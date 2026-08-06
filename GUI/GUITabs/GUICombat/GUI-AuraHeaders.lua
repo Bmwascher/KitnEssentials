@@ -221,7 +221,7 @@ local function BuildPage(opts)
                 { key = "OUTLINE",      text = "Outline" },
                 { key = "THICKOUTLINE", text = "Thick" },
             },
-            value = db.FontOutline,
+            value = KE:NormalizeFontOutline(db.FontOutline),
             callback = function(v) db.FontOutline = v; ApplySettings() end,
         })
         rowG:AddWidget(outline, 0.5)

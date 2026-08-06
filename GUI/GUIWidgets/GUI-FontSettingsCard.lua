@@ -222,7 +222,7 @@ local function ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     -- below can restore it. (Surfaces as "font size resets to max" when
     -- navigating between modules with different fontSizeRanges.)
     kit.fontDropdown:SetValue(GetDbValue(db, keys.fontFace, "Friz Quadrata TT"), true)
-    kit.outlineDropdown:SetValue(GetDbValue(db, keys.fontOutline, "OUTLINE"), true)
+    kit.outlineDropdown:SetValue(KE:NormalizeFontOutline(GetDbValue(db, keys.fontOutline, "OUTLINE")), true)
     kit.fontSizeSlider:SetMinMaxValues(fontSizeRange[1], fontSizeRange[2], true)
     kit.fontSizeSlider:SetValue(GetDbValue(db, keys.fontSize, 18), true)
 
@@ -287,7 +287,7 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
 
     local outlineDropdown = GUIFrame:CreateDropdown(row1, "Outline", {
         options = KE:GetFontOutlineOptions{ includeSoft = includeSoftOutline },
-        value = getValue(keys.fontOutline, "OUTLINE"),
+        value = KE:NormalizeFontOutline(getValue(keys.fontOutline, "OUTLINE")),
         callback = function(key) setValue(keys.fontOutline, key) end,
     })
     row1:AddWidget(outlineDropdown, 0.5)

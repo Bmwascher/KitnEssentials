@@ -205,7 +205,7 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
             { key = "THICKOUTLINE", text = "Thick" },
             { key = "SOFTOUTLINE",  text = "Soft Outline" },
         },
-        value = db.FontOutline,
+        value = KE:NormalizeFontOutline(db.FontOutline),
         callback = function(value) db.FontOutline = value; ApplySettings() end,
     })
     rowT3:AddWidget(outlineDrop, 0.33)

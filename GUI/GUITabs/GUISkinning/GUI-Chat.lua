@@ -488,7 +488,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     local tabFontOutlineDropdown = GUIFrame:CreateDropdown(row9a, "Tab Font Outline", {
         options = TAB_FONT_OUTLINE_OPTIONS,
-        value = db.TabFontOutline or "OUTLINE",
+        value = KE:NormalizeFontOutline(db.TabFontOutline or "OUTLINE"),
         callback = function(value)
             db.TabFontOutline = value
             ApplySettings()

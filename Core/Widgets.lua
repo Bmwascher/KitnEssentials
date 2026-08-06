@@ -842,12 +842,13 @@ function KE:ApplyFontToText(fontString, fontName, fontSize, fontOutline, shadowC
     if not fontString then return end
 
     -- Soft outline mode: use 8-shadow system instead of WoW's built-in outline.
-    -- Main and shadow FontStrings both render with the "SLUG" flag (Blizzard's
-    -- vector glyph renderer) so the halo stays crisp at every sub-pixel screen
-    -- position. Bitmap rasterization on the bare main text used to produce a
-    -- visible ghost-shadow that varied with the frame's X offset.
+    -- Main and shadow FontStrings both follow the profile-wide slug switch
+    -- (KE:SlugFlags) so the halo stays crisp at every sub-pixel screen
+    -- position when slug is on. Bitmap rasterization on the bare main text
+    -- used to produce a visible ghost-shadow that varied with the frame's X
+    -- offset.
     if fontOutline == "SOFTOUTLINE" then
-        local success = self:ApplyFont(fontString, fontName, fontSize, "SLUG")
+        local success = self:ApplyFont(fontString, fontName, fontSize, "")
         fontString:SetShadowOffset(0, 0)
         fontString:SetShadowColor(0, 0, 0, 0)
 
@@ -862,7 +863,7 @@ function KE:ApplyFontToText(fontString, fontName, fontSize, fontOutline, shadowC
                 fontSize = fontSize,
             })
         else
-            fontString.softOutline:SetFont(fontPath, fontSize, "SLUG")
+            fontString.softOutline:SetFont(fontPath, fontSize, KE:SlugFlags(""))
             fontString.softOutline:SetText(fontString:GetText() or "")
             fontString.softOutline:SetShown(true)
         end

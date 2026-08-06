@@ -142,30 +142,30 @@ describe("Core/Globals.lua helpers", function()
             return keys
         end
 
-        it("returns the 5 universal modes with no flags", function()
+        it("returns the 3 universal modes with no flags", function()
             assert.same(
-                { "NONE", "OUTLINE", "THICKOUTLINE", "SLUG", "SLUG,OUTLINE" },
+                { "NONE", "OUTLINE", "THICKOUTLINE" },
                 keysOf(KE:GetFontOutlineOptions())
             )
         end)
 
         it("appends SOFTOUTLINE only with includeSoft", function()
             local keys = keysOf(KE:GetFontOutlineOptions({ includeSoft = true }))
-            assert.equals(6, #keys)
-            assert.equals("SOFTOUTLINE", keys[6])
+            assert.equals(4, #keys)
+            assert.equals("SOFTOUTLINE", keys[4])
         end)
 
         it("appends MONOCHROME only with includeMono", function()
             local keys = keysOf(KE:GetFontOutlineOptions({ includeMono = true }))
-            assert.equals(6, #keys)
-            assert.equals("MONOCHROME", keys[6])
+            assert.equals(4, #keys)
+            assert.equals("MONOCHROME", keys[4])
         end)
 
         it("orders soft before mono when both flags are set", function()
             local keys = keysOf(KE:GetFontOutlineOptions({ includeSoft = true, includeMono = true }))
-            assert.equals(7, #keys)
-            assert.equals("SOFTOUTLINE", keys[6])
-            assert.equals("MONOCHROME", keys[7])
+            assert.equals(5, #keys)
+            assert.equals("SOFTOUTLINE", keys[4])
+            assert.equals("MONOCHROME", keys[5])
         end)
     end)
 
@@ -503,6 +503,26 @@ describe("Core/Globals.lua helpers", function()
             KE.db = nil
             _G.GetLocale = function() return "enUS" end
             assert.equals("OUTLINE", KE:SlugFlags("OUTLINE, SLUG"))
+        end)
+    end)
+
+    describe("KE:NormalizeFontOutline", function()
+        it("maps the retired slug keys to their surviving equivalent", function()
+            assert.equals("NONE", KE:NormalizeFontOutline("SLUG"))
+            assert.equals("OUTLINE", KE:NormalizeFontOutline("SLUG,OUTLINE"))
+            assert.equals("OUTLINE", KE:NormalizeFontOutline("OUTLINE, SLUG"))
+        end)
+
+        it("passes surviving keys through unchanged", function()
+            assert.equals("NONE", KE:NormalizeFontOutline("NONE"))
+            assert.equals("OUTLINE", KE:NormalizeFontOutline("OUTLINE"))
+            assert.equals("THICKOUTLINE", KE:NormalizeFontOutline("THICKOUTLINE"))
+            assert.equals("SOFTOUTLINE", KE:NormalizeFontOutline("SOFTOUTLINE"))
+            assert.equals("MONOCHROME", KE:NormalizeFontOutline("MONOCHROME"))
+        end)
+
+        it("defaults a nil value to OUTLINE", function()
+            assert.equals("OUTLINE", KE:NormalizeFontOutline(nil))
         end)
     end)
 end)

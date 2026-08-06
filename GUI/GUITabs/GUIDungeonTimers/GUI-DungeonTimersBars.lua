@@ -155,7 +155,7 @@ GUIFrame:RegisterContent("DTimers_Bars", function(scrollChild, yOffset)
     local row3 = GUIFrame:CreateRow(displayCard.content, Theme.rowHeightLast)
     local outlineDropdown = GUIFrame:CreateDropdown(row3, "Font Outline", {
         options = SETTINGS_TEXT_OUTLINE_OPTIONS,
-        value = db.BarDisplay.fontOutline or "OUTLINE",
+        value = KE:NormalizeFontOutline(db.BarDisplay.fontOutline or "OUTLINE"),
         callback = function(key) db.BarDisplay.fontOutline = key; ApplyAndUpdate() end,
     })
     row3:AddWidget(outlineDropdown, 0.5)

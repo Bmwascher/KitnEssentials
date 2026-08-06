@@ -484,10 +484,10 @@ function KE:CreateSoftOutline(mainText, options)
     end
     for i = 1, #SHADOW_OFFSETS do
         local shadow = parent:CreateFontString(nil, "ARTWORK", nil, 7)
-        -- "SLUG" flag = vector glyph rendering (no bitmap rasterization, no
-        -- sub-pixel anti-aliasing variance). Paired with the same flag on the
-        -- main FontString in KE:ApplyFontToText so the halo stays crisp.
-        shadow:SetFont(font, size, "SLUG")
+        -- Follows the profile-wide slug switch (KE:SlugFlags), same as the
+        -- main FontString in KE:ApplyFontToText, so the halo stays crisp
+        -- when slug is on and matches when it is off.
+        shadow:SetFont(font, size, KE:SlugFlags(""))
         shadow:SetText(shadowInitial)
         shadow:SetJustifyH(mainText:GetJustifyH())
         shadow:SetJustifyV(mainText:GetJustifyV())
