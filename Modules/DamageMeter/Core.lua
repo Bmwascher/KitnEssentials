@@ -1594,7 +1594,7 @@ end
 -- Segment / history browser section below.
 ---------------------------------------------------------------------------------
 
--- Settings: open the GUI straight to the Damage Meter page (combat section).
+-- Settings: open the GUI straight to the Damage Meter page.
 function DM:HeaderSettings(_)
     if KE.GUIFrame and KE.GUIFrame.OpenPage then
         KE.GUIFrame:OpenPage("DamageMeter", "skinning_section")
