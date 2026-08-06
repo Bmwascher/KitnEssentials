@@ -84,20 +84,6 @@ GUIFrame.sidebarConfig = {
         },
     },
     {
-        id = "utilities_section",
-        type = "header",
-        text = "\226\128\162 General Utilities",
-        defaultExpanded = false,
-        items = {
-            { id = "PotionReady",   text = "Combat Potion Ready", keywords = { "potion", "pot", "combat", "consumable" } },
-            { id = "RaidNotifications", text = "Raid Notifications", keywords = { "raid", "notification", "alert", "gateway", "soulwell", "feast", "repair", "portal" } },
-            { id = "ReadyCheckConsumables", text = "Ready Check Consumables", keywords = { "ready check", "consumable", "flask", "food", "rune", "potion", "missing" } },
-            { id = "Recuperate",    text = "Recuperate Button", keywords = { "recuperate", "heal", "button" } },
-            { id = "TimeSpiral",    text = "Time Spiral Tracker", keywords = { "time spiral", "evoker" } },
-            { id = "WorldMarkerCycler", text = "World Marker Cycler", keywords = { "world marker", "marker", "raid marker", "cycle" } },
-        },
-    },
-    {
         id = "qol_section",
         type = "header",
         text = "\226\128\162 QoL",
@@ -109,6 +95,7 @@ GUIFrame.sidebarConfig = {
             { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "map", "scale" } },
             { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
             { id = "QualityOfLife",     text = "Quality of Life", keywords = { "quality of life", "qol", "spell alert opacity", "spell alert", "opacity", "proc", "alert", "glow", "overlay", "copy anything", "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip", "move frames", "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock" } },
+            { id = "Utilities",         text = "Utilities", keywords = { "utilities", "general", "potion", "pot", "combat", "consumable", "raid", "notification", "notifications", "alert", "gateway", "soulwell", "feast", "repair", "portal", "ready check", "flask", "food", "rune", "missing", "recuperate", "heal", "button", "time spiral", "tracker", "evoker", "world marker", "marker", "raid marker", "cycle", "cycler" } },
         },
     },
     {
