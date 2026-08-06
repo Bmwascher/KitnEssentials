@@ -123,8 +123,13 @@ end
 
 -- Toggle the GUI window
 function GUIFrame:Toggle()
-    if InCombatLockdown() then
-        KE:Print("Cannot open settings in combat.")
+    -- No blanket combat refusal here: Show() arms reopenAfterCombat and the
+    -- guard that used to sit at this level swallowed the queue before it could
+    -- arm. Toggling again while queued cancels it, which is the only way to
+    -- change your mind without waiting out the fight.
+    if InCombatLockdown() and self.reopenAfterCombat then
+        self.reopenAfterCombat = nil
+        KE:Print("Queued options window cancelled.")
         return
     end
     if self.mainFrame and self.mainFrame:IsShown() then
