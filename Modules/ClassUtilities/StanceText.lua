@@ -22,6 +22,7 @@ local GetShapeshiftFormInfo = GetShapeshiftFormInfo
 local C_UnitAuras = C_UnitAuras
 local C_Spell = C_Spell
 local C_SpellBook = C_SpellBook
+local C_RestrictedActions = C_RestrictedActions
 local UIParent = UIParent
 
 local MISSING_TEXT_DEFAULT = "MISSING"
@@ -30,8 +31,12 @@ local WRONG_TEXT_DEFAULT = "WRONG"
 -- Per-spec expected form, keyed by specialization ID.
 --
 --   spellID  the form/aura/stance that spec is expected to hold
---   check    "form"  read through GetShapeshiftForm (Warrior, Druid)
---            "aura"  read through the player's auras (Priest, Evoker, Paladin)
+--   check    "form"  read through GetShapeshiftForm -- every spec today
+--            "aura"  read through the player's auras. No spec uses this: aura
+--                    identity is unreadable in combat, encounters, challenge
+--                    mode and PvP, so the check goes blind exactly where it
+--                    matters. Kept, with its guard, for a state that has no
+--                    form equivalent. Prefer a form check whenever one exists.
 --   also     extra spell IDs that also satisfy the requirement
 --
 -- Paladin auras and Warrior stances have several valid choices, so their
@@ -45,18 +50,24 @@ local SPECS = {
     [71]   = { spellID = 386164, check = "form", options = WARRIOR_STANCES },
     [72]   = { spellID = 386196, check = "form", options = WARRIOR_STANCES },
     [73]   = { spellID = 386208, check = "form", options = WARRIOR_STANCES },
-    -- Paladin
-    [65]   = { spellID = 465,    check = "aura", options = PALADIN_AURAS },
-    [66]   = { spellID = 465,    check = "aura", options = PALADIN_AURAS },
-    [70]   = { spellID = 32223,  check = "aura", options = PALADIN_AURAS },
+    -- Paladin: the three auras are the three stances, so they read as forms.
+    [65]   = { spellID = 465,    check = "form", options = PALADIN_AURAS },
+    [66]   = { spellID = 465,    check = "form", options = PALADIN_AURAS },
+    [70]   = { spellID = 32223,  check = "form", options = PALADIN_AURAS },
     -- Druid
     [102]  = { spellID = 24858,  check = "form" },
     [103]  = { spellID = 768,    check = "form" },
     [104]  = { spellID = 5487,   check = "form" },
-    -- Priest: Voidform also satisfies Shadowform.
-    [258]  = { spellID = 232698, check = "aura", also = { 194249 } },
-    -- Evoker
-    [1473] = { spellID = 403264, check = "aura", options = EVOKER_ATTUNE },
+    -- Priest: Shadowform is a form, not a buff, so it reads in combat where an
+    -- aura check cannot. Voidform is not a separate form -- it leaves the
+    -- Shadowform reading in place -- so the alternative below never fires today.
+    -- It stays as a backstop, and costs nothing: alternatives are only walked
+    -- once the primary reading has already failed.
+    [258]  = { spellID = 232698, check = "form", also = { 194249 } },
+    -- Evoker: an attunement registers as a shapeshift form, so it reads like a
+    -- Warrior stance. Reading it as an aura instead goes blind in restricted
+    -- content and reports every attuned Evoker as missing one.
+    [1473] = { spellID = 403264, check = "form", options = EVOKER_ATTUNE },
 }
 ST.SPECS = SPECS
 
@@ -102,6 +113,29 @@ local function HasAura(spellID, also)
     return false
 end
 
+-- The four states in which the aura system stops reporting which spell an aura
+-- belongs to. A by-ID lookup then answers "absent" for an aura that is present,
+-- so the aura check has to stay quiet rather than accuse. Form checks read a
+-- different subsystem and are never affected.
+local AURA_HIDDEN_STATES
+do
+    local kinds = Enum and Enum.AddOnRestrictionType
+    AURA_HIDDEN_STATES = kinds and {
+        kinds.Combat, kinds.Encounter, kinds.ChallengeMode, kinds.PvPMatch,
+    } or nil
+end
+
+local function AuraIdentityVisible()
+    if not (AURA_HIDDEN_STATES and C_RestrictedActions
+        and C_RestrictedActions.IsAddOnRestrictionActive) then
+        return true
+    end
+    for _, state in ipairs(AURA_HIDDEN_STATES) do
+        if C_RestrictedActions.IsAddOnRestrictionActive(state) then return false end
+    end
+    return true
+end
+
 -- The form the player is actually in, as a spell ID, or nil.
 local function CurrentFormSpell()
     local index = GetShapeshiftForm()
@@ -117,13 +151,18 @@ end
 
 -- Reused rather than rebuilt: UNIT_AURA for the player fires constantly in
 -- combat, and the reference's inline version allocates nothing on this path.
-local evalContext = { hasAura = HasAura, isKnown = SpellIsKnown }
+local evalContext = {
+    hasAura = HasAura,
+    isKnown = SpellIsKnown,
+    auraIdentityVisible = AuraIdentityVisible,
+}
 
 -- The whole rule, with every world reading passed in. Returns the spell id to
 -- draw, or nil to hide. Kept free of API calls so the rules can be tested
 -- without faking the shapeshift and aura subsystems.
 --
--- ctx fields: inCombat, currentFormSpell, hasAura(spellID, also), isKnown(spellID)
+-- ctx fields: inCombat, currentFormSpell, hasAura(spellID, also),
+-- isKnown(spellID), auraIdentityVisible()
 function ST:EvaluateSpec(db, specID, entry, ctx)
     if not entry then return nil end
 
@@ -143,8 +182,20 @@ function ST:EvaluateSpec(db, specID, entry, ctx)
     local satisfied
     if entry.check == "aura" then
         satisfied = ctx.hasAura(wanted, entry.also)
+        -- Only the accusing path pays for the check, which is the rare one.
+        if not satisfied and not ctx.auraIdentityVisible() then return nil end
     else
         satisfied = ctx.currentFormSpell == wanted
+        -- A form can have stand-ins too, the way Voidform stands in for
+        -- Shadowform, so the alternatives count here as much as on the aura path.
+        if not satisfied and entry.also then
+            for _, extra in ipairs(entry.also) do
+                if ctx.currentFormSpell == extra then
+                    satisfied = true
+                    break
+                end
+            end
+        end
     end
     if satisfied then return nil end
 
@@ -232,11 +283,6 @@ function ST:Update()
     f:Show()
 end
 
-function ST:OnAura(_, unit)
-    if KE:IsSecretValue(unit) or unit ~= "player" then return end
-    self:Update()
-end
-
 -- The "MISSING" caption above the icon.
 -- wrongForm says the icon on screen is the form the player IS in, not the one
 -- they are missing, so the caption has to say the opposite thing. Showing
@@ -276,10 +322,12 @@ function ST:OnEnable()
     if not self.db.Enabled then return end
     self:CreateFrame()
 
-    -- Entirely event-driven -- nothing polls. Form and aura changes are the
-    -- only things that can change the answer, plus the combat transitions
-    -- that the per-spec CombatOnly option depends on.
-    self:RegisterEvent("UNIT_AURA", "OnAura")
+    -- Entirely event-driven -- nothing polls. Form changes are the only thing
+    -- that can change the answer, plus the combat transitions that the per-spec
+    -- CombatOnly option depends on. UNIT_AURA is deliberately absent: no spec
+    -- reads auras, and in restricted content it arrives with a secret unit and
+    -- would be discarded anyway. Putting a spec back on the aura check means
+    -- registering it again here.
     self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", "Update")
     self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS", "Update")
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "Update")
@@ -305,7 +353,6 @@ function ST:OnEnable()
 end
 
 function ST:OnDisable()
-    self:UnregisterEvent("UNIT_AURA")
     self:UnregisterEvent("UPDATE_SHAPESHIFT_FORM")
     self:UnregisterEvent("UPDATE_SHAPESHIFT_FORMS")
     self:UnregisterEvent("PLAYER_REGEN_DISABLED")
