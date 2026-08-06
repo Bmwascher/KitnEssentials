@@ -18,10 +18,13 @@ local pcall = pcall
 ---------------------------------------------------------------------------------
 
 local ThemeDefaults = {
-    bgDark         = { 0.0627, 0.0627, 0.0627, 0.60 },
-    bgMedium       = { 0.0902, 0.0902, 0.0902, 0.60 },
-    bgLight        = { 0.0314, 0.0314, 0.0314, 0.60 },
-    bgHover        = { 0.1804, 0.1804, 0.1804, 0.60 },
+    -- Depth comes from opacity stacking inside one near-black family, not from
+    -- stepping the grey. Card bodies read marginally lighter than the window,
+    -- which is deliberate: the alternative reads as a hole in the panel.
+    bgDark         = { 0.031, 0.031, 0.031, 0.80 }, -- #080808 window / content pane / inputs
+    bgMedium       = { 0.055, 0.055, 0.055, 0.95 }, -- #0E0E0E sidebar / title bar / footer / controls
+    bgLight        = { 0.055, 0.055, 0.055, 0.80 }, -- #0E0E0E card bodies / sliders / dialogs
+    bgHover        = { 0.227, 0.227, 0.227, 0.80 }, -- #3A3A3A hover
     border         = { 0, 0, 0, 1 },
     accent         = { 1.0, 0.0, 0.549, 1 },       -- #FF008C (KitnUI pink)
     accentHover    = { 1.0, 0.0, 0.549, 0.25 },
