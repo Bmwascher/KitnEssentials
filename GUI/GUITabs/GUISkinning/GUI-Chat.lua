@@ -30,16 +30,27 @@ local EDITBOX_POSITIONS = {
 }
 
 local TIMESTAMP_FORMATS = {
-    { value = "NONE",           text = "None" },
-    { value = "[%H:%M] ",       text = "[HH:MM]" },
-    { value = "[%H:%M:%S] ",    text = "[HH:MM:SS]" },
-    { value = "[%I:%M %p] ",    text = "[HH:MM AM/PM]" },
-    { value = "[%I:%M:%S %p] ", text = "[HH:MM:SS AM/PM]" },
-    { value = "%H:%M ",         text = "HH:MM" },
-    { value = "%H:%M:%S ",      text = "HH:MM:SS" },
-    { value = "%I:%M %p ",      text = "HH:MM AM/PM" },
-    { value = "%I:%M:%S %p ",   text = "HH:MM:SS AM/PM" },
+    "[%H:%M] ", "[%H:%M:%S] ", "[%I:%M %p] ", "[%I:%M:%S %p] ",
+    "%H:%M ",   "%H:%M:%S ",   "%I:%M %p ",   "%I:%M:%S %p ",
 }
+
+-- The list used to name each entry by its pattern, which put "HH:MM" on four
+-- different options and gave no way to tell a 12-hour one from a 24-hour one.
+-- Showing the clock instead needs no explaining. The trimming below mirrors what
+-- the module does to a rendered stamp, so the sample is what actually appears.
+local function TimestampOptions(useLocal)
+    local betterDate = (_G.TimeUtil and _G.TimeUtil.BetterDate) or _G.BetterDate
+    local now = useLocal and time() or GetServerTime()
+    local list = { { value = "NONE", text = "None" } }
+    for _, format in ipairs(TIMESTAMP_FORMATS) do
+        local sample = betterDate and betterDate(format, now)
+        if sample then
+            sample = sample:gsub(" ", ""):gsub("AM", " AM"):gsub("PM", " PM")
+        end
+        list[#list + 1] = { value = format, text = sample or format }
+    end
+    return list
+end
 
 local TAB_SELECTOR_STYLES = {
     { value = "NONE",   text = "None" },
@@ -423,7 +434,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     local row8a = GUIFrame:CreateRow(card8.content, Theme.rowHeight)
     local timestampFormatDropdown = GUIFrame:CreateDropdown(row8a, "Timestamp Format", {
-        options = TIMESTAMP_FORMATS,
+        options = TimestampOptions(db.UseLocalTime ~= false),
         value = db.TimestampFormat or "NONE",
         callback = function(value)
             db.TimestampFormat = value
