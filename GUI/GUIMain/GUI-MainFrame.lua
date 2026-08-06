@@ -12,6 +12,7 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local math = math
+local abs, floor = math.abs, math.floor
 
 ---------------------------------------------------------------------------------
 -- Sidebar Data
@@ -94,7 +95,7 @@ GUIFrame.sidebarConfig = {
             { id = "Nicknames",         text = "Custom Nicknames", keywords = { "nickname", "nicknames", "name", "custom", "rename" } },
             { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "map", "scale" } },
             { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
-            { id = "QualityOfLife",     text = "Quality of Life", keywords = { "quality of life", "qol", "spell alert opacity", "spell alert", "opacity", "proc", "alert", "glow", "overlay", "copy anything", "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip", "move frames", "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock" } },
+            { id = "QualityOfLife",     text = "Quality of Life", keywords = { "quality of life", "qol", "spell alert opacity", "spell alert", "opacity", "proc", "alert", "glow", "overlay", "copy anything", "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip", "move frames", "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock", "slash", "slash command", "command", "commands", "shortcut", "reload" } },
             { id = "Utilities",         text = "Utilities", keywords = { "utilities", "general", "potion", "pot", "combat", "consumable", "raid", "notification", "notifications", "alert", "gateway", "soulwell", "feast", "repair", "portal", "ready check", "consumables", "flask", "food", "rune", "missing", "recuperate", "heal", "button", "time spiral", "tracker", "evoker", "world marker", "marker", "raid marker", "cycle", "cycler" } },
         },
     },
@@ -323,9 +324,33 @@ function GUIFrame:CreateMainFrame()
     frame:SetResizeBounds(950, 550)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
+    -- Resize/move instrumentation. The runaway enlarge is intermittent, so the
+    -- log has to be armed before it happens rather than switched on after.
+    -- The flag hangs off the FRAME because that is what has a global name --
+    -- the addon table is private to the file scope and unreachable from /run:
+    --   /run KE_GUIFrame.DEBUG_RESIZE = true
+    -- Every handler on both the move path and the size path reports, so the
+    -- ORDER they fire in is visible -- a move and a size both engaging is the
+    -- shape worth ruling in or out, and it cannot be seen from the end state.
+    local isResizing = false
+    local function resizeLog(tag)
+        if not frame.DEBUG_RESIZE then return end
+        local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
+        KE:Print(string.format("%s w=%.1f h=%.1f %s>%s %.1f,%.1f sizing=%s",
+            tag, frame:GetWidth() or -1, frame:GetHeight() or -1,
+            tostring(point), tostring(relativePoint),
+            xOfs or 0, yOfs or 0, tostring(isResizing)))
+    end
+
+    frame:SetScript("OnSizeChanged", function() resizeLog("size") end)
+
     frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function(f) f:StartMoving(true) end)
+    frame:SetScript("OnDragStart", function(f)
+        resizeLog("moveStart")
+        f:StartMoving(true)
+    end)
     frame:SetScript("OnDragStop", function(f)
+        resizeLog("moveStop")
         f:StopMovingOrSizing()
         local point, _, relativePoint, xOfs, yOfs = f:GetPoint()
         if KE.db and KE.db.global then
@@ -646,11 +671,27 @@ function GUIFrame:CreateMainFrame()
     -- OnDragStop fires for completed drags), but OnMouseUp is still needed
     -- for clicks that never reached drag threshold. The isResizing guard
     -- keeps the cleanup idempotent.
-    local isResizing = false
+    local sizeAtGrab
     local function stopAndSaveResize()
+        resizeLog("sizeStop")
         if not isResizing then return end
         isResizing = false
         frame:StopMovingOrSizing()
+
+        -- A click that never became a drag must not commit a size. WoW polls
+        -- the cursor every frame while sizing, so even a still hand registers a
+        -- pixel or two, and each stray click used to bank that drift for good.
+        if sizeAtGrab then
+            local w, h = frame:GetWidth(), frame:GetHeight()
+            if abs(w - sizeAtGrab[1]) < 2 and abs(h - sizeAtGrab[2]) < 2 then
+                frame:SetSize(sizeAtGrab[1], sizeAtGrab[2])
+            end
+            sizeAtGrab = nil
+        end
+
+        -- Whole pixels only. StartSizing leaves fractions behind, they persist
+        -- into SavedVariables, and they compound across sessions.
+        frame:SetSize(floor(frame:GetWidth() + 0.5), floor(frame:GetHeight() + 0.5))
         -- StartSizing re-anchors to TOPLEFT internally; persist the new anchor
         -- alongside size so the next session restores a consistent layout.
         local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
@@ -664,10 +705,28 @@ function GUIFrame:CreateMainFrame()
             gs.yOffset = yOfs
         end
     end
+    -- Sizing starts on the PRESS, while the cursor is provably still on the
+    -- grip. StartSizing snaps the dragged corner to wherever the cursor is when
+    -- it runs, so any gap between the two becomes an instant jump -- and
+    -- OnDragStart, by definition, only fires once the cursor has already left.
+    -- That was the runaway enlarge: one discontinuity at the first size event,
+    -- then a perfectly smooth drag.
+    --
+    -- RegisterForDrag stays. The whole window is draggable, so without it the
+    -- press would bubble up and start MOVING the window mid-resize. OnDragStart
+    -- still fires afterwards and the isResizing guard makes it a no-op.
     resizeGrip:RegisterForDrag("LeftButton")
+    resizeGrip:SetScript("OnMouseDown", function(_, button)
+        if button ~= "LeftButton" or isResizing then return end
+        resizeLog("sizeStart")
+        isResizing = true
+        sizeAtGrab = { frame:GetWidth(), frame:GetHeight() }
+        frame:StartSizing("BOTTOMRIGHT")
+    end)
     resizeGrip:SetScript("OnDragStart", function()
         if isResizing then return end
         isResizing = true
+        sizeAtGrab = { frame:GetWidth(), frame:GetHeight() }
         frame:StartSizing("BOTTOMRIGHT")
     end)
     resizeGrip:SetScript("OnDragStop", stopAndSaveResize)

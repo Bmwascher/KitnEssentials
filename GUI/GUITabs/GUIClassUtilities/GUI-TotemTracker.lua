@@ -58,7 +58,7 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     if db.Enabled == false then return yOffset end
 
     -- No manual preview card: the tracker previews itself whenever this page is
-    -- open (SECTION_PREVIEW_MODULES' class_utilities_section entry in
+    -- open (SECTION_PREVIEW_MODULES' class_section entry in
     -- Core/Globals.lua), and positioning is handled by /kes edit via the
     -- EditMode element the module registers in OnEnable. A Show Preview button
     -- would only duplicate both.

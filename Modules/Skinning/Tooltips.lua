@@ -48,10 +48,10 @@ local FACTION_BAR_COLORS = FACTION_BAR_COLORS
 local hooksecurefunc = hooksecurefunc
 local S = KE.Skins
 
--- AE:GetEffectiveFont returns the LSM NAME, not a file path
--- (every consumer resolves it through LSM; v891 passed the raw name to
--- SetFont -> "Invalid font asset (Expressway)"). Silent fetch + stock
--- fallback so a missing registration degrades instead of erroring.
+-- KE:GetEffectiveFont returns the LSM NAME, not a file path -- every consumer
+-- resolves it through LSM, and passing the raw name straight to SetFont throws
+-- "Invalid font asset". Silent fetch plus a stock fallback so a missing
+-- registration degrades instead of erroring.
 local function ResolveFont(db)
     local name = KE:GetEffectiveFont(db)
     local path = KE.LSM and KE.LSM:Fetch("font", name, true)
