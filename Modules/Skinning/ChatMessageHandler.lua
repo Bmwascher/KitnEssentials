@@ -384,15 +384,17 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
 
         -- Process message filters
         if _G.ChatFrameUtil and _G.ChatFrameUtil.ProcessMessageEventFilters then
-            local filtered, new1, new2, new3, new4, new5, new6, new7, new8, new9, new10, new11, new12, new13, new14, new15, new16, new17 =
+            -- The filter chain carries arg1..arg14 only. Asking for more
+            -- assigned nil over arg15..arg17, and arg17 is the flag that
+            -- suppresses raid-icon conversion further down.
+            local filtered, new1, new2, new3, new4, new5, new6, new7, new8, new9, new10, new11, new12, new13, new14 =
                 _G.ChatFrameUtil.ProcessMessageEventFilters(frame, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8,
-                    arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17)
+                    arg9, arg10, arg11, arg12, arg13, arg14)
             if filtered then
                 return true
             else
-                arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17 =
-                    new1, new2, new3, new4, new5, new6, new7, new8, new9, new10, new11, new12, new13, new14, new15, new16,
-                    new17
+                arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14 =
+                    new1, new2, new3, new4, new5, new6, new7, new8, new9, new10, new11, new12, new13, new14
             end
         elseif _G.ChatFrame_GetMessageEventFilters then
             local chatFilters = _G.ChatFrame_GetMessageEventFilters(event)
@@ -617,7 +619,8 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
         else
             -- Default case, regular chat messages including whispers
             -- Check if this message is censored and prepare formatter for "Show Message" click
-            local isChatLineCensored, eventArgs, msgFormatter = IsChatLineCensored and IsChatLineCensored(arg11)
+            local eventArgs, msgFormatter
+            local isChatLineCensored = IsChatLineCensored and IsChatLineCensored(arg11)
             if isChatLineCensored then
                 eventArgs = SafePack(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18)
 

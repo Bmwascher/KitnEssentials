@@ -1063,14 +1063,17 @@ function CHAT:RGBToHex(r, g, b)
     return format("|cff%02x%02x%02x", r * 255, g * 255, b * 255)
 end
 
+-- Handed to gsub as the replacement function, so `self` is the captured
+-- channel text rather than the module.
 function CHAT:ShortChannel()
-    local key = gsub(strupper(self), " ", "_")
+    local name = self --[[@as string]]
+    local key = gsub(strupper(name), " ", "_")
     local abbr = SHORT_CHANNELS[key]
     if not abbr then
         abbr = communityAbbrevCache[key]
         if abbr == nil then
             local resolved = false
-            local chanName = select(2, _G.GetChannelName(gsub(self, "channel:", "")))
+            local chanName = select(2, _G.GetChannelName(gsub(name, "channel:", "")))
             if chanName then
                 local communityID = strmatch(chanName, "Community:(%d+):")
                 if communityID and _G.C_Club and _G.C_Club.GetClubInfo then
@@ -1085,7 +1088,7 @@ function CHAT:ShortChannel()
         end
         if abbr == false then abbr = nil end
     end
-    return format("|Hchannel:%s|h[%s]|h", self, abbr or gsub(self, "channel:", ""))
+    return format("|Hchannel:%s|h[%s]|h", name, abbr or gsub(name, "channel:", ""))
 end
 
 function CHAT:HandleShortChannels(msg, hide)
@@ -1352,12 +1355,16 @@ function CHAT:Tab_OnClick(button)
     PlaySound(SOUND_U_CHAT_SCROLL_BUTTON)
 end
 
+-- Replaces the Blizzard handler, so `self` arrives as the chat frame; the
+-- fallback covers the call sites that pass it explicitly.
 function CHAT:FCF_Close(fallback)
     if fallback then self = fallback end
     if not self or self == CHAT then self = _G.FCF_GetCurrentChatFrame() end
     if self == _G.DEFAULT_CHAT_FRAME then return end
 
     _G.FCF_UnDockFrame(self)
+    -- `self` is the chat frame here, not the module.
+    ---@diagnostic disable-next-line: missing-parameter
     self:Hide()
     CHAT:GetTab(self):Hide()
 
@@ -2848,8 +2855,6 @@ function CHAT:OnInviteLinkClick(_, data)
     if feature == "invite" and arg and arg ~= "" then
         if _G.C_PartyInfo and _G.C_PartyInfo.InviteUnit then
             _G.C_PartyInfo.InviteUnit(arg)
-        elseif _G.InviteUnit then
-            _G.InviteUnit(arg)
         end
     end
 end
