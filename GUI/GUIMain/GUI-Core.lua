@@ -123,13 +123,16 @@ end
 
 -- Toggle the GUI window
 function GUIFrame:Toggle()
-    -- No blanket combat refusal here: Show() arms reopenAfterCombat and the
-    -- guard that used to sit at this level swallowed the queue before it could
-    -- arm. Toggling again while queued cancels it, which is the only way to
-    -- change your mind without waiting out the fight.
-    if InCombatLockdown() and self.reopenAfterCombat then
-        self.reopenAfterCombat = nil
-        KE:Print("Queued options window cancelled.")
+    -- The window can never be on screen during combat, so the only thing a
+    -- toggle can flip is whether it will be open once combat ends.
+    if InCombatLockdown() then
+        if self.reopenAfterCombat then
+            self.reopenAfterCombat = nil
+            KE:Print("Options window will stay closed after combat.")
+        else
+            self.reopenAfterCombat = true
+            KE:Print("Options will open after combat ends.")
+        end
         return
     end
     if self.mainFrame and self.mainFrame:IsShown() then
