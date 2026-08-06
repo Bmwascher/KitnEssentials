@@ -59,7 +59,10 @@ local SPECS = {
     [103]  = { spellID = 768,    check = "form" },
     [104]  = { spellID = 5487,   check = "form" },
     -- Priest: Shadowform is a form, not a buff, so it reads in combat where an
-    -- aura check cannot. Voidform also satisfies it.
+    -- aura check cannot. Voidform is not a separate form -- it leaves the
+    -- Shadowform reading in place -- so the alternative below never fires today.
+    -- It stays as a backstop, and costs nothing: alternatives are only walked
+    -- once the primary reading has already failed.
     [258]  = { spellID = 232698, check = "form", also = { 194249 } },
     -- Evoker: an attunement registers as a shapeshift form, so it reads like a
     -- Warrior stance. Reading it as an aura instead goes blind in restricted
@@ -280,11 +283,6 @@ function ST:Update()
     f:Show()
 end
 
-function ST:OnAura(_, unit)
-    if KE:IsSecretValue(unit) or unit ~= "player" then return end
-    self:Update()
-end
-
 -- The "MISSING" caption above the icon.
 -- wrongForm says the icon on screen is the form the player IS in, not the one
 -- they are missing, so the caption has to say the opposite thing. Showing
@@ -324,10 +322,12 @@ function ST:OnEnable()
     if not self.db.Enabled then return end
     self:CreateFrame()
 
-    -- Entirely event-driven -- nothing polls. Form and aura changes are the
-    -- only things that can change the answer, plus the combat transitions
-    -- that the per-spec CombatOnly option depends on.
-    self:RegisterEvent("UNIT_AURA", "OnAura")
+    -- Entirely event-driven -- nothing polls. Form changes are the only thing
+    -- that can change the answer, plus the combat transitions that the per-spec
+    -- CombatOnly option depends on. UNIT_AURA is deliberately absent: no spec
+    -- reads auras, and in restricted content it arrives with a secret unit and
+    -- would be discarded anyway. Putting a spec back on the aura check means
+    -- registering it again here.
     self:RegisterEvent("UPDATE_SHAPESHIFT_FORM", "Update")
     self:RegisterEvent("UPDATE_SHAPESHIFT_FORMS", "Update")
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "Update")
@@ -353,7 +353,6 @@ function ST:OnEnable()
 end
 
 function ST:OnDisable()
-    self:UnregisterEvent("UNIT_AURA")
     self:UnregisterEvent("UPDATE_SHAPESHIFT_FORM")
     self:UnregisterEvent("UPDATE_SHAPESHIFT_FORMS")
     self:UnregisterEvent("PLAYER_REGEN_DISABLED")
