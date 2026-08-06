@@ -26,9 +26,9 @@ describe("DamageMeter retired font face clear", function()
     end)
 
     it("leaves a face the user chose alone", function()
-        KE.db.profile.DamageMeter = { FontFace = "Naowh" }
+        KE.db.profile.DamageMeter = { FontFace = "PT Sans Narrow" }
         DM:UpdateDB()
-        assert.equals("Naowh", DM.db.FontFace)
+        assert.equals("PT Sans Narrow", DM.db.FontFace)
     end)
 
     it("runs once, so the retired face survives when picked deliberately", function()
