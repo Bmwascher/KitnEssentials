@@ -194,13 +194,29 @@ GUIFrame.sidebarConfig = {
 function GUIFrame:CreateContentArea(parent)
     local T = Theme
 
+    -- Three points fully constrain the frame, so the pane absorbs every resize
+    -- delta while the sidebar keeps its fixed width. The left edge offsets from
+    -- the frame rather than anchoring to the sidebar, which does not exist yet:
+    -- CreateSidebar runs after this function.
     local content = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    content:SetWidth(T.contentWidth)
+    content:SetPoint("TOPLEFT", parent, "TOPLEFT", T.borderSize + T.sidebarWidth, -(T.headerHeight + T.borderSize))
     content:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -T.borderSize, -(T.headerHeight + T.borderSize))
     content:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -T.borderSize, T.borderSize)
 
     content:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
     content:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], T.bgDark[4])
+
+    -- Derived arithmetically rather than read off the frame: an anchor-only
+    -- frame can still measure 1x1 before its first layout pass, and the content
+    -- builders below must never see a zero-width parent.
+    local function ResolveContentWidth()
+        local frameWidth = parent:GetWidth()
+        if not frameWidth or frameWidth <= 1 then
+            frameWidth = T.sidebarWidth + T.contentWidth + (T.borderSize * 2)
+        end
+        return frameWidth - T.sidebarWidth - (T.borderSize * 2)
+    end
+    content.ResolveContentWidth = ResolveContentWidth
 
     -- Scroll frame
     local scrollFrame = CreateFrame("ScrollFrame", nil, content, "UIPanelScrollFrameTemplate")
@@ -245,17 +261,17 @@ function GUIFrame:CreateContentArea(parent)
     -- below still runs to handle scrollbar width adjustments later).
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
     scrollChild:SetHeight(1)
-    scrollChild:SetWidth(T.contentWidth)
+    scrollChild:SetWidth(ResolveContentWidth())
     scrollFrame:SetScrollChild(scrollChild)
 
     -- Scrollbar visibility
     local scrollbarVisible = false
     local function UpdateScrollChildWidth()
+        local width = ResolveContentWidth()
         if scrollbarVisible then
-            scrollChild:SetWidth(T.contentWidth - scrollbarWidth)
-        else
-            scrollChild:SetWidth(T.contentWidth)
+            width = width - scrollbarWidth
         end
+        scrollChild:SetWidth(width)
     end
 
     local function UpdateScrollBarVisibility()
@@ -289,6 +305,17 @@ function GUIFrame:CreateContentArea(parent)
     parent.content = content
     self.contentArea = content
     return content
+end
+
+-- Live width of the content pane. Panel builders that used to derive their
+-- own width from the Theme.contentWidth constant read this instead, so a
+-- resized window reaches nested tab panels too.
+function GUIFrame:GetContentWidth()
+    local content = self.contentArea
+    if content and content.ResolveContentWidth then
+        return content.ResolveContentWidth()
+    end
+    return Theme.contentWidth
 end
 
 ---------------------------------------------------------------------------------

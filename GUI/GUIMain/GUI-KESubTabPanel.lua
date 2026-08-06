@@ -53,7 +53,7 @@ function KE.GUI.CreateSubTabPanel(container, tabs, options)
     contentFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
 
     local contentArea = KE.GUI.CreateBasicContentArea(contentFrame, {
-        contentWidth = options.contentWidth or Theme.contentWidth,
+        contentWidth = options.contentWidth or KE.GUIFrame:GetContentWidth(),
         showBackground = false,
         scrollbarOptions = {
             width = 16,

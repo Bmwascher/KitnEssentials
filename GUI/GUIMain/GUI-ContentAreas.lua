@@ -565,7 +565,7 @@ function KE.GUI.CreateMiniSidebar(container, options)
 
     local contentArea
     local contentType = options.contentType or "basic"
-    local contentWidth = options.contentWidth or (Theme.contentWidth - sidebarWidth - 1)
+    local contentWidth = options.contentWidth or (KE.GUIFrame:GetContentWidth() - sidebarWidth - 1)
 
     if contentType == "tabbed" and options.tabs then
         contentArea = KE.GUI.CreateSubTabPanel(contentFrame, options.tabs, {
