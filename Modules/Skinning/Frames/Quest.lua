@@ -286,7 +286,9 @@ local function Skin()
             hooksecurefunc(_G.QuestInfoSealFrame.Text, "SetText", SealFrameText)
         end
         if _G.QuestFrameGreetingPanel_OnShow then
-            hooksecurefunc("QuestFrameGreetingPanel_OnShow", GreetingPanel_OnShow)
+            -- Forwarded through varargs: the checker types the Blizzard
+            -- function as taking none, while it is called with the panel.
+            hooksecurefunc("QuestFrameGreetingPanel_OnShow", function(...) GreetingPanel_OnShow(...) end)
         end
     end
 
