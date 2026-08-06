@@ -12,6 +12,7 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local math = math
+local abs, floor = math.abs, math.floor
 
 ---------------------------------------------------------------------------------
 -- Sidebar Data
@@ -670,11 +671,27 @@ function GUIFrame:CreateMainFrame()
     -- OnDragStop fires for completed drags), but OnMouseUp is still needed
     -- for clicks that never reached drag threshold. The isResizing guard
     -- keeps the cleanup idempotent.
+    local sizeAtGrab
     local function stopAndSaveResize()
         resizeLog("sizeStop")
         if not isResizing then return end
         isResizing = false
         frame:StopMovingOrSizing()
+
+        -- A click that never became a drag must not commit a size. WoW polls
+        -- the cursor every frame while sizing, so even a still hand registers a
+        -- pixel or two, and each stray click used to bank that drift for good.
+        if sizeAtGrab then
+            local w, h = frame:GetWidth(), frame:GetHeight()
+            if abs(w - sizeAtGrab[1]) < 2 and abs(h - sizeAtGrab[2]) < 2 then
+                frame:SetSize(sizeAtGrab[1], sizeAtGrab[2])
+            end
+            sizeAtGrab = nil
+        end
+
+        -- Whole pixels only. StartSizing leaves fractions behind, they persist
+        -- into SavedVariables, and they compound across sessions.
+        frame:SetSize(floor(frame:GetWidth() + 0.5), floor(frame:GetHeight() + 0.5))
         -- StartSizing re-anchors to TOPLEFT internally; persist the new anchor
         -- alongside size so the next session restores a consistent layout.
         local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
@@ -688,11 +705,28 @@ function GUIFrame:CreateMainFrame()
             gs.yOffset = yOfs
         end
     end
+    -- Sizing starts on the PRESS, while the cursor is provably still on the
+    -- grip. StartSizing snaps the dragged corner to wherever the cursor is when
+    -- it runs, so any gap between the two becomes an instant jump -- and
+    -- OnDragStart, by definition, only fires once the cursor has already left.
+    -- That was the runaway enlarge: one discontinuity at the first size event,
+    -- then a perfectly smooth drag.
+    --
+    -- RegisterForDrag stays. The whole window is draggable, so without it the
+    -- press would bubble up and start MOVING the window mid-resize. OnDragStart
+    -- still fires afterwards and the isResizing guard makes it a no-op.
     resizeGrip:RegisterForDrag("LeftButton")
-    resizeGrip:SetScript("OnDragStart", function()
+    resizeGrip:SetScript("OnMouseDown", function(_, button)
+        if button ~= "LeftButton" or isResizing then return end
         resizeLog("sizeStart")
+        isResizing = true
+        sizeAtGrab = { frame:GetWidth(), frame:GetHeight() }
+        frame:StartSizing("BOTTOMRIGHT")
+    end)
+    resizeGrip:SetScript("OnDragStart", function()
         if isResizing then return end
         isResizing = true
+        sizeAtGrab = { frame:GetWidth(), frame:GetHeight() }
         frame:StartSizing("BOTTOMRIGHT")
     end)
     resizeGrip:SetScript("OnDragStop", stopAndSaveResize)
