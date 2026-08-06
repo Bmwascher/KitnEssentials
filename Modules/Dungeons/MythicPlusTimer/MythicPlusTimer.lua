@@ -280,6 +280,15 @@ end
 -- Canonical flat defaults (seeded into KE.db.profile.MythicPlusTimer
 -- by MPT:UpdateDB). Flat keys only — no nesting (KE convention). Colors are
 -- {r,g,b} arrays resolved via KE:ResolveColor at render time.
+-- The font face this module used to seed, and every key it seeded it into.
+-- Kept only so UpdateDB can recognise and clear the stale seeds; nothing else
+-- may read either.
+local RETIRED_FONT_FACE = "Expressway"
+local RETIRED_FONT_FACE_KEYS = {
+    "FontFace", "TimerFontFace", "ForcesFontFace",
+    "ObjectiveFontFace", "DeathsFontFace", "OverlayFontFace",
+}
+
 local MPT_DEFAULTS = {
     Enabled = true,
 
@@ -749,6 +758,27 @@ function MPT:UpdateDB()
     -- so the method is guaranteed to exist by the time UpdateDB first runs.
     -- No existence guard needed.
     self:MigrateLegacyOverlayDB()
+
+    -- Same class of repair, different cause: this module seeded its own font
+    -- faces, and because it writes straight into the profile rather than
+    -- registering AceDB defaults, those seeds were never stripped on logout.
+    -- Retiring the defaults therefore left every existing profile pinned to
+    -- the old value while an unset face is supposed to follow KE's global
+    -- font. Clear the retired literal once per profile; a face the user picks
+    -- afterwards persists normally. Run-once-stamped because the retired
+    -- literal is also a legitimate choice.
+    --
+    -- Ordered AFTER the overlay migration on purpose: that migration can copy
+    -- a retired face back out of the old forces-overlay table, so clearing
+    -- first would let it return.
+    if not self.db.FontFacesCleared then
+        for _, key in ipairs(RETIRED_FONT_FACE_KEYS) do
+            if self.db[key] == RETIRED_FONT_FACE then
+                self.db[key] = nil
+            end
+        end
+        self.db.FontFacesCleared = true
+    end
 
     if type(KE.db.global.MythicPlusTimerSplits) ~= "table" then
         KE.db.global.MythicPlusTimerSplits = {}
