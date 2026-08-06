@@ -162,7 +162,10 @@ function PR:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "PotionReady",
+            -- No sidebar row of its own -- this lives on the Utilities
+            -- page now, so guiTab picks its tab there.
+            guiPath = "Utilities",
+            guiTab = "PotionReady",
         })
         self.editModeRegistered = true
     end
