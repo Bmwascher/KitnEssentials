@@ -323,9 +323,31 @@ function GUIFrame:CreateMainFrame()
     frame:SetResizeBounds(950, 550)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
+    -- Resize/move instrumentation. The runaway enlarge is intermittent, so the
+    -- log has to be armed before it happens rather than switched on after:
+    --   /run KE.GUIFrame.DEBUG_RESIZE = true
+    -- Every handler on both the move path and the size path reports, so the
+    -- ORDER they fire in is visible -- a move and a size both engaging is the
+    -- shape worth ruling in or out, and it cannot be seen from the end state.
+    local isResizing = false
+    local function resizeLog(tag)
+        if not GUIFrame.DEBUG_RESIZE then return end
+        local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
+        KE:Print(string.format("%s w=%.1f h=%.1f %s>%s %.1f,%.1f sizing=%s",
+            tag, frame:GetWidth() or -1, frame:GetHeight() or -1,
+            tostring(point), tostring(relativePoint),
+            xOfs or 0, yOfs or 0, tostring(isResizing)))
+    end
+
+    frame:SetScript("OnSizeChanged", function() resizeLog("size") end)
+
     frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function(f) f:StartMoving(true) end)
+    frame:SetScript("OnDragStart", function(f)
+        resizeLog("moveStart")
+        f:StartMoving(true)
+    end)
     frame:SetScript("OnDragStop", function(f)
+        resizeLog("moveStop")
         f:StopMovingOrSizing()
         local point, _, relativePoint, xOfs, yOfs = f:GetPoint()
         if KE.db and KE.db.global then
@@ -646,8 +668,8 @@ function GUIFrame:CreateMainFrame()
     -- OnDragStop fires for completed drags), but OnMouseUp is still needed
     -- for clicks that never reached drag threshold. The isResizing guard
     -- keeps the cleanup idempotent.
-    local isResizing = false
     local function stopAndSaveResize()
+        resizeLog("sizeStop")
         if not isResizing then return end
         isResizing = false
         frame:StopMovingOrSizing()
@@ -666,6 +688,7 @@ function GUIFrame:CreateMainFrame()
     end
     resizeGrip:RegisterForDrag("LeftButton")
     resizeGrip:SetScript("OnDragStart", function()
+        resizeLog("sizeStart")
         if isResizing then return end
         isResizing = true
         frame:StartSizing("BOTTOMRIGHT")
