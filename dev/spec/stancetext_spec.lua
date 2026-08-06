@@ -13,6 +13,7 @@ describe("StanceText:EvaluateSpec", function()
             currentFormSpell = nil,
             hasAura = function() return false end,
             isKnown = function() return true end,
+            auraIdentityVisible = function() return true end,
         }
     end)
 
@@ -60,5 +61,39 @@ describe("StanceText:EvaluateSpec", function()
     it("counts an alternative aura as satisfied", function()
         ctx.hasAura = function(_, also) return also ~= nil end
         assert.is_nil(ST:EvaluateSpec(db, 258, entryAura, ctx))
+    end)
+
+    -- Restricted content hides aura identity, so "not found" stops meaning
+    -- "not present". Accusing on it is the bug this guard exists to prevent.
+    it("stays quiet when aura identity is hidden", function()
+        ctx.auraIdentityVisible = function() return false end
+        assert.is_nil(ST:EvaluateSpec(db, 258, entryAura, ctx))
+    end)
+
+    it("still shows when identity is hidden but the aura was found anyway", function()
+        ctx.auraIdentityVisible = function() return false end
+        ctx.hasAura = function() return true end
+        assert.is_nil(ST:EvaluateSpec(db, 258, entryAura, ctx))
+    end)
+
+    -- The guard is scoped to aura checks. A stance is read through a different
+    -- subsystem that restricted content never touches, so it must still alert.
+    it("does not let hidden aura identity silence a form check", function()
+        ctx.auraIdentityVisible = function() return false end
+        assert.equals(386164, ST:EvaluateSpec(db, 71, entryForm, ctx))
+    end)
+
+    it("reads an Evoker attunement as a form, not an aura", function()
+        assert.equals("form", ST.SPECS[1473].check)
+    end)
+
+    it("hides when the Evoker holds the wanted attunement", function()
+        ctx.currentFormSpell = 403264
+        assert.is_nil(ST:EvaluateSpec(db, 1473, ST.SPECS[1473], ctx))
+    end)
+
+    it("shows when the Evoker holds the other attunement", function()
+        ctx.currentFormSpell = 403265
+        assert.equals(403264, ST:EvaluateSpec(db, 1473, ST.SPECS[1473], ctx))
     end)
 end)

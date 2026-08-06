@@ -30,8 +30,8 @@ local WRONG_TEXT_DEFAULT = "WRONG"
 -- Per-spec expected form, keyed by specialization ID.
 --
 --   spellID  the form/aura/stance that spec is expected to hold
---   check    "form"  read through GetShapeshiftForm (Warrior, Druid)
---            "aura"  read through the player's auras (Priest, Evoker, Paladin)
+--   check    "form"  read through GetShapeshiftForm (Warrior, Druid, Evoker)
+--            "aura"  read through the player's auras (Priest, Paladin)
 --   also     extra spell IDs that also satisfy the requirement
 --
 -- Paladin auras and Warrior stances have several valid choices, so their
@@ -55,8 +55,10 @@ local SPECS = {
     [104]  = { spellID = 5487,   check = "form" },
     -- Priest: Voidform also satisfies Shadowform.
     [258]  = { spellID = 232698, check = "aura", also = { 194249 } },
-    -- Evoker
-    [1473] = { spellID = 403264, check = "aura", options = EVOKER_ATTUNE },
+    -- Evoker: an attunement registers as a shapeshift form, so it reads like a
+    -- Warrior stance. Reading it as an aura instead goes blind in restricted
+    -- content and reports every attuned Evoker as missing one.
+    [1473] = { spellID = 403264, check = "form", options = EVOKER_ATTUNE },
 }
 ST.SPECS = SPECS
 
@@ -102,6 +104,17 @@ local function HasAura(spellID, also)
     return false
 end
 
+-- Challenge mode, encounters and PvP hide which spell each aura belongs to, and
+-- a by-ID lookup then answers "absent" for an aura that is present. Reading one
+-- aura is enough to tell: if its spell is hidden, no aura can be identified and
+-- the module has to stay quiet rather than accuse. A player with no buffs at all
+-- has nothing hidden, and "missing" is the honest answer there.
+local function AuraIdentityVisible()
+    local aura = C_UnitAuras.GetAuraDataByIndex("player", 1, "HELPFUL")
+    if not aura then return true end
+    return KE:NotSecretValue(aura.spellId)
+end
+
 -- The form the player is actually in, as a spell ID, or nil.
 local function CurrentFormSpell()
     local index = GetShapeshiftForm()
@@ -117,13 +130,18 @@ end
 
 -- Reused rather than rebuilt: UNIT_AURA for the player fires constantly in
 -- combat, and the reference's inline version allocates nothing on this path.
-local evalContext = { hasAura = HasAura, isKnown = SpellIsKnown }
+local evalContext = {
+    hasAura = HasAura,
+    isKnown = SpellIsKnown,
+    auraIdentityVisible = AuraIdentityVisible,
+}
 
 -- The whole rule, with every world reading passed in. Returns the spell id to
 -- draw, or nil to hide. Kept free of API calls so the rules can be tested
 -- without faking the shapeshift and aura subsystems.
 --
--- ctx fields: inCombat, currentFormSpell, hasAura(spellID, also), isKnown(spellID)
+-- ctx fields: inCombat, currentFormSpell, hasAura(spellID, also),
+-- isKnown(spellID), auraIdentityVisible()
 function ST:EvaluateSpec(db, specID, entry, ctx)
     if not entry then return nil end
 
@@ -143,6 +161,8 @@ function ST:EvaluateSpec(db, specID, entry, ctx)
     local satisfied
     if entry.check == "aura" then
         satisfied = ctx.hasAura(wanted, entry.also)
+        -- Only the accusing path pays for the check, which is the rare one.
+        if not satisfied and not ctx.auraIdentityVisible() then return nil end
     else
         satisfied = ctx.currentFormSpell == wanted
     end
