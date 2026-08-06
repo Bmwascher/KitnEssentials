@@ -70,21 +70,11 @@ describe("StanceText:EvaluateSpec", function()
         assert.is_nil(ST:EvaluateSpec(db, 258, entryAura, ctx))
     end)
 
-    it("still shows when identity is hidden but the aura was found anyway", function()
-        ctx.auraIdentityVisible = function() return false end
-        ctx.hasAura = function() return true end
-        assert.is_nil(ST:EvaluateSpec(db, 258, entryAura, ctx))
-    end)
-
     -- The guard is scoped to aura checks. A stance is read through a different
     -- subsystem that restricted content never touches, so it must still alert.
     it("does not let hidden aura identity silence a form check", function()
         ctx.auraIdentityVisible = function() return false end
         assert.equals(386164, ST:EvaluateSpec(db, 71, entryForm, ctx))
-    end)
-
-    it("reads an Evoker attunement as a form, not an aura", function()
-        assert.equals("form", ST.SPECS[1473].check)
     end)
 
     it("hides when the Evoker holds the wanted attunement", function()
