@@ -324,14 +324,16 @@ function GUIFrame:CreateMainFrame()
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
     -- Resize/move instrumentation. The runaway enlarge is intermittent, so the
-    -- log has to be armed before it happens rather than switched on after:
-    --   /run KE.GUIFrame.DEBUG_RESIZE = true
+    -- log has to be armed before it happens rather than switched on after.
+    -- The flag hangs off the FRAME because that is what has a global name --
+    -- the addon table is private to the file scope and unreachable from /run:
+    --   /run KE_GUIFrame.DEBUG_RESIZE = true
     -- Every handler on both the move path and the size path reports, so the
     -- ORDER they fire in is visible -- a move and a size both engaging is the
     -- shape worth ruling in or out, and it cannot be seen from the end state.
     local isResizing = false
     local function resizeLog(tag)
-        if not GUIFrame.DEBUG_RESIZE then return end
+        if not frame.DEBUG_RESIZE then return end
         local point, _, relativePoint, xOfs, yOfs = frame:GetPoint()
         KE:Print(string.format("%s w=%.1f h=%.1f %s>%s %.1f,%.1f sizing=%s",
             tag, frame:GetWidth() or -1, frame:GetHeight() or -1,
