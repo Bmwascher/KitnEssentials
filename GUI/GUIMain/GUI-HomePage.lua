@@ -14,10 +14,23 @@ local UnitClass = UnitClass
 local ipairs = ipairs
 local string_format = string.format
 local ReloadUI = ReloadUI
+local pairs = pairs
 
 ---------------------------------------------------------------------------------
 -- Helpers
 ---------------------------------------------------------------------------------
+
+local function BuildFontList()
+    local list = {}
+    if KE.LSM then
+        for name in pairs(KE.LSM:HashTable("font")) do
+            list[name] = name
+        end
+    else
+        list["Expressway"] = "Expressway"
+    end
+    return list
+end
 
 ---------------------------------------------------------------------------------
 -- Card Sections
@@ -129,7 +142,32 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         end,
     })
     row3a:AddWidget(chatCheck, 0.5)
-    cardSettings:AddRow(row3a, Theme.rowHeightLast, 0)
+    cardSettings:AddRow(row3a, Theme.rowHeight)
+
+    local row3b = GUIFrame:CreateRow(cardSettings.content, Theme.rowHeightLast)
+    local slugCheck = GUIFrame:CreateCheckbox(row3b, "Use Slug Font Rendering", {
+        value = not (db and db.UseSlugFonts == false),
+        tooltip = "Renders text with the GPU glyph renderer for crisper edges.",
+        callback = function(checked)
+            if not db then return end
+            db.UseSlugFonts = checked
+            KE:CreateReloadPrompt("Changing Slug rendering requires a UI reload to reach every module.")
+        end,
+    })
+    row3b:AddWidget(slugCheck, 0.5)
+
+    local fontDropdown = GUIFrame:CreateDropdown(row3b, "Global Font", {
+        options = BuildFontList(),
+        value = KE:GetGlobalFont(),
+        tooltip = "Used by every module and skin that has not been given a font of its own.",
+        callback = function(name)
+            if not db or not name then return end
+            db.GlobalFont = name
+            KE:CreateReloadPrompt("Changing the global font requires a UI reload to reach every module.")
+        end,
+    })
+    row3b:AddWidget(fontDropdown, 0.5)
+    cardSettings:AddRow(row3b, Theme.rowHeightLast, 0)
 
     yOffset = cardSettings:GetNextOffset()
 
