@@ -31,8 +31,12 @@ local WRONG_TEXT_DEFAULT = "WRONG"
 -- Per-spec expected form, keyed by specialization ID.
 --
 --   spellID  the form/aura/stance that spec is expected to hold
---   check    "form"  read through GetShapeshiftForm (Warrior, Druid, Evoker, Priest)
---            "aura"  read through the player's auras (Paladin)
+--   check    "form"  read through GetShapeshiftForm -- every spec today
+--            "aura"  read through the player's auras. No spec uses this: aura
+--                    identity is unreadable in combat, encounters, challenge
+--                    mode and PvP, so the check goes blind exactly where it
+--                    matters. Kept, with its guard, for a state that has no
+--                    form equivalent. Prefer a form check whenever one exists.
 --   also     extra spell IDs that also satisfy the requirement
 --
 -- Paladin auras and Warrior stances have several valid choices, so their
@@ -46,10 +50,10 @@ local SPECS = {
     [71]   = { spellID = 386164, check = "form", options = WARRIOR_STANCES },
     [72]   = { spellID = 386196, check = "form", options = WARRIOR_STANCES },
     [73]   = { spellID = 386208, check = "form", options = WARRIOR_STANCES },
-    -- Paladin
-    [65]   = { spellID = 465,    check = "aura", options = PALADIN_AURAS },
-    [66]   = { spellID = 465,    check = "aura", options = PALADIN_AURAS },
-    [70]   = { spellID = 32223,  check = "aura", options = PALADIN_AURAS },
+    -- Paladin: the three auras are the three stances, so they read as forms.
+    [65]   = { spellID = 465,    check = "form", options = PALADIN_AURAS },
+    [66]   = { spellID = 465,    check = "form", options = PALADIN_AURAS },
+    [70]   = { spellID = 32223,  check = "form", options = PALADIN_AURAS },
     -- Druid
     [102]  = { spellID = 24858,  check = "form" },
     [103]  = { spellID = 768,    check = "form" },
