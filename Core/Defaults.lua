@@ -82,6 +82,8 @@ local Defaults = {
         -- shipped configuration already rendered slugged before the setting
         -- existed; defaulting off would be a silent downgrade on upgrade.
         UseSlugFonts = true,
+        -- Resolved by KE:GetFontPath whenever a module has no font of its own.
+        GlobalFont = "Expressway",
         -- Minimap Icon
         Minimap = {
             hide = false,

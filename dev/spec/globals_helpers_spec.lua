@@ -569,6 +569,54 @@ describe("KE:RunAfterCombat", function()
     end)
 end)
 
+describe("KE:GetGlobalFont", function()
+    local KE
+
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    it("falls back to Expressway with no db", function()
+        KE.db = nil
+        assert.equals("Expressway", KE:GetGlobalFont())
+    end)
+
+    it("falls back to Expressway when the key is unset", function()
+        KE.db = { profile = {} }
+        assert.equals("Expressway", KE:GetGlobalFont())
+    end)
+
+    it("returns the stored value", function()
+        KE.db = { profile = { GlobalFont = "GoodFont" } }
+        assert.equals("GoodFont", KE:GetGlobalFont())
+    end)
+end)
+
+describe("KE:GetFontPath global resolution", function()
+    local KE
+
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    -- The loader's fake LSM returns "path/" .. name for any Fetch, so the
+    -- resolved name is readable straight off the returned path.
+    it("resolves a nil font name through the global font", function()
+        KE.db = { profile = { GlobalFont = "GoodFont" } }
+        assert.equals("path/GoodFont", KE:GetFontPath(nil))
+    end)
+
+    it("resolves a nil font name to Expressway with no db", function()
+        KE.db = nil
+        assert.equals("path/Expressway", KE:GetFontPath(nil))
+    end)
+
+    it("lets an explicit font name win over the global", function()
+        KE.db = { profile = { GlobalFont = "GoodFont" } }
+        assert.equals("path/Expressway", KE:GetFontPath("Expressway"))
+    end)
+end)
+
 describe("KE:GetEffectiveFont", function()
     local KE
 

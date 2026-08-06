@@ -84,7 +84,19 @@ end
 -- Media Helpers
 ---------------------------------------------------------------------------------
 
+-- The profile-wide font. Every module and skin that has not been given a font
+-- of its own resolves here, so one setting moves the whole addon.
+---@return string fontName
+function KE:GetGlobalFont()
+    local profile = self.db and self.db.profile
+    return (profile and profile.GlobalFont) or "Expressway"
+end
+
+-- A nil fontName means "no per-module choice", which resolves to the global
+-- font. Every font application reaches this, so no module needs to read the
+-- setting itself.
 function KE:GetFontPath(fontName)
+    fontName = fontName or self:GetGlobalFont()
     if KE.LSM and fontName then
         local path = KE.LSM:Fetch("font", fontName)
         if path then return path end
@@ -476,8 +488,13 @@ local function ValidateFontsRecursive(tbl, defaults)
             -- would write a font name into every profile on every login.
             local wantsEmpty = value == "" and (defaults and defaults[key]) == ""
             if not wantsEmpty and not LSM:IsValid("font", value) then
-                local defaultVal = defaults and defaults[key] or DEFAULT_FONT
+                local defaultVal = defaults and defaults[key] or KE:GetGlobalFont()
                 if not LSM:IsValid("font", defaultVal) then
+                    -- Backstop stays a literal. KE registers Expressway itself,
+                    -- so it is the one name guaranteed valid. The global font is
+                    -- never validated -- IsFontKey matches only "Font" and keys
+                    -- ending FontFace, so "GlobalFont" is not a font key -- which
+                    -- means it can BE the invalid value this branch just rejected.
                     defaultVal = DEFAULT_FONT
                 end
                 tbl[key] = defaultVal
