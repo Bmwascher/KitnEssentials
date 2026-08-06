@@ -1054,10 +1054,18 @@ function CP:StyleStatsPaneTexts()
     end
 
     -- Per-stat rows (Label/Value) are restyled by our PaperDollFrame_SetLabelAndText
-    -- hook, which only fires when Blizzard re-renders the stats pane. Force a
-    -- re-render so a StatsFontSize change applies live instead of on next reopen.
-    if PaperDollFrame and PaperDollFrame:IsShown() and PaperDollFrame_UpdateStats then
-        PaperDollFrame_UpdateStats()
+    -- hook, which only fires when Blizzard re-renders the stats pane. Walk the live
+    -- rows so a StatsFontSize change applies now instead of on next reopen.
+    -- Calling PaperDollFrame_UpdateStats to force that re-render taints Blizzard's
+    -- stat code, which then throws comparing UnitStat's secret buff values.
+    local statsSize = self.db.StatsFontSize or 12
+    if statsPane.statsFramePool and statsPane.statsFramePool.EnumerateActive then
+        for row in statsPane.statsFramePool:EnumerateActive() do
+            if row ~= statsPane.ItemLevelFrame then
+                if row.Label then self:ApplyFont(row.Label, statsSize) end
+                if row.Value then self:ApplyFont(row.Value, statsSize) end
+            end
+        end
     end
 end
 

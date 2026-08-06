@@ -512,7 +512,7 @@ function RC:CreateRoleIcons(panel)
         local Count = frame:CreateFontString(nil, "OVERLAY")
         S.SetFont(Count, 12, "OUTLINE")
         Count:SetPoint("LEFT", frame, "RIGHT", 1, 0)
-        Count:SetText(0)
+        Count:SetText("0")
         frame.count = Count
 
         frame.role = data.role

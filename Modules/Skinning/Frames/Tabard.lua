@@ -36,7 +36,8 @@ local function Skin()
     end
 
     local i = 1
-    local button, previous = _G["TabardFrameCustomization" .. i]
+    local previous
+    local button = _G["TabardFrameCustomization" .. i]
     while button do
         S.StripTextures(button)
         local left = _G["TabardFrameCustomization" .. i .. "LeftButton"]

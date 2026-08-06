@@ -71,8 +71,8 @@ local function Apply()
     local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
     local base = (bs and tonumber(bs.FontBaseSize)) or 12
-    for _, list in ipairs({ { OUTLINED, "OUTLINE" }, { PLAIN, "NONE" } }) do
-        local names, flags = list[1], list[2]
+    for _, pass in ipairs({ { names = OUTLINED, flags = "OUTLINE" }, { names = PLAIN, flags = "NONE" } }) do
+        local names, flags = pass.names, pass.flags
         for i = 1, #names do
             local name = names[i]
             local obj = _G[name]
@@ -114,7 +114,8 @@ S:RegisterEarly(function()
 
     if S.StylePulloutFrames and _G.C_Timer then
         S.StylePulloutFrames()
-        local n, ticker = 0
+        local n = 0
+        local ticker
         ticker = _G.C_Timer.NewTicker(2, function()
             S.StylePulloutFrames()
             n = n + 1

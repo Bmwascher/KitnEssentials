@@ -331,6 +331,6 @@ function ST:ShowPreview()
 end
 
 function ST:HidePreview()
-    self.previewing = nil
+    self.previewing = false
     self:Update()
 end

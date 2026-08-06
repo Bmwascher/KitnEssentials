@@ -288,7 +288,7 @@ function KE:SnapFrameToPixels(frame) end
 -- callers in Core/Widgets.lua use it on EditBoxes (the search/import
 -- inputs) where the underlying type is `EditBox & BackdropTemplate`.
 ---@param fontStr FontString|EditBox
----@param size string  -- "small" | "normal" | "large"
+---@param size string|number  -- "small" | "normal" | "large", or a point size
 function KE:ApplyThemeFont(fontStr, size) end
 
 -- Matches the real signature in Core/Widgets.lua. Most params are optional;

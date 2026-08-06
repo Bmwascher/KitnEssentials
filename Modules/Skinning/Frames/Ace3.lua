@@ -434,23 +434,6 @@ local function SkinWidget(widget)
             HookFontBump(lbl, 13)
         end
 
-        if lbl and widget.SetWidth and not S.data(widget).aeWidthHook then
-            S.data(widget).aeWidthHook = true
-            hooksecurefunc(widget, "SetWidth", function(wdg, width)
-                if type(width) == "number" and wdg.label then
-                    local fo = wdg.label.GetFontObject and wdg.label:GetFontObject()
-                    local f, sz, fl = fo and fo:GetFont() -- luacheck: ignore 221/sz 221/fl
-                    if f and sz then
-
-                        local cf, cs, cfl = wdg.label:GetFont()
-                        if cf ~= f or cs ~= sz or (cfl or "") ~= (fl or "") then
-                            wdg.label:SetFont(f, sz, fl or "")
-                        end
-                    end
-                end
-            end)
-        end
-
     elseif t == "Icon" then
         if frame then S.StripTextures(frame) end
 

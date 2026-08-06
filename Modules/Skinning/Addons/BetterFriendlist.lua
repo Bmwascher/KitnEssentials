@@ -204,9 +204,14 @@ local function FlattenInviteButton(tp)
 end
 
 local function HookLazy(module, creatorNames, skinFn)
-    if not module then return end
+    -- Callers pass whatever GetModule or a namespace field returns, which is
+    -- not always a table to hook onto.
+    if type(module) ~= "table" then return end
     for _, name in ipairs(creatorNames) do
         if type(module[name]) == "function" then
+            -- The checker infers this parameter from its call sites and cannot
+            -- see the table guard above.
+            ---@diagnostic disable-next-line: type-mismatch
             hooksecurefunc(module, name, function() pcall(skinFn) end)
         end
     end
