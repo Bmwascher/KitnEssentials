@@ -447,7 +447,7 @@ function KE:CreateSoftOutline(mainText, options)
         font = (font and font ~= "") and font or options.fontPath or "Fonts\\FRIZQT__.TTF"
         size = (size and size > 0) and size or options.fontSize or 14
 
-        existingOutline:SetFont(font, size, "")
+        existingOutline:SetFont(font, size, KE:SlugFlags(""))
         existingOutline:SetText(mainText:GetText() or "")
         existingOutline:_ApplyOffsets()
         existingOutline:_ApplyColor()
