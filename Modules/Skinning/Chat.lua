@@ -259,6 +259,12 @@ local function ReplaceSetupTextureCoordinates(frame)
     end
 end
 
+-- The copy-chat window keeps this surface colour instead of reading the addon
+-- theme's. It sits over the chat frame, not inside the settings window, so it
+-- has to stay put when the settings window's palette is retuned -- the chat
+-- module's own look is a separate decision from the settings window's.
+local COPY_FRAME_BG = { 0.0627, 0.0627, 0.0627, 0.60 }
+
 local function GetTemplateColors(template)
     local backdropR, backdropG, backdropB, backdropA = 0.1, 0.1, 0.1, 0.9
     local borderR, borderG, borderB, borderA = 0, 0, 0, 1
@@ -1802,7 +1808,7 @@ function CHAT:BuildCopyChatFrame()
     local frame = CreateFrame("Frame", "KE_CopyChatFrame", UIParent, "BackdropTemplate")
     tinsert(_G.UISpecialFrames, "KE_CopyChatFrame")
     frame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1, })
-    frame:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], Theme.bgDark[4])
+    frame:SetBackdropColor(COPY_FRAME_BG[1], COPY_FRAME_BG[2], COPY_FRAME_BG[3], COPY_FRAME_BG[4])
     frame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
     frame:SetSize(COPY_FRAME_WIDTH, COPY_FRAME_HEIGHT)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 100)
@@ -1822,7 +1828,7 @@ function CHAT:BuildCopyChatFrame()
     header:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
     header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -1, -1)
     header:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
-    header:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], Theme.bgDark[4] or 1)
+    header:SetBackdropColor(COPY_FRAME_BG[1], COPY_FRAME_BG[2], COPY_FRAME_BG[3], COPY_FRAME_BG[4])
     header:EnableMouse(true)
     header:RegisterForDrag("LeftButton")
     header:SetScript("OnDragStart", function() frame:StartMoving() end)
@@ -1887,7 +1893,7 @@ function CHAT:BuildCopyChatFrame()
     scrollbar:SetPoint("TOPRIGHT", contentArea, "TOPRIGHT", 0, 0)
     scrollbar:SetPoint("BOTTOMRIGHT", contentArea, "BOTTOMRIGHT", 0, 0)
     scrollbar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1, })
-    scrollbar:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.5)
+    scrollbar:SetBackdropColor(COPY_FRAME_BG[1], COPY_FRAME_BG[2], COPY_FRAME_BG[3], 0.5)
     scrollbar:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
     scrollbar:SetOrientation("VERTICAL")
     scrollbar:SetMinMaxValues(0, 1)

@@ -24,6 +24,7 @@ describe("tabbed pages: declared ids resolve to builders", function()
         helpers.loadModule("GUI/GUITabs/GUIClassUtilities/GUI-SpellAlerts.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-MoveFrames.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-CopyAnything.lua", KE)
+        helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-SlashCommands.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUIDungeons/GUI-GroupFinderPanel.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUIDungeons/GUI-LFGQuickCreate.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUIDungeons/GUI-LFGReminder.lua", KE)
@@ -69,11 +70,11 @@ describe("tabbed pages: declared ids resolve to builders", function()
         assert.is_function(GUIFrame.registeredContent["LFGReminder"])
     end)
 
-    it("gives Quality of Life three tabs, each with a builder", function()
+    it("gives Quality of Life four tabs, each with a builder", function()
         local tabs = strip("QualityOfLife")
-        assert.equals(3, #tabs)
-        assert.are.same({ "SpellAlerts", "MoveFrames", "CopyAnything" },
-            { tabs[1].id, tabs[2].id, tabs[3].id })
+        assert.equals(4, #tabs)
+        assert.are.same({ "SpellAlerts", "MoveFrames", "CopyAnything", "SlashCommands" },
+            { tabs[1].id, tabs[2].id, tabs[3].id, tabs[4].id })
         for _, tab in ipairs(tabs) do
             assert.is_function(GUIFrame.registeredContent[tab.id],
                 "no builder registered for declared tab id " .. tab.id)
