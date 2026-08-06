@@ -6,7 +6,7 @@
 ## SavedVariables: KitnEssentialsDB, KitnEssentialsOptimizeDB
 ## Interface: 120007
 ## OptionalDeps: Ace3, LibSharedMedia-3.0, ElvUI
-## IconTexture: Interface\Icons\INV_Misc_Gift_05
+## IconTexture: Interface\AddOns\KitnEssentials\Media\Icon\KES
 ## Category-enUS: |cffFF008CKitn|rUI
 ## X-Curse-Project-ID: 1485435
 ## X-Wago-ID: n6VLEEGd
