@@ -22,6 +22,7 @@ local GetShapeshiftFormInfo = GetShapeshiftFormInfo
 local C_UnitAuras = C_UnitAuras
 local C_Spell = C_Spell
 local C_SpellBook = C_SpellBook
+local C_RestrictedActions = C_RestrictedActions
 local UIParent = UIParent
 
 local MISSING_TEXT_DEFAULT = "MISSING"
@@ -104,15 +105,27 @@ local function HasAura(spellID, also)
     return false
 end
 
--- Challenge mode, encounters and PvP hide which spell each aura belongs to, and
--- a by-ID lookup then answers "absent" for an aura that is present. Reading one
--- aura is enough to tell: if its spell is hidden, no aura can be identified and
--- the module has to stay quiet rather than accuse. A player with no buffs at all
--- has nothing hidden, and "missing" is the honest answer there.
+-- The four states in which the aura system stops reporting which spell an aura
+-- belongs to. A by-ID lookup then answers "absent" for an aura that is present,
+-- so the aura check has to stay quiet rather than accuse. Form checks read a
+-- different subsystem and are never affected.
+local AURA_HIDDEN_STATES
+do
+    local kinds = Enum and Enum.AddOnRestrictionType
+    AURA_HIDDEN_STATES = kinds and {
+        kinds.Combat, kinds.Encounter, kinds.ChallengeMode, kinds.PvPMatch,
+    } or nil
+end
+
 local function AuraIdentityVisible()
-    local aura = C_UnitAuras.GetAuraDataByIndex("player", 1, "HELPFUL")
-    if not aura then return true end
-    return KE:NotSecretValue(aura.spellId)
+    if not (AURA_HIDDEN_STATES and C_RestrictedActions
+        and C_RestrictedActions.IsAddOnRestrictionActive) then
+        return true
+    end
+    for _, state in ipairs(AURA_HIDDEN_STATES) do
+        if C_RestrictedActions.IsAddOnRestrictionActive(state) then return false end
+    end
+    return true
 end
 
 -- The form the player is actually in, as a spell ID, or nil.
