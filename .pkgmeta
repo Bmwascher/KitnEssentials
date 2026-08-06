@@ -21,6 +21,10 @@ ignore:
   - dev
   - CHANGELOG.md
   - README.md
+  # Source art for the addon list icon. The icon itself ships as KES.tga --
+  # cropped and sized for a square slot -- so the full-bleed original is dead
+  # weight in the player zip.
+  - Media/Icon/KES.png
 
 
 externals:
