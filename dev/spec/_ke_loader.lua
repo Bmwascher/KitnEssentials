@@ -67,7 +67,10 @@ function L.loadDungeonTimers(opts, overrides)
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
-    local KE = { Print = function() end }
+    local KE = {
+        Print = function() end,
+        GetGlobalFont = function() return "Expressway" end,
+    }
     if opts.withEncounterData then
         helpers.loadModule("Modules/DungeonTimers/EncounterData.lua", KE)
     end

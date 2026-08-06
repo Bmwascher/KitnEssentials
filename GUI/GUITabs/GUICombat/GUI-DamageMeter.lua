@@ -1323,7 +1323,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", {
         options = fontList,
-        value = db.FontFace or "Expressway",
+        value = db.FontFace or KE:GetGlobalFont(),
         callback = function(key) db.FontFace = key; ApplySettings() end,
         searchable = true,
         isFontPreview = true,
@@ -1333,7 +1333,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 
     local outlineDropdown = GUIFrame:CreateDropdown(row3a, "Font Outline", {
         options = KE:GetFontOutlineOptions(),
-        value = db.FontOutline or "OUTLINE",
+        value = KE:NormalizeFontOutline(db.FontOutline or "OUTLINE"),
         callback = function(key) db.FontOutline = key; ApplySettings() end,
     })
     row3a:AddWidget(outlineDropdown, 0.5)

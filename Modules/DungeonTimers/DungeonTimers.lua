@@ -1597,11 +1597,11 @@ local function ApplyVisualsToBar(frame)
     -- Font on label + timerText
     local face, size, outline
     if isBar then
-        face = (barDisplay and barDisplay.fontFace) or "Expressway"
+        face = (barDisplay and barDisplay.fontFace) or KE:GetGlobalFont()
         size = (barDisplay and barDisplay.fontSize) or 12
         outline = (barDisplay and barDisplay.fontOutline) or "OUTLINE"
     else
-        face = (textDisplay and textDisplay.fontFace) or "Expressway"
+        face = (textDisplay and textDisplay.fontFace) or KE:GetGlobalFont()
         size = (textDisplay and textDisplay.fontSize) or 14
         outline = (textDisplay and textDisplay.fontOutline) or "SOFTOUTLINE"
     end

@@ -167,7 +167,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
         local rowFace = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
         local fontDropdown = GUIFrame:CreateDropdown(rowFace, "Font", {
             options = fontList,
-            value = db.Font or "Friz Quadrata TT",
+            value = db.Font or KE:GetGlobalFont(),
             callback = function(key)
                 db.Font = key
                 ApplySettings()
@@ -180,7 +180,7 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
 
         local outlineDropdown = GUIFrame:CreateDropdown(rowFace, "Outline", {
             options = OUTLINE_OPTIONS,
-            value = db.FontOutline or "OUTLINE",
+            value = KE:NormalizeFontOutline(db.FontOutline or "OUTLINE"),
             callback = function(key)
                 db.FontOutline = key
                 ApplySettings()

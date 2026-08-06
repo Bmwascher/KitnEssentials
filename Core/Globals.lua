@@ -84,7 +84,19 @@ end
 -- Media Helpers
 ---------------------------------------------------------------------------------
 
+-- The profile-wide font. Every module and skin that has not been given a font
+-- of its own resolves here, so one setting moves the whole addon.
+---@return string fontName
+function KE:GetGlobalFont()
+    local profile = self.db and self.db.profile
+    return (profile and profile.GlobalFont) or "Expressway"
+end
+
+-- A nil fontName means "no per-module choice", which resolves to the global
+-- font. Every font application reaches this, so no module needs to read the
+-- setting itself.
 function KE:GetFontPath(fontName)
+    fontName = fontName or self:GetGlobalFont()
     if KE.LSM and fontName then
         local path = KE.LSM:Fetch("font", fontName)
         if path then return path end
@@ -359,10 +371,10 @@ function KE:GetFontOutline(outline)
 end
 
 -- Single source of truth for the font-outline dropdown option list used by
--- every GUI font card. The base set (None/Outline/Thick/Slug/Outline Slug) is
--- always returned — Slug + Outline Slug engage Blizzard's vector glyph
--- renderer and are safe on every FontString surface. Pass flags for the two
--- optional modes that aren't universally appropriate:
+-- every GUI font card. The base set (None/Outline/Thick) is always returned.
+-- Slug is now a profile-wide switch (KE:SlugFlags) rather than a per-module
+-- mode, so it no longer appears here. Pass flags for the two optional modes
+-- that aren't universally appropriate:
 --   includeSoft  → SOFTOUTLINE   (KE's 8-shadow custom outline; pulls in
 --                                 extra FontStrings, can misbehave on
 --                                 recycled tiny-text Blizzard frames)
@@ -375,8 +387,6 @@ function KE:GetFontOutlineOptions(flags)
         { key = "NONE",         text = "None" },
         { key = "OUTLINE",      text = "Outline" },
         { key = "THICKOUTLINE", text = "Thick" },
-        { key = "SLUG",         text = "Slug" },
-        { key = "SLUG,OUTLINE", text = "Outline Slug" },
     }
     if flags.includeSoft then
         opts[#opts + 1] = { key = "SOFTOUTLINE", text = "Soft" }
@@ -385,6 +395,62 @@ function KE:GetFontOutlineOptions(flags)
         opts[#opts + 1] = { key = "MONOCHROME",  text = "Monochrome" }
     end
     return opts
+end
+
+-- Outline values saved while the per-module Slug modes existed are no longer
+-- selectable. A dropdown handed an unknown key renders the raw key as its
+-- label, so every read site funnels stored values through here first.
+local RETIRED_OUTLINES = {
+    ["SLUG"] = "NONE",
+    ["SLUG,OUTLINE"] = "OUTLINE",
+    ["OUTLINE, SLUG"] = "OUTLINE",
+}
+
+---@param value string?
+---@return string
+function KE:NormalizeFontOutline(value)
+    if value == nil then return "OUTLINE" end
+    return RETIRED_OUTLINES[value] or value
+end
+
+---------------------------------------------------------------------------------
+-- Slug Gate
+---------------------------------------------------------------------------------
+-- SLUG is Blizzard's GPU glyph renderer, not an outline effect, so an enabled
+-- gate slugs plain text too. THICKOUTLINE and MONOCHROME are left alone: the
+-- first renders badly slugged, the second carries its own rasterization rules.
+-- The disabled path strips rather than short-circuits, so an outline value
+-- saved while the old per-module Slug dropdown existed degrades to its plain
+-- form instead of sticking.
+--
+-- Slug silently draws nothing against the large CJK and Cyrillic faces these
+-- clients ship, which reads as a missing font rather than a missing effect.
+-- GetLocale is called inline, not localized at file scope, so headless specs
+-- can vary it per example.
+local SLUG_UNSUPPORTED = { zhCN = true, zhTW = true, koKR = true, ruRU = true }
+
+---@param flags string?
+---@return string?
+function KE:SlugFlags(flags)
+    local locale = GetLocale and GetLocale() or "enUS"
+    local profile = self.db and self.db.profile
+    local enabled = not SLUG_UNSUPPORTED[locale] and profile ~= nil and profile.UseSlugFonts == true
+
+    if enabled then
+        flags = flags or ""
+        if flags:find("SLUG", 1, true) then return flags end
+        if flags:find("THICKOUTLINE", 1, true) or flags:find("MONOCHROME", 1, true) then
+            return flags
+        end
+        if flags == "" then return "SLUG" end
+        return flags .. ", SLUG"
+    end
+
+    if not flags or flags == "" then return flags end
+    if not flags:find("SLUG", 1, true) then return flags end
+    -- Strips the concatenated form and the leading legacy form. Parenthesized
+    -- so the gsub match count never leaks out as a second return value.
+    return (flags:gsub("%s*,%s*SLUG", ""):gsub("^%s*SLUG%s*,?%s*", ""):gsub("SLUG", ""))
 end
 
 ---------------------------------------------------------------------------------
@@ -422,8 +488,13 @@ local function ValidateFontsRecursive(tbl, defaults)
             -- would write a font name into every profile on every login.
             local wantsEmpty = value == "" and (defaults and defaults[key]) == ""
             if not wantsEmpty and not LSM:IsValid("font", value) then
-                local defaultVal = defaults and defaults[key] or DEFAULT_FONT
+                local defaultVal = defaults and defaults[key] or KE:GetGlobalFont()
                 if not LSM:IsValid("font", defaultVal) then
+                    -- Backstop stays a literal. KE registers Expressway itself,
+                    -- so it is the one name guaranteed valid. The global font is
+                    -- never validated -- IsFontKey matches only "Font" and keys
+                    -- ending FontFace, so "GlobalFont" is not a font key -- which
+                    -- means it can BE the invalid value this branch just rejected.
                     defaultVal = DEFAULT_FONT
                 end
                 tbl[key] = defaultVal
@@ -502,7 +573,7 @@ function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     if not self:IsFontValid(fontPath) then
         fontPath = "Fonts\\FRIZQT__.TTF"
     end
-    local outline = self:GetFontOutline(fontOutline)
+    local outline = self:SlugFlags(self:GetFontOutline(fontOutline))
     local size = (fontSize and fontSize > 0) and fontSize or 12
 
     -- SimpleHTML frames (guild MOTD and Info bodies, anything rendering

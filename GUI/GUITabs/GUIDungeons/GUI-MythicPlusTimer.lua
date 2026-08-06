@@ -80,7 +80,7 @@ local function AddFontCard(scrollChild, yOffset, db, manager, prefix, opts)
     local row = GUIFrame:CreateRow(card.content, rowH)
     local fontDrop = GUIFrame:CreateDropdown(row, "Font", {
         options = MediaList("font", "Expressway"),
-        value = db[faceKey] or db.FontFace or "Expressway",
+        value = db[faceKey] or db.FontFace or KE:GetGlobalFont(),
         callback = function(key) db[faceKey] = key; applyFn() end,
         searchable = true, isFontPreview = true,
     })
@@ -96,7 +96,7 @@ local function AddFontCard(scrollChild, yOffset, db, manager, prefix, opts)
     local outlineDrop = GUIFrame:CreateDropdown(row, "Outline", {
         options = opts.includeMono and KE:GetFontOutlineOptions{ includeMono = true }
                                     or KE:GetFontOutlineOptions(),
-        value = db[outlineKey] or db.FontOutline or "OUTLINE",
+        value = KE:NormalizeFontOutline(db[outlineKey] or db.FontOutline or "OUTLINE"),
         callback = function(key) db[outlineKey] = key; applyFn() end,
     })
     row:AddWidget(outlineDrop, 1 / 3)

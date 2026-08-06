@@ -216,7 +216,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
             function() return db.FontFace or "Expressway" end,
             function(v) db.FontFace = v end), 40,
         MkDropdown("Outline", KE:GetFontOutlineOptions(),
-            function() return db.FontOutline or "OUTLINE" end,
+            function() return KE:NormalizeFontOutline(db.FontOutline or "OUTLINE") end,
             function(v) db.FontOutline = v end), 40)
     PairRow(card3,
         MkSlider("Font Size", 8, 20, 1,

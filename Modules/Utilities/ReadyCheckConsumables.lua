@@ -457,7 +457,7 @@ function RCC:BuildFrame()
         local timeLeft = btn:CreateFontString(nil, "OVERLAY", nil, 8)
         timeLeft:SetPoint("BOTTOM", btn, "TOP", 0, 1)
         KE:ApplyFontToText(timeLeft,
-            db.FontFace    or "Expressway",
+            db.FontFace,
             db.FontSize    or 11,
             db.FontOutline or "OUTLINE")
         local dr, dg, db_, da = KE:ResolveColor(db.DurationColor, { 1, 1, 1, 1 })
@@ -469,7 +469,7 @@ function RCC:BuildFrame()
         local countText = btn:CreateFontString(nil, "OVERLAY", nil, 8)
         countText:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
         KE:ApplyFontToText(countText,
-            db.FontFace    or "Expressway",
+            db.FontFace,
             db.FontSize    or 11,
             db.FontOutline or "OUTLINE")
         countText:SetTextColor(dr, dg, db_, da)
@@ -1480,14 +1480,14 @@ function RCC:ApplySettings()
         if btn then
             if btn.timeLeft then
                 KE:ApplyFontToText(btn.timeLeft,
-                    db.FontFace    or "Expressway",
+                    db.FontFace,
                     db.FontSize    or 11,
                     db.FontOutline or "OUTLINE")
                 btn.timeLeft:SetTextColor(dr, dg, db_, da)
             end
             if btn.countText then
                 KE:ApplyFontToText(btn.countText,
-                    db.FontFace    or "Expressway",
+                    db.FontFace,
                     db.FontSize    or 11,
                     db.FontOutline or "OUTLINE")
                 btn.countText:SetTextColor(dr, dg, db_, da)

@@ -211,7 +211,7 @@ local function BuildPage(opts)
         local rowG = GUIFrame:CreateRow(card4.content, 40)
         local fontDrop = GUIFrame:CreateDropdown(rowG, "Font", {
             options = fontList,
-            value = db.FontFace,
+            value = db.FontFace or KE:GetGlobalFont(),
             callback = function(v) db.FontFace = v; ApplySettings() end,
         })
         rowG:AddWidget(fontDrop, 0.5)
@@ -221,7 +221,7 @@ local function BuildPage(opts)
                 { key = "OUTLINE",      text = "Outline" },
                 { key = "THICKOUTLINE", text = "Thick" },
             },
-            value = db.FontOutline,
+            value = KE:NormalizeFontOutline(db.FontOutline),
             callback = function(v) db.FontOutline = v; ApplySettings() end,
         })
         rowG:AddWidget(outline, 0.5)

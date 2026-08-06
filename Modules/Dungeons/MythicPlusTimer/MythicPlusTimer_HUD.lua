@@ -199,7 +199,7 @@ function MPT:BuildHUD()
         -- Render's SetText calls run synchronously before it — a template-
         -- less FontString with no font errors "Font not set" on SetText
         -- (hit via ShowPreview's first Render of a fresh session).
-        KE:ApplyFont(fs, (self.db and self.db.FontFace) or "Expressway",
+        KE:ApplyFont(fs, (self.db and self.db.FontFace),
             (self.db and self.db.FontSize) or 13, "OUTLINE")
         return fs
     end

@@ -177,7 +177,7 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     local rowFont = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
     local fontFaceDropdown = GUIFrame:CreateDropdown(rowFont, "Font", {
         options = fontList,
-        value = db.FontFace or "Expressway",
+        value = db.FontFace or KE:GetGlobalFont(),
         searchable = true,
         isFontPreview = true,
         callback = function(key) db.FontFace = key; ApplySettings() end,
@@ -187,7 +187,7 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
 
     local outlineDropdown = GUIFrame:CreateDropdown(rowFont, "Outline", {
         options = KE:GetFontOutlineOptions{ includeSoft = true },
-        value = db.FontOutline or "OUTLINE",
+        value = KE:NormalizeFontOutline(db.FontOutline or "OUTLINE"),
         callback = function(key) db.FontOutline = key; ApplySettings() end,
     })
     rowFont:AddWidget(outlineDropdown, 0.5)

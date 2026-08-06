@@ -411,7 +411,7 @@ function GUIFrame:CreateSidebar(parent)
     local sidebar = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     sidebar:SetPoint("TOPLEFT", parent, "TOPLEFT", T.borderSize, -(T.headerHeight + T.borderSize))
     sidebar:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", T.borderSize, T.footerHeight)
-    sidebar:SetPoint("RIGHT", parent.content or parent, "LEFT", 0, 0)
+    sidebar:SetWidth(T.sidebarWidth)
     sidebar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
     sidebar:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4])
 

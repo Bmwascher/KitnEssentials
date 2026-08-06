@@ -123,8 +123,16 @@ end
 
 -- Toggle the GUI window
 function GUIFrame:Toggle()
+    -- The window can never be on screen during combat, so the only thing a
+    -- toggle can flip is whether it will be open once combat ends.
     if InCombatLockdown() then
-        KE:Print("Cannot open settings in combat.")
+        if self.reopenAfterCombat then
+            self.reopenAfterCombat = nil
+            KE:Print("Options window will stay closed after combat.")
+        else
+            self.reopenAfterCombat = true
+            KE:Print("Options will open after combat ends.")
+        end
         return
     end
     if self.mainFrame and self.mainFrame:IsShown() then

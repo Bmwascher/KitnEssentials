@@ -78,6 +78,12 @@ local Defaults = {
     profile = {
         -- Global
         ShowChatMessage = true,
+        -- Slug is Blizzard's GPU glyph renderer. On by default because the
+        -- shipped configuration already rendered slugged before the setting
+        -- existed; defaulting off would be a silent downgrade on upgrade.
+        UseSlugFonts = true,
+        -- Resolved by KE:GetFontPath whenever a module has no font of its own.
+        GlobalFont = "Expressway",
         -- Minimap Icon
         Minimap = {
             hide = false,
@@ -98,7 +104,6 @@ local Defaults = {
             Format = "MM:SS",
             BracketStyle = "square",
             FontSize = 28,
-            FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
             FontShadow = DefaultFontShadow(),
             ColorInCombat = { 1, 1, 1, 1 },
@@ -132,7 +137,6 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -60),
             FontSize = 16,
-            FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
             TextSpacing = 4,
             GrowthDirection = "RIGHT",
@@ -151,7 +155,6 @@ local Defaults = {
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
-            FontFace = "Expressway",
             FontSize = 16,
             FontOutline = "SOFTOUTLINE",
             Position = DefaultPosition(0, 125),
@@ -230,7 +233,6 @@ local Defaults = {
                 AnchorPoint        = "CENTER",
                 XOffset            = 0,
                 YOffset            = 10,
-                FontFace           = "Expressway",
                 FontSize           = 18,
                 TextColor          = { 1, 1, 1, 1 },
                 VisibilityOverride = nil,
@@ -247,7 +249,6 @@ local Defaults = {
                 AnchorPoint        = "CENTER",
                 XOffset            = 10,
                 YOffset            = 10,
-                FontFace           = "Expressway",
                 FontSize           = 18,
                 TextColor          = { 1, 1, 1, 1 },
                 VisibilityOverride = nil,
@@ -262,7 +263,6 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 100),
             FontSize = 26,
-            FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
             PetMissing = "PET MISSING",
             PetDead = "PET DEAD",
@@ -282,7 +282,6 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 150),
             FontSize = 16,
-            FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
             ColorMode = "custom",
             Color = { 0.969, 0.027, 0.945, 1 },  -- #F707F1
@@ -296,7 +295,6 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 350),
             FontSize = 37,
-            FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
             ColorMode = "custom",
             Color = { 1, 0, 0.549, 1 },  -- #FF008C
@@ -314,7 +312,6 @@ local Defaults = {
             Enabled = true,
             Position = DefaultPosition(0, -61),
             FontSize = 16,
-            FontFace = "Expressway",
             FontOutline = "OUTLINE",
 
             GrowDirection = "DOWN",
@@ -349,7 +346,6 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 220),
             FontSize = 14,
-            FontFace = "Expressway",
             FontOutline = "OUTLINE",
             StatusBarTexture = "KitnUI",
             CastingColor = { 0.624, 0.749, 1, 1 },
@@ -415,7 +411,6 @@ local Defaults = {
             ColorTwo = { 1, 0.42, 0 },
             ColorThree = { 1, 0.82, 0 },
             ColorFour = { 0, 1, 0 },
-            FontFace = "Expressway",
             FontSize = 24,
             FontOutline = "SOFTOUTLINE",
             Strata = "HIGH",
@@ -431,14 +426,12 @@ local Defaults = {
             TextLabel = "FREE",
             TextColor = { 0, 1, 0, 1 },
             ShowTimer = true,
-            TimerFontFace = "Expressway",
             TimerFontSize = 16,
             TimerFontOutline = "OUTLINE",
             TimerTextColor = { 1, 1, 1, 1 },
             GlowEnabled = true,
             GlowType = "proc",
             GlowColor = { 0, 1, 0, 1 },
-            FontFace = "Expressway",
             FontSize = 14,
             FontOutline = "SOFTOUTLINE",
             Strata = "MEDIUM",
@@ -470,7 +463,6 @@ local Defaults = {
             HideWhenZero = true,
             FadeTime = 10, -- seconds the icon (and, when abbreviating, the number) lingers after a change
 
-            FontFace = "Expressway",
             FontSize = 16,
             FontOutline = "OUTLINE",
             ShieldColor = { 0.37, 0.82, 1, 1 },    -- cyan
@@ -511,7 +503,6 @@ local Defaults = {
             Swipe = false,
             Reverse = false,
 
-            FontFace = "Expressway",
             FontOutline = "OUTLINE",
             TimerFontSize = 18,
 
@@ -531,7 +522,6 @@ local Defaults = {
             ShowTimer = true,
             TimerColor = { 1, 1, 1, 1 },
             TimerFontSize = 18,
-            FontFace = "Expressway",
             FontOutline = "OUTLINE",
             -- Glow (CreateGlowSettingsCard default key names)
             GlowEnabled   = false,
@@ -568,7 +558,6 @@ local Defaults = {
             LowDurationColor = { 1, 0.302, 0.302, 1 },  -- #ff4d4d
             MidDurationColor = { 1, 0.749, 0.2, 1 },     -- #ffbf33
             HighDurationColor = { 0, 1, 0.059, 1 },      -- #00ff0f
-            FontFace = "Expressway",
             FontOutline = "OUTLINE",
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
@@ -584,7 +573,6 @@ local Defaults = {
                 Enabled = true,
                 Text = "DON'T CLIP",
                 FontSize = 16,
-                FontFace = "Expressway",
                 FontOutline = "SOFTOUTLINE",
                 Color = { 1, 0, 0, 1 },
             },
@@ -610,7 +598,6 @@ local Defaults = {
             Color = { 0.2, 0.5, 0.4, 1 },
             BarBackgroundColor = { 0, 0, 0, 0.8 },
             FontSize = 14,
-            FontFace = "Expressway",
             FontOutline = "OUTLINE",
         },
 
@@ -628,7 +615,6 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -150),
             IconSize = 48,
-            FontFace = "Expressway",
             FontSize = 22,
             FontOutline = "OUTLINE",
             BaseColor = { 1, 1, 1, 1 },
@@ -760,7 +746,6 @@ local Defaults = {
             BarHeight = 16,
             Spacing = 1,
             SpeedFontSize = 14,
-            FontFace = "Expressway",
             ShowSurgeIcon = true,
             SurgeIconOnLeft = false,
             SurgeIconAutoSize = true,
@@ -795,10 +780,8 @@ local Defaults = {
             ShowNames = true,
             ClassColorNames = false,
             NameMaxLength = 0,
-            NameFontFace = "Expressway",
             NameFontSize = 12,
             NameFontOutline = "OUTLINE",
-            TimerFontFace = "Expressway",
             TimerFontSize = 14,
             TimerFontOutline = "OUTLINE",
             NameColor = { 1, 1, 1, 1 },
@@ -837,7 +820,6 @@ local Defaults = {
             -- Text
             ShowName = true,
             ShowTimer = true,
-            FontFace = "Expressway",
             FontSize = 14,
             FontOutline = "OUTLINE",
             -- Ready state
@@ -864,7 +846,6 @@ local Defaults = {
             Text = "MISSING",
             TextWrong = "WRONG",
             TextColor = { 1, 0.3, 0.3, 1 },
-            FontFace = "Expressway",
             FontSize = 14,
             FontOutline = "SOFTOUTLINE",
 
@@ -893,7 +874,6 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 120),
             FontSize = 16,
-            FontFace = "Expressway",
             FontOutline = "OUTLINE",
             Color = { 1, 0.82, 0, 1 },
         },
@@ -905,7 +885,6 @@ local Defaults = {
             DisableOnHealer = false,
             Text = "Potion Ready",
             FontSize = 20,
-            FontFace = "Expressway",
             FontOutline = "SOFTOUTLINE",
             ColorMode = "theme",
             Color = { 0, 1, 0, 1 },
@@ -953,7 +932,6 @@ local Defaults = {
             -- thing they can share: YourKeyUseRerollPosition parks Your Key
             -- on the Reroll coordinates instead of its own.
             RerollSize = 64,
-            RerollFontFace = "Expressway",
             RerollFontOutline = "SOFTOUTLINE",
             RerollFontSize = 36,
             RerollFontColor = { 1, 1, 1, 1 },
@@ -967,7 +945,6 @@ local Defaults = {
             -- follow off must not stack the two on identical coordinates.
             YourKeyUseRerollPosition = true,
             YourKeySize = 64,
-            YourKeyFontFace = "Expressway",
             YourKeyFontOutline = "SOFTOUTLINE",
             YourKeyFontSize = 36,
             YourKeyFontColor = { 1, 1, 1, 1 },
@@ -1070,7 +1047,6 @@ local Defaults = {
             SoundChannel = "Master",
             ShowChatMessage = true,
             FontSize = 32,
-            FontFace = "Expressway",
             FontOutline = "OUTLINE",
             AlertDuration = 4,
             Strata = "HIGH",
@@ -1119,8 +1095,7 @@ local Defaults = {
             ShowSlotGems         = true,
             SlotInfoFontSize     = 15,
 
-            -- Shared font face/outline (warnings + character panel text)
-            FontFace                 = "Expressway",
+            -- Shared font outline (warnings + character panel text)
             FontOutline              = "OUTLINE",
 
             -- Warning text size (independent)
@@ -1192,7 +1167,6 @@ local Defaults = {
             IconSpacing = 1,
 
             -- Font settings (for duration text above icons)
-            FontFace = "Expressway",
             FontSize = 13,
             FontOutline = "SOFTOUTLINE",
 
@@ -1233,7 +1207,6 @@ local Defaults = {
             GlowDuration      = 1.0,
             SoundEnabled      = false,
             SoundName         = "None",
-            FontFace          = "Expressway",
             FontSize          = 14,
             FontOutline       = "OUTLINE",
             TimerFontSize     = 18,
@@ -1283,7 +1256,6 @@ local Defaults = {
                 INCLUDE_NAME_PLATE_ONLY = false,
             },
             Blocklist     = {},
-            FontFace      = "Expressway",
             FontSize      = 14,
             FontOutline   = "OUTLINE",
             TimerFontSize = 16,
@@ -1313,7 +1285,6 @@ local Defaults = {
             EnchantBorderColor = { 0.6, 0.2, 0.9, 1 },
             CountColor = { 1, 1, 1, 1 },
 
-            FontFace = "Expressway",
             FontOutline = "OUTLINE",
             TimerFontSize = 12,
             CountFontSize = 12,
@@ -1348,7 +1319,6 @@ local Defaults = {
             EnchantBorderColor = { 0.6, 0.2, 0.9, 1 },
             CountColor = { 1, 1, 1, 1 },
 
-            FontFace = "Expressway",
             FontOutline = "OUTLINE",
             TimerFontSize = 12,
             CountFontSize = 12,
@@ -1371,7 +1341,6 @@ local Defaults = {
             TextSpacing = 45,           -- middle countdown slot width (px)
             Grow = "UP",                -- "DOWN" | "UP" only (no horizontal in v1)
             MaxIcons = 10,              -- entry cap; invisible entries count (secret targeting)
-            FontFace = "Expressway",
             FontSize = 32,
             FontOutline = "OUTLINE",    -- no SOFTOUTLINE (widget-managed countdown text)
             FontColor = { 1, 0.976, 0.153, 1 }, -- countdown text #FFF927 (plain values into SetTextColor)
@@ -1450,7 +1419,6 @@ local Defaults = {
                 ShowPrefix = true,
                 Prefix = "Enemies:",
                 FontSize = 20,
-                FontFace = "Expressway",
                 FontOutline = "SOFTOUTLINE",
                 ColorMode = "theme",
                 Color = { 1, 1, 1, 1 },
@@ -1486,7 +1454,6 @@ local Defaults = {
                 ManaFontSize = 14,
                 ManaXOffset = 4,
                 ManaYOffset = -2,
-                FontFace = "Expressway",
                 FontOutline = "SOFTOUTLINE",
                 HighManaColor = { 1, 1, 1, 1 },
             },
@@ -1495,7 +1462,6 @@ local Defaults = {
                 EnableInDungeons = true,
                 EnableInRaids = false,
 
-                FontFace = "Expressway",
                 FontSize = 34,
                 FontOutline = "SOFTOUTLINE",
 
@@ -1548,7 +1514,6 @@ local Defaults = {
                 -- Bar appearance
                 BarDisplay = {
                     StatusBarTexture = "KitnUI",
-                    FontFace = "Expressway",
                     FontSize = 14,
                     FontOutline = "OUTLINE",
                     SparkEnabled = true,
@@ -1614,7 +1579,6 @@ local Defaults = {
             BarDisplay = {
                 barWidth = 279,
                 barHeight = 27,
-                fontFace = "Expressway",
                 fontSize = 14,
                 fontOutline = "OUTLINE",
                 barTexture = "KitnUI",
@@ -1635,7 +1599,6 @@ local Defaults = {
             },
 
             TextDisplay = {
-                fontFace = "Expressway",
                 fontSize = 26,
                 fontOutline = "SOFTOUTLINE",
                 textAlign = "CENTER",
@@ -1776,7 +1739,6 @@ local Defaults = {
                 Enabled = false,
                 Width = 448,
                 Height = 245,
-                FontFace = "Expressway",
                 FontOutline = "OUTLINE",
                 FontSize = 14,
                 TabFontSize = 12,
@@ -1841,7 +1803,6 @@ local Defaults = {
             },
             Messages = {
                 Enabled = false,
-                Font = "Expressway",
                 FontOutline = "OUTLINE",
                 UIErrorsFrame = {
                     Hide = false,

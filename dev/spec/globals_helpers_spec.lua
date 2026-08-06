@@ -142,30 +142,30 @@ describe("Core/Globals.lua helpers", function()
             return keys
         end
 
-        it("returns the 5 universal modes with no flags", function()
+        it("returns the 3 universal modes with no flags", function()
             assert.same(
-                { "NONE", "OUTLINE", "THICKOUTLINE", "SLUG", "SLUG,OUTLINE" },
+                { "NONE", "OUTLINE", "THICKOUTLINE" },
                 keysOf(KE:GetFontOutlineOptions())
             )
         end)
 
         it("appends SOFTOUTLINE only with includeSoft", function()
             local keys = keysOf(KE:GetFontOutlineOptions({ includeSoft = true }))
-            assert.equals(6, #keys)
-            assert.equals("SOFTOUTLINE", keys[6])
+            assert.equals(4, #keys)
+            assert.equals("SOFTOUTLINE", keys[4])
         end)
 
         it("appends MONOCHROME only with includeMono", function()
             local keys = keysOf(KE:GetFontOutlineOptions({ includeMono = true }))
-            assert.equals(6, #keys)
-            assert.equals("MONOCHROME", keys[6])
+            assert.equals(4, #keys)
+            assert.equals("MONOCHROME", keys[4])
         end)
 
         it("orders soft before mono when both flags are set", function()
             local keys = keysOf(KE:GetFontOutlineOptions({ includeSoft = true, includeMono = true }))
-            assert.equals(7, #keys)
-            assert.equals("SOFTOUTLINE", keys[6])
-            assert.equals("MONOCHROME", keys[7])
+            assert.equals(5, #keys)
+            assert.equals("SOFTOUTLINE", keys[4])
+            assert.equals("MONOCHROME", keys[5])
         end)
     end)
 
@@ -429,6 +429,102 @@ describe("Core/Globals.lua helpers", function()
             assert.equals("GoodFont", KE.db.profile.Module.FontFace)
         end)
     end)
+
+    describe("KE:SlugFlags", function()
+        -- GetLocale is not managed by _wow_mock, so it lives on _G and is
+        -- reassigned per test. Core/Globals.lua calls it inline for exactly
+        -- this reason.
+        local function enable(locale)
+            KE.db = { profile = { UseSlugFonts = true } }
+            _G.GetLocale = function() return locale or "enUS" end
+        end
+
+        local function disable()
+            KE.db = { profile = { UseSlugFonts = false } }
+            _G.GetLocale = function() return "enUS" end
+        end
+
+        it("slugs plain text — slug is a glyph renderer, not an outline effect", function()
+            enable()
+            assert.equals("SLUG", KE:SlugFlags(""))
+            assert.equals("SLUG", KE:SlugFlags(nil))
+        end)
+
+        it("appends to an existing outline", function()
+            enable()
+            assert.equals("OUTLINE, SLUG", KE:SlugFlags("OUTLINE"))
+        end)
+
+        it("leaves THICKOUTLINE alone — slug and thick render badly together", function()
+            enable()
+            assert.equals("THICKOUTLINE", KE:SlugFlags("THICKOUTLINE"))
+        end)
+
+        it("leaves MONOCHROME alone", function()
+            enable()
+            assert.equals("MONOCHROME", KE:SlugFlags("MONOCHROME"))
+        end)
+
+        it("is idempotent on already-slugged flags", function()
+            enable()
+            assert.equals("OUTLINE, SLUG", KE:SlugFlags("OUTLINE, SLUG"))
+            assert.equals("SLUG,OUTLINE", KE:SlugFlags("SLUG,OUTLINE"))
+        end)
+
+        it("strips the concatenated form when disabled", function()
+            disable()
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE, SLUG"))
+        end)
+
+        it("strips the leading legacy form when disabled", function()
+            disable()
+            assert.equals("OUTLINE", KE:SlugFlags("SLUG,OUTLINE"))
+        end)
+
+        it("strips a bare SLUG to empty when disabled", function()
+            disable()
+            assert.equals("", KE:SlugFlags("SLUG"))
+        end)
+
+        it("passes non-slug flags through untouched when disabled", function()
+            disable()
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE"))
+            assert.equals("", KE:SlugFlags(""))
+            assert.is_nil(KE:SlugFlags(nil))
+        end)
+
+        it("overrides the setting on locales where slug renders blank", function()
+            enable("koKR")
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE, SLUG"))
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE"))
+        end)
+
+        it("treats a missing db as disabled", function()
+            KE.db = nil
+            _G.GetLocale = function() return "enUS" end
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE, SLUG"))
+        end)
+    end)
+
+    describe("KE:NormalizeFontOutline", function()
+        it("maps the retired slug keys to their surviving equivalent", function()
+            assert.equals("NONE", KE:NormalizeFontOutline("SLUG"))
+            assert.equals("OUTLINE", KE:NormalizeFontOutline("SLUG,OUTLINE"))
+            assert.equals("OUTLINE", KE:NormalizeFontOutline("OUTLINE, SLUG"))
+        end)
+
+        it("passes surviving keys through unchanged", function()
+            assert.equals("NONE", KE:NormalizeFontOutline("NONE"))
+            assert.equals("OUTLINE", KE:NormalizeFontOutline("OUTLINE"))
+            assert.equals("THICKOUTLINE", KE:NormalizeFontOutline("THICKOUTLINE"))
+            assert.equals("SOFTOUTLINE", KE:NormalizeFontOutline("SOFTOUTLINE"))
+            assert.equals("MONOCHROME", KE:NormalizeFontOutline("MONOCHROME"))
+        end)
+
+        it("defaults a nil value to OUTLINE", function()
+            assert.equals("OUTLINE", KE:NormalizeFontOutline(nil))
+        end)
+    end)
 end)
 
 describe("KE:RunAfterCombat", function()
@@ -470,6 +566,54 @@ describe("KE:RunAfterCombat", function()
         assert.is_true(secondRan)
         assert.equal(1, #caughtErrors)
         assert.matches("boom", caughtErrors[1])
+    end)
+end)
+
+describe("KE:GetGlobalFont", function()
+    local KE
+
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    it("falls back to Expressway with no db", function()
+        KE.db = nil
+        assert.equals("Expressway", KE:GetGlobalFont())
+    end)
+
+    it("falls back to Expressway when the key is unset", function()
+        KE.db = { profile = {} }
+        assert.equals("Expressway", KE:GetGlobalFont())
+    end)
+
+    it("returns the stored value", function()
+        KE.db = { profile = { GlobalFont = "GoodFont" } }
+        assert.equals("GoodFont", KE:GetGlobalFont())
+    end)
+end)
+
+describe("KE:GetFontPath global resolution", function()
+    local KE
+
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    -- The loader's fake LSM returns "path/" .. name for any Fetch, so the
+    -- resolved name is readable straight off the returned path.
+    it("resolves a nil font name through the global font", function()
+        KE.db = { profile = { GlobalFont = "GoodFont" } }
+        assert.equals("path/GoodFont", KE:GetFontPath(nil))
+    end)
+
+    it("resolves a nil font name to Expressway with no db", function()
+        KE.db = nil
+        assert.equals("path/Expressway", KE:GetFontPath(nil))
+    end)
+
+    it("lets an explicit font name win over the global", function()
+        KE.db = { profile = { GlobalFont = "GoodFont" } }
+        assert.equals("path/Expressway", KE:GetFontPath("Expressway"))
     end)
 end)
 

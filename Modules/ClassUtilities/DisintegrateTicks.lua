@@ -282,7 +282,7 @@ function DT:ApplyWarningSettings()
     local cw = db.ClipWarning or {}
 
     KE:ApplyFontToText(self.warningText,
-        cw.FontFace or "Expressway",
+        cw.FontFace,
         cw.FontSize or 16,
         cw.FontOutline or "SOFTOUTLINE"
     )

@@ -229,7 +229,7 @@ function ST:ApplySettings()
 
     -- Font
     KE:ApplyFontToText(self.countdownText,
-        db.FontFace or "Expressway",
+        db.FontFace,
         db.FontSize or 14,
         db.FontOutline or "OUTLINE"
     )

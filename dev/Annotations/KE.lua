@@ -159,7 +159,7 @@ function KE:SetWAEnabled(enabled) end
 function KE:HandleWACommand(arg) end
 
 -- ─── Font helpers ─────────────────────────────────────────
----@param name string
+---@param name string?
 ---@return string
 function KE:GetFontPath(name) end
 
@@ -178,6 +178,20 @@ function KE:GetFontOutline(outline) end
 ---@param flags { includeSoft: boolean?, includeMono: boolean? }?
 ---@return { key: string, text: string }[]
 function KE:GetFontOutlineOptions(flags) end
+
+--- Adds or strips the SLUG glyph-renderer flag per the profile-wide toggle.
+---@param flags string?
+---@return string?
+function KE:SlugFlags(flags) end
+
+--- Maps retired outline keys to their surviving equivalent for display.
+---@param value string?
+---@return string
+function KE:NormalizeFontOutline(value) end
+
+--- The profile-wide font, resolved by KE:GetFontPath when a module has none.
+---@return string
+function KE:GetGlobalFont() end
 
 ---@param fontPath string
 ---@return boolean

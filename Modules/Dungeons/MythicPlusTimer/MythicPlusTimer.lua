@@ -389,7 +389,6 @@ local MPT_DEFAULTS = {
                             -- pre-formatted percentValueString (API return #3 —
                             -- "0.87", NO percent sign; live-confirmed)
     OverlayCombatOnly = true,
-    OverlayFontFace = "Expressway",
     OverlayFontSize = 12,
     OverlayFontOutline = "OUTLINE",
     OverlayColorMode = "theme",
@@ -409,11 +408,11 @@ local MPT_DEFAULTS = {
     BackdropOpacity = 0.6,
 
     -- Fonts (global default + per-element overrides resolved at render)
-    FontFace = "Expressway", FontSize = 15, FontOutline = "OUTLINE",
-    TimerFontFace = "Expressway", TimerFontSize = 32, TimerFontOutline = "OUTLINE",
-    ForcesFontFace = "Expressway", ForcesFontSize = 16, ForcesFontOutline = "OUTLINE",
-    ObjectiveFontFace = "Expressway", ObjectiveFontSize = 16, ObjectiveFontOutline = "OUTLINE",
-    DeathsFontFace = "Expressway", DeathsFontSize = 15, DeathsFontOutline = "OUTLINE",
+    FontSize = 15, FontOutline = "OUTLINE",
+    TimerFontSize = 32, TimerFontOutline = "OUTLINE",
+    ForcesFontSize = 16, ForcesFontOutline = "OUTLINE",
+    ObjectiveFontSize = 16, ObjectiveFontOutline = "OUTLINE",
+    DeathsFontSize = 15, DeathsFontOutline = "OUTLINE",
 }
 
 -- Recursive deep-copy so the profile section never shares table identity with
