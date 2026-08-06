@@ -429,6 +429,82 @@ describe("Core/Globals.lua helpers", function()
             assert.equals("GoodFont", KE.db.profile.Module.FontFace)
         end)
     end)
+
+    describe("KE:SlugFlags", function()
+        -- GetLocale is not managed by _wow_mock, so it lives on _G and is
+        -- reassigned per test. Core/Globals.lua calls it inline for exactly
+        -- this reason.
+        local function enable(locale)
+            KE.db = { profile = { UseSlugFonts = true } }
+            _G.GetLocale = function() return locale or "enUS" end
+        end
+
+        local function disable()
+            KE.db = { profile = { UseSlugFonts = false } }
+            _G.GetLocale = function() return "enUS" end
+        end
+
+        it("slugs plain text — slug is a glyph renderer, not an outline effect", function()
+            enable()
+            assert.equals("SLUG", KE:SlugFlags(""))
+            assert.equals("SLUG", KE:SlugFlags(nil))
+        end)
+
+        it("appends to an existing outline", function()
+            enable()
+            assert.equals("OUTLINE, SLUG", KE:SlugFlags("OUTLINE"))
+        end)
+
+        it("leaves THICKOUTLINE alone — slug and thick render badly together", function()
+            enable()
+            assert.equals("THICKOUTLINE", KE:SlugFlags("THICKOUTLINE"))
+        end)
+
+        it("leaves MONOCHROME alone", function()
+            enable()
+            assert.equals("MONOCHROME", KE:SlugFlags("MONOCHROME"))
+        end)
+
+        it("is idempotent on already-slugged flags", function()
+            enable()
+            assert.equals("OUTLINE, SLUG", KE:SlugFlags("OUTLINE, SLUG"))
+            assert.equals("SLUG,OUTLINE", KE:SlugFlags("SLUG,OUTLINE"))
+        end)
+
+        it("strips the concatenated form when disabled", function()
+            disable()
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE, SLUG"))
+        end)
+
+        it("strips the leading legacy form when disabled", function()
+            disable()
+            assert.equals("OUTLINE", KE:SlugFlags("SLUG,OUTLINE"))
+        end)
+
+        it("strips a bare SLUG to empty when disabled", function()
+            disable()
+            assert.equals("", KE:SlugFlags("SLUG"))
+        end)
+
+        it("passes non-slug flags through untouched when disabled", function()
+            disable()
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE"))
+            assert.equals("", KE:SlugFlags(""))
+            assert.is_nil(KE:SlugFlags(nil))
+        end)
+
+        it("overrides the setting on locales where slug renders blank", function()
+            enable("koKR")
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE, SLUG"))
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE"))
+        end)
+
+        it("treats a missing db as disabled", function()
+            KE.db = nil
+            _G.GetLocale = function() return "enUS" end
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE, SLUG"))
+        end)
+    end)
 end)
 
 describe("KE:RunAfterCombat", function()

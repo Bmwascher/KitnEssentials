@@ -388,6 +388,46 @@ function KE:GetFontOutlineOptions(flags)
 end
 
 ---------------------------------------------------------------------------------
+-- Slug Gate
+---------------------------------------------------------------------------------
+-- SLUG is Blizzard's GPU glyph renderer, not an outline effect, so an enabled
+-- gate slugs plain text too. THICKOUTLINE and MONOCHROME are left alone: the
+-- first renders badly slugged, the second carries its own rasterization rules.
+-- The disabled path strips rather than short-circuits, so an outline value
+-- saved while the old per-module Slug dropdown existed degrades to its plain
+-- form instead of sticking.
+--
+-- Slug silently draws nothing against the large CJK and Cyrillic faces these
+-- clients ship, which reads as a missing font rather than a missing effect.
+-- GetLocale is called inline, not localized at file scope, so headless specs
+-- can vary it per example.
+local SLUG_UNSUPPORTED = { zhCN = true, zhTW = true, koKR = true, ruRU = true }
+
+---@param flags string?
+---@return string?
+function KE:SlugFlags(flags)
+    local locale = GetLocale and GetLocale() or "enUS"
+    local profile = self.db and self.db.profile
+    local enabled = not SLUG_UNSUPPORTED[locale] and profile ~= nil and profile.UseSlugFonts == true
+
+    if enabled then
+        flags = flags or ""
+        if flags:find("SLUG", 1, true) then return flags end
+        if flags:find("THICKOUTLINE", 1, true) or flags:find("MONOCHROME", 1, true) then
+            return flags
+        end
+        if flags == "" then return "SLUG" end
+        return flags .. ", SLUG"
+    end
+
+    if not flags or flags == "" then return flags end
+    if not flags:find("SLUG", 1, true) then return flags end
+    -- Strips the concatenated form and the leading legacy form. Parenthesized
+    -- so the gsub match count never leaks out as a second return value.
+    return (flags:gsub("%s*,%s*SLUG", ""):gsub("^%s*SLUG%s*,?%s*", ""):gsub("SLUG", ""))
+end
+
+---------------------------------------------------------------------------------
 -- Font Validation
 ---------------------------------------------------------------------------------
 -- TODO: 12.0.7 introduces a native font/asset validation API; until then,
@@ -502,7 +542,7 @@ function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     if not self:IsFontValid(fontPath) then
         fontPath = "Fonts\\FRIZQT__.TTF"
     end
-    local outline = self:GetFontOutline(fontOutline)
+    local outline = self:SlugFlags(self:GetFontOutline(fontOutline))
     local size = (fontSize and fontSize > 0) and fontSize or 12
 
     -- SimpleHTML frames (guild MOTD and Info bodies, anything rendering

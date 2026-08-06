@@ -78,6 +78,10 @@ local Defaults = {
     profile = {
         -- Global
         ShowChatMessage = true,
+        -- Slug is Blizzard's GPU glyph renderer. On by default because the
+        -- shipped configuration already rendered slugged before the setting
+        -- existed; defaulting off would be a silent downgrade on upgrade.
+        UseSlugFonts = true,
         -- Minimap Icon
         Minimap = {
             hide = false,
