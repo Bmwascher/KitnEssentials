@@ -119,6 +119,10 @@ local function FillMissing(saved, defaults)
     end
 end
 
+-- The font face this module used to seed. Kept only so UpdateDB can recognise
+-- and clear the stale seed; nothing else may read it.
+local RETIRED_FONT_FACE = "Expressway"
+
 local DM_DEFAULTS = {
     Enabled = true,
     Locked = true,              -- when true, disables EditMode drag of the dock
@@ -251,6 +255,21 @@ function DM:UpdateDB()
     -- Pending-key metadata needs NO handling here: its persisted copy lives
     -- in the profile-independent KE.db.global (History.lua) precisely so
     -- profile ops can't shard or strand it.
+
+    -- Persisted-value repair: this module used to seed its own font face, and
+    -- because it writes straight into the profile rather than registering
+    -- AceDB defaults, that seed was never stripped on logout. Retiring the
+    -- default therefore left every existing profile pinned to the old value
+    -- while an unset font is supposed to follow KE's global font. Clear the
+    -- retired literal once per profile; a face the user picks afterwards
+    -- persists normally. Run-once-stamped because the retired literal is also
+    -- a legitimate choice.
+    if not self.db.FontFaceCleared then
+        if self.db.FontFace == RETIRED_FONT_FACE then
+            self.db.FontFace = nil
+        end
+        self.db.FontFaceCleared = true
+    end
 
     -- Profile ops (switch/copy/reset) re-run UpdateDB without OnEnable; the repair
     -- is run-once-stamped per profile and signature-gated, so extra calls are free.
