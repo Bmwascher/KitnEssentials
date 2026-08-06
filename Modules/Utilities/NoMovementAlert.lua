@@ -182,10 +182,14 @@ local function SafeCharges(spellId)
     return info
 end
 
+-- One call covers what the two removed globals computed between them:
+-- known, or present in the player's spell book including overrides. Those
+-- globals now only exist behind a deprecation CVar and are going away.
 local function SpellKnown(spellId)
-    if IsPlayerSpell and IsPlayerSpell(spellId) then return true end
-    if IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(spellId) then return true end
-    return false
+    if not (C_SpellBook and C_SpellBook.IsSpellKnownOrInSpellBook) then return false end
+    local ok, known = pcall(C_SpellBook.IsSpellKnownOrInSpellBook, spellId,
+        Enum.SpellBookSpellBank.Player, true)
+    return ok and known == true
 end
 
 local function SpellInfo(spellId)
