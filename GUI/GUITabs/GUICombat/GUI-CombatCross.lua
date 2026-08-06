@@ -121,34 +121,16 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 4: Colors
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card3, "all")
-
-    local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local colorModeDropdown = GUIFrame:CreateDropdown(row3, "Color Mode", {
-        options = KE.ColorModeOptions,
-        value = db.ColorMode or "custom",
-        callback = function(key)
-            db.ColorMode = key
-            ApplySettings()
-            RefreshStates()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db         = db,
+        manager    = manager,
+        onChange   = ApplySettings,
+        stateGroup = "all",
+        colorMode  = { key = "ColorMode", onChange = RefreshStates },
+        colors     = {
+            { label = "Custom Color", key = "Color", default = { 0, 1, 0.169, 1 }, group = "customColor" },
+        },
     })
-    row3:AddWidget(colorModeDropdown, 0.5)
-    manager:Register(colorModeDropdown, "all")
-
-    local colorPicker = GUIFrame:CreateColorPicker(row3, "Custom Color", {
-        color = db.Color or { 0, 1, 0.169, 1 },
-        callback = function(r, g, b, a)
-            db.Color = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row3:AddWidget(colorPicker, 0.5)
-    manager:Register(colorPicker, "customColor")
-    card3:AddRow(row3, Theme.rowHeightLast, 0)
-
-    yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 5: Range Warning (1×3: melee | ranged | color)

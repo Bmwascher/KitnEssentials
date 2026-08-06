@@ -134,6 +134,19 @@ function KE:GetAccentColor(mode, color) end
 ---@return string
 function KE:ColorTextByTheme(text) end
 
+---@param db table
+---@param entry table
+---@return number r, number g, number b, number a
+function KE:ReadCardColor(db, entry) end
+
+---@param db table
+---@param entry table
+---@param r number
+---@param g number
+---@param b number
+---@param a number
+function KE:WriteCardColor(db, entry, r, g, b, a) end
+
 -- ─── Slash commands ───────────────────────────────────────
 ---@return boolean
 function KE:IsWAEnabled() end

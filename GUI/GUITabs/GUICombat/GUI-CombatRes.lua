@@ -177,54 +177,17 @@ GUIFrame:RegisterContent("CombatRes", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 6: Colors
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card4, "all")
-
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local sepColor = GUIFrame:CreateColorPicker(row4a, "Separator Color", {
-        color = db.SeparatorColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.SeparatorColor = { r, g, b, a }
-            ApplySettings()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db = db,
+        manager = manager,
+        onChange = ApplySettings,
+        colors = {
+            { label = "Separator Color", key = "SeparatorColor", default = { 1, 1, 1, 1 } },
+            { label = "Timer Text Color", key = "TimerColor", default = { 1, 1, 1, 1 } },
+            { label = "Charges Available", key = "ChargeAvailableColor", default = { 0.3, 1, 0.3, 1 } },
+            { label = "Charges Unavailable", key = "ChargeUnavailableColor", default = { 1, 0.3, 0.3, 1 } },
+        },
     })
-    row4a:AddWidget(sepColor, 0.5)
-    manager:Register(sepColor, "all")
-
-    local timerColor = GUIFrame:CreateColorPicker(row4a, "Timer Text Color", {
-        color = db.TimerColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.TimerColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row4a:AddWidget(timerColor, 0.5)
-    manager:Register(timerColor, "all")
-    card4:AddRow(row4a, Theme.rowHeight)
-
-    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local chargeAvailColor = GUIFrame:CreateColorPicker(row4b, "Charges Available", {
-        color = db.ChargeAvailableColor or { 0.3, 1, 0.3, 1 },
-        callback = function(r, g, b, a)
-            db.ChargeAvailableColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row4b:AddWidget(chargeAvailColor, 0.5)
-    manager:Register(chargeAvailColor, "all")
-
-    local chargeUnavailColor = GUIFrame:CreateColorPicker(row4b, "Charges Unavailable", {
-        color = db.ChargeUnavailableColor or { 1, 0.3, 0.3, 1 },
-        callback = function(r, g, b, a)
-            db.ChargeUnavailableColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row4b:AddWidget(chargeUnavailColor, 0.5)
-    manager:Register(chargeUnavailColor, "all")
-    card4:AddRow(row4b, Theme.rowHeightLast, 0)
-
-    yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 7: Backdrop

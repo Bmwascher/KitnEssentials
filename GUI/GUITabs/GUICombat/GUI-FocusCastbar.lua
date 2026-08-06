@@ -132,16 +132,29 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     manager:Register(heightSlider, "all")
     card2:AddRow(row2a, Theme.rowHeight)
 
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local statusbarDropdown = GUIFrame:CreateDropdown(row2b, "Bar Texture", {
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local hideNotInterruptCheck = GUIFrame:CreateCheckbox(row2b, "Hide Non-Interruptible Casts", {
+        value = db.HideNotInterruptible == true,
+        callback = function(checked) db.HideNotInterruptible = checked end,
+        msgPopup = true,
+        msgText = "Hide",
+        msgOn = "On",
+        msgOff = "Off",
+    })
+    row2b:AddWidget(hideNotInterruptCheck, 1)
+    manager:Register(hideNotInterruptCheck, "all")
+    card2:AddRow(row2b, Theme.rowHeight)
+
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local statusbarDropdown = GUIFrame:CreateDropdown(row2c, "Bar Texture", {
         options = statusbarList,
         value = db.StatusBarTexture or "KitnUI",
         callback = function(key) db.StatusBarTexture = key; ApplySettings() end,
         searchable = true,
     })
-    row2b:AddWidget(statusbarDropdown, 1)
+    row2c:AddWidget(statusbarDropdown, 1)
     manager:Register(statusbarDropdown, "all")
-    card2:AddRow(row2b, Theme.rowHeightLast, 0)
+    card2:AddRow(row2c, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
@@ -322,113 +335,21 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 7: Colors
     ----------------------------------------------------------------
-    local cardColors = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(cardColors, "all")
-
-    local row6a = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
-    local castingPicker = GUIFrame:CreateColorPicker(row6a, "Casting", {
-        color = db.CastingColor or { 1, 0.7, 0, 1 },
-        callback = function(r, g, b, a)
-            db.CastingColor = { r, g, b, a }
-            ApplySettings()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db         = db,
+        manager    = manager,
+        onChange   = ApplySettings,
+        stateGroup = "all",
+        colors     = {
+            { label = "Casting", key = "CastingColor", default = { 1, 0.7, 0, 1 } },
+            { label = "Channeling", key = "ChannelingColor", default = { 0, 0.7, 1, 1 } },
+            { label = "Empowering", key = "EmpoweringColor", default = { 0.8, 0.4, 1, 1 } },
+            { label = "Not Interruptible", key = "NotInterruptibleColor", default = { 0.7, 0.7, 0.7, 1 } },
+            { label = "Text", key = "TextColor", default = { 1, 1, 1, 1 } },
+            { label = "Background", key = "BackdropColor", default = { 0, 0, 0, 0.8 } },
+            { label = "Border", key = "BorderColor", default = { 0, 0, 0, 1 } },
+        },
     })
-    row6a:AddWidget(castingPicker, 0.5)
-    manager:Register(castingPicker, "all")
-
-    local channelingPicker = GUIFrame:CreateColorPicker(row6a, "Channeling", {
-        color = db.ChannelingColor or { 0, 0.7, 1, 1 },
-        callback = function(r, g, b, a)
-            db.ChannelingColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row6a:AddWidget(channelingPicker, 0.5)
-    manager:Register(channelingPicker, "all")
-    cardColors:AddRow(row6a, Theme.rowHeight)
-
-    local row6b = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
-    local empoweringPicker = GUIFrame:CreateColorPicker(row6b, "Empowering", {
-        color = db.EmpoweringColor or { 0.8, 0.4, 1, 1 },
-        callback = function(r, g, b, a)
-            db.EmpoweringColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row6b:AddWidget(empoweringPicker, 0.5)
-    manager:Register(empoweringPicker, "all")
-
-    local notInterruptPicker = GUIFrame:CreateColorPicker(row6b, "Not Interruptible", {
-        color = db.NotInterruptibleColor or { 0.7, 0.7, 0.7, 1 },
-        callback = function(r, g, b, a)
-            db.NotInterruptibleColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row6b:AddWidget(notInterruptPicker, 0.5)
-    manager:Register(notInterruptPicker, "all")
-    cardColors:AddRow(row6b, Theme.rowHeight)
-
-    local row6c = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
-    local hideNotInterruptCheck = GUIFrame:CreateCheckbox(row6c, "Hide Non-Interruptible Casts", {
-        value = db.HideNotInterruptible == true,
-        callback = function(checked) db.HideNotInterruptible = checked end,
-        msgPopup = true,
-        msgText = "Hide",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row6c:AddWidget(hideNotInterruptCheck, 1)
-    manager:Register(hideNotInterruptCheck, "all")
-    cardColors:AddRow(row6c, Theme.rowHeight)
-
-    local rowSep1 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeightSeparator)
-    local sep1 = GUIFrame:CreateSeparator(rowSep1)
-    rowSep1:AddWidget(sep1, 1)
-    manager:Register(sep1, "all")
-    cardColors:AddRow(rowSep1, Theme.rowHeightSeparator)
-
-    local row6d = GUIFrame:CreateRow(cardColors.content, Theme.rowHeight)
-    local textPicker = GUIFrame:CreateColorPicker(row6d, "Text", {
-        color = db.TextColor or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.TextColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row6d:AddWidget(textPicker, 0.5)
-    manager:Register(textPicker, "all")
-    cardColors:AddRow(row6d, Theme.rowHeight)
-
-    local rowSep2 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeightSeparator)
-    local sep2 = GUIFrame:CreateSeparator(rowSep2)
-    rowSep2:AddWidget(sep2, 1)
-    manager:Register(sep2, "all")
-    cardColors:AddRow(rowSep2, Theme.rowHeightSeparator)
-
-    local row6e = GUIFrame:CreateRow(cardColors.content, Theme.rowHeightLast)
-    local bgPicker = GUIFrame:CreateColorPicker(row6e, "Background", {
-        color = db.BackdropColor or { 0, 0, 0, 0.8 },
-        callback = function(r, g, b, a)
-            db.BackdropColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row6e:AddWidget(bgPicker, 0.5)
-    manager:Register(bgPicker, "all")
-
-    local borderPicker = GUIFrame:CreateColorPicker(row6e, "Border", {
-        color = db.BorderColor or { 0, 0, 0, 1 },
-        callback = function(r, g, b, a)
-            db.BorderColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row6e:AddWidget(borderPicker, 0.5)
-    manager:Register(borderPicker, "all")
-    cardColors:AddRow(row6e, Theme.rowHeightLast, 0)
-
-    yOffset = cardColors:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 7.5: Range & Visibility

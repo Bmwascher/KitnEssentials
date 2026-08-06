@@ -153,34 +153,17 @@ GUIFrame:RegisterContent("EnemyCounter", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 4: Colors
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card4, "all")
-
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local colorModeDropdown = GUIFrame:CreateDropdown(row4a, "Color Mode", {
-        options = KE.ColorModeOptions,
-        value = db.ColorMode or "custom",
-        callback = function(key)
-            db.ColorMode = key
-            ApplySettings()
-            RefreshStates()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db         = db,
+        manager    = manager,
+        onChange   = ApplySettings,
+        stateGroup = "all",
+        isLast     = true,
+        colorMode  = { key = "ColorMode", onChange = RefreshStates },
+        colors     = {
+            { label = "Custom Color", key = "Color", default = { 1, 1, 1, 1 }, group = "customColor" },
+        },
     })
-    row4a:AddWidget(colorModeDropdown, 0.5)
-    manager:Register(colorModeDropdown, "all")
-
-    local colorPicker = GUIFrame:CreateColorPicker(row4a, "Custom Color", {
-        color = db.Color or { 1, 1, 1, 1 },
-        callback = function(r, g, b, a)
-            db.Color = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row4a:AddWidget(colorPicker, 0.5)
-    manager:Register(colorPicker, "customColor")
-    card4:AddRow(row4a, Theme.rowHeightLast, 0)
-
-    yOffset = card4:GetNextOffset()
 
     RefreshStates()
     return yOffset

@@ -126,15 +126,32 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
     manager:Register(barSideDropdown, "all")
     card2:AddRow(row2b, Theme.rowHeight)
 
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local barHeightSlider = GUIFrame:CreateSlider(row2c, "Bar Height", {
+    local statusbarList = {}
+    if LSM then
+        for name in pairs(LSM:HashTable("statusbar")) do statusbarList[name] = name end
+    else
+        statusbarList["Blizzard"] = "Blizzard"
+    end
+
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local barTextureDropdown = GUIFrame:CreateDropdown(row2c, "Bar Texture", {
+        options = statusbarList,
+        value = db.BarTexture or "KitnUI",
+        callback = function(key) db.BarTexture = key; ApplySettings() end,
+    })
+    row2c:AddWidget(barTextureDropdown, 1)
+    manager:Register(barTextureDropdown, "all")
+    card2:AddRow(row2c, Theme.rowHeight)
+
+    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local barHeightSlider = GUIFrame:CreateSlider(row2d, "Bar Height", {
         min = 5, max = 30, step = 1,
         value = db.BarHeight or 15,
         callback = function(val) db.BarHeight = val; ApplySettings() end,
     })
-    row2c:AddWidget(barHeightSlider, 1)
+    row2d:AddWidget(barHeightSlider, 1)
     manager:Register(barHeightSlider, "all")
-    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+    card2:AddRow(row2d, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
@@ -187,61 +204,18 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Colors
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card5, "all")
-
-    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-    local colorModeDropdown = GUIFrame:CreateDropdown(row5a, "Color Mode", {
-        options = KE.ColorModeOptions,
-        value = db.ColorMode or "custom",
-        callback = function(key)
-            db.ColorMode = key
-            ApplySettings()
-            RefreshStates()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db         = db,
+        manager    = manager,
+        onChange   = ApplySettings,
+        stateGroup = "all",
+        isLast     = true,
+        colorMode  = { key = "ColorMode", onChange = RefreshStates },
+        colors     = {
+            { label = "Custom Color", key = "Color", default = { 0.2, 0.5, 0.4, 1 }, group = "customColor" },
+            { label = "Bar Background", key = "BarBackgroundColor", default = { 0, 0, 0, 0.8 } },
+        },
     })
-    row5a:AddWidget(colorModeDropdown, 0.5)
-    manager:Register(colorModeDropdown, "all")
-
-    local colorPicker = GUIFrame:CreateColorPicker(row5a, "Custom Color", {
-        color = db.Color or { 0.2, 0.5, 0.4, 1 },
-        callback = function(r, g, b, a)
-            db.Color = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row5a:AddWidget(colorPicker, 0.5)
-    manager:Register(colorPicker, "customColor")
-    card5:AddRow(row5a, Theme.rowHeight)
-
-    local statusbarList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("statusbar")) do statusbarList[name] = name end
-    else
-        statusbarList["Blizzard"] = "Blizzard"
-    end
-
-    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
-    local bgColorPicker = GUIFrame:CreateColorPicker(row5b, "Bar Background", {
-        color = db.BarBackgroundColor or { 0, 0, 0, 0.8 },
-        callback = function(r, g, b, a)
-            db.BarBackgroundColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row5b:AddWidget(bgColorPicker, 0.5)
-    manager:Register(bgColorPicker, "all")
-
-    local barTextureDropdown = GUIFrame:CreateDropdown(row5b, "Bar Texture", {
-        options = statusbarList,
-        value = db.BarTexture or "KitnUI",
-        callback = function(key) db.BarTexture = key; ApplySettings() end,
-    })
-    row5b:AddWidget(barTextureDropdown, 0.5)
-    manager:Register(barTextureDropdown, "all")
-    card5:AddRow(row5b, Theme.rowHeightLast, 0)
-
-    yOffset = card5:GetNextOffset()
 
     RefreshStates()
     return yOffset

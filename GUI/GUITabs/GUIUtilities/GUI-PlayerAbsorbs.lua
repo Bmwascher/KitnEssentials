@@ -236,31 +236,16 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Colors
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
-    manager:Register(card5, "all")
-
-    local row5 = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
-    local shieldColor = GUIFrame:CreateColorPicker(row5, "Shield Color", {
-        color = db.ShieldColor or { 0.37, 0.82, 1, 1 },
-        callback = function(r, g, b, a)
-            db.ShieldColor = { r, g, b, a }
-            ApplySettings()
-        end,
+    yOffset = GUIFrame:CreateColorsCard(scrollChild, yOffset, {
+        db = db,
+        manager = manager,
+        onChange = ApplySettings,
+        isLast = true,
+        colors = {
+            { label = "Shield Color", key = "ShieldColor", default = { 0.37, 0.82, 1, 1 } },
+            { label = "Heal-Absorb Color", key = "HealAbsorbColor", default = { 1, 0.48, 0.48, 1 } },
+        },
     })
-    row5:AddWidget(shieldColor, 0.5)
-    manager:Register(shieldColor, "all")
-    local healColor = GUIFrame:CreateColorPicker(row5, "Heal-Absorb Color", {
-        color = db.HealAbsorbColor or { 1, 0.48, 0.48, 1 },
-        callback = function(r, g, b, a)
-            db.HealAbsorbColor = { r, g, b, a }
-            ApplySettings()
-        end,
-    })
-    row5:AddWidget(healColor, 0.5)
-    manager:Register(healColor, "all")
-    card5:AddRow(row5, Theme.rowHeightLast, 0)
-
-    yOffset = card5:GetNextOffset()
 
     RefreshStates()
     return yOffset
