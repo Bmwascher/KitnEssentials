@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-TauntCursorCard.lua                                 ║
 -- ║  Purpose: Shared "Taunt Countdown" card builder.         ║
--- ║  Used by Combat Utilities > Cursor Effects > Taunt —     ║
+-- ║  Used by Combat > Cursor Effects > Taunt —               ║
 -- ║  the only place these settings live.                     ║
 -- ╚══════════════════════════════════════════════════════════╝
 

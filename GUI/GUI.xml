@@ -80,6 +80,7 @@
     <Script file="GUITabs\GUIUtilities\GUI-WorldMarkerCycler.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-ReadyCheckConsumables.lua" />
+    <Script file="GUITabs\GUIUtilities\GUI-Utilities.lua" />
 
     <!-- Dungeons tabs -->
     <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />

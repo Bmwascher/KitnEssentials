@@ -83,7 +83,7 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     ------------------------------------------------------------------
     -- Card 1: Master Enable
     ------------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Stance Text", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Missing Forms", yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
         db.Enabled = checked
         if checked then

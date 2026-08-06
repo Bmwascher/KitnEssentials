@@ -1747,7 +1747,7 @@ function MPT:HandleSlash(input)
     end
     -- Default: open the GUI page (matches the dispatcher's old fallback).
     if KE.GUIFrame and KE.GUIFrame.OpenPage then
-        KE.GUIFrame:OpenPage("MythicPlusTimer", "dungeons_section")
+        KE.GUIFrame:OpenPage("MythicPlusTimer", "skinning_section")
     end
 end
 

@@ -254,7 +254,7 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         elseif KE.GUIFrame and KE.GUIFrame.OpenPage then
             -- OpenPage(itemId, sectionId, context) self-shows the GUI, expands
             -- the section, and selects the page.
-            KE.GUIFrame:OpenPage("MythicPlusTimer", "dungeons_section")
+            KE.GUIFrame:OpenPage("MythicPlusTimer", "skinning_section")
         end
         return
     end
@@ -661,16 +661,12 @@ local SECTION_PREVIEW_MODULES = {
     combat_section = {
         "CombatRes", "CombatTexts", "CombatTimer",
         "FocusCastbar", "CombatCross", "RangeChecker",
-        "Cursor", "DamageMeter",
+        "Cursor",
         "HealerMana", "InnervateTracker", "MaintenanceTracker",
+        "NoMovementAlert", "PlayerAbsorbs",
     },
     aura_section = {
         "AuraDebuffs", "AuraExternals", "StanceText",
-    },
-    utilities_section = {
-        "PotionReady", "RaidNotifications", "Recuperate",
-        "TimeSpiral", "NoMovementAlert", "ReadyCheckConsumables",
-        "PlayerAbsorbs",
     },
     class_section = {
         "BurningRush",
@@ -680,16 +676,19 @@ local SECTION_PREVIEW_MODULES = {
     },
     qol_section = {
         "GreatVaultAlert",
+        "PotionReady", "RaidNotifications", "Recuperate",
+        "TimeSpiral", "ReadyCheckConsumables",
     },
     -- Skyriding UI moved here from Quality of Life. Without this entry the
     -- module stays in PREVIEW_MODULES but no section reaches it, so opening its
     -- page would show no preview at all.
     skinning_section = {
         "DragonRiding",
+        "DamageMeter", "MythicPlusTimer",
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
-        "MythicPlusTimer", "KeystoneHelper", "TargetedSpells", "LFGReminder",
+        "KeystoneHelper", "TargetedSpells", "LFGReminder",
     },
 }
 
