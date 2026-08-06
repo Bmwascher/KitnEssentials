@@ -60,7 +60,14 @@ describe("StanceText:EvaluateSpec", function()
 
     it("counts an alternative aura as satisfied", function()
         ctx.hasAura = function(_, also) return also ~= nil end
-        assert.is_nil(ST:EvaluateSpec(db, 258, entryAura, ctx))
+        assert.is_nil(ST:EvaluateSpec(db, 65, entryAura, ctx))
+    end)
+
+    -- Shadowform reads as a form, so Voidform has to satisfy it on the form
+    -- path or a priest mid-Voidform gets accused of being out of Shadowform.
+    it("counts an alternative form as satisfied", function()
+        ctx.currentFormSpell = 194249
+        assert.is_nil(ST:EvaluateSpec(db, 258, ST.SPECS[258], ctx))
     end)
 
     -- Restricted content hides aura identity, so "not found" stops meaning

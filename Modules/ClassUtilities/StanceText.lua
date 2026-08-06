@@ -31,8 +31,8 @@ local WRONG_TEXT_DEFAULT = "WRONG"
 -- Per-spec expected form, keyed by specialization ID.
 --
 --   spellID  the form/aura/stance that spec is expected to hold
---   check    "form"  read through GetShapeshiftForm (Warrior, Druid, Evoker)
---            "aura"  read through the player's auras (Priest, Paladin)
+--   check    "form"  read through GetShapeshiftForm (Warrior, Druid, Evoker, Priest)
+--            "aura"  read through the player's auras (Paladin)
 --   also     extra spell IDs that also satisfy the requirement
 --
 -- Paladin auras and Warrior stances have several valid choices, so their
@@ -54,8 +54,9 @@ local SPECS = {
     [102]  = { spellID = 24858,  check = "form" },
     [103]  = { spellID = 768,    check = "form" },
     [104]  = { spellID = 5487,   check = "form" },
-    -- Priest: Voidform also satisfies Shadowform.
-    [258]  = { spellID = 232698, check = "aura", also = { 194249 } },
+    -- Priest: Shadowform is a form, not a buff, so it reads in combat where an
+    -- aura check cannot. Voidform also satisfies it.
+    [258]  = { spellID = 232698, check = "form", also = { 194249 } },
     -- Evoker: an attunement registers as a shapeshift form, so it reads like a
     -- Warrior stance. Reading it as an aura instead goes blind in restricted
     -- content and reports every attuned Evoker as missing one.
@@ -178,6 +179,16 @@ function ST:EvaluateSpec(db, specID, entry, ctx)
         if not satisfied and not ctx.auraIdentityVisible() then return nil end
     else
         satisfied = ctx.currentFormSpell == wanted
+        -- A form can have stand-ins too, the way Voidform stands in for
+        -- Shadowform, so the alternatives count here as much as on the aura path.
+        if not satisfied and entry.also then
+            for _, extra in ipairs(entry.also) do
+                if ctx.currentFormSpell == extra then
+                    satisfied = true
+                    break
+                end
+            end
+        end
     end
     if satisfied then return nil end
 
