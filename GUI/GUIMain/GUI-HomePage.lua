@@ -115,7 +115,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile
     local cardSettings = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
 
-    local row3a = GUIFrame:CreateRow(cardSettings.content, Theme.rowHeightLast)
+    local row3a = GUIFrame:CreateRow(cardSettings.content, Theme.rowHeight)
     local minimapCheck = GUIFrame:CreateCheckbox(row3a, "Show Minimap Button", {
         value = not (db and db.Minimap and db.Minimap.hide),
         callback = function(checked)
