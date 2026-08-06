@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-DispelCursorCard.lua                                ║
 -- ║  Purpose: Shared "Dispel Countdown" card builder.        ║
--- ║  Used by Combat Utilities > Cursor Effects — the         ║
+-- ║  Used by Combat > Cursor Effects — the                   ║
 -- ║  only place these settings live.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
 

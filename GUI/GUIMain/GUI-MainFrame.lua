@@ -41,7 +41,7 @@ GUIFrame.sidebarConfig = {
     {
         id = "combat_section",
         type = "header",
-        text = "\226\128\162 Combat Utilities",
+        text = "\226\128\162 Combat",
         defaultExpanded = false,
         items = {
             { id = "CombatRes",     text = "Battle Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
@@ -65,7 +65,7 @@ GUIFrame.sidebarConfig = {
             { id = "AuraHeaders_Debuffs", text = "Player Debuffs", keywords = { "debuff", "debuffs", "player debuffs", "aura", "auras", "magic", "curse", "poison", "disease", "blizzard", "replace" } },
             { id = "AuraDebuffs",   text = "Advanced Debuffs", keywords = { "debuff", "debuffs", "aura", "boss", "dot", "magic", "curse", "poison", "disease" } },
             { id = "AuraExternals", text = "External Tracker", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
-            { id = "StanceText",    text = "Stance Text", keywords = { "stance", "form", "shapeshift", "druid", "warrior", "evoker", "presence" } },
+            { id = "StanceText",    text = "Missing Forms", keywords = { "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "evoker", "presence" } },
         },
     },
     {
