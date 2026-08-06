@@ -1597,7 +1597,7 @@ end
 -- Settings: open the GUI straight to the Damage Meter page (combat section).
 function DM:HeaderSettings(_)
     if KE.GUIFrame and KE.GUIFrame.OpenPage then
-        KE.GUIFrame:OpenPage("DamageMeter", "combat_section")
+        KE.GUIFrame:OpenPage("DamageMeter", "skinning_section")
     end
 end
 

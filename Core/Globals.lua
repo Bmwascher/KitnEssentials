@@ -254,7 +254,7 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         elseif KE.GUIFrame and KE.GUIFrame.OpenPage then
             -- OpenPage(itemId, sectionId, context) self-shows the GUI, expands
             -- the section, and selects the page.
-            KE.GUIFrame:OpenPage("MythicPlusTimer", "dungeons_section")
+            KE.GUIFrame:OpenPage("MythicPlusTimer", "skinning_section")
         end
         return
     end
