@@ -1818,9 +1818,33 @@ function CHAT:BuildCopyChatFrame()
     frame:SetResizable(true)
     frame:SetFrameStrata("DIALOG")
     frame:SetClampedToScreen(true)
+    -- The header used to register the drag as well, and the two handed the
+    -- drag back and forth: a start re-anchors the window to the cursor, the
+    -- jump carries the pointer across the header's lower edge, the frame
+    -- losing the pointer ends its drag and the one gaining it starts
+    -- another, which jumps again. One drag was measured as thirteen
+    -- start/stop pairs alternating between the two. The header is mouse-free
+    -- now, so this frame is the only drag source and there is nothing to
+    -- hand off to; its close button keeps its own mouse and is unaffected.
+    --
+    -- The guard below is belt and braces against any other repeat start.
+    -- OnHide clears the flag: a window closed mid-drag never reaches
+    -- OnDragStop, and a flag left set would swallow the next drag entirely.
+    local function StartDrag()
+        if frame.isMoving then return end
+        frame.isMoving = true
+        frame:StartMoving()
+    end
+    local function StopDrag()
+        if not frame.isMoving then return end
+        frame.isMoving = false
+        frame:StopMovingOrSizing()
+    end
+
     frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", function(f) f:StartMoving() end)
-    frame:SetScript("OnDragStop", function(f) f:StopMovingOrSizing() end)
+    frame:SetScript("OnDragStart", StartDrag)
+    frame:SetScript("OnDragStop", StopDrag)
+    frame:SetScript("OnHide", StopDrag)
     self.CopyChatFrame = frame
 
     local header = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -1829,10 +1853,6 @@ function CHAT:BuildCopyChatFrame()
     header:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -1, -1)
     header:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
     header:SetBackdropColor(COPY_FRAME_BG[1], COPY_FRAME_BG[2], COPY_FRAME_BG[3], COPY_FRAME_BG[4])
-    header:EnableMouse(true)
-    header:RegisterForDrag("LeftButton")
-    header:SetScript("OnDragStart", function() frame:StartMoving() end)
-    header:SetScript("OnDragStop", function() frame:StopMovingOrSizing() end)
     frame.header = header
 
     local headerBorder = header:CreateTexture(nil, "BORDER")
