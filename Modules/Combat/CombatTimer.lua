@@ -32,10 +32,12 @@ CT.isEncounter = false
 
 KE.lastCombatDuration = 0
 
--- Gap between a bracket and the digits. The brackets are pinned to the frame
--- edges and the digits are centred, so widening the frame by this on each side
--- is what separates them. Without it they render flush against each other.
-local BRACKET_GAP = 3
+-- Brackets live in the timer string itself, as the reference renders them.
+-- They were previously two extra FontStrings pinned to the frame edges, which
+-- left the space between a bracket and the digits to whatever the frame sizing
+-- had spare rather than to the font's own spacing. Cached because FormatTime
+-- runs on every tick.
+local cachedOpenBracket, cachedCloseBracket = "[", "]"
 
 local function GetRefreshRate(format)
     return (format == "MM:SS:MS") and 0.1 or 0.25
@@ -80,18 +82,17 @@ local function GetBrackets(style)
     else return "[", "]" end
 end
 
--- Returns the digits-only timer string (no brackets). Brackets are rendered
--- as separate FontStrings pinned to the frame's edges so they don't shift
--- as proportional digit widths vary.
 local function FormatTime(total_seconds, format)
     local mins = math_floor(total_seconds / 60)
     local secs = math_floor(total_seconds % 60)
     if format == "MM:SS:MS" then
         local frac = total_seconds - math_floor(total_seconds)
         local ms = math_floor(frac * 10)
-        return string_format("%02d:%02d:%d", mins, secs, ms)
+        return string_format("%s%02d:%02d:%d%s",
+            cachedOpenBracket, mins, secs, ms, cachedCloseBracket)
     end
-    return string_format("%02d:%02d", mins, secs)
+    return string_format("%s%02d:%02d%s",
+        cachedOpenBracket, mins, secs, cachedCloseBracket)
 end
 
 ---------------------------------------------------------------------------------
@@ -107,34 +108,16 @@ function CT:CreateFrame()
     frame:SetMouseClickEnabled(false)
     frame:Hide()
 
-    -- Brackets are separate FontStrings pinned to the frame's edges so they
-    -- don't shift as proportional digit widths vary in the digits FontString.
-    -- Inset is 0 so the brackets sit snug to the frame edge; the gap to the
-    -- digits comes from BRACKET_GAP in UpdateFrameSize.
-    local bracketL = frame:CreateFontString(nil, "OVERLAY")
-    bracketL:SetPoint("LEFT", frame, "LEFT", 0, 0)
-    bracketL:SetJustifyH("LEFT")
-    bracketL:SetJustifyV("MIDDLE")
-    KE:ApplyFont(bracketL, "Expressway", 14, "")
-
-    local bracketR = frame:CreateFontString(nil, "OVERLAY")
-    bracketR:SetPoint("RIGHT", frame, "RIGHT", 0, 0)
-    bracketR:SetJustifyH("RIGHT")
-    bracketR:SetJustifyV("MIDDLE")
-    KE:ApplyFont(bracketR, "Expressway", 14, "")
-
     local text = frame:CreateFontString("KE_CombatTimerText", "OVERLAY")
     text:SetPoint("CENTER", frame, "CENTER", 0, 0)
     text:SetJustifyH("CENTER")
     text:SetJustifyV("MIDDLE")
     KE:ApplyFont(text, "Expressway", 14, "")
-    text:SetText("00:00")
+    text:SetText(cachedOpenBracket .. "00:00" .. cachedCloseBracket)
 
     self.frame = frame
     frame.text = text
     self.text = text
-    self.bracketL = bracketL
-    self.bracketR = bracketR
 end
 
 ---------------------------------------------------------------------------------
@@ -143,27 +126,17 @@ end
 function CT:UpdateFrameSize()
     if not self.frame or not self.text then return end
 
-    -- Measure against a fixed reference string so frame width stays stable
-    -- regardless of which digits are currently rendered (proportional fonts
-    -- give "1" a different width than "0", which would shift bracket
-    -- positions if the brackets shared a FontString with the digits).
+    -- Measure against a fixed reference string, brackets included, so the frame
+    -- stays put as the digits tick. GetStringWidth() straight after SetText()
+    -- also returns stale metrics, which mis-sized the backdrop.
     local current = self.text:GetText()
-    local refDigits = (self.db.Format == "MM:SS:MS") and "00:00:0" or "00:00"
-    self.text:SetText(refDigits)
+    local refBody = (self.db.Format == "MM:SS:MS") and "00:00:0" or "00:00"
+    self.text:SetText(cachedOpenBracket .. refBody .. cachedCloseBracket)
 
-    local digitsW = self.text:GetStringWidth() or 0
-    local bracketW = 0
-    if self.bracketL and self.bracketL:IsShown() then
-        bracketW = (self.bracketL:GetStringWidth() or 0) + (self.bracketR:GetStringWidth() or 0)
-            + BRACKET_GAP * 2
-    end
-
-    -- Frame width = digits + brackets, snapped to an even pixel multiple.
-    -- digitsW comes from GetStringWidth() and is a float; rounding to even
-    -- pixels keeps text-CENTER on integer pixels and the right edge on the
-    -- pixel grid. ApplyFramePosition's auto-snap aligns LEFT/BOTTOM but
-    -- not width, so this PixelSnapEven keeps the right bracket crisp.
-    local total = KE:PixelSnapEven(digitsW + bracketW)
+    -- Snapped to an even pixel multiple: GetStringWidth() is a float, and
+    -- rounding keeps text-CENTER on integer pixels and the right edge on the
+    -- pixel grid. ApplyFramePosition's auto-snap aligns LEFT/BOTTOM, not width.
+    local total = KE:PixelSnapEven(self.text:GetStringWidth() or 0)
     -- Height from the rendered string, not the configured size: an outline adds
     -- to the glyph box, so a size-derived height clips the tallest outlines.
     local height = self.text:GetStringHeight() or 0
@@ -193,8 +166,8 @@ end
 
 -- Colour is the only thing a combat transition changes, so it is split out of
 -- ApplySettings: running the whole of that on every enter and exit re-applied
--- three fonts, re-anchored the text and re-measured the frame twice per fight
--- for nothing. Applied to all three FontStrings so the timer reads as one piece.
+-- the font, re-anchored the text and re-measured the frame twice per fight for
+-- nothing.
 function CT:UpdateCombatColor()
     if not self.text then return end
     local textColor = self.running and self.db.ColorInCombat or self.db.ColorOutOfCombat
@@ -206,8 +179,6 @@ function CT:UpdateCombatColor()
         a = textColor[4] or 1
     end
     self.text:SetTextColor(r, g, b, a)
-    self.bracketL:SetTextColor(r, g, b, a)
-    self.bracketR:SetTextColor(r, g, b, a)
 end
 
 ---------------------------------------------------------------------------------
@@ -217,38 +188,26 @@ function CT:ApplySettings()
     if not self.text then return end
     self.refreshRate = GetRefreshRate(self.db.Format)
 
-    -- Same font on all three FontStrings so brackets and digits visually
-    -- align (matching x-height and weight).
+    cachedOpenBracket, cachedCloseBracket = GetBrackets(self.db.BracketStyle)
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
-    KE:ApplyFontToText(self.bracketL, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
-    KE:ApplyFontToText(self.bracketR, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
 
-    -- Bracket characters + visibility per BracketStyle. When the style is
-    -- "none" the digits FontString takes over the full frame width and
-    -- respects the user's anchor-justify preference (legacy behavior).
-    local open, close = GetBrackets(self.db.BracketStyle)
+    -- One string, so placement is just where it sits in the frame: pinned to
+    -- the held edge for an edge anchor, centred otherwise. Pinning the held
+    -- edge keeps that edge still as the rendered width changes.
+    local justify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
+    local point = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)
     self.text:ClearAllPoints()
-    if open == "" then
-        self.bracketL:Hide()
-        self.bracketR:Hide()
-        local justify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
-        local point = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)
-        self.text:SetJustifyH(justify)
-        if point == "LEFT" then
-            self.text:SetPoint("LEFT", self.frame, "LEFT", 4, 0)
-        elseif point == "RIGHT" then
-            self.text:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
-        else
-            self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
-        end
+    self.text:SetJustifyH(justify)
+    if point == "LEFT" then
+        self.text:SetPoint("LEFT", self.frame, "LEFT", 0, 0)
+    elseif point == "RIGHT" then
+        self.text:SetPoint("RIGHT", self.frame, "RIGHT", 0, 0)
     else
-        self.bracketL:SetText(open)
-        self.bracketR:SetText(close)
-        self.bracketL:Show()
-        self.bracketR:Show()
-        self.text:SetJustifyH("CENTER")
         self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
     end
+
+    -- The rendered string changes with the bracket style, so force a re-stamp.
+    self.lastDisplayedText = ""
 
     self:UpdateCombatColor()
 
