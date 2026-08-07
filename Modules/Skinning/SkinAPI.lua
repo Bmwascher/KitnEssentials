@@ -2371,8 +2371,7 @@ end
 -- object shadow governs rendering.
 --
 -- Deliberately scoped to the skin engine rather than KE:ApplyFont, which is
--- shared with KE's own modules,
--- whose text has its own shadow and soft-outline pipeline
+-- shared with KE's own modules, whose text has its own shadow pipeline
 -- (KE:ApplyFontToText). Skinned Blizzard frames all funnel through here.
 local noShadowFont
 function S.PrimeNoShadow(fontString)

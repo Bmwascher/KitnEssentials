@@ -178,7 +178,7 @@ function CR:ApplyTextSettings()
     local db = self.db
     local fontName = db.FontFace
     local fontSize = db.FontSize or 16
-    local fontOutline = db.FontOutline or "SOFTOUTLINE"
+    local fontOutline = db.FontOutline or "OUTLINE"
 
     -- Apply font to all text elements (no shadow)
     KE:ApplyFontToText(self.frame.separator, fontName, fontSize, fontOutline)

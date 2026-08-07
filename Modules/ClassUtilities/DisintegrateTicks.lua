@@ -284,15 +284,14 @@ function DT:ApplyWarningSettings()
     KE:ApplyFontToText(self.warningText,
         cw.FontFace,
         cw.FontSize or 16,
-        cw.FontOutline or "SOFTOUTLINE"
+        cw.FontOutline or "OUTLINE"
     )
 
     self.warningText:SetText(cw.Text or "DON'T CLIP")
     local cr, cg, cb, ca = KE:ResolveColor(cw.Color, { 1, 0, 0, 1 })
     self.warningText:SetTextColor(cr, cg, cb, ca)
 
-    -- ApplyFontToText may create/show soft outline shadows — hide them
-    -- ShowWarning() will re-show when actually needed during combat
+    -- ShowWarning() re-shows this when it is actually needed in combat.
     if not self.isPreview then
         self:HideWarning()
     end
@@ -311,17 +310,11 @@ function DT:ShowWarning()
         self.warningFrame:Show()
     end
     self.warningText:Show()
-    if self.warningText.softOutline then
-        self.warningText.softOutline:SetShown(true)
-    end
 end
 
 function DT:HideWarning()
     if not self.warningText then return end
     self.warningText:Hide()
-    if self.warningText.softOutline then
-        self.warningText.softOutline:SetShown(false)
-    end
     if self.warningFrame then
         self.warningFrame:Hide()
     end
@@ -588,9 +581,6 @@ function DT:ShowPreview()
 
     -- Show warning text in preview
     self.warningText:Show()
-    if self.warningText.softOutline then
-        self.warningText.softOutline:SetShown((self.db.ClipWarning or {}).FontOutline == "SOFTOUTLINE")
-    end
 
     -- Try to show ticks on the cast bar
     self:DiscoverCastBar()

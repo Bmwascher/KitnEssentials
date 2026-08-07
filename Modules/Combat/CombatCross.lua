@@ -229,16 +229,10 @@ function CC:CreateFrame()
 
     self.text = self.frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     self.text:SetPoint("CENTER")
-    self.text:SetFont(fontPath, fontSize, "")
+    -- The Outline toggle used to build a shadow halo around the cross. That
+    -- renderer is gone, so it maps to the font's own outline flag.
+    self.text:SetFont(fontPath, fontSize, self.db.Outline and "OUTLINE" or "")
     self.text:SetText("+")
-
-    if self.db.Outline then
-        self.frame.softOutline = KE:CreateSoftOutline(self.text, {
-            thickness = 1,
-            color = { 0, 0, 0 },
-            alpha = 0.9,
-        })
-    end
 
     self.text:ClearAllPoints()
     self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
@@ -256,23 +250,7 @@ function CC:ApplySettings()
     -- Apply font
     local fontSize = (self.db.Thickness or 22) * FONT_SIZE_MULTIPLIER
     local fontPath = KE:GetFontPath(self.db.FontFace) or KE.FONT
-    self.text:SetFont(fontPath, fontSize, "")
-
-    if self.db.Outline then
-        if not self.frame.softOutline then
-            self.frame.softOutline = KE:CreateSoftOutline(self.text, {
-                thickness = 1,
-                color = { 0, 0, 0 },
-                alpha = 0.9,
-            })
-        else
-            self.frame.softOutline:SetShown(true)
-        end
-    else
-        if self.frame.softOutline then
-            self.frame.softOutline:SetShown(false)
-        end
-    end
+    self.text:SetFont(fontPath, fontSize, self.db.Outline and "OUTLINE" or "")
 
     -- Apply color
     local r, g, b, a = self:GetColor()

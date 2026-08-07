@@ -144,7 +144,6 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
             fontOutline = "FontOutline",
         },
         fontSizeRange = { 8, 32 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")

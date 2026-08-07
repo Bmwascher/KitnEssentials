@@ -20,7 +20,7 @@ local SETTINGS_GROWTH_OPTIONS = {
     { key = "UP",   text = "Up" },
 }
 
-local SETTINGS_TEXT_OUTLINE_OPTIONS = KE:GetFontOutlineOptions{ includeSoft = true }
+local SETTINGS_TEXT_OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 
 local function GetSettingsDB()
     if not KE.db or not KE.db.profile then return nil end

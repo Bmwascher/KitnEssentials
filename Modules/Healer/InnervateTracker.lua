@@ -152,7 +152,6 @@ function IT:CreateFrame()
     KE:ApplyFontToText(label, self.db.FontFace, self.db.LabelFontSize, self.db.FontOutline)
     label:SetText(self.db.LabelText or "INNERVATE")
     label:SetShadowOffset(0, 0)
-    if label._keSoftOutline then label._keSoftOutline:SetShown(false) end
     frame.label = label
 
     -- Cooldown swipe (visual duration drain)
@@ -171,7 +170,6 @@ function IT:CreateFrame()
     KE:ApplyFontToText(timer, self.db.FontFace, self.db.TimerFontSize, self.db.FontOutline)
     timer:SetText("")
     timer:SetShadowOffset(0, 0)
-    if timer._keSoftOutline then timer._keSoftOutline:SetShown(false) end
     frame.timer = timer
 
     -- Visual OnUpdate: only runs while the frame is shown (Innervate active)
@@ -218,10 +216,8 @@ function IT:ApplySettings()
     self.frame.label:SetTextColor(lc[1], lc[2], lc[3], lc[4] or 1)
     if self.db.ShowLabel == false then
         self.frame.label:Hide()
-        if self.frame.label._keSoftOutline then self.frame.label._keSoftOutline:SetShown(false) end
     else
         self.frame.label:Show()
-        if self.frame.label._keSoftOutline then self.frame.label._keSoftOutline:SetShown(true) end
     end
 
     -- Timer
@@ -230,10 +226,8 @@ function IT:ApplySettings()
     self.frame.timer:SetTextColor(tc[1], tc[2], tc[3], tc[4] or 1)
     if self.db.ShowTimer == false then
         self.frame.timer:Hide()
-        if self.frame.timer._keSoftOutline then self.frame.timer._keSoftOutline:SetShown(false) end
     else
         self.frame.timer:Show()
-        if self.frame.timer._keSoftOutline then self.frame.timer._keSoftOutline:SetShown(true) end
     end
 
     self:ApplyPosition()
@@ -372,7 +366,6 @@ function IT:HideFrame()
     self._lastTimerStr = nil
     if self.frame then
         self.frame.timer:SetText("")
-        if self.frame.timer._keSoftOutline then self.frame.timer._keSoftOutline:SetShown(false) end
         if self.frame.cooldown and self.frame.cooldown.Clear then
             self.frame.cooldown:Clear()
         end
@@ -449,7 +442,6 @@ function IT:UpdateTimer()
     if self.db.ShowTimer == false then
         if self.frame.timer:GetText() ~= "" then
             self.frame.timer:SetText("")
-            if self.frame.timer._keSoftOutline then self.frame.timer._keSoftOutline:SetShown(false) end
         end
         return
     end
@@ -489,12 +481,10 @@ function IT:ShowPreview()
     self.frame.label:SetText(self.db.LabelText or "INNERVATE")
     if self.db.ShowLabel ~= false then
         self.frame.label:Show()
-        if self.frame.label._keSoftOutline then self.frame.label._keSoftOutline:SetShown(true) end
     end
     self.frame.timer:SetText("8.0")
     if self.db.ShowTimer ~= false then
         self.frame.timer:Show()
-        if self.frame.timer._keSoftOutline then self.frame.timer._keSoftOutline:SetShown(true) end
     end
     self.frame:SetAlpha(1)
     self.frame:Show()

@@ -599,23 +599,9 @@ local BASE_BORDER_SIZE = 1
 local DUPE_BORDER_SIZE = 2
 local CRIT_BORDER_SIZE = 2
 
--- Show/hide a FontString together with its KE soft outline shadows. Calling
--- Hide() on the main FontString alone leaves the 8 shadow FontStrings visible
--- (separate objects on fontString._keSoftOutline), which appears as a ghost
--- of the hidden text.
 local function SetTextElementShown(fontString, shown)
     if not fontString then return end
-    if shown then
-        fontString:Show()
-        if fontString._keSoftOutline then
-            fontString._keSoftOutline:SetShown(true)
-        end
-    else
-        fontString:Hide()
-        if fontString._keSoftOutline then
-            fontString._keSoftOutline:SetShown(false)
-        end
-    end
+    fontString:SetShown(shown)
 end
 
 -- Recolor and resize the four border strips created by KE:AddIconBorders.

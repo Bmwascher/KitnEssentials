@@ -196,15 +196,8 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
         callback = function(v) db.FontSize = v; ApplySettings() end,
     })
     rowT3:AddWidget(fontSize, 0.33)
-    -- Soft Outline is added here for the caption's own renderer
-    -- (KE:ApplyFontToText), which the reference does not have.
     local outlineDrop = GUIFrame:CreateDropdown(rowT3, "Outline", {
-        options = {
-            { key = "NONE",         text = "None" },
-            { key = "OUTLINE",      text = "Outline" },
-            { key = "THICKOUTLINE", text = "Thick" },
-            { key = "SOFTOUTLINE",  text = "Soft Outline" },
-        },
+        options = KE:GetFontOutlineOptions(),
         value = KE:NormalizeFontOutline(db.FontOutline),
         callback = function(value) db.FontOutline = value; ApplySettings() end,
     })

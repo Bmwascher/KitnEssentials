@@ -133,7 +133,6 @@ GUIFrame:RegisterContent("KeystoneHelperReroll", function(scrollChild, yOffset)
             fontOutline = "RerollFontOutline",
         },
         fontSizeRange = { 16, 72 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")
@@ -300,7 +299,6 @@ GUIFrame:RegisterContent("KeystoneHelperYourKey", function(scrollChild, yOffset)
             fontOutline = "YourKeyFontOutline",
         },
         fontSizeRange = { 16, 72 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")

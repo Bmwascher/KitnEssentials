@@ -512,10 +512,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     -- skin engine supports exactly these three modes. Note the token is THICK,
     -- not the THICKOUTLINE spelling the rest of the addon uses for a raw font
     -- flag: this key is a mode the engine resolves, not a flag it forwards.
-    --
-    -- SOFTOUTLINE is deliberately absent: it is a shadow system this addon
-    -- draws for HUD text, not a font flag, and it has no meaning inside a
-    -- skinned window.
     rowFace:AddWidget(GUIFrame:CreateDropdown(rowFace, "Outline", {
         options = { NONE = "None", OUTLINE = "Outline", THICK = "Thick" },
         value = (S and S._ResolveOutlineMode and S._ResolveOutlineMode(db.FontOutline)) or "NONE",

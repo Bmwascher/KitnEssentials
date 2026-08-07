@@ -310,7 +310,6 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
             { label = "Timer Size",  dbKey = "TimerFontSize", default = 18 },
         },
         fontSizeRange = { 8, 48 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")

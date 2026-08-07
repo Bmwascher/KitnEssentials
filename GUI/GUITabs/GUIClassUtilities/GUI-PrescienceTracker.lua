@@ -222,7 +222,6 @@ GUIFrame:RegisterContent("PrescienceTracker", function(scrollChild, yOffset)
             fontOutline = "NameFontOutline",
         },
         fontSizeRange = { 8, 32 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(nameFontCard, "all")
@@ -243,7 +242,6 @@ GUIFrame:RegisterContent("PrescienceTracker", function(scrollChild, yOffset)
             fontOutline = "TimerFontOutline",
         },
         fontSizeRange = { 8, 32 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(timerFontCard, "all")

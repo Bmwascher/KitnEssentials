@@ -1363,18 +1363,6 @@ end
 ---@type table<string, table[]>
 local barFramePool = { bar = {}, text = {} }
 
--- Soft-outline shadows are siblings of the main FontString (not its children), so
--- bar:Hide() doesn't take them down via inheritance the way you'd expect — they
--- linger as ghosts on screen until SetShown(false) is called explicitly. Touch
--- every FontString slot a phase / cast / regular bar can carry so this helper is
--- a safe drop-in for any bar lifecycle path.
-local function HideBarSoftOutlines(bar)
-    if not bar then return end
-    if bar.label and bar.label.softOutline then bar.label.softOutline:SetShown(false) end
-    if bar.timerText and bar.timerText.softOutline then bar.timerText.softOutline:SetShown(false) end
-    if bar.transitionText and bar.transitionText.softOutline then bar.transitionText.softOutline:SetShown(false) end
-end
-
 -- Single teardown funnel for every bar lifecycle path. Callers stay
 -- responsible for clearing their self.bars entry and re-running LayoutBars.
 -- Frames without a _dtPoolKey tag (CreatePhaseBar kits — structurally
@@ -1387,7 +1375,6 @@ local function ReleaseBar(bar)
         bar.revealTimer = nil
     end
     bar:SetScript("OnUpdate", nil)
-    HideBarSoftOutlines(bar)
     bar:Hide()
     if not bar._dtPoolKey then return end
     bar:ClearAllPoints()
@@ -1603,7 +1590,7 @@ local function ApplyVisualsToBar(frame)
     else
         face = (textDisplay and textDisplay.fontFace) or KE:GetGlobalFont()
         size = (textDisplay and textDisplay.fontSize) or 14
-        outline = (textDisplay and textDisplay.fontOutline) or "SOFTOUTLINE"
+        outline = (textDisplay and textDisplay.fontOutline) or "OUTLINE"
     end
     if frame.label and KE.ApplyFontToText then
         KE:ApplyFontToText(frame.label, face, size, outline)
@@ -2987,8 +2974,6 @@ local PREVIEW_ICON_IDS = { 236273, 460952, 429383 }
 
 DT.previewBarShown = false
 DT.previewTextShown = false
-
--- HideBarSoftOutlines lives above ReleaseBar (the teardown funnel) now.
 
 local function CreatePreviewBar(self, key, label, duration, displayMode, iconID, sortIndex)
     local existing = self.bars[key]

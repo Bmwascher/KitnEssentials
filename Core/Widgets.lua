@@ -30,9 +30,8 @@ local function ValidateThemeColor(color, default)
     return color
 end
 
--- Build-once singleton: a fresh container per call leaked the frame, the
--- FontString, AND its 8-shadow soft outline permanently (frames are never
--- GC'd; softOutline caches per FontString, so reuse stops that too).
+-- Build-once singleton: a fresh container per call leaked the frame and its
+-- FontString permanently (frames are never GC'd).
 function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOffset)
     if KE.msgContainer then
         KE.msgContainer:Hide()
@@ -63,12 +62,10 @@ function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOff
     msgContainer:ClearAllPoints()
     msgContainer:SetPoint("CENTER", parent, "CENTER", x, y)
 
-    -- SetText BEFORE ApplyFontToText — the soft-outline reuse path copies
-    -- GetText() into the shadow layer.
     msgText:SetText(text)
     msgText:SetFont(KE.FONT, fontSize, "")
 
-    KE:ApplyFontToText(msgText, "Expressway", fontSize, "SOFTOUTLINE")
+    KE:ApplyFontToText(msgText, "Expressway", fontSize, "OUTLINE")
 
     local accent = ValidateThemeColor(Theme.accent, { 1, 0.82, 0, 1 })
     msgText:SetTextColor(accent[1], accent[2], accent[3], 1)
@@ -841,40 +838,8 @@ end
 function KE:ApplyFontToText(fontString, fontName, fontSize, fontOutline, shadowConfig)
     if not fontString then return end
 
-    -- Soft outline mode: use 8-shadow system instead of WoW's built-in outline.
-    -- Main and shadow FontStrings both follow the profile-wide slug switch
-    -- (KE:SlugFlags) so the halo stays crisp at every sub-pixel screen
-    -- position when slug is on. Bitmap rasterization on the bare main text
-    -- used to produce a visible ghost-shadow that varied with the frame's X
-    -- offset.
-    if fontOutline == "SOFTOUTLINE" then
-        local success = self:ApplyFont(fontString, fontName, fontSize, "")
-        fontString:SetShadowOffset(0, 0)
-        fontString:SetShadowColor(0, 0, 0, 0)
-
-        local fontPath = self:GetFontPath(fontName)
-
-        if not fontString.softOutline then
-            fontString.softOutline = self:CreateSoftOutline(fontString, {
-                thickness = 1,
-                color = { 0, 0, 0 },
-                alpha = 0.9,
-                fontPath = fontPath,
-                fontSize = fontSize,
-            })
-        else
-            fontString.softOutline:SetFont(fontPath, fontSize, KE:SlugFlags(""))
-            fontString.softOutline:SetText(fontString:GetText() or "")
-            fontString.softOutline:SetShown(true)
-        end
-
-        return success
-    end
-
-    if fontString.softOutline then
-        fontString.softOutline:SetShown(false)
-    end
-
+    -- SOFTOUTLINE used to branch here into an 8-shadow renderer. KE:ApplyFont
+    -- resolves it to a plain outline now, so there is one path again.
     self:ApplyFont(fontString, fontName, fontSize, fontOutline)
 
     if shadowConfig and shadowConfig.Enabled then

@@ -18,6 +18,7 @@ local CT = KitnEssentials:NewModule("CombatTimer", "AceEvent-3.0")
 local CreateFrame = CreateFrame
 local GetTime = GetTime
 local InCombatLockdown = InCombatLockdown
+local C_InstanceEncounter = C_InstanceEncounter
 local math_floor = math.floor
 local string_format = string.format
 
@@ -27,11 +28,36 @@ CT.startTime = 0
 CT.running = false
 CT.lastDisplayedText = ""
 CT.isPreview = false
+CT.isEncounter = false
 
 KE.lastCombatDuration = 0
 
+-- Brackets live in the timer string itself, as the reference renders them.
+-- They were previously two extra FontStrings pinned to the frame edges, which
+-- left the space between a bracket and the digits to whatever the frame sizing
+-- had spare rather than to the font's own spacing. Cached because FormatTime
+-- runs on every tick.
+local cachedOpenBracket, cachedCloseBracket = "[", "]"
+
 local function GetRefreshRate(format)
     return (format == "MM:SS:MS") and 0.1 or 0.25
+end
+
+-- Whether a stop event should actually stop the clock. Pure so the rule can be
+-- tested without frames: a plain-combat timer stops on a combat end, an
+-- encounter timer stops on an encounter end, and an encounter timer also stops
+-- on a combat end once the encounter is genuinely over (the wipe or release
+-- case, where ENCOUNTER_END may never arrive for us).
+local function ShouldStopTimer(isEncounterTimer, isEncounterEvent, encounterInProgress)
+    if isEncounterTimer == isEncounterEvent then return true end
+    return isEncounterTimer and not encounterInProgress
+end
+
+local function EncounterInProgress()
+    local fn = C_InstanceEncounter and C_InstanceEncounter.IsEncounterInProgress
+    if not fn then return false end
+    local ok, inProgress = pcall(fn)
+    return ok and inProgress == true
 end
 
 ---------------------------------------------------------------------------------
@@ -56,18 +82,17 @@ local function GetBrackets(style)
     else return "[", "]" end
 end
 
--- Returns the digits-only timer string (no brackets). Brackets are rendered
--- as separate FontStrings pinned to the frame's edges so they don't shift
--- as proportional digit widths vary.
 local function FormatTime(total_seconds, format)
     local mins = math_floor(total_seconds / 60)
     local secs = math_floor(total_seconds % 60)
     if format == "MM:SS:MS" then
         local frac = total_seconds - math_floor(total_seconds)
         local ms = math_floor(frac * 10)
-        return string_format("%02d:%02d:%d", mins, secs, ms)
+        return string_format("%s%02d:%02d:%d%s",
+            cachedOpenBracket, mins, secs, ms, cachedCloseBracket)
     end
-    return string_format("%02d:%02d", mins, secs)
+    return string_format("%s%02d:%02d%s",
+        cachedOpenBracket, mins, secs, cachedCloseBracket)
 end
 
 ---------------------------------------------------------------------------------
@@ -83,34 +108,16 @@ function CT:CreateFrame()
     frame:SetMouseClickEnabled(false)
     frame:Hide()
 
-    -- Brackets are separate FontStrings pinned to the frame's edges so they
-    -- don't shift as proportional digit widths vary in the digits FontString.
-    -- Inset is 0 so the brackets sit snug to the frame edge — visual gap to
-    -- the digits is controlled by the small safety pad in UpdateFrameSize.
-    local bracketL = frame:CreateFontString(nil, "OVERLAY")
-    bracketL:SetPoint("LEFT", frame, "LEFT", 0, 0)
-    bracketL:SetJustifyH("LEFT")
-    bracketL:SetJustifyV("MIDDLE")
-    KE:ApplyFont(bracketL, "Expressway", 14, "")
-
-    local bracketR = frame:CreateFontString(nil, "OVERLAY")
-    bracketR:SetPoint("RIGHT", frame, "RIGHT", 0, 0)
-    bracketR:SetJustifyH("RIGHT")
-    bracketR:SetJustifyV("MIDDLE")
-    KE:ApplyFont(bracketR, "Expressway", 14, "")
-
     local text = frame:CreateFontString("KE_CombatTimerText", "OVERLAY")
     text:SetPoint("CENTER", frame, "CENTER", 0, 0)
     text:SetJustifyH("CENTER")
     text:SetJustifyV("MIDDLE")
     KE:ApplyFont(text, "Expressway", 14, "")
-    text:SetText("00:00")
+    text:SetText(cachedOpenBracket .. "00:00" .. cachedCloseBracket)
 
     self.frame = frame
     frame.text = text
     self.text = text
-    self.bracketL = bracketL
-    self.bracketR = bracketR
 end
 
 ---------------------------------------------------------------------------------
@@ -119,28 +126,23 @@ end
 function CT:UpdateFrameSize()
     if not self.frame or not self.text then return end
 
-    -- Measure against a fixed reference string so frame width stays stable
-    -- regardless of which digits are currently rendered (proportional fonts
-    -- give "1" a different width than "0", which would shift bracket
-    -- positions if the brackets shared a FontString with the digits).
+    -- Measure against a fixed reference string, brackets included, so the frame
+    -- stays put as the digits tick. GetStringWidth() straight after SetText()
+    -- also returns stale metrics, which mis-sized the backdrop.
     local current = self.text:GetText()
-    local refDigits = (self.db.Format == "MM:SS:MS") and "00:00:0" or "00:00"
-    self.text:SetText(refDigits)
+    local refBody = (self.db.Format == "MM:SS:MS") and "00:00:0" or "00:00"
+    self.text:SetText(cachedOpenBracket .. refBody .. cachedCloseBracket)
 
-    local digitsW = self.text:GetStringWidth() or 0
-    local bracketW = 0
-    if self.bracketL and self.bracketL:IsShown() then
-        bracketW = (self.bracketL:GetStringWidth() or 0) + (self.bracketR:GetStringWidth() or 0)
-    end
-
-    -- Frame width = digits + brackets, snapped to an even pixel multiple.
-    -- digitsW comes from GetStringWidth() and is a float; rounding to even
-    -- pixels keeps text-CENTER on integer pixels and the right edge on the
-    -- pixel grid. ApplyFramePosition's auto-snap aligns LEFT/BOTTOM but
-    -- not width, so this PixelSnapEven keeps the right bracket crisp.
-    local total = KE:PixelSnapEven(digitsW + bracketW)
+    -- Snapped to an even pixel multiple: GetStringWidth() is a float, and
+    -- rounding keeps text-CENTER on integer pixels and the right edge on the
+    -- pixel grid. ApplyFramePosition's auto-snap aligns LEFT/BOTTOM, not width.
+    local total = KE:PixelSnapEven(self.text:GetStringWidth() or 0)
+    -- Height from the rendered string, not the configured size: an outline adds
+    -- to the glyph box, so a size-derived height clips the tallest outlines.
+    local height = self.text:GetStringHeight() or 0
+    if not (KE:IsSafeValue(height) and height > 0) then height = self.db.FontSize or 28 end
     if KE:IsSafeValue(total) then
-        self.frame:SetSize(total, (self.db.FontSize or 28) + 8)
+        self.frame:SetSize(total, height + 8)
     end
 
     if current ~= nil then self.text:SetText(current) end
@@ -162,52 +164,12 @@ function CT:UpdateText()
     end
 end
 
----------------------------------------------------------------------------------
--- Apply Settings
----------------------------------------------------------------------------------
-function CT:ApplySettings()
+-- Colour is the only thing a combat transition changes, so it is split out of
+-- ApplySettings: running the whole of that on every enter and exit re-applied
+-- the font, re-anchored the text and re-measured the frame twice per fight for
+-- nothing.
+function CT:UpdateCombatColor()
     if not self.text then return end
-    self.refreshRate = GetRefreshRate(self.db.Format)
-
-    -- Same font on all three FontStrings so brackets and digits visually
-    -- align (matching x-height, weight, soft-outline rendering).
-    KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
-    KE:ApplyFontToText(self.bracketL, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
-    KE:ApplyFontToText(self.bracketR, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
-
-    -- Bracket characters + visibility per BracketStyle. When the style is
-    -- "none" the digits FontString takes over the full frame width and
-    -- respects the user's anchor-justify preference (legacy behavior).
-    local open, close = GetBrackets(self.db.BracketStyle)
-    self.text:ClearAllPoints()
-    if open == "" then
-        self.bracketL:Hide()
-        self.bracketR:Hide()
-        -- Soft-outline shadows are parented to the FRAME, not the bracket
-        -- FontString, so :Hide() on the bracket alone leaves 8 shadow ghosts
-        -- visible. Explicitly hide the .softOutline as well.
-        if self.bracketL.softOutline then self.bracketL.softOutline:SetShown(false) end
-        if self.bracketR.softOutline then self.bracketR.softOutline:SetShown(false) end
-        local justify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
-        local point = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)
-        self.text:SetJustifyH(justify)
-        if point == "LEFT" then
-            self.text:SetPoint("LEFT", self.frame, "LEFT", 4, 0)
-        elseif point == "RIGHT" then
-            self.text:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
-        else
-            self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
-        end
-    else
-        self.bracketL:SetText(open)
-        self.bracketR:SetText(close)
-        self.bracketL:Show()
-        self.bracketR:Show()
-        self.text:SetJustifyH("CENTER")
-        self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
-    end
-
-    -- Colors apply to all three so the timer reads as one piece.
     local textColor = self.running and self.db.ColorInCombat or self.db.ColorOutOfCombat
     local r, g, b, a = 1, 1, 1, 1
     if textColor then
@@ -217,8 +179,37 @@ function CT:ApplySettings()
         a = textColor[4] or 1
     end
     self.text:SetTextColor(r, g, b, a)
-    self.bracketL:SetTextColor(r, g, b, a)
-    self.bracketR:SetTextColor(r, g, b, a)
+end
+
+---------------------------------------------------------------------------------
+-- Apply Settings
+---------------------------------------------------------------------------------
+function CT:ApplySettings()
+    if not self.text then return end
+    self.refreshRate = GetRefreshRate(self.db.Format)
+
+    cachedOpenBracket, cachedCloseBracket = GetBrackets(self.db.BracketStyle)
+    KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
+
+    -- One string, so placement is just where it sits in the frame: pinned to
+    -- the held edge for an edge anchor, centred otherwise. Pinning the held
+    -- edge keeps that edge still as the rendered width changes.
+    local justify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
+    local point = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)
+    self.text:ClearAllPoints()
+    self.text:SetJustifyH(justify)
+    if point == "LEFT" then
+        self.text:SetPoint("LEFT", self.frame, "LEFT", 0, 0)
+    elseif point == "RIGHT" then
+        self.text:SetPoint("RIGHT", self.frame, "RIGHT", 0, 0)
+    else
+        self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
+    end
+
+    -- The rendered string changes with the bracket style, so force a re-stamp.
+    self.lastDisplayedText = ""
+
+    self:UpdateCombatColor()
 
     if self.frame then
         KE:ApplyBackdrop(self.frame, self.db.Backdrop)
@@ -259,22 +250,38 @@ function CT:_SetOnUpdateActive(active)
     end
 end
 
-function CT:OnEnterCombat()
-    if self.running or not self.db.Enabled then return end
+-- A timer remembers whether it began as an encounter, because the two clocks
+-- end differently: plain combat ends when combat does, but a boss fight drops
+-- and regains combat freely, and restarting the clock on every one of those
+-- makes the readout useless. So an encounter timer ignores combat ending and
+-- waits for ENCOUNTER_END, or for the encounter to genuinely be over. Combat
+-- already running when a boss pulls is promoted rather than restarted.
+function CT:StartTimer(isEncounterEvent)
+    if not self.db.Enabled then return end
+    if self.running then
+        if isEncounterEvent then self.isEncounter = true end
+        return
+    end
     self.startTime = GetTime()
     self.running = true
+    self.isEncounter = isEncounterEvent
     KE.lastCombatDuration = 0
     self.lastDisplayedText = ""
     if self.frame then self.frame:Show() end
     self:_SetOnUpdateActive(true)
-    self:ApplySettings()
+    self:UpdateCombatColor()
     self:UpdateText()
 end
 
-function CT:OnExitCombat()
+function CT:StopTimer(isEncounterEvent)
     if not self.running then return end
+    if not ShouldStopTimer(self.isEncounter, isEncounterEvent, EncounterInProgress()) then
+        return
+    end
+
     KE.lastCombatDuration = GetTime() - self.startTime
     self.running = false
+    self.isEncounter = false
     self.startTime = 0
     -- Final UpdateText below paints the closing duration; after that, drop
     -- the OnUpdate so we don't tick at idle. Preview can keep us awake.
@@ -283,8 +290,21 @@ function CT:OnExitCombat()
         local duration = FormatTime(KE.lastCombatDuration, self.db.Format)
         KE:Print("Combat lasted " .. duration)
     end
-    self:ApplySettings()
+    self:UpdateCombatColor()
     self:UpdateText()
+end
+
+-- Named handlers rather than closures so the event registration stays in the
+-- string-handler form the rest of the addon uses.
+function CT:OnCombatStart()    self:StartTimer(false) end
+function CT:OnCombatEnd()      self:StopTimer(false) end
+function CT:OnEncounterStart() self:StartTimer(true) end
+function CT:OnEncounterEnd()   self:StopTimer(true) end
+
+-- Thin accessor so the stop rule can be exercised without the frames and the
+-- event wiring around it.
+function CT:ShouldStopTimer(isEncounterTimer, isEncounterEvent, encounterInProgress)
+    return ShouldStopTimer(isEncounterTimer, isEncounterEvent, encounterInProgress)
 end
 
 ---------------------------------------------------------------------------------
@@ -338,14 +358,15 @@ function CT:OnEnable()
     self:RegWithEditMode()
     self:ApplySettings()
     C_Timer.After(0.5, function() self:ApplyPosition() end)
-    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnEnterCombat")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnExitCombat")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatStart")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
+    self:RegisterEvent("ENCOUNTER_START", "OnEncounterStart")
+    self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
     -- Don't attach OnUpdate here. OnEnterCombat / ShowPreview will attach it
     -- when work is actually needed; OnExitCombat / HidePreview detach it.
-    -- Module enabled mid-combat: re-arm via OnEnterCombat using the running
-    -- combat lockdown.
+    -- Module enabled mid-combat: re-arm from the running combat lockdown.
     if self.db.Enabled then self.frame:Show() end
-    if InCombatLockdown() then self:OnEnterCombat() end
+    if InCombatLockdown() then self:StartTimer(false) end
 end
 
 function CT:OnDisable()
@@ -354,6 +375,7 @@ function CT:OnDisable()
         self.frame:Hide()
     end
     self.running = false
+    self.isEncounter = false
     self.isPreview = false
     self:UnregisterAllEvents()
 end

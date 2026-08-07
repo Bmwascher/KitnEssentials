@@ -1314,8 +1314,6 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 
     ----------------------------------------------------------------
     -- Font
-    -- Outline list excludes SOFTOUTLINE: bar text is small and soft-outline
-    -- haloes on tiny text (matches the KickTracker bar-text rationale).
     ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     manager:Register(card3, "all")

@@ -192,7 +192,6 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
             fontOutline = "FontOutline",
         },
         fontSizeRange = { 8, 36 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")

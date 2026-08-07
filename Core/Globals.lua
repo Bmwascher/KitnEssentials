@@ -362,9 +362,13 @@ end
 -- Font Helpers
 ---------------------------------------------------------------------------------
 
--- Filters SOFTOUTLINE to "" since it uses a custom shadow system instead
+-- SOFTOUTLINE named a custom 8-shadow renderer that no longer exists. The
+-- option is still offered and still sits in saved profiles, so it resolves to
+-- a plain outline here rather than being rejected: a stored value keeps
+-- working and only the look changes.
 function KE:GetFontOutline(outline)
-    if not outline or outline == "NONE" or outline == "SOFTOUTLINE" or outline == "" then
+    if outline == "SOFTOUTLINE" then return "OUTLINE" end
+    if not outline or outline == "NONE" or outline == "" then
         return ""
     end
     return outline
@@ -372,12 +376,9 @@ end
 
 -- Single source of truth for the font-outline dropdown option list used by
 -- every GUI font card. The base set (None/Outline/Thick) is always returned.
--- Slug is now a profile-wide switch (KE:SlugFlags) rather than a per-module
--- mode, so it no longer appears here. Pass flags for the two optional modes
--- that aren't universally appropriate:
---   includeSoft  → SOFTOUTLINE   (KE's 8-shadow custom outline; pulls in
---                                 extra FontStrings, can misbehave on
---                                 recycled tiny-text Blizzard frames)
+-- Slug is a profile-wide switch (KE:SlugFlags) rather than a per-module mode
+-- and Soft's renderer is gone, so neither appears here. One optional mode
+-- remains, since it is not universally appropriate:
 --   includeMono  → MONOCHROME    (no anti-aliasing; specialized, e.g.
 --                                 nameplate text)
 -- Adding a new mode here picks it up everywhere automatically.
@@ -388,22 +389,23 @@ function KE:GetFontOutlineOptions(flags)
         { key = "OUTLINE",      text = "Outline" },
         { key = "THICKOUTLINE", text = "Thick" },
     }
-    if flags.includeSoft then
-        opts[#opts + 1] = { key = "SOFTOUTLINE", text = "Soft" }
-    end
     if flags.includeMono then
         opts[#opts + 1] = { key = "MONOCHROME",  text = "Monochrome" }
     end
     return opts
 end
 
--- Outline values saved while the per-module Slug modes existed are no longer
--- selectable. A dropdown handed an unknown key renders the raw key as its
--- label, so every read site funnels stored values through here first.
+-- Outline values saved while the per-module Slug modes and the soft-outline
+-- renderer existed are no longer selectable. A dropdown handed an unknown key
+-- renders the raw key as its label, so every read site funnels stored values
+-- through here first. Nothing rewrites the saved value: it keeps rendering
+-- through KE:GetFontOutline until the user picks something else, so no profile
+-- needs migrating.
 local RETIRED_OUTLINES = {
     ["SLUG"] = "NONE",
     ["SLUG,OUTLINE"] = "OUTLINE",
     ["OUTLINE, SLUG"] = "OUTLINE",
+    ["SOFTOUTLINE"] = "OUTLINE",
 }
 
 ---@param value string?

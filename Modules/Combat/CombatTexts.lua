@@ -128,11 +128,9 @@ function CM:GetMessageFrame(msgType)
 
     self.messageFrames[msgType] = frame
 
-    -- Apply font — interrupt uses native OUTLINE (SOFTOUTLINE shadows too visible on white text)
     if msgType == "interrupt" then
-        local outline = self.db.FontOutline
-        if outline == "SOFTOUTLINE" then outline = "OUTLINE" end
-        KE:ApplyFont(text, self.db.FontFace, self.db.FontSize, KE:GetFontOutline(outline))
+        KE:ApplyFont(text, self.db.FontFace, self.db.FontSize,
+            KE:GetFontOutline(self.db.FontOutline))
     else
         KE:ApplyFontToText(text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
     end
@@ -208,17 +206,16 @@ function CM:ShowFlashMessage(msgType, textOverride)
             frame:Hide()
             -- Don't reset alpha here. Render tick can process a SetAlpha(1)
             -- as a visible frame before the Hide takes effect, flashing the
-            -- text at full alpha (especially with soft-outline shadows).
+            -- text at full alpha.
             -- ShowFlashMessage does SetAlpha(1) on the next show path instead.
             self.activeMessages[msgType] = nil
             self:ArrangeMessages()
         end
     end
 
-    -- Manual alpha fade. UIFrameFadeOut is unsafe — it causes a stack overflow
-    -- on frames whose children use the SOFTOUTLINE shadow system. SetAlpha on
-    -- the parent propagates to soft-outline children without that hook path.
-    -- OnUpdate only runs during the fadeDuration window itself (not the full
+    -- Manual alpha fade rather than UIFrameFadeOut, which used to stack-overflow
+    -- through the retired soft-outline hooks. Kept because it is known good and
+    -- costs nothing: OnUpdate only runs during the fadeDuration window (not the full
     -- message duration), so per-frame cost is limited to ~0.4s per message.
     local fadeDuration = 0.4
     C_Timer.After(duration - fadeDuration, function()
@@ -383,12 +380,8 @@ function CM:ApplySettings()
         frame:SetHeight(fontSize + 2)
         if frame.text then
             if frame.msgType == "interrupt" then
-                if frame.text._keSoftOutline then
-                    frame.text._keSoftOutline:Release()
-                end
-                local outline = self.db.FontOutline
-                if outline == "SOFTOUTLINE" then outline = "OUTLINE" end
-                KE:ApplyFont(frame.text, self.db.FontFace, self.db.FontSize, KE:GetFontOutline(outline))
+                KE:ApplyFont(frame.text, self.db.FontFace, self.db.FontSize,
+                    KE:GetFontOutline(self.db.FontOutline))
             else
                 KE:ApplyFontToText(frame.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
             end

@@ -691,7 +691,6 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
             { label = "Timer Size", dbKey = "TimerFontSize", default = 16 },
         },
         fontSizeRange      = { 8, 48 },
-        includeSoftOutline = true,
         onChangeCallback   = ApplySettings,
     })
     manager:Register(fontCard, "all")

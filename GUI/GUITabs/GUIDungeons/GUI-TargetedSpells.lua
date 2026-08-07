@@ -107,7 +107,6 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
             fontSize = "FontSize",
             fontOutline = "FontOutline",
         },
-        includeSoftOutline = false,   -- widget-managed countdown text (spec constraint 3)
         extraSlider = {
             label = "Decimals", min = 0, max = 2, step = 1,
             dbKey = "Decimals", default = 1,

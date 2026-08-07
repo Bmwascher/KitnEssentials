@@ -1471,9 +1471,8 @@ function RCC:ApplySettings()
     local db = self.db
     if not db then return end
 
-    -- Re-apply font + base text color to all buttons. ApplyFontToText handles
-    -- SOFTOUTLINE properly via KE's custom shadow system. Hearty food color
-    -- is re-applied per update cycle inside UpdateFood when applicable.
+    -- Re-apply font + base text color to all buttons. Hearty food color is
+    -- re-applied per update cycle inside UpdateFood when applicable.
     local dr, dg, db_, da = KE:ResolveColor(db.DurationColor, { 1, 1, 1, 1 })
     for i = 1, NUM_SLOTS do
         local btn = self.buttons[i]

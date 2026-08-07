@@ -275,8 +275,6 @@ local function alertOnUpdate(self)
     -- degrade to a silent detach-and-pool instead.
     if DTrash.alerts[self.key] ~= self then
         self:SetScript("OnUpdate", nil)
-        if self.label and self.label.softOutline then self.label.softOutline:SetShown(false) end
-        if self.timerText and self.timerText.softOutline then self.timerText.softOutline:SetShown(false) end
         self:Hide()
         self:ClearAllPoints()
         if not self._pooled and self._poolKey then
@@ -443,8 +441,6 @@ function DTrash:HideAlert(key, skipLayout)
     self.alerts[key] = nil
     local mode = frame._poolKey
     frame:SetScript("OnUpdate", nil)
-    if frame.label and frame.label.softOutline then frame.label.softOutline:SetShown(false) end
-    if frame.timerText and frame.timerText.softOutline then frame.timerText.softOutline:SetShown(false) end
     frame:Hide()
     frame:ClearAllPoints()
     if not frame._pooled and frame._poolKey then

@@ -1319,7 +1319,7 @@ function MPT:RenderObjectives()
         timeFS:ClearAllPoints()
         if rightText ~= "" then
             MPT.SetTextGated(timeFS, rightText)
-            timeFS:SetTextColor(1, 1, 1)  -- 3-arg form (SOFTOUTLINE hook convention)
+            timeFS:SetTextColor(1, 1, 1)
             timeFS:SetWidth(0)
             -- GetStringWidth is safe here: RenderObjectives runs only from the
             -- C_Timer.After(0) deferred layout path, never a tainted event handler.

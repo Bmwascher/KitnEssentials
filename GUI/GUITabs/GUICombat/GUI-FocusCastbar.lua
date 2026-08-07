@@ -193,7 +193,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
             fontOutline = "FontOutline",
         },
         fontSizeRange = { 8, 24 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")

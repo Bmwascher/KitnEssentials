@@ -256,18 +256,7 @@ function TSP:ApplySettings()
     local tr, tg, tb, ta = KE:ResolveColor(db.TextColor, { 1, 1, 1, 1 })
     self.text:SetTextColor(tr, tg, tb, ta)
 
-    if showText then
-        self.text:Show()
-        if self.text.softOutline then
-            local usingSoftOutline = (db.FontOutline == "SOFTOUTLINE")
-            self.text.softOutline:SetShown(usingSoftOutline)
-        end
-    else
-        self.text:Hide()
-        if self.text.softOutline then
-            self.text.softOutline:SetShown(false)
-        end
-    end
+    self.text:SetShown(showText)
 
     -- Update timer text settings
     if self.timerText then
@@ -277,18 +266,7 @@ function TSP:ApplySettings()
         local tcr, tcg, tcb, tca = KE:ResolveColor(self.db.TimerTextColor, { 1, 1, 1, 1 })
         self.timerText:SetTextColor(tcr, tcg, tcb, tca)
 
-        if showTimer then
-            self.timerText:Show()
-            if self.timerText.softOutline then
-                local usingSoftOutline = (self.db.TimerFontOutline == "SOFTOUTLINE")
-                self.timerText.softOutline:SetShown(usingSoftOutline)
-            end
-        else
-            self.timerText:Hide()
-            if self.timerText.softOutline then
-                self.timerText.softOutline:SetShown(false)
-            end
-        end
+        self.timerText:SetShown(showTimer)
     end
 
     -- Apply position
@@ -362,9 +340,6 @@ function TSP:OnUpdate()
         if self._lastTimerStr ~= "" then
             self._lastTimerStr = ""
             self.timerText:SetText("")
-            if self.timerText.softOutline and self.timerText.softOutline.main then
-                self.timerText.softOutline.main:SetText("")
-            end
         end
         return
     end
@@ -380,9 +355,6 @@ function TSP:OnUpdate()
     if newStr ~= self._lastTimerStr then
         self._lastTimerStr = newStr
         self.timerText:SetText(newStr)
-        if self.timerText.softOutline and self.timerText.softOutline.main then
-            self.timerText.softOutline.main:SetText(newStr)
-        end
     end
 end
 
@@ -419,9 +391,6 @@ function TSP:HideProc()
 
     if self.timerText then
         self.timerText:SetText("")
-        if self.timerText.softOutline and self.timerText.softOutline.main then
-            self.timerText.softOutline.main:SetText("")
-        end
     end
 
     if self.hideTimer then
@@ -477,9 +446,6 @@ function TSP:HidePreview()
 
     if self.timerText then
         self.timerText:SetText("")
-        if self.timerText.softOutline and self.timerText.softOutline.main then
-            self.timerText.softOutline.main:SetText("")
-        end
     end
 
     if self.frame then
