@@ -172,6 +172,23 @@ describe("NoMovementAlert RoleColor", function()
             assert.is_nil(load():ReadCooldown(1))
         end)
 
+        it("reports at once when the client answers the question outright", function()
+            -- Outside a key isOnGCD is a real answer, so nothing is timed and
+            -- the countdown appears immediately -- no ceiling is paid.
+            local NMA = load()
+            cooldown = { isActive = true, isOnGCD = false, timeUntilEndOfStartRecovery = 30 }
+            assert.equals(30, NMA:ReadCooldown(1))
+            assert.is_nil(NMA.cdSince[1])
+        end)
+
+        it("stays quiet at once when the client says it is only the global cooldown", function()
+            local NMA = load()
+            cooldown = { isActive = true, isOnGCD = true, timeUntilEndOfStartRecovery = 1.5 }
+            assert.is_nil(NMA:ReadCooldown(1))
+            now = now + 5
+            assert.is_nil(NMA:ReadCooldown(1))
+        end)
+
         it("stays quiet while the active window is still inside the ceiling", function()
             local NMA = load()
             cooldown = { isActive = true, timeUntilEndOfStartRecovery = 1.4 }

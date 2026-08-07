@@ -138,15 +138,23 @@ end
 -- Rendering the duration object unconditionally is what made the global
 -- cooldown appear as the ability's own countdown.
 --
--- isActive is the one field the client still answers plainly, and it is
--- true for both a global cooldown and a real one. Duration is what
--- separates them, and a global cooldown never outlasts GCD_MAX. So time
--- the active window locally: still running past that ceiling means a real
--- cooldown. Plain arithmetic on our own clock, nothing secret inspected.
+-- Where isOnGCD DOES answer, it is exact and costs nothing, so it stays
+-- the primary test and the display is immediate. Its own documentation
+-- warns against trusting it outside a SPELL_UPDATE_COOLDOWN response; a
+-- wrong answer there would show a global cooldown for a moment, which is
+-- the failure this whole read exists to prevent, so treat a regression in
+-- that direction as this field going stale rather than as a new bug.
 --
--- Cost: a real cooldown appears GCD_MAX late. Every ability tracked here
--- runs far longer than that, and the alternative is showing the wrong
--- number.
+-- Only when it comes back nil does the timed window take over. isActive is
+-- the one field the client still answers plainly then, and it is true for
+-- both a global cooldown and a real one. Duration is what separates them,
+-- and a global cooldown never outlasts GCD_MAX. So time the active window
+-- locally: still running past that ceiling means a real cooldown. Plain
+-- arithmetic on our own clock, nothing secret inspected.
+--
+-- Cost, on that path only: a real cooldown appears GCD_MAX late. Every
+-- ability tracked here runs far longer than that, and the alternative is
+-- showing the wrong number.
 local GCD_MAX = 1.5
 
 -- Returns: remaining, total, isSecret  (remaining may be secret when
@@ -163,14 +171,21 @@ function NMA:ReadCooldown(spellId)
         return nil
     end
 
-    local since = self.cdSince[spellId]
-    if not since then
-        since = GetTime()
-        self.cdSince[spellId] = since
-    end
-    if GetTime() - since <= GCD_MAX then
-        self.cdPending = true
-        return nil
+    local onGCD = info.isOnGCD
+    if onGCD ~= nil then
+        -- Answered outright, so there is no window to time.
+        self.cdSince[spellId] = nil
+        if onGCD == true then return nil end
+    else
+        local since = self.cdSince[spellId]
+        if not since then
+            since = GetTime()
+            self.cdSince[spellId] = since
+        end
+        if GetTime() - since <= GCD_MAX then
+            self.cdPending = true
+            return nil
+        end
     end
 
     local rem = info.timeUntilEndOfStartRecovery
