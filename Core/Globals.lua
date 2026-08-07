@@ -362,9 +362,13 @@ end
 -- Font Helpers
 ---------------------------------------------------------------------------------
 
--- Filters SOFTOUTLINE to "" since it uses a custom shadow system instead
+-- SOFTOUTLINE named a custom 8-shadow renderer that no longer exists. The
+-- option is still offered and still sits in saved profiles, so it resolves to
+-- a plain outline here rather than being rejected: a stored value keeps
+-- working and only the look changes.
 function KE:GetFontOutline(outline)
-    if not outline or outline == "NONE" or outline == "SOFTOUTLINE" or outline == "" then
+    if outline == "SOFTOUTLINE" then return "OUTLINE" end
+    if not outline or outline == "NONE" or outline == "" then
         return ""
     end
     return outline

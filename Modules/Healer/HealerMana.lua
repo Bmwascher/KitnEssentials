@@ -262,17 +262,11 @@ function HM:CreateHealerFrame()
     -- Name
     local fontPath = KE:GetFontPath(self.db.FontFace)
     local fontOutline = self.db.FontOutline or "OUTLINE"
-    local useSoftOutline = fontOutline == "SOFTOUTLINE"
-    local actualOutline = useSoftOutline and "" or (fontOutline == "NONE" and "" or fontOutline)
 
     frame.name = frame:CreateFontString(nil, "OVERLAY")
-    frame.name:SetFont(fontPath, self.db.NameFontSize, actualOutline)
+    frame.name:SetFont(fontPath, self.db.NameFontSize, KE:GetFontOutline(fontOutline))
     frame.name:SetPoint("LEFT", frame.iconFrame, "RIGHT", self.db.NameXOffset, self.db.NameYOffset)
     frame.name:SetJustifyH("LEFT")
-
-    if useSoftOutline and KE.CreateSoftOutline then
-        frame.nameSoftOutline = KE:CreateSoftOutline(frame.name, { size = 2 })
-    end
 
     local manaOutline = (fontOutline == "NONE") and "" or "OUTLINE"
     frame.mana = frame:CreateFontString(nil, "OVERLAY")

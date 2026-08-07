@@ -213,10 +213,6 @@ function KE:ApplyFont(fontStr, name, size, outline) end
 ---@param shadowConfig table?
 function KE:ApplyFontToText(fontStr, face, size, outline, shadowConfig) end
 
----@param fontStr FontString
----@param options table?
-function KE:CreateSoftOutline(fontStr, options) end
-
 --- Preset/alias colour for arbitrary display text, or nil when nothing matches
 --- (defined in DungeonTimers.lua; shared with the Dungeon Trash resolvers).
 ---@param text string?

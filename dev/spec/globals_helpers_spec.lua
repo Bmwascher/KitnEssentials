@@ -117,8 +117,11 @@ describe("Core/Globals.lua helpers", function()
     end)
 
     describe("KE:GetFontOutline", function()
-        it("filters SOFTOUTLINE to \"\" — invariant: KE's soft outline is a custom 8-shadow system, never a real font flag", function()
-            assert.equals("", KE:GetFontOutline("SOFTOUTLINE"))
+        it("resolves SOFTOUTLINE to a plain outline — the custom renderer it named is gone", function()
+            -- The option is still offered and still sits in saved profiles, so
+            -- it has to degrade rather than be rejected. Returning "" instead
+            -- would silently strip the outline from every text already set to it.
+            assert.equals("OUTLINE", KE:GetFontOutline("SOFTOUTLINE"))
         end)
 
         it("maps NONE, empty string, and nil to \"\"", function()
