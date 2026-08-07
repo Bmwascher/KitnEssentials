@@ -523,7 +523,6 @@ function NMA:OnTrackedCast(_, unit, _, spellId)
             local c = (self.chargeCount[spellId] or 0) + 1
             if c > meta.max then c = meta.max end
             self.chargeCount[spellId] = c
-            if c > 0 then self.cdUntil[spellId] = nil end
             if self:IsEnabled() then self:Update() end
         end)
         table.insert(self.chargeTimers[spellId], t)
