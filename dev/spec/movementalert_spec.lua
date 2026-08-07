@@ -135,4 +135,118 @@ describe("NoMovementAlert RoleColor", function()
         NMA.db = { ColorMode = "THEME", TextColor = { 1, 1, 1, 1 }, TimerColor = { 1, 0, 0, 1 } }
         assert.same({ 1, 0, 0, 1 }, NMA:RoleColor("TimerColor"))
     end)
+
+    -- Under restriction the client will not say whether a cooldown is only the
+    -- global one: isOnGCD comes back nil and every number is secret. isActive
+    -- still answers plainly but is true for both, so the module times the
+    -- active window and treats anything outlasting the ceiling as real. Drawing
+    -- the window that does NOT outlast it is the bug these cover.
+    describe("global cooldown ceiling", function()
+        local now, cooldown, durationRemaining
+
+        before_each(function()
+            now = 1000
+            cooldown = { isActive = false }
+            durationRemaining = nil
+        end)
+
+        local function load(secret)
+            local module, KE = L.loadMovementAlert({
+                GetTime = function() return now end,
+                C_Spell = {
+                    GetSpellCooldown = function() return cooldown end,
+                    GetSpellCharges = function() return nil end,
+                    GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,
+                    GetSpellCooldownDuration = function()
+                        if durationRemaining == nil then return nil end
+                        return { GetRemainingDuration = function() return durationRemaining end }
+                    end,
+                },
+            })
+            KE.IsSecretValue = function(_, value) return secret == true and value ~= nil end
+            module.cdSince = {}
+            return module
+        end
+
+        it("stays quiet while nothing is on cooldown", function()
+            assert.is_nil(load():ReadCooldown(1))
+        end)
+
+        it("stays quiet while the active window is still inside the ceiling", function()
+            local NMA = load()
+            cooldown = { isActive = true, timeUntilEndOfStartRecovery = 1.4 }
+            assert.is_nil(NMA:ReadCooldown(1))
+            now = now + 1.4
+            assert.is_nil(NMA:ReadCooldown(1))
+            assert.is_true(NMA.cdPending)
+        end)
+
+        it("never draws a window that ends inside the ceiling", function()
+            local NMA = load()
+            cooldown = { isActive = true, timeUntilEndOfStartRecovery = 1.5 }
+            assert.is_nil(NMA:ReadCooldown(1))
+            now = now + 1.0
+            assert.is_nil(NMA:ReadCooldown(1))
+            cooldown = { isActive = false }
+            now = now + 0.5
+            assert.is_nil(NMA:ReadCooldown(1))
+        end)
+
+        it("reports the remaining time once the window outlasts the ceiling", function()
+            local NMA = load()
+            cooldown = { isActive = true, timeUntilEndOfStartRecovery = 30, duration = 35 }
+            NMA:ReadCooldown(1)
+            now = now + 1.6
+            local rem, total, isSecret = NMA:ReadCooldown(1)
+            assert.equals(30, rem)
+            assert.equals(35, total)
+            assert.is_false(isSecret)
+        end)
+
+        it("stays quiet once the spell is ready again, however old the window", function()
+            -- The client keeps offering a remaining time after the cooldown
+            -- ends, so readiness has to be read from isActive rather than
+            -- from whether a number is on offer.
+            local NMA = load()
+            cooldown = { isActive = true, timeUntilEndOfStartRecovery = 30 }
+            NMA:ReadCooldown(1)
+            now = now + 60
+            cooldown = { isActive = false, timeUntilEndOfStartRecovery = 30 }
+            assert.is_nil(NMA:ReadCooldown(1))
+        end)
+
+        it("times each new window from its own start", function()
+            local NMA = load()
+            cooldown = { isActive = true, timeUntilEndOfStartRecovery = 1.2 }
+            NMA:ReadCooldown(1)
+            cooldown = { isActive = false }
+            now = now + 1.2
+            NMA:ReadCooldown(1)
+            assert.is_nil(NMA.cdSince[1])
+            -- A fresh window inherits nothing from the one that just ended.
+            cooldown = { isActive = true, timeUntilEndOfStartRecovery = 30 }
+            now = now + 1.0
+            assert.is_nil(NMA:ReadCooldown(1))
+        end)
+
+        it("passes a secret remaining through without a total", function()
+            local NMA = load(true)
+            cooldown = { isActive = true, timeUntilEndOfStartRecovery = 30, duration = 35 }
+            NMA:ReadCooldown(1)
+            now = now + 1.6
+            local rem, total, isSecret = NMA:ReadCooldown(1)
+            assert.equals(30, rem)
+            assert.is_nil(total)
+            assert.is_true(isSecret)
+        end)
+
+        it("falls back to the duration object when the recovery field is missing", function()
+            local NMA = load()
+            cooldown = { isActive = true }
+            durationRemaining = 22
+            NMA:ReadCooldown(1)
+            now = now + 1.6
+            assert.equals(22, NMA:ReadCooldown(1))
+        end)
+    end)
 end)

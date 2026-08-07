@@ -129,48 +129,62 @@ end
 -- Same doctrine as Cursor.lua's SetCooldownFromDurationObject note --
 -- never boolean-test a secret.
 --
--- The two fields below are what a plain cooldown and a charge cooldown
--- both gate on:
---   timeUntilEndOfStartRecovery -- remaining time, directly
---   isOnGCD                     -- true when the only "cooldown" is the GCD
--- That second field is the whole answer to the charge problem: a charge
--- spell with a charge banked reports isOnGCD, so it filters out, while a
--- fully spent one reports a real cooldown. No comparison against a
--- secret, no local clock, no charge bookkeeping.
+-- Telling a real cooldown from the global one is the hard half, because
+-- under restriction the client answers neither question directly:
+--   isOnGCD                     -- comes back nil, not false
+--   timeUntilEndOfStartRecovery -- secret, so it cannot be measured
+--   the cooldown duration object -- always returns a value, even when the
+--                                  spell is ready, and that value is secret
+-- Rendering the duration object unconditionally is what made the global
+-- cooldown appear as the ability's own countdown.
 --
+-- isActive is the one field the client still answers plainly, and it is
+-- true for both a global cooldown and a real one. Duration is what
+-- separates them, and a global cooldown never outlasts GCD_MAX. So time
+-- the active window locally: still running past that ceiling means a real
+-- cooldown. Plain arithmetic on our own clock, nothing secret inspected.
+--
+-- Cost: a real cooldown appears GCD_MAX late. Every ability tracked here
+-- runs far longer than that, and the alternative is showing the wrong
+-- number.
+local GCD_MAX = 1.5
+
 -- Returns: remaining, total, isSecret  (remaining may be secret when
--- isSecret is true -- render it, never inspect it).
-local function ReadCooldown(spellId)
+-- isSecret is true -- render it, never inspect it). Sets self.cdPending
+-- while an active window is still inside the ceiling, so the caller knows
+-- to keep polling rather than treating the spell as idle.
+function NMA:ReadCooldown(spellId)
     if not (C_Spell and C_Spell.GetSpellCooldown) then return nil end
     local ok, info = pcall(C_Spell.GetSpellCooldown, spellId)
     if not ok or type(info) ~= "table" then return nil end
 
-    local rem = info.timeUntilEndOfStartRecovery
-    if rem == nil then return nil end
-
-    -- isOnGCD is nil on clients that predate the field; treat that as
-    -- "cannot tell" and fall through to the duration object below.
-    local okGCD, onGCD = pcall(function() return info.isOnGCD end)
-    if okGCD and onGCD ~= nil then
-        if onGCD == true then return nil end          -- GCD only: not a cooldown
-        if KE:IsSecretValue(rem) then return rem, nil, true end
-        if rem > 0 then return rem, info.duration, false end
+    if info.isActive ~= true then
+        self.cdSince[spellId] = nil
         return nil
     end
 
-    -- Fallback: the duration object (unrestricted per the API docs).
-    if C_Spell.GetSpellCooldownDuration then
+    local since = self.cdSince[spellId]
+    if not since then
+        since = GetTime()
+        self.cdSince[spellId] = since
+    end
+    if GetTime() - since <= GCD_MAX then
+        self.cdPending = true
+        return nil
+    end
+
+    local rem = info.timeUntilEndOfStartRecovery
+    if rem == nil and C_Spell.GetSpellCooldownDuration then
         local duration = C_Spell.GetSpellCooldownDuration(spellId)
         if duration then
-            local okD, r, total = pcall(function()
-                return duration:GetRemainingDuration(), duration:GetTotalDuration()
-            end)
-            if okD then
-                if KE:IsSecretValue(r) or KE:IsSecretValue(total) then return r, total, true end
-                if total and total > 1.5 and r and r > 0 then return r, total, false end
-            end
+            local okD, r = pcall(duration.GetRemainingDuration, duration)
+            if okD then rem = r end
         end
     end
+    if rem == nil then return nil end
+
+    if KE:IsSecretValue(rem) then return rem, nil, true end
+    if rem > 0 then return rem, info.duration, false end
     return nil
 end
 
@@ -279,6 +293,9 @@ function NMA:OnInitialize()
     -- poll overwrites the local state with truth.
     self.cdDuration = {}   -- spellId -> learned cooldown length
     self.cdUntil = {}      -- spellId -> GetTime() when it comes back
+    -- spellId -> GetTime() when its cooldown became active, for the
+    -- global-cooldown ceiling in ReadCooldown.
+    self.cdSince = {}
     self.isPreview = false
     self:SetEnabledState(false)
 end
@@ -600,6 +617,10 @@ function NMA:Update()
     end
 
     local shown, anyRunning = 0, false
+    -- ReadCooldown raises this while a spell is inside the global-cooldown
+    -- ceiling: nothing renders yet, but the answer is about to change, so
+    -- the ticker has to survive the pass that found nothing.
+    self.cdPending = false
 
     for _, entry in ipairs(self.tracked) do
         -- Secret-safe render contract: `secretValue` means "show this,
@@ -622,7 +643,7 @@ function NMA:Update()
             -- countdown. The charge rule is enforced by ReadCooldown
             -- instead: the plain cooldown duration is already zero while a
             -- charge remains.
-            local rem, _, isSecret = ReadCooldown(entry.spellId)
+            local rem, _, isSecret = self:ReadCooldown(entry.spellId)
 
             if isSecret then
                 anyRunning = true
@@ -677,7 +698,7 @@ function NMA:Update()
     -- messages come and go. The ticker only runs while something is
     -- counting down -- exactly when this is visible -- so re-seating here
     -- costs nothing when idle and keeps formation when not.
-    if not anyRunning then self:StopTicker() end
+    if not (anyRunning or self.cdPending) then self:StopTicker() end
 end
 
 function NMA:Refresh()
@@ -991,6 +1012,8 @@ function NMA:OnDisable()
     if self.frame then self.frame:Hide() end
     self.tracked = {}
     self.auraActive = {}
+    self.cdSince = {}
+    self.cdPending = false
     self.readyFired = nil
     self.isPreview = false
     KE.EditMode:UnregisterElement("NoMovementAlert")
