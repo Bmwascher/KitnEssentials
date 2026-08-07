@@ -129,64 +129,26 @@ end
 -- Same doctrine as Cursor.lua's SetCooldownFromDurationObject note --
 -- never boolean-test a secret.
 --
--- Telling a real cooldown from the global one is the hard half, because
--- under restriction the client answers neither question directly:
---   isOnGCD                     -- comes back nil, not false
---   timeUntilEndOfStartRecovery -- secret, so it cannot be measured
---   the cooldown duration object -- always returns a value, even when the
---                                  spell is ready, and that value is secret
--- Rendering the duration object unconditionally is what made the global
--- cooldown appear as the ability's own countdown.
+-- isOnGCD carries the whole answer, and it is three-valued rather than two:
+--   false -- a real cooldown is running, so report it
+--   true  -- the global cooldown only, so stay quiet
+--   nil   -- nothing worth reporting, which covers both an idle spell and
+--            the brief window a charge ability reports after a use that
+--            left it another charge
+-- Only an explicit false renders. Reading nil as "cannot tell" and falling
+-- through to the cooldown duration object instead is what put a one-second
+-- countdown under an ability whose real cooldown is half a minute: that
+-- object hands back a value whenever it is asked, including when the spell
+-- is ready, and the value is secret so nothing about it can be checked.
 --
--- Where isOnGCD DOES answer, it is exact and costs nothing, so it stays
--- the primary test and the display is immediate. Its own documentation
--- warns against trusting it outside a SPELL_UPDATE_COOLDOWN response; a
--- wrong answer there would show a global cooldown for a moment, which is
--- the failure this whole read exists to prevent, so treat a regression in
--- that direction as this field going stale rather than as a new bug.
---
--- Only when it comes back nil does the timed window take over. isActive is
--- the one field the client still answers plainly then, and it is true for
--- both a global cooldown and a real one. Duration is what separates them,
--- and a global cooldown never outlasts GCD_MAX. So time the active window
--- locally: still running past that ceiling means a real cooldown. Plain
--- arithmetic on our own clock, nothing secret inspected.
---
--- Cost, on that path only: a real cooldown appears GCD_MAX late. Every
--- ability tracked here runs far longer than that, and the alternative is
--- showing the wrong number.
-local GCD_MAX = 1.5
-
--- Returns: remaining, total, isSecret  (remaining may be secret when
--- isSecret is true -- render it, never inspect it). Sets self.cdPending
--- while an active window is still inside the ceiling, so the caller knows
--- to keep polling rather than treating the spell as idle.
+-- This holds identically inside and outside addon restrictions. The field
+-- tracks the cooldown, not the environment.
 function NMA:ReadCooldown(spellId)
     if not (C_Spell and C_Spell.GetSpellCooldown) then return nil end
     local ok, info = pcall(C_Spell.GetSpellCooldown, spellId)
     if not ok or type(info) ~= "table" then return nil end
 
-    if info.isActive ~= true then
-        self.cdSince[spellId] = nil
-        return nil
-    end
-
-    local onGCD = info.isOnGCD
-    if onGCD ~= nil then
-        -- Answered outright, so there is no window to time.
-        self.cdSince[spellId] = nil
-        if onGCD == true then return nil end
-    else
-        local since = self.cdSince[spellId]
-        if not since then
-            since = GetTime()
-            self.cdSince[spellId] = since
-        end
-        if GetTime() - since <= GCD_MAX then
-            self.cdPending = true
-            return nil
-        end
-    end
+    if info.isOnGCD ~= false then return nil end
 
     local rem = info.timeUntilEndOfStartRecovery
     if rem == nil and C_Spell.GetSpellCooldownDuration then
@@ -308,9 +270,6 @@ function NMA:OnInitialize()
     -- poll overwrites the local state with truth.
     self.cdDuration = {}   -- spellId -> learned cooldown length
     self.cdUntil = {}      -- spellId -> GetTime() when it comes back
-    -- spellId -> GetTime() when its cooldown became active, for the
-    -- global-cooldown ceiling in ReadCooldown.
-    self.cdSince = {}
     self.isPreview = false
     self:SetEnabledState(false)
 end
@@ -632,10 +591,6 @@ function NMA:Update()
     end
 
     local shown, anyRunning = 0, false
-    -- ReadCooldown raises this while a spell is inside the global-cooldown
-    -- ceiling: nothing renders yet, but the answer is about to change, so
-    -- the ticker has to survive the pass that found nothing.
-    self.cdPending = false
 
     for _, entry in ipairs(self.tracked) do
         -- Secret-safe render contract: `secretValue` means "show this,
@@ -713,7 +668,7 @@ function NMA:Update()
     -- messages come and go. The ticker only runs while something is
     -- counting down -- exactly when this is visible -- so re-seating here
     -- costs nothing when idle and keeps formation when not.
-    if not (anyRunning or self.cdPending) then self:StopTicker() end
+    if not anyRunning then self:StopTicker() end
 end
 
 function NMA:Refresh()
@@ -1027,8 +982,6 @@ function NMA:OnDisable()
     if self.frame then self.frame:Hide() end
     self.tracked = {}
     self.auraActive = {}
-    self.cdSince = {}
-    self.cdPending = false
     self.readyFired = nil
     self.isPreview = false
     KE.EditMode:UnregisterElement("NoMovementAlert")
