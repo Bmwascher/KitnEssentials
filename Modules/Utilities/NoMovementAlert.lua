@@ -164,6 +164,50 @@ function NMA:ReadCooldown(spellId)
     return nil
 end
 
+-- Threshold gate: nothing is shown until its countdown drops under this many
+-- seconds. Returns nil when the gate is off, so every caller can treat nil as
+-- "no limit" rather than testing the pair of settings itself.
+function NMA:ThresholdSeconds()
+    local db = self.db
+    if not db or not db.MaxRemainingEnabled then return nil end
+    local seconds = db.MaxRemaining
+    if type(seconds) ~= "number" or seconds <= 0 then return nil end
+    return seconds
+end
+
+-- Alpha curve for the gate, rebuilt only when the threshold changes: the
+-- evaluation below runs for every gated line on every tick.
+function NMA:ThresholdCurve(seconds)
+    if not (C_CurveUtil and C_CurveUtil.CreateCurve and Enum and Enum.LuaCurveType) then
+        return nil
+    end
+    if self.thresholdCurveFor ~= seconds then
+        local curve = C_CurveUtil.CreateCurve()
+        curve:SetType(Enum.LuaCurveType.Step)
+        curve:AddPoint(0, 1)
+        curve:AddPoint(seconds, 1)
+        curve:AddPoint(seconds + 0.001, 0)
+        self.thresholdCurve, self.thresholdCurveFor = curve, seconds
+    end
+    return self.thresholdCurve
+end
+
+-- The gate for a cooldown whose remaining time cannot be read. Inside addon
+-- restrictions that number is secret, so the comparison happens in the client:
+-- the duration object is evaluated against the curve and hands back an alpha,
+-- itself secret, which is legal in an alpha sink and nowhere else. A hidden
+-- line still occupies its row -- knowing to skip the row would mean reading
+-- the very value the client is withholding.
+function NMA:ThresholdAlpha(spellId, seconds)
+    local curve = self:ThresholdCurve(seconds)
+    if not curve or not (C_Spell and C_Spell.GetSpellCooldownDuration) then return nil end
+    local ok, duration = pcall(C_Spell.GetSpellCooldownDuration, spellId)
+    if not ok or not duration then return nil end
+    local okE, alpha = pcall(duration.EvaluateRemainingDuration, duration, curve)
+    if not okE then return nil end
+    return alpha
+end
+
 local function SafeCharges(spellId)
     if not (C_Spell and C_Spell.GetSpellCharges) then return nil end
     local ok, info = pcall(C_Spell.GetSpellCharges, spellId)
@@ -307,6 +351,9 @@ function NMA:StyleSlot(slot)
     KE:ApplyFontToText(slot.text, face, size, outline)
     slot.text:SetTextColor(c[1], c[2], c[3], c[4] or 1)
     slot:SetSize(220, size + 6)
+    -- Opaque by default so a slot reused from a threshold-hidden line comes
+    -- back visible. Update re-applies the hidden alpha after it lays out.
+    slot:SetAlpha(1)
 end
 
 function NMA:LayoutSlots(count)
@@ -562,6 +609,12 @@ function NMA:Update()
     end
 
     local shown, anyRunning = 0, false
+    local threshold = self:ThresholdSeconds()
+    -- Alphas are applied after LayoutSlots, which restyles every slot and
+    -- resets alpha as it goes.
+    local alphas = self.slotAlphas or {}
+    self.slotAlphas = alphas
+    wipe(alphas)
 
     for _, entry in ipairs(self.tracked) do
         -- Secret-safe render contract: `secretValue` means "show this,
@@ -569,7 +622,7 @@ function NMA:Update()
         -- a plain SetText (safe values) or a SetFormattedText with the
         -- secret number as an argument (never compared, never formatted
         -- by us).
-        local plainLine, fmtLine, fmtValue
+        local plainLine, fmtLine, fmtValue, lineAlpha
 
         if entry.isBuffActive then
             if self.auraActive[entry.spellId] then
@@ -593,6 +646,9 @@ function NMA:Update()
                 if rem ~= nil then
                     fmtLine = self:ComposeFormat(entry.customText or entry.name, "%.0f")
                     fmtValue = rem
+                    if threshold then
+                        lineAlpha = self:ThresholdAlpha(entry.spellId, threshold)
+                    end
                 else
                     plainLine = self:ComposeLine(entry.customText or entry.name, "...")
                 end
@@ -600,7 +656,12 @@ function NMA:Update()
                 anyRunning = true
                 self.readyFired = self.readyFired or {}
                 self.readyFired[entry.spellId] = true
-                plainLine = self:ComposeLine(entry.customText or entry.name, FormatTime(rem))
+                -- Readable remaining time, so the gate drops the line outright
+                -- and the row goes with it. anyRunning above is what keeps the
+                -- ticker alive to bring it back when the countdown comes down.
+                if not (threshold and rem > threshold) then
+                    plainLine = self:ComposeLine(entry.customText or entry.name, FormatTime(rem))
+                end
             else
                 if self.readyFired and self.readyFired[entry.spellId] then
                     self.readyFired[entry.spellId] = nil
@@ -624,11 +685,15 @@ function NMA:Update()
             else
                 text:SetText(plainLine)
             end
+            alphas[shown] = lineAlpha
         end
     end
 
     if shown > 0 then
         self:LayoutSlots(shown)
+        for i = 1, shown do
+            if alphas[i] ~= nil then self.slots[i]:SetAlpha(alphas[i]) end
+        end
         self:ApplyPosition()
         self.frame:Show()
     else

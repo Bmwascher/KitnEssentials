@@ -317,6 +317,9 @@ local Defaults = {
             GrowDirection = "DOWN",
             ShowWhenReady = false,
             HideOutOfCombat = false,
+            -- Off by default: the gate changes what an existing profile shows.
+            MaxRemainingEnabled = false,
+            MaxRemaining = 30,
             Spacing = 2,
             Scale = 1,
             AttachToCombatTexts = false,

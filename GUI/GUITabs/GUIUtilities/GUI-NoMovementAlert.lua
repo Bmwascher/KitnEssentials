@@ -131,6 +131,34 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
         card2:AddRow(row3, 44)
     end
 
+    local gateRow = GUIFrame:CreateRow(card2.content, 44)
+    gateRow:AddWidget(GUIFrame:CreateCheckbox(gateRow, "Hide Long Cooldowns", {
+        value = db.MaxRemainingEnabled == true,
+        tooltip = "Keep a spell hidden until its countdown drops under the limit below.",
+        callback = function(v)
+            db.MaxRemainingEnabled = v
+            ApplySettings()
+            GUIFrame:RefreshContent()
+        end,
+    }), 0.5)
+    if db.MaxRemainingEnabled then
+        gateRow:AddWidget(GUIFrame:CreateSlider(gateRow, "Show Under", {
+            min = 5, max = 120, step = 1, value = db.MaxRemaining or 30,
+            callback = function(v) db.MaxRemaining = v; ApplySettings() end,
+        }), 0.5)
+    end
+    card2:AddRow(gateRow, 44)
+
+    if db.MaxRemainingEnabled then
+        local gateNote = GUIFrame:CreateRow(card2.content, Theme.rowHeightNote)
+        gateNote:AddWidget(GUIFrame:CreateText(gateNote,
+            KE:ColorTextByTheme("Note"),
+            KE:ColorTextByTheme("-") .. " A spell stays hidden until its countdown reaches this many seconds.\n" ..
+            KE:ColorTextByTheme("-") .. " In dungeons and raids the game hides the number from addons, so a hidden line still holds its place in the list until it appears.",
+            50, "hide"), 1)
+        card2:AddRow(gateNote, Theme.rowHeightNote, 0)
+    end
+
     local attachRow = GUIFrame:CreateRow(card2.content, 40)
     local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
         value = db.AttachToCombatTexts == true,
