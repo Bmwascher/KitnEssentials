@@ -1716,4 +1716,63 @@ function L.loadStanceText(overrides)
     return modules["StanceText"], KE
 end
 
+-- Modules/QoL/CombatLogger.lua. The module caches its whole API surface at
+-- file scope, so every name it reads has to exist on _G BEFORE loadModule --
+-- which is the point of loading it this way: a name cached from the wrong
+-- namespace resolves to nil here exactly as it does in game.
+--
+-- rec.pvp is the mutable answer sheet behind the PvP predicates. The module
+-- holds IsArenaSkirmish and IsWargame as upvalues, so reassigning them on _G
+-- after the load would not reach it; routing every predicate through one table
+-- lets a single load serve every branch. C_PvP deliberately carries only the
+-- members the module is supposed to use.
+-- Returns CL, rec.
+function L.loadCombatLogger(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+
+    local rec = {
+        logging = false,
+        prints = {},
+        popups = {},
+        pvp = {
+            ratedArena = false,
+            skirmish = false,
+            soloShuffle = false,
+            wargame = false,
+            ratedBG = false,
+        },
+    }
+
+    _G.StaticPopupDialogs = {}
+    _G.StaticPopup_Show = function(which) rec.popups[#rec.popups + 1] = which end
+    _G.ReloadUI = function() end
+    _G.GetInstanceInfo = overrides.GetInstanceInfo
+        or function() return "Test", "none", 0, "", 0 end
+    _G.LoggingCombat = overrides.LoggingCombat or function(on)
+        if on ~= nil then rec.logging = on end
+        return rec.logging
+    end
+    _G.C_CVar = overrides.C_CVar or {
+        GetCVar = function() return "1" end,
+        SetCVar = function() end,
+    }
+    _G.IsArenaSkirmish = function() return rec.pvp.skirmish end
+    _G.IsWargame = function() return rec.pvp.wargame end
+    _G.C_PvP = {
+        IsRatedArena = function() return rec.pvp.ratedArena end,
+        IsSoloShuffle = function() return rec.pvp.soloShuffle end,
+        IsRatedBattleground = function() return rec.pvp.ratedBG end,
+    }
+
+    local KE = { Print = function(_, msg) rec.prints[#rec.prints + 1] = msg end }
+    helpers.loadModule("Modules/QoL/CombatLogger.lua", KE)
+
+    local CL = modules["CombatLogger"]
+    CL.ScheduleTimer = function() return {} end
+    CL.CancelTimer = function() end
+    return CL, rec
+end
+
 return L

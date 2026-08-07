@@ -176,7 +176,7 @@ read_globals = {
     -- Instance / Group
     "IsInInstance", "GetInstanceInfo", "GetMinimapZoneText",
     "IsInRaid", "IsInGroup", "IsInGuild", "GetNumGroupMembers", "GetRaidRosterInfo", "GetRaidDifficultyID",
-    "IsWargame", "SendChatMessage", "LE_PARTY_CATEGORY_INSTANCE", "LE_PARTY_CATEGORY_HOME",
+    "IsWargame", "IsArenaSkirmish", "SendChatMessage", "LE_PARTY_CATEGORY_INSTANCE", "LE_PARTY_CATEGORY_HOME",
 
     -- Auras
     "C_UnitAuras", "AuraUtil",

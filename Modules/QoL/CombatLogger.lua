@@ -16,7 +16,10 @@ local LoggingCombat = LoggingCombat
 local C_CVar = C_CVar
 local C_PvP = C_PvP
 local C_Timer = C_Timer
-local IsArenaSkirmish = C_PvP.IsArenaSkirmish
+-- A plain global, not a C_PvP member: the namespaced name is nil, so caching it
+-- here left every arena check calling nil. Blizzard's own PvP match code calls
+-- the global form.
+local IsArenaSkirmish = IsArenaSkirmish
 local IsWargame = IsWargame
 local ReloadUI = ReloadUI
 
