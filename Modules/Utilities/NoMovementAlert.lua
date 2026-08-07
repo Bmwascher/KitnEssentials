@@ -24,7 +24,6 @@ local NMA = KitnEssentials:NewModule("NoMovementAlert", "AceEvent-3.0")
 
 local C_Spell = C_Spell
 local C_Timer = C_Timer
-local GetTime = GetTime
 local UnitClass, UnitAffectingCombat = UnitClass, UnitAffectingCombat
 
 ------------------------------------------------------------------------
@@ -260,16 +259,6 @@ function NMA:OnInitialize()
     self.chargeMeta = {}
     self.chargeCount = {}
     self.chargeTimers = {}
-    -- The client refuses cooldown NUMBERS in combat, and a secret value
-    -- cannot be compared -- so "ready" and "on cooldown" are
-    -- indistinguishable and everything would render, showing "Roll - 0"
-    -- with a charge in hand. Asking harder cannot fix that. Instead keep
-    -- a local clock: learn each spell's duration while the values ARE
-    -- readable, stamp an expiry when the cast goes out, and count down
-    -- locally with plain arithmetic no one can restrict. Any readable
-    -- poll overwrites the local state with truth.
-    self.cdDuration = {}   -- spellId -> learned cooldown length
-    self.cdUntil = {}      -- spellId -> GetTime() when it comes back
     self.isPreview = false
     self:SetEnabledState(false)
 end
@@ -519,29 +508,12 @@ function NMA:OnTrackedCast(_, unit, _, spellId)
     if KE:IsSecretValue(unit) or unit ~= "player" then return end
     if not spellId then return end
 
-
-    -- Local clock: stamp when this comes back, using the length we
-    -- learned while the numbers were readable.
     local meta = self.chargeMeta[spellId]
-    local len = self.cdDuration[spellId]
-    if not meta and len and len > 1.5 then
-        self.cdUntil[spellId] = GetTime() + len
-        self:Update()
-        self:StartTicker()
-        return
-    end
     if not meta then return end
 
     local left = (self.chargeCount[spellId] or meta.max) - 1
     if left < 0 then left = 0 end
     self.chargeCount[spellId] = left
-    -- Only a fully spent charge spell is genuinely unavailable.
-    if left == 0 then
-        local d = self.cdDuration[spellId] or meta.recharge
-        if d and d > 1.5 then self.cdUntil[spellId] = GetTime() + d end
-    else
-        self.cdUntil[spellId] = nil
-    end
 
     local delay = meta.recharge
     if not delay or delay <= 0 then delay = nil end
