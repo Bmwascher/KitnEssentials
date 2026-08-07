@@ -172,10 +172,10 @@ function KE:GetStatusbarPath(barName) end
 function KE:GetFontOutline(outline) end
 
 --- Single source of truth for the font-outline dropdown option list used by
---- every GUI font card (Core/Globals.lua). `flags.includeSoft` adds the
---- SOFTOUTLINE option, `flags.includeMono` adds MONOCHROME — both omitted
---- from the base set since they aren't universally appropriate.
----@param flags { includeSoft: boolean?, includeMono: boolean? }?
+--- every GUI font card (Core/Globals.lua). `flags.includeMono` adds
+--- MONOCHROME, omitted from the base set since it is not universally
+--- appropriate.
+---@param flags { includeMono: boolean? }?
 ---@return { key: string, text: string }[]
 function KE:GetFontOutlineOptions(flags) end
 

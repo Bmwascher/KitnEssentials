@@ -923,11 +923,6 @@ function CP:ApplyFont(fontString, size)
     local db = self.db
     local fontFace    = db.FontFace
     local fontOutline = db.FontOutline or "OUTLINE"
-    -- These style Blizzard's own FontStrings (level/name/stat/category texts).
-    -- SOFTOUTLINE is KE's custom 8-shadow system; on Blizzard's recycled
-    -- FontStrings it renders as solid black, so use the low-level ApplyFont
-    -- (no shadow objects) and never pass SOFTOUTLINE through here.
-    if fontOutline == "SOFTOUTLINE" then fontOutline = "OUTLINE" end
     KE:ApplyFont(fontString, fontFace, size, fontOutline)
 end
 
@@ -1381,14 +1376,6 @@ end
 -- Number of gem icons a slot can show inline (matches the 3-socket max).
 local SLOT_DETAIL_MAX_GEMS = 3
 
--- Sanitize the configured outline for Blizzard-adjacent FontStrings — SOFTOUTLINE
--- is KE's custom 8-shadow system and renders as solid black on these, so collapse
--- it to a plain OUTLINE (same rule the warning/level texts follow via ApplyFont).
-local function SanitizeDetailOutline(outline)
-    if outline == "SOFTOUTLINE" then return "OUTLINE" end
-    return outline or "OUTLINE"
-end
-
 -- Lazy quality→hex cache: C_Item.GetItemQualityColor returns constants, so
 -- resolve each quality once instead of a C call + select() per slot render.
 local QUALITY_HEX = {}
@@ -1438,7 +1425,7 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     local isCenter = CENTER_SLOTS[slotID]
     local fontFace    = self.db.FontFace
     local fontSize    = self.db.SlotInfoFontSize or 11
-    local fontOutline = SanitizeDetailOutline(self.db.FontOutline)
+    local fontOutline = self.db.FontOutline or "OUTLINE"
 
     -- Parent to the slot's parent so the strip can extend beyond the slot bounds
     -- without clipping; render above the slot.
@@ -1592,7 +1579,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     local detail = self:CreateSlotDetail(slotFrame, slotID)
     local fontFace    = self.db.FontFace
     local fontSize    = self.db.SlotInfoFontSize or 11
-    local fontOutline = SanitizeDetailOutline(self.db.FontOutline)
+    local fontOutline = self.db.FontOutline or "OUTLINE"
 
     -- Re-apply font each call so the size slider is live.
     KE:ApplyFont(detail.enchantText, fontFace, fontSize, fontOutline)

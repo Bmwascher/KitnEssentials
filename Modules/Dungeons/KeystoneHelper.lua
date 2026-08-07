@@ -137,10 +137,7 @@ local function CreateReminderFrame(nameSuffix, iconID)
     frame.title = title
 
     -- "<dungeon> - <level>" line, below the icon. The dungeon icon to its
-    -- left is a real Texture, NOT inline |T|t markup — SOFTOUTLINE shadows
-    -- strip escape codes (CustomOutline.lua StripEscapeCodes), so the width
-    -- mismatch under center-justify would shift the shadow text half an
-    -- icon left of the glyphs.
+    -- left is a real Texture, NOT inline |T|t markup.
     local keyText = frame:CreateFontString(nil, "OVERLAY")
     keyText:SetPoint("TOP", frame, "BOTTOM", 0, -8)
     frame.keyText = keyText

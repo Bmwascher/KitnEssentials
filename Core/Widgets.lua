@@ -30,9 +30,8 @@ local function ValidateThemeColor(color, default)
     return color
 end
 
--- Build-once singleton: a fresh container per call leaked the frame, the
--- FontString, AND its 8-shadow soft outline permanently (frames are never
--- GC'd; softOutline caches per FontString, so reuse stops that too).
+-- Build-once singleton: a fresh container per call leaked the frame and its
+-- FontString permanently (frames are never GC'd).
 function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOffset)
     if KE.msgContainer then
         KE.msgContainer:Hide()
@@ -63,12 +62,10 @@ function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOff
     msgContainer:ClearAllPoints()
     msgContainer:SetPoint("CENTER", parent, "CENTER", x, y)
 
-    -- SetText BEFORE ApplyFontToText — the soft-outline reuse path copies
-    -- GetText() into the shadow layer.
     msgText:SetText(text)
     msgText:SetFont(KE.FONT, fontSize, "")
 
-    KE:ApplyFontToText(msgText, "Expressway", fontSize, "SOFTOUTLINE")
+    KE:ApplyFontToText(msgText, "Expressway", fontSize, "OUTLINE")
 
     local accent = ValidateThemeColor(Theme.accent, { 1, 0.82, 0, 1 })
     msgText:SetTextColor(accent[1], accent[2], accent[3], 1)

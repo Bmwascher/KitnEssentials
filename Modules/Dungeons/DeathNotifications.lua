@@ -127,9 +127,7 @@ end
 
 -- Returns just the class atlas name (e.g. "classicon-druid") if the class
 -- is known and not tainted, else nil. The icon itself is rendered as a
--- separate Texture child of the message frame, NOT inline in the text —
--- inline atlas escapes (`|A:...|a`) get stripped from the soft-outline
--- shadow FontStrings, which then misalign relative to the main text.
+-- separate Texture child of the message frame, NOT inline in the text.
 local string_lower = string.lower
 
 local function GetClassIconAtlas(classFilename)
@@ -332,10 +330,9 @@ function DN:ShowFlashMessage(msgType, msgText, msgColor, iconAtlas)
         self:ArrangeMessages()
     end
 
-    -- Manual alpha fade. UIFrameFadeOut is unsafe — it stack-overflows on
-    -- frames whose children use the SOFTOUTLINE shadow system. SetAlpha on
-    -- the parent propagates to soft-outline children without that hook
-    -- path. OnUpdate only runs during the FADE_DURATION window itself, so
+    -- Manual alpha fade rather than UIFrameFadeOut, which used to stack-overflow
+    -- through the retired soft-outline hooks. Kept because it is known good and
+    -- costs nothing: OnUpdate only runs during the FADE_DURATION window, so
     -- per-frame cost is bounded to ~0.4s per message.
     local duration = self.db.Duration or 3
     local fadeStart = duration - FADE_DURATION

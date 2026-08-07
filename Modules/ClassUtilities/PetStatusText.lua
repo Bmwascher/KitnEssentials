@@ -214,8 +214,8 @@ function PS:CreateFrame()
 
     local text = frame:CreateFontString(nil, "OVERLAY")
     local fontPath = KE:GetFontPath(self.db.FontFace)
-    -- SOFTOUTLINE is a KE construct, not a SetFont flag — filter it here or the
-    -- default outline reaches SetFont as an unknown flag string.
+    -- GetFontOutline maps the stored key to a real SetFont flag; NONE and the
+    -- retired SOFTOUTLINE would otherwise reach SetFont as unknown strings.
     text:SetFont(fontPath, self.db.FontSize, KE:GetFontOutline(self.db.FontOutline))
     text:SetTextColor(1, 0.82, 0, 1)
     text:ClearAllPoints()

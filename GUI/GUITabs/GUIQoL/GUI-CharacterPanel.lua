@@ -377,8 +377,6 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             { label = "Item Level Value",  dbKey = "IlvlValueSize",    elvuiGated = true },
         },
         fontSizeRange = { 8, 24 },
-        -- SOFTOUTLINE renders as solid black on Blizzard's character-panel
-        -- FontStrings, so it's not offered for this module.
         manager = manager,
         onChangeCallback = function()
             local CP = GetModule()

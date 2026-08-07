@@ -170,7 +170,7 @@ function CT:ApplySettings()
     self.refreshRate = GetRefreshRate(self.db.Format)
 
     -- Same font on all three FontStrings so brackets and digits visually
-    -- align (matching x-height, weight, soft-outline rendering).
+    -- align (matching x-height and weight).
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
     KE:ApplyFontToText(self.bracketL, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
     KE:ApplyFontToText(self.bracketR, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
@@ -183,11 +183,6 @@ function CT:ApplySettings()
     if open == "" then
         self.bracketL:Hide()
         self.bracketR:Hide()
-        -- Soft-outline shadows are parented to the FRAME, not the bracket
-        -- FontString, so :Hide() on the bracket alone leaves 8 shadow ghosts
-        -- visible. Explicitly hide the .softOutline as well.
-        if self.bracketL.softOutline then self.bracketL.softOutline:SetShown(false) end
-        if self.bracketR.softOutline then self.bracketR.softOutline:SetShown(false) end
         local justify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
         local point = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)
         self.text:SetJustifyH(justify)

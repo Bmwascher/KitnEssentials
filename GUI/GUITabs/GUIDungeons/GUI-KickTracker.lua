@@ -302,9 +302,6 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
 
     ----------------------------------------------------------------
     -- Card 4: Bar Appearance
-    -- Outline list intentionally excludes SOFTOUTLINE — bar text is small
-    -- and SOFTOUTLINE produces visible halo artifacts on tiny text.
-    -- Default is still SOFTOUTLINE for backward compat with existing saves.
     ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Bar Appearance", yOffset)
     manager:Register(card4, "all")

@@ -66,9 +66,6 @@ local TAB_SELECTOR_STYLES = {
     { value = "CURVE1", text = "( Text )" },
 }
 
--- Tab font outline options: default set (None/Outline/Thick/Slug/Outline Slug)
--- only -- no SOFTOUTLINE. Chat text is styled via plain SetFont, not the
--- FontString-based soft-outline system.
 local TAB_FONT_OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 
 -- Sorted LSM sound list for the whisper dropdowns.

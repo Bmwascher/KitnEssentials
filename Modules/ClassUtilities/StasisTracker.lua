@@ -234,12 +234,8 @@ function ST:ApplySettings()
         db.FontOutline or "OUTLINE"
     )
 
-    -- Hide soft outline shadows when not actively showing
     if not self.isPreview and not self.state.showing then
         self.countdownText:Hide()
-        if self.countdownText.softOutline then
-            self.countdownText.softOutline:SetShown(false)
-        end
     end
 
     self:LayoutFrames()
@@ -267,10 +263,6 @@ function ST:StartStasis()
     self.bar:SetValue(0)
     self.countdownText:SetText("")
     self.countdownText:Show()
-    if self.countdownText.softOutline then
-        local outline = self.db.FontOutline or "OUTLINE"
-        self.countdownText.softOutline:SetShown(outline == "SOFTOUTLINE")
-    end
 
     self.containerFrame:Show()
 end
@@ -287,9 +279,6 @@ function ST:ReleaseStasis()
 
     if self.countdownText then
         self.countdownText:Hide()
-        if self.countdownText.softOutline then
-            self.countdownText.softOutline:SetShown(false)
-        end
     end
     if self.containerFrame then
         self.containerFrame:Hide()
@@ -418,10 +407,6 @@ function ST:ShowPreview()
     self.bar:SetValue(15)
     self.countdownText:SetText("15")
     self.countdownText:Show()
-    if self.countdownText.softOutline then
-        local outline = self.db.FontOutline or "OUTLINE"
-        self.countdownText.softOutline:SetShown(outline == "SOFTOUTLINE")
-    end
     self.containerFrame:Show()
 end
 
@@ -429,9 +414,6 @@ function ST:HidePreview()
     self.isPreview = false
     if self.countdownText then
         self.countdownText:Hide()
-        if self.countdownText.softOutline then
-            self.countdownText.softOutline:SetShown(false)
-        end
     end
     if self.containerFrame then
         self.containerFrame:Hide()
