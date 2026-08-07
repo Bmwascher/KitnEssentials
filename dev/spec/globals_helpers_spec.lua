@@ -455,6 +455,39 @@ describe("Core/Globals.lua helpers", function()
             assert.equals("OUTLINE, SLUG", KE:SlugFlags("OUTLINE"))
         end)
 
+        it("leaves large outlined text unslugged — the stroke scales with the glyph", function()
+            enable()
+            assert.equals("OUTLINE", KE:SlugFlags("OUTLINE", 32))
+        end)
+
+        it("still slugs outlined text at the size ceiling", function()
+            enable()
+            assert.equals("OUTLINE, SLUG", KE:SlugFlags("OUTLINE", 24))
+        end)
+
+        it("slugs large text that carries no outline", function()
+            enable()
+            assert.equals("SLUG", KE:SlugFlags("", 32))
+        end)
+
+        it("slugs outlined text when the caller passes no size", function()
+            enable()
+            assert.equals("OUTLINE, SLUG", KE:SlugFlags("OUTLINE"))
+        end)
+
+        it("KE:ApplyFont hands the size to the gate, not just the outline", function()
+            enable()
+            local fs = { calls = {} }
+            fs.IsObjectType = function() return false end
+            fs.SetFont = function(_, ...) fs.calls[#fs.calls + 1] = { ... }; return true end
+
+            KE:ApplyFont(fs, "Expressway", 32, "OUTLINE")
+            assert.equals("OUTLINE", fs.calls[1][3])
+
+            KE:ApplyFont(fs, "Expressway", 14, "OUTLINE")
+            assert.equals("OUTLINE, SLUG", fs.calls[2][3])
+        end)
+
         it("leaves THICKOUTLINE alone — slug and thick render badly together", function()
             enable()
             assert.equals("THICKOUTLINE", KE:SlugFlags("THICKOUTLINE"))
