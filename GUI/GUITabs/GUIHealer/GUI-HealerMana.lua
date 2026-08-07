@@ -350,7 +350,6 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
             { label = "Mana Size", dbKey = "ManaFontSize" },
         },
         fontSizeRange = { 8, 44 },
-        includeSoftOutline = true,
         onChangeCallback = Refresh,
     })
     manager:Register(fontCard, "all")

@@ -108,7 +108,6 @@ GUIFrame:RegisterContent("CombatTexts", function(scrollChild, yOffset)
             fontSize = "FontSize",
             fontOutline = "FontOutline",
         },
-        includeSoftOutline = true,
         extraSlider = {
             label = "Message Spacing",
             dbKey = "Spacing",

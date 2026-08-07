@@ -238,7 +238,6 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
             fontOutline = "FontOutline",
         },
         fontSizeRange = { 8, 24 },
-        includeSoftOutline = false,
         onChangeCallback = ApplyVisuals,
     })
     manager:Register(fontCard, "all")

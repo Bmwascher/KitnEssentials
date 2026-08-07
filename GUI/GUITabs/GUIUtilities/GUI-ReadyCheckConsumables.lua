@@ -298,7 +298,6 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
             fontOutline = "FontOutline",
         },
         fontSizeRange = { 6, 32 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")

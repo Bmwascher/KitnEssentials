@@ -288,13 +288,11 @@ end
 function HM:UpdateFrameAppearance(frame)
     local fontPath = KE:GetFontPath(self.db.FontFace)
     local fontOutline = self.db.FontOutline
-    local useSoftOutline = fontOutline == "SOFTOUTLINE"
-    local actualOutline = useSoftOutline and "" or (fontOutline == "NONE" and "" or fontOutline)
     local manaOutline = (fontOutline == "NONE") and "" or "OUTLINE"
 
     frame:SetSize(self.db.FrameWidth, self.db.IconSize)
     frame.iconFrame:SetSize(self.db.IconSize, self.db.IconSize)
-    frame.name:SetFont(fontPath, self.db.NameFontSize, actualOutline)
+    frame.name:SetFont(fontPath, self.db.NameFontSize, KE:GetFontOutline(fontOutline))
     frame.name:ClearAllPoints()
     frame.name:SetPoint("LEFT", frame.iconFrame, "RIGHT", self.db.NameXOffset, self.db.NameYOffset)
     frame.mana:SetFont(fontPath, self.db.ManaFontSize, manaOutline)

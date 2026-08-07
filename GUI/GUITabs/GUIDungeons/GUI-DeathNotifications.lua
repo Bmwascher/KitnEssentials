@@ -247,7 +247,6 @@ GUIFrame:RegisterContent("DeathNotifications", function(scrollChild, yOffset)
             fontOutline = "FontOutline",
         },
         fontSizeRange = { 12, 64 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")

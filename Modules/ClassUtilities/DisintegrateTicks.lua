@@ -284,7 +284,7 @@ function DT:ApplyWarningSettings()
     KE:ApplyFontToText(self.warningText,
         cw.FontFace,
         cw.FontSize or 16,
-        cw.FontOutline or "SOFTOUTLINE"
+        cw.FontOutline or "OUTLINE"
     )
 
     self.warningText:SetText(cw.Text or "DON'T CLIP")

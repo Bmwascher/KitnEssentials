@@ -215,7 +215,6 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
             fontOutline = "FontOutline",
         },
         fontSizeRange = { 8, 36 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(labelFontCard, "text")
@@ -267,7 +266,6 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
             fontOutline = "TimerFontOutline",
         },
         fontSizeRange = { 8, 36 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(timerFontCard, "timer")

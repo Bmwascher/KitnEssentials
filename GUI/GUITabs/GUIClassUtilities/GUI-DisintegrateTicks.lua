@@ -188,7 +188,6 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
             fontOutline = "ClipWarning.FontOutline",
         },
         fontSizeRange = { 8, 36 },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "clip")

@@ -186,7 +186,7 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
     manager:Register(fontFaceDropdown, "all")
 
     local outlineDropdown = GUIFrame:CreateDropdown(rowFont, "Outline", {
-        options = KE:GetFontOutlineOptions{ includeSoft = true },
+        options = KE:GetFontOutlineOptions(),
         value = KE:NormalizeFontOutline(db.FontOutline or "OUTLINE"),
         callback = function(key) db.FontOutline = key; ApplySettings() end,
     })

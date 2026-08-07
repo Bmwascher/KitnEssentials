@@ -1603,7 +1603,7 @@ local function ApplyVisualsToBar(frame)
     else
         face = (textDisplay and textDisplay.fontFace) or KE:GetGlobalFont()
         size = (textDisplay and textDisplay.fontSize) or 14
-        outline = (textDisplay and textDisplay.fontOutline) or "SOFTOUTLINE"
+        outline = (textDisplay and textDisplay.fontOutline) or "OUTLINE"
     end
     if frame.label and KE.ApplyFontToText then
         KE:ApplyFontToText(frame.label, face, size, outline)

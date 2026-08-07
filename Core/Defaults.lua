@@ -104,7 +104,7 @@ local Defaults = {
             Format = "MM:SS",
             BracketStyle = "square",
             FontSize = 28,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
             FontShadow = DefaultFontShadow(),
             ColorInCombat = { 1, 1, 1, 1 },
             ColorOutOfCombat = { 1, 1, 1, 0.7 },
@@ -137,7 +137,7 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, -60),
             FontSize = 16,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
             TextSpacing = 4,
             GrowthDirection = "RIGHT",
             SeparatorColor = { 1, 1, 1, 1 },
@@ -156,7 +156,7 @@ local Defaults = {
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             FontSize = 16,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
             Position = DefaultPosition(0, 125),
             Spacing = 0,
             EnterEnabled = true,
@@ -263,7 +263,7 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 100),
             FontSize = 26,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
             PetMissing = "PET MISSING",
             PetDead = "PET DEAD",
             PetPassive = "PET PASSIVE",
@@ -282,7 +282,7 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 150),
             FontSize = 16,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
             ColorMode = "custom",
             Color = { 0.969, 0.027, 0.945, 1 },  -- #F707F1
             ShowIcons = true,
@@ -295,7 +295,7 @@ local Defaults = {
             ParentFrame = "UIParent",
             Position = DefaultPosition(0, 350),
             FontSize = 37,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
             ColorMode = "custom",
             Color = { 1, 0, 0.549, 1 },  -- #FF008C
             ShowIcons = true,
@@ -412,7 +412,7 @@ local Defaults = {
             ColorThree = { 1, 0.82, 0 },
             ColorFour = { 0, 1, 0 },
             FontSize = 24,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
             Strata = "HIGH",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
@@ -433,7 +433,7 @@ local Defaults = {
             GlowType = "proc",
             GlowColor = { 0, 1, 0, 1 },
             FontSize = 14,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
@@ -573,7 +573,7 @@ local Defaults = {
                 Enabled = true,
                 Text = "DON'T CLIP",
                 FontSize = 16,
-                FontOutline = "SOFTOUTLINE",
+                FontOutline = "OUTLINE",
                 Color = { 1, 0, 0, 1 },
             },
             Strata = "HIGH",
@@ -847,7 +847,7 @@ local Defaults = {
             TextWrong = "WRONG",
             TextColor = { 1, 0.3, 0.3, 1 },
             FontSize = 14,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
 
             -- Warrior defaults to Reverse Icon (show the stance you ARE in)
             -- because "wrong stance" is the useful signal there; the others
@@ -885,7 +885,7 @@ local Defaults = {
             DisableOnHealer = false,
             Text = "Potion Ready",
             FontSize = 20,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
             ColorMode = "theme",
             Color = { 0, 1, 0, 1 },
             Strata = "MEDIUM",
@@ -932,7 +932,7 @@ local Defaults = {
             -- thing they can share: YourKeyUseRerollPosition parks Your Key
             -- on the Reroll coordinates instead of its own.
             RerollSize = 64,
-            RerollFontOutline = "SOFTOUTLINE",
+            RerollFontOutline = "OUTLINE",
             RerollFontSize = 36,
             RerollFontColor = { 1, 1, 1, 1 },
             RerollFontColorKey = { 1, 1, 1, 1 },
@@ -945,7 +945,7 @@ local Defaults = {
             -- follow off must not stack the two on identical coordinates.
             YourKeyUseRerollPosition = true,
             YourKeySize = 64,
-            YourKeyFontOutline = "SOFTOUTLINE",
+            YourKeyFontOutline = "OUTLINE",
             YourKeyFontSize = 36,
             YourKeyFontColor = { 1, 1, 1, 1 },
             YourKeyFontColorKey = { 1, 1, 1, 1 },
@@ -1168,7 +1168,7 @@ local Defaults = {
 
             -- Font settings (for duration text above icons)
             FontSize = 13,
-            FontOutline = "SOFTOUTLINE",
+            FontOutline = "OUTLINE",
 
             -- Colors
             -- HeartyFoodColor: tints the food slot's duration text when the active
@@ -1342,7 +1342,7 @@ local Defaults = {
             Grow = "UP",                -- "DOWN" | "UP" only (no horizontal in v1)
             MaxIcons = 10,              -- entry cap; invisible entries count (secret targeting)
             FontSize = 32,
-            FontOutline = "OUTLINE",    -- no SOFTOUTLINE (widget-managed countdown text)
+            FontOutline = "OUTLINE",
             FontColor = { 1, 0.976, 0.153, 1 }, -- countdown text #FFF927 (plain values into SetTextColor)
             Decimals = 1,               -- countdown digits below 60s (0-2)
             GlowImportant = true,
@@ -1419,7 +1419,7 @@ local Defaults = {
                 ShowPrefix = true,
                 Prefix = "Enemies:",
                 FontSize = 20,
-                FontOutline = "SOFTOUTLINE",
+                FontOutline = "OUTLINE",
                 ColorMode = "theme",
                 Color = { 1, 1, 1, 1 },
                 Strata = "MEDIUM",
@@ -1454,7 +1454,7 @@ local Defaults = {
                 ManaFontSize = 14,
                 ManaXOffset = 4,
                 ManaYOffset = -2,
-                FontOutline = "SOFTOUTLINE",
+                FontOutline = "OUTLINE",
                 HighManaColor = { 1, 1, 1, 1 },
             },
             DeathNotifications = {
@@ -1463,7 +1463,7 @@ local Defaults = {
                 EnableInRaids = false,
 
                 FontSize = 34,
-                FontOutline = "SOFTOUTLINE",
+                FontOutline = "OUTLINE",
 
                 Duration = 3,
                 Spacing = 4,
@@ -1600,7 +1600,7 @@ local Defaults = {
 
             TextDisplay = {
                 fontSize = 26,
-                fontOutline = "SOFTOUTLINE",
+                fontOutline = "OUTLINE",
                 textAlign = "CENTER",
                 -- Spell-icon prefix on text-mode timers (KE-standard zoom +
                 -- border, anchored to the static label so timer width changes

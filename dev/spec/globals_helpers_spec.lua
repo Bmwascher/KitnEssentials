@@ -152,23 +152,18 @@ describe("Core/Globals.lua helpers", function()
             )
         end)
 
-        it("appends SOFTOUTLINE only with includeSoft", function()
-            local keys = keysOf(KE:GetFontOutlineOptions({ includeSoft = true }))
-            assert.equals(4, #keys)
-            assert.equals("SOFTOUTLINE", keys[4])
-        end)
-
         it("appends MONOCHROME only with includeMono", function()
             local keys = keysOf(KE:GetFontOutlineOptions({ includeMono = true }))
             assert.equals(4, #keys)
             assert.equals("MONOCHROME", keys[4])
         end)
 
-        it("orders soft before mono when both flags are set", function()
-            local keys = keysOf(KE:GetFontOutlineOptions({ includeSoft = true, includeMono = true }))
-            assert.equals(5, #keys)
-            assert.equals("SOFTOUTLINE", keys[4])
-            assert.equals("MONOCHROME", keys[5])
+        it("never offers SOFTOUTLINE — the renderer it named is gone", function()
+            for _, flags in ipairs({ {}, { includeMono = true }, { includeSoft = true } }) do
+                for _, key in ipairs(keysOf(KE:GetFontOutlineOptions(flags))) do
+                    assert.are_not.equal("SOFTOUTLINE", key)
+                end
+            end
         end)
     end)
 
@@ -549,11 +544,18 @@ describe("Core/Globals.lua helpers", function()
             assert.equals("OUTLINE", KE:NormalizeFontOutline("OUTLINE, SLUG"))
         end)
 
+        it("shows a saved SOFTOUTLINE as Outline rather than as a raw key", function()
+            -- A dropdown handed a key it has no option for renders the key
+            -- itself as the label, so an unmapped stored value would read
+            -- "SOFTOUTLINE" in the menu. This is what makes the removal
+            -- survive existing profiles without a migration.
+            assert.equals("OUTLINE", KE:NormalizeFontOutline("SOFTOUTLINE"))
+        end)
+
         it("passes surviving keys through unchanged", function()
             assert.equals("NONE", KE:NormalizeFontOutline("NONE"))
             assert.equals("OUTLINE", KE:NormalizeFontOutline("OUTLINE"))
             assert.equals("THICKOUTLINE", KE:NormalizeFontOutline("THICKOUTLINE"))
-            assert.equals("SOFTOUTLINE", KE:NormalizeFontOutline("SOFTOUTLINE"))
             assert.equals("MONOCHROME", KE:NormalizeFontOutline("MONOCHROME"))
         end)
 

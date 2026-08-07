@@ -343,7 +343,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local fontOutlineDropdown = GUIFrame:CreateDropdown(row4c, "Font Outline", {
         options = KE:GetFontOutlineOptions(),
-        value = KE:NormalizeFontOutline(db.FontOutline or "SOFTOUTLINE"),
+        value = KE:NormalizeFontOutline(db.FontOutline or "OUTLINE"),
         callback = function(key) db.FontOutline = key; ApplySettings() end,
     })
     row4c:AddWidget(fontOutlineDropdown, 1)

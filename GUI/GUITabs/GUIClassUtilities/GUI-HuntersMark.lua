@@ -97,7 +97,6 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
             fontSize = "FontSize",
             fontOutline = "FontOutline",
         },
-        includeSoftOutline = true,
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")

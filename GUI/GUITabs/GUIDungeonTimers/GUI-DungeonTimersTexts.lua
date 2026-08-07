@@ -18,7 +18,7 @@ local SETTINGS_GROWTH_OPTIONS = {
     { key = "UP",   text = "Up" },
 }
 
-local SETTINGS_TEXT_OUTLINE_OPTIONS = KE:GetFontOutlineOptions{ includeSoft = true }
+local SETTINGS_TEXT_OUTLINE_OPTIONS = KE:GetFontOutlineOptions()
 
 local SETTINGS_TEXT_ALIGN_OPTIONS = {
     { key = "LEFT",   text = "Left" },
@@ -136,7 +136,7 @@ GUIFrame:RegisterContent("DTimers_Texts", function(scrollChild, yOffset)
     local row2 = GUIFrame:CreateRow(displayCard.content, Theme.rowHeight)
     local outlineDropdown = GUIFrame:CreateDropdown(row2, "Font Outline", {
         options = SETTINGS_TEXT_OUTLINE_OPTIONS,
-        value = KE:NormalizeFontOutline(db.TextDisplay.fontOutline or "SOFTOUTLINE"),
+        value = KE:NormalizeFontOutline(db.TextDisplay.fontOutline or "OUTLINE"),
         callback = function(key) db.TextDisplay.fontOutline = key; ApplyAndUpdate() end,
     })
     row2:AddWidget(outlineDropdown, 0.5)
