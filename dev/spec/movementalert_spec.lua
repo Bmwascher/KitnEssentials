@@ -135,4 +135,76 @@ describe("NoMovementAlert RoleColor", function()
         NMA.db = { ColorMode = "THEME", TextColor = { 1, 1, 1, 1 }, TimerColor = { 1, 0, 0, 1 } }
         assert.same({ 1, 0, 0, 1 }, NMA:RoleColor("TimerColor"))
     end)
+
+    -- isOnGCD is three-valued and only an explicit false means "a real cooldown
+    -- is running". Treating its nil as "cannot tell" and reading the cooldown
+    -- duration object instead is what drew a one-second countdown under an
+    -- ability whose cooldown is half a minute, so the nil case is the one these
+    -- exist to pin. The behaviour is the same in and out of restricted content.
+    describe("what counts as a cooldown worth reporting", function()
+        local cooldown, durationRemaining
+
+        before_each(function()
+            cooldown = {}
+            durationRemaining = nil
+        end)
+
+        local function load(secret)
+            local module, KE = L.loadMovementAlert({
+                C_Spell = {
+                    GetSpellCooldown = function() return cooldown end,
+                    GetSpellCharges = function() return nil end,
+                    GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,
+                    GetSpellCooldownDuration = function()
+                        if durationRemaining == nil then return nil end
+                        return { GetRemainingDuration = function() return durationRemaining end }
+                    end,
+                },
+            })
+            KE.IsSecretValue = function(_, value) return secret == true and value ~= nil end
+            return module
+        end
+
+        it("reports a real cooldown", function()
+            cooldown = { isOnGCD = false, timeUntilEndOfStartRecovery = 30, duration = 35 }
+            local rem, total, isSecret = load():ReadCooldown(1)
+            assert.equals(30, rem)
+            assert.equals(35, total)
+            assert.is_false(isSecret)
+        end)
+
+        it("stays quiet on the global cooldown", function()
+            cooldown = { isOnGCD = true, timeUntilEndOfStartRecovery = 1.5 }
+            assert.is_nil(load():ReadCooldown(1))
+        end)
+
+        it("stays quiet when the client declines to answer", function()
+            -- A charge ability reports this for about a second after a use that
+            -- left it another charge. It is not down, so nothing may render --
+            -- and the duration object below must not be consulted either.
+            cooldown = { timeUntilEndOfStartRecovery = 1 }
+            durationRemaining = 1
+            assert.is_nil(load():ReadCooldown(1))
+        end)
+
+        it("stays quiet when the spell is idle", function()
+            durationRemaining = 30
+            assert.is_nil(load():ReadCooldown(1))
+        end)
+
+        it("passes a secret remaining through without a total", function()
+            cooldown = { isOnGCD = false, timeUntilEndOfStartRecovery = 30, duration = 35 }
+            local rem, total, isSecret = load(true):ReadCooldown(1)
+            assert.equals(30, rem)
+            assert.is_nil(total)
+            assert.is_true(isSecret)
+        end)
+
+        it("falls back to the duration object once a real cooldown is confirmed", function()
+            cooldown = { isOnGCD = false }
+            durationRemaining = 22
+            assert.equals(22, load():ReadCooldown(1))
+        end)
+    end)
+
 end)

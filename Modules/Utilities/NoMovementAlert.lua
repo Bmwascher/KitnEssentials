@@ -129,48 +129,39 @@ end
 -- Same doctrine as Cursor.lua's SetCooldownFromDurationObject note --
 -- never boolean-test a secret.
 --
--- The two fields below are what a plain cooldown and a charge cooldown
--- both gate on:
---   timeUntilEndOfStartRecovery -- remaining time, directly
---   isOnGCD                     -- true when the only "cooldown" is the GCD
--- That second field is the whole answer to the charge problem: a charge
--- spell with a charge banked reports isOnGCD, so it filters out, while a
--- fully spent one reports a real cooldown. No comparison against a
--- secret, no local clock, no charge bookkeeping.
+-- isOnGCD carries the whole answer, and it is three-valued rather than two:
+--   false -- a real cooldown is running, so report it
+--   true  -- the global cooldown only, so stay quiet
+--   nil   -- nothing worth reporting, which covers both an idle spell and
+--            the brief window a charge ability reports after a use that
+--            left it another charge
+-- Only an explicit false renders. Reading nil as "cannot tell" and falling
+-- through to the cooldown duration object instead is what put a one-second
+-- countdown under an ability whose real cooldown is half a minute: that
+-- object hands back a value whenever it is asked, including when the spell
+-- is ready, and the value is secret so nothing about it can be checked.
 --
--- Returns: remaining, total, isSecret  (remaining may be secret when
--- isSecret is true -- render it, never inspect it).
-local function ReadCooldown(spellId)
+-- This holds identically inside and outside addon restrictions. The field
+-- tracks the cooldown, not the environment.
+function NMA:ReadCooldown(spellId)
     if not (C_Spell and C_Spell.GetSpellCooldown) then return nil end
     local ok, info = pcall(C_Spell.GetSpellCooldown, spellId)
     if not ok or type(info) ~= "table" then return nil end
 
+    if info.isOnGCD ~= false then return nil end
+
     local rem = info.timeUntilEndOfStartRecovery
-    if rem == nil then return nil end
-
-    -- isOnGCD is nil on clients that predate the field; treat that as
-    -- "cannot tell" and fall through to the duration object below.
-    local okGCD, onGCD = pcall(function() return info.isOnGCD end)
-    if okGCD and onGCD ~= nil then
-        if onGCD == true then return nil end          -- GCD only: not a cooldown
-        if KE:IsSecretValue(rem) then return rem, nil, true end
-        if rem > 0 then return rem, info.duration, false end
-        return nil
-    end
-
-    -- Fallback: the duration object (unrestricted per the API docs).
-    if C_Spell.GetSpellCooldownDuration then
+    if rem == nil and C_Spell.GetSpellCooldownDuration then
         local duration = C_Spell.GetSpellCooldownDuration(spellId)
         if duration then
-            local okD, r, total = pcall(function()
-                return duration:GetRemainingDuration(), duration:GetTotalDuration()
-            end)
-            if okD then
-                if KE:IsSecretValue(r) or KE:IsSecretValue(total) then return r, total, true end
-                if total and total > 1.5 and r and r > 0 then return r, total, false end
-            end
+            local okD, r = pcall(duration.GetRemainingDuration, duration)
+            if okD then rem = r end
         end
     end
+    if rem == nil then return nil end
+
+    if KE:IsSecretValue(rem) then return rem, nil, true end
+    if rem > 0 then return rem, info.duration, false end
     return nil
 end
 
@@ -622,7 +613,7 @@ function NMA:Update()
             -- countdown. The charge rule is enforced by ReadCooldown
             -- instead: the plain cooldown duration is already zero while a
             -- charge remains.
-            local rem, _, isSecret = ReadCooldown(entry.spellId)
+            local rem, _, isSecret = self:ReadCooldown(entry.spellId)
 
             if isSecret then
                 anyRunning = true
