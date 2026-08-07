@@ -429,9 +429,17 @@ end
 -- can vary it per example.
 local SLUG_UNSUPPORTED = { zhCN = true, zhTW = true, koKR = true, ruRU = true }
 
+-- Slug strokes an outline in proportion to the glyph, where the bitmap
+-- rasterizer draws a fixed thin edge at every height. Past this size the ring
+-- reads as a heavy border rather than an outline, so large outlined text keeps
+-- the bitmap edge. Blizzard's own slug-plus-outline font families stop here for
+-- the same reason. Plain and shadowed text is unaffected and slugs at any size.
+local SLUG_OUTLINE_MAX_SIZE = 24
+
 ---@param flags string?
+---@param size number? font height; only consulted for outlined text
 ---@return string?
-function KE:SlugFlags(flags)
+function KE:SlugFlags(flags, size)
     local locale = GetLocale and GetLocale() or "enUS"
     local profile = self.db and self.db.profile
     local enabled = not SLUG_UNSUPPORTED[locale] and profile ~= nil and profile.UseSlugFonts == true
@@ -440,6 +448,9 @@ function KE:SlugFlags(flags)
         flags = flags or ""
         if flags:find("SLUG", 1, true) then return flags end
         if flags:find("THICKOUTLINE", 1, true) or flags:find("MONOCHROME", 1, true) then
+            return flags
+        end
+        if size and size > SLUG_OUTLINE_MAX_SIZE and flags:find("OUTLINE", 1, true) then
             return flags
         end
         if flags == "" then return "SLUG" end
@@ -573,8 +584,8 @@ function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     if not self:IsFontValid(fontPath) then
         fontPath = "Fonts\\FRIZQT__.TTF"
     end
-    local outline = self:SlugFlags(self:GetFontOutline(fontOutline))
     local size = (fontSize and fontSize > 0) and fontSize or 12
+    local outline = self:SlugFlags(self:GetFontOutline(fontOutline), size)
 
     -- SimpleHTML frames (guild MOTD and Info bodies, anything rendering
     -- links) expose SetFont with a textType-FIRST signature:

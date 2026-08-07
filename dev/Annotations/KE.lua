@@ -180,9 +180,11 @@ function KE:GetFontOutline(outline) end
 function KE:GetFontOutlineOptions(flags) end
 
 --- Adds or strips the SLUG glyph-renderer flag per the profile-wide toggle.
+--- Outlined text above a size ceiling is left unslugged.
 ---@param flags string?
+---@param size number?
 ---@return string?
-function KE:SlugFlags(flags) end
+function KE:SlugFlags(flags, size) end
 
 --- Maps retired outline keys to their surviving equivalent for display.
 ---@param value string?
