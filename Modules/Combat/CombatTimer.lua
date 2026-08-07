@@ -18,6 +18,7 @@ local CT = KitnEssentials:NewModule("CombatTimer", "AceEvent-3.0")
 local CreateFrame = CreateFrame
 local GetTime = GetTime
 local InCombatLockdown = InCombatLockdown
+local C_InstanceEncounter = C_InstanceEncounter
 local math_floor = math.floor
 local string_format = string.format
 
@@ -27,11 +28,34 @@ CT.startTime = 0
 CT.running = false
 CT.lastDisplayedText = ""
 CT.isPreview = false
+CT.isEncounter = false
 
 KE.lastCombatDuration = 0
 
+-- Gap between a bracket and the digits. The brackets are pinned to the frame
+-- edges and the digits are centred, so widening the frame by this on each side
+-- is what separates them. Without it they render flush against each other.
+local BRACKET_GAP = 3
+
 local function GetRefreshRate(format)
     return (format == "MM:SS:MS") and 0.1 or 0.25
+end
+
+-- Whether a stop event should actually stop the clock. Pure so the rule can be
+-- tested without frames: a plain-combat timer stops on a combat end, an
+-- encounter timer stops on an encounter end, and an encounter timer also stops
+-- on a combat end once the encounter is genuinely over (the wipe or release
+-- case, where ENCOUNTER_END may never arrive for us).
+local function ShouldStopTimer(isEncounterTimer, isEncounterEvent, encounterInProgress)
+    if isEncounterTimer == isEncounterEvent then return true end
+    return isEncounterTimer and not encounterInProgress
+end
+
+local function EncounterInProgress()
+    local fn = C_InstanceEncounter and C_InstanceEncounter.IsEncounterInProgress
+    if not fn then return false end
+    local ok, inProgress = pcall(fn)
+    return ok and inProgress == true
 end
 
 ---------------------------------------------------------------------------------
@@ -85,8 +109,8 @@ function CT:CreateFrame()
 
     -- Brackets are separate FontStrings pinned to the frame's edges so they
     -- don't shift as proportional digit widths vary in the digits FontString.
-    -- Inset is 0 so the brackets sit snug to the frame edge — visual gap to
-    -- the digits is controlled by the small safety pad in UpdateFrameSize.
+    -- Inset is 0 so the brackets sit snug to the frame edge; the gap to the
+    -- digits comes from BRACKET_GAP in UpdateFrameSize.
     local bracketL = frame:CreateFontString(nil, "OVERLAY")
     bracketL:SetPoint("LEFT", frame, "LEFT", 0, 0)
     bracketL:SetJustifyH("LEFT")
@@ -131,6 +155,7 @@ function CT:UpdateFrameSize()
     local bracketW = 0
     if self.bracketL and self.bracketL:IsShown() then
         bracketW = (self.bracketL:GetStringWidth() or 0) + (self.bracketR:GetStringWidth() or 0)
+            + BRACKET_GAP * 2
     end
 
     -- Frame width = digits + brackets, snapped to an even pixel multiple.
@@ -139,8 +164,12 @@ function CT:UpdateFrameSize()
     -- pixel grid. ApplyFramePosition's auto-snap aligns LEFT/BOTTOM but
     -- not width, so this PixelSnapEven keeps the right bracket crisp.
     local total = KE:PixelSnapEven(digitsW + bracketW)
+    -- Height from the rendered string, not the configured size: an outline adds
+    -- to the glyph box, so a size-derived height clips the tallest outlines.
+    local height = self.text:GetStringHeight() or 0
+    if not (KE:IsSafeValue(height) and height > 0) then height = self.db.FontSize or 28 end
     if KE:IsSafeValue(total) then
-        self.frame:SetSize(total, (self.db.FontSize or 28) + 8)
+        self.frame:SetSize(total, height + 8)
     end
 
     if current ~= nil then self.text:SetText(current) end
@@ -160,6 +189,25 @@ function CT:UpdateText()
         self.lastDisplayedText = status
         self:UpdateFrameSize()
     end
+end
+
+-- Colour is the only thing a combat transition changes, so it is split out of
+-- ApplySettings: running the whole of that on every enter and exit re-applied
+-- three fonts, re-anchored the text and re-measured the frame twice per fight
+-- for nothing. Applied to all three FontStrings so the timer reads as one piece.
+function CT:UpdateCombatColor()
+    if not self.text then return end
+    local textColor = self.running and self.db.ColorInCombat or self.db.ColorOutOfCombat
+    local r, g, b, a = 1, 1, 1, 1
+    if textColor then
+        r = textColor[1] or 1
+        g = textColor[2] or 1
+        b = textColor[3] or 1
+        a = textColor[4] or 1
+    end
+    self.text:SetTextColor(r, g, b, a)
+    self.bracketL:SetTextColor(r, g, b, a)
+    self.bracketR:SetTextColor(r, g, b, a)
 end
 
 ---------------------------------------------------------------------------------
@@ -202,18 +250,7 @@ function CT:ApplySettings()
         self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
     end
 
-    -- Colors apply to all three so the timer reads as one piece.
-    local textColor = self.running and self.db.ColorInCombat or self.db.ColorOutOfCombat
-    local r, g, b, a = 1, 1, 1, 1
-    if textColor then
-        r = textColor[1] or 1
-        g = textColor[2] or 1
-        b = textColor[3] or 1
-        a = textColor[4] or 1
-    end
-    self.text:SetTextColor(r, g, b, a)
-    self.bracketL:SetTextColor(r, g, b, a)
-    self.bracketR:SetTextColor(r, g, b, a)
+    self:UpdateCombatColor()
 
     if self.frame then
         KE:ApplyBackdrop(self.frame, self.db.Backdrop)
@@ -254,22 +291,38 @@ function CT:_SetOnUpdateActive(active)
     end
 end
 
-function CT:OnEnterCombat()
-    if self.running or not self.db.Enabled then return end
+-- A timer remembers whether it began as an encounter, because the two clocks
+-- end differently: plain combat ends when combat does, but a boss fight drops
+-- and regains combat freely, and restarting the clock on every one of those
+-- makes the readout useless. So an encounter timer ignores combat ending and
+-- waits for ENCOUNTER_END, or for the encounter to genuinely be over. Combat
+-- already running when a boss pulls is promoted rather than restarted.
+function CT:StartTimer(isEncounterEvent)
+    if not self.db.Enabled then return end
+    if self.running then
+        if isEncounterEvent then self.isEncounter = true end
+        return
+    end
     self.startTime = GetTime()
     self.running = true
+    self.isEncounter = isEncounterEvent
     KE.lastCombatDuration = 0
     self.lastDisplayedText = ""
     if self.frame then self.frame:Show() end
     self:_SetOnUpdateActive(true)
-    self:ApplySettings()
+    self:UpdateCombatColor()
     self:UpdateText()
 end
 
-function CT:OnExitCombat()
+function CT:StopTimer(isEncounterEvent)
     if not self.running then return end
+    if not ShouldStopTimer(self.isEncounter, isEncounterEvent, EncounterInProgress()) then
+        return
+    end
+
     KE.lastCombatDuration = GetTime() - self.startTime
     self.running = false
+    self.isEncounter = false
     self.startTime = 0
     -- Final UpdateText below paints the closing duration; after that, drop
     -- the OnUpdate so we don't tick at idle. Preview can keep us awake.
@@ -278,8 +331,21 @@ function CT:OnExitCombat()
         local duration = FormatTime(KE.lastCombatDuration, self.db.Format)
         KE:Print("Combat lasted " .. duration)
     end
-    self:ApplySettings()
+    self:UpdateCombatColor()
     self:UpdateText()
+end
+
+-- Named handlers rather than closures so the event registration stays in the
+-- string-handler form the rest of the addon uses.
+function CT:OnCombatStart()    self:StartTimer(false) end
+function CT:OnCombatEnd()      self:StopTimer(false) end
+function CT:OnEncounterStart() self:StartTimer(true) end
+function CT:OnEncounterEnd()   self:StopTimer(true) end
+
+-- Thin accessor so the stop rule can be exercised without the frames and the
+-- event wiring around it.
+function CT:ShouldStopTimer(isEncounterTimer, isEncounterEvent, encounterInProgress)
+    return ShouldStopTimer(isEncounterTimer, isEncounterEvent, encounterInProgress)
 end
 
 ---------------------------------------------------------------------------------
@@ -333,14 +399,15 @@ function CT:OnEnable()
     self:RegWithEditMode()
     self:ApplySettings()
     C_Timer.After(0.5, function() self:ApplyPosition() end)
-    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnEnterCombat")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnExitCombat")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatStart")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
+    self:RegisterEvent("ENCOUNTER_START", "OnEncounterStart")
+    self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
     -- Don't attach OnUpdate here. OnEnterCombat / ShowPreview will attach it
     -- when work is actually needed; OnExitCombat / HidePreview detach it.
-    -- Module enabled mid-combat: re-arm via OnEnterCombat using the running
-    -- combat lockdown.
+    -- Module enabled mid-combat: re-arm from the running combat lockdown.
     if self.db.Enabled then self.frame:Show() end
-    if InCombatLockdown() then self:OnEnterCombat() end
+    if InCombatLockdown() then self:StartTimer(false) end
 end
 
 function CT:OnDisable()
@@ -349,6 +416,7 @@ function CT:OnDisable()
         self.frame:Hide()
     end
     self.running = false
+    self.isEncounter = false
     self.isPreview = false
     self:UnregisterAllEvents()
 end

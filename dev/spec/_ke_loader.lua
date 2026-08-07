@@ -1609,6 +1609,26 @@ function L.loadOptimize(overrides)
     return OPT, rec, KE
 end
 
+-- Modules/Combat/CombatTimer.lua. Only the pure stop rule is reachable
+-- headlessly: everything else in that module is frames, an OnUpdate ticker and
+-- event timing, which this project verifies in game.
+function L.loadCombatTimer(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+
+    _G.UIParent = noopFrame()
+    _G.GetTime = overrides.GetTime or function() return 1000 end
+    _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
+    _G.C_InstanceEncounter = overrides.C_InstanceEncounter or {
+        IsEncounterInProgress = function() return false end,
+    }
+
+    local KE = { Print = function() end }
+    helpers.loadModule("Modules/Combat/CombatTimer.lua", KE)
+    return modules["CombatTimer"], KE
+end
+
 -- Modules/Utilities/NoMovementAlert.lua. Only the PURE resolution layer is
 -- reachable headlessly: the data tables, the per-spec override rules and the
 -- alias/category duration lookup. Everything else in that module is frames,

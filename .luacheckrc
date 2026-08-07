@@ -265,6 +265,9 @@ read_globals = {
     -- Resurrection
     "AcceptResurrect", "IsEncounterInProgress",
 
+    -- Encounters
+    "C_InstanceEncounter",
+
     -- Equipment Slots
     "INVSLOT_HEAD", "INVSLOT_NECK", "INVSLOT_SHOULDER", "INVSLOT_BACK", "INVSLOT_CHEST",
     "INVSLOT_WRIST", "INVSLOT_WAIST", "INVSLOT_LEGS", "INVSLOT_FEET",
