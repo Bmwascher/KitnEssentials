@@ -48,6 +48,26 @@ local function noopFrame()
     return setmetatable(f, { __index = function() return function() end end })
 end
 
+-- Like noopFrame, but SetSize/SetPoint calls are recorded instead of
+-- swallowed. Used wherever a spec needs to inspect a frame CreateFrame
+-- handed back to production code -- e.g. LootRoll's addon-owned stack
+-- anchor, which a spec cannot reach any other way.
+local function trackablePointFrame()
+    local f = {
+        _points = {},
+        SetSize = function(self, w, h) self._w, self._h = w, h end,
+        GetWidth = function(self) return self._w end,
+        GetHeight = function(self) return self._h end,
+        ClearAllPoints = function(self) self._points = {} end,
+        SetPoint = function(self, point, rel, relPoint, x, y)
+            self._points[#self._points + 1] =
+                { point = point, rel = rel, relPoint = relPoint, x = x, y = y }
+        end,
+        CreateFontString = function() return noopObject() end,
+    }
+    return setmetatable(f, { __index = function() return function() end end })
+end
+
 -- mock.install with loader defaults; caller overrides win. Only keys
 -- _wow_mock manages belong in defaults — everything else goes on _G.
 local function installMock(overrides, defaults)
@@ -568,15 +588,15 @@ end
 -- have via KE.db.profile.Skinning.LootRoll. GroupLootContainer is a
 -- secure-managed Blizzard frame, headlessly replaced by calling the returned
 -- `container(mock)` setter, which just assigns _G.GroupLootContainer -- the
--- global LR:ApplyPosition reads. LR._lastPoint() reads the mock's own
--- _points log (see lootroll_spec.lua's makeContainer) so a spec can assert
--- the most recent SetPoint without the mock needing a shared upvalue with
--- this loader. Returns LR, container.
+-- global LR:ApplyPosition reads. The module positions its OWN addon-owned
+-- stack anchor (LR:GetStackAnchor), never the container, so CreateFrame
+-- returns a trackablePointFrame and LR._lastPoint() reads that anchor's
+-- _points log instead of the container mock's. Returns LR, container.
 function L.loadLootRoll(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
-    _G.CreateFrame = function() return noopFrame() end
+    _G.CreateFrame = function() return trackablePointFrame() end
     _G.hooksecurefunc = function() end
     _G.InCombatLockdown = function() return false end
     -- The module's DEBUG_LR tracer captures these as upvalues AT LOAD, so they
@@ -600,9 +620,9 @@ function L.loadLootRoll(overrides)
     end
 
     LR._lastPoint = function()
-        local c = _G.GroupLootContainer
-        if not c or not c._points or #c._points == 0 then return nil end
-        return c._points[#c._points]
+        local a = LR.stackAnchor
+        if not a or not a._points or #a._points == 0 then return nil end
+        return a._points[#a._points]
     end
 
     return LR, container

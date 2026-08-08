@@ -8,10 +8,7 @@ if not KitnEssentials then
 end
 
 ---@class LootRoll: AceModule, AceEvent-3.0
----@field _reassertPending boolean? true while a ReassertPosition retry is queued; nil once it settles
----@field _regenPending boolean? true while WaitForRegen's PLAYER_REGEN_ENABLED watcher is armed; nil once it fires
 ---@field editModeRegistered boolean? true while the EditMode element is registered; nil after OnDisable/UnregisterElement
----@field _pendingRestore boolean? true while OnDisable's combat-deferred GroupLootContainer restore watcher is armed; nil once it fires
 ---@field _barsWired boolean? true once SetupRollBars has registered START_LOOT_ROLL and unregistered UIParent's; nil after TeardownRollBars
 ---@field _bonusWired boolean? true once the Replace-mode BonusRollFrame re-anchor hook is installed; never cleared (hooksecurefunc is permanent)
 ---@field _previewBar table? the RollBar table currently showing the GUI preview; nil when no preview is active
@@ -30,7 +27,6 @@ local unpack = unpack -- luacheck: ignore 211/unpack
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 local GetLootRollItemInfo = GetLootRollItemInfo
-local C_Timer = C_Timer
 local InCombatLockdown = InCombatLockdown
 local GetTime = GetTime
 local debugprofilestop = debugprofilestop
@@ -140,13 +136,40 @@ local function SkinAllRollFrames(container)
 end
 LR.SkinAllRollFrames = SkinAllRollFrames
 
+-- Stands in for the container as the thing the roll frames hang off. Ours,
+-- so sizing and anchoring it is free; empty, so it draws nothing.
+function LR:GetStackAnchor()
+    if self.stackAnchor then return self.stackAnchor end
+    local a = CreateFrame("Frame", "KE_LootRollStackAnchor", UIParent)
+    a:SetSize(1, 1)
+    a:EnableMouse(false)
+    self.stackAnchor = a
+    return a
+end
+
+-- Blizzard's own line from GroupLootContainer_Update, with the anchor frame
+-- passed in: slot i's CENTER sits reservedSize * (i - 0.5) above the stack's
+-- bottom edge. Passing the container itself hands the frames back unchanged.
+local function StackRollFrames(c, anchor)
+    local rolls = c.rollFrames
+    if type(rolls) ~= "table" then return end
+    local reserved = c.reservedSize or 100
+    for i = 1, (c.maxIndex or 0) do
+        local f = rolls[i]
+        if f and f.ClearAllPoints then
+            f:ClearAllPoints()
+            f:SetPoint("CENTER", anchor, "BOTTOM", 0, reserved * (i - 1 + 0.5))
+        end
+    end
+end
+
 -- `why` is DEBUG_LR-only: it names the caller in the trace. Probe run 1
 -- logged an ApplyPosition whose "before" state was already
--- correct, and there was no way to tell which of the six call sites produced
--- it -- Setup, the GLC_Update hook, the OnShow hook, either ReassertPosition
--- tick, the regen watcher, or an external GUI/EditMode call. Untagged, the
--- trace could not answer its own question. Callers that do not pass it show as
--- "external", which is itself the answer for the GUI and EditMode paths.
+-- correct, and there was no way to tell which of the four call sites produced
+-- it -- Setup, the GLC_Update hook, the OnShow hook, or an external GUI/
+-- EditMode call. Untagged, the trace could not answer its own question.
+-- Callers that do not pass it show as "external", which is itself the
+-- answer for the GUI and EditMode paths.
 function LR:ApplyPosition(why)
     if not self.db then return end
 
@@ -156,31 +179,17 @@ function LR:ApplyPosition(why)
     end
     local c = _G.GroupLootContainer
     if not c then return end
-    -- layout removal is by REPARENTING (see the Unmanage note
-    -- below) -- the ignoreInLayout flag writes are gone; that boolean
-    -- is read inside the SECURE managed-layout pass and writing it from
-    -- here taints the whole UIParent_ManageFramePositions execution.
-    -- Restore path: hand the container back to its original managed
-    -- parent; Reposition path: ensure it's unmanaged, then position.
-    -- Repositioning an unmanaged frame is legal, but the reparent that
-    -- unmanages it is not safe in combat -- so bail, and come back the
-    -- moment combat ends rather than waiting for the next roll event.
-    -- Without that the container sat at Blizzard's managed spot for the
-    -- rest of the fight and then jumped.
-    if InCombatLockdown() then
-        LR:WaitForRegen()
-        return
-    end
+    -- The roll FRAMES are moved, never the container. The container is
+    -- managed by the game's bottom-edge layout, and every way out of that
+    -- pass -- flag writes or a reparent -- is state the SECURE pass reads.
+    -- The frames are ordinary unmanaged children, so writing their points
+    -- is legal, in combat included: a roll that starts mid-fight lands at
+    -- the chosen spot instead of jumping there when the fight ends.
     if not self.db.Reposition then
-        if self._origGLCParent and c:GetParent() ~= self._origGLCParent then
-            c:SetParent(self._origGLCParent)
-        end
+        StackRollFrames(c, c)
         return
     end
-    if c:GetParent() ~= _G.UIParent then
-        self._origGLCParent = self._origGLCParent or c:GetParent()
-        c:SetParent(_G.UIParent)
-    end
+
     -- Anchored by its BOTTOM, not its centre.
     --
     -- GroupLootContainer_Update sets the container's height to
@@ -202,72 +211,19 @@ function LR:ApplyPosition(why)
         y = y - (c:GetHeight() or 0) / 2
     end
 
+    -- Matched to the container so a corner or edge anchor lands exactly
+    -- where the container would have. Blizzard has already sized it for
+    -- this pass; the fallbacks only matter before the first update.
+    local a = self:GetStackAnchor()
+    local w, h = c:GetWidth() or 0, c:GetHeight() or 0
+    a:SetSize(w > 0 and w or 340, h > 0 and h or 100)
+    a:ClearAllPoints()
+    a:SetPoint(point, UIParent, p.RelPoint or "CENTER", p.X or 0, y)
+
     local tag = "ApplyPosition<" .. (why or "external") .. ">"
     LogState(tag .. ":before")
-    c:ClearAllPoints()
-    c:SetPoint(point, UIParent, p.RelPoint or "CENTER", p.X or 0, y)
+    StackRollFrames(c, a)
     LogState(tag .. ":after")
-end
-
--- Single watcher: unmanage (if still pending) then position, in that
--- order -- positioning a frame that is still managed would be undone by
--- the next layout pass.
--- Re-applies the position once Blizzard's managed layout has settled.
--- Two frames rather than one: the layout is dirty-marked and can settle
--- on either of the next two.
-function LR:ReassertPosition()
-    if self._reassertPending then
-        LogState("ReassertPosition:already-pending")
-        return
-    end
-    self._reassertPending = true
-    LogState("ReassertPosition:armed")
-
-    -- DEVIATION A (task-3 FIX ROUND 2): both timer callbacks below are two
-    -- of the five async re-entries the module-disabled guard covers (see
-    -- the longer note at the hook installs below). Each bails when the
-    -- module is disabled, but must still clear _reassertPending first --
-    -- otherwise a disable mid-flight would leave the flag stuck true and
-    -- silently block every ReassertPosition call for the rest of the
-    -- session, even after the module is re-enabled.
-    C_Timer.After(0, function()
-        LogState("ReassertPosition:tick1")
-        if not LR:IsEnabled() then
-            LR._reassertPending = nil
-            return
-        end
-        self:ApplyPosition("reassert-tick1")
-        C_Timer.After(0, function()
-            LogState("ReassertPosition:tick2")
-            self._reassertPending = nil
-            if not LR:IsEnabled() then return end
-            self:ApplyPosition("reassert-tick2")
-        end)
-    end)
-end
-
-function LR:WaitForRegen()
-    if self._regenPending then
-        LogState("WaitForRegen:already-pending")
-        return
-    end
-    self._regenPending = true
-    LogState("WaitForRegen:armed")
-
-    local w = CreateFrame("Frame")
-    w:RegisterEvent("PLAYER_REGEN_ENABLED")
-    w:SetScript("OnEvent", function(f)
-        f:UnregisterAllEvents()
-        LR._regenPending = nil
-        LogState("WaitForRegen:fired")
-        -- DEVIATION A (task-3 FIX ROUND 2): the watcher must always disarm
-        -- itself (UnregisterAllEvents + clear the pending flag above), but
-        -- must not re-apply the feature once the module has been disabled
-        -- -- see the longer note at the hook installs below.
-        if not LR:IsEnabled() then return end
-        if LR._unmanage then LR._unmanage() end
-        LR:ApplyPosition("regen-watcher")
-    end)
 end
 
 function LR:GetMover()
@@ -350,9 +306,8 @@ LR.AnchorBonusRoll = AnchorBonusRoll
 function LR:Setup()
 
     -- Installed for BOTH modes and guarded inside on db.Replace, because
-    -- hooksecurefunc cannot be undone -- the DEVIATION A lesson below. Its own
-    -- flag, not _wired: _wired belongs to the legacy branch that Setup never
-    -- reaches in Replace mode.
+    -- hooksecurefunc cannot be undone. Its own flag, not _wired: _wired
+    -- belongs to the legacy branch that Setup never reaches in Replace mode.
     if not self._bonusWired and type(_G.GroupLootContainer_Update) == "function" then
         hooksecurefunc("GroupLootContainer_Update", AnchorBonusRoll)
         self._bonusWired = true
@@ -375,100 +330,19 @@ function LR:Setup()
     LogState("Setup:pre-wire wired=" .. tostring(self._wired == true))
 
     if not self._wired then
-        -- (taint report: ADDON_ACTION_BLOCKED on
-        -- UIParentRightManagedFrameContainer:ClearAllPoints during a
-        -- stance-bar update): writing UIPARENT_MANAGED_FRAME_POSITIONS
-        -- (even nil) taints the table, and setting ignoreInLayout on a
-        -- managed child taints the boolean the SECURE layout pass reads
-        -- -- either poisons UIParent_ManageFramePositions, which then
-        -- detonates on the next managed-layout update anywhere (the
-        -- stance bar, in the report). Reparenting the container out of
-        -- the managed hierarchy needs no field writes at all, so it is
-        -- taint-free, and our ClearAllPoints/SetPoint in ApplyPosition
-        -- are then writes on a frame Blizzard's layout no longer walks.
-        -- Deferred to REGEN_ENABLED if a roll wires up mid-combat.
-        --
-        -- What the reparent does and does NOT buy -- two separate layers,
-        -- and it only exits one of them. Earlier comments here and below
-        -- each described one layer as if it were the whole story:
-        --
-        --  1. LAYOUT CHILD ENUMERATION -- exited. BaseLayoutMixin's
-        --     GetLayoutChildren walks GetChildren()
-        --     (Blizzard_SharedXML/LayoutFrame.lua), so once the
-        --     container is reparented to UIParent instead,
-        --     UIParentBottomManagedFrameContainer's Layout() genuinely
-        --     cannot reach it.
-        --  2. MANAGER MEMBERSHIP -- kept. The frame stays in the container's
-        --     showingFrames table (written in Blizzard_UIParent/Shared/
-        --     UIParent.lua). UpdateManagedFrames iterates THAT table, not the
-        --     child list, and its UpdateFrame reparents the frame back. Every
-        --     hide/show cycle also re-runs OnShow -> AddManagedFrame.
-        --
-        -- So the reparent alone cannot hold the position: the layout pass
-        -- puts the container back at the BOTTOM of the screen and our hook
-        -- has to move it again. That is the visible "jumps to the bottom,
-        -- then back" the bug report describes. Re-asserting
-        -- after the layout settles is what makes it stick today.
-        local function Unmanage()
-            if c:GetParent() ~= _G.UIParent then
-                LR._origGLCParent = LR._origGLCParent or c:GetParent()
-                c:SetParent(_G.UIParent)
-            end
-        end
-        LR._unmanage = Unmanage
-        if InCombatLockdown() then
-            LR:WaitForRegen()
-        else
-            Unmanage()
-        end
-
-        -- The three hooks below are the layer-2 mitigation described above:
-        -- they re-assert our position after Blizzard's managed layout has
-        -- moved the container. Cheap -- they only do work while a roll is
-        -- on screen.
-        --
-        -- These three hooks are PERMANENT -- hooksecurefunc cannot be undone.
-        -- Without an enabled test in each callback,
-        -- KitnEssentials:DisableModule("LootRoll") left the container getting
-        -- repositioned and roll frames getting skinned anyway, so the user's
-        -- off-switch did not turn the feature off. Each callback below bails
-        -- first when the module is disabled.
-        --
-        -- The same guard is needed on two ASYNC re-entries
-        -- these hooks feed into, not just here -- five paths total.
-        -- WaitForRegen's PLAYER_REGEN_ENABLED watcher and both of
-        -- ReassertPosition's C_Timer.After callbacks call ApplyPosition
-        -- on a later frame, after this Setup call has returned; a disable
-        -- that lands in the gap between arming one of those and it firing
-        -- otherwise re-applies the feature anyway. Worse, in combat that
-        -- race pits WaitForRegen's watcher against Deviation B's own
-        -- restore watcher on the SAME PLAYER_REGEN_ENABLED event, and
-        -- registration order decides which one wins -- the unfavourable
-        -- order undoes the disable-time restore until reload. Both
-        -- watchers now check LR:IsEnabled() before touching the container
-        -- (see WaitForRegen and ReassertPosition above), while still
-        -- disarming/clearing their own pending flags unconditionally.
-        --
-        -- ApplyPosition itself stays deliberately UNGUARDED: every
-        -- synchronous caller (Setup, the GUI position sliders, Edit
-        -- Mode's setPosition) only runs while the module is legitimately
-        -- enabled, and a blanket guard inside ApplyPosition would risk
-        -- breaking those live paths for no gain -- the leak is strictly
-        -- in the async re-entries, so that's where the guard belongs.
+        -- Each callback below bails first when the module is disabled --
+        -- hooksecurefunc cannot be undone, so without this test
+        -- KitnEssentials:DisableModule("LootRoll") left the container
+        -- getting repositioned and roll frames getting skinned anyway.
         if type(_G.GroupLootContainer_Update) == "function" then
             hooksecurefunc("GroupLootContainer_Update", function(container)
                 LogState("GLC_Update:hook")
                 if not LR:IsEnabled() then return end
                 LR:ApplyPosition("glc-update")
                 SkinAllRollFrames(container)
-                LR:ReassertPosition()
             end)
         end
 
-        -- ApplyPosition FIRST, then ReassertPosition -- the same order the
-        -- GroupLootContainer_Update hook above uses. ReassertPosition alone
-        -- puts its first correction a C_Timer.After(0) away, so the container
-        -- renders for one frame at Blizzard's managed spot before moving.
         c:HookScript("OnShow", function()
             -- Logged BEFORE the enabled guard: Blizzard's AddManagedFrame has
             -- already run by the time this fires (it is the mixin's own OnShow),
@@ -477,7 +351,6 @@ function LR:Setup()
             LogState("Container:OnShow")
             if not LR:IsEnabled() then return end
             LR:ApplyPosition("container-onshow")
-            LR:ReassertPosition()
         end)
         c:HookScript("OnHide", function() LogState("Container:OnHide") end)
         if type(_G.GroupLootContainer_AddFrame) == "function" then
@@ -559,40 +432,8 @@ function LR:OnDisable()
         self.editModeRegistered = nil
     end
     if self.TeardownRollBars then self:TeardownRollBars() end
+    -- Hand the roll frames back to the container's own stack. Nothing else to
+    -- undo: the container was never moved and no field of it was written.
     local c = _G.GroupLootContainer
-    -- restore by reparenting (flag writes taint the secure
-    -- layout pass).
-    --
-    -- This is NOT combat-deferred implicitly by the next out-of-combat
-    -- ApplyPosition, which is the tempting reading. On the path that actually
-    -- reaches OnDisable, ApplyPosition's restore
-    -- branch only runs when self.db.Reposition is FALSE, so a user who
-    -- disables the MODULE while leaving Reposition on (the GUI's normal
-    -- toggle) got no restore at all, in or out of combat. When combat
-    -- blocks the reparent below, set a pending flag and watch for
-    -- PLAYER_REGEN_ENABLED to finish the restore -- a dedicated one-shot
-    -- watcher, NOT LR:WaitForRegen(), which also calls
-    -- _unmanage()/ApplyPosition() and would re-apply the very feature
-    -- the user just disabled.
-    if c and LR._origGLCParent and c:GetParent() ~= LR._origGLCParent then
-        if InCombatLockdown() then
-            -- Diagnostic state only -- nothing reads this flag or gates on
-            -- it. The watcher below is already one-shot (UnregisterAllEvents
-            -- on first fire) and idempotent (re-checks _origGLCParent vs.
-            -- the current parent before setting), so a later reader should
-            -- not assume _pendingRestore is what prevents double-arming.
-            LR._pendingRestore = true
-            local w = CreateFrame("Frame")
-            w:RegisterEvent("PLAYER_REGEN_ENABLED")
-            w:SetScript("OnEvent", function(f)
-                f:UnregisterAllEvents()
-                LR._pendingRestore = nil
-                if LR._origGLCParent and c:GetParent() ~= LR._origGLCParent then
-                    c:SetParent(LR._origGLCParent)
-                end
-            end)
-        else
-            c:SetParent(LR._origGLCParent)
-        end
-    end
+    if c then StackRollFrames(c, c) end
 end
