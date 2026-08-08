@@ -972,6 +972,8 @@ function L.loadLFGReminder(overrides)
     }
     _G.IsInGroup = overrides.IsInGroup or function() return true end
     _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
+    _G.IsInRaid = overrides.IsInRaid or function() return false end
+    _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
 
     local profile = {
         LFGReminder = {
@@ -992,9 +994,24 @@ function L.loadLFGReminder(overrides)
             if not _G.InCombatLockdown() then fn(); return end
             combatQueue[#combatQueue + 1] = fn
         end,
+        -- Mirrors Core/Secret.lua's real IsSecretValue (`issecretvalue and
+        -- issecretvalue(value)`) without loading the whole file: Secret.lua
+        -- creates two frames at file scope, which would pollute this
+        -- loader's onCreateFrame spy (used to count BuildPopup's frames).
+        IsSecretValue = function(_, v) return _G.issecretvalue and _G.issecretvalue(v) end,
     }
     helpers.loadModule("Modules/Dungeons/LFGReminder.lua", KE)
     local LR = modules["LFGReminder"]
+    -- ShowPopup/HidePopup (the leader/cooldown-gate work) register and
+    -- unregister SPELL_UPDATE_COOLDOWN on every show/hide, and installAddonShim
+    -- hands back a bare module table with no AceEvent mixin -- almost every
+    -- test in this file reaches one of those two paths, so the default lives
+    -- here rather than being stubbed per test. Recorded so a spec CAN assert
+    -- registration symmetry via seams.registeredEvents, though none currently
+    -- does.
+    local registeredEvents = {}
+    LR.RegisterEvent = function(_, event) registeredEvents[event] = true end
+    LR.UnregisterEvent = function(_, event) registeredEvents[event] = nil end
     LR:UpdateDB()
 
     -- ResolveTeleportSpellByName has no stored handle and no caller that
@@ -1003,12 +1020,13 @@ function L.loadLFGReminder(overrides)
     -- The deferral helpers ARE upvalues of the module methods that call
     -- them, so findUpvalue recovers those without running anything.
     -- Both are guarded: Task 5 is what creates these methods.
-    -- The module lifecycle methods (SetEnabledState, IsEnabled,
-    -- RegisterEvent) are NOT stubbed by helpers.installAddonShim -- its
-    -- modules are bare tables. A test that drives a path calling one of
-    -- them stubs it itself, e.g. LR.IsEnabled = function() return true end.
+    -- The module lifecycle methods (SetEnabledState, IsEnabled) are NOT
+    -- stubbed by helpers.installAddonShim -- its modules are bare tables. A
+    -- test that drives a path calling one of them stubs it itself, e.g.
+    -- LR.IsEnabled = function() return true end.
     local seams = {}
     seams.resolveByName = LR._ResolveTeleportSpellByName
+    seams.registeredEvents = registeredEvents
     -- Drain the deferred-teardown queue, i.e. "combat ended".
     seams.runCombatQueue = function()
         local fns = combatQueue

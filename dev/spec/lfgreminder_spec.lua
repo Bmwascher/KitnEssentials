@@ -215,5 +215,60 @@ describe("LFGReminder module", function()
             assert.is_false(popup:IsShown())
             assert.is_nil(btn:GetAttribute("spell"))
         end)
+
+        -- LFG_LIST_JOINED_GROUP only fires for someone who applied, so the
+        -- person who made the group (the leader) never gets a prompt through
+        -- that path. The leader arms off their own active listing instead,
+        -- and only fires once that listing drops WITH a full group.
+        it("arms and prompts the leader when their full-group listing drops", function()
+            local entryPresent = true
+            local LR = loader.loadLFGReminder({
+                C_LFGList = {
+                    GetActiveEntryInfo = function()
+                        if entryPresent then return { activityID = 7 } end
+                        return nil
+                    end,
+                    GetActivityInfoTable = function() return { fullName = "Skyreach" } end,
+                },
+                GetNumGroupMembers = function() return 5 end,
+                IsInRaid = function() return false end,
+            })
+            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()  -- listing up: arms
+            entryPresent = false
+            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()  -- listing gone, group full: prompts
+            assert.equals(159898, LR:_GetPendingSpellID())
+        end)
+
+        it("does not prompt the leader when the listing drops short-handed", function()
+            local entryPresent = true
+            local LR = loader.loadLFGReminder({
+                C_LFGList = {
+                    GetActiveEntryInfo = function()
+                        if entryPresent then return { activityID = 7 } end
+                        return nil
+                    end,
+                    GetActivityInfoTable = function() return { fullName = "Skyreach" } end,
+                },
+                GetNumGroupMembers = function() return 3 end,
+                IsInRaid = function() return false end,
+            })
+            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
+            entryPresent = false
+            LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
+            assert.is_nil(LR:_GetPendingSpellID())
+        end)
+
+        it("refuses to open the prompt while the teleport is on cooldown", function()
+            local LR, seams = joinedWith("Skyreach")
+            LR:LFG_LIST_JOINED_GROUP(nil, 1)
+            assert.equals(159898, LR:_GetPendingSpellID())
+            local popup = seams.frames["KE_LFGReminderPopup"]
+            popup:Hide()
+            _G.C_Spell.GetSpellCooldown = function()
+                return { isActive = true, isOnGCD = false, duration = 300 }
+            end
+            seams.showPrompt()
+            assert.is_false(popup:IsShown())
+        end)
     end)
 end)

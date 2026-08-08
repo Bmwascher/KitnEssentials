@@ -45,6 +45,8 @@ local InCombatLockdown = InCombatLockdown
 local C_SpellBook = C_SpellBook
 local SpellBookBank_Player = Enum.SpellBookSpellBank.Player
 local IsInGroup = IsInGroup
+local IsInRaid = IsInRaid
+local GetNumGroupMembers = GetNumGroupMembers
 local IsInInstance = IsInInstance
 local UIParent = UIParent
 local C_Spell = C_Spell
@@ -93,6 +95,35 @@ end
 -- function references it until the resolve chain lands, so debug.getupvalue
 -- has nothing to reach it through.
 LR._ResolveTeleportSpellByName = ResolveTeleportSpellByName
+
+-- The prompt IS a teleport button, so it is pointless once the teleport is
+-- on cooldown -- which it always is straight after using it.
+--
+-- C_Spell.GetSpellCooldown is SecretWhenCooldownsRestricted and neither
+-- startTime nor duration carries NeverSecret, so comparing duration against
+-- a number is the very pattern the button-visual path already avoids.
+-- isActive and isOnGCD on the same struct ARE NeverSecret: isActive reliably
+-- says whether a cooldown exists; isOnGCD == true can exclude the GCD, but
+-- false/nil is not decisive outside SPELL_UPDATE_COOLDOWN.
+-- GetSpellCooldownDuration is not usable here: it hands back an object even
+-- when the spell is ready.
+--
+-- Fails OPEN: an unreadable cooldown offers a button that may not work,
+-- which beats hiding one that would have.
+local function TeleportOnCooldown(spellID)
+    if not (spellID and C_Spell and C_Spell.GetSpellCooldown) then return false end
+    local ok, info = pcall(C_Spell.GetSpellCooldown, spellID)
+    if not ok or type(info) ~= "table" then return false end
+    if info.isActive ~= true then return false end -- NeverSecret
+    if info.isOnGCD == true then return false end  -- NeverSecret: the GCD only
+    -- isOnGCD is only trustworthy inside SPELL_UPDATE_COOLDOWN handling, and
+    -- this also runs from LFG and regen paths -- so false/nil never decides
+    -- on its own. A plain duration settles it; a secret one fails OPEN (a
+    -- button that may not work beats hiding one that would).
+    local dur = info.duration
+    if KE:IsSecretValue(dur) then return false end
+    return type(dur) == "number" and dur > 1.5
+end
 
 -- Layout constants
 local POPUP_W     = 210
@@ -271,12 +302,7 @@ BuildPopup = function()
             ShowTip(self, "You have not learned this dungeon teleport yet.")
             return
         end
-        -- pcall'd whole-condition: see the note under UpdateButtonVisuals.
-        local ok, onCD = pcall(function()
-            local cdInfo = C_Spell and C_Spell.GetSpellCooldown and C_Spell.GetSpellCooldown(sid)
-            return cdInfo and cdInfo.duration and cdInfo.duration > 0
-        end)
-        if ok and onCD then
+        if TeleportOnCooldown(sid) then
             ShowTip(self, "Teleport on Cooldown")
         else
             ShowTip(self, "Teleport to " .. (pendingName or "dungeon"))
@@ -380,8 +406,64 @@ ResolveDungeon = function(resultID)
     end)
 end
 
+-- LFG_LIST_JOINED_GROUP only fires for someone who APPLIED, so the person
+-- who made the group never got the prompt. Arm while our own listing is up,
+-- and fire when that listing ends WITH a full group: the game delists
+-- automatically at that point, which is when the group is actually ready to
+-- move. A listing that ends any other way -- cancelled by hand, group broke
+-- up -- leaves the group short and prompts nothing.
+local armedSpellID, armedName, armedPending
+
+local function GroupIsFull()
+    if IsInRaid() then return false end
+    return GetNumGroupMembers() >= 5
+end
+
+local function ClearArmed()
+    armedSpellID, armedName, armedPending = nil, nil, nil
+end
+
+-- Same clean-string chain as ResolveDungeon, against our own active entry.
+-- The active-entry read can return secret data in chat-messaging lockdown,
+-- so the guards are not optional.
+local function ResolveListing()
+    if not (C_LFGList and C_LFGList.GetActiveEntryInfo) then return nil end
+    local spellID, name
+    pcall(function()
+        local info = C_LFGList.GetActiveEntryInfo()
+        if type(info) ~= "table" then return end
+        local activityID = info.activityID
+        if activityID == nil and info.activityIDs and not issecrettable(info.activityIDs) then
+            activityID = info.activityIDs[1]
+        end
+        if activityID == nil or issecretvalue(activityID) then return end
+        local act = C_LFGList.GetActivityInfoTable(activityID)
+        if type(act) ~= "table" then return end
+        local fullName = act.fullName
+        if type(fullName) ~= "string" or issecretvalue(fullName) then return end
+        spellID = ResolveTeleportSpellByName(fullName)
+        name = (fullName:gsub("%s*%b()%s*$", ""))
+    end)
+    return spellID, name
+end
+
+-- Every popup:Show() pairs with registering SPELL_UPDATE_COOLDOWN, and every
+-- popup:Hide() with unregistering it, regardless of which path reaches the
+-- popup (real prompt, the deferred regen re-show, or the preview) -- shared
+-- helpers keep that symmetric instead of repeating the pair per site.
+local function ShowPopup()
+    popup:Show()
+    LR:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+end
+
+local function HidePopup()
+    popup:Hide()
+    LR:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
+end
+
 ShowPrompt = function()
     if not (LR.db and LR.db.Enabled ~= false) or not pendingSpellID then return end
+    if TeleportOnCooldown(pendingSpellID) then return end
     if InCombatLockdown() then
         -- Deferral comes BEFORE BuildPopup, because BuildPopup calls
         -- secureBtn:SetAttribute("type", "spell") on a protected frame,
@@ -400,7 +482,7 @@ ShowPrompt = function()
     pendingAttrSpellID = nil
     pendingHide = nil
     UpdateButtonVisuals()
-    popup:Show()
+    ShowPopup()
 end
 
 HidePrompt = function()
@@ -411,7 +493,7 @@ HidePrompt = function()
     if not (popup and popup:IsShown()) then pendingHide = nil; return end
     if InCombatLockdown() then pendingHide = true; return end
     pendingHide = nil
-    popup:Hide()
+    HidePopup()
 end
 
 ClearPending = function()
@@ -445,10 +527,41 @@ function LR:LFG_LIST_JOINED_GROUP(_, resultID)
     if pendingSpellID then ShowPrompt() end
 end
 
+function LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()
+    local spellID, name = ResolveListing()
+    if spellID then
+        armedSpellID, armedName, armedPending = spellID, name, nil
+        return
+    end
+    -- Entry gone. Arm the check rather than deciding here: the fifth player
+    -- joining can update the listing before the roster, so the member count
+    -- may still read four at this instant. GROUP_ROSTER_UPDATE retries it.
+    if armedSpellID then
+        armedPending = true
+        self:TryLeaderPrompt()
+    end
+end
+
+function LR:TryLeaderPrompt()
+    if not (armedPending and armedSpellID) then return end
+    if not GroupIsFull() then return end
+    pendingSpellID, pendingName = armedSpellID, armedName
+    ClearArmed()
+    ShowPrompt()
+end
+
+function LR:SPELL_UPDATE_COOLDOWN()
+    if not (popup and popup:IsShown()) then return end
+    if TeleportOnCooldown(pendingSpellID) then HidePrompt() end
+end
+
 function LR:GROUP_ROSTER_UPDATE()
     if not IsInGroup() then
+        ClearArmed()
         ClearPending(); HidePrompt()
+        return
     end
+    self:TryLeaderPrompt()
 end
 
 function LR:CheckInstance()
@@ -489,12 +602,16 @@ function LR:PLAYER_REGEN_ENABLED()
     end
     -- Surface a prompt whose join landed mid-combat. The name is set here
     -- rather than in ShowPrompt: that path returned before touching the
-    -- popup, which may not have existed yet.
+    -- popup, which may not have existed yet. Consumes pendingShow either
+    -- way -- a teleport already on cooldown by the time combat ends is not
+    -- retried later, same as ShowPrompt's own gate.
     if wantShow then
         pendingShow = nil
-        if popup then popup._name:SetText(pendingName or "") end
-        UpdateButtonVisuals()
-        if popup then popup:Show() end
+        if not TeleportOnCooldown(pendingSpellID) then
+            if popup then popup._name:SetText(pendingName or "") end
+            UpdateButtonVisuals()
+            if popup then ShowPopup() end
+        end
     end
     -- Flush a hide blocked during combat -- UNLESS combat is what caused it
     -- and the prompt is still live. The popup is still on screen at this
@@ -512,7 +629,7 @@ function LR:PLAYER_REGEN_ENABLED()
             popup._name:SetText(pendingName or "")
             UpdateButtonVisuals()
         elseif popup and popup:IsShown() then
-            popup:Hide()
+            HidePopup()
         end
     end
 end
@@ -529,6 +646,7 @@ function LR:OnEnable()
         BuildPopup()  -- secure button needs out-of-combat creation
     end
     self:RegisterEvent("LFG_LIST_JOINED_GROUP")
+    self:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
     self:RegisterEvent("GROUP_ROSTER_UPDATE")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "CheckInstance")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CheckInstance")
@@ -537,6 +655,7 @@ function LR:OnEnable()
 end
 
 function LR:OnDisable()
+    ClearArmed()
     ClearPending()
     pendingHide = nil
     -- Do NOT use HidePrompt here. AceAddon disables our embeds immediately
@@ -558,7 +677,7 @@ function LR:OnDisable()
             if LR:IsEnabled() and pendingSpellID then return end
             -- Out of combat here, so both writes are safe.
             if secureBtn then secureBtn:SetAttribute("spell", nil) end
-            if popup and popup:IsShown() then popup:Hide() end
+            if popup and popup:IsShown() then HidePopup() end
         end)
     end
 end
@@ -593,7 +712,7 @@ function LR:ShowPreview()
     if secureBtn and secureBtn._label then
         secureBtn._label:SetTextColor(1, 1, 1, 1)
     end
-    popup:Show()
+    ShowPopup()
 end
 
 function LR:HidePreview()
@@ -609,5 +728,5 @@ function LR:HidePreview()
         UpdateButtonVisuals()
         return
     end
-    popup:Hide()
+    HidePopup()
 end
