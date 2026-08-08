@@ -633,6 +633,7 @@ function HM:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered and self.containerFrame then
         KE.EditMode:RegisterElement({
             key = "HealerMana", displayName = self:GetEditModeLabel(), frame = self.containerFrame,
+            module = self,
             getPosition = function() return self:GetActivePosition() end,
             setPosition = function(pos)
                 -- Write to the SAME table getPosition reads (no get/set drift).

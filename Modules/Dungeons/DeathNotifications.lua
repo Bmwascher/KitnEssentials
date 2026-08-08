@@ -610,6 +610,7 @@ function DN:OnEnable()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "DeathNotifications",
+            module = self,
             displayName = "Death Notifications",
             frame = self.container,
             getPosition = function()

@@ -416,6 +416,7 @@ function TT:OnEnable()
     if KE.EditMode then
         KE.EditMode:RegisterElement({
             key         = "TotemTracker",
+            module      = self,
             displayName = "Totem Tracker",
             frame       = containerFrame,
             getPosition = function() return self.db.Position end,

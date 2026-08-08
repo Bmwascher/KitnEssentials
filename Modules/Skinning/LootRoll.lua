@@ -378,6 +378,12 @@ function LR:RegisterEditMode()
     local mover = self:GetMover()
     KE.EditMode:RegisterElement({
         key = "LootRoll",
+        module = self,
+        -- Neither replacing the frames nor repositioning them means nothing
+        -- owns this position, so there is nothing to drag.
+        isEligible = function()
+            return (self.db.Replace or self.db.Reposition) and true or false
+        end,
         displayName = "Loot Roll",
         frame = mover,
         getPosition = function()

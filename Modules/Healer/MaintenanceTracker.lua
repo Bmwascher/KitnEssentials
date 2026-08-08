@@ -318,6 +318,8 @@ function MT:DetectSpec()
         if self.frames then
             for _, f in ipairs(self.frames) do f:Hide() end
         end
+        -- Eligibility just became false; the tool reads it only when told to.
+        if KE.EditMode then KE.EditMode:RefreshLiveState() end
         return
     end
 
@@ -356,6 +358,11 @@ function MT:DetectSpec()
                 if self.frames[i] then self.frames[i]:Show() end
             end
         end
+
+        -- The frames exist only now on a cold start from an untracked spec,
+        -- so this is the first point at which registration can succeed.
+        self:RegisterEditMode()
+        if KE.EditMode then KE.EditMode:RefreshLiveState() end
     end
 end
 
@@ -705,26 +712,37 @@ function MT:OnEnable()
         end
     end
 
-    if KE.EditMode and self.frames and self.frames[1] then
-        KE.EditMode:RegisterElement({
-            key         = "MaintenanceTracker",
-            displayName = "Maintenance Tracker",
-            frame       = self.frames[1],
-            getPosition = function() return self.db.Position end,
-            setPosition = function(pos)
-                self.db.Position.AnchorFrom = pos.AnchorFrom
-                self.db.Position.AnchorTo   = pos.AnchorTo
-                self.db.Position.XOffset    = pos.XOffset
-                self.db.Position.YOffset    = pos.YOffset
-                self:ApplyPosition()
-            end,
-            getParentFrame = function()
-                return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
-            end,
-            guiPath = "HealerTools",
-            guiTab = "MaintenanceTracker",
-        })
-    end
+    self:RegisterEditMode()
+end
+
+-- Called from OnEnable and from the tracked-spec path in DetectSpec. Starting
+-- the session on an untracked spec builds no frames, so registering only from
+-- OnEnable meant a later switch to a tracked spec produced frames that the
+-- tool never learned about.
+function MT:RegisterEditMode()
+    if not (KE.EditMode and self.frames and self.frames[1]) then return end
+    KE.EditMode:RegisterElement({
+        key         = "MaintenanceTracker",
+        module      = self,
+        -- The module stays enabled across a spec change while clearing every
+        -- tracker, so module state alone cannot answer this.
+        isEligible  = function() return #trackers > 0 end,
+        displayName = "Maintenance Tracker",
+        frame       = self.frames[1],
+        getPosition = function() return self.db.Position end,
+        setPosition = function(pos)
+            self.db.Position.AnchorFrom = pos.AnchorFrom
+            self.db.Position.AnchorTo   = pos.AnchorTo
+            self.db.Position.XOffset    = pos.XOffset
+            self.db.Position.YOffset    = pos.YOffset
+            self:ApplyPosition()
+        end,
+        getParentFrame = function()
+            return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+        end,
+        guiPath = "HealerTools",
+        guiTab = "MaintenanceTracker",
+    })
 end
 
 function MT:OnDisable()

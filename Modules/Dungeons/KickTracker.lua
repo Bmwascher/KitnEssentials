@@ -1641,6 +1641,7 @@ function KT:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "KickTracker",
+            module = self,
             displayName = self:GetEditModeLabel(),
             frame = self.containerFrame,
             getPosition = function()

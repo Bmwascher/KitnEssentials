@@ -88,6 +88,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
             db.Replace = checked
             Apply()
             UpdateAllWidgetStates()
+            -- Either mode owns the position; neither means the mover stops
+            -- deserving a box.
+            if KE.EditMode then KE.EditMode:RefreshLiveState() end
             if not checked then
                 KE:FlagReloadNeeded() -- unified close-time prompt
             end
@@ -209,6 +212,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
                 db.Reposition = checked
                 Apply()
                 UpdateAllWidgetStates()
+                -- With neither mode on, nothing owns the loot roll position,
+                -- so the mover stops deserving a box.
+                if KE.EditMode then KE.EditMode:RefreshLiveState() end
             end,
         })
         -- "Unlock (drag to move)" was removed. It was a second anchor UI

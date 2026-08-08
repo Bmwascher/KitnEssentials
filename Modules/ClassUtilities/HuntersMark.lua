@@ -324,6 +324,7 @@ function HM:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "HuntersMark", displayName = "Hunter's Mark Warning", frame = self.frame,
+            module = self,
             getPosition = function() return self.db.Position end,
             setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
@@ -391,6 +392,10 @@ function HM:OnDisable()
         self.frame:Hide()
         self.frame = nil
     end
+    -- The frame is dropped here, so the registration pointing at it has to go
+    -- with it. Clearing the guard is what lets a later enable register again.
+    if KE.EditMode then KE.EditMode:UnregisterElement("HuntersMark") end
+    self.editModeRegistered = nil
     wipe(markedUnits)
     self.isPreview = false
 end

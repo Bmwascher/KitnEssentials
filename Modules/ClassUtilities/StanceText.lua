@@ -340,6 +340,7 @@ function ST:OnEnable()
     if not self.frame or not KE.EditMode then return end
     KE.EditMode:RegisterElement({
         key = "StanceText",
+        module = self,
         displayName = "Missing Forms",
         frame = self.frame,
         getPosition = function() return self.db.Position end,

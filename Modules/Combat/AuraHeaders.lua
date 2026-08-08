@@ -438,6 +438,7 @@ local function MakeHeaderModule(config)
         if not self.mover or not KE.EditMode then return end
         KE.EditMode:RegisterElement({
             key = config.moduleName,
+            module = self,
             displayName = config.displayName,
             frame = self.mover,
             getPosition = function() return self.db.Position end,

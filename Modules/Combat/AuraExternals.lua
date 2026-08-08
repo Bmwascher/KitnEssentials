@@ -157,6 +157,7 @@ function AX:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key         = "AuraExternals",
+            module      = self,
             displayName = "Aura Externals",
             frame       = self.frame,
             getPosition = function()

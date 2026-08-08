@@ -1001,11 +1001,19 @@ function NMA:RegisterAnchor()
     -- draggable overlay for the same spot would fight it.
     if self:IsAttached() then
         KE.EditMode:UnregisterElement("NoMovementAlert")
+        self.editModeRegistered = nil
+        self.editModeFrame = nil
         return
     end
+    -- Enable and every preview show both land here. Re-registering the same
+    -- frame would cancel a drag in progress for nothing. A rebuilt frame still
+    -- re-registers, because the stored handle no longer matches.
+    if self.editModeRegistered and self.editModeFrame == self.frame then return end
+
     local cfg = {}
     for k, v in pairs(EDIT_MODE_ELEMENT) do cfg[k] = v end
     cfg.frame = self.frame
+    cfg.module = self
     cfg.getPosition = function() return self.db.Position end
     cfg.setPosition = function(pos)
         local p = self.db.Position
@@ -1014,6 +1022,8 @@ function NMA:RegisterAnchor()
         self:ApplyPosition()
     end
     KE.EditMode:RegisterElement(cfg)
+    self.editModeRegistered = true
+    self.editModeFrame = self.frame
 end
 
 function NMA:OnEnable()

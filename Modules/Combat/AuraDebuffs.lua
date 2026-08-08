@@ -526,6 +526,7 @@ function AD:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key         = "AuraDebuffs",
+            module      = self,
             displayName = "Aura Debuffs",
             frame       = self.frame,
             getPosition = function()

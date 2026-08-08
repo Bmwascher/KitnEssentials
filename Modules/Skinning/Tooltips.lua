@@ -856,32 +856,45 @@ function TT:SetDefaultAnchor(tt, parent)
 end
 
 function TT:EnsureAnchor()
-    if self.anchorFrame then return end
-    local f = CreateFrame("Frame", "KE_TooltipAnchor", UIParent)
-    f:SetSize(130, 20)
-    self.anchorFrame = f
-    self:ApplyPosition()
-    if KE.EditMode and KE.EditMode.RegisterElement then
-        KE.EditMode:RegisterElement({
-            key = "TooltipAnchor",
-            displayName = "Tooltip",
-            frame = f,
-            getPosition = function() return self.db.Position end,
-            setPosition = function(pos)
-                local p = self.db.Position
-                p.AnchorFrom = pos.AnchorFrom
-                p.AnchorTo = pos.AnchorTo
-                p.XOffset = pos.XOffset
-                p.YOffset = pos.YOffset
-                self:ApplyPosition()
-            end,
-            getParentFrame = function()
-                local p = self.db.Position
-                return KE:ResolveAnchorFrame(p.AnchorFrameType, p.ParentFrame)
-            end,
-            guiPath = "SkinTooltips",
-        })
+    if not self.anchorFrame then
+        local f = CreateFrame("Frame", "KE_TooltipAnchor", UIParent)
+        f:SetSize(130, 20)
+        self.anchorFrame = f
+        self:ApplyPosition()
     end
+    -- Registration is deliberately outside the frame guard. The frame is
+    -- created once and never destroyed, so leaving registration inside it
+    -- meant a disable/enable cycle could never register again.
+    self:RegisterEditMode()
+end
+
+function TT:RegisterEditMode()
+    if not (KE.EditMode and KE.EditMode.RegisterElement) then return end
+    if not self.anchorFrame or self.editModeRegistered then return end
+    self.editModeRegistered = true
+    KE.EditMode:RegisterElement({
+        key = "TooltipAnchor",
+        module = self,
+        -- Cursor anchoring bypasses this frame entirely, so there is nothing
+        -- for a drag to place.
+        isEligible = function() return self.db.CursorAnchor ~= true end,
+        displayName = "Tooltip",
+        frame = self.anchorFrame,
+        getPosition = function() return self.db.Position end,
+        setPosition = function(pos)
+            local p = self.db.Position
+            p.AnchorFrom = pos.AnchorFrom
+            p.AnchorTo = pos.AnchorTo
+            p.XOffset = pos.XOffset
+            p.YOffset = pos.YOffset
+            self:ApplyPosition()
+        end,
+        getParentFrame = function()
+            local p = self.db.Position
+            return KE:ResolveAnchorFrame(p.AnchorFrameType, p.ParentFrame)
+        end,
+        guiPath = "SkinTooltips",
+    })
 end
 
 -- The position card offers a parent frame and a strata, and both need somewhere
@@ -1052,6 +1065,10 @@ end
 
 function TT:OnDisable()
     self:UnregisterEvent("MODIFIER_STATE_CHANGED")
+    -- The anchor frame survives, so the guard has to be cleared or a later
+    -- enable would skip registration and leave the tool holding a dead key.
+    if KE.EditMode then KE.EditMode:UnregisterElement("TooltipAnchor") end
+    self.editModeRegistered = nil
     -- Hooks stay installed (hooksecurefunc/HookScript cannot be removed)
     -- but every handler gates on IsEnabled, so disabled = inert. Undo
     -- the visual state; fonts and bar height need a reload to fully

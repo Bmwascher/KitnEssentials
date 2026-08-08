@@ -575,6 +575,7 @@ function KH:RegisterEditModeElement(prefix)
 
     KE.EditMode:RegisterElement({
         key = meta.key,
+        module = self,
         displayName = meta.displayName,
         frame = frame,
         getPosition = function() return self.db[keyPrefix() .. "Position"] end,

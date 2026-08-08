@@ -249,6 +249,7 @@ function TS:RegisterEditMode()
     if not KE.EditMode or self.editModeRegistered then return end
     KE.EditMode:RegisterElement({
         key = "TargetedSpells",
+        module = self,
         displayName = "Targeted Spells",
         frame = self.anchorFrame,
         getPosition = function() return self.db.Position end,

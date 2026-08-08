@@ -1027,6 +1027,7 @@ function DC:OnEnable()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "DungeonCasts",
+            module = self,
             displayName = "Dungeon Casts",
             frame = self.anchorFrame,
             getPosition = function() return self.db.Frame.Position end,
