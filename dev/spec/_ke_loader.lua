@@ -1447,6 +1447,7 @@ function L.loadRaidControl(overrides)
         or { GetSize = function() return 1600, 900 end, GetWidth = function() return 1600 end }
     local KE = { db = { profile = { RaidControl = { Position = {} } } }, Skins = {} }
     KE.Skins.SafeCenter = overrides.SafeCenter or function() return 0, 0 end
+    helpers.loadModule("Core/Secret.lua", KE)
     helpers.loadModule("Modules/QoL/RaidControl.lua", KE)
     local RC = modules["RaidControl"]
 

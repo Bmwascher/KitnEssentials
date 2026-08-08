@@ -170,6 +170,20 @@ describe("RaidControl", function()
             assert.equals("|cffffffffNobody", out[1])
         end)
 
+        it("falls back to the priest colour when the class token is secret", function()
+            -- A real class key ("MAGE") marked secret. An unguarded lookup
+            -- would still find MAGE's colour in the mock's plain table --
+            -- indexing does not itself error the way it would against a
+            -- real secret value -- so this only fails if the guard rejects
+            -- the token BEFORE the lookup, not because indexing throws.
+            RC, KE, seams = loader.loadRaidControl({
+                issecretvalue = function(v) return v == "MAGE" end,
+            })
+            local out = {}
+            seams.roleIconsAddNames(out, "Nobody", "MAGE")
+            assert.equals("|cffffffffNobody", out[1])
+        end)
+
         it("leaves a realmless name untouched apart from the colour prefix", function()
             local out = {}
             seams.roleIconsAddNames(out, "Kitn", "MAGE")
