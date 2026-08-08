@@ -87,7 +87,12 @@ GUIFrame:RegisterContent("DTimers_Dungeons", function(scrollChild, yOffset)
     end
     local dungeonOptions = {}
     for _, d in ipairs(KE.GetDungeonTimerDungeonsForSeason(registry, activeSeason)) do
-        dungeonOptions[#dungeonOptions + 1] = { key = d.key, text = d.name }
+        -- Inline texture tag with the standard icon crop, so the dungeon
+        -- icon renders in the menu rows and the selected label alike.
+        dungeonOptions[#dungeonOptions + 1] = {
+            key = d.key,
+            text = ("|T%d:16:16:0:0:64:64:5:59:5:59|t %s"):format(d.iconID, d.name),
+        }
     end
 
     local card = GUIFrame:CreateCard(scrollChild, "Dungeon Selection", yOffset)
