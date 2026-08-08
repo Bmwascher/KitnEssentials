@@ -159,17 +159,68 @@ local function CurrentPlaystyle()
     return (QC.db and QC.db.DefaultPlaystyle) or 0
 end
 
+-- The activity for the keystone the player actually holds, plus its level
+-- and instance. The listed key level comes from the ACTIVITY, and our
+-- per-dungeon IDs are a fixed table -- listing one of them puts up whatever
+-- level that ID means rather than the key in the bag. The game solves it the
+-- same way, re-selecting on GetOwnedKeystoneActivityAndGroupAndLevel once a
+-- key is owned.
+--
+-- Matched on the activity's mapID, not the activity ID: the owned ID is
+-- precisely the thing that will not equal our hardcoded one.
+local function OwnedKeystone()
+    if not (C_LFGList and C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel) then return nil end
+    local ok, actID, _, level = pcall(C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel)
+    if not ok or not actID then return nil end
+    local mapID
+    if C_LFGList.GetActivityInfoTable then
+        local ok2, info = pcall(C_LFGList.GetActivityInfoTable, actID)
+        if ok2 and type(info) == "table" then mapID = info.mapID end
+    end
+    return actID, level, mapID
+end
+
+-- True when the owned keystone belongs to this button's dungeon. Falls back
+-- to the activity ID when the map lookup is unavailable.
+local function OwnsKeyFor(btn, ownActID, ownMapID)
+    if not ownActID then return false end
+    if ownMapID and btn._mapID then return ownMapID == btn._mapID end
+    return btn._lfgID == ownActID
+end
+
+-- The activity for a specific keystone LEVEL in this dungeon. A dungeon has
+-- one activity PER KEY LEVEL, which is what GetKeystoneForActivity reports,
+-- so the level being listed has to be chosen first and the activity found to
+-- match -- otherwise a party member's +12 goes up at the player's own +10.
+local function ActivityForLevel(baseActivityID, level)
+    if not (level and baseActivityID and C_LFGList
+        and C_LFGList.GetActivityInfoTable and C_LFGList.GetAvailableActivities
+        and C_LFGList.GetKeystoneForActivity) then
+        return nil
+    end
+    local ok, info = pcall(C_LFGList.GetActivityInfoTable, baseActivityID)
+    if not ok or type(info) ~= "table" then return nil end
+    local ok2, list = pcall(C_LFGList.GetAvailableActivities,
+        info.categoryID, info.groupFinderActivityGroupID, 0)
+    if not ok2 or type(list) ~= "table" then return nil end
+    for _, id in ipairs(list) do
+        local ok3, lvl = pcall(C_LFGList.GetKeystoneForActivity, id)
+        if ok3 and lvl == level then return id end
+    end
+    return nil
+end
+
 -- Read-only test seams. Both helpers are pure file-locals with no other
 -- handle; exporting them creates no second source of truth.
 QC._ActiveDungeons   = ActiveDungeons
 QC._CurrentPlaystyle = CurrentPlaystyle
+QC._OwnsKeyFor       = OwnsKeyFor
 
 -- Highlights the dungeon matching the player's own keystone in gold, and any
 -- dungeon a party member holds a key for in blue (best level among holders).
 RefreshGlow = function()
     if not C_LFGList then return end
-    local ok, ownLfgID, _, ownLevel = pcall(C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel)
-    if not ok then ownLfgID, ownLevel = nil, nil end
+    local ownLfgID, ownLevel, ownMapID = OwnedKeystone()
     -- Themed, never a hardcoded accent.
     -- Read once per call, not once per button -- KE.Theme.accent[4] is the
     -- theme's alpha, not this glow's; the glow keeps its own measured 0.38.
@@ -178,7 +229,7 @@ RefreshGlow = function()
     local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549 }
     for i = 1, #buttons do
         local btn = buttons[i]
-        local ownMatch = ownLfgID and (btn._lfgID == ownLfgID)
+        local ownMatch = OwnsKeyFor(btn, ownLfgID, ownMapID)
         local partyLevel = nil
         for _, info in pairs(partyKeys) do
             if info.cmID == btn._cmID and info.level and info.level > 0 then
@@ -187,17 +238,23 @@ RefreshGlow = function()
                 end
             end
         end
+        -- _level is the key this icon is OFFERING -- exactly the number shown
+        -- on it -- and clicking lists that level. Own key wins over a party
+        -- key for the same dungeon, matching the gold/blue glow.
         if ownMatch then
+            btn._level = ownLevel
             btn._glow:SetColorTexture(1, 0.82, 0, 0.38)          -- own: gold
             btn._glow:Show()
             btn._lvlText:SetText(ownLevel and ("+" .. ownLevel) or "")
             btn._lvlText:Show()
         elseif partyLevel then
+            btn._level = partyLevel
             btn._glow:SetColorTexture(accent[1], accent[2], accent[3], 0.38) -- party: themed accent
             btn._glow:Show()
             btn._lvlText:SetText("+" .. partyLevel)
             btn._lvlText:Show()
         else
+            btn._level = nil
             btn._glow:Hide()
             btn._lvlText:Hide()
         end
@@ -277,6 +334,7 @@ MakeButton = function(parent, dungeon, index)
     lvl:Hide()
 
     btn._lfgID   = dungeon.lfgID
+    btn._mapID   = dungeon.mapID
     btn._cmID    = dungeon.cmID
     btn._glow    = glow
     btn._lvlText = lvl
@@ -286,8 +344,8 @@ MakeButton = function(parent, dungeon, index)
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:ClearLines()
         GameTooltip:SetText(self._label, 1, 1, 1, 1, true)
-        local ok, ownLfgID, _, ownLevel = pcall(C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel)
-        if ok and ownLfgID and ownLfgID == self._lfgID and ownLevel then
+        local ownLfgID, ownLevel, ownMapID = OwnedKeystone()
+        if ownLevel and OwnsKeyFor(self, ownLfgID, ownMapID) then
             -- playerShortName is nil when the load-time capture was secret
             -- (see the file header). The line still carries the useful half.
             GameTooltip:AddLine((playerShortName or "You") .. ": +" .. ownLevel, 1, 0.82, 0)
@@ -326,8 +384,21 @@ MakeButton = function(parent, dungeon, index)
         -- LFGEntryGeneralPlaystyle. Putting the general value in the legacy
         -- field and leaving generalPlaystyle at None makes the server reject
         -- the listing silently. This mirrors Blizzard's own assembly.
+        --
+        -- The listing level comes from the ACTIVITY, so pick the activity for
+        -- the key this icon is offering -- which may be a party member's, not
+        -- the player's. Falls back to the owned keystone's activity, then to
+        -- the preset, so a dungeon nobody holds a key for still lists.
+        local activityID = self._lfgID
+        local ownLfgID, _, ownMapID = OwnedKeystone()
+        if ownLfgID and OwnsKeyFor(self, ownLfgID, ownMapID) then
+            activityID = ownLfgID
+        end
+        local levelled = ActivityForLevel(activityID, self._level)
+        if levelled then activityID = levelled end
+
         C_LFGList.CreateListing({
-            activityIDs           = { self._lfgID },
+            activityIDs           = { activityID },
             questID               = nil,
             isAutoAccept          = false,
             isCrossFactionListing = true,
@@ -477,7 +548,6 @@ Init = function()
         dblOverlay:RegisterForClicks("LeftButtonDown", "LeftButtonUp")
         dblOverlay:SetAttribute("type", "click")
         dblOverlay:SetAttribute("clickbutton", cs.StartGroupButton)
-        dblOverlay:SetFrameLevel(cs:GetFrameLevel() + 100)
         dblOverlay:Hide()
         dblOverlay:SetScript("PostClick", function()
             if dblTimer then dblTimer:Cancel(); dblTimer = nil end
@@ -509,6 +579,11 @@ Init = function()
             return
         end
         qcdbg("armed over the tile")
+        -- Stack against the button being covered, every arm: a category
+        -- button inside a scroll list can out-rank a level fixed at creation,
+        -- and a buried relay swallows the second click silently.
+        ov:SetFrameStrata(catBtn:GetFrameStrata())
+        ov:SetFrameLevel(catBtn:GetFrameLevel() + 10)
         ov:ClearAllPoints()
         ov:SetAllPoints(catBtn)
         ov:Show()

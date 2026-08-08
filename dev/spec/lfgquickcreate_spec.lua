@@ -97,6 +97,26 @@ describe("Modules/Dungeons/LFGQuickCreate.lua", function()
         end)
     end)
 
+    describe("OwnsKeyFor", function()
+
+        it("matches ownership by map id when available", function()
+            local QC = loader.loadLFGQuickCreate()
+            local btn = { _mapID = 501, _lfgID = 9999 }
+            assert.is_true(QC._OwnsKeyFor(btn, 1234, 501))   -- map match, ids differ
+            assert.is_false(QC._OwnsKeyFor(btn, 1234, 502))  -- map mismatch
+        end)
+        it("falls back to the activity id without a map id", function()
+            local QC = loader.loadLFGQuickCreate()
+            local btn = { _mapID = nil, _lfgID = 1234 }
+            assert.is_true(QC._OwnsKeyFor(btn, 1234, nil))
+            assert.is_false(QC._OwnsKeyFor(btn, 5678, nil))
+        end)
+        it("never matches with no owned key", function()
+            local QC = loader.loadLFGQuickCreate()
+            assert.is_false(QC._OwnsKeyFor({ _mapID = 501, _lfgID = 1234 }, nil, nil))
+        end)
+    end)
+
     describe("UpdateDB sanitizer", function()
 
         local function withPlaystyle(value)
