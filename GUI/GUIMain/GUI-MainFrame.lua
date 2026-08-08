@@ -144,37 +144,29 @@ GUIFrame.sidebarConfig = {
             { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "instance reset", "reroll", "key", "announcer", "mythic", "m+", "group finder", "lfg", "premade", "affix", "filter", "sort", "dungeon", "raider io", "quick create", "list group", "playstyle", "teleport", "dungeon teleport", "reminder", "popup", "portal" } },
             { id = "DeathNotifications",          text = "Death Notifications", keywords = { "death", "notification", "died", "dead", "party", "m+", "mythic" } },
             { id = "DungeonCasts",                text = "Dungeon Casts", keywords = { "dungeon cast", "cast", "interrupt", "mob", "enemy", "castbar", "m+" } },
+            { id = "DTimers_Main", text = "Dungeon Timers", keywords = { "dungeon timers", "timer", "timers", "bigwigs", "boss", "season", "enable", "general", "bar", "bars", "color", "texture", "size", "text", "font", "label", "nameplate", "trash", "mob", "icon", "cooldown", "predict", "dungeon", "algethar", "aa", "mgt", "pos", "sott" } },
             { id = "EnemyCounter",                text = "Enemy Counter", keywords = { "enemy", "counter", "count", "mobs", "pull", "nameplate", "m+" } },
             { id = "FocusMarker",                 text = "Focus Marker", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker" } },
             { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
             { id = "TargetedSpells",              text = "Targeted Spells", keywords = { "targeted", "spells", "cast", "incoming", "self", "target", "warning", "m+" } },
         },
     },
-    {
-        id = "dungeon_timers_section",
-        type = "header",
-        text = "\226\128\162 Dungeon Timers",
-        defaultExpanded = false,
-        disabledCheck = function()
-            return not (KE.db and KE.db.profile and KE.db.profile.DungeonTimers
-                and KE.db.profile.DungeonTimers.Enabled)
-        end,
-        items = {
-            { id = "DTimers_General",                  text = "General",         alwaysEnabled = true, keywords = { "dungeon timers", "timer", "general", "bigwigs", "boss", "enable" } },
-            { id = "DTimers_Bars",                     text = "Bar Settings", keywords = { "bar", "bars", "timer", "color", "texture", "size" } },
-            { id = "DTimers_Texts",                    text = "Text Settings", keywords = { "text", "font", "label", "timer" } },
-            { id = "DTimers_Nameplates",               text = "Nameplate Settings", alwaysEnabled = true, keywords = { "nameplate", "trash", "mob", "icon", "cooldown", "predict", "dungeon" } },
-            { id = "DTimers_Dungeon_AlgetharAcademy",  text = "Algeth'ar Academy", keywords = { "algethar", "academy", "aa", "dungeon", "timer" } },
-            { id = "DTimers_Dungeon_MagistersTerrace", text = "Magisters' Terrace", keywords = { "magisters", "terrace", "mgt", "dungeon", "timer" } },
-            { id = "DTimers_Dungeon_MaisaraCaverns",   text = "Maisara Caverns", keywords = { "maisara", "caverns", "dungeon", "timer" } },
-            { id = "DTimers_Dungeon_NexusPointXenas",  text = "Nexus-Point Xenas", keywords = { "nexus", "xenas", "nexus-point", "dungeon", "timer" } },
-            { id = "DTimers_Dungeon_PitOfSaron",       text = "Pit of Saron", keywords = { "pit of saron", "saron", "pos", "dungeon", "timer" } },
-            { id = "DTimers_Dungeon_SeatOfTriumvirate",text = "Seat of the Triumvirate", keywords = { "seat", "triumvirate", "sott", "dungeon", "timer" } },
-            { id = "DTimers_Dungeon_Skyreach",         text = "Skyreach", keywords = { "skyreach", "dungeon", "timer" } },
-            { id = "DTimers_Dungeon_WindrunnerSpire",  text = "Windrunner Spire", keywords = { "windrunner", "spire", "dungeon", "timer" } },
-        },
-    },
 }
+
+-- Searching a dungeon by name must still surface the Dungeon Timers page
+-- now that the per-dungeon sidebar items are gone. Names come from the
+-- registry so a future season lands in search with no edit here.
+for _, section in ipairs(GUIFrame.sidebarConfig) do
+    if section.id == "dungeons_section" then
+        for _, item in ipairs(section.items) do
+            if item.id == "DTimers_Main" then
+                for _, d in ipairs(KE.DungeonTimerDungeons or {}) do
+                    item.keywords[#item.keywords + 1] = d.name:lower()
+                end
+            end
+        end
+    end
+end
 
 ---------------------------------------------------------------------------------
 -- Content Area
