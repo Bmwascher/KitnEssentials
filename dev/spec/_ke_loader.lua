@@ -1823,4 +1823,11 @@ function L.loadCombatLogger(overrides)
     return CL, rec
 end
 
+-- Modules/DungeonTimers/DungeonRegistry.lua. Pure data + helpers on KE;
+-- the shim provides the truthy KitnEssentials global its guard checks.
+function L.loadDungeonRegistry()
+    helpers.installAddonShim()
+    return helpers.loadModule("Modules/DungeonTimers/DungeonRegistry.lua")
+end
+
 return L
