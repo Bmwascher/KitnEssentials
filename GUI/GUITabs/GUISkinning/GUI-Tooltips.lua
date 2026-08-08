@@ -78,10 +78,11 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
             })
         end, 44
     end
-    local function MkDropdown(label, options, get, set)
+    local function MkDropdown(label, options, get, set, searchable)
         return function(row)
             return GUIFrame:CreateDropdown(row, label, {
                 options = options,
+                searchable = searchable,
                 value = get(),
                 callback = function(value) set(value); ApplySettings() end,
             })
@@ -214,7 +215,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     PairRow(card3,
         MkDropdown("Font", BuildFontOptions(),
             function() return db.FontFace or "Expressway" end,
-            function(v) db.FontFace = v end), 40,
+            function(v) db.FontFace = v end, true), 40,
         MkDropdown("Outline", KE:GetFontOutlineOptions(),
             function() return KE:NormalizeFontOutline(db.FontOutline or "OUTLINE") end,
             function(v) db.FontOutline = v end), 40)
@@ -271,7 +272,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
                 function(v) db.HealthBarHeight = v end), 44,
             MkDropdown("Bar Texture", BuildStatusbarOptions(),
                 function() return db.HealthBarTexture or "Blizzard" end,
-                function(v) db.HealthBarTexture = v end), 40,
+                function(v) db.HealthBarTexture = v end, true), 40,
             true)
         -- A "Health Text" toggle and its size slider used to sit here. They
         -- were removed: 12.0 rebuilt this bar to carry a 0..1

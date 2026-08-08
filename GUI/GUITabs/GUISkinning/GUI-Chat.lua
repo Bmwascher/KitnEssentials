@@ -598,6 +598,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     local row10b = GUIFrame:CreateRow(card10.content, Theme.rowHeightLast)
     local whisperSoundDropdown = GUIFrame:CreateDropdown(row10b, "Whisper Sound", {
         options = soundOptions,
+        searchable = true,
         value = db.WhisperSounds.WhisperSound or "None",
         callback = function(value)
             db.WhisperSounds.WhisperSound = value
@@ -609,6 +610,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     local bnetWhisperSoundDropdown = GUIFrame:CreateDropdown(row10b, "Battle.net Whisper Sound", {
         options = soundOptions,
+        searchable = true,
         value = db.WhisperSounds.BNetWhisperSound or "None",
         callback = function(value)
             db.WhisperSounds.BNetWhisperSound = value

@@ -265,6 +265,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     if db.SoundEnabled then
         soundRow:AddWidget(GUIFrame:CreateDropdown(soundRow, "Sound", {
             options = BuildSoundOptions(),
+            searchable = true,
             value = db.Sound or "None",
             callback = function(key) db.Sound = key; ApplySettings() end,
         }), 0.5)

@@ -158,6 +158,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
 
     local fontDropdown = GUIFrame:CreateDropdown(row3b, "Global Font", {
         options = BuildFontList(),
+        searchable = true,
         value = KE:GetGlobalFont(),
         tooltip = "Used by every module and skin that has not been given a font of its own.",
         callback = function(name)

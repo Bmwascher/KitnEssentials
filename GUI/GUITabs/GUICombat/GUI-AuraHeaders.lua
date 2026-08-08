@@ -211,6 +211,7 @@ local function BuildPage(opts)
         local rowG = GUIFrame:CreateRow(card4.content, 40)
         local fontDrop = GUIFrame:CreateDropdown(rowG, "Font", {
             options = fontList,
+            searchable = true,
             value = db.FontFace or KE:GetGlobalFont(),
             callback = function(v) db.FontFace = v; ApplySettings() end,
         })

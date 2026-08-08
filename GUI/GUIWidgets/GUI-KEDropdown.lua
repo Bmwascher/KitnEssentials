@@ -32,6 +32,8 @@ local ITEM_HEIGHT = 24
 local MAX_DROPDOWN_HEIGHT = 400
 local ANIMATION_DURATION = 0.12
 local ARROW_SIZE = 16
+local SEARCH_BOX_HEIGHT = 24
+local SEARCH_PADDING = 4
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
 local ENABLE_ANIMATIONS = true
 
@@ -128,16 +130,16 @@ local function ReleaseItemButton(btn)
     table_insert(itemButtonPool, btn)
 end
 
--- Dropdown Widget — config-table API: { options, value, callback, tooltip }
--- TODO: `labelWidth`, `searchable`, and `isFontPreview` are accepted in the
--- API but not yet wired into the widget body.
--- Callers (e.g. font dropdowns passing `searchable = true, isFontPreview = true`)
--- won't see those behaviors. Implement when needed; config keys pass silently.
+-- Dropdown Widget — config-table API: { options, value, callback, tooltip,
+-- searchable }
+-- TODO: `labelWidth` and `isFontPreview` are accepted in the API but not
+-- yet wired into the widget body. Config keys pass silently.
 function GUIFrame:CreateDropdown(parent, labelText, config)
     config = config or {}
     local options = config.options
     local selected = config.value or config.selected
     local tooltip = config.tooltip
+    local searchable = config.searchable == true
     local sorting = nil
     local customHeight = nil
 
@@ -219,6 +221,7 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     local startHeight = 0
     local targetHeight = 0
     local scrollHold = false
+    local searchText = ""
 
     -- Dropdown list
     local dropdownList = CreateFrame("Frame", nil, row, "BackdropTemplate")
@@ -238,6 +241,33 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
     scrollFrame:SetScrollChild(scrollChild)
 
+    local searchBox, searchEmptyLabel
+    if searchable then
+        local searchContainer = CreateFrame("Frame", nil, dropdownList, "BackdropTemplate")
+        searchContainer:SetHeight(SEARCH_BOX_HEIGHT)
+        searchContainer:SetPoint("TOPLEFT", dropdownList, "TOPLEFT", 0, 0)
+        searchContainer:SetPoint("TOPRIGHT", dropdownList, "TOPRIGHT", 0, 0)
+        searchContainer:SetBackdrop(DROPDOWN_BACKDROP)
+        searchContainer:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+        searchContainer:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+        searchBox = CreateFrame("EditBox", nil, searchContainer)
+        searchBox:SetAutoFocus(false)
+        searchBox:SetPoint("TOPLEFT", searchContainer, "TOPLEFT", 8, 0)
+        searchBox:SetPoint("BOTTOMRIGHT", searchContainer, "BOTTOMRIGHT", -8, 0)
+        KE:ApplyThemeFont(searchBox, "normal")
+        searchBox:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 1)
+
+        searchEmptyLabel = dropdownList:CreateFontString(nil, "OVERLAY")
+        KE:ApplyThemeFont(searchEmptyLabel, "normal")
+        searchEmptyLabel:SetPoint("TOP", searchContainer, "BOTTOM", 0, -(SEARCH_PADDING + 6))
+        searchEmptyLabel:SetText("No matches found")
+        searchEmptyLabel:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+        searchEmptyLabel:Hide()
+
+        scrollFrame:SetPoint("TOPLEFT", dropdownList, "TOPLEFT", 0, -(SEARCH_BOX_HEIGHT + SEARCH_PADDING))
+    end
+
     -- Scrollbar components
     local scrollbar = nil
     local thumb = nil
@@ -247,7 +277,8 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
         if scrollbar then return end
 
         scrollbar = CreateFrame("Slider", nil, dropdownList, "BackdropTemplate")
-        scrollbar:SetPoint("TOPRIGHT", dropdownList, "TOPRIGHT", 0, 0)
+        scrollbar:SetPoint("TOPRIGHT", dropdownList, "TOPRIGHT", 0,
+            searchable and -(SEARCH_BOX_HEIGHT + SEARCH_PADDING) or 0)
         scrollbar:SetPoint("BOTTOMRIGHT", dropdownList, "BOTTOMRIGHT", 0, 0)
         scrollbar:SetWidth(12)
         scrollbar:SetBackdrop(SCROLLBAR_BACKDROP)
@@ -370,7 +401,7 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
 
     -- Close dropdown function
     local function CloseDropdown(instant)
-        if scrollHold then return end
+        if scrollHold and not instant then return end
         -- `instant` forces cleanup even when isOpen is already false. An animated close
         -- sets isOpen=false but defers Hide()+reparent to the 0.12s OnFinished, so a
         -- button Hide() in that window (e.g. a callback that rebuilds the page) must still
@@ -379,6 +410,15 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
         if not isOpen and not instant then return end
 
         isOpen = false
+
+        if searchable then
+            searchText = ""
+            if searchBox then
+                searchBox:ClearFocus()
+                searchBox:SetText("")
+            end
+            if searchEmptyLabel then searchEmptyLabel:Hide() end
+        end
 
         -- Force instant if animations disabled
         if not ENABLE_ANIMATIONS then
@@ -505,7 +545,17 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
             end)
         end
 
-        for i, key in ipairs(sortedKeys) do
+        local visibleKeys = sortedKeys
+        if searchable and searchText ~= "" then
+            visibleKeys = {}
+            for _, key in ipairs(sortedKeys) do
+                if KE.DropdownSearchMatches(normalizedOptions[key], key, searchText) then
+                    table_insert(visibleKeys, key)
+                end
+            end
+        end
+
+        for i, key in ipairs(visibleKeys) do
             local displayText = normalizedOptions[key]
 
             local btn = AcquireItemButton(scrollChild)
@@ -562,7 +612,7 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
             table_insert(itemButtons, btn)
         end
 
-        scrollChild:SetHeight(#sortedKeys * ITEM_HEIGHT)
+        scrollChild:SetHeight(#visibleKeys * ITEM_HEIGHT)
         itemsCreated = true
     end
 
@@ -578,12 +628,58 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
         end
     end)
 
+    -- Open-menu height: rows plus, when searchable, the docked search bar
+    -- (and one row of space for the empty-state label when nothing matches).
+    local function ListContentHeight()
+        local h = #itemButtons * ITEM_HEIGHT
+        if searchable then
+            h = h + SEARCH_BOX_HEIGHT + SEARCH_PADDING
+            if #itemButtons == 0 then h = h + ITEM_HEIGHT end
+        end
+        return math_min(h, MAX_DROPDOWN_HEIGHT)
+    end
+
+    if searchable then
+        searchBox:SetScript("OnTextChanged", function(self, userInput)
+            -- Programmatic SetText("") on open/close must not re-filter.
+            if not userInput then return end
+            searchText = self:GetText() or ""
+            CreateItemButtons()
+            searchEmptyLabel:SetShown(#itemButtons == 0)
+            if isOpen then
+                dropdownList:SetHeight(ListContentHeight())
+                targetHeight = dropdownList:GetHeight()
+                UpdateScroll()
+            end
+        end)
+        -- Enter commits the top match through the row's own click path.
+        searchBox:SetScript("OnEnterPressed", function()
+            local first = itemButtons[1]
+            if first then first:Click() end
+        end)
+        searchBox:SetScript("OnEscapePressed", function()
+            CloseDropdown(true)
+        end)
+    end
+
     -- Toggle dropdown
     local function ToggleDropdown()
         if isOpen then
             CloseDropdown()
         else
-            if not itemsCreated then
+            if searchable then
+                -- Reopen always shows the unfiltered list, focused for typing.
+                searchText = ""
+                searchBox:SetText("")
+                searchEmptyLabel:Hide()
+                CreateItemButtons()
+                C_Timer.After(0, function()
+                    if isOpen then
+                        searchBox:SetFocus()
+                        searchBox:HighlightText(0, 0)
+                    end
+                end)
+            elseif not itemsCreated then
                 CreateItemButtons()
             end
 
@@ -593,8 +689,7 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
             dropdownList:SetPoint("TOPLEFT", dropdownButton, "BOTTOMLEFT", 0, -2)
             dropdownList:SetPoint("TOPRIGHT", dropdownButton, "BOTTOMRIGHT", 0, -2)
 
-            local contentHeight = #itemButtons * ITEM_HEIGHT
-            local maxHeight = math_min(contentHeight, MAX_DROPDOWN_HEIGHT)
+            local maxHeight = ListContentHeight()
 
             startHeight = 1
             targetHeight = maxHeight
@@ -725,7 +820,7 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
             dropdownButton:SetAlpha(0.5)
             label:SetAlpha(0.5)
             if isOpen then
-                CloseDropdown()
+                CloseDropdown(searchable)
             end
         end
     end
@@ -774,6 +869,11 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
         if itemsCreated then
             CreateItemButtons()
             if isOpen then
+                if searchable then
+                    searchEmptyLabel:SetShown(#itemButtons == 0)
+                    dropdownList:SetHeight(ListContentHeight())
+                    targetHeight = dropdownList:GetHeight()
+                end
                 UpdateScroll()
             end
         end

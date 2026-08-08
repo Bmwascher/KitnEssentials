@@ -107,6 +107,7 @@ GUIFrame:RegisterContent("EbonMightHelper", function(scrollChild, yOffset)
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local soundDropdown = GUIFrame:CreateDropdown(row2b, "Sound", {
         options = soundList,
+        searchable = true,
         value = db.SoundFile or "None",
         callback = function(key)
             db.SoundFile = key

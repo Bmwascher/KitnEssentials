@@ -109,6 +109,7 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local soundDropdown = GUIFrame:CreateDropdown(row2b, "Sound", {
         options = soundList,
+        searchable = true,
         value = db.SoundFile or "None",
         callback = function(key)
             db.SoundFile = key

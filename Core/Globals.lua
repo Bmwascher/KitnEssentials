@@ -206,6 +206,17 @@ function KE:WarnRedundantAddon(addon, label, moduleName, slash, state, key)
     end)
 end
 
+-- Row matcher for searchable dropdowns. Case-insensitive plain-substring
+-- match against the option's display text — inline |T...|t texture tags
+-- are stripped so icon-led options match on their visible name — falling
+-- back to the key for options without display text. Empty query matches.
+function KE.DropdownSearchMatches(displayText, key, query)
+    if query == nil or query == "" then return true end
+    local hay = tostring(displayText or key or "")
+    hay = hay:gsub("|T.-|t", "")
+    return hay:lower():find(tostring(query):lower(), 1, true) ~= nil
+end
+
 ---------------------------------------------------------------------------------
 -- Slash Commands
 ---------------------------------------------------------------------------------
