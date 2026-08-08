@@ -460,9 +460,11 @@ local function RefreshEdge(bd)
 end
 
 edgeRefresher:SetScript("OnEvent", function()
-    for _, bd in pairs(backdropCache) do
-        RefreshEdge(bd)
-    end
+    -- One frame that refuses a geometry read must not abort the sweep:
+    -- that would leave every backdrop after it in the iteration order
+    -- stale, and pairs order is arbitrary, so the damage would move
+    -- around between sessions.
+    for _, bd in pairs(backdropCache) do pcall(RefreshEdge, bd) end
 end)
 
 -- re-check every backdrop under a root whose scale changed
@@ -1340,11 +1342,14 @@ function S.HideBlizzardRegions(frame)
         -- instantiated twice), so the global resolves to whichever instance
         -- loaded last -- on any other instance it hides the wrong frame's art
         -- and leaves the visible one alone.
+        -- A restricted proxy answers the field read and then refuses the
+        -- call ("calling Hide on bad self"), which would abort the whole
+        -- skin function for one region.
         local own = frame[area]
-        if own and own.Hide then own:Hide() end
+        if own and own.Hide then pcall(own.Hide, own) end
 
         local global = name and _G[name .. area]
-        if global and global ~= own and global.Hide then global:Hide() end
+        if global and global ~= own and global.Hide then pcall(global.Hide, global) end
     end
 end
 
