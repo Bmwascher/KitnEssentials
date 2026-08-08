@@ -351,6 +351,9 @@ function AF:RegisterEditMode()
             self.db.Position.YOffset = pos.YOffset
             self:ApplyPosition()
         end,
+        getParentFrame = function()
+            return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+        end,
         -- guiPath is a SIDEBAR ITEM ID, and this module has no sidebar row
         -- of its own -- its config cards live on the UI Widgets tab instead.
         -- Open Settings was silently falling through to "just open the GUI".
@@ -377,6 +380,12 @@ function AF:RegisterEditMode()
             self.db.EventToastPosition.XOffset = pos.XOffset
             self.db.EventToastPosition.YOffset = pos.YOffset
             self:ApplyEventToastPosition()
+        end,
+        -- Its card deliberately does not share the alert stack's anchor keys,
+        -- so the drag has to resolve the parent from its own roots.
+        getParentFrame = function()
+            return KE:ResolveAnchorFrame(self.db.EventToastAnchorFrameType,
+                self.db.EventToastParentFrame)
         end,
         -- Same page as the AlertFrames element above -- see its comment.
         guiPath = "SkinBlizzardFrames",

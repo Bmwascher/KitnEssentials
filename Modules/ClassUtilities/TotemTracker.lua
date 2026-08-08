@@ -182,6 +182,18 @@ function TT:UpdateButtonSettings(btn)
     ApplyCooldownTextStyle(btn.cooldown, db)
 end
 
+-- The growth direction, not the stored AnchorFrom, decides which point on the
+-- container actually carries the position. Edit Mode has to be told the same
+-- answer or a drag measures from a corner the frame does not hang by.
+local function ContainerAnchorPoint(db)
+    local direction = db.GrowDirection
+    if direction == "RIGHT" then return "LEFT" end
+    if direction == "LEFT" then return "RIGHT" end
+    if direction == "UP" then return "BOTTOM" end
+    if direction == "DOWN" then return "TOP" end
+    return db.Position.AnchorFrom
+end
+
 function TT:UpdateContainerPosition()
     if not containerFrame then return end
 
@@ -192,19 +204,8 @@ function TT:UpdateContainerPosition()
 
     containerFrame:SetParent(parent)
     containerFrame:ClearAllPoints()
-
-    local direction = db.GrowDirection
-    if direction == "RIGHT" then
-        containerFrame:SetPoint("LEFT", parent, position.AnchorTo, position.XOffset, position.YOffset)
-    elseif direction == "LEFT" then
-        containerFrame:SetPoint("RIGHT", parent, position.AnchorTo, position.XOffset, position.YOffset)
-    elseif direction == "UP" then
-        containerFrame:SetPoint("BOTTOM", parent, position.AnchorTo, position.XOffset, position.YOffset)
-    elseif direction == "DOWN" then
-        containerFrame:SetPoint("TOP", parent, position.AnchorTo, position.XOffset, position.YOffset)
-    else
-        containerFrame:SetPoint(position.AnchorFrom, parent, position.AnchorTo, position.XOffset, position.YOffset)
-    end
+    containerFrame:SetPoint(ContainerAnchorPoint(db), parent, position.AnchorTo,
+        position.XOffset, position.YOffset)
 
     containerFrame:SetFrameStrata(db.Strata)
 
@@ -427,6 +428,7 @@ function TT:OnEnable()
                 self.db.Position.YOffset    = pos.YOffset
                 self:ApplySettings()
             end,
+            getAnchorFrom = function() return ContainerAnchorPoint(self.db) end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
