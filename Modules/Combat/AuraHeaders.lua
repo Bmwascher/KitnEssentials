@@ -307,10 +307,10 @@ local function MakeHeaderModule(config)
 
     function M:OnLeaveCombat()
         self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        -- Enabling in combat leaves CreateHeader unfinished. Without this the
-        -- Blizzard frame is already hidden and nothing replaces it.
+        -- Enabling in combat leaves CreateHeader (and FinishEnable) unfinished.
         if not self.header then
             self:CreateHeader()
+            self:FinishEnable()
             return
         end
         self:UpdateHeader()
@@ -318,7 +318,10 @@ local function MakeHeaderModule(config)
     end
 
     function M:CreateHeader()
-        if self.header then return end
+        -- templateMissing latches: OnLeaveCombat retries CreateHeader on
+        -- every combat drop, and there is nothing to retry once the template
+        -- is gone.
+        if self.header or self.templateMissing then return end
         if InCombatLockdown() then
             self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnLeaveCombat")
             return
@@ -329,7 +332,22 @@ local function MakeHeaderModule(config)
         -- would make every growth-direction change a protected reposition.
         self.mover = self.mover or CreateFrame("Frame", config.moverName, UIParent)
 
-        local h = CreateFrame("Frame", config.frameName, UIParent, "SecureAuraHeaderTemplate")
+        -- The secure aura header template can vanish out from under us: it is
+        -- still in the FrameXML dump but can be load-gated off this game
+        -- type, so nothing registers it. CreateFrame against a missing
+        -- template errors, and this enable path runs from an AceEvent handler
+        -- (OnLeaveCombat) whose dispatch chain has no pcall -- the throw
+        -- would take every other PLAYER_REGEN_ENABLED subscriber with it.
+        --
+        -- Bail cleanly and say why once. Remove this guard only when the
+        -- container-based rebuild lands.
+        local built, h = pcall(CreateFrame, "Frame", config.frameName, UIParent,
+            "SecureAuraHeaderTemplate")
+        if not built or not h then
+            self.templateMissing = true
+            KE:WarnMissingTemplate(config.featureName or config.moduleName)
+            return
+        end
         h:SetAttribute("template", "KE_AuraButtonTemplate")
         h:SetAttribute("weaponTemplate", "KE_AuraButtonTemplate")
         h:SetAttribute("unit", "player")
@@ -398,10 +416,12 @@ local function MakeHeaderModule(config)
         return (KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()) == true
     end
 
-    function M:OnEnable()
-        self:UpdateDB()
-        if not self.db.Enabled then return end
-        if self:ShouldStandDown() then return end
+    -- Everything that only makes sense once OUR header exists: removing
+    -- Blizzard's frame and registering the Edit Mode element. Idempotent --
+    -- the regen path calls it again after a deferred build.
+    function M:FinishEnable()
+        if self.finishedEnable or not self.header then return end
+        self.finishedEnable = true
 
         -- Blizzard's frame goes away. Its CVar callbacks have to be dropped
         -- too or they re-show it whenever those settings change.
@@ -415,11 +435,6 @@ local function MakeHeaderModule(config)
             end
         end
 
-        self:CreateHeader()
-        self:RegisterEvent("PLAYER_ENTERING_WORLD", "ApplyPosition")
-        self:RegisterEvent("UI_SCALE_CHANGED", "ApplyPosition")
-        self:RegisterEvent("DISPLAY_SIZE_CHANGED", "ApplyPosition")
-
         if not self.mover or not KE.EditMode then return end
         KE.EditMode:RegisterElement({
             key = config.moduleName,
@@ -432,10 +447,28 @@ local function MakeHeaderModule(config)
         })
     end
 
+    function M:OnEnable()
+        self:UpdateDB()
+        if not self.db.Enabled then return end
+        if self:ShouldStandDown() then return end
+
+        -- Build the replacement BEFORE removing Blizzard's. When the template
+        -- is missing CreateHeader bails; when enabling in combat it defers to
+        -- the regen handler. In BOTH cases Blizzard's frame must survive --
+        -- hiding first and then failing to build leaves no buff display at
+        -- all. FinishEnable no-ops until the header exists.
+        self:CreateHeader()
+        self:FinishEnable()
+        self:RegisterEvent("PLAYER_ENTERING_WORLD", "ApplyPosition")
+        self:RegisterEvent("UI_SCALE_CHANGED", "ApplyPosition")
+        self:RegisterEvent("DISPLAY_SIZE_CHANGED", "ApplyPosition")
+    end
+
     function M:OnDisable()
         self:UnregisterEvent("PLAYER_ENTERING_WORLD")
         self:UnregisterEvent("UI_SCALE_CHANGED")
         self:UnregisterEvent("DISPLAY_SIZE_CHANGED")
+        self.finishedEnable = nil
         -- A secure header cannot be destroyed, and Blizzard's frame cannot be
         -- revived mid-session once its events are gone; a reload restores the
         -- default cleanly.
@@ -457,6 +490,7 @@ MakeHeaderModule({
     blizzardFrame = "BuffFrame",
     displayName   = "BUFFS",
     guiPath       = "AuraHeaders_Buffs",
+    featureName   = "Player Buffs",
 })
 
 MakeHeaderModule({
@@ -470,4 +504,5 @@ MakeHeaderModule({
     blizzardFrame = "DebuffFrame",
     displayName   = "DEBUFFS",
     guiPath       = "AuraHeaders_Debuffs",
+    featureName   = "Player Debuffs",
 })
