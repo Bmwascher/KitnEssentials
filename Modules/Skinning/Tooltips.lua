@@ -846,9 +846,8 @@ function TT:SetDefaultAnchor(tt, parent)
         tt:SetOwner(parent, "ANCHOR_CURSOR_RIGHT",
             db.CursorOffsetX or 10, db.CursorOffsetY or -10)
     elseif self.anchorFrame then
-        -- (the ORIGINAL ask, ElvUI TooltipMover
-        -- pattern): default-anchored tooltips dock to KE's own movable
-        -- Tooltip anchor instead of Blizzard's corner.
+        -- Default-anchored tooltips dock to this addon's own movable anchor
+        -- instead of Blizzard's screen corner.
         tt:SetOwner(parent, "ANCHOR_NONE")
         tt:ClearAllPoints()
         tt:SetPoint("BOTTOMRIGHT", self.anchorFrame, "BOTTOMRIGHT", 0, 0)

@@ -432,9 +432,14 @@ function EditMode:SetupDragHandlers(overlay)
         local newCenterX = frameStartX + deltaX
         local newCenterY = frameStartY + deltaY
 
-        -- Get parent frame position and dimensions for offset calculation
+        -- Get parent frame position and dimensions for offset calculation.
+        -- GetRect is SecretWhenAnchoringSecret, and every value below is used
+        -- in arithmetic, which throws on a secret. Parents are module-chosen
+        -- and can be any named frame, so treat an unreadable rect exactly like
+        -- a missing one and fall back to the screen.
         local parentLeft, parentBottom, parentWidth, parentHeight = parentFrame:GetRect()
-        if not parentLeft then
+        if not parentLeft or issecretvalue(parentLeft) or issecretvalue(parentBottom)
+            or issecretvalue(parentWidth) or issecretvalue(parentHeight) then
             parentLeft, parentBottom = 0, 0
             parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
         end
@@ -873,6 +878,17 @@ function EditMode:StartDeselectChecker()
             local overAny = false
 
             if EditMode.nudgeFrame and EditMode.nudgeFrame:IsMouseOver() then
+                overAny = true
+            end
+
+            -- The category strip is a child of the nudge frame but sits ABOVE
+            -- it, so it falls outside the parent's rect and the test above
+            -- cannot see it. Without this, every category click reads as a
+            -- click on empty space and clears the selection the strip exists
+            -- to filter.
+            if not overAny and EditMode.nudgeFrame
+                and EditMode.nudgeFrame.categoryStrip
+                and EditMode.nudgeFrame.categoryStrip:IsMouseOver() then
                 overAny = true
             end
 
