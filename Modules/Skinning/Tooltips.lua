@@ -46,6 +46,8 @@ local IsModifierKeyDown = IsModifierKeyDown
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local FACTION_BAR_COLORS = FACTION_BAR_COLORS
 local hooksecurefunc = hooksecurefunc
+local UnitTokenFromGUID = UnitTokenFromGUID
+local GetMouseFoci = GetMouseFoci
 local S = KE.Skins
 
 -- KE:GetEffectiveFont returns the LSM NAME, not a file path -- every consumer
@@ -450,7 +452,62 @@ local function IsEmbeddedTip(tt)
     return name and name:find("EmbeddedTooltip", 1, true) and true or false
 end
 
-function TT:OnTooltipSetUnit(tt)
+-- Resolving a USABLE unit token.
+--
+-- tt:GetUnit() alone is not enough. Over a secure group frame the token comes
+-- back SECRET, and the single-source read below then bailed on the whole
+-- handler -- class colour, guild colour, guild rank, level row, M+ score and
+-- the target line were all skipped, on raid frames and on plenty of ordinary
+-- hovers besides. The tooltip's own data pass still carries a CLEAN guid in
+-- exactly that case, and UnitTokenFromGUID turns it back into a real,
+-- non-secret token: the step that was missing.
+--
+-- Three sources, in order:
+--   1. data.guid (or the tooltip's primary data) through UnitTokenFromGUID.
+--   2. "mouseover", when the derived token is secret or has gone away.
+--   3. the moused-over frame's own `unit` attribute, for frames that never
+--      went through the tooltip data path at all.
+--
+-- A secret token never reaches UnitExists or any Unit* API: every candidate
+-- passes KE:IsSafeValue first. This widens WHICH token is used; it adds no
+-- new read of unit identity -- the existing CanReadIdentity gate on the name
+-- rebuild still decides that.
+local function ResolveUnit(tt, data)
+    local mouseover = UnitExists("mouseover") and "mouseover" or nil
+
+    local unit
+    if UnitTokenFromGUID then
+        local guid = data and data.guid
+        if not guid and tt.GetPrimaryTooltipData then
+            local okData, d = pcall(tt.GetPrimaryTooltipData, tt)
+            guid = okData and d and d.guid or nil
+        end
+        if KE:IsSafeValue(guid) then
+            local okToken, token = pcall(UnitTokenFromGUID, guid)
+            unit = okToken and token or nil
+        end
+    end
+
+    if not unit then
+        local okUnit, _, u = pcall(tt.GetUnit, tt)
+        if okUnit then unit = u end
+    end
+
+    if unit then
+        if KE:IsSafeValue(unit) and UnitExists(unit) then return unit end
+        return mouseover
+    end
+
+    local foci = GetMouseFoci and GetMouseFoci()
+    local focus = foci and foci[1]
+    local focusUnit = focus and focus.GetAttribute and focus:GetAttribute("unit")
+    if KE:IsSafeValue(focusUnit) and UnitExists(focusUnit) then
+        return focusUnit
+    end
+    return mouseover
+end
+
+function TT:OnTooltipSetUnit(tt, data)
     if IsEmbeddedTip(tt) then return end
     local db = self.db
     if not db or tt ~= _G.GameTooltip or tt:IsForbidden() then return end
@@ -460,9 +517,8 @@ function TT:OnTooltipSetUnit(tt)
         return
     end
 
-    local unitOk, _, unit = pcall(tt.GetUnit, tt)
-    if not unitOk then return end
-    if not unit or KE:IsSecretValue(unit) or not UnitExists(unit) then return end
+    local unit = ResolveUnit(tt, data)
+    if not unit then return end
 
     -- Class/reaction color: recolor the existing name line (EUI's
     -- technique -- no text rebuild, so secret name strings never touch
