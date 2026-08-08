@@ -16,10 +16,34 @@ skinners.ItemButton = function(button)
     if button.IconBorder then S.IconBorder(button.IconBorder, S.GetBackdrop(button)) end
 
     if button.SlotBackground then button.SlotBackground:Hide() end
+
+    -- Each item button carries its OWN scale, set from the configured icon
+    -- size on every layout pass, so a border measured at skin time is wrong
+    -- as soon as the bag lays out -- and wrong by a different amount in any
+    -- section using a different icon size.
+    if button.SetScale and not S.data(button).scaleHooked then
+        S.data(button).scaleHooked = true
+        hooksecurefunc(button, "SetScale", S.RefreshFrameEdge)
+    end
 end
 
 skinners.IconButton = function(button) S.Button(button) end
 skinners.Button = function(button) S.Button(button) end
+
+-- The bag window is built at scale 1 and rescaled from settings afterwards,
+-- so borders measured at build time draw roughly double. Re-measure whenever
+-- the window shows or its scale changes.
+local function WatchScale(frame)
+    if S.data(frame).bagScaleWatched then return end
+    S.data(frame).bagScaleWatched = true
+    if frame.HookScript then
+        frame:HookScript("OnShow", function(f) S.RefreshEdgesUnder(f) end)
+    end
+    if frame.SetScale then
+        hooksecurefunc(frame, "SetScale", function(f) S.RefreshEdgesUnder(f) end)
+    end
+    S.RefreshEdgesUnder(frame)
+end
 
 skinners.ButtonFrame = function(frame)
     if S.data(frame).bagSkinned then return end
@@ -29,6 +53,8 @@ skinners.ButtonFrame = function(frame)
     if frame.Bg then S.KillTexture(frame.Bg) end
     if frame.TopTileStreaks then S.KillTexture(frame.TopTileStreaks) end
     if frame.NineSlice then S.StripTextures(frame.NineSlice, true) end
+
+    WatchScale(frame)
 end
 
 skinners.SearchBox = function(box) S.EditBox(box) end
@@ -117,6 +143,19 @@ local function Skin()
     local api = _G.Baganator and _G.Baganator.API and _G.Baganator.API.Skins
     if not (api and api.RegisterListener) then return end
     api.RegisterListener(Dispatch)
+
+    -- Catch up on anything built before we registered: each region is handed
+    -- to listeners exactly once, on creation, so a frame that already existed
+    -- when our listener arrived is never offered at all. Every skinner here
+    -- is dedupe-guarded, so replaying is free.
+    if api.GetAllFrames then
+        local ok, all = pcall(api.GetAllFrames)
+        if ok and type(all) == "table" then
+            for _, details in ipairs(all) do
+                if type(details) == "table" and details.region then Dispatch(details) end
+            end
+        end
+    end
 end
 
 S:Register("Baganator", Skin, "Baganator")

@@ -479,6 +479,16 @@ function S.RefreshEdgesUnder(root)
     end
 end
 
+-- Re-measure ONE frame's border. For hosts that scale each element
+-- individually and often (bag addons scale every item button on every layout
+-- pass), walking the whole cache per element is far too much. RefreshEdge
+-- early-outs when the size has not moved, so steady-state cost is a lookup
+-- and a subtraction, with no allocation.
+function S.RefreshFrameEdge(frame)
+    local bd = frame and backdropCache[frame]
+    if bd then RefreshEdge(bd) end
+end
+
 function S.FixSubPixelEdge(frame, outsetPx)
     local bd = frame and backdropCache[frame]
     if not bd then return end
