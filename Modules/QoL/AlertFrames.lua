@@ -78,6 +78,13 @@ function AF:ApplyEventToastPosition()
     })
 end
 
+-- Replace-mode LootRoll owns the BonusRollFrame PROMPT (it anchors it to its
+-- own bar stack); the winnings toasts are nobody's either way.
+local function LootRollReplacesRolls()
+    local LR = KitnEssentials.GetModule and KitnEssentials:GetModule("LootRoll", true)
+    return LR and LR.db and LR.db.Enabled and LR.db.Replace and true or false
+end
+
 -- Trading Post (PerksProgram) support: when Blizzard re-bases the alert stack
 -- onto the PerksProgram footer, follow it (and grow up over it). AlertFrame
 -- and PerksProgramFrame are absent from .luacheckrc's read_globals, so both
@@ -137,6 +144,56 @@ function AF:PositionGroupLootContainer()
     local perksAnchor = GetPerksAnchor()
     glc:ClearAllPoints()
     glc:SetPoint(POSITION, perksAnchor or self.holder, POINT, X_OFFSET, Y_OFFSET)
+end
+
+local BONUS_ROLL_FRAMES = { "BonusRollFrame", "BonusRollLootWonFrame", "BonusRollMoneyWonFrame" }
+
+-- Only a frame the container is NOT holding needs placing: anything in
+-- rollFrames is already stacked by the game relative to the container, which
+-- PositionGroupLootContainer has just placed. Re-anchoring those piles them
+-- all onto one spot.
+function AF:PositionBonusRollToasts()
+    if not self.holder then return end
+    local glc = _G.GroupLootContainer
+    local held = {}
+    if glc and type(glc.rollFrames) == "table" then
+        for _, f in pairs(glc.rollFrames) do held[f] = true end
+    end
+    local anchor = GetPerksAnchor() or self.holder
+    if glc and glc:IsShown() then anchor = glc end
+    for _, name in ipairs(BONUS_ROLL_FRAMES) do
+        local f = _G[name]
+        if f and f:IsShown() and not held[f] and f.ClearAllPoints
+           and not (name == "BonusRollFrame" and LootRollReplacesRolls()) then
+            f:ClearAllPoints()
+            f:SetPoint(POSITION, anchor, POINT, X_OFFSET, Y_OFFSET)
+            anchor = f
+        end
+    end
+end
+
+-- Re-apply after Blizzard's managed layout has settled. Coalesced; the
+-- layout marks itself dirty and can settle on EITHER of the next two
+-- frames, so both passes place -- one placement after two ticks would
+-- leave a first-frame settle unanswered.
+function AF:ReassertContainer()
+    if self.reassertPending then return end
+    self.reassertPending = true
+
+    local frames = 0
+    local function settle()
+        frames = frames + 1
+        if self:IsEnabled() then
+            self:PositionGroupLootContainer()
+            self:PositionBonusRollToasts()
+        end
+        if frames < 2 then
+            C_Timer.After(0, settle)
+        else
+            self.reassertPending = false
+        end
+    end
+    C_Timer.After(0, settle)
 end
 
 ---------------------------------------------------------------------------------
@@ -214,9 +271,28 @@ function AF:InstallHooks()
     -- Place the container in the SAME execution that shows it.
     if type(_G.GroupLootContainer_Update) == "function" then
         hooksecurefunc("GroupLootContainer_Update", function()
-            if AF:IsEnabled() then AF:PositionGroupLootContainer() end
+            if not AF:IsEnabled() then return end
+            AF:PositionGroupLootContainer()
+            AF:PositionBonusRollToasts()
+            AF:ReassertContainer()
         end)
     end
+    -- Blizzard's managed layout settles a frame or two after the update
+    -- above runs, so also re-assert on the container's own OnShow.
+    if glc and not self.glcShowHooked then
+        self.glcShowHooked = true
+        glc:HookScript("OnShow", function() AF:ReassertContainer() end)
+    end
+
+    -- BonusRollLootWonFrame / BonusRollMoneyWonFrame are added through
+    -- AddAlertFrame rather than as subsystems, so AdjustSubSystem never
+    -- sees them; place them directly when Blizzard adds them.
+    hooksecurefunc(af, "AddAlertFrame", function(_, frame)
+        if not (AF:IsEnabled() and AF.holder and frame and frame.ClearAllPoints) then return end
+        AF:PostAlertMove()
+        frame:ClearAllPoints()
+        frame:SetPoint(POSITION, GetPerksAnchor() or AF.holder, POINT, X_OFFSET, Y_OFFSET)
+    end)
 end
 
 ---------------------------------------------------------------------------------
