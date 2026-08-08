@@ -403,9 +403,6 @@ function LR:RegisterEditMode()
             self.db.Position.Y = pos.YOffset
             self:SyncMover()
             self:ApplyPosition("editmode")
-            if KE.GUIFrame and KE.GUIFrame.RefreshContent then
-                pcall(function() KE.GUIFrame:RefreshContent("LootRoll") end)
-            end
         end,
         -- guiPath is a SIDEBAR ITEM ID and there is no sidebar
         -- item "LootRoll" -- Open Settings was silently falling through to

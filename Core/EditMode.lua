@@ -479,16 +479,28 @@ function EditMode:SetupDragHandlers(overlay)
         local newPos = {
             AnchorFrom = anchorFrom,
             AnchorTo = anchorTo,
-            XOffset = finalX,
-            YOffset = finalY,
+            XOffset = KE:RoundOffset(finalX),
+            YOffset = KE:RoundOffset(finalY),
         }
 
         element.setPosition(newPos)
         C_Timer.After(0, function()
             EditMode:UpdateOverlayPosition(self)
 
-            -- Select the dragged element in the nudge tool
-            EditMode:SelectElement(element.key)
+            -- A frame's worth of delay is enough for the tool to close, the
+            -- element to be unregistered, or its category or eligibility to
+            -- change. SelectElement validates none of that, so selecting
+            -- blindly here can drive the nudge controls from a box that is no
+            -- longer on screen.
+            local current = EditMode.registeredElements[element.key]
+            if EditMode.isActive and current == self.element
+                and EditMode:ElementShouldShow(current) then
+                EditMode:SelectElement(element.key)
+            end
+
+            if KE.GUIFrame and KE.GUIFrame.mainFrame and KE.GUIFrame.mainFrame:IsShown() then
+                KE.GUIFrame:RefreshContent()
+            end
         end)
     end)
 
@@ -1214,8 +1226,8 @@ function EditMode:CreateNudgeFrame()
         local newPos = {
             AnchorFrom = currentPos.AnchorFrom,
             AnchorTo = currentPos.AnchorTo,
-            XOffset = newX,
-            YOffset = newY,
+            XOffset = KE:RoundOffset(newX),
+            YOffset = KE:RoundOffset(newY),
         }
 
         element.setPosition(newPos)
@@ -1226,7 +1238,9 @@ function EditMode:CreateNudgeFrame()
             end)
         end
 
-        -- Position values update when the GUI tab is next opened/switched to
+        if KE.GUIFrame and KE.GUIFrame.mainFrame and KE.GUIFrame.mainFrame:IsShown() then
+            KE.GUIFrame:RefreshContent()
+        end
     end
 
     frame.xEditBox:SetScript("OnEnterPressed", function(self)
@@ -1426,8 +1440,11 @@ function EditMode:UpdateNudgeFrameInfo()
 
     local pos = element.getPosition()
     if pos then
-        frame.xEditBox:SetText(string.format("%.1f", pos.XOffset or 0))
-        frame.yEditBox:SetText(string.format("%.1f", pos.YOffset or 0))
+        -- RoundOffset rather than %d alone: Lua 5.1 truncates toward zero when
+        -- formatting a fraction, so a value stored before offsets became whole
+        -- would read one point off from what a nudge would round it to.
+        frame.xEditBox:SetText(string.format("%d", KE:RoundOffset(pos.XOffset)))
+        frame.yEditBox:SetText(string.format("%d", KE:RoundOffset(pos.YOffset)))
     end
 end
 
@@ -1546,12 +1563,14 @@ function EditMode:NudgeSelectedElement(deltaX, deltaY)
     local currentPos = element.getPosition()
     if not currentPos then return end
 
-    -- Calculate new position
+    -- Calculate new position. Rounding matters even though the delta is whole:
+    -- a value stored fractionally before offsets became whole stays fractional
+    -- otherwise.
     local newPos = {
         AnchorFrom = currentPos.AnchorFrom,
         AnchorTo = currentPos.AnchorTo,
-        XOffset = (currentPos.XOffset or 0) + deltaX,
-        YOffset = (currentPos.YOffset or 0) + deltaY,
+        XOffset = KE:RoundOffset((currentPos.XOffset or 0) + deltaX),
+        YOffset = KE:RoundOffset((currentPos.YOffset or 0) + deltaY),
     }
 
     -- Save and apply
