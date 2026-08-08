@@ -710,6 +710,10 @@ local SECTION_PREVIEW_MODULES = {
     skinning_section = {
         "DragonRiding",
         "DamageMeter", "MythicPlusTimer",
+        -- Its mover routes through the Blizzard Frames page, which belongs to
+        -- this section. Without the entry the category filter hides the sample
+        -- bars while still drawing the box around them.
+        "LootRoll",
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",

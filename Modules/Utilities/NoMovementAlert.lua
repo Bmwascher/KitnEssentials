@@ -996,13 +996,20 @@ local EDIT_MODE_ELEMENT = {
     guiPath = "NoMovementAlert",
 }
 
+-- Every unregister goes through here. The cache below is what makes a repeat
+-- RegisterAnchor a no-op, so dropping the key without clearing it would block
+-- re-registration for the rest of the session.
+function NMA:UnregisterAnchor()
+    KE.EditMode:UnregisterElement("NoMovementAlert")
+    self.editModeRegistered = nil
+    self.editModeFrame = nil
+end
+
 function NMA:RegisterAnchor()
     -- Attached to Combat Texts: that module owns the anchor, so a second
     -- draggable overlay for the same spot would fight it.
     if self:IsAttached() then
-        KE.EditMode:UnregisterElement("NoMovementAlert")
-        self.editModeRegistered = nil
-        self.editModeFrame = nil
+        self:UnregisterAnchor()
         return
     end
     -- Enable and every preview show both land here. Re-registering the same
@@ -1079,7 +1086,7 @@ function NMA:OnDisable()
     self.auraActive = {}
     self.readyFired = nil
     self.isPreview = false
-    KE.EditMode:UnregisterElement("NoMovementAlert")
+    self:UnregisterAnchor()
 end
 
 ------------------------------------------------------------------------
@@ -1111,6 +1118,6 @@ function NMA:HidePreview()
         self:Refresh()
     else
         self.frame:Hide()
-        KE.EditMode:UnregisterElement("NoMovementAlert")
+        self:UnregisterAnchor()
     end
 end
