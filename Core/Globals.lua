@@ -12,6 +12,7 @@ local addonName = select(1, ...)
 local ipairs = ipairs
 local print = print
 local string_gsub = string.gsub
+local math_floor = math.floor
 local ReloadUI = ReloadUI
 local C_AddOns = C_AddOns
 local C_Timer = C_Timer
@@ -728,19 +729,46 @@ local ITEM_TO_SECTION = nil
 
 local function GetItemToSection()
     if ITEM_TO_SECTION then return ITEM_TO_SECTION end
-    ITEM_TO_SECTION = {}
+
     local GUIFrame = KE.GUIFrame
     local sidebarConfig = GUIFrame and GUIFrame.sidebarConfig
-    if sidebarConfig then
-        for _, section in ipairs(sidebarConfig) do
-            if section.items then
-                for _, item in ipairs(section.items) do
-                    ITEM_TO_SECTION[item.id] = section.id
-                end
+    -- Do not cache before the sidebar exists: the empty table would answer nil
+    -- for the rest of the session, long after the real config arrived.
+    if not sidebarConfig then return {} end
+
+    local lookup = {}
+    for _, section in ipairs(sidebarConfig) do
+        if section.items then
+            for _, item in ipairs(section.items) do
+                lookup[item.id] = section.id
             end
         end
     end
+
+    ITEM_TO_SECTION = lookup
     return ITEM_TO_SECTION
+end
+
+-- Sidebar section owning a sidebar item id. Edit Mode groups its overlays with
+-- this so its categories and the GUI's pages can never disagree; the sidebar
+-- stays the only place the grouping is declared. An unknown id resolves to nil
+-- rather than erroring, so a module whose page has not been added yet still
+-- appears under the unfiltered view instead of vanishing.
+---@param itemId string?
+---@return string? sectionId
+function KE:GetSectionForItem(itemId)
+    if not itemId then return nil end
+    return GetItemToSection()[itemId]
+end
+
+-- Position offsets are whole numbers. The GUI position sliders step by 1, so a
+-- fractional stored offset is a value the slider can neither show nor
+-- round-trip, and the two readouts drift apart.
+---@param value any
+---@return number
+function KE:RoundOffset(value)
+    if type(value) ~= "number" then return 0 end
+    return math_floor(value + 0.5)
 end
 
 PreviewManager.guiOpen = false
