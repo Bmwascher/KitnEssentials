@@ -35,6 +35,27 @@ local FILL_ALPHA = 0.25
 local TEXT_FONT_SIZE = 14
 local SHIFT_FADE_ALPHA = 0.1
 
+-- Categories are the sidebar's own sections. A nil id means no filter.
+-- The sidebar also has settings_section and optimize_section; neither registers
+-- a mover, so a button for them would only ever be dimmed.
+local CATEGORIES = {
+    { label = "All" },
+    { id = "combat_section",   label = "Combat" },
+    { id = "aura_section",     label = "Auras" },
+    { id = "class_section",    label = "Class" },
+    { id = "qol_section",      label = "QoL" },
+    { id = "dungeons_section", label = "Dungeons" },
+    { id = "skinning_section", label = "Skinning" },
+}
+
+function EditMode:IsSelectableCategory(sectionId)
+    if not sectionId then return false end
+    for _, category in ipairs(CATEGORIES) do
+        if category.id == sectionId then return true end
+    end
+    return false
+end
+
 ---------------------------------------------------------------------------------
 -- Element Registration
 ---------------------------------------------------------------------------------
@@ -62,7 +83,10 @@ function EditMode:RegisterElement(config)
     }
 
     -- If edit mode is already active, create overlay for this element
-    if self.isActive then self:CreateOverlayForElement(config.key) end
+    if self.isActive then
+        self:CreateOverlayForElement(config.key)
+        self:UpdateCategoryStrip()
+    end
 end
 
 function EditMode:UnregisterElement(key)
@@ -137,6 +161,33 @@ function EditMode:ElementShouldShow(element)
     if not element then return false end
     if not self:ElementMatchesCategory(element) then return false end
     return self:ElementIsLive(element)
+end
+
+-- How many elements a category would actually show. Uses the same liveness rule
+-- as the overlays, so a category whose modules are all switched off reads as
+-- empty instead of selecting into a blank screen.
+function EditMode:CountElementsInCategory(sectionId)
+    local count = 0
+    for _, element in pairs(self.registeredElements) do
+        if (not sectionId or KE:GetSectionForItem(element.guiPath) == sectionId)
+            and self:ElementIsLive(element) then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+function EditMode:SetCategory(sectionId)
+    if self.activeCategory == sectionId then return end
+    self.activeCategory = sectionId
+
+    -- Previews FIRST. A later round sizes boxes from what is on screen, so
+    -- sizing before the new category's content exists would measure the old one.
+    if KE.PreviewManager then
+        KE.PreviewManager:UpdatePreviewState()
+    end
+
+    self:RefreshLiveState()
 end
 
 function EditMode:CreateOverlayFrame(element)
@@ -217,10 +268,6 @@ function EditMode:UpdateOverlayPosition(overlay)
     overlay:SetPoint("BOTTOMRIGHT", targetFrame, "BOTTOMRIGHT", right, -bottom)
     overlay:Show()
 end
-
--- Placeholder: Task 5 gives this a body. It exists from this commit so its
--- callers in this file are safe to run before the category strip is built.
-function EditMode:UpdateCategoryStrip() end
 
 -- The one refresh entry point. Anything that can change whether an element
 -- deserves a box calls this and nothing else. Three things follow from
@@ -601,6 +648,24 @@ function EditMode:Enter()
 
     self.isActive = true
 
+    -- Open on the category of the page the user came from. activeSection is not
+    -- cleared when the GUI closes, so it is only trustworthy while the GUI is
+    -- open; a cold /kes edit opens unfiltered.
+    --
+    -- The sidebar has sections the strip deliberately does not offer, because
+    -- they own no movers. Adopting one of those would filter everything away
+    -- with no button lit to show why, so they normalise to All.
+    local PM = KE.PreviewManager
+    local opening = PM and PM.guiOpen and PM.activeSection or nil
+    -- Written out rather than folded into an `and/or` chain: the test returns a
+    -- boolean, so `opening and Test(opening) or nil` yields `true`, not the
+    -- section id, and every element then fails the category match.
+    if opening and self:IsSelectableCategory(opening) then
+        self.activeCategory = opening
+    else
+        self.activeCategory = nil
+    end
+
     -- Create overlays for all registered elements
     for key in pairs(self.registeredElements) do
         self:CreateOverlayForElement(key)
@@ -608,6 +673,10 @@ function EditMode:Enter()
 
     self:ShowNudgeFrame()
     if KE.PreviewManager then KE.PreviewManager:SetEditModeActive(true) end
+
+    -- Overlays are built before previews are switched on, so this is the first
+    -- point where both are in their final state.
+    self:RefreshLiveState()
     self:SetupEscapeHandler()
     self:SetupShiftHandler()
     self:SetupCombatHandler()
@@ -950,6 +1019,57 @@ function EditMode:CreateNudgeFrame()
     })
     frame:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], 1)
     frame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+    -- Category strip. Parented to the nudge frame so the two drag together.
+    local strip = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    -- Centred above the tool rather than matching its width: seven labels do not
+    -- fit in 160. Final width is set from the measured buttons below.
+    strip:SetPoint("BOTTOM", frame, "TOP", 0, 4)
+    strip:SetHeight(24)
+    strip:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = KE:GetPixelSize(),
+    })
+    strip:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.95)
+    strip:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    frame.categoryStrip = strip
+    frame.categoryButtons = {}
+
+    local stripPad, stripGap = 6, 4
+    local cursorX = stripPad
+    for index, category in ipairs(CATEGORIES) do
+        local btn = CreateFrame("Button", nil, strip, "BackdropTemplate")
+        btn:SetHeight(18)
+        btn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = KE:GetPixelSize(),
+        })
+
+        local catLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        catLabel:SetPoint("CENTER")
+        catLabel:SetFont(KE.FONT or STANDARD_TEXT_FONT, 11, "OUTLINE")
+        catLabel:SetShadowColor(0, 0, 0, 0)
+        catLabel:SetShadowOffset(0, 0)
+        catLabel:SetText(category.label)
+        btn.label = catLabel
+
+        -- Addon-owned literal text on a frame with no secret anchor, so this
+        -- measurement cannot return a secret.
+        btn:SetWidth(catLabel:GetStringWidth() + 14)
+        btn:SetPoint("LEFT", strip, "LEFT", cursorX, 0)
+        cursorX = cursorX + btn:GetWidth() + stripGap
+
+        btn.categoryId = category.id
+        btn:SetScript("OnClick", function(self)
+            EditMode:SetCategory(self.categoryId)
+        end)
+
+        frame.categoryButtons[index] = btn
+    end
+
+    strip:SetWidth(cursorX - stripGap + stripPad)
 
     -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1375,8 +1495,40 @@ function EditMode:UpdateNudgeFrameTheme()
     self.nudgeFrame:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.95)
     self.nudgeFrame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
+    if self.nudgeFrame.categoryStrip then
+        self.nudgeFrame.categoryStrip:SetBackdropColor(
+            Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.95)
+        self.nudgeFrame.categoryStrip:SetBackdropBorderColor(
+            Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    end
+    self:UpdateCategoryStrip()
+
     -- Refresh the info display with new colors
     self:UpdateNudgeFrameInfo()
+end
+
+-- Selected category reads as accent-filled, the rest as plain controls, an
+-- empty one as dimmed and unclickable.
+function EditMode:UpdateCategoryStrip()
+    if not (self.nudgeFrame and self.nudgeFrame.categoryButtons) then return end
+
+    for _, btn in ipairs(self.nudgeFrame.categoryButtons) do
+        local selected = (btn.categoryId == self.activeCategory)
+        local populated = self:CountElementsInCategory(btn.categoryId) > 0
+
+        btn:SetEnabled(populated)
+        btn:SetAlpha(populated and 1 or 0.4)
+
+        if selected then
+            btn:SetBackdropColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.35)
+            btn:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            btn.label:SetTextColor(1, 1, 1, 1)
+        else
+            btn:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], 1)
+            btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+            btn.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -1427,6 +1579,7 @@ function EditMode:ShowNudgeFrame()
     end
     self.nudgeFrame:Show()
     self:UpdateNudgeFrameInfo()
+    self:UpdateCategoryStrip()
 end
 
 function EditMode:HideNudgeFrame()
