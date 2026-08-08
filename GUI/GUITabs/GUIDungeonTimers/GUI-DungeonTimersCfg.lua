@@ -172,6 +172,15 @@ end
 
 GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     local Theme = KE.Theme
+
+    -- General has no previews of its own, so it hides all four kinds when
+    -- it activates: bar, text, dungeon, nameplate.
+    local DT_GUI = KE.GUI.DungeonTimers
+    if DT_GUI.HideBarPreviews then DT_GUI.HideBarPreviews() end
+    if DT_GUI.HideTextPreviews then DT_GUI.HideTextPreviews() end
+    if DT_GUI.HideDungeonPreviews then DT_GUI.HideDungeonPreviews() end
+    if DT_GUI.HideNameplatePreview then DT_GUI.HideNameplatePreview() end
+
     local db = GetSettingsDB()
     if not db then return yOffset end
 

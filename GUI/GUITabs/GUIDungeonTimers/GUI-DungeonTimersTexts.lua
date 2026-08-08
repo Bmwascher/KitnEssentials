@@ -55,7 +55,7 @@ end
 
 local function ShowSettingsTextPreviews()
     if not GUIFrame or not GUIFrame:IsShown() then return end
-    if GUIFrame.selectedSidebarItem ~= "DTimers_Texts" then return end
+    if not KE.GUI.DungeonTimers.IsTabActive("DTimers_Texts") then return end
     local mod = GetModule()
     if mod and mod.ShowSettingsTextPreviews then
         mod:ShowSettingsTextPreviews()
@@ -79,6 +79,8 @@ GUIFrame:RegisterContent("DTimers_Texts", function(scrollChild, yOffset)
     -- Hide the sibling bar previews when this page activates.
     local DT_GUI = KE.GUI.DungeonTimers
     if DT_GUI.HideBarPreviews then DT_GUI.HideBarPreviews() end
+    if DT_GUI.HideDungeonPreviews then DT_GUI.HideDungeonPreviews() end
+    if DT_GUI.HideNameplatePreview then DT_GUI.HideNameplatePreview() end
 
     local db = GetSettingsDB()
     if not db then return yOffset end
