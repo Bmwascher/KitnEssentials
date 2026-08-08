@@ -705,6 +705,13 @@ local SECTION_PREVIEW_MODULES = {
     },
 }
 
+-- Pages that run their own preview system opt out of their section's
+-- ambient set — the section samples would render on top of the page's
+-- own previews.
+local SECTION_PREVIEW_OPTOUT = {
+    DTimers_Main = true,
+}
+
 -- Reverse lookup: sidebar item ID → section ID (built lazily)
 local ITEM_TO_SECTION = nil
 
@@ -777,8 +784,12 @@ end
 
 -- Resolve section from a sidebar item ID and activate it
 function PreviewManager:SetActivePage(itemId)
-    local lookup = GetItemToSection()
-    local sectionId = lookup[itemId]
+    local sectionId
+    if not SECTION_PREVIEW_OPTOUT[itemId] then
+        sectionId = GetItemToSection()[itemId]
+    end
+    -- nil section → ShowSectionPreviews hides every managed preview,
+    -- which also clears samples carried over from the previous section.
     self:SetActiveSection(sectionId)
 end
 
