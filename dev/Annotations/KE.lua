@@ -62,6 +62,14 @@ function KE_FramePool:Acquire(parent) end
 --- hidden holder. Always called at the top of a render.
 function KE_FramePool:ReleaseAll() end
 
+--- One curated dungeon entry (Modules/DungeonTimers/DungeonRegistry.lua).
+---@class KE.DungeonTimerEntry
+---@field key string
+---@field name string
+---@field iconID number
+---@field instanceID number
+---@field season number
+
 ---@class KE
 ---@field db AceDB
 ---@field FONT string
@@ -78,6 +86,7 @@ function KE_FramePool:ReleaseAll() end
 ---@field promptDialog Frame? # prompt-dialog singleton (Core/Widgets.lua)
 ---@field activePrompt Frame? # currently-open prompt; nil when closed
 ---@field PlayerAbsorbsFormat { Format: fun(amount:any, abbreviate:boolean, hideWhenZero:boolean):string }
+---@field DungeonTimerDungeons KE.DungeonTimerEntry[] # Modules/DungeonTimers/DungeonRegistry.lua
 local KE = {}
 
 -- ─── Print / chat ─────────────────────────────────────────
@@ -233,6 +242,28 @@ function KE.ApplySplitTextLayout(anchor, label, timerText, iconFrame, showIcon, 
 function KE:ValidateProfileFonts() end
 
 function KE:FillProfileDefaults() end
+
+-- ─── Dungeon Timers registry (Modules/DungeonTimers/DungeonRegistry.lua) ─
+--- Distinct seasons present in `registry`, ascending.
+---@param registry KE.DungeonTimerEntry[]
+---@return number[]
+function KE.GetDungeonTimerSeasons(registry) end
+
+--- Registry entries for one season, in registry order.
+---@param registry KE.DungeonTimerEntry[]
+---@param season number
+---@return KE.DungeonTimerEntry[]
+function KE.GetDungeonTimerDungeonsForSeason(registry, season) end
+
+--- Initial Dungeons-tab selection: the instance the player is standing in
+--- wins, then the saved selection (validated — a stale key falls through),
+--- then the newest season's first dungeon.
+---@param registry KE.DungeonTimerEntry[]
+---@param instanceID number?
+---@param saved { season: number?, dungeon: string? }?
+---@return number? season
+---@return string? dungeonKey
+function KE.ResolveDungeonTimerSelection(registry, instanceID, saved) end
 
 -- ─── Frame / position helpers ────────────────────────────
 --- Real signature (Core/Globals.lua). `Config` is REQUIRED — its

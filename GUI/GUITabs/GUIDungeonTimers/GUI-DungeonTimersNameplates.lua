@@ -16,6 +16,9 @@ local GUIFrame = KE.GUIFrame
 
 local pairs = pairs
 
+KE.GUI = KE.GUI or {}
+KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
+
 -- Where the icon row anchors on the plate. The row always grows AWAY from the
 -- plate (never inside the bar), so the anchor implies the grow direction:
 -- Left/Right grow outward to that side, Top centres a row above. Array form
@@ -69,6 +72,13 @@ end
 
 GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
     local Theme = KE.Theme
+
+    -- Hide the sibling bar/text/dungeon previews when this page activates.
+    local DT_GUI = KE.GUI.DungeonTimers
+    if DT_GUI.HideBarPreviews then DT_GUI.HideBarPreviews() end
+    if DT_GUI.HideTextPreviews then DT_GUI.HideTextPreviews() end
+    if DT_GUI.HideDungeonPreviews then DT_GUI.HideDungeonPreviews() end
+
     local db = GetTrashDB()
     if not db then return yOffset end
     if not db.Nameplate then db.Nameplate = {} end
@@ -247,8 +257,10 @@ end)
 -- away and back. mainFrame:Hide() runs before this cleanup loop on close, so
 -- GUIFrame:IsShown() is the exact discriminator: true = page switch (hide),
 -- false = window close (leave it; mainFrame:Show() brings it back).
-GUIFrame:RegisterContentCleanup("DTimers_Nameplates_preview", function()
+function KE.GUI.DungeonTimers.HideNameplatePreview()
     if not GUIFrame:IsShown() then return end
     local mod = GetTrashModule()
     if mod and mod.HideNameplatePreview then mod:HideNameplatePreview() end
-end)
+end
+
+GUIFrame:RegisterContentCleanup("DTimers_Nameplates_preview", KE.GUI.DungeonTimers.HideNameplatePreview)

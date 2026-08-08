@@ -18,6 +18,23 @@ local function GetSettingsDB()
     return KE.db.profile.DungeonTimers
 end
 
+KE.GUI = KE.GUI or {}
+KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
+
+-- First tab of the DTimers_Main tabbed page; RegisterTabbedContent falls
+-- back to the first tab when no tab was clicked yet, so "is this tab
+-- active" must apply the same fallback.
+local FIRST_TAB = "DTimers_Dungeons"
+
+-- True while the Dungeon Timers host page is the selected sidebar item AND
+-- the given tab is the one being rendered. Preview show-paths gate on this
+-- so a preview never spawns into another tab's page.
+function KE.GUI.DungeonTimers.IsTabActive(tabId)
+    if not GUIFrame or GUIFrame.selectedSidebarItem ~= "DTimers_Main" then return false end
+    local active = GUIFrame.tabbedPageState and GUIFrame.tabbedPageState["DTimers_Main"]
+    return (active or FIRST_TAB) == tabId
+end
+
 -- Module-level preview teardown. Fires whenever the user switches to ANY
 -- other sidebar item (contentCleanupCallbacks) or closes the GUI window
 -- (onCloseCallbacks). Per-page onCloseCallbacks in Bars/Texts only cover the
@@ -29,6 +46,46 @@ local function HideAllPreviews()
     if not mod then return end
     if mod.HideSettingsBarPreviews then mod:HideSettingsBarPreviews() end
     if mod.HideSettingsTextPreviews then mod:HideSettingsTextPreviews() end
+    local DT_GUI = KE.GUI.DungeonTimers
+    if DT_GUI.HideDungeonPreviews then DT_GUI.HideDungeonPreviews() end
+    if DT_GUI.HideNameplatePreview then DT_GUI.HideNameplatePreview() end
+end
+
+-- Header card shared by every tab of the host page: module toggle +
+-- reload prompt. collapse=true (module off) makes the host render the
+-- lone header bar and skip the tab strip entirely.
+function KE.GUI.DungeonTimers.BuildHeaderCard(scrollChild, yOffset)
+    local db = GetSettingsDB()
+    if not db then return yOffset, true end
+    local DT = KitnEssentials and KitnEssentials:GetModule("DungeonTimers", true)
+
+    local function ApplyModuleState(enabled)
+        db.Enabled = enabled
+        if not DT then return end
+        if enabled then
+            KitnEssentials:EnableModule("DungeonTimers")
+        else
+            KitnEssentials:DisableModule("DungeonTimers")
+        end
+    end
+
+    local card = GUIFrame:CreateCard(scrollChild, "Dungeon Timers", yOffset)
+    card:AddHeaderToggle(db.Enabled ~= false, function(checked)
+        -- The toggle's own refresh is same-item and skips cleanup, and the
+        -- collapsed header returns before any tab builder can run its
+        -- hides — tear previews down here or they strand on screen.
+        if not checked then HideAllPreviews() end
+        ApplyModuleState(checked)
+        KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
+        KE:Print("Dungeon Timers: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
+    if db.Enabled == false then
+        -- Also covers arriving here already-disabled (e.g. a profile
+        -- switch landing on a profile with the module off).
+        HideAllPreviews()
+        return card:GetNextOffset(), true
+    end
+    return card:GetNextOffset(), false
 end
 
 GUIFrame.contentCleanupCallbacks = GUIFrame.contentCleanupCallbacks or {}
@@ -36,21 +93,6 @@ GUIFrame.contentCleanupCallbacks["DungeonTimers"] = HideAllPreviews
 
 GUIFrame.onCloseCallbacks = GUIFrame.onCloseCallbacks or {}
 GUIFrame.onCloseCallbacks["DungeonTimers"] = HideAllPreviews
-
--- Dungeon registry. Duplicated from GUI-DungeonTimersDungeon.lua's local
--- DUNGEONS (Cfg loads first per GUI.xml so a shared reference there would
--- be nil at file-parse time). Keep in sync when adding a new dungeon.
--- iconID = Blizzard texture FileID for the dungeon's encounter-journal icon.
-local DUNGEONS = {
-    { key = "AlgetharAcademy",    name = "Algeth'ar Academy",       iconID = 4578414 },
-    { key = "MagistersTerrace",   name = "Magisters' Terrace",      iconID = 7439625 },
-    { key = "MaisaraCaverns",     name = "Maisara Caverns",         iconID = 7322719 },
-    { key = "NexusPointXenas",    name = "Nexus-Point Xenas",       iconID = 7553062 },
-    { key = "PitOfSaron",         name = "Pit of Saron",            iconID = 343641 },
-    { key = "SeatOfTriumvirate",  name = "Seat of the Triumvirate", iconID = 1711340 },
-    { key = "Skyreach",           name = "Skyreach",                iconID = 1002596 },
-    { key = "WindrunnerSpire",    name = "Windrunner Spire",        iconID = 7266215 },
-}
 
 -- Sound channel dropdown options. Matches Blizzard's PlaySoundFile second
 -- argument — channels are gated by their respective volume sliders, so
@@ -130,34 +172,19 @@ end
 
 GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     local Theme = KE.Theme
+
+    -- General has no previews of its own, so it hides all four kinds when
+    -- it activates: bar, text, dungeon, nameplate.
+    local DT_GUI = KE.GUI.DungeonTimers
+    if DT_GUI.HideBarPreviews then DT_GUI.HideBarPreviews() end
+    if DT_GUI.HideTextPreviews then DT_GUI.HideTextPreviews() end
+    if DT_GUI.HideDungeonPreviews then DT_GUI.HideDungeonPreviews() end
+    if DT_GUI.HideNameplatePreview then DT_GUI.HideNameplatePreview() end
+
     local db = GetSettingsDB()
     if not db then return yOffset end
 
     local DT = KitnEssentials and KitnEssentials:GetModule("DungeonTimers", true)
-
-    local function ApplyModuleState(enabled)
-        db.Enabled = enabled
-        if not DT then return end
-        if enabled then
-            KitnEssentials:EnableModule("DungeonTimers")
-        else
-            KitnEssentials:DisableModule("DungeonTimers")
-        end
-    end
-
-    ---------------------------------------------------------------------------
-    -- Card 1: Enable
-    ---------------------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Dungeon Timers", yOffset)
-    card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
-        ApplyModuleState(checked)
-        KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
-        KE:Print("Dungeon Timers: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
-    end)
-    yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
 
     ---------------------------------------------------------------------------
     -- Card 2: Role Filter
@@ -230,7 +257,7 @@ GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     local RIGHT_INSET     = Theme.paddingSmall   -- match AddWidget(widget, 1)'s effective right inset
     local REMOVE_COLOR    = { 0.9, 0.2, 0.2, 1 } -- red, matches Nicknames
 
-    for _, dungeon in ipairs(DUNGEONS) do
+    for _, dungeon in ipairs(KE.DungeonTimerDungeons) do
         local row = GUIFrame:CreateRow(card4.content, ROW_H)
 
         local iconHolder = CreateFrame("Frame", nil, row)

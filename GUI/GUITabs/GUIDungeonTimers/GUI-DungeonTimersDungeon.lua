@@ -1,8 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-DungeonTimersDungeon.lua                            ║
--- ║  Purpose: Per-dungeon settings page generator. Registers ║
--- ║  one content callback per known dungeon key              ║
--- ║  (DTimers_Dungeon_<KEY>). Each page renders the curated  ║
+-- ║  Purpose: Per-dungeon page builder used by the host's    ║
+-- ║  Dungeons tab (DTimers_Dungeons) — one registration; the ║
+-- ║  dungeon key/name are passed in as arguments instead of  ║
+-- ║  one content callback per dungeon. Renders the curated   ║
 -- ║  encounters for that dungeon as a list+detail editor:    ║
 -- ║                                                          ║
 -- ║    ┌──────────────┬─────────────────────────────────┐    ║
@@ -44,22 +45,6 @@ local CreateFrame = CreateFrame
 
 KE.GUI = KE.GUI or {}
 KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
-
----------------------------------------------------------------------------------
--- Static dungeon registry. Keep in sync when EncounterData adds a new
--- dungeon key. The order here is the order the sidebar items appear in
--- GUI-MainFrame.lua.
----------------------------------------------------------------------------------
-local DUNGEONS = {
-    { key = "AlgetharAcademy",    name = "Algeth'ar Academy" },
-    { key = "MagistersTerrace",   name = "Magisters' Terrace" },
-    { key = "MaisaraCaverns",     name = "Maisara Caverns" },
-    { key = "NexusPointXenas",    name = "Nexus-Point Xenas" },
-    { key = "PitOfSaron",         name = "Pit of Saron" },
-    { key = "SeatOfTriumvirate",  name = "Seat of the Triumvirate" },
-    { key = "Skyreach",           name = "Skyreach" },
-    { key = "WindrunnerSpire",    name = "Windrunner Spire" },
-}
 
 local PLAYER_ROLE_TOKENS = {
     { token = "TANK",    label = "Tank" },
@@ -173,11 +158,10 @@ end
 
 local function ShowSpellPreview(spellId)
     if not GUIFrame or not GUIFrame:IsShown() then return end
-    local sel = GUIFrame.selectedSidebarItem or ""
-    -- Only render the preview while a per-dungeon page is active. If the
+    -- Only render the preview while the Dungeons tab is active. If the
     -- user navigated away mid-build (rare), don't accidentally spawn a
-    -- preview into a settings page's preview group.
-    if not sel:find("^DTimers_Dungeon_") then return end
+    -- preview into another tab's page.
+    if not KE.GUI.DungeonTimers.IsTabActive("DTimers_Dungeons") then return end
     local mod = GetModule()
     if mod and mod.ShowSpellPreview then
         mod:ShowSpellPreview(spellId)
@@ -188,11 +172,20 @@ KE.GUI.DungeonTimers.HideSpellPreview = HideSpellPreview
 
 -- Trash-ability preview thunks — parallel to the boss spell preview above, but
 -- routed to the DungeonTrash module. The preview is a looping sample alert at
--- the shared bar/text position; ShowTrashPreview only renders while a per-dungeon
--- page is active (same guard as ShowSpellPreview).
+-- the shared bar/text position; ShowTrashPreview only renders while the
+-- Dungeons tab is active (same guard as ShowSpellPreview).
 local function HideTrashPreview()
     local mod = GetTrashModule()
     if mod and mod.HideTrashPreview then mod:HideTrashPreview() end
+end
+
+-- Everything the Dungeons tab can leave on screen: boss spell preview,
+-- trash preview, phase preview.
+function KE.GUI.DungeonTimers.HideDungeonPreviews()
+    HideSpellPreview()
+    HideTrashPreview()
+    local mod = GetModule()
+    if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
 end
 
 local function RefreshTrashPreview()
@@ -202,8 +195,7 @@ end
 
 local function ShowTrashPreview(mapID, npcID, spellID)
     if not GUIFrame or not GUIFrame:IsShown() then return end
-    local sel = GUIFrame.selectedSidebarItem or ""
-    if not sel:find("^DTimers_Dungeon_") then return end
+    if not KE.GUI.DungeonTimers.IsTabActive("DTimers_Dungeons") then return end
     local mod = GetTrashModule()
     if mod and mod.ShowTrashPreview then mod:ShowTrashPreview(mapID, npcID, spellID) end
 end
@@ -3198,40 +3190,18 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     return yOffset
 end
 
----------------------------------------------------------------------------------
--- Register one content callback per dungeon key. Closures capture key + name
--- once at file-load time — per-render allocation is just the function-call
--- frame, no per-render closure or table allocation.
----------------------------------------------------------------------------------
+KE.GUI.DungeonTimers.BuildDungeonPage = BuildDungeonPage
+
 GUIFrame.onCloseCallbacks = GUIFrame.onCloseCallbacks or {}
 GUIFrame.contentCleanupCallbacks = GUIFrame.contentCleanupCallbacks or {}
-for _, d in ipairs(DUNGEONS) do
-    local dungeonKey  = d.key
-    local dungeonName = d.name
-    GUIFrame:RegisterContent("DTimers_Dungeon_" .. dungeonKey, function(scrollChild, yOffset)
-        return BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
-    end)
-    -- Each dungeon ID points at the same HideSpellPreview thunk. The
-    -- onCloseCallbacks dispatch is keyed by id, so registering all 8
-    -- means GUI-close cleanup fires regardless of which dungeon page
-    -- was last visited (FireOnCloseCallbacks iterates all entries).
-    GUIFrame.onCloseCallbacks["DTimers_Dungeon_" .. dungeonKey] = function()
-        HideSpellPreview()
-        HideTrashPreview()
-        local mod = GetModule()
-        if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
-    end
+
+GUIFrame.onCloseCallbacks["DTimers_Dungeons"] = function()
+    KE.GUI.DungeonTimers.HideDungeonPreviews()
 end
--- Single contentCleanupCallback (separate from per-dungeon onClose entries).
--- contentCleanupCallbacks fires on REAL sidebar item switches; we want a
--- spell or phase preview started in any dungeon page to vanish when the
--- user clicks a non-DungeonTimers sidebar entry. RefreshContent iterates
--- ALL cleanup callbacks unconditionally, so one entry suffices regardless
--- of which dungeon was active. Keyed distinct from "DungeonTimers" (used
--- by DungeonTimersCfg for Settings previews) so the two don't clobber.
+
+-- contentCleanupCallbacks fires on REAL sidebar item switches; onCloseCallbacks
+-- above only covers the GUI-close path. Keyed distinct from "DungeonTimers"
+-- (used by DungeonTimersCfg for Settings previews) so the two don't clobber.
 GUIFrame.contentCleanupCallbacks["DTimers_Dungeon_SpellPreview"] = function()
-    HideSpellPreview()
-    HideTrashPreview()
-    local mod = GetModule()
-    if mod and mod.HidePhasePreview then mod:HidePhasePreview() end
+    KE.GUI.DungeonTimers.HideDungeonPreviews()
 end

@@ -51,7 +51,7 @@ end
 
 local function ShowSettingsBarPreviews()
     if not GUIFrame or not GUIFrame:IsShown() then return end
-    if GUIFrame.selectedSidebarItem ~= "DTimers_Bars" then return end
+    if not KE.GUI.DungeonTimers.IsTabActive("DTimers_Bars") then return end
     local mod = GetModule()
     if mod and mod.ShowSettingsBarPreviews then
         mod:ShowSettingsBarPreviews()
@@ -72,10 +72,13 @@ GUIFrame.onCloseCallbacks["DTimers_Bars"] = HideBarPreviews
 GUIFrame:RegisterContent("DTimers_Bars", function(scrollChild, yOffset)
     local Theme = KE.Theme
 
-    -- Hide the sibling text previews before our own appear, so flipping
-    -- between Bar Settings and Text Settings doesn't double-render.
+    -- Hide every preview kind that isn't this tab's own before our own
+    -- appear: switching tabs on the same item skips cleanup callbacks, so
+    -- a leftover text/dungeon/nameplate preview would double-render.
     local DT_GUI = KE.GUI.DungeonTimers
     if DT_GUI.HideTextPreviews then DT_GUI.HideTextPreviews() end
+    if DT_GUI.HideDungeonPreviews then DT_GUI.HideDungeonPreviews() end
+    if DT_GUI.HideNameplatePreview then DT_GUI.HideNameplatePreview() end
 
     local db = GetSettingsDB()
     if not db then return yOffset end
