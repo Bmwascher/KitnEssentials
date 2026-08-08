@@ -378,6 +378,19 @@ function EditMode:SetupDragHandlers(overlay)
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then return end
 
+        -- Read the origin BEFORE committing to the drag. GetRect is
+        -- SecretWhenAnchoringSecret, and a frame anchored to a restricted
+        -- parent reports a secret rect, so there is no origin to measure from.
+        -- Every value below feeds arithmetic, which throws on a secret. Refuse
+        -- the drag rather than start one that computes a wrong offset: the
+        -- element can still be moved by the nudge controls and the GUI.
+        local left, bottom, width, height = targetFrame:GetRect()
+        if issecretvalue(left) or issecretvalue(bottom)
+            or issecretvalue(width) or issecretvalue(height) then
+            KE:Print("Cannot drag this element: its position is protected. Use the nudge arrows instead.")
+            return
+        end
+
         self.isDragging = true
         didDrag = true
 
@@ -386,8 +399,6 @@ function EditMode:SetupDragHandlers(overlay)
         startX, startY = GetCursorPosition()
         startX, startY = startX / scale, startY / scale
 
-        -- Get frame start position
-        local left, bottom, width, height = targetFrame:GetRect()
         if left and bottom and width and height then
             frameStartX = left + width / 2
             frameStartY = bottom + height / 2
@@ -432,11 +443,12 @@ function EditMode:SetupDragHandlers(overlay)
         local newCenterX = frameStartX + deltaX
         local newCenterY = frameStartY + deltaY
 
-        -- Get parent frame position and dimensions for offset calculation.
-        -- GetRect is SecretWhenAnchoringSecret, and every value below is used
-        -- in arithmetic, which throws on a secret. Parents are module-chosen
-        -- and can be any named frame, so treat an unreadable rect exactly like
-        -- a missing one and fall back to the screen.
+        -- Parent rect for the offset calculation. The target's own rect is
+        -- already known readable -- OnDragStart refuses the drag otherwise, and
+        -- the drag proxy has since re-anchored it to UIParent -- but the
+        -- module's chosen parent is a separate frame and can still be
+        -- anchoring-secret on its own. Treat an unreadable rect exactly like a
+        -- missing one and fall back to the screen.
         local parentLeft, parentBottom, parentWidth, parentHeight = parentFrame:GetRect()
         if not parentLeft or issecretvalue(parentLeft) or issecretvalue(parentBottom)
             or issecretvalue(parentWidth) or issecretvalue(parentHeight) then
