@@ -787,9 +787,16 @@ PreviewManager._moduleStates = {}
 
 function PreviewManager:UpdatePreviewState()
     if self.editModeActive then
-        -- Edit mode: show ALL previews regardless of section
-        self:ShowModules(PREVIEW_MODULES)
         self.previewsActive = true
+        -- Previews track the category filter so the sample content on screen and
+        -- the boxes around it always describe the same set. A nil category means
+        -- no filter, which is every preview.
+        local category = KE.EditMode and KE.EditMode.activeCategory
+        if category then
+            self:ShowSectionPreviews(category)
+        else
+            self:ShowModules(PREVIEW_MODULES)
+        end
         return
     end
 
@@ -845,6 +852,11 @@ function PreviewManager:OnModuleEnableChanged(moduleName)
     if InCombatLockdown() then return end
     self._moduleStates[moduleName] = nil
     self:UpdatePreviewState()
+    -- Liveness changed as well as the preview set, so the boxes and the
+    -- category counts have to follow.
+    if KE.EditMode then
+        KE.EditMode:RefreshLiveState()
+    end
 end
 
 function PreviewManager:ShowSectionPreviews(sectionId)
