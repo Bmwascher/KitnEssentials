@@ -72,8 +72,9 @@ GUIFrame.onCloseCallbacks["DTimers_Bars"] = HideBarPreviews
 GUIFrame:RegisterContent("DTimers_Bars", function(scrollChild, yOffset)
     local Theme = KE.Theme
 
-    -- Hide the sibling text previews before our own appear, so flipping
-    -- between Bar Settings and Text Settings doesn't double-render.
+    -- Hide every preview kind that isn't this tab's own before our own
+    -- appear: switching tabs on the same item skips cleanup callbacks, so
+    -- a leftover text/dungeon/nameplate preview would double-render.
     local DT_GUI = KE.GUI.DungeonTimers
     if DT_GUI.HideTextPreviews then DT_GUI.HideTextPreviews() end
     if DT_GUI.HideDungeonPreviews then DT_GUI.HideDungeonPreviews() end
