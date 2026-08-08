@@ -1650,13 +1650,22 @@ function L.loadMovementAlert(overrides)
     _G.GetTime = overrides.GetTime or function() return 1000 end
     _G.UnitClass = overrides.UnitClass or function() return "Druid", "DRUID", 11 end
     _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
-    _G.IsPlayerSpell = overrides.IsPlayerSpell or function() return true end
-    _G.IsSpellKnownOrOverridesKnown = overrides.IsSpellKnownOrOverridesKnown or function() return false end
     _G.C_Spell = overrides.C_Spell or {
         GetSpellCooldown = function() return nil end,
         GetSpellCharges = function() return nil end,
         GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,
     }
+    -- The module resolves known-ness through C_SpellBook. Specs override
+    -- .known per-case; everything defaults to unknown.
+    _G.C_SpellBook = overrides.C_SpellBook or {
+        known = {},
+        IsSpellKnownOrInSpellBook = function(_) return false end,
+    }
+    _G.C_SpellBook.IsSpellKnownOrInSpellBook = function(spellId)
+        return _G.C_SpellBook.known[spellId] == true
+    end
+    _G.Enum = overrides.Enum or {}
+    _G.Enum.SpellBookSpellBank = _G.Enum.SpellBookSpellBank or { Player = 0 }
 
     local KE = {
         Print = function() end,

@@ -79,6 +79,22 @@ describe("movement alert spell resolution", function()
         end)
     end)
 
+    describe("talent choice pairs", function()
+        it("suppresses the replaced half when the replacement is known", function()
+            _G.C_SpellBook.known[212653] = true -- Shimmer
+            assert.is_true(NMA:IsReplacedChoice(1953))    -- Blink is replaced
+            assert.is_false(NMA:IsReplacedChoice(212653)) -- Shimmer is not
+        end)
+        it("suppresses nothing when only the base is known", function()
+            _G.C_SpellBook.known[1953] = true -- Blink alone
+            assert.is_false(NMA:IsReplacedChoice(1953))
+            assert.is_false(NMA:IsReplacedChoice(212653))
+        end)
+        it("never touches spells outside a choice pair", function()
+            assert.is_false(NMA:IsReplacedChoice(358267)) -- Hover
+        end)
+    end)
+
     describe("category duration", function()
         it("returns a listed duration directly", function()
             assert.equals(18, NMA:GetCategoryDuration(1850))
@@ -179,9 +195,9 @@ describe("NoMovementAlert RoleColor", function()
         end)
 
         it("stays quiet when the client declines to answer", function()
-            -- A charge ability reports this for about a second after a use that
-            -- left it another charge. It is not down, so nothing may render --
-            -- and the duration object below must not be consulted either.
+            -- isOnGCD absent (neither true nor false) means the client is not
+            -- saying. Nothing may render -- and the duration object below
+            -- must not be consulted either.
             cooldown = { timeUntilEndOfStartRecovery = 1 }
             durationRemaining = 1
             assert.is_nil(load():ReadCooldown(1))
