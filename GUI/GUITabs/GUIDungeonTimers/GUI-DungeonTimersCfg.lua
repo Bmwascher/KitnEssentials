@@ -37,21 +37,6 @@ GUIFrame.contentCleanupCallbacks["DungeonTimers"] = HideAllPreviews
 GUIFrame.onCloseCallbacks = GUIFrame.onCloseCallbacks or {}
 GUIFrame.onCloseCallbacks["DungeonTimers"] = HideAllPreviews
 
--- Dungeon registry. Duplicated from GUI-DungeonTimersDungeon.lua's local
--- DUNGEONS (Cfg loads first per GUI.xml so a shared reference there would
--- be nil at file-parse time). Keep in sync when adding a new dungeon.
--- iconID = Blizzard texture FileID for the dungeon's encounter-journal icon.
-local DUNGEONS = {
-    { key = "AlgetharAcademy",    name = "Algeth'ar Academy",       iconID = 4578414 },
-    { key = "MagistersTerrace",   name = "Magisters' Terrace",      iconID = 7439625 },
-    { key = "MaisaraCaverns",     name = "Maisara Caverns",         iconID = 7322719 },
-    { key = "NexusPointXenas",    name = "Nexus-Point Xenas",       iconID = 7553062 },
-    { key = "PitOfSaron",         name = "Pit of Saron",            iconID = 343641 },
-    { key = "SeatOfTriumvirate",  name = "Seat of the Triumvirate", iconID = 1711340 },
-    { key = "Skyreach",           name = "Skyreach",                iconID = 1002596 },
-    { key = "WindrunnerSpire",    name = "Windrunner Spire",        iconID = 7266215 },
-}
-
 -- Sound channel dropdown options. Matches Blizzard's PlaySoundFile second
 -- argument — channels are gated by their respective volume sliders, so
 -- "SFX" lets the user mute timer sounds independently of dialog/music.
@@ -230,7 +215,7 @@ GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     local RIGHT_INSET     = Theme.paddingSmall   -- match AddWidget(widget, 1)'s effective right inset
     local REMOVE_COLOR    = { 0.9, 0.2, 0.2, 1 } -- red, matches Nicknames
 
-    for _, dungeon in ipairs(DUNGEONS) do
+    for _, dungeon in ipairs(KE.DungeonTimerDungeons) do
         local row = GUIFrame:CreateRow(card4.content, ROW_H)
 
         local iconHolder = CreateFrame("Frame", nil, row)

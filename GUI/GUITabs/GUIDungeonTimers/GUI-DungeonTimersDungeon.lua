@@ -45,22 +45,6 @@ local CreateFrame = CreateFrame
 KE.GUI = KE.GUI or {}
 KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
 
----------------------------------------------------------------------------------
--- Static dungeon registry. Keep in sync when EncounterData adds a new
--- dungeon key. The order here is the order the sidebar items appear in
--- GUI-MainFrame.lua.
----------------------------------------------------------------------------------
-local DUNGEONS = {
-    { key = "AlgetharAcademy",    name = "Algeth'ar Academy" },
-    { key = "MagistersTerrace",   name = "Magisters' Terrace" },
-    { key = "MaisaraCaverns",     name = "Maisara Caverns" },
-    { key = "NexusPointXenas",    name = "Nexus-Point Xenas" },
-    { key = "PitOfSaron",         name = "Pit of Saron" },
-    { key = "SeatOfTriumvirate",  name = "Seat of the Triumvirate" },
-    { key = "Skyreach",           name = "Skyreach" },
-    { key = "WindrunnerSpire",    name = "Windrunner Spire" },
-}
-
 local PLAYER_ROLE_TOKENS = {
     { token = "TANK",    label = "Tank" },
     { token = "HEALER",  label = "Healer" },
@@ -3205,7 +3189,7 @@ end
 ---------------------------------------------------------------------------------
 GUIFrame.onCloseCallbacks = GUIFrame.onCloseCallbacks or {}
 GUIFrame.contentCleanupCallbacks = GUIFrame.contentCleanupCallbacks or {}
-for _, d in ipairs(DUNGEONS) do
+for _, d in ipairs(KE.DungeonTimerDungeons) do
     local dungeonKey  = d.key
     local dungeonName = d.name
     GUIFrame:RegisterContent("DTimers_Dungeon_" .. dungeonKey, function(scrollChild, yOffset)
