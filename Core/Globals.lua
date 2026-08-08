@@ -710,15 +710,21 @@ local SECTION_PREVIEW_MODULES = {
     skinning_section = {
         "DragonRiding",
         "DamageMeter", "MythicPlusTimer",
-        -- Its mover routes through the Blizzard Frames page, which belongs to
-        -- this section. Without the entry the category filter hides the sample
-        -- bars while still drawing the box around them.
-        "LootRoll",
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",
         "KeystoneHelper", "TargetedSpells", "LFGReminder",
     },
+}
+
+-- Previews that belong to a section under /kes edit but NOT to ordinary
+-- navigation of it. Loot Roll is the case: its mover has to have something
+-- behind it whenever the category filter is on Skinning, but its sample is a
+-- slim bar that exists only in Replace mode, and its own page deliberately
+-- gates its preview button the same way. Adding it to the shared map would
+-- spawn a fake bar for anyone who merely opened a Skinning page.
+local EDIT_MODE_SECTION_EXTRAS = {
+    skinning_section = { "LootRoll" },
 }
 
 -- Pages that run their own preview system opt out of their section's
@@ -797,7 +803,7 @@ function PreviewManager:UpdatePreviewState()
         -- no filter, which is every preview.
         local category = KE.EditMode and KE.EditMode.activeCategory
         if category then
-            self:ShowSectionPreviews(category)
+            self:ShowSectionPreviews(category, EDIT_MODE_SECTION_EXTRAS[category])
         else
             self:ShowModules(PREVIEW_MODULES)
         end
@@ -863,7 +869,9 @@ function PreviewManager:OnModuleEnableChanged(moduleName)
     end
 end
 
-function PreviewManager:ShowSectionPreviews(sectionId)
+-- `extras` adds modules to this section's set for this call only. Edit Mode
+-- passes it; ordinary navigation does not.
+function PreviewManager:ShowSectionPreviews(sectionId, extras)
     local Addon = KitnEssentials
     if not Addon then return end
 
@@ -871,6 +879,11 @@ function PreviewManager:ShowSectionPreviews(sectionId)
     local wantedSet = {}
     if wantedModules then
         for _, name in ipairs(wantedModules) do
+            wantedSet[name] = true
+        end
+    end
+    if extras then
+        for _, name in ipairs(extras) do
             wantedSet[name] = true
         end
     end
