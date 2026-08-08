@@ -136,6 +136,7 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
     local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local barTextureDropdown = GUIFrame:CreateDropdown(row2c, "Bar Texture", {
         options = statusbarList,
+        searchable = true,
         value = db.BarTexture or "KitnUI",
         callback = function(key) db.BarTexture = key; ApplySettings() end,
     })
