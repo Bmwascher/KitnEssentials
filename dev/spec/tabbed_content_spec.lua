@@ -48,6 +48,52 @@ describe("GUI-TabbedContent", function()
         end)
     end)
 
+    -- Nested sub-rows are not pages, so a nested id can never match an outer
+    -- tab. Without translation it falls through to the first tab and the row
+    -- never learns which of its children was asked for.
+    describe("ResolveActiveTab with nested ids", function()
+        before_each(function()
+            GUIFrame:RegisterNestedTabs("MaintenanceTracker", { "MTAuras", "MTLayout" })
+        end)
+
+        it("leaves an outer tab alone", function()
+            GUIFrame.tabbedPageState["HealerTools"] = "HealerMana"
+            assert.equals("HealerMana", GUIFrame:ResolveActiveTab("HealerTools", TABS))
+            assert.is_nil(GUIFrame.pendingNestedTab["MaintenanceTracker"])
+        end)
+
+        it("resolves a nested id to its owning outer tab", function()
+            GUIFrame.tabbedPageState["HealerTools"] = "MTLayout"
+            assert.equals("MaintenanceTracker", GUIFrame:ResolveActiveTab("HealerTools", TABS))
+        end)
+
+        -- Rewriting to the owner rather than clearing is the point: clearing
+        -- would send the next rebuild back to the first tab.
+        it("rewrites the page state to the owner, not to nil", function()
+            GUIFrame.tabbedPageState["HealerTools"] = "MTLayout"
+            GUIFrame:ResolveActiveTab("HealerTools", TABS)
+            assert.equals("MaintenanceTracker", GUIFrame.tabbedPageState["HealerTools"])
+        end)
+
+        it("hands the nested id down under its owner", function()
+            GUIFrame.tabbedPageState["HealerTools"] = "MTAuras"
+            GUIFrame:ResolveActiveTab("HealerTools", TABS)
+            assert.equals("MTAuras", GUIFrame.pendingNestedTab["MaintenanceTracker"])
+        end)
+
+        it("falls back and sets nothing pending when the owner is not on offer", function()
+            GUIFrame.tabbedPageState["HealerTools"] = "MTAuras"
+            local shortTabs = { { id = "HealerMana", label = "Healer Mana" } }
+            assert.equals("HealerMana", GUIFrame:ResolveActiveTab("HealerTools", shortTabs))
+            assert.is_nil(GUIFrame.pendingNestedTab["MaintenanceTracker"])
+        end)
+
+        it("still falls back for an id that is neither outer nor nested", function()
+            GUIFrame.tabbedPageState["HealerTools"] = "NotATabAtAll"
+            assert.equals("InnervateTracker", GUIFrame:ResolveActiveTab("HealerTools", TABS))
+        end)
+    end)
+
     describe("dispatch", function()
         it("resolves builders live, so registration order does not matter", function()
             GUIFrame:RegisterTabbedContent("HealerTools", TABS)

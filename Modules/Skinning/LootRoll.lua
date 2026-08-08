@@ -404,17 +404,11 @@ function LR:RegisterEditMode()
             self:SyncMover()
             self:ApplyPosition("editmode")
         end,
-        -- guiPath is a SIDEBAR ITEM ID and there is no sidebar
-        -- item "LootRoll" -- Open Settings was silently falling through to
-        -- "just open the GUI". These sections live in the consolidated
-        -- Blizzard Frames tab, so route through it (KE's sidebar id:
-        -- GUI/GUIMain/GUI-MainFrame.lua). guiContext is dropped here:
-        -- KE's GUIFrame:OpenPage stores it as pendingContext and nothing
-        -- reads it (GUI/GUIWidgets/GUI-Sidebar.lua). guiTab IS set --
-        -- it is KE's live equivalent of the same intent, seeding
-        -- GUIFrame.tabbedPageState so Open Settings lands on the right
-        -- subtab of the tabbed Blizzard Frames page (Core/EditMode.lua,
-        -- :1122-1126). The subtab id itself is created in Task 6.
+        -- guiPath is a SIDEBAR ITEM ID and there is no sidebar item "LootRoll":
+        -- these sections live in the consolidated Blizzard Frames page, so
+        -- route through it. guiTab is a NESTED id; GUI-TabbedContent.lua
+        -- translates it to its owning tab. guiContext is deliberately omitted:
+        -- GUIFrame:OpenPage stores it and nothing reads it.
         guiPath = "SkinBlizzardFrames",
         guiTab = "SkinBlizzardFramesLootRoll",
     })

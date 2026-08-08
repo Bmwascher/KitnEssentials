@@ -23,8 +23,18 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         GUIFrame = {
             registeredContent = {},
             tabStrips = {},
+            -- The nested-tab registry, matching GUI-TabbedContent.lua.
+            -- GUI-BlizzardFrames.lua registers its sub-row ids at FILE SCOPE,
+            -- so both have to exist before the load below.
+            nestedTabOwner = {},
+            pendingNestedTab = {},
             RegisterContent = function(self, id, fn) self.registeredContent[id] = fn end,
             RegisterTabbedContent = function(self, id, tabs) self.tabStrips[id] = tabs end,
+            RegisterNestedTabs = function(self, ownerId, nestedIds)
+                for _, nestedId in ipairs(nestedIds) do
+                    self.nestedTabOwner[nestedId] = ownerId
+                end
+            end,
         }
 
         KE = {
@@ -179,5 +189,52 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         assertEveryIdResolves(GUIFrame._VisibleElementTabs())
         elvui = true
         assertEveryIdResolves(GUIFrame._VisibleElementTabs())
+    end)
+
+    -- Edit Mode's Open Settings names one of the nested ids. GUI-TabbedContent
+    -- translates it to the owning outer tab and leaves the nested id pending;
+    -- this row is what has to pick it up.
+    describe("pending nested id", function()
+        -- Runs the row's own builder and reports which element it selected.
+        -- The four child builders are replaced with inert recorders: the real
+        -- ones need the whole card stack, and what is under test here is the
+        -- selection, not what those pages render.
+        local function buildRow()
+            local selected
+            GUIFrame.CreateSubTabs = function(_, _, yOffset, opts)
+                selected = opts.activeId
+                return nil, yOffset
+            end
+            for _, id in ipairs({ "SkinBlizzardFramesLootRoll", "SkinBlizzardFramesLootWindow",
+                                  "SkinBlizzardFramesWidgets", "CharacterPanel" }) do
+                GUIFrame.registeredContent[id] = function(_, yOffset) return yOffset end
+            end
+            GUIFrame.registeredContent["SkinBlizzardFramesElements"]({}, 0)
+            return selected
+        end
+
+        it("becomes the active element on the next build", function()
+            elvui = false
+            GUIFrame.pendingNestedTab["SkinBlizzardFramesElements"] = "SkinBlizzardFramesWidgets"
+            assert.equals("SkinBlizzardFramesWidgets", buildRow())
+        end)
+
+        -- Re-reading it every rebuild would drag the user back here whenever
+        -- the page redraws after they clicked a different sub-tab.
+        it("is cleared after that build, so a later switch is not overridden", function()
+            elvui = false
+            GUIFrame.pendingNestedTab["SkinBlizzardFramesElements"] = "SkinBlizzardFramesWidgets"
+            buildRow()
+            assert.is_nil(GUIFrame.pendingNestedTab["SkinBlizzardFramesElements"])
+            assert.equals("SkinBlizzardFramesWidgets", buildRow())
+        end)
+
+        -- The conflict state hides three of the four. A pending id for one of
+        -- those must be corrected rather than rendering an empty page.
+        it("is corrected by the validity loop when the conflict state hides it", function()
+            elvui = true
+            GUIFrame.pendingNestedTab["SkinBlizzardFramesElements"] = "SkinBlizzardFramesLootRoll"
+            assert.equals("CharacterPanel", buildRow())
+        end)
     end)
 end)

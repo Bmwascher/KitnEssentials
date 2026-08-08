@@ -354,14 +354,10 @@ function AF:RegisterEditMode()
         getParentFrame = function()
             return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
         end,
-        -- guiPath is a SIDEBAR ITEM ID, and this module has no sidebar row
-        -- of its own -- its config cards live on the UI Widgets tab instead.
-        -- Open Settings was silently falling through to "just open the GUI".
-        -- Route through the tab that now hosts these cards (KE's sidebar
-        -- id: GUI/GUIMain/GUI-MainFrame.lua). guiTab seeds
-        -- GUIFrame.tabbedPageState so Open Settings lands on the right
-        -- subtab (Core/EditMode.lua) -- same fix as
-        -- Modules/Skinning/LootRoll.lua.
+        -- guiPath is a SIDEBAR ITEM ID, and this module has no sidebar row of
+        -- its own -- its config cards live on the UI Widgets tab instead, so
+        -- route through the page that hosts them. guiTab is a NESTED id;
+        -- GUI/GUIMain/GUI-TabbedContent.lua translates it to its owning tab.
         guiPath = "SkinBlizzardFrames",
         guiTab = "SkinBlizzardFramesWidgets",
     })
