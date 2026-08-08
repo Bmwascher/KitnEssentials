@@ -745,7 +745,7 @@ end
 -- 10/25-player difficulty and handles dynamic instances
 -- (Blizzard_UnitPopup/Mainline/UnitPopup.lua). Reimplementing it here
 -- would be a slow-motion bug.
-local DIFFICULTY_RAID = { 17, 14, 15, 16 } -- DifficultyUtil.ID PrimaryRaid LFR/Normal/Heroic/Mythic
+local DIFFICULTY_RAID = { 14, 15, 16 } -- DifficultyUtil.ID PrimaryRaid Normal/Heroic/Mythic
 local DIFFICULTY_PARTY = { 1, 2, 23 }    -- DifficultyUtil.ID Dungeon Normal/Heroic/Mythic
 local DIFFICULTY_LABEL = _G.CRF_DIFFICULTY or "Difficulty"
 
@@ -778,7 +778,6 @@ local function SetupDifficulty(dropdown)
         local isEnabled = util and (inRaid and util.IsRaidDifficultyEnabled or util.IsDungeonDifficultyEnabled)
 
         local labels = inRaid and {
-            _G.PLAYER_DIFFICULTY3 or "Raid Finder",
             _G.PLAYER_DIFFICULTY1 or "Normal",
             _G.PLAYER_DIFFICULTY2 or "Heroic",
             _G.PLAYER_DIFFICULTY6 or "Mythic",
