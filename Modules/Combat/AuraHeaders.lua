@@ -31,6 +31,8 @@ local GetTime = GetTime
 local C_UnitAuras = C_UnitAuras
 local C_DurationUtil = C_DurationUtil
 local GameTooltip = GameTooltip
+local C_Timer = C_Timer
+local hooksecurefunc = hooksecurefunc
 
 local durationObj = C_DurationUtil and C_DurationUtil.CreateDuration and C_DurationUtil.CreateDuration()
 
@@ -423,16 +425,14 @@ local function MakeHeaderModule(config)
         if self.finishedEnable or not self.header then return end
         self.finishedEnable = true
 
-        -- Blizzard's frame goes away. Its CVar callbacks have to be dropped
-        -- too or they re-show it whenever those settings change.
+        self:SuppressBlizzard()
+        self:WatchEditMode()
+        -- One-shot: the CVar callbacks re-show the frame whenever those
+        -- settings change, and dropping them twice buys nothing.
         local blizz = _G[config.blizzardFrame]
-        if blizz then
-            blizz:UnregisterAllEvents()
-            blizz:Hide()
-            if _G.CVarCallbackRegistry then
-                _G.CVarCallbackRegistry:UnregisterCallback("consolidateBuffs", blizz)
-                _G.CVarCallbackRegistry:UnregisterCallback("collapseExpandBuffs", blizz)
-            end
+        if blizz and _G.CVarCallbackRegistry then
+            _G.CVarCallbackRegistry:UnregisterCallback("consolidateBuffs", blizz)
+            _G.CVarCallbackRegistry:UnregisterCallback("collapseExpandBuffs", blizz)
         end
 
         if not self.mover or not KE.EditMode then return end
@@ -445,6 +445,66 @@ local function MakeHeaderModule(config)
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = config.guiPath,
         })
+    end
+
+    -- Blizzard's frame goes away -- and does NOT stay away on its own.
+    --
+    -- Unregistering its events stops it updating, but Edit Mode does not
+    -- drive it by event: importing or switching a layout runs UpdateSystem
+    -- over every registered system, which reaches the frame's
+    -- UpdateShownState and calls SetShown(true) DIRECTLY. Entering and
+    -- leaving Edit Mode do the same. A one-shot Hide at login therefore
+    -- survives until the first layout import, after which Blizzard's buffs
+    -- are back on top of ours until a /reload.
+    function M:SuppressBlizzard()
+        local blizz = _G[config.blizzardFrame]
+        if not blizz then return end
+        blizz:UnregisterAllEvents()
+        blizz:Hide()
+    end
+
+    -- Re-assert whenever Edit Mode has touched its systems.
+    --
+    -- Deferred a frame ON PURPOSE: EDIT_MODE_LAYOUTS_UPDATED is dispatched
+    -- from inside Edit Mode's own layout pass -- a secureexecuterange over
+    -- every registered system -- so hiding the frame there writes state
+    -- mid-pass. Our own frame, our own execution, one frame later.
+    --
+    -- The manager hooks are separate because entering Edit Mode re-shows the
+    -- systems and leaving it re-runs UpdateShownState, and NEITHER raises
+    -- EDIT_MODE_LAYOUTS_UPDATED -- that event is the only one the game has
+    -- for Edit Mode, so the rest has to come from the manager frame itself.
+    function M:WatchEditMode()
+        if self.editModeWatcher then return end
+
+        local function ReAssert()
+            -- IsEnabled() is the AceModule truth; db.Enabled alone can
+            -- disagree with it around enable/disable transitions.
+            if self:IsEnabled() and self.db and self.db.Enabled
+               and not self:ShouldStandDown() then
+                self:SuppressBlizzard()
+            end
+        end
+        local function Defer() C_Timer.After(0, ReAssert) end
+
+        -- Lazy: the Edit Mode addon may not have loaded when we enable.
+        local function HookManager()
+            local mgr = _G.EditModeManagerFrame
+            if not mgr or self.editModeHooked then return end
+            self.editModeHooked = true
+            mgr:HookScript("OnShow", Defer)
+            hooksecurefunc(mgr, "Hide", Defer)
+        end
+
+        local w = CreateFrame("Frame")
+        self.editModeWatcher = w
+        w:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+        w:RegisterEvent("PLAYER_ENTERING_WORLD")
+        w:SetScript("OnEvent", function()
+            HookManager()
+            Defer()
+        end)
+        HookManager()
     end
 
     function M:OnEnable()
