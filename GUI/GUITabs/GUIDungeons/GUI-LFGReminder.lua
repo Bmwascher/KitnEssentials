@@ -59,7 +59,7 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return card1:GetNextOffset() end
 
-    card1:AddLabel("Shown when you join a Group Finder group for a dungeon whose teleport you know. Drag the popup to move it; it hides when you enter the dungeon, leave the group, or enter combat.")
+    card1:AddLabel("Shown when you join a Group Finder group for a dungeon whose teleport you know. Drag the popup to move it; it hides when you enter the dungeon, leave the group, or enter combat. Also prompts the group leader once their own listing fills.")
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local scale = GUIFrame:CreateSlider(row1, "Scale", {

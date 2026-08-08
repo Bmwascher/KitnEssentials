@@ -36,7 +36,7 @@ local MOVEMENT_ABILITIES = {
     EVOKER      = { [1467] = { 358267 }, [1468] = { 358267 }, [1473] = { 358267 } },
     HUNTER      = { [253] = { 186257, 781 }, [254] = { 186257, 781 }, [255] = { 186257, 781 } },
     MAGE        = { [62] = { 212653, 1953 }, [63] = { 212653, 1953 }, [64] = { 212653, 1953 } },
-    MONK        = { [268] = { 115008, 109132, 119085, 361138 }, [269] = { 109132, 119085, 361138, 101545 }, [270] = { 109132, 119085, 361138 } },
+    MONK        = { [268] = { 115008, 109132, 119085, 361138 }, [269] = { 115008, 109132, 119085, 361138, 101545 }, [270] = { 115008, 109132, 119085, 361138 } },
     PALADIN     = { [65] = { 190784 }, [66] = { 190784 }, [70] = { 190784 } },
     PRIEST      = { [256] = { 121536, 73325 }, [257] = { 121536, 73325 }, [258] = { 121536, 73325 } },
     ROGUE       = { [259] = { 36554, 2983 }, [260] = { 195457, 2983 }, [261] = { 36554, 2983 } },
@@ -131,9 +131,7 @@ end
 -- isOnGCD carries the whole answer, and it is three-valued rather than two:
 --   false -- a real cooldown is running, so report it
 --   true  -- the global cooldown only, so stay quiet
---   nil   -- nothing worth reporting, which covers both an idle spell and
---            the brief window a charge ability reports after a use that
---            left it another charge
+--   nil   -- nothing worth reporting: an idle spell
 -- Only an explicit false renders. Reading nil as "cannot tell" and falling
 -- through to the cooldown duration object instead is what put a one-second
 -- countdown under an ability whose real cooldown is half a minute: that
@@ -233,6 +231,44 @@ local function SpellInfo(spellId)
     return nil
 end
 
+-- Choice nodes: one talent replaces another, so the player can only ever have
+-- one of the pair. Both IDs still read as KNOWN -- the base is learned from
+-- levelling and never stops being known, and known-ness is asked with
+-- overrides included -- and their names differ, so neither SpellKnown nor the
+-- name dedupe separates them, and both render as two rows counting the same
+-- cooldown.
+--
+-- Asking the API which one is live does not work: an override resolver either
+-- misfires on unrelated spells or, once narrowed to spells the player does
+-- not have, never fires at all for a baseline spell like Dash. The
+-- relationships are a fixed three-entry list; stating them is exact and costs
+-- nothing.
+--
+-- MOST SPECIFIC FIRST: the talent that replaces, then the one it replaces.
+local EXCLUSIVE_GROUPS = {
+    { 252216, 1850 },   -- Tiger Dash replaces Dash
+    { 212653, 1953 },   -- Shimmer replaces Blink
+    { 115008, 109132 }, -- Chi Torpedo replaces Roll
+}
+local EXCLUSIVE_OF = {}
+for _, group in ipairs(EXCLUSIVE_GROUPS) do
+    for _, id in ipairs(group) do EXCLUSIVE_OF[id] = group end
+end
+
+-- True when a MORE SPECIFIC member of this spell's group is known: that is
+-- the one the player actually has, so this one is the replaced half. Order
+-- within the group is the priority, so this holds whichever way round the
+-- list is written.
+local function ReplacedByKnownChoice(spellId)
+    local group = EXCLUSIVE_OF[spellId]
+    if not group then return false end
+    for _, other in ipairs(group) do
+        if other == spellId then return false end
+        if SpellKnown(other) then return true end
+    end
+    return false
+end
+
 ------------------------------------------------------------------------
 -- Effective enable state: an explicit saved override wins, otherwise
 -- absence means enabled unless the preset is default-off.
@@ -278,6 +314,10 @@ end
 
 function NMA:GetCategoryDuration(spellId)
     return CategoryDuration(spellId)
+end
+
+function NMA:IsReplacedChoice(spellId)
+    return ReplacedByKnownChoice(spellId)
 end
 
 ------------------------------------------------------------------------
@@ -420,6 +460,7 @@ function NMA:BuildTracked()
         if seen[spellId] then return end
         if not SpellEnabled(db, spellId, specId) then return end
         if not SpellKnown(spellId) then return end
+        if ReplacedByKnownChoice(spellId) then return end
         local info = SpellInfo(spellId)
         if not info then return end
         -- Every Druid spec lists Wild Charge twice -- the base ID and the
@@ -629,15 +670,23 @@ function NMA:Update()
                 plainLine = self:ComposeLine(entry.customText or entry.name, nil)
             end
         else
-            local chargesLeft, _ = self:ResolveCharges(entry.spellId)
+            local chargesLeft, isChargeSpell = self:ResolveCharges(entry.spellId)
 
-            -- No usability gate: IsSpellUsable reports only learned status
-            -- and resources -- per its own docs -- and returns TRUE for a
-            -- spell sitting on cooldown, so gating on it would hide every
-            -- countdown. The charge rule is enforced by ReadCooldown
-            -- instead: the plain cooldown duration is already zero while a
-            -- charge remains.
+            -- No usability gate: IsSpellUsable reports only learned status and
+            -- resources -- per its own docs -- and returns TRUE for a spell
+            -- sitting on cooldown, so gating on it would hide every countdown.
+            -- The charge rule is enforced just below instead.
             local rem, _, isSecret = self:ReadCooldown(entry.spellId)
+
+            -- A charge spell with a charge still banked is NOT unavailable.
+            -- isOnGCD does not filter the recharge out, so spending one of two
+            -- charges put a countdown on screen for an ability the player
+            -- could still use. chargesLeft is a plain number even in combat --
+            -- SafeCharges refuses secret counts and ResolveCharges falls back
+            -- to the count it maintains -- so this comparison is safe.
+            if isChargeSpell and chargesLeft and chargesLeft > 0 then
+                rem, isSecret = nil, nil
+            end
 
             if isSecret then
                 anyRunning = true

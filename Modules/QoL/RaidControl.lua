@@ -95,8 +95,23 @@ local BUTTON_HEIGHT = 20
 local BUTTON_WIDTH = PANEL_WIDTH - 20
 local TARGET_SIZE = 22
 
+-- Bottom row: role-count plate on the left, Close filling the rest. Both
+-- widths come from these numbers, so the two always abut.
+local ROLE_ICON_SIZE   = 18
+local ROLE_COUNT_GAP   = 1
+local ROLE_PAIR_WIDTH  = ROLE_ICON_SIZE + ROLE_COUNT_GAP + 13 -- 13 = two digits
+local ROLE_PLATE_PAD   = 2                                    -- one each end
+local ROLE_PLATE_WIDTH = ROLE_PAIR_WIDTH * 3 + ROLE_PLATE_PAD
+local CLOSE_WIDTH      = PANEL_WIDTH - ROLE_PLATE_WIDTH
+
 local CWM = _G.SLASH_CLEAR_WORLD_MARKER1
 local WM = _G.SLASH_WORLD_MARKER1
+
+-- The art has a frame painted into it, which stacks with this plate's own
+-- 1px border and reads as a two-pixel edge. Crop the outer tenth off each
+-- side so the only border is ours. Local, not on KE: the LFG skin draws the
+-- same art against Blizzard's rows, where there is no KE border to double.
+local ROLE_ICON_CROP = 0.10
 
 local roleRoster = {}
 local roleCount = {}
@@ -384,7 +399,7 @@ local function RoleIcons_SortNames(a, b)
 end
 
 local function RoleIcons_AddNames(tbl, name, unitClass)
-    local color = (unitClass and RAID_CLASS_COLORS[unitClass]) or PRIEST_COLOR
+    local color = (KE:IsSafeValue(unitClass) and RAID_CLASS_COLORS[unitClass]) or PRIEST_COLOR
     tinsert(tbl, format("|cff%02x%02x%02x%s", color.r * 255, color.g * 255, color.b * 255, gsub(name, "%-.+", "*")))
 end
 
@@ -469,6 +484,48 @@ function RC:OnEvent_RoleIcons(event, initLogin, isReload)
         for role, icon in next, self.RoleIcons.icons do
             icon.count:SetText(roleCount[role] or 0)
         end
+        self:FitRolePlate()
+    end
+end
+
+-- Size the plate to the counts it is ACTUALLY showing. The pair width
+-- reserves room for two digits so a raid count of 10+ cannot clip, but with
+-- single digits that reserve sits empty at the right-hand end and reads as a
+-- gap before Close. Close follows because PositionSections pins its left
+-- edge here.
+--
+-- Combat-deferred: Close is a secure button anchored to this plate, so
+-- resizing it in combat is protected. PositionSections owns that replay.
+function RC:FitRolePlate()
+    local plate = self.RoleIcons
+    if not (plate and plate.icons) then return end
+    if InCombatLockdown() then
+        self:PositionSections()
+        return
+    end
+
+    local widest = 0
+    for _, icon in next, plate.icons do
+        local w = icon.count and icon.count:GetStringWidth() or 0
+        if w > widest then widest = w end
+    end
+    if widest <= 0 then return end
+
+    local pair = ROLE_ICON_SIZE + ROLE_COUNT_GAP + math.ceil(widest)
+    if pair > ROLE_PAIR_WIDTH then pair = ROLE_PAIR_WIDTH end
+
+    for i, data in ipairs(roles) do
+        local f = plate.icons[data.role]
+        if f then
+            f:ClearAllPoints()
+            f:SetPoint("LEFT", plate, "LEFT", ROLE_PLATE_PAD / 2 + (i - 1) * pair, 0)
+        end
+    end
+    local width = pair * 3 + ROLE_PLATE_PAD
+    plate:SetWidth(width)
+    -- -1 for the seam: without it the two 1px borders read as one thick line.
+    if self.CloseButton then
+        self.CloseButton:SetWidth(PANEL_WIDTH - width - 1)
     end
 end
 
@@ -476,35 +533,28 @@ function RC:CreateRoleIcons(panel)
     local S = KE.Skins
     local RoleIcons = CreateFrame("Frame", "KE_RaidControlRoleIcons", panel)
     -- "icon: #" pairs -- count beside the icon instead of overlaid on it,
-    -- three cells evenly spaced. Plate widened to 0.44 for breathing room;
-    -- Close computes its width from the plate so the flush right edge
-    -- holds.
-    RoleIcons:SetSize(PANEL_WIDTH * 0.44, BUTTON_HEIGHT + 8)
+    -- three cells evenly spaced. Close computes its width from the plate so
+    -- the flush right edge holds.
+    RoleIcons:SetSize(ROLE_PLATE_WIDTH, BUTTON_HEIGHT + 8)
     S.Backdrop(RoleIcons)
     RoleIcons:RegisterEvent("PLAYER_ENTERING_WORLD")
     RoleIcons:RegisterEvent("GROUP_ROSTER_UPDATE")
     RoleIcons:SetScript("OnEvent", function(_, event, a, b) RC:OnEvent_RoleIcons(event, a, b) end)
     RoleIcons.icons = {}
 
-    -- Plate contents off-center: each icon+count pair centers within its
-    -- third of the plate, making lead and trail space symmetric. pairW =
-    -- 18px icon + 3 gap + ~8px digit.
-    local cellW = (PANEL_WIDTH * 0.44) / 3
-    -- Two-digit raid counts clipped the plate edge: icon-to-count gap
-    -- tightened to 1px and the centering budget now assumes two digits, so
-    -- "15" stays inside its cell.
-    local pairW = 33 -- 18 icon + 1 gap + ~14 two-digit count
     for i, data in ipairs(roles) do
         local frame = CreateFrame("Frame", "$parent_" .. data.role, RoleIcons)
-        frame:SetSize(18, 18)
-        frame:SetPoint("LEFT", RoleIcons, "LEFT", (i - 1) * cellW + (cellW - pairW) / 2, 0)
+        frame:SetSize(ROLE_ICON_SIZE, ROLE_ICON_SIZE)
+        frame:SetPoint("LEFT", RoleIcons, "LEFT",
+            ROLE_PLATE_PAD / 2 + (i - 1) * ROLE_PAIR_WIDTH, 0)
 
         -- Modern role icons (KE.ROLE_ICONS, shared with the LFG skin),
         -- 1px border (S.Backdrop), art inset 1px.
         S.Backdrop(frame)
         local texture = frame:CreateTexture(nil, "OVERLAY")
         texture:SetTexture(KE.ROLE_ICONS[data.role])
-        texture:SetTexCoord(0, 1, 0, 1)
+        local c = ROLE_ICON_CROP
+        texture:SetTexCoord(c, 1 - c, c, 1 - c)
         texture:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
         texture:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
         frame.texture = texture
@@ -551,6 +601,7 @@ function RC:OnRegen_PositionSections()
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
     self._positionDirty = nil
     self:PositionSections()
+    self:FitRolePlate()
 end
 
 function RC:PositionSections()
@@ -570,6 +621,21 @@ function RC:PositionSections()
     local bottom = ScreenPosition(self.ShowButton)
     ReanchorSection(self.TargetIcons, bottom, nil) -- nil target = panel (parent)
     ReanchorSection(self.RoleIcons, bottom, self.TargetIcons)
+
+    -- Close is placed ENTIRELY here, both points, from a clean slate. The
+    -- secure show snippet does ClearAllPoints and sets only a right-hand
+    -- point, so leaving the left anchor to Setup means two writers each own
+    -- half the button and the result depends on which ran last.
+    local c = self.CloseButton
+    if c and self.RoleIcons and self.Panel then
+        c:ClearAllPoints()
+        if bottom then
+            c:SetPoint("BOTTOMRIGHT", self.Panel, "TOPRIGHT", 0, 30)
+        else
+            c:SetPoint("TOPRIGHT", self.Panel, "BOTTOMRIGHT", 0, -30)
+        end
+        c:SetPoint("LEFT", self.RoleIcons, "RIGHT", 1, 0) -- 1px seam
+    end
 end
 
 -- --- Show/hide driver -------------------------------------------------------
@@ -679,7 +745,7 @@ end
 -- 10/25-player difficulty and handles dynamic instances
 -- (Blizzard_UnitPopup/Mainline/UnitPopup.lua). Reimplementing it here
 -- would be a slow-motion bug.
-local DIFFICULTY_RAID = { 14, 15, 16 }   -- DifficultyUtil.ID PrimaryRaid Normal/Heroic/Mythic
+local DIFFICULTY_RAID = { 14, 15, 16 } -- DifficultyUtil.ID PrimaryRaid Normal/Heroic/Mythic
 local DIFFICULTY_PARTY = { 1, 2, 23 }    -- DifficultyUtil.ID Dungeon Normal/Heroic/Mythic
 local DIFFICULTY_LABEL = _G.CRF_DIFFICULTY or "Difficulty"
 
@@ -711,13 +777,17 @@ local function SetupDifficulty(dropdown)
         local setSelected = inRaid and SetRaidSelected or SetDungeonSelected
         local isEnabled = util and (inRaid and util.IsRaidDifficultyEnabled or util.IsDungeonDifficultyEnabled)
 
-        local labels = {
+        local labels = inRaid and {
+            _G.PLAYER_DIFFICULTY1 or "Normal",
+            _G.PLAYER_DIFFICULTY2 or "Heroic",
+            _G.PLAYER_DIFFICULTY6 or "Mythic",
+        } or {
             _G.PLAYER_DIFFICULTY1 or "Normal",
             _G.PLAYER_DIFFICULTY2 or "Heroic",
             _G.PLAYER_DIFFICULTY6 or "Mythic",
         }
 
-        for i = 1, 3 do
+        for i = 1, #ids do
             local radio = root:CreateRadio(labels[i], isSelected, setSelected, ids[i])
             -- Grey out a difficulty the player cannot actually set (locked
             -- instance, story raid, size mismatch) instead of letting the click
@@ -816,6 +886,7 @@ function RC:Setup()
     local pos = db.Position
     local ShowButton = CreateUtilButton("KE_RaidControlShowButton", UIParent, "SecureHandlerClickTemplate",
         136, BUTTON_HEIGHT, nil, nil, nil, nil, nil, _G.RAID_CONTROL or "Raid Control", nil, nil, OnClick_ShowButton)
+    KE.Skins.SetFont(ShowButton.Text, 14, "")
     if pos.bottom then
         ShowButton:SetPoint("BOTTOM", UIParent, "BOTTOM", pos.x or -400, -1)
     else
@@ -844,20 +915,21 @@ function RC:Setup()
         local point = self:GetPoint()
         if point and strfind(point, 'BOTTOM') then
             utility:SetPoint('BOTTOM', self)
-            close:SetPoint('BOTTOMRIGHT', utility, 'TOPRIGHT', -1, 30)
+            close:SetPoint('BOTTOMRIGHT', utility, 'TOPRIGHT', 0, 30)
         else
             utility:SetPoint('TOP', self)
-            close:SetPoint('TOPRIGHT', utility, 'BOTTOMRIGHT', -1, -30)
+            close:SetPoint('TOPRIGHT', utility, 'BOTTOMRIGHT', 0, -30)
         end
     ]=])
 
     self.TargetIcons = self:CreateTargetIcons(panel)
 
     local CloseButton = CreateUtilButton("KE_RaidControlClose", panel, "SecureHandlerClickTemplate",
-        PANEL_WIDTH * 0.6, BUTTON_HEIGHT + 8, "TOP", panel, "BOTTOM", 0, 0, _G.CLOSE or "Close", nil, nil, OnClick_CloseButton)
+        CLOSE_WIDTH, BUTTON_HEIGHT + 8, "TOP", panel, "BOTTOM", 0, 0, _G.CLOSE or "Close", nil, nil, OnClick_CloseButton)
     SecureHandlerSetFrameRef(CloseButton, "KE_RaidControlShowButton", ShowButton)
     CloseButton:SetAttribute("_onclick", [=[self:GetParent():Hide(); self:GetFrameRef('KE_RaidControlShowButton'):Show()]=])
     SecureHandlerSetFrameRef(panel, "KE_RaidControlClose", CloseButton)
+    self.CloseButton = CloseButton
 
     -- Row 1: Ready Check, full width.
     -- Top rows started 5px further left than the rest: the
@@ -912,18 +984,22 @@ function RC:Setup()
                 end
             end
         end
+        -- Shift-click cancels a sort stuck mid-run, so the in-progress lock
+        -- never strands the buttons.
+        local function SortClick(mode)
+            return function()
+                if IsShiftKeyDown() then KE.GroupSort:Cancel() return end
+                KE.GroupSort:Run(mode)
+            end
+        end
         local SortDefault = CreateUtilButton("KE_RaidControlSortDefault", panel, nil,
             BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", EveryoneAssist, "BOTTOMLEFT", 4, -3,
-            "Default Arrangement", sortButtonEvents, OnEvent_SortButton,
-            function() KE.GroupSort:Run("default") end)
+            "Default Arrangement", sortButtonEvents, OnEvent_SortButton, SortClick("default"))
+        -- Evens/Odds removed; Split is a full-width row matching Default
+        -- Arrangement. The "odds" mode is still in GroupSort, macro-reachable.
         local SplitGroups = CreateUtilButton("KE_RaidControlSplitGroups", panel, nil,
-            (BUTTON_WIDTH - 5) * 0.5, BUTTON_HEIGHT, "TOPLEFT", SortDefault, "BOTTOMLEFT", 0, -3,
-            "Split Groups", sortButtonEvents, OnEvent_SortButton,
-            function() KE.GroupSort:Run("split") end)
-        CreateUtilButton("KE_RaidControlSplitOdds", panel, nil,
-            (BUTTON_WIDTH - 5) * 0.5, BUTTON_HEIGHT, "TOPLEFT", SplitGroups, "TOPRIGHT", 5, 0,
-            "Evens/Odds", sortButtonEvents, OnEvent_SortButton,
-            function() KE.GroupSort:Run("odds") end)
+            BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", SortDefault, "BOTTOMLEFT", 0, -3,
+            "Split Arrangement", sortButtonEvents, OnEvent_SortButton, SortClick("split"))
         lastUtilRow = SplitGroups
         lastUtilXOfs, lastUtilYOfs = 0, -3
     end
@@ -940,10 +1016,12 @@ function RC:Setup()
         -- (frame.Close, LibDFramework panel.lua) via :Click() so DF's
         -- own close handler and hooks run. Everything here is insecure --
         -- no combat gate in either direction.
-        CreateUtilButton("KE_RaidControlNSRTNotes", panel, nil,
-            BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", lastUtilRow,
-            "BOTTOMLEFT", lastUtilXOfs, lastUtilYOfs,
-            "Shared Notes", nil, nil, function()
+        --
+        -- "/ns preminders" is the raid-tools addon's own shortcut to its
+        -- personal reminders tab. Toggling closes whichever tab is open --
+        -- one window either way.
+        local function NSRTNotes(label, arg)
+            return function()
                 local f = _G.NSUI
                 if f and f.IsShown and f:IsShown() then
                     local x = f.Close or f.CloseButton
@@ -951,29 +1029,25 @@ function RC:Setup()
                     return
                 end
                 local handler = _G.SlashCmdList and _G.SlashCmdList.NSUI
-                if not handler or not pcall(handler, "reminders") then
-                    KE:Print("Shared Notes: the Northern Sky Raid Tools command is unavailable (addon updated?)")
+                if not handler or not pcall(handler, arg) then
+                    KE:Print(label .. ": the Northern Sky Raid Tools command is unavailable (addon updated?)")
                 end
-            end)
+            end
+        end
+
+        local SharedNotes = CreateUtilButton("KE_RaidControlNSRTNotes", panel, nil,
+            (BUTTON_WIDTH - 5) * 0.5, BUTTON_HEIGHT, "TOPLEFT", lastUtilRow,
+            "BOTTOMLEFT", lastUtilXOfs, lastUtilYOfs,
+            "Shared Notes", nil, nil, NSRTNotes("Shared Notes", "reminders"))
+        CreateUtilButton("KE_RaidControlNSRTPersonalNotes", panel, nil,
+            (BUTTON_WIDTH - 5) * 0.5, BUTTON_HEIGHT, "TOPLEFT", SharedNotes,
+            "TOPRIGHT", 5, 0,
+            "Personal Notes", nil, nil, NSRTNotes("Personal Notes", "preminders"))
     end
 
     -- Role check exists on Midnight, add the icon strip
     self:CreateRoleIcons(panel)
 
-    -- Close matches the role-icon plate exactly -- top/bottom pinned to
-    -- RoleIcons (no more height mismatch), right edge landing on
-    -- PANEL_WIDTH like the marker row above. Also an explicit opaque
-    -- fill; the control-grey 0.90 read too transparent next to the
-    -- plates.
-    local closeBtn = _G.KE_RaidControlClose
-    if closeBtn and self.RoleIcons then
-        closeBtn:ClearAllPoints()
-        closeBtn:SetPoint("TOPLEFT", self.RoleIcons, "TOPRIGHT", 5, 0)
-        closeBtn:SetPoint("BOTTOMLEFT", self.RoleIcons, "BOTTOMRIGHT", 5, 0)
-        closeBtn:SetWidth(PANEL_WIDTH - self.RoleIcons:GetWidth() - 5)
-        -- Opaque override removed -- Close read darker than its
-        -- siblings; standard S.Button fill everywhere.
-    end
     self:PositionSections()
 end
 

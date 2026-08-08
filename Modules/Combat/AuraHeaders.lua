@@ -31,6 +31,8 @@ local GetTime = GetTime
 local C_UnitAuras = C_UnitAuras
 local C_DurationUtil = C_DurationUtil
 local GameTooltip = GameTooltip
+local C_Timer = C_Timer
+local hooksecurefunc = hooksecurefunc
 
 local durationObj = C_DurationUtil and C_DurationUtil.CreateDuration and C_DurationUtil.CreateDuration()
 
@@ -307,10 +309,10 @@ local function MakeHeaderModule(config)
 
     function M:OnLeaveCombat()
         self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-        -- Enabling in combat leaves CreateHeader unfinished. Without this the
-        -- Blizzard frame is already hidden and nothing replaces it.
+        -- Enabling in combat leaves CreateHeader (and FinishEnable) unfinished.
         if not self.header then
             self:CreateHeader()
+            self:FinishEnable()
             return
         end
         self:UpdateHeader()
@@ -318,7 +320,10 @@ local function MakeHeaderModule(config)
     end
 
     function M:CreateHeader()
-        if self.header then return end
+        -- templateMissing latches: OnLeaveCombat retries CreateHeader on
+        -- every combat drop, and there is nothing to retry once the template
+        -- is gone.
+        if self.header or self.templateMissing then return end
         if InCombatLockdown() then
             self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnLeaveCombat")
             return
@@ -329,7 +334,22 @@ local function MakeHeaderModule(config)
         -- would make every growth-direction change a protected reposition.
         self.mover = self.mover or CreateFrame("Frame", config.moverName, UIParent)
 
-        local h = CreateFrame("Frame", config.frameName, UIParent, "SecureAuraHeaderTemplate")
+        -- The secure aura header template can vanish out from under us: it is
+        -- still in the FrameXML dump but can be load-gated off this game
+        -- type, so nothing registers it. CreateFrame against a missing
+        -- template errors, and this enable path runs from an AceEvent handler
+        -- (OnLeaveCombat) whose dispatch chain has no pcall -- the throw
+        -- would take every other PLAYER_REGEN_ENABLED subscriber with it.
+        --
+        -- Bail cleanly and say why once. Remove this guard only when the
+        -- container-based rebuild lands.
+        local built, h = pcall(CreateFrame, "Frame", config.frameName, UIParent,
+            "SecureAuraHeaderTemplate")
+        if not built or not h then
+            self.templateMissing = true
+            KE:WarnMissingTemplate(config.featureName or config.moduleName)
+            return
+        end
         h:SetAttribute("template", "KE_AuraButtonTemplate")
         h:SetAttribute("weaponTemplate", "KE_AuraButtonTemplate")
         h:SetAttribute("unit", "player")
@@ -398,27 +418,22 @@ local function MakeHeaderModule(config)
         return (KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()) == true
     end
 
-    function M:OnEnable()
-        self:UpdateDB()
-        if not self.db.Enabled then return end
-        if self:ShouldStandDown() then return end
+    -- Everything that only makes sense once OUR header exists: removing
+    -- Blizzard's frame and registering the Edit Mode element. Idempotent --
+    -- the regen path calls it again after a deferred build.
+    function M:FinishEnable()
+        if self.finishedEnable or not self.header then return end
+        self.finishedEnable = true
 
-        -- Blizzard's frame goes away. Its CVar callbacks have to be dropped
-        -- too or they re-show it whenever those settings change.
+        self:SuppressBlizzard()
+        self:WatchEditMode()
+        -- One-shot: the CVar callbacks re-show the frame whenever those
+        -- settings change, and dropping them twice buys nothing.
         local blizz = _G[config.blizzardFrame]
-        if blizz then
-            blizz:UnregisterAllEvents()
-            blizz:Hide()
-            if _G.CVarCallbackRegistry then
-                _G.CVarCallbackRegistry:UnregisterCallback("consolidateBuffs", blizz)
-                _G.CVarCallbackRegistry:UnregisterCallback("collapseExpandBuffs", blizz)
-            end
+        if blizz and _G.CVarCallbackRegistry then
+            _G.CVarCallbackRegistry:UnregisterCallback("consolidateBuffs", blizz)
+            _G.CVarCallbackRegistry:UnregisterCallback("collapseExpandBuffs", blizz)
         end
-
-        self:CreateHeader()
-        self:RegisterEvent("PLAYER_ENTERING_WORLD", "ApplyPosition")
-        self:RegisterEvent("UI_SCALE_CHANGED", "ApplyPosition")
-        self:RegisterEvent("DISPLAY_SIZE_CHANGED", "ApplyPosition")
 
         if not self.mover or not KE.EditMode then return end
         KE.EditMode:RegisterElement({
@@ -432,10 +447,88 @@ local function MakeHeaderModule(config)
         })
     end
 
+    -- Blizzard's frame goes away -- and does NOT stay away on its own.
+    --
+    -- Unregistering its events stops it updating, but Edit Mode does not
+    -- drive it by event: importing or switching a layout runs UpdateSystem
+    -- over every registered system, which reaches the frame's
+    -- UpdateShownState and calls SetShown(true) DIRECTLY. Entering and
+    -- leaving Edit Mode do the same. A one-shot Hide at login therefore
+    -- survives until the first layout import, after which Blizzard's buffs
+    -- are back on top of ours until a /reload.
+    function M:SuppressBlizzard()
+        local blizz = _G[config.blizzardFrame]
+        if not blizz then return end
+        blizz:UnregisterAllEvents()
+        blizz:Hide()
+    end
+
+    -- Re-assert whenever Edit Mode has touched its systems.
+    --
+    -- Deferred a frame ON PURPOSE: EDIT_MODE_LAYOUTS_UPDATED is dispatched
+    -- from inside Edit Mode's own layout pass -- a secureexecuterange over
+    -- every registered system -- so hiding the frame there writes state
+    -- mid-pass. Our own frame, our own execution, one frame later.
+    --
+    -- The manager hooks are separate because entering Edit Mode re-shows the
+    -- systems and leaving it re-runs UpdateShownState, and NEITHER raises
+    -- EDIT_MODE_LAYOUTS_UPDATED -- that event is the only one the game has
+    -- for Edit Mode, so the rest has to come from the manager frame itself.
+    function M:WatchEditMode()
+        if self.editModeWatcher then return end
+
+        local function ReAssert()
+            -- IsEnabled() is the AceModule truth; db.Enabled alone can
+            -- disagree with it around enable/disable transitions.
+            if self:IsEnabled() and self.db and self.db.Enabled
+               and not self:ShouldStandDown() then
+                self:SuppressBlizzard()
+            end
+        end
+        local function Defer() C_Timer.After(0, ReAssert) end
+
+        -- Lazy: the Edit Mode addon may not have loaded when we enable.
+        local function HookManager()
+            local mgr = _G.EditModeManagerFrame
+            if not mgr or self.editModeHooked then return end
+            self.editModeHooked = true
+            mgr:HookScript("OnShow", Defer)
+            hooksecurefunc(mgr, "Hide", Defer)
+        end
+
+        local w = CreateFrame("Frame")
+        self.editModeWatcher = w
+        w:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
+        w:RegisterEvent("PLAYER_ENTERING_WORLD")
+        w:SetScript("OnEvent", function()
+            HookManager()
+            Defer()
+        end)
+        HookManager()
+    end
+
+    function M:OnEnable()
+        self:UpdateDB()
+        if not self.db.Enabled then return end
+        if self:ShouldStandDown() then return end
+
+        -- Build the replacement BEFORE removing Blizzard's. When the template
+        -- is missing CreateHeader bails; when enabling in combat it defers to
+        -- the regen handler. In BOTH cases Blizzard's frame must survive --
+        -- hiding first and then failing to build leaves no buff display at
+        -- all. FinishEnable no-ops until the header exists.
+        self:CreateHeader()
+        self:FinishEnable()
+        self:RegisterEvent("PLAYER_ENTERING_WORLD", "ApplyPosition")
+        self:RegisterEvent("UI_SCALE_CHANGED", "ApplyPosition")
+        self:RegisterEvent("DISPLAY_SIZE_CHANGED", "ApplyPosition")
+    end
+
     function M:OnDisable()
         self:UnregisterEvent("PLAYER_ENTERING_WORLD")
         self:UnregisterEvent("UI_SCALE_CHANGED")
         self:UnregisterEvent("DISPLAY_SIZE_CHANGED")
+        self.finishedEnable = nil
         -- A secure header cannot be destroyed, and Blizzard's frame cannot be
         -- revived mid-session once its events are gone; a reload restores the
         -- default cleanly.
@@ -457,6 +550,7 @@ MakeHeaderModule({
     blizzardFrame = "BuffFrame",
     displayName   = "BUFFS",
     guiPath       = "AuraHeaders_Buffs",
+    featureName   = "Player Buffs",
 })
 
 MakeHeaderModule({
@@ -470,4 +564,5 @@ MakeHeaderModule({
     blizzardFrame = "DebuffFrame",
     displayName   = "DEBUFFS",
     guiPath       = "AuraHeaders_Debuffs",
+    featureName   = "Player Debuffs",
 })

@@ -48,6 +48,26 @@ local function noopFrame()
     return setmetatable(f, { __index = function() return function() end end })
 end
 
+-- Like noopFrame, but SetSize/SetPoint calls are recorded instead of
+-- swallowed. Used wherever a spec needs to inspect a frame CreateFrame
+-- handed back to production code -- e.g. LootRoll's addon-owned stack
+-- anchor, which a spec cannot reach any other way.
+local function trackablePointFrame()
+    local f = {
+        _points = {},
+        SetSize = function(self, w, h) self._w, self._h = w, h end,
+        GetWidth = function(self) return self._w end,
+        GetHeight = function(self) return self._h end,
+        ClearAllPoints = function(self) self._points = {} end,
+        SetPoint = function(self, point, rel, relPoint, x, y)
+            self._points[#self._points + 1] =
+                { point = point, rel = rel, relPoint = relPoint, x = x, y = y }
+        end,
+        CreateFontString = function() return noopObject() end,
+    }
+    return setmetatable(f, { __index = function() return function() end end })
+end
+
 -- mock.install with loader defaults; caller overrides win. Only keys
 -- _wow_mock manages belong in defaults — everything else goes on _G.
 local function installMock(overrides, defaults)
@@ -568,15 +588,15 @@ end
 -- have via KE.db.profile.Skinning.LootRoll. GroupLootContainer is a
 -- secure-managed Blizzard frame, headlessly replaced by calling the returned
 -- `container(mock)` setter, which just assigns _G.GroupLootContainer -- the
--- global LR:ApplyPosition reads. LR._lastPoint() reads the mock's own
--- _points log (see lootroll_spec.lua's makeContainer) so a spec can assert
--- the most recent SetPoint without the mock needing a shared upvalue with
--- this loader. Returns LR, container.
+-- global LR:ApplyPosition reads. The module positions its OWN addon-owned
+-- stack anchor (LR:GetStackAnchor), never the container, so CreateFrame
+-- returns a trackablePointFrame and LR._lastPoint() reads that anchor's
+-- _points log instead of the container mock's. Returns LR, container.
 function L.loadLootRoll(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
-    _G.CreateFrame = function() return noopFrame() end
+    _G.CreateFrame = function() return trackablePointFrame() end
     _G.hooksecurefunc = function() end
     _G.InCombatLockdown = function() return false end
     -- The module's DEBUG_LR tracer captures these as upvalues AT LOAD, so they
@@ -600,9 +620,9 @@ function L.loadLootRoll(overrides)
     end
 
     LR._lastPoint = function()
-        local c = _G.GroupLootContainer
-        if not c or not c._points or #c._points == 0 then return nil end
-        return c._points[#c._points]
+        local a = LR.stackAnchor
+        if not a or not a._points or #a._points == 0 then return nil end
+        return a._points[#a._points]
     end
 
     return LR, container
@@ -952,6 +972,8 @@ function L.loadLFGReminder(overrides)
     }
     _G.IsInGroup = overrides.IsInGroup or function() return true end
     _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
+    _G.IsInRaid = overrides.IsInRaid or function() return false end
+    _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
 
     local profile = {
         LFGReminder = {
@@ -972,9 +994,24 @@ function L.loadLFGReminder(overrides)
             if not _G.InCombatLockdown() then fn(); return end
             combatQueue[#combatQueue + 1] = fn
         end,
+        -- Mirrors Core/Secret.lua's real IsSecretValue (`issecretvalue and
+        -- issecretvalue(value)`) without loading the whole file: Secret.lua
+        -- creates two frames at file scope, which would pollute this
+        -- loader's onCreateFrame spy (used to count BuildPopup's frames).
+        IsSecretValue = function(_, v) return _G.issecretvalue and _G.issecretvalue(v) end,
     }
     helpers.loadModule("Modules/Dungeons/LFGReminder.lua", KE)
     local LR = modules["LFGReminder"]
+    -- ShowPopup/HidePopup (the leader/cooldown-gate work) register and
+    -- unregister SPELL_UPDATE_COOLDOWN on every show/hide, and installAddonShim
+    -- hands back a bare module table with no AceEvent mixin -- almost every
+    -- test in this file reaches one of those two paths, so the default lives
+    -- here rather than being stubbed per test. Recorded so a spec CAN assert
+    -- registration symmetry via seams.registeredEvents, though none currently
+    -- does.
+    local registeredEvents = {}
+    LR.RegisterEvent = function(_, event) registeredEvents[event] = true end
+    LR.UnregisterEvent = function(_, event) registeredEvents[event] = nil end
     LR:UpdateDB()
 
     -- ResolveTeleportSpellByName has no stored handle and no caller that
@@ -983,12 +1020,13 @@ function L.loadLFGReminder(overrides)
     -- The deferral helpers ARE upvalues of the module methods that call
     -- them, so findUpvalue recovers those without running anything.
     -- Both are guarded: Task 5 is what creates these methods.
-    -- The module lifecycle methods (SetEnabledState, IsEnabled,
-    -- RegisterEvent) are NOT stubbed by helpers.installAddonShim -- its
-    -- modules are bare tables. A test that drives a path calling one of
-    -- them stubs it itself, e.g. LR.IsEnabled = function() return true end.
+    -- The module lifecycle methods (SetEnabledState, IsEnabled) are NOT
+    -- stubbed by helpers.installAddonShim -- its modules are bare tables. A
+    -- test that drives a path calling one of them stubs it itself, e.g.
+    -- LR.IsEnabled = function() return true end.
     local seams = {}
     seams.resolveByName = LR._ResolveTeleportSpellByName
+    seams.registeredEvents = registeredEvents
     -- Drain the deferred-teardown queue, i.e. "combat ended".
     seams.runCombatQueue = function()
         local fns = combatQueue
@@ -1427,6 +1465,7 @@ function L.loadRaidControl(overrides)
         or { GetSize = function() return 1600, 900 end, GetWidth = function() return 1600 end }
     local KE = { db = { profile = { RaidControl = { Position = {} } } }, Skins = {} }
     KE.Skins.SafeCenter = overrides.SafeCenter or function() return 0, 0 end
+    helpers.loadModule("Core/Secret.lua", KE)
     helpers.loadModule("Modules/QoL/RaidControl.lua", KE)
     local RC = modules["RaidControl"]
 
@@ -1650,13 +1689,22 @@ function L.loadMovementAlert(overrides)
     _G.GetTime = overrides.GetTime or function() return 1000 end
     _G.UnitClass = overrides.UnitClass or function() return "Druid", "DRUID", 11 end
     _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
-    _G.IsPlayerSpell = overrides.IsPlayerSpell or function() return true end
-    _G.IsSpellKnownOrOverridesKnown = overrides.IsSpellKnownOrOverridesKnown or function() return false end
     _G.C_Spell = overrides.C_Spell or {
         GetSpellCooldown = function() return nil end,
         GetSpellCharges = function() return nil end,
         GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,
     }
+    -- The module resolves known-ness through C_SpellBook. Specs override
+    -- .known per-case; everything defaults to unknown.
+    _G.C_SpellBook = overrides.C_SpellBook or {
+        known = {},
+        IsSpellKnownOrInSpellBook = function(_) return false end,
+    }
+    _G.C_SpellBook.IsSpellKnownOrInSpellBook = function(spellId)
+        return _G.C_SpellBook.known[spellId] == true
+    end
+    _G.Enum = overrides.Enum or {}
+    _G.Enum.SpellBookSpellBank = _G.Enum.SpellBookSpellBank or { Player = 0 }
 
     local KE = {
         Print = function() end,

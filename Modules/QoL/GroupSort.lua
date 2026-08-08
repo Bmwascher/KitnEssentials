@@ -461,7 +461,24 @@ end
 
 local lastRun
 
+-- Shift-click on either arrangement button. The 15s in-progress lock is a
+-- backstop against a sort that loops, but until it expires every press is
+-- refused -- so there has to be a way out that is not waiting it out.
+function GS:Cancel()
+    if not Groups.Processing then
+        KE:Print("Group Sort: nothing running.")
+        return
+    end
+    Groups.Processing = false
+    Groups.ProcessStart = nil
+    lastRun = nil -- do not also make them sit out the run cooldown
+    KE:Print("Group Sort: cancelled.")
+end
+
 function GS:Run(mode) -- "default" | "split" | "odds"
+    -- Whether spec broadcasts have already been arriving decides whether the
+    -- sort can start immediately -- see the delay at the end of this function.
+    local hadSpecData = libSpecRegistered
     RegisterLibSpec()
     -- Hard combat gate: the buttons grey out too, but keybinds, macros, and
     -- edge-of-combat clicks all land here.
@@ -495,7 +512,15 @@ function GS:Run(mode) -- "default" | "split" | "odds"
     difficultyID = (instanceType == "raid" and difficultyID) or GetRaidDifficultyID() or 0
     if difficultyID == 16 then Flex = false end
     if difficultyID == 233 then MythicFlex = true end
-    _G.C_Timer.After(2, function() self:SortGroup(Flex, default, odds, MythicFlex) end)
+    -- RegisterLibSpec runs at login, so by the time anyone presses a button
+    -- the data has normally been arriving all session. The fixed 2s pause was
+    -- why a press looked like it did nothing: every refusal prints, so
+    -- silence meant the sort was accepted and sitting in a timer.
+    if hadSpecData then
+        self:SortGroup(Flex, default, odds, MythicFlex)
+    else
+        _G.C_Timer.After(2, function() self:SortGroup(Flex, default, odds, MythicFlex) end)
+    end
 end
 
 -- --- Continuation driver -----------------------------------------------------

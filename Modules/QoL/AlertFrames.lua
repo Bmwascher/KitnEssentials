@@ -29,7 +29,6 @@ local _G = _G
 local ipairs = ipairs
 local CreateFrame = CreateFrame
 local hooksecurefunc = hooksecurefunc
-local InCombatLockdown = InCombatLockdown
 local UIParent = UIParent
 
 -- Growth state, mutated by PostAlertMove.
@@ -79,6 +78,13 @@ function AF:ApplyEventToastPosition()
     })
 end
 
+-- Replace-mode LootRoll owns the BonusRollFrame PROMPT (it anchors it to its
+-- own bar stack); the winnings toasts are nobody's either way.
+local function LootRollReplacesRolls()
+    local LR = KitnEssentials.GetModule and KitnEssentials:GetModule("LootRoll", true)
+    return LR and LR.db and LR.db.Enabled and LR.db.Replace and true or false
+end
+
 -- Trading Post (PerksProgram) support: when Blizzard re-bases the alert stack
 -- onto the PerksProgram footer, follow it (and grow up over it). AlertFrame
 -- and PerksProgramFrame are absent from .luacheckrc's read_globals, so both
@@ -126,29 +132,68 @@ function AF:PostAlertMove()
     self:PositionGroupLootContainer()
 end
 
--- LootRoll (non-Replace, Reposition on) owns the container outright -- both
--- its anchor (PositionGroupLootContainer, below) and its removal from
--- Blizzard's managed layout (InstallHooks' reparent) must stand down for it,
--- or Alert Frames reparenting first leaves LootRoll's own origin-parent
--- capture (Modules/Skinning/LootRoll.lua) never set, permanently
--- breaking its disable-time restore (Modules/Skinning/LootRoll.lua).
--- One helper, called from both places, so the three-key test is never
--- written twice.
-local function LootRollOwnsGroupLootContainer()
-    local LR = KitnEssentials.GetModule and KitnEssentials:GetModule("LootRoll", true)
-    return LR and LR.db and LR.db.Enabled and LR.db.Reposition and not LR.db.Replace and true or false
-end
-
 -- The container renders wherever its LAST anchors point, so it only snaps
 -- into the stack when AlertFrame:UpdateAnchors next runs. GroupLootContainer
 -- is absent from .luacheckrc's read_globals, so it is reached through _G.
+-- Nothing to yield to any more: LootRoll used to move this container and now
+-- moves the roll FRAMES off it instead (Modules/Skinning/LootRoll.lua), so
+-- the two no longer compete.
 function AF:PositionGroupLootContainer()
     local glc = _G.GroupLootContainer
     if not (glc and self.holder) then return end
-    if LootRollOwnsGroupLootContainer() then return end
     local perksAnchor = GetPerksAnchor()
     glc:ClearAllPoints()
     glc:SetPoint(POSITION, perksAnchor or self.holder, POINT, X_OFFSET, Y_OFFSET)
+end
+
+local BONUS_ROLL_FRAMES = { "BonusRollFrame", "BonusRollLootWonFrame", "BonusRollMoneyWonFrame" }
+
+-- Only a frame the container is NOT holding needs placing: anything in
+-- rollFrames is already stacked by the game relative to the container, which
+-- PositionGroupLootContainer has just placed. Re-anchoring those piles them
+-- all onto one spot.
+function AF:PositionBonusRollToasts()
+    if not self.holder then return end
+    local glc = _G.GroupLootContainer
+    local held = {}
+    if glc and type(glc.rollFrames) == "table" then
+        for _, f in pairs(glc.rollFrames) do held[f] = true end
+    end
+    local anchor = GetPerksAnchor() or self.holder
+    if glc and glc:IsShown() then anchor = glc end
+    for _, name in ipairs(BONUS_ROLL_FRAMES) do
+        local f = _G[name]
+        if f and f:IsShown() and not held[f] and f.ClearAllPoints
+           and not (name == "BonusRollFrame" and LootRollReplacesRolls()) then
+            f:ClearAllPoints()
+            f:SetPoint(POSITION, anchor, POINT, X_OFFSET, Y_OFFSET)
+            anchor = f
+        end
+    end
+end
+
+-- Re-apply after Blizzard's managed layout has settled. Coalesced; the
+-- layout marks itself dirty and can settle on EITHER of the next two
+-- frames, so both passes place -- one placement after two ticks would
+-- leave a first-frame settle unanswered.
+function AF:ReassertContainer()
+    if self.reassertPending then return end
+    self.reassertPending = true
+
+    local frames = 0
+    local function settle()
+        frames = frames + 1
+        if self:IsEnabled() then
+            self:PositionGroupLootContainer()
+            self:PositionBonusRollToasts()
+        end
+        if frames < 2 then
+            C_Timer.After(0, settle)
+        else
+            self.reassertPending = false
+        end
+    end
+    C_Timer.After(0, settle)
 end
 
 ---------------------------------------------------------------------------------
@@ -218,32 +263,36 @@ function AF:InstallHooks()
     if af.SetBaseAnchorFrame then hooksecurefunc(af, "SetBaseAnchorFrame", Reroot) end
     if af.ResetBaseAnchorFrame then hooksecurefunc(af, "ResetBaseAnchorFrame", Reroot) end
 
-    -- GroupLootContainer: stop it fighting the stack. Removal from Blizzard's
-    -- managed layout is by REPARENTING to UIParent only, and only out of
-    -- combat -- ignoreInLayout / UIPARENT_MANAGED_FRAME_POSITIONS writes both
-    -- taint the secure managed-layout pass and are never written here (see
-    -- the LootRoll module's own note on the same mechanism). The reparent
-    -- additionally stands down when LootRoll owns the container -- same
-    -- condition PositionGroupLootContainer already guards its anchor with
-    -- (LootRollOwnsGroupLootContainer, above). Reparenting here first would
-    -- otherwise beat LootRoll to it: LootRoll captures the container's
-    -- ORIGINAL parent lazily, only inside its own reparent branch
-    -- (Modules/Skinning/LootRoll.lua), so if Alert Frames reparents
-    -- first that capture never happens and LootRoll's disable-time restore
-    -- (Modules/Skinning/LootRoll.lua) becomes a permanent no-op.
+    -- GroupLootContainer stays exactly as Blizzard manages it. LootRoll
+    -- moves the roll FRAMES off it instead of moving the container
+    -- (Modules/Skinning/LootRoll.lua), so nothing here needs to reparent it.
     local glc = _G.GroupLootContainer
-    if glc then
-        glc:EnableMouse(false)
-        if not LootRollOwnsGroupLootContainer() and not InCombatLockdown() and glc:GetParent() ~= UIParent then
-            glc:SetParent(UIParent)
-        end
-    end
+    if glc then glc:EnableMouse(false) end
     -- Place the container in the SAME execution that shows it.
     if type(_G.GroupLootContainer_Update) == "function" then
         hooksecurefunc("GroupLootContainer_Update", function()
-            if AF:IsEnabled() then AF:PositionGroupLootContainer() end
+            if not AF:IsEnabled() then return end
+            AF:PositionGroupLootContainer()
+            AF:PositionBonusRollToasts()
+            AF:ReassertContainer()
         end)
     end
+    -- Blizzard's managed layout settles a frame or two after the update
+    -- above runs, so also re-assert on the container's own OnShow.
+    if glc and not self.glcShowHooked then
+        self.glcShowHooked = true
+        glc:HookScript("OnShow", function() AF:ReassertContainer() end)
+    end
+
+    -- BonusRollLootWonFrame / BonusRollMoneyWonFrame are added through
+    -- AddAlertFrame rather than as subsystems, so AdjustSubSystem never
+    -- sees them; place them directly when Blizzard adds them.
+    hooksecurefunc(af, "AddAlertFrame", function(_, frame)
+        if not (AF:IsEnabled() and AF.holder and frame and frame.ClearAllPoints) then return end
+        AF:PostAlertMove()
+        frame:ClearAllPoints()
+        frame:SetPoint(POSITION, GetPerksAnchor() or AF.holder, POINT, X_OFFSET, Y_OFFSET)
+    end)
 end
 
 ---------------------------------------------------------------------------------
