@@ -1567,6 +1567,10 @@ local Defaults = {
             RoleFilterEnabled = true,
             MutePresetSounds = false,
             SoundChannel = "Master",
+            -- Last season + dungeon viewed on the Dungeons tab (GUI
+            -- navigation state; the dungeon key is what selection trusts,
+            -- the season is re-derived from the registry at read time).
+            LastViewed = {},
             SpellRoleOverrides = {},
             SpellDisabled = {},
             SpellShowAtOverrides = {},
