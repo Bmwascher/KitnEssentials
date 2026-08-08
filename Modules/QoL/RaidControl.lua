@@ -886,6 +886,7 @@ function RC:Setup()
     local pos = db.Position
     local ShowButton = CreateUtilButton("KE_RaidControlShowButton", UIParent, "SecureHandlerClickTemplate",
         136, BUTTON_HEIGHT, nil, nil, nil, nil, nil, _G.RAID_CONTROL or "Raid Control", nil, nil, OnClick_ShowButton)
+    KE.Skins.SetFont(ShowButton.Text, 14, "")
     if pos.bottom then
         ShowButton:SetPoint("BOTTOM", UIParent, "BOTTOM", pos.x or -400, -1)
     else
