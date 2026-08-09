@@ -1150,7 +1150,7 @@ function EditMode:CreateNudgeFrame()
 
     -- Main frame
     local frame = CreateFrame("Frame", "KE_EditModeNudge", UIParent, "BackdropTemplate")
-    frame:SetSize(160, 304)
+    frame:SetSize(160, 332)
     frame:SetPoint("CENTER", UIParent, "CENTER", 400, 0)
     frame:SetFrameStrata("TOOLTIP")
     frame:SetFrameLevel(1001)
@@ -1561,10 +1561,37 @@ function EditMode:CreateNudgeFrame()
     frame.btnLeft:SetScript("OnClick", function() EditMode:NudgeSelectedElement(-1, 0) end)
     frame.btnRight:SetScript("OnClick", function() EditMode:NudgeSelectedElement(1, 0) end)
 
+    -- Done button. Bottom of the stack, so everything above chains off it.
+    local doneBtn = CreateFrame("Button", nil, frame, "BackdropTemplate")
+    doneBtn:SetSize(140, 22)
+    doneBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, 8)
+    doneBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = KE:GetPixelSize(),
+    })
+    doneBtn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+    doneBtn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+    local doneBtnText = doneBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    doneBtnText:SetPoint("CENTER")
+    doneBtnText:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
+    doneBtnText:SetShadowColor(0, 0, 0, 0)
+    doneBtnText:SetShadowOffset(0, 0)
+    doneBtnText:SetText("Done")
+    doneBtnText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    frame.doneBtn = doneBtn
+    frame.doneBtnText = doneBtnText
+
+    -- Not gated on combat: the combat handler exits through this same call.
+    doneBtn:SetScript("OnClick", function()
+        EditMode:Exit()
+    end)
+
     -- Settings button
     local settingsBtn = CreateFrame("Button", nil, frame, "BackdropTemplate")
     settingsBtn:SetSize(140, 22)
-    settingsBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, 8)
+    settingsBtn:SetPoint("BOTTOM", doneBtn, "TOP", 0, 6)
     settingsBtn:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -1831,6 +1858,17 @@ function EditMode:UpdateNudgeFrameTheme()
     ThemeToolToggle(self.nudgeFrame.gridBtn)
     ThemeToolToggle(self.nudgeFrame.snapBtn)
     ThemeToolToggle(self.nudgeFrame.spacingBtn)
+
+    -- Same three colours, but its fontstring hangs off a different field name.
+    if self.nudgeFrame.doneBtn then
+        self.nudgeFrame.doneBtn:SetBackdropColor(
+            Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+        self.nudgeFrame.doneBtn:SetBackdropBorderColor(
+            Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        self.nudgeFrame.doneBtnText:SetTextColor(
+            Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end
+
     if self.nudgeFrame.categoryList then
         self.nudgeFrame.categoryList:SetBackdropColor(
             Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
