@@ -939,6 +939,49 @@ function KE:CombineOverlayInsets(grid, elements)
            (grid[3] or 0) + best[3], (grid[4] or 0) + best[4]
 end
 
+-- The font a FontString is actually rendering, as one comparable value.
+--
+-- All THREE returns of GetFont are encoded. Keeping only the path leaves a size
+-- or an outline change reading as no change, which strands the previous font's
+-- measurements on screen through exactly the gap a deferred sampler exists to
+-- close. And this is read back FROM the FontString rather than from settings,
+-- because KE:ApplyFont substitutes a fallback path, substitutes size 12 for an
+-- absent or non-positive size, and rewrites the outline flags.
+---@param fontString FontString?
+---@return string?
+function KE:FontKey(fontString)
+    if not (fontString and fontString.GetFont) then return nil end
+    local path, size, flags = fontString:GetFont()
+    return tostring(path) .. ":" .. tostring(size) .. ":" .. tostring(flags)
+end
+
+-- Records what a text role measured, under the font it measured with.
+--
+-- A font change clears the old dimensions at once rather than waiting for a
+-- replacement: the sample arrives a frame later, and leaving the previous
+-- font's numbers up in the meantime is the one stale window a user notices,
+-- because they just changed the font and the box did not move.
+--
+-- An invalid sample under an UNCHANGED font keeps what is there. The text is
+-- empty between populates, and letting an empty read shrink the box under the
+-- user's cursor mid-drag is worse than being a frame stale.
+function KE:CommitTextExtent(cache, role, fontKey, width, height)
+    if not (cache and role) then return end
+    local entry = cache[role]
+    if not entry then
+        entry = {}
+        cache[role] = entry
+    end
+
+    if entry.fontKey ~= fontKey then
+        entry.fontKey = fontKey
+        entry.width, entry.height = nil, nil
+    end
+    if width and height then
+        entry.width, entry.height = width, height
+    end
+end
+
 PreviewManager.guiOpen = false
 PreviewManager.editModeActive = false
 PreviewManager.previewsActive = false
