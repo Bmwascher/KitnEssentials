@@ -34,6 +34,7 @@ local BORDER_SIZE = 2
 local FILL_ALPHA = 0.25
 local TEXT_FONT_SIZE = 14
 local SHIFT_FADE_ALPHA = 0.1
+local CATEGORY_ROW_HEIGHT = 20
 
 -- Categories are the sidebar's own sections. A nil id means no filter.
 -- The sidebar also has settings_section and optimize_section; neither registers
@@ -85,7 +86,7 @@ function EditMode:RegisterElement(config)
     -- If edit mode is already active, create overlay for this element
     if self.isActive then
         self:CreateOverlayForElement(config.key)
-        self:UpdateCategoryStrip()
+        self:UpdateCategorySelector()
     end
 end
 
@@ -106,7 +107,7 @@ function EditMode:UnregisterElement(key)
     end
 
     if self.isActive then
-        self:UpdateCategoryStrip()
+        self:UpdateCategorySelector()
     end
 end
 
@@ -290,7 +291,7 @@ function EditMode:RefreshLiveState()
         end
     end
 
-    self:UpdateCategoryStrip()
+    self:UpdateCategorySelector()
 end
 
 -- Everything a pooled overlay must forget before it is reused. Exit resets the
@@ -769,10 +770,23 @@ function EditMode:SetupEscapeHandler()
     if not self.escapeFrame then
         self.escapeFrame = CreateFrame("Frame", "KE_EditModeEscape", UIParent)
         self.escapeFrame:SetScript("OnKeyDown", function(frame, key)
-            if key == "ESCAPE" then
-                frame:SetPropagateKeyboardInput(false)
-                EditMode:Exit()
-            end
+            -- SetPropagateKeyboardInput is restricted in combat, and the combat
+            -- auto-exit reaches this frame while still in lockdown — the same
+            -- window RemoveEscapeHandler guards. The tool is closing anyway, so
+            -- refusing the whole keypress costs at most one swallowed key and
+            -- avoids a blocked-action error.
+            if InCombatLockdown() then return end
+
+            -- Re-opened for every key, because the flag persists on the frame.
+            -- Escape used to be the last thing this handler ever did before the
+            -- handler was torn down, so leaving it closed cost nothing; now that
+            -- Escape can be consumed without exiting, a stuck flag would swallow
+            -- the next keypress, movement included.
+            frame:SetPropagateKeyboardInput(true)
+            if key ~= "ESCAPE" then return end
+
+            frame:SetPropagateKeyboardInput(false)
+            EditMode:HandleEscape()
         end)
     end
     self.escapeFrame:EnableKeyboard(true)
@@ -893,15 +907,26 @@ function EditMode:StartDeselectChecker()
                 overAny = true
             end
 
-            -- The category strip is a child of the nudge frame but sits ABOVE
-            -- it, so it falls outside the parent's rect and the test above
-            -- cannot see it. Without this, every category click reads as a
-            -- click on empty space and clears the selection the strip exists
-            -- to filter.
-            if not overAny and EditMode.nudgeFrame
-                and EditMode.nudgeFrame.categoryStrip
-                and EditMode.nudgeFrame.categoryStrip:IsMouseOver() then
+            -- The category selector is a child of the nudge frame but sits
+            -- ABOVE it, and its open list hangs below across the tool. Neither
+            -- falls inside the parent's rect, so without this every click on
+            -- them reads as a click on empty space and clears the selection the
+            -- filter exists to narrow.
+            local nudge = EditMode.nudgeFrame
+            local overSelector = nudge and nudge.categorySelector
+                and nudge.categorySelector:IsMouseOver()
+            local overList = nudge and nudge.categoryList
+                and nudge.categoryList:IsShown()
+                and nudge.categoryList:IsMouseOver()
+
+            if not overAny and (overSelector or overList) then
                 overAny = true
+            end
+
+            -- A click anywhere else dismisses the list, the way every other
+            -- dropdown in the addon behaves.
+            if not overSelector and not overList then
+                EditMode:CloseCategoryList()
             end
 
             -- Ignore clicks on the GUI main frame
@@ -1060,56 +1085,127 @@ function EditMode:CreateNudgeFrame()
     frame:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], 1)
     frame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
-    -- Category strip. Parented to the nudge frame so the two drag together.
-    local strip = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    -- Centred above the tool rather than matching its width: seven labels do not
-    -- fit in 160. Final width is set from the measured buttons below.
-    strip:SetPoint("BOTTOM", frame, "TOP", 0, 4)
-    strip:SetHeight(24)
-    strip:SetBackdrop({
+    -- Category selector. Parented to the nudge frame so the two drag together.
+    -- Matches the tool's width: a row of seven labelled buttons could not, and
+    -- read as a shelf balanced on top of the tool rather than part of it.
+    local selector = CreateFrame("Button", nil, frame, "BackdropTemplate")
+    selector:SetSize(160, 22)
+    selector:SetPoint("BOTTOM", frame, "TOP", 0, 2)
+    selector:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = KE:GetPixelSize(),
     })
-    strip:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.95)
-    strip:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
-    frame.categoryStrip = strip
+    selector:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.95)
+    selector:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    frame.categorySelector = selector
+
+    local showingLabel = selector:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    showingLabel:SetPoint("LEFT", selector, "LEFT", 6, 0)
+    showingLabel:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
+    showingLabel:SetShadowColor(0, 0, 0, 0)
+    showingLabel:SetShadowOffset(0, 0)
+    showingLabel:SetText("Showing")
+    showingLabel:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2],
+        Theme.textSecondary[3], 0.7)
+
+    local selectorArrow = selector:CreateTexture(nil, "OVERLAY")
+    selectorArrow:SetSize(10, 10)
+    selectorArrow:SetPoint("RIGHT", selector, "RIGHT", -6, 0)
+    selectorArrow:SetTexture(arrowTexture)
+    selectorArrow:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    selectorArrow:SetTexelSnappingBias(0)
+    selectorArrow:SetSnapToPixelGrid(false)
+    selector.arrow = selectorArrow
+
+    local selectorValue = selector:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    selectorValue:SetPoint("RIGHT", selectorArrow, "LEFT", -4, 0)
+    selectorValue:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
+    selectorValue:SetShadowColor(0, 0, 0, 0)
+    selectorValue:SetShadowOffset(0, 0)
+    selectorValue:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    selector.value = selectorValue
+
+    -- The list hangs below the selector, over the tool. The nudge frame already
+    -- sits at TOOLTIP/1001, so the level has to be raised explicitly or the list
+    -- draws underneath the thing it opens over.
+    local list = CreateFrame("Frame", nil, selector, "BackdropTemplate")
+    list:SetPoint("TOPLEFT", selector, "BOTTOMLEFT", 0, -2)
+    list:SetPoint("TOPRIGHT", selector, "BOTTOMRIGHT", 0, -2)
+    list:SetHeight(#CATEGORIES * CATEGORY_ROW_HEIGHT + 4)
+    list:SetFrameStrata("TOOLTIP")
+    list:SetFrameLevel(frame:GetFrameLevel() + 20)
+    -- The rows leave a border's worth of list uncovered. Without this, a press
+    -- on that sliver falls through to the nudge frame beneath and drags the
+    -- tool while the user thinks they are using the list.
+    list:EnableMouse(true)
+    list:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = KE:GetPixelSize(),
+    })
+    list:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+    list:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    list:Hide()
+    frame.categoryList = list
     frame.categoryButtons = {}
 
-    local stripPad, stripGap = 6, 4
-    local cursorX = stripPad
     for index, category in ipairs(CATEGORIES) do
-        local btn = CreateFrame("Button", nil, strip, "BackdropTemplate")
-        btn:SetHeight(18)
-        btn:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = KE:GetPixelSize(),
-        })
+        local rowY = -2 - (index - 1) * CATEGORY_ROW_HEIGHT
+        local btn = CreateFrame("Button", nil, list)
+        btn:SetHeight(CATEGORY_ROW_HEIGHT)
+        btn:SetPoint("TOPLEFT", list, "TOPLEFT", 2, rowY)
+        btn:SetPoint("TOPRIGHT", list, "TOPRIGHT", -2, rowY)
+
+        local hover = btn:CreateTexture(nil, "BACKGROUND")
+        hover:SetAllPoints()
+        hover:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.25)
+        hover:Hide()
+        btn.hover = hover
 
         local catLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        catLabel:SetPoint("CENTER")
-        catLabel:SetFont(KE.FONT or STANDARD_TEXT_FONT, 11, "OUTLINE")
+        catLabel:SetPoint("LEFT", btn, "LEFT", 6, 0)
+        catLabel:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
         catLabel:SetShadowColor(0, 0, 0, 0)
         catLabel:SetShadowOffset(0, 0)
         catLabel:SetText(category.label)
         btn.label = catLabel
 
-        -- Addon-owned literal text on a frame with no secret anchor, so this
-        -- measurement cannot return a secret.
-        btn:SetWidth(catLabel:GetStringWidth() + 14)
-        btn:SetPoint("LEFT", strip, "LEFT", cursorX, 0)
-        cursorX = cursorX + btn:GetWidth() + stripGap
+        -- The count that decides whether the row is selectable, shown rather
+        -- than only implied by dimming it.
+        local catCount = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        catCount:SetPoint("RIGHT", btn, "RIGHT", -6, 0)
+        catCount:SetFont(KE.FONT or STANDARD_TEXT_FONT, 11, "OUTLINE")
+        catCount:SetShadowColor(0, 0, 0, 0)
+        catCount:SetShadowOffset(0, 0)
+        btn.count = catCount
 
         btn.categoryId = category.id
+        btn.categoryLabel = category.label
+
+        btn:SetScript("OnEnter", function(self)
+            if self:IsEnabled() then self.hover:Show() end
+        end)
+        btn:SetScript("OnLeave", function(self) self.hover:Hide() end)
         btn:SetScript("OnClick", function(self)
             EditMode:SetCategory(self.categoryId)
+            -- Closed on the NEXT frame, not this one. The deselect checker
+            -- tests the list's rect on this same mouse-up, and a list already
+            -- hidden by then reads as a click on empty space — which would
+            -- clear the very selection a switch to All is meant to keep.
+            C_Timer.After(0, function() EditMode:CloseCategoryList() end)
         end)
 
         frame.categoryButtons[index] = btn
     end
 
-    strip:SetWidth(cursorX - stripGap + stripPad)
+    selector:SetScript("OnClick", function() EditMode:ToggleCategoryList() end)
+    selector:SetScript("OnEnter", function(self)
+        self:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end)
+    selector:SetScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    end)
 
     -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1545,38 +1641,95 @@ function EditMode:UpdateNudgeFrameTheme()
     self.nudgeFrame:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.95)
     self.nudgeFrame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
-    if self.nudgeFrame.categoryStrip then
-        self.nudgeFrame.categoryStrip:SetBackdropColor(
+    if self.nudgeFrame.categorySelector then
+        self.nudgeFrame.categorySelector:SetBackdropColor(
             Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.95)
-        self.nudgeFrame.categoryStrip:SetBackdropBorderColor(
+        self.nudgeFrame.categorySelector:SetBackdropBorderColor(
             Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        self.nudgeFrame.categorySelector.arrow:SetVertexColor(
+            Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        self.nudgeFrame.categorySelector.value:SetTextColor(
+            Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     end
-    self:UpdateCategoryStrip()
+    if self.nudgeFrame.categoryList then
+        self.nudgeFrame.categoryList:SetBackdropColor(
+            Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+        self.nudgeFrame.categoryList:SetBackdropBorderColor(
+            Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        for _, btn in ipairs(self.nudgeFrame.categoryButtons) do
+            btn.hover:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.25)
+        end
+    end
+    self:UpdateCategorySelector()
 
     -- Refresh the info display with new colors
     self:UpdateNudgeFrameInfo()
 end
 
--- Selected category reads as accent-filled, the rest as plain controls, an
--- empty one as dimmed and unclickable.
-function EditMode:UpdateCategoryStrip()
-    if not (self.nudgeFrame and self.nudgeFrame.categoryButtons) then return end
+-- Escape backs out one layer at a time: an open category list first, the tool
+-- second. Without the first layer, dismissing a list you opened by mistake
+-- would also throw away the whole session.
+function EditMode:HandleEscape()
+    local nudge = self.nudgeFrame
+    if nudge and nudge.categoryList and nudge.categoryList:IsShown() then
+        self:CloseCategoryList()
+        return
+    end
+    self:Exit()
+end
 
-    for _, btn in ipairs(self.nudgeFrame.categoryButtons) do
+function EditMode:ToggleCategoryList()
+    local frame = self.nudgeFrame
+    if not (frame and frame.categoryList) then return end
+
+    if frame.categoryList:IsShown() then
+        self:CloseCategoryList()
+    else
+        frame.categoryList:Show()
+        frame.categorySelector.arrow:SetRotation(math.pi)
+    end
+end
+
+function EditMode:CloseCategoryList()
+    local frame = self.nudgeFrame
+    if not (frame and frame.categoryList) then return end
+
+    frame.categoryList:Hide()
+    frame.categorySelector.arrow:SetRotation(0)
+end
+
+-- The control names the active category; the list carries the rest. An empty
+-- category reads as dimmed and unclickable, with its count showing why.
+function EditMode:UpdateCategorySelector()
+    local frame = self.nudgeFrame
+    if not (frame and frame.categoryButtons) then return end
+
+    for _, btn in ipairs(frame.categoryButtons) do
+        local count = self:CountElementsInCategory(btn.categoryId)
         local selected = (btn.categoryId == self.activeCategory)
-        local populated = self:CountElementsInCategory(btn.categoryId) > 0
+        local populated = count > 0
 
         btn:SetEnabled(populated)
-        btn:SetAlpha(populated and 1 or 0.4)
+        btn.count:SetText(count)
+
+        if not populated then
+            btn.hover:Hide()
+            btn.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2],
+                Theme.textSecondary[3], 0.3)
+            btn.count:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2],
+                Theme.textSecondary[3], 0.3)
+        elseif selected then
+            btn.label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            btn.count:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.7)
+        else
+            btn.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2],
+                Theme.textSecondary[3], 1)
+            btn.count:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2],
+                Theme.textSecondary[3], 0.5)
+        end
 
         if selected then
-            btn:SetBackdropColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.35)
-            btn:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-            btn.label:SetTextColor(1, 1, 1, 1)
-        else
-            btn:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], 1)
-            btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
-            btn.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+            frame.categorySelector.value:SetText(btn.categoryLabel)
         end
     end
 end
@@ -1631,11 +1784,14 @@ function EditMode:ShowNudgeFrame()
     end
     self.nudgeFrame:Show()
     self:UpdateNudgeFrameInfo()
-    self:UpdateCategoryStrip()
+    self:UpdateCategorySelector()
 end
 
 function EditMode:HideNudgeFrame()
     if self.nudgeFrame then
+        -- Hiding the tool hides the list with it, but a child keeps its own
+        -- shown state, so without this it reopens still expanded next time.
+        self:CloseCategoryList()
         self.nudgeFrame:Hide()
     end
     self.selectedElementKey = nil
