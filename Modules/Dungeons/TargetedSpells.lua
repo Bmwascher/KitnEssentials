@@ -139,24 +139,33 @@ end
 -- It matters because ApplySettings is the in-place path — glow and content
 -- gating — and is also what a profile switch reaches. Without this comparison
 -- the pooled frames keep the previous profile's geometry.
--- No fallbacks. A fallback here would have to guess which of the module's own
--- defaults the builders would land on, and guessing wrong turns a real change
--- into no change. tostring keeps a nil comparable instead, so an absent setting
--- differs from a present one, which is the honest answer.
+-- No fallbacks for the settings themselves. A fallback here would have to guess
+-- which of the module's own defaults the builders would land on, and guessing
+-- wrong turns a real change into no change. tostring keeps a nil comparable
+-- instead, so an absent setting differs from a present one.
+--
+-- The font face is the one exception, and it is not a fallback: a nil FontFace
+-- is not "no font", it MEANS the profile's global font. Keying the raw setting
+-- gets it wrong in both directions — two profiles with no per-module choice and
+-- different global fonts key the same, and a profile that names the global font
+-- explicitly keys differently from one that leaves it alone while rendering
+-- identically. The resolved face is passed in.
 local REBUILD_KEY_FIELDS = {
     "IconSize", "TextSpacing", "Gap", "Grow", "MaxIcons",
-    "FontSize", "FontFace", "FontOutline", "Decimals",
+    "FontSize", "FontOutline", "Decimals",
 }
 
 ---@param db table?
+---@param fontFace string? resolved face, not db.FontFace
 ---@return string
-function TS.RebuildKey(db)
+function TS.RebuildKey(db, fontFace)
     if not db then return "" end
 
     local parts = {}
     for i = 1, #REBUILD_KEY_FIELDS do
         parts[i] = tostring(db[REBUILD_KEY_FIELDS[i]])
     end
+    parts[#parts + 1] = tostring(fontFace)
 
     local colour = db.FontColor
     for i = 1, 4 do
@@ -164,6 +173,15 @@ function TS.RebuildKey(db)
     end
 
     return tconcat(parts, ":")
+end
+
+-- The key for the settings that are live right now. Kept separate from the pure
+-- helper so the face resolution has one home and the helper stays comparable
+-- against any face a caller wants to ask about.
+---@return string
+function TS:CurrentRebuildKey()
+    local db = self.db
+    return TS.RebuildKey(db, db and (db.FontFace or KE:GetGlobalFont()))
 end
 
 -- Overlay insets for the entry stack. The anchor frame is one entry tall and
@@ -319,7 +337,7 @@ end
 -- drops the pool. Stamping anywhere else — after re-sizing the anchor, say —
 -- makes the key claim the entries are current when they are not.
 function TS:SyncStructure()
-    if TS.RebuildKey(self.db) ~= self.builtRebuildKey then
+    if self:CurrentRebuildKey() ~= self.builtRebuildKey then
         self:RebuildEntries()
         return true
     end
@@ -843,7 +861,7 @@ function TS:RebuildEntries()
     end
     -- Stamped HERE and nowhere else: this is the only function that drops the
     -- pool, so it is the only one that can honestly claim the frames match.
-    self.builtRebuildKey = TS.RebuildKey(self.db)
+    self.builtRebuildKey = self:CurrentRebuildKey()
     self:ApplyPosition()
     if wasPreview then self:ShowPreview() end
     self:CheckContentGate()
@@ -881,6 +899,12 @@ function TS:ApplySettings()
     -- job on its own, including the content gate, so stop here rather than
     -- walking a glow loop over entries it has already released.
     if self:SyncStructure() then return end
+
+    -- Position, parent and strata are profile settings too, and a switch that
+    -- leaves this module enabled reaches only here. The GUI's own position
+    -- callback does not fire on that path, and RebuildEntries — the only other
+    -- thing that re-applies them — did not run or we would have returned above.
+    self:ApplyPosition()
 
     for _, entry in pairs(self.activeEntries) do
         self:UpdateGlow(entry)

@@ -11,18 +11,27 @@ describe("TS.RebuildKey", function()
         TS = L.loadTargetedSpells()
     end)
 
+    -- The face is a parameter, not a db field: a nil FontFace MEANS the
+    -- profile's global font, so the resolution lives in CurrentRebuildKey and
+    -- these cases hold the face constant unless they are testing it.
+    local FACE = "Expressway"
+
     local function db(overrides)
         local d = {
             IconSize = 36, TextSpacing = 45, Gap = 3, Grow = "UP", MaxIcons = 10,
-            FontSize = 32, FontFace = "Expressway", FontOutline = "OUTLINE",
+            FontSize = 32, FontOutline = "OUTLINE",
             Decimals = 1, FontColor = { 1, 0.976, 0.153, 1 },
         }
         for k, v in pairs(overrides or {}) do d[k] = v end
         return d
     end
 
+    local function key(overrides, face)
+        return TS.RebuildKey(db(overrides), face or FACE)
+    end
+
     it("is stable for the same settings", function()
-        assert.equals(TS.RebuildKey(db()), TS.RebuildKey(db()))
+        assert.equals(key(), key())
     end)
 
     -- One case per term the settings page rebuilds for. That page is the single
@@ -34,7 +43,6 @@ describe("TS.RebuildKey", function()
         { name = "growth direction",  change = { Grow = "DOWN" } },
         { name = "entry cap",         change = { MaxIcons = 4 } },
         { name = "font size",         change = { FontSize = 20 } },
-        { name = "font face",         change = { FontFace = "GoodFont" } },
         { name = "font outline",      change = { FontOutline = "" } },
         { name = "decimals",          change = { Decimals = 0 } },
         { name = "countdown colour",  change = { FontColor = { 0, 1, 0, 1 } } },
@@ -42,22 +50,33 @@ describe("TS.RebuildKey", function()
 
     for _, term in ipairs(TERMS) do
         it("changes when the " .. term.name .. " changes", function()
-            assert.are_not.equals(TS.RebuildKey(db()), TS.RebuildKey(db(term.change)))
+            assert.are_not.equals(key(), key(term.change))
         end)
     end
+
+    it("changes when the resolved font face changes", function()
+        assert.are_not.equals(key(), key(nil, "GoodFont"))
+    end)
 
     -- The decoy. An in-place setting must NOT force a rebuild, or every glow
     -- checkbox tears down the pool and the key is worse than not having it.
     it("does not change for an in-place setting", function()
-        assert.equals(TS.RebuildKey(db()), TS.RebuildKey(db({ GlowImportant = true })))
+        assert.equals(key(), key({ GlowImportant = true }))
+    end)
+
+    -- The raw FontFace setting is deliberately NOT read. Keying it would make
+    -- a profile that names the global font explicitly differ from one that
+    -- leaves it alone, while both render the same.
+    it("ignores the raw FontFace setting", function()
+        assert.equals(key(), key({ FontFace = "Whatever" }))
     end)
 
     -- Concatenated terms can collude: without separators, icon size 36 with
     -- text spacing 3 and icon size 3 with text spacing 63 both read "363".
     it("does not collide when a digit moves between terms", function()
         assert.are_not.equals(
-            TS.RebuildKey(db({ IconSize = 36, TextSpacing = 3 })),
-            TS.RebuildKey(db({ IconSize = 3, TextSpacing = 63 })))
+            key({ IconSize = 36, TextSpacing = 3 }),
+            key({ IconSize = 3, TextSpacing = 63 }))
     end)
 
     -- Absent terms are built by deletion, not by an override table: a nil in an
@@ -66,28 +85,68 @@ describe("TS.RebuildKey", function()
     local function without(field)
         local d = db()
         d[field] = nil
-        return d
+        return TS.RebuildKey(d, FACE)
     end
 
     -- An absent term must not read as equal to a present one. There are no
     -- fallbacks in the key on purpose, so this is what holds that line.
     it("tells an absent setting apart from a present one", function()
-        assert.are_not.equals(TS.RebuildKey(db()), TS.RebuildKey(without("FontSize")))
+        assert.are_not.equals(key(), without("FontSize"))
     end)
 
     -- A missing colour table must not throw from a lifecycle path, and must
     -- still differ from a present one.
     it("survives a missing colour table", function()
-        assert.are_not.equals(TS.RebuildKey(db()), TS.RebuildKey(without("FontColor")))
+        assert.are_not.equals(key(), without("FontColor"))
+    end)
+end)
+
+-- A nil FontFace is not "no font" — it means the profile's global font. Keying
+-- the raw setting is wrong in both directions, so the resolution is its own
+-- seam and gets its own cases.
+describe("TS:CurrentRebuildKey", function()
+    local TS, KE, globalFont
+
+    setup(function()
+        TS, KE = L.loadTargetedSpells()
+        KE.GetGlobalFont = function() return globalFont end
+    end)
+
+    before_each(function()
+        globalFont = "Expressway"
+        TS.db = { IconSize = 36, FontSize = 32 }
+    end)
+
+    it("follows the global font when the module has no choice of its own", function()
+        local before = TS:CurrentRebuildKey()
+        globalFont = "Naowh"
+
+        assert.are_not.equals(before, TS:CurrentRebuildKey())
+    end)
+
+    it("reads the same whether the global font is named or left implicit", function()
+        local implicit = TS:CurrentRebuildKey()
+        TS.db.FontFace = "Expressway"
+
+        assert.equals(implicit, TS:CurrentRebuildKey())
+    end)
+
+    it("ignores the global font once the module names its own", function()
+        TS.db.FontFace = "GoodFont"
+        local before = TS:CurrentRebuildKey()
+        globalFont = "Naowh"
+
+        assert.equals(before, TS:CurrentRebuildKey())
     end)
 end)
 
 -- The branch the key exists to drive, at both the doors that reach it.
 describe("TS structural sync", function()
-    local TS, rebuilt, glowed, gated
+    local TS, KE, rebuilt, glowed, gated, positioned
 
     setup(function()
-        TS = require("dev.spec._ke_loader").loadTargetedSpells()
+        TS, KE = L.loadTargetedSpells()
+        KE.GetGlobalFont = function() return "Expressway" end
     end)
 
     local function settings()
@@ -99,15 +158,16 @@ describe("TS structural sync", function()
     end
 
     before_each(function()
-        rebuilt, glowed, gated = 0, 0, 0
+        rebuilt, glowed, gated, positioned = 0, 0, 0, 0
         TS.db = settings()
         TS.activeEntries = { {} }
-        TS.builtRebuildKey = TS.RebuildKey(TS.db)
+        TS.builtRebuildKey = TS:CurrentRebuildKey()
 
         TS.UpdateDB = function() end
         TS.RebuildEntries = function() rebuilt = rebuilt + 1 end
         TS.UpdateGlow = function() glowed = glowed + 1 end
         TS.CheckContentGate = function() gated = gated + 1 end
+        TS.ApplyPosition = function() positioned = positioned + 1 end
     end)
 
     describe("SyncStructure", function()
@@ -127,7 +187,7 @@ describe("TS structural sync", function()
         -- coming back under another profile finds frames built to the old
         -- numbers; nothing else on that path would notice.
         it("rebuilds when the pool was built for another profile", function()
-            TS.builtRebuildKey = TS.RebuildKey({ IconSize = 60 })
+            TS.builtRebuildKey = TS.RebuildKey({ IconSize = 60 }, "Expressway")
 
             assert.is_true(TS:SyncStructure())
             assert.equals(1, rebuilt)
@@ -152,8 +212,18 @@ describe("TS structural sync", function()
             assert.equals(1, gated)
         end)
 
+        -- Position, parent and strata are profile settings the rebuild key
+        -- cannot see, and a switch that leaves the module enabled reaches only
+        -- this function. Without this the anchor keeps the other profile's spot.
+        it("re-applies the anchor position on the in-place path", function()
+            TS:ApplySettings()
+
+            assert.equals(1, positioned)
+        end)
+
         -- Rebuild once and stop. The glow loop below the handoff would walk
-        -- entries the rebuild has already released, and the rebuild gates too.
+        -- entries the rebuild has already released, and the rebuild gates and
+        -- re-positions on its own.
         it("hands off exactly once and returns when the geometry changed", function()
             TS.db.IconSize = 60
 
@@ -162,6 +232,7 @@ describe("TS structural sync", function()
             assert.equals(1, rebuilt)
             assert.equals(0, glowed)
             assert.equals(0, gated)
+            assert.equals(0, positioned)
         end)
     end)
 end)
