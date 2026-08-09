@@ -1260,6 +1260,11 @@ function EditMode:CreateNudgeFrame()
 
         element.setPosition(newPos)
 
+        -- Repaint the boxes from what was actually stored. The typed text is
+        -- still whatever was entered, so without this a fractional entry keeps
+        -- showing its fraction while the stored value is the rounded one.
+        EditMode:UpdateNudgeFrameInfo()
+
         if EditMode.overlayFrames[EditMode.selectedElementKey] then
             C_Timer.After(0, function()
                 EditMode:UpdateOverlayPosition(EditMode.overlayFrames[EditMode.selectedElementKey])
