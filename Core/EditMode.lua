@@ -1895,13 +1895,13 @@ end
 function EditMode:NudgeSelectedElement(deltaX, deltaY)
     if not self.selectedElementKey then
         KE:Print("No element selected. Click an overlay to select it.")
-        return
+        return false
     end
 
     local element = self.registeredElements[self.selectedElementKey]
-    if not element then return end
+    if not element then return false end
     local currentPos = element.getPosition()
-    if not currentPos then return end
+    if not currentPos then return false end
 
     -- Calculate new position. Rounding matters even though the delta is whole:
     -- a value stored fractionally before offsets became whole stays fractional
@@ -1930,6 +1930,9 @@ function EditMode:NudgeSelectedElement(deltaX, deltaY)
     if KE.GUIFrame and KE.GUIFrame.mainFrame and KE.GUIFrame.mainFrame:IsShown() then
         KE.GUIFrame:RefreshContent()
     end
+
+    -- The key handler swallows an arrow only when this says a position moved.
+    return true
 end
 
 function EditMode:ShowNudgeFrame()
