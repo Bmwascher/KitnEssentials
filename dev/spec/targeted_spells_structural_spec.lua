@@ -5,29 +5,40 @@
 -- stops triggering a rebuild and nobody notices until the frames look wrong.
 local L = require("dev.spec._ke_loader")
 
+-- What KE:GetFontOutline does with each stored value. Its own mapping is specced
+-- in globals_helpers_spec; here it only has to be a mapping that collapses
+-- several stored values onto one rendered one, because that collapse is the
+-- thing CurrentRebuildKey has to respect.
+local OUTLINE_RESOLVES_TO = {
+    SOFTOUTLINE = "OUTLINE",
+    OUTLINE = "OUTLINE",
+    THICKOUTLINE = "THICKOUTLINE",
+    NONE = "",
+    [""] = "",
+}
+
 describe("TS.RebuildKey", function()
     local TS
     setup(function()
         TS = L.loadTargetedSpells()
     end)
 
-    -- The face is a parameter, not a db field: a nil FontFace MEANS the
-    -- profile's global font, so the resolution lives in CurrentRebuildKey and
-    -- these cases hold the face constant unless they are testing it.
-    local FACE = "Expressway"
+    -- Face and outline are parameters, not db fields: both stored values stand
+    -- for something else at render time, so the resolutions live in
+    -- CurrentRebuildKey and these cases hold them constant unless testing them.
+    local FACE, OUTLINE = "Expressway", "OUTLINE"
 
     local function db(overrides)
         local d = {
             IconSize = 36, TextSpacing = 45, Gap = 3, Grow = "UP", MaxIcons = 10,
-            FontSize = 32, FontOutline = "OUTLINE",
-            Decimals = 1, FontColor = { 1, 0.976, 0.153, 1 },
+            FontSize = 32, Decimals = 1, FontColor = { 1, 0.976, 0.153, 1 },
         }
         for k, v in pairs(overrides or {}) do d[k] = v end
         return d
     end
 
-    local function key(overrides, face)
-        return TS.RebuildKey(db(overrides), face or FACE)
+    local function key(overrides, face, outline)
+        return TS.RebuildKey(db(overrides), face or FACE, outline or OUTLINE)
     end
 
     it("is stable for the same settings", function()
@@ -43,7 +54,6 @@ describe("TS.RebuildKey", function()
         { name = "growth direction",  change = { Grow = "DOWN" } },
         { name = "entry cap",         change = { MaxIcons = 4 } },
         { name = "font size",         change = { FontSize = 20 } },
-        { name = "font outline",      change = { FontOutline = "" } },
         { name = "decimals",          change = { Decimals = 0 } },
         { name = "countdown colour",  change = { FontColor = { 0, 1, 0, 1 } } },
     }
@@ -58,17 +68,25 @@ describe("TS.RebuildKey", function()
         assert.are_not.equals(key(), key(nil, "GoodFont"))
     end)
 
+    it("changes when the resolved font outline changes", function()
+        assert.are_not.equals(key(), key(nil, nil, "THICKOUTLINE"))
+    end)
+
     -- The decoy. An in-place setting must NOT force a rebuild, or every glow
     -- checkbox tears down the pool and the key is worse than not having it.
     it("does not change for an in-place setting", function()
         assert.equals(key(), key({ GlowImportant = true }))
     end)
 
-    -- The raw FontFace setting is deliberately NOT read. Keying it would make
-    -- a profile that names the global font explicitly differ from one that
-    -- leaves it alone, while both render the same.
+    -- The raw settings are deliberately NOT read. Keying them would make a
+    -- profile that names the global font, or stores a legacy outline value,
+    -- differ from one that does not while both render the same.
     it("ignores the raw FontFace setting", function()
         assert.equals(key(), key({ FontFace = "Whatever" }))
+    end)
+
+    it("ignores the raw FontOutline setting", function()
+        assert.equals(key(), key({ FontOutline = "SOFTOUTLINE" }))
     end)
 
     -- Concatenated terms can collude: without separators, icon size 36 with
@@ -85,7 +103,7 @@ describe("TS.RebuildKey", function()
     local function without(field)
         local d = db()
         d[field] = nil
-        return TS.RebuildKey(d, FACE)
+        return TS.RebuildKey(d, FACE, OUTLINE)
     end
 
     -- An absent term must not read as equal to a present one. There are no
@@ -101,42 +119,81 @@ describe("TS.RebuildKey", function()
     end)
 end)
 
--- A nil FontFace is not "no font" — it means the profile's global font. Keying
--- the raw setting is wrong in both directions, so the resolution is its own
--- seam and gets its own cases.
+-- Both font terms are stored values that stand for something else at render
+-- time. Keying them raw is wrong in both directions, so the resolution is its
+-- own seam and gets its own cases.
 describe("TS:CurrentRebuildKey", function()
-    local TS, KE, globalFont
+    local TS, KE, globalFont, outlineAsked
 
     setup(function()
         TS, KE = L.loadTargetedSpells()
         KE.GetGlobalFont = function() return globalFont end
+        KE.GetFontOutline = function(_, stored)
+            outlineAsked = stored
+            return OUTLINE_RESOLVES_TO[stored] or stored
+        end
     end)
 
     before_each(function()
         globalFont = "Expressway"
-        TS.db = { IconSize = 36, FontSize = 32 }
+        outlineAsked = nil
+        TS.db = { IconSize = 36, FontSize = 32, FontOutline = "OUTLINE" }
     end)
 
-    it("follows the global font when the module has no choice of its own", function()
-        local before = TS:CurrentRebuildKey()
-        globalFont = "Naowh"
+    describe("the font face", function()
+        it("follows the global font when the module has no choice of its own", function()
+            local before = TS:CurrentRebuildKey()
+            globalFont = "Naowh"
 
-        assert.are_not.equals(before, TS:CurrentRebuildKey())
+            assert.are_not.equals(before, TS:CurrentRebuildKey())
+        end)
+
+        it("reads the same whether the global font is named or left implicit", function()
+            local implicit = TS:CurrentRebuildKey()
+            TS.db.FontFace = "Expressway"
+
+            assert.equals(implicit, TS:CurrentRebuildKey())
+        end)
+
+        it("ignores the global font once the module names its own", function()
+            TS.db.FontFace = "GoodFont"
+            local before = TS:CurrentRebuildKey()
+            globalFont = "Naowh"
+
+            assert.equals(before, TS:CurrentRebuildKey())
+        end)
     end)
 
-    it("reads the same whether the global font is named or left implicit", function()
-        local implicit = TS:CurrentRebuildKey()
-        TS.db.FontFace = "Expressway"
+    describe("the font outline", function()
+        -- The wiring, not the mapping: whatever the renderer resolves an
+        -- outline to, the key has to ask the same question.
+        it("asks the shared resolver what the stored value renders as", function()
+            TS.db.FontOutline = "SOFTOUTLINE"
+            TS:CurrentRebuildKey()
 
-        assert.equals(implicit, TS:CurrentRebuildKey())
+            assert.equals("SOFTOUTLINE", outlineAsked)
+        end)
+
+        it("reads the same for two stored values that render alike", function()
+            TS.db.FontOutline = "OUTLINE"
+            local plain = TS:CurrentRebuildKey()
+            TS.db.FontOutline = "SOFTOUTLINE"
+
+            assert.equals(plain, TS:CurrentRebuildKey())
+        end)
+
+        it("still tells genuinely different outlines apart", function()
+            local plain = TS:CurrentRebuildKey()
+            TS.db.FontOutline = "THICKOUTLINE"
+
+            assert.are_not.equals(plain, TS:CurrentRebuildKey())
+        end)
     end)
 
-    it("ignores the global font once the module names its own", function()
-        TS.db.FontFace = "GoodFont"
-        local before = TS:CurrentRebuildKey()
-        globalFont = "Naowh"
+    it("survives being asked before the db exists", function()
+        TS.db = nil
 
-        assert.equals(before, TS:CurrentRebuildKey())
+        assert.equals("", TS:CurrentRebuildKey())
     end)
 end)
 
@@ -147,10 +204,12 @@ describe("TS structural sync", function()
     setup(function()
         TS, KE = L.loadTargetedSpells()
         KE.GetGlobalFont = function() return "Expressway" end
+        KE.GetFontOutline = function(_, stored) return OUTLINE_RESOLVES_TO[stored] or stored end
     end)
 
     local function settings()
         return {
+            Enabled = true,
             IconSize = 36, TextSpacing = 45, Gap = 3, Grow = "UP", MaxIcons = 10,
             FontSize = 32, FontFace = "Expressway", FontOutline = "OUTLINE",
             Decimals = 1, FontColor = { 1, 1, 1, 1 },
@@ -187,7 +246,7 @@ describe("TS structural sync", function()
         -- coming back under another profile finds frames built to the old
         -- numbers; nothing else on that path would notice.
         it("rebuilds when the pool was built for another profile", function()
-            TS.builtRebuildKey = TS.RebuildKey({ IconSize = 60 }, "Expressway")
+            TS.builtRebuildKey = TS.RebuildKey({ IconSize = 60 }, "Expressway", "OUTLINE")
 
             assert.is_true(TS:SyncStructure())
             assert.equals(1, rebuilt)
@@ -238,34 +297,41 @@ describe("TS structural sync", function()
 end)
 
 -- Frames are never collected in WoW, so a rebuild that runs twice orphans a
--- whole pool. The queue and the synchronous path can both fire for one change.
+-- whole pool. A quarter second is long enough for a profile switch, so the
+-- queued timer must re-ask whether its rebuild is still wanted rather than
+-- trust the answer it had when it was set.
 describe("TS:QueueRebuild invalidation", function()
-    local TS, rebuilt, pending
+    local TS, KE, rebuilt, pending
 
     -- Held rather than run, so the window between queueing and firing is the
     -- thing under test. Installed at LOAD time: the module localizes C_Timer at
     -- file scope, so a swap afterwards never reaches it.
     setup(function()
-        TS = L.loadTargetedSpells({
+        TS, KE = L.loadTargetedSpells({
             C_Timer = { After = function(_, fn) pending = fn end },
         })
+        KE.GetGlobalFont = function() return "Expressway" end
+        KE.GetFontOutline = function(_, stored) return OUTLINE_RESOLVES_TO[stored] or stored end
     end)
 
+    -- The real RebuildEntries touches frames; this one keeps the single
+    -- behaviour the timer depends on, which is that a rebuild stamps the key.
     before_each(function()
         rebuilt = 0
         pending = nil
 
         TS._rebuildQueued = false
-        TS._rebuildGeneration = 0
-        TS.RealRebuildEntries = TS.RealRebuildEntries or TS.RebuildEntries
+        TS.db = { Enabled = true, IconSize = 36, FontSize = 32, FontOutline = "OUTLINE" }
+        TS.builtRebuildKey = TS:CurrentRebuildKey()
         TS.RebuildEntries = function(self)
-            self._rebuildGeneration = (self._rebuildGeneration or 0) + 1
             self._rebuildQueued = false
+            self.builtRebuildKey = self:CurrentRebuildKey()
             rebuilt = rebuilt + 1
         end
     end)
 
-    it("still rebuilds when nothing intervenes", function()
+    it("still rebuilds when the change is still wanted", function()
+        TS.db.IconSize = 60
         TS:QueueRebuild()
         pending()
 
@@ -273,6 +339,7 @@ describe("TS:QueueRebuild invalidation", function()
     end)
 
     it("stands down when a synchronous rebuild already happened", function()
+        TS.db.IconSize = 60
         TS:QueueRebuild()
         TS:RebuildEntries()   -- the profile-switch path, mid-wait
         pending()
@@ -280,11 +347,36 @@ describe("TS:QueueRebuild invalidation", function()
         assert.equals(1, rebuilt)
     end)
 
+    -- The hole a captured token could not see: nothing rebuilt, but the profile
+    -- that arrived in the meantime already matches what is built, so the timer
+    -- would drop a pool for no reason.
+    it("stands down when the new profile already matches what is built", function()
+        TS.db.IconSize = 60
+        TS:QueueRebuild()
+        TS.db.IconSize = 36   -- switched to a profile equal to the built state
+        pending()
+
+        assert.equals(0, rebuilt)
+    end)
+
+    -- Same hole, other shape: a switch can disable the module outright, and
+    -- that path never reaches ApplySettings at all.
+    it("stands down when the module was disabled before it fired", function()
+        TS.db.IconSize = 60
+        TS:QueueRebuild()
+        TS.db.Enabled = false
+        pending()
+
+        assert.equals(0, rebuilt)
+    end)
+
     it("can queue again after standing down", function()
+        TS.db.IconSize = 60
         TS:QueueRebuild()
         TS:RebuildEntries()
         pending()
 
+        TS.db.IconSize = 48
         TS:QueueRebuild()
         pending()
 

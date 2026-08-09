@@ -144,21 +144,23 @@ end
 -- wrong turns a real change into no change. tostring keeps a nil comparable
 -- instead, so an absent setting differs from a present one.
 --
--- The font face is the one exception, and it is not a fallback: a nil FontFace
--- is not "no font", it MEANS the profile's global font. Keying the raw setting
--- gets it wrong in both directions — two profiles with no per-module choice and
--- different global fonts key the same, and a profile that names the global font
--- explicitly keys differently from one that leaves it alone while rendering
--- identically. The resolved face is passed in.
+-- The two font terms are the exception, and neither is a fallback. Both are
+-- stored values that stand for something else at render time, so keying them
+-- raw is wrong in both directions — settings that render identically key
+-- differently and rebuild on every switch, and settings that render differently
+-- can key the same. A nil FontFace is not "no font", it MEANS the profile's
+-- global font; and several stored outline values collapse onto the same
+-- rendered outline. Both are resolved before they reach the key.
 local REBUILD_KEY_FIELDS = {
     "IconSize", "TextSpacing", "Gap", "Grow", "MaxIcons",
-    "FontSize", "FontOutline", "Decimals",
+    "FontSize", "Decimals",
 }
 
 ---@param db table?
 ---@param fontFace string? resolved face, not db.FontFace
+---@param fontOutline string? resolved outline, not db.FontOutline
 ---@return string
-function TS.RebuildKey(db, fontFace)
+function TS.RebuildKey(db, fontFace, fontOutline)
     if not db then return "" end
 
     local parts = {}
@@ -166,6 +168,7 @@ function TS.RebuildKey(db, fontFace)
         parts[i] = tostring(db[REBUILD_KEY_FIELDS[i]])
     end
     parts[#parts + 1] = tostring(fontFace)
+    parts[#parts + 1] = tostring(fontOutline)
 
     local colour = db.FontColor
     for i = 1, 4 do
@@ -176,12 +179,17 @@ function TS.RebuildKey(db, fontFace)
 end
 
 -- The key for the settings that are live right now. Kept separate from the pure
--- helper so the face resolution has one home and the helper stays comparable
--- against any face a caller wants to ask about.
+-- helper so the resolutions have one home and the helper stays comparable
+-- against any face or outline a caller wants to ask about. These are the same
+-- two calls the entry builder makes, which is what makes the key describe what
+-- was actually rendered rather than what was stored.
 ---@return string
 function TS:CurrentRebuildKey()
     local db = self.db
-    return TS.RebuildKey(db, db and (db.FontFace or KE:GetGlobalFont()))
+    if not db then return TS.RebuildKey(nil) end
+    return TS.RebuildKey(db,
+        db.FontFace or KE:GetGlobalFont(),
+        KE:GetFontOutline(db.FontOutline))
 end
 
 -- Overlay insets for the entry stack. The anchor frame is one entry tall and
@@ -839,10 +847,9 @@ end
 -- Structural keys (IconSize/Gap/Grow/Font*/MaxIcons) invalidate pooled frame
 -- geometry: drop the pool and re-derive everything.
 function TS:RebuildEntries()
-    -- Any rebuild already queued has now been done. Without this the timer
-    -- fires anyway and orphans a second pool of frames, which WoW never
-    -- collects.
-    self._rebuildGeneration = (self._rebuildGeneration or 0) + 1
+    -- Any rebuild already queued has now been done, so let a later change queue
+    -- a fresh one. The pending timer standing down is SyncStructure's job, not
+    -- this flag's.
     self._rebuildQueued = false
 
     -- Hide (and pool) any preview entries FIRST so the stale-geometry frames
@@ -877,15 +884,17 @@ end
 function TS:QueueRebuild()
     if self._rebuildQueued then return end
     self._rebuildQueued = true
-    -- Captured now and checked at fire time. A synchronous rebuild in the
-    -- meantime — a profile switch is the one that does this — has already done
-    -- the work and bumped the generation, so this timer must stand down rather
-    -- than orphan another pool.
-    local generation = self._rebuildGeneration or 0
+    -- The question is re-asked at fire time rather than answered now. A quarter
+    -- second is long enough for a profile switch, and a switch can leave this
+    -- timer wanting a rebuild nobody needs any more: the pool may have been
+    -- rebuilt already, the new profile's settings may match what is built, or
+    -- the module may be off. Frames are never collected, so an unwanted rebuild
+    -- orphans a whole pool. SyncStructure answers all three by comparing the
+    -- key that is live when the timer actually runs.
     C_Timer.After(0.25, function()
-        if (TS._rebuildGeneration or 0) ~= generation then return end
         TS._rebuildQueued = false
-        TS:RebuildEntries()
+        if not (TS.db and TS.db.Enabled) then return end
+        TS:SyncStructure()
     end)
 end
 
