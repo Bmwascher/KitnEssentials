@@ -57,13 +57,52 @@ describe("EditMode:HandleEscape", function()
         assert.equals(1, exited)
     end)
 
-    -- One Escape per layer. A handler that closed the list and exited in the
-    -- same press would satisfy every case above except this one.
-    it("never closes and exits on the same press", function()
-        EditMode.nudgeFrame = nudgeWithList(true)
+    -- The keyboard-propagation flag lives on the frame, not on the key event,
+    -- so once Escape can be consumed WITHOUT tearing the handler down, only the
+    -- handler itself can re-open it. HandleEscape cannot see any of this: the
+    -- defect that shipped was entirely in the closure around it, and left every
+    -- later keypress swallowed, movement included.
+    describe("keyboard propagation", function()
+        local escapeFrame, propagate
 
-        EditMode:HandleEscape()
+        local function press(key)
+            escapeFrame:GetScript("OnKeyDown")(escapeFrame, key)
+        end
 
-        assert.equals(0, exited)
+        before_each(function()
+            EditMode:SetupEscapeHandler()
+            escapeFrame = EditMode.escapeFrame
+            propagate = nil
+            escapeFrame.SetPropagateKeyboardInput = function(_, value)
+                propagate = value
+            end
+        end)
+
+        it("consumes the Escape it acts on", function()
+            EditMode.nudgeFrame = nudgeWithList(true)
+
+            press("ESCAPE")
+
+            assert.is_false(propagate)
+        end)
+
+        it("lets the next key through after a consumed Escape", function()
+            EditMode.nudgeFrame = nudgeWithList(true)
+
+            press("ESCAPE")
+            press("W")
+
+            assert.is_true(propagate)
+        end)
+
+        it("never consumes a key it does not act on", function()
+            EditMode.nudgeFrame = nudgeWithList(true)
+
+            press("W")
+
+            assert.is_true(propagate)
+            assert.equals(0, closed)
+            assert.equals(0, exited)
+        end)
     end)
 end)
