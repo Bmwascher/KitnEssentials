@@ -359,6 +359,25 @@ function KE:GetGridOverlayInset(cols, rows, size, spacing, pin, growLeft, growUp
 ---@return number outward, number cross
 function KE:GetSideDecorationInset(size, gap, hostSize) end
 
+--- One snap decision shared by the live drag and the commit, so the two can
+--- only ever agree. Pure: the caller supplies the grid in `context`.
+---@param x number desired centre, absolute UIParent coordinates
+---@param y number
+---@param context table? { enabled, spacing, originX, originY }
+---@return number snappedX
+---@return number snappedY
+---@return boolean onCentreX true only when the result is the origin itself
+---@return boolean onCentreY
+function KE:SnapCenter(x, y, context) end
+
+--- Resolves an arrow key and the modifier state into a nudge delta. nil for
+--- any other key, so one call both recognises an arrow and resolves it.
+---@param key string?
+---@param ctrlDown boolean?
+---@return number? deltaX
+---@return number? deltaY
+function KE:ArrowNudgeDelta(key, ctrlDown) end
+
 -- ─── GUI helpers ─────────────────────────────────────────
 -- Accepts both FontStrings and EditBoxes — both expose SetFont. The
 -- callers in Core/Widgets.lua use it on EditBoxes (the search/import

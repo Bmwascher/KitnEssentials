@@ -1027,6 +1027,28 @@ function KE:SnapCenter(x, y, context)
     return snappedX, snappedY, onCentreX, onCentreY
 end
 
+-- Y is positive upward, matching the nudge buttons and the stored offsets.
+local ARROW_DELTAS = {
+    UP    = { 0,  1 },
+    DOWN  = { 0, -1 },
+    LEFT  = { -1, 0 },
+    RIGHT = { 1,  0 },
+}
+
+-- nil for a non-arrow, so the key handler can use one call to both recognise
+-- an arrow and resolve it.
+---@param key string?
+---@param ctrlDown boolean?
+---@return number? deltaX
+---@return number? deltaY
+function KE:ArrowNudgeDelta(key, ctrlDown)
+    local delta = ARROW_DELTAS[key or ""]
+    if not delta then return nil end
+
+    local step = ctrlDown and 10 or 1
+    return delta[1] * step, delta[2] * step
+end
+
 PreviewManager.guiOpen = false
 PreviewManager.editModeActive = false
 PreviewManager.previewsActive = false
