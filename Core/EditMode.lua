@@ -770,17 +770,16 @@ function EditMode:SetupEscapeHandler()
     if not self.escapeFrame then
         self.escapeFrame = CreateFrame("Frame", "KE_EditModeEscape", UIParent)
         self.escapeFrame:SetScript("OnKeyDown", function(frame, key)
-            if key == "ESCAPE" then
-                frame:SetPropagateKeyboardInput(false)
-                -- An open category list eats the first Escape, so backing out of
-                -- it does not also close the tool.
-                local nudge = EditMode.nudgeFrame
-                if nudge and nudge.categoryList and nudge.categoryList:IsShown() then
-                    EditMode:CloseCategoryList()
-                    return
-                end
-                EditMode:Exit()
-            end
+            -- Re-opened for every key, because the flag persists on the frame.
+            -- Escape used to be the last thing this handler ever did before the
+            -- handler was torn down, so leaving it closed cost nothing; now that
+            -- Escape can be consumed without exiting, a stuck flag would swallow
+            -- the next keypress, movement included.
+            frame:SetPropagateKeyboardInput(true)
+            if key ~= "ESCAPE" then return end
+
+            frame:SetPropagateKeyboardInput(false)
+            EditMode:HandleEscape()
         end)
     end
     self.escapeFrame:EnableKeyboard(true)
@@ -1654,6 +1653,18 @@ function EditMode:UpdateNudgeFrameTheme()
 
     -- Refresh the info display with new colors
     self:UpdateNudgeFrameInfo()
+end
+
+-- Escape backs out one layer at a time: an open category list first, the tool
+-- second. Without the first layer, dismissing a list you opened by mistake
+-- would also throw away the whole session.
+function EditMode:HandleEscape()
+    local nudge = self.nudgeFrame
+    if nudge and nudge.categoryList and nudge.categoryList:IsShown() then
+        self:CloseCategoryList()
+        return
+    end
+    self:Exit()
 end
 
 function EditMode:ToggleCategoryList()
