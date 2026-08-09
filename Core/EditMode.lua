@@ -770,6 +770,13 @@ function EditMode:SetupEscapeHandler()
     if not self.escapeFrame then
         self.escapeFrame = CreateFrame("Frame", "KE_EditModeEscape", UIParent)
         self.escapeFrame:SetScript("OnKeyDown", function(frame, key)
+            -- SetPropagateKeyboardInput is restricted in combat, and the combat
+            -- auto-exit reaches this frame while still in lockdown — the same
+            -- window RemoveEscapeHandler guards. The tool is closing anyway, so
+            -- refusing the whole keypress costs at most one swallowed key and
+            -- avoids a blocked-action error.
+            if InCombatLockdown() then return end
+
             -- Re-opened for every key, because the flag persists on the frame.
             -- Escape used to be the last thing this handler ever did before the
             -- handler was torn down, so leaving it closed cost nothing; now that
@@ -1128,6 +1135,10 @@ function EditMode:CreateNudgeFrame()
     list:SetHeight(#CATEGORIES * CATEGORY_ROW_HEIGHT + 4)
     list:SetFrameStrata("TOOLTIP")
     list:SetFrameLevel(frame:GetFrameLevel() + 20)
+    -- The rows leave a border's worth of list uncovered. Without this, a press
+    -- on that sliver falls through to the nudge frame beneath and drags the
+    -- tool while the user thinks they are using the list.
+    list:EnableMouse(true)
     list:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",

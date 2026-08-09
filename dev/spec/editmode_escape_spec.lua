@@ -4,7 +4,7 @@
 local L = require("dev.spec._ke_loader")
 
 describe("EditMode:HandleEscape", function()
-    local KE, EditMode, closed, exited
+    local KE, EditMode, closed, exited, inCombat
 
     -- A nudge frame is a real frame in game. Everything this branch reads from
     -- it is one boolean, so the stub is that boolean and nothing else.
@@ -13,7 +13,10 @@ describe("EditMode:HandleEscape", function()
     end
 
     before_each(function()
-        KE = L.loadGlobals()
+        inCombat = false
+        -- Overridden at load, not after it: the module localizes
+        -- InCombatLockdown at file scope, so a later swap never reaches it.
+        KE = L.loadGlobals({ InCombatLockdown = function() return inCombat end })
         EditMode = L.loadEditMode(KE)
 
         closed, exited = 0, 0
@@ -110,6 +113,20 @@ describe("EditMode:HandleEscape", function()
             press("W")
 
             assert.is_true(propagate)
+        end)
+
+        -- The propagation call is restricted in combat, and the combat auto-exit
+        -- reaches this frame while still in lockdown. Touching it there is a
+        -- blocked action, so the handler must do nothing at all.
+        it("touches nothing in combat", function()
+            inCombat = true
+            EditMode.nudgeFrame = nudgeWithList(true)
+
+            press("ESCAPE")
+
+            assert.is_nil(propagate)
+            assert.equals(0, closed)
+            assert.equals(0, exited)
         end)
 
         it("never consumes a key it does not act on", function()
