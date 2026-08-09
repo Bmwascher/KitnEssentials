@@ -167,6 +167,24 @@ function AX:RegWithEditMode()
                 self.db.Position = pos
                 KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
             end,
+            -- The container is sized to the grid, but the grid is pinned to the
+            -- module's anchor corner and grows from there, so a growth setting
+            -- that opposes the anchor slides every icon out of the frame. Read
+            -- at call time: a value captured at registration goes stale the
+            -- moment the user changes a growth direction.
+            getOverlayInset = function()
+                local db = self.db
+                if not db then return 0, 0, 0, 0 end
+                return KE:GetGridOverlayInset(
+                    db.IconsPerRow or 6,
+                    db.MaxRows or 1,
+                    db.IconSize,
+                    db.IconSpacing,
+                    (db.Position and db.Position.AnchorFrom) or "CENTER",
+                    db.GrowHorizontal == "LEFT",
+                    db.GrowVertical == "UP"
+                )
+            end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
