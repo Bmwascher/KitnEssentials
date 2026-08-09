@@ -31,27 +31,35 @@ describe("GUI-Core RefreshContent guard", function()
         GUIFrame.mainFrame = { IsShown = function() return true end }
     end)
 
-    it("refuses to rebuild while the window is collapsed", function()
-        GUIFrame.minimized = true
+    -- The three states the page must not be rebuilt in. Table-driven because
+    -- a hole in any one of them is the same defect, and covering them
+    -- separately is how the hidden case ended up with weaker coverage than the
+    -- collapsed one.
+    --
+    -- Each is called repeatedly and asserted after EVERY call. One assertion at
+    -- the end would accept a guard that refuses the first time and then gives
+    -- up, or one that toggles the flag rather than setting it.
+    local REFUSING_STATES = {
+        { name = "collapsed",            minimized = true,  shown = true },
+        { name = "hidden",               minimized = false, shown = false },
+        { name = "collapsed and hidden", minimized = true,  shown = false },
+    }
 
-        GUIFrame:RefreshContent()
+    for _, state in ipairs(REFUSING_STATES) do
+        it("refuses to rebuild, every time, while " .. state.name, function()
+            GUIFrame.minimized = state.minimized
+            GUIFrame.mainFrame = { IsShown = function() return state.shown end }
 
-        assert.equals(0, rebuilt)
-        assert.is_true(GUIFrame._contentDirtyWhileHidden)
-    end)
+            for _ = 1, 4 do
+                GUIFrame:RefreshContent()
+                assert.equals(0, rebuilt)
+                assert.is_true(GUIFrame._contentDirtyWhileHidden)
+            end
+        end)
+    end
 
-    it("refuses to rebuild while the window is hidden", function()
-        GUIFrame.minimized = false
-        GUIFrame.mainFrame = { IsShown = function() return false end }
-
-        GUIFrame:RefreshContent()
-
-        assert.equals(0, rebuilt)
-        assert.is_true(GUIFrame._contentDirtyWhileHidden)
-    end)
-
-    -- The decoy that makes the first case meaningful: with neither condition
-    -- set the guard must NOT fire, or both tests above would pass against a
+    -- The decoy that gives the three above their meaning: with neither
+    -- condition set the guard must NOT fire, or they would all pass against a
     -- function that refuses everything.
     it("does not refuse when the window is open and expanded", function()
         GUIFrame.minimized = false
@@ -63,33 +71,6 @@ describe("GUI-Core RefreshContent guard", function()
 
         assert.equals(1, rebuilt)
         assert.is_nil(GUIFrame._contentDirtyWhileHidden)
-    end)
-
-    -- Collapsed AND closed at once is reachable — minimise, then click the X.
-    -- Covered explicitly because a guard that tested the two conditions against
-    -- each other rather than either-or would refuse each alone and rebuild
-    -- when both hold, which is the worst of the three states.
-    it("refuses to rebuild while collapsed and hidden together", function()
-        GUIFrame.minimized = true
-        GUIFrame.mainFrame = { IsShown = function() return false end }
-
-        GUIFrame:RefreshContent()
-
-        assert.equals(0, rebuilt)
-        assert.is_true(GUIFrame._contentDirtyWhileHidden)
-    end)
-
-    -- The flag must survive every refusal, not just be true once the run ends.
-    -- Asserted after each call because a guard that toggled the flag would
-    -- read as correct on any odd number of them.
-    it("keeps the dirty flag set on every repeated refusal", function()
-        GUIFrame.minimized = true
-
-        for _ = 1, 4 do
-            GUIFrame:RefreshContent()
-            assert.equals(0, rebuilt)
-            assert.is_true(GUIFrame._contentDirtyWhileHidden)
-        end
     end)
 
     -- The recovery the whole mechanism exists for, and the only case that
