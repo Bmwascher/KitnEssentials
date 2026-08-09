@@ -90,6 +90,19 @@ describe("EditMode:HandleEscape", function()
             assert.equals(0, exited)
         end)
 
+        -- The closure must reach the WHOLE decision, not just the layer that
+        -- happens to be on top: wire it to either branch alone and the case
+        -- above still passes.
+        it("exits through the same key when no list is open", function()
+            EditMode.nudgeFrame = nudgeWithList(false)
+
+            press("ESCAPE")
+
+            assert.is_false(propagate)
+            assert.equals(0, closed)
+            assert.equals(1, exited)
+        end)
+
         it("lets the next key through after a consumed Escape", function()
             EditMode.nudgeFrame = nudgeWithList(true)
 
