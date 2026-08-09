@@ -400,6 +400,7 @@ read_globals = {
     -- Misc API
     "IsAltKeyDown", "IsControlKeyDown", "IsShiftKeyDown", "IsMetaKeyDown",
     "IsMouseButtonDown", "IsMounted", "IsModifiedClick",
+    "GetCurrentKeyBoardFocus",
     "ResetInstances",
     "GetServerTime", "GetTimePreciseSec", "GetLocale",
     "ReloadUI", "print",

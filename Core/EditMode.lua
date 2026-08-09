@@ -14,6 +14,7 @@ local pairs = pairs
 local ipairs = ipairs
 local GetCursorPosition = GetCursorPosition
 local IsShiftKeyDown = IsShiftKeyDown
+local IsControlKeyDown = IsControlKeyDown
 local tonumber = tonumber
 local IsMouseButtonDown = IsMouseButtonDown
 local STANDARD_TEXT_FONT = STANDARD_TEXT_FONT
@@ -843,10 +844,35 @@ function EditMode:SetupEscapeHandler()
             -- Escape can be consumed without exiting, a stuck flag would swallow
             -- the next keypress, movement included.
             frame:SetPropagateKeyboardInput(true)
-            if key ~= "ESCAPE" then return end
 
-            frame:SetPropagateKeyboardInput(false)
-            EditMode:HandleEscape()
+            if key == "ESCAPE" then
+                frame:SetPropagateKeyboardInput(false)
+                EditMode:HandleEscape()
+                return
+            end
+
+            -- nil means it was not an arrow, which is every other key.
+            local deltaX, deltaY = KE:ArrowNudgeDelta(key, IsControlKeyDown())
+            if not deltaX then return end
+
+            -- A focused field owns the arrows: without this, moving the caret
+            -- in the offset boxes would move the element instead and the
+            -- read-out would then overwrite what was typed.
+            local focus = GetCurrentKeyBoardFocus()
+            if focus and focus.IsVisible then
+                local visible = focus:IsVisible()
+                -- issecretvalue FIRST. Truth-testing a secret throws, and this
+                -- looks at whatever holds focus — other addons' frames
+                -- included — so none of them can be assumed clean. A secret
+                -- answer routes like a visible one: hands the key back.
+                if issecretvalue(visible) or visible then return end
+            end
+
+            -- Consumed only when it moved something. Swallowing arrows while
+            -- the tool merely sits open would break turning.
+            if EditMode:NudgeSelectedElement(deltaX, deltaY) then
+                frame:SetPropagateKeyboardInput(false)
+            end
         end)
     end
     self.escapeFrame:EnableKeyboard(true)
