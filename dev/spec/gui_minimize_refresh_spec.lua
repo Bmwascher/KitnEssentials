@@ -91,4 +91,20 @@ describe("GUI-Core RefreshContent guard", function()
             assert.is_true(GUIFrame._contentDirtyWhileHidden)
         end
     end)
+
+    -- The recovery the whole mechanism exists for, and the only case that
+    -- catches a guard which refuses because a refusal already happened: such a
+    -- guard passes every case above and then never lets the page rebuild
+    -- again, so expanding shows the state from before the last drag forever.
+    it("rebuilds once the window comes back, and clears the flag", function()
+        GUIFrame.minimized = true
+        GUIFrame:RefreshContent()
+        assert.is_true(GUIFrame._contentDirtyWhileHidden)
+
+        GUIFrame.minimized = false
+        pcall(GUIFrame.RefreshContent, GUIFrame)
+
+        assert.equals(1, rebuilt)
+        assert.is_nil(GUIFrame._contentDirtyWhileHidden)
+    end)
 end)
