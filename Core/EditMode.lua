@@ -405,6 +405,12 @@ function EditMode:SetupDragHandlers(overlay)
     local startX, startY = 0, 0
     local frameStartX, frameStartY = 0, 0
 
+    -- Only the live update samples the cursor and snaps. The commit reads what
+    -- the live update resolved, so the position that was last shown is by
+    -- definition the position that gets saved.
+    local snapContext = nil
+    local snappedX, snappedY = nil, nil
+
     overlay:SetScript("OnDragStart", function(self)
         if InCombatLockdown() then return end
 
@@ -440,6 +446,9 @@ function EditMode:SetupDragHandlers(overlay)
             frameStartY = bottom + height / 2
         end
 
+        snapContext = EditMode:BuildSnapContext()
+        snappedX, snappedY = nil, nil
+
         -- Visual feedback
         self:SetAlpha(0.7)
     end)
@@ -448,6 +457,7 @@ function EditMode:SetupDragHandlers(overlay)
         if not self.isDragging then return end
         self.isDragging = false
         self:SetAlpha(1)
+        EditMode:HideCentreGuides()
 
         local element = self.element
         if not element then return end
@@ -467,17 +477,23 @@ function EditMode:SetupDragHandlers(overlay)
             parentFrame = element.getParentFrame() or UIParent
         end
 
-        -- Calculate cursor delta
-        local scale = UIParent:GetEffectiveScale()
-        local curX, curY = GetCursorPosition()
-        curX, curY = curX / scale, curY / scale
-
-        local deltaX = curX - startX
-        local deltaY = curY - startY
-
-        -- Calculate the new center based on movement
-        local newCenterX = frameStartX + deltaX
-        local newCenterY = frameStartY + deltaY
+        -- Reuse the decision the live update already made. Resampling here
+        -- would run the same arithmetic on a different cursor reading, and near
+        -- the edge of the snap threshold the two answers differ by the whole
+        -- threshold -- a visible jump at the moment the button comes up.
+        local newCenterX, newCenterY = snappedX, snappedY
+        if not newCenterX then
+            -- A drag that ended before any update ran, so there is no earlier
+            -- decision to contradict. This is the only place the commit reads
+            -- the cursor, and it is unreachable once one update has run.
+            local scale = UIParent:GetEffectiveScale()
+            local curX, curY = GetCursorPosition()
+            curX, curY = curX / scale, curY / scale
+            newCenterX, newCenterY = KE:SnapCenter(
+                frameStartX + (curX - startX),
+                frameStartY + (curY - startY),
+                snapContext)
+        end
 
         -- Parent rect for the offset calculation. The target's own rect is
         -- already known readable -- OnDragStart refuses the drag otherwise, and
@@ -574,8 +590,14 @@ function EditMode:SetupDragHandlers(overlay)
         local deltaY = curY - startY
 
         -- Move visually using BOTTOMLEFT as a screen-coordinate proxy
+        local onCentreX, onCentreY
+        snappedX, snappedY, onCentreX, onCentreY =
+            KE:SnapCenter(frameStartX + deltaX, frameStartY + deltaY, snapContext)
+
         targetFrame:ClearAllPoints()
-        targetFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", frameStartX + deltaX, frameStartY + deltaY)
+        targetFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", snappedX, snappedY)
+
+        EditMode:SetCentreGuides(onCentreX, onCentreY)
 
         EditMode:UpdateOverlayPosition(self)
     end)
@@ -647,6 +669,7 @@ function EditMode:CancelDrag(overlay)
     if not overlay or not overlay.isDragging then return end
     overlay.isDragging = false
     overlay:SetAlpha(1)
+    self:HideCentreGuides()
 
     local element = overlay.element
     if not element then return end
