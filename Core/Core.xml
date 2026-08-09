@@ -12,6 +12,7 @@
     <Script file="Globals.lua" />
     <Script file="Conflicts.lua" />
     <Script file="EditMode.lua" />
+    <Script file="EditModeGuides.lua" />
     <Script file="Main.lua" />
     <Script file="ProfileManager.lua" />
     <Script file="Colors.lua" />

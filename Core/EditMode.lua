@@ -737,6 +737,7 @@ function EditMode:Enter()
     end
 
     self:ShowNudgeFrame()
+    self:ShowGuideFrame()
     if KE.PreviewManager then KE.PreviewManager:SetEditModeActive(true) end
 
     -- Overlays are built before previews are switched on, so this is the first
@@ -757,6 +758,7 @@ function EditMode:Exit()
     self.isActive = false
     -- Hide nudge frame
     self:HideNudgeFrame()
+    self:HideGuideFrame()
     -- Notify PreviewManager that edit mode is inactive
     if KE.PreviewManager then
         KE.PreviewManager:SetEditModeActive(false)
