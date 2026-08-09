@@ -58,6 +58,41 @@ function EditMode:IsSelectableCategory(sectionId)
 end
 
 ---------------------------------------------------------------------------------
+-- Grid, Guides and Snapping
+---------------------------------------------------------------------------------
+
+local function GuideDB()
+    return KE.db and KE.db.global and KE.db.global.EditModeGuides
+end
+
+function EditMode:GetGuideSetting(name)
+    local db = GuideDB()
+    if not db then return nil end
+    return db[name]
+end
+
+function EditMode:SetGuideSetting(name, value)
+    local db = GuideDB()
+    if not db then return end
+    db[name] = value
+end
+
+-- Captured once per drag. Re-reading the settings mid-drag would let the
+-- live update and the commit disagree about what they were snapping to.
+function EditMode:BuildSnapContext()
+    local width, height = UIParent:GetWidth(), UIParent:GetHeight()
+    return {
+        enabled = self:GetGuideSetting("Snapping") and true or false,
+        spacing = tonumber(self:GetGuideSetting("Spacing")) or 32,
+        -- Whole units. The screen centre is fractional at a non-perfect UI
+        -- scale or an odd physical dimension, and a fractional lattice would
+        -- push every single snap through the offset rounding downstream.
+        originX = math.floor((width or 0) / 2 + 0.5),
+        originY = math.floor((height or 0) / 2 + 0.5),
+    }
+end
+
+---------------------------------------------------------------------------------
 -- Element Registration
 ---------------------------------------------------------------------------------
 

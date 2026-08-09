@@ -49,6 +49,16 @@ local Defaults = {
         UseGlobalProfile = false,
         GlobalProfile = "Default",
 
+        -- Tool preferences, not module settings: they describe how edit mode
+        -- behaves, so they sit beside the other account-wide entries here
+        -- rather than in a profile. A per-profile grid would mean switching
+        -- profiles silently changed how the tool behaves.
+        EditModeGuides = {
+            ShowGrid = false,
+            Snapping = true,
+            Spacing = 32,
+        },
+
         GUIState = {
             frame = {
                 point = nil,
