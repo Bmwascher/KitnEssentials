@@ -14,6 +14,7 @@ local print = print
 local string_gsub = string.gsub
 local string_find = string.find
 local math_floor = math.floor
+local math_max = math.max
 local ReloadUI = ReloadUI
 local C_AddOns = C_AddOns
 local C_Timer = C_Timer
@@ -845,6 +846,25 @@ function KE:GetGridOverlayInset(cols, rows, size, spacing, pin, growLeft, growUp
     local gridBottom = growUp and firstBottom or (firstBottom - (h - size))
 
     return -gridLeft, gridLeft, gridBottom, -gridBottom
+end
+
+-- A fixed-size decoration hung just outside one edge of a host frame and
+-- centred on the other axis: how far it reaches past that edge, and how far
+-- past each of the two perpendicular edges. The caller decides which edges
+-- those are, so this never has to know a module's spelling of a side.
+--
+-- The cross term is not usually zero. A decoration is free to be larger than
+-- the thing it decorates, and when it is, it overhangs by half the difference
+-- at each end.
+---@param size number?      decoration edge length
+---@param gap number?       clearance between the decoration and the host edge
+---@param hostSize number?  host extent on the perpendicular axis
+---@return number outward, number cross
+function KE:GetSideDecorationInset(size, gap, hostSize)
+    size = tonumber(size) or 0
+    gap = tonumber(gap) or 0
+    hostSize = tonumber(hostSize) or 0
+    return size + gap, math_max(0, (size - hostSize) * 0.5)
 end
 
 PreviewManager.guiOpen = false
