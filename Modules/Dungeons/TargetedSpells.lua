@@ -23,6 +23,7 @@ local GetTime = GetTime
 local C_Timer = C_Timer
 local C_StringUtil = C_StringUtil
 local tinsert, tremove, tsort = table.insert, table.remove, table.sort
+local tconcat = table.concat
 local strmatch = string.match
 local type, ipairs = type, ipairs
 
@@ -125,36 +126,44 @@ function TS.CompareEntries(a, b)
     return (a.receiptTime or 0) < (b.receiptTime or 0)
 end
 
--- Every setting baked into a pooled entry frame at creation, as one comparable
--- value. ApplySettings is the in-place path — glow and content gating — and it
--- is also what a profile switch reaches, so without a way to notice that the
--- geometry settings changed underneath it, the pooled frames keep the previous
--- profile's dimensions until an unrelated slider rebuilds them.
+-- Every setting a pooled entry frame bakes in when it is built, as one
+-- comparable value.
 --
--- The set is defined twice already and this must agree with both: the settings
--- the page routes through QueueRebuild (IconSize, Gap, Grow, MaxIcons,
--- TextSpacing), plus FontSize, which the page routes through the font card but
--- which sizes the interrupt cross at entry-creation time and is therefore just
--- as baked in. FontFace and FontOutline are re-applied per paint, so they are
--- genuinely in-place and stay out.
+-- The set has a single definition, and it is not this function: it is whatever
+-- the settings page routes through QueueRebuild. That is the module's own
+-- statement of "the pooled frames are now stale", it already covers the layout
+-- sliders, the whole font card and the countdown colour, and keeping this in
+-- step with it is the only rule needed. A term the page rebuilds for but this
+-- omits is a setting that silently stops rebuilding.
 --
--- A term missing here is a setting that silently stops rebuilding.
---
--- Each fallback mirrors the one the builder for that term uses, NOT the shipped
--- default — the key has to describe the geometry the builders would actually
--- produce, and for two of these the two numbers differ. FontSize gets zero
--- because its builder has no fallback and would throw on a nil, so any
--- plausible-looking number here would only disguise that.
+-- It matters because ApplySettings is the in-place path — glow and content
+-- gating — and is also what a profile switch reaches. Without this comparison
+-- the pooled frames keep the previous profile's geometry.
+-- No fallbacks. A fallback here would have to guess which of the module's own
+-- defaults the builders would land on, and guessing wrong turns a real change
+-- into no change. tostring keeps a nil comparable instead, so an absent setting
+-- differs from a present one, which is the honest answer.
+local REBUILD_KEY_FIELDS = {
+    "IconSize", "TextSpacing", "Gap", "Grow", "MaxIcons",
+    "FontSize", "FontFace", "FontOutline", "Decimals",
+}
+
 ---@param db table?
 ---@return string
-function TS.StructuralKey(db)
+function TS.RebuildKey(db)
     if not db then return "" end
-    return (db.IconSize or 36)
-        .. ":" .. (db.TextSpacing or 32)
-        .. ":" .. (db.Gap or 3)
-        .. ":" .. (db.Grow or "DOWN")
-        .. ":" .. (db.MaxIcons or 10)
-        .. ":" .. (db.FontSize or 0)
+
+    local parts = {}
+    for i = 1, #REBUILD_KEY_FIELDS do
+        parts[i] = tostring(db[REBUILD_KEY_FIELDS[i]])
+    end
+
+    local colour = db.FontColor
+    for i = 1, 4 do
+        parts[#parts + 1] = tostring(colour and colour[i])
+    end
+
+    return tconcat(parts, ":")
 end
 
 -- Overlay insets for the entry stack. The anchor frame is one entry tall and
@@ -209,6 +218,11 @@ function TS:OnEnable()
     if not self.db or not self.db.Enabled then return end
 
     self:CreateAnchorFrame()
+    -- Before anything can acquire an entry. A re-enable under a different
+    -- profile finds the pool still holding the previous profile's frames, and
+    -- newly-enabled modules deliberately skip ApplySettings, so this is the
+    -- only hook on that path.
+    self:SyncStructure()
     self:ApplyPosition()
     -- OnDisable hides the anchor and nothing else re-Shows it (ApplyPosition
     -- doesn't); without this a GUI disable→re-enable leaves live entries
@@ -293,7 +307,23 @@ function TS:CreateAnchorFrame()
         self.anchorFrame = CreateFrame("Frame", "KE_TargetedSpells", UIParent)
     end
     self.anchorFrame:SetSize(EntryWidth(self.db), self.db.IconSize)
-    self.builtStructuralKey = TS.StructuralKey(self.db)
+end
+
+-- The one place that decides whether the pooled frames still match the profile.
+-- Disabling this module only RELEASES its entries into the pool, so a re-enable
+-- under a different profile finds frames built to the old numbers; and a switch
+-- that leaves the module enabled reaches ApplySettings, which is the in-place
+-- path. Both come through here.
+--
+-- Only RebuildEntries may stamp the key, because only RebuildEntries actually
+-- drops the pool. Stamping anywhere else — after re-sizing the anchor, say —
+-- makes the key claim the entries are current when they are not.
+function TS:SyncStructure()
+    if TS.RebuildKey(self.db) ~= self.builtRebuildKey then
+        self:RebuildEntries()
+        return true
+    end
+    return false
 end
 
 function TS:ApplyPosition()
@@ -791,6 +821,12 @@ end
 -- Structural keys (IconSize/Gap/Grow/Font*/MaxIcons) invalidate pooled frame
 -- geometry: drop the pool and re-derive everything.
 function TS:RebuildEntries()
+    -- Any rebuild already queued has now been done. Without this the timer
+    -- fires anyway and orphans a second pool of frames, which WoW never
+    -- collects.
+    self._rebuildGeneration = (self._rebuildGeneration or 0) + 1
+    self._rebuildQueued = false
+
     -- Hide (and pool) any preview entries FIRST so the stale-geometry frames
     -- are dropped with the rest of the pool below, then re-show after the
     -- rebuild so the GUI preview reflects the new settings.
@@ -805,7 +841,9 @@ function TS:RebuildEntries()
     if self.anchorFrame then
         self.anchorFrame:SetSize(EntryWidth(self.db), self.db.IconSize)
     end
-    self.builtStructuralKey = TS.StructuralKey(self.db)
+    -- Stamped HERE and nowhere else: this is the only function that drops the
+    -- pool, so it is the only one that can honestly claim the frames match.
+    self.builtRebuildKey = TS.RebuildKey(self.db)
     self:ApplyPosition()
     if wasPreview then self:ShowPreview() end
     self:CheckContentGate()
@@ -821,7 +859,13 @@ end
 function TS:QueueRebuild()
     if self._rebuildQueued then return end
     self._rebuildQueued = true
+    -- Captured now and checked at fire time. A synchronous rebuild in the
+    -- meantime — a profile switch is the one that does this — has already done
+    -- the work and bumped the generation, so this timer must stand down rather
+    -- than orphan another pool.
+    local generation = self._rebuildGeneration or 0
     C_Timer.After(0.25, function()
+        if (TS._rebuildGeneration or 0) ~= generation then return end
         TS._rebuildQueued = false
         TS:RebuildEntries()
     end)
@@ -832,14 +876,11 @@ end
 function TS:ApplySettings()
     self:UpdateDB()
 
-    -- This is the in-place path, but it is also the one a profile switch takes,
-    -- and a switch can change the geometry settings without any slider moving.
-    -- RebuildEntries is the only thing that re-sizes the anchor and drops the
-    -- stale pool, so hand off to it and let it finish the job.
-    if TS.StructuralKey(self.db) ~= self.builtStructuralKey then
-        self:RebuildEntries()
-        return
-    end
+    -- A profile switch can change the geometry settings without any slider
+    -- moving, and this is the function it reaches. RebuildEntries finishes the
+    -- job on its own, including the content gate, so stop here rather than
+    -- walking a glow loop over entries it has already released.
+    if self:SyncStructure() then return end
 
     for _, entry in pairs(self.activeEntries) do
         self:UpdateGlow(entry)
