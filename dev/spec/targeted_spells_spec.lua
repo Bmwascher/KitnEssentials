@@ -51,4 +51,54 @@ describe("TargetedSpells helpers (Modules/Dungeons/TargetedSpells.lua)", functio
             assert.is_false(TS.CompareEntries({ receiptTime = 2 }, { receiptTime = 2 }))
         end)
     end)
+
+    -- The anchor frame is one entry tall and every entry chains off its outer
+    -- edge, so the box has to be moved onto the stack, not just grown. The
+    -- negative term is the frame's own height and it is the whole point of
+    -- this arithmetic -- an off-by-one there parks the box half an icon away
+    -- from the thing it names, which is exactly the bug being fixed.
+    describe("TS.PreviewStackInset", function()
+        it("moves the box below the frame when the stack grows down", function()
+            local l, r, t, b = TS.PreviewStackInset({ IconSize = 36, Gap = 3, Grow = "DOWN" })
+            assert.equals(0, l)
+            assert.equals(0, r)
+            assert.equals(-36, t)
+            assert.equals(75, b)
+        end)
+
+        it("moves the box above the frame when the stack grows up", function()
+            local l, r, t, b = TS.PreviewStackInset({ IconSize = 36, Gap = 3, Grow = "UP" })
+            assert.equals(0, l)
+            assert.equals(0, r)
+            assert.equals(75, t)
+            assert.equals(-36, b)
+        end)
+
+        it("treats an absent growth setting as down", function()
+            local _, _, t, b = TS.PreviewStackInset({ IconSize = 36, Gap = 3 })
+            assert.equals(-36, t)
+            assert.equals(75, b)
+        end)
+
+        it("tracks icon size and gap", function()
+            local _, _, _, b = TS.PreviewStackInset({ IconSize = 50, Gap = 10, Grow = "DOWN" })
+            assert.equals(110, b)
+        end)
+
+        -- The box must stay a box. Frame height and stack span are both derived
+        -- from IconSize, so span always exceeds it for any positive count --
+        -- this pins that rather than trusting it.
+        it("always leaves a positive box height", function()
+            local _, _, t, b = TS.PreviewStackInset({ IconSize = 36, Gap = 0, Grow = "DOWN" })
+            assert.is_true(36 + t + b > 0)
+        end)
+
+        it("returns zeroes rather than erroring without a db", function()
+            local l, r, t, b = TS.PreviewStackInset(nil)
+            assert.equals(0, l)
+            assert.equals(0, r)
+            assert.equals(0, t)
+            assert.equals(0, b)
+        end)
+    end)
 end)

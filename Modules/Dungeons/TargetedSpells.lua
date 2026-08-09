@@ -61,6 +61,7 @@ local MAX_NAMEPLATES = 40
 local SETTLE_DELAY = 0.2
 local INTERRUPT_LINGER = 1.0   -- seconds the desaturated icon stays up post-interrupt
 local INTERRUPT_HOLD = 0.95    -- Release() suppression window; < LINGER avoids a same-tick race with the linger timer
+local PREVIEW_ENTRY_COUNT = 2   -- entries the edit-mode preview draws; see PREVIEW_ENTRIES
 
 -- Breakpoint countdown formatter: db.Decimals digits for the whole sub-60
 -- range, m:ss above (only reachable if the >60s gate changes). The
@@ -122,6 +123,25 @@ end
 -- compared); strict less-than keeps table.sort stable-safe.
 function TS.CompareEntries(a, b)
     return (a.receiptTime or 0) < (b.receiptTime or 0)
+end
+
+-- Overlay insets for the entry stack. The anchor frame is one entry tall and
+-- every entry chains off its outer edge, so nothing is ever drawn inside it:
+-- the box has to be MOVED onto the stack, not merely grown over it. The
+-- negative term is the anchor frame's own height, which cancels it out, and the
+-- positive term is the stack span. Sized to what edit mode actually draws,
+-- which is the preview set, not the MaxIcons cap.
+---@param db table?
+---@return number left, number right, number top, number bottom
+function TS.PreviewStackInset(db)
+    if not db then return 0, 0, 0, 0 end
+    local size = db.IconSize or 36
+    local n = PREVIEW_ENTRY_COUNT
+    local span = n * size + (n - 1) * (db.Gap or 3)
+    if (db.Grow or "DOWN") == "UP" then
+        return 0, 0, span, -size
+    end
+    return 0, 0, -size, span
 end
 
 ---------------------------------------------------------------------------------
@@ -261,6 +281,7 @@ function TS:RegisterEditMode()
             self:ApplyPosition()
         end,
         getAnchorFrom = function() return self.db.Position.AnchorFrom or "CENTER" end,
+        getOverlayInset = function() return TS.PreviewStackInset(self.db) end,
         getParentFrame = function()
             return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
         end,
@@ -776,6 +797,9 @@ local PREVIEW_ENTRIES = {
     { icon = 135846, duration = 8 },   -- Frostbolt
     { icon = 136197, duration = 5 },   -- Shadow Bolt
 }
+-- The overlay box is sized from PREVIEW_ENTRY_COUNT, declared with the other
+-- constants because the edit-mode registration is parsed before this table.
+assert(#PREVIEW_ENTRIES == PREVIEW_ENTRY_COUNT)
 
 function TS:ShowPreview()
     self:UpdateDB()
