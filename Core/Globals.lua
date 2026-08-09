@@ -982,6 +982,51 @@ function KE:CommitTextExtent(cache, role, fontKey, width, height)
     end
 end
 
+local math_min = math.min
+local math_abs = math.abs
+
+-- Snapping is a magnet, not a cage: the threshold is capped below half the
+-- spacing at the coarse settings, which leaves a band between lines where
+-- nothing snaps and off-grid placement stays possible.
+local SNAP_THRESHOLD_CAP = 12
+
+-- One decision for both drag callers. Pure on purpose -- the live update and
+-- the commit can only stay in step by sharing this, and a version that read the
+-- database or a frame could not be shared at all.
+---@param x number desired centre, absolute UIParent coordinates
+---@param y number
+---@param context table? { enabled, spacing, originX, originY }
+---@return number snappedX
+---@return number snappedY
+---@return boolean onCentreX true only when the result is the origin itself
+---@return boolean onCentreY
+function KE:SnapCenter(x, y, context)
+    if not context or not context.enabled then return x, y, false, false end
+
+    local spacing = tonumber(context.spacing)
+    if not spacing or spacing <= 0 then return x, y, false, false end
+
+    local threshold = math_min(spacing / 2, SNAP_THRESHOLD_CAP)
+    local originX = tonumber(context.originX) or 0
+    local originY = tonumber(context.originY) or 0
+
+    -- floor(v/step + 0.5) is the same rounding SnapFrameToPixels uses. It
+    -- rounds ties toward positive, so a point exactly between two lines lands
+    -- on the upper one regardless of which side of the origin it is.
+    local function axis(value, origin)
+        local steps = math_floor((value - origin) / spacing + 0.5)
+        local line = origin + steps * spacing
+        if math_abs(value - line) <= threshold then
+            return line, steps == 0
+        end
+        return value, false
+    end
+
+    local snappedX, onCentreX = axis(x, originX)
+    local snappedY, onCentreY = axis(y, originY)
+    return snappedX, snappedY, onCentreX, onCentreY
+end
+
 PreviewManager.guiOpen = false
 PreviewManager.editModeActive = false
 PreviewManager.previewsActive = false
