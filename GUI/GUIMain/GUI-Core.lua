@@ -174,6 +174,37 @@ function GUIFrame:Show()
     end
 end
 
+-- Collapse the window to its title bar, so in-world elements stay reachable
+-- without losing the page being worked on. The header keeps the drag handlers,
+-- so a minimized window still moves. Saved height lives on the table rather
+-- than the frame so a hide/show cycle cannot lose it.
+--
+-- The resize minimum has to drop with it: the next layout pass would otherwise
+-- clamp the frame straight back up to the full minimum height.
+function GUIFrame:ToggleMinimize()
+    local frame = self.mainFrame
+    if not frame then return end
+    self.minimized = not self.minimized
+
+    if self.minimized then
+        self._savedHeight = frame:GetHeight()
+        if self.contentArea then self.contentArea:Hide() end
+        if self.sidebar then self.sidebar:Hide() end
+        if self.bottomBar then self.bottomBar:Hide() end
+        local collapsed = Theme.headerHeight + Theme.borderSize * 2
+        frame:SetResizeBounds(self.minWidth, collapsed)
+        frame:SetHeight(collapsed)
+    else
+        frame:SetResizeBounds(self.minWidth, self.minHeight)
+        frame:SetHeight(self._savedHeight or self.minHeight)
+        if self.contentArea then self.contentArea:Show() end
+        if self.sidebar then self.sidebar:Show() end
+        if self.bottomBar then self.bottomBar:Show() end
+    end
+
+    if self.PaintMinimizeArrow then self:PaintMinimizeArrow() end
+end
+
 -- Hide the GUI
 function GUIFrame:Hide()
     if self.mainFrame then
