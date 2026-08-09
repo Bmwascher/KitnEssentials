@@ -1124,7 +1124,7 @@ function EditMode:CreateNudgeFrame()
 
     -- Main frame
     local frame = CreateFrame("Frame", "KE_EditModeNudge", UIParent, "BackdropTemplate")
-    frame:SetSize(160, 220)
+    frame:SetSize(160, 304)
     frame:SetPoint("CENTER", UIParent, "CENTER", 400, 0)
     frame:SetFrameStrata("TOOLTIP")
     frame:SetFrameLevel(1001)
@@ -1596,8 +1596,89 @@ function EditMode:CreateNudgeFrame()
         EditMode:OpenElementSettings()
     end)
 
+    local GUIDE_SPACINGS = { 8, 16, 32, 64 }
+
+    -- Grid preferences. Stacked above the settings button, top to bottom:
+    -- grid, snapping, spacing.
+    local function CreateToolToggle(parent, anchorTo, label)
+        local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
+        btn:SetSize(140, 22)
+        btn:SetPoint("BOTTOM", anchorTo, "TOP", 0, 6)
+        btn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = KE:GetPixelSize(),
+        })
+        btn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+        btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+        local text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        text:SetPoint("CENTER")
+        text:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
+        text:SetShadowColor(0, 0, 0, 0)
+        text:SetShadowOffset(0, 0)
+        text:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        btn.text = text
+        btn.label = label
+
+        return btn
+    end
+
+    local spacingBtn = CreateToolToggle(frame, settingsBtn, "Spacing")
+    local snapBtn = CreateToolToggle(frame, spacingBtn, "Snapping")
+    local gridBtn = CreateToolToggle(frame, snapBtn, "Grid")
+
+    frame.spacingBtn = spacingBtn
+    frame.snapBtn = snapBtn
+    frame.gridBtn = gridBtn
+
+    gridBtn:SetScript("OnClick", function()
+        EditMode:SetGuideSetting("ShowGrid", not EditMode:GetGuideSetting("ShowGrid"))
+        EditMode:UpdateGuideControls()
+        EditMode:RefreshGrid()
+    end)
+
+    snapBtn:SetScript("OnClick", function()
+        EditMode:SetGuideSetting("Snapping", not EditMode:GetGuideSetting("Snapping"))
+        EditMode:UpdateGuideControls()
+        -- No redraw: the next drag builds a fresh context and reads this then.
+    end)
+
+    spacingBtn:SetScript("OnClick", function()
+        local current = EditMode:GetGuideSetting("Spacing") or 32
+        local nextValue = GUIDE_SPACINGS[1]
+        for i = 1, #GUIDE_SPACINGS do
+            if GUIDE_SPACINGS[i] == current then
+                nextValue = GUIDE_SPACINGS[(i % #GUIDE_SPACINGS) + 1]
+                break
+            end
+        end
+        EditMode:SetGuideSetting("Spacing", nextValue)
+        EditMode:UpdateGuideControls()
+        -- Spacing is grid geometry, so the grid redraws now rather than waiting
+        -- for the tool to be reopened.
+        EditMode:RefreshGrid()
+    end)
+
+    -- After the assignment, never before: UpdateGuideControls guards on
+    -- self.nudgeFrame, so an earlier call returns and leaves all three blank.
     self.nudgeFrame = frame
+    self:UpdateGuideControls()
     return frame
+end
+
+-- One place decides what each button says, so the build and every click
+-- produce the same string. A control that renders its label separately from
+-- its click handler drifts the first time one of them changes.
+function EditMode:UpdateGuideControls()
+    local f = self.nudgeFrame
+    if not f or not f.gridBtn then return end
+    f.gridBtn.text:SetText("Grid: " ..
+        (self:GetGuideSetting("ShowGrid") and "On" or "Off"))
+    f.snapBtn.text:SetText("Snapping: " ..
+        (self:GetGuideSetting("Snapping") and "On" or "Off"))
+    f.spacingBtn.text:SetText("Spacing: " ..
+        tostring(self:GetGuideSetting("Spacing") or 32))
 end
 
 function EditMode:UpdateNudgeFrameInfo()
@@ -1711,6 +1792,19 @@ function EditMode:UpdateNudgeFrameTheme()
         self.nudgeFrame.categorySelector.value:SetTextColor(
             Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     end
+
+    -- Three explicit calls, not ipairs over a literal: a nil in an array
+    -- literal ends the iteration at the gap and silently skips the rest.
+    local function ThemeToolToggle(btn)
+        if not btn then return end
+        btn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+        btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        btn.text:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end
+
+    ThemeToolToggle(self.nudgeFrame.gridBtn)
+    ThemeToolToggle(self.nudgeFrame.snapBtn)
+    ThemeToolToggle(self.nudgeFrame.spacingBtn)
     if self.nudgeFrame.categoryList then
         self.nudgeFrame.categoryList:SetBackdropColor(
             Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
