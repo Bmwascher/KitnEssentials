@@ -867,6 +867,78 @@ function KE:GetSideDecorationInset(size, gap, hostSize)
     return size + gap, math_max(0, (size - hostSize) * 0.5)
 end
 
+-- Where a named anchor point sits inside a rectangle, as a fraction of its
+-- width and height. Y runs from the bottom because that is the direction frame
+-- offsets run. An unrecognised point centres rather than throwing: saved
+-- profiles predate the current dropdowns and can hold anything, and a throw
+-- here takes the whole overlay down with it.
+local ANCHOR_FRACTIONS = {
+    TOPLEFT     = { 0,   1   }, TOP    = { 0.5, 1   }, TOPRIGHT    = { 1, 1   },
+    LEFT        = { 0,   0.5 }, CENTER = { 0.5, 0.5 }, RIGHT       = { 1, 0.5 },
+    BOTTOMLEFT  = { 0,   0   }, BOTTOM = { 0.5, 0   }, BOTTOMRIGHT = { 1, 0   },
+}
+
+---@param point string?
+---@return number, number
+function KE:GetAnchorFractions(point)
+    local f = ANCHOR_FRACTIONS[point or ""] or ANCHOR_FRACTIONS.CENTER
+    return f[1], f[2]
+end
+
+-- How far an anchored element sticks out past each edge of its host, clamped at
+-- zero. The element is anchored point-to-point with an offset, which is one
+-- placement rule per axis:
+--
+--     start = hostFraction * hostSize + offset - elementFraction * elementSize
+--
+-- and the overhangs fall out of where that leaves the element's two edges. An
+-- element with no measured size is still placed: it becomes a point at its
+-- anchor, which is a true lower bound rather than a guess.
+--
+-- Returned as left, right, top, bottom to match the overlay contract. The
+-- vertical pair is crossed relative to the horizontal one because start grows
+-- upward, so the high overhang is the TOP.
+---@return number, number, number, number
+function KE:GetTextOverlayInset(hostPoint, elementPoint, xOffset, yOffset,
+                                elementW, elementH, hostW, hostH)
+    local hx, hy = self:GetAnchorFractions(hostPoint)
+    local ex, ey = self:GetAnchorFractions(elementPoint)
+    xOffset, yOffset = tonumber(xOffset) or 0, tonumber(yOffset) or 0
+    elementW, elementH = tonumber(elementW) or 0, tonumber(elementH) or 0
+    hostW, hostH = tonumber(hostW) or 0, tonumber(hostH) or 0
+
+    local startX = hx * hostW + xOffset - ex * elementW
+    local startY = hy * hostH + yOffset - ey * elementH
+
+    return math_max(0, -startX), math_max(0, startX + elementW - hostW),
+           math_max(0, startY + elementH - hostH), math_max(0, -startY)
+end
+
+-- Folds a set of element overhangs into a container's grid term. Two different
+-- operators, and each wrong choice fails silently in its own way.
+--
+-- Across elements: the LARGEST, because they all overlay the same host and are
+-- alternatives rather than additions - a sum would reserve empty hitbox.
+--
+-- Against the grid: ADDITION, because the grid term is a shift whose two terms
+-- cancel per axis. A maximum there would drop the shift on one edge and put the
+-- box in the wrong place, which reads as a rendering quirk rather than a bug.
+---@param grid number[] four numbers, left/right/top/bottom
+---@param elements number[][] zero or more of the same shape
+---@return number, number, number, number
+function KE:CombineOverlayInsets(grid, elements)
+    local best = { 0, 0, 0, 0 }
+    for i = 1, #elements do
+        local e = elements[i]
+        for edge = 1, 4 do
+            local v = e[edge] or 0
+            if v > best[edge] then best[edge] = v end
+        end
+    end
+    return (grid[1] or 0) + best[1], (grid[2] or 0) + best[2],
+           (grid[3] or 0) + best[3], (grid[4] or 0) + best[4]
+end
+
 PreviewManager.guiOpen = false
 PreviewManager.editModeActive = false
 PreviewManager.previewsActive = false
