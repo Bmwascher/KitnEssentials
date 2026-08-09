@@ -1090,7 +1090,7 @@ function EditMode:CreateNudgeFrame()
     -- read as a shelf balanced on top of the tool rather than part of it.
     local selector = CreateFrame("Button", nil, frame, "BackdropTemplate")
     selector:SetSize(160, 22)
-    selector:SetPoint("BOTTOM", frame, "TOP", 0, 4)
+    selector:SetPoint("BOTTOM", frame, "TOP", 0, 2)
     selector:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -1102,7 +1102,7 @@ function EditMode:CreateNudgeFrame()
 
     local showingLabel = selector:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     showingLabel:SetPoint("LEFT", selector, "LEFT", 6, 0)
-    showingLabel:SetFont(KE.FONT or STANDARD_TEXT_FONT, 11, "OUTLINE")
+    showingLabel:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
     showingLabel:SetShadowColor(0, 0, 0, 0)
     showingLabel:SetShadowOffset(0, 0)
     showingLabel:SetText("Showing")
@@ -1120,7 +1120,7 @@ function EditMode:CreateNudgeFrame()
 
     local selectorValue = selector:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     selectorValue:SetPoint("RIGHT", selectorArrow, "LEFT", -4, 0)
-    selectorValue:SetFont(KE.FONT or STANDARD_TEXT_FONT, 11, "OUTLINE")
+    selectorValue:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
     selectorValue:SetShadowColor(0, 0, 0, 0)
     selectorValue:SetShadowOffset(0, 0)
     selectorValue:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
@@ -1165,7 +1165,7 @@ function EditMode:CreateNudgeFrame()
 
         local catLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         catLabel:SetPoint("LEFT", btn, "LEFT", 6, 0)
-        catLabel:SetFont(KE.FONT or STANDARD_TEXT_FONT, 11, "OUTLINE")
+        catLabel:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
         catLabel:SetShadowColor(0, 0, 0, 0)
         catLabel:SetShadowOffset(0, 0)
         catLabel:SetText(category.label)
@@ -1175,7 +1175,7 @@ function EditMode:CreateNudgeFrame()
         -- than only implied by dimming it.
         local catCount = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         catCount:SetPoint("RIGHT", btn, "RIGHT", -6, 0)
-        catCount:SetFont(KE.FONT or STANDARD_TEXT_FONT, 10, "OUTLINE")
+        catCount:SetFont(KE.FONT or STANDARD_TEXT_FONT, 11, "OUTLINE")
         catCount:SetShadowColor(0, 0, 0, 0)
         catCount:SetShadowOffset(0, 0)
         btn.count = catCount
