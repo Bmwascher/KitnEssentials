@@ -469,6 +469,11 @@ function AD:ApplySettings()
         self.frame:SetFrameStrata(self.db.Strata or "MEDIUM")
     end
     self:RefreshAllAuras()
+
+    -- The overlay box is computed from these settings and is only recomputed on
+    -- request, so it would otherwise keep the previous numbers until something
+    -- unrelated refreshed it.
+    if KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 
 ---------------------------------------------------------------------------------

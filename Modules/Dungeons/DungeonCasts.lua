@@ -836,10 +836,14 @@ function DC:ApplySettings()
     -- outline, anything that affects timeText's natural width).
     self:RefreshTimeWidthReserve()
 
+    -- The overlay box is computed from these settings and is only recomputed on
+    -- request, so it would otherwise keep the previous numbers until something
+    -- unrelated refreshed it. Both exits need it; the preview arm returns early.
     if self.isPreview then
         -- Rebuild preview so style/layout changes are visible immediately
         self:ReleaseAllBars()
         self:CreatePreviewBars()
+        if KE.EditMode then KE.EditMode:RefreshLiveState() end
         return
     end
 
@@ -847,6 +851,8 @@ function DC:ApplySettings()
     if self.instanceActive then
         self:ScanExistingNameplates()
     end
+
+    if KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 
 -- In-place visual refresh: re-applies size/font/texture/colors/anchor to all
@@ -877,6 +883,11 @@ function DC:UpdateFrameVisuals()
     end
 
     self:PositionAllBars()
+
+    -- The overlay box is computed from these settings and is only recomputed on
+    -- request, so it would otherwise keep the previous numbers until something
+    -- unrelated refreshed it.
+    if KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 
 function DC:ApplyPosition()

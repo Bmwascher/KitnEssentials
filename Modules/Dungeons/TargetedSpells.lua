@@ -770,6 +770,11 @@ function TS:RebuildEntries()
     self:ApplyPosition()
     if wasPreview then self:ShowPreview() end
     self:CheckContentGate()
+
+    -- The overlay box is computed from these settings and is only recomputed on
+    -- request, so it would otherwise keep the previous numbers until something
+    -- unrelated refreshed it.
+    if KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 
 -- Structural sliders fire during drag (~100ms throttle); coalesce so a drag
