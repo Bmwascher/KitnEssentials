@@ -378,6 +378,12 @@ function LR:RegisterEditMode()
     local mover = self:GetMover()
     KE.EditMode:RegisterElement({
         key = "LootRoll",
+        module = self,
+        -- Neither replacing the frames nor repositioning them means nothing
+        -- owns this position, so there is nothing to drag.
+        isEligible = function()
+            return (self.db.Replace or self.db.Reposition) and true or false
+        end,
         displayName = "Loot Roll",
         frame = mover,
         getPosition = function()
@@ -397,21 +403,12 @@ function LR:RegisterEditMode()
             self.db.Position.Y = pos.YOffset
             self:SyncMover()
             self:ApplyPosition("editmode")
-            if KE.GUIFrame and KE.GUIFrame.RefreshContent then
-                pcall(function() KE.GUIFrame:RefreshContent("LootRoll") end)
-            end
         end,
-        -- guiPath is a SIDEBAR ITEM ID and there is no sidebar
-        -- item "LootRoll" -- Open Settings was silently falling through to
-        -- "just open the GUI". These sections live in the consolidated
-        -- Blizzard Frames tab, so route through it (KE's sidebar id:
-        -- GUI/GUIMain/GUI-MainFrame.lua). guiContext is dropped here:
-        -- KE's GUIFrame:OpenPage stores it as pendingContext and nothing
-        -- reads it (GUI/GUIWidgets/GUI-Sidebar.lua). guiTab IS set --
-        -- it is KE's live equivalent of the same intent, seeding
-        -- GUIFrame.tabbedPageState so Open Settings lands on the right
-        -- subtab of the tabbed Blizzard Frames page (Core/EditMode.lua,
-        -- :1122-1126). The subtab id itself is created in Task 6.
+        -- guiPath is a SIDEBAR ITEM ID and there is no sidebar item "LootRoll":
+        -- these sections live in the consolidated Blizzard Frames page, so
+        -- route through it. guiTab is a NESTED id; GUI-TabbedContent.lua
+        -- translates it to its owning tab. guiContext is deliberately omitted:
+        -- GUIFrame:OpenPage stores it and nothing reads it.
         guiPath = "SkinBlizzardFrames",
         guiTab = "SkinBlizzardFramesLootRoll",
     })

@@ -198,7 +198,12 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     PairRow(card2,
         MkCheck("Anchor To Cursor",
             function() return db.CursorAnchor == true end,
-            function(v) db.CursorAnchor = v end,
+            -- Cursor anchoring bypasses the anchor frame, so this also decides
+            -- whether the Tooltip mover deserves a box.
+            function(v)
+                db.CursorAnchor = v
+                if KE.EditMode then KE.EditMode:RefreshLiveState() end
+            end,
             "Default-anchored tooltips follow the mouse cursor instead."), 40,
         MkCheck("Always Show Realm",
             function() return db.AlwaysShowRealm == true end,

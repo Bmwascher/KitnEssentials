@@ -438,10 +438,17 @@ local function MakeHeaderModule(config)
         if not self.mover or not KE.EditMode then return end
         KE.EditMode:RegisterElement({
             key = config.moduleName,
+            module = self,
             displayName = config.displayName,
             frame = self.mover,
             getPosition = function() return self.db.Position end,
             setPosition = function(pos) self:UpdatePosition(pos) end,
+            -- The growth direction decides which corner the mover hangs by,
+            -- not the stored AnchorFrom. Same table ApplyPosition uses, so the
+            -- two can never give different answers.
+            getAnchorFrom = function()
+                return DIRECTION_TO_POINT[self.db.GrowthDirection] or "TOPLEFT"
+            end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             guiPath = config.guiPath,
         })

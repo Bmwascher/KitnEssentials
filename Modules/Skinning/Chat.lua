@@ -499,13 +499,14 @@ function CHAT:OnDisable()
 end
 
 ------------------------------------------------------------------------
--- Edit mode (Task 4)
+-- Edit mode
 ------------------------------------------------------------------------
 
 function CHAT:RegisterEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "Chat", displayName = "Chat", frame = self.panel,
+            module = self,
             getPosition = function() return self.db.Position end,
             setPosition = function(pos)
                 self.db.Position = pos

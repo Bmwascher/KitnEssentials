@@ -361,6 +361,7 @@ function DM:RegWithEditMode()
     self:EnsureDock()
     KE.EditMode:RegisterElement({
         key = "DamageMeter",
+        module = self,
         displayName = "Damage Meter",
         frame = self.dock,
         getPosition = function()

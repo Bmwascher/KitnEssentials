@@ -28,11 +28,33 @@ EditMode.overlayFrames = {}
 EditMode.selectedElementKey = nil
 EditMode.nudgeFrame = nil
 EditMode.isShiftFaded = false
+EditMode.activeCategory = nil
 
 local BORDER_SIZE = 2
 local FILL_ALPHA = 0.25
 local TEXT_FONT_SIZE = 14
 local SHIFT_FADE_ALPHA = 0.1
+
+-- Categories are the sidebar's own sections. A nil id means no filter.
+-- The sidebar also has settings_section and optimize_section; neither registers
+-- a mover, so a button for them would only ever be dimmed.
+local CATEGORIES = {
+    { label = "All" },
+    { id = "combat_section",   label = "Combat" },
+    { id = "aura_section",     label = "Auras" },
+    { id = "class_section",    label = "Class" },
+    { id = "qol_section",      label = "QoL" },
+    { id = "dungeons_section", label = "Dungeons" },
+    { id = "skinning_section", label = "Skinning" },
+}
+
+function EditMode:IsSelectableCategory(sectionId)
+    if not sectionId then return false end
+    for _, category in ipairs(CATEGORIES) do
+        if category.id == sectionId then return true end
+    end
+    return false
+end
 
 ---------------------------------------------------------------------------------
 -- Element Registration
@@ -52,24 +74,40 @@ function EditMode:RegisterElement(config)
         setPosition = config.setPosition,
         getParentFrame = config.getParentFrame,
         getAnchorFrom = config.getAnchorFrom,
+        module = config.module,
+        isEligible = config.isEligible,
+        getOverlayInset = config.getOverlayInset,
         guiPath = config.guiPath,
         guiTab = config.guiTab,
         guiContext = config.guiContext,
     }
 
     -- If edit mode is already active, create overlay for this element
-    if self.isActive then self:CreateOverlayForElement(config.key) end
+    if self.isActive then
+        self:CreateOverlayForElement(config.key)
+        self:UpdateCategoryStrip()
+    end
 end
 
 function EditMode:UnregisterElement(key)
     if not key then return end
 
-    -- Remove overlay if it exists
-    if self.overlayFrames[key] then
-        self.overlayFrames[key]:Hide()
-        self.overlayFrames[key] = nil
+    local overlay = self.overlayFrames[key]
+    if overlay then
+        -- Keep the frame for reuse; a fresh one would collide with its name.
+        self:CancelDrag(overlay)
+        self:RetireOverlay(overlay)
     end
+
     self.registeredElements[key] = nil
+
+    if self.selectedElementKey == key then
+        self:SelectElement(nil)
+    end
+
+    if self.isActive then
+        self:UpdateCategoryStrip()
+    end
 end
 
 function EditMode:GetElementFrame(element)
@@ -84,6 +122,73 @@ end
 ---------------------------------------------------------------------------------
 -- Overlay Frame Creation
 ---------------------------------------------------------------------------------
+
+-- Inset values cross the module boundary, so one module forgetting a secret
+-- guard would otherwise throw from a layout path and take the whole tool down.
+local function SafeInset(value)
+    if type(value) ~= "number" or issecretvalue(value) then return 0 end
+    return value
+end
+EditMode._SafeInset = SafeInset
+
+-- An element with no resolvable section shows only when unfiltered, so a module
+-- whose sidebar page is missing still reaches the tool instead of disappearing.
+function EditMode:ElementMatchesCategory(element)
+    if not self.activeCategory then return true end
+    return KE:GetSectionForItem(element.guiPath) == self.activeCategory
+end
+
+-- Two reasons an element deserves no box even though it is still registered.
+-- Its module was switched off: registration outlives the module, so without
+-- this the box outlives it too. Or the module is running but something else
+-- owns the position in the current mode.
+--
+-- Visibility is deliberately NOT used here. Some movers are invisible proxies
+-- by design, previews are switched on after overlays are built, and the
+-- visibility APIs are secret-capable.
+function EditMode:ElementIsLive(element)
+    local module = element.module
+    if module and module.IsEnabled and not module:IsEnabled() then
+        return false
+    end
+    if element.isEligible and not element.isEligible() then
+        return false
+    end
+    return true
+end
+
+function EditMode:ElementShouldShow(element)
+    if not element then return false end
+    if not self:ElementMatchesCategory(element) then return false end
+    return self:ElementIsLive(element)
+end
+
+-- How many elements a category would actually show. Uses the same liveness rule
+-- as the overlays, so a category whose modules are all switched off reads as
+-- empty instead of selecting into a blank screen.
+function EditMode:CountElementsInCategory(sectionId)
+    local count = 0
+    for _, element in pairs(self.registeredElements) do
+        if (not sectionId or KE:GetSectionForItem(element.guiPath) == sectionId)
+            and self:ElementIsLive(element) then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+function EditMode:SetCategory(sectionId)
+    if self.activeCategory == sectionId then return end
+    self.activeCategory = sectionId
+
+    -- Previews FIRST. A later round sizes boxes from what is on screen, so
+    -- sizing before the new category's content exists would measure the old one.
+    if KE.PreviewManager then
+        KE.PreviewManager:UpdatePreviewState()
+    end
+
+    self:RefreshLiveState()
+end
 
 function EditMode:CreateOverlayFrame(element)
     local targetFrame = self:GetElementFrame(element)
@@ -123,33 +228,120 @@ function EditMode:CreateOverlayFrame(element)
     overlay.element = element
 
     -- Setup drag handling
-    self:SetupDragHandlers(overlay, element)
+    self:SetupDragHandlers(overlay)
 
     return overlay
 end
 
 function EditMode:UpdateOverlayPosition(overlay)
     local element = overlay.element
-    local targetFrame = self:GetElementFrame(element)
+    local targetFrame = element and self:GetElementFrame(element)
 
-    if not targetFrame then
+    -- Three callers reach here from a next-frame timer, so the tool can have
+    -- closed in between: a combat auto-exit hides every overlay, and without
+    -- this a late timer would show a pooled one back over a closed tool.
+    if not self.isActive or not targetFrame then
         overlay:Hide()
         return
     end
 
-    -- Match target frame size and position
+    -- A drag in flight always finishes. Hiding the overlay mid-drag would strand
+    -- the target re-anchored to the screen corner with no OnDragStop to undo it.
+    if not overlay.isDragging and not self:ElementShouldShow(element) then
+        overlay:Hide()
+        return
+    end
+
+    -- The box is sometimes larger than the frame: decorations anchored just
+    -- outside an edge are part of what the user sees and expects to grab. They
+    -- must not reach the drag, which still measures the frame itself. All four
+    -- default to zero, which is the plain SetAllPoints behaviour.
+    local left, right, top, bottom = 0, 0, 0, 0
+    if element.getOverlayInset then
+        left, right, top, bottom = element.getOverlayInset()
+    end
+    left, right = SafeInset(left), SafeInset(right)
+    top, bottom = SafeInset(top), SafeInset(bottom)
+
     overlay:ClearAllPoints()
-    overlay:SetAllPoints(targetFrame)
+    overlay:SetPoint("TOPLEFT", targetFrame, "TOPLEFT", -left, top)
+    overlay:SetPoint("BOTTOMRIGHT", targetFrame, "BOTTOMRIGHT", right, -bottom)
     overlay:Show()
+end
+
+-- The one refresh entry point. Anything that can change whether an element
+-- deserves a box calls this and nothing else. Three things follow from
+-- liveness, and splitting them is how they drift: the boxes themselves, whether
+-- the selected element is still one of them, and the per-category counts that
+-- grey out an empty category button.
+function EditMode:RefreshLiveState()
+    if not self.isActive then return end
+
+    for _, overlay in pairs(self.overlayFrames) do
+        self:UpdateOverlayPosition(overlay)
+    end
+
+    -- A selection that just stopped qualifying would leave the nudge tool
+    -- driving something with no box on screen.
+    if self.selectedElementKey then
+        local selected = self.registeredElements[self.selectedElementKey]
+        if not (selected and self:ElementShouldShow(selected)) then
+            self:SelectElement(nil)
+        end
+    end
+
+    self:UpdateCategoryStrip()
+end
+
+-- Everything a pooled overlay must forget before it is reused. Exit resets the
+-- same state; retirement has to do it too, or a frame comes back mid-animation
+-- or still wearing its selected colours.
+function EditMode:RetireOverlay(overlay)
+    if overlay._fadeFrame then
+        overlay._fadeFrame:SetScript("OnUpdate", nil)
+    end
+
+    overlay.element = nil
+    overlay:Hide()
+    overlay:SetAlpha(1)
+    overlay:SetBackdropColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], FILL_ALPHA)
+    overlay:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+
+    if overlay.text then
+        overlay.text:SetAlpha(1)
+        overlay.text:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2],
+            Theme.textSecondary[3], 0.2)
+        overlay.text:SetText("")
+    end
 end
 
 function EditMode:CreateOverlayForElement(key)
     local element = self.registeredElements[key]
     if not element then return end
 
-    -- Don't recreate if already exists
+    -- Reuse the pooled overlay. Its name is already taken, so a second frame
+    -- would orphan the first.
     if self.overlayFrames[key] then
-        self:UpdateOverlayPosition(self.overlayFrames[key])
+        local overlay = self.overlayFrames[key]
+        local wasSelected = (self.selectedElementKey == key)
+
+        -- Never rebind a live element: cancel any drag, then retire, then adopt.
+        self:CancelDrag(overlay)
+        self:RetireOverlay(overlay)
+
+        overlay.element = element
+        if overlay.text then
+            overlay.text:SetText(element.displayName)
+        end
+        self:UpdateOverlayPosition(overlay)
+
+        -- Retirement cleared the selected styling. Re-apply it for the new
+        -- element, which also refreshes the nudge readout, or drop the
+        -- selection if the new element is not one this view can show.
+        if wasSelected then
+            self.selectedElementKey = nil
+            self:SelectElement(self:ElementShouldShow(element) and key or nil)
+        end
         return
     end
 
@@ -164,12 +356,15 @@ end
 -- Drag Handling
 ---------------------------------------------------------------------------------
 
-function EditMode:SetupDragHandlers(overlay, element)
+function EditMode:SetupDragHandlers(overlay)
     overlay:EnableMouse(true)
     overlay:SetMovable(true)
     overlay:RegisterForDrag("LeftButton")
 
-    local isDragging = false
+    -- didDrag and the start coordinates stay local: only this overlay's own
+    -- handlers read them, and OnDragStart rewrites them before any use. The
+    -- drag flag lives on the overlay because the cancel path outside these
+    -- closures has to see it.
     local didDrag = false
     local startX, startY = 0, 0
     local frameStartX, frameStartY = 0, 0
@@ -177,10 +372,26 @@ function EditMode:SetupDragHandlers(overlay, element)
     overlay:SetScript("OnDragStart", function(self)
         if InCombatLockdown() then return end
 
+        local element = self.element
+        if not element then return end
+
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then return end
 
-        isDragging = true
+        -- Read the origin BEFORE committing to the drag. GetRect is
+        -- SecretWhenAnchoringSecret, and a frame anchored to a restricted
+        -- parent reports a secret rect, so there is no origin to measure from.
+        -- Every value below feeds arithmetic, which throws on a secret. Refuse
+        -- the drag rather than start one that computes a wrong offset: the
+        -- element can still be moved by the nudge controls and the GUI.
+        local left, bottom, width, height = targetFrame:GetRect()
+        if issecretvalue(left) or issecretvalue(bottom)
+            or issecretvalue(width) or issecretvalue(height) then
+            KE:Print("Cannot drag this element: its position is protected. Use the nudge arrows instead.")
+            return
+        end
+
+        self.isDragging = true
         didDrag = true
 
         -- Get cursor start position
@@ -188,8 +399,6 @@ function EditMode:SetupDragHandlers(overlay, element)
         startX, startY = GetCursorPosition()
         startX, startY = startX / scale, startY / scale
 
-        -- Get frame start position
-        local left, bottom, width, height = targetFrame:GetRect()
         if left and bottom and width and height then
             frameStartX = left + width / 2
             frameStartY = bottom + height / 2
@@ -200,9 +409,12 @@ function EditMode:SetupDragHandlers(overlay, element)
     end)
 
     overlay:SetScript("OnDragStop", function(self)
-        if not isDragging then return end
-        isDragging = false
+        if not self.isDragging then return end
+        self.isDragging = false
         self:SetAlpha(1)
+
+        local element = self.element
+        if not element then return end
 
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then return end
@@ -231,9 +443,15 @@ function EditMode:SetupDragHandlers(overlay, element)
         local newCenterX = frameStartX + deltaX
         local newCenterY = frameStartY + deltaY
 
-        -- Get parent frame position and dimensions for offset calculation
+        -- Parent rect for the offset calculation. The target's own rect is
+        -- already known readable -- OnDragStart refuses the drag otherwise, and
+        -- the drag proxy has since re-anchored it to UIParent -- but the
+        -- module's chosen parent is a separate frame and can still be
+        -- anchoring-secret on its own. Treat an unreadable rect exactly like a
+        -- missing one and fall back to the screen.
         local parentLeft, parentBottom, parentWidth, parentHeight = parentFrame:GetRect()
-        if not parentLeft then
+        if not parentLeft or issecretvalue(parentLeft) or issecretvalue(parentBottom)
+            or issecretvalue(parentWidth) or issecretvalue(parentHeight) then
             parentLeft, parentBottom = 0, 0
             parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
         end
@@ -278,22 +496,37 @@ function EditMode:SetupDragHandlers(overlay, element)
         local newPos = {
             AnchorFrom = anchorFrom,
             AnchorTo = anchorTo,
-            XOffset = finalX,
-            YOffset = finalY,
+            XOffset = KE:RoundOffset(finalX),
+            YOffset = KE:RoundOffset(finalY),
         }
 
         element.setPosition(newPos)
         C_Timer.After(0, function()
             EditMode:UpdateOverlayPosition(self)
 
-            -- Select the dragged element in the nudge tool
-            EditMode:SelectElement(element.key)
+            -- A frame's worth of delay is enough for the tool to close, the
+            -- element to be unregistered, or its category or eligibility to
+            -- change. SelectElement validates none of that, so selecting
+            -- blindly here can drive the nudge controls from a box that is no
+            -- longer on screen.
+            local current = EditMode.registeredElements[element.key]
+            if EditMode.isActive and current == self.element
+                and EditMode:ElementShouldShow(current) then
+                EditMode:SelectElement(element.key)
+            end
+
+            if KE.GUIFrame and KE.GUIFrame.mainFrame and KE.GUIFrame.mainFrame:IsShown() then
+                KE.GUIFrame:RefreshContent()
+            end
         end)
     end)
 
     -- Update position while dragging
     overlay:SetScript("OnUpdate", function(self)
-        if not isDragging then return end
+        if not self.isDragging then return end
+
+        local element = self.element
+        if not element then return end
 
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then return end
@@ -308,21 +541,24 @@ function EditMode:SetupDragHandlers(overlay, element)
         targetFrame:ClearAllPoints()
         targetFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", frameStartX + deltaX, frameStartY + deltaY)
 
-        self:ClearAllPoints()
-        self:SetAllPoints(targetFrame)
+        EditMode:UpdateOverlayPosition(self)
     end)
 
     -- Mouseover stuff
-    overlay:SetScript("OnEnter", function()
-        if overlay.text and EditMode.selectedElementKey ~= element.key then
-            overlay.text:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-            overlay:SetBackdropBorderColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+    overlay:SetScript("OnEnter", function(self)
+        local element = self.element
+        if not element then return end
+        if self.text and EditMode.selectedElementKey ~= element.key then
+            self.text:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+            self:SetBackdropBorderColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
         end
     end)
-    overlay:SetScript("OnLeave", function()
-        if overlay.text and EditMode.selectedElementKey ~= element.key then
-            overlay.text:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.2)
-            overlay:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    overlay:SetScript("OnLeave", function(self)
+        local element = self.element
+        if not element then return end
+        if self.text and EditMode.selectedElementKey ~= element.key then
+            self.text:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.2)
+            self:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
         end
     end)
 
@@ -334,11 +570,98 @@ function EditMode:SetupDragHandlers(overlay, element)
     end)
 
     -- Click to select for nudge tool
-    overlay:SetScript("OnMouseUp", function(_, button)
+    overlay:SetScript("OnMouseUp", function(self, button)
+        local element = self.element
+        if not element then return end
         if button == "LeftButton" and not didDrag then
             EditMode:SelectElement(element.key)
         end
     end)
+end
+
+-- Both gates answer with a secret-capable boolean, so neither may be
+-- truth-tested. Fail closed on either one being true or secret. IsProtected
+-- alone is not enough: an unprotected mover that a secure header anchors to is
+-- still restricted.
+local function CanReanchor(frame)
+    local protected = frame:IsProtected()
+    if issecretvalue(protected) or protected == true then return false end
+
+    -- Fail closed if the method is missing too. Every current target is a Frame
+    -- or a Button and both carry it, so this is unreachable today, but a gate
+    -- that cannot be asked is not a gate that said yes.
+    if not frame.IsAnchoringRestricted then return false end
+
+    local restricted = frame:IsAnchoringRestricted()
+    if issecretvalue(restricted) or restricted == true then return false end
+
+    return true
+end
+
+-- A drag leaves the target temporarily anchored to the screen corner, so any
+-- path that ends a drag early has to put it back.
+--
+-- Going through the module's own setter is not sufficient. The commonest way a
+-- drag is interrupted is entering combat, and some setters refuse to run then:
+-- the aura header movers call a position update that returns immediately in
+-- combat, so the frame would stay in the corner. Re-anchor the frame directly
+-- as well, which is a plain frame operation, and let the setter persist the
+-- value for the next full apply.
+function EditMode:CancelDrag(overlay)
+    if not overlay or not overlay.isDragging then return end
+    overlay.isDragging = false
+    overlay:SetAlpha(1)
+
+    local element = overlay.element
+    if not element then return end
+    local key = element.key
+
+    -- Both closures re-resolve the element, the frame AND the position from the
+    -- registry at call time. A deferred restore can run long after this element
+    -- was unregistered, rebuilt or rebound to a different db table, and pairing
+    -- a live frame with a value captured earlier would place it using a
+    -- position that no longer belongs to it.
+    local function Reanchor()
+        local live = EditMode.registeredElements[key]
+        if not live then return end
+        local frame = EditMode:GetElementFrame(live)
+        if not frame then return end
+        local pos = live.getPosition and live.getPosition()
+        if not pos then return end
+        local parent = live.getParentFrame and live.getParentFrame() or UIParent
+        local anchorFrom = live.getAnchorFrom and live.getAnchorFrom()
+            or pos.AnchorFrom or "CENTER"
+        frame:ClearAllPoints()
+        frame:SetPoint(anchorFrom, parent, pos.AnchorTo or "CENTER",
+            pos.XOffset or 0, pos.YOffset or 0)
+    end
+
+    -- The setter is module code. Whatever the target frame itself reports, a
+    -- setter may reposition a secure child or a protected frame of its own --
+    -- one module's setter positions a secure action button -- so it is never
+    -- called during lockdown.
+    local function Reapply()
+        local live = EditMode.registeredElements[key]
+        if not live or not live.setPosition then return end
+        local pos = live.getPosition and live.getPosition()
+        if pos then live.setPosition(pos) end
+    end
+
+    if InCombatLockdown() then
+        -- Re-anchor now when both permission gates allow it: that is what stops
+        -- the frame sitting in the screen corner for the rest of the fight.
+        -- Anything restricted has to wait for the queue.
+        local targetFrame = self:GetElementFrame(element)
+        if targetFrame and CanReanchor(targetFrame) then
+            Reanchor()
+        else
+            KE:RunAfterCombat(Reanchor)
+        end
+        KE:RunAfterCombat(Reapply)
+    else
+        Reanchor()
+        Reapply()
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -354,6 +677,24 @@ function EditMode:Enter()
 
     self.isActive = true
 
+    -- Open on the category of the page the user came from. activeSection is not
+    -- cleared when the GUI closes, so it is only trustworthy while the GUI is
+    -- open; a cold /kes edit opens unfiltered.
+    --
+    -- The sidebar has sections the strip deliberately does not offer, because
+    -- they own no movers. Adopting one of those would filter everything away
+    -- with no button lit to show why, so they normalise to All.
+    local PM = KE.PreviewManager
+    local opening = PM and PM.guiOpen and PM.activeSection or nil
+    -- Written out rather than folded into an `and/or` chain: the test returns a
+    -- boolean, so `opening and Test(opening) or nil` yields `true`, not the
+    -- section id, and every element then fails the category match.
+    if opening and self:IsSelectableCategory(opening) then
+        self.activeCategory = opening
+    else
+        self.activeCategory = nil
+    end
+
     -- Create overlays for all registered elements
     for key in pairs(self.registeredElements) do
         self:CreateOverlayForElement(key)
@@ -361,6 +702,10 @@ function EditMode:Enter()
 
     self:ShowNudgeFrame()
     if KE.PreviewManager then KE.PreviewManager:SetEditModeActive(true) end
+
+    -- Overlays are built before previews are switched on, so this is the first
+    -- point where both are in their final state.
+    self:RefreshLiveState()
     self:SetupEscapeHandler()
     self:SetupShiftHandler()
     self:SetupCombatHandler()
@@ -383,21 +728,11 @@ function EditMode:Exit()
     -- Hide overlays but KEEP them pooled for reuse. Wiping the table here
     -- would orphan one named frame per registered element on every open/close
     -- cycle (WoW frames can't be destroyed); CreateOverlayForElement reuses
-    -- any overlay that already exists. Reset each to the unselected appearance
-    -- and cancel any in-flight shift-fade so a pooled overlay re-opens clean.
+    -- any overlay that already exists and re-adopts its element.
     for _, overlay in pairs(self.overlayFrames) do
         if overlay then
-            if overlay._fadeFrame then
-                overlay._fadeFrame:SetScript("OnUpdate", nil)
-            end
-            overlay:SetBackdropColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], FILL_ALPHA)
-            overlay:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-            if overlay.text then
-                overlay.text:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.2)
-                overlay.text:SetAlpha(1)
-            end
-            overlay:SetAlpha(1)
-            overlay:Hide()
+            self:CancelDrag(overlay)
+            self:RetireOverlay(overlay)
         end
     end
     self:RemoveEscapeHandler()
@@ -558,6 +893,17 @@ function EditMode:StartDeselectChecker()
                 overAny = true
             end
 
+            -- The category strip is a child of the nudge frame but sits ABOVE
+            -- it, so it falls outside the parent's rect and the test above
+            -- cannot see it. Without this, every category click reads as a
+            -- click on empty space and clears the selection the strip exists
+            -- to filter.
+            if not overAny and EditMode.nudgeFrame
+                and EditMode.nudgeFrame.categoryStrip
+                and EditMode.nudgeFrame.categoryStrip:IsMouseOver() then
+                overAny = true
+            end
+
             -- Ignore clicks on the GUI main frame
             if not overAny and KE.GUIFrame and KE.GUIFrame.mainFrame
                 and KE.GUIFrame.mainFrame:IsShown()
@@ -714,6 +1060,57 @@ function EditMode:CreateNudgeFrame()
     frame:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], 1)
     frame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
+    -- Category strip. Parented to the nudge frame so the two drag together.
+    local strip = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    -- Centred above the tool rather than matching its width: seven labels do not
+    -- fit in 160. Final width is set from the measured buttons below.
+    strip:SetPoint("BOTTOM", frame, "TOP", 0, 4)
+    strip:SetHeight(24)
+    strip:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = KE:GetPixelSize(),
+    })
+    strip:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.95)
+    strip:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    frame.categoryStrip = strip
+    frame.categoryButtons = {}
+
+    local stripPad, stripGap = 6, 4
+    local cursorX = stripPad
+    for index, category in ipairs(CATEGORIES) do
+        local btn = CreateFrame("Button", nil, strip, "BackdropTemplate")
+        btn:SetHeight(18)
+        btn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = KE:GetPixelSize(),
+        })
+
+        local catLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        catLabel:SetPoint("CENTER")
+        catLabel:SetFont(KE.FONT or STANDARD_TEXT_FONT, 11, "OUTLINE")
+        catLabel:SetShadowColor(0, 0, 0, 0)
+        catLabel:SetShadowOffset(0, 0)
+        catLabel:SetText(category.label)
+        btn.label = catLabel
+
+        -- Addon-owned literal text on a frame with no secret anchor, so this
+        -- measurement cannot return a secret.
+        btn:SetWidth(catLabel:GetStringWidth() + 14)
+        btn:SetPoint("LEFT", strip, "LEFT", cursorX, 0)
+        cursorX = cursorX + btn:GetWidth() + stripGap
+
+        btn.categoryId = category.id
+        btn:SetScript("OnClick", function(self)
+            EditMode:SetCategory(self.categoryId)
+        end)
+
+        frame.categoryButtons[index] = btn
+    end
+
+    strip:SetWidth(cursorX - stripGap + stripPad)
+
     -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOP", frame, "TOP", 0, -6)
@@ -857,11 +1254,16 @@ function EditMode:CreateNudgeFrame()
         local newPos = {
             AnchorFrom = currentPos.AnchorFrom,
             AnchorTo = currentPos.AnchorTo,
-            XOffset = newX,
-            YOffset = newY,
+            XOffset = KE:RoundOffset(newX),
+            YOffset = KE:RoundOffset(newY),
         }
 
         element.setPosition(newPos)
+
+        -- Repaint the boxes from what was actually stored. The typed text is
+        -- still whatever was entered, so without this a fractional entry keeps
+        -- showing its fraction while the stored value is the rounded one.
+        EditMode:UpdateNudgeFrameInfo()
 
         if EditMode.overlayFrames[EditMode.selectedElementKey] then
             C_Timer.After(0, function()
@@ -869,7 +1271,9 @@ function EditMode:CreateNudgeFrame()
             end)
         end
 
-        -- Position values update when the GUI tab is next opened/switched to
+        if KE.GUIFrame and KE.GUIFrame.mainFrame and KE.GUIFrame.mainFrame:IsShown() then
+            KE.GUIFrame:RefreshContent()
+        end
     end
 
     frame.xEditBox:SetScript("OnEnterPressed", function(self)
@@ -1069,8 +1473,11 @@ function EditMode:UpdateNudgeFrameInfo()
 
     local pos = element.getPosition()
     if pos then
-        frame.xEditBox:SetText(string.format("%.1f", pos.XOffset or 0))
-        frame.yEditBox:SetText(string.format("%.1f", pos.YOffset or 0))
+        -- RoundOffset rather than %d alone: Lua 5.1 truncates toward zero when
+        -- formatting a fraction, so a value stored before offsets became whole
+        -- would read one point off from what a nudge would round it to.
+        frame.xEditBox:SetText(string.format("%d", KE:RoundOffset(pos.XOffset)))
+        frame.yEditBox:SetText(string.format("%d", KE:RoundOffset(pos.YOffset)))
     end
 end
 
@@ -1138,8 +1545,40 @@ function EditMode:UpdateNudgeFrameTheme()
     self.nudgeFrame:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.95)
     self.nudgeFrame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
+    if self.nudgeFrame.categoryStrip then
+        self.nudgeFrame.categoryStrip:SetBackdropColor(
+            Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 0.95)
+        self.nudgeFrame.categoryStrip:SetBackdropBorderColor(
+            Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    end
+    self:UpdateCategoryStrip()
+
     -- Refresh the info display with new colors
     self:UpdateNudgeFrameInfo()
+end
+
+-- Selected category reads as accent-filled, the rest as plain controls, an
+-- empty one as dimmed and unclickable.
+function EditMode:UpdateCategoryStrip()
+    if not (self.nudgeFrame and self.nudgeFrame.categoryButtons) then return end
+
+    for _, btn in ipairs(self.nudgeFrame.categoryButtons) do
+        local selected = (btn.categoryId == self.activeCategory)
+        local populated = self:CountElementsInCategory(btn.categoryId) > 0
+
+        btn:SetEnabled(populated)
+        btn:SetAlpha(populated and 1 or 0.4)
+
+        if selected then
+            btn:SetBackdropColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.35)
+            btn:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            btn.label:SetTextColor(1, 1, 1, 1)
+        else
+            btn:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], 1)
+            btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+            btn.label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -1157,12 +1596,14 @@ function EditMode:NudgeSelectedElement(deltaX, deltaY)
     local currentPos = element.getPosition()
     if not currentPos then return end
 
-    -- Calculate new position
+    -- Calculate new position. Rounding matters even though the delta is whole:
+    -- a value stored fractionally before offsets became whole stays fractional
+    -- otherwise.
     local newPos = {
         AnchorFrom = currentPos.AnchorFrom,
         AnchorTo = currentPos.AnchorTo,
-        XOffset = (currentPos.XOffset or 0) + deltaX,
-        YOffset = (currentPos.YOffset or 0) + deltaY,
+        XOffset = KE:RoundOffset((currentPos.XOffset or 0) + deltaX),
+        YOffset = KE:RoundOffset((currentPos.YOffset or 0) + deltaY),
     }
 
     -- Save and apply
@@ -1190,6 +1631,7 @@ function EditMode:ShowNudgeFrame()
     end
     self.nudgeFrame:Show()
     self:UpdateNudgeFrameInfo()
+    self:UpdateCategoryStrip()
 end
 
 function EditMode:HideNudgeFrame()
@@ -1201,5 +1643,5 @@ end
 
 -- NOTE: A per-frame StartPositionUpdates/StopPositionUpdates driver used to
 -- live here but was dead code (never called) — overlays auto-track their target
--- via SetAllPoints(targetFrame) in UpdateOverlayPosition, so no polling is
+-- via anchors to the target frame in UpdateOverlayPosition, so no polling is
 -- needed. Removed to drop the unused OnUpdate path entirely.

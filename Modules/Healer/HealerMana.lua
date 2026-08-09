@@ -349,14 +349,23 @@ end
 -- anchor edge. Adjustment is display-only (not persisted). Uses KE's pixel-
 -- perfect ApplyFramePosition (snaps the container once; children use integer
 -- offsets so no per-child re-snap, avoiding the buggy-grid issue).
+-- The anchor edge the container is ACTUALLY hanging by right now, condition
+-- included. Only rewritten when actually stacking (>1 healer): a single healer
+-- keeps the user's configured anchor so existing positions don't shift on
+-- upgrade (default AnchorFrom is "CENTER"). Edit Mode asks this too, so a drag
+-- measures from the same edge the applier used.
+function HM:GetActiveAnchorFrom()
+    local pos = self:GetActivePosition()
+    if #self.currentHealers > 1 then
+        return self:GetGrowAnchor(pos.AnchorFrom)
+    end
+    return pos.AnchorFrom
+end
+
 function HM:ApplyContainerPosition()
     if not self.containerFrame then return end
     local pos = self:GetActivePosition()
-    -- Only rewrite the anchor edge when actually stacking (>1 healer). A single
-    -- healer keeps the user's configured anchor so existing positions don't
-    -- shift on upgrade (default AnchorFrom is "CENTER").
-    local count = #self.currentHealers
-    local anchorFrom = (count > 1) and self:GetGrowAnchor(pos.AnchorFrom) or pos.AnchorFrom
+    local anchorFrom = self:GetActiveAnchorFrom()
     local adjusted = {
         AnchorFrom = anchorFrom,
         AnchorTo = pos.AnchorTo,
@@ -633,12 +642,14 @@ function HM:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered and self.containerFrame then
         KE.EditMode:RegisterElement({
             key = "HealerMana", displayName = self:GetEditModeLabel(), frame = self.containerFrame,
+            module = self,
             getPosition = function() return self:GetActivePosition() end,
             setPosition = function(pos)
                 -- Write to the SAME table getPosition reads (no get/set drift).
                 self.db[self:GetActivePositionKey()] = pos
                 self:ApplyContainerPosition()
             end,
+            getAnchorFrom = function() return self:GetActiveAnchorFrom() end,
             getParentFrame = function()
                 local cfg = self:GetActiveAnchorConfig()
                 return KE:ResolveAnchorFrame(cfg.anchorFrameType, cfg.ParentFrame)

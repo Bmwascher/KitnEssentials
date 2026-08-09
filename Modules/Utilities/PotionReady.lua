@@ -152,6 +152,7 @@ function PR:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key         = "PotionReady",
+            module      = self,
             displayName = "Combat Potion Ready",
             frame       = self.frame,
             getPosition = function() return self.db.Position end,

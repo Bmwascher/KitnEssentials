@@ -150,6 +150,15 @@ function L.loadGlobals(overrides, opts)
     return helpers.loadModule("Core/Globals.lua", KE), caughtErrors
 end
 
+-- Core/EditMode.lua onto an ALREADY-LOADED KE (its category predicate calls
+-- KE:GetSectionForItem, which Core/Globals.lua defines, and it reads KE.Theme
+-- at file scope). Pass the table L.loadGlobals returned. The file only defines
+-- functions at load -- no frames, no slash registration -- so whatever mock the
+-- caller's loader installed is enough. Returns the EditMode table.
+function L.loadEditMode(KE)
+    return helpers.loadModule("Core/EditMode.lua", KE).EditMode
+end
+
 -- Modules/DamageMeter/Core.lua (KE.DamageMeter is set at file scope).
 -- Secret handling is DECLARED, never real: a table with __secret == true
 -- counts as secret, so specs exercise guard branches only — real 12.0 taint

@@ -79,8 +79,17 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
 
         GUIFrame = {
             registeredContent = {},
+            -- GUI-BlizzardFrames.lua registers its nested sub-row ids at FILE
+            -- SCOPE, so this has to exist before the load.
+            nestedTabOwner = {},
+            pendingNestedTab = {},
             RegisterContent = function(self, id, fn) self.registeredContent[id] = fn end,
             RegisterTabbedContent = function() end,
+            RegisterNestedTabs = function(self, ownerId, nestedIds)
+                for _, nestedId in ipairs(nestedIds) do
+                    self.nestedTabOwner[nestedId] = ownerId
+                end
+            end,
             CreateCard = function()
                 local card = { content = {} }
                 function card:AddRow() end

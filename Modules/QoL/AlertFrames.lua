@@ -119,6 +119,16 @@ function AF:PostAlertMove()
     local screenTop = UIParent and UIParent:GetTop()
     local growUp = ShouldGrowUp(centreY, screenTop, perksAnchor ~= nil)
 
+    -- Edit Mode has to know when the stack stops being ours to move, and this
+    -- is the only place that decision is made. Refresh only on a change: this
+    -- runs once per alert, and an alert-heavy moment would otherwise repaint
+    -- every overlay each time.
+    local rebased = perksAnchor and true or false
+    if rebased ~= self.rebasedToPerks then
+        self.rebasedToPerks = rebased
+        if KE.EditMode then KE.EditMode:RefreshLiveState() end
+    end
+
     if growUp then
         POSITION, POINT, X_OFFSET, Y_OFFSET = "BOTTOM", "TOP", 0, 5
         BASE_YOFFSET = perksAnchor and 40 or 0
@@ -327,6 +337,10 @@ function AF:RegisterEditMode()
     self.editModeRegistered = true
     KE.EditMode:RegisterElement({
         key = "AlertFrames",
+        module = self,
+        -- While the stack is rebased onto the Perks Program footer it is not
+        -- ours to move.
+        isEligible = function() return not self.rebasedToPerks end,
         displayName = "Alerts / Loot Toasts",
         frame = self.holder,
         getPosition = function() return self.db.Position end,
@@ -337,19 +351,22 @@ function AF:RegisterEditMode()
             self.db.Position.YOffset = pos.YOffset
             self:ApplyPosition()
         end,
-        -- guiPath is a SIDEBAR ITEM ID, and this module has no sidebar row
-        -- of its own -- its config cards live on the UI Widgets tab instead.
-        -- Open Settings was silently falling through to "just open the GUI".
-        -- Route through the tab that now hosts these cards (KE's sidebar
-        -- id: GUI/GUIMain/GUI-MainFrame.lua). guiTab seeds
-        -- GUIFrame.tabbedPageState so Open Settings lands on the right
-        -- subtab (Core/EditMode.lua) -- same fix as
-        -- Modules/Skinning/LootRoll.lua.
+        getParentFrame = function()
+            return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+        end,
+        -- guiPath is a SIDEBAR ITEM ID, and this module has no sidebar row of
+        -- its own -- its config cards live on the UI Widgets tab instead, so
+        -- route through the page that hosts them. guiTab is a NESTED id;
+        -- GUI/GUIMain/GUI-TabbedContent.lua translates it to its owning tab.
         guiPath = "SkinBlizzardFrames",
         guiTab = "SkinBlizzardFramesWidgets",
     })
     KE.EditMode:RegisterElement({
         key = "EventToasts",
+        module = self,
+        -- The holder exists whether or not the toggle is on, but nothing is
+        -- routed into it until it is.
+        isEligible = function() return self.db.MoveEventToasts == true end,
         displayName = "Event Toasts (Recipe / Level Banners)",
         frame = self.toastHolder,
         getPosition = function() return self.db.EventToastPosition end,
@@ -359,6 +376,12 @@ function AF:RegisterEditMode()
             self.db.EventToastPosition.XOffset = pos.XOffset
             self.db.EventToastPosition.YOffset = pos.YOffset
             self:ApplyEventToastPosition()
+        end,
+        -- Its card deliberately does not share the alert stack's anchor keys,
+        -- so the drag has to resolve the parent from its own roots.
+        getParentFrame = function()
+            return KE:ResolveAnchorFrame(self.db.EventToastAnchorFrameType,
+                self.db.EventToastParentFrame)
         end,
         -- Same page as the AlertFrames element above -- see its comment.
         guiPath = "SkinBlizzardFrames",

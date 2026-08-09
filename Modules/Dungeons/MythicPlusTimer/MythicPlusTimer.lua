@@ -1795,6 +1795,7 @@ function MPT:RegWithEditMode()
     if self.editModeRegistered then return end
     KE.EditMode:RegisterElement({
         key = "MythicPlusTimer",
+        module = self,
         displayName = "Mythic+ Timer",
         frame = self.frames.root,
         getPosition = function()

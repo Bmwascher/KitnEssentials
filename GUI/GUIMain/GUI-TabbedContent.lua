@@ -14,6 +14,18 @@ local ipairs = ipairs
 -- Active tab per page, session only. Which tab you last viewed is not a setting.
 GUIFrame.tabbedPageState = GUIFrame.tabbedPageState or {}
 
+-- Nested sub-rows are not pages, so they have no entry in tabbedPageState.
+-- Edit Mode can only hand over one id, so a nested id has to be translated to
+-- its owning outer tab and then passed down.
+GUIFrame.nestedTabOwner = GUIFrame.nestedTabOwner or {}
+GUIFrame.pendingNestedTab = GUIFrame.pendingNestedTab or {}
+
+function GUIFrame:RegisterNestedTabs(ownerId, nestedIds)
+    for _, nestedId in ipairs(nestedIds) do
+        self.nestedTabOwner[nestedId] = ownerId
+    end
+end
+
 -- Falls back to the first tab when the remembered id is absent OR no longer in
 -- `tabs` — a stale id would otherwise render an empty page.
 function GUIFrame:ResolveActiveTab(itemId, tabs)
@@ -21,6 +33,20 @@ function GUIFrame:ResolveActiveTab(itemId, tabs)
     if remembered then
         for _, tab in ipairs(tabs) do
             if tab.id == remembered then return remembered end
+        end
+
+        -- A remembered id that is not an outer tab may be a nested one. Rewrite
+        -- the page state to the owning tab and hand the nested id down, so a
+        -- later rebuild stays on the right outer tab instead of falling back.
+        local owner = self.nestedTabOwner[remembered]
+        if owner then
+            for _, tab in ipairs(tabs) do
+                if tab.id == owner then
+                    self.pendingNestedTab[owner] = remembered
+                    self.tabbedPageState[itemId] = owner
+                    return owner
+                end
+            end
         end
     end
     return tabs[1] and tabs[1].id or nil

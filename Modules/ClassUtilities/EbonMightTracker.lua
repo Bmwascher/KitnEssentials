@@ -854,6 +854,7 @@ function EMT:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "EbonMightTracker",
+            module = self,
             displayName = "Ebon Might Tracker",
             frame = self.frame,
             getPosition = function() return self.db.Position end,

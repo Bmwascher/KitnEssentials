@@ -484,6 +484,7 @@ function PA:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "PlayerAbsorbs", displayName = "Player Absorbs", frame = self.frame,
+            module = self,
             getPosition = function() return self.db.Position end,
             setPosition = function(pos)
                 self.db.Position = pos

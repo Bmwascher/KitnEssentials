@@ -1132,6 +1132,8 @@ function H.RegWithEditMode(self, opts)
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = opts.key, displayName = opts.displayName, frame = self.frame,
+            -- `self` here is the calling module, not the helper table.
+            module = self,
             getPosition = function() return self.db.Position end,
             setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,

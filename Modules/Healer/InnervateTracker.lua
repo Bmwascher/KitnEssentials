@@ -248,6 +248,7 @@ function IT:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key         = "InnervateTracker",
+            module      = self,
             displayName = "Innervate Tracker",
             frame       = self.frame,
             getPosition = function() return self.db.Position end,

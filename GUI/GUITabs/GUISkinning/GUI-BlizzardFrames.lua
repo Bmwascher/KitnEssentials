@@ -605,6 +605,15 @@ local elementTabs = {
 }
 local activeElement = elementTabs[1].id
 
+-- Edit Mode's Open Settings hands over one of these nested ids. The page-level
+-- resolver cannot see them, so it needs to know which outer tab owns them.
+GUIFrame:RegisterNestedTabs("SkinBlizzardFramesElements", {
+    "SkinBlizzardFramesLootRoll",
+    "SkinBlizzardFramesLootWindow",
+    "SkinBlizzardFramesWidgets",
+    "CharacterPanel",
+})
+
 -- Only Character Screen survives the conflict state; the other three configure
 -- skins this addon stands down from.
 local function VisibleElementTabs()
@@ -617,6 +626,14 @@ GUIFrame._VisibleElementTabs = VisibleElementTabs
 
 GUIFrame:RegisterContent("SkinBlizzardFramesElements", function(scrollChild, yOffset)
     local tabs = VisibleElementTabs()
+
+    -- Consumed once: re-reading it on every rebuild would drag the user back
+    -- here every time the page redraws after they clicked a different sub-tab.
+    local pending = GUIFrame.pendingNestedTab["SkinBlizzardFramesElements"]
+    if pending then
+        activeElement = pending
+        GUIFrame.pendingNestedTab["SkinBlizzardFramesElements"] = nil
+    end
 
     local found = false
     for _, tab in ipairs(tabs) do

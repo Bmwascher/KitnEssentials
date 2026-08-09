@@ -377,6 +377,7 @@ function ST:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "StasisTracker",
+            module = self,
             displayName = "Stasis Tracker",
             frame = self.containerFrame,
             getPosition = function() return self.db.Position end,

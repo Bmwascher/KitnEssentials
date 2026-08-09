@@ -180,6 +180,7 @@ function GVA:RegWithEditMode()
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
             key = "GreatVaultAlert",
+            module = self,
             displayName = "Great Vault Alert",
             frame = self.alertFrame,
             getPosition = function() return self.db.Position end,

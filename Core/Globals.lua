@@ -12,6 +12,7 @@ local addonName = select(1, ...)
 local ipairs = ipairs
 local print = print
 local string_gsub = string.gsub
+local math_floor = math.floor
 local ReloadUI = ReloadUI
 local C_AddOns = C_AddOns
 local C_Timer = C_Timer
@@ -716,6 +717,16 @@ local SECTION_PREVIEW_MODULES = {
     },
 }
 
+-- Previews that belong to a section under /kes edit but NOT to ordinary
+-- navigation of it. Loot Roll is the case: its mover has to have something
+-- behind it whenever the category filter is on Skinning, but its sample is a
+-- slim bar that exists only in Replace mode, and its own page deliberately
+-- gates its preview button the same way. Adding it to the shared map would
+-- spawn a fake bar for anyone who merely opened a Skinning page.
+local EDIT_MODE_SECTION_EXTRAS = {
+    skinning_section = { "LootRoll" },
+}
+
 -- Pages that run their own preview system opt out of their section's
 -- ambient set — the section samples would render on top of the page's
 -- own previews.
@@ -728,19 +739,46 @@ local ITEM_TO_SECTION = nil
 
 local function GetItemToSection()
     if ITEM_TO_SECTION then return ITEM_TO_SECTION end
-    ITEM_TO_SECTION = {}
+
     local GUIFrame = KE.GUIFrame
     local sidebarConfig = GUIFrame and GUIFrame.sidebarConfig
-    if sidebarConfig then
-        for _, section in ipairs(sidebarConfig) do
-            if section.items then
-                for _, item in ipairs(section.items) do
-                    ITEM_TO_SECTION[item.id] = section.id
-                end
+    -- Do not cache before the sidebar exists: the empty table would answer nil
+    -- for the rest of the session, long after the real config arrived.
+    if not sidebarConfig then return {} end
+
+    local lookup = {}
+    for _, section in ipairs(sidebarConfig) do
+        if section.items then
+            for _, item in ipairs(section.items) do
+                lookup[item.id] = section.id
             end
         end
     end
+
+    ITEM_TO_SECTION = lookup
     return ITEM_TO_SECTION
+end
+
+-- Sidebar section owning a sidebar item id. Edit Mode groups its overlays with
+-- this so its categories and the GUI's pages can never disagree; the sidebar
+-- stays the only place the grouping is declared. An unknown id resolves to nil
+-- rather than erroring, so a module whose page has not been added yet still
+-- appears under the unfiltered view instead of vanishing.
+---@param itemId string?
+---@return string? sectionId
+function KE:GetSectionForItem(itemId)
+    if not itemId then return nil end
+    return GetItemToSection()[itemId]
+end
+
+-- Position offsets are whole numbers. The GUI position sliders step by 1, so a
+-- fractional stored offset is a value the slider can neither show nor
+-- round-trip, and the two readouts drift apart.
+---@param value any
+---@return number
+function KE:RoundOffset(value)
+    if type(value) ~= "number" then return 0 end
+    return math_floor(value + 0.5)
 end
 
 PreviewManager.guiOpen = false
@@ -759,9 +797,16 @@ PreviewManager._moduleStates = {}
 
 function PreviewManager:UpdatePreviewState()
     if self.editModeActive then
-        -- Edit mode: show ALL previews regardless of section
-        self:ShowModules(PREVIEW_MODULES)
         self.previewsActive = true
+        -- Previews track the category filter so the sample content on screen and
+        -- the boxes around it always describe the same set. A nil category means
+        -- no filter, which is every preview.
+        local category = KE.EditMode and KE.EditMode.activeCategory
+        if category then
+            self:ShowSectionPreviews(category, EDIT_MODE_SECTION_EXTRAS[category])
+        else
+            self:ShowModules(PREVIEW_MODULES)
+        end
         return
     end
 
@@ -817,9 +862,16 @@ function PreviewManager:OnModuleEnableChanged(moduleName)
     if InCombatLockdown() then return end
     self._moduleStates[moduleName] = nil
     self:UpdatePreviewState()
+    -- Liveness changed as well as the preview set, so the boxes and the
+    -- category counts have to follow.
+    if KE.EditMode then
+        KE.EditMode:RefreshLiveState()
+    end
 end
 
-function PreviewManager:ShowSectionPreviews(sectionId)
+-- `extras` adds modules to this section's set for this call only. Edit Mode
+-- passes it; ordinary navigation does not.
+function PreviewManager:ShowSectionPreviews(sectionId, extras)
     local Addon = KitnEssentials
     if not Addon then return end
 
@@ -827,6 +879,11 @@ function PreviewManager:ShowSectionPreviews(sectionId)
     local wantedSet = {}
     if wantedModules then
         for _, name in ipairs(wantedModules) do
+            wantedSet[name] = true
+        end
+    end
+    if extras then
+        for _, name in ipairs(extras) do
             wantedSet[name] = true
         end
     end

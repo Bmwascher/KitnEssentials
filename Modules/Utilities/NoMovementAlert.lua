@@ -996,16 +996,31 @@ local EDIT_MODE_ELEMENT = {
     guiPath = "NoMovementAlert",
 }
 
+-- Every unregister goes through here. The cache below is what makes a repeat
+-- RegisterAnchor a no-op, so dropping the key without clearing it would block
+-- re-registration for the rest of the session.
+function NMA:UnregisterAnchor()
+    KE.EditMode:UnregisterElement("NoMovementAlert")
+    self.editModeRegistered = nil
+    self.editModeFrame = nil
+end
+
 function NMA:RegisterAnchor()
     -- Attached to Combat Texts: that module owns the anchor, so a second
     -- draggable overlay for the same spot would fight it.
     if self:IsAttached() then
-        KE.EditMode:UnregisterElement("NoMovementAlert")
+        self:UnregisterAnchor()
         return
     end
+    -- Enable and every preview show both land here. Re-registering the same
+    -- frame would cancel a drag in progress for nothing. A rebuilt frame still
+    -- re-registers, because the stored handle no longer matches.
+    if self.editModeRegistered and self.editModeFrame == self.frame then return end
+
     local cfg = {}
     for k, v in pairs(EDIT_MODE_ELEMENT) do cfg[k] = v end
     cfg.frame = self.frame
+    cfg.module = self
     cfg.getPosition = function() return self.db.Position end
     cfg.setPosition = function(pos)
         local p = self.db.Position
@@ -1014,6 +1029,8 @@ function NMA:RegisterAnchor()
         self:ApplyPosition()
     end
     KE.EditMode:RegisterElement(cfg)
+    self.editModeRegistered = true
+    self.editModeFrame = self.frame
 end
 
 function NMA:OnEnable()
@@ -1069,7 +1086,7 @@ function NMA:OnDisable()
     self.auraActive = {}
     self.readyFired = nil
     self.isPreview = false
-    KE.EditMode:UnregisterElement("NoMovementAlert")
+    self:UnregisterAnchor()
 end
 
 ------------------------------------------------------------------------
@@ -1101,6 +1118,6 @@ function NMA:HidePreview()
         self:Refresh()
     else
         self.frame:Hide()
-        KE.EditMode:UnregisterElement("NoMovementAlert")
+        self:UnregisterAnchor()
     end
 end
