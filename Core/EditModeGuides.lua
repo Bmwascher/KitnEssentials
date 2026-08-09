@@ -11,6 +11,7 @@ local EditMode = KE.EditMode
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 local math_floor = math.floor
+local pairs = pairs
 
 local GRID_ALPHA = 0.12
 local CENTRE_GUIDE_ALPHA = 0.85
@@ -172,3 +173,36 @@ function EditMode:HideCentreGuides()
     if frame.centreLineX then frame.centreLineX:Hide() end
     if frame.centreLineY then frame.centreLineY:Hide() end
 end
+
+-- The grid, the guides and the drag are all built from the screen's dimensions
+-- and the pixel size, so one pair of events invalidates all three. This is the
+-- same pair PixelPerfect watches for its own cache.
+local watcher = CreateFrame("Frame")
+watcher:RegisterEvent("UI_SCALE_CHANGED")
+watcher:RegisterEvent("DISPLAY_SIZE_CHANGED")
+watcher:SetScript("OnEvent", function()
+    -- Refresh the pixel cache FIRST. Everything below reads the pixel size, and
+    -- the cancelled drag's restore re-applies a position through the framework
+    -- snap. Doing this after would leave those on the previous lattice and make
+    -- correctness depend on which handler ran first.
+    KE:UpdatePixelCache()
+
+    -- A drag started in the old coordinate space. Its start cursor, its start
+    -- centre and its grid origin were all captured there, so continuing would
+    -- land the frame somewhere nobody asked for. Cancelling restores the saved
+    -- position and costs one re-drag.
+    for _, overlay in pairs(EditMode.overlayFrames) do
+        if overlay.isDragging then
+            EditMode:CancelDrag(overlay)
+        end
+    end
+
+    -- Not gated on the tool being open. The screen can change size while it is
+    -- closed, and a guide left on the old coordinate would then be wrong on the
+    -- very next drag. This does build the (hidden) guide frame on the first such
+    -- event even if the tool has never been opened, which is deliberate -- a
+    -- gated version would miss exactly the case this exists for.
+    EditMode:BuildGuideFrame()
+    EditMode:RepositionCentreGuides()
+    EditMode:RefreshGrid()
+end)
