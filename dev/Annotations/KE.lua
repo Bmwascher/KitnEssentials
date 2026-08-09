@@ -336,6 +336,29 @@ function KE:PixelSnap(value) end
 ---@param frame Frame?
 function KE:SnapFrameToPixels(frame) end
 
+-- ─── Edit-mode overlay geometry (Core/Globals.lua) ───────
+--- Four SIGNED edge insets for an icon grid pinned to one corner of its own
+--- container and growing away from it. The pair on each axis cancels, so the
+--- box slides with the grid rather than growing to the union of the two.
+---@param cols number?
+---@param rows number?
+---@param size number?
+---@param spacing number?
+---@param pin string?
+---@param growLeft boolean
+---@param growUp boolean
+---@return number left, number right, number top, number bottom
+function KE:GetGridOverlayInset(cols, rows, size, spacing, pin, growLeft, growUp) end
+
+--- How far a fixed-size decoration hung outside one edge of a host reaches
+--- past that edge, and past each of the two perpendicular edges. Both
+--- non-negative; the caller decides which edges they land on.
+---@param size number?
+---@param gap number?
+---@param hostSize number?
+---@return number outward, number cross
+function KE:GetSideDecorationInset(size, gap, hostSize) end
+
 -- ─── GUI helpers ─────────────────────────────────────────
 -- Accepts both FontStrings and EditBoxes — both expose SetFont. The
 -- callers in Core/Widgets.lua use it on EditBoxes (the search/import
