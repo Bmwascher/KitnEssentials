@@ -12,7 +12,9 @@ local addonName = select(1, ...)
 local ipairs = ipairs
 local print = print
 local string_gsub = string.gsub
+local string_find = string.find
 local math_floor = math.floor
+local math_max = math.max
 local ReloadUI = ReloadUI
 local C_AddOns = C_AddOns
 local C_Timer = C_Timer
@@ -779,6 +781,90 @@ end
 function KE:RoundOffset(value)
     if type(value) ~= "number" then return 0 end
     return math_floor(value + 0.5)
+end
+
+-- Four edge insets for an icon grid that is pinned to one corner of its own
+-- container and grows away from it.
+--
+-- The container is sized to the grid's full extent, so the grid and the frame
+-- are always the same size; what moves is where the grid sits inside the frame.
+-- Button[1] anchors its own `pin` corner to the frame's `pin` corner, so when
+-- the growth direction opposes the anchor corner the entire grid slides out of
+-- the frame by its own span minus one icon. That is the box the user sees and
+-- the box the frame reports disagreeing, which is what these insets close.
+--
+-- The returns are SIGNED, and the pair on each axis always cancels: the edge
+-- the grid overhangs gets a positive inset, the opposite edge the same number
+-- negative, so the box ends up the grid's rectangle rather than the union of
+-- the grid and the frame. Clamping either at zero leaves a dead strip as wide
+-- as the overhang. Grid and frame share a size, so the box can never invert.
+--
+-- `pin` is the module's stored AnchorFrom. `growLeft` and `growUp` are the two
+-- growth settings already resolved to booleans by the caller, so this stays
+-- free of any module's string spellings.
+---@param cols number?
+---@param rows number?
+---@param size number?     icon edge length
+---@param spacing number?  gap between icons
+---@param pin string?      WoW anchor point, e.g. "BOTTOMLEFT"
+---@param growLeft boolean
+---@param growUp boolean
+---@return number left, number right, number top, number bottom
+function KE:GetGridOverlayInset(cols, rows, size, spacing, pin, growLeft, growUp)
+    cols = tonumber(cols) or 1
+    rows = tonumber(rows) or 1
+    size = tonumber(size) or 0
+    spacing = tonumber(spacing) or 0
+    pin = pin or "CENTER"
+
+    local step = size + spacing
+    local w = (cols - 1) * step + size
+    local h = (rows - 1) * step + size
+
+    -- Where button[1]'s own anchor corner lands, measured from the frame's left
+    -- and bottom edges. A point naming neither side of an axis is centred on it.
+    local pinX = string_find(pin, "LEFT") and 0
+        or (string_find(pin, "RIGHT") and w or w * 0.5)
+    local pinY = string_find(pin, "BOTTOM") and 0
+        or (string_find(pin, "TOP") and h or h * 0.5)
+
+    -- How far that corner sits inside button[1] itself, so we can turn the
+    -- corner back into the button's left and bottom edges.
+    local offX = string_find(pin, "LEFT") and 0
+        or (string_find(pin, "RIGHT") and size or size * 0.5)
+    local offY = string_find(pin, "BOTTOM") and 0
+        or (string_find(pin, "TOP") and size or size * 0.5)
+
+    local firstLeft = pinX - offX
+    local firstBottom = pinY - offY
+
+    -- Growing away from the anchor puts button[1] on the near edge of the grid;
+    -- growing toward it puts button[1] on the far edge, so the grid starts a
+    -- full span earlier. Both values are the grid's offset from the frame's
+    -- matching edge, which is the shift the box has to make.
+    local gridLeft = growLeft and (firstLeft - (w - size)) or firstLeft
+    local gridBottom = growUp and firstBottom or (firstBottom - (h - size))
+
+    return -gridLeft, gridLeft, gridBottom, -gridBottom
+end
+
+-- A fixed-size decoration hung just outside one edge of a host frame and
+-- centred on the other axis: how far it reaches past that edge, and how far
+-- past each of the two perpendicular edges. The caller decides which edges
+-- those are, so this never has to know a module's spelling of a side.
+--
+-- The cross term is not usually zero. A decoration is free to be larger than
+-- the thing it decorates, and when it is, it overhangs by half the difference
+-- at each end.
+---@param size number?      decoration edge length
+---@param gap number?       clearance between the decoration and the host edge
+---@param hostSize number?  host extent on the perpendicular axis
+---@return number outward, number cross
+function KE:GetSideDecorationInset(size, gap, hostSize)
+    size = tonumber(size) or 0
+    gap = tonumber(gap) or 0
+    hostSize = tonumber(hostSize) or 0
+    return size + gap, math_max(0, (size - hostSize) * 0.5)
 end
 
 PreviewManager.guiOpen = false
