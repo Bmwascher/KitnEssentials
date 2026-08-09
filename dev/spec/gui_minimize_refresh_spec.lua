@@ -65,16 +65,30 @@ describe("GUI-Core RefreshContent guard", function()
         assert.is_nil(GUIFrame._contentDirtyWhileHidden)
     end)
 
-    -- A collapsed window must not clear the flag a hidden one set, or the
-    -- replay on expand is skipped and the page comes back stale.
-    it("keeps the dirty flag set across repeated refusals", function()
+    -- Collapsed AND closed at once is reachable — minimise, then click the X.
+    -- Covered explicitly because a guard that tested the two conditions against
+    -- each other rather than either-or would refuse each alone and rebuild
+    -- when both hold, which is the worst of the three states.
+    it("refuses to rebuild while collapsed and hidden together", function()
         GUIFrame.minimized = true
+        GUIFrame.mainFrame = { IsShown = function() return false end }
 
-        GUIFrame:RefreshContent()
-        GUIFrame:RefreshContent()
         GUIFrame:RefreshContent()
 
         assert.equals(0, rebuilt)
         assert.is_true(GUIFrame._contentDirtyWhileHidden)
+    end)
+
+    -- The flag must survive every refusal, not just be true once the run ends.
+    -- Asserted after each call because a guard that toggled the flag would
+    -- read as correct on any odd number of them.
+    it("keeps the dirty flag set on every repeated refusal", function()
+        GUIFrame.minimized = true
+
+        for _ = 1, 4 do
+            GUIFrame:RefreshContent()
+            assert.equals(0, rebuilt)
+            assert.is_true(GUIFrame._contentDirtyWhileHidden)
+        end
     end)
 end)
