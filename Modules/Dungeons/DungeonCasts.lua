@@ -146,12 +146,17 @@ local function GetDCSelfPoint(frameDb)
     return vertical .. horizontal
 end
 
+-- Creates the anchor, or re-syncs the one that already exists. A frame is never
+-- destroyed, so a profile switch that re-enables this module reuses the previous
+-- profile's anchor; ApplyAnchorPosition already re-derives size, parent, point
+-- and strata, so the whole fix is letting it run. Callers must not guard this
+-- with `if not self.anchorFrame` — that guard is what hid the mismatch.
 function DC:CreateAnchorFrame()
-    if self.anchorFrame then return end
-    local anchor = CreateFrame("Frame", "KE_DungeonCastsAnchor", UIParent)
-    anchor:SetSize(GetDCAnchorSize(self.db.Frame))
-    anchor:SetFrameStrata("HIGH")
-    self.anchorFrame = anchor
+    if not self.anchorFrame then
+        local anchor = CreateFrame("Frame", "KE_DungeonCastsAnchor", UIParent)
+        anchor:SetFrameStrata("HIGH")
+        self.anchorFrame = anchor
+    end
     self:ApplyAnchorPosition()
 end
 
@@ -961,7 +966,7 @@ end
 
 function DC:ShowPreview()
     if self.isPreview then return end
-    if not self.anchorFrame then self:CreateAnchorFrame() end
+    self:CreateAnchorFrame()
     self:CreateUpdateFrame()
 
     self.isPreview      = true

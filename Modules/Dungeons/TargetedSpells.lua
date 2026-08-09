@@ -125,13 +125,26 @@ function TS.CompareEntries(a, b)
     return (a.receiptTime or 0) < (b.receiptTime or 0)
 end
 
--- Every setting that changes the SIZE or the chaining of the entry frames, as
--- one comparable value. ApplySettings is the in-place path — glow and content
--- gating — and it is also what a profile switch reaches, so without a way to
--- notice that the geometry settings changed underneath it, the pooled frames
--- keep the previous profile's dimensions until an unrelated slider rebuilds
--- them. Anything read here must also be read by CreateAnchorFrame, the entry
--- builders, or the spacer chain; anything else does not belong.
+-- Every setting baked into a pooled entry frame at creation, as one comparable
+-- value. ApplySettings is the in-place path — glow and content gating — and it
+-- is also what a profile switch reaches, so without a way to notice that the
+-- geometry settings changed underneath it, the pooled frames keep the previous
+-- profile's dimensions until an unrelated slider rebuilds them.
+--
+-- The set is defined twice already and this must agree with both: the settings
+-- the page routes through QueueRebuild (IconSize, Gap, Grow, MaxIcons,
+-- TextSpacing), plus FontSize, which the page routes through the font card but
+-- which sizes the interrupt cross at entry-creation time and is therefore just
+-- as baked in. FontFace and FontOutline are re-applied per paint, so they are
+-- genuinely in-place and stay out.
+--
+-- A term missing here is a setting that silently stops rebuilding.
+--
+-- Each fallback mirrors the one the builder for that term uses, NOT the shipped
+-- default — the key has to describe the geometry the builders would actually
+-- produce, and for two of these the two numbers differ. FontSize gets zero
+-- because its builder has no fallback and would throw on a nil, so any
+-- plausible-looking number here would only disguise that.
 ---@param db table?
 ---@return string
 function TS.StructuralKey(db)
@@ -140,6 +153,8 @@ function TS.StructuralKey(db)
         .. ":" .. (db.TextSpacing or 32)
         .. ":" .. (db.Gap or 3)
         .. ":" .. (db.Grow or "DOWN")
+        .. ":" .. (db.MaxIcons or 10)
+        .. ":" .. (db.FontSize or 0)
 end
 
 -- Overlay insets for the entry stack. The anchor frame is one entry tall and
