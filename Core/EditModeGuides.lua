@@ -13,6 +13,7 @@ local UIParent = UIParent
 local math_floor = math.floor
 
 local GRID_ALPHA = 0.12
+local CENTRE_GUIDE_ALPHA = 0.85
 
 -- Textures are reused across rebuilds. Frames are never destroyed in this
 -- runtime, so a rebuild that created fresh ones would leak the old set for the
@@ -110,9 +111,64 @@ end
 function EditMode:ShowGuideFrame()
     local frame = self:BuildGuideFrame()
     self:RefreshGrid()
+    self:RepositionCentreGuides()
     frame:Show()
 end
 
 function EditMode:HideGuideFrame()
     if self.guideFrame then self.guideFrame:Hide() end
+end
+
+-- The guide reports a snap that has already been decided. It never predicts
+-- one: a second prediction is a second chance to disagree with the commit.
+local function CentreLine(frame, key)
+    local tex = frame[key]
+    if tex then return tex end
+
+    tex = frame:CreateTexture(nil, "ARTWORK")
+    tex:Hide()
+    frame[key] = tex
+
+    return tex
+end
+
+-- Positioning is separate from creation because the coordinates these lines
+-- sit on can change while the tool is closed. Textures belong to their frame
+-- for the session, so a stale one is re-pointed, never dropped and remade.
+function EditMode:RepositionCentreGuides()
+    local frame = self.guideFrame
+    if not frame then return end
+
+    local context = self:BuildSnapContext()
+    local thickness = KE:GetPixelSize()
+    local width, height = UIParent:GetWidth() or 0, UIParent:GetHeight() or 0
+    -- Colour is set here rather than at creation so a theme change is picked up
+    -- the next time the tool opens, the same way the grid's is.
+    local colour = KE.Theme and KE.Theme.accent or { 1, 1, 1 }
+
+    local vertical = CentreLine(frame, "centreLineX")
+    vertical:SetColorTexture(colour[1], colour[2], colour[3], CENTRE_GUIDE_ALPHA)
+    vertical:ClearAllPoints()
+    vertical:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", context.originX, height)
+    vertical:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", context.originX + thickness, 0)
+
+    local horizontal = CentreLine(frame, "centreLineY")
+    horizontal:SetColorTexture(colour[1], colour[2], colour[3], CENTRE_GUIDE_ALPHA)
+    horizontal:ClearAllPoints()
+    horizontal:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, context.originY)
+    horizontal:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", width, context.originY + thickness)
+end
+
+function EditMode:SetCentreGuides(onX, onY)
+    local frame = self:BuildGuideFrame()
+    -- The vertical line marks a snap on the X axis, and vice versa.
+    CentreLine(frame, "centreLineX"):SetShown(onX and true or false)
+    CentreLine(frame, "centreLineY"):SetShown(onY and true or false)
+end
+
+function EditMode:HideCentreGuides()
+    local frame = self.guideFrame
+    if not frame then return end
+    if frame.centreLineX then frame.centreLineX:Hide() end
+    if frame.centreLineY then frame.centreLineY:Hide() end
 end
