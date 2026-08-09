@@ -174,6 +174,47 @@ function GUIFrame:Show()
     end
 end
 
+-- Collapse the window to its title bar, so in-world elements stay reachable
+-- without losing the page being worked on. Drag handlers live on the main
+-- frame, which stays shown, so a collapsed window still moves. Saved height
+-- lives on the table rather than the frame so a hide/show cycle cannot lose it.
+--
+-- The resize minimum has to drop with it: the next layout pass would otherwise
+-- clamp the frame straight back up to the full minimum height.
+function GUIFrame:ToggleMinimize()
+    local frame = self.mainFrame
+    if not frame then return end
+    self.minimized = not self.minimized
+
+    if self.minimized then
+        self._savedHeight = frame:GetHeight()
+        if self.contentArea then self.contentArea:Hide() end
+        if self.sidebar then self.sidebar:Hide() end
+        if self.bottomBar then self.bottomBar:Hide() end
+        local collapsed = Theme.headerHeight + Theme.borderSize * 2
+        frame:SetResizeBounds(self.minWidth, collapsed)
+        frame:SetHeight(collapsed)
+    else
+        -- Height first, then the bound. Raising the minimum while the frame is
+        -- still collapsed clamps it to that minimum and fires an extra size
+        -- pass on the way back up.
+        frame:SetHeight(self._savedHeight or self.minHeight)
+        frame:SetResizeBounds(self.minWidth, self.minHeight)
+        if self.contentArea then self.contentArea:Show() end
+        if self.sidebar then self.sidebar:Show() end
+        if self.bottomBar then self.bottomBar:Show() end
+
+        -- RefreshContent refuses to rebuild while collapsed, so the page can be
+        -- stale by the time it comes back — an edit-mode drag writes positions
+        -- the sliders never saw.
+        if self._contentDirtyWhileHidden then
+            self:RefreshContent()
+        end
+    end
+
+    if self.PaintMinimizeArrow then self:PaintMinimizeArrow() end
+end
+
 -- Hide the GUI
 function GUIFrame:Hide()
     if self.mainFrame then
@@ -588,7 +629,11 @@ function GUIFrame:RefreshContent()
     -- event, unbounded, and reached hundreds of thousands in one session. Mark
     -- dirty and bail; Show() replays one refresh so a reopened page is never
     -- stale.
-    if not (self.mainFrame and self.mainFrame:IsShown()) then
+    -- Minimized counts as hidden here. The frame is still shown, so the test
+    -- below passes, but the page is not on screen and every edit-mode drop
+    -- calls in — which is the same unbounded orphaning this guard exists to
+    -- stop, just reached by a different door.
+    if self.minimized or not (self.mainFrame and self.mainFrame:IsShown()) then
         self._contentDirtyWhileHidden = true
         return
     end

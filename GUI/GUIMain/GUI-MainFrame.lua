@@ -313,7 +313,11 @@ function GUIFrame:CreateMainFrame()
     frame:SetToplevel(true)
     frame:SetMovable(true)
     frame:SetResizable(true)
-    frame:SetResizeBounds(950, 550)
+    -- Kept on the table because ToggleMinimize has to drop the height minimum
+    -- to collapse and put it back to restore, and two copies of these numbers
+    -- would drift.
+    GUIFrame.minWidth, GUIFrame.minHeight = 950, 550
+    frame:SetResizeBounds(GUIFrame.minWidth, GUIFrame.minHeight)
     frame:EnableMouse(true)
     frame:SetClampedToScreen(true)
     -- Resize/move instrumentation. The runaway enlarge is intermittent, so the
@@ -391,10 +395,46 @@ function GUIFrame:CreateMainFrame()
         closeIcon:SetVertexColor(T.textPrimary[1], T.textPrimary[2], T.textPrimary[3], T.textPrimary[4])
     end)
 
+    -- Minimize button: collapses the window to its title bar so in-world
+    -- elements can be adjusted without closing the page you are working on.
+    -- Sits next to close because both are window-state controls.
+    local minimizeBtn = CreateFrame("Button", nil, header)
+    minimizeBtn:SetSize(18, 18)
+    minimizeBtn:SetPoint("RIGHT", closeBtn, "LEFT", -8, 0)
+    local minimizeIcon = minimizeBtn:CreateTexture(nil, "ARTWORK")
+    minimizeIcon:SetAllPoints()
+    minimizeIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga")
+    minimizeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+    minimizeIcon:SetTexelSnappingBias(0)
+    minimizeIcon:SetSnapToPixelGrid(true)
+
+    -- The arrow points at what the click does: down to collapse, up to
+    -- restore. Unrotated the texture already points down.
+    local function PaintMinimizeArrow()
+        minimizeIcon:SetRotation(GUIFrame.minimized and math.pi or 0)
+    end
+    PaintMinimizeArrow()
+    GUIFrame.PaintMinimizeArrow = PaintMinimizeArrow
+
+    minimizeBtn:SetScript("OnEnter", function(self)
+        minimizeIcon:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText(GUIFrame.minimized and "Expand" or "Minimize")
+        GameTooltip:Show()
+    end)
+    minimizeBtn:SetScript("OnLeave", function()
+        minimizeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+        GameTooltip:Hide()
+    end)
+    minimizeBtn:SetScript("OnClick", function()
+        GUIFrame:ToggleMinimize()
+    end)
+    GUIFrame.minimizeBtn = minimizeBtn
+
     -- Hamburger menu button
     local menuBtn = CreateFrame("Button", nil, header)
     menuBtn:SetSize(18, 18)
-    menuBtn:SetPoint("RIGHT", closeBtn, "LEFT", -8, 0)
+    menuBtn:SetPoint("RIGHT", minimizeBtn, "LEFT", -8, 0)
     local menuIcon = menuBtn:CreateTexture(nil, "ARTWORK")
     menuIcon:SetAllPoints()
     menuIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomBurger.png")
@@ -628,6 +668,8 @@ function GUIFrame:CreateMainFrame()
     bottomBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -T.borderSize, T.borderSize)
     bottomBar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
     bottomBar:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
+    -- Held on the frame so ToggleMinimize can hide it with the rest of the body.
+    GUIFrame.bottomBar = bottomBar
 
     -- Top border on the bottom bar
     local bottomBarBorder = bottomBar:CreateTexture(nil, "OVERLAY")
