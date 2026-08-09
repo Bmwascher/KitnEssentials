@@ -125,6 +125,23 @@ function TS.CompareEntries(a, b)
     return (a.receiptTime or 0) < (b.receiptTime or 0)
 end
 
+-- Every setting that changes the SIZE or the chaining of the entry frames, as
+-- one comparable value. ApplySettings is the in-place path — glow and content
+-- gating — and it is also what a profile switch reaches, so without a way to
+-- notice that the geometry settings changed underneath it, the pooled frames
+-- keep the previous profile's dimensions until an unrelated slider rebuilds
+-- them. Anything read here must also be read by CreateAnchorFrame, the entry
+-- builders, or the spacer chain; anything else does not belong.
+---@param db table?
+---@return string
+function TS.StructuralKey(db)
+    if not db then return "" end
+    return (db.IconSize or 36)
+        .. ":" .. (db.TextSpacing or 32)
+        .. ":" .. (db.Gap or 3)
+        .. ":" .. (db.Grow or "DOWN")
+end
+
 -- Overlay insets for the entry stack. The anchor frame is one entry tall and
 -- every entry chains off its outer edge, so nothing is ever drawn inside it:
 -- the box has to be MOVED onto the stack, not merely grown over it. The
@@ -251,11 +268,17 @@ local function EntryWidth(db)
     return db.IconSize * 2 + (db.TextSpacing or 32)
 end
 
+-- Creates the anchor, or re-sizes the one that already exists. A frame is never
+-- destroyed, so a profile switch that re-enables this module reuses the previous
+-- profile's anchor: re-sizing here is what stops it keeping the other profile's
+-- dimensions. The built key is stamped so ApplySettings can tell whether the
+-- pooled entry frames still match the profile that is now live.
 function TS:CreateAnchorFrame()
-    if self.anchorFrame then return end
-    local f = CreateFrame("Frame", "KE_TargetedSpells", UIParent)
-    f:SetSize(EntryWidth(self.db), self.db.IconSize)
-    self.anchorFrame = f
+    if not self.anchorFrame then
+        self.anchorFrame = CreateFrame("Frame", "KE_TargetedSpells", UIParent)
+    end
+    self.anchorFrame:SetSize(EntryWidth(self.db), self.db.IconSize)
+    self.builtStructuralKey = TS.StructuralKey(self.db)
 end
 
 function TS:ApplyPosition()
@@ -767,6 +790,7 @@ function TS:RebuildEntries()
     if self.anchorFrame then
         self.anchorFrame:SetSize(EntryWidth(self.db), self.db.IconSize)
     end
+    self.builtStructuralKey = TS.StructuralKey(self.db)
     self:ApplyPosition()
     if wasPreview then self:ShowPreview() end
     self:CheckContentGate()
@@ -792,6 +816,16 @@ end
 -- re-apply to live entries, re-evaluate the gate immediately.
 function TS:ApplySettings()
     self:UpdateDB()
+
+    -- This is the in-place path, but it is also the one a profile switch takes,
+    -- and a switch can change the geometry settings without any slider moving.
+    -- RebuildEntries is the only thing that re-sizes the anchor and drops the
+    -- stale pool, so hand off to it and let it finish the job.
+    if TS.StructuralKey(self.db) ~= self.builtStructuralKey then
+        self:RebuildEntries()
+        return
+    end
+
     for _, entry in pairs(self.activeEntries) do
         self:UpdateGlow(entry)
     end
