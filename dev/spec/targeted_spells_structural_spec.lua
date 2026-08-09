@@ -341,6 +341,54 @@ describe("TS structural sync", function()
     end)
 end)
 
+-- The seam's own closing invariant, driven through the REAL RebuildEntries.
+-- Every other block here stubs it, and a stub that stamps the key hides the
+-- only thing worth proving: that the real one stamps. Delete the stamp and
+-- every stubbed case still passes, while in game each ApplySettings would tear
+-- down and orphan a pool because the key never matches again.
+--
+-- The stubs below are collaborators, not a fake of any Blizzard subsystem: a
+-- position applier, three font resolvers, and the content gate, which decides
+-- instance eligibility and has nothing to do with whether the pool is current.
+describe("TS:RebuildEntries stamping", function()
+    local TS
+
+    before_each(function()
+        local KE
+        TS, KE = L.loadTargetedSpells()
+        KE.GetGlobalFont = function() return "Expressway" end
+        KE.GetFontPath = fontPathResolver(function() return "Expressway" end)
+        KE.GetFontOutline = function(_, stored) return OUTLINE_RESOLVES_TO[stored] or stored end
+        KE.ApplyFramePosition = function() end
+
+        TS.db = {
+            Enabled = true,
+            IconSize = 36, TextSpacing = 45, Gap = 3, Grow = "UP", MaxIcons = 10,
+            FontSize = 32, FontOutline = "OUTLINE",
+            Decimals = 1, FontColor = { 1, 1, 1, 1 }, Position = {},
+        }
+        TS.entryPool, TS.activeEntries = {}, {}
+        TS.CheckContentGate = function() end
+        TS:CreateAnchorFrame()
+    end)
+
+    it("leaves the pool claiming to match the settings it was built from", function()
+        TS:RebuildEntries()
+
+        assert.equals(TS:CurrentRebuildKey(), TS.builtRebuildKey)
+    end)
+
+    -- The rule closing on itself: one change, one rebuild, and asking again
+    -- says no. Without the stamp the second ask rebuilds too, and so does every
+    -- ApplySettings after it.
+    it("settles, so a second sync declines", function()
+        TS.db.IconSize = 60
+
+        assert.is_true(TS:SyncStructure())
+        assert.is_false(TS:SyncStructure())
+    end)
+end)
+
 -- Frames are never collected in WoW, so a rebuild that runs twice orphans a
 -- whole pool. A quarter second is long enough for a profile switch, so the
 -- queued timer must re-ask whether its rebuild is still wanted rather than
