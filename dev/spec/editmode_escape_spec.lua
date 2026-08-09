@@ -78,12 +78,16 @@ describe("EditMode:HandleEscape", function()
             end
         end)
 
-        it("consumes the Escape it acts on", function()
+        -- Both halves, or the case is satisfied by a handler that consumes the
+        -- key and then does nothing with it.
+        it("consumes the Escape it acts on, and acts on it", function()
             EditMode.nudgeFrame = nudgeWithList(true)
 
             press("ESCAPE")
 
             assert.is_false(propagate)
+            assert.equals(1, closed)
+            assert.equals(0, exited)
         end)
 
         it("lets the next key through after a consumed Escape", function()
