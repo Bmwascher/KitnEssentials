@@ -142,7 +142,7 @@ function EditMode:RepositionCentreGuides()
 
     local context = self:BuildSnapContext()
     local thickness = KE:GetPixelSize()
-    local width, height = UIParent:GetWidth() or 0, UIParent:GetHeight() or 0
+    local height = UIParent:GetHeight() or 0
     -- Colour is set here rather than at creation so a theme change is picked up
     -- the next time the tool opens, the same way the grid's is.
     local colour = KE.Theme and KE.Theme.accent or { 1, 1, 1 }
@@ -157,7 +157,7 @@ function EditMode:RepositionCentreGuides()
     horizontal:SetColorTexture(colour[1], colour[2], colour[3], CENTRE_GUIDE_ALPHA)
     horizontal:ClearAllPoints()
     horizontal:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, context.originY)
-    horizontal:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", width, context.originY + thickness)
+    horizontal:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, context.originY + thickness)
 end
 
 function EditMode:SetCentreGuides(onX, onY)
