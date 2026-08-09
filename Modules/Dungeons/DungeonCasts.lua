@@ -1043,6 +1043,20 @@ function DC:OnEnable()
             getAnchorFrom = function()
                 return GetDCSelfPoint(self.db.Frame)
             end,
+            -- The raid marker hangs off the outside of each bar's left edge and
+            -- is centred on the bar, so it reaches past the frame on the left
+            -- and, whenever it is taller than a bar, above and below as well.
+            -- The gap between marker and bar is a layout literal in this file,
+            -- not a setting, so it is repeated here rather than invented into
+            -- the db.
+            getOverlayInset = function()
+                local raid = self.db and self.db.RaidIcon
+                if not (raid and raid.Enabled) then return 0, 0, 0, 0 end
+                local frameDb = self.db.Frame
+                local outward, cross = KE:GetSideDecorationInset(
+                    raid.Size, 4, frameDb and frameDb.Height)
+                return outward, 0, cross, cross
+            end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.Frame.anchorFrameType, self.db.Frame.ParentFrame)
             end,
