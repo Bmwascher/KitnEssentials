@@ -426,7 +426,7 @@ function AD:OnEnable()
     self._pendingFullRefresh = false
     wipe(self.activeAuras)
     wipe(self.auraCache)
-    if not self.frame then self:CreateContainer() end
+    self:CreateContainer()
 
     self:RegisterEvent("UNIT_AURA",              "OnUnitAura")
     self:RegisterEvent("PLAYER_ENTERING_WORLD",   "QueueFullRefresh")
@@ -517,13 +517,18 @@ end
 -- Container + EditMode
 ---------------------------------------------------------------------------------
 
+-- Creates the container, or re-syncs the one that already exists. A frame is
+-- never destroyed, so a profile switch that re-enables this module reuses the
+-- previous profile's container: re-syncing here is what stops it keeping the
+-- other profile's size, strata and position. Callers must not guard this with
+-- `if not self.frame` — that guard is what hid the mismatch.
 function AD:CreateContainer()
-    if self.frame then return end
-    local frame = CreateFrame("Frame", "KE_AuraDebuffs", UIParent)
-    frame:SetSize(GetFrameSize(self.db))
-    frame:SetFrameStrata(self.db.Strata or "MEDIUM")
-    self.frame = frame
-    KE:ApplyFramePosition(frame, self.db.Position, self.db)
+    if not self.frame then
+        self.frame = CreateFrame("Frame", "KE_AuraDebuffs", UIParent)
+    end
+    self.frame:SetSize(GetFrameSize(self.db))
+    self.frame:SetFrameStrata(self.db.Strata or "MEDIUM")
+    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
     self:RegWithEditMode()
 end
 
@@ -1073,7 +1078,7 @@ end
 
 function AD:ShowPreview()
     self.isPreview = true
-    if not self.frame then self:CreateContainer() end
+    self:CreateContainer()
     self:RefreshAllAuras()
 end
 

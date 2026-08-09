@@ -90,7 +90,7 @@ end
 
 function AX:OnEnable()
     self:UpdateDB()
-    if not self.frame then self:CreateContainer() end
+    self:CreateContainer()
     self.seenSounded = {}
     self._soundPrimed = false  -- first Refresh silently seeds seenSounded
     self._pendingRefresh = false
@@ -148,13 +148,18 @@ function AX:ApplySettings()
     if KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 
+-- Creates the container, or re-syncs the one that already exists. A frame is
+-- never destroyed, so a profile switch that re-enables this module reuses the
+-- previous profile's container: re-syncing here is what stops it keeping the
+-- other profile's size, strata and position. Callers must not guard this with
+-- `if not self.frame` — that guard is what hid the mismatch.
 function AX:CreateContainer()
-    if self.frame then return end
-    local frame = CreateFrame("Frame", "KE_AuraExternals", UIParent)
-    frame:SetSize(GetFrameSize(self.db))
-    frame:SetFrameStrata(self.db.Strata or "MEDIUM")
-    self.frame = frame
-    KE:ApplyFramePosition(frame, self.db.Position, self.db)
+    if not self.frame then
+        self.frame = CreateFrame("Frame", "KE_AuraExternals", UIParent)
+    end
+    self.frame:SetSize(GetFrameSize(self.db))
+    self.frame:SetFrameStrata(self.db.Strata or "MEDIUM")
+    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
     self:RegWithEditMode()
 end
 
@@ -561,7 +566,7 @@ end
 
 function AX:ShowPreview()
     self.isPreview = true
-    if not self.frame then self:CreateContainer() end
+    self:CreateContainer()
     self.frame:Show()
     self:Refresh()
 end
