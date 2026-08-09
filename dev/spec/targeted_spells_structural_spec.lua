@@ -17,16 +17,36 @@ local OUTLINE_RESOLVES_TO = {
     [""] = "",
 }
 
+-- What KE:GetFontPath does with a stored face name: nil means the profile's
+-- global font, a registered name becomes its file, and anything the media
+-- library does not know falls back to the default font. Its own behaviour is
+-- specced with the Core helpers; here it only has to be a lookup with a
+-- fallback, because the fallback is what collapses distinct names onto one file.
+local FALLBACK_FONT = "Fonts\\FRIZQT__.TTF"
+local FONT_FILES = {
+    Expressway = "Media\\Expressway.TTF",
+    Naowh = "Media\\Naowh.TTF",
+    -- Two names, one file. A rename or an alias in the media library does this.
+    ExpresswayAlias = "Media\\Expressway.TTF",
+}
+
+local function fontPathResolver(globalFontGetter)
+    return function(_, name)
+        name = name or globalFontGetter()
+        return FONT_FILES[name] or FALLBACK_FONT
+    end
+end
+
 describe("TS.RebuildKey", function()
     local TS
     setup(function()
         TS = L.loadTargetedSpells()
     end)
 
-    -- Face and outline are parameters, not db fields: both stored values stand
-    -- for something else at render time, so the resolutions live in
+    -- Font FILE and outline are parameters, not db fields: both stored values
+    -- stand for something else at render time, so the resolutions live in
     -- CurrentRebuildKey and these cases hold them constant unless testing them.
-    local FACE, OUTLINE = "Expressway", "OUTLINE"
+    local PATH, OUTLINE = FONT_FILES.Expressway, "OUTLINE"
 
     local function db(overrides)
         local d = {
@@ -37,8 +57,8 @@ describe("TS.RebuildKey", function()
         return d
     end
 
-    local function key(overrides, face, outline)
-        return TS.RebuildKey(db(overrides), face or FACE, outline or OUTLINE)
+    local function key(overrides, path, outline)
+        return TS.RebuildKey(db(overrides), path or PATH, outline or OUTLINE)
     end
 
     it("is stable for the same settings", function()
@@ -64,8 +84,8 @@ describe("TS.RebuildKey", function()
         end)
     end
 
-    it("changes when the resolved font face changes", function()
-        assert.are_not.equals(key(), key(nil, "GoodFont"))
+    it("changes when the resolved font file changes", function()
+        assert.are_not.equals(key(), key(nil, FONT_FILES.Naowh))
     end)
 
     it("changes when the resolved font outline changes", function()
@@ -103,11 +123,12 @@ describe("TS.RebuildKey", function()
     local function without(field)
         local d = db()
         d[field] = nil
-        return TS.RebuildKey(d, FACE, OUTLINE)
+        return TS.RebuildKey(d, PATH, OUTLINE)
     end
 
-    -- An absent term must not read as equal to a present one. There are no
-    -- fallbacks in the key on purpose, so this is what holds that line.
+    -- An absent term must not read as equal to a present one. The key is
+    -- deliberately fail-closed on absence — it costs one extra rebuild and buys
+    -- never mistaking a real change for no change — so this holds that line.
     it("tells an absent setting apart from a present one", function()
         assert.are_not.equals(key(), without("FontSize"))
     end)
@@ -128,6 +149,7 @@ describe("TS:CurrentRebuildKey", function()
     setup(function()
         TS, KE = L.loadTargetedSpells()
         KE.GetGlobalFont = function() return globalFont end
+        KE.GetFontPath = fontPathResolver(function() return globalFont end)
         KE.GetFontOutline = function(_, stored)
             outlineAsked = stored
             return OUTLINE_RESOLVES_TO[stored] or stored
@@ -140,7 +162,7 @@ describe("TS:CurrentRebuildKey", function()
         TS.db = { IconSize = 36, FontSize = 32, FontOutline = "OUTLINE" }
     end)
 
-    describe("the font face", function()
+    describe("the font file", function()
         it("follows the global font when the module has no choice of its own", function()
             local before = TS:CurrentRebuildKey()
             globalFont = "Naowh"
@@ -156,11 +178,33 @@ describe("TS:CurrentRebuildKey", function()
         end)
 
         it("ignores the global font once the module names its own", function()
-            TS.db.FontFace = "GoodFont"
+            TS.db.FontFace = "Naowh"
             local before = TS:CurrentRebuildKey()
-            globalFont = "Naowh"
+            globalFont = "GoodFont"
 
             assert.equals(before, TS:CurrentRebuildKey())
+        end)
+
+        -- The reason the FILE is keyed and not the name. Two names that resolve
+        -- to one file render identically, so a switch between them must not
+        -- tear down the pool.
+        it("reads the same for two names that resolve to one file", function()
+            TS.db.FontFace = "Expressway"
+            local named = TS:CurrentRebuildKey()
+            TS.db.FontFace = "ExpresswayAlias"
+
+            assert.equals(named, TS:CurrentRebuildKey())
+        end)
+
+        -- Same reason, the shape that actually happens: a font the media
+        -- library never registered draws as the default, so two unknown names
+        -- both render the default and must key alike.
+        it("reads the same for two names the media library does not know", function()
+            TS.db.FontFace = "NotInstalled"
+            local missing = TS:CurrentRebuildKey()
+            TS.db.FontFace = "AlsoNotInstalled"
+
+            assert.equals(missing, TS:CurrentRebuildKey())
         end)
     end)
 
@@ -204,6 +248,7 @@ describe("TS structural sync", function()
     setup(function()
         TS, KE = L.loadTargetedSpells()
         KE.GetGlobalFont = function() return "Expressway" end
+        KE.GetFontPath = fontPathResolver(function() return "Expressway" end)
         KE.GetFontOutline = function(_, stored) return OUTLINE_RESOLVES_TO[stored] or stored end
     end)
 
@@ -246,7 +291,7 @@ describe("TS structural sync", function()
         -- coming back under another profile finds frames built to the old
         -- numbers; nothing else on that path would notice.
         it("rebuilds when the pool was built for another profile", function()
-            TS.builtRebuildKey = TS.RebuildKey({ IconSize = 60 }, "Expressway", "OUTLINE")
+            TS.builtRebuildKey = TS.RebuildKey({ IconSize = 60 }, FONT_FILES.Expressway, "OUTLINE")
 
             assert.is_true(TS:SyncStructure())
             assert.equals(1, rebuilt)
@@ -311,6 +356,7 @@ describe("TS:QueueRebuild invalidation", function()
             C_Timer = { After = function(_, fn) pending = fn end },
         })
         KE.GetGlobalFont = function() return "Expressway" end
+        KE.GetFontPath = fontPathResolver(function() return "Expressway" end)
         KE.GetFontOutline = function(_, stored) return OUTLINE_RESOLVES_TO[stored] or stored end
     end)
 

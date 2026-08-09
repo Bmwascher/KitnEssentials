@@ -148,26 +148,33 @@ end
 -- stored values that stand for something else at render time, so keying them
 -- raw is wrong in both directions — settings that render identically key
 -- differently and rebuild on every switch, and settings that render differently
--- can key the same. A nil FontFace is not "no font", it MEANS the profile's
--- global font; and several stored outline values collapse onto the same
--- rendered outline. Both are resolved before they reach the key.
+-- can key the same. A stored face name is resolved through the global font, a
+-- media lookup and a fallback before anything is drawn with it; several stored
+-- outline values collapse onto the same rendered outline. Both reach the key
+-- already resolved, by the same two calls the entry builder makes.
+--
+-- Absent values are keyed fail-closed. The builders carry their own `or`
+-- fallbacks, so an absent term does render as something — but keying that
+-- guess would let a real change read as no change, while keying the absence
+-- only costs one extra rebuild. Over-rebuilding is visible and cheap;
+-- under-rebuilding is silent and wrong.
 local REBUILD_KEY_FIELDS = {
     "IconSize", "TextSpacing", "Gap", "Grow", "MaxIcons",
     "FontSize", "Decimals",
 }
 
 ---@param db table?
----@param fontFace string? resolved face, not db.FontFace
+---@param fontPath string? resolved font FILE, not db.FontFace
 ---@param fontOutline string? resolved outline, not db.FontOutline
 ---@return string
-function TS.RebuildKey(db, fontFace, fontOutline)
+function TS.RebuildKey(db, fontPath, fontOutline)
     if not db then return "" end
 
     local parts = {}
     for i = 1, #REBUILD_KEY_FIELDS do
         parts[i] = tostring(db[REBUILD_KEY_FIELDS[i]])
     end
-    parts[#parts + 1] = tostring(fontFace)
+    parts[#parts + 1] = tostring(fontPath)
     parts[#parts + 1] = tostring(fontOutline)
 
     local colour = db.FontColor
@@ -180,15 +187,20 @@ end
 
 -- The key for the settings that are live right now. Kept separate from the pure
 -- helper so the resolutions have one home and the helper stays comparable
--- against any face or outline a caller wants to ask about. These are the same
--- two calls the entry builder makes, which is what makes the key describe what
--- was actually rendered rather than what was stored.
+-- against any font or outline a caller wants to ask about.
+--
+-- These are the same two calls the entry builder makes, verbatim. That is the
+-- whole point: the FILE is what gets drawn with, and the name is several
+-- lookups away from it — a stored name absent from the media library falls back
+-- to the default font, so two names nobody registered render identically. Key
+-- the file and the question "did the text change" is answered by the same value
+-- that decided how it looked.
 ---@return string
 function TS:CurrentRebuildKey()
     local db = self.db
     if not db then return TS.RebuildKey(nil) end
     return TS.RebuildKey(db,
-        db.FontFace or KE:GetGlobalFont(),
+        KE:GetFontPath(db.FontFace),
         KE:GetFontOutline(db.FontOutline))
 end
 
@@ -326,8 +338,10 @@ end
 -- Creates the anchor, or re-sizes the one that already exists. A frame is never
 -- destroyed, so a profile switch that re-enables this module reuses the previous
 -- profile's anchor: re-sizing here is what stops it keeping the other profile's
--- dimensions. The built key is stamped so ApplySettings can tell whether the
--- pooled entry frames still match the profile that is now live.
+-- dimensions. Callers must not guard this with `if not self.anchorFrame` — that
+-- guard is what hid the mismatch. It deliberately does NOT stamp the rebuild
+-- key: re-sizing the anchor says nothing about the pooled entry frames, and
+-- claiming otherwise is how they end up stale.
 function TS:CreateAnchorFrame()
     if not self.anchorFrame then
         self.anchorFrame = CreateFrame("Frame", "KE_TargetedSpells", UIParent)
@@ -931,7 +945,7 @@ assert(#PREVIEW_ENTRIES == PREVIEW_ENTRY_COUNT)
 
 function TS:ShowPreview()
     self:UpdateDB()
-    if not self.anchorFrame then self:CreateAnchorFrame() end
+    self:CreateAnchorFrame()
     self:ApplyPosition()
     self:HidePreview()
     self.isPreview = true
