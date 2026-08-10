@@ -1711,6 +1711,10 @@ end
 function EditMode:UpdateNudgeFrameInfo()
     if not self.nudgeFrame then return end
 
+    -- Another writer is about to replace both boxes, so the drag read-out's
+    -- memory of what they hold is no longer true.
+    self:ResetReadoutCache()
+
     local frame = self.nudgeFrame
 
     if not self.selectedElementKey then
@@ -1742,6 +1746,43 @@ function EditMode:UpdateNudgeFrameInfo()
         -- would read one point off from what a nudge would round it to.
         frame.xEditBox:SetText(string.format("%d", KE:RoundOffset(pos.XOffset)))
         frame.yEditBox:SetText(string.format("%d", KE:RoundOffset(pos.YOffset)))
+    end
+end
+
+-- The last strings written, so a drag that has not crossed a grid line does not
+-- rewrite the same text sixty times a second. Cleared at drag start, because
+-- clearing focus does not clear the box: a number typed and abandoned is still
+-- sitting there, and a stale cache would let the first write be skipped and
+-- leave it on screen for the whole drag.
+local lastReadoutX, lastReadoutY = nil, nil
+
+function EditMode:ResetReadoutCache()
+    lastReadoutX, lastReadoutY = nil, nil
+end
+
+function EditMode:ClearReadoutFocus()
+    if not self.nudgeFrame then return end
+    self:ResetReadoutCache()
+    self.nudgeFrame.xEditBox:ClearFocus()
+    self.nudgeFrame.yEditBox:ClearFocus()
+end
+
+-- The equality gate is safe here and only here: these offsets come from the
+-- pure resolver, which received numbers a guard proved clean. A secret would
+-- have thrown in the arithmetic or the formatting long before any comparison.
+function EditMode:ShowDraggedOffsets(offsetX, offsetY)
+    if not self.nudgeFrame then return end
+
+    local textX = string.format("%d", offsetX)
+    if textX ~= lastReadoutX then
+        self.nudgeFrame.xEditBox:SetText(textX)
+        lastReadoutX = textX
+    end
+
+    local textY = string.format("%d", offsetY)
+    if textY ~= lastReadoutY then
+        self.nudgeFrame.yEditBox:SetText(textY)
+        lastReadoutY = textY
     end
 end
 
