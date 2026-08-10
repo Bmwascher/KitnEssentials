@@ -47,7 +47,7 @@ local CATEGORY_ROW_HEIGHT = 20
 -- The tool's height with no restore control, and what that control adds when it
 -- appears. Two numbers rather than two literals because the help text below the
 -- buttons decides the first one, and it changes.
-local TOOL_HEIGHT = 430
+local TOOL_HEIGHT = 330
 local RESTORE_ROW = 28
 
 -- Centre-guide diagnosis. Set true, /reload, drag through the centre, read the
@@ -1693,11 +1693,6 @@ function EditMode:CreateNudgeFrame()
     frame.yEditBox = yRow.editBox
     frame.yRow = yRow
 
-    -- Anchor display
-    local anchorRow = CreateFrame("Frame", nil, frame)
-    anchorRow:SetSize(140, 18)
-    anchorRow:SetPoint("TOP", frame, "TOP", 0, -90)
-
     -- EditBox submit handlers
     local function ApplyPositionFromEditBoxes()
         if not EditMode.selectedElementKey then return end
@@ -1752,7 +1747,7 @@ function EditMode:CreateNudgeFrame()
 
     -- D-Pad settings
     local btnSize = 22
-    local dpadCenterY = -105
+    local dpadCenterY = -92
 
     -- Create arrow button with animated hover
     local function CreateArrowButton(parent, direction, xOff, yOff, rotation)
