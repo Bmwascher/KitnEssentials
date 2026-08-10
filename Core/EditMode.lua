@@ -418,10 +418,6 @@ function EditMode:SetupDragHandlers(overlay)
     local dragAnchorFrom, dragAnchorTo = nil, nil
     local dragParent = nil
 
-    -- The position the last update displayed. The commit saves this object
-    -- rather than converting again, so what was on screen is what is stored.
-    local draggedPos = nil
-
     overlay:SetScript("OnDragStart", function(self)
         if InCombatLockdown() then return end
 
@@ -449,8 +445,15 @@ function EditMode:SetupDragHandlers(overlay)
         -- around, an unmeasurable one is a transient state with no advice.
         if not left or not bottom or not width or not height then return end
 
-        self.isDragging = true
-        didDrag = true
+        -- Everything the drag needs, resolved BEFORE it is armed. These call
+        -- module-supplied getters, and one that errors here must not leave a
+        -- half-started drag holding the previous drag's cached position.
+        local currentPos = element.getPosition()
+        dragAnchorFrom = element.getAnchorFrom and element.getAnchorFrom()
+            or (currentPos and currentPos.AnchorFrom) or "CENTER"
+        dragAnchorTo = (currentPos and currentPos.AnchorTo) or "CENTER"
+        dragParent = (element.getParentFrame and element.getParentFrame()) or UIParent
+        self.draggedPos = nil
 
         -- Get cursor start position
         local scale = UIParent:GetEffectiveScale()
@@ -463,12 +466,8 @@ function EditMode:SetupDragHandlers(overlay)
         snapContext = EditMode:BuildSnapContext()
         snappedX, snappedY = nil, nil
 
-        local currentPos = element.getPosition()
-        dragAnchorFrom = element.getAnchorFrom and element.getAnchorFrom()
-            or (currentPos and currentPos.AnchorFrom) or "CENTER"
-        dragAnchorTo = (currentPos and currentPos.AnchorTo) or "CENTER"
-        dragParent = (element.getParentFrame and element.getParentFrame()) or UIParent
-        draggedPos = nil
+        self.isDragging = true
+        didDrag = true
 
         -- The drag owns the read-out from here. Selecting makes the boxes
         -- describe what is actually moving; clearing focus stops a half-typed
@@ -486,6 +485,12 @@ function EditMode:SetupDragHandlers(overlay)
         self:SetAlpha(1)
         EditMode:HideCentreGuides()
 
+        -- Taken and retired in one move, above the guards below, so that every
+        -- exit from this handler retires it. A drag that ends without
+        -- committing must not leave an object a later drag could reach.
+        local newPos = self.draggedPos
+        self.draggedPos = nil
+
         local element = self.element
         if not element then return end
 
@@ -495,7 +500,6 @@ function EditMode:SetupDragHandlers(overlay)
         -- Commit exactly what the last update displayed. Converting again here
         -- would run the same arithmetic on geometry read a moment later, and
         -- the number saved would not be the number that was on screen.
-        local newPos = draggedPos
         if not newPos then
             -- Released before any update ran, so there is no earlier decision
             -- to contradict -- and nothing has re-anchored the frame either, so
@@ -539,7 +543,6 @@ function EditMode:SetupDragHandlers(overlay)
             EditMode:ShowDraggedOffsets(offsetX, offsetY)
         end
 
-        draggedPos = nil
         element.setPosition(newPos)
         C_Timer.After(0, function()
             -- A frame's worth of delay is enough for the tool to close, the
@@ -597,7 +600,7 @@ function EditMode:SetupDragHandlers(overlay)
             targetFrame:GetWidth(), targetFrame:GetHeight(),
             parentLeft, parentBottom, parentWidth, parentHeight)
 
-        draggedPos = {
+        self.draggedPos = {
             AnchorFrom = dragAnchorFrom,
             AnchorTo = dragAnchorTo,
             XOffset = offsetX,
@@ -678,6 +681,14 @@ function EditMode:CancelDrag(overlay)
     overlay.isDragging = false
     overlay:SetAlpha(1)
     self:HideCentreGuides()
+
+    -- The live read-out is showing a position that is about to stop existing,
+    -- and the cached object behind it must never reach a commit. Both die here:
+    -- this is a termination path like the commit, not a pause. The stored
+    -- position is untouched by a drag, so repainting from it is correct
+    -- immediately, without waiting for the deferred restore below.
+    overlay.draggedPos = nil
+    self:UpdateNudgeFrameInfo()
 
     local element = overlay.element
     if not element then return end
