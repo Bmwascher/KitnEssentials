@@ -126,4 +126,24 @@ describe("EditMode revert", function()
         assert.equals(77, el.live.XOffset)
         assert.equals(88, el.live.YOffset)
     end)
+
+    -- Every case above calls the snapshot by hand, so none of them notices if
+    -- adoption stops taking one — and deleting that single call leaves the whole
+    -- suite green. This case reaches it the way the feature does. The stub is
+    -- two lines because the hook sits above both branches: a nil frame makes the
+    -- fresh branch return before it touches anything.
+    it("takes a snapshot when an overlay adopts the element", function()
+        local el = inPlaceElement("Timer")
+        EditMode.registeredElements.Timer = el
+        EditMode.CreateOverlayFrame = function() return nil end
+
+        EditMode:CreateOverlayForElement("Timer")
+
+        local snapshot = EditMode.positionSnapshots.Timer
+        assert.is_table(snapshot)
+        assert.equals(10, snapshot.XOffset)
+        assert.equals(20, snapshot.YOffset)
+        -- Copied at this call site too, not just when called directly.
+        assert.is_not.equal(el.live, snapshot)
+    end)
 end)
