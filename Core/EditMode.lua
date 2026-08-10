@@ -50,6 +50,12 @@ local CATEGORY_ROW_HEIGHT = 20
 local TOOL_HEIGHT = 430
 local RESTORE_ROW = 28
 
+-- Centre-guide diagnosis. Set true, /reload, drag through the centre, read the
+-- log. It prints only inside a band around the origin and only when the centre
+-- moves a whole unit, so one pass is readable instead of several hundred lines.
+local DEBUG_GUIDES = false
+local guideLogStamp
+
 -- Categories are the sidebar's own sections. A nil id means no filter.
 -- The sidebar also has settings_section and optimize_section; neither registers
 -- a mover, so a button for them would only ever be dimmed.
@@ -708,6 +714,21 @@ function EditMode:SetupDragHandlers(overlay)
         local onCentreX, onCentreY
         snappedX, snappedY, onCentreX, onCentreY =
             KE:SnapCenter(frameStartX + deltaX, frameStartY + deltaY, snapContext)
+
+        if DEBUG_GUIDES then
+            local rawY = frameStartY + deltaY
+            local band = rawY - snapContext.originY
+            if band > -40 and band < 40 then
+                local stamp = math.floor(rawY)
+                if stamp ~= guideLogStamp then
+                    guideLogStamp = stamp
+                    KE:Print(string.format(
+                        "rawY %.1f origin %d snappedY %.1f onY %s | rawX %.1f onX %s",
+                        rawY, snapContext.originY, snappedY, tostring(onCentreY),
+                        frameStartX + deltaX, tostring(onCentreX)))
+                end
+            end
+        end
 
         targetFrame:ClearAllPoints()
         targetFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", snappedX, snappedY)

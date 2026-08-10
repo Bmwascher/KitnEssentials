@@ -13,7 +13,10 @@ local UIParent = UIParent
 local math_floor = math.floor
 local pairs = pairs
 
-local GRID_ALPHA = 0.12
+-- The grid is a reference the eye reads past; the centre guides are an answer
+-- it reads. The gap between these two is what keeps that true, so raising the
+-- grid means checking the guides still dominate rather than just raising it.
+local GRID_ALPHA = 0.35
 local CENTRE_GUIDE_ALPHA = 0.85
 
 -- Textures are reused across rebuilds. Frames are never destroyed in this
