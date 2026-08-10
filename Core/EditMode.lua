@@ -1826,7 +1826,6 @@ function EditMode:CreateNudgeFrame()
         EditMode:Exit()
     end)
 
-    -- Settings button
     -- Built here so the settings button below can anchor to it, and shown only
     -- while at least one box is hidden. A hide with no visible way back is a
     -- hole the user has to guess their way out of.
@@ -1855,6 +1854,8 @@ function EditMode:CreateNudgeFrame()
         EditMode:RestoreHiddenElements()
     end)
 
+    -- Settings button. Its anchor is set here for the no-hidden-boxes case and
+    -- owned by UpdateHiddenControl thereafter.
     local settingsBtn = CreateFrame("Button", nil, frame, "BackdropTemplate")
     settingsBtn:SetSize(140, 22)
     settingsBtn:SetPoint("BOTTOM", doneBtn, "TOP", 0, 6)
