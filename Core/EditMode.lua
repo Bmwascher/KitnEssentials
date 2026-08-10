@@ -1603,6 +1603,15 @@ function EditMode:CreateNudgeFrame()
         editBox:SetScript("OnEditFocusLost", function(self)
             container:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
             self:HighlightText(0, 0)
+
+            -- A box abandoned holding something that is not a number would sit
+            -- there describing a position the element does not have. The commit
+            -- path already refuses it; this is the path where there is no
+            -- commit. Text that IS a number is left alone, because the commit
+            -- and the drag read-out both own it.
+            if not tonumber(self:GetText()) then
+                EditMode:UpdateNudgeFrameInfo()
+            end
         end)
 
         -- Hover animation
@@ -1643,16 +1652,19 @@ function EditMode:CreateNudgeFrame()
 
         row.editBox = editBox
         row.container = container
+        row.label = label
         return row
     end
 
     -- X position row
     local xRow = CreatePosEditBox(frame, "X Offset:", -42)
     frame.xEditBox = xRow.editBox
+    frame.xRow = xRow
 
     -- Y position row
     local yRow = CreatePosEditBox(frame, "Y Offset:", -66)
     frame.yEditBox = yRow.editBox
+    frame.yRow = yRow
 
     -- Anchor display
     local anchorRow = CreateFrame("Frame", nil, frame)
@@ -2207,6 +2219,29 @@ function EditMode:UpdateNudgeFrameTheme()
             Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     end
 
+    -- The two offset rows. Written out for the same reason the toggles are:
+    -- a nil in an array literal ends the iteration at the gap.
+    local function ThemeOffsetRow(row)
+        if not row then return end
+        if row.container then
+            row.container:SetBackdropColor(
+                Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+            row.container:SetBackdropBorderColor(
+                Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        end
+        if row.editBox then
+            row.editBox:SetTextColor(
+                Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        end
+        if row.label then
+            row.label:SetTextColor(
+                Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+        end
+    end
+
+    ThemeOffsetRow(self.nudgeFrame.xRow)
+    ThemeOffsetRow(self.nudgeFrame.yRow)
+
     if self.nudgeFrame.helpText then
         self.nudgeFrame.helpText:SetTextColor(
             Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
@@ -2356,7 +2391,10 @@ function EditMode:ShowNudgeFrame()
         self:CreateNudgeFrame()
     end
     self.nudgeFrame:Show()
-    self:UpdateNudgeFrameInfo()
+    -- The tool is built once per login and pooled, so a theme changed while it
+    -- was closed reaches it nowhere else: the live path runs only while edit
+    -- mode is active. Without this the accent stays stale until a reload.
+    self:UpdateNudgeFrameTheme()
     self:UpdateCategorySelector()
     self:UpdateHiddenControl()
 end
