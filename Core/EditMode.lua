@@ -1650,6 +1650,19 @@ function EditMode:CreateNudgeFrame()
         editBox:SetScript("OnEnter", function() AnimateBorder(true) end)
         editBox:SetScript("OnLeave", function() AnimateBorder(false) end)
 
+        -- Same reason the arrows and the settings button carry one: the shade
+        -- this row's hover animates away from is a closure local, so a repaint
+        -- from outside leaves the next hover fading out of the old theme.
+        row.ApplyTheme = function()
+            animGroup:Stop()
+            container:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+            container:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+            editBox:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2],
+                Theme.textSecondary[3], 1)
+            hoverR, hoverG, hoverB = Theme.border[1], Theme.border[2], Theme.border[3]
+        end
+
         row.editBox = editBox
         row.container = container
         row.label = label
@@ -2242,35 +2255,16 @@ function EditMode:UpdateNudgeFrameTheme()
             Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     end
 
-    -- The two offset rows. Written out for the same reason the toggles are:
-    -- a nil in an array literal ends the iteration at the gap.
-    local function ThemeOffsetRow(row)
-        if not row then return end
-        if row.container then
-            row.container:SetBackdropColor(
-                Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-            row.container:SetBackdropBorderColor(
-                Theme.border[1], Theme.border[2], Theme.border[3], 1)
-        end
-        if row.editBox then
-            row.editBox:SetTextColor(
-                Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-        end
-        if row.label then
-            row.label:SetTextColor(
-                Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-        end
-    end
-
-    ThemeOffsetRow(self.nudgeFrame.xRow)
-    ThemeOffsetRow(self.nudgeFrame.yRow)
-
-    -- Controls that animate their own colour own their repaint too, because the
-    -- shade they animate away from lives in a closure this cannot see.
+    -- Everything that animates its own colour owns its repaint, because the
+    -- shade it animates away from lives in a closure this cannot see. Written
+    -- out one call each for the same reason the toggles are: a nil in an array
+    -- literal ends the iteration at the gap.
     local function ApplyOwnTheme(control)
         if control and control.ApplyTheme then control.ApplyTheme() end
     end
 
+    ApplyOwnTheme(self.nudgeFrame.xRow)
+    ApplyOwnTheme(self.nudgeFrame.yRow)
     ApplyOwnTheme(self.nudgeFrame.settingsBtn)
     ApplyOwnTheme(self.nudgeFrame.btnUp)
     ApplyOwnTheme(self.nudgeFrame.btnDown)
@@ -2430,7 +2424,6 @@ function EditMode:ShowNudgeFrame()
     -- was closed reaches it nowhere else: the live path runs only while edit
     -- mode is active. Without this the accent stays stale until a reload.
     self:UpdateNudgeFrameTheme()
-    self:UpdateCategorySelector()
     self:UpdateHiddenControl()
 end
 
