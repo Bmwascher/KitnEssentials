@@ -419,9 +419,70 @@ function EditMode:RetireOverlay(overlay)
     end
 end
 
+-- Copied values, never the table the getter returned. Getters hand back the
+-- module's live settings table, so a module that saves by editing that table in
+-- place would have its snapshot follow the current position and the revert would
+-- quietly do nothing — on some elements and not others, with nothing on screen
+-- to say which.
+function EditMode:SnapshotElementPosition(key)
+    local element = self.registeredElements[key]
+    if not element or not element.getPosition then return end
+
+    local pos = element.getPosition()
+    if not pos then return end
+
+    self.positionSnapshots[key] = {
+        AnchorFrom = pos.AnchorFrom,
+        AnchorTo = pos.AnchorTo,
+        XOffset = pos.XOffset,
+        YOffset = pos.YOffset,
+    }
+end
+
+-- Ctrl and right-click: back to where the element sat when its box was adopted.
+-- Not a restore-to-default, and never called one on any surface.
+function EditMode:RevertElement(key)
+    local snapshot = self.positionSnapshots[key]
+    if not snapshot then return false end
+
+    local element = self.registeredElements[key]
+    if not element or not element.setPosition then return false end
+
+    -- A fresh table every time. A setter that keeps what it is handed and later
+    -- edits it in place would otherwise edit the snapshot, and the second revert
+    -- on that element would restore the first one's result.
+    element.setPosition({
+        AnchorFrom = snapshot.AnchorFrom,
+        AnchorTo = snapshot.AnchorTo,
+        XOffset = snapshot.XOffset,
+        YOffset = snapshot.YOffset,
+    })
+
+    local overlay = self.overlayFrames[key]
+    if overlay then
+        C_Timer.After(0, function()
+            self:UpdateOverlayPosition(overlay)
+        end)
+    end
+    self:UpdateNudgeFrameInfo()
+
+    if KE.GUIFrame and KE.GUIFrame.mainFrame and KE.GUIFrame.mainFrame:IsShown() then
+        KE.GUIFrame:RefreshContent()
+    end
+
+    return true
+end
+
 function EditMode:CreateOverlayForElement(key)
     local element = self.registeredElements[key]
     if not element then return end
+
+    -- Every adoption flows through here: the sweep when the tool opens, late
+    -- registration, and a module that re-registers itself mid-session when its
+    -- own mode changes. Above the pooled branch on purpose — frames outlive the
+    -- session and are re-adopted, so a snapshot taken only when the frame was
+    -- built would send a later revert to a position from an earlier session.
+    self:SnapshotElementPosition(key)
 
     -- Reuse the pooled overlay. Its name is already taken, so a second frame
     -- would orphan the first.
@@ -733,6 +794,8 @@ function EditMode:SetupDragHandlers(overlay)
 
         if IsShiftKeyDown() then
             EditMode:HideElementBox(element.key)
+        elseif IsControlKeyDown() then
+            EditMode:RevertElement(element.key)
         else
             EditMode:OpenElementSettings()
         end
