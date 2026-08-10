@@ -412,6 +412,16 @@ function EditMode:SetupDragHandlers(overlay)
     local snapContext = nil
     local snappedX, snappedY = nil, nil
 
+    -- Resolved once per drag: the anchor pair and the parent cannot change
+    -- while the mouse is down, and re-reading them every frame would be the
+    -- one input the per-frame conversion does not need.
+    local dragAnchorFrom, dragAnchorTo = nil, nil
+    local dragParent = nil
+
+    -- The position the last update displayed. The commit saves this object
+    -- rather than converting again, so what was on screen is what is stored.
+    local draggedPos = nil
+
     overlay:SetScript("OnDragStart", function(self)
         if InCombatLockdown() then return end
 
@@ -433,6 +443,11 @@ function EditMode:SetupDragHandlers(overlay)
             KE:Print("Cannot drag this element: its position is protected. Use the nudge arrows instead.")
             return
         end
+        -- GetRect may also return nothing at all, and the commit leans on this
+        -- refusal as its only proof the geometry is usable. Silent, unlike the
+        -- branch above: a protected element is something the user can work
+        -- around, an unmeasurable one is a transient state with no advice.
+        if not left or not bottom or not width or not height then return end
 
         self.isDragging = true
         didDrag = true
@@ -442,13 +457,24 @@ function EditMode:SetupDragHandlers(overlay)
         startX, startY = GetCursorPosition()
         startX, startY = startX / scale, startY / scale
 
-        if left and bottom and width and height then
-            frameStartX = left + width / 2
-            frameStartY = bottom + height / 2
-        end
+        frameStartX = left + width / 2
+        frameStartY = bottom + height / 2
 
         snapContext = EditMode:BuildSnapContext()
         snappedX, snappedY = nil, nil
+
+        local currentPos = element.getPosition()
+        dragAnchorFrom = element.getAnchorFrom and element.getAnchorFrom()
+            or (currentPos and currentPos.AnchorFrom) or "CENTER"
+        dragAnchorTo = (currentPos and currentPos.AnchorTo) or "CENTER"
+        dragParent = (element.getParentFrame and element.getParentFrame()) or UIParent
+        draggedPos = nil
+
+        -- The drag owns the read-out from here. Selecting makes the boxes
+        -- describe what is actually moving; clearing focus stops a half-typed
+        -- number from surviving under numbers that are about to change.
+        EditMode:SelectElement(element.key)
+        EditMode:ClearReadoutFocus()
 
         -- Visual feedback
         self:SetAlpha(0.7)
@@ -466,81 +492,64 @@ function EditMode:SetupDragHandlers(overlay)
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then return end
 
-        -- Get the current position/anchor settings from the module's DB
-        local currentPos = element.getPosition()
-        local anchorFrom = element.getAnchorFrom and element.getAnchorFrom()
-            or currentPos.AnchorFrom or "CENTER"
-        local anchorTo = currentPos.AnchorTo or "CENTER"
-
-        -- Get the parent frame
-        local parentFrame = UIParent
-        if element.getParentFrame then
-            parentFrame = element.getParentFrame() or UIParent
-        end
-
-        -- Reuse the decision the live update already made. Resampling here
-        -- would run the same arithmetic on a different cursor reading, and near
-        -- the edge of the snap threshold the two answers differ by the whole
-        -- threshold -- a visible jump at the moment the button comes up.
-        local newCenterX, newCenterY = snappedX, snappedY
-        if not newCenterX then
-            -- A drag that ended before any update ran, so there is no earlier
-            -- decision to contradict. This is the only place the commit reads
-            -- the cursor, and it is unreachable once one update has run.
+        -- Commit exactly what the last update displayed. Converting again here
+        -- would run the same arithmetic on geometry read a moment later, and
+        -- the number saved would not be the number that was on screen.
+        local newPos = draggedPos
+        if not newPos then
+            -- Released before any update ran, so there is no earlier decision
+            -- to contradict -- and nothing has re-anchored the frame either, so
+            -- the drag-start refusal is the only thing proving this geometry
+            -- readable. This is the one place the commit reads the cursor.
             local scale = UIParent:GetEffectiveScale()
             local curX, curY = GetCursorPosition()
             curX, curY = curX / scale, curY / scale
-            newCenterX, newCenterY = KE:SnapCenter(
+            local centerX, centerY = KE:SnapCenter(
                 frameStartX + (curX - startX),
                 frameStartY + (curY - startY),
                 snapContext)
+
+            -- The module's chosen parent is a separate frame and can be
+            -- anchoring-secret on its own. Secret questions first: GetRect can
+            -- return nothing AND can return secrets, and asking `not
+            -- parentLeft` of a secret throws.
+            local parentLeft, parentBottom, parentWidth, parentHeight = dragParent:GetRect()
+            if issecretvalue(parentLeft) or issecretvalue(parentBottom)
+                or issecretvalue(parentWidth) or issecretvalue(parentHeight)
+                or not parentLeft then
+                parentLeft, parentBottom = 0, 0
+                parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
+            end
+
+            local offsetX, offsetY = KE:ResolveAnchorOffsets(
+                centerX, centerY, dragAnchorFrom, dragAnchorTo,
+                targetFrame:GetWidth(), targetFrame:GetHeight(),
+                parentLeft, parentBottom, parentWidth, parentHeight)
+
+            -- Save using the ORIGINAL anchors, edit mode does not change anchors
+            newPos = {
+                AnchorFrom = dragAnchorFrom,
+                AnchorTo = dragAnchorTo,
+                XOffset = offsetX,
+                YOffset = offsetY,
+            }
+
+            -- The boxes have never been written this drag: the update that
+            -- normally writes them is exactly the one that did not run.
+            EditMode:ShowDraggedOffsets(offsetX, offsetY)
         end
 
-        -- Parent rect for the offset calculation. The target's own rect is
-        -- already known readable -- OnDragStart refuses the drag otherwise, and
-        -- the drag proxy has since re-anchored it to UIParent -- but the
-        -- module's chosen parent is a separate frame and can still be
-        -- anchoring-secret on its own. Treat an unreadable rect exactly like a
-        -- missing one and fall back to the screen.
-        local parentLeft, parentBottom, parentWidth, parentHeight = parentFrame:GetRect()
-        -- Every secret question first: GetRect can return nothing AND can
-        -- return secrets, and asking `not parentLeft` of a secret throws.
-        if issecretvalue(parentLeft) or issecretvalue(parentBottom)
-            or issecretvalue(parentWidth) or issecretvalue(parentHeight)
-            or not parentLeft then
-            parentLeft, parentBottom = 0, 0
-            parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
-        end
-
-        local frameWidth, frameHeight = targetFrame:GetWidth(), targetFrame:GetHeight()
-
-        local offsetX, offsetY = KE:ResolveAnchorOffsets(
-            newCenterX, newCenterY, anchorFrom, anchorTo,
-            frameWidth, frameHeight,
-            parentLeft, parentBottom, parentWidth, parentHeight)
-
-        -- Save using the ORIGINAL anchors, edit mode does not change anchor points
-        local newPos = {
-            AnchorFrom = anchorFrom,
-            AnchorTo = anchorTo,
-            XOffset = offsetX,
-            YOffset = offsetY,
-        }
-
+        draggedPos = nil
         element.setPosition(newPos)
         C_Timer.After(0, function()
-            EditMode:UpdateOverlayPosition(self)
-
             -- A frame's worth of delay is enough for the tool to close, the
             -- element to be unregistered, or its category or eligibility to
-            -- change. SelectElement validates none of that, so selecting
-            -- blindly here can drive the nudge controls from a box that is no
-            -- longer on screen.
-            local current = EditMode.registeredElements[element.key]
-            if EditMode.isActive and current == self.element
-                and EditMode:ElementShouldShow(current) then
-                EditMode:SelectElement(element.key)
-            end
+            -- change. The drag selected this element, so declining to re-select
+            -- is no longer protection -- a stale selection would survive with no
+            -- box on screen. RefreshLiveState repositions every overlay,
+            -- deselects anything that stopped qualifying, and does nothing at
+            -- all once the tool has closed.
+            EditMode:RefreshLiveState()
 
             if KE.GUIFrame and KE.GUIFrame.mainFrame and KE.GUIFrame.mainFrame:IsShown() then
                 KE.GUIFrame:RefreshContent()
@@ -571,6 +580,30 @@ function EditMode:SetupDragHandlers(overlay)
 
         targetFrame:ClearAllPoints()
         targetFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", snappedX, snappedY)
+
+        -- Below the re-anchor, not beside the centre it consumes. The width and
+        -- height read here are unguarded, and they are safe only because the
+        -- frame is now anchored to UIParent, which cannot be anchoring-secret.
+        local parentLeft, parentBottom, parentWidth, parentHeight = dragParent:GetRect()
+        if issecretvalue(parentLeft) or issecretvalue(parentBottom)
+            or issecretvalue(parentWidth) or issecretvalue(parentHeight)
+            or not parentLeft then
+            parentLeft, parentBottom = 0, 0
+            parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
+        end
+
+        local offsetX, offsetY = KE:ResolveAnchorOffsets(
+            snappedX, snappedY, dragAnchorFrom, dragAnchorTo,
+            targetFrame:GetWidth(), targetFrame:GetHeight(),
+            parentLeft, parentBottom, parentWidth, parentHeight)
+
+        draggedPos = {
+            AnchorFrom = dragAnchorFrom,
+            AnchorTo = dragAnchorTo,
+            XOffset = offsetX,
+            YOffset = offsetY,
+        }
+        EditMode:ShowDraggedOffsets(offsetX, offsetY)
 
         EditMode:SetCentreGuides(onCentreX, onCentreY)
 
