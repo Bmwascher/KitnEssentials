@@ -2431,9 +2431,12 @@ function EditMode:CloseCategoryList()
 end
 
 -- The flyout is the category list's peer, so it is opened, closed, dismissed
--- and escaped the same way. Only one of the two is ever open: they overlap on
--- screen, and a user who opened the second would be looking at a stack rather
--- than a choice.
+-- and escaped the same way. Only one of the two is ever open, and that is what
+-- lets them be one layer rather than two: Escape backs out of whichever is
+-- showing, and the dismiss check closes whichever is showing, neither of them
+-- needing to know which. The two panels do not overlap on screen -- the list
+-- hangs from the top and the flyout from two thirds down -- so this is a rule
+-- about the layer, not about the pixels.
 function EditMode:ToggleGuidesFlyout()
     local frame = self.nudgeFrame
     if not (frame and frame.guidesFlyout) then return end
