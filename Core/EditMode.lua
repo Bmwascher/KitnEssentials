@@ -1987,11 +1987,12 @@ function EditMode:CreateNudgeFrame()
 
     local GUIDE_SPACINGS = { 8, 16, 32, 64 }
 
-    -- Grid preferences. Stacked above the settings button, top to bottom:
-    -- grid, snapping, spacing.
-    local function CreateToolToggle(parent, anchorTo, label)
+    -- One row with a dark backdrop and accent text. Used three times: once
+    -- narrowed for Snapping, which shares its row with the chevron, and twice
+    -- inside the flyout.
+    local function CreateToolToggle(parent, anchorTo, label, width)
         local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
-        btn:SetSize(140, 22)
+        btn:SetSize(width or 140, 22)
         btn:SetPoint("BOTTOM", anchorTo, "TOP", 0, 6)
         btn:SetBackdrop({
             bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -2013,13 +2014,83 @@ function EditMode:CreateNudgeFrame()
         return btn
     end
 
-    local spacingBtn = CreateToolToggle(frame, settingsBtn, "Spacing")
-    local snapBtn = CreateToolToggle(frame, spacingBtn, "Snapping")
-    local gridBtn = CreateToolToggle(frame, snapBtn, "Grid")
+    -- The Snapping row is the only grid control on the tool's face. It shares
+    -- its 140 with the chevron, so it needs a container: CreateToolToggle
+    -- centres its button above the anchor it is given, and a narrowed button
+    -- centred that way would leave the chevron no edge to sit against.
+    local snapRow = CreateFrame("Frame", nil, frame)
+    snapRow:SetSize(140, 22)
+    snapRow:SetPoint("BOTTOM", settingsBtn, "TOP", 0, 6)
+    frame.snapRow = snapRow
 
-    frame.spacingBtn = spacingBtn
+    local snapBtn = CreateToolToggle(snapRow, snapRow, "Snapping", 116)
+    snapBtn:ClearAllPoints()
+    snapBtn:SetPoint("LEFT", snapRow, "LEFT", 0, 0)
     frame.snapBtn = snapBtn
+
+    local guidesChevron = CreateFrame("Button", nil, snapRow, "BackdropTemplate")
+    guidesChevron:SetSize(22, 22)
+    guidesChevron:SetPoint("RIGHT", snapRow, "RIGHT", 0, 0)
+    guidesChevron:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = KE:GetPixelSize(),
+    })
+    guidesChevron:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+    guidesChevron:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+
+    local chevronArrow = guidesChevron:CreateTexture(nil, "OVERLAY")
+    chevronArrow:SetSize(10, 10)
+    chevronArrow:SetPoint("CENTER")
+    chevronArrow:SetTexture(arrowTexture)
+    chevronArrow:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    chevronArrow:SetTexelSnappingBias(0)
+    chevronArrow:SetSnapToPixelGrid(false)
+    guidesChevron.arrow = chevronArrow
+
+    -- The selector's hover, copied exactly: a direct colour swap, no animation
+    -- group. That is why this control needs no ApplyTheme -- it keeps no
+    -- closure local for a shade to go stale in.
+    guidesChevron:SetScript("OnEnter", function(self)
+        self:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end)
+    guidesChevron:SetScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    end)
+    guidesChevron:SetScript("OnClick", function() EditMode:ToggleGuidesFlyout() end)
+    frame.guidesChevron = guidesChevron
+
+    -- Set-once preferences, off the face. The tool sits at TOOLTIP/1001, so
+    -- the level is raised explicitly or this draws underneath the buttons it
+    -- opens over. Mouse is enabled on the panel itself because the rows leave
+    -- a border's worth uncovered, and a press on that sliver would otherwise
+    -- fall through and drag the tool.
+    local flyout = CreateFrame("Frame", nil, snapRow, "BackdropTemplate")
+    flyout:SetPoint("TOPLEFT", snapRow, "BOTTOMLEFT", 0, -2)
+    flyout:SetPoint("TOPRIGHT", snapRow, "BOTTOMRIGHT", 0, -2)
+    flyout:SetHeight(52)
+    flyout:SetFrameStrata("TOOLTIP")
+    flyout:SetFrameLevel(frame:GetFrameLevel() + 20)
+    flyout:EnableMouse(true)
+    flyout:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = KE:GetPixelSize(),
+    })
+    flyout:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+    flyout:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    flyout:Hide()
+    frame.guidesFlyout = flyout
+
+    local gridBtn = CreateToolToggle(flyout, flyout, "Grid", 132)
+    gridBtn:ClearAllPoints()
+    gridBtn:SetPoint("TOP", flyout, "TOP", 0, -4)
     frame.gridBtn = gridBtn
+
+    local spacingBtn = CreateToolToggle(flyout, flyout, "Spacing", 132)
+    spacingBtn:ClearAllPoints()
+    spacingBtn:SetPoint("TOP", gridBtn, "BOTTOM", 0, -4)
+    frame.spacingBtn = spacingBtn
 
     gridBtn:SetScript("OnClick", function()
         EditMode:SetGuideSetting("ShowGrid", not EditMode:GetGuideSetting("ShowGrid"))
@@ -2310,6 +2381,7 @@ function EditMode:ToggleCategoryList()
     if frame.categoryList:IsShown() then
         self:CloseCategoryList()
     else
+        self:CloseGuidesFlyout()
         frame.categoryList:Show()
         frame.categorySelector.arrow:SetRotation(math.pi)
     end
@@ -2321,6 +2393,31 @@ function EditMode:CloseCategoryList()
 
     frame.categoryList:Hide()
     frame.categorySelector.arrow:SetRotation(0)
+end
+
+-- The flyout is the category list's peer, so it is opened, closed, dismissed
+-- and escaped the same way. Only one of the two is ever open: they overlap on
+-- screen, and a user who opened the second would be looking at a stack rather
+-- than a choice.
+function EditMode:ToggleGuidesFlyout()
+    local frame = self.nudgeFrame
+    if not (frame and frame.guidesFlyout) then return end
+
+    if frame.guidesFlyout:IsShown() then
+        self:CloseGuidesFlyout()
+    else
+        self:CloseCategoryList()
+        frame.guidesFlyout:Show()
+        frame.guidesChevron.arrow:SetRotation(math.pi)
+    end
+end
+
+function EditMode:CloseGuidesFlyout()
+    local frame = self.nudgeFrame
+    if not (frame and frame.guidesFlyout) then return end
+
+    frame.guidesFlyout:Hide()
+    frame.guidesChevron.arrow:SetRotation(0)
 end
 
 -- The control names the active category; the list carries the rest. An empty
