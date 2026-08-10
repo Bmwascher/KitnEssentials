@@ -1007,10 +1007,12 @@ function EditMode:Enter()
     self:StartDeselectChecker()
 
     local EnterMsg =
-    "Edit Mode |cff00ff00enabled|r.\nDrag elements to reposition.\nHold Shift to see through overlay.\nPress ESC or type /kes edit to exit."
-    -- Short, because the tool now carries the same advice permanently. This one
-    -- still exists for the cases the tool cannot cover: it may have been
-    -- dragged off-screen, and a filter with nothing live shows no overlays.
+    "Edit Mode |cff00ff00enabled|r.\nDrag to move. Arrows or wheel nudge, Ctrl for 10.\nRight-click a box for settings, Shift to hide it, Ctrl to revert it.\nHold Shift to see through. ESC or /kes edit to exit."
+    -- This carries the full list; the tool's caption keeps only the chords.
+    -- It has to, for two cases the tool cannot cover at all: the tool may have
+    -- been dragged off-screen, and a filter with nothing live shows no
+    -- overlays. The popup's fontstring sets no width, so these break only on
+    -- the newlines written here.
     KE:CreateMessagePopup(6, EnterMsg, 14, UIParent, 200, 0)
 end
 
@@ -1854,9 +1856,11 @@ function EditMode:CreateNudgeFrame()
     frame.btnRight:SetScript("OnClick", function() EditMode:NudgeSelectedElement(1, 0) end)
 
     -- Help caption. Bottom of the stack, so the buttons chain off it, and the
-    -- frame's height is sized for how many lines it wraps to. Most of what it
-    -- names has no other surface: the arrow keys, the wheel, and all three
-    -- right-button chords are reachable nowhere else in the tool.
+    -- frame's height is sized for how many lines it wraps to. It names the
+    -- right-button chords and nothing else. Drag, the arrow keys and the wheel
+    -- were dropped: the d-pad sits directly above this, and the entry popup
+    -- still lists all of them. The chords are what a user forgets mid-session
+    -- and what the tool shows nowhere else.
     local helpText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     helpText:SetPoint("BOTTOM", frame, "BOTTOM", 0, 8)
     helpText:SetWidth(140)
@@ -1864,9 +1868,8 @@ function EditMode:CreateNudgeFrame()
     helpText:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
     helpText:SetShadowColor(0, 0, 0, 0)
     helpText:SetShadowOffset(0, 0)
-    helpText:SetText("Drag to move. Arrows or wheel nudge, Ctrl for 10. "
-        .. "Right-click a box for settings, Shift to hide it, Ctrl to revert it. "
-        .. "Hold Shift to see through.")
+    helpText:SetText("Right-click a box for settings. "
+        .. "Add Shift to hide it, Ctrl to revert it.")
     helpText:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
     frame.helpText = helpText
 
