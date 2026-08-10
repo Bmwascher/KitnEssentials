@@ -781,7 +781,10 @@ function EditMode:Enter()
 
     local EnterMsg =
     "Edit Mode |cff00ff00enabled|r.\nDrag elements to reposition.\nHold Shift to see through overlay.\nPress ESC or type /kes edit to exit."
-    KE:CreateMessagePopup(20, EnterMsg, 14, UIParent, 200, 0)
+    -- Short, because the tool now carries the same advice permanently. This one
+    -- still exists for the cases the tool cannot cover: it may have been
+    -- dragged off-screen, and a filter with nothing live shows no overlays.
+    KE:CreateMessagePopup(6, EnterMsg, 14, UIParent, 200, 0)
 end
 
 function EditMode:Exit()
@@ -1157,7 +1160,7 @@ function EditMode:CreateNudgeFrame()
 
     -- Main frame
     local frame = CreateFrame("Frame", "KE_EditModeNudge", UIParent, "BackdropTemplate")
-    frame:SetSize(160, 332)
+    frame:SetSize(160, 382)
     frame:SetPoint("CENTER", UIParent, "CENTER", 400, 0)
     frame:SetFrameStrata("TOOLTIP")
     frame:SetFrameLevel(1001)
@@ -1568,10 +1571,22 @@ function EditMode:CreateNudgeFrame()
     frame.btnLeft:SetScript("OnClick", function() EditMode:NudgeSelectedElement(-1, 0) end)
     frame.btnRight:SetScript("OnClick", function() EditMode:NudgeSelectedElement(1, 0) end)
 
-    -- Done button. Bottom of the stack, so everything above chains off it.
+    -- Help caption. Bottom of the stack, so the buttons chain off it. The two
+    -- things it names that nothing else shows are the arrow keys and Ctrl.
+    local helpText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    helpText:SetPoint("BOTTOM", frame, "BOTTOM", 0, 8)
+    helpText:SetWidth(140)
+    helpText:SetJustifyH("CENTER")
+    helpText:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
+    helpText:SetShadowColor(0, 0, 0, 0)
+    helpText:SetShadowOffset(0, 0)
+    helpText:SetText("Drag to move. Arrows nudge, Ctrl for 10. Hold Shift to see through.")
+    helpText:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+    frame.helpText = helpText
+
     local doneBtn = CreateFrame("Button", nil, frame, "BackdropTemplate")
     doneBtn:SetSize(140, 22)
-    doneBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, 8)
+    doneBtn:SetPoint("BOTTOM", helpText, "TOP", 0, 8)
     doneBtn:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -1915,6 +1930,11 @@ function EditMode:UpdateNudgeFrameTheme()
             Theme.border[1], Theme.border[2], Theme.border[3], 1)
         self.nudgeFrame.doneBtnText:SetTextColor(
             Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end
+
+    if self.nudgeFrame.helpText then
+        self.nudgeFrame.helpText:SetTextColor(
+            Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
     end
 
     if self.nudgeFrame.categoryList then
