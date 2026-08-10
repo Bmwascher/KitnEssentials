@@ -1938,6 +1938,14 @@ function EditMode:NudgeSelectedElement(deltaX, deltaY)
 
     local element = self.registeredElements[self.selectedElementKey]
     if not element then return false end
+
+    -- The mouse is already moving this one, and the commit at release would
+    -- overwrite whatever this wrote. Silent on purpose: the other refusals here
+    -- are silent, and a held drag with a finger on an arrow would otherwise
+    -- fill the chat frame.
+    local overlay = self.overlayFrames[self.selectedElementKey]
+    if overlay and overlay.isDragging then return false end
+
     local currentPos = element.getPosition()
     if not currentPos then return false end
 

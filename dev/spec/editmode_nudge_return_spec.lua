@@ -45,6 +45,36 @@ describe("EditMode:NudgeSelectedElement return value", function()
         assert.is_nil(saved)
     end)
 
+    -- The arrow keys reach the selected element whenever nothing is focused,
+    -- and a drag both selects and clears focus. Without this the keypress is
+    -- written, silently overwritten at release, and leaves the read-out
+    -- describing a position that is not the one being saved.
+    it("returns false while the selected element is being dragged", function()
+        EditMode.selectedElementKey = "el"
+        EditMode.registeredElements = {
+            el = element({ AnchorFrom = "CENTER", AnchorTo = "CENTER",
+                           XOffset = 5, YOffset = 5 }),
+        }
+        EditMode.overlayFrames = { el = { isDragging = true } }
+
+        assert.is_false(EditMode:NudgeSelectedElement(1, 0))
+        assert.is_nil(saved)
+    end)
+
+    -- The decoy that gives the case above its meaning: an overlay that exists
+    -- and is not dragging must not be refused.
+    it("still nudges when the overlay exists and is idle", function()
+        EditMode.selectedElementKey = "el"
+        EditMode.registeredElements = {
+            el = element({ AnchorFrom = "CENTER", AnchorTo = "CENTER",
+                           XOffset = 5, YOffset = 5 }),
+        }
+        EditMode.overlayFrames = { el = { isDragging = false } }
+
+        assert.is_true(EditMode:NudgeSelectedElement(1, 0))
+        assert.equals(6, saved.XOffset)
+    end)
+
     it("returns true and saves when it commits", function()
         EditMode.selectedElementKey = "el"
         EditMode.registeredElements = {
