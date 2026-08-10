@@ -638,13 +638,32 @@ function EditMode:SetupDragHandlers(overlay)
         end
     end)
 
-    -- Click to select for nudge tool
+    -- Left-click selects. Right-click is the chord surface: it acts on the box
+    -- under the cursor rather than on whatever the tool happens to name.
     overlay:SetScript("OnMouseUp", function(self, button)
         local element = self.element
         if not element then return end
-        if button == "LeftButton" and not didDrag then
-            EditMode:SelectElement(element.key)
+
+        if button == "LeftButton" then
+            if not didDrag then
+                EditMode:SelectElement(element.key)
+            end
+            return
         end
+
+        if button ~= "RightButton" then return end
+
+        -- The left button can be holding a drag while this one is clicked, and
+        -- opening a settings panel over a frame still following the mouse is the
+        -- mildest of the three ways that goes wrong. didDrag is deliberately not
+        -- consulted: it exists so a left-click that became a drag does not also
+        -- select, and a right-click cannot start a drag.
+        if EditMode:IsAnyDragInFlight() then return end
+
+        -- Select first, always. Acting on one element while the tool names
+        -- another is the defect the drag path already had to fix.
+        EditMode:SelectElement(element.key)
+        EditMode:OpenElementSettings()
     end)
 end
 
