@@ -12,6 +12,7 @@ local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local pairs = pairs
 local ipairs = ipairs
+local next = next
 local GetCursorPosition = GetCursorPosition
 local IsShiftKeyDown = IsShiftKeyDown
 local IsControlKeyDown = IsControlKeyDown
@@ -31,11 +32,23 @@ EditMode.nudgeFrame = nil
 EditMode.isShiftFaded = false
 EditMode.activeCategory = nil
 
+-- Session view state, both of them, cleared when the tool closes. Keyed by
+-- element key: boxes the user hid for this session, and where each element sat
+-- when its box was adopted.
+EditMode.hiddenElements = {}
+EditMode.positionSnapshots = {}
+
 local BORDER_SIZE = 2
 local FILL_ALPHA = 0.25
 local TEXT_FONT_SIZE = 14
 local SHIFT_FADE_ALPHA = 0.1
 local CATEGORY_ROW_HEIGHT = 20
+
+-- The tool's height with no restore control, and what that control adds when it
+-- appears. Two numbers rather than two literals because the help text below the
+-- buttons decides the first one, and it changes.
+local TOOL_HEIGHT = 382
+local RESTORE_ROW = 28
 
 -- Categories are the sidebar's own sections. A nil id means no filter.
 -- The sidebar also has settings_section and optimize_section; neither registers
@@ -194,15 +207,69 @@ function EditMode:ElementIsLive(element)
     return true
 end
 
+-- Three reasons an element gets no box, and only one of them is a fact about the
+-- element. The hidden set and the category filter are both session view state,
+-- which is why the hide folds in here and not into liveness: liveness also
+-- answers the per-category counts, and a count reports what exists rather than
+-- what is currently drawn.
 function EditMode:ElementShouldShow(element)
     if not element then return false end
+    if self.hiddenElements[element.key] then return false end
     if not self:ElementMatchesCategory(element) then return false end
     return self:ElementIsLive(element)
 end
 
--- How many elements a category would actually show. Uses the same liveness rule
--- as the overlays, so a category whose modules are all switched off reads as
--- empty instead of selecting into a blank screen.
+-- Shift and right-click. Session-scoped and never saved: nothing about the
+-- element changes, and every hidden box comes back when the tool closes.
+function EditMode:HideElementBox(key)
+    if self.hiddenElements[key] then return end
+    self.hiddenElements[key] = true
+
+    -- The single refresh entry point, which drops a selection that stopped
+    -- qualifying. That is what makes hiding the selected box deselect rather
+    -- than leave the tool driving something with no box on screen.
+    self:RefreshLiveState()
+    self:UpdateHiddenControl()
+end
+
+function EditMode:RestoreHiddenElements()
+    if not next(self.hiddenElements) then return end
+    self.hiddenElements = {}
+    self:RefreshLiveState()
+    self:UpdateHiddenControl()
+end
+
+-- One place decides whether the restore control exists, what it says, where the
+-- button above it hangs, and how tall the tool is. Those four drift the moment
+-- two of them are written apart.
+function EditMode:UpdateHiddenControl()
+    local f = self.nudgeFrame
+    if not f then return end
+
+    local count = 0
+    for _ in pairs(self.hiddenElements) do
+        count = count + 1
+    end
+
+    f.settingsBtn:ClearAllPoints()
+    if count > 0 then
+        f.restoreBtnText:SetText("Show hidden (" .. count .. ")")
+        f.restoreBtn:Show()
+        f.settingsBtn:SetPoint("BOTTOM", f.restoreBtn, "TOP", 0, 6)
+        f:SetSize(160, TOOL_HEIGHT + RESTORE_ROW)
+    else
+        f.restoreBtn:Hide()
+        f.settingsBtn:SetPoint("BOTTOM", f.doneBtn, "TOP", 0, 6)
+        f:SetSize(160, TOOL_HEIGHT)
+    end
+end
+
+-- How many elements a category HAS, which is deliberately not how many boxes it
+-- is currently drawing. A module switched off is not one of them, so a category
+-- with nothing live reads as empty instead of selecting into a blank screen. A
+-- box the user hid for the session still counts: the count answers what exists,
+-- and hiding is a view state that the restore control reports separately. Do not
+-- "fix" this to agree with the overlays — the asymmetry is the feature.
 function EditMode:CountElementsInCategory(sectionId)
     local count = 0
     for _, element in pairs(self.registeredElements) do
@@ -663,7 +730,12 @@ function EditMode:SetupDragHandlers(overlay)
         -- Select first, always. Acting on one element while the tool names
         -- another is the defect the drag path already had to fix.
         EditMode:SelectElement(element.key)
-        EditMode:OpenElementSettings()
+
+        if IsShiftKeyDown() then
+            EditMode:HideElementBox(element.key)
+        else
+            EditMode:OpenElementSettings()
+        end
     end)
 end
 
@@ -852,6 +924,12 @@ function EditMode:Exit()
             self:RetireOverlay(overlay)
         end
     end
+    -- Both session tables die with the tool. The hidden boxes coming back is
+    -- the promise the hide is safe under, and the snapshots are what makes
+    -- "where it was when the tool opened" mean anything.
+    self.hiddenElements = {}
+    self.positionSnapshots = {}
+
     self:RemoveEscapeHandler()
     self:RemoveShiftHandler()
     self:RemoveCombatHandler()
@@ -1205,7 +1283,7 @@ function EditMode:CreateNudgeFrame()
 
     -- Main frame
     local frame = CreateFrame("Frame", "KE_EditModeNudge", UIParent, "BackdropTemplate")
-    frame:SetSize(160, 382)
+    frame:SetSize(160, TOOL_HEIGHT)
     frame:SetPoint("CENTER", UIParent, "CENTER", 400, 0)
     frame:SetFrameStrata("TOOLTIP")
     frame:SetFrameLevel(1001)
@@ -1656,6 +1734,34 @@ function EditMode:CreateNudgeFrame()
     end)
 
     -- Settings button
+    -- Built here so the settings button below can anchor to it, and shown only
+    -- while at least one box is hidden. A hide with no visible way back is a
+    -- hole the user has to guess their way out of.
+    local restoreBtn = CreateFrame("Button", nil, frame, "BackdropTemplate")
+    restoreBtn:SetSize(140, 22)
+    restoreBtn:SetPoint("BOTTOM", doneBtn, "TOP", 0, 6)
+    restoreBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = KE:GetPixelSize(),
+    })
+    restoreBtn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+    restoreBtn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    restoreBtn:Hide()
+
+    local restoreBtnText = restoreBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    restoreBtnText:SetPoint("CENTER")
+    restoreBtnText:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
+    restoreBtnText:SetShadowColor(0, 0, 0, 0)
+    restoreBtnText:SetShadowOffset(0, 0)
+    restoreBtnText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    frame.restoreBtn = restoreBtn
+    frame.restoreBtnText = restoreBtnText
+
+    restoreBtn:SetScript("OnClick", function()
+        EditMode:RestoreHiddenElements()
+    end)
+
     local settingsBtn = CreateFrame("Button", nil, frame, "BackdropTemplate")
     settingsBtn:SetSize(140, 22)
     settingsBtn:SetPoint("BOTTOM", doneBtn, "TOP", 0, 6)
@@ -1977,6 +2083,15 @@ function EditMode:UpdateNudgeFrameTheme()
             Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     end
 
+    if self.nudgeFrame.restoreBtn then
+        self.nudgeFrame.restoreBtn:SetBackdropColor(
+            Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+        self.nudgeFrame.restoreBtn:SetBackdropBorderColor(
+            Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        self.nudgeFrame.restoreBtnText:SetTextColor(
+            Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end
+
     if self.nudgeFrame.helpText then
         self.nudgeFrame.helpText:SetTextColor(
             Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
@@ -2128,6 +2243,7 @@ function EditMode:ShowNudgeFrame()
     self.nudgeFrame:Show()
     self:UpdateNudgeFrameInfo()
     self:UpdateCategorySelector()
+    self:UpdateHiddenControl()
 end
 
 function EditMode:HideNudgeFrame()
