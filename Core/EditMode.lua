@@ -737,6 +737,32 @@ function EditMode:SetupDragHandlers(overlay)
             EditMode:OpenElementSettings()
         end
     end)
+
+    overlay:EnableMouseWheel(true)
+
+    -- Vertical only, at the arrow keys' own step and multiplier, resolved
+    -- through their helper so the two cannot drift apart.
+    overlay:SetScript("OnMouseWheel", function(self, delta)
+        local element = self.element
+        if not element then return end
+
+        -- Before the select, not after. Selecting first would hand the read-out
+        -- to this box while a drag on another one still owns it, and the
+        -- dragged element's live numbers would appear under this element's name.
+        if EditMode:IsAnyDragInFlight() then return end
+
+        -- Shift is held to see through the selected box, and the wheel selects
+        -- what it points at, so Shift and wheel would fade the very box it
+        -- moves. It fades and does not nudge.
+        if IsShiftKeyDown() then return end
+
+        EditMode:SelectElement(element.key)
+
+        local deltaX, deltaY = KE:ArrowNudgeDelta(delta > 0 and "UP" or "DOWN",
+            IsControlKeyDown())
+        if not deltaX then return end
+        EditMode:NudgeSelectedElement(0, deltaY)
+    end)
 end
 
 -- Both gates answer with a secret-capable boolean, so neither may be
