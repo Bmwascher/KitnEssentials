@@ -2319,12 +2319,16 @@ function EditMode:UpdateNudgeFrameTheme()
     ThemeToolToggle(self.nudgeFrame.snapBtn)
     ThemeToolToggle(self.nudgeFrame.spacingBtn)
 
-    -- Same three colours, but its fontstring hangs off a different field name.
+    -- Done is the only control here that ends the session, so it is the only
+    -- one filled rather than outlined. The fill is accent at low alpha and the
+    -- text stays accent: a solid fill would need dark text, and the accent is
+    -- the user's own colour, so a dark accent would put dark text on a dark
+    -- ground with nothing to catch it.
     if self.nudgeFrame.doneBtn then
         self.nudgeFrame.doneBtn:SetBackdropColor(
-            Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+            Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.25)
         self.nudgeFrame.doneBtn:SetBackdropBorderColor(
-            Theme.border[1], Theme.border[2], Theme.border[3], 1)
+            Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
         self.nudgeFrame.doneBtnText:SetTextColor(
             Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     end
@@ -2367,6 +2371,22 @@ function EditMode:UpdateNudgeFrameTheme()
         for _, btn in ipairs(self.nudgeFrame.categoryButtons) do
             btn.hover:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.25)
         end
+    end
+
+    if self.nudgeFrame.guidesChevron then
+        self.nudgeFrame.guidesChevron:SetBackdropColor(
+            Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+        self.nudgeFrame.guidesChevron:SetBackdropBorderColor(
+            Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        self.nudgeFrame.guidesChevron.arrow:SetVertexColor(
+            Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end
+
+    if self.nudgeFrame.guidesFlyout then
+        self.nudgeFrame.guidesFlyout:SetBackdropColor(
+            Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+        self.nudgeFrame.guidesFlyout:SetBackdropBorderColor(
+            Theme.border[1], Theme.border[2], Theme.border[3], 1)
     end
     self:UpdateCategorySelector()
 
