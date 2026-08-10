@@ -47,7 +47,7 @@ local CATEGORY_ROW_HEIGHT = 20
 -- The tool's height with no restore control, and what that control adds when it
 -- appears. Two numbers rather than two literals because the help text below the
 -- buttons decides the first one, and it changes.
-local TOOL_HEIGHT = 382
+local TOOL_HEIGHT = 430
 local RESTORE_ROW = 28
 
 -- Categories are the sidebar's own sections. A nil id means no filter.
@@ -1783,8 +1783,10 @@ function EditMode:CreateNudgeFrame()
     frame.btnLeft:SetScript("OnClick", function() EditMode:NudgeSelectedElement(-1, 0) end)
     frame.btnRight:SetScript("OnClick", function() EditMode:NudgeSelectedElement(1, 0) end)
 
-    -- Help caption. Bottom of the stack, so the buttons chain off it. The two
-    -- things it names that nothing else shows are the arrow keys and Ctrl.
+    -- Help caption. Bottom of the stack, so the buttons chain off it, and the
+    -- frame's height is sized for how many lines it wraps to. Most of what it
+    -- names has no other surface: the arrow keys, the wheel, and all three
+    -- right-button chords are reachable nowhere else in the tool.
     local helpText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     helpText:SetPoint("BOTTOM", frame, "BOTTOM", 0, 8)
     helpText:SetWidth(140)
@@ -1792,7 +1794,9 @@ function EditMode:CreateNudgeFrame()
     helpText:SetFont(KE.FONT or STANDARD_TEXT_FONT, 12, "OUTLINE")
     helpText:SetShadowColor(0, 0, 0, 0)
     helpText:SetShadowOffset(0, 0)
-    helpText:SetText("Drag to move. Arrows nudge, Ctrl for 10. Hold Shift to see through.")
+    helpText:SetText("Drag to move. Arrows or wheel nudge, Ctrl for 10. "
+        .. "Right-click a box for settings, Shift to hide it, Ctrl to revert it. "
+        .. "Hold Shift to see through.")
     helpText:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
     frame.helpText = helpText
 
