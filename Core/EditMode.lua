@@ -503,54 +503,28 @@ function EditMode:SetupDragHandlers(overlay)
         -- anchoring-secret on its own. Treat an unreadable rect exactly like a
         -- missing one and fall back to the screen.
         local parentLeft, parentBottom, parentWidth, parentHeight = parentFrame:GetRect()
-        if not parentLeft or issecretvalue(parentLeft) or issecretvalue(parentBottom)
-            or issecretvalue(parentWidth) or issecretvalue(parentHeight) then
+        -- Every secret question first: GetRect can return nothing AND can
+        -- return secrets, and asking `not parentLeft` of a secret throws.
+        if issecretvalue(parentLeft) or issecretvalue(parentBottom)
+            or issecretvalue(parentWidth) or issecretvalue(parentHeight)
+            or not parentLeft then
             parentLeft, parentBottom = 0, 0
             parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
         end
 
         local frameWidth, frameHeight = targetFrame:GetWidth(), targetFrame:GetHeight()
 
-        -- Convert new center to the anchorFrom point on the frame
-        local fromX, fromY = newCenterX, newCenterY
-        if anchorFrom:find("LEFT") then
-            fromX = newCenterX - frameWidth / 2
-        elseif anchorFrom:find("RIGHT") then
-            fromX = newCenterX + frameWidth / 2
-        end
-        if anchorFrom:find("TOP") then
-            fromY = newCenterY + frameHeight / 2
-        elseif anchorFrom:find("BOTTOM") then
-            fromY = newCenterY - frameHeight / 2
-        end
-
-        -- Convert anchorTo point on the parent to absolute position
-        local toX, toY
-        if anchorTo:find("LEFT") then
-            toX = parentLeft
-        elseif anchorTo:find("RIGHT") then
-            toX = parentLeft + parentWidth
-        else
-            toX = parentLeft + parentWidth / 2
-        end
-        if anchorTo:find("TOP") then
-            toY = parentBottom + parentHeight
-        elseif anchorTo:find("BOTTOM") then
-            toY = parentBottom
-        else
-            toY = parentBottom + parentHeight / 2
-        end
-
-        -- Offset = anchorFrom point minus anchorTo point
-        local finalX = fromX - toX
-        local finalY = fromY - toY
+        local offsetX, offsetY = KE:ResolveAnchorOffsets(
+            newCenterX, newCenterY, anchorFrom, anchorTo,
+            frameWidth, frameHeight,
+            parentLeft, parentBottom, parentWidth, parentHeight)
 
         -- Save using the ORIGINAL anchors, edit mode does not change anchor points
         local newPos = {
             AnchorFrom = anchorFrom,
             AnchorTo = anchorTo,
-            XOffset = KE:RoundOffset(finalX),
-            YOffset = KE:RoundOffset(finalY),
+            XOffset = offsetX,
+            YOffset = offsetY,
         }
 
         element.setPosition(newPos)
