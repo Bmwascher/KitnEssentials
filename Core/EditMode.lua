@@ -1799,6 +1799,18 @@ function EditMode:CreateNudgeFrame()
             AnimateColor(false)
         end)
 
+        -- The theme pass cannot reach the colour this button animates from,
+        -- because that is a closure local. Repainting the icon without resetting
+        -- it leaves the next hover fading out of the old accent, which is why
+        -- the arrows only corrected themselves after being moused over once.
+        btn.ApplyTheme = function()
+            animGroup:Stop()
+            container:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+            container:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+            icon:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            curR, curG, curB = Theme.accent[1], Theme.accent[2], Theme.accent[3]
+        end
+
         btn.direction = direction
         return btn
     end
@@ -1944,6 +1956,17 @@ function EditMode:CreateNudgeFrame()
 
     settingsBtn:SetScript("OnEnter", function() AnimateSettingsBtn(true) end)
     settingsBtn:SetScript("OnLeave", function() AnimateSettingsBtn(false) end)
+
+    -- Same reason the arrows carry one: the border colour this animates from is
+    -- a closure local, and its label was never in the theme pass at all because
+    -- the button as a whole was excluded for animating its own border.
+    settingsBtn.ApplyTheme = function()
+        settingsAnimGroup:Stop()
+        settingsBtn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+        settingsBtn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        settingsBtnText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        settingsBtnR, settingsBtnG, settingsBtnB = Theme.border[1], Theme.border[2], Theme.border[3]
+    end
 
     settingsBtn:SetScript("OnClick", function()
         EditMode:OpenElementSettings()
@@ -2241,6 +2264,18 @@ function EditMode:UpdateNudgeFrameTheme()
 
     ThemeOffsetRow(self.nudgeFrame.xRow)
     ThemeOffsetRow(self.nudgeFrame.yRow)
+
+    -- Controls that animate their own colour own their repaint too, because the
+    -- shade they animate away from lives in a closure this cannot see.
+    local function ApplyOwnTheme(control)
+        if control and control.ApplyTheme then control.ApplyTheme() end
+    end
+
+    ApplyOwnTheme(self.nudgeFrame.settingsBtn)
+    ApplyOwnTheme(self.nudgeFrame.btnUp)
+    ApplyOwnTheme(self.nudgeFrame.btnDown)
+    ApplyOwnTheme(self.nudgeFrame.btnLeft)
+    ApplyOwnTheme(self.nudgeFrame.btnRight)
 
     if self.nudgeFrame.helpText then
         self.nudgeFrame.helpText:SetTextColor(
