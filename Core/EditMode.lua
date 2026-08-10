@@ -667,6 +667,21 @@ local function CanReanchor(frame)
     return true
 end
 
+-- One question with two ways in. The arrow keys and the d-pad inherit it
+-- through the nudge; the wheel and the right-button chords ask it themselves,
+-- and the wheel asks BEFORE it selects, which is the whole reason it is one
+-- question rather than three. Asked as "is anything being dragged" rather than
+-- "is THIS element being dragged", because the wheel and the chords act on the
+-- box under the cursor, and every overlay shares a strata and a frame level, so
+-- the box the mouse reaches is not always the box the drag owns. There is only
+-- ever one drag, so this costs a single sweep of a small table.
+function EditMode:IsAnyDragInFlight()
+    for _, overlay in pairs(self.overlayFrames) do
+        if overlay.isDragging then return true end
+    end
+    return false
+end
+
 -- A drag leaves the target temporarily anchored to the screen corner, so any
 -- path that ends a drag early has to put it back.
 --
@@ -2044,12 +2059,13 @@ function EditMode:NudgeSelectedElement(deltaX, deltaY)
     local element = self.registeredElements[self.selectedElementKey]
     if not element then return false end
 
-    -- The mouse is already moving this one, and the commit at release would
-    -- overwrite whatever this wrote. Silent on purpose: the other refusals here
-    -- are silent, and a held drag with a finger on an arrow would otherwise
-    -- fill the chat frame.
-    local overlay = self.overlayFrames[self.selectedElementKey]
-    if overlay and overlay.isDragging then return false end
+    -- A drag is in flight and its commit at release would overwrite whatever
+    -- this wrote. Asked of every drag rather than this element's, because a
+    -- caller that acts on the box under the cursor is not always acting on the
+    -- box being dragged. Silent on purpose, because the other refusals here are
+    -- silent and a held drag with a finger on an arrow would otherwise fill the
+    -- chat frame.
+    if self:IsAnyDragInFlight() then return false end
 
     local currentPos = element.getPosition()
     if not currentPos then return false end

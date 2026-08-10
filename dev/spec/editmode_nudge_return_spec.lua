@@ -75,6 +75,25 @@ describe("EditMode:NudgeSelectedElement return value", function()
         assert.equals(6, saved.XOffset)
     end)
 
+    -- The case the narrow wording answers wrongly. A drag on one element while
+    -- a different element is selected is what the wheel and the right-button
+    -- chords make reachable: they select the box under the cursor, which is not
+    -- always the box being dragged.
+    it("returns false while a DIFFERENT element is being dragged", function()
+        EditMode.selectedElementKey = "el"
+        EditMode.registeredElements = {
+            el = element({ AnchorFrom = "CENTER", AnchorTo = "CENTER",
+                           XOffset = 5, YOffset = 5 }),
+        }
+        EditMode.overlayFrames = {
+            el = { isDragging = false },
+            other = { isDragging = true },
+        }
+
+        assert.is_false(EditMode:NudgeSelectedElement(1, 0))
+        assert.is_nil(saved)
+    end)
+
     it("returns true and saves when it commits", function()
         EditMode.selectedElementKey = "el"
         EditMode.registeredElements = {
