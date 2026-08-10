@@ -1252,10 +1252,22 @@ function EditMode:StartDeselectChecker()
                 overAny = true
             end
 
-            -- A click anywhere else dismisses the list, the way every other
-            -- dropdown in the addon behaves.
+            -- A click anywhere else dismisses an open dropdown, the way every
+            -- other dropdown in the addon behaves. Two of them now, tested
+            -- separately: only one is ever open, but which one is not known
+            -- here, and a shared test would close the one being clicked.
             if not overSelector and not overList then
                 EditMode:CloseCategoryList()
+            end
+
+            local overChevron = nudge and nudge.guidesChevron
+                and nudge.guidesChevron:IsMouseOver()
+            local overFlyout = nudge and nudge.guidesFlyout
+                and nudge.guidesFlyout:IsShown()
+                and nudge.guidesFlyout:IsMouseOver()
+
+            if not overChevron and not overFlyout then
+                EditMode:CloseGuidesFlyout()
             end
 
             -- Ignore clicks on the GUI main frame
@@ -2362,13 +2374,18 @@ function EditMode:UpdateNudgeFrameTheme()
     self:UpdateNudgeFrameInfo()
 end
 
--- Escape backs out one layer at a time: an open category list first, the tool
--- second. Without the first layer, dismissing a list you opened by mistake
--- would also throw away the whole session.
+-- Escape backs out one layer at a time: an open dropdown first, the tool
+-- second. Without the first layer, dismissing something you opened by mistake
+-- would also throw away the whole session. The two dropdowns are one layer,
+-- not two, because opening either closes the other.
 function EditMode:HandleEscape()
     local nudge = self.nudgeFrame
     if nudge and nudge.categoryList and nudge.categoryList:IsShown() then
         self:CloseCategoryList()
+        return
+    end
+    if nudge and nudge.guidesFlyout and nudge.guidesFlyout:IsShown() then
+        self:CloseGuidesFlyout()
         return
     end
     self:Exit()
@@ -2526,9 +2543,12 @@ end
 
 function EditMode:HideNudgeFrame()
     if self.nudgeFrame then
-        -- Hiding the tool hides the list with it, but a child keeps its own
-        -- shown state, so without this it reopens still expanded next time.
+        -- Hiding the tool hides both dropdowns with it, but a child keeps its
+        -- own shown state, so without this whichever was open reopens still
+        -- expanded next time. The tool is pooled, so "next time" is the next
+        -- session rather than the next login.
         self:CloseCategoryList()
+        self:CloseGuidesFlyout()
         self.nudgeFrame:Hide()
     end
     self.selectedElementKey = nil

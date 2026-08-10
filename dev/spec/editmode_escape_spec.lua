@@ -4,12 +4,22 @@
 local L = require("dev.spec._ke_loader")
 
 describe("EditMode:HandleEscape", function()
-    local KE, EditMode, closed, exited, inCombat, ctrlDown
+    local KE, EditMode, closed, exited, flyoutClosed, inCombat, ctrlDown
 
     -- A nudge frame is a real frame in game. Everything this branch reads from
     -- it is one boolean, so the stub is that boolean and nothing else.
     local function nudgeWithList(shown)
         return { categoryList = { IsShown = function() return shown end } }
+    end
+
+    -- The flyout layer. Two booleans rather than one, because the case that
+    -- matters is a closed list with an open flyout: a handler that read only
+    -- the first layer would exit the session instead of closing the flyout.
+    local function nudgeWith(listShown, flyoutShown)
+        return {
+            categoryList = { IsShown = function() return listShown end },
+            guidesFlyout = { IsShown = function() return flyoutShown end },
+        }
     end
 
     before_each(function()
@@ -26,8 +36,9 @@ describe("EditMode:HandleEscape", function()
         _G.IsControlKeyDown = function() return ctrlDown end
         EditMode = L.loadEditMode(KE)
 
-        closed, exited = 0, 0
+        closed, exited, flyoutClosed = 0, 0, 0
         EditMode.CloseCategoryList = function() closed = closed + 1 end
+        EditMode.CloseGuidesFlyout = function() flyoutClosed = flyoutClosed + 1 end
         EditMode.Exit = function() exited = exited + 1 end
     end)
 
@@ -65,6 +76,41 @@ describe("EditMode:HandleEscape", function()
         EditMode:HandleEscape()
 
         assert.equals(1, exited)
+    end)
+
+    it("closes an open flyout and leaves the tool running", function()
+        EditMode.nudgeFrame = nudgeWith(false, true)
+
+        EditMode:HandleEscape()
+
+        assert.equals(1, flyoutClosed)
+        assert.equals(0, closed)
+        assert.equals(0, exited)
+    end)
+
+    -- The decoy. Without it, a handler that closed the flyout unconditionally
+    -- passes the case above and Escape never exits again.
+    it("exits when both layers are closed", function()
+        EditMode.nudgeFrame = nudgeWith(false, false)
+
+        EditMode:HandleEscape()
+
+        assert.equals(0, flyoutClosed)
+        assert.equals(1, exited)
+    end)
+
+    -- The layers are exclusive by construction, so this pins which one the
+    -- handler reaches for rather than a state the user can produce. It fails
+    -- an implementation that tests the flyout first, which would close the
+    -- wrong thing the day the exclusion is broken.
+    it("closes the list first when both somehow report open", function()
+        EditMode.nudgeFrame = nudgeWith(true, true)
+
+        EditMode:HandleEscape()
+
+        assert.equals(1, closed)
+        assert.equals(0, flyoutClosed)
+        assert.equals(0, exited)
     end)
 
     -- The keyboard-propagation flag lives on the frame, not on the key event,
