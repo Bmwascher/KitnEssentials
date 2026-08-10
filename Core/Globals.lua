@@ -1049,6 +1049,59 @@ function KE:ArrowNudgeDelta(key, ctrlDown)
     return delta[1] * step, delta[2] * step
 end
 
+-- Turns an absolute centre into the two offsets a SetPoint stores. Pure by
+-- contract: it calls no API, because three of the geometry reads behind its
+-- arguments are secret when the anchoring is secret, and proving them clean is
+-- the caller's job.
+---@param centerX number
+---@param centerY number
+---@param anchorFrom string
+---@param anchorTo string
+---@param frameWidth number
+---@param frameHeight number
+---@param parentLeft number
+---@param parentBottom number
+---@param parentWidth number
+---@param parentHeight number
+---@return number offsetX
+---@return number offsetY
+function KE:ResolveAnchorOffsets(centerX, centerY, anchorFrom, anchorTo,
+                                frameWidth, frameHeight,
+                                parentLeft, parentBottom, parentWidth, parentHeight)
+    -- Where the frame's own anchor point sits, given its centre. The two axes
+    -- are independent chains on purpose: a corner moves both.
+    local fromX, fromY = centerX, centerY
+    if anchorFrom:find("LEFT") then
+        fromX = centerX - frameWidth / 2
+    elseif anchorFrom:find("RIGHT") then
+        fromX = centerX + frameWidth / 2
+    end
+    if anchorFrom:find("TOP") then
+        fromY = centerY + frameHeight / 2
+    elseif anchorFrom:find("BOTTOM") then
+        fromY = centerY - frameHeight / 2
+    end
+
+    -- Where the parent's anchor point sits.
+    local toX, toY
+    if anchorTo:find("LEFT") then
+        toX = parentLeft
+    elseif anchorTo:find("RIGHT") then
+        toX = parentLeft + parentWidth
+    else
+        toX = parentLeft + parentWidth / 2
+    end
+    if anchorTo:find("TOP") then
+        toY = parentBottom + parentHeight
+    elseif anchorTo:find("BOTTOM") then
+        toY = parentBottom
+    else
+        toY = parentBottom + parentHeight / 2
+    end
+
+    return self:RoundOffset(fromX - toX), self:RoundOffset(fromY - toY)
+end
+
 PreviewManager.guiOpen = false
 PreviewManager.editModeActive = false
 PreviewManager.previewsActive = false

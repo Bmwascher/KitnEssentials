@@ -378,6 +378,24 @@ function KE:SnapCenter(x, y, context) end
 ---@return number? deltaY
 function KE:ArrowNudgeDelta(key, ctrlDown) end
 
+--- Turns an absolute centre into the two offsets a SetPoint stores. Pure by
+--- contract: calls no API, so the caller proves every number clean first.
+---@param centerX number
+---@param centerY number
+---@param anchorFrom string
+---@param anchorTo string
+---@param frameWidth number
+---@param frameHeight number
+---@param parentLeft number
+---@param parentBottom number
+---@param parentWidth number
+---@param parentHeight number
+---@return number offsetX
+---@return number offsetY
+function KE:ResolveAnchorOffsets(centerX, centerY, anchorFrom, anchorTo,
+                                frameWidth, frameHeight,
+                                parentLeft, parentBottom, parentWidth, parentHeight) end
+
 -- ─── GUI helpers ─────────────────────────────────────────
 -- Accepts both FontStrings and EditBoxes — both expose SetFont. The
 -- callers in Core/Widgets.lua use it on EditBoxes (the search/import
