@@ -1014,43 +1014,150 @@ local math_abs = math.abs
 -- Snapping is a magnet, not a cage: the threshold is capped below half the
 -- spacing at the coarse settings, which leaves a band between lines where
 -- nothing snaps and off-grid placement stays possible.
+--
+-- ONE threshold serves both the grid and the element candidates, and that is
+-- load-bearing rather than tidy. It is not a constant -- at spacing 8 it is 4,
+-- not 12 -- so giving the two families their own would mean a nearer element
+-- could be excluded while a farther grid line won, which is not the
+-- closest-wins rule this claims to implement.
 local SNAP_THRESHOLD_CAP = 12
 
--- One decision for both drag callers. Pure on purpose -- the live update and
--- the commit can only stay in step by sharing this, and a version that read the
--- database or a frame could not be shared at all.
+-- The nearest grid line, or nil when none is close enough.
+--
+-- floor(v/step + 0.5) is the same rounding SnapFrameToPixels uses. It rounds
+-- ties toward positive, so a point exactly between two lines lands on the upper
+-- one regardless of which side of the origin it is.
+local function GridAxis(value, origin, spacing, threshold)
+    local steps = math_floor((value - origin) / spacing + 0.5)
+    local line = origin + steps * spacing
+    local displacement = math_abs(value - line)
+    if displacement <= threshold then
+        return line, displacement, steps == 0
+    end
+    return nil
+end
+
+-- Whether an element candidate beats the running best. All three tie rules live
+-- here and nowhere else.
+--
+-- bestCoord is nil while the best is the grid or nothing, which is what turns
+-- "an element breaks a tie with the grid" into a single comparison rather than
+-- a flag threaded through the caller.
+local function ElementBeats(displacement, centre, coord, bestDisplacement, bestCentre, bestCoord)
+    if bestDisplacement == nil then return true end
+    if displacement < bestDisplacement then return true end
+    if displacement > bestDisplacement then return false end
+    if bestCoord == nil then return true end
+    -- Two alignments can reach the same centre by different routes, so the
+    -- centre alone is not a total order and the drawn coordinate settles it.
+    if centre ~= bestCentre then return centre > bestCentre end
+    return coord > bestCoord
+end
+
+-- One axis, grid and elements together. Returns the centre to use, whether that
+-- centre is the origin itself, and the coordinate a guide should be drawn at
+-- (nil unless an element won).
+--
+-- A file local rather than a closure inside SnapCenter: the drag update calls
+-- this every frame, and a closure built per call is an allocation in the one
+-- path that must not allocate.
+local function SnapAxis(value, origin, spacing, threshold, candidates, near, centreOffset, far)
+    local bestCentre, bestDisplacement, bestOnCentre, bestCoord = value, nil, false, nil
+
+    local line, displacement, onCentre = GridAxis(value, origin, spacing, threshold)
+    if line then
+        bestCentre, bestDisplacement, bestOnCentre = line, displacement, onCentre
+    end
+
+    if not candidates then
+        return bestCentre, bestOnCentre, nil
+    end
+
+    for i = 1, #candidates do
+        local coord = candidates[i]
+
+        -- Unrolled over the box's three edges. A loop would want a table of the
+        -- offsets, and building one here would allocate on every frame.
+        -- An offset is measured from the frame centre, so the centre that puts
+        -- that edge on this candidate is the candidate minus the offset.
+        local centre = coord - near
+        local d = math_abs(centre - value)
+        if d <= threshold
+            and ElementBeats(d, centre, coord, bestDisplacement, bestCentre, bestCoord) then
+            bestCentre, bestDisplacement, bestOnCentre, bestCoord = centre, d, false, coord
+        end
+
+        centre = coord - centreOffset
+        d = math_abs(centre - value)
+        if d <= threshold
+            and ElementBeats(d, centre, coord, bestDisplacement, bestCentre, bestCoord) then
+            bestCentre, bestDisplacement, bestOnCentre, bestCoord = centre, d, false, coord
+        end
+
+        centre = coord - far
+        d = math_abs(centre - value)
+        if d <= threshold
+            and ElementBeats(d, centre, coord, bestDisplacement, bestCentre, bestCoord) then
+            bestCentre, bestDisplacement, bestOnCentre, bestCoord = centre, d, false, coord
+        end
+    end
+
+    return bestCentre, bestOnCentre, bestCoord
+end
+
+-- The element family for one axis, or nil when this drag has none. Both halves
+-- are required: a candidate list with no edge offsets cannot be measured
+-- against anything, and offsets with no list have nothing to measure. Missing
+-- either leaves grid snapping working, which is the ordinary state on a screen
+-- showing one element.
+local function ElementAxis(candidates, near, centreOffset, far)
+    if type(candidates) ~= "table" or #candidates == 0 then return nil end
+    if type(near) ~= "number" or type(centreOffset) ~= "number"
+        or type(far) ~= "number" then
+        return nil
+    end
+    return candidates
+end
+
+-- One decision for every drag caller. Pure on purpose -- the live update, the
+-- no-update fallback and the stop reconciliation can only stay in step by
+-- sharing this, and a version that read the database or a frame could not be
+-- shared at all.
 ---@param x number desired centre, absolute UIParent coordinates
 ---@param y number
----@param context table? { enabled, spacing, originX, originY }
+---@param context table? { enabled, spacing, originX, originY, candidatesX,
+---       candidatesY, edgeLeft, edgeCentreX, edgeRight, edgeBottom,
+---       edgeCentreY, edgeTop }
+---@param suppressed boolean? true while the suppress modifier is held
 ---@return number snappedX
 ---@return number snappedY
 ---@return boolean onCentreX true only when the result is the origin itself
 ---@return boolean onCentreY
-function KE:SnapCenter(x, y, context)
-    if not context or not context.enabled then return x, y, false, false end
+---@return number? guideX coordinate to draw a vertical guide at, nil unless an
+---        element won this axis
+---@return number? guideY
+function KE:SnapCenter(x, y, context, suppressed)
+    if suppressed then return x, y, false, false, nil, nil end
+    if not context or not context.enabled then return x, y, false, false, nil, nil end
 
     local spacing = tonumber(context.spacing)
-    if not spacing or spacing <= 0 then return x, y, false, false end
+    if not spacing or spacing <= 0 then return x, y, false, false, nil, nil end
 
     local threshold = math_min(spacing / 2, SNAP_THRESHOLD_CAP)
-    local originX = tonumber(context.originX) or 0
-    local originY = tonumber(context.originY) or 0
 
-    -- floor(v/step + 0.5) is the same rounding SnapFrameToPixels uses. It
-    -- rounds ties toward positive, so a point exactly between two lines lands
-    -- on the upper one regardless of which side of the origin it is.
-    local function axis(value, origin)
-        local steps = math_floor((value - origin) / spacing + 0.5)
-        local line = origin + steps * spacing
-        if math_abs(value - line) <= threshold then
-            return line, steps == 0
-        end
-        return value, false
-    end
+    local snappedX, onCentreX, guideX = SnapAxis(
+        x, tonumber(context.originX) or 0, spacing, threshold,
+        ElementAxis(context.candidatesX, context.edgeLeft, context.edgeCentreX,
+            context.edgeRight),
+        context.edgeLeft, context.edgeCentreX, context.edgeRight)
 
-    local snappedX, onCentreX = axis(x, originX)
-    local snappedY, onCentreY = axis(y, originY)
-    return snappedX, snappedY, onCentreX, onCentreY
+    local snappedY, onCentreY, guideY = SnapAxis(
+        y, tonumber(context.originY) or 0, spacing, threshold,
+        ElementAxis(context.candidatesY, context.edgeBottom, context.edgeCentreY,
+            context.edgeTop),
+        context.edgeBottom, context.edgeCentreY, context.edgeTop)
+
+    return snappedX, snappedY, onCentreX, onCentreY, guideX, guideY
 end
 
 -- Y is positive upward, matching the nudge buttons and the stored offsets.
@@ -1075,6 +1182,48 @@ function KE:ArrowNudgeDelta(key, ctrlDown)
     return delta[1] * step, delta[2] * step
 end
 
+-- The two terms an anchor pair contributes, factored out so the forward
+-- conversion below and its inverse cannot drift apart. Sharing them is what
+-- makes the inverse structural rather than a second transcription that happens
+-- to agree today.
+--
+-- The frame term is where the frame's own anchor point sits relative to its
+-- centre; the parent term is where the parent's anchor point sits absolutely.
+-- The two axes are independent chains on purpose: a corner moves both.
+local function FrameAnchorDelta(anchorFrom, frameWidth, frameHeight)
+    local dx, dy = 0, 0
+    if anchorFrom:find("LEFT") then
+        dx = -frameWidth / 2
+    elseif anchorFrom:find("RIGHT") then
+        dx = frameWidth / 2
+    end
+    if anchorFrom:find("TOP") then
+        dy = frameHeight / 2
+    elseif anchorFrom:find("BOTTOM") then
+        dy = -frameHeight / 2
+    end
+    return dx, dy
+end
+
+local function ParentAnchorPoint(anchorTo, parentLeft, parentBottom, parentWidth, parentHeight)
+    local x, y
+    if anchorTo:find("LEFT") then
+        x = parentLeft
+    elseif anchorTo:find("RIGHT") then
+        x = parentLeft + parentWidth
+    else
+        x = parentLeft + parentWidth / 2
+    end
+    if anchorTo:find("TOP") then
+        y = parentBottom + parentHeight
+    elseif anchorTo:find("BOTTOM") then
+        y = parentBottom
+    else
+        y = parentBottom + parentHeight / 2
+    end
+    return x, y
+end
+
 -- Turns an absolute centre into the two offsets a SetPoint stores. Pure by
 -- contract: it calls no API, because three of the geometry reads behind its
 -- arguments are secret when the anchoring is secret, and proving them clean is
@@ -1094,38 +1243,56 @@ end
 function KE:ResolveAnchorOffsets(centerX, centerY, anchorFrom, anchorTo,
                                 frameWidth, frameHeight,
                                 parentLeft, parentBottom, parentWidth, parentHeight)
-    -- Where the frame's own anchor point sits, given its centre. The two axes
-    -- are independent chains on purpose: a corner moves both.
-    local fromX, fromY = centerX, centerY
-    if anchorFrom:find("LEFT") then
-        fromX = centerX - frameWidth / 2
-    elseif anchorFrom:find("RIGHT") then
-        fromX = centerX + frameWidth / 2
-    end
-    if anchorFrom:find("TOP") then
-        fromY = centerY + frameHeight / 2
-    elseif anchorFrom:find("BOTTOM") then
-        fromY = centerY - frameHeight / 2
-    end
+    local deltaX, deltaY = FrameAnchorDelta(anchorFrom, frameWidth, frameHeight)
+    local toX, toY = ParentAnchorPoint(anchorTo, parentLeft, parentBottom,
+        parentWidth, parentHeight)
 
-    -- Where the parent's anchor point sits.
-    local toX, toY
-    if anchorTo:find("LEFT") then
-        toX = parentLeft
-    elseif anchorTo:find("RIGHT") then
-        toX = parentLeft + parentWidth
-    else
-        toX = parentLeft + parentWidth / 2
-    end
-    if anchorTo:find("TOP") then
-        toY = parentBottom + parentHeight
-    elseif anchorTo:find("BOTTOM") then
-        toY = parentBottom
-    else
-        toY = parentBottom + parentHeight / 2
-    end
+    return self:RoundOffset(centerX + deltaX - toX),
+        self:RoundOffset(centerY + deltaY - toY)
+end
 
-    return self:RoundOffset(fromX - toX), self:RoundOffset(fromY - toY)
+-- The offsets that will actually be stored, and the centre those offsets
+-- produce. Same inputs as ResolveAnchorOffsets, and the right-inverse of it:
+-- feed the returned centre back through that function and the same offsets come
+-- out, because RoundOffset is the identity on a whole number.
+--
+-- This exists because a stored offset is a whole number and a snap target is
+-- not. Without it the guide marks a coordinate the commit never reaches, and by
+-- an amount that depends on where the parent's anchor happens to sit rather
+-- than on anything the user can see. It CANNOT recover the pre-rounding centre
+-- -- rounding is many-to-one -- and it does not try to; it answers a different
+-- question, which is where the frame will end up.
+--
+-- One stage further on, the common setter pixel-snaps the frame again. That is
+-- deliberately not modelled here: doing so would mean assuming every module's
+-- position setter routes through that helper, which nothing enforces and at
+-- least one setter does not do. So the residual this bounds is 0.5 UI unit,
+-- and the pipeline as a whole has no bound this function can promise.
+---@param centerX number desired centre, absolute UIParent coordinates
+---@param centerY number
+---@param anchorFrom string
+---@param anchorTo string
+---@param frameWidth number
+---@param frameHeight number
+---@param parentLeft number
+---@param parentBottom number
+---@param parentWidth number
+---@param parentHeight number
+---@return number offsetX stored offset, a whole number
+---@return number offsetY
+---@return number representedX the centre those offsets produce
+---@return number representedY
+function KE:ResolveRepresentablePlacement(centerX, centerY, anchorFrom, anchorTo,
+                                frameWidth, frameHeight,
+                                parentLeft, parentBottom, parentWidth, parentHeight)
+    local deltaX, deltaY = FrameAnchorDelta(anchorFrom, frameWidth, frameHeight)
+    local toX, toY = ParentAnchorPoint(anchorTo, parentLeft, parentBottom,
+        parentWidth, parentHeight)
+
+    local offsetX = self:RoundOffset(centerX + deltaX - toX)
+    local offsetY = self:RoundOffset(centerY + deltaY - toY)
+
+    return offsetX, offsetY, toX + offsetX - deltaX, toY + offsetY - deltaY
 end
 
 PreviewManager.guiOpen = false

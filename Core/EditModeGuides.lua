@@ -177,6 +177,79 @@ function EditMode:HideCentreGuides()
     if frame.centreLineY then frame.centreLineY:Hide() end
 end
 
+---------------------------------------------------------------------------------
+-- Element Snap Guides
+---------------------------------------------------------------------------------
+-- The centre guides mark two fixed coordinates the user already knows. These
+-- mark wherever a neighbour was matched, so unlike those they are re-pointed as
+-- the drag moves. Same colour and alpha, because they mean the same thing: a
+-- snap that has already been decided. The line's position says which is which.
+--
+-- Two persistent textures, never the grid pool. RefreshGrid resets that pool by
+-- count and hides everything past the mark, so a borrowed line would vanish the
+-- moment anything redrew the grid mid-drag.
+local function SnapLine(frame, key)
+    local tex = frame[key]
+    if tex then return tex end
+
+    tex = frame:CreateTexture(nil, "ARTWORK")
+    tex:Hide()
+    frame[key] = tex
+
+    return tex
+end
+
+-- nil hides that axis. Dirty-checked on both visibility and coordinate: this
+-- runs on every frame of a drag, and re-pointing an unchanged texture sixty
+-- times a second is the kind of cost the perf patterns exist to refuse.
+function EditMode:SetElementSnapGuides(x, y)
+    local frame = self:BuildGuideFrame()
+    local thickness = KE:GetPixelSize()
+    local colour = KE.Theme and KE.Theme.accent or { 1, 1, 1 }
+
+    local vertical = SnapLine(frame, "snapLineX")
+    if x then
+        if frame._snapAtX ~= x then
+            frame._snapAtX = x
+            local height = UIParent:GetHeight() or 0
+            vertical:SetColorTexture(colour[1], colour[2], colour[3], CENTRE_GUIDE_ALPHA)
+            vertical:ClearAllPoints()
+            vertical:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", x, height)
+            vertical:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", x + thickness, 0)
+        end
+        vertical:Show()
+    else
+        frame._snapAtX = nil
+        vertical:Hide()
+    end
+
+    local horizontal = SnapLine(frame, "snapLineY")
+    if y then
+        if frame._snapAtY ~= y then
+            frame._snapAtY = y
+            horizontal:SetColorTexture(colour[1], colour[2], colour[3], CENTRE_GUIDE_ALPHA)
+            horizontal:ClearAllPoints()
+            horizontal:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, y)
+            horizontal:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, y + thickness)
+        end
+        horizontal:Show()
+    else
+        frame._snapAtY = nil
+        horizontal:Hide()
+    end
+end
+
+-- The termination and suspension path. Clears the remembered coordinates too,
+-- or the next drag's first frame would skip its own re-point as unchanged and
+-- show a line where the last drag left one.
+function EditMode:HideElementSnapGuides()
+    local frame = self.guideFrame
+    if not frame then return end
+    frame._snapAtX, frame._snapAtY = nil, nil
+    if frame.snapLineX then frame.snapLineX:Hide() end
+    if frame.snapLineY then frame.snapLineY:Hide() end
+end
+
 -- The grid, the guides and the drag are all built from the screen's dimensions
 -- and the pixel size, so one pair of events invalidates all three. This is the
 -- same pair PixelPerfect watches for its own cache.

@@ -363,12 +363,17 @@ function KE:GetSideDecorationInset(size, gap, hostSize) end
 --- only ever agree. Pure: the caller supplies the grid in `context`.
 ---@param x number desired centre, absolute UIParent coordinates
 ---@param y number
----@param context table? { enabled, spacing, originX, originY }
+---@param context table? { enabled, spacing, originX, originY, candidatesX,
+---       candidatesY, edgeLeft, edgeCentreX, edgeRight, edgeBottom,
+---       edgeCentreY, edgeTop }
+---@param suppressed boolean? true while the suppress modifier is held
 ---@return number snappedX
 ---@return number snappedY
 ---@return boolean onCentreX true only when the result is the origin itself
 ---@return boolean onCentreY
-function KE:SnapCenter(x, y, context) end
+---@return number? guideX nil unless an element won this axis
+---@return number? guideY
+function KE:SnapCenter(x, y, context, suppressed) end
 
 --- Resolves an arrow key and the modifier state into a nudge delta. nil for
 --- any other key, so one call both recognises an arrow and resolves it.
@@ -393,6 +398,24 @@ function KE:ArrowNudgeDelta(key, ctrlDown) end
 ---@return number offsetX
 ---@return number offsetY
 function KE:ResolveAnchorOffsets(centerX, centerY, anchorFrom, anchorTo,
+                                frameWidth, frameHeight,
+                                parentLeft, parentBottom, parentWidth, parentHeight) end
+
+---@param centerX number
+---@param centerY number
+---@param anchorFrom string
+---@param anchorTo string
+---@param frameWidth number
+---@param frameHeight number
+---@param parentLeft number
+---@param parentBottom number
+---@param parentWidth number
+---@param parentHeight number
+---@return number offsetX
+---@return number offsetY
+---@return number representedX
+---@return number representedY
+function KE:ResolveRepresentablePlacement(centerX, centerY, anchorFrom, anchorTo,
                                 frameWidth, frameHeight,
                                 parentLeft, parentBottom, parentWidth, parentHeight) end
 
