@@ -112,6 +112,73 @@ function EditMode:BuildSnapContext()
     }
 end
 
+-- Bumped by anything that can change which boxes are on screen or where they
+-- are. A drag captures this alongside its candidates; seeing it move is how the
+-- drag learns its magnets have gone stale.
+function EditMode:BumpCandidateVersion()
+    self.candidateVersion = (self.candidateVersion or 0) + 1
+end
+
+-- A rect, or nil when it cannot be trusted. GetRect is SecretWhenAnchoringSecret
+-- AND can return nothing at all, so both questions are asked, secrets first --
+-- `not left` on a secret throws.
+local function ReadableRect(frame)
+    local left, bottom, width, height = frame:GetRect()
+    if issecretvalue(left) or issecretvalue(bottom)
+        or issecretvalue(width) or issecretvalue(height) then
+        return nil
+    end
+    if not left or not bottom or not width or not height then return nil end
+    return left, bottom, width, height
+end
+EditMode._ReadableRect = ReadableRect
+
+local function AddCoordinate(list, seen, value)
+    if seen[value] then return end
+    seen[value] = true
+    list[#list + 1] = value
+end
+
+-- The lines this drag can snap to: three per axis for every other box on
+-- screen. Captured once, for the reason BuildSnapContext gives -- a mid-drag
+-- re-read lets the live update and the commit disagree about what they were
+-- snapping to.
+--
+-- Boxes rather than frames, and that matters: an inset can move a box entirely
+-- off its own frame, so snapping on frames would align two rectangles the user
+-- cannot see while the visible things stay apart.
+--
+-- Both visibility tests are needed. ElementShouldShow is not on its own what
+-- decides a box is drawn -- an overlay is also hidden when its target frame
+-- will not resolve, which that test never sees, and a hidden overlay still
+-- reports the rect it had when it was last positioned.
+function EditMode:BuildElementCandidates(context, draggedOverlay)
+    local xs, ys = {}, {}
+    local seenX, seenY = {}, {}
+
+    for _, overlay in pairs(self.overlayFrames) do
+        if overlay ~= draggedOverlay and overlay:IsShown()
+            and self:ElementShouldShow(overlay.element) then
+            -- One unreadable neighbour costs its own lines and nothing else.
+            -- Refusing the whole build would take every other alignment on
+            -- screen away over a frame the user is not even dragging.
+            local left, bottom, width, height = ReadableRect(overlay)
+            if left then
+                AddCoordinate(xs, seenX, left)
+                AddCoordinate(xs, seenX, left + width / 2)
+                AddCoordinate(xs, seenX, left + width)
+                AddCoordinate(ys, seenY, bottom)
+                AddCoordinate(ys, seenY, bottom + height / 2)
+                AddCoordinate(ys, seenY, bottom + height)
+            end
+        end
+    end
+
+    context.candidatesX = xs
+    context.candidatesY = ys
+    context.version = self.candidateVersion or 0
+end
+
 ---------------------------------------------------------------------------------
 -- Element Registration
 ---------------------------------------------------------------------------------
@@ -121,6 +188,7 @@ function EditMode:RegisterElement(config)
     if not config.frame and not config.frameName then return end
     if not config.getPosition or not config.setPosition then return end
 
+    self:BumpCandidateVersion()
     self.registeredElements[config.key] = {
         key = config.key,
         displayName = config.displayName or config.key,
@@ -156,6 +224,7 @@ function EditMode:UnregisterElement(key)
     end
 
     self.registeredElements[key] = nil
+    self:BumpCandidateVersion()
 
     if self.selectedElementKey == key then
         self:SelectElement(nil)
@@ -387,6 +456,8 @@ end
 function EditMode:RefreshLiveState()
     if not self.isActive then return end
 
+    self:BumpCandidateVersion()
+
     for _, overlay in pairs(self.overlayFrames) do
         self:UpdateOverlayPosition(overlay)
     end
@@ -527,6 +598,98 @@ end
 -- Drag Handling
 ---------------------------------------------------------------------------------
 
+-- The one place a drag position is decided. Three callers reach it -- the live
+-- update, the release that never got an update, and the release that found its
+-- magnets stale -- and they can only agree by sharing this.
+--
+-- Alt is sampled HERE rather than by the callers, because the rule is about
+-- what the code is doing, not which handler it sits in: every resolve that
+-- reads the cursor samples it fresh. A caller-side sample lets a user release
+-- Alt, trigger a refresh, hold it again and still get a snap on release.
+--
+-- Bookkeeping goes on the overlay and NOT on the returned table. That table is
+-- handed to the module's setter, a setter may keep it, and anything extra on it
+-- would end up in saved variables and travel with exported profiles.
+function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
+                                      context, anchorFrom, anchorTo, dragParent)
+    local snappedX, snappedY, onCentreX, onCentreY, guideX, guideY =
+        KE:SnapCenter(rawX, rawY, context, IsAltKeyDown() and true or false)
+
+    -- Re-anchor before reading the size. The width and height below are
+    -- unguarded, and they are safe only because the frame is now anchored to
+    -- UIParent, which cannot be anchoring-secret.
+    targetFrame:ClearAllPoints()
+    targetFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", snappedX, snappedY)
+
+    local parentLeft, parentBottom, parentWidth, parentHeight = dragParent:GetRect()
+    if issecretvalue(parentLeft) or issecretvalue(parentBottom)
+        or issecretvalue(parentWidth) or issecretvalue(parentHeight)
+        or not parentLeft then
+        parentLeft, parentBottom = 0, 0
+        parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
+    end
+
+    -- The offsets that will be stored, and the centre they actually reach. A
+    -- stored offset is a whole number and a snap target is not, so showing the
+    -- raw target would put the frame and its guide somewhere the commit never
+    -- goes.
+    local offsetX, offsetY, representedX, representedY =
+        KE:ResolveRepresentablePlacement(snappedX, snappedY, anchorFrom, anchorTo,
+            targetFrame:GetWidth(), targetFrame:GetHeight(),
+            parentLeft, parentBottom, parentWidth, parentHeight)
+
+    if representedX ~= snappedX or representedY ~= snappedY then
+        targetFrame:ClearAllPoints()
+        targetFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", representedX, representedY)
+        -- The guide moves with the frame, by the same amount, or it would mark
+        -- an alignment the frame does not have.
+        if guideX then guideX = guideX + representedX - snappedX end
+        if guideY then guideY = guideY + representedY - snappedY end
+    end
+
+    if DEBUG_GUIDES then
+        local stamp = math.floor(rawY)
+        if stamp ~= guideLogStamp then
+            guideLogStamp = stamp
+            KE:Print(string.format(
+                "raw %.1f,%.1f snapped %.1f,%.1f shown %.1f,%.1f guide %s,%s",
+                rawX, rawY, snappedX, snappedY, representedX, representedY,
+                tostring(guideX), tostring(guideY)))
+        end
+    end
+
+    overlay.snapVersion = context.version
+    overlay.snapUsedElement = (guideX ~= nil) or (guideY ~= nil)
+
+    local pos = {
+        AnchorFrom = anchorFrom,
+        AnchorTo = anchorTo,
+        XOffset = offsetX,
+        YOffset = offsetY,
+    }
+    overlay.draggedPos = pos
+
+    self:SetCentreGuides(onCentreX, onCentreY)
+    self:SetElementSnapGuides(guideX, guideY)
+    self:ShowDraggedOffsets(offsetX, offsetY)
+
+    return pos
+end
+
+-- Whether this drag's captured magnets still describe the screen.
+function EditMode:CandidatesAreStale(context)
+    return context and context.version ~= (self.candidateVersion or 0)
+end
+
+-- Give up the magnets, keep the drag. Cancelling would throw away the move in
+-- progress to fix candidates that have merely gone out of date; that is
+-- reserved for a scale change, where every captured number is wrong.
+function EditMode:DropElementCandidates(context)
+    if not context then return end
+    context.candidatesX, context.candidatesY = nil, nil
+    context.version = self.candidateVersion or 0
+end
+
 function EditMode:SetupDragHandlers(overlay)
     overlay:EnableMouse(true)
     overlay:SetMovable(true)
@@ -544,7 +707,6 @@ function EditMode:SetupDragHandlers(overlay)
     -- the live update resolved, so the position that was last shown is by
     -- definition the position that gets saved.
     local snapContext = nil
-    local snappedX, snappedY = nil, nil
 
     -- Resolved once per drag: the anchor pair and the parent cannot change
     -- while the mouse is down, and re-reading them every frame would be the
@@ -587,7 +749,12 @@ function EditMode:SetupDragHandlers(overlay)
             or (currentPos and currentPos.AnchorFrom) or "CENTER"
         dragAnchorTo = (currentPos and currentPos.AnchorTo) or "CENTER"
         dragParent = (element.getParentFrame and element.getParentFrame()) or UIParent
+        -- Overlays are pooled and outlive the drag, and the retire path does
+        -- not touch these, so they are cleared next to the position they
+        -- describe. Keeping the three together is what stops a later reader
+        -- picking up a previous drag's answer.
         self.draggedPos = nil
+        self.snapVersion, self.snapUsedElement = nil, nil
 
         -- Get cursor start position
         local scale = UIParent:GetEffectiveScale()
@@ -598,7 +765,23 @@ function EditMode:SetupDragHandlers(overlay)
         frameStartY = bottom + height / 2
 
         snapContext = EditMode:BuildSnapContext()
-        snappedX, snappedY = nil, nil
+
+        -- The dragged box's own edges, as offsets from the frame centre. Not
+        -- half-extents: an inset can be asymmetric, or move the box off the
+        -- frame entirely, and half a width cannot describe either.
+        --
+        -- Unlike a neighbour, a failure here is a refusal. This rect is not a
+        -- candidate, it is what every comparison is measured from.
+        local oLeft, oBottom, oWidth, oHeight = EditMode._ReadableRect(self)
+        if not oLeft then return end
+        snapContext.edgeLeft = oLeft - frameStartX
+        snapContext.edgeCentreX = oLeft + oWidth / 2 - frameStartX
+        snapContext.edgeRight = oLeft + oWidth - frameStartX
+        snapContext.edgeBottom = oBottom - frameStartY
+        snapContext.edgeCentreY = oBottom + oHeight / 2 - frameStartY
+        snapContext.edgeTop = oBottom + oHeight - frameStartY
+
+        EditMode:BuildElementCandidates(snapContext, self)
 
         self.isDragging = true
         didDrag = true
@@ -618,11 +801,13 @@ function EditMode:SetupDragHandlers(overlay)
         self.isDragging = false
         self:SetAlpha(1)
         EditMode:HideCentreGuides()
+        EditMode:HideElementSnapGuides()
 
         -- Taken and retired in one move, above the guards below, so that every
         -- exit from this handler retires it. A drag that ends without
         -- committing must not leave an object a later drag could reach.
         local newPos = self.draggedPos
+        local usedElement, cachedVersion = self.snapUsedElement, self.snapVersion
         self.draggedPos = nil
 
         local element = self.element
@@ -631,50 +816,32 @@ function EditMode:SetupDragHandlers(overlay)
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then return end
 
-        -- Commit exactly what the last update displayed. Converting again here
-        -- would run the same arithmetic on geometry read a moment later, and
-        -- the number saved would not be the number that was on screen.
-        if not newPos then
-            -- Released before any update ran, so there is no earlier decision
-            -- to contradict -- and nothing has re-anchored the frame either, so
-            -- the drag-start refusal is the only thing proving this geometry
-            -- readable. This is the one place the commit reads the cursor.
+        -- Commit exactly what the last update displayed, UNLESS that answer
+        -- leaned on a neighbour that has since moved or gone. Everything else
+        -- commits untouched, including an answer that only ever used the grid:
+        -- no magnet going stale can invalidate a position that never referenced
+        -- one, and re-deciding it would move the frame after the user let go.
+        local stale = usedElement and cachedVersion ~= (EditMode.candidateVersion or 0)
+
+        if not newPos or stale then
+            if stale then EditMode:DropElementCandidates(snapContext) end
+
+            -- The one place the commit reads the cursor. Nothing has
+            -- re-anchored the frame, so the drag-start refusal is still what
+            -- proves this geometry readable.
             local scale = UIParent:GetEffectiveScale()
             local curX, curY = GetCursorPosition()
             curX, curY = curX / scale, curY / scale
-            local centerX, centerY = KE:SnapCenter(
-                frameStartX + (curX - startX),
-                frameStartY + (curY - startY),
-                snapContext)
 
-            -- The module's chosen parent is a separate frame and can be
-            -- anchoring-secret on its own. Secret questions first: GetRect can
-            -- return nothing AND can return secrets, and asking `not
-            -- parentLeft` of a secret throws.
-            local parentLeft, parentBottom, parentWidth, parentHeight = dragParent:GetRect()
-            if issecretvalue(parentLeft) or issecretvalue(parentBottom)
-                or issecretvalue(parentWidth) or issecretvalue(parentHeight)
-                or not parentLeft then
-                parentLeft, parentBottom = 0, 0
-                parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
-            end
+            newPos = EditMode:ResolveDragPosition(self, targetFrame,
+                frameStartX + (curX - startX), frameStartY + (curY - startY),
+                snapContext, dragAnchorFrom, dragAnchorTo, dragParent)
 
-            local offsetX, offsetY = KE:ResolveAnchorOffsets(
-                centerX, centerY, dragAnchorFrom, dragAnchorTo,
-                targetFrame:GetWidth(), targetFrame:GetHeight(),
-                parentLeft, parentBottom, parentWidth, parentHeight)
-
-            -- Save using the ORIGINAL anchors, edit mode does not change anchors
-            newPos = {
-                AnchorFrom = dragAnchorFrom,
-                AnchorTo = dragAnchorTo,
-                XOffset = offsetX,
-                YOffset = offsetY,
-            }
-
-            -- The boxes have never been written this drag: the update that
-            -- normally writes them is exactly the one that did not run.
-            EditMode:ShowDraggedOffsets(offsetX, offsetY)
+            -- That resolve wrote the guides on its way through, and the drag is
+            -- over, so they go straight back off.
+            EditMode:SetCentreGuides(false, false)
+            EditMode:SetElementSnapGuides(nil, nil)
+            self.draggedPos = nil
         end
 
         element.setPosition(newPos)
@@ -704,60 +871,20 @@ function EditMode:SetupDragHandlers(overlay)
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then return end
 
+        -- A neighbour can be registered, unregistered or hidden while this drag
+        -- runs, which makes its captured coordinates describe a screen that no
+        -- longer exists.
+        if EditMode:CandidatesAreStale(snapContext) then
+            EditMode:DropElementCandidates(snapContext)
+        end
+
         local scale = UIParent:GetEffectiveScale()
         local curX, curY = GetCursorPosition()
         curX, curY = curX / scale, curY / scale
-        local deltaX = curX - startX
-        local deltaY = curY - startY
 
-        -- Move visually using BOTTOMLEFT as a screen-coordinate proxy
-        local onCentreX, onCentreY
-        snappedX, snappedY, onCentreX, onCentreY =
-            KE:SnapCenter(frameStartX + deltaX, frameStartY + deltaY, snapContext)
-
-        if DEBUG_GUIDES then
-            local rawY = frameStartY + deltaY
-            local band = rawY - snapContext.originY
-            if band > -40 and band < 40 then
-                local stamp = math.floor(rawY)
-                if stamp ~= guideLogStamp then
-                    guideLogStamp = stamp
-                    KE:Print(string.format(
-                        "rawY %.1f origin %d snappedY %.1f onY %s | rawX %.1f onX %s",
-                        rawY, snapContext.originY, snappedY, tostring(onCentreY),
-                        frameStartX + deltaX, tostring(onCentreX)))
-                end
-            end
-        end
-
-        targetFrame:ClearAllPoints()
-        targetFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", snappedX, snappedY)
-
-        -- Below the re-anchor, not beside the centre it consumes. The width and
-        -- height read here are unguarded, and they are safe only because the
-        -- frame is now anchored to UIParent, which cannot be anchoring-secret.
-        local parentLeft, parentBottom, parentWidth, parentHeight = dragParent:GetRect()
-        if issecretvalue(parentLeft) or issecretvalue(parentBottom)
-            or issecretvalue(parentWidth) or issecretvalue(parentHeight)
-            or not parentLeft then
-            parentLeft, parentBottom = 0, 0
-            parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
-        end
-
-        local offsetX, offsetY = KE:ResolveAnchorOffsets(
-            snappedX, snappedY, dragAnchorFrom, dragAnchorTo,
-            targetFrame:GetWidth(), targetFrame:GetHeight(),
-            parentLeft, parentBottom, parentWidth, parentHeight)
-
-        self.draggedPos = {
-            AnchorFrom = dragAnchorFrom,
-            AnchorTo = dragAnchorTo,
-            XOffset = offsetX,
-            YOffset = offsetY,
-        }
-        EditMode:ShowDraggedOffsets(offsetX, offsetY)
-
-        EditMode:SetCentreGuides(onCentreX, onCentreY)
+        EditMode:ResolveDragPosition(self, targetFrame,
+            frameStartX + (curX - startX), frameStartY + (curY - startY),
+            snapContext, dragAnchorFrom, dragAnchorTo, dragParent)
 
         EditMode:UpdateOverlayPosition(self)
     end)
@@ -897,6 +1024,7 @@ function EditMode:CancelDrag(overlay)
     overlay.isDragging = false
     overlay:SetAlpha(1)
     self:HideCentreGuides()
+    self:HideElementSnapGuides()
 
     -- The live read-out is showing a position that is about to stop existing,
     -- and the cached object behind it must never reach a commit. Both die here:
@@ -1021,6 +1149,10 @@ function EditMode:Exit()
     self.isActive = false
     -- Hide nudge frame
     self:HideNudgeFrame()
+    -- Both kinds of guide, and the snap pair explicitly rather than by hiding
+    -- their parent: the frame comes back on the next open, and a child left
+    -- shown comes back with it.
+    self:HideElementSnapGuides()
     self:HideGuideFrame()
     -- Notify PreviewManager that edit mode is inactive
     if KE.PreviewManager then
