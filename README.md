@@ -11,7 +11,7 @@ KitnEssentials adds HUD elements, aura trackers, automation, dungeon tools, and 
 
 - **Dozens of modules** — combat HUD, aura tracking, automation, dungeon tools, and UI skinning
 - **Dark themed GUI** — custom settings panel with sidebar navigation and 8 color themes
-- **Edit mode** — drag any element to reposition, with anchor and strata controls
+- **Edit mode** — drag any element to reposition, with snapping to a grid and to other elements' edges and centres, centre guides, keyboard nudging, per-category filtering, and anchor and strata controls
 - **Profile system** — save, copy, and reset per-character or shared profiles
 - **Global font** — set one font for every module, with per-module overrides still available
 - **Sidebar search** — filter every page by name or keyword as you type
@@ -85,7 +85,7 @@ The home page also carries the general settings: minimap button, login message, 
 
 | Page | Description |
 |---|---|
-| Dark Theme | Broad dark restyle of Blizzard's frames, dialogs, context menus, and toasts, plus font and outline control for Blizzard text and repositionable alert and loot anchors |
+| Dark Theme | One skinning engine across roughly fifty Blizzard windows, dialogs, context menus, and toasts, on a six-tab page: General, Fonts, Colors, Frame Skins, Addon Skins (skins for several third-party addons), and Elements (loot roll, loot window, UI widgets, character screen). Also carries the Color Picker additions (typed RGB and alpha entry in Blizzard's picker) and Raid Control (a group panel with ready check, countdown, difficulty, everyone-assist, world markers, a role count, and group sorting) |
 | Chat | Custom movable chat panel with tab styling, short channel names, timestamps with live clock samples, chat copy, message fading, class-colored Battle.net whispers, guild login and logout messages, and whisper sounds |
 | Damage Meter | Standalone multi-window damage and healing meter built on the 12.0 damage meter API, replacing Blizzard's built-in one. Proportional dock with shared backdrop, per-content auto-swapping layouts, eight meter types, class-colored bars with nickname support, header combat clock, out-of-combat spell breakdown, death recap, target details, segment history, and report-to-chat |
 | Mythic+ Timer | Self-contained keystone timer HUD — count-up timer with +3/+2/+1 threshold marks, aggregate forces bar, per-boss objective list with clear times and personal-best deltas, deaths line with class-colored hover log, personal-best splits, Challenger's Peril aware cutoffs, enemy tooltip and nameplate forces overlay, keystone auto-insert, Blizzard objective-tracker hider, boss-split party chat posts, and a live preview. Six-tab config page (`/kes mt`) |
@@ -96,7 +96,7 @@ The home page also carries the general settings: minimap button, login message, 
 
 | Module | Description |
 |---|---|
-| Keystone Helper | Keystone reminders and group tools on one tabbed page: party or raid announce on instance reset, a glowing "reroll your key" prompt after timing a key at or above your keystone's level, a "Your Key?" prompt when entering the Mythic 0 dungeon matching your keystone, plus group finder filtering and quick group creation |
+| Keystone Helper | Keystone reminders and group tools on one tabbed page: party or raid announce on instance reset, a glowing "reroll your key" prompt after timing a key at or above your keystone's level, a "Your Key?" prompt when entering the Mythic 0 dungeon matching your keystone, plus a reworked group finder panel with filtering, a quick-create listing tool, and a reminder when you have a group listed and stop watching it |
 | Death Notifications | On-screen alert when party or raid members, or your focus target, die — class portrait and color, configurable text format, and an optional voice reminder when your focus dies in combat. Active in dungeons by default; raid activation is opt-in |
 | Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible or shielded status colors |
 | Enemy Counter | Number of enemies currently in combat via nameplate scanning, with editable prefix and combat-only visibility |
