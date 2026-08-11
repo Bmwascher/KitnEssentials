@@ -1182,6 +1182,48 @@ function KE:ArrowNudgeDelta(key, ctrlDown)
     return delta[1] * step, delta[2] * step
 end
 
+-- The two terms an anchor pair contributes, factored out so the forward
+-- conversion below and its inverse cannot drift apart. Sharing them is what
+-- makes the inverse structural rather than a second transcription that happens
+-- to agree today.
+--
+-- The frame term is where the frame's own anchor point sits relative to its
+-- centre; the parent term is where the parent's anchor point sits absolutely.
+-- The two axes are independent chains on purpose: a corner moves both.
+local function FrameAnchorDelta(anchorFrom, frameWidth, frameHeight)
+    local dx, dy = 0, 0
+    if anchorFrom:find("LEFT") then
+        dx = -frameWidth / 2
+    elseif anchorFrom:find("RIGHT") then
+        dx = frameWidth / 2
+    end
+    if anchorFrom:find("TOP") then
+        dy = frameHeight / 2
+    elseif anchorFrom:find("BOTTOM") then
+        dy = -frameHeight / 2
+    end
+    return dx, dy
+end
+
+local function ParentAnchorPoint(anchorTo, parentLeft, parentBottom, parentWidth, parentHeight)
+    local x, y
+    if anchorTo:find("LEFT") then
+        x = parentLeft
+    elseif anchorTo:find("RIGHT") then
+        x = parentLeft + parentWidth
+    else
+        x = parentLeft + parentWidth / 2
+    end
+    if anchorTo:find("TOP") then
+        y = parentBottom + parentHeight
+    elseif anchorTo:find("BOTTOM") then
+        y = parentBottom
+    else
+        y = parentBottom + parentHeight / 2
+    end
+    return x, y
+end
+
 -- Turns an absolute centre into the two offsets a SetPoint stores. Pure by
 -- contract: it calls no API, because three of the geometry reads behind its
 -- arguments are secret when the anchoring is secret, and proving them clean is
@@ -1201,38 +1243,56 @@ end
 function KE:ResolveAnchorOffsets(centerX, centerY, anchorFrom, anchorTo,
                                 frameWidth, frameHeight,
                                 parentLeft, parentBottom, parentWidth, parentHeight)
-    -- Where the frame's own anchor point sits, given its centre. The two axes
-    -- are independent chains on purpose: a corner moves both.
-    local fromX, fromY = centerX, centerY
-    if anchorFrom:find("LEFT") then
-        fromX = centerX - frameWidth / 2
-    elseif anchorFrom:find("RIGHT") then
-        fromX = centerX + frameWidth / 2
-    end
-    if anchorFrom:find("TOP") then
-        fromY = centerY + frameHeight / 2
-    elseif anchorFrom:find("BOTTOM") then
-        fromY = centerY - frameHeight / 2
-    end
+    local deltaX, deltaY = FrameAnchorDelta(anchorFrom, frameWidth, frameHeight)
+    local toX, toY = ParentAnchorPoint(anchorTo, parentLeft, parentBottom,
+        parentWidth, parentHeight)
 
-    -- Where the parent's anchor point sits.
-    local toX, toY
-    if anchorTo:find("LEFT") then
-        toX = parentLeft
-    elseif anchorTo:find("RIGHT") then
-        toX = parentLeft + parentWidth
-    else
-        toX = parentLeft + parentWidth / 2
-    end
-    if anchorTo:find("TOP") then
-        toY = parentBottom + parentHeight
-    elseif anchorTo:find("BOTTOM") then
-        toY = parentBottom
-    else
-        toY = parentBottom + parentHeight / 2
-    end
+    return self:RoundOffset(centerX + deltaX - toX),
+        self:RoundOffset(centerY + deltaY - toY)
+end
 
-    return self:RoundOffset(fromX - toX), self:RoundOffset(fromY - toY)
+-- The offsets that will actually be stored, and the centre those offsets
+-- produce. Same inputs as ResolveAnchorOffsets, and the right-inverse of it:
+-- feed the returned centre back through that function and the same offsets come
+-- out, because RoundOffset is the identity on a whole number.
+--
+-- This exists because a stored offset is a whole number and a snap target is
+-- not. Without it the guide marks a coordinate the commit never reaches, and by
+-- an amount that depends on where the parent's anchor happens to sit rather
+-- than on anything the user can see. It CANNOT recover the pre-rounding centre
+-- -- rounding is many-to-one -- and it does not try to; it answers a different
+-- question, which is where the frame will end up.
+--
+-- One stage further on, the common setter pixel-snaps the frame again. That is
+-- deliberately not modelled here: doing so would mean assuming every module's
+-- position setter routes through that helper, which nothing enforces and at
+-- least one setter does not do. So the residual this bounds is 0.5 UI unit,
+-- and the pipeline as a whole has no bound this function can promise.
+---@param centerX number desired centre, absolute UIParent coordinates
+---@param centerY number
+---@param anchorFrom string
+---@param anchorTo string
+---@param frameWidth number
+---@param frameHeight number
+---@param parentLeft number
+---@param parentBottom number
+---@param parentWidth number
+---@param parentHeight number
+---@return number offsetX stored offset, a whole number
+---@return number offsetY
+---@return number representedX the centre those offsets produce
+---@return number representedY
+function KE:ResolveRepresentablePlacement(centerX, centerY, anchorFrom, anchorTo,
+                                frameWidth, frameHeight,
+                                parentLeft, parentBottom, parentWidth, parentHeight)
+    local deltaX, deltaY = FrameAnchorDelta(anchorFrom, frameWidth, frameHeight)
+    local toX, toY = ParentAnchorPoint(anchorTo, parentLeft, parentBottom,
+        parentWidth, parentHeight)
+
+    local offsetX = self:RoundOffset(centerX + deltaX - toX)
+    local offsetY = self:RoundOffset(centerY + deltaY - toY)
+
+    return offsetX, offsetY, toX + offsetX - deltaX, toY + offsetY - deltaY
 end
 
 PreviewManager.guiOpen = false

@@ -396,6 +396,24 @@ function KE:ResolveAnchorOffsets(centerX, centerY, anchorFrom, anchorTo,
                                 frameWidth, frameHeight,
                                 parentLeft, parentBottom, parentWidth, parentHeight) end
 
+---@param centerX number
+---@param centerY number
+---@param anchorFrom string
+---@param anchorTo string
+---@param frameWidth number
+---@param frameHeight number
+---@param parentLeft number
+---@param parentBottom number
+---@param parentWidth number
+---@param parentHeight number
+---@return number offsetX
+---@return number offsetY
+---@return number representedX
+---@return number representedY
+function KE:ResolveRepresentablePlacement(centerX, centerY, anchorFrom, anchorTo,
+                                frameWidth, frameHeight,
+                                parentLeft, parentBottom, parentWidth, parentHeight) end
+
 -- ─── GUI helpers ─────────────────────────────────────────
 -- Accepts both FontStrings and EditBoxes — both expose SetFont. The
 -- callers in Core/Widgets.lua use it on EditBoxes (the search/import
