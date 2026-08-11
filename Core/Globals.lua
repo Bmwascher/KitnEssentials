@@ -982,6 +982,32 @@ function KE:CommitTextExtent(cache, role, fontKey, width, height)
     end
 end
 
+-- A FontString's measured extent, or nil when it cannot be trusted.
+--
+-- The secret test comes FIRST and this order is the whole point: both getters
+-- are secret when the string is anchored into a secret chain, and a positivity
+-- comparison is arithmetic, so `w <= 0` on a secret throws before any later
+-- guard can run. SafeInset sanitises what the overlay callback RETURNS; it
+-- cannot rescue a throw inside it.
+--
+-- The string extents rather than the rect, which is a constraint on the CALLER
+-- rather than a fact about font strings: the intrinsic extent is the right
+-- answer only for a string that has been given no explicit layout width. Hand
+-- this one that has, and the box sits inside the text instead of around it.
+--
+-- Both getters are tested before either is called. One of them existing does
+-- not imply the other, and the second call would throw rather than refuse.
+---@param fs FontString?
+---@return number?, number?
+function KE:MeasureFontString(fs)
+    if not (fs and fs.GetStringWidth and fs.GetStringHeight) then return nil end
+    local w, h = fs:GetStringWidth(), fs:GetStringHeight()
+    if issecretvalue(w) or issecretvalue(h) then return nil end
+    if type(w) ~= "number" or type(h) ~= "number" then return nil end
+    if w <= 0 or h <= 0 then return nil end
+    return w, h
+end
+
 local math_min = math.min
 local math_abs = math.abs
 

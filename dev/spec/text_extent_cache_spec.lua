@@ -16,8 +16,8 @@ describe("KE:FontKey", function()
                       KE:FontKey(fs("a.ttf", 12, "OUTLINE")))
     end)
 
-    -- All three returns matter. Keeping only the path was this plan's first
-    -- draft, and it left a size or outline change reading as no change.
+    -- All three returns matter. A key built from the path alone leaves a size
+    -- or an outline change reading as no change at all.
     it("changes when only the size changes", function()
         assert.are_not.equals(KE:FontKey(fs("a.ttf", 12, "OUTLINE")),
                               KE:FontKey(fs("a.ttf", 16, "OUTLINE")))

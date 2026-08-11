@@ -66,6 +66,12 @@ local function BuildPreviewAuras(db)
         -- isExternal: all-true when Big Defensives are hidden; alternating
         -- when shown.
         local isExternal = (not showBig) or (i % 2 == 1)
+        -- Sparse counts so the stack-text positioning is visible in preview and
+        -- has something to measure.
+        local count
+        if i % 4 == 1 then count = 2
+        elseif i % 4 == 2 then count = 5
+        else count = 0 end
         list[i] = {
             auraInstanceID = i,                     -- synthetic; never collides with real IDs
             spellId        = 0,
@@ -74,6 +80,7 @@ local function BuildPreviewAuras(db)
             expirationTime = startTime + duration,
             applications   = 0,
             isExternal     = isExternal,
+            count          = count,
         }
     end
     return list
@@ -185,7 +192,8 @@ function AX:RegWithEditMode()
             getOverlayInset = function()
                 local db = self.db
                 if not db then return 0, 0, 0, 0 end
-                return KE:GetGridOverlayInset(
+
+                local grid = { KE:GetGridOverlayInset(
                     db.IconsPerRow or 6,
                     db.MaxRows or 1,
                     db.IconSize,
@@ -193,7 +201,26 @@ function AX:RegWithEditMode()
                     (db.Position and db.Position.AnchorFrom) or "CENTER",
                     db.GrowHorizontal == "LEFT",
                     db.GrowVertical == "UP"
-                )
+                ) }
+
+                -- Both elements anchor to a BUTTON, so the host is one icon
+                -- square rather than the container. An absent measurement
+                -- leaves the element a point at its anchor, which still carries
+                -- the offset and is a true lower bound.
+                local icon = db.IconSize or 0
+                local extents = self.textExtents or {}
+
+                local function textInset(pos, role)
+                    if not pos then return { 0, 0, 0, 0 } end
+                    local e = extents[role] or {}
+                    return { KE:GetTextOverlayInset(pos.AnchorTo, pos.AnchorFrom,
+                        pos.XOffset, pos.YOffset, e.width, e.height, icon, icon) }
+                end
+
+                return KE:CombineOverlayInsets(grid, {
+                    textInset(db.TimerPosition, "timer"),
+                    textInset(db.StackPosition, "stack"),
+                })
             end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
@@ -460,7 +487,15 @@ function AX:Refresh()
         -- real-aura lookup, so explicit empty for them.
         if b.count then
             if self.isPreview then
-                b.count:SetText("")
+                -- Preview records carry their own counts. The live arm below
+                -- passes the API's string straight through without comparing
+                -- it, and must stay that way: comparing a count is how a secret
+                -- one taints.
+                if type(aura.count) == "number" and aura.count > 1 then
+                    b.count:SetText(tostring(aura.count))
+                else
+                    b.count:SetText("")
+                end
             elseif C_UnitAuras.GetAuraApplicationDisplayCount then
                 b.count:SetText(C_UnitAuras.GetAuraApplicationDisplayCount(UNIT, aura.auraInstanceID, 2, 999) or "")
             else
@@ -484,6 +519,64 @@ function AX:Refresh()
 
     self:UpdateButtonAppearance(cap)
     self:LayoutButtons(cap)
+end
+
+-- Records what the two text roles measure, so the edit-mode box can cover text
+-- the user has moved outside the icons.
+--
+-- Only buttons 1..textButtonCount are read. Surplus buttons past the cap are
+-- hidden rather than cleared, so they still hold text from a configuration
+-- nobody is looking at.
+--
+-- Largest across buttons, per role: every button shares one set of anchors and
+-- font settings, so a per-button figure would only tighten the box while tying
+-- the measurement to the row and column layout. The font key comes from the
+-- first button for the same reason.
+function AX:CommitTextExtents(sample)
+    local roles = { timer = {}, stack = {} }
+    for i = 1, (self.textButtonCount or 0) do
+        local b = self.buttons[i]
+        if b then
+            local strings = { timer = b.timer, stack = b.count }
+            for role, acc in pairs(roles) do
+                local fs = strings[role]
+                acc.key = acc.key or KE:FontKey(fs)
+                if sample then
+                    local w, h = KE:MeasureFontString(fs)
+                    if w and (not acc.w or w > acc.w) then acc.w = w end
+                    if h and (not acc.h or h > acc.h) then acc.h = h end
+                end
+            end
+        end
+    end
+    for role, acc in pairs(roles) do
+        KE:CommitTextExtent(self.textExtents, role, acc.key, acc.w, acc.h)
+    end
+end
+
+function AX:SyncTextExtents(count)
+    self.textExtents = self.textExtents or {}
+    self.textButtonCount = count or 0
+
+    -- The font is known now and the text is not: Blizzard fills the countdown
+    -- after this returns, so a measurement here would read an empty string.
+    -- Reconciling the key without a sample is what drops the previous font's
+    -- numbers at once, which matters because the alternative leaves them on
+    -- screen through the gap -- the one stale window a user notices, since they
+    -- just changed the font and the box did not move.
+    self:CommitTextExtents(false)
+
+    if self._extentSampleQueued then return end
+    self._extentSampleQueued = true
+    C_Timer.After(0, function()
+        AX._extentSampleQueued = false
+        -- Re-asked at fire time, never carried. The preview can be torn down or
+        -- rebuilt in the gap, so whatever is up NOW is the only right answer
+        -- and there is nothing stale for a token to guard against.
+        if not AX.isPreview then return end
+        AX:CommitTextExtents(true)
+        if KE.EditMode then KE.EditMode:RefreshLiveState() end
+    end)
 end
 
 function AX:UpdateButtonAppearance(count)
@@ -524,6 +617,14 @@ function AX:UpdateButtonAppearance(count)
         if b and b.cooldown and b.cooldown.SetDrawSwipe then
             b.cooldown:SetDrawSwipe(db.Swipe ~= false)
         end
+    end
+
+    -- Preview only. This function also runs on every live aura refresh, so
+    -- sampling there would add combat work for nothing. Every steady state that
+    -- shows this mover also has its preview up, and the preview's own populate
+    -- supplies the sample; the box starts anchor-only and fits a frame later.
+    if self.isPreview then
+        self:SyncTextExtents(count)
     end
 end
 
