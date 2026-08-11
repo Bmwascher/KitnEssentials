@@ -20,6 +20,15 @@ describe("KE:MeasureFontString", function()
         }
     end
 
+    -- Every refusal asserts BOTH returns. Asserting only the first passes an
+    -- implementation that refuses the width and hands back a height anyway,
+    -- because the caller would then store a half-measurement as if it were one.
+    local function refuses(candidate)
+        local w, h = KE:MeasureFontString(candidate)
+        assert.is_nil(w)
+        assert.is_nil(h)
+    end
+
     it("measures a string that answers with two positive numbers", function()
         local w, h = KE:MeasureFontString(fs(9, 16))
         assert.equals(9, w)
@@ -27,38 +36,50 @@ describe("KE:MeasureFontString", function()
     end)
 
     it("refuses nothing at all", function()
-        assert.is_nil(KE:MeasureFontString(nil))
+        refuses(nil)
     end)
 
     -- The overlay callback runs against whatever the module hands it, and a
     -- module that has not built its buttons yet hands over a plain table.
     it("refuses an object that is not a font string", function()
-        assert.is_nil(KE:MeasureFontString({}))
+        refuses({})
+    end)
+
+    -- Each getter is tested separately, because one of them existing does not
+    -- imply the other. A guard that checks only the width calls the height
+    -- method on something that does not have it, and throws where it meant to
+    -- refuse -- which no assertion about the return value can catch.
+    it("refuses an object carrying only the width getter", function()
+        refuses({ GetStringWidth = function() return 9 end })
+    end)
+
+    it("refuses an object carrying only the height getter", function()
+        refuses({ GetStringHeight = function() return 16 end })
     end)
 
     -- The empty string between populates. Zero is the reading that would
     -- collapse the box onto its anchor while the text is merely absent for a
     -- frame, which is the whole reason the caller keeps its previous sample.
     it("refuses a zero measurement", function()
-        assert.is_nil(KE:MeasureFontString(fs(0, 16)))
-        assert.is_nil(KE:MeasureFontString(fs(9, 0)))
+        refuses(fs(0, 16))
+        refuses(fs(9, 0))
     end)
 
     it("refuses a negative measurement", function()
-        assert.is_nil(KE:MeasureFontString(fs(-1, 16)))
-        assert.is_nil(KE:MeasureFontString(fs(9, -1)))
+        refuses(fs(-1, 16))
+        refuses(fs(9, -1))
     end)
 
     it("refuses a non-number measurement", function()
-        assert.is_nil(KE:MeasureFontString(fs("9", 16)))
-        assert.is_nil(KE:MeasureFontString(fs(9, "16")))
+        refuses(fs("9", 16))
+        refuses(fs(9, "16"))
     end)
 
     -- Each axis has to be able to fail on its own. A guard written against the
     -- width alone passes every case above that varies the width, and reports a
     -- height nobody checked.
     it("refuses on either axis independently", function()
-        assert.is_nil(KE:MeasureFontString(fs(9, nil)))
-        assert.is_nil(KE:MeasureFontString(fs(nil, 16)))
+        refuses(fs(9, nil))
+        refuses(fs(nil, 16))
     end)
 end)

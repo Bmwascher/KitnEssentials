@@ -990,14 +990,17 @@ end
 -- guard can run. SafeInset sanitises what the overlay callback RETURNS; it
 -- cannot rescue a throw inside it.
 --
--- The string extents rather than the rect. Nothing sets an explicit width on
--- the strings this measures, so the two agree. They diverge only if something
--- does, and the rect is the one that would then be right: the box would sit
--- inside the text rather than around it.
+-- The string extents rather than the rect, which is a constraint on the CALLER
+-- rather than a fact about font strings: the intrinsic extent is the right
+-- answer only for a string that has been given no explicit layout width. Hand
+-- this one that has, and the box sits inside the text instead of around it.
+--
+-- Both getters are tested before either is called. One of them existing does
+-- not imply the other, and the second call would throw rather than refuse.
 ---@param fs FontString?
 ---@return number?, number?
 function KE:MeasureFontString(fs)
-    if not (fs and fs.GetStringWidth) then return nil end
+    if not (fs and fs.GetStringWidth and fs.GetStringHeight) then return nil end
     local w, h = fs:GetStringWidth(), fs:GetStringHeight()
     if issecretvalue(w) or issecretvalue(h) then return nil end
     if type(w) ~= "number" or type(h) ~= "number" then return nil end
