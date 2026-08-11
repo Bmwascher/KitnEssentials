@@ -16,6 +16,7 @@ local next = next
 local GetCursorPosition = GetCursorPosition
 local IsShiftKeyDown = IsShiftKeyDown
 local IsControlKeyDown = IsControlKeyDown
+local IsAltKeyDown = IsAltKeyDown
 local tonumber = tonumber
 local IsMouseButtonDown = IsMouseButtonDown
 local STANDARD_TEXT_FONT = STANDARD_TEXT_FONT
@@ -613,6 +614,15 @@ end
 -- would end up in saved variables and travel with exported profiles.
 function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
                                       context, anchorFrom, anchorTo, dragParent)
+    -- The version check lives HERE rather than in the callers, and that is what
+    -- makes it total. A neighbour can move between the last update and the
+    -- release, and a drag can start and stop without a single update ever
+    -- running -- so a caller-side check leaves whichever path nobody thought
+    -- about resolving against magnets that describe a screen that has changed.
+    if self:CandidatesAreStale(context) then
+        self:DropElementCandidates(context)
+    end
+
     local snappedX, snappedY, onCentreX, onCentreY, guideX, guideY =
         KE:SnapCenter(rawX, rawY, context, IsAltKeyDown() and true or false)
 
@@ -825,8 +835,6 @@ function EditMode:SetupDragHandlers(overlay)
         local stale = usedElement and cachedVersion ~= (EditMode.candidateVersion or 0)
 
         if not newPos or stale then
-            if stale then EditMode:DropElementCandidates(snapContext) end
-
             -- The one place the commit reads the cursor. Nothing has
             -- re-anchored the frame, so the drag-start refusal is still what
             -- proves this geometry readable.
@@ -871,13 +879,6 @@ function EditMode:SetupDragHandlers(overlay)
 
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then return end
-
-        -- A neighbour can be registered, unregistered or hidden while this drag
-        -- runs, which makes its captured coordinates describe a screen that no
-        -- longer exists.
-        if EditMode:CandidatesAreStale(snapContext) then
-            EditMode:DropElementCandidates(snapContext)
-        end
 
         local scale = UIParent:GetEffectiveScale()
         local curX, curY = GetCursorPosition()

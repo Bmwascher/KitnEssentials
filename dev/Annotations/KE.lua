@@ -363,11 +363,16 @@ function KE:GetSideDecorationInset(size, gap, hostSize) end
 --- only ever agree. Pure: the caller supplies the grid in `context`.
 ---@param x number desired centre, absolute UIParent coordinates
 ---@param y number
----@param context table? { enabled, spacing, originX, originY }
+---@param context table? { enabled, spacing, originX, originY, candidatesX,
+---       candidatesY, edgeLeft, edgeCentreX, edgeRight, edgeBottom,
+---       edgeCentreY, edgeTop }
+---@param suppressed boolean? true while the suppress modifier is held
 ---@return number snappedX
 ---@return number snappedY
 ---@return boolean onCentreX true only when the result is the origin itself
 ---@return boolean onCentreY
+---@return number? guideX nil unless an element won this axis
+---@return number? guideY
 function KE:SnapCenter(x, y, context, suppressed) end
 
 --- Resolves an arrow key and the modifier state into a nudge delta. nil for

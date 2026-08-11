@@ -307,3 +307,35 @@ describe("KE:SnapCenter suppression and degenerate candidates", function()
         assert.is_nil(guideX)
     end)
 end)
+
+describe("KE:SnapCenter element threshold boundary", function()
+    local KE
+    setup(function() KE = L.loadGlobals() end)
+
+    -- The CAP side of the shared threshold, which unlike the half-spacing side
+    -- is observable: at spacing 1000 the nearest grid line is hundreds of units
+    -- away, so nothing but the element can decide these.
+    --
+    -- Without a case out here every element assertion in this file sits within
+    -- 2 units of its candidate, and a version that clamped the element
+    -- threshold to some smaller number would pass all of them.
+    -- All three edge offsets are zero, which collapses the box to a point.
+    -- A real box has three edges and therefore three ways to reach the same
+    -- candidate, so a value 13 from a candidate can still be 3 from one of its
+    -- own edges -- which is correct behaviour and useless for measuring a
+    -- threshold. Collapsed, the distance IS the displacement.
+    local function atDistance(d)
+        local _, _, _, _, guideX =
+            KE:SnapCenter(200 + d, 0, elementCtx(1000, { 200 }, 0, 0, 0))
+        return guideX
+    end
+
+    it("accepts an element just inside the cap", function()
+        assert.equals(200, atDistance(11))
+        assert.equals(200, atDistance(12))
+    end)
+
+    it("refuses an element just outside the cap", function()
+        assert.is_nil(atDistance(13))
+    end)
+end)
