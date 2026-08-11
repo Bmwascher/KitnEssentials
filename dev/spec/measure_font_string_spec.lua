@@ -39,8 +39,10 @@ describe("KE:MeasureFontString", function()
         refuses(nil)
     end)
 
-    -- The overlay callback runs against whatever the module hands it, and a
-    -- module that has not built its buttons yet hands over a plain table.
+    -- Fail-closed coverage rather than a caller that exists: both modules hand
+    -- over a real string or nil, never this. It pins that the refusal is
+    -- decided by what the object CAN do, so a future caller holding some other
+    -- kind of region gets nil instead of a throw.
     it("refuses an object that is not a font string", function()
         refuses({})
     end)
