@@ -990,9 +990,10 @@ end
 -- guard can run. SafeInset sanitises what the overlay callback RETURNS; it
 -- cannot rescue a throw inside it.
 --
--- The string extents rather than the rect: probed in game against a live
--- countdown, both axes agreed to within float noise, which is only possible
--- when nothing has set an explicit width on these strings.
+-- The string extents rather than the rect. Nothing sets an explicit width on
+-- the strings this measures, so the two agree. They diverge only if something
+-- does, and the rect is the one that would then be right: the box would sit
+-- inside the text rather than around it.
 ---@param fs FontString?
 ---@return number?, number?
 function KE:MeasureFontString(fs)
