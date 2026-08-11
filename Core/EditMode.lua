@@ -120,8 +120,9 @@ function EditMode:BumpCandidateVersion()
 end
 
 -- A rect, or nil when it cannot be trusted. GetRect is SecretWhenAnchoringSecret
--- AND can return nothing at all, so both questions are asked, secrets first --
--- `not left` on a secret throws.
+-- AND can return nothing at all, so both questions get asked. Secrets first:
+-- these are numbers, so the truth test below would survive one, but the
+-- arithmetic every caller does next would not.
 local function ReadableRect(frame)
     local left, bottom, width, height = frame:GetRect()
     if issecretvalue(left) or issecretvalue(bottom)
