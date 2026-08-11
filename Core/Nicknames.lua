@@ -1,10 +1,10 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Nicknames.lua                                           ║
--- ║  Purpose: Backend for the Custom Nicknames feature —     ║
--- ║           serialization helpers for Import/Export and    ║
--- ║           bulk clear. Loads without ElvUI so the GUI     ║
--- ║           still functions for users who plan to install  ║
--- ║           ElvUI later (or are sharing a list with raid). ║
+-- ║  Purpose: The nickname store and its serialization       ║
+-- ║           helpers. The config page and the unit-frame    ║
+-- ║           tags are gone; what remains is the store       ║
+-- ║           itself, read by the Damage Meter, Death        ║
+-- ║           Notifications and Healer Mana.                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 ---@class KE
 local KE = select(2, ...)
@@ -42,9 +42,20 @@ end
 -- Public Lookup
 ---------------------------------------------------------------------------------
 -- Returns the saved nickname for a unit, or its UnitName if none is set.
--- Loads regardless of ElvUI presence so non-ElvUI modules (HealerMana, etc.)
--- can use it. Mirrors the lookup pattern used by Core/Tags.lua's ElvUI tags
--- (key format "Fullname-NormalizedRealm").
+-- Key format is "Fullname-NormalizedRealm".
+--
+-- The secret test comes FIRST and the order is the point. UnitFullName is
+-- secret when the unit's identity is restricted, and BOTH the emptiness
+-- comparison below and the key concatenation are forbidden on a secret --
+-- they are two distinct illegal operations, not one. Refusing here falls
+-- through to the plain name, which is the same answer an unnamed player gets.
+--
+-- The fall-through `UnitName(unit) or ""` is deliberately unguarded. A truth
+-- test on a secret string is permitted, so that line cannot throw; it hands
+-- the secret string back untouched. Refusing it instead would make Healer
+-- Mana render an empty name where it renders a real one today, because it
+-- passes this value straight to SetText, which accepts a secret. The cost is
+-- that a caller which COMPARES the result has to guard for itself.
 ---@param unit string Unit token (e.g., "player", "party2")
 ---@return string name Nickname if set, else raw UnitName
 function KE:GetNicknameOrName(unit)
@@ -55,6 +66,9 @@ function KE:GetNicknameOrName(unit)
     local nicks = GetDB()
     if nicks then
         local name, realm = UnitFullName(unit)
+        if issecretvalue(name) or issecretvalue(realm) then
+            return UnitName(unit) or ""
+        end
         if name and name ~= "" then
             if not realm or realm == "" then realm = GetNormalizedRealmName() end
             if realm and realm ~= "" then
@@ -227,27 +241,14 @@ function KE:ClearAllNicknames()
 end
 
 ---------------------------------------------------------------------------------
--- Tag Refresh
+-- Store-change Notification
 ---------------------------------------------------------------------------------
--- Invalidates cached tag output in each supported frame library after the
--- nicknames table changes. Defined here (rather than in Tags.lua) so it's
--- available in UUF-only setups where Tags.lua early-returns. Safe no-op if
--- neither lib is loaded.
+-- Tells the one live reader that the store changed. This used to fan out to
+-- ElvUI and UUF as well; KE registers no tags with either any more, so both
+-- arms went. The name is kept because it is what the import and clear paths
+-- call.
 
 function KE:RefreshNicknameTags()
-    local ElvUF = _G.ElvUF
-    if ElvUF and ElvUF.Tags and ElvUF.Tags.RefreshMethods then
-        local names = KE._nickElvTagNames
-        if names then
-            for i = 1, #names do
-                ElvUF.Tags:RefreshMethods(names[i])
-            end
-        end
-    end
-    local UUFG = _G.UUFG
-    if UUFG and UUFG.UpdateAllTags then
-        UUFG:UpdateAllTags()
-    end
     -- The Damage Meter substitutes nicknames at render time behind memo tables
     -- (Modules/DamageMeter/Window.lua); tell it to drop them so a store edit
     -- repaints the bars instead of serving stale (or missing) nicknames.

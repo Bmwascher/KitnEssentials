@@ -1176,11 +1176,12 @@ function DM:LookupNickname(rawName)
     return c or nil
 end
 
--- Store-change hook, fanned out from KE:RefreshNicknameTags (the canonical
--- "nicknames edited" notification: GUI edits, imports, clears). Drops every
--- memo so the next paint re-resolves; the trailing Tick repaints immediately
--- (nickname edits happen in the GUI, i.e. out of combat, where no ticker runs
--- to pick the change up otherwise -- Tick is OOC-safe, see the wheel handler).
+-- Store-change hook, called from KE:RefreshNicknameTags (the canonical
+-- "nicknames edited" notification, now reaching imports and clears only --
+-- there is no longer a config page to edit them one at a time). Drops every
+-- memo so the next paint re-resolves; the trailing Tick repaints immediately,
+-- because a store change happens out of combat where no ticker runs to pick
+-- it up otherwise -- Tick is OOC-safe, see the wheel handler.
 function DM:OnNicknamesChanged()
     wipe(nickLookup)
     wipe(nickByGUID)
