@@ -368,7 +368,7 @@ function KE:GetSideDecorationInset(size, gap, hostSize) end
 ---@return number snappedY
 ---@return boolean onCentreX true only when the result is the origin itself
 ---@return boolean onCentreY
-function KE:SnapCenter(x, y, context) end
+function KE:SnapCenter(x, y, context, suppressed) end
 
 --- Resolves an arrow key and the modifier state into a nudge delta. nil for
 --- any other key, so one call both recognises an arrow and resolves it.
