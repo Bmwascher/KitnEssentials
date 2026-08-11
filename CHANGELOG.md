@@ -1,5 +1,118 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.0.0
+
+The largest release so far. Skinning has been rebuilt around one engine
+instead of a dozen separate modules, Edit Mode has been through four rounds of
+work, and there is a new batch of quality of life tools. Several settings pages
+have moved or merged, so it is worth a look through the sidebar after updating.
+
+### Edit Mode
+- **NEW:** boxes now snap to each other. Drag a frame near another and it locks
+  to that frame's left, centre or right edge, and to its bottom, middle or top,
+  with a line showing where the lock happened. The two directions decide
+  separately, so a frame can line up horizontally with one neighbour and
+  vertically with another
+- **NEW:** hold **Alt** while dragging to turn snapping off for as long as you
+  hold it. Works on both the grid and the new element snapping
+- **NEW:** centre guides and a coarse grid, both toggleable, so you can see what
+  a drag is aiming at
+- **NEW:** right-click a box for its settings, add Shift to hide that box for
+  the session, or Ctrl to put the frame back where it started
+- **NEW:** arrow keys and the mouse wheel nudge the selected frame a pixel at a
+  time, or ten with Ctrl held
+- **NEW:** a category selector narrows the screen to one area at a time, so a
+  busy layout stops being a wall of overlapping boxes
+- The nudge tool was redesigned around a single column with the set-once
+  preferences moved behind a chevron, and it is a good deal shorter than it was
+- Selection boxes now cover text you have dragged off its icon. Timer and stack
+  text parked outside an icon used to be text you could neither grab nor see
+  highlighted
+- Frames now land on exactly the position that gets saved, rather than up to
+  half a pixel away from it
+
+### Skinning
+- **NEW:** a single skinning engine replaces the previous per-area modules.
+  Around fifty Blizzard windows are covered — character, spellbook, talents,
+  professions, auction house, bags, mail, guild, collections, weekly rewards,
+  the settings panel and many more
+- **NEW:** loot frame, loot roll and loot roll bar skins
+- **NEW:** skins for several external addons, so a mixed UI stops looking
+  assembled from parts
+- **NEW:** global font control, including a slug renderer toggle for sharper
+  text at small sizes
+- **NEW:** UI widget skinning covers the top-of-screen widget sets, and the
+  tooltip status bar is themed with everything else
+- Action bars, auras, the micro menu, the raid manager, Battle.net, the Details
+  backdrop and the general clean-up options are now tabs and cards inside the
+  skinning pages rather than separate sidebar entries
+
+### Quality of Life
+- **NEW: Move Frames** — a temporary mover for Blizzard windows that do not
+  normally remember where you put them
+- **NEW: Copy Anything** — copy text out of tooltips, chat and most UI text
+- **NEW: Color Picker** — RGB and alpha entry added to Blizzard's picker, so a
+  colour can be typed rather than hunted for
+- **NEW: Raid Control** — a compact raid utility panel
+- **NEW: Group Sort** — keeps party and raid frames in a consistent order
+- **NEW: Merchant Pages** — wider vendor windows with fewer pages to click
+  through
+- **NEW: Map Scale** — an adjustable size for the minimised world map
+- **NEW: Alert Frames** — moves Blizzard's achievement and loot alerts somewhere
+  less intrusive
+- The Quality of Life page now gathers several small modules that used to have
+  their own sidebar entries
+
+### Dungeons and Mythic+
+- **NEW: Group Finder Panel** — a reworked group finder with the information
+  that matters on one screen
+- **NEW: LFG Quick Create** — make a listing in a couple of clicks
+- **NEW: LFG Reminder** — a nudge when you have a group listed and have stopped
+  paying attention to it
+- **NEW:** Dungeon Timers is now one tabbed page with season and dungeon
+  dropdowns, instead of a long flat list
+- Dungeon trash tracking gained aura-based detection for casts that previously
+  went unnoticed
+
+### Combat
+- **NEW: Aura Headers** — control over the player buff and debuff rows, with
+  both handled by one settings page
+- Castbar and target castbar settings merged into a single page
+- Dispel Glow and Dispel on Cursor merged into one Healer Tools page
+
+### Damage Meter
+- **NEW:** segment history is kept per character, so a key you ran yesterday is
+  still there to look at
+
+### Interface
+- **NEW:** settings pages that carry a lot of options are now tabbed, which
+  makes the long ones navigable
+- **NEW:** a shared colours card, so the colour controls behave the same way on
+  every page that has them
+- **NEW:** conflict detection warns when another addon is doing the same job as
+  a module you have enabled
+- Dropdowns with long lists are now searchable
+- The sidebar search matches on keywords as well as page titles
+
+### Removed
+- **Custom Nicknames** is hidden. The unit frame tags are gone and the settings
+  page with them. Nicknames already saved still appear on Damage Meter bars,
+  death notifications and healer mana, and nothing has been deleted — the
+  feature can come back if the integration it depended on ever does
+- **Position Controller** and the standalone **World Map** page are gone; their
+  jobs are covered by Edit Mode and by Map Scale
+- The soft outline font renderer has been retired. Text set to it now renders
+  as a normal outline
+
+### Under the hood
+- Interface version raised for the 12.1 patch
+- A great deal of secret-value hardening across combat, dungeon and unit code,
+  which is the 12.0 rule set that makes the game refuse to hand addons certain
+  information during encounters
+- The headless test suite is now over 1900 checks
+
+---
+
 ## v3.4.2
 
 ### Mythic+ Timer
