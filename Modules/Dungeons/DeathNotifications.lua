@@ -141,11 +141,13 @@ end
 local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 
 local function FormatPartyDeathMessage(db, unitID, fallbackName)
-    -- Custom Nicknames first; falls back to the secret-value-safe lookup if
-    -- the nickname path returned a secret value (UnitFullName can be tainted
-    -- mid-encounter in 12.0).
+    -- The nickname store first, falling back to the secret-safe lookup when
+    -- the name comes back secret. The secret test MUST precede the emptiness
+    -- comparison: comparing a secret string throws, so the other order made
+    -- the secret branch unreachable and crashed on exactly the value it was
+    -- written to catch.
     local name = KE:GetNicknameOrName(unitID)
-    if not name or name == "" or KE:IsSecretValue(name) then
+    if not name or KE:IsSecretValue(name) or name == "" then
         name = KE:GetSafeUnitName(unitID) or fallbackName
     end
     if not name then return nil, nil end

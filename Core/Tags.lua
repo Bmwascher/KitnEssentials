@@ -2,11 +2,9 @@
 -- ║  Tags.lua                                                ║
 -- ║  Purpose: Custom ElvUI unit frame tags — name with       ║
 -- ║           class/reaction color, target separator, target ║
--- ║           name with class color, and nickname lookup.    ║
+-- ║           name with class color, raid group, and mana.   ║
 -- ║  Note: ElvUI only. Skips loading if ElvUI is absent.     ║
 -- ╚══════════════════════════════════════════════════════════╝
----@class KE
-local KE = select(2, ...)
 
 if not ElvUI then return end
 
@@ -14,7 +12,6 @@ local E = unpack(ElvUI)
 local ElvUF = _G.ElvUF
 
 local UnitName = UnitName
-local UnitFullName = UnitFullName
 local UnitClass = UnitClass
 local UnitIsPlayer = UnitIsPlayer
 local UnitReaction = UnitReaction
@@ -23,9 +20,7 @@ local UnitInPartyIsAI = UnitInPartyIsAI
 local IsInRaid = IsInRaid
 local GetNumGroupMembers = GetNumGroupMembers
 local GetRaidRosterInfo = GetRaidRosterInfo
-local GetNormalizedRealmName = GetNormalizedRealmName
 local format = string.format
-local strsub = string.sub
 local UnitPower = UnitPower
 local UnitPowerMax = UnitPowerMax
 local math_floor = math.floor
@@ -116,87 +111,3 @@ E:AddTag('kes:mana:percent', 'UNIT_POWER_FREQUENT UNIT_MAXPOWER UNIT_DISPLAYPOWE
     return pct
 end)
 E:AddTagInfo('kes:mana:percent', 'KitnEssentials', "Mana percentage. Hidden at 100%.")
-
----------------------------------------------------------------------------------
--- Nickname Tags
----------------------------------------------------------------------------------
--- Lookup: KE.db.global.Nicknames["Fullname-NormalizedRealm"] -> "Nickname"
--- Falls back to UnitName when no nickname is set.
--- Only player units are considered; NPCs always return their normal name.
-
--- Build the lookup key. Realm portion uses GetNormalizedRealmName() which
--- strips spaces/apostrophes (e.g. "Area 52" -> "Area52"), matching the
--- format that NSRT/TLR use — keeps us compatible if we ever add import/export.
-local function GetNicknameKey(unit)
-    local name, realm = UnitFullName(unit)
-    if not name or name == '' then return nil end
-    if not realm or realm == '' then
-        realm = GetNormalizedRealmName()
-    end
-    if not realm or realm == '' then return nil end
-    return name .. '-' .. realm
-end
-
-local function GetNicknameOrName(unit)
-    if not UnitIsPlayer(unit) then
-        return UnitName(unit)
-    end
-    local nicknames = KE and KE.db and KE.db.global and KE.db.global.Nicknames
-    if nicknames then
-        local key = GetNicknameKey(unit)
-        if key then
-            local nick = nicknames[key]
-            if nick and nick ~= '' then
-                return nick
-            end
-        end
-    end
-    return UnitName(unit)
-end
-
--- Shared by all kes:nickname* tags. UNIT_NAME_UPDATE covers name changes,
--- GROUP_ROSTER_UPDATE covers roster entry/exit.
-local NICK_EVENTS = 'UNIT_NAME_UPDATE GROUP_ROSTER_UPDATE'
-
--- Registered tag names, used by KE:RefreshNicknameTags (in Nicknames.lua) to
--- invalidate ElvUF's per-unit tag cache after the nicknames table is edited.
--- Exposed on KE so the refresh hook can read it from a file that loads even
--- when ElvUI is absent (UUF-only users).
-KE._nickElvTagNames = KE._nickElvTagNames or {}
-local NICK_TAG_NAMES = KE._nickElvTagNames
-
--- Prefer ElvUI's UTF-8 aware truncation so multi-byte names don't break.
-local function Truncate(str, n)
-    if not str then return nil end
-    if E.ShortenString then return E:ShortenString(str, n) end
-    return strsub(str, 1, n)
-end
-
-local function AddNicknameTag(name, lengthOrNil, info)
-    E:AddTag(name, NICK_EVENTS, function(unit)
-        local s = GetNicknameOrName(unit)
-        if not s then return nil end
-        if lengthOrNil then return Truncate(s, lengthOrNil) end
-        return s
-    end)
-    E:AddTagInfo(name, 'KitnEssentials', info)
-    NICK_TAG_NAMES[#NICK_TAG_NAMES + 1] = name
-end
-
--- Full nickname
-AddNicknameTag('kes:nickname', nil, "Nickname if set, else unit name")
-
--- Numeric variants: [kes:nickname:1] through [kes:nickname:30].
--- Any width without needing named aliases.
-for n = 1, 30 do
-    AddNicknameTag('kes:nickname:' .. n, n,
-        "Nickname (or name), max " .. n .. " chars")
-end
-
--- Named variants matching ElvUI's familiar [name:short|medium|long] convention
-AddNicknameTag('kes:nickname:short',  6,  "Nickname (or name), max 6 chars")
-AddNicknameTag('kes:nickname:medium', 10, "Nickname (or name), max 10 chars")
-AddNicknameTag('kes:nickname:long',   20, "Nickname (or name), max 20 chars")
-
--- KE:RefreshNicknameTags lives in Core/Nicknames.lua so it's defined whether
--- or not ElvUI is loaded (UUF-only users still need the refresh hook).

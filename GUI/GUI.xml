@@ -116,7 +116,6 @@
     <Script file="GUITabs\GUIQoL\GUI-CombatLogger.lua" />
     <Script file="GUITabs\GUIQoL\GUI-GreatVaultAlert.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CharacterPanel.lua" />
-    <Script file="GUITabs\GUIQoL\GUI-Nicknames.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CopyAnything.lua" />
     <Script file="GUITabs\GUIQoL\GUI-ColorPicker.lua" />
     <Script file="GUITabs\GUIQoL\GUI-MoveFrames.lua" />

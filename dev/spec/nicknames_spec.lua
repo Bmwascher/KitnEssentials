@@ -303,6 +303,38 @@ describe("Nicknames.lua GetNicknameOrName", function()
         KE2.db.global.Nicknames["Bob-Realm"] = "Bobby"
         assert.equals("Bobby", KE2:GetNicknameOrName("party1"))
     end)
+
+    -- Refusal rule. These use a DECLARED sentinel, which is the only honest
+    -- thing a headless spec can do: plain Lua compares and concatenates
+    -- strings happily, so what is pinned here is the BRANCH, never the real
+    -- secret semantics. Those stay in game.
+    --
+    -- Each case plants the nickname under the key the UNGUARDED code would
+    -- build. Without that the test proves nothing, because refusing and
+    -- looking up a key that is not in the store both end at "Bob".
+    local SECRET = "<<declared secret>>"
+
+    it("refuses the store when the name comes back secret", function()
+        local KE2 = reloadWithUnitStubs({
+            UnitIsPlayer = function() return true end,
+            UnitFullName = function() return SECRET, "Realm" end,
+            UnitName = function() return "Bob" end,
+            issecretvalue = function(v) return v == SECRET end,
+        })
+        KE2.db.global.Nicknames[SECRET .. "-Realm"] = "WRONG"
+        assert.equals("Bob", KE2:GetNicknameOrName("party1"))
+    end)
+
+    it("refuses the store when the realm comes back secret", function()
+        local KE2 = reloadWithUnitStubs({
+            UnitIsPlayer = function() return true end,
+            UnitFullName = function() return "Bob", SECRET end,
+            UnitName = function() return "Bob" end,
+            issecretvalue = function(v) return v == SECRET end,
+        })
+        KE2.db.global.Nicknames["Bob-" .. SECRET] = "WRONG"
+        assert.equals("Bob", KE2:GetNicknameOrName("party1"))
+    end)
 end)
 
 describe("Nicknames.lua BuildNicknameKey", function()
@@ -375,12 +407,15 @@ describe("Nicknames.lua ClearAllNicknames + tag refresh", function()
         assert.equals(0, KE:ClearAllNicknames())
     end)
 
-    it("RefreshNicknameTags is a safe no-op without ElvUF/UUFG and dispatches to UUFG", function()
+    -- The Damage Meter is the only reader left, so it is the only dispatch
+    -- worth asserting. Counting the call rather than flagging it: a second
+    -- fan-out arm creeping back in is as wrong as none at all.
+    it("notifies the Damage Meter, and no-ops when it is absent", function()
         assert.has_no.errors(function() KE:RefreshNicknameTags() end)
-        local updated = false
-        _G.UUFG = { UpdateAllTags = function() updated = true end }
+        local calls = 0
+        local DM = _G.KitnEssentials:GetModule("DamageMeter", true)
+        DM.OnNicknamesChanged = function() calls = calls + 1 end
         KE:RefreshNicknameTags()
-        _G.UUFG = nil -- don't leak the detection global into other specs
-        assert.is_true(updated)
+        assert.equals(1, calls)
     end)
 end)

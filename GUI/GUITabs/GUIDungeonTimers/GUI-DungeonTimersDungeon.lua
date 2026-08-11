@@ -81,8 +81,8 @@ local ENC_HEADER_HEIGHT = 30
 local DETAIL_PADDING    = 12
 
 local CURATED_TAG_COLOR = { 0.65, 0.65, 0.65 }
--- Destructive-action color, matches GUI-Nicknames Remove buttons. Used for
--- the per-spell Reset button so destructive UX is consistent across the addon.
+-- The addon-wide destructive-action color. Used for the per-spell Reset
+-- button so destructive UX is consistent across the addon.
 local REMOVE_COLOR = { 0.9, 0.2, 0.2, 1 }
 
 -- Section header for the Visibility tab body. Small accent-colored label
@@ -967,7 +967,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- Reset overrides button — clears BOTH role overrides AND disable
     -- state for this spell so toggles return to curated default values.
     -- Uses GUIFrame:CreateButton (KE button factory) so hover styling
-    -- matches the rest of the addon (Nicknames Remove, Reset All Triggers).
+    -- matches the rest of the addon (Reset All Triggers and friends).
     -- Red text + StaticPopup confirmation signal destructive intent.
     --
     -- Anchored TOP-down (under the time-offset caption) instead of
