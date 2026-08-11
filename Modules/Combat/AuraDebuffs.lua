@@ -94,6 +94,9 @@ local DISPEL_DEFAULTS = {
 -- same way.
 local DISPEL_TYPE_ORDER = { "Magic", "Curse", "Disease", "Poison", "Bleed", "Enrage" }
 
+-- The dispel overlay is a fixed fraction of the icon, not a setting.
+local DISPEL_ICON_FRACTION = 0.40
+
 ---------------------------------------------------------------------------------
 -- LuaCurveObject-based dispel detection (taint-safe for encounter HARMFUL)
 --
@@ -554,7 +557,8 @@ function AD:RegWithEditMode()
             getOverlayInset = function()
                 local db = self.db
                 if not db then return 0, 0, 0, 0 end
-                return KE:GetGridOverlayInset(
+
+                local grid = { KE:GetGridOverlayInset(
                     db.IconsPerRow or 8,
                     db.MaxRows or 1,
                     db.IconSize,
@@ -562,7 +566,33 @@ function AD:RegWithEditMode()
                     (db.Position and db.Position.AnchorFrom) or "CENTER",
                     db.GrowHorizontal == "LEFT",
                     db.GrowVertical == "UP"
-                )
+                ) }
+
+                -- Every element anchors to a BUTTON, so the host is one icon
+                -- square rather than the container. An absent measurement
+                -- leaves the element a point at its anchor, which still carries
+                -- the offset and is a true lower bound.
+                local icon = db.IconSize or 0
+                local extents = self.textExtents or {}
+                local dispel = math_floor(icon * DISPEL_ICON_FRACTION)
+
+                local function textInset(pos, role)
+                    if not pos then return { 0, 0, 0, 0 } end
+                    local e = extents[role] or {}
+                    return { KE:GetTextOverlayInset(pos.AnchorTo, pos.AnchorFrom,
+                        pos.XOffset, pos.YOffset, e.width, e.height, icon, icon) }
+                end
+
+                return KE:CombineOverlayInsets(grid, {
+                    textInset(db.TimerPosition, "timer"),
+                    textInset(db.StackPosition, "stack"),
+                    { KE:GetTextOverlayInset(
+                        db.DispelPosition and db.DispelPosition.AnchorTo,
+                        db.DispelPosition and db.DispelPosition.AnchorFrom,
+                        db.DispelPosition and db.DispelPosition.XOffset,
+                        db.DispelPosition and db.DispelPosition.YOffset,
+                        dispel, dispel, icon, icon) },
+                })
             end,
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
@@ -672,7 +702,7 @@ local function CreateButton(parent, db)
     dispelOverlay:SetFrameLevel(cd:GetFrameLevel() + 1)
     b.dispelOverlay = dispelOverlay
 
-    local dispelSize = math_floor(db.IconSize * 0.40)
+    local dispelSize = math_floor(db.IconSize * DISPEL_ICON_FRACTION)
     b.dispelTextures = {}
     for _, name in ipairs(DISPEL_TYPE_ORDER) do
         local atlas = DISPEL_ICON_ATLASES[name]
@@ -758,6 +788,64 @@ local function PaintBorder(b, db, previewDispelType)
     ApplyBorderRGBA(b, r, g, bb, a)
 end
 
+-- Records what the two text roles measure, so the edit-mode box can cover text
+-- the user has moved outside the icons.
+--
+-- Only buttons 1..textButtonCount are read. Surplus buttons past the cap are
+-- hidden rather than cleared, so they still hold text from a configuration
+-- nobody is looking at.
+--
+-- Largest across buttons, per role: every button shares one set of anchors and
+-- font settings, so a per-button figure would only tighten the box while tying
+-- the measurement to the row and column layout. The font key comes from the
+-- first button for the same reason.
+function AD:CommitTextExtents(sample)
+    local roles = { timer = {}, stack = {} }
+    for i = 1, (self.textButtonCount or 0) do
+        local b = self.buttons[i]
+        if b then
+            local strings = { timer = b.timer, stack = b.stack }
+            for role, acc in pairs(roles) do
+                local fs = strings[role]
+                acc.key = acc.key or KE:FontKey(fs)
+                if sample then
+                    local w, h = KE:MeasureFontString(fs)
+                    if w and (not acc.w or w > acc.w) then acc.w = w end
+                    if h and (not acc.h or h > acc.h) then acc.h = h end
+                end
+            end
+        end
+    end
+    for role, acc in pairs(roles) do
+        KE:CommitTextExtent(self.textExtents, role, acc.key, acc.w, acc.h)
+    end
+end
+
+function AD:SyncTextExtents(count)
+    self.textExtents = self.textExtents or {}
+    self.textButtonCount = count or 0
+
+    -- The font is known now and the text is not: Blizzard fills the countdown
+    -- after this returns, so a measurement here would read an empty string.
+    -- Reconciling the key without a sample is what drops the previous font's
+    -- numbers at once, which matters because the alternative leaves them on
+    -- screen through the gap -- the one stale window a user notices, since they
+    -- just changed the font and the box did not move.
+    self:CommitTextExtents(false)
+
+    if self._extentSampleQueued then return end
+    self._extentSampleQueued = true
+    C_Timer.After(0, function()
+        AD._extentSampleQueued = false
+        -- Re-asked at fire time, never carried. The preview can be torn down or
+        -- rebuilt in the gap, so whatever is up NOW is the only right answer
+        -- and there is nothing stale for a token to guard against.
+        if not AD.isPreview then return end
+        AD:CommitTextExtents(true)
+        if KE.EditMode then KE.EditMode:RefreshLiveState() end
+    end)
+end
+
 function AD:UpdateButtonAppearance(count)
     local db = self.db
     local tp = db.TimerPosition
@@ -792,7 +880,7 @@ function AD:UpdateButtonAppearance(count)
                 b.stack:SetPoint(sp.AnchorFrom, b, sp.AnchorTo, sp.XOffset, sp.YOffset)
             end
             if b.dispelTextures then
-                local dispelSize = math_floor(db.IconSize * 0.40)
+                local dispelSize = math_floor(db.IconSize * DISPEL_ICON_FRACTION)
                 for _, tex in pairs(b.dispelTextures) do
                     tex:SetSize(dispelSize, dispelSize)
                     tex:ClearAllPoints()
@@ -810,6 +898,14 @@ function AD:UpdateButtonAppearance(count)
             -- fallback (custom mode / preview).
             PaintBorder(b, db, b._previewDispelType)
         end
+    end
+
+    -- Preview only. This function also runs on every live aura refresh, so
+    -- sampling there would add combat work for nothing. Every steady state that
+    -- shows this mover also has its preview up, and the preview's own populate
+    -- supplies the sample; the box starts anchor-only and fits a frame later.
+    if self.isPreview then
+        self:SyncTextExtents(count)
     end
 end
 
