@@ -76,7 +76,6 @@ The home page also carries the general settings: minimap button, login message, 
 |---|---|
 | Automation | Auto-repair, auto-sell, auto-confirm queues, auto-slot keystone, skip cinematics, hide event toasts and zone text, merchant and auction house conveniences, and one-click Vantus Rune withdrawal from the guild bank |
 | Combat Logger | Automatic combat logging for raids, dungeons, M+, PvP, and arenas with per-content toggles |
-| Custom Nicknames | Map characters to personal nicknames on ElvUI and Unhalted Unit Frames via the `[kes:nickname]` tag family (plus class-color variants `[kes:nickname:color]` for UUF), with a management GUI offering search, import/export, and replace/merge modes. Nicknames also display on the KitnEssentials Damage Meter |
 | CVars | One-click console variable panel, including the adjustable minimized world map scale |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault, with class color and sound |
 | Quality of Life | Four tools on one page: Spell Alert Opacity (per-spec opt-in grid for Blizzard's proc overlay flashes, plus an opacity slider), Move Frames (drag Blizzard windows anywhere), Copy Anything (pull spell, item, NPC, and aura IDs to the clipboard from tooltips), and Slash Commands (shorthand commands such as `/rl`, `/cd`, `/fs`, `/leave`, `/reset`, `/mute`, `/music`) |
@@ -126,7 +125,6 @@ Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast du
 | `[kes:target:name-classcolor]` | Target name with class or reaction color |
 | `[kes:group]` | Shows "Group: X" only while in a raid |
 | `[kes:mana:percent]` | Unit's mana percentage, hidden at 100% |
-| `[kes:nickname]` | Custom nickname from the Nicknames page |
 
 ## Slash Commands
 
