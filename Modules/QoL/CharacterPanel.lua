@@ -22,7 +22,7 @@ local GetInventoryItemLink = GetInventoryItemLink
 local GetExpansionForLevel = GetExpansionForLevel
 local GetItemInfoInstant = C_Item.GetItemInfoInstant
 local UnitLevel = UnitLevel
-local IsLevelAtEffectiveMaxLevel = IsLevelAtEffectiveMaxLevel
+local GameRulesUtil = GameRulesUtil
 local C_TooltipInfo = C_TooltipInfo
 local strsplit = strsplit
 local pairs, ipairs = pairs, ipairs
@@ -44,6 +44,13 @@ local INVSLOT_OFFHAND   = INVSLOT_OFFHAND
 
 local function ElvUILoaded()
     return C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI")
+end
+
+-- 12.1 removed the IsLevelAtEffectiveMaxLevel global; Blizzard code now
+-- compares against GameRulesUtil.GetEffectiveMaxLevelForPlayer (GameRulesUtil.lua).
+local function IsLevelAtEffectiveMaxLevel(level)
+    return GameRulesUtil and GameRulesUtil.GetEffectiveMaxLevelForPlayer
+        and level >= GameRulesUtil.GetEffectiveMaxLevelForPlayer()
 end
 
 ---------------------------------------------------------------------------------

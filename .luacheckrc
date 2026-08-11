@@ -274,7 +274,7 @@ read_globals = {
     "INVSLOT_FINGER1", "INVSLOT_FINGER2", "INVSLOT_MAINHAND", "INVSLOT_OFFHAND",
 
     -- Level / Expansion
-    "GetExpansionForLevel", "IsLevelAtEffectiveMaxLevel",
+    "GetExpansionForLevel", "GameRulesUtil",
 
     -- Currency / Money
     "C_CurrencyInfo",

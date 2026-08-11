@@ -27,7 +27,7 @@ local function loadCP(overrides)
     _G.ENCHANTED_TOOLTIP_LINE = "Enchanted: %s"
     for _, name in ipairs({
         "GetInventoryItemLink", "GetExpansionForLevel", "UnitLevel",
-        "IsLevelAtEffectiveMaxLevel", "GetInventoryItemQuality", "issecretvalue",
+        "GetInventoryItemQuality", "issecretvalue",
     }) do
         _G[name] = _G[name] or function() return nil end
     end
