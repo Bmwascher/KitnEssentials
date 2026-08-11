@@ -92,7 +92,6 @@ GUIFrame.sidebarConfig = {
         items = {
             { id = "Automation",        text = "Automation", keywords = { "automation", "auto", "role", "quest", "repair", "sell", "accept", "group", "duel", "delete", "ah", "auction house", "house", "housing", "vantus rune", "merchant", "vendor", "pages", "shop", "buy", "buyback", "extend", "wide" } },
             { id = "CombatLogger",      text = "Combat Logger", keywords = { "combat log", "logging", "advanced logging", "warcraftlogs", "raid" } },
-            { id = "Nicknames",         text = "Custom Nicknames", keywords = { "nickname", "nicknames", "name", "custom", "rename" } },
             { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "map", "scale" } },
             { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
             { id = "QualityOfLife",     text = "Quality of Life", keywords = { "quality of life", "qol", "spell alert opacity", "spell alert", "opacity", "proc", "alert", "glow", "overlay", "copy anything", "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip", "move frames", "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock", "slash", "slash command", "command", "commands", "shortcut", "reload" } },

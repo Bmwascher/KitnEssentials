@@ -231,8 +231,8 @@ GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     -- Module-wide "Reset All Dungeons" sits at the BOTTOM of the card after
     -- the per-dungeon list (least-frequent / most-destructive action goes
     -- last so the eye scans the per-dungeon rows first). All Reset buttons
-    -- use red text (REMOVE_COLOR) matching the Nicknames Remove-button
-    -- convention for destructive actions.
+    -- use red text (REMOVE_COLOR), the house convention for a destructive
+    -- action.
     ---------------------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Reset Overrides", yOffset)
     card4:AddLabel("Clears your per-spell and per-phase overrides (role, enable, color, sound, display, etc.).")
@@ -255,7 +255,7 @@ GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     local BTN_W           = 140
     local ICON_SIZE       = 28
     local RIGHT_INSET     = Theme.paddingSmall   -- match AddWidget(widget, 1)'s effective right inset
-    local REMOVE_COLOR    = { 0.9, 0.2, 0.2, 1 } -- red, matches Nicknames
+    local REMOVE_COLOR    = { 0.9, 0.2, 0.2, 1 } -- destructive-action red
 
     for _, dungeon in ipairs(KE.DungeonTimerDungeons) do
         local row = GUIFrame:CreateRow(card4.content, ROW_H)

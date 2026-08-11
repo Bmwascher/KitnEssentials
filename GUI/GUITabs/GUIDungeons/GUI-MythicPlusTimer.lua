@@ -420,8 +420,9 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     yOffset = qolCard:GetNextOffset()
 
     -- Card 8: Reset to Defaults (destructive — full module settings reset).
-    -- Mirrors the Nicknames "Clear All" pattern: red button + confirmation
-    -- prompt + RefreshContent to rebuild the page with the regenerated values.
+    -- The house pattern for a bulk destructive action: red button +
+    -- confirmation prompt + RefreshContent to rebuild the page with the
+    -- regenerated values.
     local resetCard = GUIFrame:CreateCard(scrollChild, "Reset", yOffset)
     manager:Register(resetCard, "all")
     local resetNoteRow = GUIFrame:CreateRow(resetCard.content, 30)
@@ -450,7 +451,7 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
                 nil, "Reset", "Cancel")
         end,
     })
-    -- Destructive-action red, matching the Nicknames "Clear All" button.
+    -- Destructive-action red, the house colour for a bulk clear.
     if resetBtn.text then
         resetBtn.text:SetTextColor(0.9, 0.2, 0.2, 1)
     end
