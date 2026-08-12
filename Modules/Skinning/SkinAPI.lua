@@ -390,6 +390,21 @@ function S.Backdrop(frame, inset, borderOnly)
     local bd = backdropCache[frame]
     if not bd then
         bd = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+        -- 12.1: a backdrop anchored to a frame whose size is secret reads a
+        -- secret size itself, and Blizzard's edge tiling divides by it
+        -- (Backdrop.lua SetupTextureCoordinates), which throws on every size
+        -- change. Both textures here are solid white, so the repeat factors
+        -- change nothing that can be seen -- skip the setup instead. Patched
+        -- on this instance only; never on the shared mixin.
+        local SetupCoords = bd.SetupTextureCoordinates
+        if SetupCoords then
+            bd.SetupTextureCoordinates = function(self)
+                if KE:IsSecretValue(self:GetWidth()) or KE:IsSecretValue(self:GetHeight()) then
+                    return
+                end
+                return SetupCoords(self)
+            end
+        end
         bd:SetBackdrop({
             bgFile = BG_TEX,
             edgeFile = "Interface\\Buttons\\WHITE8x8",
