@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.0.2
+
+One more patch 12.1 fix, following on from 4.0.1.
+
+### Skinning
+- Fixed a flood of errors coming from skinned windows. Where the game now
+  hides a window's size from addons, the border around it tried to do maths
+  with that size and failed, repeatedly. The border skips that step on those
+  windows now and looks exactly the same
+
+---
+
 ## v4.0.1
 
 Compatibility fixes for patch 12.1. Nothing new here — this release removes
