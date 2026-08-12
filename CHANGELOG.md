@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.0.3
+
+Another patch 12.1 fix.
+
+### Skinning
+- Fixed a skin error on the Recruit A Friend rewards list. Patch 12.1 moved
+  the month label into a wrapper, so the skin was colouring something that no
+  longer accepted a colour
+
+---
+
 ## v4.0.2
 
 One more patch 12.1 fix, following on from 4.0.1.
