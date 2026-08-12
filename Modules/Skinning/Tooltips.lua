@@ -673,7 +673,10 @@ function TT:OnTooltipSetUnit(tt, data)
     -- (Tooltip.lua).
     --
     -- The name row above is rebuilt separately, behind CanReadIdentity.
-    if UnitIsPlayer(unit) then
+    -- The same gate is needed here: 12.1 puts UnitRace (and GetGuildInfo's
+    -- name) under identity restriction, and a secret race inside format()
+    -- throws. Fail closed -- Blizzard's own level line stays.
+    if UnitIsPlayer(unit) and CanReadIdentity(unit) then
         local guildName = GetGuildInfo(unit)
         local levelLine, specLine = FindLevelLine(tt, guildName and 2 or 1)
 
