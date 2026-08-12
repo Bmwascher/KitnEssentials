@@ -19,7 +19,6 @@ local CreateFrame = CreateFrame
 local GetInventoryItemLink = GetInventoryItemLink
 local GetInventoryItemTexture = GetInventoryItemTexture
 local GetInspectSpecialization = GetInspectSpecialization
-local UnitGUID = UnitGUID
 local C_Timer = C_Timer
 local C_Item = C_Item
 local C_TooltipInfo = C_TooltipInfo
@@ -262,7 +261,10 @@ end
 function InspectPanel:RenderInspectSlot(button)
     local unit, slotID = ResolveInspectSlot(button)
     if not unit then return end
-    local guid = UnitGUID(unit)
+    -- 12.1 puts UnitGUID under identity restriction; a secret guid is truthy,
+    -- would pass a bare nil check, and then throws as the _inspectCache key.
+    -- No clean guid, no overlays.
+    local guid = KE:GetSafeUnitGUID(unit)
     if not guid then return end
 
     local CP = self.CP

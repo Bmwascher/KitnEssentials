@@ -421,7 +421,7 @@ function DN:CheckFocusDeath(deadGUID)
     local deadSecret = KE:IsSecretValue(deadGUID)
     if DEBUG_DN then
         KE:Print(string.format("[DN] focus check: focusGUID=%s (secret=%s), deadSecret=%s",
-            tostring(focusGUID), tostring(focusSecret), tostring(deadSecret)))
+            focusSecret and "<secret>" or tostring(focusGUID), tostring(focusSecret), tostring(deadSecret)))
     end
 
     -- Primary path: clean GUID equality. Deterministic, no dedup needed —
