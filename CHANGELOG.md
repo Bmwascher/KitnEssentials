@@ -1,5 +1,29 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.0.1
+
+Compatibility fixes for patch 12.1. Nothing new here — this release removes
+the errors the patch introduced.
+
+### Character Panel
+- Fixed an error when opening the character panel. The patch removed the
+  function the missing-enchant warning used to check your level, so the
+  **No Enchant** warning is back
+- Inspecting a player outside your group no longer risks an error from the
+  gear overlays. Slots the game will not let us read are skipped instead
+
+### Tooltips
+- Fixed an error when mousing over units the game now hides information
+  about. Player tooltips keep their class colors
+- The rebuilt level line now steps aside on those hidden units instead of
+  erroring, so they show the standard Blizzard line
+
+### Totem Tracker
+- Fixed an error when clicking **Create Macro**. The patch moved the macro
+  limit the button checks against
+
+---
+
 ## v4.0.0
 
 The largest release so far. Skinning has been rebuilt around one engine
