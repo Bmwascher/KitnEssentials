@@ -69,7 +69,10 @@ local function SkinRecruitRewards()
                 end
                 RecruitRewardBorder(button)
             end
-            if reward.Months then reward.Months:SetTextColor(1, 1, 1) end
+            -- 12.1 made Months a frame wrapping a Text fontstring; Blizzard's
+            -- own code colours Months.Text (RecruitAFriendFrame.lua).
+            local months = reward.Months and reward.Months.Text
+            if months then months:SetTextColor(1, 1, 1) end
         end
     end
 end
