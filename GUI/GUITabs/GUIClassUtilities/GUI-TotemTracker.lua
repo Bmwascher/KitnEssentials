@@ -15,6 +15,12 @@ local GetMacroIndexByName = GetMacroIndexByName
 local GetNumMacros        = GetNumMacros
 local CreateMacro         = CreateMacro
 
+-- 12.1 removed the MAX_ACCOUNT_MACROS global; the cap lives in
+-- Constants.MacroConsts now. 120 is the documented value, kept as the
+-- fallback so a missing constant can't turn the guard into a crash.
+local MAX_ACCOUNT_MACROS = Constants and Constants.MacroConsts
+    and Constants.MacroConsts.MAX_ACCOUNT_MACROS or 120
+
 local function GetModule()
     return KitnEssentials and KitnEssentials:GetModule("TotemTracker", true)
 end

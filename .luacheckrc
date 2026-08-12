@@ -103,9 +103,9 @@ read_globals = {
     "ImportDataStreamMixin",
     "MapCanvasPinMixin", "MapCanvasDataProviderMixin",
     "hooksecurefunc",
-    "ShowUIPanel", "HideUIPanel", "UIParentLoadAddOn",
+    "ShowUIPanel", "HideUIPanel",
     "WorldFrame",
-    "MouseIsOver", "GetMouseFoci", "GetMouseFocus",
+    "GetMouseFoci", "GetMouseFocus",
     "GetPhysicalScreenSize", "GetCursorPosition",
     "RunNextFrame",
     "IsModifierKeyDown",
@@ -332,7 +332,7 @@ read_globals = {
 
     -- Macro
     "CreateMacro", "EditMacro", "GetMacroIndexByName",
-    "GetMacroSpell", "GetNumMacros", "MAX_ACCOUNT_MACROS",
+    "GetMacroSpell", "GetNumMacros",
 
     -- Keybinding
     "GetBindingKey", "SetBinding", "SaveBindings", "GetCurrentBindingSet",
