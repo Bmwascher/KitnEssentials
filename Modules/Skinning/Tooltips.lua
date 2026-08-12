@@ -282,11 +282,13 @@ local function UnitColor(unit)
     -- Midnight secret units. UnitName returning a secret is
     -- the tell (ElvUI's IsSecretUnit); on that branch UnitIsPlayer /
     -- UnitReaction results are secret booleans -- branching on them is
-    -- the crash class -- but UnitClass's classFile stays usable, so
-    -- resolve color through it (ElvUI AddTargetInfo secret branch).
+    -- the crash class -- and 12.1 makes UnitClass's classFile secret
+    -- here too, so a plain RAID_CLASS_COLORS[class] lookup throws.
+    -- C_ClassColor.GetClassColor is AllowedWhenTainted and resolves the
+    -- secret C-side (RAID_CLASS_COLORS is itself built from it).
     if KE:IsSecretValue(UnitName(unit)) then
         local _, class = UnitClass(unit)
-        local c = class and RAID_CLASS_COLORS[class]
+        local c = class and C_ClassColor.GetClassColor(class)
         if c then return c.r, c.g, c.b end
         return 1, 1, 1
     end
