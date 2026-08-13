@@ -1576,9 +1576,11 @@ end
 -- prank toys) with a per-item include/exclude picker. Zero cost when idle:
 -- events only registered while the master is on AND at least one transform
 -- is included. Two separate defences, in this order: the UNIT_AURA handler
--- secret-checks each payload field it reads before deciding to sweep, and the
--- sweep itself then asks the aura-secrecy predicate before touching the aura
--- index. The handler's checks run FIRST and do not depend on that bail-out.
+-- secret-checks the payload, its isFullUpdate flag and every spellId it
+-- inspects before deciding to sweep -- addedAuras itself is read without one,
+-- as the reference wrote it -- and the sweep then asks the aura-secrecy
+-- predicate before touching the aura index. The handler's checks run FIRST
+-- and do not depend on that bail-out.
 
 local TRANSFORM_CATEGORY_ORDER = { "professions", "holiday", "toys", "items" }
 local TRANSFORM_CATEGORY_LABEL = {
