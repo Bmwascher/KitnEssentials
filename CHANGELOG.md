@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.0.4
+
+More patch 12.1 fixes, both in code that reads buffs.
+
+### Automation
+- Fixed a flood of errors from **Hide Transforms** in dungeons and raids. The
+  check meant to hold the sweep back asked the game a question patch 12.1 no
+  longer answers, so it never held anything back. It now asks the supported
+  way and skips the sweep while the game hides buff information
+
+### Maintenance Tracker
+- Stopped the group scan from erroring in the same places. The tracker keeps
+  its last reading there and carries on counting it down, instead of reading
+  as though nobody is buffed
+
+---
+
 ## v4.0.3
 
 Another patch 12.1 fix.
