@@ -1654,20 +1654,18 @@ end
 -- Index scans hard-error while aura restrictions are active (M+/raids, even
 -- out of combat). Transforms are cosmetic; skipping the sweep there is fine
 -- -- it re-runs on the next event outside.
-local function TransformAurasRestricted()
-    if C_UnitAuras and C_UnitAuras.AreAurasRestricted then
-        local ok, res = pcall(C_UnitAuras.AreAurasRestricted)
-        if ok then return res == true end
-    end
-    return false
-end
+--
+-- This asked C_UnitAuras.AreAurasRestricted, which no version of the 12.x
+-- reference declares, so the guard was never able to fire and the scan below
+-- threw instead. KE:AreAuraIdentitiesHidden asks the restriction system the
+-- documented way.
 
 -- Sweep current buffs, canceling any included transform. Descending so
 -- a cancel (which shifts later buff indices down) cannot skip a match.
 local function CancelMatchingTransforms(force)
     if not (C_UnitAuras and C_UnitAuras.GetBuffDataByIndex) then return end
     if not force and UnitAffectingCombat("player") then return end
-    if TransformAurasRestricted() then return end
+    if KE:AreAuraIdentitiesHidden() then return end
     for i = 40, 1, -1 do
         local data = C_UnitAuras.GetBuffDataByIndex("player", i)
         if data then
@@ -1718,7 +1716,7 @@ local function ApplyHideTransforms()
             if not (AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
             C_Timer.After(0.3, function()
                 if not (AU.db.Enabled and AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
-                if UnitAffectingCombat("player") or TransformAurasRestricted() then return end
+                if UnitAffectingCombat("player") or KE:AreAuraIdentitiesHidden() then return end
                 if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return end
                 local aura = C_UnitAuras.GetPlayerAuraBySpellID(FISHING_OUTFIT_AURA)
                 if aura and aura.auraInstanceID and C_UnitAuras.RemovePlayerAuraByAuraInstanceID then

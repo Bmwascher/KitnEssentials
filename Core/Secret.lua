@@ -71,6 +71,33 @@ function KE:NoSecretValues(object)
     return not self:HasSecretValues(object)
 end
 
+-- The four states in which the aura system stops reporting which spell an aura
+-- belongs to. Index scans (C_UnitAuras.GetBuffDataByIndex and friends) HARD
+-- ERROR for a tainted caller while any of them is active, so ask before
+-- scanning -- sampling an aura to find out is the error you were avoiding.
+-- Unknown enum or API means no restriction system to consult: answer false and
+-- let the call proceed, matching how the game behaves without one.
+-- StanceText keeps its own copy of this list on purpose; its aura path is
+-- dormant and the guard is documented to travel with it.
+local AURA_HIDDEN_STATES
+do
+    local kinds = Enum and Enum.AddOnRestrictionType
+    AURA_HIDDEN_STATES = kinds and {
+        kinds.Combat, kinds.Encounter, kinds.ChallengeMode, kinds.PvPMatch,
+    } or nil
+end
+
+function KE:AreAuraIdentitiesHidden()
+    if not (AURA_HIDDEN_STATES and C_RestrictedActions
+        and C_RestrictedActions.IsAddOnRestrictionActive) then
+        return false
+    end
+    for _, state in ipairs(AURA_HIDDEN_STATES) do
+        if C_RestrictedActions.IsAddOnRestrictionActive(state) then return true end
+    end
+    return false
+end
+
 ---------------------------------------------------------------------------------
 -- Safe Unit Helpers
 ---------------------------------------------------------------------------------

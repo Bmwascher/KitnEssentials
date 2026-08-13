@@ -150,7 +150,13 @@ local function newFixture()
     _G.StaticPopupDialogs = {}
 
     local modules = helpers.installAddonShim()
-    local KE = { Skins = nil, IsFullyRestricted = function() return false end }
+    local KE = {
+        Skins = nil,
+        IsFullyRestricted = function() return false end,
+        -- Core/Secret.lua's real one asks the restriction system; unrestricted
+        -- is what these refusal paths need to reach their action.
+        AreAuraIdentitiesHidden = function() return false end,
+    }
     helpers.loadModule("Modules/QoL/Automation.lua", KE)
     local AU = modules["Automation"]
 
