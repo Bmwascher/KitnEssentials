@@ -71,14 +71,19 @@ function KE:NoSecretValues(object)
     return not self:HasSecretValues(object)
 end
 
--- The four states in which the aura system stops reporting which spell an aura
--- belongs to. Index scans (C_UnitAuras.GetBuffDataByIndex and friends) HARD
--- ERROR for a tainted caller while any of them is active, so ask before
--- scanning -- sampling an aura to find out is the error you were avoiding.
--- Unknown enum or API means no restriction system to consult: answer false and
--- let the call proceed, matching how the game behaves without one.
--- StanceText keeps its own copy of this list on purpose; its aura path is
--- dormant and the guard is documented to travel with it.
+-- Aura index scans (C_UnitAuras.GetAuraDataByIndex and its Buff/Debuff
+-- siblings) carry RequiresUnitAuraAccess, whose failure mode is a HARD ERROR
+-- for a tainted caller -- not a secret return. So ask before scanning;
+-- sampling an aura to find out IS the error being avoided.
+--
+-- ShouldAurasBeSecret answers the question directly and is the gate KE
+-- already proved in dungeons (DungeonTimers' Guidance check). The restriction
+-- types are the documented definition of the same condition and stand in when
+-- the client has no such predicate. Neither available means no restriction
+-- system to consult: answer "not hidden" and let the call proceed.
+--
+-- StanceText keeps its own copy of the state list on purpose; its aura path
+-- is dormant and the guard is documented to travel with it.
 local AURA_HIDDEN_STATES
 do
     local kinds = Enum and Enum.AddOnRestrictionType
@@ -88,6 +93,10 @@ do
 end
 
 function KE:AreAuraIdentitiesHidden()
+    if C_Secrets and C_Secrets.ShouldAurasBeSecret then
+        local ok, secret = pcall(C_Secrets.ShouldAurasBeSecret)
+        if ok then return secret == true end
+    end
     if not (AURA_HIDDEN_STATES and C_RestrictedActions
         and C_RestrictedActions.IsAddOnRestrictionActive) then
         return false

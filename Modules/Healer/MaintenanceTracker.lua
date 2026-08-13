@@ -284,6 +284,9 @@ end
 
 function MT:ScanAllUnits()
     if #trackers == 0 then return end
+    -- Ahead of the wipe: bailing after it would trade the error for an empty
+    -- tracker, which reads as "nobody is buffed" rather than "we cannot look".
+    if KE:AreAuraIdentitiesHidden() then return end
     for ti = 1, #trackers do
         wipe(trackers[ti].activeBuffs)
     end
@@ -663,6 +666,10 @@ end
 ------------------------------------------------------------------------
 function MT:UNIT_AURA(_, unit)
     if #trackers == 0 then return end
+    -- Before IsGroupUnit, which slices the token: the payload token can be
+    -- secret while auras are restricted, and the scan behind it hard-errors
+    -- there anyway. The next unrestricted event rebuilds state.
+    if KE:AreAuraIdentitiesHidden() then return end
     if not IsGroupUnit(unit) then return end
     self:ScanUnit(unit)
 end

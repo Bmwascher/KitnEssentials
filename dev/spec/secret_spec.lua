@@ -79,3 +79,99 @@ describe("Secret.lua value guards — the HONESTY BOUNDARY", function()
         assert.is_true(KE:IsSafeValue(42))
     end)
 end)
+
+-- AreAuraIdentitiesHidden gates every aura index scan KE runs, and the API it
+-- guards HARD ERRORS rather than returning a secret, so a guard that silently
+-- answers "not hidden" is indistinguishable from no guard at all. That is what
+-- shipped once already: the previous version asked an API that does not exist,
+-- and its nil-check turned the whole guard into `return false` forever.
+--
+-- HONESTY BOUNDARY: this drives the two predicates through values the test
+-- declares. It pins KE's branching and the priority between the two sources.
+-- It cannot vouch for when the client actually reports a restriction -- in
+-- particular the combat-end instant, which is an in-game question.
+describe("Secret.lua aura-restriction guard", function()
+    local RESTRICTION_TYPES = {
+        Combat = 0, Encounter = 1, ChallengeMode = 2, PvPMatch = 3, Map = 4, Chat = 5,
+    }
+
+    -- opts.direct: what ShouldAurasBeSecret returns, or "absent", or "throws"
+    -- opts.active: restriction type NAME currently active, if any
+    -- opts.noEnum / opts.noRestrictionAPI: drop that half of the fallback
+    local function loadWith(opts)
+        mock.install()
+        -- Explicit if, not `cond and nil or value`: that idiom cannot yield
+        -- nil (the `or` swallows it) and silently kept the enum installed.
+        if opts.noEnum then
+            _G.Enum = nil
+        else
+            _G.Enum = { AddOnRestrictionType = RESTRICTION_TYPES }
+        end
+        if opts.direct == "absent" then
+            _G.C_Secrets = nil
+        elseif opts.direct == "throws" then
+            _G.C_Secrets = { ShouldAurasBeSecret = function() error("no access") end }
+        else
+            _G.C_Secrets = { ShouldAurasBeSecret = function() return opts.direct end }
+        end
+        if opts.noRestrictionAPI then
+            _G.C_RestrictedActions = nil
+        else
+            _G.C_RestrictedActions = {
+                IsAddOnRestrictionActive = function(t)
+                    return opts.active ~= nil and t == RESTRICTION_TYPES[opts.active]
+                end,
+            }
+        end
+        return helpers.loadModule("Core/Secret.lua", { Print = function() end })
+    end
+
+    it("reports hidden when the direct predicate says auras are secret", function()
+        assert.is_true(loadWith({ direct = true }):AreAuraIdentitiesHidden())
+    end)
+
+    it("reports visible when the direct predicate says they are not", function()
+        assert.is_false(loadWith({ direct = false }):AreAuraIdentitiesHidden())
+    end)
+
+    -- The direct predicate is the client's own answer to this exact question,
+    -- so it wins. Consulting the state list anyway would re-hide auras the
+    -- client just said were readable.
+    it("lets the direct predicate overrule an active restriction type", function()
+        assert.is_false(loadWith({ direct = false, active = "Combat" }):AreAuraIdentitiesHidden())
+    end)
+
+    for _, kind in ipairs({ "Combat", "Encounter", "ChallengeMode", "PvPMatch" }) do
+        it("falls back to the state list and reports hidden in " .. kind, function()
+            assert.is_true(loadWith({ direct = "absent", active = kind }):AreAuraIdentitiesHidden())
+        end)
+    end
+
+    it("reports visible on the fallback when no restriction is active", function()
+        assert.is_false(loadWith({ direct = "absent" }):AreAuraIdentitiesHidden())
+    end)
+
+    -- Map and Chat restrict other subsystems. Treating them as aura secrecy
+    -- would silently kill these features on every dungeon map.
+    for _, kind in ipairs({ "Map", "Chat" }) do
+        it("does not treat " .. kind .. " restriction as hidden auras", function()
+            assert.is_false(loadWith({ direct = "absent", active = kind }):AreAuraIdentitiesHidden())
+        end)
+    end
+
+    it("answers visible when the client offers neither predicate", function()
+        local KE = loadWith({ direct = "absent", noEnum = true, noRestrictionAPI = true })
+        assert.is_false(KE:AreAuraIdentitiesHidden())
+    end)
+
+    it("answers visible when the restriction API exists but the enum does not", function()
+        local KE = loadWith({ direct = "absent", noEnum = true, active = "Combat" })
+        assert.is_false(KE:AreAuraIdentitiesHidden())
+    end)
+
+    -- A throwing predicate must not take the caller down with it; the state
+    -- list still gets its say.
+    it("survives a throwing direct predicate and uses the fallback", function()
+        assert.is_true(loadWith({ direct = "throws", active = "Encounter" }):AreAuraIdentitiesHidden())
+    end)
+end)
