@@ -134,11 +134,14 @@ describe("Secret.lua aura-restriction guard", function()
         assert.is_false(loadWith({ direct = false }):AreAuraIdentitiesHidden())
     end)
 
-    -- The direct predicate is the client's own answer to this exact question,
-    -- so it wins. Consulting the state list anyway would re-hide auras the
-    -- client just said were readable.
-    it("lets the direct predicate overrule an active restriction type", function()
-        assert.is_false(loadWith({ direct = false, active = "Combat" }):AreAuraIdentitiesHidden())
+    -- Conflicting signals resolve fail-closed. The direct predicate only
+    -- forecasts whether queries generally return secrets; the hard error this
+    -- guards comes from a separate access precondition, so a "no" from it is
+    -- not permission, and an active restriction type hides auras on its own
+    -- authority. Flip this to expect visible and the guard starts trusting a
+    -- forecast over a stated restriction.
+    it("stays hidden when a restriction is active despite a negative forecast", function()
+        assert.is_true(loadWith({ direct = false, active = "Combat" }):AreAuraIdentitiesHidden())
     end)
 
     for _, kind in ipairs({ "Combat", "Encounter", "ChallengeMode", "PvPMatch" }) do

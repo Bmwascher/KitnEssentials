@@ -76,11 +76,14 @@ end
 -- for a tainted caller -- not a secret return. So ask before scanning;
 -- sampling an aura to find out IS the error being avoided.
 --
--- ShouldAurasBeSecret answers the question directly and is the gate KE
--- already proved in dungeons (DungeonTimers' Guidance check). The restriction
--- types are the documented definition of the same condition and stand in when
--- the client has no such predicate. Neither available means no restriction
--- system to consult: answer "not hidden" and let the call proceed.
+-- Two independent sources, combined fail-closed. ShouldAurasBeSecret is the
+-- gate KE already proved in dungeons (DungeonTimers' Guidance check), but it
+-- only predicts whether queries GENERALLY return secrets, and the hard error
+-- comes from a separate access precondition -- so its "no" is not permission,
+-- and an active restriction type still hides auras on its own documented
+-- authority. Hidden when either says so; visible only when neither does.
+-- Neither available means no restriction system to consult: answer "not
+-- hidden" and let the call proceed.
 --
 -- StanceText keeps its own copy of the state list on purpose; its aura path
 -- is dormant and the guard is documented to travel with it.
@@ -95,7 +98,7 @@ end
 function KE:AreAuraIdentitiesHidden()
     if C_Secrets and C_Secrets.ShouldAurasBeSecret then
         local ok, secret = pcall(C_Secrets.ShouldAurasBeSecret)
-        if ok then return secret == true end
+        if ok and secret == true then return true end
     end
     if not (AURA_HIDDEN_STATES and C_RestrictedActions
         and C_RestrictedActions.IsAddOnRestrictionActive) then
