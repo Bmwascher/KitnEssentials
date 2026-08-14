@@ -307,15 +307,45 @@ function TutorialHideButtonsUnder(root)
     if root.GetChildren then TutorialScanChildren(pcall(root.GetChildren, root)) end
 end
 
--- One-time full walk to catch panels already open at enable time
+-- One-time full walk to catch panels already open at enable time.
+--
+-- This visits EVERY frame the client knows about, not just KE's or Blizzard's,
+-- so its cost scales with the player's whole addon set -- far enough to trip
+-- the script watchdog in a single pass. Sliced across frames instead: the
+-- watchdog measures one uninterrupted run, and nothing here is urgent enough
+-- to justify one. The guard keeps a second ApplySettings from starting a
+-- parallel walk over the same list.
+local TUTORIAL_SWEEP_SLICE = 500
+local tutorialSweeping = false
+
+local function TutorialSweepStep(frame, fp)
+    -- Re-checked every slice: the setting can be turned off mid-walk, and the
+    -- restore pass has already run by then. Without this the tail of the sweep
+    -- would hide buttons the player just asked to see again.
+    if not TutorialsEnabled() then
+        tutorialSweeping = false
+        return
+    end
+    local enumerate = EnumerateFrames
+    local visited = 0
+    while frame and visited < TUTORIAL_SWEEP_SLICE do
+        if frame.ShowTooltip == fp then TutorialHideButton(frame) end
+        frame = enumerate(frame)
+        visited = visited + 1
+    end
+    if not frame then
+        tutorialSweeping = false
+        return
+    end
+    C_Timer.After(0, function() TutorialSweepStep(frame, fp) end)
+end
+
 local function TutorialSweepAll()
+    if tutorialSweeping then return end
     local fp = GetTutorialFingerprint()
     if not fp then return end
-    local frame = EnumerateFrames()
-    while frame do
-        if frame.ShowTooltip == fp then TutorialHideButton(frame) end
-        frame = EnumerateFrames(frame)
-    end
+    tutorialSweeping = true
+    TutorialSweepStep(EnumerateFrames(), fp)
 end
 
 local function TutorialRestoreButtons()
