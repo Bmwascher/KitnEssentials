@@ -724,3 +724,257 @@ describe("Automation effective-state predicates (Task 3 Step 10b)", function()
         end)
     end)
 end)
+
+---------------------------------------------------------------------------------
+-- Behaviour 5: the Hide Helptips sweep lifecycle
+---------------------------------------------------------------------------------
+-- The sweep walks the client's entire frame list in slices so it cannot trip
+-- the script watchdog. Everything asserted here is invented bookkeeping around
+-- that walk: slice handoff, once-per-enable, abort-and-retry, generation
+-- retirement, per-frame isolation, and restore retention. The walk's TIMING is
+-- not under test -- the fixture's C_Timer records callbacks and these cases run
+-- them by hand.
+
+-- `count` frames, a tutorial button every `every`th slot, all reachable.
+-- Returns the frame list, the buttons in it, and a call counter for the
+-- enumerator so a case can prove a walk did or did not start.
+local function newSweepWorld(count, every, fingerprint)
+    local frames, buttons, index = {}, {}, {}
+    for i = 1, count do
+        local f = {
+            alpha = 1,
+            mouse = true,
+            SetAlpha = function(self, v) self.alpha = v end,
+            EnableMouse = function(self, v) self.mouse = v end,
+            CanBeAccessedInContext = function() return true end,
+        }
+        if i % every == 0 then
+            f.ShowTooltip = fingerprint
+            buttons[#buttons + 1] = f
+        end
+        frames[i] = f
+        index[f] = i
+    end
+
+    local calls = 0
+    _G.EnumerateFrames = function(prev)
+        calls = calls + 1
+        if prev == nil then return frames[1] end
+        local at = index[prev]
+        if not at then return nil end
+        return frames[at + 1]
+    end
+
+    return frames, buttons, function() return calls end
+end
+
+-- Runs the zero-delay callbacks queued from `from` onward, picking up the ones
+-- each slice queues behind it. Bounded: a walk that never terminates must fail
+-- the case, not hang the suite.
+local function pumpSlices(fx, from)
+    local i = from or 1
+    local ran = 0
+    while i <= #fx.timers do
+        local t = fx.timers[i]
+        i = i + 1
+        if t.delay == 0 and not t.pumped then
+            t.pumped = true
+            ran = ran + 1
+            if ran > 200 then error("sweep did not terminate") end
+            t.fn()
+        end
+    end
+    return ran
+end
+
+-- Master OFF, feature ON: Hide Helptips is master-independent, so ApplySettings
+-- reaches ApplyHideHelptips and returns before every other feature. That keeps
+-- the timer list to this walk's own slices.
+local function helptipFixture()
+    local fx = newFixture()
+    _G.MainHelpPlateButtonMixin = { ShowTooltip = function() end }
+    fx.fingerprint = _G.MainHelpPlateButtonMixin.ShowTooltip
+    fx.AU.db = { Enabled = false, HideHelptips = true }
+    return fx
+end
+
+local function countHidden(buttons)
+    local n = 0
+    for _, b in ipairs(buttons) do
+        if b.alpha == 0 then n = n + 1 end
+    end
+    return n
+end
+
+local function allHidden(buttons)
+    for _, b in ipairs(buttons) do
+        if b.alpha ~= 0 or b.mouse ~= false then return false end
+    end
+    return true
+end
+
+describe("Automation Hide Helptips sweep lifecycle", function()
+    it("hides every tutorial button across more than one slice", function()
+        local fx = helptipFixture()
+        local _, buttons = newSweepWorld(1200, 100, fx.fingerprint)
+        local from = #fx.timers + 1
+
+        fx.AU:ApplySettings()
+        assert.is_true(pumpSlices(fx, from) >= 2) -- 1200 frames cannot be one slice
+        assert.equals(12, #buttons)
+        assert.is_true(allHidden(buttons))
+    end)
+
+    it("does not walk again on a later apply once a walk completed", function()
+        local fx = helptipFixture()
+        local _, _, calls = newSweepWorld(1200, 100, fx.fingerprint)
+        local from = #fx.timers + 1
+
+        fx.AU:ApplySettings()
+        pumpSlices(fx, from)
+        local afterFirst = calls()
+
+        fx.AU:ApplySettings() -- what every zone load does
+        pumpSlices(fx, from)
+        assert.equals(afterFirst, calls())
+    end)
+
+    it("does not count a walk as done when no fingerprint exists yet", function()
+        local fx = newFixture()
+        _G.MainHelpPlateButtonMixin = nil
+        fx.AU.db = { Enabled = false, HideHelptips = true }
+        local from = #fx.timers + 1
+
+        local fingerprint = function() end
+        local _, buttons = newSweepWorld(400, 100, fingerprint)
+        fx.AU:ApplySettings() -- nothing to match against, so nothing is claimed
+        pumpSlices(fx, from)
+        assert.equals(0, countHidden(buttons))
+
+        _G.MainHelpPlateButtonMixin = { ShowTooltip = fingerprint }
+        fx.AU:ApplySettings()
+        pumpSlices(fx, from)
+        assert.is_true(allHidden(buttons))
+    end)
+
+    it("retries on a later apply after the walk throws part way through", function()
+        local fx = helptipFixture()
+        local frames, buttons = newSweepWorld(1200, 100, fx.fingerprint)
+        local from = #fx.timers + 1
+
+        -- The enumerator itself throwing is the one failure the per-frame guard
+        -- cannot absorb: it kills the slice rather than one node.
+        local index = {}
+        for i, f in ipairs(frames) do index[f] = i end
+        local broken = true
+        _G.EnumerateFrames = function(prev)
+            if prev == nil then return frames[1] end
+            local at = index[prev]
+            if not at then return nil end
+            if broken and at == 700 then error("enumeration blew up") end
+            return frames[at + 1]
+        end
+
+        fx.AU:ApplySettings()
+        pumpSlices(fx, from)
+        assert.is_true(countHidden(buttons) < #buttons) -- aborted part way
+
+        broken = false
+        fx.AU:ApplySettings() -- an aborted walk is not a finished one
+        pumpSlices(fx, from)
+        assert.is_true(allHidden(buttons))
+    end)
+
+    it("keeps walking when one frame refuses inspection", function()
+        local fx = helptipFixture()
+        local frames, buttons = newSweepWorld(1200, 100, fx.fingerprint)
+        -- 499 is not a multiple of 100, so the refusing frame is not itself one
+        -- of the tutorial buttons: every button must still be reached.
+        frames[499].CanBeAccessedInContext = function() error("no access") end
+        local from = #fx.timers + 1
+
+        fx.AU:ApplySettings()
+        pumpSlices(fx, from)
+        assert.is_true(allHidden(buttons))
+    end)
+
+    it("skips only the button that refuses, not the ones behind it", function()
+        local fx = helptipFixture()
+        local frames, buttons = newSweepWorld(1200, 100, fx.fingerprint)
+        frames[500].CanBeAccessedInContext = function() error("no access") end
+        local from = #fx.timers + 1
+
+        fx.AU:ApplySettings()
+        pumpSlices(fx, from)
+        assert.equals(#buttons - 1, countHidden(buttons))
+        assert.equals(1, frames[500].alpha) -- the refusing button, untouched
+    end)
+
+    it("retires a queued slice when the feature is switched off mid-walk", function()
+        local fx = helptipFixture()
+        local _, buttons = newSweepWorld(1200, 100, fx.fingerprint)
+        local from = #fx.timers + 1
+
+        fx.AU:ApplySettings()
+        -- One slice only, so the rest of the walk is still queued.
+        local first = fx.timers[from]
+        first.pumped = true
+        first.fn()
+        assert.is_true(countHidden(buttons) > 0)
+
+        fx.AU.db.HideHelptips = false
+        fx.AU:ApplySettings() -- restores what was hidden and retires the walk
+        assert.equals(0, countHidden(buttons))
+
+        pumpSlices(fx, from)
+        assert.equals(0, countHidden(buttons)) -- the retired slice re-hid nothing
+    end)
+
+    it("starts a fresh walk when the feature returns before the retired slice ran", function()
+        local fx = helptipFixture()
+        local _, buttons = newSweepWorld(1200, 100, fx.fingerprint)
+        local from = #fx.timers + 1
+
+        fx.AU:ApplySettings()
+        local first = fx.timers[from]
+        first.pumped = true
+        first.fn()
+
+        fx.AU.db.HideHelptips = false
+        fx.AU:ApplySettings()
+        fx.AU.db.HideHelptips = true
+        fx.AU:ApplySettings() -- must not be refused by the retired walk's guard
+
+        pumpSlices(fx, from)
+        assert.is_true(allHidden(buttons))
+    end)
+
+    it("keeps a button in the restore set until its restore succeeds", function()
+        local fx = helptipFixture()
+        local _, buttons = newSweepWorld(400, 100, fx.fingerprint)
+        local from = #fx.timers + 1
+
+        fx.AU:ApplySettings()
+        pumpSlices(fx, from)
+        assert.is_true(allHidden(buttons))
+
+        -- Restoring the mouse is a protected call in game, so it can refuse.
+        local stubborn = buttons[2]
+        local refusals = 1
+        stubborn.EnableMouse = function(self, v)
+            if v == true and refusals > 0 then
+                refusals = refusals - 1
+                error("protected")
+            end
+            self.mouse = v
+        end
+
+        fx.AU.db.HideHelptips = false
+        fx.AU:ApplySettings()
+        assert.equals(1, stubborn.alpha)  -- alpha went back
+        assert.is_false(stubborn.mouse)   -- the mouse did not
+
+        fx.AU:ApplySettings() -- still in the set, so the next pass finishes it
+        assert.is_true(stubborn.mouse)
+    end)
+end)
