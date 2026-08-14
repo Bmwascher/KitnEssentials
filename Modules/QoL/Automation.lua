@@ -261,11 +261,13 @@ local function GetTutorialFingerprint()
 end
 
 local function TutorialHideButton(btn)
-    -- Recorded BEFORE the mutations. EnableMouse is protected, so it can fail
-    -- on a frame this addon does not own; recording afterwards would leave a
-    -- transparent button the restore pass cannot find.
-    tutorialsHidden[btn] = true
     btn:SetAlpha(0)
+    -- Recorded BETWEEN the two: after the change that actually needs undoing,
+    -- and before the protected EnableMouse, which can fail on a frame this
+    -- addon does not own. Either end records the wrong set -- afterwards
+    -- leaves a transparent button restore cannot find, before leaves an
+    -- untouched button restore would alter.
+    tutorialsHidden[btn] = true
     btn:EnableMouse(false)
 end
 
@@ -321,58 +323,88 @@ end
 -- parallel walk over the same list.
 local TUTORIAL_SWEEP_SLICE = 500
 local tutorialSweeping = false
+local tutorialSweepGen = 0
+
+-- Inspect one frame. Both steps can throw and neither is this addon's frame:
+-- object security is a secret aspect in 12.1, so the access check's own answer
+-- can be a secret boolean, and hiding calls a protected function. Callers run
+-- this under pcall per frame so one bad node costs one node.
+local function TutorialInspectFrame(frame, fp)
+    if frame.CanBeAccessedInContext and not frame:CanBeAccessedInContext() then return end
+    if frame.ShowTooltip == fp then TutorialHideButton(frame) end
+end
 
 -- Returns the first frame of the next slice, or nil at the end of the list.
--- Takes the same two precautions the per-panel walk takes, and for the same
--- reason: this is handed the client's whole frame list, so it refuses
--- forbidden nodes before touching any field on them.
 local function TutorialSweepSlice(frame, fp)
     local enumerate = EnumerateFrames
     local visited = 0
     while frame and visited < TUTORIAL_SWEEP_SLICE do
-        if not (frame.IsForbidden and frame:IsForbidden())
-            and frame.ShowTooltip == fp then
-            TutorialHideButton(frame)
-        end
+        pcall(TutorialInspectFrame, frame, fp)
         frame = enumerate(frame)
         visited = visited + 1
     end
     return frame
 end
 
-local function TutorialSweepStep(frame, fp)
-    -- Re-checked every slice: the setting can be turned off mid-walk, and the
-    -- restore pass has already run by then. Without this the tail of the sweep
-    -- would hide buttons the player just asked to see again.
-    if not TutorialsEnabled() then
-        tutorialSweeping = false
-        return
-    end
-    -- The slice runs under pcall so the flag cannot survive a throw. Hiding a
-    -- button calls a protected function on a frame this addon does not own; a
-    -- latched flag would kill the feature until reload, where abandoning the
-    -- walk only costs the rest of this pass and the next apply retries.
-    local ok, nextFrame = pcall(TutorialSweepSlice, frame, fp)
-    if not ok or not nextFrame then
-        tutorialSweeping = false
-        return
-    end
-    C_Timer.After(0, function() TutorialSweepStep(nextFrame, fp) end)
+-- An abandoned walk is NOT a completed one: clearing the done flag too is what
+-- makes "the next apply retries" true rather than a comforting comment.
+local function TutorialSweepAbort()
+    tutorialSweeping = false
+    tutorialsSwept = false
 end
 
+local function TutorialSweepStep(frame, fp, gen)
+    -- Retired by a toggle-off that already ran the restore pass. Touch no
+    -- state: a newer walk may own these flags now.
+    if gen ~= tutorialSweepGen then return end
+    if not TutorialsEnabled() then
+        TutorialSweepAbort()
+        return
+    end
+    local ok, nextFrame = pcall(TutorialSweepSlice, frame, fp)
+    if not ok then
+        TutorialSweepAbort()
+        return
+    end
+    if not nextFrame then
+        tutorialSweeping = false
+        tutorialsSwept = true
+        return
+    end
+    if not pcall(C_Timer.After, 0, function() TutorialSweepStep(nextFrame, fp, gen) end) then
+        TutorialSweepAbort()
+    end
+end
+
+-- Owns its own once-per-enable bookkeeping. ApplySettings runs for every
+-- module on every PLAYER_ENTERING_WORLD and this walks every frame in the
+-- game, so only a walk that actually finished counts as done -- a missing
+-- fingerprint or a throw leaves it to the next apply.
 local function TutorialSweepAll()
-    if tutorialSweeping then return end
+    if tutorialSweeping or tutorialsSwept then return end
     local fp = GetTutorialFingerprint()
     if not fp then return end
     tutorialSweeping = true
-    TutorialSweepStep(EnumerateFrames(), fp)
+    local ok, first = pcall(EnumerateFrames)
+    if not ok then
+        TutorialSweepAbort()
+        return
+    end
+    TutorialSweepStep(first, fp, tutorialSweepGen)
+end
+
+local function TutorialRestoreButton(btn)
+    btn:SetAlpha(1)
+    btn:EnableMouse(true)
 end
 
 local function TutorialRestoreButtons()
     for btn in pairs(tutorialsHidden) do
-        btn:SetAlpha(1)
-        btn:EnableMouse(true)
+        -- Dropped from the set first, then restored under pcall: EnableMouse is
+        -- protected, and one button that refuses must not abort the restore of
+        -- every button behind it, nor be retried forever.
         tutorialsHidden[btn] = nil
+        pcall(TutorialRestoreButton, btn)
     end
 end
 
@@ -416,14 +448,7 @@ local function ApplyHideHelptips()
         pcall(SetCVar, "hideHelptips", "1")
         pcall(SetCVar, "showTutorials", "0")
         tutorialsWeSetCVar = true
-        -- Once per off-to-on edge only. ApplySettings runs for every module on
-        -- every PLAYER_ENTERING_WORLD, and this walks every frame in the game;
-        -- the ShowUIPanel and HelpTip hooks already cover anything opened
-        -- after the first pass.
-        if not tutorialsSwept then
-            tutorialsSwept = true
-            TutorialSweepAll()
-        end
+        TutorialSweepAll()
         HideOpenTips()
     else
         if tutorialsWeSetCVar then
@@ -431,6 +456,12 @@ local function ApplyHideHelptips()
             pcall(SetCVar, "showTutorials", "1")
             tutorialsWeSetCVar = false
         end
+        -- Retire any queued slice before restoring, and free the guard now so a
+        -- re-enable in the same frame is not refused by a walk that no longer
+        -- owns anything. The retired continuation returns without touching
+        -- state.
+        tutorialSweepGen = tutorialSweepGen + 1
+        tutorialSweeping = false
         tutorialsSwept = false
         TutorialRestoreButtons()
     end
