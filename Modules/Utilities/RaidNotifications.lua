@@ -524,17 +524,26 @@ end
 --- reason to exist is gone). The shouldSubscribe gate already confirmed we're
 --- in a raid instance.
 function RN:_OnResetBossAura(_, unit, updateInfo)
-    if unit ~= "player" then return end
+    -- Ahead of the comparison: the event's unit token is secret while aura
+    -- identity is hidden, which makes `unit ~= "player"` a secret boolean,
+    -- and truth-testing one of those throws.
+    if KE:IsSecretValue(unit) or unit ~= "player" then return end
     if not updateInfo then return end
     if self.isPreview then return end
 
-    -- Both payload fields read below turn secret while aura identity is
-    -- hidden: pairs rejects a secret table outright, and a boolean test on a
-    -- secret isFullUpdate throws. Nothing here can read such an update, and
-    -- the alert cannot show in combat anyway -- the combat-end resync
-    -- (_OnResetBossCombatEnd -> _SyncResetBossFromExistingSated) rebuilds it.
-    if issecretvalue(updateInfo.addedAuras)
-        or issecretvalue(updateInfo.isFullUpdate) then
+    -- Everything below turns secret while aura identity is hidden: pairs
+    -- rejects a secret table, a boolean test on a secret isFullUpdate throws,
+    -- and the instance lookup inside the loop hard-errors without aura
+    -- access. The list is tested with the table predicate rather than the
+    -- value one because that also catches a plain table whose reads hand back
+    -- secrets, which is exactly what the loop indexes.
+    --
+    -- Nothing here can read such an update, and the alert cannot show in
+    -- combat anyway -- the combat-end resync (_OnResetBossCombatEnd ->
+    -- _SyncResetBossFromExistingSated) rebuilds it.
+    if KE:AreAuraIdentitiesHidden()
+        or KE:IsSecretTable(updateInfo.addedAuras)
+        or KE:IsSecretValue(updateInfo.isFullUpdate) then
         return
     end
 
