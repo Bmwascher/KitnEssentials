@@ -528,6 +528,16 @@ function RN:_OnResetBossAura(_, unit, updateInfo)
     if not updateInfo then return end
     if self.isPreview then return end
 
+    -- Both payload fields read below turn secret while aura identity is
+    -- hidden: pairs rejects a secret table outright, and a boolean test on a
+    -- secret isFullUpdate throws. Nothing here can read such an update, and
+    -- the alert cannot show in combat anyway -- the combat-end resync
+    -- (_OnResetBossCombatEnd -> _SyncResetBossFromExistingSated) rebuilds it.
+    if issecretvalue(updateInfo.addedAuras)
+        or issecretvalue(updateInfo.isFullUpdate) then
+        return
+    end
+
     if updateInfo.addedAuras then
         for _, info in pairs(updateInfo.addedAuras) do
             if info and info.auraInstanceID then
