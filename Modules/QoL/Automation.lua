@@ -400,11 +400,13 @@ end
 
 local function TutorialRestoreButtons()
     for btn in pairs(tutorialsHidden) do
-        -- Dropped from the set first, then restored under pcall: EnableMouse is
-        -- protected, and one button that refuses must not abort the restore of
-        -- every button behind it, nor be retried forever.
-        tutorialsHidden[btn] = nil
-        pcall(TutorialRestoreButton, btn)
+        -- Restored under pcall so one button that refuses cannot abort the
+        -- restore of every button behind it, and dropped only on success:
+        -- EnableMouse is protected, and forgetting a button that is still
+        -- hidden would strand it. A later apply picks the failures back up.
+        if pcall(TutorialRestoreButton, btn) then
+            tutorialsHidden[btn] = nil
+        end
     end
 end
 
