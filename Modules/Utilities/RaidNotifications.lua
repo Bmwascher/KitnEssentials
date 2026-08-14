@@ -524,19 +524,45 @@ end
 --- reason to exist is gone). The shouldSubscribe gate already confirmed we're
 --- in a raid instance.
 function RN:_OnResetBossAura(_, unit, updateInfo)
-    if unit ~= "player" then return end
+    -- Ahead of the comparison: the event's unit token is secret while aura
+    -- identity is hidden, which makes `unit ~= "player"` a secret boolean,
+    -- and truth-testing one of those throws.
+    if KE:IsSecretValue(unit) or unit ~= "player" then return end
     if not updateInfo then return end
     if self.isPreview then return end
+
+    -- Everything below turns secret while aura identity is hidden: pairs
+    -- rejects a secret table, a boolean test on a secret isFullUpdate throws,
+    -- and the instance lookup inside the loop hard-errors without aura
+    -- access. The list is tested with the table predicate rather than the
+    -- value one because that also catches a plain table whose reads hand back
+    -- secrets, which is exactly what the loop indexes.
+    --
+    -- Nothing here can read such an update, and the alert cannot show in
+    -- combat anyway -- the combat-end resync (_OnResetBossCombatEnd ->
+    -- _SyncResetBossFromExistingSated) rebuilds it.
+    if KE:AreAuraIdentitiesHidden()
+        or KE:IsSecretTable(updateInfo.addedAuras)
+        or KE:IsSecretValue(updateInfo.isFullUpdate) then
+        return
+    end
 
     if updateInfo.addedAuras then
         for _, info in pairs(updateInfo.addedAuras) do
             if info and info.auraInstanceID then
                 local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", info.auraInstanceID)
-                if data and data.spellId and not issecretvalue(data.spellId) then
-                    for _, sated in ipairs(SATED_DEBUFFS) do
-                        if data.spellId == sated then
-                            self:_FireResetBoss()
-                            return
+                -- The table is checked before it is indexed, not after: an
+                -- individual spell can be secret even when the general
+                -- forecast above said otherwise, and reading a field off a
+                -- secret table is itself the throw.
+                if data and KE:NotSecretTable(data) then
+                    local spellID = data.spellId
+                    if KE:IsSafeValue(spellID) then
+                        for _, sated in ipairs(SATED_DEBUFFS) do
+                            if spellID == sated then
+                                self:_FireResetBoss()
+                                return
+                            end
                         end
                     end
                 end
