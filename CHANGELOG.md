@@ -1,5 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.0.5
+
+Two more patch 12.1 crash fixes, both reported from live play.
+
+### Raid Notifications
+- Fixed a flood of errors during raid pulls. The **Reset Boss** alert read the
+  game's buff-change message, and patch 12.1 hides that information in raids
+  and dungeons, so every buff change threw an error. It now checks before it
+  reads, and the alert still rebuilds itself once combat ends, as before
+
+### Automation
+- Fixed **Hide Helptips** stopping the game with "script ran too long". The
+  one-off scan that hides Blizzard tutorial buttons checked every frame in the
+  game in a single pass, which with a large addon collection takes longer than
+  the game allows. It now works through the list in small batches
+- The same scan no longer repeats on every zone and dungeon load, and no longer
+  gives up for the rest of the session if one frame refuses to be checked
+
+---
+
 ## v4.0.4
 
 More patch 12.1 fixes, both in code that reads buffs.
