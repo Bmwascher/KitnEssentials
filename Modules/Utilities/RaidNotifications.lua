@@ -551,11 +551,18 @@ function RN:_OnResetBossAura(_, unit, updateInfo)
         for _, info in pairs(updateInfo.addedAuras) do
             if info and info.auraInstanceID then
                 local data = C_UnitAuras.GetAuraDataByAuraInstanceID("player", info.auraInstanceID)
-                if data and data.spellId and not issecretvalue(data.spellId) then
-                    for _, sated in ipairs(SATED_DEBUFFS) do
-                        if data.spellId == sated then
-                            self:_FireResetBoss()
-                            return
+                -- The table is checked before it is indexed, not after: an
+                -- individual spell can be secret even when the general
+                -- forecast above said otherwise, and reading a field off a
+                -- secret table is itself the throw.
+                if data and KE:NotSecretTable(data) then
+                    local spellID = data.spellId
+                    if KE:IsSafeValue(spellID) then
+                        for _, sated in ipairs(SATED_DEBUFFS) do
+                            if spellID == sated then
+                                self:_FireResetBoss()
+                                return
+                            end
                         end
                     end
                 end
