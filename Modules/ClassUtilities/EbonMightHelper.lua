@@ -164,8 +164,13 @@ function EM:OnTimingCheck(expectedCastEnd, previousExpiration, count)
     if not self.db.Enabled then return end
 
     -- Check what spell is currently being cast
-    local spellId = select(9, UnitCastingInfo("player")) or select(8, UnitChannelInfo("player"))
-    if not spellId then return end
+    local spellId = select(9, UnitCastingInfo("player"))
+    if KE:IsSecretValue(spellId) then return end
+    if spellId == nil then
+        spellId = select(8, UnitChannelInfo("player"))
+        if KE:IsSecretValue(spellId) then return end
+    end
+    if spellId == nil then return end
     if not IsExtender(spellId) then return end
 
     local expiration = GetEbonMightExpiration()
@@ -210,8 +215,10 @@ end
 ---------------------------------------------------------------------------------
 function EM:OnEvent(event, unit, ...)
     if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_EMPOWER_START" then
+        if KE:IsSecretValue(unit) then return end
         if unit ~= "player" then return end
         local _, spellId = ...
+        if KE:IsSecretValue(spellId) then return end
 
         -- Empower events may pass spellId at a different arg position
         if spellId and spellId < 100000 and event == "UNIT_SPELLCAST_EMPOWER_START" then
@@ -253,8 +260,10 @@ function EM:OnEvent(event, unit, ...)
         end
 
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        if KE:IsSecretValue(unit) then return end
         if unit ~= "player" then return end
         local _, spellId = ...
+        if KE:IsSecretValue(spellId) then return end
         if spellId == EBON_MIGHT_CAST then
             self.lastEbonMightCast = GetTime()
         end
