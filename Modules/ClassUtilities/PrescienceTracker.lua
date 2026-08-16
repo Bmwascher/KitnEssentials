@@ -262,10 +262,15 @@ function PT:OnUnitAura(_, unit, info)
         -- Incremental update: process event payload directly
         if info.addedAuras then
             for _, aura in ipairs(info.addedAuras) do
-                if not issecretvalue(aura.applications) then
-                    local def = BUFF_DEFS[aura.spellId]
-                    if def and self.db[def.key] ~= false and aura.sourceUnit == "player" then
-                        self:AddTrackedBuff(unit, aura, aura.spellId)
+                -- Guard the fields this loop CONSUMES. A secret spell id used
+                -- as a table key and a secret source compared against a literal
+                -- are the two ways this loop can throw.
+                local spellId = aura.spellId
+                local source = aura.sourceUnit
+                if not KE:IsSecretValue(spellId) and not KE:IsSecretValue(source) then
+                    local def = BUFF_DEFS[spellId]
+                    if def and self.db[def.key] ~= false and source == "player" then
+                        self:AddTrackedBuff(unit, aura, spellId)
                         changed = true
                         break
                     end
