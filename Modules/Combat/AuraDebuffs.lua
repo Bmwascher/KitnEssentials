@@ -431,8 +431,10 @@ function AD:OnEnable()
     wipe(self.auraCache)
     self:CreateContainer()
 
-    self:RegisterEvent("UNIT_AURA",              "OnUnitAura")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD",   "QueueFullRefresh")
+    self:RegisterEvent("UNIT_AURA",                       "OnUnitAura")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD",           "QueueFullRefresh")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED",            "QueueFullRefresh")
+    self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "QueueFullRefresh")
 
     self:RefreshAllAuras()
 end
@@ -488,7 +490,11 @@ function AD:QueueFullRefresh()
     if self._pendingFullRefresh then return end
     self._pendingFullRefresh = true
     C_Timer.After(0, function()
+        -- Clear the debounce before any early return: the queued operation is
+        -- over either way, and a flag left set would swallow the next queue
+        -- attempt.
         AD._pendingFullRefresh = false
+        if not AD:IsEnabled() then return end
         AD:RefreshAllAuras()
     end)
 end
@@ -496,8 +502,14 @@ end
 -- UNIT_AURA handler with updateInfo support. Falls back to QueueFullRefresh
 -- when updateInfo is missing or isFullUpdate is true (zone change, /reload).
 function AD:OnUnitAura(_, unit, updateInfo)
-    if unit ~= UNIT then return end
+    -- Two different questions, both asked before the token is compared. The
+    -- broad one first: the incremental path below reaches aura APIs that hard
+    -- error without access, and a readable payload is not permission to call
+    -- them.
     if not self.frame then return end
+    if KE:AreAuraIdentitiesHidden() then return end
+    if KE:IsUnreadableAuraPayload(unit, updateInfo) then return end
+    if unit ~= UNIT then return end
 
     if not updateInfo or updateInfo.isFullUpdate then
         self:QueueFullRefresh()
@@ -952,6 +964,11 @@ function AD:RefreshAllAuras()
         return
     end
     self.frame:Show()
+
+    -- The live scan below needs aura access and hard errors without it. Leave
+    -- the last painted list alone rather than blanking it; the release refresh
+    -- rebuilds. The preview path reads nothing and is unaffected.
+    if not self.isPreview and KE:AreAuraIdentitiesHidden() then return end
 
     local db = self.db
     wipe(self.auraCache)
