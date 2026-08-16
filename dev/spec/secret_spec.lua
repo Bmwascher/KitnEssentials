@@ -6,10 +6,27 @@ local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
 
 describe("Secret.lua restriction state machine", function()
-    local KE, frames
+    local KE, frames, restrictionActive
+
     before_each(function()
         frames = mock.install()
+        restrictionActive = {}
+        _G.Enum = {
+            AddOnRestrictionType = {
+                Combat = 0, Encounter = 1, ChallengeMode = 2,
+                PvPMatch = 3, Map = 4, Chat = 5,
+            },
+            AddOnRestrictionState = { Inactive = 0, Activating = 1, Active = 2 },
+        }
+        _G.C_RestrictedActions = {
+            IsAddOnRestrictionActive = function(t) return restrictionActive[t] or false end,
+        }
         KE = helpers.loadModule("Core/Secret.lua", { Print = function() end })
+    end)
+
+    after_each(function()
+        _G.Enum = nil
+        _G.C_RestrictedActions = nil
     end)
 
     it("starts unrestricted", function()
@@ -44,11 +61,48 @@ describe("Secret.lua restriction state machine", function()
         assert.is_true(ran)
     end)
 
-    it("treats ADDON_RESTRICTION_STATE_CHANGED(Map) as partial restriction", function()
-        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", "Map", true)
+    it("treats a Map restriction as partial", function()
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 4, 2) -- Map, Active
         assert.equals(1, KE:GetRestrictionState())
         assert.is_true(KE:IsRestricted())
         assert.is_false(KE:IsFullyRestricted())
+    end)
+
+    it("treats Encounter, ChallengeMode and PvPMatch as full restriction", function()
+        for _, restrictionType in ipairs({ 1, 2, 3 }) do
+            frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", restrictionType, 2)
+            assert.is_true(KE:IsFullyRestricted())
+            frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", restrictionType, 0)
+            assert.equals(0, KE:GetRestrictionState())
+        end
+    end)
+
+    it("treats Activating as already restricted", function()
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 1, 1) -- Encounter, Activating
+        assert.is_true(KE:IsFullyRestricted())
+    end)
+
+    it("clears on Inactive rather than reading zero as restricted", function()
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 2) -- ChallengeMode, Active
+        assert.is_true(KE:IsFullyRestricted())
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 0) -- ChallengeMode, Inactive
+        assert.equals(0, KE:GetRestrictionState())
+    end)
+
+    it("seeds an already-active restriction on entering world", function()
+        restrictionActive[2] = true -- ChallengeMode, e.g. a reload inside a keystone
+        frames[1]:Fire("PLAYER_ENTERING_WORLD")
+        assert.is_true(KE:IsFullyRestricted())
+    end)
+
+    it("flushes a deferred callback when the seeded restriction clears", function()
+        restrictionActive[1] = true -- Encounter
+        frames[1]:Fire("PLAYER_ENTERING_WORLD")
+        local ran = false
+        KE:DeferUntilUnrestricted(0, function() ran = true end)
+        assert.is_false(ran)
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 1, 0)
+        assert.is_true(ran)
     end)
 end)
 
