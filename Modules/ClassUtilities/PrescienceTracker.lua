@@ -202,9 +202,11 @@ function PT:RemoveTrackedBuff(auraInstanceID)
 end
 
 function PT:OnUnitAura(_, unit, info)
-    if not unit then return end
     if not self.db.Enabled or self.isPreview then return end
     if not self.isAugSpec then return end
+    if KE:AreAuraIdentitiesHidden() then return end
+    if KE:IsUnreadableAuraPayload(unit, info) then return end
+    if unit == nil then return end
 
     -- Skip non-party/raid units (nameplates, etc.)
     if unit ~= "player" and not unit:find("^party%d") and not unit:find("^raid%d") then return end
