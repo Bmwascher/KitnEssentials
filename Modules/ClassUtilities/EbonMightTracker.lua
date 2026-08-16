@@ -903,7 +903,9 @@ end
 function EMT:OnUnitAura(_, unit, updateInfo)
     if not self.db.Enabled or self.isPreview then return end
     if not self.isAugSpec then return end
-    if not unit then return end
+    if KE:AreAuraIdentitiesHidden() then return end
+    if KE:IsUnreadableAuraPayload(unit, updateInfo) then return end
+    if unit == nil then return end
 
     -- Filter: only player, party, raid (not pets)
     if unit ~= "player" and not unit:find("^party%d") and not unit:find("^raid%d") then return end
@@ -1026,6 +1028,7 @@ end
 
 function EMT:PLAYER_REGEN_ENABLED()
     self:AutoRefreshSeed()
+    self:QueueRestrictionRescan()
 end
 
 function EMT:ACTIVE_PLAYER_SPECIALIZATION_CHANGED()
@@ -1080,6 +1083,25 @@ function EMT:PLAYER_TOTEM_UPDATE()
     self:UpdateDisplay()
 end
 
+-- Dropped events leave the tracker stale, and combat end is not restriction
+-- end. Rescan a frame after the transition, once the restriction system answers
+-- again. Two events feed this, so it debounces to one pending rescan: the scan
+-- walks the whole roster. The scan does not raise while identities are hidden,
+-- so the gate below is about reading something useful, not about safety.
+function EMT:QueueRestrictionRescan()
+    if self._restrictionRescanPending then return end
+    self._restrictionRescanPending = true
+    C_Timer.After(0, function()
+        EMT._restrictionRescanPending = false
+        if not EMT:IsEnabled() then return end
+        if not EMT.isAugSpec or EMT.isPreview then return end
+        if KE:AreAuraIdentitiesHidden() then return end
+        EMT:ScanAuras()
+        EMT:TickerHandling()
+        EMT:UpdateDisplay()
+    end)
+end
+
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
@@ -1108,6 +1130,8 @@ function EMT:OnEnable()
     self:RegisterEvent("UNIT_AURA", "OnUnitAura")
     self:RegisterEvent("UNIT_FLAGS")
     self:RegisterEvent("PLAYER_TOTEM_UPDATE")
+    self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "QueueRestrictionRescan")
+    self:QueueRestrictionRescan()
 end
 
 function EMT:OnDisable()
