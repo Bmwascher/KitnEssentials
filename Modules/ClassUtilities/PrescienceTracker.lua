@@ -118,6 +118,19 @@ end
 ---------------------------------------------------------------------------------
 -- Aura Detection
 ---------------------------------------------------------------------------------
+-- points[1] == 6 marks a crit Prescience. The table can be plain while its
+-- accesses produce secrets, so the table predicate and the element are both
+-- asked before the literal comparison. Unknown is NOT a crit.
+local function IsCritPrescience(aura, spellID)
+    if spellID == nil then spellID = aura.spellId end
+    if KE:IsSecretValue(spellID) or spellID ~= PRESCIENCE_ID then return false end
+    local points = aura.points
+    if points == nil or KE:IsSecretValue(points) or KE:IsSecretTable(points) then return false end
+    local first = points[1]
+    if KE:IsSecretValue(first) then return false end
+    return first == 6
+end
+
 function PT:ScanUnit(unit)
     if not UnitExists(unit) then return end
 
@@ -207,11 +220,7 @@ function PT:AddTrackedBuff(unit, aura, spellID)
     local role = UnitGroupRolesAssigned(unit) or "NONE"
     local _, classToken = UnitClass(unit)
 
-    -- Prescience crit detection: aura.points[1] == 6
-    local isCrit = false
-    if aura.points and not issecretvalue(aura.points) then
-        isCrit = aura.points[1] == 6 and spellID == PRESCIENCE_ID
-    end
+    local isCrit = IsCritPrescience(aura, spellID)
 
     self.trackedBuffs[instanceID] = {
         unit = unit,
@@ -287,7 +296,7 @@ function PT:OnUnitAura(_, unit, info)
                         if not issecretvalue(aura.expirationTime) then
                             tracked.expirationTime = aura.expirationTime
                             tracked.duration = aura.duration or 0
-                            tracked.isCrit = aura.points and not issecretvalue(aura.points) and aura.points[1] == 6 and aura.spellId == PRESCIENCE_ID
+                            tracked.isCrit = IsCritPrescience(aura)
                             changed = true
                         end
                     end
