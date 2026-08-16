@@ -254,6 +254,12 @@ describe("Secret.lua UNIT_AURA payload gate", function()
         assert.is_true(KE:IsUnreadableAuraPayload("player", info))
     end)
 
+    it("refuses an outer table that is itself a secret value", function()
+        local info = {}
+        local KE = loadWith({ [info] = "value" })
+        assert.is_true(KE:IsUnreadableAuraPayload("player", info))
+    end)
+
     it("refuses a secret isFullUpdate", function()
         local flag = {}
         local KE = loadWith({ [flag] = "value" })
