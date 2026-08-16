@@ -1788,13 +1788,11 @@ local function ApplyHideTransforms()
                 CancelMatchingTransforms(true)  -- clear anything that landed in combat
                 return
             end
-            -- UNIT_AURA (player only). The payload (and fields) can be secret
-            -- in restricted content -- boolean use of a secret errors, and the
-            -- sweep would error anyway; bail.
-            if not updateInfo then return end
-            if issecretvalue and issecretvalue(updateInfo) then return end
+            -- UNIT_AURA (player only). The shared gate covers the payload and
+            -- isFullUpdate; the nil check follows it, not the other way round.
+            if KE:IsUnreadableAuraPayload("player", updateInfo) then return end
+            if updateInfo == nil then return end
             local isFull = updateInfo.isFullUpdate
-            if isFull ~= nil and issecretvalue and issecretvalue(isFull) then return end
             if isFull then
                 CancelMatchingTransforms(false)
             elseif updateInfo.addedAuras then

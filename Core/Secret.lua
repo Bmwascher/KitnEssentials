@@ -134,9 +134,9 @@ function KE:IsUnreadableAuraPayload(unit, updateInfo)
     local added   = updateInfo.addedAuras
     local updated = updateInfo.updatedAuraInstanceIDs
     local removed = updateInfo.removedAuraInstanceIDs
-    if (added ~= nil and self:IsSecretTable(added))
-        or (updated ~= nil and self:IsSecretTable(updated))
-        or (removed ~= nil and self:IsSecretTable(removed)) then
+    if (added ~= nil and (self:IsSecretValue(added) or self:IsSecretTable(added)))
+        or (updated ~= nil and (self:IsSecretValue(updated) or self:IsSecretTable(updated)))
+        or (removed ~= nil and (self:IsSecretValue(removed) or self:IsSecretTable(removed))) then
         return true
     end
     return false

@@ -1197,6 +1197,13 @@ end
 
 function AD:HidePreview()
     self.isPreview = false
+    -- Drop the preview records here rather than leaving it to the refresh.
+    -- While identities are hidden the refresh returns early to preserve the
+    -- last real list, and preview records left in the cache would keep
+    -- painting invented debuffs for the rest of the restricted stretch.
+    wipe(self.auraCache)
+    wipe(self.activeAuras)
+    self:LayoutAndPaint()
     self:RefreshAllAuras()
     if not self.db.Enabled and self.frame then
         self.frame:Hide()

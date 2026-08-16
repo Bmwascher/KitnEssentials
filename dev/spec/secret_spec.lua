@@ -275,6 +275,15 @@ describe("Secret.lua UNIT_AURA payload gate", function()
         end)
     end
 
+    for _, field in ipairs({ "addedAuras", "updatedAuraInstanceIDs",
+                             "removedAuraInstanceIDs" }) do
+        it("refuses a " .. field .. " that is itself a secret value", function()
+            local list = {}
+            local KE = loadWith({ [list] = "value" })
+            assert.is_true(KE:IsUnreadableAuraPayload("player", { [field] = list }))
+        end)
+    end
+
     it("does not refuse a nil updateInfo", function()
         assert.is_false(loadWith({}):IsUnreadableAuraPayload("player", nil))
     end)
