@@ -1,7 +1,10 @@
--- Modules/Utilities/NoMovementAlert.lua -- the resolution layer only. The
--- tracking engine, the frames and the event wiring are a verbatim port and are
--- verified in game; what is tested here is the one rule a later edit breaks
--- silently: which spells count as enabled, and for which spec.
+-- Modules/Utilities/NoMovementAlert.lua -- the layers a later edit breaks
+-- silently: spell resolution end to end (the exported tables and key format,
+-- which spells count as enabled and for which spec, replacement choices, and
+-- alias and category durations), how role colours resolve, how a cooldown reads
+-- back, and whether an unreadable aura is allowed to masquerade as an absent
+-- one. The tracking engine, the frames and the event wiring are a verbatim port
+-- and are verified in game.
 local L = require("dev.spec._ke_loader")
 
 describe("movement alert spell resolution", function()
@@ -223,4 +226,75 @@ describe("NoMovementAlert RoleColor", function()
         end)
     end)
 
+end)
+
+local BURNING_RUSH = 111400
+
+-- The loader does not seed the buff-readback state, because the module's own
+-- OnEnable is never called headlessly. Each case starts from a known table
+-- rather than inheriting one, and Update is stubbed so RefreshBuffStates can
+-- run without a frame.
+local function seededNMA(overrides)
+    local NMA = L.loadMovementAlert(overrides)
+    NMA.tracked = { { spellId = BURNING_RUSH, isBuffActive = true } }
+    NMA.auraActive = {}
+    NMA.glowing = {}
+    NMA.auraScanTrusted = overrides.trusted == true or nil
+    NMA.Update = function() end
+    return NMA
+end
+
+describe("NoMovementAlert buff readback", function()
+    it("reports active from a readable aura", function()
+        local NMA = seededNMA({ aura = { spellId = BURNING_RUSH } })
+        NMA:RefreshBuffStates()
+        assert.is_true(NMA.auraActive[BURNING_RUSH])
+    end)
+
+    it("honours earned trust while identities are readable", function()
+        -- Positive control for the fix: trust still works where it was earned.
+        -- Without this, deleting the trust path entirely would pass every other
+        -- case in this block.
+        local NMA = seededNMA({ aura = nil, trusted = true })
+        NMA.glowing[BURNING_RUSH] = true
+        NMA:RefreshBuffStates()
+        assert.is_false(NMA.auraActive[BURNING_RUSH])
+    end)
+
+    it("ignores earned trust while identities are hidden and uses the glow", function()
+        -- The defect. Trust earned out of combat made the nil read authoritative
+        -- inside a key, so the glow fallback was unreachable exactly when it was
+        -- the only working source.
+        local NMA = seededNMA({ aura = nil, trusted = true, aurasHidden = true })
+        NMA.glowing[BURNING_RUSH] = true
+        NMA:RefreshBuffStates()
+        assert.is_true(NMA.auraActive[BURNING_RUSH])
+    end)
+
+    it("still reports inactive while hidden when the glow is also off", function()
+        local NMA = seededNMA({ aura = nil, trusted = true, aurasHidden = true })
+        NMA:RefreshBuffStates()
+        assert.is_false(NMA.auraActive[BURNING_RUSH])
+    end)
+
+    it("uses the glow when trust was never earned", function()
+        local NMA = seededNMA({ aura = nil })
+        NMA.glowing[BURNING_RUSH] = true
+        NMA:RefreshBuffStates()
+        assert.is_true(NMA.auraActive[BURNING_RUSH])
+    end)
+end)
+
+describe("NoMovementAlert trust acquisition", function()
+    it("does NOT grant trust while identities are hidden", function()
+        local NMA = seededNMA({ aura = { spellId = BURNING_RUSH }, aurasHidden = true })
+        NMA:OnAura(nil, "player")
+        assert.is_nil(NMA.auraScanTrusted)
+    end)
+
+    it("grants trust on a successful read while identities are readable", function()
+        local NMA = seededNMA({ aura = { spellId = BURNING_RUSH } })
+        NMA:OnAura(nil, "player")
+        assert.is_true(NMA.auraScanTrusted)
+    end)
 end)

@@ -104,6 +104,10 @@ function M.reset()
         "GetUnitEmpowerMinHoldTime", "LibStub",
         "GetNumGroupMembers", "IsInRaid", "UnitGroupRolesAssigned",
         "GetSpecialization", "GetSpecializationInfo", "UIParent",
+        "C_SpellActivationOverlay", "UnitAffectingCombat",
+        "IsMounted", "UnitOnTaxi", "UnitInVehicle", "UnitHasVehicleUI",
+        "UnitIsDeadOrGhost", "PetHasActionBar", "GetPetActionInfo",
+        "C_SpellBook", "Enum", "strsplit", "KitnEssentials",
     }) do
         _G[k] = nil
     end

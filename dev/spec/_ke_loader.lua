@@ -1677,10 +1677,12 @@ function L.loadCombatTimer(overrides)
     return modules["CombatTimer"], KE
 end
 
--- Modules/Utilities/NoMovementAlert.lua. Only the PURE resolution layer is
--- reachable headlessly: the data tables, the per-spec override rules and the
--- alias/category duration lookup. Everything else in that module is frames,
--- cooldown APIs and event timing, which this project verifies in game.
+-- Modules/Utilities/NoMovementAlert.lua. Several layers are reachable
+-- headlessly: the PURE resolution layer (data tables, per-spec override rules,
+-- alias and category duration lookup), the role-colour resolver, the cooldown
+-- readback, and the buff-readback refusal rules, which are driven directly
+-- rather than through OnEnable. The frames and the event timing are still
+-- verified in game.
 -- The module captures C_Spell/C_Timer/GetTime/UnitClass at file scope, so they
 -- have to exist on _G BEFORE loadModule or the module holds stale upvalues.
 -- Returns NMA, KE, rec. KE comes SECOND, unlike some loaders here, because the
@@ -1715,9 +1717,19 @@ function L.loadMovementAlert(overrides)
     _G.Enum = overrides.Enum or {}
     _G.Enum.SpellBookSpellBank = _G.Enum.SpellBookSpellBank or { Player = 0 }
 
+    -- Both are read at CALL time, so a case can swap them per override.
+    -- ReadBuffActive reads the aura namespace; SeedGlowState reads the overlay.
+    -- An absent aura models the soft-fail this wave exists for; an absent
+    -- overlay models a client where the glow API is unavailable.
+    _G.C_UnitAuras = overrides.C_UnitAuras or {
+        GetPlayerAuraBySpellID = function() return overrides.aura end,
+    }
+    _G.C_SpellActivationOverlay = overrides.overlay
+
     local KE = {
         Print = function() end,
         IsSecretValue = function() return false end,
+        AreAuraIdentitiesHidden = function() return overrides.aurasHidden == true end,
         ApplyFontToText = function(_, fontString, face, size, outline)
             rec.fonts[#rec.fonts + 1] =
                 { fontString = fontString, face = face, size = size, outline = outline }
@@ -1771,6 +1783,113 @@ function L.loadStanceText(overrides)
     }
     helpers.loadModule("Modules/ClassUtilities/StanceText.lua", KE)
     return modules["StanceText"], KE
+end
+
+-- Modules/ClassUtilities/PetStatusText.lua. The branch under test lives inside
+-- the file-local CheckPetStatus, which is reached from outside only through
+-- PS:UpdatePetText -- so the spec drives that and asserts on what was painted.
+--
+-- OnInitialize MUST be called: petInfo and isGrimoireClass are both set there,
+-- and CheckPetStatus returns NONE immediately while petInfo is nil, so a spec
+-- that skips it would pass against any implementation at all. SetEnabledState is
+-- stubbed first because the addon shim's module table does not have it.
+--
+-- Enum and strsplit are read at FILE scope, so both must exist before
+-- loadModule.
+--
+-- rec.text is the last painted string and rec.shown the last visibility call.
+-- The refusal shows up as shown=false with no text, which is why both are
+-- recorded rather than just the string.
+function L.loadPetStatusText(overrides)
+    overrides = overrides or {}
+    local rec = { text = nil, shown = false }
+
+    installMock(overrides, {
+        C_Timer = inertTimer(),
+    })
+
+    _G.UIParent            = noopFrame()
+    _G.UnitClass           = function() return overrides.class or "WARLOCK", overrides.class or "WARLOCK" end
+    _G.IsMounted           = function() return false end
+    _G.UnitOnTaxi          = function() return false end
+    _G.UnitInVehicle       = function() return false end
+    _G.UnitHasVehicleUI    = function() return false end
+    _G.GetSpecialization   = function() return 1 end
+    _G.GetSpecializationInfo = function() return overrides.specID or 265 end
+    _G.C_SpellBook         = { IsSpellKnown = function() return true end }
+    _G.UnitExists          = function(unit) return unit == "pet" and overrides.hasPet == true end
+    _G.UnitIsDeadOrGhost   = function() return false end
+    _G.PetHasActionBar     = function() return false end
+    _G.GetPetActionInfo    = function() return nil end
+    _G.C_UnitAuras         = { GetPlayerAuraBySpellID = function() return overrides.aura end }
+    _G.Enum                = { SpellBookSpellBank = { Player = "Player" } }
+    _G.strsplit            = function() return nil end
+
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { PetStatusText = overrides.db or {
+            Enabled = true, PetMissing = "PET MISSING", MissingColor = { 1, 1, 1, 1 },
+        } } },
+        AreAuraIdentitiesHidden = function() return overrides.aurasHidden == true end,
+        GetSafeUnitGUID = function() return nil end,
+        ResolveColor = function() return 1, 1, 1, 1 end,
+    }
+    helpers.loadModule("Modules/ClassUtilities/PetStatusText.lua", KE)
+
+    local PS = modules["PetStatusText"]
+    PS.SetEnabledState = function() end
+    PS:OnInitialize()
+    PS.isPreview = false
+    PS.frame = {
+        Show = function() rec.shown = true end,
+        Hide = function() rec.shown = false end,
+    }
+    PS.text = {
+        SetText = function(_, value) rec.text = value end,
+        SetTextColor = function() end,
+    }
+    return PS, rec
+end
+
+-- Modules/ClassUtilities/BurningRush.lua. The module captures CreateFrame,
+-- UnitClass, C_UnitAuras, C_Timer and UIParent at file scope and calls LibStub
+-- once, so every one of those has to exist before loadModule.
+-- C_SpellActivationOverlay is read at CALL time, so overrides.overlay can be
+-- absent to exercise the no-overlay path.
+--
+-- rec.setActive records every SetActive argument IN ORDER. The refusal is only
+-- visible as an absence: a spec asserting on BURN.active alone cannot tell
+-- "refused to decide" from "decided on the value it already held".
+function L.loadBurningRush(overrides)
+    overrides = overrides or {}
+    local rec = { setActive = {} }
+
+    installMock(overrides, {
+        C_Timer = inertTimer(),
+    })
+
+    _G.UIParent    = noopFrame()
+    _G.UnitClass   = function() return "Warlock", "WARLOCK" end
+    _G.LibStub     = function() return nil end
+    _G.C_UnitAuras = { GetPlayerAuraBySpellID = function() return overrides.aura end }
+    _G.C_SpellActivationOverlay = overrides.overlay
+
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { BurningRush = overrides.db or { Enabled = true } } },
+        AreAuraIdentitiesHidden = function() return overrides.aurasHidden == true end,
+    }
+    helpers.loadModule("Modules/ClassUtilities/BurningRush.lua", KE)
+
+    local BURN = modules["BurningRush"]
+    BURN.db = KE.db.profile.BurningRush
+    BURN.active = overrides.active == true
+    BURN.isPreview = overrides.isPreview == true
+    BURN.SetActive = function(self, value)
+        self.active = value
+        rec.setActive[#rec.setActive + 1] = value
+    end
+    return BURN, rec
 end
 
 -- Modules/ClassUtilities/EbonMightHelper.lua. The module caches its whole API
