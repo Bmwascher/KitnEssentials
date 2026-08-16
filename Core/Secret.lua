@@ -176,6 +176,23 @@ local currentRestrictionState = 0
 local restrictionTypes = {}
 local deferredCallbacks = {}
 
+-- The restriction event supplies numeric enum values, not strings, and its
+-- state enum starts at Inactive = 0 -- truthy in Lua. So the table is keyed by
+-- the enum value and always stores an explicit boolean. Without the enum table
+-- there is nothing to key by: fall back to the combat edge alone rather than
+-- inventing string keys the event will never match.
+local RestrictionType = Enum and Enum.AddOnRestrictionType
+local RestrictionState = Enum and Enum.AddOnRestrictionState
+
+local COMBAT_KEY = RestrictionType and RestrictionType.Combat or "Combat"
+local MAP_KEY = RestrictionType and RestrictionType.Map
+local FULL_KEYS = RestrictionType and {
+    RestrictionType.Combat,
+    RestrictionType.Encounter,
+    RestrictionType.ChallengeMode,
+    RestrictionType.PvPMatch,
+} or { COMBAT_KEY }
+
 -- Get current restriction state (0 = none, 1 = partial, 2 = full)
 function KE:GetRestrictionState()
     return currentRestrictionState
@@ -250,22 +267,46 @@ local function SetRestrictionState(newState)
     end
 end
 
-local function UpdateRestrictionType(restrictionType, active)
-    restrictionTypes[restrictionType] = active
-
-    -- Full (2): Combat, Encounter, ChallengeMode, PvPMatch
-    -- Partial (1): Map transitions
-    -- None (0): Everything else
-    if restrictionTypes.Combat or
-       restrictionTypes.Encounter or
-       restrictionTypes.ChallengeMode or
-       restrictionTypes.PvPMatch then
-        SetRestrictionState(2)
-    elseif restrictionTypes.Map then
+-- Full (2): Combat, Encounter, ChallengeMode, PvPMatch
+-- Partial (1): Map transitions
+-- None (0): Everything else
+local function RecomputeState()
+    for _, key in ipairs(FULL_KEYS) do
+        if restrictionTypes[key] then
+            SetRestrictionState(2)
+            return
+        end
+    end
+    if MAP_KEY and restrictionTypes[MAP_KEY] then
         SetRestrictionState(1)
     else
         SetRestrictionState(0)
     end
+end
+
+local function UpdateRestrictionType(key, active)
+    if key == nil then return end
+    restrictionTypes[key] = active or nil
+    RecomputeState()
+end
+
+-- IsAddOnRestrictionActive is documented to answer false for the whole of
+-- ADDON_RESTRICTION_STATE_CHANGED dispatch, so this is the only place it can
+-- be trusted. Without it, reloading inside an encounter or a keystone starts
+-- from "unrestricted" and stays there until the next transition.
+local function SeedRestrictionState()
+    if RestrictionType and C_RestrictedActions
+        and C_RestrictedActions.IsAddOnRestrictionActive then
+        for _, key in ipairs(FULL_KEYS) do
+            restrictionTypes[key] = C_RestrictedActions.IsAddOnRestrictionActive(key) or nil
+        end
+        if MAP_KEY then
+            restrictionTypes[MAP_KEY] =
+                C_RestrictedActions.IsAddOnRestrictionActive(MAP_KEY) or nil
+        end
+    end
+    if InCombatLockdown() then restrictionTypes[COMBAT_KEY] = true end
+    RecomputeState()
 end
 
 ---------------------------------------------------------------------------------
@@ -274,17 +315,26 @@ end
 
 local restrictionFrame = CreateFrame("Frame")
 restrictionFrame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+restrictionFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 restrictionFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 restrictionFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
 restrictionFrame:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_RESTRICTION_STATE_CHANGED" then
         local restrictionType, state = ...
-        UpdateRestrictionType(restrictionType, state)
+        -- Activating counts as restricted: it means enforcement begins as soon
+        -- as this dispatch ends, and anything queued in between would run into
+        -- it. Compared, never truth-tested -- Inactive is 0.
+        local active = RestrictionState ~= nil
+            and (state == RestrictionState.Activating
+                or state == RestrictionState.Active)
+        UpdateRestrictionType(restrictionType, active)
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        SeedRestrictionState()
     elseif event == "PLAYER_REGEN_DISABLED" then
-        UpdateRestrictionType("Combat", true)
+        UpdateRestrictionType(COMBAT_KEY, true)
     elseif event == "PLAYER_REGEN_ENABLED" then
-        UpdateRestrictionType("Combat", false)
+        UpdateRestrictionType(COMBAT_KEY, false)
     end
 end)
 
