@@ -42,6 +42,7 @@ local SHIFTING_SANDS_ID = 413984
 local SHIFTING_SANDS_ICON = 5199633
 local AUG_SPEC_ID = 1473
 local REFRESH_INTERVAL = 0.1
+local RESCAN_INTERVAL = 1.0
 
 local BUFF_DEFS = {
     [PRESCIENCE_ID] = { icon = PRESCIENCE_ICON, key = "ShowPrescience", label = "Prescience" },
@@ -69,6 +70,7 @@ PT.isAugSpec = false
 PT.isPreview = false
 PT.editModeRegistered = false
 PT.elapsed = 0
+PT.lastRescan = -RESCAN_INTERVAL
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -579,12 +581,16 @@ function PT:UpdateTimers()
         self:LayoutEntries()
     end
 
-    -- If no tracked buffs, try to re-detect via additive scan (doesn't wipe first).
-    -- The full raid check runs regardless of combat state.
-    local hasAny = next(self.trackedBuffs) ~= nil
-    if not hasAny then
-        self:RescanRoster()
-    end
+    -- Fallback re-detect for anything the event path missed. It is a FALLBACK:
+    -- the countdown text above repaints ten times a second, this does not need
+    -- to. Rescanning the whole roster at the repaint rate costs dozens of aura
+    -- queries per tick and finds nothing at all while identities are hidden,
+    -- because the query soft-fails rather than erroring.
+    if next(self.trackedBuffs) ~= nil then return end
+    if now - self.lastRescan < RESCAN_INTERVAL then return end
+    self.lastRescan = now
+    if KE:AreAuraIdentitiesHidden() then return end
+    self:RescanRoster()
 end
 
 ---------------------------------------------------------------------------------
