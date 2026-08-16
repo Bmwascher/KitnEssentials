@@ -701,6 +701,7 @@ end
 --- guarded against SecretWhenUnitIdentityRestricted (encounter anonymization).
 function RCC:_GetSoulstonedTarget()
     local function check(unit)
+        if KE:AreAuraIdentitiesHidden() then return nil end
         if not UnitExists(unit) then return nil end
         if UnitIsDeadOrGhost(unit) then return nil end
         local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, "Soulstone", "HELPFUL")
@@ -1367,7 +1368,7 @@ end
 --- READY_CHECK, UNIT_AURA, and UNIT_INVENTORY_CHANGED events.
 ---
 --- Secret value guards are layered:
----   1. C_Secrets.ShouldAurasBeSecret() early-return — skips entirely if the
+---   1. KE:AreAuraIdentitiesHidden() early-return — skips entirely if the
 ---      global aura system is locked for this player.
 ---   2. Per-aura spellId / expirationTime guards via ScanPlayerAuras filter.
 ---   3. Per-API guards inside individual slot updaters (weapon enchant exp/ID,
@@ -1375,7 +1376,7 @@ end
 function RCC:UpdateAllIcons()
     if not self.frame or not self.frame:IsShown() then return end
 
-    if C_Secrets and C_Secrets.ShouldAurasBeSecret and C_Secrets.ShouldAurasBeSecret() then
+    if KE:AreAuraIdentitiesHidden() then
         if DEBUG_RCC then KE:Print("[RCC] UpdateAllIcons: auras are secret, skipping.") end
         return
     end
@@ -1722,6 +1723,9 @@ end
 --- @param _ string   event name (unused)
 --- @param unit string
 function RCC:UNIT_AURA(_, unit)
+    -- The token is secret while identities are hidden, and every branch below
+    -- compares it against a literal.
+    if KE:IsUnreadableAuraPayload(unit, nil) then return end
     if unit == "player" then
         if DEBUG_RCC then KE:Print("[RCC] UNIT_AURA: player auras changed, refreshing.") end
         self:UpdateAllIcons()
