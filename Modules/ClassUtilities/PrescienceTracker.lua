@@ -159,6 +159,22 @@ function PT:RescanRoster()
     self:LayoutEntries()
 end
 
+-- Two events feed this and both can fire for the same transition, so it
+-- debounces to a single pending rescan: the scan walks the whole roster. It
+-- runs a frame later because the restriction system does not answer the new
+-- state until after the event dispatch.
+function PT:QueueRestrictionRescan()
+    if self._restrictionRescanPending then return end
+    self._restrictionRescanPending = true
+    C_Timer.After(0, function()
+        PT._restrictionRescanPending = false
+        if not PT:IsEnabled() then return end
+        if not PT.db or not PT.db.Enabled then return end
+        if not PT.isAugSpec or PT.isPreview then return end
+        PT:ScanAllUnits()
+    end)
+end
+
 function PT:ScanRoster()
     self:ScanUnit("player")
     local size = GetNumGroupMembers()
@@ -733,6 +749,8 @@ function PT:OnEnable()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterUpdate")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnZoneChange")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "QueueRestrictionRescan")
+    self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "QueueRestrictionRescan")
 
     self:StartOnUpdate()
 
