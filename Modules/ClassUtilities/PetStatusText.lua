@@ -44,6 +44,7 @@ local PET_CLASSES = {
 -- Module State
 ---------------------------------------------------------------------------------
 local petInfo = nil
+local isGrimoireClass = false
 local petDeathTracked = false
 
 local PET_STATUS = {
@@ -178,7 +179,15 @@ local function CheckPetStatus()
         end
         return PET_STATUS.NONE, nil, nil
     else
-        -- Check for Grimoire of Sacrifice (Warlock talent that consumes the pet)
+        -- The MISSING verdict is earned by failing to find Grimoire of Sacrifice,
+        -- which consumes the pet. That search cannot succeed while aura
+        -- identities are hidden -- the call returns nothing rather than erroring
+        -- -- so the failure proves nothing and the verdict would be a false
+        -- accusation for the whole restricted stretch. Warlocks only: no other
+        -- pet class can be holding this buff, so their warning is untouched.
+        if isGrimoireClass and KE:AreAuraIdentitiesHidden() then
+            return PET_STATUS.NONE, nil, nil
+        end
         local sacrificeAura = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(196099)
         if sacrificeAura then
             return PET_STATUS.NONE, nil, nil
@@ -199,6 +208,7 @@ function PS:OnInitialize()
 
     local _, class = UnitClass("player")
     petInfo = PET_CLASSES[class]
+    isGrimoireClass = class == "WARLOCK"
 
     self:SetEnabledState(false)
 end
@@ -385,6 +395,10 @@ function PS:OnEnable()
     end)
 
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "QueueUpdate")
+    -- Combat exit is not the only release. A keystone keeps identities hidden
+    -- between pulls, so without this the text stays suppressed for the whole
+    -- run rather than the pull.
+    self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "QueueUpdate")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnPlayerEnteringWorld")
     self:RegisterEvent("SPELLS_CHANGED", "QueueUpdate")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "QueueUpdate")
