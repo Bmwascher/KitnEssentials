@@ -159,8 +159,8 @@ end
 --   * UNIT_SPELLCAST_SUCCEEDED (player)    -> shown
 --   * SPELL_ACTIVATION_OVERLAY_GLOW_HIDE   -> hidden
 -- This is far cheaper than UNIT_AURA, which wakes on every aura change on every
--- unit. A one-shot aura check on login covers the reload-while-active case the
--- events alone would miss (player auras aren't secret in 12.0, so the check is safe).
+-- unit. A one-shot state check on login covers the reload-while-active case the
+-- events alone would miss.
 function BURN:OnSpellCast(spellID)
     if self.isPreview then return end
     if spellID ~= BURNING_RUSH_SPELL then return end
@@ -173,9 +173,23 @@ function BURN:OnGlowHide(spellID)
     self:SetActive(false)
 end
 
-function BURN:RefreshFromAura()
+-- Seeds the toggle state after a reload or zone change; live changes ride the
+-- cast and glow events instead. The aura read returns nothing rather than
+-- erroring while identities are hidden, which reads as "not running" and would
+-- switch the warning off while the drain is still ticking. The activation
+-- overlay is not an aura read and keeps answering, so it is asked first and the
+-- aura is consulted only when its answer can be believed.
+function BURN:RefreshActiveState()
     if self.isPreview then return end
-    local hasBuff = (C_UnitAuras.GetPlayerAuraBySpellID(BURNING_RUSH_SPELL) ~= nil)
+    local hasBuff
+    local overlayed = C_SpellActivationOverlay and C_SpellActivationOverlay.IsSpellOverlayed
+    if overlayed then
+        hasBuff = overlayed(BURNING_RUSH_SPELL) == true
+    end
+    if hasBuff == nil then
+        if KE:AreAuraIdentitiesHidden() then return end
+        hasBuff = C_UnitAuras.GetPlayerAuraBySpellID(BURNING_RUSH_SPELL) ~= nil
+    end
     if hasBuff == self.active then return end
     self:SetActive(hasBuff)
 end
@@ -242,7 +256,7 @@ function BURN:OnEnable()
     self:RegWithEditMode()
     C_Timer.After(0.5, function()
         self:ApplyPosition()
-        self:RefreshFromAura()
+        self:RefreshActiveState()
     end)
 
     -- Raw event frame so the cast event can be unit-filtered to "player" via
@@ -259,7 +273,14 @@ function BURN:OnEnable()
         end
     end)
 
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", function() self:RefreshFromAura() end)
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", function() self:RefreshActiveState() end)
+    -- A reload inside a keystone seeds while identities are hidden; without this
+    -- the seed never runs again for the whole run.
+    self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", function()
+        C_Timer.After(0, function()
+            if self:IsEnabled() then self:RefreshActiveState() end
+        end)
+    end)
     self:RegisterEvent("PLAYER_DEAD", function()
         self.active = false
         self:HideDisplay()
