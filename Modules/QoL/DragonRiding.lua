@@ -718,11 +718,17 @@ function DR:OnShowHandler()
     self.vigorFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
     self.vigorFrame:RegisterEvent("UNIT_AURA")
     self.vigorFrame:SetScript("OnEvent", function(_, event, unit)
-        if event == "UNIT_AURA" and unit ~= "player" then return end
+        if event == "UNIT_AURA" then
+            if KE:IsUnreadableAuraPayload(unit, nil) then return end
+            if unit ~= "player" then return end
+        end
         UpdateVigor(self)
     end)
     self.vigorFrame:HookScript("OnEvent", function(_, event, unit)
-        if event == "UNIT_AURA" and unit ~= "player" then return end
+        if event == "UNIT_AURA" then
+            if KE:IsUnreadableAuraPayload(unit, nil) then return end
+            if unit ~= "player" then return end
+        end
         UpdateVigorColor(self)
     end)
 
