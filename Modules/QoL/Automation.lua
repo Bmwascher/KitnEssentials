@@ -1763,8 +1763,14 @@ local function CancelMatchingTransforms(force)
         local data = C_UnitAuras.GetBuffDataByIndex("player", i)
         if data then
             local spellID = data.spellId
-            if spellID and not (issecretvalue and issecretvalue(spellID)) and transformCTable[spellID] then
-                CancelUnitBuff("player", i)
+            local instanceID = data.auraInstanceID
+            if spellID ~= nil
+                and not (issecretvalue and issecretvalue(spellID))
+                and transformCTable[spellID]
+                and instanceID ~= nil
+                and not (issecretvalue and issecretvalue(instanceID))
+                and C_UnitAuras.CancelAuraByInstanceID then
+                C_UnitAuras.CancelAuraByInstanceID("player", instanceID)
             end
         end
     end
@@ -1812,8 +1818,10 @@ local function ApplyHideTransforms()
                 if UnitAffectingCombat("player") or KE:AreAuraIdentitiesHidden() then return end
                 if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return end
                 local aura = C_UnitAuras.GetPlayerAuraBySpellID(FISHING_OUTFIT_AURA)
-                if aura and aura.auraInstanceID and C_UnitAuras.RemovePlayerAuraByAuraInstanceID then
-                    C_UnitAuras.RemovePlayerAuraByAuraInstanceID(aura.auraInstanceID)
+                if aura and aura.auraInstanceID ~= nil
+                    and not (issecretvalue and issecretvalue(aura.auraInstanceID))
+                    and C_UnitAuras.CancelAuraByInstanceID then
+                    C_UnitAuras.CancelAuraByInstanceID("player", aura.auraInstanceID)
                 end
             end)
         end)

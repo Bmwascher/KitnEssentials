@@ -540,7 +540,7 @@ describe("Automation effective-state predicates (Task 3 Step 10b)", function()
                 _G.UnitAffectingCombat = function() return false end
                 _G.C_UnitAuras = {
                     GetPlayerAuraBySpellID = function() return { auraInstanceID = 7 } end,
-                    RemovePlayerAuraByAuraInstanceID = function() called = true end,
+                    CancelAuraByInstanceID = function() called = true end,
                 }
                 fn()
                 assert.equals(active, called)
