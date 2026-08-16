@@ -756,6 +756,17 @@ function NMA:Update()
     if not anyRunning then self:StopTicker() end
 end
 
+-- The restriction event fires BEFORE a restriction becomes active or AFTER it is
+-- deactivated, so the state is read one frame later rather than inside dispatch.
+-- The enabled check matches the module's other deferred path: unregistering an
+-- event does not retract a callback already queued, and Refresh would otherwise
+-- repopulate state and start a ticker after a disable tore both down.
+function NMA:OnRestrictionChanged()
+    C_Timer.After(0, function()
+        if self:IsEnabled() then self:Refresh() end
+    end)
+end
+
 function NMA:Refresh()
     if self.isPreview then return end
     self:BuildTracked()
@@ -849,19 +860,24 @@ function NMA:OnGlowHide(_, spellId)
     if self:RefreshBuffStates() then self:Update() end
 end
 
-function NMA:ReadBuffActive(entry)
+function NMA:ReadBuffActive(entry, hidden)
     local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, entry.spellId)
     if ok and aura then return true end
-    if ok and self.auraScanTrusted then return false end
+    -- Trust is earned in a context where the scan can answer, and it does not
+    -- carry into one where it cannot: the same nil that means "not up" there
+    -- means "cannot see it" here. While identities are hidden, fall through to
+    -- the glow rather than reporting the buff off.
+    if ok and self.auraScanTrusted and not hidden then return false end
 
     return self.glowing[entry.spellId] and true or false
 end
 
 function NMA:RefreshBuffStates()
     local changed = false
+    local hidden = KE:AreAuraIdentitiesHidden()
     for _, entry in ipairs(self.tracked) do
         if entry.isBuffActive then
-            local active = self:ReadBuffActive(entry)
+            local active = self:ReadBuffActive(entry, hidden)
             if self.auraActive[entry.spellId] ~= active then
                 self.auraActive[entry.spellId] = active
                 changed = true
@@ -874,9 +890,11 @@ end
 function NMA:OnAura(_, unit)
     if KE:IsSecretValue(unit) or unit ~= "player" then return end
 
-    -- One confirmed aura read proves the scan works in this context;
-    -- from then on it is authoritative and the cast fallback is inert.
-    if not self.auraScanTrusted then
+    -- One confirmed aura read proves the scan works in this context; from then
+    -- on it is authoritative and the cast fallback is inert. Trust is only
+    -- meaningful when it was earned where the scan could answer, so it is never
+    -- granted while identities are hidden.
+    if not self.auraScanTrusted and not KE:AreAuraIdentitiesHidden() then
         for _, entry in ipairs(self.tracked) do
             if entry.isBuffActive then
                 local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, entry.spellId)
@@ -1049,6 +1067,11 @@ function NMA:OnEnable()
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnSpecChanged")
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "Refresh")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "Refresh")
+    -- Combat exit is not the only release. The restriction predicate also covers
+    -- encounter, keystone and PvP states, none of which end at regen, and the
+    -- buff readback now depends on that predicate -- so without this the module
+    -- can hold its restricted answer with no aura or glow event to correct it.
+    self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
     -- While attached, Combat Texts' container height changes as its
     -- messages come and go; combat transitions are when that happens, and
     -- Refresh -> Update -> ApplyPosition re-seats this underneath.
