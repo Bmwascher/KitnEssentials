@@ -100,7 +100,17 @@ local function GetCastTime(spellId)
     return GetUnitEmpowerMinHoldTime("player") / 1000
 end
 
+-- Returns nil for "cannot tell", which is NOT the same as zero. Two separate
+-- things make the answer unavailable: the broad restriction state, and a
+-- per-spell flag that takes priority over it -- a spell can be secret while
+-- nothing general is restricted. A zero here would turn either case into an
+-- expired buff and warn about it.
 local function GetEbonMightExpiration()
+    if C_Secrets and C_Secrets.ShouldSpellAuraBeSecret then
+        if C_Secrets.ShouldSpellAuraBeSecret(EBON_MIGHT_AURA) then return nil end
+    elseif KE:AreAuraIdentitiesHidden() then
+        return nil
+    end
     local auraData = C_UnitAuras.GetPlayerAuraBySpellID(EBON_MIGHT_AURA)
     return auraData and auraData.expirationTime or 0
 end
@@ -158,7 +168,9 @@ function EM:OnTimingCheck(expectedCastEnd, previousExpiration, count)
     if not spellId then return end
     if not IsExtender(spellId) then return end
 
-    self.expirationTime = GetEbonMightExpiration()
+    local expiration = GetEbonMightExpiration()
+    if expiration == nil then return end
+    self.expirationTime = expiration
     dbg("timing recheck #", count, "spellId=", spellId, "EMexp=", self.expirationTime, "expectedCastEnd=", expectedCastEnd)
 
     -- Buff faded since the original cast
@@ -211,6 +223,10 @@ function EM:OnEvent(event, unit, ...)
         local now = GetTime()
         dbg("extender cast:", event, "spellId=", spellId, "EMexp=", self.expirationTime)
 
+        local expiration = GetEbonMightExpiration()
+        if expiration == nil then return end
+        self.expirationTime = expiration
+
         -- No Ebon Might active
         if self.expirationTime == 0 then
             -- Casting extender immediately after EM cast — buff not yet visible
@@ -224,7 +240,6 @@ function EM:OnEvent(event, unit, ...)
         end
 
         local castTime = GetCastTime(spellId)
-        self.expirationTime = GetEbonMightExpiration()
 
         local castEnd = now + castTime
         local tooLate = castEnd > self.expirationTime
@@ -245,13 +260,16 @@ function EM:OnEvent(event, unit, ...)
         end
 
     elseif event == "UNIT_AURA" then
+        if KE:IsUnreadableAuraPayload(unit, nil) then return end
         if unit ~= "player" then return end
-        self.expirationTime = GetEbonMightExpiration()
+        local expiration = GetEbonMightExpiration()
+        if expiration ~= nil then self.expirationTime = expiration end
 
     elseif event == "LOADING_SCREEN_DISABLED" then
         if self:IsValidSpec() then
             self:RegisterSpellEvents()
-            self.expirationTime = GetEbonMightExpiration()
+            local expiration = GetEbonMightExpiration()
+            if expiration ~= nil then self.expirationTime = expiration end
         else
             self:UnregisterSpellEvents()
         end
@@ -300,7 +318,8 @@ function EM:OnEnable()
     if self:IsValidSpec() then
         dbg("OnEnable: Augmentation spec -> spell events registered")
         self:RegisterSpellEvents()
-        self.expirationTime = GetEbonMightExpiration()
+        local expiration = GetEbonMightExpiration()
+        if expiration ~= nil then self.expirationTime = expiration end
     else
         dbg("OnEnable: not Augmentation spec -> spell events NOT registered")
     end
