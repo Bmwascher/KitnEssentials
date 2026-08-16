@@ -232,3 +232,51 @@ describe("Secret.lua aura-restriction guard", function()
         assert.is_true(loadWith({ direct = "throws", active = "Encounter" }):AreAuraIdentitiesHidden())
     end)
 end)
+
+describe("Secret.lua UNIT_AURA payload gate", function()
+    local function loadWith(secretSet)
+        mock.install({
+            issecretvalue = function(v) return secretSet[v] == "value" end,
+            issecrettable = function(v) return secretSet[v] == "table" end,
+        })
+        return helpers.loadModule("Core/Secret.lua", { Print = function() end })
+    end
+
+    it("refuses a secret unit token", function()
+        local unit = {}
+        local KE = loadWith({ [unit] = "value" })
+        assert.is_true(KE:IsUnreadableAuraPayload(unit, {}))
+    end)
+
+    it("refuses a secret outer table", function()
+        local info = {}
+        local KE = loadWith({ [info] = "table" })
+        assert.is_true(KE:IsUnreadableAuraPayload("player", info))
+    end)
+
+    it("refuses a secret isFullUpdate", function()
+        local flag = {}
+        local KE = loadWith({ [flag] = "value" })
+        assert.is_true(KE:IsUnreadableAuraPayload("player", { isFullUpdate = flag }))
+    end)
+
+    for _, field in ipairs({ "addedAuras", "updatedAuraInstanceIDs",
+                             "removedAuraInstanceIDs" }) do
+        it("refuses a secret " .. field, function()
+            local list = {}
+            local KE = loadWith({ [list] = "table" })
+            assert.is_true(KE:IsUnreadableAuraPayload("player", { [field] = list }))
+        end)
+    end
+
+    it("does not refuse a nil updateInfo", function()
+        assert.is_false(loadWith({}):IsUnreadableAuraPayload("player", nil))
+    end)
+
+    it("does not refuse an ordinary readable payload", function()
+        local KE = loadWith({})
+        assert.is_false(KE:IsUnreadableAuraPayload("player", {
+            isFullUpdate = false, addedAuras = {}, removedAuraInstanceIDs = {},
+        }))
+    end)
+end)

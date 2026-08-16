@@ -110,6 +110,38 @@ function KE:AreAuraIdentitiesHidden()
     return false
 end
 
+-- The single gate every UNIT_AURA consumer calls before it touches the event.
+-- Order is the point: the unit token is refused before anything compares or
+-- slices it, because a comparison against a secret throws exactly as a truth
+-- test does. The three payload lists are asked with the TABLE predicate, which
+-- also catches a plain table whose reads hand back secrets -- the shape the
+-- consumers' loops would otherwise walk into.
+--
+-- This answers whether the PAYLOAD can be read. It does not answer whether the
+-- aura APIs may be called; that is AreAuraIdentitiesHidden, and every consumer
+-- asks both.
+--
+-- A nil updateInfo is READABLE, not unreadable. What each caller does with it
+-- differs -- one rebuilds, the others return -- and folding the decision in
+-- here would take it away from them.
+function KE:IsUnreadableAuraPayload(unit, updateInfo)
+    if self:IsSecretValue(unit) then return true end
+    if updateInfo == nil then return false end
+    if self:IsSecretValue(updateInfo) or self:IsSecretTable(updateInfo) then
+        return true
+    end
+    if self:IsSecretValue(updateInfo.isFullUpdate) then return true end
+    local added   = updateInfo.addedAuras
+    local updated = updateInfo.updatedAuraInstanceIDs
+    local removed = updateInfo.removedAuraInstanceIDs
+    if (added ~= nil and self:IsSecretTable(added))
+        or (updated ~= nil and self:IsSecretTable(updated))
+        or (removed ~= nil and self:IsSecretTable(removed)) then
+        return true
+    end
+    return false
+end
+
 ---------------------------------------------------------------------------------
 -- Safe Unit Helpers
 ---------------------------------------------------------------------------------
