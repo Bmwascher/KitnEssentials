@@ -127,8 +127,11 @@ function PT:ScanUnit(unit)
             if spellName then
                 local aura = C_UnitAuras.GetAuraDataBySpellName(unit, spellName, "HELPFUL|PLAYER")
                 if aura and aura.auraInstanceID then
-                    -- Only track our own casts
-                    if not aura.sourceUnit or aura.sourceUnit == "player" then
+                    -- Only track our own casts. The source can be secret even
+                    -- when the broad state reads clear, and comparing one
+                    -- against a literal throws.
+                    local source = aura.sourceUnit
+                    if not KE:IsSecretValue(source) and (source == nil or source == "player") then
                         self:AddTrackedBuff(unit, aura, spellID)
                     end
                 end
@@ -190,7 +193,12 @@ function PT:ScanRoster()
 end
 
 function PT:AddTrackedBuff(unit, aura, spellID)
-    if not aura.auraInstanceID then return end
+    -- The instance ID becomes this table's key. Aura fields carry no documented
+    -- secrecy guarantee either way, and the game does mark instance IDs secret
+    -- elsewhere, so refuse before the write rather than bet on it: a secret key
+    -- either raises or writes an entry every later plain lookup misses.
+    local instanceID = aura.auraInstanceID
+    if KE:IsSecretValue(instanceID) or instanceID == nil then return end
 
     -- Guard: if expirationTime is secret (API call in combat), skip — can't track timer
     if aura.expirationTime and issecretvalue(aura.expirationTime) then return end
@@ -205,7 +213,7 @@ function PT:AddTrackedBuff(unit, aura, spellID)
         isCrit = aura.points[1] == 6 and spellID == PRESCIENCE_ID
     end
 
-    self.trackedBuffs[aura.auraInstanceID] = {
+    self.trackedBuffs[instanceID] = {
         unit = unit,
         name = name,
         spellID = spellID,
