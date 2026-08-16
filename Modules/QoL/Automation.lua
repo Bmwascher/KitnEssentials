@@ -1775,6 +1775,27 @@ local function CancelMatchingTransforms(force)
     end
 end
 
+-- Containment alone leaves a transform stranded: while identities are hidden
+-- the sweep refuses, and the aura handler only sweeps on a full update or on a
+-- listed transform being ADDED. An update, a removal or an unrelated buff
+-- arriving after the restriction lifts does nothing, so out of combat the
+-- transform can persist until a reload. The restriction transition is the
+-- reliable trigger; combat end stays as a second one because whether the
+-- restriction event fires for ordinary combat is unverified. Both feed one
+-- debounced sweep that re-asks every question a frame later, when the
+-- restriction system answers truthfully again.
+local transformSweepPending = false
+local function QueueTransformSweep()
+    if transformSweepPending then return end
+    transformSweepPending = true
+    C_Timer.After(0, function()
+        transformSweepPending = false
+        if not (AU.db and AU.db.Enabled and AU.db.HideTransforms) then return end
+        if next(transformCTable) == nil then return end
+        CancelMatchingTransforms(true)
+    end)
+end
+
 local function ApplyHideTransforms()
     RebuildTransformList()
     local on = AU.db.Enabled and AU.db.HideTransforms
@@ -1783,8 +1804,13 @@ local function ApplyHideTransforms()
         if not (on and next(transformCTable) ~= nil) then return end
         transformAuraFrame = CreateFrame("Frame")
         transformAuraFrame:SetScript("OnEvent", function(_, event, _, updateInfo)
-            if event == "PLAYER_REGEN_ENABLED" then
-                CancelMatchingTransforms(true)  -- clear anything that landed in combat
+            -- Restriction transitions and combat end both arrive here with
+            -- their own payloads, so they return before anything reads the
+            -- UNIT_AURA parameter -- the restriction event's third and fourth
+            -- arguments are a type and a state, not an update table.
+            if event == "PLAYER_REGEN_ENABLED"
+                or event == "ADDON_RESTRICTION_STATE_CHANGED" then
+                QueueTransformSweep()
                 return
             end
             -- UNIT_AURA (player only). The shared gate covers the payload and
@@ -1827,10 +1853,12 @@ local function ApplyHideTransforms()
     if on and next(transformCTable) ~= nil then
         transformAuraFrame:RegisterUnitEvent("UNIT_AURA", "player")
         transformAuraFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        transformAuraFrame:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
         CancelMatchingTransforms(false)  -- immediate sweep
     else
         transformAuraFrame:UnregisterEvent("UNIT_AURA")
         transformAuraFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        transformAuraFrame:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     end
 
     if on and TransformItemEnabled("fishing") then
