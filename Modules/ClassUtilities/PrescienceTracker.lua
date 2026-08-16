@@ -136,10 +136,14 @@ function PT:ScanUnit(unit)
 end
 
 function PT:ScanAllUnits()
-    -- Clear existing tracked data
-    wipe(self.trackedBuffs)
-
     if not self.isAugSpec and not self.isPreview then return end
+
+    -- Refuse BEFORE the wipe, not after. While identities are hidden the scan
+    -- below finds nothing, so wiping first would replace a correct list with an
+    -- empty one for the rest of the restricted stretch.
+    if KE:AreAuraIdentitiesHidden() then return end
+
+    wipe(self.trackedBuffs)
 
     self:ScanRoster()
     self:SyncEntries()
