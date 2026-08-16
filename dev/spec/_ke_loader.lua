@@ -1773,6 +1773,61 @@ function L.loadStanceText(overrides)
     return modules["StanceText"], KE
 end
 
+-- Modules/ClassUtilities/EbonMightHelper.lua. The module caches its whole API
+-- surface at file scope, so every name it reads has to exist on _G BEFORE
+-- loadModule. Only the keys _wow_mock manages may go through installMock --
+-- anything else handed to it is silently dropped, which would leave the
+-- module's upvalues nil and the specs testing a crash instead of a decision.
+--
+-- GetTime is deliberately NON-ZERO. The module seeds lastEbonMightCast to 0 and
+-- suppresses its warning when the two match, so a zero clock would make every
+-- warning-based case pass for the wrong reason.
+--
+-- rec.warnings counts PlayWarningSound calls, which is the observable: the
+-- decision under test is "warn or not". Overriding the method after the load
+-- works because every internal call is a self-lookup, not a cached local.
+-- Returns EM, rec.
+function L.loadEbonMightHelper(overrides)
+    overrides = overrides or {}
+    local rec = { warnings = 0 }
+
+    installMock(overrides, {
+        C_Timer = inertTimer(),
+        GetTime = function() return 1000 end,
+    })
+
+    _G.C_Secrets   = overrides.C_Secrets
+    _G.C_UnitAuras = { GetPlayerAuraBySpellID = function() return overrides.aura end }
+    _G.C_Spell     = { GetSpellInfo = function() return { castTime = 2500 } end }
+    _G.UnitCastingInfo = overrides.UnitCastingInfo or function() return nil end
+    _G.UnitChannelInfo = overrides.UnitChannelInfo or function() return nil end
+    _G.UnitClass   = function() return "Evoker", "EVOKER" end
+    _G.PlaySoundFile = function() return false end
+    _G.StopSound   = function() end
+    _G.PlayerUtil  = { GetCurrentSpecID = function() return 1473 end }
+    _G.RunNextFrame = function(fn) fn() end
+    _G.GetUnitEmpowerMinHoldTime = function() return 1000 end
+    _G.LibStub     = function() return nil end
+
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { EbonMightHelper = overrides.db or { Enabled = true } } },
+        AreAuraIdentitiesHidden = function() return overrides.aurasHidden == true end,
+        IsSecretValue = function(_, v) return overrides.secret ~= nil and overrides.secret[v] == true end,
+        IsSafeValue = function(self, v) return v ~= nil and not self:IsSecretValue(v) end,
+        IsUnreadableAuraPayload = function(self, unit) return self:IsSecretValue(unit) end,
+        Print = function() end,
+    }
+    helpers.loadModule("Modules/ClassUtilities/EbonMightHelper.lua", KE)
+
+    local EM = modules["EbonMightHelper"]
+    EM.db = KE.db.profile.EbonMightHelper
+    EM.PlayWarningSound = function() rec.warnings = rec.warnings + 1 end
+    EM.IsValidSpec = function() return true end
+    EM.lastEbonMightCast = -1
+    return EM, rec
+end
+
 -- Modules/QoL/CombatLogger.lua. The module caches its whole API surface at
 -- file scope, so every name it reads has to exist on _G BEFORE loadModule --
 -- which is the point of loading it this way: a name cached from the wrong

@@ -99,6 +99,9 @@ function M.reset()
         "issecretvalue", "issecrettable", "canaccessvalue", "canaccesstable",
         "UnitName", "UnitGUID", "UnitExists", "UnitIsUnit",
         "AbbreviateNumbers", "BreakUpLargeNumbers",
+        "C_Secrets", "C_UnitAuras", "C_Spell", "UnitCastingInfo", "UnitChannelInfo",
+        "UnitClass", "PlaySoundFile", "StopSound", "PlayerUtil", "RunNextFrame",
+        "GetUnitEmpowerMinHoldTime", "LibStub",
     }) do
         _G[k] = nil
     end
