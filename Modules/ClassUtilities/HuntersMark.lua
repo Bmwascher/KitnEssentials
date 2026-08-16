@@ -120,6 +120,10 @@ end
 function HM:CheckUnitForMark(unit)
     if not isHunter then return end
     if KE:IsFullyRestricted() then return end
+    -- The scan below hard errors without aura access, and the state machine
+    -- above answers from the last event rather than from the restriction
+    -- system. Ask the live question before the call that can throw.
+    if KE:AreAuraIdentitiesHidden() then return end
 
     -- Validate unit is safe to use
     if not KE:IsSafeValue(unit) then return end
@@ -167,8 +171,8 @@ function HM:SetScanningActive(active)
         self.scannerFrame:RegisterEvent("ENCOUNTER_END")
         -- Plain RegisterEvent + manual unit filter on the handler (project rule:
         -- avoid RegisterUnitEvent because of known interaction with AceEvent's
-        -- dispatcher). The handler at line 264 already discriminates on `event`,
-        -- so add the unit filter alongside it.
+        -- dispatcher). The handler already discriminates on `event`, so add
+        -- the unit filter alongside it.
         self.scannerFrame:RegisterEvent("UNIT_AURA")
     else
         self.scannerFrame:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
