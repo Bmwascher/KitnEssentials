@@ -102,6 +102,8 @@ function M.reset()
         "C_Secrets", "C_UnitAuras", "C_Spell", "UnitCastingInfo", "UnitChannelInfo",
         "UnitClass", "PlaySoundFile", "StopSound", "PlayerUtil", "RunNextFrame",
         "GetUnitEmpowerMinHoldTime", "LibStub",
+        "GetNumGroupMembers", "IsInRaid", "UnitGroupRolesAssigned",
+        "GetSpecialization", "GetSpecializationInfo", "UIParent",
     }) do
         _G[k] = nil
     end

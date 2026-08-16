@@ -1828,6 +1828,125 @@ function L.loadEbonMightHelper(overrides)
     return EM, rec
 end
 
+-- Modules/ClassUtilities/PrescienceTracker.lua. The module caches its API
+-- surface at file scope, so every name it reads has to exist on _G BEFORE
+-- loadModule. Only the keys _wow_mock manages may go through installMock --
+-- anything else handed to it is silently dropped, leaving the module's upvalues
+-- nil and the specs testing a crash instead of a decision.
+--
+-- The timer QUEUES rather than running inline, and rec.flush drains it. The
+-- module's debounce is only observable if two calls can land before the pending
+-- callback runs; an immediate timer resets the flag between them and a correct
+-- implementation would look like a broken one.
+--
+-- rec.now is the clock. UpdateTimers reads GetTime once per call, so a spec
+-- advances rec.now between calls to drive the rescan throttle.
+--
+-- rec.rescans counts RescanRoster calls and rec.hiddenChecks counts restriction
+-- queries. Both are observables: the RESCAN count proves the interval, and the
+-- CHECK count proves the timestamp is written before the restriction query
+-- rather than after.
+--
+-- The aura stub answers only for the spell name matching its own spellId.
+-- ScanUnit queries every definition in turn and keys results by instance ID, so
+-- a stub that answered every name would let the second definition overwrite the
+-- first and make the crit assertion depend on pairs() order.
+--
+-- SyncEntries and LayoutEntries are stubbed because they drive frames; every
+-- assertion here reads PT.trackedBuffs, which is the decision, not the paint.
+-- ScanRoster and ScanUnit are left REAL -- they are part of what is under test.
+--
+-- OnZoneChange is driven once with isAugSpec false purely to populate the
+-- module's file-local SPELL_NAMES, which ScanUnit needs and which nothing else
+-- exposes; its deferred callback is flushed immediately afterwards.
+-- Returns PT, rec.
+function L.loadPrescienceTracker(overrides)
+    overrides = overrides or {}
+    local rec = { now = 1000, rescans = 0, hiddenChecks = 0 }
+    local queued = {}
+
+    local function isSecret(v)
+        return overrides.secret ~= nil and overrides.secret[v] == true
+    end
+    local function isSecretTable(t)
+        return overrides.secretTables ~= nil and overrides.secretTables[t] == true
+    end
+
+    rec.flush = function()
+        local batch = queued
+        queued = {}
+        for _, fn in ipairs(batch) do fn() end
+    end
+
+    installMock(overrides, {
+        GetTime = function() return rec.now end,
+        UnitExists = function(unit) return unit == "player" end,
+        UnitName = function() return "Tester" end,
+        issecretvalue = function(v) return isSecret(v) end,
+        issecrettable = function(t) return isSecretTable(t) end,
+        C_Timer = {
+            After = function(_, fn) queued[#queued + 1] = fn end,
+            NewTimer = function() return { Cancel = function() end } end,
+            NewTicker = function() return { Cancel = function() end } end,
+        },
+    })
+
+    _G.UIParent = noopFrame()
+    _G.C_UnitAuras = {
+        GetAuraDataBySpellName = function(_, spellName)
+            local a = overrides.aura
+            if a == nil then return nil end
+            if spellName ~= "Spell" .. tostring(a.spellId) then return nil end
+            return a
+        end,
+        GetAuraDataByAuraInstanceID = function() return overrides.instanceAura end,
+    }
+    _G.C_Spell = { GetSpellName = function(id) return "Spell" .. tostring(id) end }
+    _G.GetNumGroupMembers = function() return overrides.groupSize or 0 end
+    _G.IsInRaid = function() return false end
+    _G.UnitGroupRolesAssigned = function() return "DAMAGER" end
+    _G.UnitClass = function() return "Mage", "MAGE" end
+    _G.GetSpecialization = function() return 3 end
+    _G.GetSpecializationInfo = function() return 1473 end
+
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { PrescienceTracker = overrides.db or { Enabled = true } } },
+        AreAuraIdentitiesHidden = function()
+            rec.hiddenChecks = rec.hiddenChecks + 1
+            return overrides.aurasHidden == true
+        end,
+        IsSecretValue = function(_, v) return isSecret(v) end,
+        IsSecretTable = function(_, t) return isSecretTable(t) end,
+        IsSafeValue = function(self, v) return v ~= nil and not self:IsSecretValue(v) end,
+        IsUnreadableAuraPayload = function(self, unit) return self:IsSecretValue(unit) end,
+        ApplyIconZoom = function() end,
+        AddIconBorders = function() end,
+        ApplyFont = function() end,
+        ApplyFramePosition = function() end,
+        ResolveAnchorFrame = function() return nil end,
+        ResolveColor = function() return 1, 1, 1, 1 end,
+        Print = function() end,
+    }
+    helpers.loadModule("Modules/ClassUtilities/PrescienceTracker.lua", KE)
+
+    local PT = modules["PrescienceTracker"]
+    PT.db = KE.db.profile.PrescienceTracker
+    -- The addon shim hands back a bare table, so the AceAddon methods the module
+    -- calls do not exist and have to be supplied.
+    PT.IsEnabled = function() return true end
+    PT.SyncEntries = function() end
+    PT.LayoutEntries = function() end
+    PT.RescanRoster = function() rec.rescans = rec.rescans + 1 end
+
+    PT.isAugSpec = false
+    PT:OnZoneChange()
+    rec.flush()
+    PT.isAugSpec = overrides.isAugSpec ~= false
+
+    return PT, rec
+end
+
 -- Modules/QoL/CombatLogger.lua. The module caches its whole API surface at
 -- file scope, so every name it reads has to exist on _G BEFORE loadModule --
 -- which is the point of loading it this way: a name cached from the wrong
