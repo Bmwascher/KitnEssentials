@@ -41,4 +41,13 @@ describe("preview swap decisions", function()
         assert.is_true(plan.anchorShown)
     end)
 
+    -- The one deliberate inversion of the rule above: a disabled module gets
+    -- nothing restored, anchor included, because there was never anything
+    -- there for the user to lose.
+    it("hides the anchor too when unrestricted and the module is disabled", function()
+        local P = L.loadAuraPreview()
+        local plan = P.PlanExit({ isHidden = false, state = false })
+        assert.is_false(plan.anchorShown)
+    end)
+
 end)

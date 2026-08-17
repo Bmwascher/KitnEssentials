@@ -177,6 +177,17 @@ local function TeardownFrames(state)
     state.entries = {}
 end
 
+-- Tears down the preview frames for a display without touching the
+-- container. Shared by Exit (which applies a container plan afterward) and
+-- Rebuild (which never does, because the container is already hidden while
+-- the preview is open and must stay that way).
+local function TeardownPreviewFrames(display)
+    local state = previewState[display.key]
+    if state then
+        TeardownFrames(state)
+    end
+end
+
 -- Counts down every active entry and re-seeds any that reach zero, from
 -- `now`, so the preview loops forever instead of freezing on an expired icon.
 local function TickPreview(state)
@@ -242,6 +253,7 @@ end
 ---------------------------------------------------------------------------------
 
 function Preview.Enter(handle, display, settings)
+    if not handle then return end
     ApplyContainerPlan(handle, Preview.PlanEnter())
     BuildFrames(GetPreviewState(display), handle, display, settings)
 end
@@ -250,43 +262,36 @@ end
 -- restriction check, neither of which reads it. Kept in the signature
 -- because the interface names it explicitly.
 --
--- The restriction check goes through display.gate when the display has one:
--- Request("general") both answers whether the restore may happen now AND
--- records the debt for later if it can't, so there is exactly one place the
--- deferral answer can be wrong. A display built before its gate exists falls
--- back to the direct query.
+-- The restriction check reads display.gate's own predicate directly --
+-- never Request, which CLEARS the pending flag on a true answer because a
+-- true answer is a promise that the caller acts on it immediately. Exit's
+-- own plan may then decide not to restore the container (a disabled module,
+-- or the caller's moduleState says otherwise), so asking Request here would
+-- consume a debt Exit is not guaranteed to honour. Every display gets a gate
+-- when it is registered, so this is never nil in production.
 function Preview.Exit(handle, display, _settings, moduleState)
-    local isHidden
-    if display.gate then
-        isHidden = not display.gate:Request("general")
-    else
-        isHidden = KE.AreAuraIdentitiesHidden and KE:AreAuraIdentitiesHidden() or false
-    end
+    local isHidden = display.gate.isHidden()
     local plan = Preview.PlanExit({ isHidden = isHidden, state = moduleState })
 
-    local state = previewState[display.key]
-    if state then
-        TeardownFrames(state)
-    end
-
+    TeardownPreviewFrames(display)
     ApplyContainerPlan(handle, plan)
 
     return plan
 end
 
 -- What a settings change reaches while the preview is open: discard the
--- current preview frames and re-enter from current settings, so size,
--- layout, quotas and glow all follow the user's edit. Exit followed by
--- Enter, never a second construction path, so the preview cannot drift from
--- itself.
---
--- The state Exit restores the container to is never observable here --
--- Enter immediately re-hides it again regardless (PlanEnter) -- so the value
--- passed is a placeholder.
+-- current preview frames and rebuild them from current settings, so size,
+-- layout, quotas and glow all follow the user's edit. It goes through the
+-- same frame-building path Enter uses -- never a second construction path,
+-- so the preview cannot drift from itself -- but it skips the container
+-- swap entirely: the container is already hidden while the preview is open
+-- and must stay that way, so cycling it through Exit's show/enable plan on
+-- every settings tick would re-register a secure container's events for no
+-- visible change.
 function Preview.Rebuild(display, settings)
     local handle = display.handle
     if not handle then return end
 
-    Preview.Exit(handle, display, settings, true)
+    TeardownPreviewFrames(display)
     Preview.Enter(handle, display, settings)
 end
