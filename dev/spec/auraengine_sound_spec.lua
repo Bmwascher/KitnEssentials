@@ -240,3 +240,69 @@ describe("retire all", function()
         assert.is_false(reg:IsPending())
     end)
 end)
+
+-- The no-op guard ANDs three conditions, and on both failure paths the id
+-- list is emptied anyway. That redundancy hides whether currentPath is
+-- actually doing its job: a regression that stopped clearing it, or that set
+-- it before the add loop finished, would still pass every test above. These
+-- isolate it.
+describe("sound registry currentPath discipline", function()
+    -- Both of these register successfully FIRST. Starting from a fresh
+    -- registry would assert that a never-set field is nil, which is true of
+    -- any implementation and proves nothing.
+    it("CLEARS a previously recorded currentPath on a deferred sync", function()
+        local rec = apiRecording()
+        local reg, state = registryWith(rec, false)
+        reg:Sync(DECL, { SoundEnabled = true, SoundName = "Bell" }, true)
+        assert.equals("path/Bell", reg.currentPath)
+
+        state.hidden = true
+        reg:Sync(DECL, { SoundEnabled = true, SoundName = "Horn" }, true)
+
+        assert.is_nil(reg.currentPath)
+        assert.is_true(reg:IsPending())
+    end)
+
+    it("CLEARS a previously recorded currentPath on a rolled back sync", function()
+        local rec = apiRecording()
+        local reg = registryWith(rec, false)
+        reg:Sync(DECL, { SoundEnabled = true, SoundName = "Bell" }, true)
+        assert.equals("path/Bell", reg.currentPath)
+
+        -- Make the next attempt's fourth Add return nil.
+        rec.api.Add = function(_, payload)
+            rec.added[#rec.added + 1] = payload
+            if #rec.added == 11 then return nil end
+            rec.nextID = rec.nextID + 1
+            return rec.nextID
+        end
+        reg:Sync(DECL, { SoundEnabled = true, SoundName = "Horn" }, true)
+
+        assert.is_nil(reg.currentPath)
+        assert.is_false(reg:IsPending())
+        assert.equals(0, #reg.ids)
+    end)
+
+    it("records currentPath only once the whole set registered", function()
+        local rec = apiRecording()
+        local reg = registryWith(rec, false)
+        reg:Sync(DECL, { SoundEnabled = true, SoundName = "Bell" }, true)
+        assert.equals("path/Bell", reg.currentPath)
+    end)
+
+    -- The masking case, driven directly: ids present and nothing pending, so
+    -- the other two guard conditions both say "skip". Only currentPath can
+    -- force the rebuild, so this fails if it is ignored.
+    it("rebuilds when currentPath alone is stale", function()
+        local rec = apiRecording()
+        local reg = registryWith(rec, false)
+        reg:Sync(DECL, { SoundEnabled = true, SoundName = "Bell" }, true)
+        assert.equals(7, #rec.added)
+
+        reg.currentPath = "path/SomethingElse"
+        reg:Sync(DECL, { SoundEnabled = true, SoundName = "Bell" }, true)
+
+        assert.equals(14, #rec.added)
+        assert.equals(7, #rec.removed)
+    end)
+end)
