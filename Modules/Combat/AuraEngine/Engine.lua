@@ -119,6 +119,21 @@ function Engine.RegisterEvents(display)
     -- work inside a key. It is a secondary retry, never the sole drain.
     owner:RegisterEvent("PLAYER_REGEN_ENABLED", Reapply)
 
+    -- Two policies. The default SUSPENDS the display, which is right for a
+    -- tracker whose subject is the fight rather than the player. A display of
+    -- the player's own auras instead FOLLOWS the player into the seat, which
+    -- is what the vehicle unit token is for.
+    local function ApplyVehicle(inVehicle)
+        if display.declaration.vehiclePolicy == "follow" then
+            if display.handle then
+                KE.AuraContainer.SetUnit(display.handle, inVehicle and "vehicle" or "player")
+            end
+            return
+        end
+        display.vehicleDisabled = inVehicle
+        Engine.ApplyDisplayState(display, display.getSettings())
+    end
+
     -- Entering a vehicle is already the answer, so the flag is set from the
     -- event itself without asking. UnitHasVehicleUI is unreliable around this
     -- event, which is why the exit handler below waits before querying it.
@@ -129,21 +144,18 @@ function Engine.RegisterEvents(display)
     -- stops a party member's vehicle from hiding this player's display.
     owner:RegisterEvent("UNIT_ENTERED_VEHICLE", function(_, unitTarget)
         if unitTarget ~= "player" then return end
-        display.vehicleDisabled = true
-        Engine.ApplyDisplayState(display, display.getSettings())
+        ApplyVehicle(true)
     end)
 
     owner:RegisterEvent("UNIT_EXITED_VEHICLE", function(_, unitTarget)
         if unitTarget ~= "player" then return end
         C_Timer.After(0.1, function()
-            display.vehicleDisabled = UnitHasVehicleUI("player") or false
-            Engine.ApplyDisplayState(display, display.getSettings())
+            ApplyVehicle(UnitHasVehicleUI("player") or false)
         end)
     end)
 
     owner:RegisterEvent("PLAYER_ENTERING_WORLD", function()
-        display.vehicleDisabled = UnitHasVehicleUI("player") or false
-        Engine.ApplyDisplayState(display, display.getSettings())
+        ApplyVehicle(UnitHasVehicleUI("player") or false)
     end)
 end
 
@@ -168,6 +180,13 @@ function Engine.ApplySettings(display)
         -- reconfiguration defers.
         display.handle = KE.AuraContainer.Create(display, settings)
         Engine.RegWithEditMode(display)
+
+        -- A reload inside a vehicle would otherwise come up on the player's
+        -- own auras until the next vehicle event, which may never arrive.
+        if display.declaration.vehiclePolicy == "follow" and UnitHasVehicleUI("player") then
+            KE.AuraContainer.SetUnit(display.handle, "vehicle")
+        end
+
         Engine.ApplyDisplayState(display, settings)
         return
     end

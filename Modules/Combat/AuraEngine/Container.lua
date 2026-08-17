@@ -276,6 +276,13 @@ function Container.ApplyState(handle, state, anchorShown)
     handle.anchorFrame:SetShown(anchorShown)
 end
 
+-- The container owns its unit, so a vehicle swap is a plain setter rather
+-- than a secure attribute driver. Blizzard rebuilds the display from the new
+-- unit's auras on its own.
+function Container.SetUnit(handle, unitToken)
+    handle.container:SetUnit(unitToken)
+end
+
 -- Groups are add-only with no public remove, so retiring is always a zero
 -- count and never a removal. Keys are author-assigned literals that never
 -- change, so nothing here goes stale.
