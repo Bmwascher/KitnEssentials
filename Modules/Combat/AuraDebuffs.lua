@@ -113,10 +113,6 @@ local function RebuildDispelColorCurve(db)
     end
 end
 
--- Forward-declared: GetDispelPreviewColor below calls this before its
--- definition further down the file.
-local ResolveDispelPreviewColor
-
 -- Public accessor so sibling modules reuse the same dispel palette the user
 -- configures here, instead of duplicating the curve. Lazily
 -- builds from this module's DB so it resolves even when AuraDebuffs itself is
@@ -131,14 +127,6 @@ function AD:GetDispelColorCurve()
     return _dispelColorCurve
 end
 
--- Preview counterpart to GetDispelColorCurve, exposed for the same reason:
--- another display borrows this palette for its ring, so its preview has to
--- resolve the same colours the live ring will. The caller's own settings still
--- decide the colour mode and the flat fallback; only the palette is borrowed.
-function AD:GetDispelPreviewColor(settings, dispelType)
-    return ResolveDispelPreviewColor(settings, dispelType, self.db and self.db.DispelColors)
-end
-
 -- Preview-only counterpart to the curve above: resolves a flat RGBA for one
 -- dispel type instead of feeding Blizzard's per-aura repaint, since a preview
 -- frame accepts no such registration. Mirrors the curve's own resolution
@@ -146,7 +134,7 @@ end
 -- -- and only consults either when the colour mode actually uses them;
 -- otherwise, and whenever a type resolves to neither, it falls back to the
 -- flat BorderColor the same way the live ring does outside "dispel" mode.
-function ResolveDispelPreviewColor(settings, dispelType, palette)
+local function ResolveDispelPreviewColor(settings, dispelType, palette)
     if settings.BorderColorMode == "dispel" then
         local pal   = palette or settings.DispelColors
         local color = (pal and pal[dispelType]) or DISPEL_DEFAULTS[dispelType]
@@ -155,6 +143,14 @@ function ResolveDispelPreviewColor(settings, dispelType, palette)
         end
     end
     return KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
+end
+
+-- Preview counterpart to GetDispelColorCurve, exposed for the same reason:
+-- another display borrows this palette for its ring, so its preview has to
+-- resolve the same colours the live ring will. The caller's own settings still
+-- decide the colour mode and the flat fallback; only the palette is borrowed.
+function AD:GetDispelPreviewColor(settings, dispelType)
+    return ResolveDispelPreviewColor(settings, dispelType, self.db and self.db.DispelColors)
 end
 
 -- Preview icons + dispel sequence used to populate the live grid when the
