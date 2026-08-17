@@ -47,6 +47,12 @@ game's own aura display system. That rebuild is the actual fix for the patch
   — instead of for anything landing on you. Anything outside that list is
   silent
 
+### Player Buffs and Player Debuffs
+- Both work again, rebuilt on the game's own aura display system
+- Existing settings carry over
+- Both gain four growth directions, plus a new fill-direction control
+- Weapon enchants and right-click to cancel a buff both still work
+
 ---
 
 ## v4.0.5
