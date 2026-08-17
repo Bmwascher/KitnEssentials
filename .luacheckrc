@@ -114,6 +114,7 @@ read_globals = {
 
     -- Aura container (12.1 secure aura display)
     "AuraContainerSortMethod", "AuraContainerSortDirection",
+    "AuraContainerItemEnchantmentSlot",
 
     -- Tutorial / help-plate suppression
     "MainHelpPlateButtonMixin", "HelpTip", "SetCVarBitfield", "EnumerateFrames",

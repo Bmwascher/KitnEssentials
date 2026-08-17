@@ -680,6 +680,7 @@ local PREVIEW_MODULES = {
     -- defines both (Modules/Skinning/LootRollBars.lua) and was missing, so
     -- /kes edit showed its mover with no sample bars behind it.
     "LootRoll",
+    "BuffTracking", "PlayerDebuffTracking",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -693,6 +694,7 @@ local SECTION_PREVIEW_MODULES = {
         "NoMovementAlert", "PlayerAbsorbs",
     },
     aura_section = {
+        "BuffTracking", "PlayerDebuffTracking",
         "AuraDebuffs", "AuraExternals", "StanceText",
     },
     class_section = {

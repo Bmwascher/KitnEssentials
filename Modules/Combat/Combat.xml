@@ -1,16 +1,6 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
 
-    <!-- Buff buttons must be secure: right-click cancels the aura, which is a
-         protected action. SecureAuraHeaderTemplate creates them from this
-         template and drives them itself. -->
-    <Button name="KE_AuraButtonTemplate" inherits="SecureActionButtonTemplate, BackdropTemplate" virtual="true" registerForClicks="RightButtonUp, RightButtonDown">
-        <Attributes>
-            <Attribute name="type" value="cancelaura"/>
-            <Attribute name="unit" value="player"/>
-        </Attributes>
-    </Button>
-
     <Script file="CombatTimer.lua" />
     <Script file="CombatCross.lua" />
     <Script file="CombatRes.lua" />

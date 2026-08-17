@@ -1866,15 +1866,25 @@ end
 
 -- Modules/Combat/AuraHeaders.lua. Both MakeHeaderModule calls run at file
 -- scope and only DEFINE methods -- nothing touches a frame or the db until
--- OnEnable, which this loader never calls -- so the only stub the spec needs
--- is KE.ShouldNotLoadModule, driven by overrides.shouldNotLoad.
--- overrides.noHelper omits the stub entirely, modelling a build where
--- Core/Globals.lua has not defined it. Returns the BuffTracking module plus
--- KE (the shim's registry also captures PlayerDebuffTracking, reachable off
--- KitnEssentials:GetModule if a spec ever needs it).
+-- OnEnable, which this loader never calls -- so the only stubs the spec
+-- needs are KE.ShouldNotLoadModule, driven by overrides.shouldNotLoad, and
+-- the enchant slot table below.
+-- overrides.noHelper omits the ShouldNotLoadModule stub entirely, modelling
+-- a build where Core/Globals.lua has not defined it. Returns the
+-- BuffTracking module plus KE (the shim's registry also captures
+-- PlayerDebuffTracking, reachable off KitnEssentials:GetModule if a spec
+-- ever needs it).
 function L.loadAuraHeaders(overrides)
     overrides = overrides or {}
     local modules = helpers.installAddonShim()
+    -- The buff declaration reads the enchant slot table at file scope, so it
+    -- has to exist before the module loads. The values are arbitrary: nothing
+    -- in the spec environment reaches the container that consumes them.
+    _G.AuraContainerItemEnchantmentSlot = _G.AuraContainerItemEnchantmentSlot or {
+        MainHand = 1,
+        OffHand  = 2,
+        Ranged   = 3,
+    }
     local KE = {
         db = { profile = { BuffTracking = {}, PlayerDebuffTracking = {} } },
     }

@@ -179,28 +179,6 @@ function KE:GetSafeText(fontString)
 end
 
 ---------------------------------------------------------------------------------
--- Missing Template Notice
----------------------------------------------------------------------------------
-
--- One-shot notice for a feature whose XML template no longer exists.
---
--- Per-file load-gate directives mean a template can be present in the FrameXML
--- dump and still be unregistered on this game type. CreateFrame against a
--- missing template throws, and that aborts whatever enable path is running,
--- so callers pcall the creation and report through here.
---
--- Deliberately NOT a generic "does this template exist" probe: the only way
--- to ask is to build one, and building a throwaway secure header runs its
--- OnLoad and registers its events for nothing.
-local warnedTemplate = {}
-function KE:WarnMissingTemplate(feature)
-    if warnedTemplate[feature] then return end
-    warnedTemplate[feature] = true
-    self:Print(("|cffff8800%s is unavailable on this game version|r "):format(tostring(feature))
-        .. "- the interface template it is built on was removed. An update is needed.")
-end
-
----------------------------------------------------------------------------------
 -- Restriction State Management
 ---------------------------------------------------------------------------------
 
