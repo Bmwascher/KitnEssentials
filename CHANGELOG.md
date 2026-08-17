@@ -17,11 +17,10 @@ game's own aura display system. That rebuild is the actual fix for the patch
 - The custom Blocklist can now only block spells the game itself lets addons
   identify by name. The settings card already warned this could happen; it
   is now the actual behaviour rather than a caveat
-- The `INCLUDE_NAME_PLATE_ONLY` tick box on the Filters card works for the
-  first time. It never did anything useful before. If you had deliberately
-  unticked it, it now does what its hover text says and lets nameplate-only
-  debuffs through, so you may see icons you have not seen before — tick it to
-  go back to the old look. If you never touched it, nothing changes
+- The `INCLUDE_NAME_PLATE_ONLY` tick box on the Filtering Options card works
+  for the first time. It never did anything useful before. Everyone starts
+  with it ticked, which shows exactly the debuffs this display always showed.
+  Untick it if you also want debuffs the game flags as nameplate-only
 
 ### External Tracker
 - Rebuilt on the game's own aura display system, fixing the patch 12.1
