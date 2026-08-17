@@ -482,6 +482,17 @@ function L.loadAuraGlowRules(overrides)
     return KE.AuraGlowRules, KE
 end
 
+-- Modules/Combat/AuraEngine/Restriction.lua. The predicate is INJECTED
+-- (opts.isHidden), so the load needs only a KE table to hang
+-- KE.AuraRestriction on -- no C_Secrets/C_RestrictedActions stub. Returns
+-- KE.AuraRestriction, KE.
+function L.loadAuraRestriction(overrides)
+    installMock(overrides, {})
+    local KE = {}
+    helpers.loadModule("Modules/Combat/AuraEngine/Restriction.lua", KE)
+    return KE.AuraRestriction, KE
+end
+
 -- Modules/Skinning/SkinAPI.lua AND Modules/Skinning/EUIWindows.lua on the
 -- SAME KE instance. loadSkinAPI and loadEUIWindows above each return a
 -- separate KE, so no spec driven through either loader alone can push a real

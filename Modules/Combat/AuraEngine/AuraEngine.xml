@@ -3,4 +3,5 @@
 
     <Script file="Rules.lua" />
     <Script file="GlowRules.lua" />
+    <Script file="Restriction.lua" />
 </Ui>
