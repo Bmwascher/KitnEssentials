@@ -48,6 +48,20 @@ function Container.TotalLimit(display, settings)
     return perRow * (settings.MaxRows or 1)
 end
 
+-- The anchor has no size of its own until this runs -- every corner of a
+-- zero-size frame coincides, so neither the pin nor the position math
+-- notices, but the Edit Mode mover needs a real rectangle to grab, and
+-- ApplyFramePosition's pixel snap reads the frame's ACTUAL edges. Called
+-- before ApplyLayout in both Create and Reconfigure so the snap always runs
+-- last, against the correct size, never a 0x0 or stale one.
+function Container.SizeAnchor(handle, display, settings)
+    local cols = settings.IconsPerRow or display.defaultIconsPerRow
+    local rows = settings.MaxRows or 1
+    local w = cols * settings.IconSize + (cols - 1) * settings.IconSpacing
+    local h = rows * settings.IconSize + (rows - 1) * settings.IconSpacing
+    handle.anchorFrame:SetSize(w, h)
+end
+
 -- Blizzard owns the frame list, so ask Blizzard. The provider grows it with
 -- every batch, and a private copy would drift the first time a batch landed
 -- without this addon noticing.
@@ -145,6 +159,7 @@ function Container.Create(display, settings)
     }
 
     Container.AddGroups(handle, display, settings)
+    Container.SizeAnchor(handle, display, settings)
     Container.ApplyLayout(handle, settings)
 
     return handle
@@ -196,6 +211,7 @@ function Container.Reconfigure(handle, display, settings)
         end)
     end
 
+    Container.SizeAnchor(handle, display, settings)
     Container.ApplyLayout(handle, settings)
 end
 

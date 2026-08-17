@@ -16,16 +16,11 @@ KE.AuraEngine = Engine
 
 local DEBUG_AE = false
 
--- Container.Create leaves the anchor at 0x0 -- every corner of a zero-size
--- frame coincides, so neither the pin nor the position math notices, but the
--- Edit Mode mover needs a real rectangle to grab.
-local function SizeAnchor(display, settings)
-    local cols = settings.IconsPerRow or display.defaultIconsPerRow
-    local rows = settings.MaxRows or 1
-    local w = cols * settings.IconSize + (cols - 1) * settings.IconSpacing
-    local h = rows * settings.IconSize + (rows - 1) * settings.IconSpacing
-    display.handle.anchorFrame:SetSize(w, h)
-end
+-- Enforces the invariant the comment below documents: keyed on the owner
+-- object itself (weak so a module's teardown does not pin it), so a second
+-- Register call reusing the same Ace3 owner is caught immediately instead of
+-- silently overwriting the first display's event handlers.
+local ownerDisplays = setmetatable({}, { __mode = "k" })
 
 -- OWNER is the Ace3 module object, and it is not optional. AceEvent registers
 -- against the owner it was embedded into, and CallbackHandler keys every
@@ -33,6 +28,12 @@ end
 -- each other's handlers for the same event. Edit Mode needs the same object
 -- for its `module` field.
 function Engine.Register(owner, declaration, getSettings)
+    if ownerDisplays[owner] then
+        error("AuraEngine.Register: owner is already registered to display '"
+            .. tostring(ownerDisplays[owner]) .. "'", 2)
+    end
+    ownerDisplays[owner] = declaration.key
+
     local display = {
         owner              = owner,
         key                = declaration.key,
@@ -151,7 +152,6 @@ function Engine.ApplySettings(display)
         -- First creation is PERMITTED while restricted. Only later
         -- reconfiguration defers.
         display.handle = KE.AuraContainer.Create(display, settings)
-        SizeAnchor(display, settings)
         Engine.RegWithEditMode(display)
         Engine.ApplyDisplayState(display, settings)
         return
@@ -169,7 +169,6 @@ function Engine.ApplySettings(display)
     if not display.gate:Request("general") then return end
 
     KE.AuraContainer.Reconfigure(display.handle, display, settings)
-    SizeAnchor(display, settings)
     Engine.ApplyDisplayState(display, settings)
 end
 
@@ -177,6 +176,14 @@ end
 -- computed state says. Without this, every settings change re-shows the real
 -- display underneath the preview.
 function Engine.ApplyDisplayState(display, settings)
+    -- The five registered events fire from login and every zone change
+    -- whether or not the module has ever created a container -- OnEnable
+    -- (and with it Container.Create) never runs for a module the user has
+    -- switched off, so display.handle stays nil for the display's entire
+    -- lifetime in that case. Same guard as SetModuleEnabled's disable branch
+    -- and Preview.Enter/Exit.
+    if not display.handle then return end
+
     local state = Rules.ComputeState(settings.Enabled, display.vehicleDisabled)
     local shown = state.container and not display.previewActive
     KE.AuraContainer.ApplyState(display.handle, shown)
@@ -198,6 +205,14 @@ end
 
 function Engine.SetModuleEnabled(display, enabled)
     if enabled then
+        -- AceEvent's OnEmbedDisable calls owner:UnregisterAllEvents() on
+        -- every Ace module disable, and AceEvent declares no OnEmbedEnable to
+        -- undo that -- so re-enable must re-register explicitly or the
+        -- display goes deaf for the rest of the session. Safe to repeat:
+        -- CallbackHandler-1.0 keys each registration by owner+event, so a
+        -- second RegisterEvent call overwrites the closure rather than
+        -- stacking a duplicate.
+        Engine.RegisterEvents(display)
         -- Re-enable is a reconfiguration like any other, so it goes through
         -- the gate and defers when restricted.
         Engine.ApplySettings(display)
@@ -212,15 +227,26 @@ function Engine.SetModuleEnabled(display, enabled)
         display.sounds:RetireAll()
     end
 
+    -- The preview's ticker is plain Lua, not a container event registration,
+    -- so it keeps firing against hidden frames for the rest of the session
+    -- unless the preview is explicitly exited here.
+    if display.previewActive then
+        Engine.HidePreview(display)
+    end
+
     -- Hiding alone only unregisters the container's dynamic aura events and
     -- marks a rebuild -- it does not clear painted auras, so do not rely on
-    -- it alone. ApplyState's SetEnabled(false) does the real work.
+    -- it alone. ApplyState's SetEnabled(false) does the real work. Applied
+    -- unconditionally after HidePreview, whose own plan may otherwise have
+    -- left the container shown.
     if display.handle then
         KE.AuraContainer.ApplyState(display.handle, false)
     end
 
     -- Clears the general pending flag, so a later restriction release cannot
-    -- resurrect work for a module the user switched off.
+    -- resurrect work for a module the user switched off. Also discards
+    -- whatever HidePreview just recorded above -- correct, since the module
+    -- is off and owes nothing.
     display.gate:Cancel()
 end
 
@@ -229,7 +255,12 @@ end
 ---------------------------------------------------------------------------------
 
 function Engine.ShowPreview(display)
-    if display.previewActive then return end
+    -- A module never OnEnable'd (switched off) has no handle, and
+    -- Preview.Enter already refuses a nil handle -- but flagging the preview
+    -- active first would wedge the display: the flag says a preview is up,
+    -- so ApplyDisplayState keeps the live container hidden, and no preview
+    -- exists to show in its place.
+    if display.previewActive or not display.handle then return end
     display.previewActive = true
     KE.AuraPreview.Enter(display.handle, display, display.getSettings())
 end
@@ -239,7 +270,18 @@ function Engine.HidePreview(display)
     display.previewActive = false
     local settings = display.getSettings()
     local state = Rules.ComputeState(settings.Enabled, display.vehicleDisabled)
-    KE.AuraPreview.Exit(display.handle, display, settings, state.container)
+    local plan = KE.AuraPreview.Exit(display.handle, display, settings, state.container)
+
+    -- Preview.Exit deliberately does not register the debt it plans --
+    -- Request may only be called once, exactly here, by the caller that owns
+    -- the gate. isHidden() is still true in this window when the plan says
+    -- pendGeneral, so Request's restricted branch is the one that fires: it
+    -- SETS the flag and returns false, rather than its unrestricted branch,
+    -- which would clear one. Without this the debt is never recorded and the
+    -- display stays blank until the next unrelated settings change.
+    if plan and plan.pendGeneral then
+        display.gate:Request("general")
+    end
 end
 
 ---------------------------------------------------------------------------------

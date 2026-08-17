@@ -256,27 +256,39 @@ end
 -- which runs on live and preview frames alike, for the same reason.
 ---------------------------------------------------------------------------------
 
--- A failed measurement is not a zero -- it means the text has not been laid
--- out yet, and stomping a previous good measurement with zero would shrink the
--- hitbox out from under a mover the user may be dragging right now.
-local function CommitExtent(display, role, w, h)
-    if not (w and h) then return end
+-- Largest across every current preview entry, per role: stack count and
+-- timer text genuinely differ per entry (some entries have a count of 0, and
+-- durations/phases vary), so a single-frame sample can return an empty
+-- string and stall the extent at zero. The font key comes from the first
+-- entry for the same reason a per-entry figure would be wrong -- every entry
+-- in a role shares one font and one anchor.
+--
+-- `sample` false skips the measurement and only reconciles the font key,
+-- via KE:CommitTextExtent -- that is what discards the previous font's
+-- dimensions at once rather than leaving them onscreen until the real
+-- sample lands a frame later.
+local function CommitTextExtents(display, state, sample)
     display.textExtents = display.textExtents or {}
-    display.textExtents[role] = { width = w, height = h }
-end
 
--- One preview frame is enough: every button in a group shares one font and one
--- anchor, so a second button would only measure the same text again.
-local function SampleTextExtents(display, state)
-    local item = state.entries and state.entries[1]
-    local frame = item and item.frame
-    if not frame then return end
+    local fields = { timer = "keTimer", stack = "keCount" }
+    local roles = { timer = {}, stack = {} }
+    for i = 1, #state.entries do
+        local frame = state.entries[i].frame
+        for role, field in pairs(fields) do
+            local fs = frame[field]
+            local acc = roles[role]
+            acc.key = acc.key or KE:FontKey(fs)
+            if sample then
+                local w, h = KE:MeasureFontString(fs)
+                if w and (not acc.w or w > acc.w) then acc.w = w end
+                if h and (not acc.h or h > acc.h) then acc.h = h end
+            end
+        end
+    end
 
-    local tw, th = KE:MeasureFontString(frame.keTimer)
-    CommitExtent(display, "timer", tw, th)
-
-    local cw, ch = KE:MeasureFontString(frame.keCount)
-    CommitExtent(display, "stack", cw, ch)
+    for role, acc in pairs(roles) do
+        KE:CommitTextExtent(display.textExtents, role, acc.key, acc.w, acc.h)
+    end
 end
 
 -- The font is set immediately but the text is not: Blizzard lays the
@@ -285,12 +297,14 @@ end
 -- because the preview can be rebuilt or torn down in the gap and whatever is
 -- open THEN is the only right answer.
 local function QueueTextExtentSample(display, state)
+    CommitTextExtents(display, state, false)
+
     if state.extentSampleQueued then return end
     state.extentSampleQueued = true
     C_Timer.After(0, function()
         state.extentSampleQueued = false
         if not display.previewActive then return end
-        SampleTextExtents(display, state)
+        CommitTextExtents(display, state, true)
         if KE.EditMode then KE.EditMode:RefreshLiveState() end
     end)
 end
