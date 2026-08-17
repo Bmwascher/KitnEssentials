@@ -35,7 +35,6 @@ local function GetDurationFormatter(settings)
     formatter:SetBreakpoints({
         {
             threshold = 60,
-            rounding  = Enum.NumericRuleFormatRounding.Down,
             format    = "%dm",
             components = {
                 { div = 60, step = 1, rounding = Enum.NumericRuleFormatRounding.Down },
@@ -150,6 +149,7 @@ function Style.CreateRegions(frame, group, settings)
     frame.keCooldown = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")
     frame.keCooldown:SetAllPoints(frame)
     frame.keCooldown:SetDrawEdge(false)
+    frame.keCooldown:EnableMouse(false)
     -- Blizzard's built-in countdown numbers are superseded by the SEPARATE
     -- duration-text region below (registered via SetDurationText onto its
     -- own fontstring), so the cooldown widget's own numbers would double up
@@ -166,6 +166,7 @@ function Style.CreateRegions(frame, group, settings)
     frame.keTextOverlay:EnableMouse(false)
 
     frame.keCount = frame.keTextOverlay:CreateFontString(nil, "OVERLAY")
+    frame.keCount:SetJustifyH("RIGHT")
     frame.keTimer = frame.keTextOverlay:CreateFontString(nil, "OVERLAY")
 
     -- Seeded here for the same reason as the dispel host's fontstring:
@@ -231,10 +232,9 @@ function Style.RegisterRegions(button, _display, group, settings)
         button:SetIcon(button.keIcon)
     end
 
-    -- "Swipe" gates the cooldown REGION itself, not just its visual: a
-    -- button toggled off must be reachable from the checkbox again later,
-    -- which a plain SetDrawSwipe(false) on an always-registered cooldown
-    -- would not by itself guarantee reflects registration state.
+    -- "Swipe" gates the cooldown REGION itself, not just its visual: the
+    -- registration must be reversible, so ClearDurationCooldown has to be
+    -- reachable from the checkbox.
     if button.keCooldown then
         if settings.Swipe ~= false then
             button.keCooldown:Show()
@@ -279,6 +279,15 @@ end
 function Style.StyleAuraFrame(frame, settings, capabilities)
     local caps = capabilities or {}
 
+    -- Nothing else sizes an aura button. Blizzard's flow layout only anchors
+    -- its elements, and the group layout's elementWidth feeds spacing
+    -- arithmetic rather than the frame, so without this every SetAllPoints
+    -- region collapses.
+    local iconSize = settings.IconSize
+    if iconSize then
+        frame:SetSize(iconSize, iconSize)
+    end
+
     if frame.keIcon then
         KE:ApplyIconZoom(frame.keIcon)
     end
@@ -293,6 +302,8 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         local sp = settings.StackPosition
         if sp then
             frame.keCount:SetPoint(sp.AnchorFrom, frame, sp.AnchorTo, sp.XOffset, sp.YOffset)
+        else
+            frame.keCount:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
         end
     end
 
