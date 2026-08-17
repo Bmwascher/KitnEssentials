@@ -285,7 +285,8 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
 
     -- Filter rows. Each entry: { key = Blizzard token, label = display label,
     -- tooltip = mouseover description }. RAID_IN_COMBAT omitted — it's a
-    -- HELPFUL-side token (see FILTER_KEYS comment in AuraDebuffs.lua).
+    -- HELPFUL-side token (see the AuraDebuffs Filters defaults comment in
+    -- Core/Defaults.lua).
     local FILTERS = {
         { key = "PLAYER",
           label   = "PLAYER",
@@ -357,14 +358,14 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
 
     -- The hardcoded blocklist is applied unconditionally regardless of a
     -- row's own enabled flag (see AuraRules.HARDCODED_BLOCKLIST_SET), so any
-    -- default row that is also one of those ids can never actually be
-    -- switched off. Read-only: this table is shared and used elsewhere as
-    -- the returned exclude set.
+    -- row whose spell id is one of those ids can never actually be switched
+    -- off -- whether it's a shipped default row or one the user typed in
+    -- themselves. Read-only: this table is shared and used elsewhere as the
+    -- returned exclude set.
     local ALWAYS_ON_BLOCKLIST_IDS = KE.AuraRules and KE.AuraRules.HARDCODED_BLOCKLIST_SET or {}
 
-    local function IsAlwaysOnBlocklistEntry(spellId, entry)
-        return type(entry) == "table" and entry.default == true
-            and ALWAYS_ON_BLOCKLIST_IDS[spellId] == true
+    local function IsAlwaysOnBlocklistEntry(spellId)
+        return ALWAYS_ON_BLOCKLIST_IDS[spellId] == true
     end
 
     local selectedSpellId = nil
@@ -388,7 +389,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     -- keeps applying regardless.
     manager:SetCondition("toggleable", function()
         if not selectedSpellId then return true end
-        return not IsAlwaysOnBlocklistEntry(selectedSpellId, db.Blocklist[selectedSpellId])
+        return not IsAlwaysOnBlocklistEntry(selectedSpellId)
     end)
 
     local function GetSortedBlocklist()
@@ -420,6 +421,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
                 label = tostring(spellId)
             end
             local isDisabled = type(entry) == "table" and not entry.enabled
+                and not IsAlwaysOnBlocklistEntry(spellId)
             local text = label .. " (" .. spellId .. ")"
             if isDisabled then
                 text = "|cff666666" .. text .. "|r"
@@ -446,7 +448,12 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
         spellIconFrame:Show()
 
         local entry = db.Blocklist[selectedSpellId]
-        local isEnabled = (type(entry) == "table" and entry.enabled ~= false)
+        -- An always-on entry is filtered unconditionally, so it must always
+        -- DISPLAY as on -- a live toggle showing "off" while the engine
+        -- keeps filtering it would be exactly the lie this row exists to
+        -- avoid.
+        local isEnabled = IsAlwaysOnBlocklistEntry(selectedSpellId)
+            or (type(entry) == "table" and entry.enabled ~= false)
             or entry == true or type(entry) == "string"
         local label = type(entry) == "table" and entry.label
             or (type(entry) == "string" and entry or "")
@@ -460,7 +467,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
         spellIdInput:SetValue(tostring(selectedSpellId), true)
         labelInput:SetValue(label, true)
         enabledToggle.toggle:SetValue(isEnabled, true)
-        enabledAlwaysOnHint:SetShown(IsAlwaysOnBlocklistEntry(selectedSpellId, entry))
+        enabledAlwaysOnHint:SetShown(IsAlwaysOnBlocklistEntry(selectedSpellId))
 
         -- Re-run the manager so the "deletable" condition is re-evaluated
         -- against the new selection. Direct SetEnabled() would get clobbered
@@ -475,7 +482,11 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     end
 
     -- Info "Blocklist Filter Info" header
-    local textRowSize = 46
+    -- CreateText reserves ~23px for the title line (16pt + 2px spacer)
+    -- before the body starts. This note runs ~265 characters at 12pt --
+    -- three wrapped lines needing ~47px of body space. 23 + 47 = 70, plus
+    -- a small buffer against font-metric rounding.
+    local textRowSize = 76
     local infoRow = GUIFrame:CreateRow(card8.content, textRowSize)
     local infoText = GUIFrame:CreateText(infoRow,
         KE:ColorTextByTheme("Blocklist Filter Info"),

@@ -263,13 +263,14 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     yOffset = glowOffset
 
     ----------------------------------------------------------------
-    -- Card 5: Sound (External Defensives Only)
+    -- Card 5: Sound (Seven Tracked Externals)
     --
-    -- External defensives applied to you (Pain Suppression, Iron Bark,
-    -- etc.) play the configured sound on application. Self-applied big
-    -- defensives are silent.
+    -- Plays the configured sound when one of a fixed list of seven
+    -- external-defensive spells lands on you -- Blizzard's sound-trigger
+    -- API takes a spell ID, not a filter, so this can't cover every
+    -- external defensive. Self-applied big defensives are silent.
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Sound (External Defensives Only)", yOffset)
+    local card5 = GUIFrame:CreateCard(scrollChild, "Sound (Seven Tracked Externals)", yOffset)
     manager:Register(card5, "all")
 
     local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
