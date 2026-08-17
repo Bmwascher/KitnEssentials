@@ -1291,9 +1291,13 @@ local Defaults = {
 
             IconSize = 32,
             IconSpacing = 4,
+            -- Counted along the axis that fills first, so a vertical display
+            -- reads this as icons per column.
             IconsPerRow = 12,
             MaxRows = 3,
-            GrowthDirection = "LEFT_DOWN",
+            GrowHorizontal = "LEFT",
+            GrowVertical = "DOWN",
+            GrowAxis = "HORIZONTAL",
 
             -- Sorting is deliberately NOT configurable: this is skinning, and
             -- Blizzard's own order is what people expect.
@@ -1304,11 +1308,11 @@ local Defaults = {
 
             BorderColor = { 0, 0, 0, 1 },
             EnchantBorderColor = { 0.6, 0.2, 0.9, 1 },
-            CountColor = { 1, 1, 1, 1 },
+            StackColor = { 1, 1, 1, 1 },
 
             FontOutline = "OUTLINE",
             TimerFontSize = 12,
-            CountFontSize = 12,
+            FontSize = 12,
 
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
@@ -1329,20 +1333,25 @@ local Defaults = {
             IconSpacing = 4,
             IconsPerRow = 12,
             MaxRows = 2,
-            GrowthDirection = "LEFT_DOWN",
+            GrowHorizontal = "LEFT",
+            GrowVertical = "DOWN",
+            GrowAxis = "HORIZONTAL",
 
             Swipe = true,
             Reverse = false,
             ShowTimer = true,
 
-            ColorByType = true,
+            -- "dispel" colours the icon ring by school; anything else paints
+            -- the flat BorderColor. This is the switch the settings page shows
+            -- as Color By Type.
+            BorderColorMode = "dispel",
             BorderColor = { 0, 0, 0, 1 },
             EnchantBorderColor = { 0.6, 0.2, 0.9, 1 },
-            CountColor = { 1, 1, 1, 1 },
+            StackColor = { 1, 1, 1, 1 },
 
             FontOutline = "OUTLINE",
             TimerFontSize = 12,
-            CountFontSize = 12,
+            FontSize = 12,
 
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
