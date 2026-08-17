@@ -81,7 +81,19 @@ end
 -- entirely the container's job.
 ---------------------------------------------------------------------------------
 
+-- A module the user switched off never runs OnEnable, so it never calls
+-- Register and owns no display at all. The preview manager still calls
+-- HidePreview on it whenever a config page changes -- that branch is not
+-- gated on the Enabled setting the way the show branch is -- so a nil display
+-- reaches these entry points on the ordinary path, not an exotic one. The
+-- handle guards below sit one level too deep to catch it.
+local function NoDisplay(display)
+    return display == nil
+end
+
 function Engine.RegisterEvents(display)
+    if NoDisplay(display) then return end
+
     local owner = display.owner
 
     -- Two kinds can resolve to the SAME function, so a display owing both
@@ -139,6 +151,8 @@ end
 ---------------------------------------------------------------------------------
 
 function Engine.ApplySettings(display)
+    if NoDisplay(display) then return end
+
     local settings = display.getSettings()
 
     -- Sound FIRST, and outside the gate. Retiring is never restricted and the
@@ -204,6 +218,8 @@ end
 ---------------------------------------------------------------------------------
 
 function Engine.SetModuleEnabled(display, enabled)
+    if NoDisplay(display) then return end
+
     if enabled then
         -- AceEvent's OnEmbedDisable calls owner:UnregisterAllEvents() on
         -- every Ace module disable, and AceEvent declares no OnEmbedEnable to
@@ -255,6 +271,8 @@ end
 ---------------------------------------------------------------------------------
 
 function Engine.ShowPreview(display)
+    if NoDisplay(display) then return end
+
     -- A module never OnEnable'd (switched off) has no handle, and
     -- Preview.Enter already refuses a nil handle -- but flagging the preview
     -- active first would wedge the display: the flag says a preview is up,
@@ -266,6 +284,7 @@ function Engine.ShowPreview(display)
 end
 
 function Engine.HidePreview(display)
+    if NoDisplay(display) then return end
     if not display.previewActive then return end
     display.previewActive = false
     local settings = display.getSettings()
