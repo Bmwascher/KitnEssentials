@@ -17,6 +17,11 @@ local GlowRules = KE.AuraGlowRules
 local MIN_FREQUENCY = 0.05
 local MAX_FREQUENCY = 2
 
+-- ReadSpeed's key-table shape: the settings table doubles as the db it reads,
+-- since a "proc"-typed profile keeps its tuned loop period in GlowDuration
+-- rather than GlowFrequency.
+local SPEED_KEYS = { type = "GlowType", frequency = "GlowFrequency", duration = "GlowDuration" }
+
 local function ResolveEntry(settings)
     local key = GlowRules.ResolveType(settings.GlowType)
     return GlowRules.FLIPBOOKS[key] or GlowRules.FLIPBOOKS.ants
@@ -43,12 +48,31 @@ local function ConfigureHost(host, settings)
         texture:SetTexture(entry.texture)
     end
 
-    host.flip:SetFlipBookRows(entry.rows)
-    host.flip:SetFlipBookColumns(entry.columns)
-    host.flip:SetFlipBookFrames(entry.frames)
+    local read = GlowRules.ReadSpeed(settings, SPEED_KEYS)
+    local frequency = GlowRules.NormaliseFrequency(read, MIN_FREQUENCY, MAX_FREQUENCY)
+    local duration = GlowRules.FrequencyToDuration(frequency)
 
-    local frequency = GlowRules.NormaliseFrequency(settings.GlowFrequency, MIN_FREQUENCY, MAX_FREQUENCY)
-    host.flip:SetDuration(GlowRules.FrequencyToDuration(frequency))
+    -- No in-client case mutates a PLAYING flipbook's grid or duration; every
+    -- one sets them on a stopped group and plays it afterward. Restarting
+    -- unconditionally on every reconfigure would stutter an unrelated change
+    -- (icon size, colour), so the group is only stopped and replayed when a
+    -- flipbook property actually differs from what is already applied.
+    local applied = host.appliedFlip
+    local changed = not applied
+        or applied.rows ~= entry.rows
+        or applied.columns ~= entry.columns
+        or applied.frames ~= entry.frames
+        or applied.duration ~= duration
+
+    if changed then
+        host.animGroup:Stop()
+        host.flip:SetFlipBookRows(entry.rows)
+        host.flip:SetFlipBookColumns(entry.columns)
+        host.flip:SetFlipBookFrames(entry.frames)
+        host.flip:SetDuration(duration)
+        host.animGroup:Play()
+        host.appliedFlip = { rows = entry.rows, columns = entry.columns, frames = entry.frames, duration = duration }
+    end
 
     -- Without the desaturate the atlas keeps its own hue and the colour
     -- setting appears to do nothing on some sources.
@@ -56,11 +80,6 @@ local function ConfigureHost(host, settings)
     local r, g, b, a = KE:ResolveColor(settings.GlowColor, { 0, 1, 0, 1 })
     texture:SetVertexColor(r, g, b, a)
 
-    -- The animation runs continuously; only visibility follows GlowEnabled,
-    -- so the loop is never stopped and restarted mid-cycle.
-    if not host.animGroup:IsPlaying() then
-        host.animGroup:Play()
-    end
     host:SetShown(settings.GlowEnabled and true or false)
 end
 
