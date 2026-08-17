@@ -246,3 +246,48 @@ describe("display state folding", function()
         assert.same({ container = true, sound = true }, R.ComputeState(true, false))
     end)
 end)
+
+describe("ConvertGrowthDirection", function()
+    local CASES = {
+        RIGHT_DOWN = { "RIGHT", "DOWN", "HORIZONTAL" },
+        RIGHT_UP   = { "RIGHT", "UP",   "HORIZONTAL" },
+        LEFT_DOWN  = { "LEFT",  "DOWN", "HORIZONTAL" },
+        LEFT_UP    = { "LEFT",  "UP",   "HORIZONTAL" },
+        DOWN_RIGHT = { "RIGHT", "DOWN", "VERTICAL" },
+        DOWN_LEFT  = { "LEFT",  "DOWN", "VERTICAL" },
+        UP_RIGHT   = { "RIGHT", "UP",   "VERTICAL" },
+        UP_LEFT    = { "LEFT",  "UP",   "VERTICAL" },
+    }
+
+    it("converts every direction the old display offered", function()
+        local R = L.loadAuraRules()
+        for input, want in pairs(CASES) do
+            local h, v, axis = R.ConvertGrowthDirection(input)
+            assert.are.equal(want[1], h, input .. " horizontal")
+            assert.are.equal(want[2], v, input .. " vertical")
+            assert.are.equal(want[3], axis, input .. " axis")
+        end
+    end)
+
+    it("covers all eight directions and nothing else", function()
+        local n = 0
+        for _ in pairs(CASES) do n = n + 1 end
+        assert.are.equal(8, n)
+    end)
+
+    it("falls back to the shipped default for an unknown value", function()
+        local R = L.loadAuraRules()
+        local h, v, axis = R.ConvertGrowthDirection("SIDEWAYS_INWARD")
+        assert.are.equal("LEFT", h)
+        assert.are.equal("DOWN", v)
+        assert.are.equal("HORIZONTAL", axis)
+    end)
+
+    it("falls back for nil", function()
+        local R = L.loadAuraRules()
+        local h, v, axis = R.ConvertGrowthDirection(nil)
+        assert.are.equal("LEFT", h)
+        assert.are.equal("DOWN", v)
+        assert.are.equal("HORIZONTAL", axis)
+    end)
+end)

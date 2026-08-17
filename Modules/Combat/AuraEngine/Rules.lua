@@ -182,3 +182,27 @@ function Rules.ComputeState(enabled, vehicleDisabled)
         sound     = enabled and true or false,
     }
 end
+
+-- The display this replaces named a growth direction with two tokens: the
+-- axis that fills first, then where new lines go. The engine splits that into
+-- a direction per axis plus which axis fills first, so every one of the eight
+-- values converts exactly and nothing is approximated.
+--
+-- The fallback matches the shipped default rather than the engine's, so a
+-- profile carrying a value this table does not know still comes up looking
+-- like the display it replaced.
+local GROWTH_CONVERSION = {
+    RIGHT_DOWN = { "RIGHT", "DOWN", "HORIZONTAL" },
+    RIGHT_UP   = { "RIGHT", "UP",   "HORIZONTAL" },
+    LEFT_DOWN  = { "LEFT",  "DOWN", "HORIZONTAL" },
+    LEFT_UP    = { "LEFT",  "UP",   "HORIZONTAL" },
+    DOWN_RIGHT = { "RIGHT", "DOWN", "VERTICAL" },
+    DOWN_LEFT  = { "LEFT",  "DOWN", "VERTICAL" },
+    UP_RIGHT   = { "RIGHT", "UP",   "VERTICAL" },
+    UP_LEFT    = { "LEFT",  "UP",   "VERTICAL" },
+}
+
+function Rules.ConvertGrowthDirection(value)
+    local out = GROWTH_CONVERSION[value] or GROWTH_CONVERSION.LEFT_DOWN
+    return out[1], out[2], out[3]
+end
