@@ -249,13 +249,62 @@ local function BuildFrames(state, handle, display, settings)
 end
 
 ---------------------------------------------------------------------------------
+-- Text extent sampling -- feeds the Edit Mode hitbox (Engine.lua's
+-- getOverlayInset). Extents are sampled from PREVIEW frames ONLY: measuring a
+-- live secure aura button's FontString is exactly the read-back
+-- DenyTaintedAccessWhenAurasAreSecret denies. Kept out of Style.StyleAuraFrame,
+-- which runs on live and preview frames alike, for the same reason.
+---------------------------------------------------------------------------------
+
+-- A failed measurement is not a zero -- it means the text has not been laid
+-- out yet, and stomping a previous good measurement with zero would shrink the
+-- hitbox out from under a mover the user may be dragging right now.
+local function CommitExtent(display, role, w, h)
+    if not (w and h) then return end
+    display.textExtents = display.textExtents or {}
+    display.textExtents[role] = { width = w, height = h }
+end
+
+-- One preview frame is enough: every button in a group shares one font and one
+-- anchor, so a second button would only measure the same text again.
+local function SampleTextExtents(display, state)
+    local item = state.entries and state.entries[1]
+    local frame = item and item.frame
+    if not frame then return end
+
+    local tw, th = KE:MeasureFontString(frame.keTimer)
+    CommitExtent(display, "timer", tw, th)
+
+    local cw, ch = KE:MeasureFontString(frame.keCount)
+    CommitExtent(display, "stack", cw, ch)
+end
+
+-- The font is set immediately but the text is not: Blizzard lays the
+-- countdown out a frame after BuildFrames returns, so an immediate sample
+-- would measure an empty string. Re-checked at fire time rather than carried,
+-- because the preview can be rebuilt or torn down in the gap and whatever is
+-- open THEN is the only right answer.
+local function QueueTextExtentSample(display, state)
+    if state.extentSampleQueued then return end
+    state.extentSampleQueued = true
+    C_Timer.After(0, function()
+        state.extentSampleQueued = false
+        if not display.previewActive then return end
+        SampleTextExtents(display, state)
+        if KE.EditMode then KE.EditMode:RefreshLiveState() end
+    end)
+end
+
+---------------------------------------------------------------------------------
 -- Public API
 ---------------------------------------------------------------------------------
 
 function Preview.Enter(handle, display, settings)
     if not handle then return end
     ApplyContainerPlan(handle, Preview.PlanEnter())
-    BuildFrames(GetPreviewState(display), handle, display, settings)
+    local state = GetPreviewState(display)
+    BuildFrames(state, handle, display, settings)
+    QueueTextExtentSample(display, state)
 end
 
 -- settings is unused: Exit's only work is the container swap and the

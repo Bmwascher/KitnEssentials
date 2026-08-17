@@ -13,8 +13,9 @@ local Style = {}
 KE.AuraStyle = Style
 
 -- The dispel badge is a fixed fraction of the icon, not a setting -- ported
--- from the modules this engine replaces.
-local DISPEL_ICON_FRACTION = 0.40
+-- from the modules this engine replaces. A field rather than a local so the
+-- Edit Mode hitbox math can share this one definition instead of copying it.
+Style.DISPEL_ICON_FRACTION = 0.40
 
 ---------------------------------------------------------------------------------
 -- Duration formatter -- declarative data, not a callback. Wave 1 has neither
@@ -112,7 +113,7 @@ function Style.CreateDispelHost(button, settings)
     host:SetAllPoints(button)
     host:EnableMouse(false)
 
-    local size = math_floor((settings.IconSize or 0) * DISPEL_ICON_FRACTION)
+    local size = math_floor((settings.IconSize or 0) * Style.DISPEL_ICON_FRACTION)
 
     local texture = host:CreateTexture(nil, "OVERLAY")
     texture:SetSize(size, size)
@@ -401,7 +402,7 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
     end
 
     if caps.hasDispel and frame.keDispel then
-        local size = math_floor((settings.IconSize or 0) * DISPEL_ICON_FRACTION)
+        local size = math_floor((settings.IconSize or 0) * Style.DISPEL_ICON_FRACTION)
         local tex  = frame.keDispel.texture
         tex:SetSize(size, size)
         tex:ClearAllPoints()

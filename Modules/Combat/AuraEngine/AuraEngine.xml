@@ -9,4 +9,5 @@
     <Script file="Container.lua" />
     <Script file="Style.lua" />
     <Script file="Preview.lua" />
+    <Script file="Engine.lua" />
 </Ui>

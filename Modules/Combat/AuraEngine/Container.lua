@@ -155,7 +155,7 @@ end
 -- the sound registry — entering a vehicle hides the icons and leaves the
 -- sounds registered.
 --
--- First creation calls this too. A container is ENABLED at birth — the
+-- The creating module calls this on first creation too. A container is ENABLED at birth — the
 -- intrinsic sets it through KeyValues, which the template inherits — so this
 -- does not repair a default; it makes the display MATCH its configured
 -- state. A module switched off in saved settings must come up hidden and

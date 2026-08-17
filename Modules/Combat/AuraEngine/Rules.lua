@@ -163,3 +163,22 @@ function Rules.BuildExternalsPreview(icons, iconsBig, total, showBig)
 
     return entries
 end
+
+-- Two inputs and no more. There are no "load conditions" in Wave 1 -- that is
+-- the reference's concept for its user-created displays, and neither KE module
+-- has any such setting.
+--
+-- vehicleDisabled is a stored flag the event handlers maintain, NOT a live
+-- query: the API that answers it is unreliable at the moment the entry event
+-- fires.
+--
+-- TWO outputs from the same inputs, and the asymmetry between them IS the
+-- rule. The container hides in a vehicle; the sound keeps playing. Returning
+-- them together is what makes that difference assertable -- two separate
+-- functions could drift apart and no test would notice.
+function Rules.ComputeState(enabled, vehicleDisabled)
+    return {
+        container = (enabled and not vehicleDisabled) and true or false,
+        sound     = enabled and true or false,
+    }
+end
