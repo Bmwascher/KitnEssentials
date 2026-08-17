@@ -133,7 +133,16 @@ function Container.Create(display, settings)
     -- from an ordinary settings change. Without it, every reconfiguration —
     -- and the ApplyLayout call two lines below — would re-pin, which fires
     -- the one call whose legality is still an open question.
-    local handle = { anchorFrame = anchorFrame, container = container, corner = corner }
+    --
+    -- defaultIconsPerRow travels with the handle for the same reason
+    -- TotalLimit reads it: ApplyLayout has no display argument, so this is
+    -- its only route to the same fallback.
+    local handle = {
+        anchorFrame        = anchorFrame,
+        container          = container,
+        corner             = corner,
+        defaultIconsPerRow = display.defaultIconsPerRow,
+    }
 
     Container.AddGroups(handle, display, settings)
     Container.ApplyLayout(handle, settings)
@@ -210,8 +219,9 @@ function Container.ApplyLayout(handle, settings)
 
     -- Blizzard's default is infinity, so without this the display never
     -- wraps and IconsPerRow silently becomes a total cap instead of a row
-    -- width.
-    local perRow = settings.IconsPerRow
+    -- width. Falls back the same way TotalLimit does -- ApplyLayout has no
+    -- display argument, so handle.defaultIconsPerRow is the only route to it.
+    local perRow = settings.IconsPerRow or handle.defaultIconsPerRow
     handle.container:SetFlowLayoutMaximumLineSize(
         perRow * settings.IconSize + (perRow - 1) * settings.IconSpacing
     )
