@@ -25,6 +25,37 @@ function Container.CornerFor(settings)
     return (up and "BOTTOM" or "TOP") .. (left and "RIGHT" or "LEFT")
 end
 
+-- The axis elements FILL before wrapping. Blizzard calls this the primary
+-- axis: the maximum line size is measured along it, and new lines are added
+-- across it. IconsPerRow therefore counts along the filling axis in both
+-- cases -- a vertical display reads it as icons per column -- and MaxRows
+-- always counts lines.
+function Container.IsVerticalAxis(settings)
+    return settings.GrowAxis == "VERTICAL"
+end
+
+function Container.AxisFor(settings)
+    return Container.IsVerticalAxis(settings)
+        and AnchorUtil.FlowLayoutAxis.Vertical
+        or AnchorUtil.FlowLayoutAxis.Horizontal
+end
+
+-- How many layout elements the display can produce: the configured grid, or
+-- the enchant slot count when that is larger. Enchant frames are registered
+-- once at creation and there is no call to withdraw one, so a grid smaller
+-- than the slot count cannot drop them -- it has to make room, or icons draw
+-- outside the box the mover uses. A display declaring no enchants gets the
+-- plain grid, unchanged.
+function Container.ElementCapacity(display, settings)
+    local perRow = settings.IconsPerRow or display.defaultIconsPerRow
+    local grid   = perRow * (settings.MaxRows or 1)
+
+    local enchants = display.declaration and display.declaration.itemEnchantments
+    if not enchants then return grid end
+
+    return math.max(grid, #enchants.slots)
+end
+
 -- elementWidth/Height come from IconSize because the flow layout measures
 -- from these numbers, not from the frames. groupSpacing and forceNewLine stay
 -- at Blizzard's defaults deliberately: setting groupSpacing to the element
@@ -63,9 +94,16 @@ end
 -- before ApplyLayout in both Create and Reconfigure so the snap always runs
 -- last, against the correct size, never a 0x0 or stale one.
 function Container.SizeAnchor(handle, display, settings)
-    local cols = settings.IconsPerRow or display.defaultIconsPerRow
-    local rows = settings.MaxRows or 1
-    handle.anchorFrame:SetSize(GridSpan(cols, settings), GridSpan(rows, settings))
+    local along  = settings.IconsPerRow or display.defaultIconsPerRow
+    -- Derived from the element capacity rather than MaxRows directly, so the
+    -- box always covers everything that can draw. For a display with no
+    -- enchants this is exactly MaxRows and nothing changes.
+    local across = math.ceil(Container.ElementCapacity(display, settings) / along)
+    if Container.IsVerticalAxis(settings) then
+        handle.anchorFrame:SetSize(GridSpan(across, settings), GridSpan(along, settings))
+    else
+        handle.anchorFrame:SetSize(GridSpan(along, settings), GridSpan(across, settings))
+    end
 end
 
 -- Blizzard owns the frame list, so ask Blizzard. The provider grows it with
@@ -236,6 +274,11 @@ function Container.ApplyLayout(handle, settings)
         and AnchorUtil.FlowDirection.Up
         or AnchorUtil.FlowDirection.Down
     handle.container:SetFlowLayoutGrowthDirection(horizontalDirection, verticalDirection)
+
+    -- Set BEFORE the anchor point and the maximum line size: both are
+    -- interpreted relative to the primary axis, so setting them first would
+    -- apply them against the previous axis for one layout pass.
+    handle.container:SetFlowLayoutAxis(Container.AxisFor(settings))
 
     -- Must agree with the pin corner below — see Container.CornerFor. The
     -- flow layout anchors every element corner-to-corner at this point and

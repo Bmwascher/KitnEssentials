@@ -10,6 +10,7 @@ local KE    = select(2, ...)
 local Rules = KE.AuraRules
 
 local math_floor = math.floor
+local math_ceil  = math.ceil
 
 local Engine = {}
 KE.AuraEngine = Engine
@@ -330,9 +331,20 @@ end
 -- to zero, which is what the modules this engine replaces without a dispel
 -- decoration already relied on.
 local function GetOverlayInset(display, settings)
+    -- GetGridOverlayInset counts columns then rows, so a vertical display
+    -- passes them the other way round: its IconsPerRow is a column height.
+    local along  = settings.IconsPerRow or display.defaultIconsPerRow
+    -- Same derivation as Container.SizeAnchor, so the hitbox and the anchor
+    -- can never disagree about how many lines the display occupies.
+    local across = math_ceil(KE.AuraContainer.ElementCapacity(display, settings) / along)
+    local cols, rows = along, across
+    if KE.AuraContainer.IsVerticalAxis(settings) then
+        cols, rows = across, along
+    end
+
     local grid = { KE:GetGridOverlayInset(
-        settings.IconsPerRow or display.defaultIconsPerRow,
-        settings.MaxRows or 1,
+        cols,
+        rows,
         settings.IconSize,
         settings.IconSpacing,
         KE.AuraContainer.CornerFor(settings),

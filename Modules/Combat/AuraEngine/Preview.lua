@@ -112,8 +112,17 @@ local function PositionEntryFrame(frame, index, display, settings)
     local spacing  = settings.IconSpacing or 0
     local dx       = (size + spacing) * (settings.GrowHorizontal == "LEFT" and -1 or 1)
     local dy       = (size + spacing) * (settings.GrowVertical == "UP" and 1 or -1)
-    local row      = math_floor((index - 1) / perRow)
-    local col      = (index - 1) % perRow
+    -- perRow counts along the FILLING axis, so under a vertical axis the
+    -- quotient is the column index and the remainder is the position down
+    -- that column -- the transpose of the horizontal case.
+    local line   = math_floor((index - 1) / perRow)
+    local offset = (index - 1) % perRow
+    local col, row
+    if KE.AuraContainer.IsVerticalAxis(settings) then
+        col, row = line, offset
+    else
+        col, row = offset, line
+    end
     local pin      = KE.AuraContainer.CornerFor(settings)
 
     frame:ClearAllPoints()
