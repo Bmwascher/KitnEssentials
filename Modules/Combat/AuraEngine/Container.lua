@@ -74,9 +74,19 @@ function Container.GroupLayout(settings)
     }
 end
 
+-- Reserved, not counted live. Counting only ACTIVE enchants would keep more
+-- icons visible, but changing the budget as enchants come and go is a
+-- reconfiguration, and reconfiguration DEFERS under restriction -- so inside a
+-- keystone the correction would not land and the overflow would happen anyway.
+--
+-- The subtraction cannot go negative, because ElementCapacity is at least the
+-- slot count. A one-icon display with weapon enchants declared therefore shows
+-- no auras and its enchants, which is the only honest answer: the slots exist
+-- and cannot be given back.
 function Container.TotalLimit(display, settings)
-    local perRow = settings.IconsPerRow or display.defaultIconsPerRow
-    return perRow * (settings.MaxRows or 1)
+    local enchants = display.declaration and display.declaration.itemEnchantments
+    local reserved = enchants and #enchants.slots or 0
+    return Container.ElementCapacity(display, settings) - reserved
 end
 
 -- The grid's span along one axis. The anchor's size and the flow layout's
@@ -157,6 +167,41 @@ function Container.AddGroups(handle, display, settings)
     end
 end
 
+-- Enchant frames are layout elements in their own right, NOT members of an
+-- aura group, so they take no share of the group budget and carry their own
+-- layout. layoutIndex 0 puts them ahead of every group, which is where
+-- Blizzard's own frame shows them.
+--
+-- Add-only, like groups: there is no public remove, so this runs once at
+-- creation and never again.
+function Container.AddItemEnchantments(handle, display, settings)
+    local spec = display.declaration.itemEnchantments
+    if not spec then return end
+
+    local layout = Container.GroupLayout(settings)
+    layout.layoutIndex = 0
+    handle.container:SetItemEnchantmentLayout(layout)
+
+    for i = 1, #spec.slots do
+        local frame = handle.container:AddItemEnchantment(spec.slots[i], {
+            -- Same live-settings read as the group callback, for the same
+            -- reason: a captured table would dress a later batch from the
+            -- profile that was current when the slot was added.
+            initializeFrame = function(button)
+                local live = display.getSettings()
+                KE.AuraStyle.InitializeButton(button, display, spec, live)
+            end,
+            -- The display this replaces showed an enchant whether or not it
+            -- was expiring, so permanent enchants stay visible.
+            hidePermanent = false,
+        })
+
+        if frame then
+            handle.enchantFrames[#handle.enchantFrames + 1] = frame
+        end
+    end
+end
+
 -- Two frames per display. The anchor is a plain Frame carrying Position, the
 -- KE mover and the pixel snap; the container is its CHILD.
 --
@@ -200,9 +245,11 @@ function Container.Create(display, settings)
         container          = container,
         corner             = corner,
         defaultIconsPerRow = display.defaultIconsPerRow,
+        enchantFrames      = {},
     }
 
     Container.AddGroups(handle, display, settings)
+    Container.AddItemEnchantments(handle, display, settings)
     Container.SizeAnchor(handle, display, settings)
     Container.ApplyLayout(handle, settings)
 
@@ -257,6 +304,22 @@ function Container.Reconfigure(handle, display, settings)
             KE.AuraStyle.StyleAuraFrame(button, settings, group.capabilities)
             KE.AuraGlow.Apply(button, settings, group.capabilities)
         end)
+    end
+
+    -- Enchant frames keep their creation-time dressing exactly as group
+    -- frames do, and there is no group enumeration that reaches them, so the
+    -- registered frames are re-dressed from the handle's own record.
+    local enchantSpec = display.declaration.itemEnchantments
+    if enchantSpec then
+        local layout = Container.GroupLayout(settings)
+        layout.layoutIndex = 0
+        handle.container:SetItemEnchantmentLayout(layout)
+
+        for i = 1, #handle.enchantFrames do
+            local button = handle.enchantFrames[i]
+            KE.AuraStyle.RegisterRegions(button, display, enchantSpec, settings)
+            KE.AuraStyle.StyleAuraFrame(button, settings, enchantSpec.capabilities)
+        end
     end
 
     Container.SizeAnchor(handle, display, settings)
