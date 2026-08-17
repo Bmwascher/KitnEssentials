@@ -270,6 +270,11 @@ end
 -- consume a debt Exit is not guaranteed to honour. Every display gets a gate
 -- when it is registered, so this is never nil in production.
 function Preview.Exit(handle, display, _settings, moduleState)
+    -- Same guard as Enter. A display with no container or no gate is one this
+    -- engine never registered, so there is nothing to restore and no debt to
+    -- reason about.
+    if not handle or not display.gate then return end
+
     local isHidden = display.gate.isHidden()
     local plan = Preview.PlanExit({ isHidden = isHidden, state = moduleState })
 
