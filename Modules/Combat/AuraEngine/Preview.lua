@@ -84,7 +84,7 @@ local function GroupsByKey(display)
 end
 
 -- One pool per GROUP KEY, never one for the whole display. A group's
--- capabilities (hasGlow, hasBorder, hasDispel) come from its declaration and
+-- capabilities (hasGlow, hasBorder, hasDispelBadge, hasDispelRing) come from its declaration and
 -- never change at runtime, so keying purely on groupKey is enough -- the same
 -- key can never resolve to a different capability set later.
 local function EnsurePool(state, groupKey, display, group, settings)
@@ -178,7 +178,7 @@ end
 -- no badge for a non-dispellable aura.
 local function PopulateDispelBadge(frame, dispelType)
     local dispel = frame.keDispel
-    if not dispel then return end
+    if not (dispel and dispel.texture) then return end
 
     local atlas = AuraUtil.GetAuraDispelTypeIcon(dispelType)
     dispel.texture:SetShown(atlas ~= nil)

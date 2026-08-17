@@ -108,20 +108,29 @@ end
 -- from inside RegisterRegions's Set* calls, before StyleAuraFrame's first
 -- pass) never calls SetText on a fontless string or SetPoint on a size-0
 -- texture. StyleAuraFrame re-dresses both on every reconfiguration.
-function Style.CreateDispelHost(button, settings)
+function Style.CreateDispelHost(button, settings, wantBadge, wantRing)
     local host = CreateFrame("Frame", nil, button)
     host:SetAllPoints(button)
     host:EnableMouse(false)
 
-    local size = math_floor((settings.IconSize or 0) * Style.DISPEL_ICON_FRACTION)
+    if wantBadge then
+        local size = math_floor((settings.IconSize or 0) * Style.DISPEL_ICON_FRACTION)
 
-    local texture = host:CreateTexture(nil, "OVERLAY")
-    texture:SetSize(size, size)
-    texture:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
+        local texture = host:CreateTexture(nil, "OVERLAY")
+        texture:SetSize(size, size)
+        texture:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
 
-    local text = host:CreateFontString(nil, "OVERLAY")
-    KE:ApplyFontToText(text, settings.FontFace, settings.FontSize, settings.FontOutline)
-    text:SetPoint("CENTER", texture, "CENTER", 0, 0)
+        local text = host:CreateFontString(nil, "OVERLAY")
+        KE:ApplyFontToText(text, settings.FontFace, settings.FontSize, settings.FontOutline)
+        text:SetPoint("CENTER", texture, "CENTER", 0, 0)
+
+        host.texture = texture
+        host.text    = text
+    end
+
+    if not wantRing then
+        return host
+    end
 
     -- The dispel-coloured ring. Parented directly to the BUTTON, not the
     -- overlay host above -- sublevel only orders regions of the same frame,
@@ -168,8 +177,6 @@ function Style.CreateDispelHost(button, settings)
     ring.right:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -px, px)
     ring.right:SetWidth(innerPx)
 
-    host.texture = texture
-    host.text    = text
     host.ring    = ring
     return host
 end
@@ -226,8 +233,9 @@ function Style.CreateRegions(frame, group, settings)
     if caps.hasBorder then
         frame.keBorder = Style.CreateBorderHost(frame, settings)
     end
-    if caps.hasDispel then
-        frame.keDispel = Style.CreateDispelHost(frame, settings)
+    if caps.hasDispelBadge or caps.hasDispelRing then
+        frame.keDispel = Style.CreateDispelHost(frame, settings,
+            caps.hasDispelBadge, caps.hasDispelRing)
     end
     if caps.hasGlow then
         frame.keGlow = KE.AuraGlow.CreateHost(frame, settings)
@@ -311,10 +319,12 @@ function Style.RegisterRegions(button, _display, group, settings)
 
         -- Badge: Blizzard's built-in dispel atlases already carry their own
         -- colours, so no curve here -- the curve goes to the ring instead.
-        button:AddDispelTypeTexture(button.keDispel.texture, {
-            style = Enum.CustomAuraButtonDispelTypeTextureStyle.Icon,
-        })
-        button:SetDispelTypeText(button.keDispel.text, {})
+        if button.keDispel.texture then
+            button:AddDispelTypeTexture(button.keDispel.texture, {
+                style = Enum.CustomAuraButtonDispelTypeTextureStyle.Icon,
+            })
+            button:SetDispelTypeText(button.keDispel.text, {})
+        end
 
         -- The ring is only a registered dispel texture in "dispel" mode, so
         -- Blizzard repaints it per aura. Any other mode paints it directly
@@ -401,7 +411,7 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         host.right:ClearAllPoints();  host.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 0, 0)
     end
 
-    if caps.hasDispel and frame.keDispel then
+    if frame.keDispel and frame.keDispel.texture then
         local size = math_floor((settings.IconSize or 0) * Style.DISPEL_ICON_FRACTION)
         local tex  = frame.keDispel.texture
         tex:SetSize(size, size)
@@ -417,47 +427,48 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         KE:ApplyFontToText(text, settings.FontFace, settings.FontSize, settings.FontOutline)
         text:ClearAllPoints()
         text:SetPoint("CENTER", tex, "CENTER", 0, 0)
+    end
 
-        local ring = frame.keDispel.ring
-        if ring then
-            local px      = KE:GetPixelSize()
-            local innerPx = 2 * px
+    local dispelRing = frame.keDispel and frame.keDispel.ring
+    if dispelRing then
+        local ring = dispelRing
+        local px      = KE:GetPixelSize()
+        local innerPx = 2 * px
 
-            ring.top:ClearAllPoints()
-            ring.top:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
-            ring.top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
-            ring.top:SetHeight(innerPx)
+        ring.top:ClearAllPoints()
+        ring.top:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
+        ring.top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
+        ring.top:SetHeight(innerPx)
 
-            ring.bottom:ClearAllPoints()
-            ring.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", px, px)
-            ring.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
-            ring.bottom:SetHeight(innerPx)
+        ring.bottom:ClearAllPoints()
+        ring.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", px, px)
+        ring.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
+        ring.bottom:SetHeight(innerPx)
 
-            ring.left:ClearAllPoints()
-            ring.left:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
-            ring.left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", px, px)
-            ring.left:SetWidth(innerPx)
+        ring.left:ClearAllPoints()
+        ring.left:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
+        ring.left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", px, px)
+        ring.left:SetWidth(innerPx)
 
-            ring.right:ClearAllPoints()
-            ring.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
-            ring.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
-            ring.right:SetWidth(innerPx)
+        ring.right:ClearAllPoints()
+        ring.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
+        ring.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
+        ring.right:SetWidth(innerPx)
 
-            -- Colour: "dispel" mode is Blizzard's to paint, via the vertex
-            -- tint RegisterRegions wires up -- kept white here so that tint
-            -- is never multiplied against a colour of ours. Any other mode
-            -- paints the flat setting directly, the same final fallback the
-            -- module this engine replaces used.
-            local r, g, b, a
-            if settings.BorderColorMode == "dispel" then
-                r, g, b, a = 1, 1, 1, 1
-            else
-                r, g, b, a = KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
-            end
-            ring.top:SetColorTexture(r, g, b, a);    ring.top:SetSnapToPixelGrid(false)
-            ring.bottom:SetColorTexture(r, g, b, a); ring.bottom:SetSnapToPixelGrid(false)
-            ring.left:SetColorTexture(r, g, b, a);   ring.left:SetSnapToPixelGrid(false)
-            ring.right:SetColorTexture(r, g, b, a);  ring.right:SetSnapToPixelGrid(false)
+        -- Colour: "dispel" mode is Blizzard's to paint, via the vertex
+        -- tint RegisterRegions wires up -- kept white here so that tint
+        -- is never multiplied against a colour of ours. Any other mode
+        -- paints the flat setting directly, the same final fallback the
+        -- module this engine replaces used.
+        local r, g, b, a
+        if settings.BorderColorMode == "dispel" then
+            r, g, b, a = 1, 1, 1, 1
+        else
+            r, g, b, a = KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
         end
+        ring.top:SetColorTexture(r, g, b, a);    ring.top:SetSnapToPixelGrid(false)
+        ring.bottom:SetColorTexture(r, g, b, a); ring.bottom:SetSnapToPixelGrid(false)
+        ring.left:SetColorTexture(r, g, b, a);   ring.left:SetSnapToPixelGrid(false)
+        ring.right:SetColorTexture(r, g, b, a);  ring.right:SetSnapToPixelGrid(false)
     end
 end

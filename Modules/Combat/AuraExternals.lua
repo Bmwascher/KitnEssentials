@@ -42,7 +42,7 @@ local DECLARATION = {
             key          = "external",
             buildFilter  = function() return "HELPFUL|EXTERNAL_DEFENSIVE" end,
             buildCandidates = BuildCandidates,
-            capabilities = { hasBorder = true, hasDispel = false, hasGlow = true },
+            capabilities = { hasBorder = true, hasDispelBadge = false, hasDispelRing = false, hasGlow = true },
         },
         {
             key          = "big",
@@ -51,7 +51,7 @@ local DECLARATION = {
             -- Only the externals group glows. Big defensives are shown
             -- un-glowed, and creating a host for both would silently start
             -- glowing personal cooldowns for every user with that option on.
-            capabilities = { hasBorder = true, hasDispel = false, hasGlow = false },
+            capabilities = { hasBorder = true, hasDispelBadge = false, hasDispelRing = false, hasGlow = false },
         },
     },
 

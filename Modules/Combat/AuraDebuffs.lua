@@ -193,7 +193,7 @@ local DECLARATION = {
             buildCandidates = function(settings)
                 return { excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(settings.Blocklist) }
             end,
-            capabilities = { hasBorder = true, hasDispel = true, hasGlow = false },
+            capabilities = { hasBorder = true, hasDispelBadge = true, hasDispelRing = true, hasGlow = false },
 
             -- The dispel texture registration needs this, and only this
             -- display has the colours. The rebuild mutates the existing
