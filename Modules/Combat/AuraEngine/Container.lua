@@ -168,9 +168,11 @@ function Container.AddGroups(handle, display, settings)
 end
 
 -- Enchant frames are layout elements in their own right, NOT members of an
--- aura group, so they take no share of the group budget and carry their own
--- layout. layoutIndex 0 puts them ahead of every group, which is where
--- Blizzard's own frame shows them.
+-- aura group, but their slots ARE reserved out of the group budget: capacity
+-- is the configured grid or the declared slot count, whichever is larger,
+-- and the aura group's limit is that capacity minus the reserved slots.
+-- layoutIndex 0 puts them ahead of every group, which is where Blizzard's
+-- own frame shows them.
 --
 -- Add-only, like groups: there is no public remove, so this runs once at
 -- creation and never again.

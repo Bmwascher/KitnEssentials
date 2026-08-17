@@ -1,4 +1,4 @@
--- One builder, two pages. Both drive SecureAuraHeader modules
+-- One builder, two pages. Both drive aura engine displays
 -- (Modules/Combat/AuraHeaders.lua), so the options are identical apart
 -- from the debuff-only school-colour toggle.
 --

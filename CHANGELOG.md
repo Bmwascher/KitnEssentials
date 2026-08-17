@@ -49,8 +49,11 @@ game's own aura display system. That rebuild is the actual fix for the patch
 
 ### Player Buffs and Player Debuffs
 - Both work again, rebuilt on the game's own aura display system
+- Both ship switched off. Turn them on to replace the game's own buff and
+  debuff frames
 - Existing settings carry over
-- Both gain four growth directions, plus a new fill-direction control
+- All eight growth directions are still there, now set with three controls
+  instead of one list
 - Weapon enchants and right-click to cancel a buff both still work
 
 ---

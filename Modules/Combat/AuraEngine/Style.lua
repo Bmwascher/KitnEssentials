@@ -101,14 +101,16 @@ end
 -- The dispel decoration: a texture (registered via AddDispelTypeTexture,
 -- Blizzard's own vocabulary calls this the aura's "border" -- see the
 -- deprecated SetAuraBorder alias) plus a fontstring (the colourblind-mode
--- symbol, aliased SetAuraSymbol). Both live on their own overlay frame so
--- their level can sit above the cooldown swipe (Step 2), and both take no
--- mouse input so decoration can never swallow a click or the tooltip.
+-- symbol, aliased SetAuraSymbol), created only when the badge is requested.
+-- Both live on their own overlay frame so their level can sit above the
+-- cooldown swipe (Step 2), and both take no mouse input so decoration can
+-- never swallow a click or the tooltip.
 --
--- Sized/fonted here at creation so the very first UpdateAuraDisplay (fired
--- from inside RegisterRegions's Set* calls, before StyleAuraFrame's first
--- pass) never calls SetText on a fontless string or SetPoint on a size-0
--- texture. StyleAuraFrame re-dresses both on every reconfiguration.
+-- When the badge IS requested, both are sized/fonted here at creation so the
+-- very first UpdateAuraDisplay (fired from inside RegisterRegions's Set*
+-- calls, before StyleAuraFrame's first pass) never calls SetText on a
+-- fontless string or SetPoint on a size-0 texture. StyleAuraFrame re-dresses
+-- both on every reconfiguration.
 function Style.CreateDispelHost(button, settings, wantBadge, wantRing)
     local host = CreateFrame("Frame", nil, button)
     host:SetAllPoints(button)
