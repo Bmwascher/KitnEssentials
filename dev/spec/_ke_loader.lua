@@ -513,6 +513,70 @@ function L.loadAuraPreview()
     return KE.AuraPreview, KE
 end
 
+-- Modules/Combat/AuraEngine/Rules.lua, Restriction.lua and Engine.lua on ONE
+-- KE, in that order: Engine.lua captures KE.AuraRules as a file-scope local at
+-- load, so loading Rules any later leaves that capture nil.
+--
+-- Everything the engine reaches beyond those three is project-owned and
+-- stubbed. KE.EditMode is left ABSENT so the Edit Mode branch no-ops, and the
+-- declaration carries no `sounds` key, so no sound registry is built and no
+-- C_UnitAuras stub is needed.
+--
+-- Returns KE.AuraEngine, KE and one registered display. The container recorder
+-- is KE.AuraContainer; a spec flips the restriction by reassigning
+-- KE.AreAuraIdentitiesHidden, which the gate reads through KE at call time.
+function L.loadAuraEngine()
+    mock.install()
+
+    local KE = {
+        -- Unrestricted by default. This is the predicate the whole engine spec
+        -- turns on, so every case that cares sets its own.
+        AreAuraIdentitiesHidden = function() return false end,
+    }
+
+    -- Counted rather than swallowed: whether the container was created, and
+    -- whether it was reconfigured afterwards, is the only thing the engine's
+    -- permission rule can be observed by from outside.
+    local container = { creates = 0, applyStates = 0, reconfigures = 0 }
+
+    container.Create = function(display)
+        container.creates = container.creates + 1
+        -- The real handle's shape. Only anchorFrame is read outside the
+        -- container itself, and only by the Edit Mode branch disabled above.
+        return {
+            anchorFrame        = noopFrame(),
+            container          = noopFrame(),
+            corner             = "TOPLEFT",
+            defaultIconsPerRow = display.defaultIconsPerRow,
+        }
+    end
+    container.ApplyState = function() container.applyStates = container.applyStates + 1 end
+    container.Reconfigure = function() container.reconfigures = container.reconfigures + 1 end
+    KE.AuraContainer = container
+
+    helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua", KE)
+    helpers.loadModule("Modules/Combat/AuraEngine/Restriction.lua", KE)
+    helpers.loadModule("Modules/Combat/AuraEngine/Engine.lua", KE)
+
+    -- Register keys its duplicate check on the owner object and hands it every
+    -- event registration, so the owner is real work even where a spec never
+    -- fires an event. Reachable afterwards as display.owner.
+    local owner = { events = {} }
+    owner.RegisterEvent = function(_, event, handler) owner.events[event] = handler end
+
+    -- Only the fields Register and ApplySettings actually read.
+    local display = KE.AuraEngine.Register(owner, {
+        key                = "AuraEngineSpec",
+        sortMethod         = "TIME",
+        groups             = {},
+        splitLimit         = function() return {} end,
+        buildPreview       = function() return {} end,
+        defaultIconsPerRow = 6,
+    }, function() return { Enabled = true } end)
+
+    return KE.AuraEngine, KE, display
+end
+
 -- Modules/Skinning/SkinAPI.lua AND Modules/Skinning/EUIWindows.lua on the
 -- SAME KE instance. loadSkinAPI and loadEUIWindows above each return a
 -- separate KE, so no spec driven through either loader alone can push a real

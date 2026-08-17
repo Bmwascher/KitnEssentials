@@ -35,11 +35,25 @@ describe("Advanced Debuffs filter-string construction", function()
         assert.truthy(R.BuildDebuffFilter({}):find("|INCLUDE_NAME_PLATE_ONLY", 1, true))
     end)
 
+    -- The literal, and every negatable filter at once. Building the same key
+    -- set twice in different source order proves nothing: Lua 5.1 orders a
+    -- given set by the key hashes, not by insertion, so an implementation that
+    -- iterated the filters unordered would emit the same string both times and
+    -- agree with itself. Restating an implementation's output is normally the
+    -- assertion this project rejects -- here the fixed order IS the specified
+    -- behaviour, so pinning it is the point.
     it("emits tokens in a stable order regardless of table iteration", function()
         local R = L.loadAuraRules()
-        local a = R.BuildDebuffFilter({ PLAYER = true, RAID = true, CROWD_CONTROL = true })
-        local b = R.BuildDebuffFilter({ CROWD_CONTROL = true, RAID = true, PLAYER = true })
-        assert.equals(a, b)
+        assert.equals(
+            "HARMFUL|!PLAYER|!RAID|!CROWD_CONTROL|!IMPORTANT|!RAID_PLAYER_DISPELLABLE|INCLUDE_NAME_PLATE_ONLY",
+            R.BuildDebuffFilter({
+                PLAYER                  = true,
+                RAID                    = true,
+                CROWD_CONTROL           = true,
+                IMPORTANT               = true,
+                RAID_PLAYER_DISPELLABLE = true,
+            })
+        )
     end)
 end)
 
@@ -136,10 +150,16 @@ describe("preview timing", function()
         assert.equals(15, duration)
     end)
 
+    -- A pair that SHARES a duration, which is the only case the phase term
+    -- exists for. Durations repeat across the index range, and two icons on
+    -- the same duration would otherwise open in lockstep. Any other pair
+    -- carries differing durations, so their offsets differ on their own and
+    -- the assertion holds with no phase term at all.
     it("varies the phase across indices so icons are not synchronised", function()
         local R = L.loadAuraRules()
-        local _, offsetA = R.PreviewTiming(1)
-        local _, offsetB = R.PreviewTiming(2)
+        local durationA, offsetA = R.PreviewTiming(1)
+        local durationB, offsetB = R.PreviewTiming(7)
+        assert.equals(durationA, durationB)
         assert.not_equals(offsetA, offsetB)
     end)
 
