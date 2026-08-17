@@ -2,12 +2,12 @@
 
 ## Unreleased
 
-**Aura Debuffs** and **Aura Externals** have been rebuilt on top of the
+**Advanced Debuffs** and **Aura Externals** have been rebuilt on top of the
 game's own aura display system. That rebuild is the actual fix for the patch
 12.1 crashes that led to the earlier advice to switch both modules off —
 **if you disabled either one, turn it back on.**
 
-### Aura Debuffs
+### Advanced Debuffs
 - Rebuilt on the game's own aura display system, fixing the patch 12.1
   crashes. Turn this module back on if you had switched it off
 - The movable frame's internal name changed from `KE_AuraDebuffs` to
