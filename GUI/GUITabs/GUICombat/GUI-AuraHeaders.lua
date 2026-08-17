@@ -15,17 +15,6 @@ local LSM = KE.LSM
 local table_insert = table.insert
 local ipairs, pairs = ipairs, pairs
 
-local GROWTH_OPTIONS = {
-    { key = "RIGHT_DOWN", text = "Right, then Down" },
-    { key = "RIGHT_UP",   text = "Right, then Up" },
-    { key = "LEFT_DOWN",  text = "Left, then Down" },
-    { key = "LEFT_UP",    text = "Left, then Up" },
-    { key = "DOWN_RIGHT", text = "Down, then Right" },
-    { key = "DOWN_LEFT",  text = "Down, then Left" },
-    { key = "UP_RIGHT",   text = "Up, then Right" },
-    { key = "UP_LEFT",    text = "Up, then Left" },
-}
-
 local function BuildPage(opts)
     GUIFrame:RegisterContent(opts.contentID, function(scrollChild, yOffset)
         local db = KE.db and KE.db.profile[opts.dbKey]
@@ -114,13 +103,36 @@ local function BuildPage(opts)
         card2:AddRow(rowB, 40)
 
         local rowC = GUIFrame:CreateRow(card2.content, 40)
-        local growth = GUIFrame:CreateDropdown(rowC, "Growth Direction", {
-            options = GROWTH_OPTIONS,
-            value = db.GrowthDirection,
-            callback = function(v) db.GrowthDirection = v; ApplySettings() end,
+        local growH = GUIFrame:CreateDropdown(rowC, "Grow Sideways", {
+            options = {
+                { text = "Right", value = "RIGHT" },
+                { text = "Left",  value = "LEFT" },
+            },
+            value = db.GrowHorizontal,
+            callback = function(v) db.GrowHorizontal = v; ApplySettings() end,
         })
-        rowC:AddWidget(growth, 1)
-        table_insert(allWidgets, growth)
+        rowC:AddWidget(growH, 0.34)
+        local growV = GUIFrame:CreateDropdown(rowC, "Grow Vertically", {
+            options = {
+                { text = "Down", value = "DOWN" },
+                { text = "Up",   value = "UP" },
+            },
+            value = db.GrowVertical,
+            callback = function(v) db.GrowVertical = v; ApplySettings() end,
+        })
+        rowC:AddWidget(growV, 0.33)
+        local growAxis = GUIFrame:CreateDropdown(rowC, "Fill Direction", {
+            options = {
+                { text = "Rows first",    value = "HORIZONTAL" },
+                { text = "Columns first", value = "VERTICAL" },
+            },
+            value = db.GrowAxis,
+            callback = function(v) db.GrowAxis = v; ApplySettings() end,
+        })
+        rowC:AddWidget(growAxis, 0.33)
+        table_insert(allWidgets, growH)
+        table_insert(allWidgets, growV)
+        table_insert(allWidgets, growAxis)
         card2:AddRow(rowC, 40)
         yOffset = yOffset + card2:GetContentHeight() + Theme.paddingSmall
 
@@ -160,8 +172,8 @@ local function BuildPage(opts)
         table_insert(allWidgets, tips)
         if opts.colorByType then
             local byType = GUIFrame:CreateCheckbox(rowE, "Color Border By Debuff Type", {
-                value = db.ColorByType ~= false,
-                callback = function(c) db.ColorByType = c; ApplySettings() end,
+                value = db.BorderColorMode == "dispel",
+                callback = function(c) db.BorderColorMode = c and "dispel" or "flat"; ApplySettings() end,
             })
             rowE:AddWidget(byType, 0.5)
             table_insert(allWidgets, byType)
@@ -184,8 +196,8 @@ local function BuildPage(opts)
             table_insert(allWidgets, ench)
         end
         local countCol = GUIFrame:CreateColorPicker(rowF, "Stack Color", {
-            color = db.CountColor,
-            callback = function(r, g, b, a) db.CountColor = { r, g, b, a }; ApplySettings() end,
+            color = db.StackColor,
+            callback = function(r, g, b, a) db.StackColor = { r, g, b, a }; ApplySettings() end,
         })
         rowF:AddWidget(countCol, opts.weapons and 0.33 or 0.5)
         table_insert(allWidgets, countCol)
@@ -237,8 +249,8 @@ local function BuildPage(opts)
         })
         rowH:AddWidget(timerSize, 0.5)
         local countSize = GUIFrame:CreateSlider(rowH, "Stack Font Size", {
-            min = 6, max = 24, step = 1, value = db.CountFontSize,
-            callback = function(v) db.CountFontSize = v; ApplySettings() end,
+            min = 6, max = 24, step = 1, value = db.FontSize,
+            callback = function(v) db.FontSize = v; ApplySettings() end,
         })
         rowH:AddWidget(countSize, 0.5)
         table_insert(allWidgets, timerSize)
