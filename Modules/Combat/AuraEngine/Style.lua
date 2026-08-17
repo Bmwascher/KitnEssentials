@@ -122,8 +122,54 @@ function Style.CreateDispelHost(button, settings)
     KE:ApplyFontToText(text, settings.FontFace, settings.FontSize, settings.FontOutline)
     text:SetPoint("CENTER", texture, "CENTER", 0, 0)
 
+    -- The dispel-coloured ring. Parented directly to the BUTTON, not the
+    -- overlay host above -- sublevel only orders regions of the same frame,
+    -- and this has to sit below CreateBorderHost's plain black edges
+    -- (OVERLAY sublevel 7) rather than above them, which a higher frame
+    -- level would force regardless of sublevel. Two-point corner-to-corner
+    -- anchors, one pixel inset on every edge, with only the thin dimension
+    -- given an explicit size -- that is what lets the ring track the
+    -- button's real size instead of a size fixed at creation.
+    local px      = KE:GetPixelSize()
+    local innerPx = 2 * px
+
+    local function MakeRingEdge()
+        local tex = button:CreateTexture(nil, "OVERLAY", nil, 6)
+        tex:SetTexelSnappingBias(0)
+        -- White: the dispel-mode repaint tints via vertex colour, which
+        -- multiplies against the texture's own colour, so anything but
+        -- white here would darken or discolour the result.
+        tex:SetColorTexture(1, 1, 1, 1)
+        tex:SetSnapToPixelGrid(false)
+        return tex
+    end
+
+    local ring = {
+        top    = MakeRingEdge(),
+        bottom = MakeRingEdge(),
+        left   = MakeRingEdge(),
+        right  = MakeRingEdge(),
+    }
+
+    ring.top:SetPoint("TOPLEFT", button, "TOPLEFT", px, -px)
+    ring.top:SetPoint("TOPRIGHT", button, "TOPRIGHT", -px, -px)
+    ring.top:SetHeight(innerPx)
+
+    ring.bottom:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", px, px)
+    ring.bottom:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -px, px)
+    ring.bottom:SetHeight(innerPx)
+
+    ring.left:SetPoint("TOPLEFT", button, "TOPLEFT", px, -px)
+    ring.left:SetPoint("BOTTOMLEFT", button, "BOTTOMLEFT", px, px)
+    ring.left:SetWidth(innerPx)
+
+    ring.right:SetPoint("TOPRIGHT", button, "TOPRIGHT", -px, -px)
+    ring.right:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -px, px)
+    ring.right:SetWidth(innerPx)
+
     host.texture = texture
     host.text    = text
+    host.ring    = ring
     return host
 end
 
@@ -262,12 +308,33 @@ function Style.RegisterRegions(button, _display, group, settings)
     if button.keDispel then
         button:ClearDispelTypeTextures()
 
-        local options = { style = Enum.CustomAuraButtonDispelTypeTextureStyle.Icon }
-        if group.getDispelColorCurve then
-            options.customDispelColorCurve = group.getDispelColorCurve(settings)
-        end
-        button:AddDispelTypeTexture(button.keDispel.texture, options)
+        -- Badge: Blizzard's built-in dispel atlases already carry their own
+        -- colours, so no curve here -- the curve goes to the ring instead.
+        button:AddDispelTypeTexture(button.keDispel.texture, {
+            style = Enum.CustomAuraButtonDispelTypeTextureStyle.Icon,
+        })
         button:SetDispelTypeText(button.keDispel.text, {})
+
+        -- The ring is only a registered dispel texture in "dispel" mode, so
+        -- Blizzard repaints it per aura. Any other mode paints it directly
+        -- in StyleAuraFrame instead, so registering it here would fight
+        -- that paint on every UpdateAuraDisplay.
+        local ring = button.keDispel.ring
+        if ring and settings.BorderColorMode == "dispel" then
+            local ringOptions = {
+                style = Enum.CustomAuraButtonDispelTypeTextureStyle.PreserveAsset,
+                -- The old ring never hid itself for an aura with no dispel
+                -- type; this option is the only thing that reproduces that.
+                showWithoutDispelType = true,
+            }
+            if group.getDispelColorCurve then
+                ringOptions.customDispelColorCurve = group.getDispelColorCurve(settings)
+            end
+            button:AddDispelTypeTexture(ring.top, ringOptions)
+            button:AddDispelTypeTexture(ring.bottom, ringOptions)
+            button:AddDispelTypeTexture(ring.left, ringOptions)
+            button:AddDispelTypeTexture(ring.right, ringOptions)
+        end
     end
 end
 
@@ -349,5 +416,47 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         KE:ApplyFontToText(text, settings.FontFace, settings.FontSize, settings.FontOutline)
         text:ClearAllPoints()
         text:SetPoint("CENTER", tex, "CENTER", 0, 0)
+
+        local ring = frame.keDispel.ring
+        if ring then
+            local px      = KE:GetPixelSize()
+            local innerPx = 2 * px
+
+            ring.top:ClearAllPoints()
+            ring.top:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
+            ring.top:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
+            ring.top:SetHeight(innerPx)
+
+            ring.bottom:ClearAllPoints()
+            ring.bottom:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", px, px)
+            ring.bottom:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
+            ring.bottom:SetHeight(innerPx)
+
+            ring.left:ClearAllPoints()
+            ring.left:SetPoint("TOPLEFT", frame, "TOPLEFT", px, -px)
+            ring.left:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", px, px)
+            ring.left:SetWidth(innerPx)
+
+            ring.right:ClearAllPoints()
+            ring.right:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -px, -px)
+            ring.right:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -px, px)
+            ring.right:SetWidth(innerPx)
+
+            -- Colour: "dispel" mode is Blizzard's to paint, via the vertex
+            -- tint RegisterRegions wires up -- kept white here so that tint
+            -- is never multiplied against a colour of ours. Any other mode
+            -- paints the flat setting directly, the same final fallback the
+            -- module this engine replaces used.
+            local r, g, b, a
+            if settings.BorderColorMode == "dispel" then
+                r, g, b, a = 1, 1, 1, 1
+            else
+                r, g, b, a = KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
+            end
+            ring.top:SetColorTexture(r, g, b, a);    ring.top:SetSnapToPixelGrid(false)
+            ring.bottom:SetColorTexture(r, g, b, a); ring.bottom:SetSnapToPixelGrid(false)
+            ring.left:SetColorTexture(r, g, b, a);   ring.left:SetSnapToPixelGrid(false)
+            ring.right:SetColorTexture(r, g, b, a);  ring.right:SetSnapToPixelGrid(false)
+        end
     end
 end
