@@ -1269,7 +1269,12 @@ local Defaults = {
                 CROWD_CONTROL           = false,
                 IMPORTANT               = false,
                 RAID_PLAYER_DISPELLABLE = false,
-                INCLUDE_NAME_PLATE_ONLY = false,
+                -- ON by default, unlike every other filter here. This one
+                -- INVERTS: enabled means the token is absent, which is what
+                -- excludes nameplate-only auras. Defaulting it off would put
+                -- the token in the filter string and start showing auras this
+                -- display has never shown.
+                INCLUDE_NAME_PLATE_ONLY = true,
             },
             Blocklist     = {},
             FontSize      = 14,

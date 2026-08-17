@@ -48,6 +48,9 @@ local DECLARATION = {
             key          = "big",
             buildFilter  = function() return "HELPFUL|BIG_DEFENSIVE" end,
             buildCandidates = BuildCandidates,
+            -- Only the externals group glows. Big defensives are shown
+            -- un-glowed, and creating a host for both would silently start
+            -- glowing personal cooldowns for every user with that option on.
             capabilities = { hasBorder = true, hasDispel = false, hasGlow = false },
         },
     },
@@ -56,9 +59,6 @@ local DECLARATION = {
         return KE.AuraRules.SplitExternalsLimit(total, settings.ShowBigDefensives)
     end,
 
-    -- Only the externals group glows. Big defensives are shown un-glowed, and
-    -- creating a host for both would silently start glowing personal
-    -- cooldowns for every user with that option on.
     sounds = {
         spellIDs    = { 6940, 47788, 255312, 102342, 116849, 357170, 53480 },
         unit        = "player",
