@@ -102,8 +102,10 @@ local function EnsurePool(state, groupKey, display, group, settings)
 end
 
 -- Same grid math the module this engine replaces used to lay out its own
--- buttons: button[1] sits at the position corner, later icons step by
--- IconSize + IconSpacing per column/row, signed by the grow direction.
+-- buttons: button[1] sits at the growth-opposite corner, the corner the live
+-- container is pinned at, so the preview and the live grid start from the same
+-- place; later icons step by IconSize + IconSpacing per column/row, signed by
+-- the grow direction.
 local function PositionEntryFrame(frame, index, display, settings)
     local perRow   = settings.IconsPerRow or display.defaultIconsPerRow
     local size     = settings.IconSize or 0
@@ -112,7 +114,7 @@ local function PositionEntryFrame(frame, index, display, settings)
     local dy       = (size + spacing) * (settings.GrowVertical == "UP" and 1 or -1)
     local row      = math_floor((index - 1) / perRow)
     local col      = (index - 1) % perRow
-    local pin      = (settings.Position and settings.Position.AnchorFrom) or "CENTER"
+    local pin      = KE.AuraContainer.CornerFor(settings)
 
     frame:ClearAllPoints()
     frame:SetPoint(pin, frame:GetParent(), pin, col * dx, row * dy)
@@ -377,11 +379,11 @@ end
 -- current preview frames and rebuild them from current settings, so size,
 -- layout, quotas and glow all follow the user's edit. It goes through the
 -- same frame-building path Enter uses -- never a second construction path,
--- so the preview cannot drift from itself -- but it skips the container
--- swap entirely: the container is already hidden while the preview is open
--- and must stay that way, so cycling it through Exit's show/enable plan on
--- every settings tick would re-register a secure container's events for no
--- visible change.
+-- so the preview cannot drift from itself. Enter re-applies PlanEnter, which
+-- is the hidden/disabled container state the preview is already in, so the
+-- container swap is a no-op in practice rather than a skipped step: the
+-- container early-outs on an unchanged SetEnabled, so a settings tick never
+-- re-registers a secure container's events.
 function Preview.Rebuild(display, settings)
     local handle = display.handle
     if not handle then return end

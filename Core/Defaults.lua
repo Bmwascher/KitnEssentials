@@ -1208,7 +1208,11 @@ local Defaults = {
             GlowEnabled       = true,
             GlowType          = "pixel",
             GlowColor         = { 0, 1, 0, 1 },
-            -- PixelGlow extended params (passed to LCG.PixelGlow_Start)
+            -- Six of the keys below are retained but unread -- GlowLines,
+            -- GlowLength, GlowThickness, GlowBorder, GlowScale and
+            -- GlowStartAnim -- so a profile saved by an older version still
+            -- loads cleanly. GlowFrequency and GlowDuration in the same run
+            -- are NOT dead and are still read.
             GlowLines         = 8,
             GlowFrequency     = 0.25,
             GlowLength        = 10,

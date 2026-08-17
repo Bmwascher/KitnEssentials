@@ -794,8 +794,7 @@ end
 -- Rate-capped with a trailing flush so a burst of events costs one pass rather
 -- than one per event. The cap matches the ticker's own 0.1s period, so nothing
 -- is displayed later than it already would have been. The flush closure is
--- allocated once at load, not once per event (same reason as the UNIT_AURA
--- debounce in AuraExternals.lua).
+-- allocated once at load, not once per event.
 local DISPLAY_REFRESH_CAP = 0.1
 
 local flushDisplayRefresh = function()

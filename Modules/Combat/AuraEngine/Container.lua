@@ -48,6 +48,14 @@ function Container.TotalLimit(display, settings)
     return perRow * (settings.MaxRows or 1)
 end
 
+-- The grid's span along one axis. The anchor's size and the flow layout's
+-- wrap point are the same quantity measured twice -- the box the user drags
+-- and the point the icons wrap -- so they are computed in one place and
+-- cannot drift apart.
+local function GridSpan(count, settings)
+    return count * settings.IconSize + (count - 1) * settings.IconSpacing
+end
+
 -- The anchor has no size of its own until this runs -- every corner of a
 -- zero-size frame coincides, so neither the pin nor the position math
 -- notices, but the Edit Mode mover needs a real rectangle to grab, and
@@ -57,9 +65,7 @@ end
 function Container.SizeAnchor(handle, display, settings)
     local cols = settings.IconsPerRow or display.defaultIconsPerRow
     local rows = settings.MaxRows or 1
-    local w = cols * settings.IconSize + (cols - 1) * settings.IconSpacing
-    local h = rows * settings.IconSize + (rows - 1) * settings.IconSpacing
-    handle.anchorFrame:SetSize(w, h)
+    handle.anchorFrame:SetSize(GridSpan(cols, settings), GridSpan(rows, settings))
 end
 
 -- Blizzard owns the frame list, so ask Blizzard. The provider grows it with
@@ -170,15 +176,19 @@ end
 -- the sound registry — entering a vehicle hides the icons and leaves the
 -- sounds registered.
 --
--- The creating module calls this on first creation too. A container is ENABLED at birth — the
+-- The engine calls this on first creation too. A container is ENABLED at birth — the
 -- intrinsic sets it through KeyValues, which the template inherits — so this
 -- does not repair a default; it makes the display MATCH its configured
 -- state. A module switched off in saved settings must come up hidden and
 -- disabled.
-function Container.ApplyState(handle, state)
+--
+-- anchorShown is a SEPARATE decision the caller makes, never derived from
+-- state: the preview frames are children of the anchor, so a hidden container
+-- does not imply a hidden anchor.
+function Container.ApplyState(handle, state, anchorShown)
     handle.container:SetShown(state)
     handle.container:SetEnabled(state)
-    handle.anchorFrame:SetShown(state)
+    handle.anchorFrame:SetShown(anchorShown)
 end
 
 -- Groups are add-only with no public remove, so retiring is always a zero
@@ -238,9 +248,7 @@ function Container.ApplyLayout(handle, settings)
     -- width. Falls back the same way TotalLimit does -- ApplyLayout has no
     -- display argument, so handle.defaultIconsPerRow is the only route to it.
     local perRow = settings.IconsPerRow or handle.defaultIconsPerRow
-    handle.container:SetFlowLayoutMaximumLineSize(
-        perRow * settings.IconSize + (perRow - 1) * settings.IconSpacing
-    )
+    handle.container:SetFlowLayoutMaximumLineSize(GridSpan(perRow, settings))
 
     -- Applied to BOTH frames. A child inherits its parent's strata at
     -- creation, but whether a later SetFrameStrata on the parent propagates

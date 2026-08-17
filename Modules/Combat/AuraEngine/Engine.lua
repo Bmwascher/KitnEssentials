@@ -204,8 +204,15 @@ function Engine.ApplyDisplayState(display, settings)
     if not display.handle then return end
 
     local state = Rules.ComputeState(settings.Enabled, display.vehicleDisabled)
-    local shown = state.container and not display.previewActive
-    KE.AuraContainer.ApplyState(display.handle, shown)
+    local container = state.container and not display.previewActive
+
+    -- The anchor is a SEPARATE decision from the container. Preview frames are
+    -- its children and it carries the mover and the position the user is
+    -- editing, so while a preview is up it stays shown whatever the container
+    -- does -- which is exactly what Preview.PlanEnter already specifies.
+    local anchor = display.previewActive or container
+
+    KE.AuraContainer.ApplyState(display.handle, container, anchor)
 end
 
 -- One synchronisation per call, and the only caller of Registry:Sync. It takes
@@ -261,7 +268,7 @@ function Engine.SetModuleEnabled(display, enabled)
     -- unconditionally after HidePreview, whose own plan may otherwise have
     -- left the container shown.
     if display.handle then
-        KE.AuraContainer.ApplyState(display.handle, false)
+        KE.AuraContainer.ApplyState(display.handle, false, false)
     end
 
     -- Clears the general pending flag, so a later restriction release cannot
@@ -312,11 +319,11 @@ end
 -- Edit Mode -- the mover and its hitbox.
 ---------------------------------------------------------------------------------
 
--- The container is sized to the grid, but the grid is pinned to the module's
--- anchor corner and grows from there, so a growth setting that opposes the
--- anchor slides every icon out of the frame. Every element anchors to a
--- BUTTON, so the host for a text inset is one icon square rather than the
--- container.
+-- The grid term is zero by construction: the anchor is sized to the grid and
+-- the grid is pinned at the corner it grows away from, so the icons can never
+-- reach outside the anchor box and the inset is carried entirely by the text
+-- and dispel decorations. Every element anchors to a BUTTON, so the host for a
+-- text inset is one icon square rather than the container.
 --
 -- The dispel term is safe to include even for a display with no DispelPosition
 -- setting: with both anchor points absent it centres against itself and nets
@@ -328,7 +335,7 @@ local function GetOverlayInset(display, settings)
         settings.MaxRows or 1,
         settings.IconSize,
         settings.IconSpacing,
-        (settings.Position and settings.Position.AnchorFrom) or "CENTER",
+        KE.AuraContainer.CornerFor(settings),
         settings.GrowHorizontal == "LEFT",
         settings.GrowVertical == "UP"
     ) }

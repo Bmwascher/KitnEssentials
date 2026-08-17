@@ -25,6 +25,11 @@ game's own aura display system. That rebuild is the actual fix for the patch
   `KE_AuraExternalsAnchor`. If anything else was anchored directly to the old
   name, it will no longer follow this display and will fall back to its own
   default position — re-anchor it to the new name
+- The glow on a tracked external now uses the game's own glow art instead of
+  the drawn-in glow it used before, so its appearance changes for everyone.
+  The choices are now Ants, Proc Loop and Alert; Colour and Speed still work,
+  but the Lines, Length, Thickness, Border, Scale and Start Animation settings
+  are gone because the new art has no use for them
 
 ---
 
