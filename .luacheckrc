@@ -103,6 +103,10 @@ read_globals = {
     "ImportDataStreamMixin",
     "MapCanvasPinMixin", "MapCanvasDataProviderMixin",
     "hooksecurefunc",
+    "AnchorUtil",
+
+    -- Aura container (12.1 secure aura display)
+    "AuraContainerSortMethod", "AuraContainerSortDirection",
     "ShowUIPanel", "HideUIPanel",
     "WorldFrame",
     "GetMouseFoci", "GetMouseFocus",
