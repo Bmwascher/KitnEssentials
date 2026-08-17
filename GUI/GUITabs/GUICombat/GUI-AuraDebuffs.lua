@@ -355,10 +355,22 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
 
     db.Blocklist = db.Blocklist or {}
 
+    -- The hardcoded blocklist is applied unconditionally regardless of a
+    -- row's own enabled flag (see AuraRules.HARDCODED_BLOCKLIST_SET), so any
+    -- default row that is also one of those ids can never actually be
+    -- switched off. Read-only: this table is shared and used elsewhere as
+    -- the returned exclude set.
+    local ALWAYS_ON_BLOCKLIST_IDS = KE.AuraRules and KE.AuraRules.HARDCODED_BLOCKLIST_SET or {}
+
+    local function IsAlwaysOnBlocklistEntry(spellId, entry)
+        return type(entry) == "table" and entry.default == true
+            and ALWAYS_ON_BLOCKLIST_IDS[spellId] == true
+    end
+
     local selectedSpellId = nil
     local blocklistDropdown, spellIdInput, labelInput
     local spellIconFrame, spellIconTexture, spellNameLabel
-    local enabledToggle, deleteBtn
+    local enabledToggle, enabledAlwaysOnHint, deleteBtn
 
     -- Conditional group: Delete Entry button is only enabled when a
     -- non-default entry is selected. The master `db.Enabled` gate is
@@ -369,6 +381,14 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
         if not selectedSpellId then return false end
         local entry = db.Blocklist[selectedSpellId]
         return not (type(entry) == "table" and entry.default)
+    end)
+
+    -- Conditional group: the Enabled toggle is disabled for an always-on
+    -- entry -- flipping it off would be a lie, since the hardcoded filter
+    -- keeps applying regardless.
+    manager:SetCondition("toggleable", function()
+        if not selectedSpellId then return true end
+        return not IsAlwaysOnBlocklistEntry(selectedSpellId, db.Blocklist[selectedSpellId])
     end)
 
     local function GetSortedBlocklist()
@@ -419,6 +439,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
         if not selectedSpellId or not db.Blocklist[selectedSpellId] then
             spellIconFrame:Hide()
             spellNameLabel:SetText("")
+            enabledAlwaysOnHint:Hide()
             return
         end
 
@@ -439,6 +460,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
         spellIdInput:SetValue(tostring(selectedSpellId), true)
         labelInput:SetValue(label, true)
         enabledToggle.toggle:SetValue(isEnabled, true)
+        enabledAlwaysOnHint:SetShown(IsAlwaysOnBlocklistEntry(selectedSpellId, entry))
 
         -- Re-run the manager so the "deletable" condition is re-evaluated
         -- against the new selection. Direct SetEnabled() would get clobbered
@@ -453,12 +475,13 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     end
 
     -- Info "Blocklist Filter Info" header
-    local textRowSize = 34
+    local textRowSize = 46
     local infoRow = GUIFrame:CreateRow(card8.content, textRowSize)
     local infoText = GUIFrame:CreateText(infoRow,
         KE:ColorTextByTheme("Blocklist Filter Info"),
         KE:ColorTextByTheme("-") ..
-            " Only possible to add auras that have been made non secret by Blizzard, for example all the Bloodlust ID's.",
+            " Only possible to add auras that have been made non secret by Blizzard, for example all the Bloodlust ID's." ..
+            " Adding a boss debuff's spell ID will not hide it -- filtering only works for spells Blizzard has made non-secret, so an unsupported ID silently does nothing.",
         textRowSize, "hide")
     infoRow:AddWidget(infoText, 1)
     manager:Register(infoText, "all")
@@ -507,7 +530,27 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
         end,
     })
     selectRow:AddWidget(enabledToggle, 0.5, 3)
-    manager:Register(enabledToggle, "all")
+    manager:Register(enabledToggle, "toggleable")
+
+    -- Hover-only hint for an always-on entry. The toggle widget has no
+    -- public API to change its tooltip after creation, so a thin mouse
+    -- catcher sits over it instead, shown only while such an entry is
+    -- selected -- SetEnabled(false) on the toggle already drops its own
+    -- mouse handling, leaving this frame free to receive the hover.
+    enabledAlwaysOnHint = CreateFrame("Frame", nil, enabledToggle.toggle)
+    enabledAlwaysOnHint:SetAllPoints(enabledToggle.toggle)
+    enabledAlwaysOnHint:SetFrameLevel(enabledToggle.toggle:GetFrameLevel() + 10)
+    enabledAlwaysOnHint:EnableMouse(true)
+    enabledAlwaysOnHint:Hide()
+    enabledAlwaysOnHint:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
+        GameTooltip:SetText(
+            "Always filtered. This entry is applied unconditionally and cannot be turned off.",
+            1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    enabledAlwaysOnHint:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
     card8:AddRow(selectRow, Theme.rowHeight)
 
     -- Separator under select/toggle row

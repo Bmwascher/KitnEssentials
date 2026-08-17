@@ -225,6 +225,35 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
             startAnim = "GlowStartAnim",
             duration  = "GlowDuration",
         },
+        types = {
+            { key = "ants",     text = "Ants" },
+            { key = "procloop", text = "Proc Loop" },
+            { key = "alert",    text = "Alert" },
+        },
+        resolveType = KE.AuraGlowRules.ResolveType,
+        -- No typeRows override: the card's own default lookup keys its
+        -- type-only geometry rows "pixel"/"autocast"/"proc", and a resolved
+        -- flipbook type is always "ants"/"procloop"/"alert" -- never one of
+        -- those keys. Passing an override here (even an empty one) would
+        -- replace that lookup and stop the card from ever hiding those rows,
+        -- leaving the retired Lines/Length/Thickness/Border/Scale/Start
+        -- Animation controls permanently visible.
+        showSpeed = function() return true end,
+        speedAdapter = {
+            -- WRAPPED, not passed bare. The read rule's result needs
+            -- normalising -- nil or zero becomes 0.25, then clamp -- and the
+            -- glow card is shared and generic, so it has no access to these
+            -- rules. Passing ReadSpeed directly hands the slider a nil on a
+            -- profile with no stored frequency.
+            read = function(readDb, readKeys)
+                return KE.AuraGlowRules.NormaliseFrequency(
+                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 2)
+            end,
+            write   = KE.AuraGlowRules.WriteSpeed,
+            setType = KE.AuraGlowRules.SetType,
+            min     = 0.05,
+            max     = 2, -- keeps the old 0.5s proc period reachable
+        },
         onChangeCallback = ApplySettings,
     })
     manager:Register(glowCard, "all")
