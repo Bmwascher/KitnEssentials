@@ -6,4 +6,5 @@
     <Script file="Restriction.lua" />
     <Script file="Sound.lua" />
     <Script file="Container.lua" />
+    <Script file="Style.lua" />
 </Ui>
