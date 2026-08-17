@@ -66,17 +66,18 @@ end
 -- The trade: a mid-fight UI-scale change leaves these borders unsnapped until
 -- the next reconfiguration. That is the correct side to err on.
 --
--- Fixed black, matching the plain border both modules being replaced draw
--- (their dispel-coloured decoration is a SEPARATE region, now the dispel
--- host below). Sized from settings.IconSize at creation; StyleAuraFrame
+-- Defaults to black, matching the plain border both modules being replaced
+-- draw (their dispel-coloured decoration is a SEPARATE region, now the
+-- dispel host below). Sized from settings.IconSize at creation; StyleAuraFrame
 -- re-sizes on every reconfiguration the same way, in case IconSize changed.
-function Style.CreateBorderHost(button, settings)
+function Style.CreateBorderHost(button, settings, color)
     local px   = KE:GetPixelSize()
     local size = settings.IconSize or 0
+    local r, g, b, a = KE:ResolveColor(color, { 0, 0, 0, 1 })
 
     local function MakeEdge(width, height)
         local tex = button:CreateTexture(nil, "OVERLAY", nil, 7)
-        tex:SetColorTexture(0, 0, 0, 1)
+        tex:SetColorTexture(r, g, b, a)
         tex:SetTexelSnappingBias(0)
         tex:SetSnapToPixelGrid(false)
         tex:SetSize(width, height)
@@ -231,7 +232,8 @@ function Style.CreateRegions(frame, group, settings)
     if frame.keTimer.SetShadowOffset then frame.keTimer:SetShadowOffset(0, 0) end
 
     if caps.hasBorder then
-        frame.keBorder = Style.CreateBorderHost(frame, settings)
+        frame.keBorder = Style.CreateBorderHost(frame, settings,
+            group.borderColorKey and settings[group.borderColorKey] or nil)
     end
     if caps.hasDispelBadge or caps.hasDispelRing then
         frame.keDispel = Style.CreateDispelHost(frame, settings,
@@ -259,9 +261,19 @@ function Style.InitializeButton(button, display, group, settings)
 
     -- Tooltip policy, per button and LIVE ONLY. Both methods live on the aura
     -- BUTTON mixin; a plain preview frame has neither.
-    button:SetMouseMotionEnabled(true)
+    button:SetMouseMotionEnabled(settings.ShowTooltips ~= false)
     button:SetTooltipAnchorPoint("ANCHOR_BOTTOMLEFT")
     button:SetHideTooltipInCombat(false)
+
+    -- Cancelling is a property of what the display SHOWS, not a setting: a
+    -- debuff cannot be cancelled at all, so this is declared per group rather
+    -- than offered as a checkbox.
+    if caps.canCancel then
+        -- The token is stored verbatim and compared for EXACT equality
+        -- against the button name with "Up" or "Down" appended, so a bare
+        -- "RightButton" matches nothing and cancel silently never fires.
+        button:SetCancelAuraButtons("RightButtonUp")
+    end
 
     Style.RegisterRegions(button, display, group, settings)
     Style.StyleAuraFrame(button, settings, caps)
@@ -287,6 +299,13 @@ function Style.RegisterRegions(button, _display, group, settings)
         button:SetIcon(button.keIcon)
     end
 
+    -- Tooltips are a live toggle, so the policy is re-applied here rather
+    -- than only at creation. SetMouseMotionEnabled exists on the aura button
+    -- and not on a preview frame, which never reaches this function.
+    if button.SetMouseMotionEnabled then
+        button:SetMouseMotionEnabled(settings.ShowTooltips ~= false)
+    end
+
     -- "Swipe" gates the cooldown REGION itself, not just its visual: the
     -- registration must be reversible, so ClearDurationCooldown has to be
     -- reachable from the checkbox.
@@ -302,10 +321,17 @@ function Style.RegisterRegions(button, _display, group, settings)
     end
 
     if button.keTimer then
-        button:SetDurationText(button.keTimer, {
-            textFormatter = GetDurationFormatter(settings),
-            textColor     = nil,
-        })
+        if settings.ShowTimer ~= false then
+            button.keTimer:Show()
+            button:SetDurationText(button.keTimer, {
+                textFormatter = GetDurationFormatter(settings),
+                textColor     = nil,
+            })
+        else
+            button:ClearDurationText()
+            button.keTimer:SetText("")
+            button.keTimer:Hide()
+        end
     end
 
     if button.keCount then
@@ -376,6 +402,10 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
 
     if frame.keCount then
         KE:ApplyFontToText(frame.keCount, settings.FontFace, settings.FontSize, settings.FontOutline)
+        local sc = settings.StackColor
+        if sc then
+            frame.keCount:SetTextColor(sc[1] or 1, sc[2] or 1, sc[3] or 1, sc[4] or 1)
+        end
         frame.keCount:ClearAllPoints()
         local sp = settings.StackPosition
         if sp then
@@ -392,6 +422,11 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         local tp = settings.TimerPosition
         if tp then
             frame.keTimer:SetPoint(tp.AnchorFrom, frame, tp.AnchorTo, tp.XOffset, tp.YOffset)
+        else
+            -- A display with no configurable timer position keeps it centred,
+            -- which is where the cooldown widget's own countdown draws. Without
+            -- a fallback the ClearAllPoints above leaves the text unanchored.
+            frame.keTimer:SetPoint("CENTER", frame, "CENTER", 0, 0)
         end
     end
 
@@ -399,6 +434,14 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         local px   = KE:GetPixelSize()
         local size = settings.IconSize or 0
         local host = frame.keBorder
+        local r, g, b, a = KE:ResolveColor(
+            caps.borderColorKey and settings[caps.borderColorKey] or nil,
+            { 0, 0, 0, 1 })
+
+        host.top:SetColorTexture(r, g, b, a)
+        host.bottom:SetColorTexture(r, g, b, a)
+        host.left:SetColorTexture(r, g, b, a)
+        host.right:SetColorTexture(r, g, b, a)
 
         host.top:SetSize(size, px)
         host.bottom:SetSize(size, px)
