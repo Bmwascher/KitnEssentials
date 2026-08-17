@@ -261,8 +261,10 @@ function Style.InitializeButton(button, display, group, settings)
 
     Style.CreateRegions(button, group, settings)
 
-    -- Tooltip policy, per button and LIVE ONLY. Both methods live on the aura
-    -- BUTTON mixin; a plain preview frame has neither.
+    -- Tooltip policy, per button and LIVE ONLY. SetTooltipAnchorPoint and
+    -- SetHideTooltipInCombat come from the aura button mixin, so this path
+    -- needs a real button. SetMouseMotionEnabled is not one of them -- every
+    -- frame has it -- and it is set here only to keep the policy in one place.
     button:SetMouseMotionEnabled(settings.ShowTooltips ~= false)
     button:SetTooltipAnchorPoint("ANCHOR_BOTTOMLEFT")
     button:SetHideTooltipInCombat(false)
@@ -302,8 +304,9 @@ function Style.RegisterRegions(button, _display, group, settings)
     end
 
     -- Tooltips are a live toggle, so the policy is re-applied here rather
-    -- than only at creation. SetMouseMotionEnabled exists on the aura button
-    -- and not on a preview frame, which never reaches this function.
+    -- than only at creation. The guard is belt and braces, NOT a test for a
+    -- real button: this is a script region method every frame carries, so it
+    -- cannot tell a button from anything else that reaches this function.
     if button.SetMouseMotionEnabled then
         button:SetMouseMotionEnabled(settings.ShowTooltips ~= false)
     end
