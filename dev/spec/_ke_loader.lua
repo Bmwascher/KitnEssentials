@@ -462,6 +462,16 @@ function L.loadEUIWindows(overrides)
     return helpers.loadModule("Modules/Skinning/EUIWindows.lua", KE), KE
 end
 
+-- Modules/Combat/AuraEngine/Rules.lua. Pure decision logic -- no WoW API, no
+-- frames -- so the load needs only a KE table to hang KE.AuraRules on.
+-- Returns KE.AuraRules, KE.
+function L.loadAuraRules(overrides)
+    installMock(overrides, {})
+    local KE = {}
+    helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua", KE)
+    return KE.AuraRules, KE
+end
+
 -- Modules/Skinning/SkinAPI.lua AND Modules/Skinning/EUIWindows.lua on the
 -- SAME KE instance. loadSkinAPI and loadEUIWindows above each return a
 -- separate KE, so no spec driven through either loader alone can push a real

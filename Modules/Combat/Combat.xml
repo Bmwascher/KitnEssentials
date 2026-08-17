@@ -19,6 +19,7 @@
     <Script file="CastbarHelpers.lua" />
     <Script file="FocusCastbar.lua" />
     <Script file="RangeChecker.lua" />
+    <Include file="AuraEngine\AuraEngine.xml" />
     <Script file="AuraExternals.lua" />
     <Script file="AuraDebuffs.lua" />
     <Script file="AuraHeaders.lua" />
