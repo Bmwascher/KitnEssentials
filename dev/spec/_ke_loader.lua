@@ -502,6 +502,17 @@ function L.loadAuraSound()
     return KE.AuraSound, KE
 end
 
+-- Modules/Combat/AuraEngine/Preview.lua. Only PlanEnter/PlanExit are
+-- reachable from a spec -- both are pure and sit in a section of the file
+-- with no upvalue dependency on Style/Container/Rules/Glow, so the load
+-- needs only the default mock's Enum stub, same as loadAuraSound. Returns
+-- KE.AuraPreview, KE.
+function L.loadAuraPreview()
+    mock.install()
+    local KE = helpers.loadModule("Modules/Combat/AuraEngine/Preview.lua")
+    return KE.AuraPreview, KE
+end
+
 -- Modules/Skinning/SkinAPI.lua AND Modules/Skinning/EUIWindows.lua on the
 -- SAME KE instance. loadSkinAPI and loadEUIWindows above each return a
 -- separate KE, so no spec driven through either loader alone can push a real

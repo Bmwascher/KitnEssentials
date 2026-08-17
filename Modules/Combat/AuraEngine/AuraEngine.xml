@@ -8,4 +8,5 @@
     <Script file="Sound.lua" />
     <Script file="Container.lua" />
     <Script file="Style.lua" />
+    <Script file="Preview.lua" />
 </Ui>
