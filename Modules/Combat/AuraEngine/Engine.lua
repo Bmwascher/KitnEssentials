@@ -184,6 +184,11 @@ function Engine.ApplySettings(display)
 
     KE.AuraContainer.Reconfigure(display.handle, display, settings)
     Engine.ApplyDisplayState(display, settings)
+
+    -- The overlay box is computed from these settings and is only
+    -- recomputed on request, so it would otherwise keep the previous
+    -- dimensions until something unrelated refreshed it.
+    if KE.EditMode then KE.EditMode:RefreshLiveState() end
 end
 
 -- The live container stays HIDDEN while the preview is up, whatever the

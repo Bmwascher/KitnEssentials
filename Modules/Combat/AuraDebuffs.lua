@@ -127,6 +127,24 @@ function AD:GetDispelColorCurve()
     return _dispelColorCurve
 end
 
+-- Preview-only counterpart to the curve above: resolves a flat RGBA for one
+-- dispel type instead of feeding Blizzard's per-aura repaint, since a preview
+-- frame accepts no such registration. Mirrors the curve's own resolution
+-- order -- the user's DispelColors entry first, the per-type default second
+-- -- and only consults either when the colour mode actually uses them;
+-- otherwise, and whenever a type resolves to neither, it falls back to the
+-- flat BorderColor the same way the live ring does outside "dispel" mode.
+local function ResolveDispelPreviewColor(settings, dispelType)
+    if settings.BorderColorMode == "dispel" then
+        local color = (settings.DispelColors and settings.DispelColors[dispelType])
+                   or DISPEL_DEFAULTS[dispelType]
+        if color then
+            return KE:ResolveColor(color, { 0.8, 0, 0, 1 })
+        end
+    end
+    return KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
+end
+
 -- Preview icons + dispel sequence used to populate the live grid when the
 -- user opens the GUI page. Dispel sequence is None → Magic → Curse →
 -- Disease → Poison → Bleed (None has no atlas overlay). Cycled by
@@ -178,9 +196,17 @@ local DECLARATION = {
             capabilities = { hasBorder = true, hasDispel = true, hasGlow = false },
 
             -- The dispel texture registration needs this, and only this
-            -- display has the colours. Rebuilt on every reapplication, never
-            -- cached: the colours are user settings.
+            -- display has the colours. The rebuild mutates the existing
+            -- curve object in place rather than replacing it, so a palette
+            -- edit is already visible through it even when a settings
+            -- reapplication defers before reaching the re-registration step.
             getDispelColorCurve = function() return AD:GetDispelColorCurve() end,
+
+            -- group.getDispelPreviewColor(settings, dispelType) -> r, g, b, a
+            -- Optional, declared only by a group that has a per-type palette.
+            -- Absent means the preview falls back to the flat border colour,
+            -- which is correct for a group with no palette.
+            getDispelPreviewColor = ResolveDispelPreviewColor,
         },
     },
 

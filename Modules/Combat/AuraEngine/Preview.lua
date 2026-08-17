@@ -134,21 +134,46 @@ local function UpdateEntryTimer(frame, entry, now)
     frame.keTimer:SetText(FormatRemaining(entry.expirationTime - now))
 end
 
--- StyleAuraFrame paints the dispel ring pure white in "dispel" mode, because
--- on a live button the game repaints it per aura through the registered
--- dispel texture. A preview frame gets no such registration, so that repaint
--- never happens and the ring would stay white without this. Applied in both
--- colour modes: in the non-dispel mode the ring is already this colour, so
--- repainting it changes nothing.
-local function RepaintDispelRing(frame, settings)
+-- On a live button the game repaints the ring per aura through the
+-- registered dispel texture; a preview frame gets no such registration, so
+-- this stands in for that repaint. The per-type palette is module data --
+-- only a group that owns one declares getDispelPreviewColor -- so it is
+-- asked for the colour when present. A group with none (Externals has no
+-- dispel host at all) falls back to the flat border colour, the same colour
+-- StyleAuraFrame paints outside "dispel" mode.
+local function RepaintDispelRing(frame, group, settings, dispelType)
     local ring = frame.keDispel and frame.keDispel.ring
     if not ring then return end
 
-    local r, g, b, a = KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
+    local r, g, b, a
+    if group.getDispelPreviewColor then
+        r, g, b, a = group.getDispelPreviewColor(settings, dispelType)
+    end
+    if not r then
+        r, g, b, a = KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
+    end
+
     ring.top:SetColorTexture(r, g, b, a);    ring.top:SetSnapToPixelGrid(false)
     ring.bottom:SetColorTexture(r, g, b, a); ring.bottom:SetSnapToPixelGrid(false)
     ring.left:SetColorTexture(r, g, b, a);   ring.left:SetSnapToPixelGrid(false)
     ring.right:SetColorTexture(r, g, b, a);  ring.right:SetSnapToPixelGrid(false)
+end
+
+-- The badge's atlas comes straight from the aura's own dispel type, via the
+-- same built-in atlas map (AuraUtil.GetAuraDispelTypeIcon) a live button
+-- gets from its registered dispel texture -- a preview frame takes no such
+-- registration, so nothing else would ever set it. Returns nil for a type
+-- with no atlas (including "None"), which is the old module's behaviour:
+-- no badge for a non-dispellable aura.
+local function PopulateDispelBadge(frame, dispelType)
+    local dispel = frame.keDispel
+    if not dispel then return end
+
+    local atlas = AuraUtil.GetAuraDispelTypeIcon(dispelType)
+    dispel.texture:SetShown(atlas ~= nil)
+    if atlas then
+        dispel.texture:SetAtlas(atlas)
+    end
 end
 
 local function PopulateEntryContent(frame, entry, now)
@@ -236,7 +261,8 @@ local function BuildFrames(state, handle, display, settings)
             -- whatever was live the first time this group's pool was built.
             KE.AuraStyle.StyleAuraFrame(frame, settings, group.capabilities)
             KE.AuraGlow.Apply(frame, settings, group.capabilities)
-            RepaintDispelRing(frame, settings)
+            RepaintDispelRing(frame, group, settings, entry.dispelType)
+            PopulateDispelBadge(frame, entry.dispelType)
 
             PositionEntryFrame(frame, i, display, settings)
             PopulateEntryContent(frame, entry, now)
