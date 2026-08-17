@@ -21,6 +21,21 @@ local GLOW_TYPES = {
     { key = "proc",     text = "Proc" },
 }
 
+-- Default resolveType: no coercion, so a raw stored value passes through
+-- unchanged and every existing caller keeps reading/writing db[keys.type] as-is.
+local function IdentityResolveType(value)
+    return value
+end
+
+-- Default speedAdapter: the card's own long-standing behavior — read/write
+-- db[keys.frequency] directly, bounded 0.05 to 1, with no type-settling step.
+local DEFAULT_SPEED_ADAPTER = {
+    min = 0.05,
+    max = 1,
+    read = function(db, keys) return db[keys.frequency] end,
+    write = function(db, keys, value) db[keys.frequency] = value end,
+}
+
 function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     config = config or {}
     local title = config.title or "Glow Settings"
@@ -28,6 +43,11 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     local dbKeys = config.dbKeys or {}
     local onChange = config.onChangeCallback
     local onHeightChange = config.onHeightChange
+    local types = config.types or GLOW_TYPES
+    local resolveType = config.resolveType or IdentityResolveType
+    local typeRowsOverride = config.typeRows
+    local showSpeedOverride = config.showSpeed
+    local speedAdapter = config.speedAdapter or DEFAULT_SPEED_ADAPTER
 
     local keys = {
         enabled = dbKeys.enabled or "GlowEnabled",
@@ -70,10 +90,19 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     table_insert(widgets, enableCheck)
 
     local typeDropdown = GUIFrame:CreateDropdown(row1, "Type", {
-        options = GLOW_TYPES,
-        value = db[keys.type],
+        options = types,
+        value = resolveType(db[keys.type]),
         callback = function(val)
-            setValue(keys.type, val)
+            -- The adapter's setType (when present) settles a legacy value
+            -- carried under the old type before overwriting it; a plain
+            -- assignment would strand that value. Assign directly and fire
+            -- onChange exactly once, same as setValue would for one write.
+            if speedAdapter.setType then
+                speedAdapter.setType(db, keys, val)
+            else
+                db[keys.type] = val
+            end
+            if onChange then onChange() end
             card.updateTypeVisibility()
         end
     })
@@ -99,11 +128,16 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     table_insert(widgets, colorPicker)
 
     freqSlider = GUIFrame:CreateSlider(row2, "Speed", {
-        min = 0.05,
-        max = 1,
+        min = speedAdapter.min,
+        max = speedAdapter.max,
         step = 0.05,
-        value = db[keys.frequency],
-        callback = function(val) setValue(keys.frequency, val) end
+        value = speedAdapter.read(db, keys),
+        callback = function(val)
+            -- The adapter's write may set two db values; assign directly and
+            -- fire onChange exactly once afterwards, not through setValue.
+            speedAdapter.write(db, keys, val)
+            if onChange then onChange() end
+        end
     })
     row2:AddWidget(freqSlider, 0.5)
     table_insert(widgets, freqSlider)
@@ -200,7 +234,7 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     card._initialized = false
 
     function card.updateTypeVisibility()
-        local glowType = db[keys.type]
+        local glowType = resolveType(db[keys.type])
         local enabled = db[keys.enabled]
 
         local baseHeight = card.headerHeight + Theme.paddingSmall * 2
@@ -208,10 +242,15 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
 
         -- Color + Speed share one row; only the Speed widget hides for glow
         -- types that don't honor frequency (proc).
-        local showFrequency = (glowType == "pixel" or glowType == "autocast" or glowType == "button")
+        local showFrequency
+        if showSpeedOverride then
+            showFrequency = showSpeedOverride(glowType)
+        else
+            showFrequency = (glowType == "pixel" or glowType == "autocast" or glowType == "button")
+        end
         if freqSlider and freqSlider.SetShown then freqSlider:SetShown(showFrequency) end
 
-        for typeName, rows in pairs(typeOnlyRows) do
+        for typeName, rows in pairs(typeRowsOverride or typeOnlyRows) do
             local show = (typeName == glowType)
             for _, row in ipairs(rows) do
                 row:SetShown(show)
