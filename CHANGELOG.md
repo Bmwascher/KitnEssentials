@@ -1,5 +1,33 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## Unreleased
+
+**Aura Debuffs** and **Aura Externals** have been rebuilt on top of the
+game's own aura display system. That rebuild is the actual fix for the patch
+12.1 crashes that led to the earlier advice to switch both modules off —
+**if you disabled either one, turn it back on.**
+
+### Aura Debuffs
+- Rebuilt on the game's own aura display system, fixing the patch 12.1
+  crashes. Turn this module back on if you had switched it off
+- The movable frame's internal name changed from `KE_AuraDebuffs` to
+  `KE_AuraDebuffsAnchor`. If anything else was anchored directly to the old
+  name, it will no longer follow this display and will fall back to its own
+  default position — re-anchor it to the new name
+- The custom Blocklist can now only block spells the game itself lets addons
+  identify by name. The settings card already warned this could happen; it
+  is now the actual behaviour rather than a caveat
+
+### Aura Externals
+- Rebuilt on the game's own aura display system, fixing the patch 12.1
+  crashes. Turn this module back on if you had switched it off
+- The movable frame's internal name changed from `KE_AuraExternals` to
+  `KE_AuraExternalsAnchor`. If anything else was anchored directly to the old
+  name, it will no longer follow this display and will fall back to its own
+  default position — re-anchor it to the new name
+
+---
+
 ## v4.0.5
 
 Two more patch 12.1 crash fixes, both reported from live play.
