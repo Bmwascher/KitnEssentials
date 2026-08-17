@@ -104,9 +104,6 @@ read_globals = {
     "MapCanvasPinMixin", "MapCanvasDataProviderMixin",
     "hooksecurefunc",
     "AnchorUtil",
-
-    -- Aura container (12.1 secure aura display)
-    "AuraContainerSortMethod", "AuraContainerSortDirection",
     "ShowUIPanel", "HideUIPanel",
     "WorldFrame",
     "GetMouseFoci", "GetMouseFocus",
@@ -114,6 +111,9 @@ read_globals = {
     "RunNextFrame",
     "IsModifierKeyDown",
     "EventUtil",
+
+    -- Aura container (12.1 secure aura display)
+    "AuraContainerSortMethod", "AuraContainerSortDirection",
 
     -- Tutorial / help-plate suppression
     "MainHelpPlateButtonMixin", "HelpTip", "SetCVarBitfield", "EnumerateFrames",
