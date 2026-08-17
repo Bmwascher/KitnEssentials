@@ -34,6 +34,9 @@ end
 -- Returns true when the caller may act immediately. A false answer means the
 -- debt is recorded and the drain will re-run the work from CURRENT settings —
 -- the flag records only THAT work is owed, never what the work was.
+-- `kind` is always "general". The sound debt is NOT stored here — IsPending
+-- reads it from the registry — so requesting "sound" would write a flag
+-- nothing ever reads.
 function Gate:Request(kind)
     if self.isHidden() then
         self.pending[kind] = true

@@ -91,7 +91,9 @@ describe("restriction drain", function()
             general = function() seen[#seen + 1] = "general" end,
             sound   = function() seen[#seen + 1] = "sound" end,
         })
-        assert.equals(2, #seen)
+        -- Order, not just count. Nothing else would catch a refactor that
+        -- iterated the kinds unordered.
+        assert.same({ "general", "sound" }, seen)
     end)
 
     -- The engine passes ONE closure for both kinds, because reapplying
