@@ -88,6 +88,9 @@ function M.install(overrides)
     _G.AbbreviateNumbers = overrides.AbbreviateNumbers or function(v) return tostring(v) end
     _G.BreakUpLargeNumbers = overrides.BreakUpLargeNumbers or function(v) return tostring(v) end
 
+    -- Enum.UnitAuraSoundTrigger: the aura sound registry's trigger constant.
+    _G.Enum = overrides.Enum or { UnitAuraSoundTrigger = { Added = "Added" } }
+
     return frames
 end
 

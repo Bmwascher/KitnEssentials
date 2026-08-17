@@ -493,6 +493,15 @@ function L.loadAuraRestriction(overrides)
     return KE.AuraRestriction, KE
 end
 
+-- Modules/Combat/AuraEngine/Sound.lua. The api/resolveMedia/isHidden trio is
+-- INJECTED, so the load needs only the default mock's Enum stub -- no
+-- C_UnitAuras or LibSharedMedia. Returns KE.AuraSound, KE.
+function L.loadAuraSound()
+    mock.install()
+    local KE = helpers.loadModule("Modules/Combat/AuraEngine/Sound.lua")
+    return KE.AuraSound, KE
+end
+
 -- Modules/Skinning/SkinAPI.lua AND Modules/Skinning/EUIWindows.lua on the
 -- SAME KE instance. loadSkinAPI and loadEUIWindows above each return a
 -- separate KE, so no spec driven through either loader alone can push a real
