@@ -55,6 +55,12 @@ end
 local PREVIEW_BUFF_ICONS   = { 136078, 135932, 135940, 136107, 135953, 132333 }
 local PREVIEW_DEBUFF_ICONS = { 136118, 136182, 136207, 135813, 132090, 136182 }
 
+-- Matched pairwise with PREVIEW_DEBUFF_ICONS: each sample icon stands for a
+-- debuff of the type in the same slot, so the preview ring resolves the colour
+-- that type really gets instead of painting black on black. The palette is
+-- borrowed from Advanced Debuffs, the same way the live ring's curve already is.
+local PREVIEW_DEBUFF_TYPES = { "None", "Magic", "Curse", "Disease", "Poison", "Bleed" }
+
 ------------------------------------------------------------------------
 -- Shared behaviour
 ------------------------------------------------------------------------
@@ -111,6 +117,13 @@ local function MakeHeaderModule(config)
                         return ad and ad.GetDispelColorCurve and ad:GetDispelColorCurve() or nil
                     end
                     or nil,
+                getDispelPreviewColor = config.dispelRing
+                    and function(settings, dispelType)
+                        local ad = KitnEssentials:GetModule("AuraDebuffs", true)
+                        if not (ad and ad.GetDispelPreviewColor) then return nil end
+                        return ad:GetDispelPreviewColor(settings, dispelType)
+                    end
+                    or nil,
             },
         },
 
@@ -119,13 +132,16 @@ local function MakeHeaderModule(config)
         end,
 
         buildPreview = function(_, total)
-            local icons = config.previewIcons
+            local icons   = config.previewIcons
+            local types   = config.previewDispelTypes
             local entries = {}
             for i = 1, total do
+                local idx = ((i - 1) % #icons) + 1
                 entries[i] = {
-                    icon     = icons[((i - 1) % #icons) + 1],
-                    groupKey = "auras",
-                    count    = (i % 4 == 1 and 2) or (i % 4 == 2 and 5) or 0,
+                    icon       = icons[idx],
+                    dispelType = types and types[idx] or nil,
+                    groupKey   = "auras",
+                    count      = (i % 4 == 1 and 2) or (i % 4 == 2 and 5) or 0,
                 }
             end
             return entries
@@ -313,6 +329,7 @@ MakeHeaderModule({
     weapons       = false,
     dispelRing    = true,
     previewIcons  = PREVIEW_DEBUFF_ICONS,
+    previewDispelTypes = PREVIEW_DEBUFF_TYPES,
     blizzardFrame = "DebuffFrame",
     displayName   = "DEBUFFS",
     guiPath       = "AuraHeaders_Debuffs",
