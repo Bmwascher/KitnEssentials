@@ -123,3 +123,85 @@ describe("Externals icon limit split", function()
         assert.equals(0, R.SplitExternalsLimit(4, false).big)
     end)
 end)
+
+describe("preview timing", function()
+    -- One rule for both displays, taken whole from Advanced Debuffs because
+    -- its 10-35s range exercises wider duration text than the 6-15s one.
+    it("produces the documented duration for the first index", function()
+        local R = L.loadAuraRules()
+        local duration = R.PreviewTiming(1)
+        assert.equals(10 + ((1 * 5) % 30), duration)
+    end)
+
+    it("varies the phase across indices so icons are not synchronised", function()
+        local R = L.loadAuraRules()
+        local _, offsetA = R.PreviewTiming(1)
+        local _, offsetB = R.PreviewTiming(2)
+        assert.not_equals(offsetA, offsetB)
+    end)
+
+    it("keeps every phase offset inside one full duration", function()
+        local R = L.loadAuraRules()
+        for i = 1, 12 do
+            local duration, offset = R.PreviewTiming(i)
+            assert.is_true(offset >= 0)
+            assert.is_true(offset < duration)
+        end
+    end)
+end)
+
+describe("Externals preview shaping", function()
+    local ICONS     = { 1, 2, 3 }
+    local ICONS_BIG = { 7, 8, 9 }
+
+    it("yields only external entries when big defensives are off", function()
+        local R = L.loadAuraRules()
+        local entries = R.BuildExternalsPreview(ICONS, ICONS_BIG, 6, false)
+        assert.equals(6, #entries)
+        for _, e in ipairs(entries) do
+            assert.equals("external", e.groupKey)
+        end
+    end)
+
+    -- Blocked, not alternating. The container lays groups out as ordered
+    -- blocks, so an alternating preview would advertise an interleaving the
+    -- live display cannot produce.
+    it("yields one external block then one big block when enabled", function()
+        local R = L.loadAuraRules()
+        local entries = R.BuildExternalsPreview(ICONS, ICONS_BIG, 6, true)
+        local keys = {}
+        for i, e in ipairs(entries) do keys[i] = e.groupKey end
+        assert.same({ "external", "external", "external", "big", "big", "big" }, keys)
+    end)
+
+    it("sizes the blocks by the same split the live layout uses", function()
+        local R = L.loadAuraRules()
+        local entries = R.BuildExternalsPreview(ICONS, ICONS_BIG, 5, true)
+        local counts = { external = 0, big = 0 }
+        for _, e in ipairs(entries) do counts[e.groupKey] = counts[e.groupKey] + 1 end
+        assert.same({ external = 3, big = 2 }, counts)
+    end)
+
+    it("emits no big entries when the split gives that group zero", function()
+        local R = L.loadAuraRules()
+        local entries = R.BuildExternalsPreview(ICONS, ICONS_BIG, 1, true)
+        assert.equals(1, #entries)
+        assert.equals("external", entries[1].groupKey)
+    end)
+
+    it("cycles its icon source rather than running out", function()
+        local R = L.loadAuraRules()
+        local entries = R.BuildExternalsPreview(ICONS, ICONS_BIG, 5, false)
+        assert.equals(ICONS[1], entries[1].icon)
+        assert.equals(ICONS[1], entries[4].icon)
+    end)
+
+    -- The big block starts at its OWN first icon, not at an offset left over
+    -- from the external quota.
+    it("starts the big block at the first big icon regardless of the split", function()
+        local R = L.loadAuraRules()
+        local entries = R.BuildExternalsPreview(ICONS, ICONS_BIG, 6, true)
+        assert.equals(ICONS_BIG[1], entries[4].icon)
+        assert.equals(ICONS_BIG[2], entries[5].icon)
+    end)
+end)

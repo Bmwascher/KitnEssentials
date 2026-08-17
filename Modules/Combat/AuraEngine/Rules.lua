@@ -125,3 +125,41 @@ function Rules.SplitExternalsLimit(total, showBig)
         big      = math_floor(total / 2),
     }
 end
+
+-- One timing rule for every display. Both halves come from the same source
+-- so the phase and the duration cannot drift apart; an earlier draft paired
+-- one module's duration with another's phase and called it a port.
+function Rules.PreviewTiming(index)
+    local duration = 10 + ((index * 5) % 30)
+    local offset   = duration * (0.2 + (index % 5) * 0.1)
+    return duration, offset
+end
+
+-- The mixed preview is BLOCKED, not alternating, and reserves capacity the
+-- same way the live display does. A preview that filled every slot with
+-- externals would show a fuller display than the user actually gets.
+function Rules.BuildExternalsPreview(icons, iconsBig, total, showBig)
+    local split   = Rules.SplitExternalsLimit(total, showBig)
+    local entries = {}
+
+    -- Each source cycles from ITS OWN start. Indexing by the running entry
+    -- total would make the big block begin at whatever offset the external
+    -- quota happened to leave, so the same settings would show different big
+    -- icons depending on how many externals fit.
+    local function append(source, count, groupKey)
+        if not source or #source == 0 then return end
+        for i = 1, count do
+            local icon = source[((i - 1) % #source) + 1]
+            table_insert(entries, {
+                icon     = icon,
+                groupKey = groupKey,
+                count    = (i % 4 == 1 and 2) or (i % 4 == 2 and 5) or 0,
+            })
+        end
+    end
+
+    append(icons,    split.external, "external")
+    append(iconsBig, split.big,      "big")
+
+    return entries
+end
