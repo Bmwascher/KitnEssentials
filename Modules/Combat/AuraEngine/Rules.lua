@@ -50,3 +50,78 @@ function Rules.BuildDebuffFilter(filters)
 
     return table_concat(parts, "|")
 end
+
+local math_ceil = math.ceil
+local math_floor = math.floor
+
+-- Applied unconditionally to every group, regardless of the user's own
+-- blocklist. These are the never-secret nuisance auras the reference filters;
+-- spell-ID filtering only works at all for never-secret spells, which is why
+-- the list cannot be opened up to arbitrary boss debuffs.
+Rules.HARDCODED_BLOCKLIST = {
+    57723,   -- Exhaustion
+    390435,  -- Exhaustion
+    57724,   -- Sated
+    264689,  -- Fatigued
+    160455,  -- Fatigued
+    95809,   -- Insanity
+    80354,   -- Time Warp
+    71041,   -- Dungeon Deserter
+    206151,  -- Challenger's Burden
+}
+
+-- Saved blocklist entries are RECORDS with an enabled flag, not a boolean
+-- set, so a disabled row must not filter. The hardcoded nine are added after
+-- the user's rows and therefore override a disabled row for the same id --
+-- the GUI shows those rows as always-on for exactly this reason.
+--
+-- MERGE OR ALIAS, and never an unconditional fresh table. The design ports
+-- the reference's shape: when the user has entries, the nine merge INTO that
+-- set; when they have none, the shared constant set is returned BY REFERENCE.
+-- Nothing may then mutate the returned table -- see the invariant in Task 13.
+-- A defensive copy here is the deviation the design names and forbids.
+Rules.HARDCODED_BLOCKLIST_SET = {}
+for i = 1, #Rules.HARDCODED_BLOCKLIST do
+    Rules.HARDCODED_BLOCKLIST_SET[Rules.HARDCODED_BLOCKLIST[i]] = true
+end
+
+function Rules.BuildExcludeSpellIDs(saved)
+    local set
+
+    if saved then
+        for spellID, record in pairs(saved) do
+            if type(record) == "table" and record.enabled ~= false then
+                set = set or {}
+                set[spellID] = true
+            end
+        end
+    end
+
+    if not set then
+        return Rules.HARDCODED_BLOCKLIST_SET
+    end
+
+    for i = 1, #Rules.HARDCODED_BLOCKLIST do
+        set[Rules.HARDCODED_BLOCKLIST[i]] = true
+    end
+
+    return set
+end
+
+-- maxFrameCount is per group and unused capacity cannot cross a group
+-- boundary, so the limit is divided rather than shared. The remainder goes to
+-- externals: they are the reason the module exists, and a single slot showing
+-- a personal cooldown instead of an external would be the wrong one.
+function Rules.SplitExternalsLimit(total, showBig)
+    total = tonumber(total) or 0
+    if total < 0 then total = 0 end
+
+    if not showBig then
+        return { external = total, big = 0 }
+    end
+
+    return {
+        external = math_ceil(total / 2),
+        big      = math_floor(total / 2),
+    }
+end
