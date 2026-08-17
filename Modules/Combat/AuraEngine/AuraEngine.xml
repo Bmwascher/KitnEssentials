@@ -3,6 +3,7 @@
 
     <Script file="Rules.lua" />
     <Script file="GlowRules.lua" />
+    <Script file="Glow.lua" />
     <Script file="Restriction.lua" />
     <Script file="Sound.lua" />
     <Script file="Container.lua" />
