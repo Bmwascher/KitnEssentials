@@ -17,6 +17,11 @@ game's own aura display system. That rebuild is the actual fix for the patch
 - The custom Blocklist can now only block spells the game itself lets addons
   identify by name. The settings card already warned this could happen; it
   is now the actual behaviour rather than a caveat
+- The "Filters out auras flagged to appear only on enemy nameplates" tick box
+  works for the first time. It never did anything useful before. If you had
+  deliberately unticked it, it now does what it says and lets those debuffs
+  through, so you may see icons you have not seen before — tick it to go back
+  to the old look. If you never touched it, nothing changes
 
 ### External Tracker
 - Rebuilt on the game's own aura display system, fixing the patch 12.1
@@ -30,6 +35,18 @@ game's own aura display system. That rebuild is the actual fix for the patch
   The choices are now Ants, Proc Loop and Alert; Colour and Speed still work,
   but the Lines, Length, Thickness, Border, Scale and Start Animation settings
   are gone because the new art has no use for them
+- Two changes that only affect you if **Include Defensives** is turned on.
+  Externals now appear as a group first, followed by your own big cooldowns,
+  instead of the two being mixed together in the order they landed. And half
+  the icon slots, rounded down, are now held for your own cooldowns even when
+  none are running — so six slots that used to show six incoming externals now
+  show three. Turning Include Defensives off restores the old behaviour. This
+  comes from how the game's own aura display divides its slots and cannot be
+  tuned away
+- The sound now plays for a fixed list of externals — Blessing of Sacrifice,
+  Guardian Spirit, Ironbark, Life Cocoon, Time Dilation and Roar of Sacrifice
+  — instead of for anything landing on you. Anything outside that list is
+  silent
 
 ---
 
