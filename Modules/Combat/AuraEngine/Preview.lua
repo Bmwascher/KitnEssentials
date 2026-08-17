@@ -46,15 +46,26 @@ function Preview.PlanExit(ctx)
 end
 
 ---------------------------------------------------------------------------------
--- Per-display state. Rebuild's signature carries no handle, so the handle
--- Enter was given has to be remembered somewhere Rebuild can reach it.
--- Pools persist across Exit/Enter -- releasing a FramePool's kits only hides
--- them, so dropping the table on every Exit would orphan real WoW frames
--- (SetParent(nil) -> UIParent) instead of reusing them, and Rebuild can fire
--- many times in a row while a slider drags.
+-- Per-display frame state -- pools, the ticker, and the current entries.
+-- The handle itself is NOT kept here: display.handle is the one place it
+-- lives, so there is exactly one copy that can go stale after a rebuild
+-- replaces the container. Pools persist across Exit/Enter -- releasing a
+-- FramePool's kits only hides them, so dropping the table on every Exit
+-- would orphan real WoW frames (SetParent(nil) -> UIParent) instead of
+-- reusing them, and Rebuild can fire many times in a row while a slider
+-- drags.
 ---------------------------------------------------------------------------------
 
-local activeState = {}
+local previewState = {}
+
+local function GetPreviewState(display)
+    local state = previewState[display.key]
+    if not state then
+        state = {}
+        previewState[display.key] = state
+    end
+    return state
+end
 
 local function ApplyContainerPlan(handle, plan)
     if not handle then return end
@@ -121,6 +132,23 @@ end
 local function UpdateEntryTimer(frame, entry, now)
     if not frame.keTimer then return end
     frame.keTimer:SetText(FormatRemaining(entry.expirationTime - now))
+end
+
+-- StyleAuraFrame paints the dispel ring pure white in "dispel" mode, because
+-- on a live button the game repaints it per aura through the registered
+-- dispel texture. A preview frame gets no such registration, so that repaint
+-- never happens and the ring would stay white without this. Applied in both
+-- colour modes: in the non-dispel mode the ring is already this colour, so
+-- repainting it changes nothing.
+local function RepaintDispelRing(frame, settings)
+    local ring = frame.keDispel and frame.keDispel.ring
+    if not ring then return end
+
+    local r, g, b, a = KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
+    ring.top:SetColorTexture(r, g, b, a);    ring.top:SetSnapToPixelGrid(false)
+    ring.bottom:SetColorTexture(r, g, b, a); ring.bottom:SetSnapToPixelGrid(false)
+    ring.left:SetColorTexture(r, g, b, a);   ring.left:SetSnapToPixelGrid(false)
+    ring.right:SetColorTexture(r, g, b, a);  ring.right:SetSnapToPixelGrid(false)
 end
 
 local function PopulateEntryContent(frame, entry, now)
@@ -197,6 +225,7 @@ local function BuildFrames(state, handle, display, settings)
             -- whatever was live the first time this group's pool was built.
             KE.AuraStyle.StyleAuraFrame(frame, settings, group.capabilities)
             KE.AuraGlow.Apply(frame, settings, group.capabilities)
+            RepaintDispelRing(frame, settings)
 
             PositionEntryFrame(frame, i, display, settings)
             PopulateEntryContent(frame, entry, now)
@@ -214,26 +243,30 @@ end
 
 function Preview.Enter(handle, display, settings)
     ApplyContainerPlan(handle, Preview.PlanEnter())
-
-    local state = activeState[display.key] or {}
-    state.handle = handle
-    state.active = true
-    activeState[display.key] = state
-
-    BuildFrames(state, handle, display, settings)
+    BuildFrames(GetPreviewState(display), handle, display, settings)
 end
 
 -- settings is unused: Exit's only work is the container swap and the
 -- restriction check, neither of which reads it. Kept in the signature
 -- because the interface names it explicitly.
+--
+-- The restriction check goes through display.gate when the display has one:
+-- Request("general") both answers whether the restore may happen now AND
+-- records the debt for later if it can't, so there is exactly one place the
+-- deferral answer can be wrong. A display built before its gate exists falls
+-- back to the direct query.
 function Preview.Exit(handle, display, _settings, moduleState)
-    local isHidden = KE.AreAuraIdentitiesHidden and KE:AreAuraIdentitiesHidden() or false
+    local isHidden
+    if display.gate then
+        isHidden = not display.gate:Request("general")
+    else
+        isHidden = KE.AreAuraIdentitiesHidden and KE:AreAuraIdentitiesHidden() or false
+    end
     local plan = Preview.PlanExit({ isHidden = isHidden, state = moduleState })
 
-    local state = activeState[display.key]
+    local state = previewState[display.key]
     if state then
         TeardownFrames(state)
-        state.active = false
     end
 
     ApplyContainerPlan(handle, plan)
@@ -251,10 +284,9 @@ end
 -- Enter immediately re-hides it again regardless (PlanEnter) -- so the value
 -- passed is a placeholder.
 function Preview.Rebuild(display, settings)
-    local state = activeState[display.key]
-    if not state or not state.active then return end
+    local handle = display.handle
+    if not handle then return end
 
-    local handle = state.handle
     Preview.Exit(handle, display, settings, true)
     Preview.Enter(handle, display, settings)
 end
