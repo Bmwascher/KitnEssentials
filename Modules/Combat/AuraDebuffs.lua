@@ -160,6 +160,9 @@ end
 local DECLARATION = {
     key                = "AuraDebuffs",
     dbKey              = "AuraDebuffs",
+    -- Edit Mode falls back to the key when this is absent, which would label
+    -- the mover with the unspaced identifier instead of its display name.
+    displayName        = "Aura Debuffs",
     sortMethod         = "AuraInstanceIDOnly",
     defaultIconsPerRow = 8,   -- this module's existing fallback; Externals uses 6
 
