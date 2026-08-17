@@ -130,7 +130,10 @@ describe("preview timing", function()
     it("produces the documented duration for the first index", function()
         local R = L.loadAuraRules()
         local duration = R.PreviewTiming(1)
-        assert.equals(10 + ((1 * 5) % 30), duration)
+        -- An independent literal, not the formula restated. Repeating the
+        -- expression here would let a transcribed constant satisfy its own
+        -- test.
+        assert.equals(15, duration)
     end)
 
     it("varies the phase across indices so icons are not synchronised", function()
