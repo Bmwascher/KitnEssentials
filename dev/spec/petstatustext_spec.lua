@@ -58,3 +58,28 @@ describe("PetStatusText missing-pet verdict", function()
         assert.is_false(rec.shown)
     end)
 end)
+
+describe("pet status per-spell secrecy", function()
+    local function secrets(spellSecret)
+        return { ShouldSpellAuraBeSecret = function() return spellSecret end,
+                 ShouldAurasBeSecret = function() return true end }
+    end
+
+    it("refuses when the exact predicate says the sacrifice aura is secret", function()
+        local PS, rec = L.loadPetStatusText({
+            class = "WARLOCK", specID = 265, hasPet = false,
+            aurasHidden = false, C_Secrets = secrets(true),
+        })
+        PS:UpdatePetText()
+        assert.is_false(rec.shown)
+    end)
+
+    it("does NOT refuse when the exact predicate says it is readable, even though the broad state says hidden", function()
+        local PS, rec = L.loadPetStatusText({
+            class = "WARLOCK", specID = 265, hasPet = false,
+            aurasHidden = true, C_Secrets = secrets(false),
+        })
+        PS:UpdatePetText()
+        assert.is_true(rec.shown)
+    end)
+end)

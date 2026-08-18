@@ -185,7 +185,7 @@ local function CheckPetStatus()
         -- -- so the failure proves nothing and the verdict would be a false
         -- accusation for the whole restricted stretch. Warlocks only: no other
         -- pet class can be holding this buff, so their warning is untouched.
-        if isGrimoireClass and KE:AreAuraIdentitiesHidden() then
+        if isGrimoireClass and KE:IsAuraHiddenForSpell(196099) then
             return PET_STATUS.NONE, nil, nil
         end
         local sacrificeAura = C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(196099)
