@@ -103,9 +103,8 @@ end
 
 -- Same grid math the module this engine replaces used to lay out its own
 -- buttons: button[1] sits at the growth-opposite corner, the corner the live
--- container is pinned at, so the preview and the live grid start from the same
--- place; later icons step by IconSize + IconSpacing per column/row, signed by
--- the grow direction.
+-- container is pinned at, so the preview and the live grid start from the
+-- same place.
 local function PositionEntryFrame(frame, index, display, settings)
     local perRow   = settings.IconsPerRow or display.defaultIconsPerRow
     local size     = settings.IconSize or 0

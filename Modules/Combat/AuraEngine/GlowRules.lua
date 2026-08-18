@@ -36,8 +36,7 @@ GlowRules.FLIPBOOKS = {
 }
 
 -- Read-time coercion, never a profile rewrite: a migration would write a
--- value the user could not yet have chosen, and this programme does not
--- migrate profiles while it is still under test.
+-- value the user could not yet have chosen.
 local TYPE_MAP = {
     pixel    = "ants",      -- both trace the button edge
     autocast = "ants",

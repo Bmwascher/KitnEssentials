@@ -72,9 +72,8 @@ function Registry:Sync(declaration, settings, moduleEnabled)
     -- unconditional retire-and-rebuild would tear down a valid registration on
     -- every one of those, and inside a keystone the rebuild half is not
     -- allowed: the user would lose their sound for the rest of the key by
-    -- nudging a font slider. The design's rule is that registrations exist
-    -- whenever its four inputs hold, and that only registrations which no
-    -- longer MATCH are retired.
+    -- nudging a font slider. Registrations exist whenever the four inputs
+    -- hold, and only registrations which no longer MATCH are retired.
     if path and path == self.currentPath and not self.pending and #self.ids > 0 then
         return
     end

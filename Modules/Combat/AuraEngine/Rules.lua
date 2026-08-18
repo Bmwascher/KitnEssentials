@@ -75,11 +75,11 @@ Rules.HARDCODED_BLOCKLIST = {
 -- the user's rows and therefore override a disabled row for the same id --
 -- the GUI shows those rows as always-on for exactly this reason.
 --
--- MERGE OR ALIAS, and never an unconditional fresh table. The design ports
--- the reference's shape: when the user has entries, the nine merge INTO that
--- set; when they have none, the shared constant set is returned BY REFERENCE.
--- Nothing may then mutate the returned table -- see the invariant in Task 13.
--- A defensive copy here is the deviation the design names and forbids.
+-- MERGE OR ALIAS, and never an unconditional fresh table: it ports the
+-- reference's shape, where the nine merge INTO the user's set when the user
+-- has entries, and the shared constant set is returned BY REFERENCE when
+-- they have none. Nothing may then mutate the returned table. A defensive
+-- copy here would violate that.
 Rules.HARDCODED_BLOCKLIST_SET = {}
 for i = 1, #Rules.HARDCODED_BLOCKLIST do
     Rules.HARDCODED_BLOCKLIST_SET[Rules.HARDCODED_BLOCKLIST[i]] = true
@@ -164,7 +164,7 @@ function Rules.BuildExternalsPreview(icons, iconsBig, total, showBig)
     return entries
 end
 
--- Two inputs and no more. There are no "load conditions" in Wave 1 -- that is
+-- Two inputs and no more. There are no "load conditions" here -- that is
 -- the reference's concept for its user-created displays, and neither KE module
 -- has any such setting.
 --

@@ -83,8 +83,8 @@ end
 --
 -- Two kinds can resolve to the SAME function, because reapplying settings
 -- synchronises the sound on its way past. Collapsing identical handlers is
--- what keeps the design's "synchronised exactly once when both drain
--- together" rule true without the caller having to know it.
+-- what keeps the "synchronised exactly once when both drain together" rule
+-- true without the caller having to know it.
 function Gate:Drain(handlers)
     if self.isHidden() then return end
     handlers = handlers or {}
