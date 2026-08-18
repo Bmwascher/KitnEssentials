@@ -54,7 +54,7 @@ local function GetDurationFormatter(settings)
 end
 
 ---------------------------------------------------------------------------------
--- Host creation -- called once, from initializeFrame, per Step 1's rule.
+-- Host creation -- called once, from initializeFrame.
 ---------------------------------------------------------------------------------
 
 -- Deliberately NOT KE:AddIconBorders. That helper registers every frame it
@@ -103,7 +103,7 @@ end
 -- deprecated SetAuraBorder alias) plus a fontstring (the colourblind-mode
 -- symbol, aliased SetAuraSymbol), created only when the badge is requested.
 -- Both live on their own overlay frame so their level can sit above the
--- cooldown swipe (Step 2), and both take no mouse input so decoration can
+-- cooldown swipe, and both take no mouse input so decoration can
 -- never swallow a click or the tooltip.
 --
 -- When the badge IS requested, both are sized/fonted here at creation so the
@@ -216,8 +216,8 @@ function Style.CreateRegions(frame, group, settings)
     -- The count and timer live on their OWN overlay frame, not on the button.
     -- A FontString parented to the button sits at the button's frame level,
     -- so the cooldown swipe and the glow -- both child FRAMES at higher levels
-    -- -- paint straight over it. This overlay is the +4 level the design names,
-    -- and it takes no mouse input so it cannot steal the button's tooltip.
+    -- -- paint straight over it. This overlay is the +4 level, and it takes
+    -- no mouse input so it cannot steal the button's tooltip.
     frame.keTextOverlay = CreateFrame("Frame", nil, frame)
     frame.keTextOverlay:SetAllPoints(frame)
     frame.keTextOverlay:EnableMouse(false)
