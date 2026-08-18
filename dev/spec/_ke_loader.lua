@@ -1840,11 +1840,21 @@ function L.loadMovementAlert(overrides)
         GetPlayerAuraBySpellID = function() return overrides.aura end,
     }
     _G.C_SpellActivationOverlay = overrides.overlay
+    -- Absent by default, which is the pre-12.1 client and the broad-only path.
+    -- A spec supplies it to exercise the exact-first branch.
+    _G.C_Secrets = overrides.C_Secrets
 
     local KE = {
         Print = function() end,
         IsSecretValue = function() return false end,
         AreAuraIdentitiesHidden = function() return overrides.aurasHidden == true end,
+        IsAuraHiddenForSpell = function(self, spellIdentifier)
+            if spellIdentifier and _G.C_Secrets and _G.C_Secrets.ShouldSpellAuraBeSecret then
+                local ok, secret = pcall(_G.C_Secrets.ShouldSpellAuraBeSecret, spellIdentifier)
+                if ok then return secret == true end
+            end
+            return self:AreAuraIdentitiesHidden()
+        end,
         ApplyFontToText = function(_, fontString, face, size, outline)
             rec.fonts[#rec.fonts + 1] =
                 { fontString = fontString, face = face, size = size, outline = outline }
@@ -1949,6 +1959,9 @@ function L.loadPetStatusText(overrides)
     _G.C_UnitAuras         = { GetPlayerAuraBySpellID = function() return overrides.aura end }
     _G.Enum                = { SpellBookSpellBank = { Player = "Player" } }
     _G.strsplit            = function() return nil end
+    -- Absent by default, which is the pre-12.1 client and the broad-only path.
+    -- A spec supplies it to exercise the exact-first branch.
+    _G.C_Secrets = overrides.C_Secrets
 
     local modules = helpers.installAddonShim()
     local KE = {
@@ -1956,6 +1969,13 @@ function L.loadPetStatusText(overrides)
             Enabled = true, PetMissing = "PET MISSING", MissingColor = { 1, 1, 1, 1 },
         } } },
         AreAuraIdentitiesHidden = function() return overrides.aurasHidden == true end,
+        IsAuraHiddenForSpell = function(self, spellIdentifier)
+            if spellIdentifier and _G.C_Secrets and _G.C_Secrets.ShouldSpellAuraBeSecret then
+                local ok, secret = pcall(_G.C_Secrets.ShouldSpellAuraBeSecret, spellIdentifier)
+                if ok then return secret == true end
+            end
+            return self:AreAuraIdentitiesHidden()
+        end,
         GetSafeUnitGUID = function() return nil end,
         ResolveColor = function() return 1, 1, 1, 1 end,
     }
@@ -1998,11 +2018,21 @@ function L.loadBurningRush(overrides)
     _G.LibStub     = function() return nil end
     _G.C_UnitAuras = { GetPlayerAuraBySpellID = function() return overrides.aura end }
     _G.C_SpellActivationOverlay = overrides.overlay
+    -- Absent by default, which is the pre-12.1 client and the broad-only path.
+    -- A spec supplies it to exercise the exact-first branch.
+    _G.C_Secrets = overrides.C_Secrets
 
     local modules = helpers.installAddonShim()
     local KE = {
         db = { profile = { BurningRush = overrides.db or { Enabled = true } } },
         AreAuraIdentitiesHidden = function() return overrides.aurasHidden == true end,
+        IsAuraHiddenForSpell = function(self, spellIdentifier)
+            if spellIdentifier and _G.C_Secrets and _G.C_Secrets.ShouldSpellAuraBeSecret then
+                local ok, secret = pcall(_G.C_Secrets.ShouldSpellAuraBeSecret, spellIdentifier)
+                if ok then return secret == true end
+            end
+            return self:AreAuraIdentitiesHidden()
+        end,
     }
     helpers.loadModule("Modules/ClassUtilities/BurningRush.lua", KE)
 
@@ -2057,6 +2087,13 @@ function L.loadEbonMightHelper(overrides)
     local KE = {
         db = { profile = { EbonMightHelper = overrides.db or { Enabled = true } } },
         AreAuraIdentitiesHidden = function() return overrides.aurasHidden == true end,
+        IsAuraHiddenForSpell = function(self, spellIdentifier)
+            if spellIdentifier and _G.C_Secrets and _G.C_Secrets.ShouldSpellAuraBeSecret then
+                local ok, secret = pcall(_G.C_Secrets.ShouldSpellAuraBeSecret, spellIdentifier)
+                if ok then return secret == true end
+            end
+            return self:AreAuraIdentitiesHidden()
+        end,
         IsSecretValue = function(_, v) return overrides.secret ~= nil and overrides.secret[v] == true end,
         IsSafeValue = function(self, v) return v ~= nil and not self:IsSecretValue(v) end,
         IsUnreadableAuraPayload = function(self, unit) return self:IsSecretValue(unit) end,
@@ -2145,13 +2182,19 @@ function L.loadPrescienceTracker(overrides)
         end,
         GetAuraDataByAuraInstanceID = function() return overrides.instanceAura end,
     }
-    _G.C_Spell = { GetSpellName = function(id) return "Spell" .. tostring(id) end }
+    -- Keep the default body byte-identical to the "Spell" .. id format: every
+    -- existing case depends on it, including this loader's own aura stub,
+    -- which matches against it.
+    _G.C_Spell = overrides.C_Spell or { GetSpellName = function(id) return "Spell" .. tostring(id) end }
     _G.GetNumGroupMembers = function() return overrides.groupSize or 0 end
     _G.IsInRaid = function() return false end
     _G.UnitGroupRolesAssigned = function() return "DAMAGER" end
     _G.UnitClass = function() return "Mage", "MAGE" end
     _G.GetSpecialization = function() return 3 end
     _G.GetSpecializationInfo = function() return 1473 end
+    -- Absent by default, which is the pre-12.1 client and the broad-only path.
+    -- A spec supplies it to exercise the exact-first branch.
+    _G.C_Secrets = overrides.C_Secrets
 
     local modules = helpers.installAddonShim()
     local KE = {
@@ -2159,6 +2202,13 @@ function L.loadPrescienceTracker(overrides)
         AreAuraIdentitiesHidden = function()
             rec.hiddenChecks = rec.hiddenChecks + 1
             return overrides.aurasHidden == true
+        end,
+        IsAuraHiddenForSpell = function(self, spellIdentifier)
+            if spellIdentifier and _G.C_Secrets and _G.C_Secrets.ShouldSpellAuraBeSecret then
+                local ok, secret = pcall(_G.C_Secrets.ShouldSpellAuraBeSecret, spellIdentifier)
+                if ok then return secret == true end
+            end
+            return self:AreAuraIdentitiesHidden()
         end,
         IsSecretValue = function(_, v) return isSecret(v) end,
         IsSecretTable = function(_, t) return isSecretTable(t) end,
