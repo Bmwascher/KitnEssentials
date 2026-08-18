@@ -40,12 +40,9 @@ function Container.AxisFor(settings)
         or AnchorUtil.FlowLayoutAxis.Horizontal
 end
 
--- How many layout elements the display can produce: the configured grid, or
--- the enchant slot count when that is larger. Enchant frames are registered
--- once at creation and there is no call to withdraw one, so a grid smaller
--- than the slot count cannot drop them -- it has to make room, or icons draw
--- outside the box the mover uses. A display declaring no enchants gets the
--- plain grid, unchanged.
+-- Enchant frames are registered once at creation and there is no call to
+-- withdraw one, so a grid smaller than the slot count cannot drop them --
+-- it has to make room, or icons draw outside the box the mover uses.
 function Container.ElementCapacity(display, settings)
     local perRow = settings.IconsPerRow or display.defaultIconsPerRow
     local grid   = perRow * (settings.MaxRows or 1)
@@ -89,10 +86,9 @@ function Container.TotalLimit(display, settings)
     return Container.ElementCapacity(display, settings) - reserved
 end
 
--- The grid's span along one axis. The anchor's size and the flow layout's
--- wrap point are the same quantity measured twice -- the box the user drags
--- and the point the icons wrap -- so they are computed in one place and
--- cannot drift apart.
+-- The anchor's size and the flow layout's wrap point are the same quantity
+-- measured twice -- the box the user drags and the point the icons wrap --
+-- so they are computed in one place and cannot drift apart.
 local function GridSpan(count, settings)
     return count * settings.IconSize + (count - 1) * settings.IconSpacing
 end
@@ -106,8 +102,7 @@ end
 function Container.SizeAnchor(handle, display, settings)
     local along  = settings.IconsPerRow or display.defaultIconsPerRow
     -- Derived from the element capacity rather than MaxRows directly, so the
-    -- box always covers everything that can draw. For a display with no
-    -- enchants this is exactly MaxRows and nothing changes.
+    -- box always covers everything that can draw.
     local across = math.ceil(Container.ElementCapacity(display, settings) / along)
     if Container.IsVerticalAxis(settings) then
         handle.anchorFrame:SetSize(GridSpan(across, settings), GridSpan(along, settings))
@@ -168,9 +163,7 @@ function Container.AddGroups(handle, display, settings)
 end
 
 -- Enchant frames are layout elements in their own right, NOT members of an
--- aura group, but their slots ARE reserved out of the group budget: capacity
--- is the configured grid or the declared slot count, whichever is larger,
--- and the aura group's limit is that capacity minus the reserved slots.
+-- aura group, but their slots ARE reserved out of the group budget.
 -- layoutIndex 0 puts them ahead of every group, which is where Blizzard's
 -- own frame shows them.
 --
@@ -204,9 +197,6 @@ function Container.AddItemEnchantments(handle, display, settings)
     end
 end
 
--- Two frames per display. The anchor is a plain Frame carrying Position, the
--- KE mover and the pixel snap; the container is its CHILD.
---
 -- The container cannot be the positioned frame: the first AddAuraGroup adds
 -- UntrustedLayoutScriptExecution to its forbidden aspects, so KE frames
 -- cannot anchor to it afterwards, and it calls SetSize on itself so its size
@@ -258,16 +248,9 @@ function Container.Create(display, settings)
     return handle
 end
 
--- state is the CONTAINER DISPLAY state and reaches nothing else. Two inputs
--- feed it: the module's Enabled setting and the vehicle rule. It does not own
--- the sound registry — entering a vehicle hides the icons and leaves the
--- sounds registered.
---
--- The engine calls this on first creation too. A container is ENABLED at birth — the
--- intrinsic sets it through KeyValues, which the template inherits — so this
--- does not repair a default; it makes the display MATCH its configured
--- state. A module switched off in saved settings must come up hidden and
--- disabled.
+-- The engine calls this on first creation too. A container is ENABLED at birth,
+-- so this does not repair a default; it makes the display MATCH its configured
+-- state. A module switched off in saved settings must come up hidden.
 --
 -- anchorShown is a SEPARATE decision the caller makes, never derived from
 -- state: the preview frames are children of the anchor, so a hidden container
@@ -335,9 +318,7 @@ function Container.Reconfigure(handle, display, settings)
     Container.ApplyLayout(handle, settings)
 end
 
--- Growth direction, anchor point, maximum line size, strata, and the anchor
--- frame's position. Runs once at the end of Create and again on every
--- reconfiguration.
+-- Runs once at the end of Create and again on every reconfiguration.
 function Container.ApplyLayout(handle, settings)
     local horizontalDirection = settings.GrowHorizontal == "LEFT"
         and AnchorUtil.FlowDirection.Left

@@ -245,10 +245,9 @@ function Style.CreateRegions(frame, group, settings)
         frame.keGlow = KE.AuraGlow.CreateHost(frame, settings)
     end
 
-    -- Frame levels, off the button: cooldown +1, dispel overlay +2, glow +3,
-    -- text overlay +4. Higher levels paint over lower ones regardless of
-    -- creation order, which is what stops the swipe and the glow from
-    -- covering the count/timer text.
+    -- Frame levels, off the button. Higher levels paint over lower ones
+    -- regardless of creation order, which is what stops the swipe and the
+    -- glow from covering the count/timer text.
     local baseLevel = frame:GetFrameLevel()
     frame.keCooldown:SetFrameLevel(baseLevel + 1)
     if frame.keDispel then frame.keDispel:SetFrameLevel(baseLevel + 2) end
