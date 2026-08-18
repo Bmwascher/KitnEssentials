@@ -18,9 +18,9 @@ KE.AuraStyle = Style
 Style.DISPEL_ICON_FRACTION = 0.40
 
 ---------------------------------------------------------------------------------
--- Duration formatter -- declarative data, not a callback. Wave 1 has neither
--- a ShowDecimalSeconds nor a ColorDurationUnderThreshold setting on either
--- display, so only the non-decimal breakpoint set is built and textColor is
+-- Duration formatter -- declarative data, not a callback. Neither display
+-- supports a ShowDecimalSeconds or a ColorDurationUnderThreshold setting,
+-- so only the non-decimal breakpoint set is built and textColor is
 -- never populated. Weak-keyed on the settings table: the same settings table
 -- is reused for every reconfiguration of a display, so this rebuilds a
 -- formatter once per settings table rather than once per button.
