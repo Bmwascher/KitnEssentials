@@ -1985,7 +1985,7 @@ function DM:OnChallengeEvent(event)
     -- off = sessions survive the boundary (history AND Overall span keys; pins stay
     -- valid, so none of the reset teardown below applies) until a manual reset; the
     -- run-level "+NN" session stored at key completion still gives a per-run summary
-    -- after the fact. A Details-style local snapshot store would give both at once --
+    -- after the fact. A local snapshot store would give both at once --
     -- that's a feature (new data layer), not a different gate here.
     if event == "CHALLENGE_MODE_START" then
         if self.db and self.db.ResetOnKeyStart then

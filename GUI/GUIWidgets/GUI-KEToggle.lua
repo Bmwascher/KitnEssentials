@@ -420,8 +420,8 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
 
     cell:SetScript("OnClick", function(self)
         -- The refusal rule. A fully suppressed row must not be writable: its
-        -- saved value is the user's real choice, kept intact until EllesmereUI
-        -- stops covering that window.
+        -- saved value is the user's real choice, kept intact until the row is
+        -- enabled again.
         if not self._enabled then return end
         self:SetChecked(not self._checked)
         if config.callback then config.callback(self._checked) end

@@ -61,9 +61,9 @@ local FONT_LIST = {
     { "ObjectiveFont", 12, "S" },
     { "ObjectiveTrackerHeaderFont", 14, "O" },
     -- (dungeon/scenario tracker lines lacked outline):
-    -- these lines inherit ObjectiveTrackerLineFont; EUI's QuestTracker
-    -- skin re-fonts only the blocks it covers, so the scenario module
-    -- falls through to this font object. Promoted to outline
+    -- these lines inherit ObjectiveTrackerLineFont; a tracker skin that
+    -- re-fonts only the blocks it covers leaves the scenario module
+    -- falling through to this font object. Promoted to outline
     -- (deliberate departure from Blizzard's shadow-only original).
     { "ObjectiveTrackerLineFont", 12, "O" },
 
