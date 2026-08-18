@@ -243,10 +243,41 @@ end
 ---------------------------------------------------------------------------------
 -- Aura Scanning (full refresh on isFullUpdate)
 ---------------------------------------------------------------------------------
+-- May the aura scan run at all?
+--
+-- EVERY spell the scan will read must be readable. The scan clears self state,
+-- the ally list and the calculation state together, so running it with one of
+-- the two spells hidden would clear that spell's data and rebuild nothing into
+-- it -- reporting "not present" for something merely unreadable.
+--
+-- The allies spell counts only while grouped, because that half of the scan
+-- does not run otherwise. A spell with no resolved name counts as unreadable.
+function EMT:CanScanAllEbonMightSpells()
+    local getName = C_Spell and C_Spell.GetSpellName
+    if not getName then return false end
+
+    local selfName = getName(EBON_MIGHT_SELF)
+    if not selfName or KE:IsAuraHiddenForSpell(selfName) then return false end
+
+    if self.inGroup then
+        local othersName = getName(EBON_MIGHT_OTHERS)
+        if not othersName or KE:IsAuraHiddenForSpell(othersName) then return false end
+    end
+
+    return true
+end
+
 function EMT:ScanAuras()
+    -- Before the clear, not after: refusing here is what stops a restricted
+    -- stretch from emptying state it merely cannot read. Every caller gets
+    -- this for free, which is why it is not repeated at any of them.
+    if not self:CanScanAllEbonMightSpells() then return end
+
     self:ClearData()
     if not self.isAugSpec then return end
 
+    -- Both names are already resolved and readable: the gate at the top of
+    -- this function refuses unless every spell it will query answered so.
     -- Read self aura by spell name
     local selfName = C_Spell.GetSpellName(EBON_MIGHT_SELF)
     if selfName then
@@ -891,7 +922,12 @@ function EMT:HidePreview()
     self._shown = false
     if not self.frame then return end
     self.frame:Hide()
-    -- Re-sync with actual game state after the fake preview aura is cleared.
+    -- ShowPreview wrote these; ScanAuras may now refuse, so do not depend on
+    -- its clear to undo them.
+    self.selfAuraInstanceID = 0
+    self.selfExpirationTime = 0
+    -- Re-sync with actual game state; ScanAuras may refuse if a spell is
+    -- currently unreadable, in which case the state above is already clean.
     self:ScanAuras()
     self:TickerHandling()
     self:UpdateDisplay()
@@ -1095,7 +1131,7 @@ function EMT:QueueRestrictionRescan()
         EMT._restrictionRescanPending = false
         if not EMT:IsEnabled() then return end
         if not EMT.isAugSpec or EMT.isPreview then return end
-        if KE:AreAuraIdentitiesHidden() then return end
+        if not EMT:CanScanAllEbonMightSpells() then return end
         EMT:ScanAuras()
         EMT:TickerHandling()
         EMT:UpdateDisplay()

@@ -2241,6 +2241,37 @@ function L.loadPrescienceTracker(overrides)
     return PT, rec
 end
 
+-- Modules/ClassUtilities/EbonMightTracker.lua. This loader reaches ONLY
+-- CanScanAllEbonMightSpells -- ScanAuras, the preview sentinel and the
+-- ticker/display pipeline all touch Blizzard names the module captures as
+-- file-scope locals (C_UnitAuras, CreateFrame, UnitStat, GetNumGroupMembers,
+-- ...) that this loader deliberately does not stub. A spec that needs
+-- ScanAuras itself wants a different fixture.
+-- Returns the module.
+function L.loadEbonMightTracker(overrides)
+    overrides = overrides or {}
+    local modules = helpers.installAddonShim()
+    _G.LibStub = function() return nil end
+    _G.C_Spell = overrides.C_Spell or { GetSpellName = function(id) return "Spell " .. tostring(id) end }
+    _G.C_Secrets = overrides.C_Secrets
+
+    local KE = {
+        AreAuraIdentitiesHidden = function() return overrides.aurasHidden == true end,
+        IsAuraHiddenForSpell = function(self, spellIdentifier)
+            if spellIdentifier and _G.C_Secrets and _G.C_Secrets.ShouldSpellAuraBeSecret then
+                local ok, secret = pcall(_G.C_Secrets.ShouldSpellAuraBeSecret, spellIdentifier)
+                if ok then return secret == true end
+            end
+            return self:AreAuraIdentitiesHidden()
+        end,
+    }
+    helpers.loadModule("Modules/ClassUtilities/EbonMightTracker.lua", KE)
+
+    local EMT = modules["EbonMightTracker"]
+    EMT.inGroup = overrides.inGroup == true
+    return EMT
+end
+
 -- Modules/QoL/CombatLogger.lua. The module caches its whole API surface at
 -- file scope, so every name it reads has to exist on _G BEFORE loadModule --
 -- which is the point of loading it this way: a name cached from the wrong
