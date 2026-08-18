@@ -46,7 +46,6 @@ describe("DungeonTrash — CAST_START start-advance", function()
         local modules = helpers.installAddonShim()
         KE = { Print = function() end }  -- DEBUG_DTRASH dprints route here
         helpers.loadModule("Modules/DungeonTimers/Trash/TrashInference.lua", KE)
-        helpers.loadModule("Modules/DungeonTimers/Trash/TrashAuraDelta.lua", KE)
         helpers.loadModule("Modules/DungeonTimers/Trash/DungeonTrash.lua", KE)
         helpers.loadModule("Modules/DungeonTimers/Trash/TrashCache.lua", KE)
         DTrash = modules["DungeonTrash"]
@@ -312,44 +311,24 @@ describe("DungeonTrash — CAST_START start-advance", function()
             assert.is_true(TI.MatchesObservedCastStart(pureChannel, "channel", {}))
         end)
 
-        it("castStartAuraDelta ownership follows the sampler's availability", function()
+        it("a castStartAuraDelta spell is never start-advance-owned", function()
             local ambush = { cdMode = "CAST_START", castTime = 3.5, castStartAuraDelta = true }
-            -- sampler dark: neither provable nor refutable at start → success path
             assert.is_false(TI.IsStartAdvanceOwned(ambush))
+            -- The entry gate refuses too, and this line is CARRIED FORWARD
+            -- unchanged from the case being replaced: it is the dark-path
+            -- outcome, so it must survive.
             assert.is_false(TI.MatchesObservedCastStart(ambush, "cast", {}))
-            -- sampler live: start-advance-owned, discriminated by the sampled delta
-            assert.is_true(TI.IsStartAdvanceOwned(ambush, true))
-            assert.is_true(TI.MatchesObservedCastStart(ambush, "cast",
-                { castStartAuraDelta = true }, true))
-            -- a start with no fresh party debuff (the mob's OTHER cast) can
-            -- never cross-anchor the curating spell
-            assert.is_false(TI.MatchesObservedCastStart(ambush, "cast",
-                { castStartAuraDelta = false }, true))
+        end)
+
+        it("a plain CAST_START spell is owned", function()
             assert.is_true(TI.IsStartAdvanceOwned({ cdMode = "CAST_START", channelTime = 5 }))
             assert.is_false(TI.IsStartAdvanceOwned({ cdMode = "SUCCESS", castTime = 2 }))
         end)
 
-        it("a sampled aura delta is presence-symmetric at success matching", function()
-            local plain = { castTime = 3.5 }
-            local curating = { castTime = 3.5, castStartAuraDelta = true }
-            local matched = { kind = "cast", duration = 3.5,
-                fingerprints = { castStartAuraDelta = true } }
-            local unmatched = { kind = "cast", duration = 3.5,
-                fingerprints = { castStartAuraDelta = false } }
-            local unsampled = { kind = "cast", duration = 3.5, fingerprints = {} }
-            assert.is_false(TI.SpellMatchesObserved(plain, matched))  -- delta the spell can't explain
-            assert.is_true(TI.SpellMatchesObserved(plain, unmatched))
-            assert.is_true(TI.SpellMatchesObserved(plain, unsampled)) -- nil stays lenient
-            assert.is_true(TI.SpellMatchesObserved(curating, matched))
-            assert.is_false(TI.SpellMatchesObserved(curating, unmatched))
-            assert.is_true(TI.SpellMatchesObserved(curating, unsampled))
-        end)
-
-        it("NeedsStartFingerprints counts castStartAuraDelta only when the sampler is live", function()
-            local mob = { spells = { [30] = { cdMode = "CAST_START", castTime = 3.5,
+        it("NeedsStartFingerprints never waits for a castStartAuraDelta spell", function()
+            local mob = { spells = { [1] = { cdMode = "CAST_START", castTime = 3.5,
                 castStartAuraDelta = true } } }
-            assert.is_false(TI.NeedsStartFingerprints(mob))       -- not owned → nothing to wait for
-            assert.is_true(TI.NeedsStartFingerprints(mob, true))  -- owned → wait for the sampler
+            assert.is_false(TI.NeedsStartFingerprints(mob))
         end)
 
         it("sampled fingerprints gate the match; unsampled stay lenient", function()
@@ -357,146 +336,6 @@ describe("DungeonTrash — CAST_START start-advance", function()
             assert.is_false(TI.MatchesObservedCastStart(sp, "channel", { castStartChangeTarget = false }))
             assert.is_true(TI.MatchesObservedCastStart(sp, "channel", { castStartChangeTarget = true }))
             assert.is_true(TI.MatchesObservedCastStart(sp, "channel", {}))
-        end)
-    end)
-
-    -- Vicious Ravager shape (Academy 196671): Ambush curates castStartAuraDelta
-    -- + CAST_START; Riftbreath is a two-phase success-mode spell. The aura-delta
-    -- sampler (TrashAuraDelta.lua) makes Ambush start-advance-owned, so a
-    -- meld-FAILED cast still advances its schedule instead of stranding the
-    -- plate marker past-due — the Shadowmeld plate-break headline fix.
-    describe("aura-delta sampled start-advance (Vicious Ambush shape)", function()
-        local TAD
-        local function ravagerData()
-            KE.TrashData[1].mobs[111].spells = {
-                [30] = { name = "Ambush", castTime = 3.5, first = 3.3, cd = { 14.5 },
-                    cdMode = "CAST_START", castStartAuraDelta = true },
-                [40] = { name = "Riftbreath", castTime = 2.5, channelTime = 2.5,
-                    first = 7, cd = { 13.2 } },
-            }
-            TAD = KE.TrashAuraDelta
-            DTrash._auraDeltaLive = true
-            TAD.SetEnabled(true)
-        end
-
-        it("a FAILED cast still advances the schedule (start-advance owns it)", function()
-            ravagerData()
-            local rt = trackResolved("nameplate1")
-            local base = #timers
-            DTrash:OnCastStart(nil, "nameplate1", nil, nil, 3)   -- Ambush start at 100
-            world.debuffs.player = { 501 }                       -- pounce debuff lands on the party
-            clock.now = 100.05
-            TAD.OnUnitAura("player")                             -- UNIT_AURA edge feeds the ring
-            clock.now = 100.1
-            fireTimersAfter(base)                                -- +0.10s sampler
-            assert.is_true(rt.fpCastStartAuraDelta)
-            assert.equals("success", rt.anchors[30].mode)
-            assert.equals(114.5, rt.anchors[30].nextStartAt)     -- start + cd 14.5
-            clock.now = 102                                      -- Shadowmeld abort
-            DTrash:OnCastFailed(nil, "nameplate1", nil, nil, 3)
-            assert.equals(114.5, rt.anchors[30].nextStartAt)     -- anchor survives the FAILED
-            assert.is_nil(rt.sawInterrupted)                     -- FAILED still isn't kick evidence
-        end)
-
-        it("a start with no fresh party debuff cannot cross-anchor the curating spell", function()
-            ravagerData()
-            local rt = trackResolved("nameplate1")
-            local base = #timers
-            DTrash:OnCastStart(nil, "nameplate1", nil, nil, 3)   -- Riftbreath-shaped start
-            clock.now = 100.1
-            fireTimersAfter(base)
-            assert.is_false(rt.fpCastStartAuraDelta)
-            assert.equals("enter", rt.anchors[30].mode)          -- Ambush NOT start-advanced
-            -- Nothing matched → the pending is RETAINED (consume-on-match);
-            -- the transition pairing or the next start clears/re-arms it.
-            assert.equals(100, rt.pendingStartAdvanceAt)
-        end)
-
-        -- Divergent matched/candidates regression (review find):
-        -- a runtime Layer2-locked onto the WRONG identity while Layer1's
-        -- candidate list already names the curating mob must (a) still
-        -- sample the delta, (b) hold the pending past the pre-sample
-        -- resolution pass, and (c) retain it through the sampler-time pass
-        -- (the stale mob's spells all reject the sampled delta) so the
-        -- Layer2 flip at FinishCast can claim the TRUE observed start.
-        it("a stale locked identity holds the pending until the Layer2 flip claims it", function()
-            ravagerData()
-            KE.TrashData[1].mobs[222] = { npcID = 222, name = "Decoy", spells = {
-                [50] = { name = "Bolt", castTime = 3, first = 12, cd = { 15 } },
-            } }
-            local rt = trackResolved("nameplate1")
-            rt.matchedNPCID = 222                       -- stale Layer2-locked identity
-            rt.castConfirmed = true
-            rt.candidates = { { npcID = 111, levelAgreed = true } }
-            local base = #timers
-            DTrash:OnCastStart(nil, "nameplate1", nil, nil, 3)   -- real Ambush start at 100
-            DTrash:ApplyPendingStartAdvance(rt)         -- ResolveMob-tail stand-in, pre-sampler
-            assert.equals(100, rt.pendingStartAdvanceAt)         -- held: a candidate curates the delta
-            world.debuffs.player = { 601 }
-            clock.now = 100.05
-            TAD.OnUnitAura("player")
-            clock.now = 100.1
-            fireTimersAfter(base)                                -- +0.10s sampler
-            assert.is_true(rt.fpCastStartAuraDelta)              -- candidates made it sample
-            assert.equals(100, rt.pendingStartAdvanceAt)         -- retained: Decoy's spells reject
-            clock.now = 103.5
-            DTrash:OnCastStop(nil, "nameplate1", nil, nil, 3)    -- Layer2 flips to the Ravager...
-            assert.equals(111, rt.matchedNPCID)
-            assert.equals("success", rt.anchors[30].mode)        -- ...which claims the held start
-            assert.equals(114.5, rt.anchors[30].nextStartAt)     -- anchored at the TRUE start
-            assert.is_nil(rt.pendingStartAdvanceAt)              -- consumed exactly once
-        end)
-
-        -- Churn guard (review find, round 2): the curator present at the hold
-        -- decision, absent when the +0.10s sampler recomputes need (sample
-        -- skipped, delta nil, ready bit set anyway), then present again at
-        -- resolution. An unsampled delta must fail ownership — never match on
-        -- the lenient nil — and the success path recovers the anchor.
-        it("candidate churn across the sample window cannot produce a lenient-nil advance", function()
-            ravagerData()
-            KE.TrashData[1].mobs[222] = { npcID = 222, name = "Decoy", spells = {
-                [50] = { name = "Bolt", castTime = 3, first = 12, cd = { 15 } },
-            } }
-            local rt = trackResolved("nameplate1")
-            rt.matchedNPCID = nil
-            rt.candidates = { { npcID = 111 } }        -- curator present at the hold
-            local base = #timers
-            DTrash:OnCastStart(nil, "nameplate1", nil, nil, 3)   -- real Ambush start at 100
-            world.debuffs.player = { 601 }             -- the debuff DOES land...
-            clock.now = 100.05
-            TAD.OnUnitAura("player")
-            rt.candidates = { { npcID = 222 } }        -- ...but churn hides the curator at +0.10s
-            clock.now = 100.1
-            fireTimersAfter(base)                      -- sampling skipped: need=false at fire time
-            assert.is_nil(rt.fpCastStartAuraDelta)
-            assert.is_true(rt.startFingerprintsReady)
-            assert.equals(100, rt.pendingStartAdvanceAt)
-            rt.matchedNPCID = 111                      -- the curator returns and resolves
-            rt.candidates = { { npcID = 111, levelAgreed = true } }
-            DTrash:ApplyPendingStartAdvance(rt)
-            assert.is_nil(rt.anchors)                  -- unsampled delta: NOT owned, no advance
-            assert.equals(100, rt.pendingStartAdvanceAt)         -- retained, never lenient-consumed
-            clock.now = 103.5
-            DTrash:OnCastStop(nil, "nameplate1", nil, nil, 3)
-            assert.equals("success", rt.anchors[30].mode)        -- success path recovers the anchor
-            assert.equals(114.5, rt.anchors[30].nextStartAt)     -- CAST_START origin: start 100 + 14.5
-        end)
-
-        it("with the sampler dark, the curating spell keeps the success-path anchor", function()
-            ravagerData()
-            DTrash._auraDeltaLive = false
-            TAD.SetEnabled(false)
-            local rt = trackResolved("nameplate1")
-            local base = #timers
-            DTrash:OnCastStart(nil, "nameplate1", nil, nil, 3)
-            clock.now = 100.1
-            fireTimersAfter(base)
-            assert.is_nil(rt.fpCastStartAuraDelta)               -- never sampled
-            assert.equals("enter", rt.anchors[30].mode)          -- no start advance
-            clock.now = 103.5
-            DTrash:OnCastStop(nil, "nameplate1", nil, nil, 3)
-            assert.equals("success", rt.anchors[30].mode)        -- success credit lands
-            assert.equals(114.5, rt.anchors[30].nextStartAt)     -- CAST_START origin: start 100 + 14.5
         end)
     end)
 
