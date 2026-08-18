@@ -131,13 +131,39 @@ local function IsCritPrescience(aura, spellID)
     return first == 6
 end
 
+-- May the roster scan run at all?
+--
+-- EVERY enabled spell must be readable, not merely one of them. The scan wipes
+-- the whole tracked table and every entry records the spell it belongs to, so
+-- scanning with one spell hidden would clear its entries and repopulate only
+-- the readable one -- turning "cannot see it" into "it is not there", which is
+-- the inference this guard exists to prevent.
+--
+-- Nothing enabled also passes: the correct result is then an empty list, and
+-- refusing would strand stale entries on screen.
+--
+-- A spell with no resolved name counts as unreadable; the scan below skips it
+-- for the same reason.
+function PT:CanScanAllEnabledTrackedSpells()
+    for spellID, def in pairs(BUFF_DEFS) do
+        if self.db[def.key] ~= false then
+            local spellName = SPELL_NAMES[spellID]
+            if not spellName or KE:IsAuraHiddenForSpell(spellName) then
+                return false
+            end
+        end
+    end
+    -- Reaching here means every enabled spell is readable, or none is enabled.
+    return true
+end
+
 function PT:ScanUnit(unit)
     if not UnitExists(unit) then return end
 
     for spellID, def in pairs(BUFF_DEFS) do
         if self.db[def.key] ~= false then
             local spellName = SPELL_NAMES[spellID]
-            if spellName then
+            if spellName and not KE:IsAuraHiddenForSpell(spellName) then
                 local aura = C_UnitAuras.GetAuraDataBySpellName(unit, spellName, "HELPFUL|PLAYER")
                 if aura and aura.auraInstanceID then
                     -- Only track our own casts. The source can be secret even
@@ -156,10 +182,10 @@ end
 function PT:ScanAllUnits()
     if not self.isAugSpec and not self.isPreview then return end
 
-    -- Refuse BEFORE the wipe, not after. While identities are hidden the scan
-    -- below finds nothing, so wiping first would replace a correct list with an
-    -- empty one for the rest of the restricted stretch.
-    if KE:AreAuraIdentitiesHidden() then return end
+    -- Refuse BEFORE the wipe, not after. If any enabled spell is unreadable the
+    -- scan below finds nothing for it, so wiping first would replace a correct
+    -- list with an empty one for the rest of the restricted stretch.
+    if not self:CanScanAllEnabledTrackedSpells() then return end
 
     wipe(self.trackedBuffs)
 
@@ -627,7 +653,7 @@ function PT:UpdateTimers()
     if next(self.trackedBuffs) ~= nil then return end
     if now - self.lastRescan < RESCAN_INTERVAL then return end
     self.lastRescan = now
-    if KE:AreAuraIdentitiesHidden() then return end
+    if not self:CanScanAllEnabledTrackedSpells() then return end
     self:RescanRoster()
 end
 

@@ -199,6 +199,63 @@ describe("PrescienceTracker crit detection", function()
     end)
 end)
 
+describe("PrescienceTracker roster scan gate", function()
+    local ENABLED_DB = { Enabled = true, ShowPrescience = true, ShowShiftingSands = true }
+    local DISABLED_DB = { Enabled = true, ShowPrescience = false, ShowShiftingSands = false }
+    local PRESCIENCE_NAME = "Spell" .. PRESCIENCE
+    local SANDS_NAME = "Spell" .. SHIFTING_SANDS
+
+    -- Drives KE:IsAuraHiddenForSpell's per-spell answer from a name-keyed
+    -- table, matching how the guarded scan queries -- by name, not id.
+    local function secrecy(db, hiddenNames)
+        return {
+            db = db,
+            C_Secrets = {
+                ShouldSpellAuraBeSecret = function(name) return hiddenNames[name] == true end,
+            },
+        }
+    end
+
+    it("scans when both enabled spells are readable", function()
+        local PT = loader.loadPrescienceTracker(secrecy(ENABLED_DB, {}))
+        assert.is_true(PT:CanScanAllEnabledTrackedSpells())
+    end)
+
+    it("refuses when both enabled spells are hidden", function()
+        local PT = loader.loadPrescienceTracker(
+            secrecy(ENABLED_DB, { [PRESCIENCE_NAME] = true, [SANDS_NAME] = true }))
+        assert.is_false(PT:CanScanAllEnabledTrackedSpells())
+    end)
+
+    it("refuses a mixed set (one enabled spell readable, one hidden) -- the case this predicate exists for: scanning would wipe the hidden spell's entries and repopulate only the readable one", function()
+        local PT = loader.loadPrescienceTracker(secrecy(ENABLED_DB, { [SANDS_NAME] = true }))
+        assert.is_false(PT:CanScanAllEnabledTrackedSpells())
+    end)
+
+    it("scans when neither tracked spell is enabled -- the empty-list case", function()
+        -- Both answers are declared hidden so a predicate that mistakenly asks
+        -- anyway would fail this test instead of passing it by accident.
+        local PT = loader.loadPrescienceTracker(
+            secrecy(DISABLED_DB, { [PRESCIENCE_NAME] = true, [SANDS_NAME] = true }))
+        assert.is_true(PT:CanScanAllEnabledTrackedSpells())
+    end)
+
+    it("refuses when an enabled spell has no resolved name", function()
+        -- overrides.C_Spell is the seam that makes an unresolved name
+        -- reachable at all -- the default loader resolver answers every id.
+        local PT = loader.loadPrescienceTracker({
+            db = { Enabled = true, ShowPrescience = true, ShowShiftingSands = false },
+            C_Spell = {
+                GetSpellName = function(id)
+                    if id == PRESCIENCE then return nil end
+                    return "Spell" .. tostring(id)
+                end,
+            },
+        })
+        assert.is_false(PT:CanScanAllEnabledTrackedSpells())
+    end)
+end)
+
 describe("PrescienceTracker restriction-release rescan", function()
     it("debounces two events in the same frame into one rescan", function()
         local PT, rec = loader.loadPrescienceTracker({})
