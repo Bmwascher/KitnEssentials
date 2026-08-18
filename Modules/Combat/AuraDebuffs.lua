@@ -130,10 +130,7 @@ end
 -- Preview-only counterpart to the curve above: resolves a flat RGBA for one
 -- dispel type instead of feeding Blizzard's per-aura repaint, since a preview
 -- frame accepts no such registration. Mirrors the curve's own resolution
--- order -- the user's DispelColors entry first, the per-type default second
--- -- and only consults either when the colour mode actually uses them;
--- otherwise, and whenever a type resolves to neither, it falls back to the
--- flat BorderColor the same way the live ring does outside "dispel" mode.
+-- order so the preview always matches what the live ring would show.
 local function ResolveDispelPreviewColor(settings, dispelType, palette)
     if settings.BorderColorMode == "dispel" then
         local pal   = palette or settings.DispelColors
@@ -230,9 +227,6 @@ local DECLARATION = {
     buildPreview = function(_, total)
         local entries = {}
         for i = 1, total do
-            -- ONE index into both arrays, exactly as the current module does:
-            -- icon and dispel type are a matched pair, not two independent
-            -- cycles.
             local idx = ((i - 1) % #PREVIEW_ICONS) + 1
             entries[i] = {
                 icon       = PREVIEW_ICONS[idx],

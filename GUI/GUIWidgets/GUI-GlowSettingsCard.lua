@@ -27,8 +27,8 @@ local function IdentityResolveType(value)
     return value
 end
 
--- Default speedAdapter: the card's own long-standing behavior — read/write
--- db[keys.frequency] directly, bounded 0.05 to 1, with no type-settling step.
+-- Default speedAdapter: the card's own long-standing behavior, with no
+-- type-settling step.
 local DEFAULT_SPEED_ADAPTER = {
     min = 0.05,
     max = 1,
