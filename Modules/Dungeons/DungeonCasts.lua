@@ -129,8 +129,7 @@ end
 -- the whole group. Its pinned VERTICAL edge follows growth (BOTTOM grow-up /
 -- TOP grow-down) so the box stays aligned with the bars when growth is flipped;
 -- the HORIZONTAL edge is preserved from the user's AnchorFrom so left/center/
--- right alignment still works. Based on NUI's InterruptTracker model, extended
--- to keep KES's horizontal anchor control.
+-- right alignment still works.
 local function GetDCAnchorSize(frameDb)
     local maxBars = frameDb.MaxBars or 5
     local h = maxBars * frameDb.Height + mmax(maxBars - 1, 0) * frameDb.Spacing

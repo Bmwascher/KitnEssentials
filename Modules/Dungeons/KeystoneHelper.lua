@@ -86,7 +86,7 @@ end
 
 ---------------------------------------------------------------------------------
 -- Feature 1: Instance Reset Announcer
--- SecureHook (not a bare frame + event) mirrors the NUI/old-KE pattern —
+-- SecureHook, not a bare frame + event:
 -- ResetInstances() has no corresponding event, so a hook is the only way to
 -- observe the reset. IsHooked guards against double-hooking across repeated
 -- ApplySettings calls; the hook itself stays installed for the module's

@@ -45,8 +45,8 @@ local CIRCLE_TEXTURES = {
     circle_backup = TEX_BASE .. "circle_backup.tga",
 }
 
--- Spark orbit centerline ratio per texture (from EUI measurements;
--- re-measure when commissioned KE art replaces borrowed art).
+-- Spark orbit centerline ratio per texture (measured off the borrowed art;
+-- re-measure when commissioned KE art replaces it).
 local CIRCLE_INNER = {
     circle_thin   = 0.92,
     circle_light  = 0.85,
@@ -272,7 +272,7 @@ local function _gcdOnEvent(self, event, unit, _, _)
     end
 
     -- SUCCESS or START: GCD may have started. Wrap in pcall — duration MAY be
-    -- a secret number in 12.0 (defensive, matches EUI pattern).
+    -- a secret number in 12.0 (defensive).
     local cdData = GetSpellCooldown(GCD_SPELL_ID)
     if not cdData or not cdData.startTime then return end
     local ok, dur, start = pcall(function()
@@ -1386,7 +1386,7 @@ function C:OnEnable()
     -- Initial visibility decision for cursor (before satellites exist)
     self:UpdateVisibility()
 
-    -- Defer satellite creation 0.5s (matches EUI; lets other addons finish init)
+    -- Defer satellite creation 0.5s (lets other addons finish init)
     C_Timer.After(0.5, function()
         if not self.db or not self.db.Enabled then return end
         self:ApplyGCDSatellite()

@@ -489,7 +489,7 @@ end
 ---------------------------------------------------------------------------------
 -- Gateway Logic
 ---------------------------------------------------------------------------------
---- AE-pattern Gateway evaluator. IsUsableItem(GATEWAY_ITEM_ID) already filters:
+--- Gateway evaluator. IsUsableItem(GATEWAY_ITEM_ID) already filters:
 ---   (a) item present in bags
 ---   (b) a warlock-in-range has deployed a gate
 --- So we just check it and Show/Hide accordingly. Idempotent — ShowAlert

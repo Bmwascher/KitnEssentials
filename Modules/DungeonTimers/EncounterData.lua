@@ -218,8 +218,7 @@
 -- ║                                  -- bar of `duration`    ║
 -- ║                                  -- seconds (optionally  ║
 -- ║                                  -- after `leadDelay`    ║
--- ║                                  -- seconds, matching    ║
--- ║                                  -- ExBoss's "prepare"   ║
+-- ║                                  -- seconds, a prepare   ║
 -- ║                                  -- phase before the     ║
 -- ║                                  -- active window).      ║
 -- ║                                  -- Use this when        ║
@@ -318,7 +317,7 @@
 -- ║            ...                                           ║
 -- ║        },                                                ║
 -- ║                -- optional: HP%-driven "Phase Transition ║
--- ║                -- X%" text bar mimicking ExBoss alert.   ║
+-- ║                -- X%" text bar.                          ║
 -- ║                -- Fires while unit HP is in              ║
 -- ║                -- (threshold, threshold + lead]. Always  ║
 -- ║                -- shown to everyone (no role filter).    ║
@@ -402,7 +401,7 @@ KE.EncounterData[2565] = {
         -- Disabled by default: random single-target hit, fires frequently — opt-in via GUI
         [373326]  = { name = "Arcane Missiles", castType = "cast",                                           role = "other",                                       disabled = true },
         [1282251] = { name = "Astral Blast",    castType = "begincast", castDuration = 3,                    role = "tank",     display = "bar", displayText = "TANK HIT" },
-        -- castDuration=1.5 assumed from EXBoss 374350 — live verification still pending (role=heal so filtered for DAMAGER logs, can't see in this run).
+        -- castDuration=1.5 assumed — live verification still pending (role=heal so filtered for DAMAGER logs, can't see in this run).
         [374343]  = { name = "Energy Bomb",     castType = "begincast", castDuration = 1.5,                  role = "heal",                      displayText = "DISPEL",   sound = "Dispell" },
         -- The pull effect fires AT the end of BigWigs's predictive countdown (= start of the boss
         -- cast). No castDuration extension because the pull is instantaneous from the player's POV
@@ -492,8 +491,8 @@ KE.EncounterData[3213] = {
         -- casts an absorb shield (UnitGetTotalAbsorbs, secret on hostile units).
         -- Two bars surface for one mechanic: the BigWigs-driven INTERMISSION
         -- countdown (channelDuration=60) and an opt-in absorb-tracking shieldBar
-        -- that drains as the team breaks the shield. baseAmount sourced from
-        -- ExBoss/EXDB; M+ scaling applied automatically by DungeonTimers.
+        -- that drains as the team breaks the shield. M+ scaling on baseAmount
+        -- is applied automatically by DungeonTimers.
         [1250708] = { name = "Necrotic Convergence", castType = "channel",                       channelDuration = 60,  role = "other",                     displayText = "INTERMISSION", sound = "Intermission",
                       shieldBar = { baseAmount = 1160814, displayText = "SHIELD" } },
     },
@@ -657,8 +656,8 @@ KE.EncounterData[2068] = {
         -- (confirmed via in-game log — Bar message never arrived). Instead this entry
         -- spawns when 1266001's BigWigs_StopBar fires naturally (cast finished = buff
         -- applied). LittleWigs drives that StopBar via ENCOUNTER_TIMELINE_EVENT_*,
-        -- the same reliable Blizzard API ExBoss uses; ExBoss measures the active
-        -- phase at 19.5s.
+        -- a reliable Blizzard API. The active phase measures ~19.5s, rounded up
+        -- to the 20s duration below.
         [247816]  = { name = "Vulnerability Phase", phantomFollowupOf = 1266001, duration = 20, role = "other", display = "bar", displayText = "VULNERABILITY", iconOverride = 4914666, showAtSeconds = 0, sortAtEnd = true, sound = "Dmg Amp" },
     },
 }
@@ -743,10 +742,10 @@ KE.EncounterData[3058] = {
     dungeon = "WindrunnerSpire",
     spells = {
         [467620]  = { name = "Rampage",            castType = "begincast", castDuration = 2,   channelDuration = 5, role = "tank",     display = "bar", displayText = "TANK HIT" },
-        -- 472081 vs EXBoss 472053 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 472053
+        -- 472081 vs 472053 — LittleWigs ID wins (BigWigs Timer key); cast data assumed same as 472053
         [472081]  = { name = "Reckless Leap",      castType = "begincast", castDuration = 3,                        role = "other",                    displayText = "FEET",     sound = "Feet" },
         [1253272] = { name = "Intimidating Shout", castType = "begincast", castDuration = 5,                        role = "mechanic",                 displayText = "STACK",    sound = "Stack" },
-        -- 470963 vs EXBoss 1271676 — LittleWigs ID wins (BigWigs Timer key); cast data adjusted to 2s based on live log late values
+        -- 470963 vs 1271676 — LittleWigs ID wins (BigWigs Timer key); cast data adjusted to 2s based on live log late values
         [470963]  = { name = "Bladestorm",         castType = "begincast", castDuration = 2,                        role = "other",                    displayText = "DODGE"    },
     },
     -- HP-threshold phase bars are visual-only — see Crawth note above for why.

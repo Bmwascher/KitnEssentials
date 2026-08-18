@@ -78,9 +78,9 @@ local function ShieldBarKey(spellId) return SHIELD_KEY_PREFIX .. tostring(spellI
 
 -- M+ damage scaling for boss absorb shields.
 -- shield max = baseAmount × LEVEL_MULTIPLIERS[keystoneLevel].
--- Sourced from ExBoss/EXDB. Levels above 35 clamp to [35]; level 0 (no
--- keystone) uses 1.0. Same table powered the standalone VordazaShield module
--- before it was folded into DungeonTimers' shieldBar schema field.
+-- Levels above 35 clamp to [35]; level 0 (no keystone) uses 1.0. Same table
+-- powered the standalone VordazaShield module before it was folded into
+-- DungeonTimers' shieldBar schema field.
 local LEVEL_MULTIPLIERS = {
     [1]  =  1.00,
     [2]  =  1.07000005245,
@@ -330,7 +330,7 @@ DT.barGroup = nil
 DT.textGroup = nil
 DT.spellLookup = nil
 
--- Phase tracker (HP%-driven) — mirrors ExBoss healthThresholds. Bars live in self.bars
+-- Phase tracker (HP%-driven). Bars live in self.bars
 -- with internal "_phase_<n>" keys so LayoutBars handles them naturally.
 DT.activeEncounterID = nil
 DT.phaseTicker = nil
@@ -984,7 +984,7 @@ function DT:GetPhaseDisplay(key)
 end
 
 function DT:GetPhaseCuratorDisplay(_)
-    return "text"  -- phase rules default to text mode (matches ExBoss central_medium semantics)
+    return "text"  -- phase rules default to text mode
 end
 
 function DT:SetPhaseDisplay(key, mode)
@@ -1788,8 +1788,7 @@ function DT:CreateBar(text, baseDuration, extension, displayMode, displayText, s
     -- them as left/right pair inside the fill. Text mode uses them as a
     -- "static label » floating timer" split so the label (and the spell
     -- icon when shown) stays put while only the timer text width changes
-    -- as the countdown shrinks. Matches ExBoss's TimerBar layout, where
-    -- labelFS is the centered anchor and cdFS hangs off labelFS:RIGHT.
+    -- as the countdown shrinks.
     frame.label = frame.label or frame.bar:CreateFontString(nil, "OVERLAY")
     frame.timerText = frame.timerText or frame.bar:CreateFontString(nil, "OVERLAY")
 
@@ -2019,9 +2018,8 @@ end
 -- non-aura trigger (widget update, boss emote, CLEU success). Example:
 -- Crawth's goal-tracker widget 4183 hitting barValue=3 fires
 -- Message(376448, "red") which we use as the VULN spawn signal.
--- `leadDelay` mirrors ExBoss's "prepare" phase — the visible bar starts
--- leadDelay seconds after the message arrives, matching the moment the
--- buff actually lands on the boss.
+-- `leadDelay` starts the visible bar leadDelay seconds after the message
+-- arrives, matching the moment the buff actually lands on the boss.
 local function ResolveIconOverride(value, fallback)
     if not value then return fallback end
     if type(value) == "number" and C_Spell and C_Spell.GetSpellTexture then
@@ -2202,10 +2200,9 @@ end
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Phase tracker (HP%-driven)                              ║
--- ║  Mirrors ExBoss healthThresholds. While unit HP is in    ║
--- ║  (threshold, threshold + lead], shows a "Phase Transition║
--- ║  X%" bar that updates as the boss takes damage. Always   ║
--- ║  shown to everyone (no role filter).                     ║
+-- ║  While unit HP is in (threshold, threshold + lead], shows║
+-- ║  a "Phase Transition X%" bar that updates as the boss    ║
+-- ║  takes damage. Always shown to everyone (no role filter).║
 -- ║                                                          ║
 -- ║  Per-rule overrides (Disabled / Display / Color / Sounds ║
 -- ║  / Lead) are stored on phase rule keys and resolved      ║
@@ -2215,7 +2212,7 @@ end
 local PHASE_BAR_ICON = 6013778  -- matches PHASE_ROW_ICON in the GUI list
 local PHASE_TRANSITIONED_LABEL = "Phase Transitioned"  -- shown briefly after HP crosses threshold
 -- HP percent below threshold during which the "Phase Transitioned" overlay stays
--- visible. Narrow band → brief flash (mirrors ExBoss's behavior). At typical M+
+-- visible. Narrow band → brief flash. At typical M+
 -- DPS, 1% HP burns through in ~1-3s. Wider (e.g. lead-mirroring 5%) would linger
 -- for the entire post-phase damage window which the user found too long.
 local PHASE_TRANSITIONED_BAND = 1
@@ -2656,7 +2653,7 @@ DT._shieldArmingTimers = DT._shieldArmingTimers or {}  -- pending arm + auto-dis
 -- the channel's natural end (e.g. team gets full-wiped without breaking it).
 DT._shieldFallbackTimers = DT._shieldFallbackTimers or {}
 
--- Lifecycle (mirrors ExBoss/3213_Vordaza.lua):
+-- Lifecycle:
 --   BigWigs_Timer for shieldBar parent → _ArmShieldChannelWatch arms a flag
 --                                        ~1s before the curated cast time
 --   UNIT_SPELLCAST_CHANNEL_START on bossN, while armed → _ShowShieldBar
@@ -2698,9 +2695,8 @@ function DT:_ShowShieldBar(spellId, unit)
         -- secret-poisons its getters. Drop it from the shared bar pool so a
         -- later plain countdown bar can never recycle the poisoned kit and
         -- taint on GetMinMaxValues. ReleaseBar then gives it hide-only
-        -- teardown, exactly like phase bars. Mirrors ExBoss's dedicated,
-        -- never-pooled ExtraShieldBar frame; the GatedSetValue guard above is
-        -- the backstop. Strands one kit per shield hide/show cycle
+        -- teardown, exactly like phase bars. The GatedSetValue guard above
+        -- is the backstop. Strands one kit per shield hide/show cycle
         -- (Vordaza-rare), and each re-show pops a fresh kit from the shared
         -- pool — accepted cost of the secret-taint quarantine.
         bar._dtPoolKey = nil
@@ -2842,8 +2838,8 @@ end
 
 -- Schedule the arming flag for `spellId` to flip true ~1s before the curated
 -- cast lands, then auto-disarm 5s after that to bound the false-positive
--- window. Mirrors ExBoss's ArmShieldChannelWatch(remaining - 1) pattern.
--- leadTime is the BigWigs_Timer reported duration (countdown to next cast).
+-- window. leadTime is the BigWigs_Timer reported duration (countdown to
+-- next cast).
 function DT:_ArmShieldChannelWatch(spellId, leadTime)
     if not spellId then return end
     -- Cancel any pending arm scheduler for this spellId.
@@ -2908,10 +2904,10 @@ function DT:OnUnitChannelStart(_, unit)
     end
 end
 
--- Vordaza's channel becomes interruptible only after the shield is consumed
--- (see ExBoss/3213_Vordaza.lua). For any other shieldBar boss we'd want
--- this same signal — non-interruptible while shield is up, interruptible
--- after. Hide all active shields on the firing unit.
+-- Vordaza's channel becomes interruptible only after the shield is consumed.
+-- For any other shieldBar boss we'd want this same signal — non-interruptible
+-- while shield is up, interruptible after. Hide all active shields on the
+-- firing unit.
 function DT:OnUnitSpellcastInterruptible(_, unit)
     if type(unit) ~= "string" or not unit:match("^boss%d$") then return end
     if #self._activeShieldSpellIds == 0 then return end
@@ -3273,7 +3269,7 @@ function DT:OnEnable()
         dprint("LibSpec missing — role filter degraded to always-DAMAGER")
     end
 
-    -- Phase tracker (HP%-driven, mirrors ExBoss healthThresholds).
+    -- Phase tracker (HP%-driven).
     self:RegisterEvent("ENCOUNTER_START", "OnEncounterStart")
     self:RegisterEvent("ENCOUNTER_END",   "OnEncounterEnd")
 end

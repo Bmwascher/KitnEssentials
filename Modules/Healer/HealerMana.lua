@@ -217,9 +217,9 @@ function HM:GetEditModeLabel()
     return "Healer Mana"
 end
 
--- Ported from NUI v4 (HealerMana.lua). Rewrites the container's
--- vertical anchor edge so the stack grows away from a stable edge: DOWN pins
--- the TOP, UP pins the BOTTOM. Horizontal component preserved.
+-- Rewrites the container's vertical anchor edge so the stack grows away from
+-- a stable edge: DOWN pins the TOP, UP pins the BOTTOM. Horizontal component
+-- preserved.
 function HM:GetGrowAnchor(anchor)
     anchor = anchor or "CENTER"
     local growDown = self.db.GrowDirection == "DOWN"
@@ -428,7 +428,7 @@ function HM:FindHealers()
     local mode = self:GetMode()
 
     -- Clear stale frames when crossing the dungeon<->raid boundary so a smaller
-    -- new set doesn't leave orphaned frames visible (mirrors NUI/AE groupTypeChanged).
+    -- new set doesn't leave orphaned frames visible.
     if mode ~= self._lastMode then
         self._lastMode = mode
         for _, frame in pairs(self.healerFrames) do frame:Hide() end
@@ -710,7 +710,7 @@ function HM:ShowPreview()
     wipe(self.currentHealers)
     local previewCount = (self.previewContext == "RAID") and (self.db.MaxHealers or 6) or 1
     -- Sample healer specs (drive only the icon/class color in the preview).
-    -- Names are generic "Healer N" per AE; only the spec/class is read here.
+    -- Names are generic "Healer N"; only the spec/class is read here.
     local CANNED = {
         { specID = 257,  class = "PRIEST" },   -- Holy Priest
         { specID = 105,  class = "DRUID" },    -- Restoration
@@ -721,8 +721,8 @@ function HM:ShowPreview()
     }
     for i = 1, previewCount do
         local c = CANNED[((i - 1) % #CANNED) + 1]
-        -- Top row uses the real player name (mirrors AE HealerMana:466) so the
-        -- preview feels personal; the rest are generic "Healer N" sample rows.
+        -- Top row uses the real player name so the preview feels personal; the
+        -- rest are generic "Healer N" sample rows.
         -- GetNicknameOrName honors a nickname (own name is never secret).
         local name = (i == 1) and KE:GetNicknameOrName("player") or ("Healer " .. i)
         self.currentHealers[i] = {

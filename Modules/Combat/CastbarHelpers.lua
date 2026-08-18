@@ -215,22 +215,21 @@ end
 -- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
 -- pet, NPC), not just players. GetPlayerInfoByGUID silently returned nil for
 -- non-player interrupters — Demo warlock Felhunter Spell Lock and any pet/NPC
--- kick degraded to bare "Interrupted" with no "by X". NUI v3.10 fix.
+-- kick degraded to bare "Interrupted" with no "by X".
 --
 -- IMPORTANT 12.0 limitation: UNIT_SPELLCAST_INTERRUPTED's interruptedBy GUID
 -- is itself SecretWhenUnitSpellCastRestricted in instanced PvE/PvP (M+, raid,
 -- rated PvP, training dummy zones with restriction). When the GUID is secret,
 -- both APIs return secret strings; we bail at the IsSafeValue check below and
--- the caller falls back to plain "Interrupted". This is parity with NUI v3.10
--- behavior in restricted contexts — Blizzard secured the data, no API can
--- recover the name. See CombatTexts.lua for the same observation, where
+-- the caller falls back to plain "Interrupted". In restricted contexts
+-- Blizzard secured the data and no API can recover the name. See
+-- CombatTexts.lua for the same observation, where
 -- self-attribution uses flag correlation instead. The swap still helps in
 -- non-restricted contexts (open world) where interpolated GUIDs are plain.
 -- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
 -- pet, NPC), not just players. GetPlayerInfoByGUID silently returned nil for
 -- non-player interrupters — Demo warlock Felhunter Spell Lock and Felguard
--- Axe Toss kicks degraded to bare "Interrupted" with no "by X". NUI v3.10
--- fix verbatim.
+-- Axe Toss kicks degraded to bare "Interrupted" with no "by X".
 --
 -- 12.0 secret-value note: in restricted contexts (M+ / raids / outdoor cast
 -- restrictions), the interrupter GUID itself is SecretWhenUnitSpellCastRestricted,
@@ -656,7 +655,7 @@ function H.SetupKickCooldownBar(self)
     local _, height = self.castBar:GetSize()
     local isChannel = self.channeling or false
 
-    -- ExwindTools-style: kickCooldownBar is a full-width overlay on castBar
+    -- kickCooldownBar is a full-width overlay on castBar
     -- (not chain-anchored to positioner). Value is set ONCE here to the
     -- current kick CD remaining; the tick anchored to the bar's fill edge
     -- then stays pinned for the life of the cast. SetValue accepts the
@@ -809,8 +808,7 @@ function H.StartCast(self)
     else
         self.isImportant = nil
     end
-    -- Default nil → false at the read site (matches EllesmereUI
-    -- EllesmereUINameplates.lua UpdateCast). UnitCastingInfo /
+    -- Default nil → false at the read site. UnitCastingInfo /
     -- UnitChannelInfo can omit the notInterruptible field for some cast
     -- types, and a nil value crashes SetAlphaFromBoolean (line 665) and
     -- the downstream EvaluateColorValueFromBoolean / SetVertexColorFromBoolean
@@ -1002,7 +1000,7 @@ function H.OnUnitChanged(self)
 end
 
 ---------------------------------------------------------------------------------
--- Raid-target marker (NUI v3.10 port). Module opts in by populating
+-- Raid-target marker. Module opts in by populating
 -- db.TargetMarker; FocusCastbar does. The owning module wires
 -- RAID_TARGET_UPDATE -> H.UpdateTargetMarker via its own event
 -- registration; H.ToggleTargetMarkerIntegration is a convenience for live

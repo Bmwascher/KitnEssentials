@@ -567,7 +567,7 @@ function DTrash:BuildNameplatePreview(host)
         -- `plate` IS the health bar (the marker anchors to it, mirroring the live
         -- resolvePlateAnchor result). A name + HP text inside the bar and a cast
         -- bar below turn the bare bar into a representative modern nameplate
-        -- (Plater/EUI/Platynator style) so the icon placement preview reads
+        -- (Plater/Platynator style) so the icon placement preview reads
         -- against something realistic.
         plate = CreateFrame("Frame", nil, stage)
         plate.border = plate:CreateTexture(nil, "BACKGROUND")

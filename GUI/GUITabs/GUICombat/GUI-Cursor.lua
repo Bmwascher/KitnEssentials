@@ -605,7 +605,7 @@ GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
     yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Cursor Trail (EUI parity — single toggle + Density)
+    -- Card 5: Cursor Trail (single toggle + Density)
     -- DotDuration / DotBaseSize / ColorInherit / Color stay DB-only.
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Cursor Trail", yOffset)
