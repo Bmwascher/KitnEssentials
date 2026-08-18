@@ -60,3 +60,30 @@ describe("BurningRush seed state", function()
         assert.same({}, rec.setActive)
     end)
 end)
+
+describe("burning rush per-spell secrecy", function()
+    local function secrets(spellSecret, broad)
+        return { ShouldSpellAuraBeSecret = function() return spellSecret end,
+                 ShouldAurasBeSecret = function() return broad end }
+    end
+
+    it("refuses when the exact predicate says the buff is secret, though the broad state says readable", function()
+        local BURN, rec = L.loadBurningRush({
+            overlay = nil, aura = nil, active = true,
+            aurasHidden = false, C_Secrets = secrets(true, false),
+        })
+        BURN:RefreshActiveState()
+        assert.same({}, rec.setActive)
+        assert.is_true(BURN.active)
+    end)
+
+    it("decides when the exact predicate says the buff is readable, though the broad state says hidden", function()
+        local BURN, rec = L.loadBurningRush({
+            overlay = nil, aura = nil, active = true,
+            aurasHidden = true, C_Secrets = secrets(false, true),
+        })
+        BURN:RefreshActiveState()
+        assert.same({ false }, rec.setActive)
+        assert.is_false(BURN.active)
+    end)
+end)

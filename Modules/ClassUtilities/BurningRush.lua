@@ -187,7 +187,7 @@ function BURN:RefreshActiveState()
         hasBuff = overlayed(BURNING_RUSH_SPELL) == true
     end
     if hasBuff == nil then
-        if KE:AreAuraIdentitiesHidden() then return end
+        if KE:IsAuraHiddenForSpell(BURNING_RUSH_SPELL) then return end
         hasBuff = C_UnitAuras.GetPlayerAuraBySpellID(BURNING_RUSH_SPELL) ~= nil
     end
     if hasBuff == self.active then return end
