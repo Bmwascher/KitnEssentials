@@ -449,9 +449,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
 
         local entry = db.Blocklist[selectedSpellId]
         -- An always-on entry is filtered unconditionally, so it must always
-        -- DISPLAY as on -- a live toggle showing "off" while the engine
-        -- keeps filtering it would be exactly the lie this row exists to
-        -- avoid.
+        -- DISPLAY as on.
         local isEnabled = IsAlwaysOnBlocklistEntry(selectedSpellId)
             or (type(entry) == "table" and entry.enabled ~= false)
             or entry == true or type(entry) == "string"

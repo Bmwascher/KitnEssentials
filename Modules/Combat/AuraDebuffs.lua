@@ -69,8 +69,6 @@ local DISPEL_DEFAULTS = {
 -- Blizzard's `Enum.DispelType` isn't reliably populated for addons.
 --
 -- _dispelColorCurve — the color curve mapping dispel integer → user color.
---                     Rebuilt on each ApplySettings so GUI edits to
---                     DispelColors take effect on the next reconfiguration.
 ---------------------------------------------------------------------------------
 
 local DISPEL_TYPE_INDEX = {
@@ -142,10 +140,9 @@ local function ResolveDispelPreviewColor(settings, dispelType, palette)
     return KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
 end
 
--- Preview counterpart to GetDispelColorCurve, exposed for the same reason:
--- another display borrows this palette for its ring, so its preview has to
--- resolve the same colours the live ring will. The caller's own settings still
--- decide the colour mode and the flat fallback; only the palette is borrowed.
+-- Preview counterpart to GetDispelColorCurve, exposed for the same reason.
+-- The caller's own settings still decide the colour mode and the flat
+-- fallback; only the palette is borrowed.
 function AD:GetDispelPreviewColor(settings, dispelType)
     return ResolveDispelPreviewColor(settings, dispelType, self.db and self.db.DispelColors)
 end
@@ -200,11 +197,10 @@ local DECLARATION = {
             end,
             capabilities = { hasBorder = true, hasDispelBadge = true, hasDispelRing = true, hasGlow = false },
 
-            -- The dispel texture registration needs this, and only this
-            -- display has the colours. The rebuild mutates the existing
-            -- curve object in place rather than replacing it, so a palette
-            -- edit is already visible through it even when a settings
-            -- reapplication defers before reaching the re-registration step.
+            -- The rebuild mutates the existing curve object in place rather
+            -- than replacing it, so a palette edit is already visible
+            -- through it even when a settings reapplication defers before
+            -- reaching the re-registration step.
             getDispelColorCurve = function() return AD:GetDispelColorCurve() end,
 
             -- group.getDispelPreviewColor(settings, dispelType) -> r, g, b, a

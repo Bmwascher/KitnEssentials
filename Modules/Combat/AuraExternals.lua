@@ -14,8 +14,6 @@ if not KitnEssentials then return end
 local AX = KitnEssentials:NewModule("AuraExternals", "AceEvent-3.0")
 
 -- Preview icon sets used to populate the GUI page preview.
---   PREVIEW_ICONS     — all-external set
---   PREVIEW_ICONS_BIG — big-defensives-only set
 local PREVIEW_ICONS     = { 135936, 572025, 135966, 627485, 4622478, 237542 }
 local PREVIEW_ICONS_BIG = { 136097, 615341, 136120 }
 
