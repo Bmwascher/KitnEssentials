@@ -656,8 +656,8 @@ KE.EncounterData[2068] = {
         -- (confirmed via in-game log — Bar message never arrived). Instead this entry
         -- spawns when 1266001's BigWigs_StopBar fires naturally (cast finished = buff
         -- applied). LittleWigs drives that StopBar via ENCOUNTER_TIMELINE_EVENT_*,
-        -- a reliable Blizzard API. The active phase measures ~19.5s, rounded up
-        -- to the 20s duration below.
+        -- a reliable Blizzard API. The active phase measures ~19.5s -- second-hand,
+        -- not re-timed in game here -- rounded up to the 20s duration below.
         [247816]  = { name = "Vulnerability Phase", phantomFollowupOf = 1266001, duration = 20, role = "other", display = "bar", displayText = "VULNERABILITY", iconOverride = 4914666, showAtSeconds = 0, sortAtEnd = true, sound = "Dmg Amp" },
     },
 }

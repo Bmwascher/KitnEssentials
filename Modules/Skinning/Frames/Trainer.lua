@@ -73,8 +73,8 @@ local function Skin()
         end
     end
     SkinEUIButton()
-    -- was a flat 0.5s retry for EllesmereUI's button (half a
-    -- second unskinned). Poll per frame until it exists.
+    -- EllesmereUI's button appears late; a fixed retry delay leaves it
+    -- unskinned until that delay expires. Poll per frame until it exists.
     S.WaitFor(function()
         return _G.EUI_TrainAllButton ~= nil or _G.AES_TrainAllButton ~= nil
     end, SkinEUIButton, 300)
