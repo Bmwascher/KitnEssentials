@@ -106,11 +106,7 @@ end
 -- nothing general is restricted. A zero here would turn either case into an
 -- expired buff and warn about it.
 local function GetEbonMightExpiration()
-    if C_Secrets and C_Secrets.ShouldSpellAuraBeSecret then
-        if C_Secrets.ShouldSpellAuraBeSecret(EBON_MIGHT_AURA) then return nil end
-    elseif KE:AreAuraIdentitiesHidden() then
-        return nil
-    end
+    if KE:IsAuraHiddenForSpell(EBON_MIGHT_AURA) then return nil end
     local auraData = C_UnitAuras.GetPlayerAuraBySpellID(EBON_MIGHT_AURA)
     return auraData and auraData.expirationTime or 0
 end
