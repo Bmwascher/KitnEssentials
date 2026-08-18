@@ -703,7 +703,6 @@ function DTrash:FireObservedCastStartCue(rt, kind, seq)
         castStartChangeTarget = rt.fpCastStartChangeTarget,
         targetClearOnCastStart = rt.fpTargetClearOnCastStart,
         targetIsTank = rt.fpTargetIsTank,
-        castStartAuraDelta = rt.fpCastStartAuraDelta,
     }
     local candidates
     for spellID, spellData in pairs(mob.spells) do

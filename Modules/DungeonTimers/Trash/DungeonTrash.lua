@@ -1674,7 +1674,7 @@ function DTrash:ApplyPendingStartAdvance(rt)
     -- Consume ON MATCH, not unconditionally: the pending start
     -- is retained while its fingerprint needs are unresolved and re-applied
     -- per resolution pass. Under a stale locked identity whose spells all
-    -- reject the sampled delta, the pending must survive to the Layer2 flip
+    -- reject the observed start, the pending must survive to the Layer2 flip
     -- that names the true consumer — FinishCast re-applies it right after
     -- the flip. Retention is bounded: the next BeginCast re-arms
     -- (overwrites) the pending and a paired transition clears it, so a
