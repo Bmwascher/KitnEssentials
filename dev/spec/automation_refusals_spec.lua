@@ -141,9 +141,17 @@ local function newFixture()
     _G.COLLECTION_UNOPENED_PLURAL = "PLURAL"
     _G.COLLECTION_UNOPENED_SINGULAR = "SINGULAR"
 
-    _G.C_UnitAuras = nil
+    -- Fishing outfit cancel path: both methods the converted guard's block
+    -- calls, so an "exact says readable" case reaches an observable cancel
+    -- instead of the same silent nothing a refusal produces.
+    local cancels = {}
+    _G.C_UnitAuras = {
+        GetPlayerAuraBySpellID = function() return { auraInstanceID = 42 } end,
+        CancelAuraByInstanceID = function(unit, id) cancels[#cancels + 1] = { unit = unit, id = id } end,
+    }
     _G.CancelUnitBuff = function() end
     _G.C_CVar = { GetCVar = function() return "0" end, SetCVar = function() end }
+    _G.C_Secrets = nil
 
     -- File-scope assignment (StaticPopupDialogs["KE_BONUS_ROLL_CONFIRM"] = ...)
     -- needs the table to exist before the chunk runs, not just inside a function.
@@ -156,6 +164,13 @@ local function newFixture()
         -- Core/Secret.lua's real one asks the restriction system; unrestricted
         -- is what these refusal paths need to reach their action.
         AreAuraIdentitiesHidden = function() return false end,
+        IsAuraHiddenForSpell = function(self, spellIdentifier)
+            if spellIdentifier and _G.C_Secrets and _G.C_Secrets.ShouldSpellAuraBeSecret then
+                local ok, secret = pcall(_G.C_Secrets.ShouldSpellAuraBeSecret, spellIdentifier)
+                if ok then return secret == true end
+            end
+            return self:AreAuraIdentitiesHidden()
+        end,
     }
     helpers.loadModule("Modules/QoL/Automation.lua", KE)
     local AU = modules["Automation"]
@@ -173,6 +188,8 @@ local function newFixture()
         ledger = ledger, timers = timers,
         hookedGlobals = hookedGlobals, hookedMethods = hookedMethods,
         named = named, cvarSets = cvarSets,
+        cancels = cancels,
+        setSecrets = function(t) _G.C_Secrets = t end,
         setCombat = function(v) combat = v end,
         createCount = function() return createCount end,
         originalErrHandler = originalErrHandler,
@@ -976,5 +993,44 @@ describe("Automation Hide Helptips sweep lifecycle", function()
 
         fx.AU:ApplySettings() -- still in the set, so the next pass finishes it
         assert.is_true(stubborn.mouse)
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Behaviour 6: per-spell secrecy on the fishing outfit cancel (Task 6)
+---------------------------------------------------------------------------------
+describe("Automation fishing outfit per-spell secrecy", function()
+    -- Same route Behaviour 4's "the fishing channel closure" path uses: obtain
+    -- the transform frame via the shared upvalue walk, fire it, then hand back
+    -- the queued 0.3s callback for the case to run.
+    local function captureFishCancel(fx)
+        local applyTransforms = findUpvalue(fx.AU.ApplySettings, "ApplyHideTransforms")
+        local fishFrame = findUpvalue(applyTransforms, "transformFishFrame")
+        local FISHING_CHANNEL_ID = findUpvalue(applyTransforms, "FISHING_CHANNEL_ID")
+        local before = #fx.timers
+        fishFrame:Fire("UNIT_SPELLCAST_CHANNEL_STOP", nil, nil, FISHING_CHANNEL_ID)
+        for i = before + 1, #fx.timers do
+            if fx.timers[i].delay == 0.3 then return fx.timers[i].fn end
+        end
+    end
+
+    it("exact says secret, broad says readable: the cancel recorder stays empty", function()
+        local fx = installedFixture()
+        local fn = captureFishCancel(fx)
+        assert.is_not_nil(fn)
+        fx.KE.AreAuraIdentitiesHidden = function() return false end
+        fx.setSecrets({ ShouldSpellAuraBeSecret = function() return true end })
+        fn()
+        assert.equals(0, #fx.cancels)
+    end)
+
+    it("exact says readable, broad says hidden: the cancel recorder has exactly one entry", function()
+        local fx = installedFixture()
+        local fn = captureFishCancel(fx)
+        assert.is_not_nil(fn)
+        fx.KE.AreAuraIdentitiesHidden = function() return true end
+        fx.setSecrets({ ShouldSpellAuraBeSecret = function() return false end })
+        fn()
+        assert.equals(1, #fx.cancels)
     end)
 end)

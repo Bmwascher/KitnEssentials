@@ -1838,7 +1838,7 @@ local function ApplyHideTransforms()
             if not (AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
             C_Timer.After(0.3, function()
                 if not (AU.db.Enabled and AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
-                if UnitAffectingCombat("player") or KE:AreAuraIdentitiesHidden() then return end
+                if UnitAffectingCombat("player") or KE:IsAuraHiddenForSpell(FISHING_OUTFIT_AURA) then return end
                 if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return end
                 local aura = C_UnitAuras.GetPlayerAuraBySpellID(FISHING_OUTFIT_AURA)
                 if aura and aura.auraInstanceID ~= nil
