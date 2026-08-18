@@ -4,9 +4,6 @@
 -- ║  Purpose: Missing enchant/gem warnings, decimal ilvl,    ║
 -- ║           character text styling, race text, item track  ║
 -- ║           indicators, gem socket helper.                 ║
--- ║  Credit: Warnings based on BetterCharacterPanel by       ║
--- ║          Grimonja. Feature set ported from NUI v3.13     ║
--- ║          CharacterPanel.                                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

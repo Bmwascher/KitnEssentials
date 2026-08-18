@@ -6,24 +6,19 @@
 --   split    two balanced halves
 --   odds     groups 1/3/5 against groups 2/4/6
 --
--- Native port of NorthernSkyRaidTools' SetupManager (Reloe & Rav). NSRT keeps
--- that engine in its private namespace -- no public API, no slash entry,
--- verified against NSRT 12.0.114 -- so driving their function is impossible;
--- porting is. Theirs is the proven engine, so the port is faithful: same
--- classification tables, same split balancing, same iterative server
--- reconciliation.
+-- The sorting engine is reimplemented here rather than driven: the established
+-- implementation of it lives in a private namespace with no public API and no
+-- slash entry, so calling it is impossible.
 --
--- Spec data comes from LibSpecialization (BigWigs's broadcast lib), the same
--- source NSRT uses, so the raid-wide broadcast network already exists wherever
--- BigWigs does. Unknown specs sort last (spec order 100), exactly as in NSRT.
+-- Spec data comes from LibSpecialization, BigWigs's broadcast lib, so the
+-- raid-wide broadcast network already exists wherever BigWigs does. Unknown
+-- specs sort last, at spec order 100.
 --
--- Deltas from NSRT's original, all mechanical:
---   * NSI.Groups state -> file-local; the NSAPI mirror is dropped.
---   * NSRT read an undeclared `indextosubgroup` global in one ArrangeGroups
---     branch (leaked from an older revision); indexlink carries the same data,
---     so that read is indexlink here.
+-- Two deliberate departures from the established behaviour, both mechanical:
+--   * A read of an undeclared `indextosubgroup` global in one ArrangeGroups
+--     branch is an `indexlink` read here; indexlink carries the same data.
 --   * SplitGroupInit's MythicFlex flag is passed all the way through to
---     GetSortedGroup; NSRT computes it but drops it at the SortGroup hop.
+--     GetSortedGroup rather than dropped at the SortGroup hop.
 --
 -- The only user surface is the three sort buttons inside the Raid Control
 -- panel (Modules/QoL/RaidControl.lua), which look for KE.GroupSort before

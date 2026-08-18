@@ -2,7 +2,6 @@
 -- ║  Curves.lua                                              ║
 -- ║  Purpose: Animation curve utilities for timing-based     ║
 -- ║           UI logic (duration decimal formatting).        ║
--- ║  Credit: p3lim.                                          ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
