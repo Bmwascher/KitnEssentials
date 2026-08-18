@@ -295,3 +295,62 @@ describe("Secret.lua UNIT_AURA payload gate", function()
         }))
     end)
 end)
+
+describe("IsAuraHiddenForSpell", function()
+    local function loadWith(secrets)
+        mock.install()
+        -- Decide the broad state through ShouldAurasBeSecret alone: with no
+        -- Enum the module's restriction list is nil, so the second half of the
+        -- fallback cannot answer and cannot leak in from an earlier block.
+        _G.Enum = nil
+        _G.C_RestrictedActions = nil
+        _G.C_Secrets = secrets
+        return helpers.loadModule("Core/Secret.lua", { Print = function() end })
+    end
+
+    local function answers(spellAnswer, broadAnswer)
+        return {
+            ShouldSpellAuraBeSecret = spellAnswer ~= nil
+                and function() return spellAnswer end or nil,
+            ShouldAurasBeSecret = function() return broadAnswer == true end,
+        }
+    end
+
+    it("returns hidden when the exact predicate says hidden and the broad state does not", function()
+        local KE = loadWith(answers(true, false))
+        assert.is_true(KE:IsAuraHiddenForSpell(196099))
+    end)
+
+    it("returns visible when the exact predicate says visible and the broad state says hidden", function()
+        local KE = loadWith(answers(false, true))
+        assert.is_false(KE:IsAuraHiddenForSpell(196099))
+    end)
+
+    it("falls back to the broad state when the exact predicate is absent", function()
+        local KE = loadWith(answers(nil, true))
+        assert.is_true(KE:IsAuraHiddenForSpell(196099))
+    end)
+
+    it("falls back to the broad state when the exact predicate throws", function()
+        local KE = loadWith({
+            ShouldSpellAuraBeSecret = function() error("tainted") end,
+            ShouldAurasBeSecret = function() return true end,
+        })
+        assert.is_true(KE:IsAuraHiddenForSpell(196099))
+    end)
+
+    it("falls back to the broad state when no identifier is given", function()
+        local KE = loadWith(answers(false, true))
+        assert.is_true(KE:IsAuraHiddenForSpell(nil))
+    end)
+
+    it("accepts a spell NAME as the identifier", function()
+        local seen
+        local KE = loadWith({
+            ShouldSpellAuraBeSecret = function(id) seen = id return true end,
+            ShouldAurasBeSecret = function() return false end,
+        })
+        assert.is_true(KE:IsAuraHiddenForSpell("Soulstone"))
+        assert.are.equal("Soulstone", seen)
+    end)
+end)

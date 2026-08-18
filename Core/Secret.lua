@@ -110,6 +110,28 @@ function KE:AreAuraIdentitiesHidden()
     return false
 end
 
+-- The per-spell question, for a guard that protects a query about ONE spell.
+--
+-- A spell can be flagged never- or always-secret, and that flag outranks the
+-- broad restriction state in BOTH directions -- readable inside a keystone,
+-- or secret with nothing restricting at all. So when this question can be
+-- asked it is the only one asked: falling through to the broad state after an
+-- exact "no" would put back the approximation this exists to remove.
+--
+-- The identifier is whatever the guarded query itself passes -- id, name,
+-- name with subtext, or link. Asking by id about a name query can answer
+-- about a different spell, because a name lookup resolves overrides.
+--
+-- The broad helper above remains correct for enumeration and index calls,
+-- where there is no single spell to ask about.
+function KE:IsAuraHiddenForSpell(spellIdentifier)
+    if spellIdentifier and C_Secrets and C_Secrets.ShouldSpellAuraBeSecret then
+        local ok, secret = pcall(C_Secrets.ShouldSpellAuraBeSecret, spellIdentifier)
+        if ok then return secret == true end
+    end
+    return self:AreAuraIdentitiesHidden()
+end
+
 -- The single gate every UNIT_AURA consumer calls before it touches the event.
 -- Order is the point: the unit token is refused before anything compares or
 -- slices it, because a comparison against a secret throws exactly as a truth
