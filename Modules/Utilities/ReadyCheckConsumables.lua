@@ -701,7 +701,7 @@ end
 --- guarded against SecretWhenUnitIdentityRestricted (encounter anonymization).
 function RCC:_GetSoulstonedTarget()
     local function check(unit)
-        if KE:AreAuraIdentitiesHidden() then return nil end
+        if KE:IsAuraHiddenForSpell("Soulstone") then return nil end
         if not UnitExists(unit) then return nil end
         if UnitIsDeadOrGhost(unit) then return nil end
         local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, "Soulstone", "HELPFUL")
