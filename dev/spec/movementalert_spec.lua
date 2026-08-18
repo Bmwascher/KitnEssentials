@@ -298,3 +298,70 @@ describe("NoMovementAlert trust acquisition", function()
         assert.is_true(NMA.auraScanTrusted)
     end)
 end)
+
+-- Group B reshape: the answer used to be computed ONCE for the whole sweep
+-- and applied to every entry; now each entry asks for itself. Production
+-- defines only one buff-active spell, so a synthetic second is added here to
+-- prove two entries in the same sweep can land on different answers -- the
+-- thing a hoisted answer could never produce.
+describe("NoMovementAlert buff readback asks per spell", function()
+    local SYNTHETIC_ID = 999001
+
+    -- The secret map is read at CALL time (RefreshBuffStates runs after this
+    -- returns), so it is populated once the real spell id is known from the
+    -- loaded module's own exported table rather than guessed up front.
+    local function loadFixture(aurasHidden)
+        local secretMap = {}
+        local NMA, KE = L.loadMovementAlert({
+            aurasHidden = aurasHidden,
+            C_Secrets = {
+                ShouldSpellAuraBeSecret = function(spellId) return secretMap[spellId] end,
+            },
+        })
+        NMA.auraActive = {}
+        NMA.auraScanTrusted = true
+        NMA.Update = function() end
+        return NMA, secretMap, next(KE.MOVEMENT_BUFF_ACTIVE)
+    end
+
+    it("answers two spells in the same sweep differently, which a hoisted answer could not", function()
+        local NMA, secretMap, realId = loadFixture(false)
+        secretMap[realId] = true
+        secretMap[SYNTHETIC_ID] = false
+        NMA.tracked = {
+            { spellId = realId, isBuffActive = true },
+            { spellId = SYNTHETIC_ID, isBuffActive = true },
+        }
+        -- Load-bearing: an empty glow table makes both entries fall through to
+        -- false no matter which spell is hidden, so seeding only the hidden
+        -- spell's glow is what lets the two answers differ.
+        NMA.glowing = { [realId] = true }
+
+        NMA:RefreshBuffStates()
+
+        assert.is_true(NMA.auraActive[realId])
+        assert.is_false(NMA.auraActive[SYNTHETIC_ID])
+    end)
+
+    it("falls through to the glow when the exact answer hides a spell the broad answer would show", function()
+        local NMA, secretMap, realId = loadFixture(false)
+        secretMap[realId] = true
+        NMA.tracked = { { spellId = realId, isBuffActive = true } }
+        NMA.glowing = { [realId] = true }
+
+        NMA:RefreshBuffStates()
+
+        assert.is_true(NMA.auraActive[realId])
+    end)
+
+    it("lets trust report the buff off when the exact answer clears a spell the broad answer would hide", function()
+        local NMA, secretMap, realId = loadFixture(true)
+        secretMap[realId] = false
+        NMA.tracked = { { spellId = realId, isBuffActive = true } }
+        NMA.glowing = { [realId] = true }
+
+        NMA:RefreshBuffStates()
+
+        assert.is_false(NMA.auraActive[realId])
+    end)
+end)

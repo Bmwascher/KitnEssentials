@@ -859,9 +859,13 @@ function NMA:OnGlowHide(_, spellId)
     if self:RefreshBuffStates() then self:Update() end
 end
 
-function NMA:ReadBuffActive(entry, hidden)
+function NMA:ReadBuffActive(entry)
     local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, entry.spellId)
     if ok and aura then return true end
+
+    -- Per entry, never hoisted: the answer is per spell now, so one value
+    -- computed for the whole sweep would be another spell's answer.
+    local hidden = KE:IsAuraHiddenForSpell(entry.spellId)
     -- Trust is earned in a context where the scan can answer, and it does not
     -- carry into one where it cannot: the same nil that means "not up" there
     -- means "cannot see it" here. While identities are hidden, fall through to
@@ -873,10 +877,9 @@ end
 
 function NMA:RefreshBuffStates()
     local changed = false
-    local hidden = KE:AreAuraIdentitiesHidden()
     for _, entry in ipairs(self.tracked) do
         if entry.isBuffActive then
-            local active = self:ReadBuffActive(entry, hidden)
+            local active = self:ReadBuffActive(entry)
             if self.auraActive[entry.spellId] ~= active then
                 self.auraActive[entry.spellId] = active
                 changed = true
@@ -893,9 +896,9 @@ function NMA:OnAura(_, unit)
     -- on it is authoritative and the cast fallback is inert. Trust is only
     -- meaningful when it was earned where the scan could answer, so it is never
     -- granted while identities are hidden.
-    if not self.auraScanTrusted and not KE:AreAuraIdentitiesHidden() then
+    if not self.auraScanTrusted then
         for _, entry in ipairs(self.tracked) do
-            if entry.isBuffActive then
+            if entry.isBuffActive and not KE:IsAuraHiddenForSpell(entry.spellId) then
                 local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, entry.spellId)
                 if ok and aura then self.auraScanTrusted = true break end
             end
