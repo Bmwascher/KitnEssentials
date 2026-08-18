@@ -1,8 +1,7 @@
 -- KitnEssentials — Tooltips
 --
--- the brief: EUI-grade performance, more customization, and enough
--- coverage to retire EllesmereUIBlizzardSkin ("BlizzUI Enhanced") from
--- the pack, since tooltip skinning is all it is used for.
+-- the brief: high performance, more customization, and enough coverage
+-- to replace a standalone tooltip-skinning addon.
 --
 -- Architecture:
 --   * Visual-only changes -- alpha/backdrop/font. No Hide/Show/SetParent on
@@ -81,7 +80,7 @@ end
 
 -- Style ---------------------------------------------------------------
 
--- EUI's ACTUAL overlay technique (BlizzardSkin.lua) --
+-- The overlay technique --
 -- plain textures on the tooltip, no BackdropTemplate. The old
 -- BackdropTemplate child ran SetupTextureCoordinates (width/edgeSize
 -- arithmetic) on every tooltip resize, and Midnight world-quest
@@ -522,9 +521,8 @@ function TT:OnTooltipSetUnit(tt, data)
     local unit = ResolveUnit(tt, data)
     if not unit then return end
 
-    -- Class/reaction color: recolor the existing name line (EUI's
-    -- technique -- no text rebuild, so secret name strings never touch
-    -- our code) and the health bar.
+    -- Class/reaction color: recolor the existing name line (no text rebuild,
+    -- so secret name strings never touch our code) and the health bar.
     if db.ClassColorNames then
         local r, g, b = UnitColor(unit)
         local line1 = _G.GameTooltipTextLeft1

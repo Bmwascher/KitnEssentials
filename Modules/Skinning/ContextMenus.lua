@@ -207,9 +207,7 @@ local function OnMenuOpen(manager, _ownerRegion, menuDescription)
     -- full diagnosis. C_Timer.After(0) puts the measurement one frame later,
     -- by which point the layout has run.
     --
-    -- This is EllesmereUI's shape and is why its menu skin does not have this
-    -- bug (EllesmereUIBlizzardSkin.lua defer both the root skin and
-    -- every acquired frame). It is NOT the reverted timing change:
+    -- It is NOT the reverted timing change:
     -- that reverted a POLLER that had replaced the hooks outright, on a theory
     -- about hooks tainting that the note itself calls wrong. The hooks stay
     -- exactly as they are here; only the visual work inside them moves.

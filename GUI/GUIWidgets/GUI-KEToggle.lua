@@ -262,8 +262,8 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
             baseA
         if tooltip then
             -- ANCHOR_CURSOR_RIGHT positions the tooltip top-right of the
-            -- cursor, matching AE's tooltip style — keeps the description
-            -- next to the pointer instead of obscuring the widget below.
+            -- cursor — keeps the description next to the pointer instead of
+            -- obscuring the widget below.
             -- The 10/10 offset pushes the tooltip slightly out from the
             -- cursor so the pointer doesn't sit on the tooltip edge.
             GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
