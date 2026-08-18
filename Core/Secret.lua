@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Secret.lua                                              ║
 -- ║  Purpose: Centralized secret value utilities and         ║
--- ║           restriction state management for 12.0.         ║
+-- ║           restriction state management for 12.1.         ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- Restriction States:
@@ -299,9 +299,6 @@ local function SetRestrictionState(newState)
     end
 end
 
--- Full (2): Combat, Encounter, ChallengeMode, PvPMatch
--- Partial (1): Map transitions
--- None (0): Everything else
 local function RecomputeState()
     for _, key in ipairs(FULL_KEYS) do
         if restrictionTypes[key] then

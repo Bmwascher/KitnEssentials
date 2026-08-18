@@ -153,7 +153,6 @@ function PT:CanScanAllEnabledTrackedSpells()
             end
         end
     end
-    -- Reaching here means every enabled spell is readable, or none is enabled.
     return true
 end
 

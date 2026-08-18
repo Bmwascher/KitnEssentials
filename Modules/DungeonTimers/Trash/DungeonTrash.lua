@@ -1522,8 +1522,7 @@ local function creditFinishedCast(self, rt, mob, observed, startAt, stopAt)
         self:SeedFirstCasts(rt)
         return
     end
-    -- A start-advance-owned CAST_START spell was already anchored at its
-    -- observed START, so the success path must not credit it a second time.
+    -- Same start-advance guard as creditFinishedChannel above: don't credit twice.
     if TI.IsStartAdvanceOwned(mob.spells and mob.spells[spellID]) then return end
     self:EmitCastResolution(rt, mob, spellID, startAt, stopAt, now, "cast", observed.duration)
 end

@@ -893,9 +893,8 @@ function NMA:OnAura(_, unit)
     if KE:IsSecretValue(unit) or unit ~= "player" then return end
 
     -- One confirmed aura read proves the scan works in this context; from then
-    -- on it is authoritative and the cast fallback is inert. Trust is only
-    -- meaningful when it was earned where the scan could answer, so it is never
-    -- granted while identities are hidden.
+    -- on it is authoritative and the cast fallback is inert. Granted only where
+    -- the scan can answer, matching ReadBuffActive's read-side check.
     if not self.auraScanTrusted then
         for _, entry in ipairs(self.tracked) do
             if entry.isBuffActive and not KE:IsAuraHiddenForSpell(entry.spellId) then
