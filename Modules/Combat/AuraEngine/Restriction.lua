@@ -15,7 +15,7 @@ Gate.__index = Gate
 
 -- The predicate is injected so the state machine can be tested without
 -- standing up C_Secrets and C_RestrictedActions. Production passes the same
--- helper every other module in this programme uses.
+-- helper every other module uses.
 function Restriction.New(opts)
     opts = opts or {}
     return setmetatable({

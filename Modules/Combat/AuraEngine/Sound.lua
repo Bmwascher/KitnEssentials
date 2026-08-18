@@ -78,8 +78,7 @@ function Registry:Sync(declaration, settings, moduleEnabled)
         return
     end
 
-    -- Past this point the desired state genuinely differs. Retire first:
-    -- removal is never restricted, and a stale sound is worse than silence.
+    -- Past this point the desired state genuinely differs.
     self:RetireAll()
     self.currentPath = nil
 

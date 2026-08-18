@@ -79,7 +79,8 @@ Rules.HARDCODED_BLOCKLIST = {
 -- reference's shape, where the nine merge INTO the user's set when the user
 -- has entries, and the shared constant set is returned BY REFERENCE when
 -- they have none. Nothing may then mutate the returned table. A defensive
--- copy here would violate that.
+-- copy here would violate the merge-or-alias rule above: it makes the
+-- no-entries case an unconditional fresh table.
 Rules.HARDCODED_BLOCKLIST_SET = {}
 for i = 1, #Rules.HARDCODED_BLOCKLIST do
     Rules.HARDCODED_BLOCKLIST_SET[Rules.HARDCODED_BLOCKLIST[i]] = true
@@ -127,8 +128,7 @@ function Rules.SplitExternalsLimit(total, showBig)
 end
 
 -- One timing rule for every display. Both halves come from the same source
--- so the phase and the duration cannot drift apart; an earlier draft paired
--- one module's duration with another's phase and called it a port.
+-- so the phase and the duration cannot drift apart.
 function Rules.PreviewTiming(index)
     local duration = 10 + ((index * 5) % 30)
     local offset   = duration * (0.2 + (index % 5) * 0.1)

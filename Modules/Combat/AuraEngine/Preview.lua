@@ -85,8 +85,7 @@ end
 
 -- One pool per GROUP KEY, never one for the whole display. A group's
 -- capabilities (hasGlow, hasBorder, hasDispelBadge, hasDispelRing) come from its declaration and
--- never change at runtime, so keying purely on groupKey is enough -- the same
--- key can never resolve to a different capability set later.
+-- never change at runtime, so keying purely on groupKey is enough.
 local function EnsurePool(state, groupKey, display, group, settings)
     state.pools = state.pools or {}
     local pool = state.pools[groupKey]
@@ -223,8 +222,7 @@ local function TeardownPreviewFrames(display)
     end
 end
 
--- Counts down every active entry and re-seeds any that reach zero, from
--- `now`, so the preview loops forever instead of freezing on an expired icon.
+-- So the preview loops forever instead of freezing on an expired icon.
 local function TickPreview(state)
     local now = GetTime()
     for i = 1, #state.entries do
@@ -383,15 +381,12 @@ function Preview.Exit(handle, display, _settings, moduleState)
     return plan
 end
 
--- What a settings change reaches while the preview is open: discard the
--- current preview frames and rebuild them from current settings, so size,
--- layout, quotas and glow all follow the user's edit. It goes through the
--- same frame-building path Enter uses -- never a second construction path,
--- so the preview cannot drift from itself. Enter re-applies PlanEnter, which
--- is the hidden/disabled container state the preview is already in, so the
--- container swap is a no-op in practice rather than a skipped step: the
--- container early-outs on an unchanged SetEnabled, so a settings tick never
--- re-registers a secure container's events.
+-- It goes through the same frame-building path Enter uses -- never a second
+-- construction path, so the preview cannot drift from itself. Enter
+-- re-applies PlanEnter, which is the hidden/disabled container state the
+-- preview is already in, so the container swap is a no-op in practice rather
+-- than a skipped step: the container early-outs on an unchanged SetEnabled,
+-- so a settings tick never re-registers a secure container's events.
 function Preview.Rebuild(display, settings)
     local handle = display.handle
     if not handle then return end
