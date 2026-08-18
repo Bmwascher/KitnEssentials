@@ -64,7 +64,7 @@ local UnitAffectingCombat = UnitAffectingCombat
 local UnitIsGroupAssistant = _G.UnitIsGroupAssistant
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 
--- --- Classification tables (NSRT verbatim) ----------------------------------
+-- --- Classification tables --------------------------------------------------
 
 local MELEE = { -- ignoring tanks for this
     [263]  = true, -- Shaman: Enhancement
@@ -98,7 +98,7 @@ local BRESS = {
 }
 
 local SPEC_ORDER = {
-    [0] = 100, -- offline / no data: sorted last (NSRT semantics)
+    [0] = 100, -- offline / no data: sorted last
     -- Tanks
     [268] = 1, [66] = 2, [104] = 3, [73] = 4, [581] = 5, [250] = 6,
     -- Melee
@@ -302,7 +302,7 @@ function GS:SortGroup(Flex, default, odds, MythicFlex)
     self:ArrangeGroups(true)
 end
 
--- --- Server reconciliation (NSRT ArrangeGroups, faithful) --------------------
+-- --- Server reconciliation ---------------------------------------------------
 
 function GS:ArrangeGroups(firstcall, finalcheck)
     if not firstcall and not Groups.Processing then return end

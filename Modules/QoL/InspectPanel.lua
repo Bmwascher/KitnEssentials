@@ -122,8 +122,7 @@ end
 -- and render the red cue. Within the grace period, treat as suspect:
 --
 --   1. Primary path (event-driven): re-issue C_Item.RequestLoadItemDataByID
---      so ITEM_DATA_LOAD_RESULT re-fires when gem bytes hydrate. Mirrors the
---      EUI CharacterSheet player-path pattern.
+--      so ITEM_DATA_LOAD_RESULT re-fires when gem bytes hydrate.
 --   2. Fallback path (timer): single dedup'd C_Timer per (guid, slotID) in
 --      case the event chain stalls. RETRY_DELAY = 0.5s.
 --
@@ -301,7 +300,7 @@ function InspectPanel:RenderInspectSlot(button)
         s.paintPasses = (s.paintPasses or 0) + 1
         if s.paintPasses < MAX_PAINT_PASSES then
             -- Re-request item data so ITEM_DATA_LOAD_RESULT re-fires with the
-            -- now-hydrated gem bytes (EUI player-path pattern).
+            -- now-hydrated gem bytes.
             local itemID = C_Item.GetItemInfoInstant(link)
             if itemID then C_Item.RequestLoadItemDataByID(itemID) end
             -- Timer fallback in case the event chain stalls.
@@ -454,9 +453,8 @@ function InspectPanel:GetInspectAverageItemLevel(unit)
 end
 
 -- Blizzard's inspect frame shows no average item level, so render our own.
--- (Mirrors BetterCharacterPanel: a custom FontString on the inspect items frame;
--- there is no native element to restyle the way the player panel reuses
--- CharacterStatsPane.ItemLevelFrame.)
+-- (A custom FontString on the inspect items frame; there is no native element
+-- to restyle the way the player panel reuses CharacterStatsPane.ItemLevelFrame.)
 function InspectPanel:UpdateInspectItemLevel()
     if not self.CP.db.Enabled then return end
     local unit = InspectFrame and InspectFrame.unit

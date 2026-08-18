@@ -2700,8 +2700,8 @@ end
 
 -- Multi-slot variant for the Replace All preview: Shift-down glows every slot
 -- the replace would touch. Native Blizzard spell-activation overlay glow —
--- the same code path DominationSocketHelper uses (pixel-identical to the
--- in-game "ability ready" glow). No accent overlay underneath.
+-- pixel-identical to the in-game "ability ready" glow. No accent overlay
+-- underneath.
 function CP:ShowSlotHighlights(slotIDs)
     self:HideSlotHighlight()
     if not ActionButtonSpellAlertManager then return end

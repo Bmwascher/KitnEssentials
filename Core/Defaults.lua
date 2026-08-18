@@ -82,7 +82,7 @@ local Defaults = {
         -- Map of "Fullname-NormalizedRealm" -> "Nickname".
         -- Global so nicknames persist across characters/profiles.
         -- Realm portion uses GetNormalizedRealmName() (no spaces/apostrophes)
-        -- for NSRT-compatible keys if we ever add import/export.
+        -- for portable keys if we ever add import/export.
         Nicknames = {},
     },
     profile = {
@@ -1247,7 +1247,7 @@ local Defaults = {
             BorderColor        = { 0.8, 0, 0, 1 },
             BorderColorMode    = "dispel",
             -- DispelColors are user overrides; the GUI's DISPEL_DEFAULTS
-            -- table provides the AE-matched fallback colors when nil.
+            -- table provides the fallback colors when nil.
             -- All 7 types Blizzard surfaces (incl. None/Enrage) are valid keys.
             DispelColors = {
                 None    = nil,
@@ -1638,8 +1638,7 @@ local Defaults = {
                 textAlign = "CENTER",
                 -- Spell-icon prefix on text-mode timers (KE-standard zoom +
                 -- border, anchored to the static label so timer width changes
-                -- don't shift icon/label). Matches ExBoss's "[icon] [name]
-                -- [timer]" layout.
+                -- don't shift icon/label). Layout is "[icon] [name] [timer]".
                 ShowSpellIcon = true,
                 -- Multiplier on the text-line height to size the icon; lets
                 -- users tune the icon relative to the font without changing
