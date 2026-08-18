@@ -161,7 +161,9 @@ end
 -- When other addons in the user's loadout (Augur, AdvancedInterfaceOptions,
 -- etc.) share the same handler namespace, the dispatch chain becomes tainted
 -- and SendChatMessage (HasRestrictions=true, RestrictedForMacroChatMessages=true)
--- is blocked.
+-- is blocked. The C_Timer.After(0, ...) defer below is part of the same fix --
+-- it keeps SendChatMessage off the tainted OnEvent dispatch by running it on
+-- a clean next frame instead of inline in the handler.
 function FM:_AnnounceFocusMarkerOnReadyCheck()
     local db = self.db
     if not db.AnnounceReadyCheck then return end
