@@ -85,6 +85,12 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
         callback = function(val)
             if SetCVar then
                 SetCVar("spellActivationOverlayOpacity", tostring(val / 100))
+                -- Blizzard's own settings callback drives
+                -- displaySpellActivationOverlays off this slider, so moving it
+                -- silently overrides the per-spec choice. Re-assert ours after.
+                if SA and SA.ApplyForCurrentSpec then
+                    SA:ApplyForCurrentSpec()
+                end
             end
         end,
     })
@@ -141,8 +147,17 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
                         local specCheck = GUIFrame:CreateCheckbox(specRow, spec.label, {
                             value = current,
                             callback = function(checked)
-                                -- Store explicit false for opt-out; nil for default-on
-                                db.EnabledSpecs[sID] = checked and nil or false
+                                -- Explicit false opts out; nil means default-on.
+                                -- WRITTEN AS AN IF, not `checked and nil or false`:
+                                -- nil and false are both falsy, so that idiom
+                                -- cannot yield either of them. It stored false on
+                                -- every tick, which turned a spec off and left no
+                                -- way to turn it back on.
+                                if checked then
+                                    db.EnabledSpecs[sID] = nil
+                                else
+                                    db.EnabledSpecs[sID] = false
+                                end
                                 if SA and SA.ApplyForCurrentSpec then
                                     SA:ApplyForCurrentSpec()
                                 end
