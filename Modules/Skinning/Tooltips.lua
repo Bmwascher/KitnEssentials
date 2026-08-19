@@ -30,6 +30,7 @@ local UnitExists = UnitExists
 local UnitIsPlayer = UnitIsPlayer
 local UnitClass = UnitClass
 local UnitName = UnitName
+local UnitGUID = UnitGUID
 local UnitReaction = UnitReaction
 local UnitLevel = UnitLevel
 local UnitEffectiveLevel = UnitEffectiveLevel
@@ -814,7 +815,13 @@ function TT:OnTooltipSetUnit(tt, data)
             if name then
                 -- AddDoubleLine is a display sink, so secret colour
                 -- components pass through it untouched.
-                local c = UnitColor(unitTarget)
+                --
+                -- The target's own GUID is passed as well as its token, so a
+                -- player target still class-colours when the token is secret
+                -- but the GUID is not. UnitGUID is SecretWhenUnitIdentity-
+                -- Restricted, so under a restriction it degrades to white --
+                -- which is the honest answer, not a guess at the class.
+                local c = UnitColor(unitTarget, UnitGUID(unitTarget))
                 tt:AddDoubleLine(format("%s:", _G.TARGET or "Target"),
                     name, 1, 1, 1, (c or WHITE_COLOR):GetRGB())
             end
