@@ -103,8 +103,9 @@ local function BuildElement(config, opts)
             -- spaces agree only while that parent is UIParent. Refuse the
             -- write otherwise: the frame would land somewhere else entirely,
             -- silently.
-            if config.getParentFrame and config.getParentFrame() ~= _G.UIParent then
-                return
+            if config.getParentFrame then
+                local parent = config.getParentFrame()
+                if parent and parent ~= _G.UIParent then return end
             end
             config.setPosition(Bridge.FromEUIPosition(point, relPoint, x, y))
         end,
@@ -142,7 +143,7 @@ end
 local function ReapplyAnchorsToUs()
     local eui = EUI()
     local anchors = _G.EllesmereUIDB and _G.EllesmereUIDB.unlockAnchors
-    if not (eui and eui.ReapplyUnlockAnchor and anchors) then return end
+    if not (eui and eui.ReapplyUnlockAnchor and type(anchors) == "table") then return end
 
     for childKey, info in pairs(anchors) do
         if type(info) == "table" and info.target and published[info.target] then
@@ -182,9 +183,9 @@ local function PublishPending()
     local stillPending = {}
     for _, entry in ipairs(pending) do
         local euiKey = KEY_PREFIX .. entry.config.key
-        -- An already-published key is skipped rather than re-registered: a
-        -- re-register would churn EUI's element table and lose the anchors
-        -- pointing at it.
+        -- An already-published key is skipped: re-registering would rebuild
+        -- this element's closures for no gain. Anchors pointing at it live in a
+        -- separate store and are unaffected either way.
         if not published[euiKey] then
             if ResolveFrame(entry.config) then
                 local element = BuildElement(entry.config, entry.opts)
