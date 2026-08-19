@@ -94,6 +94,11 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
                 local card = { content = {} }
                 function card:AddRow() end
                 function card:AddLabel(text) labels[#labels + 1] = text end
+                -- The real AddNote (GUI-Core.lua) is AddLabel plus an
+                -- accent-coloured lead-in, so it records the same way.
+                function card:AddNote(text)
+                    return self:AddLabel(KE:ColorTextByTheme("-") .. " " .. text)
+                end
                 function card:AddHeaderToggle(anyOn, callback)
                     -- Snapshot `calls` HERE, not later. AddHeaderToggle is
                     -- invoked between the header anyOn loop and

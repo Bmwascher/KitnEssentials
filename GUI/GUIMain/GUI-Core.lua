@@ -443,6 +443,12 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         return label
     end
 
+    -- A label with the accent-coloured lead-in the GUI uses for explanatory
+    -- text. Resolved per call, not captured, so it follows a theme change.
+    function card:AddNote(text)
+        return self:AddLabel(KE:ColorTextByTheme("-") .. " " .. text)
+    end
+
     function card:AddSeparator()
         local sep = self.content:CreateTexture(nil, "ARTWORK")
         sep:SetHeight(T.borderSize)

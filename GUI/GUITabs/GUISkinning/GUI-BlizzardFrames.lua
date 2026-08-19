@@ -9,12 +9,6 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
--- Accent-coloured lead-in for this page's notes, matching the note idiom the
--- rest of the GUI uses. Resolved per call, not captured: the accent follows the
--- theme, and a file-scope string would freeze it at whatever was live at parse.
-local function DASH()
-    return KE:ColorTextByTheme("-") .. " "
-end
 
 local ipairs = ipairs
 
@@ -447,7 +441,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
     end)
 
     if AnySuppressed(FRAME_SKINS) then
-        card:AddLabel(DASH() .. "Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
+        card:AddNote("Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
     end
 
     -- No solo rows in this list today -- Context Menus was one until its label
@@ -466,7 +460,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
     local card = GUIFrame:CreateCard(scrollChild, "Addon Skins", yOffset)
 
     if #ADDON_SKINS == 0 then
-        card:AddLabel(DASH() .. "No addon skins are available yet.")
+        card:AddNote("No addon skins are available yet.")
         return card:GetNextOffset()
     end
 
@@ -491,7 +485,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
         if needsReload then KE:FlagReloadNeeded() end
     end)
 
-    card:AddLabel(DASH() .. "Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
+    card:AddNote("Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
     BuildSoloRows(card, ADDON_SKINS, db.Skins)
     BuildCheckGrid(card, ADDON_SKINS, db.Skins, ADDON_PER_ROW)
     return card:GetNextOffset()
@@ -514,7 +508,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     local S = KE.Skins
 
     local card = GUIFrame:CreateCard(scrollChild, "Skin Font", yOffset)
-    card:AddLabel(DASH() .. "Controls text inside windows KitnEssentials skins. Elements with a deliberately larger size, such as window titles and big counters, keep the gap between them and move together.")
+    card:AddNote("Controls text inside windows KitnEssentials skins. Elements with a deliberately larger size, such as window titles and big counters, keep the gap between them and move together.")
 
     -- An empty key is the addon's own font. A map of options is sorted by key,
     -- and an empty string sorts before every font name, so this entry lands
@@ -584,7 +578,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffs
     db.BorderColor = db.BorderColor or { 0, 0, 0, 1 }
 
     local card = GUIFrame:CreateCard(scrollChild, "Window Colors", yOffset)
-    card:AddLabel(DASH() .. "Both pickers repaint every skinned window that is already open. Frames that carry a colour of their own, such as controls and panels, keep it.")
+    card:AddNote("Both pickers repaint every skinned window that is already open. Frames that carry a colour of their own, such as controls and panels, keep it.")
 
     local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     row:AddWidget(GUIFrame:CreateColorPicker(row, "Background Color", {
@@ -759,9 +753,9 @@ end, {
         -- Picker stands down under ElvUI too and says so on its own card, so a
         -- blanket "ElvUI does not touch these" here would be false.
         if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
-            card:AddLabel(DASH() .. "|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
+            card:AddNote("|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
         elseif db.Enabled ~= true then
-            card:AddLabel(DASH() .. "Turn this on to configure frame and addon skins. The tabs below belong to modules that work with it off.")
+            card:AddNote("Turn this on to configure frame and addon skins. The tabs below belong to modules that work with it off.")
         end
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
         -- Never collapse: the tab list above already drops the engine's own

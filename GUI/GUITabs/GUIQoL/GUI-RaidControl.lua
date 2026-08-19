@@ -24,10 +24,10 @@ GUIFrame:RegisterContent("RaidControl", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled ~= true then return card:GetNextOffset() end
 
-    card:AddLabel("A Raid Control button sits at the top of the screen whenever you are in a group. Click it for a panel with ready check, a 10 or 20 second countdown, the dungeon difficulty, an everyone-assist switch, world markers and a role count.")
-    card:AddLabel("Marker buttons place world markers; the skull-and-crossbones button clears them all. Hold shift and click either countdown to cancel one that is already running.")
-    card:AddLabel("Shared Notes and Personal Notes appear when Northern Sky Raid Tools is installed.")
-    card:AddLabel("This replaces the Blizzard Raid Manager tab. Reload the UI after turning it off to get that tab back.")
+    card:AddNote("A Raid Control button sits at the top of the screen whenever you are in a group. Click it for a panel with ready check, a 10 or 20 second countdown, the dungeon difficulty, an everyone-assist switch, world markers and a role count.")
+    card:AddNote("Marker buttons place world markers; the skull-and-crossbones button clears them all. Hold shift and click either countdown to cancel one that is already running.")
+    card:AddNote("Shared Notes and Personal Notes appear when Northern Sky Raid Tools is installed.")
+    card:AddNote("This replaces the Blizzard Raid Manager tab. Reload the UI after turning it off to get that tab back.")
 
     return card:GetNextOffset()
 end)
