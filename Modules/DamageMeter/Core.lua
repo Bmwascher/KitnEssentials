@@ -356,25 +356,48 @@ end
 
 function DM:RegWithEditMode()
     if not KE.EditMode then return end
+
+    self:EnsureDock()
+
+    if not self.editModeConfig then
+        self.editModeConfig = {
+            key = "DamageMeter",
+            module = self,
+            displayName = "Damage Meter",
+            frame = self.dock,
+            getPosition = function()
+                return self.db and self.db.Position
+            end,
+            setPosition = function(pos)
+                if not self.db then return end
+                self.db.Position = pos
+                KE:ApplyFramePosition(self.dock, self.db.Position, self.db)
+                self:RefreshDock()
+            end,
+            guiPath = "DamageMeter",
+        }
+    end
+
+    -- Published regardless of the lock, and never withdrawn: EUI elements
+    -- anchored to the dock must keep following it after the meter is locked.
+    -- isHidden therefore does NOT report the lock. It reports the two states
+    -- that should cost the element its mover: no dock, or the module disabled.
+    -- OnDisable hides the dock without destroying it, so existence alone is not
+    -- enough.
+    if KE.EUIUnlock then
+        KE.EUIUnlock:Register(self.editModeConfig, {
+            label = "Damage Meter",
+            order = 610,
+            isHidden = function()
+                return not (self.db and self.db.Enabled and self.dock)
+            end,
+        })
+    end
+
     if self.db and self.db.Locked then return end
     if self.editModeRegistered then return end
-    self:EnsureDock()
-    KE.EditMode:RegisterElement({
-        key = "DamageMeter",
-        module = self,
-        displayName = "Damage Meter",
-        frame = self.dock,
-        getPosition = function()
-            return self.db and self.db.Position
-        end,
-        setPosition = function(pos)
-            if not self.db then return end
-            self.db.Position = pos
-            KE:ApplyFramePosition(self.dock, self.db.Position, self.db)
-            self:RefreshDock()
-        end,
-        guiPath = "DamageMeter",
-    })
+
+    KE.EditMode:RegisterElement(self.editModeConfig)
     self.editModeRegistered = true
 end
 
@@ -383,6 +406,7 @@ function DM:UnregisterEditMode()
         KE.EditMode:UnregisterElement("DamageMeter")
     end
     self.editModeRegistered = false
+    -- The EllesmereUI element deliberately stays registered; see RegWithEditMode.
 end
 
 -- GUI Lock toggle entry point: register or unregister the dock mover and refresh
