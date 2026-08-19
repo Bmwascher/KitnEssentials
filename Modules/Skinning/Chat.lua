@@ -2273,6 +2273,31 @@ function CHAT:PositionButtonFrame(chat)
     buttonFrame:ClearAllPoints()
     buttonFrame:SetPoint("TOP", chat, "BOTTOM", 0, -90000)
     buttonFrame:SetClipsChildren(true)
+
+    self:RescueChatAlertFrame(chat)
+end
+
+-- Every Battle.net toast is a subsystem of ChatAlertFrame, which Blizzard
+-- anchors to DEFAULT_CHAT_FRAME.buttonFrame -- the frame parked 90,000px
+-- below the screen above. The toasts were never hidden, just posted where
+-- nobody can see them. Re-anchor to the panel (the box the user sees; the
+-- seated chat frame's top is ~30px inside it) so they follow it around.
+function CHAT:RescueChatAlertFrame(chat)
+    local caf = _G.ChatAlertFrame
+    -- `chat` tested first: with both it and DEFAULT_CHAT_FRAME nil the
+    -- inequality is false and this would SetPoint on nothing.
+    if not caf or not chat or chat ~= _G.DEFAULT_CHAT_FRAME then return end
+
+    if not caf.keOldPoints then
+        caf.keOldPoints = {}
+        for i = 1, caf:GetNumPoints() do
+            caf.keOldPoints[i] = { caf:GetPoint(i) }
+        end
+    end
+
+    local anchor = self.panel or chat
+    caf:ClearAllPoints()
+    caf:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT", 0, 1)
 end
 
 -- Reverses PositionButtonFrame's reparent-off-screen and clips-children
@@ -2291,6 +2316,17 @@ function CHAT:RestoreButtonFrame(chat)
 
     buttonFrame.keOldPoints = nil
     buttonFrame.keOldClipsChildren = nil
+
+    local caf = _G.ChatAlertFrame
+    if caf and caf.keOldPoints and chat == _G.DEFAULT_CHAT_FRAME then
+        caf:ClearAllPoints()
+        for _, pointData in ipairs(caf.keOldPoints) do
+            if pointData[2] then
+                caf:SetPoint(pointData[1], pointData[2], pointData[3], pointData[4], pointData[5])
+            end
+        end
+        caf.keOldPoints = nil
+    end
 end
 
 local hyperlinkHoveredFrame
@@ -2502,6 +2538,10 @@ function CHAT:PositionChats()
         local chat = _G[frameName]
         if chat and chat ~= docker and self:IsChatValid(chat) then self:PositionChat(chat) end
     end
+
+    -- Re-asserted here as well as from PositionButtonFrame: that one runs
+    -- during per-window styling, which can happen before the panel exists.
+    self:RescueChatAlertFrame(_G.DEFAULT_CHAT_FRAME)
 end
 
 function CHAT:PositionChat(chat)

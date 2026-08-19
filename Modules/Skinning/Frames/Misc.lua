@@ -93,6 +93,27 @@ local function SkinMisc()
     strip_bd(_G.GhostFrame)
     strip_bd(_G.ItemTextFrame, true)
     strip_bd(_G.AddonCompartmentFrame)
+
+    -- Social toasts. SocialToastTemplate is a plain BackdropTemplate, so the
+    -- backdrop is ours to replace outright. The glow is an OVERLAY texture
+    -- drawn outside the frame, so it survives that and has to go by name.
+    for _, name in ipairs({ "BNToastFrame", "TimeAlertFrame" }) do
+        local toast = _G[name]
+        if toast and not S.data(toast).skinned then
+            S.data(toast).skinned = true
+            if toast.SetBackdrop then toast:SetBackdrop(nil) end
+            S.Backdrop(toast)
+            local glow = _G[name .. "GlowFrame"]
+            if glow then glow:SetAlpha(0) end
+            for _, child in ipairs({ toast:GetChildren() }) do
+                if child.GetObjectType and child:GetObjectType() == "Button"
+                    and child.SetNormalTexture then
+                    S.CloseButton(child)
+                end
+            end
+        end
+    end
+
     SkinGameMenu()
 
     if _G.ReadyCheckFrame and not S.data(_G.ReadyCheckFrame).skinned then
