@@ -243,6 +243,34 @@ local function AchievementRows(frame)
     frame:ForEachFrame(SkinAchievementRow)
 end
 
+-- The search box and the filter dropdown share one row, and on a category page
+-- -- where the filter appears -- the pair reaches far enough left to sit under
+-- the achievement points. Lifting the search box above the filter clears it.
+--
+-- It cannot be done by size or by layoutIndex: HeaderDetails is only 38 tall
+-- (Categories' top at -19 down to -57) and one control is 22 of that, so the
+-- second row has to live in the band above, beside the close button.
+--
+-- Re-anchored from a post-hook on the layout rather than by setting
+-- ignoreInLayout on Blizzard's frame. LayoutMixin re-points every child on each
+-- pass, so ours has to be the last write -- and this way nothing of ours is
+-- written into a Blizzard table. (Note this is NOT the ignoreInLayout that is
+-- banned elsewhere: that one is read by the SECURE
+-- UIParent_ManageFramePositions pass. This layout is an ordinary frame's. The
+-- post-hook is still the better shape here.)
+--
+-- Only while the filter is SHOWN. Without it the row has all the space it
+-- needs, and Blizzard's own placement is already right -- their next Layout()
+-- puts the box back with no work from us.
+local function StackSearch(filters)
+    local search, filter = filters.SearchBox, filters.FilterDropdown
+    if not (search and filter) then return end
+    if not filter:IsShown() then return end
+
+    search:ClearAllPoints()
+    search:SetPoint("BOTTOMRIGHT", filter, "TOPRIGHT", 0, 2)
+end
+
 local function Skin()
     local frame = _G.AchievementFrame
     if not frame then return end
@@ -252,29 +280,81 @@ local function Skin()
     frame.Header.Title:Hide()
     frame.Header.Points:SetPoint("TOP", frame, 0, -3)
 
-    S.EditBox(frame.SearchBox)
-    frame.SearchBox:ClearAllPoints()
-    frame.SearchBox:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -25, -2)
-    frame.SearchBox:SetPoint("BOTTOMLEFT", frame, "TOPRIGHT", -130, -20)
+    -- 12.1 moved the search box and the filter dropdown into a new
+    -- AchievementFrame.HeaderDetails.Filters, and dropped the
+    -- AchievementFrameFilterDropdown global on the way. Reaching for the old
+    -- field is a nil index, and that aborted the WHOLE achievement skin.
+    --
+    -- Filters is a HorizontalLayoutFrame, so Blizzard positions its children
+    -- itself and a plain SetPoint is undone on the next layout pass -- hence
+    -- the pre-12.1 geometry below is gated, and the one place we do move a
+    -- child goes through StackSearch on a Layout post-hook. The search preview
+    -- moves with the box (it is now a child of it) and is left where Blizzard
+    -- puts it.
+    local filters = frame.HeaderDetails and frame.HeaderDetails.Filters
+    local search = (filters and filters.SearchBox) or frame.SearchBox
+    local filter = (filters and filters.FilterDropdown) or _G.AchievementFrameFilterDropdown
 
-    local filter = _G.AchievementFrameFilterDropdown
+    if search then
+        S.EditBox(search)
+        -- Blizzard anchors the magnifier at LEFT x=1, which sits it directly
+        -- against our 1px border. The template's own left text inset is 16, so
+        -- there is room to move it clear without the text meeting it.
+        if search.searchIcon then
+            search.searchIcon:ClearAllPoints()
+            search.searchIcon:SetPoint("LEFT", search, "LEFT", 4, 0)
+        end
+        if filters then
+            -- Matched to the filter dropdown beside it, which is 135x22
+            -- (WowStyle1FilterDropdownTemplate with resizeToText off) against
+            -- Blizzard's 107x30 search box. Size is the one thing the layout
+            -- frame does not own -- it positions by layoutIndex and READS each
+            -- child's size -- so this is safe where a SetPoint would be undone.
+            -- topPadding is the same hint the dropdown carries, and is what
+            -- keeps the box in line with the dropdown on the pages that have
+            -- no filter and so leave it in the row.
+            search:SetSize(135, 22)
+            search.topPadding = 6
+            StackSearch(filters)
+            if filters.Layout then
+                hooksecurefunc(filters, "Layout", StackSearch)
+                pcall(filters.Layout, filters)
+            end
+        else
+            search:ClearAllPoints()
+            search:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -25, -2)
+            search:SetPoint("BOTTOMLEFT", frame, "TOPRIGHT", -130, -20)
+        end
+    end
+
+    -- 12.1's Back button: steps back through the achievement selection history,
+    -- so it earns its place -- Blizzard only shows it when there is somewhere
+    -- to go back to and disables it otherwise. Skinned, not hidden.
+    if frame.HeaderDetails and frame.HeaderDetails.Back then
+        S.Button(frame.HeaderDetails.Back)
+    end
+
     if filter then
         pcall(S.DropDown, filter)
-        filter:ClearAllPoints()
-        filter:SetPoint("RIGHT", frame.SearchBox, "LEFT", -3, 0)
+        if not filters and search then
+            filter:ClearAllPoints()
+            filter:SetPoint("RIGHT", search, "LEFT", -3, 0)
+        end
     end
 
     for i = 1, 3 do
         S.Tab(_G["AchievementFrameTab" .. i])
     end
 
-    local preview = frame.SearchPreviewContainer
+    local preview = (search and search.SearchPreviewContainer) or frame.SearchPreviewContainer
     if preview then
         local showAll = preview.ShowAllSearchResults
         S.StripTextures(preview)
         local pbd = S.Backdrop(preview)
-        preview:ClearAllPoints()
-        preview:SetPoint("TOPLEFT", frame, "TOPRIGHT", 7, -2)
+        if not filters then
+            preview:ClearAllPoints()
+            preview:SetPoint("TOPLEFT", frame, "TOPRIGHT", 7, -2)
+        end
         if pbd and showAll then
             pbd:SetPoint("BOTTOMRIGHT", showAll, 3, -3)
         end
@@ -389,8 +469,9 @@ local function Skin()
 
     if _G.AchievementFrame.Header and _G.AchievementFrame.Header.Points then
         local pts = _G.AchievementFrame.Header.Points
-        S.SetFont(pts, 16, "OUTLINE")
-
+        -- Deliberately NOT fonted here. Forcing 16 was the last thing holding
+        -- the points total outside the size bands; the font object it inherits
+        -- is in the GlobalFonts sweep, so face and size both arrive from there.
         if _G.AchievementFrameAchievements then
             pts:ClearAllPoints()
 
