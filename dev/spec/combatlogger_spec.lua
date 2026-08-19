@@ -92,12 +92,44 @@ describe("CombatLogger arena classification", function()
         assert.is_true(rec.logging)
     end)
 
-    it("stops a running log once no arena kind wants it", function()
+    it("stops a running log of ours once no arena kind wants it", function()
         CL.db = db()
         CL.isLogging = true
+        CL.startedByUs = true
         rec.logging = true
         CL:CheckArenaLogging()
         assert.is_false(rec.logging)
+    end)
+
+    -- Ownership. A log the player opened by hand is not ours to close, and
+    -- without this the module silently fights whatever else they are running.
+    it("leaves a log it did not start running", function()
+        CL.db = db()
+        CL.isLogging = true
+        CL.startedByUs = false
+        rec.logging = true
+        CL:CheckArenaLogging()
+        assert.is_true(rec.logging)
+    end)
+
+    it("takes over a running log in content it would have logged itself", function()
+        CL.db = db({ PvPRatedArena = true, QuietMode = false })
+        rec.pvp.ratedArena = true
+        rec.logging = true
+        CL.isLogging = true
+        CL.startedByUs = false
+        CL:CheckArenaLogging()
+        assert.is_true(CL.startedByUs)
+        assert.is_true(#rec.prints > 0)
+    end)
+
+    it("does not take over a running log in content it would not log", function()
+        CL.db = db()
+        rec.logging = true
+        CL.isLogging = true
+        CL.startedByUs = false
+        CL:CheckArenaLogging()
+        assert.is_false(CL.startedByUs)
     end)
 
     it("refuses to start without advanced combat logging", function()

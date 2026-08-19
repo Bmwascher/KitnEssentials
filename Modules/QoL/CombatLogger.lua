@@ -13,6 +13,7 @@ local CL = KitnEssentials:NewModule("CombatLogger", "AceEvent-3.0", "AceTimer-3.
 
 local GetInstanceInfo = GetInstanceInfo
 local LoggingCombat = LoggingCombat
+local C_ChatInfo = C_ChatInfo
 local C_CVar = C_CVar
 local C_PvP = C_PvP
 local C_Timer = C_Timer
@@ -26,7 +27,8 @@ local ReloadUI = ReloadUI
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
-CL.isLogging = false
+CL.isLogging = false      -- what the client reports
+CL.startedByUs = false    -- ...and whether this module is the one that asked
 CL.delayStopTimer = nil
 CL.arenaCheckTimer = nil
 
@@ -72,24 +74,66 @@ function CL:CheckACL()
     return true
 end
 
-function CL:StartLogging()
+function CL:StartLogging(label)
     -- Cancel any pending delayed stop
     if self.delayStopTimer then
         self:CancelTimer(self.delayStopTimer)
         self.delayStopTimer = nil
     end
 
-    if not self.isLogging then
-        LoggingCombat(true)
-        self.isLogging = true
-        if not self.db.QuietMode then
-            KE:Print("Combat logging |cff00ff00started|r.")
-        end
+    if self.isLogging then return end
+
+    LoggingCombat(true)
+    -- Believe the client rather than the call, so ownership is never claimed
+    -- over a log that did not actually open.
+    self:SyncLoggingState()
+    if not self.isLogging then return end
+    self.startedByUs = true
+
+    if not self.db.QuietMode then
+        KE:Print("Combat logging |cff00ff00started|r" .. (label and (" for " .. label) or "") .. ".")
+    end
+end
+
+-- Read the client's own answer rather than trusting the flag, which a /reload
+-- resets.
+function CL:SyncLoggingState()
+    local enabled
+    if C_ChatInfo and C_ChatInfo.IsLoggingCombat then
+        enabled = C_ChatInfo.IsLoggingCombat()
+    else
+        enabled = LoggingCombat()
+    end
+    self.isLogging = enabled and true or false
+    -- Cannot own a log that is not running -- someone may have closed ours by
+    -- hand. Without this, startedByUs outlives the log it described.
+    if not self.isLogging then self.startedByUs = false end
+    return self.isLogging
+end
+
+-- A /reload inside a raid loses startedByUs, so a log we opened would never be
+-- closed again. If one is running in content we would have started it for, take
+-- it back. One running anywhere else was started by hand and is left alone.
+--
+-- Adopting is the one path that changes who owns the log without changing
+-- whether one is running, so it used to print nothing -- and this is the moment
+-- the addon becomes the thing that will close it.
+function CL:AdoptExistingLog(shouldLog, label)
+    if not (self.isLogging and shouldLog) then return end
+    if self.startedByUs then return end
+
+    self.startedByUs = true
+    if not self.db.QuietMode then
+        KE:Print("Took over the combat log already running"
+            .. (label and (" for " .. label) or "")
+            .. "; it will be closed on the way out.")
     end
 end
 
 function CL:StopLogging()
-    if not self.isLogging then return end
+    -- Never close a log we did not open. Someone who typed /combatlog by hand,
+    -- or another addon's log, is not ours to end.
+    if not self.isLogging or not self.startedByUs then return end
 
     if self.db.DelayStop then
         if not self.delayStopTimer then
@@ -112,6 +156,7 @@ function CL:StopLoggingNow()
     if self.isLogging then
         LoggingCombat(false)
         self.isLogging = false
+        self.startedByUs = false
         if not self.db.QuietMode then
             KE:Print("Combat logging |cffff4444stopped|r.")
         end
@@ -125,27 +170,33 @@ function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
         -- Guard: maxPlayers <= 5 to exclude raids queued as party
         if maxPlayers and maxPlayers > 5 then return false end
 
-        if difficultyID == 1 then return db.DungeonNormal end
-        if difficultyID == 2 then return db.DungeonHeroic end
-        if difficultyID == 23 then return db.DungeonMythic end
-        if difficultyID == 8 then return db.DungeonMythicPlus end
-        if difficultyID == 24 then return db.DungeonTimewalking end
+        if difficultyID == 1 then return db.DungeonNormal == true, "a Normal dungeon" end
+        if difficultyID == 2 then return db.DungeonHeroic == true, "a Heroic dungeon" end
+        if difficultyID == 23 then return db.DungeonMythic == true, "a Mythic dungeon" end
+        if difficultyID == 8 then return db.DungeonMythicPlus == true, "Mythic+" end
+        if difficultyID == 24 then return db.DungeonTimewalking == true, "a Timewalking dungeon" end
         return false
 
     elseif instanceType == "raid" then
-        if difficultyID == 7 or difficultyID == 17 then return db.RaidLFR end
-        if difficultyID == 3 or difficultyID == 4 or difficultyID == 9 or difficultyID == 14 then return db.RaidNormal end
-        if difficultyID == 5 or difficultyID == 6 or difficultyID == 15 then return db.RaidHeroic end
-        if difficultyID == 16 then return db.RaidMythic end
-        if difficultyID == 33 or difficultyID == 151 then return db.RaidTimewalking end
+        if difficultyID == 7 or difficultyID == 17 then return db.RaidLFR == true, "LFR" end
+        if difficultyID == 3 or difficultyID == 4 or difficultyID == 9 or difficultyID == 14 then
+            return db.RaidNormal == true, "a Normal raid"
+        end
+        if difficultyID == 5 or difficultyID == 6 or difficultyID == 15 then
+            return db.RaidHeroic == true, "a Heroic raid"
+        end
+        if difficultyID == 16 then return db.RaidMythic == true, "a Mythic raid" end
+        if difficultyID == 33 or difficultyID == 151 then
+            return db.RaidTimewalking == true, "a Timewalking raid"
+        end
         return false
 
     elseif instanceType == "pvp" then
-        if C_PvP.IsRatedBattleground() then return db.PvPRatedBG end
-        return db.PvPRegularBG
+        if C_PvP.IsRatedBattleground() then return db.PvPRatedBG == true, "a rated battleground" end
+        return db.PvPRegularBG == true, "a battleground"
 
     elseif instanceType == "scenario" then
-        if difficultyID == 167 then return db.ScenarioTorghast end
+        if difficultyID == 167 then return db.ScenarioTorghast == true, "Torghast" end
         return false
     end
 
@@ -154,21 +205,24 @@ end
 
 function CL:CheckArenaLogging()
     local db = self.db
-    local shouldLog = false
+    local shouldLog, label = false, nil
 
     if C_PvP.IsRatedArena() and not IsArenaSkirmish() and not C_PvP.IsSoloShuffle() and not IsWargame() then
-        shouldLog = db.PvPRatedArena
+        shouldLog, label = db.PvPRatedArena, "a rated arena"
     elseif IsArenaSkirmish() then
-        shouldLog = db.PvPArenaSkirmish
+        shouldLog, label = db.PvPArenaSkirmish, "an arena skirmish"
     elseif C_PvP.IsSoloShuffle() then
-        shouldLog = db.PvPSoloShuffle
+        shouldLog, label = db.PvPSoloShuffle, "Solo Shuffle"
     elseif IsWargame() then
-        shouldLog = db.PvPWarGame
+        shouldLog, label = db.PvPWarGame, "a war game"
     end
+
+    self:SyncLoggingState()
+    self:AdoptExistingLog(shouldLog, label)
 
     if shouldLog then
         if self:CheckACL() then
-            self:StartLogging()
+            self:StartLogging(label)
         end
     elseif self.isLogging then
         self:StopLogging()
@@ -183,11 +237,13 @@ function CL:CheckEnableLogging()
     -- Arena handled separately
     if instanceType == "arena" then return end
 
-    if self:ShouldLog(instanceType, difficultyID, maxPlayers) then
-        if not self.isLogging then
-            if self:CheckACL() then
-                self:StartLogging()
-            end
+    local shouldLog, label = self:ShouldLog(instanceType, difficultyID, maxPlayers)
+    self:SyncLoggingState()
+    self:AdoptExistingLog(shouldLog, label)
+
+    if shouldLog and not self.isLogging then
+        if self:CheckACL() then
+            self:StartLogging(label)
         end
     end
 end
@@ -226,8 +282,7 @@ function CL:OnEvent_ZoneChanged()
 end
 
 function CL:OnEvent_EnteringWorld()
-    -- Sync logging state
-    self.isLogging = LoggingCombat() or false
+    self:SyncLoggingState()
 
     local _, instanceType = GetInstanceInfo()
     if instanceType == "arena" then
@@ -259,8 +314,7 @@ end
 function CL:OnEnable()
     if not self.db.Enabled then return end
 
-    -- Sync initial logging state (LoggingCombat() with no args returns current state)
-    self.isLogging = LoggingCombat() or false
+    self:SyncLoggingState()
 
     self:RegisterEvent("UPDATE_INSTANCE_INFO", "OnEvent_InstanceInfo")
     self:RegisterEvent("PLAYER_DIFFICULTY_CHANGED", "OnEvent_InstanceInfo")
@@ -280,7 +334,9 @@ function CL:OnEnable()
 end
 
 function CL:OnDisable()
-    if self.isLogging then
+    -- Only if it was ours; StopLoggingNow is unconditional, so the ownership
+    -- test has to happen here.
+    if self.isLogging and self.startedByUs then
         self:StopLoggingNow()
     end
     if self.delayStopTimer then
