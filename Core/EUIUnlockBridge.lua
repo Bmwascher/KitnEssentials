@@ -34,6 +34,7 @@ function Bridge.FromEUIPosition(point, relPoint, x, y)
     }
 end
 
+local pairs = pairs
 local ipairs = ipairs
 local type = type
 local tinsert = table.insert
@@ -46,7 +47,8 @@ local DEFAULT_GROUP = "KitnEssentials"
 local DEFAULT_ORDER = 500
 
 local pending = {}   -- configs handed over before EUI or the frame was ready
-local published = {} -- euiKey -> true, so a re-register is a no-op
+local published = {}        -- euiKey -> true, so a re-register is a no-op
+local publishedConfigs = {} -- list of { config = ..., opts = ... }, never pruned
 
 local function EUI()
     local eui = _G.EllesmereUI
@@ -123,6 +125,55 @@ local function BuildElement(config, opts)
     })
 end
 
+local REAPPLY_INTERVAL = 0.1
+local REAPPLY_MAX_TRIES = 20 -- about two seconds, then give up rather than poll forever
+
+-- GetLeft answers nil until a frame has been through a layout pass, which is
+-- the same test EUI's own apply makes before it gives up. Re-applying earlier
+-- hits the identical bail this is working around.
+local function AllPublishedFramesLaidOut()
+    for _, entry in ipairs(publishedConfigs) do
+        local frame = ResolveFrame(entry.config)
+        if not frame or not frame.GetLeft or not frame:GetLeft() then return false end
+    end
+    return true
+end
+
+local function ReapplyAnchorsToUs()
+    local eui = EUI()
+    local anchors = _G.EllesmereUIDB and _G.EllesmereUIDB.unlockAnchors
+    if not (eui and eui.ReapplyUnlockAnchor and anchors) then return end
+
+    for childKey, info in pairs(anchors) do
+        if type(info) == "table" and info.target and published[info.target] then
+            pcall(eui.ReapplyUnlockAnchor, childKey)
+        end
+    end
+end
+
+-- Reset when the ticker stops, not left latched: frames appear in waves, so a
+-- later batch publishes after this pass has already finished and its children
+-- need a pass of their own.
+local reapplyScheduled = false
+local function ScheduleReapply()
+    if reapplyScheduled then return end
+    reapplyScheduled = true
+
+    local tries = 0
+    local ticker
+    ticker = C_Timer.NewTicker(REAPPLY_INTERVAL, function()
+        tries = tries + 1
+        if AllPublishedFramesLaidOut() then
+            ReapplyAnchorsToUs()
+            ticker:Cancel()
+            reapplyScheduled = false
+        elseif tries >= REAPPLY_MAX_TRIES then
+            ticker:Cancel()
+            reapplyScheduled = false
+        end
+    end)
+end
+
 local function PublishPending()
     local eui = EUI()
     if not eui then return end
@@ -140,6 +191,7 @@ local function PublishPending()
                 if element then
                     tinsert(batch, element)
                     published[euiKey] = true
+                    tinsert(publishedConfigs, entry)
                 end
             else
                 tinsert(stillPending, entry)
@@ -150,6 +202,7 @@ local function PublishPending()
     pending = stillPending
     if #batch > 0 then
         eui:RegisterUnlockElements(batch, "KitnEssentials")
+        ScheduleReapply()
     end
 end
 
