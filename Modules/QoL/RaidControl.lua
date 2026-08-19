@@ -66,6 +66,10 @@ local IsEveryoneAssistant = _G.IsEveryoneAssistant
 local IsInGroup = IsInGroup
 local IsInInstance = IsInInstance
 local IsInRaid = IsInRaid
+local UnitInRaid = UnitInRaid
+local GetInstanceInfo = GetInstanceInfo
+local C_UnitAuras = C_UnitAuras
+local min, abs = math.min, math.abs
 local PlaySound = PlaySound
 local SecureHandlerSetFrameRef = _G.SecureHandlerSetFrameRef
 local SetDungeonDifficultyID = _G.SetDungeonDifficultyID
@@ -87,9 +91,24 @@ local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local PRIEST_COLOR = RAID_CLASS_COLORS.PRIEST
 local NUM_RAID_GROUPS = _G.NUM_RAID_GROUPS or 8
 local NUM_RAID_ICONS = _G.NUM_RAID_ICONS or 8
+
+-- HOW MANY GROUPS ARE ACTUALLY RAIDING. Groups past this are the bench, and
+-- both the Vantus check and the raid buff strip must agree on where the line
+-- is -- two copies would drift the moment a difficulty changed.
+--   Mythic (16)       20 players -> groups 1-4
+--   Mythic flex (233) 25 players -> groups 1-5
+--   everything else   30 players -> groups 1-6
+local function MaxRaidGroup()
+    local _, instanceType, difficultyID = GetInstanceInfo()
+    difficultyID = (instanceType == "raid" and difficultyID)
+        or (_G.GetRaidDifficultyID and _G.GetRaidDifficultyID()) or 0
+    if difficultyID == 16 then return 4 end
+    if difficultyID == 233 then return 5 end
+    return 6
+end
 local PANEL_WIDTH = 250
--- Panel height WITH the two Group Sort rows and WITHOUT the Shared Notes row.
--- Step 8's arithmetic adjusts from this baseline in both directions.
+-- Panel height WITH the two Group Sort rows and WITHOUT the Shared Notes row
+-- or the Vantus row. Setup adjusts from this baseline in both directions.
 local PANEL_HEIGHT = 155
 local BUTTON_HEIGHT = 20
 local BUTTON_WIDTH = PANEL_WIDTH - 20
@@ -576,6 +595,179 @@ function RC:CreateRoleIcons(panel)
     return RoleIcons
 end
 
+-- --- Raid buff strip --------------------------------------------------------
+--
+-- One cell per raid-wide buff: bright if somebody in the raid brings it,
+-- dimmed if nobody does.
+--
+-- IT READS THE ROSTER'S CLASSES, NOT ANYONE'S AURAS. Every aura getter is
+-- RequiresUnitAuraAccess, so it hard-errors inside an encounter -- exactly
+-- when a raid leader looks at this. "Is a Mage present" is answerable from
+-- GetRaidRosterInfo alone and needs no probe.
+--
+-- Every one of these is class-wide in current retail, so no spec data is
+-- needed. If a buff ever narrows to one spec, this table needs a spec list.
+local RAID_BUFFS = {
+    { spellID = 6673,   classes = { WARRIOR = true } },     -- Battle Shout
+    { spellID = 21562,  classes = { PRIEST = true } },      -- Power Word: Fortitude
+    { spellID = 1459,   classes = { MAGE = true } },        -- Arcane Intellect
+    { spellID = 1126,   classes = { DRUID = true } },       -- Mark of the Wild
+    { spellID = 462854, classes = { SHAMAN = true } },      -- Skyfury
+    { spellID = 364342, classes = { EVOKER = true } },      -- Blessing of the Bronze
+    { spellID = 1490,   classes = { DEMONHUNTER = true } }, -- Chaos Brand
+    { spellID = 113746, classes = { MONK = true } },        -- Mystic Touch
+    { spellID = 381637, classes = { ROGUE = true } },       -- Atrophic Poison
+    { spellID = 465,    classes = { PALADIN = true } },     -- Devotion Aura
+    { spellID = 257284, classes = { HUNTER = true } },      -- Hunter's Mark
+    -- Bloodlust and battle res are deliberately absent: raid utility rather
+    -- than a raid-wide buff, and several classes bring each.
+}
+
+local BUFF_PAD = 2        -- strip edge to first/last icon
+local BUFF_GAP = 1        -- between icons; each cell carries its own 1px border
+local BUFF_ROW_HEIGHT = BUTTON_HEIGHT + 5
+
+-- A SECTION, like the marker and role strips, not a row inside the panel. As a
+-- row it reads as attached to the buttons above it however the gap is tuned,
+-- because a gap inside the panel still shows panel behind it.
+function RC:CreateBuffStrip(panel)
+    local S = KE.Skins
+    local strip = CreateFrame("Frame", "KE_RaidControlBuffs", panel)
+    strip:SetSize(PANEL_WIDTH, BUFF_ROW_HEIGHT) -- points come from PositionSections
+    S.Backdrop(strip)
+    strip.cells = {}
+
+    for i, data in ipairs(RAID_BUFFS) do
+        local cell = CreateFrame("Frame", nil, strip)
+        cell:SetPoint("TOP", strip, "TOP", 0, -BUFF_PAD) -- x and size from LayoutBuffStrip
+        cell:SetSize(BUFF_ROW_HEIGHT - BUFF_PAD * 2, BUFF_ROW_HEIGHT - BUFF_PAD * 2)
+        S.Backdrop(cell)
+
+        local icon = cell:CreateTexture(nil, "ARTWORK")
+        icon:SetPoint("TOPLEFT", cell, "TOPLEFT", 1, -1)
+        icon:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -1, 1)
+        -- Resolved at BUILD time and kept: a spell id a patch retires would
+        -- otherwise leave an empty square with no clue why, so an unresolvable
+        -- one falls back to the question-mark icon.
+        icon:SetTexture(_G.C_Spell and _G.C_Spell.GetSpellTexture
+            and _G.C_Spell.GetSpellTexture(data.spellID) or 134400)
+        S.Icon(icon)
+        cell.icon = icon
+        cell.data = data
+
+        cell:EnableMouse(true)
+        cell:SetScript("OnEnter", function(self)
+            local tt = _G.GameTooltip
+            if not tt or tt:IsForbidden() then return end
+            tt:SetOwner(self, "ANCHOR_RIGHT")
+            local info = _G.C_Spell and _G.C_Spell.GetSpellInfo
+                and _G.C_Spell.GetSpellInfo(self.data.spellID)
+            tt:AddLine(KE:IsSafeValue(info and info.name) and info.name or "")
+            if self.present then
+                tt:AddLine("In the raid.", 0.4, 1, 0.4)
+            else
+                tt:AddLine("Missing from the raid.", 1, 0.3, 0.3)
+            end
+            tt:Show()
+        end)
+        cell:SetScript("OnLeave", function()
+            if _G.GameTooltip and not _G.GameTooltip:IsForbidden() then _G.GameTooltip:Hide() end
+        end)
+
+        strip.cells[i] = cell
+    end
+
+    strip:RegisterEvent("GROUP_ROSTER_UPDATE")
+    strip:RegisterEvent("PLAYER_ENTERING_WORLD")
+    strip:RegisterEvent("PLAYER_DIFFICULTY_CHANGED")
+    strip:SetScript("OnEvent", function() RC:UpdateBuffStrip() end)
+    -- A hidden strip stops updating and catches up on show, so a raid that
+    -- changes while the panel is closed costs nothing.
+    strip:SetScript("OnShow", function()
+        RC:LayoutBuffStrip()
+        RC:UpdateBuffStrip()
+    end)
+
+    self.BuffStrip = strip
+    return strip
+end
+
+-- SQUARE CELLS, SPACED APART -- not cells that divide the width. Dividing the
+-- row between them makes each cell as wide as the row allows and as tall as
+-- the row is, which is an icon squashed by several pixels.
+--
+-- The row height is a CEILING, not the size: eleven icons at the row height
+-- would need more than the panel has, leaving nothing for the gaps. So the
+-- icon is the smaller of what the row allows and what the width allows once
+-- every gap has its pixel, and the leftover goes back into the gaps. Adding a
+-- twelfth buff shrinks the icons instead of colliding them.
+function RC:LayoutBuffStrip()
+    local strip = self.BuffStrip
+    if not strip then return end
+
+    local n = #strip.cells
+    if n == 0 then return end
+
+    local gaps = n - 1
+    local byHeight = BUFF_ROW_HEIGHT - BUFF_PAD * 2
+    local byWidth = floor((PANEL_WIDTH - BUFF_PAD * 2 - gaps * BUFF_GAP) / n)
+    local size = min(byHeight, byWidth)
+    if size < 1 then return end
+
+    local slack = PANEL_WIDTH - BUFF_PAD * 2 - size * n
+    local gap, spare = 0, 0
+    if gaps > 0 and slack > 0 then
+        gap = floor(slack / gaps)
+        spare = slack - gap * gaps
+    end
+
+    local x = BUFF_PAD
+    for i = 1, n do
+        local c = strip.cells[i]
+        c:SetSize(size, size)
+        c:ClearAllPoints()
+        -- Vertically centred, since the icon can be shorter than the row.
+        c:SetPoint("LEFT", strip, "LEFT", x, 0)
+        x = x + size + gap + (i <= spare and 1 or 0)
+    end
+end
+
+function RC:UpdateBuffStrip()
+    local strip = self.BuffStrip
+    if not strip then return end
+
+    -- IsVisible, not IsShown: a registered event fires whether or not the
+    -- frame is on screen, and the panel is closed nearly all the time -- so
+    -- the shown-flag test still walked the roster on every
+    -- GROUP_ROSTER_UPDATE for a strip nobody was looking at. Visibility itself
+    -- is ApplyGroupContext to set; two owners of a shown state disagree.
+    if not strip:IsVisible() then return end
+
+    -- Only the slots that exist: the roster is contiguous, so a five-man group
+    -- costs five reads rather than forty.
+    local maxGroup = MaxRaidGroup()
+    local present = {}
+    for i = 1, (GetNumGroupMembers() or 0) do
+        local name, _, subgroup, _, _, fileName = GetRaidRosterInfo(i)
+        -- fileName is the English class token, and unit identity can be secret
+        -- in restricted content -- a secret used as a table key is the banned
+        -- comparison, so it is tested before it is written.
+        if name and subgroup and subgroup <= maxGroup and KE:IsSafeValue(fileName) then
+            present[fileName] = true
+        end
+    end
+
+    for _, cell in ipairs(strip.cells) do
+        local have = false
+        for class in pairs(cell.data.classes) do
+            if present[class] then have = true break end
+        end
+        cell.present = have
+        cell.icon:SetDesaturated(not have)
+        cell.icon:SetAlpha(have and 1 or 0.35)
+    end
+end
+
 -- --- Section anchoring ------------------------------------------------------
 local function ReanchorSection(section, bottom, target)
     if section then
@@ -619,23 +811,82 @@ function RC:PositionSections()
         return
     end
     local bottom = ScreenPosition(self.ShowButton)
-    ReanchorSection(self.TargetIcons, bottom, nil) -- nil target = panel (parent)
+    -- Section order away from the panel: buff row, markers, roles. The buff
+    -- row is skipped when it is hidden (party), so the markers sit against the
+    -- panel exactly as they did before it existed.
+    local first = self.Panel
+    if self.BuffStrip and self.BuffStrip:IsShown() then
+        ReanchorSection(self.BuffStrip, bottom, nil) -- nil target = panel (parent)
+        first = self.BuffStrip
+    end
+    ReanchorSection(self.TargetIcons, bottom, first)
     ReanchorSection(self.RoleIcons, bottom, self.TargetIcons)
 
     -- Close is placed ENTIRELY here, both points, from a clean slate. The
     -- secure show snippet does ClearAllPoints and sets only a right-hand
     -- point, so leaving the left anchor to Setup means two writers each own
     -- half the button and the result depends on which ran last.
+    --
+    -- PINNED TO THE ROLE PLATE, not measured from the panel. A hardcoded
+    -- offset is the marker row plus its seams, which silently stops being the
+    -- distance to the plate the moment a section is inserted between the two:
+    -- the buff strip pushes the plate down and leaves Close sitting on the
+    -- markers. Taking both vertical edges from the plate means any number of
+    -- sections can come and go and the pair still lines up.
     local c = self.CloseButton
     if c and self.RoleIcons and self.Panel then
         c:ClearAllPoints()
-        if bottom then
-            c:SetPoint("BOTTOMRIGHT", self.Panel, "TOPRIGHT", 0, 30)
-        else
-            c:SetPoint("TOPRIGHT", self.Panel, "BOTTOMRIGHT", 0, -30)
+        c:SetPoint("TOPLEFT", self.RoleIcons, "TOPRIGHT", 1, 0) -- 1px seam
+        c:SetPoint("BOTTOMLEFT", self.RoleIcons, "BOTTOMRIGHT", 1, 0)
+        c:SetWidth(PANEL_WIDTH - self.RoleIcons:GetWidth() - 1)
+
+        -- HAND THE SAME DISTANCE TO THE SECURE SNIPPET, which places Close
+        -- when the panel is opened in combat and cannot measure anything
+        -- itself. Panel edge to the role plate: a seam, the buff strip and its
+        -- seam when shown, the marker row, and its seam.
+        --
+        -- Safe here because this function has already bailed if we are in
+        -- combat -- SetAttribute on a secure frame is protected.
+        local off = 1 + (self.TargetIcons and self.TargetIcons:GetHeight() or 0) + 1
+        if self.BuffStrip and self.BuffStrip:IsShown() then
+            off = off + self.BuffStrip:GetHeight() + 1
         end
-        c:SetPoint("LEFT", self.RoleIcons, "RIGHT", 1, 0) -- 1px seam
+        self.Panel:SetAttribute("keCloseOffset", floor(off + 0.5))
     end
+end
+
+-- Party vs raid: hide the rows that only mean something in a raid and take
+-- their height off the panel. Callers are combat-gated already -- the panel is
+-- a secure frame, so resizing it in combat is a protected operation.
+function RC:ApplyGroupContext()
+    if not (self.setup and self.Panel and self.RaidOnlyRows) then return end
+    if InCombatLockdown() then return end
+
+    local inRaid = UnitInRaid("player") and true or false
+    -- Nothing below changes unless party/raid changed, and GROUP_ROSTER_UPDATE
+    -- fires on every join, leave, role and rank change in a 30-man raid. One
+    -- boolean compare turns all of that into no work at all.
+    if self._inRaidApplied == inRaid then
+        self:UpdateBuffStrip()
+        return
+    end
+    self._inRaidApplied = inRaid
+
+    local dropped = 0
+    for _, row in ipairs(self.RaidOnlyRows) do
+        for _, button in ipairs(row) do button:SetShown(inRaid) end
+        if not inRaid then dropped = dropped + (row.h or 0) end
+    end
+
+    local height = self._panelHeightFull - dropped
+    if abs(self.Panel:GetHeight() - height) > 0.5 then
+        self.Panel:SetHeight(height)
+    end
+    -- ALWAYS re-place the sections, not only on a height change: the buff
+    -- strip joins and leaves the section chain with the group, so the markers
+    -- have to be re-anchored even when the panel itself did not resize.
+    self:PositionSections()
+    self:UpdateBuffStrip()
 end
 
 -- --- Show/hide driver -------------------------------------------------------
@@ -647,6 +898,7 @@ function RC:ToggleRaidControl(event)
 
     local panel = self.Panel
     local status = InGroup()
+    self:ApplyGroupContext()
     self.ShowButton:SetShown(status and not panel.toggled)
     panel:SetShown(status and panel.toggled)
 
@@ -703,17 +955,16 @@ local function OnClick_ReadyCheckButton(self)
     end
 end
 
--- Shift-click on either countdown button cancels a running countdown --
+-- Shift-click on any countdown button cancels a running countdown --
 -- DoCountdown(0), same as /pull 0.
-local function OnClick_Countdown10()
-    if InGroup() and not InCombatLockdown() then
-        DoCountdown(IsShiftKeyDown() and 0 or 10)
-    end
-end
-
-local function OnClick_Countdown20()
-    if InGroup() and not InCombatLockdown() then
-        DoCountdown(IsShiftKeyDown() and 0 or 20)
+--
+-- One factory rather than a handler per duration: the handlers differed only
+-- in a number, and adding a third to a copy-per-button design is how the set
+-- drifts apart.
+local function CountdownClick(seconds)
+    return function()
+        if not (InGroup() and not InCombatLockdown()) then return end
+        DoCountdown(IsShiftKeyDown() and 0 or seconds)
     end
 end
 
@@ -874,10 +1125,22 @@ function RC:Setup()
     local panelHeight = PANEL_HEIGHT
     if not hasGroupSort then panelHeight = panelHeight - 2 * (BUTTON_HEIGHT + 3) end
     if hasSharedNotes then panelHeight = panelHeight + (BUTTON_HEIGHT + 3) end
+    -- The Vantus row is unconditional and was not in PANEL_HEIGHT's baseline.
+    panelHeight = panelHeight + (BUTTON_HEIGHT + 3)
     panel:SetSize(PANEL_WIDTH, panelHeight)
+    -- Remembered so ApplyGroupContext subtracts from a FIXED number rather
+    -- than from the live height -- reading the current size and adjusting it
+    -- compounds every time the group changes.
+    self._panelHeightFull = panelHeight
     panel:SetPoint("TOP", UIParent, "TOP", -400, 1)
     panel:SetFrameLevel(3)
     panel:SetFrameStrata("HIGH")
+    -- Deferred a frame: the snippet's order is `utility:Show()` first and
+    -- `close:ClearAllPoints()` immediately after, so an inline OnShow layout
+    -- is thrown away by the two lines below it. A frame later ours is last.
+    panel:HookScript("OnShow", function()
+        C_Timer.After(0, function() RC:PositionSections() end)
+    end)
     panel.toggled = false
     panel:Hide()
     self.Panel = panel
@@ -913,12 +1176,19 @@ function RC:Setup()
         close:ClearAllPoints()
 
         local point = self:GetPoint()
+        -- The vertical offset is READ FROM AN ATTRIBUTE, not baked in. It is
+        -- the distance from the panel edge to the role plate, which used to be
+        -- a constant 30 -- the marker row plus its two seams -- and stopped
+        -- being constant the moment the raid buff strip was added between the
+        -- two. Lua measures it whenever the sections are placed and writes it
+        -- here; 30 remains the fallback for the first open.
+        local off = utility:GetAttribute('keCloseOffset') or 30
         if point and strfind(point, 'BOTTOM') then
             utility:SetPoint('BOTTOM', self)
-            close:SetPoint('BOTTOMRIGHT', utility, 'TOPRIGHT', 0, 30)
+            close:SetPoint('BOTTOMRIGHT', utility, 'TOPRIGHT', 0, off)
         else
             utility:SetPoint('TOP', self)
-            close:SetPoint('TOPRIGHT', utility, 'BOTTOMRIGHT', 0, -30)
+            close:SetPoint('TOPRIGHT', utility, 'BOTTOMRIGHT', 0, -off)
         end
     ]=])
 
@@ -942,17 +1212,33 @@ function RC:Setup()
         BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", panel, "TOPLEFT", 10, -4,
         _G.READY_CHECK or "Ready Check", buttonEvents, OnEvent_PermissionButton, OnClick_ReadyCheckButton)
 
-    -- Row 2: 10s Countdown | 20s Countdown
+    -- Row 2: 5s | 10s | 20s, one row.
+    --
+    -- Widths come from ONE division of the row rather than a fraction each:
+    -- three buttons and two gaps have to land on the same right edge as Ready
+    -- Check above, and the floor stops a fractional width putting the last
+    -- button half a pixel past it. The remainder goes to the LAST button so
+    -- the row is flush at both ends whatever BUTTON_WIDTH is.
+    --
+    -- Just the durations. Three buttons in the width two used to have leaves
+    -- no room for the word, and the row sits directly under Ready Check with
+    -- nothing else on the panel it could be confused for.
+    local COUNTDOWN_GAP = 5
+    local cdWidth = floor((BUTTON_WIDTH - COUNTDOWN_GAP * 2) / 3)
+    local cdLastWidth = BUTTON_WIDTH - COUNTDOWN_GAP * 2 - cdWidth * 2
+    local Countdown5Button = CreateUtilButton("KE_RaidControlCountdown5", panel, nil,
+        cdWidth, BUTTON_HEIGHT, "TOPLEFT", ReadyCheckButton, "BOTTOMLEFT", 0, -5,
+        "5s", nil, nil, CountdownClick(5))
     local Countdown10Button = CreateUtilButton("KE_RaidControlCountdown10", panel, nil,
-        (BUTTON_WIDTH - 5) * 0.5, BUTTON_HEIGHT, "TOPLEFT", ReadyCheckButton, "BOTTOMLEFT", 0, -5,
-        "10s Countdown", nil, nil, OnClick_Countdown10)
+        cdWidth, BUTTON_HEIGHT, "TOPLEFT", Countdown5Button, "TOPRIGHT", COUNTDOWN_GAP, 0,
+        "10s", nil, nil, CountdownClick(10))
     CreateUtilButton("KE_RaidControlCountdown20", panel, nil,
-        (BUTTON_WIDTH - 5) * 0.5, BUTTON_HEIGHT, "TOPLEFT", Countdown10Button, "TOPRIGHT", 5, 0,
-        "20s Countdown", nil, nil, OnClick_Countdown20)
+        cdLastWidth, BUTTON_HEIGHT, "TOPLEFT", Countdown10Button, "TOPRIGHT", COUNTDOWN_GAP, 0,
+        "20s", nil, nil, CountdownClick(20))
 
     -- Row 3: Dungeon Difficulty
     local DifficultyDropdown = CreateDropdown("KE_RaidControlDifficulty", panel, 85,
-        "TOPLEFT", Countdown10Button, "BOTTOMLEFT", 0, -5, -- rows now share x=10
+        "TOPLEFT", Countdown5Button, "BOTTOMLEFT", 0, -5, -- rows now share x=10
         DIFFICULTY_LABEL,
         -- GROUP_ROSTER_UPDATE as well as the difficulty event: converting a
         -- party to a raid changes which difficulty the control reads, and both
@@ -966,6 +1252,16 @@ function RC:Setup()
 
     local lastUtilRow = EveryoneAssist
     local lastUtilXOfs, lastUtilYOfs = 4, -3
+
+    -- RAID-ONLY ROWS. Group arrangement, the Vantus check, the note buttons
+    -- and the buff strip are all meaningless in a party -- subgroups, runes
+    -- and raid notes do not exist there -- so the panel drops them and shrinks
+    -- by exactly the rows it dropped.
+    --
+    -- One entry per ROW, not per button: the two note buttons share a row and
+    -- together cost one row of height. `h` is that row's own cost.
+    local raidOnly = {}
+    self.RaidOnlyRows = raidOnly
 
     if hasGroupSort then
         -- Combat-gated: SetEnabled(false) blocks input, grey text signals it.
@@ -1002,7 +1298,82 @@ function RC:Setup()
             "Split Arrangement", sortButtonEvents, OnEvent_SortButton, SortClick("split"))
         lastUtilRow = SplitGroups
         lastUtilXOfs, lastUtilYOfs = 0, -3
+        raidOnly[#raidOnly + 1] = { h = BUTTON_HEIGHT + 3, SortDefault }
+        raidOnly[#raidOnly + 1] = { h = BUTTON_HEIGHT + 3, SplitGroups }
     end
+
+    -- VANTUS RUNE CHECK. Who in the raid is missing the rune for this tier's
+    -- boss. Prints to your own chat only -- it is a check, not an
+    -- announcement, and naming people in raid chat is the caller's decision.
+    --
+    -- THE SPELL ID IS CARRIED ON TRUST. Spell ids appear in no dump, so if a
+    -- patch changes it the failure is silent in the worst way: the name lookup
+    -- returns nothing and every player reads as missing. Hence the explicit
+    -- "could not read" message rather than a bare return. The rune buff is
+    -- named "<Vantus Rune>: <Boss>", so the part before the colon is the
+    -- localized prefix every rune shares.
+    local VANTUS_RUNE_SPELL = 1276691
+
+    local function VantusRuneCheck()
+        if not UnitInRaid("player") then
+            KE:Print("Vantus Runes: this needs a raid group.")
+            return
+        end
+        -- Every read below is RequiresUnitAuraAccess, which HARD-ERRORS while
+        -- auras are restricted rather than answering nil.
+        if KE:AreAuraIdentitiesHidden() then
+            KE:Print("Vantus Runes: auras cannot be read right now.")
+            return
+        end
+
+        local info = _G.C_Spell and _G.C_Spell.GetSpellInfo
+            and _G.C_Spell.GetSpellInfo(VANTUS_RUNE_SPELL)
+        local full = info and info.name
+        local prefix = KE:IsSafeValue(full) and full:match("^([^:]+)")
+        if not prefix or prefix == "" then
+            KE:Print("Vantus Runes: could not read the rune name.")
+            return
+        end
+
+        local maxGroup = MaxRaidGroup()
+        local missing, checked = {}, 0
+
+        for i = 1, (GetNumGroupMembers() or 0) do
+            local name, _, subgroup = GetRaidRosterInfo(i)
+            if name and subgroup and subgroup <= maxGroup and KE:IsSafeValue(name) then
+                local unit = "raid" .. i
+                local found = false
+                for j = 1, 100 do
+                    local aura = C_UnitAuras.GetAuraDataByIndex(unit, j, "HELPFUL")
+                    if not aura then break end
+                    local auraName = aura.name
+                    if KE:IsSafeValue(auraName) and auraName:find(prefix, 1, true) then
+                        found = true
+                        break
+                    end
+                end
+                checked = checked + 1
+                if not found then missing[#missing + 1] = name end
+            end
+        end
+
+        if checked == 0 then
+            KE:Print("Vantus Runes: nobody to check.")
+        elseif #missing == 0 then
+            KE:Print("Vantus Runes: everyone has a rune.")
+        else
+            KE:Print(("Missing Vantus Rune (%d/%d): %s")
+                :format(#missing, checked, table.concat(missing, ", ")))
+        end
+    end
+
+    local VantusButton = CreateUtilButton("KE_RaidControlVantus", panel, nil,
+        BUTTON_WIDTH, BUTTON_HEIGHT, "TOPLEFT", lastUtilRow, "BOTTOMLEFT",
+        lastUtilXOfs, lastUtilYOfs,
+        "Check Vantus Runes", nil, nil, VantusRuneCheck)
+    raidOnly[#raidOnly + 1] = { h = BUTTON_HEIGHT + 3, VantusButton }
+    lastUtilRow = VantusButton
+    lastUtilXOfs, lastUtilYOfs = 0, -3
 
     -- NSRT Shared Notes: opens NorthernSkyRaidTools' window on the
     -- SharedNotes tab. NSRT's internals are addon-private; the public
@@ -1039,14 +1410,24 @@ function RC:Setup()
             (BUTTON_WIDTH - 5) * 0.5, BUTTON_HEIGHT, "TOPLEFT", lastUtilRow,
             "BOTTOMLEFT", lastUtilXOfs, lastUtilYOfs,
             "Shared Notes", nil, nil, NSRTNotes("Shared Notes", "reminders"))
-        CreateUtilButton("KE_RaidControlNSRTPersonalNotes", panel, nil,
+        local PersonalNotes = CreateUtilButton("KE_RaidControlNSRTPersonalNotes", panel, nil,
             (BUTTON_WIDTH - 5) * 0.5, BUTTON_HEIGHT, "TOPLEFT", SharedNotes,
             "TOPRIGHT", 5, 0,
             "Personal Notes", nil, nil, NSRTNotes("Personal Notes", "preminders"))
+        raidOnly[#raidOnly + 1] = { h = BUTTON_HEIGHT + 3, SharedNotes, PersonalNotes }
     end
+
+    -- ITS OWN SECTION, outside the panel and above the world markers. `h = 0`
+    -- because hiding it costs the PANEL no height -- it never had any of the
+    -- panel's; PositionSections simply drops it from the section chain and the
+    -- markers close up against the panel.
+    local buffStrip = self:CreateBuffStrip(panel)
+    self:LayoutBuffStrip()
+    raidOnly[#raidOnly + 1] = { h = 0, buffStrip }
 
     -- Role check exists on Midnight, add the icon strip
     self:CreateRoleIcons(panel)
+    self:ApplyGroupContext()
 
     self:PositionSections()
 end

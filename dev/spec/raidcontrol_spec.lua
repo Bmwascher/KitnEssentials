@@ -204,4 +204,127 @@ describe("RaidControl", function()
             assert.equals("|cff000000Zed", list[2])
         end)
     end)
+
+    describe("MaxRaidGroup", function()
+        -- The bench line. Both the Vantus check and the buff strip read it, so
+        -- a wrong answer silently either skips real raiders or counts benched
+        -- ones. Each case picks a DIFFERENT number, so a constant fails three
+        -- of the four.
+        local function withInstance(instanceType, difficultyID, fallback)
+            local RC2, _, seams2 = loader.loadRaidControl({
+                GetInstanceInfo = function() return "Somewhere", instanceType, difficultyID end,
+                GetRaidDifficultyID = function() return fallback end,
+            })
+            return RC2, seams2.maxRaidGroup
+        end
+
+        it("caps Mythic at four groups", function()
+            local _, maxRaidGroup = withInstance("raid", 16, 14)
+            assert.equals(4, maxRaidGroup())
+        end)
+
+        it("caps Mythic flex at five groups", function()
+            local _, maxRaidGroup = withInstance("raid", 233, 14)
+            assert.equals(5, maxRaidGroup())
+        end)
+
+        it("allows six groups on every other raid difficulty", function()
+            local _, maxRaidGroup = withInstance("raid", 14, 14)
+            assert.equals(6, maxRaidGroup())
+        end)
+
+        it("falls back to the chosen raid difficulty outside a raid instance", function()
+            -- Standing in a city, the instance difficulty is the world's, not
+            -- the raid the player is saved to. Reading it anyway is how the
+            -- cap lands on 6 for a Mythic roster.
+            local _, maxRaidGroup = withInstance("none", 1, 16)
+            assert.equals(4, maxRaidGroup())
+        end)
+    end)
+
+    describe("UpdateBuffStrip", function()
+        local function fakeStrip(visible, classSets)
+            local cells = {}
+            for i, classes in ipairs(classSets) do
+                cells[i] = {
+                    data = { classes = classes },
+                    icon = {
+                        SetDesaturated = function(self, v) self.desaturated = v end,
+                        SetAlpha = function(self, v) self.alpha = v end,
+                    },
+                }
+            end
+            return { cells = cells, IsVisible = function() return visible end }
+        end
+
+        it("does no roster work while the strip is off screen", function()
+            local reads = 0
+            local RC2 = loader.loadRaidControl({
+                GetNumGroupMembers = function() reads = reads + 1 return 5 end,
+            })
+            RC2.BuffStrip = fakeStrip(false, { { MAGE = true } })
+            RC2:UpdateBuffStrip()
+            assert.equals(0, reads)
+        end)
+
+        it("lights a buff whose class is in the raid and dims one that is not", function()
+            local roster = {
+                { "Kitn", nil, 1, nil, nil, "MAGE" },
+                { "Other", nil, 2, nil, nil, "PRIEST" },
+            }
+            local RC2 = loader.loadRaidControl({
+                GetNumGroupMembers = function() return #roster end,
+                GetRaidRosterInfo = function(i)
+                    local r = roster[i]
+                    if not r then return nil end
+                    return r[1], r[2], r[3], r[4], r[5], r[6]
+                end,
+            })
+            RC2.BuffStrip = fakeStrip(true, { { MAGE = true }, { WARRIOR = true } })
+            RC2:UpdateBuffStrip()
+            assert.is_true(RC2.BuffStrip.cells[1].present)
+            assert.is_false(RC2.BuffStrip.cells[1].icon.desaturated)
+            assert.is_false(RC2.BuffStrip.cells[2].present)
+            assert.is_true(RC2.BuffStrip.cells[2].icon.desaturated)
+        end)
+
+        it("ignores members past the bench line", function()
+            -- Group 5 on Mythic is the bench. A cap-blind loop lights Warrior.
+            local roster = {
+                { "Kitn", nil, 1, nil, nil, "MAGE" },
+                { "Benched", nil, 5, nil, nil, "WARRIOR" },
+            }
+            local RC2 = loader.loadRaidControl({
+                GetInstanceInfo = function() return "Somewhere", "raid", 16 end,
+                GetNumGroupMembers = function() return #roster end,
+                GetRaidRosterInfo = function(i)
+                    local r = roster[i]
+                    if not r then return nil end
+                    return r[1], r[2], r[3], r[4], r[5], r[6]
+                end,
+            })
+            RC2.BuffStrip = fakeStrip(true, { { WARRIOR = true } })
+            RC2:UpdateBuffStrip()
+            assert.is_false(RC2.BuffStrip.cells[1].present)
+        end)
+
+        it("refuses to key the roster table on a secret class token", function()
+            -- The banned operation. A secret used as a table key is the read
+            -- that raises; the class is tested BEFORE it is written, so the
+            -- member is skipped and the buff reads as missing.
+            local roster = { { "Kitn", nil, 1, nil, nil, "MAGE" } }
+            local RC2 = loader.loadRaidControl({
+                issecretvalue = function(v) return v == "MAGE" end,
+                GetNumGroupMembers = function() return #roster end,
+                GetRaidRosterInfo = function(i)
+                    local r = roster[i]
+                    if not r then return nil end
+                    return r[1], r[2], r[3], r[4], r[5], r[6]
+                end,
+            })
+            RC2.BuffStrip = fakeStrip(true, { { MAGE = true } })
+            RC2:UpdateBuffStrip()
+            assert.is_false(RC2.BuffStrip.cells[1].present)
+        end)
+    end)
 end)

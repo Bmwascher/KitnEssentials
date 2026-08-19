@@ -1562,6 +1562,7 @@ end
 --   onEnterRole            <- RC.CreateRoleIcons                  (1 hop)
 --   roleIconsSortNames    <- onEnterRole                          (2 hops)
 --   roleIconsAddNames     <- onEnterRole                          (2 hops)
+--   maxRaidGroup          <- RC.UpdateBuffStrip                   (1 hop)
 --   setGrabCoords         <- RC.UpdateDB is NOT a holder; SetGrabCoords is
 --                            called only at file scope, so it is reached
 --                            through no exported function and is NOT a seam.
@@ -1591,6 +1592,16 @@ function L.loadRaidControl(overrides)
     _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
     _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
     _G.IsInGroup = overrides.IsInGroup or function() return false end
+    -- Captured as file-scope locals like everything above, so a spec that only
+    -- sets these afterwards leaves the module holding nil. GetInstanceInfo
+    -- returns name, instanceType, difficultyID -- MaxRaidGroup reads 2 and 3.
+    _G.UnitInRaid = overrides.UnitInRaid or function() return nil end
+    _G.GetInstanceInfo = overrides.GetInstanceInfo
+        or function() return "Somewhere", "none", 0 end
+    _G.GetRaidDifficultyID = overrides.GetRaidDifficultyID or function() return 14 end
+    _G.C_UnitAuras = overrides.C_UnitAuras or { GetAuraDataByIndex = function() return nil end }
+    _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
+    _G.GetRaidRosterInfo = overrides.GetRaidRosterInfo or function() return nil end
     -- UIParent is captured as a file-scope local, so it must exist
     -- on _G BEFORE loadModule. Setting it afterwards has no effect on the
     -- module's captured upvalue -- ScreenPosition would read a stale table.
@@ -1612,6 +1623,7 @@ function L.loadRaidControl(overrides)
         onEnterRole = onEnterRole,
         roleIconsSortNames = findUpvalue(onEnterRole, "RoleIcons_SortNames"),
         roleIconsAddNames = findUpvalue(onEnterRole, "RoleIcons_AddNames"),
+        maxRaidGroup = findUpvalue(RC.UpdateBuffStrip, "MaxRaidGroup"),
     }
     return RC, KE, seams
 end
