@@ -61,84 +61,130 @@ describe("EUIUnlockBridge position translation", function()
     end)
 end)
 
-describe("EUIUnlockBridge anchor rebasing", function()
-    local KE
-    before_each(function()
-        KE = L.loadEUIUnlockBridge()
-    end)
-
-    -- A 1920x1080 screen holding a 400x200 frame, used by every case below.
+-- The save branch is a refusal rule: it decides when unlock mode's centre-form
+-- result may overwrite the anchor pair the user chose, and it fails silently
+-- when wrong. The arithmetic itself is NOT retested here -- it belongs to
+-- KE:ResolveAnchorOffsets and has its own spec. What is pinned here is which
+-- branch runs, and that the coordinates handed to that helper are lifted out of
+-- unlock mode's parent-centre space into the absolute space the helper expects.
+describe("EUIUnlockBridge save branch", function()
     local UI_W, UI_H = 1920, 1080
     local F_W, F_H = 400, 200
 
-    describe("AnchorOffset", function()
-        it("puts CENTER at the middle", function()
-            local x, y = KE.EUIUnlock.AnchorOffset("CENTER", F_W, F_H)
-            assert.equal(0, x)
-            assert.equal(0, y)
-        end)
+    -- Returns the element unlock mode would have been handed, plus a record of
+    -- what the module was asked to store and how the offsets were resolved.
+    local function buildElement(storedPos, frameW, frameH)
+        local KE = L.loadEUIUnlockBridge()
+        local record = { resolveCalls = {} }
 
-        it("reads each edge independently", function()
-            local x, y = KE.EUIUnlock.AnchorOffset("LEFT", F_W, F_H)
-            assert.equal(-200, x)
-            assert.equal(0, y)
+        KE.ResolveAnchorOffsets = function(_, cx, cy, from, to, fw, fh, pl, pb, pw, ph)
+            record.resolveCalls[#record.resolveCalls + 1] = {
+                cx = cx, cy = cy, from = from, to = to,
+                fw = fw, fh = fh, pl = pl, pb = pb, pw = pw, ph = ph,
+            }
+            return 111, 222
+        end
 
-            x, y = KE.EUIUnlock.AnchorOffset("TOP", F_W, F_H)
-            assert.equal(0, x)
-            assert.equal(100, y)
-        end)
+        _G.UIParent = {
+            GetWidth = function() return UI_W end,
+            GetHeight = function() return UI_H end,
+            GetLeft = function() return 0 end,
+            GetBottom = function() return 0 end,
+        }
 
-        it("reads a corner as both of its halves", function()
-            local x, y = KE.EUIUnlock.AnchorOffset("BOTTOMLEFT", F_W, F_H)
-            assert.equal(-200, x)
-            assert.equal(-100, y)
+        local frame = {
+            GetWidth = function() return frameW end,
+            GetHeight = function() return frameH end,
+        }
 
-            x, y = KE.EUIUnlock.AnchorOffset("TOPRIGHT", F_W, F_H)
-            assert.equal(200, x)
-            assert.equal(100, y)
-        end)
+        _G.EllesmereUI = {
+            MakeUnlockElement = function(opts) return opts end,
+            RegisterUnlockElements = function(_, batch) record.element = batch[1] end,
+        }
 
-        it("treats a nil or non-string anchor as the centre", function()
-            local x, y = KE.EUIUnlock.AnchorOffset(nil, F_W, F_H)
-            assert.equal(0, x)
-            assert.equal(0, y)
-        end)
+        KE.EUIUnlock:Register({
+            key = "Thing",
+            displayName = "Thing",
+            frame = frame,
+            getPosition = function() return storedPos end,
+            setPosition = function(pos) record.stored = pos end,
+        })
+
+        return record
+    end
+
+    it("rebases onto the stored pair, in absolute coordinates", function()
+        local r = buildElement(
+            { AnchorFrom = "BOTTOMLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 1, YOffset = 1 },
+            F_W, F_H)
+        r.element.savePos(nil, "CENTER", "CENTER", -759, -439)
+
+        assert.equal(1, #r.resolveCalls)
+        local call = r.resolveCalls[1]
+        -- unlock mode measures from the parent's centre; the helper wants absolute
+        assert.equal(0 + UI_W / 2 + -759, call.cx)
+        assert.equal(0 + UI_H / 2 + -439, call.cy)
+        assert.equal("BOTTOMLEFT", call.from)
+        assert.equal("BOTTOMLEFT", call.to)
+        assert.equal(F_W, call.fw)
+        assert.equal(UI_W, call.pw)
+
+        assert.same({ AnchorFrom = "BOTTOMLEFT", AnchorTo = "BOTTOMLEFT",
+                      XOffset = 111, YOffset = 222 }, r.stored)
     end)
 
-    describe("RebaseFromCenter", function()
-        it("is the identity for a CENTER/CENTER pair", function()
-            local x, y = KE.EUIUnlock.RebaseFromCenter(37, -12, "CENTER", "CENTER",
-                F_W, F_H, UI_W, UI_H)
-            assert.equal(37, x)
-            assert.equal(-12, y)
-        end)
+    it("stores a non-CENTER result verbatim, which is the cancel restore", function()
+        local r = buildElement(
+            { AnchorFrom = "BOTTOMLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 1, YOffset = 1 },
+            F_W, F_H)
+        r.element.savePos(nil, "TOPRIGHT", "TOPRIGHT", 5, 6)
 
-        it("re-expresses a centred frame against BOTTOMLEFT/BOTTOMLEFT", function()
-            -- Frame dead centre of the screen. Its bottom-left corner then sits
-            -- half the screen minus half the frame in from the screen corner.
-            local x, y = KE.EUIUnlock.RebaseFromCenter(0, 0, "BOTTOMLEFT", "BOTTOMLEFT",
-                F_W, F_H, UI_W, UI_H)
-            assert.equal(760, x)   -- 1920/2 - 400/2
-            assert.equal(440, y)   -- 1080/2 - 200/2
-        end)
+        assert.equal(0, #r.resolveCalls)
+        assert.same({ AnchorFrom = "TOPRIGHT", AnchorTo = "TOPRIGHT",
+                      XOffset = 5, YOffset = 6 }, r.stored)
+    end)
 
-        it("round-trips a stored edge position through the centre form", function()
-            -- Start from the chat default, BOTTOMLEFT/BOTTOMLEFT at +1,+1.
-            -- Its centre relative to the screen centre is what unlock mode
-            -- would hand back for an untouched frame.
-            local cx = 1 + F_W / 2 - UI_W / 2
-            local cy = 1 + F_H / 2 - UI_H / 2
-            local x, y = KE.EUIUnlock.RebaseFromCenter(cx, cy, "BOTTOMLEFT", "BOTTOMLEFT",
-                F_W, F_H, UI_W, UI_H)
-            assert.equal(1, x)
-            assert.equal(1, y)
-        end)
+    it("stores verbatim when there is no stored pair to preserve", function()
+        local r = buildElement(nil, F_W, F_H)
+        r.element.savePos(nil, "CENTER", "CENTER", 10, 20)
 
-        it("handles a mixed pair, frame TOPRIGHT against screen BOTTOMLEFT", function()
-            local x, y = KE.EUIUnlock.RebaseFromCenter(0, 0, "TOPRIGHT", "BOTTOMLEFT",
-                F_W, F_H, UI_W, UI_H)
-            assert.equal(1160, x)  -- 0 + 200 - (-960)
-            assert.equal(640, y)   -- 0 + 100 - (-540)
-        end)
+        assert.equal(0, #r.resolveCalls)
+        assert.same({ AnchorFrom = "CENTER", AnchorTo = "CENTER",
+                      XOffset = 10, YOffset = 20 }, r.stored)
+    end)
+
+    it("stores verbatim when the stored pair is already CENTER/CENTER", function()
+        local r = buildElement(
+            { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
+            F_W, F_H)
+        r.element.savePos(nil, "CENTER", "CENTER", 10, 20)
+
+        assert.equal(0, #r.resolveCalls)
+        assert.same({ AnchorFrom = "CENTER", AnchorTo = "CENTER",
+                      XOffset = 10, YOffset = 20 }, r.stored)
+    end)
+
+    it("refuses to rebase off a frame that measures zero", function()
+        local r = buildElement(
+            { AnchorFrom = "BOTTOMLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 1, YOffset = 1 },
+            0, 0)
+        r.element.savePos(nil, "CENTER", "CENTER", 10, 20)
+
+        assert.equal(0, #r.resolveCalls)
+        assert.same({ AnchorFrom = "CENTER", AnchorTo = "CENTER",
+                      XOffset = 10, YOffset = 20 }, r.stored)
+    end)
+
+    it("stores the same offsets when unlock mode saves twice", function()
+        local r = buildElement(
+            { AnchorFrom = "BOTTOMLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 1, YOffset = 1 },
+            F_W, F_H)
+        r.element.savePos(nil, "CENTER", "CENTER", -759, -439)
+        local first = r.stored
+        r.element.savePos(nil, "CENTER", "CENTER", -759, -439)
+
+        assert.same(first, r.stored)
+        assert.equal(2, #r.resolveCalls)
+        assert.same(r.resolveCalls[1], r.resolveCalls[2])
     end)
 end)

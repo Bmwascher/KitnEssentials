@@ -37,38 +37,7 @@ end
 local pairs = pairs
 local ipairs = ipairs
 local type = type
-local strfind = string.find
 local tinsert = table.insert
-
--- Offset of a named anchor point from the centre of a region that size.
--- WoW's nine anchor names are read as their two independent halves, so
--- BOTTOMLEFT is simply the LEFT rule and the BOTTOM rule together.
-function Bridge.AnchorOffset(anchorPoint, width, height)
-    local ax, ay = 0, 0
-    if type(anchorPoint) == "string" then
-        if strfind(anchorPoint, "LEFT", 1, true) then
-            ax = -(width or 0) / 2
-        elseif strfind(anchorPoint, "RIGHT", 1, true) then
-            ax = (width or 0) / 2
-        end
-        if strfind(anchorPoint, "TOP", 1, true) then
-            ay = (height or 0) / 2
-        elseif strfind(anchorPoint, "BOTTOM", 1, true) then
-            ay = -(height or 0) / 2
-        end
-    end
-    return ax, ay
-end
-
--- Re-express a centre-relative screen position as the offsets a different
--- anchor pair needs to put the frame in the same place. cx/cy are the frame's
--- centre measured from the parent's centre; the result is what SetPoint needs
--- for selfPoint against relPoint.
-function Bridge.RebaseFromCenter(cx, cy, selfPoint, relPoint, frameW, frameH, parentW, parentH)
-    local fx, fy = Bridge.AnchorOffset(selfPoint, frameW, frameH)
-    local rx, ry = Bridge.AnchorOffset(relPoint, parentW, parentH)
-    return (cx or 0) + fx - rx, (cy or 0) + fy - ry
-end
 
 -- EUI element keys are global across every addon that registers, so ours are
 -- namespaced. Registered elements are never removed: an element that goes
@@ -155,16 +124,30 @@ local function BuildElement(config, opts)
             local stored = config.getPosition()
             local frame = ResolveFrame(config)
             local uiParent = _G.UIParent
+            -- Measure rather than test for the getter: a frame that has not been
+            -- through a layout pass answers nil or zero, and a zero-extent frame
+            -- would silently place the anchor half the frame's real size out.
+            local fw = frame and frame.GetWidth and frame:GetWidth()
+            local fh = frame and frame.GetHeight and frame:GetHeight()
+            local pw = uiParent and uiParent.GetWidth and uiParent:GetWidth()
+            local ph = uiParent and uiParent.GetHeight and uiParent:GetHeight()
+
             if point == "CENTER" and relPoint == "CENTER"
                 and stored and stored.AnchorFrom and stored.AnchorTo
                 and not (stored.AnchorFrom == "CENTER" and stored.AnchorTo == "CENTER")
-                and frame and frame.GetWidth and uiParent
+                and fw and fw > 0 and fh and fh > 0
+                and pw and pw > 0 and ph and ph > 0
             then
-                local ox, oy = Bridge.RebaseFromCenter(
-                    x, y, stored.AnchorFrom, stored.AnchorTo,
-                    frame:GetWidth(), frame:GetHeight(),
-                    uiParent:GetWidth(), uiParent:GetHeight()
-                )
+                -- KE:ResolveAnchorOffsets works in absolute screen coordinates
+                -- and rounds, which is what keeps a stored offset a whole number
+                -- for the position card's sliders. Unlock mode measures from the
+                -- parent's centre, so lift its pair into that space first.
+                local pl = uiParent:GetLeft() or 0
+                local pb = uiParent:GetBottom() or 0
+                local ox, oy = KE:ResolveAnchorOffsets(
+                    pl + pw / 2 + (x or 0), pb + ph / 2 + (y or 0),
+                    stored.AnchorFrom, stored.AnchorTo,
+                    fw, fh, pl, pb, pw, ph)
                 config.setPosition(Bridge.FromEUIPosition(
                     stored.AnchorFrom, stored.AnchorTo, ox, oy))
             else
@@ -174,8 +157,11 @@ local function BuildElement(config, opts)
             -- The position card reads the profile when its page is built, so an
             -- outside write is invisible until the page is rebuilt. KE's own
             -- edit mode refreshes here for the same reason.
+            -- Contained on purpose: this runs inside unlock mode's own save
+            -- loop, so a page builder that threw would abort that loop and
+            -- leave the session open with other addons unsaved.
             if KE.GUIFrame and KE.GUIFrame.mainFrame and KE.GUIFrame.mainFrame:IsShown() then
-                KE.GUIFrame:RefreshContent()
+                pcall(KE.GUIFrame.RefreshContent, KE.GUIFrame)
             end
         end,
 
