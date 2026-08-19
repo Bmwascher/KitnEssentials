@@ -390,6 +390,23 @@ local function StripPanelShell(frame)
     end
 end
 
+-- The whole account row hangs off BattlenetFrame: the status dropdown anchors
+-- to its LEFT and the contacts and settings buttons chain off its RIGHT, so one
+-- anchor moves all four. BFL's modern XML gives that anchor x = 10 against the
+-- title bar's centre, which widens the left margin by 10 and runs the settings
+-- cog against the frame edge. 0 is BFL's own value for the same row in their
+-- Classic layout.
+--
+-- Only the X is rewritten; point, relative frame and Y go straight back down,
+-- so a later version moving the row vertically is not undone.
+local function CenterBattlenetRow(bnet)
+    if not bnet or not bnet.GetPoint then return end
+    local p, rel, rp, x, y = bnet:GetPoint(1)
+    if not p or not rel or x == 0 then return end
+    bnet:ClearAllPoints()
+    bnet:SetPoint(p, rel, rp, 0, y)
+end
+
 local function ReStrip()
     local frame = _G.BetterFriendsFrame
     if frame then
@@ -401,6 +418,7 @@ local function ReStrip()
             for _, b in ipairs({ bnet.SettingsButton, bnet.ContactsMenuButton }) do
                 if b then S.FixSubPixelEdge(b) end
             end
+            CenterBattlenetRow(bnet)
         end
 
         local ins = frame.Inset
@@ -448,16 +466,35 @@ local function Skin()
         S.Hover(pb, bd)
     end
 
+    -- The seam is the anchor offset plus four: S.Tab draws its backdrop through
+    -- S.Template(tab, "Default", 2), inset 2 a side, so two chained tabs show
+    -- offset + 4 pixels of daylight. -3 is the 1px seam used everywhere else.
+    --
+    -- This used to run only on a tab with more than one anchor point, which was
+    -- true of BFL's old XML and stopped being true in 2.8.2 -- every tab now
+    -- carries a single point at +3, so the shim silently did nothing and the
+    -- row opened up. A guard on the shape of someone else's anchors is a guard
+    -- on their implementation; ask whether the tab is chained instead.
+    local TAB_CHAIN_OFFSET = -3
+
+    local function IsTabButton(f)
+        return (f and f.GetObjectType and f:GetObjectType() == "Button"
+            and tostring(f:GetName() or ""):find("Tab") ~= nil) or false
+    end
+
     local function CleanTabAnchors(tab)
-        if tab:GetNumPoints() > 1 then
-            local p, rel, rp, x, y = tab:GetPoint(1)
-            if p then
-                local relIsTab = rel and rel.GetObjectType and rel:GetObjectType() == "Button"
-                    and tostring(rel:GetName() or ""):find("Tab")
-                tab:ClearAllPoints()
-                tab:SetPoint(p, rel, rp, relIsTab and -3 or x, y)
-            end
-        end
+        local p, rel, rp, x, y = tab:GetPoint(1)
+        if not p then return end
+
+        local wantX = x
+        if IsTabButton(rel) then wantX = TAB_CHAIN_OFFSET end
+
+        -- Nothing to do is the common case once it has settled, and returning
+        -- here is what stops our own SetPoint re-arming the hook forever.
+        if tab:GetNumPoints() == 1 and wantX == x then return end
+
+        tab:ClearAllPoints()
+        tab:SetPoint(p, rel, rp, wantX, y)
     end
 
     local function ArmBottomHeadY(tab)
@@ -479,8 +516,12 @@ local function Skin()
         if S.data(tab).anchorShim then return end
         S.data(tab).anchorShim = true
         local pending = false
+        -- Deferred rather than inline: BFL re-anchors and re-widths the whole
+        -- row in one pass, so acting on the first SetPoint of that pass means
+        -- measuring a half-applied layout. No point-count test -- CleanTabAnchors
+        -- early-outs when there is nothing to do.
         hooksecurefunc(tab, "SetPoint", function(t)
-            if pending or t:GetNumPoints() <= 1 then return end
+            if pending then return end
             pending = true
             _G.C_Timer.After(0, function()
                 pending = false
