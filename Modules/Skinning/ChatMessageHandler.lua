@@ -531,8 +531,26 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
                 frame:AddMessage(format(arg1, self:GetPlayerLink(arg2, format('[%s]', coloredName or arg2))), info.r,
                     info.g, info.b, info.id)
             end
+        -- Blizzard's own branch is `format(CHAT_PING_GET, arg2) .. arg1`, with
+        -- arg2 used RAW -- it is formatted natively for pings and can carry
+        -- role text, so it is never turned into a player link.
+        --
+        -- No timestamp, unlike theirs: they AddMessage directly and stamp their
+        -- own, where AddMessageEdits stamps every line of ours. The joins go
+        -- through KE:WrapSecretText because either part can be secret and
+        -- neither may be concatenated in Lua.
         elseif chatType == 'PING' then
-            frame:AddMessage(arg1, info.r, info.g, info.b, info.id)
+            local pingBody = arg1
+            local fmt = _G.CHAT_PING_GET or '%s '
+            local pre, post = fmt:match('^(.-)%%s(.*)$')
+            if not pre then pre, post = '', ' ' end
+
+            local sender = arg2 ~= nil and KE:WrapSecretText(arg2, pre, post)
+            if sender then
+                pingBody = KE:WrapSecretText(arg1, sender, '') or arg1
+            end
+
+            frame:AddMessage(pingBody, info.r, info.g, info.b, info.id)
         elseif chatType == 'IGNORED' then
             if KE:NotSecretValue(arg2) then
                 frame:AddMessage(format(_G.CHAT_IGNORED, arg2), info.r, info.g, info.b, info.id)

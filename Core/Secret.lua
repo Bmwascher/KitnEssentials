@@ -71,6 +71,28 @@ function KE:NoSecretValues(object)
     return not self:HasSecretValues(object)
 end
 
+-- Join text around a body that may be secret. C_StringUtil.WrapString is
+-- AllowedWhenTainted, so it accepts a secret in any position where Lua's `..`
+-- and format() would throw.
+--
+-- The result of a secret join is itself secret, so `joined == nil` or
+-- `joined == ""` would detonate on exactly the input this exists to serve.
+-- `ok` is a plain boolean from pcall and type() never throws; nothing else here
+-- may touch `joined`. Returns nil when the join is unavailable, so callers can
+-- fall back to the undecorated body.
+---@param body any text to wrap, secret or not
+---@param prefix string|nil
+---@param suffix string|nil
+---@return any|nil joined
+function KE:WrapSecretText(body, prefix, suffix)
+    local wrap = C_StringUtil and C_StringUtil.WrapString
+    if not wrap or type(body) == "nil" then return nil end
+
+    local ok, joined = pcall(wrap, body, prefix, suffix)
+    if not ok or type(joined) == "nil" then return nil end
+    return joined
+end
+
 -- Aura index scans (C_UnitAuras.GetAuraDataByIndex and its Buff/Debuff
 -- siblings) carry RequiresUnitAuraAccess, whose failure mode is a HARD ERROR
 -- for a tainted caller -- not a secret return. So ask before scanning;
