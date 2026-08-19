@@ -20,8 +20,8 @@ local IsInRaid = IsInRaid
 local C_ChatInfo = C_ChatInfo
 local C_Timer = C_Timer
 local CreateFrame = CreateFrame
-local GetSpecialization = GetSpecialization
-local GetSpecializationInfo = GetSpecializationInfo
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local table_concat = table.concat
 
 ---------------------------------------------------------------------------------

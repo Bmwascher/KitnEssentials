@@ -13,6 +13,8 @@ if not KitnEssentials then return end
 local GVA = KitnEssentials:NewModule("GreatVaultAlert", "AceEvent-3.0")
 
 local CreateFrame = CreateFrame
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local UnitClass = UnitClass
 local InCombatLockdown = InCombatLockdown
 local PlaySoundFile = PlaySoundFile

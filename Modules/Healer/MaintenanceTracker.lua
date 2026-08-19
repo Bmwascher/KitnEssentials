@@ -21,8 +21,8 @@ local MT = KitnEssentials:NewModule("MaintenanceTracker", "AceEvent-3.0")
 
 local CreateFrame           = CreateFrame
 local GetTime               = GetTime
-local GetSpecialization     = GetSpecialization
-local GetSpecializationInfo = GetSpecializationInfo
+local GetSpecialization     = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local UnitClass             = UnitClass
 local UnitGUID              = UnitGUID
 local UnitExists            = UnitExists

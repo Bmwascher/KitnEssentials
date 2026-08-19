@@ -1587,7 +1587,7 @@ end
 ---------------------------------------------------------------------------------
 
 function KE:IsPlayerHealerSpec()
-    local specIndex = _G.GetSpecialization()
+    local specIndex = C_SpecializationInfo.GetSpecialization()
     if not specIndex then return false end
     local role = _G.GetSpecializationRole(specIndex)
     return role == "HEALER"

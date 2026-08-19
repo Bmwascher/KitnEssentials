@@ -13,6 +13,8 @@ local LSM = KE.LSM
 local table_insert = table.insert
 local ipairs, pairs = ipairs, pairs
 local tostring = tostring
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 
 local CLASS_TITLES = {
     WARRIOR = "Warrior Stances",

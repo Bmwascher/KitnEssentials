@@ -16,8 +16,8 @@ local SA = KitnEssentials:NewModule("SpellAlerts", "AceEvent-3.0")
 -- Prefer C_CVar.SetCVar (12.0 forward path); fall back to the global only
 -- if the namespaced version is missing.
 local SetCVar = (C_CVar and C_CVar.SetCVar) or SetCVar
-local GetSpecialization = GetSpecialization
-local GetSpecializationInfo = GetSpecializationInfo
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 
 function SA:UpdateDB()
     self.db = KE.db.profile.SpellAlerts

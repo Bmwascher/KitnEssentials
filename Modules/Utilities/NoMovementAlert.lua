@@ -23,6 +23,8 @@ local NMA = KitnEssentials:NewModule("NoMovementAlert", "AceEvent-3.0")
 -- shipped, so users self-correct without waiting on a build.
 
 local C_Spell = C_Spell
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local C_Timer = C_Timer
 local UnitClass, UnitAffectingCombat = UnitClass, UnitAffectingCombat
 

@@ -48,6 +48,29 @@ end
 
 -- Install WoW globals into _G. `overrides` replaces any default stub by name.
 -- Returns the (growing) list of frames created during the test.
+-- C_SpecializationInfo: the namespace every KE module now captures at file
+-- scope. It DELEGATES to the legacy globals AT CALL TIME rather than copying
+-- them, so the many loaders that drive a test by assigning _G.GetSpecialization
+-- keep working -- a copy taken here would freeze whatever was installed first
+-- and quietly make those tests vacuous. Returns nil when no global is installed
+-- instead of raising, matching a module that simply has no spec to read.
+--
+-- Exposed separately because several loaders build their globals by hand and
+-- never call install(); the module files still index the namespace at load, so
+-- they need it too.
+function M.installSpecInfo(override)
+    _G.C_SpecializationInfo = override or {
+        GetSpecialization = function(...)
+            local fn = _G.GetSpecialization
+            if fn then return fn(...) end
+        end,
+        GetSpecializationInfo = function(...)
+            local fn = _G.GetSpecializationInfo
+            if fn then return fn(...) end
+        end,
+    }
+end
+
 function M.install(overrides)
     overrides = overrides or {}
     local frames = {}
@@ -98,6 +121,8 @@ function M.install(overrides)
     _G.AbbreviateNumbers = overrides.AbbreviateNumbers or function(v) return tostring(v) end
     _G.BreakUpLargeNumbers = overrides.BreakUpLargeNumbers or function(v) return tostring(v) end
 
+    M.installSpecInfo(overrides.C_SpecializationInfo)
+
     -- Enum.UnitAuraSoundTrigger: the aura sound registry's trigger constant.
     _G.Enum = overrides.Enum or { UnitAuraSoundTrigger = { Added = "Added" } }
 
@@ -117,7 +142,7 @@ function M.reset()
         "UnitClass", "PlaySoundFile", "StopSound", "PlayerUtil", "RunNextFrame",
         "GetUnitEmpowerMinHoldTime", "LibStub",
         "GetNumGroupMembers", "IsInRaid", "UnitGroupRolesAssigned",
-        "GetSpecialization", "GetSpecializationInfo", "UIParent",
+        "GetSpecialization", "GetSpecializationInfo", "C_SpecializationInfo", "UIParent",
         "C_SpellActivationOverlay", "UnitAffectingCombat",
         "IsMounted", "UnitOnTaxi", "UnitInVehicle", "UnitHasVehicleUI",
         "UnitIsDeadOrGhost", "PetHasActionBar", "GetPetActionInfo",

@@ -924,19 +924,11 @@ function L.loadCursor(overrides)
     _G.C_SpellBook = overrides.C_SpellBook or {
         IsSpellInSpellBook = function() return false end,
     }
-    -- Cursor.lua resolves the spec getter as
-    -- `C_SpecializationInfo.GetSpecialization or GetSpecialization`, so it needs
-    -- EITHER getter plus GetSpecializationRole. With neither, _isTankSpec
-    -- returns false and the tank-positive test FAILS -- it does not pass
-    -- vacuously. Because the modern getter is installed by default it would
-    -- shadow a caller's legacy override, so pass `C_SpecializationInfo = false`
-    -- to remove it and make the legacy global the seam under test.
-    if overrides.C_SpecializationInfo == false then
-        _G.C_SpecializationInfo = nil
-    else
-        _G.C_SpecializationInfo = overrides.C_SpecializationInfo
-            or { GetSpecialization = function() return 1 end }
-    end
+    -- Cursor.lua reads C_SpecializationInfo.GetSpecialization plus the still
+    -- current GetSpecializationRole. installMock's namespace delegates to the
+    -- global below, so overriding either one drives the gate. With neither,
+    -- _isTankSpec returns false and the tank-positive test FAILS -- it does
+    -- not pass vacuously.
     _G.GetSpecialization = overrides.GetSpecialization or function() return 1 end
     _G.GetSpecializationRole = overrides.GetSpecializationRole
         or function() return "TANK" end
@@ -1933,6 +1925,7 @@ end
 -- Returns ST, KE.
 function L.loadStanceText(overrides)
     overrides = overrides or {}
+    mock.installSpecInfo()
     local modules = helpers.installAddonShim()
     local KE = {
         db = { profile = { StanceText = overrides.db or {} } },
@@ -2271,6 +2264,7 @@ end
 -- Returns the module.
 function L.loadEbonMightTracker(overrides)
     overrides = overrides or {}
+    mock.installSpecInfo()
     local modules = helpers.installAddonShim()
     _G.LibStub = function() return nil end
     _G.C_Spell = overrides.C_Spell or { GetSpellName = function(id) return "Spell " .. tostring(id) end }

@@ -11,6 +11,7 @@
 -- entry -- Automation's fixture is specific to this one spec).
 
 local helpers = require("dev.spec._helpers")
+local mock = require("dev.spec._wow_mock")
 
 -- Walks a function's upvalues by name (same recipe dev/spec/_ke_loader.lua
 -- uses for its other module seams).
@@ -176,6 +177,8 @@ local function newFixture()
             return self:AreAuraIdentitiesHidden()
         end,
     }
+    -- The module indexes C_SpecializationInfo at file scope.
+    mock.installSpecInfo()
     helpers.loadModule("Modules/QoL/Automation.lua", KE)
     local AU = modules["Automation"]
 

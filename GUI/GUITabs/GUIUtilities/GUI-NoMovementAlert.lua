@@ -10,6 +10,9 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
+
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("NoMovementAlert", true)

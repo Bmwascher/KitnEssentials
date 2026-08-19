@@ -13,6 +13,8 @@ if not KitnEssentials then return end
 local ST = KitnEssentials:NewModule("StanceText", "AceEvent-3.0")
 
 local CreateFrame = CreateFrame
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local unpack = unpack
 local ipairs = ipairs
 local tostring = tostring

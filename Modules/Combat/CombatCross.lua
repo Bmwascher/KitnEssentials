@@ -19,8 +19,8 @@ local select = select
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local UIParent = UIParent
-local GetSpecialization = GetSpecialization
-local GetSpecializationInfo = GetSpecializationInfo
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local C_Spell = C_Spell
 local UnitExists = UnitExists
 

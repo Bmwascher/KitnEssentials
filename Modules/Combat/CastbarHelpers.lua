@@ -11,6 +11,8 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local CreateFrame = CreateFrame
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local CreateColor = CreateColor
 local C_Spell = C_Spell
 local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo

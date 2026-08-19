@@ -1105,11 +1105,9 @@ function C:ApplyTauntSatellite()
 end
 
 -- File-local, declared right above its only caller so luacheck's unused-function
--- warning stays quiet. The two-step spec API resolution mirrors CombatTexts.lua
--- and Globals.lua, and is inline because KE has no compat shim for it.
+-- warning stays quiet.
 local function _isTankSpec()
-    local getSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization
-        or _G.GetSpecialization
+    local getSpec = C_SpecializationInfo.GetSpecialization
     if not getSpec then return false end
     local specIndex = getSpec()
     if not specIndex then return false end
