@@ -33,3 +33,141 @@ function Bridge.FromEUIPosition(point, relPoint, x, y)
         YOffset    = y or 0,
     }
 end
+
+local ipairs = ipairs
+local type = type
+local tinsert = table.insert
+
+-- EUI element keys are global across every addon that registers, so ours are
+-- namespaced. Registered elements are never removed: an element that goes
+-- hidden reports isHidden instead, which keeps anchors pointing at it alive.
+local KEY_PREFIX = "KE_"
+local DEFAULT_GROUP = "KitnEssentials"
+local DEFAULT_ORDER = 500
+
+local pending = {}   -- configs handed over before EUI or the frame was ready
+local published = {} -- euiKey -> true, so a re-register is a no-op
+
+local function EUI()
+    local eui = _G.EllesmereUI
+    if not eui then return nil end
+    if not (eui.RegisterUnlockElements and eui.MakeUnlockElement) then return nil end
+    return eui
+end
+
+local function ResolveFrame(config)
+    if config.frame then return config.frame end
+    if config.frameName then return _G[config.frameName] end
+    return nil
+end
+
+local function BuildElement(config, opts)
+    local eui = EUI()
+    if not eui then return nil end
+
+    local euiKey = KEY_PREFIX .. config.key
+    local isHidden = opts and opts.isHidden
+
+    return eui.MakeUnlockElement({
+        key   = euiKey,
+        label = (opts and opts.label) or config.displayName or config.key,
+        group = (opts and opts.group) or DEFAULT_GROUP,
+        order = (opts and opts.order) or DEFAULT_ORDER,
+
+        -- Size belongs to the module's own option sliders. A drag-resize handle
+        -- would fight them, so movers are position-only. noAnchorTo and
+        -- noAnchorTarget are deliberately NOT set: being an anchor target is the
+        -- whole reason for registering.
+        noResize = true,
+
+        getFrame = function() return ResolveFrame(config) end,
+
+        getSize = function()
+            local frame = ResolveFrame(config)
+            if not frame or not frame.GetWidth then return nil end
+            return frame:GetWidth(), frame:GetHeight()
+        end,
+
+        isHidden = function()
+            if isHidden then return isHidden() == true end
+            local frame = ResolveFrame(config)
+            return frame == nil
+        end,
+
+        savePos = function(_, point, relPoint, x, y)
+            -- The mover hands back coordinates already converted to
+            -- UIParent's CENTER. KE re-applies the same four values against
+            -- the element's OWN resolved anchor parent, so the two coordinate
+            -- spaces agree only while that parent is UIParent. Refuse the
+            -- write otherwise: the frame would land somewhere else entirely,
+            -- silently.
+            if config.getParentFrame and config.getParentFrame() ~= _G.UIParent then
+                return
+            end
+            config.setPosition(Bridge.FromEUIPosition(point, relPoint, x, y))
+        end,
+
+        loadPos = function()
+            return Bridge.ToEUIPosition(config.getPosition())
+        end,
+
+        -- No-op on purpose. A KE position always holds a usable anchor and the
+        -- module's own position card reads it; blanking it would leave that card
+        -- with nothing to show and the frame unplaced.
+        clearPos = function() end,
+
+        applyPos = function()
+            local pos = config.getPosition()
+            if pos then config.setPosition(pos) end
+        end,
+    })
+end
+
+local function PublishPending()
+    local eui = EUI()
+    if not eui then return end
+
+    local batch = {}
+    local stillPending = {}
+    for _, entry in ipairs(pending) do
+        local euiKey = KEY_PREFIX .. entry.config.key
+        -- An already-published key is skipped rather than re-registered: a
+        -- re-register would churn EUI's element table and lose the anchors
+        -- pointing at it.
+        if not published[euiKey] then
+            if ResolveFrame(entry.config) then
+                local element = BuildElement(entry.config, entry.opts)
+                if element then
+                    tinsert(batch, element)
+                    published[euiKey] = true
+                end
+            else
+                tinsert(stillPending, entry)
+            end
+        end
+    end
+
+    pending = stillPending
+    if #batch > 0 then
+        eui:RegisterUnlockElements(batch, "KitnEssentials")
+    end
+end
+
+function Bridge:Register(config, opts)
+    if type(config) ~= "table" or not config.key then return end
+    if type(config.getPosition) ~= "function" or type(config.setPosition) ~= "function" then return end
+    if published[KEY_PREFIX .. config.key] then return end
+
+    for _, entry in ipairs(pending) do
+        if entry.config.key == config.key then return end
+    end
+
+    tinsert(pending, { config = config, opts = opts })
+    PublishPending()
+end
+
+local boot = CreateFrame("Frame")
+boot:RegisterEvent("PLAYER_ENTERING_WORLD")
+boot:SetScript("OnEvent", function()
+    PublishPending()
+end)
