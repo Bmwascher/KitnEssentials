@@ -37,7 +37,38 @@ end
 local pairs = pairs
 local ipairs = ipairs
 local type = type
+local strfind = string.find
 local tinsert = table.insert
+
+-- Offset of a named anchor point from the centre of a region that size.
+-- WoW's nine anchor names are read as their two independent halves, so
+-- BOTTOMLEFT is simply the LEFT rule and the BOTTOM rule together.
+function Bridge.AnchorOffset(anchorPoint, width, height)
+    local ax, ay = 0, 0
+    if type(anchorPoint) == "string" then
+        if strfind(anchorPoint, "LEFT", 1, true) then
+            ax = -(width or 0) / 2
+        elseif strfind(anchorPoint, "RIGHT", 1, true) then
+            ax = (width or 0) / 2
+        end
+        if strfind(anchorPoint, "TOP", 1, true) then
+            ay = (height or 0) / 2
+        elseif strfind(anchorPoint, "BOTTOM", 1, true) then
+            ay = -(height or 0) / 2
+        end
+    end
+    return ax, ay
+end
+
+-- Re-express a centre-relative screen position as the offsets a different
+-- anchor pair needs to put the frame in the same place. cx/cy are the frame's
+-- centre measured from the parent's centre; the result is what SetPoint needs
+-- for selfPoint against relPoint.
+function Bridge.RebaseFromCenter(cx, cy, selfPoint, relPoint, frameW, frameH, parentW, parentH)
+    local fx, fy = Bridge.AnchorOffset(selfPoint, frameW, frameH)
+    local rx, ry = Bridge.AnchorOffset(relPoint, parentW, parentH)
+    return (cx or 0) + fx - rx, (cy or 0) + fy - ry
+end
 
 -- EUI element keys are global across every addon that registers, so ours are
 -- namespaced. Registered elements are never removed: an element that goes
@@ -115,7 +146,37 @@ local function BuildElement(config, opts)
                 local parent = config.getParentFrame()
                 if parent and parent ~= _G.UIParent then return end
             end
-            config.setPosition(Bridge.FromEUIPosition(point, relPoint, x, y))
+
+            -- Unlock mode always hands back CENTER/CENTER, so storing its four
+            -- values verbatim would overwrite whatever anchor points the user
+            -- picked in KE's own position card. Re-express the same screen
+            -- position against the stored pair instead, and only fall back to
+            -- CENTER when there is no stored pair or no live size to work from.
+            local stored = config.getPosition()
+            local frame = ResolveFrame(config)
+            local uiParent = _G.UIParent
+            if point == "CENTER" and relPoint == "CENTER"
+                and stored and stored.AnchorFrom and stored.AnchorTo
+                and not (stored.AnchorFrom == "CENTER" and stored.AnchorTo == "CENTER")
+                and frame and frame.GetWidth and uiParent
+            then
+                local ox, oy = Bridge.RebaseFromCenter(
+                    x, y, stored.AnchorFrom, stored.AnchorTo,
+                    frame:GetWidth(), frame:GetHeight(),
+                    uiParent:GetWidth(), uiParent:GetHeight()
+                )
+                config.setPosition(Bridge.FromEUIPosition(
+                    stored.AnchorFrom, stored.AnchorTo, ox, oy))
+            else
+                config.setPosition(Bridge.FromEUIPosition(point, relPoint, x, y))
+            end
+
+            -- The position card reads the profile when its page is built, so an
+            -- outside write is invisible until the page is rebuilt. KE's own
+            -- edit mode refreshes here for the same reason.
+            if KE.GUIFrame and KE.GUIFrame.mainFrame and KE.GUIFrame.mainFrame:IsShown() then
+                KE.GUIFrame:RefreshContent()
+            end
         end,
 
         loadPos = function()

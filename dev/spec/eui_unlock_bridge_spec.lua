@@ -60,3 +60,85 @@ describe("EUIUnlockBridge position translation", function()
         assert.same(original, back)
     end)
 end)
+
+describe("EUIUnlockBridge anchor rebasing", function()
+    local KE
+    before_each(function()
+        KE = L.loadEUIUnlockBridge()
+    end)
+
+    -- A 1920x1080 screen holding a 400x200 frame, used by every case below.
+    local UI_W, UI_H = 1920, 1080
+    local F_W, F_H = 400, 200
+
+    describe("AnchorOffset", function()
+        it("puts CENTER at the middle", function()
+            local x, y = KE.EUIUnlock.AnchorOffset("CENTER", F_W, F_H)
+            assert.equal(0, x)
+            assert.equal(0, y)
+        end)
+
+        it("reads each edge independently", function()
+            local x, y = KE.EUIUnlock.AnchorOffset("LEFT", F_W, F_H)
+            assert.equal(-200, x)
+            assert.equal(0, y)
+
+            x, y = KE.EUIUnlock.AnchorOffset("TOP", F_W, F_H)
+            assert.equal(0, x)
+            assert.equal(100, y)
+        end)
+
+        it("reads a corner as both of its halves", function()
+            local x, y = KE.EUIUnlock.AnchorOffset("BOTTOMLEFT", F_W, F_H)
+            assert.equal(-200, x)
+            assert.equal(-100, y)
+
+            x, y = KE.EUIUnlock.AnchorOffset("TOPRIGHT", F_W, F_H)
+            assert.equal(200, x)
+            assert.equal(100, y)
+        end)
+
+        it("treats a nil or non-string anchor as the centre", function()
+            local x, y = KE.EUIUnlock.AnchorOffset(nil, F_W, F_H)
+            assert.equal(0, x)
+            assert.equal(0, y)
+        end)
+    end)
+
+    describe("RebaseFromCenter", function()
+        it("is the identity for a CENTER/CENTER pair", function()
+            local x, y = KE.EUIUnlock.RebaseFromCenter(37, -12, "CENTER", "CENTER",
+                F_W, F_H, UI_W, UI_H)
+            assert.equal(37, x)
+            assert.equal(-12, y)
+        end)
+
+        it("re-expresses a centred frame against BOTTOMLEFT/BOTTOMLEFT", function()
+            -- Frame dead centre of the screen. Its bottom-left corner then sits
+            -- half the screen minus half the frame in from the screen corner.
+            local x, y = KE.EUIUnlock.RebaseFromCenter(0, 0, "BOTTOMLEFT", "BOTTOMLEFT",
+                F_W, F_H, UI_W, UI_H)
+            assert.equal(760, x)   -- 1920/2 - 400/2
+            assert.equal(440, y)   -- 1080/2 - 200/2
+        end)
+
+        it("round-trips a stored edge position through the centre form", function()
+            -- Start from the chat default, BOTTOMLEFT/BOTTOMLEFT at +1,+1.
+            -- Its centre relative to the screen centre is what unlock mode
+            -- would hand back for an untouched frame.
+            local cx = 1 + F_W / 2 - UI_W / 2
+            local cy = 1 + F_H / 2 - UI_H / 2
+            local x, y = KE.EUIUnlock.RebaseFromCenter(cx, cy, "BOTTOMLEFT", "BOTTOMLEFT",
+                F_W, F_H, UI_W, UI_H)
+            assert.equal(1, x)
+            assert.equal(1, y)
+        end)
+
+        it("handles a mixed pair, frame TOPRIGHT against screen BOTTOMLEFT", function()
+            local x, y = KE.EUIUnlock.RebaseFromCenter(0, 0, "TOPRIGHT", "BOTTOMLEFT",
+                F_W, F_H, UI_W, UI_H)
+            assert.equal(1160, x)  -- 0 + 200 - (-960)
+            assert.equal(640, y)   -- 0 + 100 - (-540)
+        end)
+    end)
+end)
