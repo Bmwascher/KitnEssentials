@@ -37,7 +37,6 @@ local function CropTabIcon(icon, atlas)
     end
 end
 
-local dashTab1
 local function AnchorDashboardTab(tab, _, _, _, x, y)
 
     if x ~= 1 or y ~= 0 then
@@ -45,10 +44,13 @@ local function AnchorDashboardTab(tab, _, _, _, x, y)
         tab:SetPoint("TOPLEFT", _G.HousingDashboardFrame, "TOPRIGHT", 1, 0)
     end
 end
+-- Each tab hangs off the one BEFORE it. 12.1 added a third, and anchoring
+-- them all to tab 1 stacks them in one place.
 local function AnchorDashboardTab2(tab, _, _, _, x, y)
-    if dashTab1 and (x ~= 0 or y ~= -1) then
+    local prev = S.data(tab).aePrevTab
+    if prev and (x ~= 0 or y ~= -1) then
         tab:ClearAllPoints()
-        tab:SetPoint("TOPLEFT", dashTab1, "BOTTOMLEFT", 0, -1)
+        tab:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -1)
     end
 end
 
@@ -191,20 +193,28 @@ local function SkinDashboard()
         end
     end
 
-    for i, tab in next, { dash.HouseInfoTabButton, dash.CatalogTabButton } do
+    -- parentArray="TabButtons" is the whole set; the hardcoded pair silently
+    -- skipped the Collection tab 12.1 added.
+    local sideTabs = dash.TabButtons
+    if not sideTabs or #sideTabs == 0 then
+        sideTabs = { dash.HouseInfoTabButton, dash.CatalogTabButton }
+    end
+    for i, tab in ipairs(sideTabs) do
         if tab then
             S.Backdrop(tab)
+            S.KillSideTabArt(tab)
             tab:SetSize(30, 40)
             if i == 1 then
-                dashTab1 = tab
                 tab:ClearAllPoints()
                 tab:SetPoint("TOPLEFT", dash, "TOPRIGHT", 1, 0)
                 hooksecurefunc(tab, "SetPoint", AnchorDashboardTab)
             else
+                S.data(tab).aePrevTab = sideTabs[i - 1]
                 tab:ClearAllPoints()
-                tab:SetPoint("TOPLEFT", dashTab1, "BOTTOMLEFT", 0, -1)
+                tab:SetPoint("TOPLEFT", sideTabs[i - 1], "BOTTOMLEFT", 0, -1)
                 hooksecurefunc(tab, "SetPoint", AnchorDashboardTab2)
             end
+            -- Pre-12.1 name; S.KillSideTabArt covers the 12.1 one.
             if tab.Highlight then S.KillTexture(tab.Highlight) end
             S.HoverWash(tab)
             local icon = tab.Icon
@@ -225,7 +235,24 @@ local function SkinDashboard()
                 hooksecurefunc(icon, "SetAtlas", CropTabIcon)
                 CropTabIcon(icon)
             end
-            if not tab.SelectedTexture then
+            -- Background is Blizzard's gold frame, drawn over our backdrop.
+            if tab.Background then tab.Background:SetAlpha(0) end
+
+            -- SelectedTexture is Blizzard's own key on 12.1, carrying the gold
+            -- selected atlas. Recolour theirs; only build ours when absent.
+            if tab.SelectedTexture then
+                tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
+                tab.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2],
+                    S.palette.brand[3], 0.3)
+                local tbd = S.GetBackdrop(tab)
+                if tbd then
+                    S.InsetToEdge(tab.SelectedTexture, tbd)
+                else
+                    tab.SelectedTexture:ClearAllPoints()
+                    tab.SelectedTexture:SetPoint("TOPLEFT", tab, "TOPLEFT", 1, -1)
+                    tab.SelectedTexture:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
+                end
+            else
                 local selT = tab:CreateTexture(nil, "BACKGROUND", nil, 1)
                 selT:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.3)
                 local tbd = S.GetBackdrop(tab)
@@ -259,6 +286,10 @@ local function SkinDashboard()
                 if upgrade.Background then upgrade.Background:Hide() end
                 if upgrade.WatchFavorButton then S.CheckBox(upgrade.WatchFavorButton) end
             end
+            -- The tabs are built in ContentFrame:Initialize(), which calls
+            -- UpdateTabs once. If that already ran, the hook alone never fires.
+            SkinContentTabs(content)
+            content:HookScript("OnShow", SkinContentTabs)
             hooksecurefunc(content, "UpdateTabs", SkinContentTabs)
 
             local initiatives = content.InitiativesFrame

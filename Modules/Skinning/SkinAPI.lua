@@ -2035,6 +2035,27 @@ function S.HookScrollBoxIcons(scrollBox, getIcon, withBackdrop)
     end
 end
 
+-- Blizzard's hover/selected art on a LargeSideTabButtonTemplate tab. 12.1
+-- renamed the atlases (questlog-tab-side* -> common-sidetab*), gave the hover
+-- texture the parentKey HighlightTexture where it had been anonymous, and added
+-- a pulsing TabGlow on top. Kill by key first; the atlas scan is the 12.0
+-- fallback for the texture that still has no key there.
+local SIDE_TAB_ATLASES = {
+    ["QuestLog-Tab-side-Glow-hover"] = true,
+    ["common-sidetab-hover"] = true,
+}
+
+function S.KillSideTabArt(tab)
+    if not tab then return end
+    S.KillTexture(tab.HighlightTexture)
+    S.KillTexture(tab.TabGlow)
+    for _, region in ipairs({ tab:GetRegions() }) do
+        if region:IsObjectType("Texture") and SIDE_TAB_ATLASES[region:GetAtlas() or ""] then
+            S.KillTexture(region)
+        end
+    end
+end
+
 function S.SideTab(tab, anchorParent, prevTab, iconSize)
     if not tab or S.data(tab).aeSideTab then return end
     iconSize = iconSize or 20
