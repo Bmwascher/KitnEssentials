@@ -55,7 +55,7 @@ The home page also carries the general settings: minimap button, login message, 
 |---|---|
 | Player Buffs | Replacement player buff header with weapon-enchant support and full layout control |
 | Player Debuffs | Replacement player debuff header with dispel-type coloring and full layout control |
-| Advanced Debuffs | Bar-based dispellable-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, PLAYER filter, per-type include/exclude, and a spell-ID blocklist (subsumes the older Boss Debuffs module) |
+| Advanced Debuffs | Bar-based dispellable-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, PLAYER filter, per-type include/exclude, a nameplate-only toggle, and a blocklist covering the spells the game lets addons identify by name (subsumes the older Boss Debuffs module) |
 | External Tracker | External defensive cooldowns cast onto you (Pain Suppression, Ironbark, Blessing of Sacrifice, and similar) with cooldown swipe, native countdown text, configurable glow per cast, BigWigs glow integration on incoming raid hits, and a sound test |
 | Missing Forms | Icon alert when you are not in the stance, form, aura, or attunement your specialization expects. Covers Warrior stances, Druid forms, Paladin auras, Priest Shadowform, and Evoker attunements, with a per-spec required choice, combat-only option, and a "show current form" mode that names what you are in instead |
 

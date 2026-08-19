@@ -1,6 +1,6 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## Unreleased
+## v4.1.0
 
 **Advanced Debuffs** and **External Tracker** have been rebuilt on top of the
 game's own aura display system. That rebuild is the actual fix for the patch
@@ -55,6 +55,29 @@ game's own aura display system. That rebuild is the actual fix for the patch
 - All eight growth directions are still there, now set with three controls
   instead of one list
 - Weapon enchants and right-click to cancel a buff both still work
+
+### Patch 12.1 stability
+- Every tool that reads buffs and debuffs now asks the game, spell by spell,
+  whether it is allowed to look before it looks. Patch 12.1 hides that
+  information far more often than before, and assuming otherwise is what
+  produced the errors in keystones, raids and rated play
+- Covers Ebon Might Helper, Prescience Tracker, Hunter's Mark, Dragonriding,
+  Ready Check Consumables, No Movement Alert, Burning Rush, Pet Status Text and
+  the automatic buff cancelling
+- Burning Rush now reads whether it is running from the spell's own activation
+  glow instead of from your buffs, so it stays right while the game is hiding
+  that information
+- Pet Status Text no longer tells you your pet is missing when the game simply
+  will not say which buffs it has
+- Displays that were forced to skip an update while the game was hiding
+  information now catch up on their own once it lifts, instead of staying stale
+  until something else happened to refresh them
+
+### Dungeon Trash
+- An internal timing helper that watched your group's buffs has been removed.
+  Patch 12.1 never allowed it to read that during a pull, so it was already
+  doing nothing at the only moments it was meant to matter. Cast timing is
+  unchanged
 
 ---
 
