@@ -161,7 +161,10 @@ local function BuildElement(config, opts)
             -- loop, so a page builder that threw would abort that loop and
             -- leave the session open with other addons unsaved.
             if KE.GUIFrame and KE.GUIFrame.mainFrame and KE.GUIFrame.mainFrame:IsShown() then
-                pcall(KE.GUIFrame.RefreshContent, KE.GUIFrame)
+                local ok, err = pcall(KE.GUIFrame.RefreshContent, KE.GUIFrame)
+                -- Contained, not swallowed: the loop survives either way, and a
+                -- page builder that broke still has to be reportable.
+                if not ok then geterrorhandler()(err) end
             end
         end,
 

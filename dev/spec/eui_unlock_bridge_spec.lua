@@ -73,7 +73,8 @@ describe("EUIUnlockBridge save branch", function()
 
     -- Returns the element unlock mode would have been handed, plus a record of
     -- what the module was asked to store and how the offsets were resolved.
-    local function buildElement(storedPos, frameW, frameH)
+    local function buildElement(storedPos, frameW, frameH, opts)
+        opts = opts or {}
         local KE = L.loadEUIUnlockBridge()
         local record = { resolveCalls = {} }
 
@@ -85,11 +86,13 @@ describe("EUIUnlockBridge save branch", function()
             return 111, 222
         end
 
+        local originX = opts.originX or 0
+        local originY = opts.originY or 0
         _G.UIParent = {
             GetWidth = function() return UI_W end,
             GetHeight = function() return UI_H end,
-            GetLeft = function() return 0 end,
-            GetBottom = function() return 0 end,
+            GetLeft = function() return originX end,
+            GetBottom = function() return originY end,
         }
 
         local frame = {
@@ -98,7 +101,7 @@ describe("EUIUnlockBridge save branch", function()
         }
 
         _G.EllesmereUI = {
-            MakeUnlockElement = function(opts) return opts end,
+            MakeUnlockElement = function(element) return element end,
             RegisterUnlockElements = function(_, batch) record.element = batch[1] end,
         }
 
@@ -108,6 +111,7 @@ describe("EUIUnlockBridge save branch", function()
             frame = frame,
             getPosition = function() return storedPos end,
             setPosition = function(pos) record.stored = pos end,
+            getParentFrame = opts.getParentFrame,
         })
 
         return record
@@ -173,6 +177,35 @@ describe("EUIUnlockBridge save branch", function()
         assert.equal(0, #r.resolveCalls)
         assert.same({ AnchorFrom = "CENTER", AnchorTo = "CENTER",
                       XOffset = 10, YOffset = 20 }, r.stored)
+    end)
+
+    it("lifts by the screen origin, not just by half the screen", function()
+        -- Every other case runs at origin zero, where a lift that forgot the
+        -- origin would still pass. This one cannot.
+        local r = buildElement(
+            { AnchorFrom = "BOTTOMLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 1, YOffset = 1 },
+            F_W, F_H, { originX = 64, originY = 32 })
+        r.element.savePos(nil, "CENTER", "CENTER", -759, -439)
+
+        local call = r.resolveCalls[1]
+        assert.equal(64 + UI_W / 2 + -759, call.cx)
+        assert.equal(32 + UI_H / 2 + -439, call.cy)
+        assert.equal(64, call.pl)
+        assert.equal(32, call.pb)
+    end)
+
+    it("refuses the write entirely when the element is not screen-anchored", function()
+        -- Unlock mode's coordinates are screen-relative. An element KE anchors
+        -- to something else would be placed somewhere else entirely, so the
+        -- write is refused rather than converted.
+        local other = {}
+        local r = buildElement(
+            { AnchorFrom = "BOTTOMLEFT", AnchorTo = "BOTTOMLEFT", XOffset = 1, YOffset = 1 },
+            F_W, F_H, { getParentFrame = function() return other end })
+        r.element.savePos(nil, "CENTER", "CENTER", -759, -439)
+
+        assert.equal(0, #r.resolveCalls)
+        assert.is_nil(r.stored)
     end)
 
     it("stores the same offsets when unlock mode saves twice", function()
