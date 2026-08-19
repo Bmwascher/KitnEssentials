@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.1.1
+
+### Automation
+- Fixed a several-second freeze on every login and reload, felt as the frame
+  rate dropping to single digits until the interface settled. The Hide
+  Helptips feature was asking an expensive patch 12.1 security question of
+  every frame in the game; it now asks it only of actual helptip buttons,
+  and its startup scan is spread thinly enough that it can no longer be felt.
+  This affected everyone, since Hide Helptips is on by default
+
+---
+
 ## v4.1.0
 
 **Advanced Debuffs** and **External Tracker** have been rebuilt on top of the
