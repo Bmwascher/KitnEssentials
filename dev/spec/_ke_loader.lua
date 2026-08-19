@@ -2353,4 +2353,14 @@ function L.loadDungeonRegistry()
     return helpers.loadModule("Modules/DungeonTimers/DungeonRegistry.lua")
 end
 
+-- Core/EUIUnlockBridge.lua. No EllesmereUI global is installed on purpose: the
+-- translation pair is pure, and the absent-EUI path is the one the specs
+-- exercise.
+function L.loadEUIUnlockBridge(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    _G.CreateFrame = function() return noopFrame() end
+    local KE = {}
+    return helpers.loadModule("Core/EUIUnlockBridge.lua", KE)
+end
+
 return L
