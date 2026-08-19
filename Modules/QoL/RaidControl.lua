@@ -118,7 +118,7 @@ local TARGET_SIZE = 22
 -- widths come from these numbers, so the two always abut.
 local ROLE_ICON_SIZE   = 18
 local ROLE_COUNT_GAP   = 1
-local ROLE_PAIR_WIDTH  = ROLE_ICON_SIZE + ROLE_COUNT_GAP + 13 -- 13 = two digits
+local ROLE_PAIR_WIDTH  = ROLE_ICON_SIZE + ROLE_COUNT_GAP + 15 -- 15 = two digits
 local ROLE_PLATE_PAD   = 2                                    -- one each end
 local ROLE_PLATE_WIDTH = ROLE_PAIR_WIDTH * 3 + ROLE_PLATE_PAD
 local CLOSE_WIDTH      = PANEL_WIDTH - ROLE_PLATE_WIDTH
@@ -231,7 +231,7 @@ local function CreateUtilButton(name, parent, template, width, height, point, re
         -- as the floor: worst case is wrong typeface, never invisible
         -- controls.
         local text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        S.SetFont(text, 12, "")
+        S.SetFont(text, 14, "")
         text:SetPoint("CENTER", btn, "CENTER", 0, 0)
         text:SetJustifyH("CENTER")
         text:SetText(btn.label)
@@ -265,7 +265,7 @@ local function CreateDropdown(name, parent, width, point, relativeto, point2, xO
 
     if label then
         dropdown.label = dropdown:CreateFontString(nil, "OVERLAY")
-        S.SetFont(dropdown.label, 12, "")
+        S.SetFont(dropdown.label, 14, "")
         dropdown.label:SetPoint("LEFT", dropdown, "RIGHT", 4, 0)
         dropdown.label:SetText(label)
     end
@@ -300,7 +300,7 @@ local function CreateCheckBox(name, parent, size, point, relativeto, point2, xOf
     if box.Text then
         box.Text:SetPoint("LEFT", box, "RIGHT", 2, 0)
         box.Text:SetText(box.label)
-        S.SetFont(box.Text, 12, "")
+        S.SetFont(box.Text, 14, "")
     end
 
     box:SetPoint(point, relativeto, point2, xOfs, yOfs)
@@ -579,7 +579,7 @@ function RC:CreateRoleIcons(panel)
         frame.texture = texture
 
         local Count = frame:CreateFontString(nil, "OVERLAY")
-        S.SetFont(Count, 12, "OUTLINE")
+        S.SetFont(Count, 14, "OUTLINE")
         Count:SetPoint("LEFT", frame, "RIGHT", 1, 0)
         Count:SetText("0")
         frame.count = Count
@@ -1149,7 +1149,7 @@ function RC:Setup()
     local pos = db.Position
     local ShowButton = CreateUtilButton("KE_RaidControlShowButton", UIParent, "SecureHandlerClickTemplate",
         136, BUTTON_HEIGHT, nil, nil, nil, nil, nil, _G.RAID_CONTROL or "Raid Control", nil, nil, OnClick_ShowButton)
-    KE.Skins.SetFont(ShowButton.Text, 14, "")
+    KE.Skins.SetFont(ShowButton.Text, 16, "")
     if pos.bottom then
         ShowButton:SetPoint("BOTTOM", UIParent, "BOTTOM", pos.x or -400, -1)
     else
