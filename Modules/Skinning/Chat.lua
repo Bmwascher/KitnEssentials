@@ -1125,23 +1125,21 @@ end
 
 function CHAT:AddMessageEdits(_, msg, isHistory, historyTime)
     if not msg then return msg end
-    if KE:IsSecretValue(msg) then return msg end
+
+    local isSecret = KE:IsSecretValue(msg)
 
     -- BN colorize runs BEFORE the |K protection check below: BN messages
     -- ALWAYS contain |K names, so MessageIsProtected is true for every
-    -- one of them.
+    -- one of them. It reads the string, so a secret body skips it.
     local db = self.db
-    if db.ClassColorWhispers ~= false and strfind(msg, "|HBNplayer:", 1, true) then
+    if not isSecret and db.ClassColorWhispers ~= false and strfind(msg, "|HBNplayer:", 1, true) then
         msg = ColorizeBNSenders(msg)
     end
 
-    -- Protected messages skip the string-parsing steps below (the
-    -- strmatch early-return and HandleShortChannels' gsub rewrite) but
-    -- still fall through to the timestamp block, which only prepends via
-    -- format and never parses the |K payload. Matches ElvUI's
-    -- AddMessageEdits (ElvUI/Game/Shared/Modules/Chat/Chat.lua),
-    -- which uses the same isProtected flag only to skip its strmatch guards.
-    local isProtected = self:MessageIsProtected(msg)
+    -- Protected messages skip every string-parsing step below -- the strmatch
+    -- early-return and HandleShortChannels' gsub rewrite -- but still reach the
+    -- timestamp block, which prepends without reading the body.
+    local isProtected = isSecret or self:MessageIsProtected(msg)
 
     if not isProtected then
         if strmatch(msg, '^%s*$') or strmatch(msg, '^|Hketime|h') then return msg end
@@ -1150,17 +1148,31 @@ function CHAT:AddMessageEdits(_, msg, isHistory, historyTime)
     local historyTimestamp
     if isHistory == "KE_ChatHistory" then historyTimestamp = historyTime end
     if not isProtected and db.ShortChannels then msg = self:HandleShortChannels(msg, false) end
+
     if db.TimestampFormat and db.TimestampFormat ~= "NONE" then
         local timestamp = BetterDate(db.TimestampFormat, historyTimestamp or self:GetDateTime(db.UseLocalTime))
         timestamp = gsub(timestamp, " ", "")
         timestamp = gsub(timestamp, "AM", " AM")
         timestamp = gsub(timestamp, "PM", " PM")
+
+        local prefix
         if db.TimestampColorEnabled and db.TimestampColor then
             local c = db.TimestampColor
             local colorCode = format("|cff%02x%02x%02x", (c.r or 0.6) * 255, (c.g or 0.6) * 255, (c.b or 0.6) * 255)
-            msg = format("|Hketime|h%s%s|r|h %s", colorCode, timestamp, msg)
+            prefix = format("|Hketime|h%s%s|r|h ", colorCode, timestamp)
         else
-            msg = format("|Hketime|h%s|h %s", timestamp, msg)
+            prefix = format("|Hketime|h%s|h ", timestamp)
+        end
+
+        if isSecret then
+            -- C_StringUtil.WrapString is AllowedWhenTainted, so it accepts a
+            -- secret body whether or not Lua's own joins would. A nil return
+            -- means the join is unavailable, so the body ships unstamped rather
+            -- than vanishing.
+            local joined = KE:WrapSecretText(msg, prefix)
+            if joined then msg = joined end
+        else
+            msg = prefix .. msg
         end
     end
 
