@@ -20,7 +20,7 @@ local function ScrollChild(button)
     S.StripTextures(button)
 
     S.RowHover(button)
-    if button.Selection then button.Selection:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.3) end
+    if button.Selection then button.Selection:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.18) end
     S.data(button).skinned = true
 end
 

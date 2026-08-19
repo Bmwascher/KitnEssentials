@@ -153,7 +153,7 @@ end
 
 local EQUIP_FONT = 13
 local EQUIP_HOVER_ALPHA = 0.30
-local EQUIP_SELECT_ALPHA = 0.40
+local EQUIP_SELECT_ALPHA = 0.24
 local function StyleEquipRow(child)
     if not child or not child.icon or child.aeEquipSkinned then return end
     if child.BgTop then child.BgTop:SetTexture(nil) end

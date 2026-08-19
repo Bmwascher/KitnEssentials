@@ -30,7 +30,7 @@ local function ScrollChild(button)
     if button.disabledBG then button.disabledBG:SetTexture(nil) end
 
     if button.selectedTex then
-        button.selectedTex:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.25)
+        button.selectedTex:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
         if bd then
             button.selectedTex:ClearAllPoints()
             button.selectedTex:SetPoint("TOPLEFT", bd, "TOPLEFT", 1, -1)

@@ -2159,7 +2159,7 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
     if tab.Background then tab.Background:SetAlpha(0) end
     if tab.SelectedTexture then
         tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
-        tab.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.3)
+        tab.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.18)
         local tbd = S.GetBackdrop(tab)
         if tbd then
             S.InsetToEdge(tab.SelectedTexture, tbd)

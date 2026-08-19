@@ -106,7 +106,7 @@ local function SkinListButton(button)
         local bd = S.Backdrop(button)
         if bd then bd:SetAllPoints(button) end
         if button.SelectedBar then
-            button.SelectedBar:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], 0.25)
+            button.SelectedBar:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], 0.15)
             if bd then button.SelectedBar:ClearAllPoints(); button.SelectedBar:SetPoint("TOPLEFT", bd, 1, -1); button.SelectedBar:SetPoint("BOTTOMRIGHT", bd, -1, 1) end
         end
         local hl = button.GetHighlightTexture and button:GetHighlightTexture()
@@ -162,7 +162,7 @@ local function SkinIconGridButton(child)
         end
     end
     if child.SelectedTexture then
-        child.SelectedTexture:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], 0.5)
+        child.SelectedTexture:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], 0.30)
         if icon then child.SelectedTexture:SetAllPoints(icon) end
     end
 end

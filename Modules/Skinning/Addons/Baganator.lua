@@ -76,7 +76,7 @@ skinners.SideTabButton = function(tab)
         tab.SelectedTexture:ClearAllPoints()
         tab.SelectedTexture:SetPoint("CENTER")
         tab.SelectedTexture:SetSize(25, 25)
-        tab.SelectedTexture:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], 0.35)
+        tab.SelectedTexture:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], 0.20)
     end
     S.Backdrop(tab)
     S.Hover(tab)

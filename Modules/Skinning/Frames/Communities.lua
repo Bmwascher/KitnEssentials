@@ -33,7 +33,7 @@ local function FlattenSelection(frame, alpha, anchor)
     if frame.Selection then
         if frame.Selection.SetAtlas then frame.Selection:SetAtlas(nil) end
         frame.Selection:SetTexture(WHITE)
-        frame.Selection:SetVertexColor(BRAND[1], BRAND[2], BRAND[3], alpha or 0.30)
+        frame.Selection:SetVertexColor(BRAND[1], BRAND[2], BRAND[3], alpha or 0.18)
         if anchor then
             frame.Selection:ClearAllPoints()
             frame.Selection:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
@@ -94,12 +94,12 @@ local function StyleListEntry(child)
         end
         child.aeRow = true
     end
-    FlattenSelection(child, 0.30, S.GetBackdrop(child))
+    FlattenSelection(child, 0.18, S.GetBackdrop(child))
 end
 
 local function StyleMemberRow(child)
     if not child then return end
-    FlattenSelection(child, 0.30)
+    FlattenSelection(child, 0.18)
     if child.aeMemberRow then return end
 
     S.FontStringsDeep(child, 12, "OUTLINE", 2)

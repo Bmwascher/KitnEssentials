@@ -122,7 +122,7 @@ local function HandleAbilityTabs(viewer)
         if tab.SelectedTexture then
 
             tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
-            tab.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.3)
+            tab.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.18)
             local tbd = S.GetBackdrop(tab)
             tab.SelectedTexture:ClearAllPoints()
             tab.SelectedTexture:SetPoint("TOPLEFT", tbd or tab, "TOPLEFT", 1, -1)

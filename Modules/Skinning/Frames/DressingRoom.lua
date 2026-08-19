@@ -55,7 +55,7 @@ local function OnDressUpResized(frame, isMinimized)
     end
 end
 
-local SET_SELECTED_ALPHA = 0.25
+local SET_SELECTED_ALPHA = 0.15
 
 local function DressSetButton(button)
     if S.data(button).skinned then return end

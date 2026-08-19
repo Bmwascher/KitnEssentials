@@ -5,7 +5,7 @@ local hooksecurefunc = hooksecurefunc
 
 local function HeaderUpdate(header)
     if header.HighlightTexture then
-        header.HighlightTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.25)
+        header.HighlightTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
         header.HighlightTexture:ClearAllPoints()
         header.HighlightTexture:SetPoint("TOPLEFT", 1, -1)
         header.HighlightTexture:SetPoint("BOTTOMRIGHT", -1, 1)

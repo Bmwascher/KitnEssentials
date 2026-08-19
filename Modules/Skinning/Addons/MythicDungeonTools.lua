@@ -66,7 +66,7 @@ local function ReskinDungeonButtons(MDT)
             end
             if button.selectedTexture then
                 button.selectedTexture:SetTexture(WHITE)
-                button.selectedTexture:SetVertexColor(BRAND[1], BRAND[2], BRAND[3], 0.4)
+                button.selectedTexture:SetVertexColor(BRAND[1], BRAND[2], BRAND[3], 0.24)
                 Inset(button.selectedTexture)
             end
             local SIZE = 40

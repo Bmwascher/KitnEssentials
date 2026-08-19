@@ -140,7 +140,7 @@ local function RefreshTree(self, ...)
                 local isSel = selected and line and line.uniquevalue == selected
                 if isSel then
 
-                    button.highlight:SetVertexColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.25)
+                    button.highlight:SetVertexColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
                 else
                     button.highlight:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], 0.15)
                 end
