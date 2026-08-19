@@ -106,6 +106,10 @@ local function newFixture()
     _G.HelpPlateTooltip = nil
     _G.HelpPlate = nil
     _G.EnumerateFrames = function() end
+    -- Frozen clock: the sweep's time budget never expires headless, so the
+    -- count cap alone decides slice size and the lifecycle cases stay
+    -- deterministic. The budget case swaps in an advancing clock itself.
+    _G.debugprofilestop = function() return 0 end
 
     -- Existing Blizzard frames the ported functions act on directly (never
     -- through CreateFrame), so a spy attached only to CreateFrame returns
@@ -856,6 +860,24 @@ describe("Automation Hide Helptips sweep lifecycle", function()
         -- stall the login frame rate when every frame in the client pays it;
         -- only fingerprint matches may.
         assert.equals(#buttons, accessCalls())
+    end)
+
+    it("yields the tick when the time budget runs out before the count does", function()
+        local fx = helptipFixture()
+        local _, buttons = newSweepWorld(100, 10, fx.fingerprint)
+        -- Every clock read advances a full millisecond, so each slice's budget
+        -- expires after a single frame. The walk must still finish -- one
+        -- frame per tick -- rather than stopping or spinning.
+        local now = 0
+        _G.debugprofilestop = function() now = now + 1 return now end
+        local from = #fx.timers + 1
+
+        fx.AU:ApplySettings()
+        -- ~one frame per tick across 100 frames (the first slice runs inside
+        -- ApplySettings itself, so the queue holds one fewer). A count-only
+        -- slice would finish in a single tick.
+        assert.is_true(pumpSlices(fx, from) >= 50)
+        assert.is_true(allHidden(buttons))
     end)
 
     it("does not walk again on a later apply once a walk completed", function()

@@ -321,7 +321,13 @@ end
 -- watchdog measures one uninterrupted run, and nothing here is urgent enough
 -- to justify one. The guard keeps a second ApplySettings from starting a
 -- parallel walk over the same list.
+-- Two bounds per slice. The count keeps one tick's work finite even where
+-- inspection is nearly free; the millisecond budget is the one that protects
+-- the frame rate -- node cost varies by orders of magnitude across the list
+-- (a forbidden stretch throws on every read), so a fixed count alone can
+-- still hold a render frame past 100ms.
 local TUTORIAL_SWEEP_SLICE = 500
+local TUTORIAL_SWEEP_BUDGET_MS = 1.5
 local tutorialSweeping = false
 local tutorialSweepGen = 0
 
@@ -342,8 +348,10 @@ end
 -- Returns the first frame of the next slice, or nil at the end of the list.
 local function TutorialSweepSlice(frame, fp)
     local enumerate = EnumerateFrames
+    local clock = debugprofilestop
+    local deadline = clock() + TUTORIAL_SWEEP_BUDGET_MS
     local visited = 0
-    while frame and visited < TUTORIAL_SWEEP_SLICE do
+    while frame and visited < TUTORIAL_SWEEP_SLICE and clock() < deadline do
         pcall(TutorialInspectFrame, frame, fp)
         frame = enumerate(frame)
         visited = visited + 1
