@@ -19,4 +19,5 @@
     <Script file="MoveFrames.lua" />
     <Script file="GroupSort.lua" />
     <Script file="RaidControl.lua" />
+    <Script file="VehicleExit.lua" />
 </Ui>

@@ -681,6 +681,7 @@ local PREVIEW_MODULES = {
     -- /kes edit showed its mover with no sample bars behind it.
     "LootRoll",
     "BuffTracking", "PlayerDebuffTracking",
+    "VehicleExit",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -714,6 +715,7 @@ local SECTION_PREVIEW_MODULES = {
     skinning_section = {
         "DragonRiding",
         "DamageMeter", "MythicPlusTimer",
+        "VehicleExit",
     },
     dungeons_section = {
         "EnemyCounter", "KickTracker", "DungeonCasts", "DeathNotifications",

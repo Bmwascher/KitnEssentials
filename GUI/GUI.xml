@@ -120,6 +120,7 @@
     <Script file="GUITabs\GUIQoL\GUI-ColorPicker.lua" />
     <Script file="GUITabs\GUIQoL\GUI-MoveFrames.lua" />
     <Script file="GUITabs\GUIQoL\GUI-RaidControl.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-VehicleExit.lua" />
     <Script file="GUITabs\GUIQoL\GUI-QualityOfLife.lua" />
 
     <!-- Skinning tabs -->

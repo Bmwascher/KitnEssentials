@@ -1067,6 +1067,16 @@ local Defaults = {
             Position = DefaultPosition(0, 200),
         },
 
+        -- OFF by default: with it off the vehicle exit button's position is
+        -- never touched, and whichever owner claims it keeps it.
+        VehicleExit = {
+            Enabled = false,
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, 150),
+        },
+
         VantusRune = {
             Enabled = true,
             ShowChatMessages = true,

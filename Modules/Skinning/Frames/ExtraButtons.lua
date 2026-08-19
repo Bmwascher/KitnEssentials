@@ -27,6 +27,7 @@ local function SkinExtraButton(button)
 
     S.Backdrop(button)
     S.Hover(button)
+    S.Pressed(button)
 
     local hotkey = button.HotKey
     if hotkey then
@@ -52,6 +53,36 @@ local function SkinExtraButton(button)
     S.data(button).skinned = true
 end
 
+-- The vehicle exit button. Same family as the buttons above, but it carries no
+-- .icon: the art IS its normal texture, so it needs its own pass. The crop
+-- trims the ring on top of the 0.140625..0.859375 Blizzard applies in XML.
+--
+-- Styling only. The button inherits EditModeVehicleLeaveButtonSystemTemplate,
+-- so where it sits and when it shows stay with their owners.
+local VEHICLE_CROP = { 0.220625, 0.799375, 0.220625, 0.779375 }
+
+local function SkinVehicleLeaveButton()
+    local button = _G.MainMenuBarVehicleLeaveButton
+    if not button or S.data(button).skinned then return end
+    S.data(button).skinned = true
+
+    local normal = button.GetNormalTexture and button:GetNormalTexture()
+    if normal then
+        normal:SetTexCoord(VEHICLE_CROP[1], VEHICLE_CROP[2], VEHICLE_CROP[3], VEHICLE_CROP[4])
+        normal:ClearAllPoints()
+        normal:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+        normal:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+    end
+
+    -- Blizzard's square ADD highlight would sit on top of our hover wash and
+    -- read as a second, brighter frame.
+    if button.Highlight then button.Highlight:SetAlpha(0) end
+
+    local bd = S.Backdrop(button)
+    S.Hover(button, bd)
+    S.Pressed(button)
+end
+
 local function SkinZoneButtons()
     local zone = _G.ZoneAbilityFrame
     if not zone then return end
@@ -64,6 +95,8 @@ local function SkinZoneButtons()
 end
 
 local function Skin()
+    SkinVehicleLeaveButton()
+
     if _G.ExtraActionButton1 then SkinExtraButton(_G.ExtraActionButton1) end
 
     local bar = _G.ExtraActionBarFrame

@@ -131,6 +131,10 @@ GUIFrame.sidebarConfig = {
             { id = "DamageMeter",        text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" }, alwaysEnabled = true },
             { id = "MythicPlusTimer",    text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" }, alwaysEnabled = true },
             { id = "DragonRiding",       text = "Skyriding UI", alwaysEnabled = true, keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
+            -- alwaysEnabled like Skyriding UI: it moves a Blizzard frame and does
+            -- not depend on the skinning subsystem, so it must not grey out when
+            -- ElvUI takes this section over.
+            { id = "VehicleExit",        text = "Vehicle Exit Button", alwaysEnabled = true, keywords = { "vehicle", "exit", "leave", "eject", "dismount", "button", "position", "move", "anchor" } },
             { id = "SkinTooltips",       text = "Tooltips", keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "mythic rating", "target", "health bar", "class color", "hide in combat" } },
         },
     },

@@ -726,6 +726,46 @@ function S.Hover(button, anchor)
     armHover(button, anchor, 1, -1, -1, 1)
 end
 
+-- Blizzard's bevelled Down art reads as a second frame over a flat button.
+-- Killing it outright leaves no press feedback, so it is replaced with an
+-- additive tint held inside our border.
+local PRESSED_TEX = "Interface\\Buttons\\WHITE8x8"
+
+local function RePressed(btn)
+    local d = S.data(btn)
+    if d.pressing then return end
+    d.pressing = true
+    S.Pressed(btn, d.pressInset)
+    d.pressing = nil
+end
+
+---@param button Button
+---@param inset number|nil pixels to hold back from the edge (default 1, our border)
+function S.Pressed(button, inset)
+    if not (button and button.SetPushedTexture) then return end
+
+    inset = inset or 1
+    local d = S.data(button)
+    d.pressInset = inset
+
+    button:SetPushedTexture(PRESSED_TEX)
+    local push = button.GetPushedTexture and button:GetPushedTexture()
+    if not push then return end
+
+    push:SetColorTexture(0.9, 0.8, 0.1, 0.3)
+    push:SetBlendMode("ADD")
+    push:ClearAllPoints()
+    push:SetPoint("TOPLEFT", button, "TOPLEFT", inset, -inset)
+    push:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -inset, inset)
+
+    -- Blizzard re-dresses the extra action button whenever its ability changes,
+    -- which puts the bevelled art straight back. Post-hook, not a replacement:
+    -- the button is protected and method surgery on it taints.
+    if d.pressedHooked then return end
+    d.pressedHooked = true
+    hooksecurefunc(button, "SetPushedTexture", RePressed)
+end
+
 function S.HoverWash(frame)
     if not frame or S.data(frame).hoverWash then return end
     local anchor = S.GetBackdrop(frame) or frame
