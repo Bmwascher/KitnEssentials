@@ -1,5 +1,74 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.2.0
+
+### Automation
+- Fixed a crash that could take the whole game client down. Hide Tutorials
+  walked a panel's frames by calling itself once per level, and a deep tree
+  such as a talent window or the map canvas could exhaust the client's own
+  stack. It now walks the same frames from a queue
+
+### Spell Alert Opacity
+- Fixed the per-spec switches. Turning a spec on wrote the opposite value, so
+  a spec you switched off could never be switched back on and the box came
+  back unticked. Any spec you already turned off will turn on correctly now
+- Moving the opacity slider no longer quietly overrides your per-spec choice
+
+### Achievements
+- Fixed the Achievement panel losing all of its skinning in patch 12.1. The
+  search box moved inside the header and the old lookup stopped the skin
+  before it started
+
+### Raid Control
+- **NEW:** a 5 second countdown, so the row is now 5s, 10s and 20s
+- **NEW:** Check Vantus Runes names anyone in the raid without a rune, in your
+  own chat only
+- **NEW:** a raid buff strip above the world markers. Each class buff dims when
+  nobody in the raid brings it
+- In a party the panel drops the raid-only rows and shrinks to fit
+- All of the panel's text is two points larger
+
+### Vehicle Exit Button
+- **NEW:** the vehicle and taxi exit button is skinned to match, and can be
+  placed anywhere. Skinning > Vehicle Exit Button, with Toggle Anchors and
+  anchor-to-frame support
+
+### Battle.net Toasts
+- Friend and Battle.net toasts are back and skinned. The skin follows Frame
+  Skins > Misc Dialogs; the position above the chat panel comes from the Chat
+  module
+
+### Housing
+- The Housing dashboard side tabs are skinned again on patch 12.1
+- The House Level and Endeavors tabs are skinned
+
+### Chat
+- Pings in chat name whoever pinged again
+
+### Tooltips
+- Hostile creatures read in their reaction colour again instead of a class
+  colour. Blizzard's class lookup answers for creatures too, which made every
+  hostile mob wear Warrior tan
+- An enemy's Target line is class-coloured when the target is a player
+
+### Combat Logger
+- The chat message now names the content logging started for
+- It tells you when it takes over a log that was already running, and it will
+  not close a log it did not start
+- Advanced combat logging no longer asks for a reload. It never needed one
+
+### Dark Theme
+- Window colours moved to the top of the General page instead of their own tab
+- Addon skins moved below frame skins instead of their own tab
+- The pink selection highlight is softer on every skinned panel
+- Notes across the General page, the Color Picker and Raid Control carry a
+  KE-coloured dash
+
+### Friends List
+- The Battle.net account row is centred again, and the tabs sit tight
+
+---
+
 ## v4.1.1
 
 ### Automation
