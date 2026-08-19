@@ -82,6 +82,14 @@ local function BuildElement(config, opts)
         -- whole reason for registering.
         noResize = true,
 
+        -- KE places and pixel-snaps its own frames, so unlock mode must not
+        -- re-place them: its init pass would otherwise re-apply the position
+        -- against a grid derived from the frame's effective scale, which is the
+        -- exact method KE's pixel-perfect system rejects, and it would force the
+        -- anchor's relative frame to the screen. Dependents anchored to us still
+        -- follow: the size hook and the anchor pass are outside this branch.
+        noInitHook = true,
+
         getFrame = function() return ResolveFrame(config) end,
 
         getSize = function()
