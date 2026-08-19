@@ -2332,6 +2332,9 @@ end
 local hyperlinkHoveredFrame
 function CHAT:OnHyperlinkEnter(frame, refString)
     if InCombatLockdown() then return end
+    -- A secret link cannot be pattern-matched, and there is no tooltip to show
+    -- for one either way.
+    if not refString or KE:IsSecretValue(refString) then return end
     local linkToken = strmatch(refString, "^([^:]+)")
     if HYPERLINK_TYPES[linkToken] then
         GameTooltip:SetOwner(frame, "ANCHOR_CURSOR")
