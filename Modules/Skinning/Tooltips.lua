@@ -304,18 +304,18 @@ end
 -- GetPlayerInfoByGUID on a CREATURE guid does not fail cleanly -- it answers
 -- with the first class, so every hostile NPC comes back WARRIOR and wears that
 -- tan class colour instead of red. Only a Player- GUID may be asked for a
--- class. data.guid is documented clean even where the unit token is secret,
--- and IsSafeValue orders the secrecy check first regardless.
+-- class. IsSafeValue runs the secrecy check before the string work, so the
+-- guard holds whether or not the field arrives secret.
 local function IsPlayerGUID(guid)
     if not KE:IsSafeValue(guid) then return false end
     return type(guid) == "string" and guid:sub(1, 7) == "Player-"
 end
 
--- Returns a colour OBJECT, never bare components. The components can be
--- secret, and `if r then` on a secret is the very test that is forbidden -- so
--- callers test the object (always a plain table) and unpack it only into
--- sinks. Nothing returned means "leave Blizzard's own colour alone", which is
--- what puts hostile names back to red.
+-- Returns a colour OBJECT, never bare components. A caller handed components
+-- would have to work out, per call site, whether this particular value is safe
+-- to test; the object is always a plain table, so the test never touches a
+-- component and they reach nothing but sinks. Nothing returned means "leave
+-- Blizzard's own colour alone", which is what puts hostile names back to red.
 local function UnitColor(unit, guid)
     -- Preferred: GetPlayerInfoByGUID is AllowedWhenTainted, so it resolves a
     -- class even over a raid frame, where the token is secret but the GUID is

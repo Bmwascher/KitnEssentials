@@ -447,9 +447,9 @@ function L.loadTooltips(opts, overrides)
     _G.UnitClass = opts.UnitClass or function() return "Evoker", "EVOKER" end
     _G.GetPlayerInfoByGUID = opts.GetPlayerInfoByGUID or function() return "Evoker", "EVOKER" end
     _G.C_ClassColor = opts.C_ClassColor or nil
-    -- Only the pure helpers (_ShortValue/_ColorsMatch/_ReactionColor/
-    -- _WantIDs) are reachable from a spec; nothing here calls OnEnable, so
-    -- only the globals those four touch need a stub.
+    -- Only _ShortValue/_ColorsMatch/_ReactionColor/_WantIDs/_UnitColor are
+    -- reachable from a spec; nothing here calls OnEnable, so only the globals
+    -- those five touch need a stub.
     local KE = {
         Print = function() end,
         ShouldNotLoadModule = function() return false end,

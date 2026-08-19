@@ -75,11 +75,10 @@ end
 -- AllowedWhenTainted, so it accepts a secret in any position where Lua's `..`
 -- and format() would throw.
 --
--- The result of a secret join is itself secret, so `joined == nil` or
--- `joined == ""` would detonate on exactly the input this exists to serve.
--- `ok` is a plain boolean from pcall and type() never throws; nothing else here
--- may touch `joined`. Returns nil when the join is unavailable, so callers can
--- fall back to the undecorated body.
+-- The return may itself be secret, and nothing here needs to know: `ok` is a
+-- plain boolean from pcall, type() never throws whatever it is handed, and no
+-- other statement touches `joined`. Returns nil when the join is unavailable,
+-- so callers can fall back to the undecorated body.
 ---@param body any text to wrap, secret or not
 ---@param prefix string|nil
 ---@param suffix string|nil

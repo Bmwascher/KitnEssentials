@@ -289,9 +289,9 @@ local function HideOpenTips()
 end
 
 -- Queued, not recursive: the old vararg recursion held every level's siblings on
--- the Lua stack and a talent tree or map canvas overflowed it, crashing the
--- client (atrocityEssentials hit this and replaced the same walker in v4.0.565).
--- The depth cap is only about cost; a "?" is panel chrome, never buried deep.
+-- the Lua stack, and a talent tree or map canvas overflowed it and killed the
+-- client. The depth cap is only about cost; a "?" is panel chrome, never buried
+-- deep.
 local TUTORIAL_MAX_DEPTH = 4
 
 local function TutorialHideButtonsUnder(root)

@@ -174,7 +174,7 @@ read_globals = {
     "CanInspect", "NotifyInspect", "GetInspectSpecialization",
 
     -- Specialization
-    "GetSpecialization", "GetSpecializationInfo", "GetSpecializationRole",
+    "GetSpecializationRole",
     "GetSpecializationInfoByID", "GetNumClasses", "GetSpecializationInfoForClassID",
     "C_CreatureInfo",
 
