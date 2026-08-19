@@ -503,8 +503,8 @@ end
 ------------------------------------------------------------------------
 
 function CHAT:RegisterEditMode()
-    if KE.EditMode and not self.editModeRegistered then
-        KE.EditMode:RegisterElement({
+    if not self.editModeConfig then
+        self.editModeConfig = {
             key = "Chat", displayName = "Chat", frame = self.panel,
             module = self,
             getPosition = function() return self.db.Position end,
@@ -517,14 +517,34 @@ function CHAT:RegisterEditMode()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
             guiPath = "Chat",
-        })
+        }
+    end
+
+    if KE.EditMode and not self.editModeRegistered then
+        KE.EditMode:RegisterElement(self.editModeConfig)
         self.editModeRegistered = true
+    end
+
+    -- Registering with EllesmereUI is independent of KE's own edit mode: the
+    -- point is that EUI elements can anchor TO the chat panel, which has to keep
+    -- working whether or not the panel is currently movable in /kes edit.
+    if KE.EUIUnlock then
+        KE.EUIUnlock:Register(self.editModeConfig, {
+            label = "Chat Panel",
+            order = 600,
+            isHidden = function()
+                return not (self.db and self.db.Enabled and self.panel)
+            end,
+        })
     end
 end
 
 function CHAT:UnregisterEditMode()
     if KE.EditMode then KE.EditMode:UnregisterElement("Chat") end
     self.editModeRegistered = false
+    -- The EllesmereUI element deliberately stays registered. Dropping it would
+    -- break every EUI element anchored to the chat panel; isHidden already
+    -- reports the panel's real state.
 end
 
 function CHAT:OnEditModeLayoutChange()
