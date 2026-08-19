@@ -140,6 +140,9 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             -- GUI-BlizzardMessages.lua gets away with `LSM = {}` because it
             -- never calls HashTable.
             LSM = { HashTable = function() return {} end },
+            -- The accent-coloured lead-in on this page's notes. Identity here:
+            -- the colour is a look, and no assertion reads it.
+            ColorTextByTheme = function(_, text) return text end,
         }
         -- ContextMenus' onToggle calls KitnEssentials:EnableModule /
         -- :DisableModule, so the addon object has to exist before the file
@@ -376,9 +379,12 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
     describe("the EllesmereUI note line", function()
         local NOTE = "Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail."
 
+        -- Substring, not equality: the page's notes carry an accent-coloured
+        -- lead-in, and asserting the whole decorated string would make this
+        -- spec fail on a styling change it has no opinion about.
         local function containsLabel(text)
             for _, l in ipairs(labels) do
-                if l == text then return true end
+                if type(l) == "string" and l:find(text, 1, true) then return true end
             end
             return false
         end

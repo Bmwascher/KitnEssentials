@@ -53,6 +53,7 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
             -- state-dependent, so the db has to be real enough to drive every
             -- branch; Enabled is flipped per example below.
             db = { profile = { Skinning = { BlizzardFrames = { Enabled = false } } } },
+            ColorTextByTheme = function(_, text) return text end,
         }
 
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-UIWidgets.lua", KE)
@@ -89,7 +90,7 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
 
     it("registers a builder for every id declared while the engine is on", function()
         local tabs = strip(true, false)
-        assert.equals(6, #tabs)
+        assert.equals(4, #tabs)
         assertEveryIdResolves(tabs)
     end)
 
@@ -109,19 +110,22 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         local tabs = strip(false, false)
         -- Count first. A set keyed by id cannot see a duplicate or an extra
         -- entry, so the membership assertions below would all still pass while
-        -- the strip rendered more than the four promised tabs.
-        assert.equals(4, #tabs)
+        -- the strip rendered more than the three promised tabs.
+        assert.equals(3, #tabs)
 
         local ids = idSet(tabs)
         assert.is_true(ids["SkinBlizzardFramesGeneral"])
         assert.is_true(ids["SkinBlizzardFramesFonts"])
-        assert.is_true(ids["SkinBlizzardFramesColors"])
         assert.is_true(ids["SkinBlizzardFramesElements"])
 
-        -- and neither tab that configures the engine itself, which would render
-        -- live-looking controls that do nothing.
+        -- and not the tab that configures the engine itself, which would render
+        -- live-looking controls that do nothing. Window Colors and Addon Skins
+        -- have no tab at all now: the first leads General, the second follows
+        -- Frame Skins.
+        assert.is_nil(ids["SkinBlizzardFramesSkins"])
         assert.is_nil(ids["SkinBlizzardFramesFrames"])
         assert.is_nil(ids["SkinBlizzardFramesAddons"])
+        assert.is_nil(ids["SkinBlizzardFramesColors"])
     end)
 
     -- General survives ElvUI because Raid Control and the group-finder pages
@@ -138,6 +142,7 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         assert.is_true(ids["SkinBlizzardFramesGeneral"])
         assert.is_true(ids["SkinBlizzardFramesElements"])
 
+        assert.is_nil(ids["SkinBlizzardFramesSkins"])
         assert.is_nil(ids["SkinBlizzardFramesFrames"])
         assert.is_nil(ids["SkinBlizzardFramesAddons"])
         assert.is_nil(ids["SkinBlizzardFramesFonts"])

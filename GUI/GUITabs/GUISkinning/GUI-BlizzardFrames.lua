@@ -9,6 +9,13 @@ local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 
+-- Accent-coloured lead-in for this page's notes, matching the note idiom the
+-- rest of the GUI uses. Resolved per call, not captured: the accent follows the
+-- theme, and a file-scope string would freeze it at whatever was live at parse.
+local function DASH()
+    return KE:ColorTextByTheme("-") .. " "
+end
+
 local ipairs = ipairs
 
 local function GetDB()
@@ -376,6 +383,16 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
     -- Chained, not re-registered: each builder takes (scrollChild, yOffset) and
     -- returns the next offset, which is the same contract RegisterTabbedContent
     -- uses. Resolved live so GUI.xml load order does not matter.
+    --
+    -- Window Colors leads rather than owning a tab of its own -- two pickers and
+    -- a reset never filled one. Gated on the ElvUI check the tab strip used to
+    -- apply for it: the windows it colours are not drawn while ElvUI has the
+    -- skinning.
+    if not (KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()) then
+        local colors = GUIFrame.registeredContent and GUIFrame.registeredContent["SkinBlizzardFramesColors"]
+        if colors then yOffset = colors(scrollChild, yOffset) end
+    end
+
     local colorPicker = GUIFrame.registeredContent and GUIFrame.registeredContent["ColorPicker"]
     if colorPicker then yOffset = colorPicker(scrollChild, yOffset) end
 
@@ -430,7 +447,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
     end)
 
     if AnySuppressed(FRAME_SKINS) then
-        card:AddLabel("Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
+        card:AddLabel(DASH() .. "Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
     end
 
     -- No solo rows in this list today -- Context Menus was one until its label
@@ -449,7 +466,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
     local card = GUIFrame:CreateCard(scrollChild, "Addon Skins", yOffset)
 
     if #ADDON_SKINS == 0 then
-        card:AddLabel("No addon skins are available yet.")
+        card:AddLabel(DASH() .. "No addon skins are available yet.")
         return card:GetNextOffset()
     end
 
@@ -474,10 +491,21 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
         if needsReload then KE:FlagReloadNeeded() end
     end)
 
-    card:AddLabel("Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
+    card:AddLabel(DASH() .. "Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
     BuildSoloRows(card, ADDON_SKINS, db.Skins)
     BuildCheckGrid(card, ADDON_SKINS, db.Skins, ADDON_PER_ROW)
     return card:GetNextOffset()
+end)
+
+-- The Frame Skins tab: both skin lists, one under the other. Addon Skins had a
+-- tab of its own and did not need one -- the two gate identically, since both
+-- configure the skin engine, so a state that hid one always hid the other.
+GUIFrame:RegisterContent("SkinBlizzardFramesSkins", function(scrollChild, yOffset)
+    for _, id in ipairs({ "SkinBlizzardFramesFrames", "SkinBlizzardFramesAddons" }) do
+        local builder = GUIFrame.registeredContent and GUIFrame.registeredContent[id]
+        if builder then yOffset = builder(scrollChild, yOffset) end
+    end
+    return yOffset
 end)
 
 GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffset)
@@ -486,7 +514,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     local S = KE.Skins
 
     local card = GUIFrame:CreateCard(scrollChild, "Skin Font", yOffset)
-    card:AddLabel("Controls text inside windows KitnEssentials skins. Elements with a deliberately larger size, such as window titles and big counters, keep the gap between them and move together.")
+    card:AddLabel(DASH() .. "Controls text inside windows KitnEssentials skins. Elements with a deliberately larger size, such as window titles and big counters, keep the gap between them and move together.")
 
     -- An empty key is the addon's own font. A map of options is sorted by key,
     -- and an empty string sorts before every font name, so this entry lands
@@ -556,7 +584,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffs
     db.BorderColor = db.BorderColor or { 0, 0, 0, 1 }
 
     local card = GUIFrame:CreateCard(scrollChild, "Window Colors", yOffset)
-    card:AddLabel("Both pickers repaint every skinned window that is already open. Frames that carry a colour of their own, such as controls and panels, keep it.")
+    card:AddLabel(DASH() .. "Both pickers repaint every skinned window that is already open. Frames that carry a colour of their own, such as controls and panels, keep it.")
 
     local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     row:AddWidget(GUIFrame:CreateColorPicker(row, "Background Color", {
@@ -661,8 +689,9 @@ end)
 -- Addon Skins -- so they drop out while it is off, because showing them there
 -- renders live-looking controls that do nothing.
 --
--- Fonts and Colors are independent of the engine but still describe a skinned
--- look, so they drop with the engine's own tabs.
+-- Fonts is independent of the engine but still describes a skinned look, so it
+-- drops with the engine's own tab. General's Window Colors card is the same
+-- case and drops on the same test, gated inside that builder rather than here.
 --
 -- General and Elements are the two that stay in every state. General carries
 -- Raid Control and the three group-finder pages, none of which is a skin;
@@ -670,8 +699,8 @@ end)
 -- features. That is why neither sits in the two groups above.
 --
 -- ElvUI is a stricter cut than the engine flag, not a wider one: it drops Fonts
--- and Colors too, alongside Frame Skins and Addon Skins, leaving only General
--- and Elements. General survives because Raid Control has no ElvUI gate at all;
+-- and Window Colors too, alongside the skin lists, leaving only General and
+-- Elements. General survives because Raid Control has no ElvUI gate at all;
 -- Elements survives because Character Panel keeps its non-overlapping features.
 -- Color Picker also rides on General but DOES stand down under ElvUI, by its
 -- own conflict list rather than the skin gate; its card already says so, which
@@ -679,28 +708,30 @@ end)
 GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", function()
     local db = GetDB()
 
+    -- Window Colors and Addon Skins have no tab of their own: the first leads
+    -- the General page, the second follows Frame Skins on its page. Their
+    -- builders are still registered and are chained from there.
     local GENERAL  = { id = "SkinBlizzardFramesGeneral",  label = "General" }
     local FONTS    = { id = "SkinBlizzardFramesFonts",    label = "Fonts" }
-    local COLORS   = { id = "SkinBlizzardFramesColors",   label = "Colors" }
-    local FRAMES   = { id = "SkinBlizzardFramesFrames",   label = "Frame Skins" }
-    local ADDONS   = { id = "SkinBlizzardFramesAddons",   label = "Addon Skins" }
+    local FRAMES   = { id = "SkinBlizzardFramesSkins",    label = "Frame Skins" }
     local ELEMENTS = { id = "SkinBlizzardFramesElements", label = "Elements" }
 
     -- In the conflict state only the two tabs whose contents are not skins
     -- survive: General carries Raid Control and the group-finder pages, and
-    -- Elements carries the Character Screen. Fonts and Colors drop with the
-    -- skins, because the text and windows they colour are not drawn here.
+    -- Elements carries the Character Screen. Fonts drops with the skins,
+    -- because the text it styles is not drawn here -- and General's own Window
+    -- Colors card drops with it, gated inside that builder.
     if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
         return { GENERAL, ELEMENTS }
     end
 
-    -- Frame Skins and Addon Skins are the only two tabs that configure the
-    -- engine itself, so they are the only two that drop while it is off.
+    -- Frame Skins is the only tab that configures the engine itself, so it is
+    -- the only one that drops while it is off. Addon Skins rides on it.
     if not db or db.Enabled ~= true then
-        return { GENERAL, FONTS, COLORS, ELEMENTS }
+        return { GENERAL, FONTS, ELEMENTS }
     end
 
-    return { GENERAL, FONTS, COLORS, FRAMES, ADDONS, ELEMENTS }
+    return { GENERAL, FONTS, FRAMES, ELEMENTS }
 end, {
     headerBuilder = function(scrollChild, yOffset)
         local db = GetDB()
@@ -728,9 +759,9 @@ end, {
         -- Picker stands down under ElvUI too and says so on its own card, so a
         -- blanket "ElvUI does not touch these" here would be false.
         if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
-            card:AddLabel("|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
+            card:AddLabel(DASH() .. "|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
         elseif db.Enabled ~= true then
-            card:AddLabel("Turn this on to configure frame and addon skins. The tabs below belong to modules that work with it off.")
+            card:AddLabel(DASH() .. "Turn this on to configure frame and addon skins. The tabs below belong to modules that work with it off.")
         end
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
         -- Never collapse: the tab list above already drops the engine's own
