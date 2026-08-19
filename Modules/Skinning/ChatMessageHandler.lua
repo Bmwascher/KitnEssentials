@@ -57,6 +57,56 @@ local GetMobileEmbeddedTexture = (_G.ChatFrameUtil and _G.ChatFrameUtil.GetMobil
 
 local UNKNOWN = _G.UNKNOWN
 
+-- Flip to true, /reload, enter an instance, and read the printed lines to see
+-- exactly which chat arguments the client hides there and whether joining text
+-- onto them is legal. Revert to false after diagnosing; the instrumentation
+-- stays.
+local DEBUG_CHAT = false
+
+-- Answers the four open questions in one line per message: which arguments are
+-- secret, whether the sender's class is still readable from a secret GUID, and
+-- whether plain concatenation and format() actually throw on a secret sender.
+-- The two joins are probed under pcall precisely because their legality is the
+-- thing being measured.
+local function ChatDebugLine(event, arg1, arg2, arg12, chatType)
+    if not DEBUG_CHAT then return end
+
+    local msgSecret = KE:IsSecretValue(arg1) and "SECRET" or "plain"
+    local nameSecret = KE:IsSecretValue(arg2) and "SECRET" or "plain"
+    local guidSecret = KE:IsSecretValue(arg12) and "SECRET" or "plain"
+
+    local class = "nil"
+    if arg12 then
+        local _, englishClass = GetPlayerInfoByGUID(arg12)
+        if englishClass then
+            class = KE:IsSecretValue(englishClass) and "SECRET" or tostring(englishClass)
+        end
+    end
+
+    local concatOk = "n/a"
+    local formatOk = "n/a"
+    if arg2 then
+        concatOk = pcall(function() return "x" .. arg2 end) and "ok" or "THROWS"
+        formatOk = pcall(format, "[%s]", arg2) and "ok" or "THROWS"
+    end
+
+    -- Can two secrets be joined to EACH OTHER? A chat line inside an instance
+    -- carries a secret sender AND a secret body, so any fix that assembles the
+    -- two needs this answer and nothing on record supplies it. Probed with the
+    -- only tainted-callable join there is.
+    local wrapTwoOk = "n/a"
+    local wrap = C_StringUtil and C_StringUtil.WrapString
+    if wrap and arg1 and arg2 then
+        local ok, joined = pcall(wrap, arg1, arg2)
+        wrapTwoOk = (ok and type(joined) ~= "nil") and "ok" or "NO"
+    end
+
+    KE:Print(format(
+        "CHATDBG %s type=%s msg=%s name=%s guid=%s class=%s concat=%s format=%s wraptwo=%s",
+        tostring(event), tostring(chatType), msgSecret, nameSecret, guidSecret,
+        class, concatOk, formatOk, wrapTwoOk))
+end
+
 -- (WindTools ChatText port): role icons before names in group
 -- chat. CMH.lfgRoles is keyed by sender name (short AND name-realm keys,
 -- both written at cache-build time in Modules/Skinning/Chat.lua on
@@ -380,6 +430,9 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
         local chatType = strsub(event, 10)
         local info = _G.ChatTypeInfo[chatType]
         if not info then return end
+
+        ChatDebugLine(event, arg1, arg2, arg12, chatType)
+
         if arg6 == 'GM' and chatType == 'WHISPER' then return end
 
         -- Process message filters
