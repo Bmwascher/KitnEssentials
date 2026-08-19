@@ -132,7 +132,9 @@ describe("CombatLogger arena classification", function()
         assert.is_false(CL.startedByUs)
     end)
 
-    it("refuses to start without advanced combat logging", function()
+    -- Asks, but does not block. A basic log beats no log, and accepting the
+    -- prompt afterwards cycles the running log so it records advanced detail.
+    it("starts anyway without advanced combat logging, and asks", function()
         CL, rec = L.loadCombatLogger({
             C_CVar = { GetCVar = function() return "0" end, SetCVar = function() end },
         })
@@ -140,8 +142,54 @@ describe("CombatLogger arena classification", function()
         CL.db = db({ DisableACLPrompt = false, PvPRatedArena = true })
         rec.pvp.ratedArena = true
         CL:CheckArenaLogging()
-        assert.is_false(rec.logging)
+        assert.is_true(rec.logging)
         assert.equals("KE_COMBATLOGGER_ACL_PROMPT", rec.popups[1])
+    end)
+
+    it("does not ask when the prompt is switched off", function()
+        CL, rec = L.loadCombatLogger({
+            C_CVar = { GetCVar = function() return "0" end, SetCVar = function() end },
+        })
+        CL.isLogging = false
+        CL.db = db({ DisableACLPrompt = true, PvPRatedArena = true })
+        rec.pvp.ratedArena = true
+        CL:CheckArenaLogging()
+        assert.is_true(rec.logging)
+        assert.equals(0, #rec.popups)
+    end)
+
+    -- Turning it on must not need a reload: Blizzard's own checkbox for the
+    -- CVar carries no restart flag. A log already running does have to be
+    -- cycled, because its format was fixed when it opened.
+    it("cycles a running log when advanced logging is turned on", function()
+        local written = {}
+        local cvar = "0"
+        CL, rec = L.loadCombatLogger({
+            C_CVar = {
+                GetCVar = function() return cvar end,
+                SetCVar = function(_, v) cvar = v; written[#written + 1] = v end,
+            },
+        })
+        CL.db = db()
+        CL.isLogging = true
+        rec.logging = true
+        CL:EnableAdvanced()
+        assert.same({ "1" }, written)
+        -- Closed and reopened, so the file the watchers see is a new one.
+        assert.is_true(rec.logging)
+    end)
+
+    it("writes nothing when advanced logging is already on", function()
+        local written = {}
+        CL, rec = L.loadCombatLogger({
+            C_CVar = {
+                GetCVar = function() return "1" end,
+                SetCVar = function(_, v) written[#written + 1] = v end,
+            },
+        })
+        CL.db = db()
+        CL:EnableAdvanced()
+        assert.equals(0, #written)
     end)
 end)
 

@@ -22,7 +22,6 @@ local C_Timer = C_Timer
 -- the global form.
 local IsArenaSkirmish = IsArenaSkirmish
 local IsWargame = IsWargame
-local ReloadUI = ReloadUI
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -47,16 +46,22 @@ end
 ---------------------------------------------------------------------------------
 -- Frame Creation
 ---------------------------------------------------------------------------------
+-- No reload. Blizzard's own control for this is a plain SetupCVarCheckbox
+-- (Blizzard_SettingsDefinitions_Shared/Network.lua) whose only commit flag is
+-- KioskProtected -- no Restart, no ClientRestart. What DOES need handling is a
+-- log that is already running, because whether it is an advanced log was
+-- decided when it opened; cycling it costs one file boundary, which every log
+-- watcher already handles from an ordinary /combatlog toggle.
 StaticPopupDialogs["KE_COMBATLOGGER_ACL_PROMPT"] = {
     text = "|cffFF008CKitnEssentials|r\n\nAdvanced Combat Logging is disabled. This is required for detailed log analysis on Warcraft Logs.\n\nEnable it now?",
-    button1 = "Enable & Reload",
-    button2 = "Skip",
+    button1 = _G.ENABLE or "Enable",
+    button2 = _G.CANCEL or "Cancel",
     OnAccept = function()
-        C_CVar.SetCVar("advancedCombatLogging", "1")
-        ReloadUI()
+        local mod = KitnEssentials:GetModule("CombatLogger", true)
+        if mod then mod:EnableAdvanced() end
     end,
     timeout = 0,
-    whileDead = false,
+    whileDead = true,
     hideOnEscape = true,
     preferredIndex = 3,
 }
@@ -64,12 +69,35 @@ StaticPopupDialogs["KE_COMBATLOGGER_ACL_PROMPT"] = {
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
+function CL:IsAdvanced()
+    return C_CVar.GetCVar("advancedCombatLogging") == "1"
+end
+
+function CL:EnableAdvanced()
+    -- Compare before writing: SetCVar makes the client flush its config, which
+    -- is expensive enough to be felt.
+    if self:IsAdvanced() then return end
+    C_CVar.SetCVar("advancedCombatLogging", "1")
+
+    -- A running log keeps whatever format it opened with, so restart it.
+    if self.isLogging then
+        LoggingCombat(false)
+        LoggingCombat(true)
+    end
+
+    if not self.db.QuietMode then
+        KE:Print("Advanced Combat Logging is now |cff00ff00on|r.")
+    end
+end
+
+-- Asks, and answers "yes" either way. Someone who turned the prompt off has not
+-- said they want logging disabled, and a basic log beats no log -- accepting
+-- the prompt later cycles the running log, which is what makes that ordering
+-- safe.
 function CL:CheckACL()
-    if self.db.DisableACLPrompt then return true end
-    local acl = C_CVar.GetCVar("advancedCombatLogging")
-    if acl ~= "1" then
+    if self:IsAdvanced() then return true end
+    if not self.db.DisableACLPrompt then
         StaticPopup_Show("KE_COMBATLOGGER_ACL_PROMPT")
-        return false
     end
     return true
 end
