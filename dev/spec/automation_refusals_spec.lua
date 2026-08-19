@@ -753,17 +753,19 @@ end)
 -- them by hand.
 
 -- `count` frames, a tutorial button every `every`th slot, all reachable.
--- Returns the frame list, the buttons in it, and a call counter for the
--- enumerator so a case can prove a walk did or did not start.
+-- Returns the frame list, the buttons in it, a call counter for the
+-- enumerator so a case can prove a walk did or did not start, and a call
+-- counter for the access checks so a case can prove who paid for one.
 local function newSweepWorld(count, every, fingerprint)
     local frames, buttons, index = {}, {}, {}
+    local accessCalls = 0
     for i = 1, count do
         local f = {
             alpha = 1,
             mouse = true,
             SetAlpha = function(self, v) self.alpha = v end,
             EnableMouse = function(self, v) self.mouse = v end,
-            CanBeAccessedInContext = function() return true end,
+            CanBeAccessedInContext = function() accessCalls = accessCalls + 1; return true end,
         }
         if i % every == 0 then
             f.ShowTooltip = fingerprint
@@ -782,7 +784,7 @@ local function newSweepWorld(count, every, fingerprint)
         return frames[at + 1]
     end
 
-    return frames, buttons, function() return calls end
+    return frames, buttons, function() return calls end, function() return accessCalls end
 end
 
 -- Runs the zero-delay callbacks queued from `from` onward, picking up the ones
@@ -840,6 +842,20 @@ describe("Automation Hide Helptips sweep lifecycle", function()
         assert.is_true(pumpSlices(fx, from) >= 2) -- 1200 frames cannot be one slice
         assert.equals(12, #buttons)
         assert.is_true(allHidden(buttons))
+    end)
+
+    it("asks the access question only of frames that match the fingerprint", function()
+        local fx = helptipFixture()
+        local _, buttons, _, accessCalls = newSweepWorld(1200, 100, fx.fingerprint)
+        local from = #fx.timers + 1
+
+        fx.AU:ApplySettings()
+        pumpSlices(fx, from)
+        assert.is_true(allHidden(buttons))
+        -- The access check is a per-call security query expensive enough to
+        -- stall the login frame rate when every frame in the client pays it;
+        -- only fingerprint matches may.
+        assert.equals(#buttons, accessCalls())
     end)
 
     it("does not walk again on a later apply once a walk completed", function()
@@ -906,8 +922,10 @@ describe("Automation Hide Helptips sweep lifecycle", function()
         local fx = helptipFixture()
         local frames, buttons = newSweepWorld(1200, 100, fx.fingerprint)
         -- 499 is not a multiple of 100, so the refusing frame is not itself one
-        -- of the tutorial buttons: every button must still be reached.
-        frames[499].CanBeAccessedInContext = function() error("no access") end
+        -- of the tutorial buttons: every button must still be reached. A
+        -- forbidden frame throws on the fingerprint read itself -- the first
+        -- thing the inspection does to any frame.
+        setmetatable(frames[499], { __index = function() error("no access") end })
         local from = #fx.timers + 1
 
         fx.AU:ApplySettings()

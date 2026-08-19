@@ -326,12 +326,17 @@ local tutorialSweeping = false
 local tutorialSweepGen = 0
 
 -- Inspect one frame. Both steps can throw and neither is this addon's frame:
--- object security is a secret aspect in 12.1, so the access check's own answer
--- can be a secret boolean, and hiding calls a protected function. Callers run
--- this under pcall per frame so one bad node costs one node.
+-- a forbidden frame throws on the fingerprint read, object security is a
+-- secret aspect in 12.1 so the access check's own answer can be a secret
+-- boolean, and hiding calls a protected function. Callers run this under
+-- pcall per frame so one bad node costs one node. The fingerprint read must
+-- come first: the access check is a per-call security query expensive enough
+-- that asking it of every frame in the client holds login at single-digit
+-- FPS for seconds -- only a matched button may pay for it.
 local function TutorialInspectFrame(frame, fp)
+    if frame.ShowTooltip ~= fp then return end
     if frame.CanBeAccessedInContext and not frame:CanBeAccessedInContext() then return end
-    if frame.ShowTooltip == fp then TutorialHideButton(frame) end
+    TutorialHideButton(frame)
 end
 
 -- Returns the first frame of the next slice, or nil at the end of the list.
