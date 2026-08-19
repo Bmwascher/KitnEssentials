@@ -288,29 +288,42 @@ local function HideOpenTips()
     pcall(DoHideOpenTips)
 end
 
-local TutorialHideButtonsUnder
--- Takes pcall's (ok, ...) directly, so a failed GetChildren costs us
--- nothing and no table is allocated per node (this walks every frame of
--- every panel opened via ShowUIPanel -- it must stay allocation free).
-local function TutorialScanChildren(ok, ...)
-    if not ok then return end
-    for i = 1, select("#", ...) do
-        TutorialHideButtonsUnder((select(i, ...)))
-    end
-end
-function TutorialHideButtonsUnder(root)
+-- Queued, not recursive: the old vararg recursion held every level's siblings on
+-- the Lua stack and a talent tree or map canvas overflowed it, crashing the
+-- client (atrocityEssentials hit this and replaced the same walker in v4.0.565).
+-- The depth cap is only about cost; a "?" is panel chrome, never buried deep.
+local TUTORIAL_MAX_DEPTH = 4
+
+local function TutorialHideButtonsUnder(root)
     if not root then return end
-    -- The walk takes hostile input by definition -- it is handed the
-    -- entire child tree of whatever panel Blizzard just opened, and
-    -- Blizzard can restrict any node in it at any patch. So it refuses
-    -- forbidden nodes up front and treats GetChildren itself as fallible
-    -- rather than trusting that the method existing means it may be
-    -- called.
-    if root.IsForbidden and root:IsForbidden() then return end
     local fp = GetTutorialFingerprint()
     if not fp then return end
-    if root.ShowTooltip == fp then TutorialHideButton(root) end
-    if root.GetChildren then TutorialScanChildren(pcall(root.GetChildren, root)) end
+
+    -- Node/depth pairs drained from the front; tail starts past the two already
+    -- queued.
+    local queue, head, tail = { root, 1 }, 1, 3
+
+    while head < tail do
+        local node, depth = queue[head], queue[head + 1]
+        queue[head], queue[head + 1] = nil, nil
+        head = head + 2
+
+        -- Hostile input by definition: Blizzard can restrict any node here.
+        if node and not (node.IsForbidden and node:IsForbidden()) then
+            if node.ShowTooltip == fp then TutorialHideButton(node) end
+
+            if depth < TUTORIAL_MAX_DEPTH and node.GetChildren then
+                local ok, kids = pcall(function() return { node:GetChildren() } end)
+                if ok and kids then
+                    for i = 1, #kids do
+                        queue[tail] = kids[i]
+                        queue[tail + 1] = depth + 1
+                        tail = tail + 2
+                    end
+                end
+            end
+        end
+    end
 end
 
 -- One-time full walk to catch panels already open at enable time.
