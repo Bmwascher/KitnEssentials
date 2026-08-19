@@ -47,7 +47,14 @@ local FACTION_BAR_COLORS = FACTION_BAR_COLORS
 local hooksecurefunc = hooksecurefunc
 local UnitTokenFromGUID = UnitTokenFromGUID
 local GetMouseFoci = GetMouseFoci
+local GetPlayerInfoByGUID = GetPlayerInfoByGUID
+local CreateColor = CreateColor
+local type = type
 local S = KE.Skins
+
+-- Fallback for a unit whose colour cannot be resolved, so a display sink
+-- always has something with :GetRGB().
+local WHITE_COLOR = CreateColor(1, 1, 1)
 
 -- KE:GetEffectiveFont returns the LSM NAME, not a file path -- every consumer
 -- resolves it through LSM, and passing the raw name straight to SetFont throws
@@ -277,26 +284,67 @@ local function ReactionColor(unit)
     return 1, 1, 1
 end
 
-local function UnitColor(unit)
-    -- Midnight secret units. UnitName returning a secret is
-    -- the tell (ElvUI's IsSecretUnit); on that branch UnitIsPlayer /
-    -- UnitReaction results are secret booleans -- branching on them is
-    -- the crash class -- and 12.1 makes UnitClass's classFile secret
-    -- here too, so a plain RAID_CLASS_COLORS[class] lookup throws.
-    -- C_ClassColor.GetClassColor is AllowedWhenTainted and resolves the
-    -- secret C-side (RAID_CLASS_COLORS is itself built from it).
+-- 12.1 made the class token SECRET for a restricted unit, and
+-- RAID_CLASS_COLORS[class] with a secret key throws -- a table lookup keyed by
+-- a secret is the same banned comparison as `==`. C_ClassColor.GetClassColor
+-- accepts a secret token and hands back a colour whose components may
+-- themselves be secret, which is fine: every consumer feeds them to a sink.
+local function ClassColorFor(class)
+    if type(class) == "nil" then return nil end
+    local get = C_ClassColor and C_ClassColor.GetClassColor
+    if get then
+        local ok, c = pcall(get, class)
+        if ok and c then return c end
+    end
+    if KE:IsSafeValue(class) then return RAID_CLASS_COLORS[class] end
+    return nil
+end
+
+-- GetPlayerInfoByGUID on a CREATURE guid does not fail cleanly -- it answers
+-- with the first class, so every hostile NPC comes back WARRIOR and wears that
+-- tan class colour instead of red. Only a Player- GUID may be asked for a
+-- class. data.guid is documented clean even where the unit token is secret,
+-- and IsSafeValue orders the secrecy check first regardless.
+local function IsPlayerGUID(guid)
+    if not KE:IsSafeValue(guid) then return false end
+    return type(guid) == "string" and guid:sub(1, 7) == "Player-"
+end
+
+-- Returns a colour OBJECT, never bare components. The components can be
+-- secret, and `if r then` on a secret is the very test that is forbidden -- so
+-- callers test the object (always a plain table) and unpack it only into
+-- sinks. Nothing returned means "leave Blizzard's own colour alone", which is
+-- what puts hostile names back to red.
+local function UnitColor(unit, guid)
+    -- Preferred: GetPlayerInfoByGUID is AllowedWhenTainted, so it resolves a
+    -- class even over a raid frame, where the token is secret but the GUID is
+    -- not.
+    if IsPlayerGUID(guid) and GetPlayerInfoByGUID then
+        local _, class = GetPlayerInfoByGUID(guid)
+        local c = ClassColorFor(class)
+        if c then return c end
+    end
+    if not unit then return end
+
+    -- Midnight secret units. UnitName returning a secret is the tell (ElvUI's
+    -- IsSecretUnit); on that branch UnitIsPlayer and UnitReaction give secret
+    -- booleans and branching on them is the crash class.
+    --
+    -- Class-colour ONLY when the GUID says this is a player. Without that this
+    -- branch class-coloured every secret-named NPC too -- the same wrong-
+    -- Warrior bug by a second route.
     if KE:IsSecretValue(UnitName(unit)) then
+        if not IsPlayerGUID(guid) then return end
         local _, class = UnitClass(unit)
-        local c = class and C_ClassColor.GetClassColor(class)
-        if c then return c.r, c.g, c.b end
-        return 1, 1, 1
+        return ClassColorFor(class) or WHITE_COLOR
     end
     if UnitIsPlayer(unit) then
         local _, class = UnitClass(unit)
-        local c = class and RAID_CLASS_COLORS[class]
-        if c then return c.r, c.g, c.b end
+        local c = ClassColorFor(class)
+        if c then return c end
     end
-    return ReactionColor(unit)
+    local r, g, b = ReactionColor(unit)
+    if r then return CreateColor(r, g, b) end
 end
 
 -- EllesmereUI's Blizzard skin adds both of these to GameTooltip already, and
@@ -523,12 +571,12 @@ function TT:OnTooltipSetUnit(tt, data)
 
     -- Class/reaction color: recolor the existing name line (no text rebuild,
     -- so secret name strings never touch our code) and the health bar.
-    if db.ClassColorNames then
-        local r, g, b = UnitColor(unit)
+    local unitColor = UnitColor(unit, data and data.guid)
+    if db.ClassColorNames and unitColor then
         local line1 = _G.GameTooltipTextLeft1
-        if line1 then line1:SetTextColor(r, g, b) end
+        if line1 then line1:SetTextColor(unitColor:GetRGB()) end
         local bar = _G.GameTooltipStatusBar
-        if bar then bar:SetStatusBarColor(r, g, b) end
+        if bar then bar:SetStatusBarColor(unitColor:GetRGB()) end
     end
 
     -- Name row rebuild: player title, realm suffix and the Away/Busy label,
@@ -706,9 +754,8 @@ function TT:OnTooltipSetUnit(tt, data)
         -- Paladin"). ElvUI rewrites it wrapped in a colour code; a plain
         -- SetTextColor gets the same look without reading the text, so no
         -- secret check is needed here.
-        if specLine and db.ClassColorNames then
-            local cr, cg, cb = UnitColor(unit)
-            specLine:SetTextColor(cr, cg, cb)
+        if specLine and db.ClassColorNames and unitColor then
+            specLine:SetTextColor(unitColor:GetRGB())
         end
     end
 
@@ -765,9 +812,11 @@ function TT:OnTooltipSetUnit(tt, data)
             -- name, which this deliberately never does.
             local name = UnitName(unitTarget)
             if name then
-                local r, g, b = UnitColor(unitTarget)
+                -- AddDoubleLine is a display sink, so secret colour
+                -- components pass through it untouched.
+                local c = UnitColor(unitTarget)
                 tt:AddDoubleLine(format("%s:", _G.TARGET or "Target"),
-                    name, 1, 1, 1, r, g, b)
+                    name, 1, 1, 1, (c or WHITE_COLOR):GetRGB())
             end
         end
     end
@@ -1086,3 +1135,4 @@ end
 TT._ColorsMatch = ColorsMatch
 TT._ReactionColor = ReactionColor
 TT._WantIDs = WantIDs
+TT._UnitColor = UnitColor

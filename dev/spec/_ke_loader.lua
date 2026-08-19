@@ -433,11 +433,20 @@ function L.loadTooltips(opts, overrides)
         [4] = { r = 0.87, g = 0.87, b = 0.37 },
         [5] = { r = 0.37, g = 0.87, b = 0.37 },
     }
+    -- ColorMixin entries, as the live table carries -- Blizzard builds these
+    -- with CreateColor, so they answer :GetRGB(). A bare {r,g,b} here would let
+    -- a colour-object caller pass headlessly and break in game.
     _G.RAID_CLASS_COLORS = {
-        EVOKER = { r = 0.20, g = 0.58, b = 0.50 },
+        EVOKER = _G.CreateColor(0.20, 0.58, 0.50),
     }
     _G.UnitReaction = opts.UnitReaction or function() return 5 end
     _G.IsModifierKeyDown = opts.IsModifierKeyDown or function() return false end
+    -- UnitColor's inputs. The class-colour branches are refusal rules, so they
+    -- are driven from here rather than left to the live tooltip.
+    _G.UnitIsPlayer = opts.UnitIsPlayer or function() return false end
+    _G.UnitClass = opts.UnitClass or function() return "Evoker", "EVOKER" end
+    _G.GetPlayerInfoByGUID = opts.GetPlayerInfoByGUID or function() return "Evoker", "EVOKER" end
+    _G.C_ClassColor = opts.C_ClassColor or nil
     -- Only the pure helpers (_ShortValue/_ColorsMatch/_ReactionColor/
     -- _WantIDs) are reachable from a spec; nothing here calls OnEnable, so
     -- only the globals those four touch need a stub.

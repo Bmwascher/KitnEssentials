@@ -29,6 +29,59 @@ describe("Tooltips ColorsMatch", function()
     end)
 end)
 
+-- The refusal rule. GetPlayerInfoByGUID answers with the FIRST class for a
+-- creature GUID rather than failing, so anything that asks it without checking
+-- the GUID paints every hostile NPC in that class's colour instead of red.
+-- Returning nothing is what leaves Blizzard's own hostile red in place.
+describe("Tooltips UnitColor", function()
+    local PLAYER_GUID = "Player-1234-DEADBEEF"
+    local CREATURE_GUID = "Creature-0-1234-5-6-7890-000000"
+
+    it("class-colours a player GUID", function()
+        local TT = L.loadTooltips()
+        local c = TT._UnitColor("target", PLAYER_GUID)
+        assert.same({ 0.20, 0.58, 0.50 }, { c:GetRGB() })
+    end)
+
+    it("never asks a creature GUID for a class", function()
+        local asked = false
+        local TT = L.loadTooltips({
+            GetPlayerInfoByGUID = function() asked = true; return "Warrior", "WARRIOR" end,
+        })
+        TT._UnitColor("target", CREATURE_GUID)
+        assert.is_false(asked)
+    end)
+
+    it("falls through to the reaction colour for a creature GUID", function()
+        local TT = L.loadTooltips()
+        local c = TT._UnitColor("target", CREATURE_GUID)
+        assert.same({ 0.37, 0.87, 0.37 }, { c:GetRGB() })
+    end)
+
+    it("returns nothing for a secret-named unit that is not a player", function()
+        local TT = L.loadTooltips(nil, {
+            issecretvalue = function() return true end,
+        })
+        assert.is_nil(TT._UnitColor("target", CREATURE_GUID))
+    end)
+
+    it("returns nothing for a secret-named unit with no GUID at all", function()
+        local TT = L.loadTooltips(nil, {
+            issecretvalue = function() return true end,
+        })
+        assert.is_nil(TT._UnitColor("target", nil))
+    end)
+
+    it("class-colours a secret-named unit whose GUID says player", function()
+        local TT = L.loadTooltips(nil, {
+            issecretvalue = function(v) return v == "SECRET" end,
+            UnitName = function() return "SECRET" end,
+        })
+        local c = TT._UnitColor("target", PLAYER_GUID)
+        assert.same({ 0.20, 0.58, 0.50 }, { c:GetRGB() })
+    end)
+end)
+
 describe("Tooltips ReactionColor", function()
     it("returns the faction bar colour for the unit's reaction", function()
         local TT = L.loadTooltips()

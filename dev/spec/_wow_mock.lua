@@ -84,6 +84,16 @@ function M.install(overrides)
     _G.UnitExists = overrides.UnitExists or function() return true end
     _G.UnitIsUnit = overrides.UnitIsUnit or function() return false end
 
+    -- ColorMixin objects. Blizzard's CreateColor, enough of it for the
+    -- unpack-into-a-sink pattern the colour helpers use.
+    _G.CreateColor = overrides.CreateColor or function(r, g, b, a)
+        return {
+            r = r, g = g, b = b, a = a,
+            GetRGB = function(self) return self.r, self.g, self.b end,
+            GetRGBA = function(self) return self.r, self.g, self.b, self.a end,
+        }
+    end
+
     -- Number formatters.
     _G.AbbreviateNumbers = overrides.AbbreviateNumbers or function(v) return tostring(v) end
     _G.BreakUpLargeNumbers = overrides.BreakUpLargeNumbers or function(v) return tostring(v) end
@@ -101,7 +111,8 @@ function M.reset()
         "InCombatLockdown", "GetTime", "C_Timer",
         "issecretvalue", "issecrettable", "canaccessvalue", "canaccesstable",
         "UnitName", "UnitGUID", "UnitExists", "UnitIsUnit",
-        "AbbreviateNumbers", "BreakUpLargeNumbers",
+        "AbbreviateNumbers", "BreakUpLargeNumbers", "CreateColor",
+        "UnitIsPlayer", "GetPlayerInfoByGUID", "C_ClassColor",
         "C_Secrets", "C_UnitAuras", "C_Spell", "UnitCastingInfo", "UnitChannelInfo",
         "UnitClass", "PlaySoundFile", "StopSound", "PlayerUtil", "RunNextFrame",
         "GetUnitEmpowerMinHoldTime", "LibStub",
