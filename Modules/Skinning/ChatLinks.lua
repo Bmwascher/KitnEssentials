@@ -340,8 +340,9 @@ function CL:HideURLPopup()
 end
 
 local function BuildURLPopup()
-    -- A full-screen click catcher behind the popup, so clicking anywhere else
-    -- dismisses it and no close button is needed.
+    -- A full-screen click catcher behind the popup, so a click that reaches it
+    -- dismisses the popup and no close button is needed. A frame at a higher
+    -- strata sits above it and takes the click instead.
     urlBackdrop = CreateFrame("Button", "KE_ChatURLBackdrop", UIParent)
     urlBackdrop:SetFrameStrata("DIALOG")
     urlBackdrop:SetFrameLevel(499)
@@ -361,7 +362,7 @@ local function BuildURLPopup()
         edgeSize = 1,
     })
     urlPopup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
-    -- The border colour is set per show, not here: the chat skin's colour can
+    -- The border colour is set per show, not here: the theme accent it takes can
     -- change without a reload.
 
     local hint = urlPopup:CreateFontString(nil, "OVERLAY")
