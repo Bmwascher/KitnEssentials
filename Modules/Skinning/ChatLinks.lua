@@ -13,15 +13,20 @@ local CL = KitnEssentials:NewModule("ChatLinks", "AceEvent-3.0")
 
 local _G = _G
 local ceil = ceil
+local C_Timer = C_Timer
+local CreateFrame = CreateFrame
 local format = format
 local gsub = _G.gsub
+local GetCursorPosition = GetCursorPosition
 local ipairs = ipairs
+local IsControlKeyDown = IsControlKeyDown
 local select = select
 local strfind = _G.strfind
 local strmatch = strmatch
 local strsub = strsub
 local tconcat = table.concat
 local tonumber = tonumber
+local UIParent = UIParent
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -301,6 +306,98 @@ function CL.WrapURLs(text, hexColor)
 end
 
 ---------------------------------------------------------------------------------
+-- Address copy popup
+---------------------------------------------------------------------------------
+
+local urlPopup, urlBackdrop
+
+function CL:HideURLPopup()
+    if urlPopup then urlPopup:Hide() end
+    if urlBackdrop then urlBackdrop:Hide() end
+end
+
+local function BuildURLPopup()
+    -- A full-screen click catcher behind the popup, so clicking anywhere else
+    -- dismisses it and no close button is needed.
+    urlBackdrop = CreateFrame("Button", "KE_ChatURLBackdrop", UIParent)
+    urlBackdrop:SetFrameStrata("DIALOG")
+    urlBackdrop:SetFrameLevel(499)
+    urlBackdrop:SetAllPoints(UIParent)
+    local shade = urlBackdrop:CreateTexture(nil, "BACKGROUND")
+    shade:SetAllPoints()
+    shade:SetColorTexture(0, 0, 0, 0.10)
+    urlBackdrop:RegisterForClicks("AnyUp")
+    urlBackdrop:SetScript("OnClick", function() CL:HideURLPopup() end)
+    urlBackdrop:Hide()
+
+    urlPopup = CreateFrame("Frame", "KE_ChatURLPopup", UIParent)
+    urlPopup:SetFrameStrata("DIALOG")
+    urlPopup:SetFrameLevel(500)
+    urlPopup:SetSize(340, 52)
+    urlPopup:EnableMouse(true)
+
+    local bg = urlPopup:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.0627, 0.0627, 0.0627, 0.97)
+
+    local hint = urlPopup:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(hint, nil, 10, "NONE")
+    hint:SetTextColor(1, 1, 1, 0.5)
+    hint:SetPoint("TOP", urlPopup, "TOP", 0, -6)
+    hint:SetText("Ctrl+C to copy, Escape to close")
+
+    -- EnableKeyboard is PROTECTED. Focus plus key scripts is how the copy
+    -- window takes Ctrl+C, and this follows it.
+    local box = CreateFrame("EditBox", nil, urlPopup)
+    box:SetSize(300, 16)
+    box:SetPoint("TOP", hint, "BOTTOM", 0, -4)
+    KE:ApplyFontToText(box, nil, 12, "NONE")
+    box:SetAutoFocus(false)
+    box:SetJustifyH("CENTER")
+    box:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+        CL:HideURLPopup()
+    end)
+    box:SetScript("OnKeyDown", function(_, key)
+        if key == "C" and IsControlKeyDown() then
+            C_Timer.After(0.05, function() CL:HideURLPopup() end)
+        end
+    end)
+    box:SetScript("OnMouseUp", function(self) self:HighlightText() end)
+
+    urlPopup:SetScript("OnMouseDown", function()
+        urlPopup.box:SetFocus()
+        urlPopup.box:HighlightText()
+    end)
+    urlPopup.box = box
+end
+
+function CL:ShowURLPopup(url)
+    -- First contact, and NOT redundant. The filter never wraps a secret body, so
+    -- no keurl link should carry one -- but this is fed by Blizzard's dispatch,
+    -- not by us, and a shipping addon's click handler was amended to refuse a
+    -- secret link at exactly this boundary. IsSafeValue covers nil and secrecy
+    -- in one call, so nothing reads the value before the guard does.
+    if not KE:IsSafeValue(url) then return end
+    if not urlPopup then BuildURLPopup() end
+
+    urlPopup.box:SetText(url)
+    urlPopup:ClearAllPoints()
+    local cx, cy = GetCursorPosition()
+    local scale = UIParent:GetEffectiveScale()
+    if cx and cy and scale and scale > 0 then
+        urlPopup:SetPoint("BOTTOM", UIParent, "BOTTOMLEFT", cx / scale, cy / scale + 10)
+    else
+        urlPopup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+    end
+
+    urlBackdrop:Show()
+    urlPopup:Show()
+    urlPopup.box:SetFocus()
+    urlPopup.box:HighlightText()
+end
+
+---------------------------------------------------------------------------------
 -- Filter
 ---------------------------------------------------------------------------------
 
@@ -373,6 +470,18 @@ function CL:OnEnable()
     if KE:ShouldNotLoadModule() then return end
     if not self.db then self:UpdateDB() end
     if not self.db.Enabled then return end
+
+    -- Registered once and never removed: LinkUtil has no unregister call, and
+    -- it asserts on a duplicate registration. A handler with nothing to handle
+    -- costs nothing.
+    local linkUtil = _G.LinkUtil
+    if linkUtil and linkUtil.RegisterLinkHandler and linkUtil.IsLinkHandlerRegistered
+        and not linkUtil.IsLinkHandlerRegistered("keurl") then
+        linkUtil.RegisterLinkHandler("keurl", function(_, _, linkData)
+            CL:ShowURLPopup(linkData and linkData.options)
+        end)
+    end
+
     if self.filtersRegistered then return end
 
     -- Resolved at call time rather than cached at file scope, so the fallback
