@@ -29,7 +29,7 @@ local Theme = KE.Theme
 local COPY_FRAME_WIDTH = 700
 local COPY_FRAME_HEIGHT = 300
 local COPY_FRAME_BG = { 0.0627, 0.0627, 0.0627, 0.60 }
-local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
+local COPY_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\chat_copy.png"
 
 local copyLines = {}
 
@@ -356,13 +356,12 @@ function CHAT:CreateCopyButton(chat)
     copyButton:SetFrameLevel(chat:GetFrameLevel() + 5)
     chat.copyButton = copyButton
 
-    -- Chevron icon (collapse.tga, same texture as the sidebar section
-    -- headers) rotated to point right; accent-independent (always white).
+    -- Accent-independent (always white), so the hover states below only change
+    -- alpha. The art is already upright, so there is no rotation.
     local icon = copyButton:CreateTexture(nil, "OVERLAY")
     icon:SetSize(14, 14)
     icon:SetPoint("CENTER", copyButton, "CENTER", 0, 0)
-    icon:SetTexture(ARROW_TEX)
-    icon:SetRotation(math.pi / 2)
+    icon:SetTexture(COPY_TEX)
     icon:SetTexelSnappingBias(0)
     icon:SetSnapToPixelGrid(false)
     copyButton.icon = icon
