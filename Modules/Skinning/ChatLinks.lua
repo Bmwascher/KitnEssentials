@@ -11,8 +11,8 @@ if not KitnEssentials then return end
 
 local CL = KitnEssentials:NewModule("ChatLinks", "AceEvent-3.0")
 
--- The chat skin owns the panel this module's popup anchors to, and the border
--- colour it borrows. Resolved here because the module exists by load time.
+-- The chat skin owns the panel this module's popup anchors to. Silent form: the
+-- popup falls back to a chat frame, then to screen centre, if the skin is off.
 local CHAT = KitnEssentials:GetModule("Chat", true)
 
 local _G = _G
