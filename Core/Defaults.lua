@@ -1851,6 +1851,29 @@ local Defaults = {
                 ClassColorMentions = false,
                 ExcludedMentions = "",
             },
+            ChatHistory = {
+                -- Off by default: the marker that keeps a replayed line's
+                -- original timestamp is installed by the chat skin, so with
+                -- the skin off this would replay every line stamped with the
+                -- login time. It also writes chat to disk, which no existing
+                -- profile opted into.
+                Enabled = false,
+                -- Rows kept per character.
+                Size = 100,
+                -- Per chat type. Keys are the module's HISTORY_TYPES values.
+                ShowTypes = {
+                    WHISPER  = true,
+                    GUILD    = true,
+                    OFFICER  = true,
+                    PARTY    = true,
+                    RAID     = true,
+                    INSTANCE = true,
+                    CHANNEL  = true,
+                    SAY      = true,
+                    YELL     = true,
+                    EMOTE    = true,
+                },
+            },
             ChatLinks = {
                 Enabled = false,
                 Icon = true,
@@ -2021,6 +2044,13 @@ local Defaults = {
             },
         },
 
+    },
+    char = {
+        -- Per-character chat history. Rows are appended by the ChatHistory
+        -- module and trimmed to the user's cap; the typing list is the saved
+        -- half of the chat edit box's Up/Down recall.
+        ChatHistory = {},
+        ChatTypingHistory = {},
     },
 }
 
