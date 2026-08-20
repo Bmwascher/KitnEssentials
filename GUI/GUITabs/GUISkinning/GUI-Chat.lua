@@ -140,8 +140,8 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     local card2 = GUIFrame:CreateCard(scrollChild, "Chat Colors", yOffset)
     manager:Register(card2, "all")
 
-    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local classColorCheck = GUIFrame:CreateCheckbox(row2, "Class Color BNet Whispers", {
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local classColorCheck = GUIFrame:CreateCheckbox(row2a, "Class Color BNet Whispers", {
         value = db.ClassColorWhispers ~= false,
         tooltip = "Class-colors sender names on Battle.net whispers in the default Blizzard chat, matching how regular whispers are already colored.",
         callback = function(checked)
@@ -149,9 +149,27 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row2:AddWidget(classColorCheck, 1)
+    row2a:AddWidget(classColorCheck, 0.5)
     manager:Register(classColorCheck, "all")
-    card2:AddRow(row2, Theme.rowHeightLast, 0)
+
+    local mentionsCheck = GUIFrame:CreateCheckbox(row2a, "Class Colour Mentions", {
+        value = db.ClassColorMentions == true,
+        tooltip = "Colours player names typed inside a message.",
+        callback = function(checked) db.ClassColorMentions = checked end,
+    })
+    row2a:AddWidget(mentionsCheck, 0.5)
+    manager:Register(mentionsCheck, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local excludeBox = GUIFrame:CreateEditBox(row2b, "Never Colour These Names", {
+        value = db.ExcludedMentions or "",
+        tooltip = "Comma separated. Use it for names that are also ordinary words.",
+        callback = function(text) db.ExcludedMentions = text end,
+    })
+    row2b:AddWidget(excludeBox, 1)
+    manager:Register(excludeBox, "all")
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
@@ -170,7 +188,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row3:AddWidget(guildStatusCheck, 0.5)
+    row3:AddWidget(guildStatusCheck, 0.34)
     manager:Register(guildStatusCheck, "all")
 
     local inviteLinkCheck = GUIFrame:CreateCheckbox(row3, "Invite Link on Guild Logins", {
@@ -181,8 +199,16 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row3:AddWidget(inviteLinkCheck, 0.5)
+    row3:AddWidget(inviteLinkCheck, 0.33)
     manager:Register(inviteLinkCheck, "all")
+
+    local mergeCheck = GUIFrame:CreateCheckbox(row3, "Merge Achievement Spam", {
+        value = db.MergeAchievements == true,
+        tooltip = "Several people earning the same achievement collapse into one line.",
+        callback = function(checked) db.MergeAchievements = checked end,
+    })
+    row3:AddWidget(mergeCheck, 0.33)
+    manager:Register(mergeCheck, "all")
     card3:AddRow(row3, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
@@ -649,10 +675,20 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             value = linksDb.Icon == true,
             tooltip = "Turn off to keep the quality tier number without any icons.",
             callback = function(checked) linksDb.Icon = checked end,
-        }), 1)
+        }), 0.34)
+        row11a:AddWidget(GUIFrame:CreateCheckbox(row11a, "Keep Icon Aspect Ratio", {
+            value = linksDb.KeepRatio == true,
+            tooltip = "Cuts the icon to fit a non-square size instead of stretching it.",
+            callback = function(checked) linksDb.KeepRatio = checked end,
+        }), 0.33)
+        row11a:AddWidget(GUIFrame:CreateCheckbox(row11a, "Quality Tier As A Number", {
+            value = linksDb.NumericalQualityTier == true,
+            tooltip = "Shows the crafting quality as a coloured number instead of the small gem.",
+            callback = function(checked) linksDb.NumericalQualityTier = checked end,
+        }), 0.33)
         card11:AddRow(row11a, Theme.rowHeight)
 
-        local row11b = GUIFrame:CreateRow(card11.content, Theme.rowHeight)
+        local row11b = GUIFrame:CreateRow(card11.content, Theme.rowHeightLast)
         row11b:AddWidget(GUIFrame:CreateSlider(row11b, "Icon Height", {
             min = 8, max = 32, step = 1, value = linksDb.IconHeight or 14,
             callback = function(val) linksDb.IconHeight = val end,
@@ -661,102 +697,56 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             min = 8, max = 32, step = 1, value = linksDb.IconWidth or 14,
             callback = function(val) linksDb.IconWidth = val end,
         }), 0.5)
-        card11:AddRow(row11b, Theme.rowHeight)
-
-        local row11c = GUIFrame:CreateRow(card11.content, Theme.rowHeight)
-        row11c:AddWidget(GUIFrame:CreateCheckbox(row11c, "Keep Icon Aspect Ratio", {
-            value = linksDb.KeepRatio == true,
-            tooltip = "Cuts the icon to fit a non-square size instead of stretching it.",
-            callback = function(checked) linksDb.KeepRatio = checked end,
-        }), 1)
-        card11:AddRow(row11c, Theme.rowHeight)
-
-        local row11d = GUIFrame:CreateRow(card11.content, Theme.rowHeightLast)
-        row11d:AddWidget(GUIFrame:CreateCheckbox(row11d, "Quality Tier As A Number", {
-            value = linksDb.NumericalQualityTier == true,
-            tooltip = "Shows the crafting quality as a coloured number instead of the small gem.",
-            callback = function(checked) linksDb.NumericalQualityTier = checked end,
-        }), 1)
-        card11:AddRow(row11d, Theme.rowHeightLast, 0)
+        card11:AddRow(row11b, Theme.rowHeightLast, 0)
 
         yOffset = card11:GetNextOffset()
     end
 
     ----------------------------------------------------------------
-    -- Card 12: Chat Messages
+    -- Card 12: Keyword Highlight
     ----------------------------------------------------------------
-    -- Registered: both features run inside KE's message handler, which only
+    -- Registered: the rewrite runs inside KE's message handler, which only
     -- exists while the chat skin is on.
-    local card12 = GUIFrame:CreateCard(scrollChild, "Chat Messages", yOffset)
+    local card12 = GUIFrame:CreateCard(scrollChild, "Keyword Highlight", yOffset)
     manager:Register(card12, "all")
 
     local row12a = GUIFrame:CreateRow(card12.content, Theme.rowHeight)
-    local mergeCheck = GUIFrame:CreateCheckbox(row12a, "Merge Achievement Spam", {
-        value = db.MergeAchievements == true,
-        tooltip = "Several people earning the same achievement collapse into one line.",
-        callback = function(checked) db.MergeAchievements = checked end,
-    })
-    row12a:AddWidget(mergeCheck, 1)
-    manager:Register(mergeCheck, "all")
-    card12:AddRow(row12a, Theme.rowHeight)
-
-    local row12b = GUIFrame:CreateRow(card12.content, Theme.rowHeight)
-    local keywordBox = GUIFrame:CreateEditBox(row12b, "Highlight Keywords", {
+    local keywordBox = GUIFrame:CreateEditBox(row12a, "Highlight Keywords", {
         value = db.HighlightKeywords or "",
         tooltip = "Comma separated. %MYNAME% inserts your character name.",
         callback = function(text) db.HighlightKeywords = text end,
     })
-    row12b:AddWidget(keywordBox, 1)
+    row12a:AddWidget(keywordBox, 1)
     manager:Register(keywordBox, "all")
-    card12:AddRow(row12b, Theme.rowHeight)
+    card12:AddRow(row12a, Theme.rowHeight)
 
-    local row12c = GUIFrame:CreateRow(card12.content, Theme.rowHeight)
-    local colorPick = GUIFrame:CreateColorPicker(row12c, "Highlight Colour", {
+    -- Colour, sound and the combat mute all answer "what happens on a hit",
+    -- so they share a row rather than stacking three deep.
+    local row12b = GUIFrame:CreateRow(card12.content, Theme.rowHeightLast)
+    local colorPick = GUIFrame:CreateColorPicker(row12b, "Highlight Colour", {
         color = db.HighlightColor,
         callback = function(r, g, b) db.HighlightColor = { r, g, b } end,
     })
-    row12c:AddWidget(colorPick, 0.5)
+    row12b:AddWidget(colorPick, 0.34)
     manager:Register(colorPick, "all")
 
-    local soundDrop = GUIFrame:CreateDropdown(row12c, "Highlight Sound", {
+    local soundDrop = GUIFrame:CreateDropdown(row12b, "Highlight Sound", {
         options = soundOptions,
         searchable = true,
         value = db.HighlightSound or "None",
         callback = function(value) db.HighlightSound = value end,
     })
-    row12c:AddWidget(soundDrop, 0.5)
+    row12b:AddWidget(soundDrop, 0.33)
     manager:Register(soundDrop, "all")
-    card12:AddRow(row12c, Theme.rowHeight)
 
-    local row12d = GUIFrame:CreateRow(card12.content, Theme.rowHeight)
-    local noCombatCheck = GUIFrame:CreateCheckbox(row12d, "No Sound In Combat", {
+    local noCombatCheck = GUIFrame:CreateCheckbox(row12b, "No Sound In Combat", {
         value = db.HighlightNoSoundInCombat == true,
         tooltip = "Keeps the keyword sound quiet while you are fighting.",
         callback = function(checked) db.HighlightNoSoundInCombat = checked end,
     })
-    row12d:AddWidget(noCombatCheck, 1)
+    row12b:AddWidget(noCombatCheck, 0.33)
     manager:Register(noCombatCheck, "all")
-    card12:AddRow(row12d, Theme.rowHeight)
-
-    local row12e = GUIFrame:CreateRow(card12.content, Theme.rowHeight)
-    local mentionsCheck = GUIFrame:CreateCheckbox(row12e, "Class Colour Mentions", {
-        value = db.ClassColorMentions == true,
-        tooltip = "Colours player names typed inside a message.",
-        callback = function(checked) db.ClassColorMentions = checked end,
-    })
-    row12e:AddWidget(mentionsCheck, 1)
-    manager:Register(mentionsCheck, "all")
-    card12:AddRow(row12e, Theme.rowHeight)
-
-    local row12f = GUIFrame:CreateRow(card12.content, Theme.rowHeightLast)
-    local excludeBox = GUIFrame:CreateEditBox(row12f, "Never Colour These Names", {
-        value = db.ExcludedMentions or "",
-        tooltip = "Comma separated. Use it for names that are also ordinary words.",
-        callback = function(text) db.ExcludedMentions = text end,
-    })
-    row12f:AddWidget(excludeBox, 1)
-    manager:Register(excludeBox, "all")
-    card12:AddRow(row12f, Theme.rowHeightLast, 0)
+    card12:AddRow(row12b, Theme.rowHeightLast, 0)
 
     yOffset = card12:GetNextOffset()
 
