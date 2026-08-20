@@ -20,7 +20,6 @@ local gsub = _G.gsub
 local GetCursorPosition = GetCursorPosition
 local ipairs = ipairs
 local IsControlKeyDown = IsControlKeyDown
-local math_max = math.max
 local select = select
 local strfind = _G.strfind
 local strmatch = strmatch
@@ -28,6 +27,7 @@ local strsub = strsub
 local tconcat = table.concat
 local tonumber = tonumber
 local UIParent = UIParent
+local Theme = KE.Theme
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -312,12 +312,18 @@ end
 
 local urlPopup, urlBackdrop
 
--- The popup parks above the chat window rather than at the cursor: a fixed home
--- is easier to find, and it never covers the line you were reading.
+-- The popup parks one pixel above the chat window rather than at the cursor: a
+-- fixed home is easier to find, and it never covers the line you were reading.
+-- It takes the chat window's width, so MIN_WIDTH only applies to the fallback
+-- position when no chat window can be resolved.
 local POPUP_HEIGHT = 64
 local POPUP_MIN_WIDTH = 340
 local POPUP_PADDING = 14
-local POPUP_GAP = 8
+local POPUP_GAP = 1
+
+-- More opaque than the copy window's backdrop. That one floats over the world;
+-- this one sits directly on chat text, which has to stay out of the address.
+local POPUP_BG = { 0.0627, 0.0627, 0.0627, 0.95 }
 
 function CL:HideURLPopup()
     if urlPopup then urlPopup:Hide() end
@@ -331,26 +337,26 @@ local function BuildURLPopup()
     urlBackdrop:SetFrameStrata("DIALOG")
     urlBackdrop:SetFrameLevel(499)
     urlBackdrop:SetAllPoints(UIParent)
-    local shade = urlBackdrop:CreateTexture(nil, "BACKGROUND")
-    shade:SetAllPoints()
-    shade:SetColorTexture(0, 0, 0, 0.10)
     urlBackdrop:RegisterForClicks("AnyUp")
     urlBackdrop:SetScript("OnClick", function() CL:HideURLPopup() end)
     urlBackdrop:Hide()
 
-    urlPopup = CreateFrame("Frame", "KE_ChatURLPopup", UIParent)
+    urlPopup = CreateFrame("Frame", "KE_ChatURLPopup", UIParent, "BackdropTemplate")
     urlPopup:SetFrameStrata("DIALOG")
     urlPopup:SetFrameLevel(500)
     urlPopup:SetSize(POPUP_MIN_WIDTH, POPUP_HEIGHT)
     urlPopup:EnableMouse(true)
-
-    local bg = urlPopup:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0.0627, 0.0627, 0.0627, 0.97)
+    urlPopup:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    urlPopup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
+    urlPopup:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
     local hint = urlPopup:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(hint, nil, 10, "NONE")
-    hint:SetTextColor(1, 1, 1, 0.5)
+    hint:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.8)
     hint:SetPoint("TOP", urlPopup, "TOP", 0, -10)
     hint:SetText("Ctrl+C to copy, Escape to close")
 
@@ -419,8 +425,8 @@ function CL:ShowURLPopup(url)
     local chat = ChatFrameUnderCursor() or _G.DEFAULT_CHAT_FRAME
     local width = chat and chat:GetWidth()
     if chat and width and width > 0 then
-        urlPopup:SetSize(math_max(width, POPUP_MIN_WIDTH), POPUP_HEIGHT)
-        urlPopup:SetPoint("BOTTOM", chat, "TOP", 0, POPUP_GAP)
+        urlPopup:SetSize(width, POPUP_HEIGHT)
+        urlPopup:SetPoint("BOTTOMLEFT", chat, "TOPLEFT", 0, POPUP_GAP)
     else
         urlPopup:SetSize(POPUP_MIN_WIDTH, POPUP_HEIGHT)
         urlPopup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
