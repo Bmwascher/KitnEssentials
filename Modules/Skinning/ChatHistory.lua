@@ -28,6 +28,9 @@ local strfind = _G.strfind
 local IsInInstance = IsInInstance
 local GetServerTime = GetServerTime
 local time = time
+local ipairs = ipairs
+local gsub, strsub = _G.gsub, strsub
+local C_Timer = C_Timer
 
 -- Event to chat type. The type is what the user's per-type toggle keys off; an
 -- event absent from this map is not covered and is never stored.
@@ -324,7 +327,18 @@ function CH:OnInitialize()
     self:SetEnabledState(false)
 end
 
-function CH:ScheduleReplay() end
+-- The chat frames are not styled yet at OnEnable. One deferred pass rather than
+-- a retry loop: nothing in this replay path needs a warm cache, because no
+-- coloured name is stored, and a frame that is still absent would be skipped
+-- anyway.
+function CH:ScheduleReplay()
+    -- Once per session, not once per enable. The GUI toggle disables and
+    -- re-enables this module, and without the latch an off/on cycle would print
+    -- the whole stored history into chat a second time.
+    if self.replayed then return end
+    self.replayed = true
+    C_Timer.After(0, function() CH:DisplayChatHistory() end)
+end
 
 -- Deliberately NOT gated on the chat skin here. Module enable order is
 -- `pairs()` order, so this can run before the Chat module does, and AceAddon
@@ -340,4 +354,144 @@ end
 
 function CH:OnDisable()
     self:UnregisterAllEvents()
+end
+
+-- A row was safe when it was stored. It is re-checked on the way out because
+-- the user's per-type toggles can have changed since, and because a stored
+-- value can read secret in a session that the session which stored it did not.
+function CH:RowIsReplayable(row)
+    if type(row) ~= "table" then return false end
+
+    local event = row.event
+    -- issecretvalue before type(), because the type check is the first read.
+    if KE:IsSecretValue(event) then return false end
+    if type(event) ~= "string" then return false end
+
+    local historyType = HISTORY_TYPES[event]
+    if not historyType then return false end
+
+    local showTypes = self.db and self.db.ShowTypes
+    if showTypes and showTypes[historyType] == false then return false end
+
+    if BodyIsUnsafe(row[1]) then return false end
+
+    -- The whole row, not just the body, and that includes the two named fields.
+    -- The premise above is that a stored value can read secret in a later
+    -- session; if that holds it holds for the timestamp and the event name too.
+    -- Login-only cost.
+    -- The timestamp must be a readable number. A missing one makes
+    -- CHAT:AddMessageEdits fall back to the login clock, which is the one thing
+    -- replay exists to avoid, and a table would reach BetterDate and throw.
+    if KE:IsSecretValue(row.time) then return false end
+    if type(row.time) ~= "number" then return false end
+    for i = 2, MAX_ARGS do
+        if KE:IsSecretValue(row[i]) then return false end
+    end
+
+    return true
+end
+
+-- Pushes each stored row back through the handler with the marker
+-- CHAT:AddMessageEdits looks for, so a replayed line carries the timestamp it
+-- was received with rather than the login clock.
+-- Not IsPersistenceActive: replay is a read, not a disk write, so being inside
+-- an instance is irrelevant to it. What IS relevant is the chat skin, because
+-- without CHAT:AddMessage installed the marker is ignored and every replayed
+-- line would be stamped with the login time.
+function CH:DisplayChatHistory()
+    if not self.db or not self.db.Enabled then return end
+    if not self:ChatSkinActive() then return end
+
+    local data = Store()
+    if not data or #data == 0 then return end
+
+    local CMH = KE.ChatMessageHandler
+    if not CMH or not CMH.ChatFrame_MessageEventHandler then return end
+
+    local frames = _G.CHAT_FRAMES
+    if type(frames) ~= "table" then return end
+
+    -- One prepass, so the per-row work happens once instead of once per chat
+    -- frame. The per-frame loop below then does comparisons only.
+    local rows, types, n = {}, {}, 0
+    for i = 1, #data do
+        local row = data[i]
+        if self:RowIsReplayable(row) then
+            n = n + 1
+            rows[n] = row
+            -- row.event is a plain string this module wrote, so this match is
+            -- never run against secret text.
+            types[n] = gsub(strsub(row.event, 10), "_INFORM", "")
+        end
+    end
+    if n == 0 then return end
+
+    -- The frames are resolved and VALIDATED here too, in the same prepass and
+    -- for a different reason: everything below runs with CMH.replaying up, and
+    -- anything that throws up there escapes with the flag stuck on, muting
+    -- every live whisper sound, keyword sound, tab flash, client-icon flash,
+    -- text-to-speech line and reply-target write until the next reload. The
+    -- per-dispatch pcall does not cover a throw outside the dispatch.
+    --
+    -- Both checks are `type(x) == "table"`, not truthiness. CHAT_FRAMES is a
+    -- Blizzard global any addon can append to, so `_G[frameName]` can be a
+    -- number or a boolean, and indexing one of those throws before any check on
+    -- the field itself could run.
+    local targets, t = {}, 0
+    for _, frameName in ipairs(frames) do
+        local chat = _G[frameName]
+        if type(chat) == "table" and type(chat.messageTypeList) == "table" then
+            t = t + 1
+            targets[t] = chat
+        end
+    end
+    if t == 0 then return end
+
+    -- Protected PER DISPATCH, not once around the pass. A single throwing row
+    -- must not silently abort every later row, and it must still reach the error
+    -- handler -- a swallowed failure would hide a real defect behind a short
+    -- replay.
+    --
+    -- pcall with the callee's arguments, NOT xpcall: WoW's Lua accepts
+    -- xpcall(f, handler, ...) but stock Lua 5.1 does not forward the extra
+    -- arguments, and the headless suite runs stock 5.1. The handler is called by
+    -- hand on failure so the error still surfaces.
+    --
+    -- Fetched BEFORE the flag goes up, with everything else that can throw.
+    local handler = geterrorhandler()
+
+    -- From here to the clear, the only calls are the pcall-wrapped dispatch and
+    -- a pcall-wrapped handler. Everything else is table indexing and comparison
+    -- on values the prepass has already type-checked, so the flag cannot be
+    -- left up by a throw. Keep it that way: anything new that can raise belongs
+    -- above this line, not inside the window.
+    CMH.replaying = true
+    do
+        for j = 1, t do
+            local chat = targets[j]
+            local messageTypes = chat.messageTypeList
+            for i = 1, n do
+                local row = rows[i]
+                local chatType = types[i]
+                for _, wanted in pairs(messageTypes) do
+                    if wanted == chatType then
+                        local ok, err = pcall(CMH.ChatFrame_MessageEventHandler,
+                            CMH, chat, row.event,
+                            row[1], row[2], row[3], row[4], row[5], row[6],
+                            row[7], row[8], row[9], row[10], row[11], row[12],
+                            row[13], row[14], row[15], row[16], row[17], false,
+                            "KE_ChatHistory", row.time)
+                        -- pcall on the HANDLER too: geterrorhandler returns
+                        -- whatever an error-grabber addon installed, and a
+                        -- throwing one would be reached only on this path --
+                        -- inside the window, after a dispatch already failed.
+                        if not ok and handler then pcall(handler, err) end
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    CMH.replaying = false
 end

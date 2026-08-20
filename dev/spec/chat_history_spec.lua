@@ -215,3 +215,207 @@ describe("ChatHistory storage guards", function()
         assert.equals(0, #KE.db.char.ChatTypingHistory)
     end)
 end)
+
+describe("ChatHistory replay", function()
+    local function fakeHandler()
+        local calls = {}
+        return {
+            replaying = false,
+            calls = calls,
+            ChatFrame_MessageEventHandler = function(self, frame, event, ...)
+                calls[#calls + 1] = {
+                    frame = frame, event = event, args = { ... },
+                    replayingAtCall = self.replaying,
+                }
+            end,
+        }
+    end
+
+    local function withFrame(messageTypes)
+        _G.ChatFrame1 = { messageTypeList = messageTypes }
+        return _G.ChatFrame1
+    end
+
+    it("refuses a row whose stored body reads secret at replay time", function()
+        local CH, KE = L.loadChatHistory({ issecretvalue = secretIs("hello") })
+        KE.db.char.ChatHistory[1] = { "hello", "Bob", event = "CHAT_MSG_SAY", time = 5 }
+        assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+    end)
+
+    it("refuses a row whose stored sender reads secret at replay time", function()
+        local CH, KE = L.loadChatHistory({ issecretvalue = secretIs("Bob") })
+        KE.db.char.ChatHistory[1] = { "hello", "Bob", event = "CHAT_MSG_SAY", time = 5 }
+        assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+    end)
+
+    it("refuses a row whose stored timestamp reads secret at replay time", function()
+        local stamp = {}
+        local CH, KE = L.loadChatHistory({ issecretvalue = secretIs(stamp) })
+        KE.db.char.ChatHistory[1] = { "hello", "Bob", event = "CHAT_MSG_SAY", time = stamp }
+        assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+    end)
+
+    it("does nothing while the chat skin is off", function()
+        local CH, KE = L.loadChatHistory()
+        KE.ChatMessageHandler = fakeHandler()
+        withFrame({ "SAY" })
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+        CH.ChatSkinActive = function() return false end
+        CH:DisplayChatHistory()
+
+        assert.equals(0, #KE.ChatMessageHandler.calls)
+    end)
+
+    it("refuses a row whose type the user has since switched off", function()
+        local CH, KE = L.loadChatHistory()
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+        KE.db.profile.Skinning.ChatHistory.ShowTypes.SAY = false
+        assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+    end)
+
+    it("refuses a malformed row", function()
+        local CH = L.loadChatHistory()
+        assert.is_false(CH:RowIsReplayable("not a row"))
+        assert.is_false(CH:RowIsReplayable(nil))
+        assert.is_false(CH:RowIsReplayable({ "hello", "Bob" }))
+        assert.is_false(CH:RowIsReplayable({ event = "CHAT_MSG_SAY" }))
+    end)
+
+    it("refuses a row with no usable timestamp", function()
+        local CH = L.loadChatHistory()
+        assert.is_false(CH:RowIsReplayable({ "hello", "Bob", event = "CHAT_MSG_SAY" }))
+        assert.is_false(CH:RowIsReplayable({ "hello", "Bob", event = "CHAT_MSG_SAY", time = "5" }))
+        assert.is_false(CH:RowIsReplayable({ "hello", "Bob", event = "CHAT_MSG_SAY", time = {} }))
+    end)
+
+    it("accepts an ordinary stored row", function()
+        local CH, KE = L.loadChatHistory()
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+        assert.is_true(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+    end)
+
+    it("dispatches with the marker and the stored time", function()
+        local CH, KE = L.loadChatHistory()
+        KE.ChatMessageHandler = fakeHandler()
+        local frame = withFrame({ "SAY" })
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+        CH:DisplayChatHistory()
+
+        assert.equals(1, #KE.ChatMessageHandler.calls)
+        local call = KE.ChatMessageHandler.calls[1]
+        assert.equals(frame, call.frame)
+        assert.equals("CHAT_MSG_SAY", call.event)
+        assert.equals("hello", call.args[1])
+        -- Seventeen stored positions, then false for the argument that is
+        -- never stored, then the marker and the time.
+        assert.equals(false, call.args[18])
+        assert.equals("KE_ChatHistory", call.args[19])
+        assert.equals(2000, call.args[20])
+    end)
+
+    it("sets the mute flag for the dispatch and clears it after", function()
+        local CH, KE = L.loadChatHistory()
+        KE.ChatMessageHandler = fakeHandler()
+        withFrame({ "SAY" })
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+        CH:DisplayChatHistory()
+
+        assert.is_true(KE.ChatMessageHandler.calls[1].replayingAtCall)
+        assert.is_false(KE.ChatMessageHandler.replaying)
+    end)
+
+    it("dispatches a row to a frame once even when the type list repeats", function()
+        local CH, KE = L.loadChatHistory()
+        KE.ChatMessageHandler = fakeHandler()
+        withFrame({ "SAY", "SAY" })
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+        CH:DisplayChatHistory()
+
+        assert.equals(1, #KE.ChatMessageHandler.calls)
+    end)
+
+    it("skips a frame that does not carry the row's type", function()
+        local CH, KE = L.loadChatHistory()
+        KE.ChatMessageHandler = fakeHandler()
+        withFrame({ "GUILD" })
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+        CH:DisplayChatHistory()
+
+        assert.equals(0, #KE.ChatMessageHandler.calls)
+    end)
+
+    it("keeps going, surfaces the error, and clears the mute flag when one row throws", function()
+        local CH, KE, _, caught = L.loadChatHistory()
+        local seen = {}
+        KE.ChatMessageHandler = {
+            replaying = false,
+            ChatFrame_MessageEventHandler = function(_, _, _, body)
+                if body == "first" then error("boom") end
+                seen[#seen + 1] = body
+            end,
+        }
+        withFrame({ "SAY" })
+        CH:SaveChatHistory("CHAT_MSG_SAY", "first", "Bob")
+        CH:SaveChatHistory("CHAT_MSG_SAY", "second", "Bob")
+        CH:DisplayChatHistory()
+
+        -- The row after the throwing one still went out ...
+        assert.equals(1, #seen)
+        assert.equals("second", seen[1])
+        -- ... the error was not swallowed ...
+        assert.equals(1, #caught)
+        -- ... and live chat is not left muted.
+        assert.is_false(KE.ChatMessageHandler.replaying)
+    end)
+
+    it("skips a CHAT_FRAMES entry that is not a frame, and stays unmuted", function()
+        -- CHAT_FRAMES is a Blizzard global any addon can append to. A number or
+        -- a boolean there would throw on the field read, and the throw would
+        -- escape with the mute flag up -- silencing every live whisper sound,
+        -- keyword sound, tab flash and reply-target write until reload.
+        --
+        -- This spec exists because that guard is invisible to every other
+        -- replay test: they all install a real frame, so removing the type
+        -- checks breaks nothing they assert.
+        local CH, KE = L.loadChatHistory()
+        KE.ChatMessageHandler = fakeHandler()
+        _G.ChatFrame1 = 42
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+
+        CH:DisplayChatHistory()
+
+        assert.equals(0, #KE.ChatMessageHandler.calls)
+        assert.is_false(KE.ChatMessageHandler.replaying)
+    end)
+
+    it("arms exactly one replay per session, not one per enable", function()
+        -- A recording timer, so the assertion is about how many passes were
+        -- ARMED. Observing the latch flag alone would pass an implementation
+        -- that sets it and schedules twice anyway.
+        local armed = {}
+        local CH, KE = L.loadChatHistory({
+            C_Timer = { After = function(_, fn) armed[#armed + 1] = fn end },
+        })
+        KE.ChatMessageHandler = fakeHandler()
+        withFrame({ "SAY" })
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+
+        CH:ScheduleReplay()
+        CH:ScheduleReplay()
+        assert.equals(1, #armed)
+
+        armed[1]()
+        assert.equals(1, #KE.ChatMessageHandler.calls)
+    end)
+
+    it("does nothing while the module is off", function()
+        local CH, KE = L.loadChatHistory()
+        KE.ChatMessageHandler = fakeHandler()
+        withFrame({ "SAY" })
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+        KE.db.profile.Skinning.ChatHistory.Enabled = false
+        CH:DisplayChatHistory()
+
+        assert.equals(0, #KE.ChatMessageHandler.calls)
+    end)
+end)
