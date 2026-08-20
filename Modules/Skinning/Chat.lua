@@ -2396,14 +2396,20 @@ function CHAT:SetupChatScripts(chat)
         end)
     end
 
-    -- Replace OnEvent with our handler to prevent taint from secret values.
-    -- KE.ChatMessageHandler is Task 7's module; until it exists this
-    -- guard leaves Blizzard's own OnEvent in place rather than nil-ing it.
-    if allowHooks and KE.ChatMessageHandler then
-        chat.keOldOnEvent = chat.keOldOnEvent or chat:GetScript("OnEvent")
-        chat:SetScript("OnEvent", function(frame, event, ...)
-            KE.ChatMessageHandler:FloatingChatFrame_OnEvent(frame, event, ...)
-        end)
+    -- Shadow the message step only -- NEVER the frame's OnEvent script.
+    -- SETTINGS_LOADED runs ConfigEventHandler -> UpdateChatFrames ->
+    -- ActivateChat, which writes ACTIVE_CHAT_EDIT_BOX. Reached from an addon
+    -- OnEvent that global stays tainted for the session, and SendChatMessage
+    -- then refuses any message carrying a link while in combat.
+    -- ChatFrameMixin:OnEvent dispatches this step as self:MessageEventHandler()
+    -- and Mixin copies it onto the frame, so replacing the one field keeps KE
+    -- off the config path. Until KE.ChatMessageHandler exists, Blizzard's own
+    -- handler stays.
+    if allowHooks and KE.ChatMessageHandler and chat.MessageEventHandler then
+        chat.keOldMessageEventHandler = chat.keOldMessageEventHandler or chat.MessageEventHandler
+        chat.MessageEventHandler = function(frame, event, ...)
+            return KE.ChatMessageHandler:ChatFrame_MessageEventHandler(frame, event, ...)
+        end
     end
 
     chat.keOldOnMouseWheel = chat.keOldOnMouseWheel or chat:GetScript("OnMouseWheel")
@@ -2743,7 +2749,7 @@ function CHAT:RestoreChat(chat)
     -- keOld* saves set, so gating this block on state instead would skip
     -- it forever for any chat window closed during the session.
     if chat.keStyled then
-        if chat.keOldOnEvent then chat:SetScript("OnEvent", chat.keOldOnEvent) end
+        if chat.keOldMessageEventHandler then chat.MessageEventHandler = chat.keOldMessageEventHandler end
         if chat.keOldOnMouseWheel then chat:SetScript("OnMouseWheel", chat.keOldOnMouseWheel) end
         chat.AddMessage = chat.OldAddMessage or chat.AddMessage
         if tab and tab.keOldOnClick then tab:SetScript("OnClick", tab.keOldOnClick) end
@@ -2774,7 +2780,7 @@ function CHAT:RestoreChat(chat)
             end
         end
 
-        chat.OldAddMessage, chat.keOldOnEvent, chat.keOldOnMouseWheel = nil, nil, nil
+        chat.OldAddMessage, chat.keOldMessageEventHandler, chat.keOldOnMouseWheel = nil, nil, nil
         if tab then tab.keOldOnClick = nil end
 
         -- StyleEditbox early-returns on editbox.styled, but OnDisable's
