@@ -120,8 +120,9 @@ end
 -- GROUP_ROSTER_UPDATE); values are ready-made |T|t texture strings.
 CMH.lfgRoles = {}
 
--- Set for the duration of a history replay. Anything that makes noise, speaks,
--- or flashes for a NEW message checks it: a replayed line is not new.
+-- Set for the duration of a history replay. Anything that treats a message as
+-- NEW checks it, which is wider than sound and light: the reply target neither
+-- speaks nor flashes and still has to be guarded.
 CMH.replaying = false
 local GROUP_CHAT_TYPES = {
     PARTY = true, PARTY_LEADER = true,

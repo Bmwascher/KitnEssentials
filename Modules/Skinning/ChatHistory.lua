@@ -169,9 +169,10 @@ function CH:PackRow(event, ...)
     end
 
     -- Trailing dead arguments are dropped. How much that saves is not known
-    -- and may be nothing: CHAT_MSG_SAY declares all seventeen of its payload
-    -- fields non-nilable, so a real line can fill every slot. A truncated tail
-    -- reads back as nil, which every consumer treats the same as the false it
+    -- and may be nothing: CHAT_MSG_SAY declares eighteen payload fields and
+    -- every one of them non-nilable, and seventeen of those are what this
+    -- module packs, so a real line can fill every slot. A truncated tail reads
+    -- back as nil, which every consumer treats the same as the false it
     -- replaces.
     for i = count, last + 1, -1 do row[i] = nil end
     if last == 0 then return nil end
