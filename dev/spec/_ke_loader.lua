@@ -2363,4 +2363,22 @@ function L.loadEUIUnlockBridge(overrides)
     return helpers.loadModule("Core/EUIUnlockBridge.lua", KE)
 end
 
+-- Modules/Skinning/ChatLinks.lua. CL is a file-local never assigned onto KE --
+-- the shim registry is the only handle to it. The module captures the WoW
+-- string aliases and `ceil` as file-scope upvalues, and Core/Secret.lua
+-- captures `issecretvalue` the same way, so every stub must exist BEFORE its
+-- loadModule and the secret override must travel through `overrides`.
+function L.loadChatLinks(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.format = string.format
+    _G.gsub = string.gsub
+    _G.strmatch = string.match
+    _G.ceil = math.ceil
+    local KE = { db = { profile = { Skinning = { ChatLinks = {} } } } }
+    helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Modules/Skinning/ChatLinks.lua", KE)
+    return modules["ChatLinks"], KE
+end
+
 return L

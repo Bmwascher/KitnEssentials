@@ -1844,6 +1844,14 @@ local Defaults = {
                 GuildMemberStatusInviteLink = true,
                 RoleIcons = true,
             },
+            ChatLinks = {
+                Enabled = false,
+                Icon = true,
+                IconHeight = 14,
+                IconWidth = 14,
+                KeepRatio = true,
+                NumericalQualityTier = true,
+            },
             Messages = {
                 Enabled = false,
                 FontOutline = "OUTLINE",
