@@ -11,6 +11,10 @@ if not KitnEssentials then return end
 
 local CL = KitnEssentials:NewModule("ChatLinks", "AceEvent-3.0")
 
+-- The chat skin owns the panel this module's popup anchors to, and the border
+-- colour it borrows. Resolved here because the module exists by load time.
+local CHAT = KitnEssentials:GetModule("Chat", true)
+
 local _G = _G
 local ceil = ceil
 local C_Timer = C_Timer
@@ -352,7 +356,8 @@ local function BuildURLPopup()
         edgeSize = 1,
     })
     urlPopup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
-    urlPopup:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    -- The border colour is set per show, not here: the chat skin's colour can
+    -- change without a reload.
 
     local hint = urlPopup:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(hint, nil, 10, "NONE")
@@ -389,24 +394,44 @@ end
 -- Which chat window the address was clicked in. Blizzard's link dispatch does
 -- not say, so this asks the only thing that still knows: the cursor has not
 -- moved since the click.
-local function ChatFrameUnderCursor()
+--
+-- The skinned panel is preferred over the message frame inside it. The panel
+-- carries the visible window and draws its border; the ScrollingMessageFrame is
+-- inset within it, so anchoring to that one puts the popup INSIDE the border and
+-- short of the window's real width.
+local function ChatAnchorUnderCursor()
     local cx, cy = GetCursorPosition()
     local scale = UIParent:GetEffectiveScale()
     if not cx or not cy or not scale or scale <= 0 then return nil end
     cx, cy = cx / scale, cy / scale
 
+    local function Contains(frame)
+        if not frame or not frame:IsShown() then return false end
+        local left, right = frame:GetLeft(), frame:GetRight()
+        local top, bottom = frame:GetTop(), frame:GetBottom()
+        return left and right and top and bottom
+            and cx >= left and cx <= right and cy >= bottom and cy <= top
+    end
+
+    local panel = CHAT and CHAT.panel
+    if Contains(panel) then return panel end
+
+    -- An undocked window sits outside the panel and is its own anchor.
     for _, frameName in ipairs(_G.CHAT_FRAMES) do
         local chat = _G[frameName]
-        if chat and chat:IsShown() then
-            local left, right = chat:GetLeft(), chat:GetRight()
-            local top, bottom = chat:GetTop(), chat:GetBottom()
-            if left and right and top and bottom
-                and cx >= left and cx <= right and cy >= bottom and cy <= top then
-                return chat
-            end
-        end
+        if Contains(chat) then return chat end
     end
-    return nil
+
+    return panel or _G.DEFAULT_CHAT_FRAME
+end
+
+-- The popup's border matches the chat window's own, so the two read as one
+-- object rather than a dialog that happened to land there.
+local function PopupBorderColor()
+    local backdrop = CHAT and CHAT.db and CHAT.db.Backdrop
+    local color = backdrop and backdrop.BorderColor
+    if color and color[1] then return color[1], color[2], color[3], color[4] or 1 end
+    return Theme.border[1], Theme.border[2], Theme.border[3], 1
 end
 
 function CL:ShowURLPopup(url)
@@ -420,13 +445,14 @@ function CL:ShowURLPopup(url)
     if not urlPopup then BuildURLPopup() end
 
     urlPopup.box:SetText(url)
+    urlPopup:SetBackdropBorderColor(PopupBorderColor())
     urlPopup:ClearAllPoints()
 
-    local chat = ChatFrameUnderCursor() or _G.DEFAULT_CHAT_FRAME
-    local width = chat and chat:GetWidth()
-    if chat and width and width > 0 then
+    local anchor = ChatAnchorUnderCursor()
+    local width = anchor and anchor:GetWidth()
+    if anchor and width and width > 0 then
         urlPopup:SetSize(width, POPUP_HEIGHT)
-        urlPopup:SetPoint("BOTTOMLEFT", chat, "TOPLEFT", 0, POPUP_GAP)
+        urlPopup:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT", 0, POPUP_GAP)
     else
         urlPopup:SetSize(POPUP_MIN_WIDTH, POPUP_HEIGHT)
         urlPopup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
