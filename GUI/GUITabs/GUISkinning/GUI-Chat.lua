@@ -140,8 +140,8 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     local card2 = GUIFrame:CreateCard(scrollChild, "Chat Colors", yOffset)
     manager:Register(card2, "all")
 
-    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local classColorCheck = GUIFrame:CreateCheckbox(row2, "Class Color BNet Whispers", {
+    local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local classColorCheck = GUIFrame:CreateCheckbox(row2a, "Class Color BNet Whispers", {
         value = db.ClassColorWhispers ~= false,
         tooltip = "Class-colors sender names on Battle.net whispers in the default Blizzard chat, matching how regular whispers are already colored.",
         callback = function(checked)
@@ -149,9 +149,27 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row2:AddWidget(classColorCheck, 1)
+    row2a:AddWidget(classColorCheck, 0.5)
     manager:Register(classColorCheck, "all")
-    card2:AddRow(row2, Theme.rowHeightLast, 0)
+
+    local mentionsCheck = GUIFrame:CreateCheckbox(row2a, "Class Colour Mentions", {
+        value = db.ClassColorMentions == true,
+        tooltip = "Colours player names typed inside a message.",
+        callback = function(checked) db.ClassColorMentions = checked end,
+    })
+    row2a:AddWidget(mentionsCheck, 0.5)
+    manager:Register(mentionsCheck, "all")
+    card2:AddRow(row2a, Theme.rowHeight)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local excludeBox = GUIFrame:CreateEditBox(row2b, "Never Colour These Names", {
+        value = db.ExcludedMentions or "",
+        tooltip = "Comma separated. Use it for names that are also ordinary words.",
+        callback = function(text) db.ExcludedMentions = text end,
+    })
+    row2b:AddWidget(excludeBox, 1)
+    manager:Register(excludeBox, "all")
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
@@ -685,11 +703,11 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     end
 
     ----------------------------------------------------------------
-    -- Card 12: Chat Messages
+    -- Card 12: Keyword Highlight
     ----------------------------------------------------------------
-    -- Registered: both features run inside KE's message handler, which only
+    -- Registered: the rewrite runs inside KE's message handler, which only
     -- exists while the chat skin is on.
-    local card12 = GUIFrame:CreateCard(scrollChild, "Chat Messages", yOffset)
+    local card12 = GUIFrame:CreateCard(scrollChild, "Keyword Highlight", yOffset)
     manager:Register(card12, "all")
 
     local row12a = GUIFrame:CreateRow(card12.content, Theme.rowHeight)
@@ -704,7 +722,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     -- Colour, sound and the combat mute all answer "what happens on a hit",
     -- so they share a row rather than stacking three deep.
-    local row12b = GUIFrame:CreateRow(card12.content, Theme.rowHeight)
+    local row12b = GUIFrame:CreateRow(card12.content, Theme.rowHeightLast)
     local colorPick = GUIFrame:CreateColorPicker(row12b, "Highlight Colour", {
         color = db.HighlightColor,
         callback = function(r, g, b) db.HighlightColor = { r, g, b } end,
@@ -728,27 +746,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     })
     row12b:AddWidget(noCombatCheck, 0.33)
     manager:Register(noCombatCheck, "all")
-    card12:AddRow(row12b, Theme.rowHeight)
-
-    local row12c = GUIFrame:CreateRow(card12.content, Theme.rowHeight)
-    local mentionsCheck = GUIFrame:CreateCheckbox(row12c, "Class Colour Mentions", {
-        value = db.ClassColorMentions == true,
-        tooltip = "Colours player names typed inside a message.",
-        callback = function(checked) db.ClassColorMentions = checked end,
-    })
-    row12c:AddWidget(mentionsCheck, 1)
-    manager:Register(mentionsCheck, "all")
-    card12:AddRow(row12c, Theme.rowHeight)
-
-    local row12d = GUIFrame:CreateRow(card12.content, Theme.rowHeightLast)
-    local excludeBox = GUIFrame:CreateEditBox(row12d, "Never Colour These Names", {
-        value = db.ExcludedMentions or "",
-        tooltip = "Comma separated. Use it for names that are also ordinary words.",
-        callback = function(text) db.ExcludedMentions = text end,
-    })
-    row12d:AddWidget(excludeBox, 1)
-    manager:Register(excludeBox, "all")
-    card12:AddRow(row12d, Theme.rowHeightLast, 0)
+    card12:AddRow(row12b, Theme.rowHeightLast, 0)
 
     yOffset = card12:GetNextOffset()
 
