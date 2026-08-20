@@ -762,6 +762,86 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     yOffset = card12:GetNextOffset()
 
+    ----------------------------------------------------------------
+    -- Card 13: Chat History
+    ----------------------------------------------------------------
+    -- A separate module with its own enable flag, so it is deliberately NOT
+    -- registered with the state manager. It does depend on the chat skin
+    -- being on, which the label says rather than the widget state, because
+    -- greying it out would hide the reason.
+    --
+    -- This sits after the page's chat-skin early return, so with the skin off
+    -- the card is not built at all. That is deliberate and matches the sibling
+    -- link card: with the skin off the whole page collapses to its master
+    -- switch, so the only useful next action is already the only thing on
+    -- screen.
+    local historyDb = KE.db and KE.db.profile.Skinning.ChatHistory
+    if historyDb then
+        local card13 = GUIFrame:CreateCard(scrollChild, "Chat History", yOffset)
+        card13:AddHeaderToggle(historyDb.Enabled == true, function(checked)
+            historyDb.Enabled = checked
+            if checked then
+                KitnEssentials:EnableModule("ChatHistory")
+            else
+                KitnEssentials:DisableModule("ChatHistory")
+            end
+            KE:Print("Chat History: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+        end)
+
+        card13:AddLabel("Keeps your chat per character so it comes back after a reload, with the time each line arrived. Needs the chat skin above to be on. Messages received while you are inside a dungeon, raid or battleground are never saved.")
+
+        local row13a = GUIFrame:CreateRow(card13.content, Theme.rowHeight)
+        row13a:AddWidget(GUIFrame:CreateSlider(row13a, "Lines To Keep", {
+            min = 50, max = 500, step = 10, value = historyDb.Size or 100,
+            callback = function(val) historyDb.Size = val end,
+        }), 0.5)
+        row13a:AddWidget(GUIFrame:CreateButton(row13a, "Clear History", {
+            width = 150,
+            tooltip = "Throws away every stored line and everything you have typed.",
+            callback = function()
+                local history = KitnEssentials:GetModule("ChatHistory", true)
+                if history and history.ClearHistory then history:ClearHistory() end
+                KE:Print("Chat history cleared.")
+            end,
+        }), 0.5)
+        card13:AddRow(row13a, Theme.rowHeight)
+
+        -- A type switched off is UNREGISTERED, not filtered per message, so a
+        -- toggle has to tell the module to rebuild its registrations.
+        local types = historyDb.ShowTypes
+        local function TypeBox(row, label, key, weight)
+            row:AddWidget(GUIFrame:CreateCheckbox(row, label, {
+                value = types[key] ~= false,
+                callback = function(checked)
+                    types[key] = checked
+                    local history = KitnEssentials:GetModule("ChatHistory", true)
+                    if history and history.RefreshEvents then history:RefreshEvents() end
+                end,
+            }), weight)
+        end
+
+        local row13b = GUIFrame:CreateRow(card13.content, Theme.rowHeight)
+        TypeBox(row13b, "Say", "SAY", 0.25)
+        TypeBox(row13b, "Yell", "YELL", 0.25)
+        TypeBox(row13b, "Emote", "EMOTE", 0.25)
+        TypeBox(row13b, "Whisper", "WHISPER", 0.25)
+        card13:AddRow(row13b, Theme.rowHeight)
+
+        local row13c = GUIFrame:CreateRow(card13.content, Theme.rowHeight)
+        TypeBox(row13c, "Party", "PARTY", 0.25)
+        TypeBox(row13c, "Raid", "RAID", 0.25)
+        TypeBox(row13c, "Instance", "INSTANCE", 0.25)
+        TypeBox(row13c, "Channel", "CHANNEL", 0.25)
+        card13:AddRow(row13c, Theme.rowHeight)
+
+        local row13d = GUIFrame:CreateRow(card13.content, Theme.rowHeightLast)
+        TypeBox(row13d, "Guild", "GUILD", 0.5)
+        TypeBox(row13d, "Officer", "OFFICER", 0.5)
+        card13:AddRow(row13d, Theme.rowHeightLast, 0)
+
+        yOffset = card13:GetNextOffset()
+    end
+
     manager:UpdateAll(db.Enabled == true)
     return yOffset
 end)
