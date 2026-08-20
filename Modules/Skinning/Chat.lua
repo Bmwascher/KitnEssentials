@@ -2749,6 +2749,8 @@ function CHAT:RestoreChat(chat)
     -- keOld* saves set, so gating this block on state instead would skip
     -- it forever for any chat window closed during the session.
     if chat.keStyled then
+        -- Puts the behaviour back, not the taint: the field was written by an
+        -- addon, so only a reload gives the frame a pristine handler again.
         if chat.keOldMessageEventHandler then chat.MessageEventHandler = chat.keOldMessageEventHandler end
         if chat.keOldOnMouseWheel then chat:SetScript("OnMouseWheel", chat.keOldOnMouseWheel) end
         chat.AddMessage = chat.OldAddMessage or chat.AddMessage
