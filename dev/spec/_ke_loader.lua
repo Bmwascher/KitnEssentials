@@ -2414,6 +2414,8 @@ function L.loadChatLinks(overrides)
     _G.gsub = string.gsub
     _G.strmatch = string.match
     _G.ceil = math.ceil
+    _G.strfind = string.find
+    _G.strsub = string.sub
     local KE = { db = { profile = { Skinning = { ChatLinks = {} } } } }
     helpers.loadModule("Core/Secret.lua", KE)
     helpers.loadModule("Modules/Skinning/ChatLinks.lua", KE)

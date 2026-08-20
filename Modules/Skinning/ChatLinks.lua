@@ -17,7 +17,10 @@ local format = format
 local gsub = _G.gsub
 local ipairs = ipairs
 local select = select
+local strfind = _G.strfind
 local strmatch = strmatch
+local strsub = strsub
+local tconcat = table.concat
 local tonumber = tonumber
 
 ---------------------------------------------------------------------------------
@@ -193,6 +196,111 @@ local function AddCurrencyInfo(link)
 end
 
 ---------------------------------------------------------------------------------
+-- Web addresses
+---------------------------------------------------------------------------------
+
+-- Ordered longest-first so a path-bearing address is not cut short by the
+-- bare-domain rule below it. `%f[%S]` is a frontier match: it anchors to the
+-- start of a word without consuming the space before it, which is also what
+-- stops a later rule re-matching text an earlier one already wrapped -- inside
+-- a wrapped link the address is preceded by `:` or `[`, so no frontier exists.
+--
+-- The tail is `[^%s|]+`, not `%S+`. A pipe cannot appear in an address, and a
+-- greedy `%S+` swallows the `|r` that closes a colour escape or the `]|h` that
+-- closes a hyperlink, producing a link whose text carries the terminator and
+-- leaving the outer escape unclosed.
+local URL_PATTERNS = {
+    "%f[%S](%a[%w+.-]+://[^%s|]+)",
+    "^(%a[%w+.-]+://[^%s|]+)",
+    "%f[%S](www%.[-%w_%%]+%.%a%a+/[^%s|]+)",
+    "^(www%.[-%w_%%]+%.%a%a+/[^%s|]+)",
+    "%f[%S](www%.[-%w_%%]+%.%a%a+)",
+    "^(www%.[-%w_%%]+%.%a%a+)",
+}
+
+local URL_COLOR_FALLBACK = "|cff4fb5ff"
+
+-- Literal pre-check, so the pattern passes are skipped entirely for the
+-- overwhelming majority of messages, which carry no address at all.
+function CL.ContainsURL(text)
+    if not text or text == "" then return false end
+    return strfind(text, "://", 1, true) ~= nil
+        or strfind(text, "www.", 1, true) ~= nil
+end
+
+function CL.URLColor()
+    local c = CL.db and CL.db.WebAddressColor
+    if not c then return URL_COLOR_FALLBACK end
+    return format("|cff%02x%02x%02x", (c[1] or 0.31) * 255, (c[2] or 0.71) * 255,
+        (c[3] or 1) * 255)
+end
+
+local function WrapSpan(span, substitution)
+    for _, pattern in ipairs(URL_PATTERNS) do
+        span = gsub(span, pattern, substitution)
+    end
+    return span
+end
+
+-- Locates the next complete hyperlink, using PLAIN finds only -- there is no
+-- pattern that gets this right. A link is `|H<data>|h<display>|h` OR
+-- `|H<data>|h` with no display at all, and the data may or may not contain a
+-- colon: `|HGMChat|h[...]|h` is a real Blizzard link with display text and no
+-- colon, and `|Hitem:1|h` is a real one with a colon and no display.
+--
+-- So the shape cannot be decided from the data. It is decided STRUCTURALLY: the
+-- second `|h` closes a display span only when it comes before the next `|H`.
+-- Otherwise this link had no display and the next `|h` belongs to the NEXT link.
+-- Getting that wrong pairs one link's terminator with another's, which leaves a
+-- real link's display text exposed as plain text and nests a link inside it.
+local function NextLink(text, pos)
+    local open = strfind(text, "|H", pos, true)
+    while open do
+        local dataEnd = strfind(text, "|h", open + 2, true)
+        if not dataEnd then return nil end
+
+        -- An unterminated `|H` is not a link. Left alone it would claim the NEXT
+        -- link's terminators and swallow everything between, so resynchronise on
+        -- the later marker and let the broken one fall through as plain text.
+        local laterOpen = strfind(text, "|H", open + 2, true)
+        if laterOpen and laterOpen < dataEnd then
+            open = laterOpen
+        else
+            local displayEnd = strfind(text, "|h", dataEnd + 2, true)
+            local following = strfind(text, "|H", dataEnd + 2, true)
+            if displayEnd and (not following or displayEnd < following) then
+                return open, displayEnd + 1
+            end
+            return open, dataEnd + 1
+        end
+    end
+    return nil
+end
+
+function CL.WrapURLs(text, hexColor)
+    if not text or text == "" then return text end
+    if not CL.ContainsURL(text) then return text end
+
+    -- gsub inserts a capture literally, so a `%` inside the matched address is
+    -- not re-read as an escape. The colour prefix carries no `%` either.
+    local substitution = (hexColor or URL_COLOR_FALLBACK) .. "|Hkeurl:%1|h[%1]|h|r"
+
+    -- Complete hyperlinks are copied through byte for byte and never scanned.
+    -- An address inside a link's display text would otherwise be wrapped into a
+    -- NESTED link, which does not render as either link.
+    local out, pos = {}, 1
+    while true do
+        local first, last = NextLink(text, pos)
+        if not first then break end
+        out[#out + 1] = WrapSpan(strsub(text, pos, first - 1), substitution)
+        out[#out + 1] = strsub(text, first, last)
+        pos = last + 1
+    end
+    out[#out + 1] = WrapSpan(strsub(text, pos), substitution)
+    return tconcat(out)
+end
+
+---------------------------------------------------------------------------------
 -- Filter
 ---------------------------------------------------------------------------------
 
@@ -215,6 +323,10 @@ function CL:Filter(event, msg, ...)
         msg = gsub(msg, "(|Hspell:%d+:%d+|h.-|h)", AddSpellInfo)
         msg = gsub(msg, "(|Hpvptal:%d+|h.-|h)", AddPvPTalentInfo)
         msg = gsub(msg, "(|Hachievement:%d+:.-|h.-|h)", AddAchievementInfo)
+
+        if db.WebAddresses then
+            msg = CL.WrapURLs(msg, CL.URLColor())
+        end
     end
     return false, msg, ...
 end
