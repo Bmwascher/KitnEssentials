@@ -2405,6 +2405,9 @@ function CHAT:SetupChatScripts(chat)
     -- and Mixin copies it onto the frame, so replacing the one field keeps KE
     -- off the config path. Until KE.ChatMessageHandler exists, Blizzard's own
     -- handler stays.
+    -- Not airtight: UPDATE_FLOATING_CHAT_WINDOWS reaches neither Blizzard
+    -- handler, so it does fall through to this field, and FCF_Close can write
+    -- the same global from there under chatStyle "im".
     if allowHooks and KE.ChatMessageHandler and chat.MessageEventHandler then
         chat.keOldMessageEventHandler = chat.keOldMessageEventHandler or chat.MessageEventHandler
         chat.MessageEventHandler = function(frame, event, ...)
