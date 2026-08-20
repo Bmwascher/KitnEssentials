@@ -252,6 +252,9 @@ function CL:OnInitialize()
 end
 
 function CL:OnEnable()
+    -- ElvUI users get link decoration from that side, so this stands down
+    -- rather than doubling every icon.
+    if KE:ShouldNotLoadModule() then return end
     if not self.db then self:UpdateDB() end
     if not self.db.Enabled then return end
     if self.filtersRegistered then return end
