@@ -20,6 +20,7 @@ local gsub = _G.gsub
 local GetCursorPosition = GetCursorPosition
 local ipairs = ipairs
 local IsControlKeyDown = IsControlKeyDown
+local math_max = math.max
 local select = select
 local strfind = _G.strfind
 local strmatch = strmatch
@@ -311,6 +312,13 @@ end
 
 local urlPopup, urlBackdrop
 
+-- The popup parks above the chat window rather than at the cursor: a fixed home
+-- is easier to find, and it never covers the line you were reading.
+local POPUP_HEIGHT = 64
+local POPUP_MIN_WIDTH = 340
+local POPUP_PADDING = 14
+local POPUP_GAP = 8
+
 function CL:HideURLPopup()
     if urlPopup then urlPopup:Hide() end
     if urlBackdrop then urlBackdrop:Hide() end
@@ -333,7 +341,7 @@ local function BuildURLPopup()
     urlPopup = CreateFrame("Frame", "KE_ChatURLPopup", UIParent)
     urlPopup:SetFrameStrata("DIALOG")
     urlPopup:SetFrameLevel(500)
-    urlPopup:SetSize(340, 52)
+    urlPopup:SetSize(POPUP_MIN_WIDTH, POPUP_HEIGHT)
     urlPopup:EnableMouse(true)
 
     local bg = urlPopup:CreateTexture(nil, "BACKGROUND")
@@ -343,15 +351,15 @@ local function BuildURLPopup()
     local hint = urlPopup:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(hint, nil, 10, "NONE")
     hint:SetTextColor(1, 1, 1, 0.5)
-    hint:SetPoint("TOP", urlPopup, "TOP", 0, -6)
+    hint:SetPoint("TOP", urlPopup, "TOP", 0, -10)
     hint:SetText("Ctrl+C to copy, Escape to close")
 
     -- EnableKeyboard is PROTECTED. Focus plus key scripts is how the copy
     -- window takes Ctrl+C, and this follows it.
     local box = CreateFrame("EditBox", nil, urlPopup)
-    box:SetSize(300, 16)
-    box:SetPoint("TOP", hint, "BOTTOM", 0, -4)
-    KE:ApplyFontToText(box, nil, 12, "NONE")
+    box:SetSize(POPUP_MIN_WIDTH - POPUP_PADDING * 2, 20)
+    box:SetPoint("TOP", hint, "BOTTOM", 0, -8)
+    KE:ApplyFontToText(box, nil, 13, "NONE")
     box:SetAutoFocus(false)
     box:SetJustifyH("CENTER")
     box:SetScript("OnEscapePressed", function(self)
@@ -372,6 +380,29 @@ local function BuildURLPopup()
     urlPopup.box = box
 end
 
+-- Which chat window the address was clicked in. Blizzard's link dispatch does
+-- not say, so this asks the only thing that still knows: the cursor has not
+-- moved since the click.
+local function ChatFrameUnderCursor()
+    local cx, cy = GetCursorPosition()
+    local scale = UIParent:GetEffectiveScale()
+    if not cx or not cy or not scale or scale <= 0 then return nil end
+    cx, cy = cx / scale, cy / scale
+
+    for _, frameName in ipairs(_G.CHAT_FRAMES) do
+        local chat = _G[frameName]
+        if chat and chat:IsShown() then
+            local left, right = chat:GetLeft(), chat:GetRight()
+            local top, bottom = chat:GetTop(), chat:GetBottom()
+            if left and right and top and bottom
+                and cx >= left and cx <= right and cy >= bottom and cy <= top then
+                return chat
+            end
+        end
+    end
+    return nil
+end
+
 function CL:ShowURLPopup(url)
     -- First contact, and NOT redundant. The filter never wraps a secret body, so
     -- no keurl link should carry one -- but this is fed by Blizzard's dispatch,
@@ -384,13 +415,17 @@ function CL:ShowURLPopup(url)
 
     urlPopup.box:SetText(url)
     urlPopup:ClearAllPoints()
-    local cx, cy = GetCursorPosition()
-    local scale = UIParent:GetEffectiveScale()
-    if cx and cy and scale and scale > 0 then
-        urlPopup:SetPoint("BOTTOM", UIParent, "BOTTOMLEFT", cx / scale, cy / scale + 10)
+
+    local chat = ChatFrameUnderCursor() or _G.DEFAULT_CHAT_FRAME
+    local width = chat and chat:GetWidth()
+    if chat and width and width > 0 then
+        urlPopup:SetSize(math_max(width, POPUP_MIN_WIDTH), POPUP_HEIGHT)
+        urlPopup:SetPoint("BOTTOM", chat, "TOP", 0, POPUP_GAP)
     else
+        urlPopup:SetSize(POPUP_MIN_WIDTH, POPUP_HEIGHT)
         urlPopup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     end
+    urlPopup.box:SetWidth(urlPopup:GetWidth() - POPUP_PADDING * 2)
 
     urlBackdrop:Show()
     urlPopup:Show()
