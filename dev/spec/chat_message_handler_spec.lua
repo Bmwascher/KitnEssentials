@@ -84,11 +84,17 @@ describe("ChatMessageHandler achievement merging", function()
 
     -- CaptureAchievement refuses; the branch prints the body raw rather than
     -- merging it.
+    --
+    -- The flagged body is MSG itself, not a bare "SECRET". A body with no
+    -- achievement link would be refused by the no-link check further down, so
+    -- the case would pass with the secret guard deleted and would constrain
+    -- nothing. Flagging a body that WOULD otherwise capture is what makes the
+    -- assertion falsifiable.
     it("refuses a secret body so the caller prints it unmerged", function()
-        local KE2 = L.loadChatMessageHandler({ issecretvalue = function(v) return v == "SECRET" end })
+        local KE2 = L.loadChatMessageHandler({ issecretvalue = function(v) return v == MSG end })
         KE2.db.profile.Skinning.Chat.MergeAchievements = true
         assert.is_nil(KE2.ChatMessageHandler:CaptureAchievement(
-            frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, "SECRET", "Ana"))
+            frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, MSG, "Ana"))
     end)
 
     it("refuses a secret player link so the caller prints it", function()
@@ -130,6 +136,10 @@ describe("ChatMessageHandler body highlight", function()
     after_each(function()
         _G.KitnEssentials = nil
         _G.GetNormalizedRealmName = nil
+        -- installSound's LibStub is not reinstalled by the loader either, so it
+        -- would otherwise outlive this file and hand a working Fetch to any
+        -- later spec that forgot to stub one.
+        _G.LibStub = nil
     end)
 
     describe("ParseList", function()
