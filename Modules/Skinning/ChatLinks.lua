@@ -424,28 +424,24 @@ local function BuildURLPopup()
     urlPopup.ruler = ruler
 end
 
-local function Rect(frame)
-    if not frame or not frame:IsShown() then return nil end
-    local left, right = frame:GetLeft(), frame:GetRight()
-    local top, bottom = frame:GetTop(), frame:GetBottom()
-    if not (left and right and top and bottom) then return nil end
-    return left, right, top, bottom
-end
-
 -- The skinned panel is preferred over the message frame it holds. The panel
 -- carries the visible window and draws its border; the ScrollingMessageFrame is
 -- inset within it, so anchoring to that one puts the popup INSIDE the border and
--- short of the window's real width. An undocked window sits outside the panel
--- and is its own anchor.
+-- short of the window's real width.
+--
+-- Ownership is asked, never inferred. The chat skin reparents exactly one frame
+-- into the panel and records it, and the dock rides along when that frame is
+-- docked. Geometry cannot stand in for that: a window the user has dragged so it
+-- happens to sit inside the panel's rectangle is still its own window, and the
+-- popup belongs to it.
 local function PanelFor(chatFrame)
     local panel = CHAT and CHAT.panel
-    local pl, pr, pt, pb = Rect(panel)
-    if not pl then return chatFrame end
+    if not panel or not panel:IsShown() then return chatFrame end
 
-    local cl, cr, ct, cb = Rect(chatFrame)
-    if not cl then return panel end
-
-    if cl >= pl and cr <= pr and ct <= pt and cb >= pb then return panel end
+    local owner = CHAT.ChatWindow
+    if not owner then return chatFrame end
+    if chatFrame == owner then return panel end
+    if chatFrame.isDocked and owner.isDocked then return panel end
     return chatFrame
 end
 
@@ -460,17 +456,22 @@ local function ChatAnchorUnderCursor()
     cx, cy = cx / scale, cy / scale
 
     local function Contains(frame)
-        local left, right, top, bottom = Rect(frame)
-        return left and cx >= left and cx <= right and cy >= bottom and cy <= top
+        if not frame or not frame:IsShown() then return false end
+        local left, right = frame:GetLeft(), frame:GetRight()
+        local top, bottom = frame:GetTop(), frame:GetBottom()
+        return left and right and top and bottom
+            and cx >= left and cx <= right and cy >= bottom and cy <= top
+    end
+
+    -- Frames before the panel: the most specific thing under the cursor wins,
+    -- and PanelFor decides whether it maps up.
+    for _, frameName in ipairs(_G.CHAT_FRAMES) do
+        local chat = _G[frameName]
+        if Contains(chat) then return PanelFor(chat) end
     end
 
     local panel = CHAT and CHAT.panel
     if Contains(panel) then return panel end
-
-    for _, frameName in ipairs(_G.CHAT_FRAMES) do
-        local chat = _G[frameName]
-        if Contains(chat) then return chat end
-    end
 
     return panel or _G.DEFAULT_CHAT_FRAME
 end
