@@ -1858,6 +1858,8 @@ local Defaults = {
                 IconWidth = 14,
                 KeepRatio = true,
                 NumericalQualityTier = true,
+                WebAddresses = true,
+                WebAddressColor = { 0.31, 0.71, 1 },
             },
             Messages = {
                 Enabled = false,
