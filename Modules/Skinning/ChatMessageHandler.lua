@@ -119,6 +119,10 @@ end
 -- both written at cache-build time in Modules/Skinning/Chat.lua on
 -- GROUP_ROSTER_UPDATE); values are ready-made |T|t texture strings.
 CMH.lfgRoles = {}
+
+-- Set for the duration of a history replay. Anything that makes noise, speaks,
+-- or flashes for a NEW message checks it: a replayed line is not new.
+CMH.replaying = false
 local GROUP_CHAT_TYPES = {
     PARTY = true, PARTY_LEADER = true,
     RAID = true, RAID_LEADER = true,
@@ -867,7 +871,7 @@ function CMH.Highlight(text, author)
     np = np + 1
     pieces[np] = text:sub(pos)
 
-    if matchedKeyword and not IsSelf(author) then CMH.PlayKeywordSound(db) end
+    if matchedKeyword and not IsSelf(author) and not CMH.replaying then CMH.PlayKeywordSound(db) end
 
     return tconcat(pieces)
 end
@@ -991,13 +995,14 @@ end
 
 -- Main message event handler
 function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10,
-                                           arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18)
+                                           arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18, isHistory,
+                                           historyTime)
     if not event then return true end
 
     local isProtected = KE:IsSecretValue(arg2)
 
     -- Text to speech
-    if _G.TextToSpeechFrame_MessageEventHandler then
+    if _G.TextToSpeechFrame_MessageEventHandler and not CMH.replaying then
         _G.TextToSpeechFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9,
             arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18)
     end
@@ -1300,16 +1305,19 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
                 arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16,
                 arg17)
 
-            if body then frame:AddMessage(body, info.r, info.g, info.b, info.id, accessID, typeID, event, eventArgs, msgFormatter) end
+            if body then
+                frame:AddMessage(body, info.r, info.g, info.b, info.id, accessID, typeID, event, eventArgs,
+                    msgFormatter, isHistory, historyTime)
+            end
         end
 
         -- Whisper-specific handling
         if (chatType == 'WHISPER' or chatType == 'BN_WHISPER') then
-            if not isProtected then ChatEditSetLastTellTarget(arg2, chatType) end
-            if FlashClientIcon then FlashClientIcon() end
+            if not isProtected and not CMH.replaying then ChatEditSetLastTellTarget(arg2, chatType) end
+            if FlashClientIcon and not CMH.replaying then FlashClientIcon() end
         end
 
-        FlashTabIfNotShown(frame, info, chatType, chatGroup, chatTarget)
+        if not CMH.replaying then FlashTabIfNotShown(frame, info, chatType, chatGroup, chatTarget) end
 
         return true
     elseif event == 'VOICE_CHAT_CHANNEL_TRANSCRIBING_CHANGED' then
