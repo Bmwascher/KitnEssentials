@@ -72,8 +72,16 @@ function KE:NoSecretValues(object)
 end
 
 -- Join text around a body that may be secret. C_StringUtil.WrapString is
--- AllowedWhenTainted, so it accepts a secret in any position where Lua's `..`
--- and format() would throw.
+-- AllowedWhenTainted, so it accepts a secret in any position.
+--
+-- Plain `..` and format() are measured NOT to throw on secret text, so the
+-- wrapper is a preference, not a requirement: it returns nil where a plain join
+-- has no failure mode to report, which lets a caller degrade deliberately.
+--
+-- The shape it actually handles is a plain `..` between TWO secrets, which is
+-- unverified. A secret used as the format STRING is a different matter: this
+-- wrapper cannot parse one either, and nothing should try -- such a body is
+-- printed as it arrived.
 --
 -- The return may itself be secret, and nothing here needs to know: `ok` is a
 -- plain boolean from pcall, type() never throws whatever it is handed, and no

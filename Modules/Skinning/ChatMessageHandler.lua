@@ -93,8 +93,9 @@ local function ChatDebugLine(event, arg1, arg2, arg12, chatType)
 
     -- Can two secrets be joined to EACH OTHER? A chat line inside an instance
     -- carries a secret sender AND a secret body, so any fix that assembles the
-    -- two needs this answer and nothing on record supplies it. Probed with the
-    -- only tainted-callable join there is.
+    -- two needs this answer and nothing on record supplies it. Probed with
+    -- WrapString under pcall, so a refusal is recorded rather than
+    -- escaping the diagnostic.
     local wrapTwoOk = "n/a"
     local wrap = C_StringUtil and C_StringUtil.WrapString
     if wrap and arg1 and arg2 then
@@ -591,8 +592,9 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
         --
         -- No timestamp, unlike theirs: they AddMessage directly and stamp their
         -- own, where AddMessageEdits stamps every line of ours. The joins go
-        -- through KE:WrapSecretText because either part can be secret and
-        -- neither may be concatenated in Lua.
+        -- through KE:WrapSecretText because BOTH parts can be secret here, and
+        -- a plain `..` between two secrets is unverified -- unlike a plain-to-
+        -- secret join, which is measured safe.
         elseif chatType == 'PING' then
             local pingBody = arg1
             local fmt = _G.CHAT_PING_GET or '%s '
