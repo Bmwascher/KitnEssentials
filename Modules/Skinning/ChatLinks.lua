@@ -320,10 +320,14 @@ local urlPopup, urlBackdrop
 -- fixed home is easier to find, and it never covers the line you were reading.
 -- It takes the chat window's width, so MIN_WIDTH only applies to the fallback
 -- position when no chat window can be resolved.
-local POPUP_HEIGHT = 64
+-- HEIGHT is a floor, not a fixed size: the address box wraps, and the popup
+-- grows to show the whole address rather than scrolling it out of sight.
+local POPUP_MIN_HEIGHT = 64
 local POPUP_MIN_WIDTH = 340
 local POPUP_PADDING = 14
 local POPUP_GAP = 1
+local POPUP_HINT_TOP = 10
+local POPUP_HINT_GAP = 8
 
 -- More opaque than the copy window's backdrop. That one floats over the world;
 -- this one sits directly on chat text, which has to stay out of the address.
@@ -348,7 +352,7 @@ local function BuildURLPopup()
     urlPopup = CreateFrame("Frame", "KE_ChatURLPopup", UIParent, "BackdropTemplate")
     urlPopup:SetFrameStrata("DIALOG")
     urlPopup:SetFrameLevel(500)
-    urlPopup:SetSize(POPUP_MIN_WIDTH, POPUP_HEIGHT)
+    urlPopup:SetSize(POPUP_MIN_WIDTH, POPUP_MIN_HEIGHT)
     urlPopup:EnableMouse(true)
     urlPopup:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8x8",
@@ -362,16 +366,18 @@ local function BuildURLPopup()
     local hint = urlPopup:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(hint, nil, 10, "NONE")
     hint:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.8)
-    hint:SetPoint("TOP", urlPopup, "TOP", 0, -10)
+    hint:SetPoint("TOP", urlPopup, "TOP", 0, -POPUP_HINT_TOP)
     hint:SetText("Ctrl+C to copy, Escape to close")
+    urlPopup.hint = hint
 
     -- EnableKeyboard is PROTECTED. Focus plus key scripts is how the copy
     -- window takes Ctrl+C, and this follows it.
     local box = CreateFrame("EditBox", nil, urlPopup)
     box:SetSize(POPUP_MIN_WIDTH - POPUP_PADDING * 2, 20)
-    box:SetPoint("TOP", hint, "BOTTOM", 0, -8)
+    box:SetPoint("TOP", hint, "BOTTOM", 0, -POPUP_HINT_GAP)
     KE:ApplyFontToText(box, nil, 13, "NONE")
     box:SetAutoFocus(false)
+    box:SetMultiLine(true)
     box:SetJustifyH("CENTER")
     box:SetScript("OnEscapePressed", function(self)
         self:ClearFocus()
@@ -389,6 +395,18 @@ local function BuildURLPopup()
         urlPopup.box:HighlightText()
     end)
     urlPopup.box = box
+
+    -- An EditBox will not report how tall its wrapped text is, so an invisible
+    -- FontString carrying the same font measures it instead.
+    local ruler = urlPopup:CreateFontString(nil, "OVERLAY")
+    KE:ApplyFontToText(ruler, nil, 13, "NONE")
+    ruler:SetPoint("TOPLEFT", box, "TOPLEFT", 0, 0)
+    -- An address has no spaces, so without this the ruler reports one line for
+    -- text the box will have broken across several.
+    ruler:SetNonSpaceWrap(true)
+    ruler:SetWordWrap(true)
+    ruler:Hide()
+    urlPopup.ruler = ruler
 end
 
 -- Which chat window the address was clicked in. Blizzard's link dispatch does
@@ -425,12 +443,12 @@ local function ChatAnchorUnderCursor()
     return panel or _G.DEFAULT_CHAT_FRAME
 end
 
--- The popup's border matches the chat window's own, so the two read as one
--- object rather than a dialog that happened to land there.
+-- The addon theme's accent, read live so a preset or class-colour change reaches
+-- the popup without a reload. The chat panel's own border is usually near-black,
+-- which leaves the popup indistinguishable from the window it sits on.
 local function PopupBorderColor()
-    local backdrop = CHAT and CHAT.db and CHAT.db.Backdrop
-    local color = backdrop and backdrop.BorderColor
-    if color and color[1] then return color[1], color[2], color[3], color[4] or 1 end
+    local accent = Theme.accent
+    if accent and accent[1] then return accent[1], accent[2], accent[3], accent[4] or 1 end
     return Theme.border[1], Theme.border[2], Theme.border[3], 1
 end
 
@@ -451,13 +469,28 @@ function CL:ShowURLPopup(url)
     local anchor = ChatAnchorUnderCursor()
     local width = anchor and anchor:GetWidth()
     if anchor and width and width > 0 then
-        urlPopup:SetSize(width, POPUP_HEIGHT)
+        urlPopup:SetWidth(width)
         urlPopup:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT", 0, POPUP_GAP)
     else
-        urlPopup:SetSize(POPUP_MIN_WIDTH, POPUP_HEIGHT)
+        urlPopup:SetWidth(POPUP_MIN_WIDTH)
         urlPopup:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
     end
-    urlPopup.box:SetWidth(urlPopup:GetWidth() - POPUP_PADDING * 2)
+
+    -- Width first, then measure the wrapped address at that width, then grow to
+    -- fit it. A wider chat window shows more of the address per line and needs
+    -- fewer of them.
+    local boxWidth = urlPopup:GetWidth() - POPUP_PADDING * 2
+    urlPopup.box:SetWidth(boxWidth)
+    urlPopup.ruler:SetWidth(boxWidth)
+    urlPopup.ruler:SetText(url)
+
+    local textHeight = urlPopup.ruler:GetStringHeight() or 0
+    local boxHeight = textHeight > 0 and textHeight + 4 or 20
+    urlPopup.box:SetHeight(boxHeight)
+
+    local hintHeight = urlPopup.hint:GetStringHeight() or 12
+    local needed = POPUP_HINT_TOP + hintHeight + POPUP_HINT_GAP + boxHeight + POPUP_PADDING
+    urlPopup:SetHeight(needed > POPUP_MIN_HEIGHT and needed or POPUP_MIN_HEIGHT)
 
     urlBackdrop:Show()
     urlPopup:Show()
