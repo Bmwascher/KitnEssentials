@@ -15,6 +15,7 @@
     <Script file="Chat.lua" />
     <Script file="ChatCopy.lua" />
     <Script file="ChatLinks.lua" />
+    <Script file="ChatHistory.lua"/>
     <Script file="LootRoll.lua" />
     <Script file="LootRollBars.lua" />
     <Script file="LootFrame.lua" />

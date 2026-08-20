@@ -2422,4 +2422,83 @@ function L.loadChatLinks(overrides)
     return modules["ChatLinks"], KE
 end
 
+-- Returns the module, the private KE table, the shim registry, and the list the
+-- geterrorhandler stub appends caught errors into.
+--
+-- Modules/Skinning/ChatHistory.lua. The module binds KE through select(2, ...),
+-- so Core/Secret.lua loads onto the SAME table and db lives there too -- the
+-- addon shim's global is only the NewModule/GetModule registry, and its tables
+-- do not exist until NewModule or GetModule creates them. The shim runs no Ace
+-- lifecycle, so UpdateDB, IsEnabled and ChatSkinActive are supplied here.
+-- IsInInstance, GetServerTime, time, tinsert, tremove, strfind, CHAT_FRAMES
+-- and geterrorhandler are not in the common mock and are set here. `wipe` IS
+-- in the mock; it is set again anyway so this loader reads as a complete list
+-- of what the module needs rather than a diff against another file.
+-- IsInInstance honours overrides so an instance can be simulated, and both
+-- clocks accept `false` to remove the global entirely.
+function L.loadChatHistory(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.gsub = string.gsub
+    _G.strsub = string.sub
+    _G.strfind = string.find
+    _G.tinsert = table.insert
+    _G.tremove = table.remove
+    _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
+    -- Both clocks are overridable AND removable. PackRow falls back from
+    -- GetServerTime to time, and it also guards each function's EXISTENCE, so
+    -- `false` has to mean "this global is not there" rather than "use the
+    -- default" -- otherwise those two branches cannot be reached from a spec.
+    -- The module localises both at file scope, so these must be set before it
+    -- loads, which is where they already are.
+    local function clock(override, default)
+        if override == false then return nil end
+        return override or default
+    end
+    _G.time = clock(overrides.time, function() return 1000 end)
+    _G.GetServerTime = clock(overrides.GetServerTime, function() return 2000 end)
+    _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
+    _G.CHAT_FRAMES = overrides.CHAT_FRAMES or { "ChatFrame1" }
+    -- DisplayChatHistory routes a throwing dispatch to the game's error handler.
+    -- The common mock does not install one; loadGlobals installs its own for the
+    -- same reason. Errors are collected so a spec can assert one was raised.
+    local caught = {}
+    _G.geterrorhandler = function() return function(err) caught[#caught + 1] = err end end
+
+    local KE = {
+        -- InsideInstance prints once when it cannot read the API, so the seed
+        -- needs Print or three of the specs below throw instead of asserting.
+        Print = function() end,
+        db = {
+            char = { ChatHistory = {}, ChatTypingHistory = {} },
+            profile = {
+                Skinning = {
+                    Chat = { Enabled = true },
+                    ChatHistory = {
+                        Enabled = true,
+                        Size = 100,
+                        ShowTypes = {
+                            WHISPER = true, GUILD = true, OFFICER = true,
+                            PARTY = true, RAID = true, INSTANCE = true,
+                            CHANNEL = true, SAY = true, YELL = true, EMOTE = true,
+                        },
+                    },
+                },
+            },
+        },
+    }
+    helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Modules/Skinning/ChatHistory.lua", KE)
+
+    local CH = modules["ChatHistory"]
+    CH:UpdateDB()
+    -- ChatSkinActive asks the Chat module whether it is enabled. There is no
+    -- Ace lifecycle here, so it is answered directly; a spec that wants it off
+    -- replaces this. IsEnabled is answered the same way and for the same reason.
+    CH.ChatSkinActive = function() return true end
+    CH.IsEnabled = function() return true end
+    return CH, KE, modules, caught
+end
+
 return L
