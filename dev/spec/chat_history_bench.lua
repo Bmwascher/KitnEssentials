@@ -106,5 +106,10 @@ local straddles = (lo < 1.5) and (hi > 1.5)
 
 print(string.format("paired 500/100 ratio: %.3f (geometric mean of %d pairs)",
     geo, RUNS))
-print(string.format("pair spread: %.3f to %.3f (hi/lo %.3f)%s", lo, hi, hi / lo,
+-- Both void conditions are PRINTED, not left to the reader. The acceptance has
+-- three parts and an earlier version of this script surfaced only one, so a
+-- dispersion breach read as a clean run.
+local dispersed = (hi / lo) > 1.3
+print(string.format("pair spread: %.3f to %.3f (hi/lo %.3f)%s%s", lo, hi, hi / lo,
+    dispersed and "  ** SPREAD OVER 1.3 -- run is VOID, retake **" or "",
     straddles and "  ** STRADDLES 1.5 -- run is VOID, retake **" or ""))
