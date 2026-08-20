@@ -382,8 +382,47 @@ end
 -- no WoW API -- so it unit-tests directly against the real KE table the
 -- module writes onto (KE.ChatMessageHandler).
 function L.loadChatMessageHandler(overrides)
-    installMock(overrides, {})
+    -- Timers stay INERT. _wow_mock's default C_Timer fires synchronously, which
+    -- would flush a group of one before the second player is ever captured, so
+    -- every grouping case would see two singular lines. The specs drive the
+    -- flush explicitly with CMH.FlushAchievements().
+    installMock(overrides, {
+        C_Timer = { After = function() end },
+    })
+
+    -- The module captures these as file-scope upvalues at load time, so they
+    -- must exist BEFORE loadModule or every one is captured as nil.
+    _G.format = string.format
+    _G.gsub = string.gsub
+    _G.gmatch = string.gmatch
+    _G.strmatch = string.match
+    _G.strsub = string.sub
+    _G.strlower = string.lower
+    _G.strlen = string.len
+    _G.sort = table.sort
+    _G.tinsert = table.insert
+    _G.strjoin = function(sep, ...) return table.concat({ ... }, sep) end
+    _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
+    _G.RAID_CLASS_COLORS = {
+        MAGE = { r = 0.25, g = 0.78, b = 0.92 },
+        ROGUE = { r = 1, g = 0.96, b = 0.41 },
+    }
+    _G.GUILD_ACHIEVEMENT_EARNED_BY = "Earned by"
+    _G.PLAYER_LIST_DELIMITER = ", "
+    _G.GetTime = function() return 0 end
+    _G.InCombatLockdown = function() return false end
+    _G.PlaySoundFile = function() end
+    _G.UnitName = function() return "Kitn" end
+    -- GetNormalizedRealmName is deliberately NOT stubbed. Leaving it absent
+    -- makes the specs exercise the display-realm stripping fallback, which is
+    -- the path that can disagree with a chat sender's suffix.
+    _G.UnitFullName = function() return "Kitn", "Ravencrest" end
+
     local KE = { db = { profile = { Skinning = { Chat = {} } } } }
+    -- KE:NotSecretValue and KE:IsSecretValue are defined by Core/Secret.lua, not
+    -- by the handler. Without this line every new case dies on
+    -- "attempt to call method 'NotSecretValue' (a nil value)".
+    helpers.loadModule("Core/Secret.lua", KE)
     return helpers.loadModule("Modules/Skinning/ChatMessageHandler.lua", KE)
 end
 

@@ -45,6 +45,10 @@ local GMChatFrame_IsGM = _G.GMChatFrame_IsGM
 local C_ClassColor_GetClassColor = C_ClassColor and C_ClassColor.GetClassColor
 local IsChatLineCensored = C_ChatInfo and C_ChatInfo.IsChatLineCensored
 local SafePack = _G.SafePack
+local strmatch = strmatch
+local sort = sort
+local strjoin = strjoin
+local tinsert = tinsert
 
 -- Blizzard globals not on KE's read_globals allowlist -- read through _G.
 -- per family convention rather than growing .luacheckrc for this port
@@ -323,6 +327,163 @@ function CMH:ChatFrame_ReplaceIconAndGroupExpressions(message, noIconReplacement
     return message
 end
 
+---------------------------------------------------------------------------------
+-- Achievement merging
+---------------------------------------------------------------------------------
+
+-- Groups PLAYERS ONLY: several people earning the same achievement collapse into
+-- one line. One person earning several achievements stays several lines, because
+-- the merged line reuses Blizzard's own localised format string and there is no
+-- published wording for that case.
+--
+-- cache[frame][event][achievementID] = {
+--     order    = { playerLink, ... },   -- insertion order, sorted before use
+--     seen     = { [playerLink] = true },
+--     link     = <the achievement link lifted from arg1, already decorated>,
+--     rendered = <exactly what the caller would have printed>,
+--     info     = <ChatTypeInfo entry the caller would have coloured with>,
+-- }
+local achievementCache = {}
+local ACHIEVEMENT_WINDOW = 0.3
+
+local function AchievementBucket(frame, event)
+    local perFrame = achievementCache[frame]
+    if not perFrame then
+        perFrame = {}
+        achievementCache[frame] = perFrame
+    end
+
+    local perEvent = perFrame[event]
+    if not perEvent then
+        perEvent = {}
+        perFrame[event] = perEvent
+    end
+
+    return perEvent
+end
+
+-- The client publishes no plural "have earned the achievement" string, so a
+-- merged line is a LABEL rather than a sentence: link, label, names. The label
+-- is read from the client so it is localised; the two-word fallback exists only
+-- because a GlobalString absent from the local reference clone is a coverage
+-- gap rather than proof it is missing, and a nil label must not produce "nil".
+-- GUILD_ACHIEVEMENT_EARNED_BY is a plain label and the live client uses it, so
+-- the fallback is a last resort against a client that does not publish it -- NOT
+-- ACHIEVEMENT_EARNED_BY, which is a format string and would render a literal %s.
+local function EarnedByLabel()
+    return _G.GUILD_ACHIEVEMENT_EARNED_BY or "Earned by"
+end
+
+local function EmitAchievement(frame, event, achievementID)
+    local perEvent = AchievementBucket(frame, event)
+    local entry = perEvent[achievementID]
+    if not entry then return end
+    perEvent[achievementID] = nil
+
+    local info = entry.info
+    if not info then return end
+
+    if #entry.order <= 1 then
+        -- Anchor 4: the common case is never re-worded. Replay exactly what the
+        -- caller would have printed, in the client's own language.
+        frame:AddMessage(entry.rendered, info.r, info.g, info.b, info.id)
+        return
+    end
+
+    -- Sorted, because an unordered join lets the same group of people produce
+    -- two different lines on two occasions.
+    sort(entry.order)
+    -- Blizzard's own list separator, which this file already uses elsewhere.
+    -- Hardcoding ", " would put English punctuation on every locale.
+    local delimiter = _G.PLAYER_LIST_DELIMITER or ", "
+    frame:AddMessage(format("%s %s %s", entry.link, EarnedByLabel(),
+        strjoin(delimiter, unpack(entry.order))), info.r, info.g, info.b, info.id)
+end
+
+-- Returns true when the line has been captured and the caller must not print it.
+-- Every refusal returns nil, so the caller prints normally -- a message that
+-- cannot be merged is never a message that gets swallowed.
+function CMH:CaptureAchievement(frame, event, info, message, playerLink)
+    -- Secret guards come FIRST, before any truth test -- and here that is
+    -- load-bearing, not defensive. The achievement branch deliberately hands
+    -- this helper a possibly-secret playerLink rather than splitting into two
+    -- paths, so THIS is the first contact. Refusing sends the line back to the
+    -- caller to print unmerged.
+    if not (KE:NotSecretValue(message) and KE:NotSecretValue(playerLink)) then return end
+
+    if not (frame and event and info and message and playerLink) then return end
+
+    local db = KE.db and KE.db.profile.Skinning.Chat
+    if not (db and db.MergeAchievements) then return end
+
+    local achievementID = strmatch(message, "|Hachievement:(%d+):")
+    if not achievementID then return end
+
+    -- The whole link INCLUDING any icon the incoming filter prepended -- that
+    -- filter builds "<icon> <link>", so a pattern anchored at |H would drop the
+    -- icon from every merged line.
+    --
+    -- Both alternatives are bound to THIS achievement's id, and the texture is
+    -- [^|]- rather than .- so it cannot swallow an earlier unrelated escape or
+    -- the prose between them. An unbound pattern captured "|Traid:14|t before
+    -- |Tachievement:14|t |Hachievement:123..." as the link, and paired a second
+    -- achievement's decorated link with the first one's id. The id is digits
+    -- only, so splicing it into a pattern is safe.
+    local link = strmatch(message, "(|T[^|]-|t |Hachievement:" .. achievementID .. ":.-|h.-|h)")
+        or strmatch(message, "(|Hachievement:" .. achievementID .. ":.-|h.-|h)")
+    if not link then return end
+
+    -- arg1 is a FORMAT string, so a literal percent in the title arrives
+    -- doubled. The merged line passes the link as an argument rather than a
+    -- format, so undo the doubling or it renders as %%.
+    link = gsub(link, "%%%%", "%%")
+
+    local perEvent = AchievementBucket(frame, event)
+    local entry = perEvent[achievementID]
+
+    if not entry then
+        entry = {
+            order = {},
+            seen = {},
+            link = link,
+            rendered = format(message, playerLink),
+            info = info,
+        }
+        perEvent[achievementID] = entry
+    end
+
+    -- A repeated announcement for the same person must not name them twice.
+    if not entry.seen[playerLink] then
+        entry.seen[playerLink] = true
+        tinsert(entry.order, playerLink)
+    end
+
+    -- Scheduled AFTER the first player is recorded, so a synchronous timer --
+    -- which the spec harness installs -- still finds a populated group.
+    if not entry.scheduled then
+        entry.scheduled = true
+        C_Timer.After(ACHIEVEMENT_WINDOW, function()
+            EmitAchievement(frame, event, achievementID)
+        end)
+    end
+
+    return true
+end
+
+function CMH.FlushAchievements()
+    for frame, perFrame in pairs(achievementCache) do
+        for event, perEvent in pairs(perFrame) do
+            for achievementID in pairs(perEvent) do
+                EmitAchievement(frame, event, achievementID)
+            end
+        end
+    end
+end
+
+function CMH.ResetAchievements()
+    wipe(achievementCache)
+end
+
 -- Message formatter, formats the message body
 function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, channelLength, coloredName, arg1, arg2, arg3,
                               arg4, _, arg6, arg7, arg8, _, _, arg11, arg12, arg13, arg14, _, _, arg17)
@@ -576,15 +737,27 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
             frame:AddMessage(arg1, info.r, info.g, info.b, info.id)
         elseif strsub(chatType, 1, 10) == 'BG_SYSTEM_' then
             frame:AddMessage(arg1, info.r, info.g, info.b, info.id)
-        elseif strsub(chatType, 1, 11) == 'ACHIEVEMENT' then
-            if KE:NotSecretValue(arg1) and KE:NotSecretValue(arg2) then
-                frame:AddMessage(format(arg1, self:GetPlayerLink(arg2, format('[%s]', coloredName or arg2))), info.r,
-                    info.g, info.b, info.id)
-            end
-        elseif strsub(chatType, 1, 18) == 'GUILD_ACHIEVEMENT' then
-            if KE:NotSecretValue(arg1) and KE:NotSecretValue(arg2) then
-                frame:AddMessage(format(arg1, self:GetPlayerLink(arg2, format('[%s]', coloredName or arg2))), info.r,
-                    info.g, info.b, info.id)
+        elseif strsub(chatType, 1, 11) == 'ACHIEVEMENT' or strsub(chatType, 1, 18) == 'GUILD_ACHIEVEMENT' then
+            if KE:NotSecretValue(arg1) then
+                -- Both senders take this path. A secret one is substituted
+                -- into a plain format string exactly as the shipped formatter
+                -- already does it, and CaptureAchievement refuses a
+                -- secret-derived playerLink on first contact, so it prints
+                -- unmerged rather than being swallowed.
+                local playerLink = self:GetPlayerLink(arg2, format('[%s]', coloredName or arg2))
+                if not self:CaptureAchievement(frame, event, info, arg1, playerLink) then
+                    frame:AddMessage(format(arg1, playerLink), info.r, info.g, info.b, info.id)
+                end
+            else
+                -- A secret BODY does need its own path, and this is the whole
+                -- of it. It cannot be a format string -- that is unverified --
+                -- and it cannot be searched for the name slot, because a pattern
+                -- match on a secret DOES throw. So it goes to the frame exactly
+                -- as it arrived, which is what the neighbouring LOOT and SPELL_
+                -- branches already do with an unguarded arg1. Anchor 5 says
+                -- never dropped, and that covers a secret body as much as a
+                -- secret sender.
+                frame:AddMessage(arg1, info.r, info.g, info.b, info.id)
             end
         -- Blizzard's own branch is `format(CHAT_PING_GET, arg2) .. arg1`, with
         -- arg2 used RAW -- it is formatted natively for pings and can carry
