@@ -419,3 +419,82 @@ describe("ChatHistory replay", function()
         assert.equals(0, #KE.ChatMessageHandler.calls)
     end)
 end)
+
+describe("ChatHistory persistence predicate", function()
+    it("is true only when everything lines up", function()
+        local CH = L.loadChatHistory()
+        assert.is_true(CH:IsPersistenceActive())
+    end)
+
+    it("is false while the module itself is disabled", function()
+        local CH = L.loadChatHistory()
+        CH.IsEnabled = function() return false end
+        assert.is_false(CH:IsPersistenceActive())
+    end)
+
+    it("is false while the chat skin is off", function()
+        local CH = L.loadChatHistory()
+        CH.ChatSkinActive = function() return false end
+        assert.is_false(CH:IsPersistenceActive())
+    end)
+
+    it("is false while the db switch is off", function()
+        local CH, KE = L.loadChatHistory()
+        KE.db.profile.Skinning.ChatHistory.Enabled = false
+        assert.is_false(CH:IsPersistenceActive())
+    end)
+
+    it("is false inside an instance", function()
+        local CH = L.loadChatHistory({ IsInInstance = inInstance() })
+        assert.is_false(CH:IsPersistenceActive())
+    end)
+
+    it("is false when the instance query cannot be read", function()
+        local CH = L.loadChatHistory({ IsInInstance = function() error("boom") end })
+        assert.is_false(CH:IsPersistenceActive())
+    end)
+end)
+
+describe("ChatHistory typed-line store", function()
+    it("stores a typed line", function()
+        local CH, KE = L.loadChatHistory()
+        assert.is_true(CH:RecordTypedLine("/say hello"))
+        assert.equals("/say hello", KE.db.char.ChatTypingHistory[1])
+    end)
+
+    it("refuses secret text", function()
+        local CH, KE = L.loadChatHistory({ issecretvalue = secretIs("/say hello") })
+        assert.is_false(CH:RecordTypedLine("/say hello"))
+        assert.equals(0, #KE.db.char.ChatTypingHistory)
+    end)
+
+    it("refuses an empty or non-string line", function()
+        local CH, KE = L.loadChatHistory()
+        assert.is_false(CH:RecordTypedLine(""))
+        assert.is_false(CH:RecordTypedLine(nil))
+        assert.is_false(CH:RecordTypedLine(42))
+        assert.equals(0, #KE.db.char.ChatTypingHistory)
+    end)
+
+    it("refuses everything typed inside an instance", function()
+        local CH, KE = L.loadChatHistory({ IsInInstance = inInstance() })
+        assert.is_false(CH:RecordTypedLine("/say hello"))
+        assert.equals(0, #KE.db.char.ChatTypingHistory)
+    end)
+
+    it("refuses while the chat skin is off", function()
+        local CH, KE = L.loadChatHistory()
+        CH.ChatSkinActive = function() return false end
+        assert.is_false(CH:RecordTypedLine("/say hello"))
+        assert.equals(0, #KE.db.char.ChatTypingHistory)
+    end)
+
+    it("caps the saved list at fifty, dropping the oldest", function()
+        local CH, KE = L.loadChatHistory()
+        for i = 1, 55 do CH:RecordTypedLine("line " .. i) end
+        local saved = KE.db.char.ChatTypingHistory
+        assert.equals(50, #saved)
+        assert.equals("line 6", saved[1])
+        assert.equals("line 55", saved[50])
+    end)
+end)

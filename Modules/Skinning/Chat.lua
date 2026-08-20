@@ -181,6 +181,10 @@ CHAT.originalStates = {}
 CHAT.GuidCache = {}
 CHAT.GuidCacheCount = 0
 
+-- One live list shared by every chat window. Seeded from the saved half at
+-- login; the saved half is written only outside instances.
+CHAT.TypingHistory = CHAT.TypingHistory or {}
+
 local canChangeMessage = function(arg1, id)
     if id and arg1 == "" then return id end
 end
@@ -284,8 +288,20 @@ end
 local RebuildLFGRoles
 local BuildGuildStatusPatterns
 
+function CHAT:SeedTypingHistory()
+    local char = KE.db and KE.db.char
+    if not char then return end
+    if type(char.ChatTypingHistory) ~= "table" then char.ChatTypingHistory = {} end
+
+    wipe(self.TypingHistory)
+    for i = 1, #char.ChatTypingHistory do
+        self.TypingHistory[i] = char.ChatTypingHistory[i]
+    end
+end
+
 function CHAT:OnInitialize()
     self:UpdateDB()
+    self:SeedTypingHistory()
     self:SetEnabledState(false)
     BuildShortChannelPatterns()
     BuildGuildStatusPatterns()
@@ -1654,16 +1670,35 @@ function CHAT:StyleEditbox(editbox)
     end)
     editbox:HookScript("OnKeyDown", function(eb, key) CHAT:EditBoxOnKeyDown(eb, key) end)
 
-    editbox.historyLines = {}
+    -- Shared, so recall is the same list in every window; the index stays per
+    -- box because it is a cursor, not data.
+    editbox.historyLines = self.TypingHistory
     editbox.historyIndex = 0
 
     if editbox.AddHistoryLine and not self:IsHooked(editbox, "AddHistoryLine") then
         self:SecureHook(editbox, "AddHistoryLine", function(eb, text)
+            -- issecretvalue before `#text`: taking the length of a secret is
+            -- itself a read. Whether an edit box can ever hold one is
+            -- UNVERIFIED, and a fail-closed design does not persist an
+            -- unverified value to find out.
+            if KE:IsSecretValue(text) then return end
             if text and #text > 0 then
                 tinsert(eb.historyLines, text)
                 while #eb.historyLines > 50 do
                     tremove(eb.historyLines, 1)
                 end
+
+                -- Nothing typed inside an instance is written to disk. Recall
+                -- above is unaffected: it reads the live list.
+                --
+                -- The whole decision belongs to the ChatHistory module, which
+                -- fails CLOSED on every unknown -- a missing module, a missing
+                -- method, a disabled module, a chat skin that is off, or an
+                -- unreadable instance state all mean no. This file asks and
+                -- does not second-guess.
+                local history = KitnEssentials:GetModule("ChatHistory", true)
+                if history and history.RecordTypedLine then history:RecordTypedLine(text) end
+
                 -- Setting historyIndex to 0 once at style time is not enough:
                 -- the index then carries over between uses, so after browsing
                 -- back three entries the next Up resumes from there instead
