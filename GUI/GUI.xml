@@ -130,7 +130,6 @@
     <Script file="GUITabs\GUISkinning\GUI-LootRoll.lua" />
     <Script file="GUITabs\GUISkinning\GUI-LootFrame.lua" />
     <Script file="GUITabs\GUISkinning\GUI-Chat.lua" />
-    <Script file="GUITabs\GUISkinning\GUI-ChatLinks.lua" />
     <Script file="GUITabs\GUISkinning\GUI-BlizzardFrames.lua" />
 
     <!-- Optimize tab -->

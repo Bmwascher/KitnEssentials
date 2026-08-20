@@ -128,7 +128,6 @@ GUIFrame.sidebarConfig = {
                 "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "role", "roles", "tank", "healer", "raid manager", "raid tools", "shared notes", "group",
                 "text", "message", "error", "raid warning", "ui error", "fonts", "replace fonts", "quest text", "objective tracker", "mail", } },
             { id = "Chat",               text = "Chat", keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
-            { id = "ChatLinks",          text = "Chat Links", alwaysEnabled = true, keywords = { "chat", "link", "links", "icon", "icons", "item", "currency", "spell", "achievement", "keystone", "pvp talent", "quality", "tier", "craft", "crafted" } },
             { id = "DamageMeter",        text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" }, alwaysEnabled = true },
             { id = "MythicPlusTimer",    text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" }, alwaysEnabled = true },
             { id = "DragonRiding",       text = "Skyriding UI", alwaysEnabled = true, keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },

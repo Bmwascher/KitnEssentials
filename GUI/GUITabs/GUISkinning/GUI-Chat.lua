@@ -623,6 +623,65 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     yOffset = card10:GetNextOffset()
 
+    ----------------------------------------------------------------
+    -- Card 11: Chat Links
+    ----------------------------------------------------------------
+    -- A separate module with its own enable flag, so it is deliberately NOT
+    -- registered with the state manager: switching the chat skin off must not
+    -- grey out link decoration.
+    local linksDb = KE.db and KE.db.profile.Skinning.ChatLinks
+    if linksDb then
+        local card11 = GUIFrame:CreateCard(scrollChild, "Chat Links", yOffset)
+        card11:AddHeaderToggle(linksDb.Enabled == true, function(checked)
+            linksDb.Enabled = checked
+            if checked then
+                KitnEssentials:EnableModule("ChatLinks")
+            else
+                KitnEssentials:DisableModule("ChatLinks")
+            end
+            KE:Print("Chat Link Decoration: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+        end)
+
+        card11:AddLabel("Puts the icon in front of items, currencies, spells, achievements, keystones and PvP talents linked in chat.")
+
+        local row11a = GUIFrame:CreateRow(card11.content, Theme.rowHeight)
+        row11a:AddWidget(GUIFrame:CreateCheckbox(row11a, "Show Link Icons", {
+            value = linksDb.Icon == true,
+            tooltip = "Turn off to keep the quality tier number without any icons.",
+            callback = function(checked) linksDb.Icon = checked end,
+        }), 1)
+        card11:AddRow(row11a, Theme.rowHeight)
+
+        local row11b = GUIFrame:CreateRow(card11.content, Theme.rowHeight)
+        row11b:AddWidget(GUIFrame:CreateSlider(row11b, "Icon Height", {
+            min = 8, max = 32, step = 1, value = linksDb.IconHeight or 14,
+            callback = function(val) linksDb.IconHeight = val end,
+        }), 0.5)
+        row11b:AddWidget(GUIFrame:CreateSlider(row11b, "Icon Width", {
+            min = 8, max = 32, step = 1, value = linksDb.IconWidth or 14,
+            callback = function(val) linksDb.IconWidth = val end,
+        }), 0.5)
+        card11:AddRow(row11b, Theme.rowHeight)
+
+        local row11c = GUIFrame:CreateRow(card11.content, Theme.rowHeight)
+        row11c:AddWidget(GUIFrame:CreateCheckbox(row11c, "Keep Icon Aspect Ratio", {
+            value = linksDb.KeepRatio == true,
+            tooltip = "Cuts the icon to fit a non-square size instead of stretching it.",
+            callback = function(checked) linksDb.KeepRatio = checked end,
+        }), 1)
+        card11:AddRow(row11c, Theme.rowHeight)
+
+        local row11d = GUIFrame:CreateRow(card11.content, Theme.rowHeightLast)
+        row11d:AddWidget(GUIFrame:CreateCheckbox(row11d, "Quality Tier As A Number", {
+            value = linksDb.NumericalQualityTier == true,
+            tooltip = "Shows the crafting quality as a coloured number instead of the small gem.",
+            callback = function(checked) linksDb.NumericalQualityTier = checked end,
+        }), 1)
+        card11:AddRow(row11d, Theme.rowHeightLast, 0)
+
+        yOffset = card11:GetNextOffset()
+    end
+
     manager:UpdateAll(db.Enabled == true)
     return yOffset
 end)
