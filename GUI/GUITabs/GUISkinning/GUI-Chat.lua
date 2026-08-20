@@ -668,7 +668,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             KE:Print("Chat Link Decoration: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
 
-        card11:AddLabel("Puts the icon in front of items, currencies, spells, achievements, keystones and PvP talents linked in chat.")
+        card11:AddLabel("Puts the icon in front of items, currencies, spells, achievements, keystones and PvP talents linked in chat, and makes web addresses clickable.")
 
         local row11a = GUIFrame:CreateRow(card11.content, Theme.rowHeight)
         row11a:AddWidget(GUIFrame:CreateCheckbox(row11a, "Show Link Icons", {
@@ -688,7 +688,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
         }), 0.33)
         card11:AddRow(row11a, Theme.rowHeight)
 
-        local row11b = GUIFrame:CreateRow(card11.content, Theme.rowHeightLast)
+        local row11b = GUIFrame:CreateRow(card11.content, Theme.rowHeight)
         row11b:AddWidget(GUIFrame:CreateSlider(row11b, "Icon Height", {
             min = 8, max = 32, step = 1, value = linksDb.IconHeight or 14,
             callback = function(val) linksDb.IconHeight = val end,
@@ -697,7 +697,19 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             min = 8, max = 32, step = 1, value = linksDb.IconWidth or 14,
             callback = function(val) linksDb.IconWidth = val end,
         }), 0.5)
-        card11:AddRow(row11b, Theme.rowHeightLast, 0)
+        card11:AddRow(row11b, Theme.rowHeight)
+
+        local row11c = GUIFrame:CreateRow(card11.content, Theme.rowHeightLast)
+        row11c:AddWidget(GUIFrame:CreateCheckbox(row11c, "Clickable Web Addresses", {
+            value = linksDb.WebAddresses == true,
+            tooltip = "Colours web addresses posted in chat and opens a copy box when you click one.",
+            callback = function(checked) linksDb.WebAddresses = checked end,
+        }), 0.5)
+        row11c:AddWidget(GUIFrame:CreateColorPicker(row11c, "Web Address Colour", {
+            color = linksDb.WebAddressColor,
+            callback = function(r, g, b) linksDb.WebAddressColor = { r, g, b } end,
+        }), 0.5)
+        card11:AddRow(row11c, Theme.rowHeightLast, 0)
 
         yOffset = card11:GetNextOffset()
     end
