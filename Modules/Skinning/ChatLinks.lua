@@ -424,14 +424,35 @@ local function BuildURLPopup()
     urlPopup.ruler = ruler
 end
 
--- Which chat window the address was clicked in. Blizzard's link dispatch does
--- not say, so this asks the only thing that still knows: the cursor has not
--- moved since the click.
---
--- The skinned panel is preferred over the message frame inside it. The panel
+local function Rect(frame)
+    if not frame or not frame:IsShown() then return nil end
+    local left, right = frame:GetLeft(), frame:GetRight()
+    local top, bottom = frame:GetTop(), frame:GetBottom()
+    if not (left and right and top and bottom) then return nil end
+    return left, right, top, bottom
+end
+
+-- The skinned panel is preferred over the message frame it holds. The panel
 -- carries the visible window and draws its border; the ScrollingMessageFrame is
 -- inset within it, so anchoring to that one puts the popup INSIDE the border and
--- short of the window's real width.
+-- short of the window's real width. An undocked window sits outside the panel
+-- and is its own anchor.
+local function PanelFor(chatFrame)
+    local panel = CHAT and CHAT.panel
+    local pl, pr, pt, pb = Rect(panel)
+    if not pl then return chatFrame end
+
+    local cl, cr, ct, cb = Rect(chatFrame)
+    if not cl then return panel end
+
+    if cl >= pl and cr <= pr and ct <= pt and cb >= pb then return panel end
+    return chatFrame
+end
+
+-- Blizzard names the originating chat frame: ChatFrameMixin:OnHyperlinkClick
+-- passes itself to SetItemRef, which puts it in contextData.frame, and LinkUtil
+-- hands contextData to the registered handler. That is authoritative, so it wins
+-- over anything inferred.
 local function ChatAnchorUnderCursor()
     local cx, cy = GetCursorPosition()
     local scale = UIParent:GetEffectiveScale()
@@ -439,23 +460,27 @@ local function ChatAnchorUnderCursor()
     cx, cy = cx / scale, cy / scale
 
     local function Contains(frame)
-        if not frame or not frame:IsShown() then return false end
-        local left, right = frame:GetLeft(), frame:GetRight()
-        local top, bottom = frame:GetTop(), frame:GetBottom()
-        return left and right and top and bottom
-            and cx >= left and cx <= right and cy >= bottom and cy <= top
+        local left, right, top, bottom = Rect(frame)
+        return left and cx >= left and cx <= right and cy >= bottom and cy <= top
     end
 
     local panel = CHAT and CHAT.panel
     if Contains(panel) then return panel end
 
-    -- An undocked window sits outside the panel and is its own anchor.
     for _, frameName in ipairs(_G.CHAT_FRAMES) do
         local chat = _G[frameName]
         if Contains(chat) then return chat end
     end
 
     return panel or _G.DEFAULT_CHAT_FRAME
+end
+
+-- The cursor route is the fallback for a dispatch that carries no frame, and it
+-- is only a heuristic: a listener on ChatFrame.OnHyperlinkClick that moves or
+-- hides the frame before this runs would send it to the wrong window.
+local function AnchorFor(sourceFrame)
+    if sourceFrame and sourceFrame.GetLeft then return PanelFor(sourceFrame) end
+    return ChatAnchorUnderCursor()
 end
 
 -- The addon theme's accent, read live so a preset or class-colour change reaches
@@ -467,7 +492,7 @@ local function PopupBorderColor()
     return Theme.border[1], Theme.border[2], Theme.border[3], 1
 end
 
-function CL:ShowURLPopup(url)
+function CL:ShowURLPopup(url, sourceFrame)
     -- First contact, and NOT redundant. The filter never wraps a secret body, so
     -- no keurl link should carry one -- but this is fed by Blizzard's dispatch,
     -- not by us, and a shipping addon's click handler was amended to refuse a
@@ -481,7 +506,7 @@ function CL:ShowURLPopup(url)
     urlPopup:SetBackdropBorderColor(PopupBorderColor())
     urlPopup:ClearAllPoints()
 
-    local anchor = ChatAnchorUnderCursor()
+    local anchor = AnchorFor(sourceFrame)
     local width = anchor and anchor:GetWidth()
     if anchor and width and width > 0 then
         urlPopup:SetWidth(width)
@@ -596,8 +621,8 @@ function CL:OnEnable()
     local linkUtil = _G.LinkUtil
     if linkUtil and linkUtil.RegisterLinkHandler and linkUtil.IsLinkHandlerRegistered
         and not linkUtil.IsLinkHandlerRegistered("keurl") then
-        linkUtil.RegisterLinkHandler("keurl", function(_, _, linkData)
-            CL:ShowURLPopup(linkData and linkData.options)
+        linkUtil.RegisterLinkHandler("keurl", function(_, _, linkData, contextData)
+            CL:ShowURLPopup(linkData and linkData.options, contextData and contextData.frame)
         end)
     end
 
