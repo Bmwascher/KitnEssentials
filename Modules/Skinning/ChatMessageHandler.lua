@@ -1,9 +1,10 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  ChatMessageHandler.lua                                  ║
 -- ║  Module: Chat                                            ║
--- ║  Purpose: Secret-safe message routing, formatting, and   ║
--- ║           OnEvent dispatch for the Chat module's styled  ║
--- ║           chat frames.                                   ║
+-- ║  Purpose: Secret-safe message routing and formatting for ║
+-- ║           the Chat module's styled chat frames. Runs as  ║
+-- ║           the frame's MessageEventHandler only; config   ║
+-- ║           and system events stay on Blizzard's path.     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -729,30 +730,3 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
     end
 end
 
--- Config event handler
-function CMH:ChatFrame_ConfigEventHandler(frame, event, ...)
-    local ConfigEventHandler = _G.ChatFrameMixin and _G.ChatFrameMixin.ConfigEventHandler or
-        _G.ChatFrame_ConfigEventHandler
-    if ConfigEventHandler then return ConfigEventHandler(frame, event, ...) end
-end
-
--- System event handler
-function CMH:ChatFrame_SystemEventHandler(frame, event, ...)
-    local SystemEventHandler = _G.ChatFrameMixin and _G.ChatFrameMixin.SystemEventHandler or
-        _G.ChatFrame_SystemEventHandler
-    if SystemEventHandler then return SystemEventHandler(frame, event, ...) end
-end
-
--- Main OnEvent handler
-function CMH:ChatFrame_OnEvent(frame, event, ...)
-    if frame.customEventHandler and frame:customEventHandler(event, ...) then return true end
-    if self:ChatFrame_ConfigEventHandler(frame, event, ...) then return true end
-    if self:ChatFrame_SystemEventHandler(frame, event, ...) then return true end
-    if self:ChatFrame_MessageEventHandler(frame, event, ...) then return true end
-    return false
-end
-
--- Floating chat frame OnEvent
-function CMH:FloatingChatFrame_OnEvent(...)
-    self:ChatFrame_OnEvent(...)
-end
