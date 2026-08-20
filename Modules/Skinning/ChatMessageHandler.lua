@@ -692,7 +692,9 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
             -- Default case, regular chat messages including whispers
             -- Check if this message is censored and prepare formatter for "Show Message" click
             local eventArgs, msgFormatter
-            local isChatLineCensored = IsChatLineCensored and IsChatLineCensored(arg11)
+            -- Blizzard declares chatLine non-nilable, so a message without a
+            -- line ID throws rather than returning false.
+            local isChatLineCensored = arg11 and IsChatLineCensored and IsChatLineCensored(arg11)
             if isChatLineCensored then
                 eventArgs = SafePack(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15, arg16, arg17, arg18)
 
