@@ -377,7 +377,8 @@ function CL:ShowURLPopup(url)
     -- no keurl link should carry one -- but this is fed by Blizzard's dispatch,
     -- not by us, and a shipping addon's click handler was amended to refuse a
     -- secret link at exactly this boundary. IsSafeValue covers nil and secrecy
-    -- in one call, so nothing reads the value before the guard does.
+    -- in one call; the nil comparison it makes first is a different-type
+    -- compare, which is not the same-type case that throws.
     if not KE:IsSafeValue(url) then return end
     if not urlPopup then BuildURLPopup() end
 
