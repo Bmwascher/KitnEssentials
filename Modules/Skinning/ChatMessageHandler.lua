@@ -49,6 +49,7 @@ local strmatch = strmatch
 local sort = sort
 local strjoin = strjoin
 local tinsert = tinsert
+local tconcat = table.concat
 
 -- Blizzard globals not on KE's read_globals allowlist -- read through _G.
 -- per family convention rather than growing .luacheckrc for this port
@@ -484,6 +485,416 @@ function CMH.ResetAchievements()
     wipe(achievementCache)
 end
 
+---------------------------------------------------------------------------------
+-- Body highlight
+---------------------------------------------------------------------------------
+
+local MYNAME_TOKEN = "%MYNAME%"
+local SOUND_THROTTLE = 5
+
+-- Module-scope scratch. A chat line is rewritten once per frame that displays
+-- it, so allocating five tables per line is measurable.
+local protectStart, protectEnd = {}, {}
+local hitStart, hitEnd, hitColor = {}, {}, {}
+
+local keywordSet, keywordSource = {}, nil
+local excludeSet, excludeSource = {}, nil
+local soundReadyAt = 0
+
+-- Trimmed at both ends. Stripping only one space after each comma -- as the
+-- reference does -- stores "a " for "a , b", and a stored trailing space can
+-- never match a candidate, so those entries are silently dead.
+function CMH.ParseList(raw)
+    local set = {}
+    if not raw or raw == "" then return set end
+
+    local myName = _G.UnitName("player")
+
+    for token in gmatch(raw, "[^,]+") do
+        token = gsub(token, "^%s*(.-)%s*$", "%1")
+        if token == MYNAME_TOKEN then token = myName end
+        if token and token ~= "" then set[strlower(token)] = true end
+    end
+
+    return set
+end
+
+local function Keywords(raw)
+    if raw ~= keywordSource then
+        keywordSource = raw
+        keywordSet = CMH.ParseList(raw)
+    end
+    return keywordSet
+end
+
+local function Exclusions(raw)
+    if raw ~= excludeSource then
+        excludeSource = raw
+        excludeSet = CMH.ParseList(raw)
+    end
+    return excludeSet
+end
+
+-- The Chat module is an Ace module; there is no KE.Chat. Resolved at call time
+-- and never cached as a miss, because this file loads before Chat registers.
+local chatModule
+local function ChatModule()
+    if not chatModule then
+        chatModule = _G.KitnEssentials and _G.KitnEssentials:GetModule("Chat", true)
+    end
+    return chatModule
+end
+
+-- Records the byte range of every escape sequence so no rewrite can land inside
+-- one. A colour span protects its CONTENT as well as its markers: colouring text
+-- that is already coloured inserts a |r that closes the OUTER colour early, so
+-- the rest of the original span silently loses its colour.
+function CMH.CollectProtected(text)
+    local count, pos = 0, 1
+    local colorOpen, colorDepth = nil, 0
+
+    while true do
+        local p = text:find("|", pos, true)
+        if not p then break end
+
+        local c = text:sub(p + 1, p + 1)
+        local e
+
+        if c == "c" then
+            if text:sub(p + 2, p + 2) == "n" then
+                local colon = text:find(":", p + 3, true)
+                e = colon or (p + 2)
+            else
+                e = p + 9
+            end
+            -- Depth, not a single flag: a nested |c inside an open span must
+            -- not let the inner |r close the outer one, or the tail of the
+            -- outer span becomes eligible for rewriting again.
+            colorOpen = colorOpen or p
+            colorDepth = colorDepth + 1
+        elseif c == "r" then
+            e = p + 1
+            if colorOpen then
+                colorDepth = colorDepth - 1
+                if colorDepth <= 0 then
+                    count = count + 1
+                    protectStart[count] = colorOpen
+                    protectEnd[count] = e
+                    colorOpen, colorDepth = nil, 0
+                end
+            end
+        elseif c == "H" then
+            local first = text:find("|h", p + 2, true)
+            local second = first and text:find("|h", first + 2, true)
+            e = (second and second + 1) or (first and first + 1) or (p + 1)
+        elseif c == "T" then
+            local close = text:find("|t", p + 2, true)
+            e = (close and close + 1) or (p + 1)
+        elseif c == "A" then
+            local close = text:find("|a", p + 2, true)
+            e = (close and close + 1) or (p + 1)
+        elseif c == "|" then
+            e = p + 1
+        else
+            pos = p + 1
+        end
+
+        if e then
+            count = count + 1
+            protectStart[count] = p
+            protectEnd[count] = e
+            pos = e + 1
+        end
+    end
+
+    -- An unterminated colour protects everything to the end of the line.
+    if colorOpen then
+        count = count + 1
+        protectStart[count] = colorOpen
+        protectEnd[count] = #text
+    end
+
+    -- Escaped percent pairs. On the boss-monster path the finished body is
+    -- concatenated INTO a format string rather than passed as an argument, and
+    -- the percent escaping that runs earlier in MessageFormatter leaves %%
+    -- pairs behind. A colour code inserted between the two bytes makes that
+    -- format call throw, so a hit overlapping a pair is refused. On every other
+    -- path the pairs are simply absent and this loop exits at once.
+    local pp = 1
+    while true do
+        local p = text:find("%%", pp, true)
+        if not p then break end
+        count = count + 1
+        protectStart[count] = p
+        protectEnd[count] = p + 1
+        pp = p + 2
+    end
+
+    return count
+end
+
+-- Byte level, because a Lua pattern class would split a multi-byte name. Any
+-- byte at or above 128 belongs to a UTF-8 sequence and counts as a word
+-- character, so accented names stay whole.
+function CMH.IsBoundary(text, index)
+    if index < 1 or index > #text then return true end
+
+    local b = text:byte(index)
+    if b >= 128 then return false end
+    if b >= 48 and b <= 57 then return false end
+    if b >= 65 and b <= 90 then return false end
+    if b >= 97 and b <= 122 then return false end
+
+    return true
+end
+
+local function Blocked(s, e, protectCount)
+    for i = 1, protectCount do
+        if s <= protectEnd[i] and e >= protectStart[i] then return true end
+    end
+    return false
+end
+
+local function HexFrom(r, g, b)
+    return format("|cff%02x%02x%02x", (r or 1) * 255, (g or 1) * 255, (b or 0) * 255)
+end
+
+local function ClassColorString(class)
+    local colors = _G.RAID_CLASS_COLORS
+    local color = colors and class and colors[class]
+    if not color then return nil end
+    return HexFrom(color.r, color.g, color.b)
+end
+
+local function RecordHit(count, s, e, colorString)
+    count = count + 1
+    hitStart[count] = s
+    hitEnd[count] = e
+    hitColor[count] = colorString
+    return count
+end
+
+-- Plain find, never a pattern, so a keyword carrying a magic character needs no
+-- escaping and cannot corrupt the search. KEYWORDS only: the set is user-typed
+-- and small, and a keyword may be a phrase containing spaces, which the
+-- candidate walk below cannot see.
+local function ScanFor(text, lowered, needle, colorString, protectCount, hitCount)
+    local length = #needle
+    if length == 0 then return hitCount end
+
+    local from = 1
+    while true do
+        local s = lowered:find(needle, from, true)
+        if not s then break end
+
+        local e = s + length - 1
+        from = e + 1
+
+        if CMH.IsBoundary(text, s - 1) and CMH.IsBoundary(text, e + 1)
+            and not Blocked(s, e, protectCount) then
+            hitCount = RecordHit(hitCount, s, e, colorString)
+        end
+    end
+
+    return hitCount
+end
+
+-- Walks the body ONCE, cuts it into boundary-delimited candidates, and looks
+-- each one up directly. Scanning once per cached name instead would be up to a
+-- thousand full-body searches per frame per message, because the class-name
+-- cache holds up to two entries for each cached GUID.
+local function ScanMentions(text, lowered, classNames, excluded, protectCount, hitCount)
+    local length = #text
+    local i = 1
+
+    while i <= length do
+        if CMH.IsBoundary(text, i) then
+            i = i + 1
+        else
+            local s = i
+            while i <= length and not CMH.IsBoundary(text, i) do i = i + 1 end
+            local e = i - 1
+
+            -- A realm-qualified name spans one hyphen. Try the long form first
+            -- so "Ana-Realm" wins over "Ana".
+            local longEnd = e
+            if text:sub(e + 1, e + 1) == "-" and not CMH.IsBoundary(text, e + 2) then
+                local j = e + 2
+                while j <= length and not CMH.IsBoundary(text, j) do j = j + 1 end
+                longEnd = j - 1
+            end
+
+            local tries = (longEnd ~= e) and 2 or 1
+            for attempt = 1, tries do
+                local stop = (attempt == 1) and longEnd or e
+                local candidate = lowered:sub(s, stop)
+
+                -- Exclusion is read BEFORE the class lookup. Checking it only
+                -- for a cached name would let "Ana-Realm" fall through to
+                -- "Ana" whenever the realm-qualified form was never cached,
+                -- colouring exactly the name the user excluded.
+                if excluded[candidate] then break end
+
+                local class = classNames[candidate]
+                if class then
+                    local colorString = ClassColorString(class)
+                    if colorString and not Blocked(s, stop, protectCount) then
+                        hitCount = RecordHit(hitCount, s, stop, colorString)
+                        break
+                    end
+                end
+            end
+
+            if longEnd ~= e then i = longEnd + 1 end
+        end
+    end
+
+    return hitCount
+end
+
+-- The SOUND is gated on the sender, not the colour: your keyword still
+-- colours in a line you typed, it just does not ding you. An unreadable sender
+-- counts as somebody else -- a missed alert is worse than an occasional
+-- self-ding, and your own name is not identity-restricted.
+--
+-- The realm half is compared rather than discarded. Comparing names alone would
+-- silence a same-named player from another realm, which is the missed alert the
+-- line above says to avoid.
+--
+-- The two realm spellings are not the same string. A chat sender's suffix is
+-- the NORMALIZED realm, stripped of spaces and punctuation; UnitFullName's
+-- second return is the display realm, which keeps them. Blizzard compares a
+-- chat-style server token against GetNormalizedRealmName for exactly this
+-- reason (Blizzard_UnitPopup/Mainline/UnitPopupUtils.lua). That call is nil
+-- before PLAYER_LOGIN, so the display realm is stripped as a fallback.
+local function StripRealm(realm)
+    if not realm then return nil end
+    -- Whitespace AND punctuation: "Aggra (Português)" is a live realm name, so
+    -- stripping only space, hyphen and apostrophe leaves the parentheses behind
+    -- and the two spellings never meet. Lua's %p is ASCII under the C locale,
+    -- so bytes at or above 128 pass through and accented realms still match.
+    return strlower(gsub(realm, "[%s%p]", ""))
+end
+
+local function IsSelf(author)
+    if KE:IsSecretValue(author) or not author then return false end
+
+    -- Fetched in an if, not through `and`. Lua's `and` and `or` collapse to a
+    -- SINGLE value, so `x and f()` discards every return past the first --
+    -- displayRealm would be permanently nil, silently defeating the realm
+    -- comparison below. See amendment A2.
+    local me, displayRealm
+    if _G.UnitFullName then me, displayRealm = _G.UnitFullName("player") end
+    if not me then return false end
+
+    local name, realm = author:match("^([^-]+)-?(.*)$")
+    if not name or strlower(name) ~= strlower(me) then return false end
+
+    -- Blizzard omits the realm for a sender on your own realm and appends it
+    -- otherwise, so an empty realm here means the sender shares yours.
+    if realm == "" then return true end
+
+    local myRealm = (_G.GetNormalizedRealmName and _G.GetNormalizedRealmName())
+        or displayRealm
+    myRealm = StripRealm(myRealm)
+
+    return myRealm ~= nil and StripRealm(realm) == myRealm
+end
+
+function CMH.Highlight(text, author)
+    if not text or text == "" then return text end
+
+    local db = KE.db and KE.db.profile.Skinning.Chat
+    if not db then return text end
+
+    local keywords = Keywords(db.HighlightKeywords)
+    local wantKeywords = next(keywords) ~= nil
+
+    local chat = ChatModule()
+    local classNames = db.ClassColorMentions and chat and chat.ClassNames
+    local wantMentions = classNames and next(classNames) ~= nil
+
+    if not (wantKeywords or wantMentions) then return text end
+
+    local lowered = strlower(text)
+    local protectCount = CMH.CollectProtected(text)
+    local hitCount = 0
+    local matchedKeyword = false
+
+    if wantKeywords then
+        local c = db.HighlightColor
+        local colorString = HexFrom(c and c[1], c and c[2], c and c[3])
+        for keyword in pairs(keywords) do
+            local before = hitCount
+            hitCount = ScanFor(text, lowered, keyword, colorString, protectCount, hitCount)
+            if hitCount > before then matchedKeyword = true end
+        end
+    end
+
+    if wantMentions then
+        hitCount = ScanMentions(text, lowered, classNames,
+            Exclusions(db.ExcludedMentions), protectCount, hitCount)
+    end
+
+    if hitCount == 0 then return text end
+
+    -- Insertion sort by start, then by DESCENDING end. Two hits starting at the
+    -- same byte must always resolve to the longer one, or the output depends on
+    -- hash iteration order.
+    for i = 2, hitCount do
+        local s, e, c = hitStart[i], hitEnd[i], hitColor[i]
+        local j = i - 1
+        while j >= 1 and (hitStart[j] > s or (hitStart[j] == s and hitEnd[j] < e)) do
+            hitStart[j + 1], hitEnd[j + 1], hitColor[j + 1] = hitStart[j], hitEnd[j], hitColor[j]
+            j = j - 1
+        end
+        hitStart[j + 1], hitEnd[j + 1], hitColor[j + 1] = s, e, c
+    end
+
+    local pieces, np, pos = {}, 0, 1
+    for i = 1, hitCount do
+        local s, e = hitStart[i], hitEnd[i]
+        -- Overlaps are dropped rather than nested: nesting breaks the |r
+        -- pairing, and two colours over the same bytes render as one anyway.
+        if s >= pos then
+            np = np + 1; pieces[np] = text:sub(pos, s - 1)
+            np = np + 1; pieces[np] = hitColor[i]
+            np = np + 1; pieces[np] = text:sub(s, e)
+            np = np + 1; pieces[np] = "|r"
+            pos = e + 1
+        end
+    end
+    np = np + 1
+    pieces[np] = text:sub(pos)
+
+    if matchedKeyword and not IsSelf(author) then CMH.PlayKeywordSound(db) end
+
+    return tconcat(pieces)
+end
+
+-- Every global here is read through _G at CALL time. LibStub may not exist when
+-- this file loads, and a spec that swaps one of these in after the module has
+-- loaded cannot reach an upvalue.
+function CMH.PlayKeywordSound(db)
+    local sound = db.HighlightSound
+    if not sound or sound == "None" then return end
+    if db.HighlightNoSoundInCombat and _G.InCombatLockdown() then return end
+
+    local now = _G.GetTime()
+    if now < soundReadyAt then return end
+    soundReadyAt = now + SOUND_THROTTLE
+
+    local LSM = _G.LibStub and _G.LibStub("LibSharedMedia-3.0", true)
+    local path = LSM and LSM:Fetch("sound", sound, true)
+    if path then _G.PlaySoundFile(path, "Master") end
+end
+
+function CMH.ResetHighlight()
+    keywordSource, excludeSource, soundReadyAt = nil, nil, 0
+    keywordSet, excludeSet = {}, {}
+    chatModule = nil
+end
+
 -- Message formatter, formats the message body
 function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, channelLength, coloredName, arg1, arg2, arg3,
                               arg4, _, arg6, arg7, arg8, _, _, arg11, arg12, arg13, arg14, _, _, arg17)
@@ -516,6 +927,10 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
             arg1 = self:ChatFrame_ReplaceIconAndGroupExpressions(arg1, arg17,
                 not _G.ChatFrame_CanChatGroupPerformExpressionExpansion(chatGroup))
         end
+
+        -- Inside the existing secret guard on purpose: a plain string rewrite
+        -- must never touch a protected body.
+        arg1 = CMH.Highlight(arg1, arg2)
     end
 
     -- Player link, use fallbacks for nil values
