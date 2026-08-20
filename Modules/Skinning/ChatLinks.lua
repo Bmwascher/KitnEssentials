@@ -328,6 +328,7 @@ local POPUP_PADDING = 14
 local POPUP_GAP = 1
 local POPUP_HINT_TOP = 10
 local POPUP_HINT_GAP = 8
+local POPUP_FIELD_PAD = 6
 
 -- More opaque than the copy window's backdrop. That one floats over the world;
 -- this one sits directly on chat text, which has to stay out of the address.
@@ -370,11 +371,24 @@ local function BuildURLPopup()
     hint:SetText("Ctrl+C to copy, Escape to close")
     urlPopup.hint = hint
 
+    -- The address sits in its own inset field. Without it the address and the
+    -- hint above it read as one block of text on a flat panel.
+    local field = CreateFrame("Frame", nil, urlPopup, "BackdropTemplate")
+    field:SetPoint("TOP", hint, "BOTTOM", 0, -POPUP_HINT_GAP)
+    field:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8x8",
+        edgeFile = "Interface\\Buttons\\WHITE8x8",
+        edgeSize = 1,
+    })
+    field:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+    field:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    urlPopup.field = field
+
     -- EnableKeyboard is PROTECTED. Focus plus key scripts is how the copy
     -- window takes Ctrl+C, and this follows it.
-    local box = CreateFrame("EditBox", nil, urlPopup)
-    box:SetSize(POPUP_MIN_WIDTH - POPUP_PADDING * 2, 20)
-    box:SetPoint("TOP", hint, "BOTTOM", 0, -POPUP_HINT_GAP)
+    local box = CreateFrame("EditBox", nil, field)
+    box:SetSize(POPUP_MIN_WIDTH - POPUP_PADDING * 2 - POPUP_FIELD_PAD * 2, 20)
+    box:SetPoint("TOPLEFT", field, "TOPLEFT", POPUP_FIELD_PAD, -POPUP_FIELD_PAD)
     KE:ApplyFontToText(box, nil, 13, "NONE")
     box:SetAutoFocus(false)
     box:SetMultiLine(true)
@@ -479,7 +493,8 @@ function CL:ShowURLPopup(url)
     -- Width first, then measure the wrapped address at that width, then grow to
     -- fit it. A wider chat window shows more of the address per line and needs
     -- fewer of them.
-    local boxWidth = urlPopup:GetWidth() - POPUP_PADDING * 2
+    local fieldWidth = urlPopup:GetWidth() - POPUP_PADDING * 2
+    local boxWidth = fieldWidth - POPUP_FIELD_PAD * 2
     urlPopup.box:SetWidth(boxWidth)
     urlPopup.ruler:SetWidth(boxWidth)
     urlPopup.ruler:SetText(url)
@@ -487,9 +502,11 @@ function CL:ShowURLPopup(url)
     local textHeight = urlPopup.ruler:GetStringHeight() or 0
     local boxHeight = textHeight > 0 and textHeight + 4 or 20
     urlPopup.box:SetHeight(boxHeight)
+    urlPopup.field:SetSize(fieldWidth, boxHeight + POPUP_FIELD_PAD * 2)
 
     local hintHeight = urlPopup.hint:GetStringHeight() or 12
-    local needed = POPUP_HINT_TOP + hintHeight + POPUP_HINT_GAP + boxHeight + POPUP_PADDING
+    local needed = POPUP_HINT_TOP + hintHeight + POPUP_HINT_GAP
+        + urlPopup.field:GetHeight() + POPUP_PADDING
     urlPopup:SetHeight(needed > POPUP_MIN_HEIGHT and needed or POPUP_MIN_HEIGHT)
 
     urlBackdrop:Show()
