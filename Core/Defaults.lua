@@ -1843,6 +1843,13 @@ local Defaults = {
                 GuildMemberStatus = true,
                 GuildMemberStatusInviteLink = true,
                 RoleIcons = true,
+                MergeAchievements = false,
+                HighlightKeywords = "",
+                HighlightColor = { 1, 0.82, 0 },
+                HighlightSound = "None",
+                HighlightNoSoundInCombat = false,
+                ClassColorMentions = false,
+                ExcludedMentions = "",
             },
             ChatLinks = {
                 Enabled = false,
