@@ -79,7 +79,7 @@ end)
 describe("SelectFeignRow refusals", function()
     -- "none" keeps the watch running; "ambiguous" stops it. A build that
     -- returned a bare nil for both would keep sampling through an ambiguity it
-    -- had already detected, which is how an earlier design tagged real deaths.
+    -- has already detected, and a tag earned that way can name a real death.
     it("refuses TWO new own-rows as ambiguous, not as none", function()
         local rid, status = DM.SelectFeignRow({ row(5, true), row(6, true) }, {})
         assert.is_nil(rid)
@@ -94,9 +94,15 @@ describe("SelectFeignRow refusals", function()
 
     it("refuses a recap id of zero or below", function()
         -- The render path already drops these; a row with no openable recap is
-        -- not a row this feature may claim.
-        assert.is_nil((DM.SelectFeignRow({ row(0, true) }, {})))
-        assert.is_nil((DM.SelectFeignRow({ row(-3, true) }, {})))
+        -- not a row this feature may claim. The status matters as much as the
+        -- id: reading an unusable row as "ambiguous" would stop the watch, so
+        -- both returns are pinned.
+        local rid, status = DM.SelectFeignRow({ row(0, true) }, {})
+        assert.is_nil(rid)
+        assert.equals("none", status)
+        rid, status = DM.SelectFeignRow({ row(-3, true) }, {})
+        assert.is_nil(rid)
+        assert.equals("none", status)
     end)
 
     it("skips a SECRET recap id rather than comparing it", function()

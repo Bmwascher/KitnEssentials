@@ -1041,8 +1041,8 @@ end
 
 -- Which new row is the feign? Returns id + status so the caller can tell "none
 -- yet" from "cannot tell": the watch keeps running on the first and stops on the
--- second. Collapsing them into a bare nil kept the watch sampling through an
--- ambiguity it had already detected.
+-- second. Collapsed into a bare nil, the watch keeps sampling through an
+-- ambiguity it has already detected, and can then tag a real death.
 function DM.SelectFeignRow(sources, snapshot)
     if not sources then return nil, "none" end
     local found
@@ -1464,8 +1464,8 @@ function DM:OnMeterReset()
     -- The ONLY thing that enables feign filtering. A reset clears the data those
     -- rows lived in, so nothing pending can be held against a later list. Every
     -- cheaper signal -- leaving combat, an empty list, a login -- is an inference
-    -- about the game's internals, and each one reviewed as able to hide a real
-    -- death.
+    -- about the game's internals, and each one can hide a real death when the
+    -- inference is wrong.
     self._feignArmable = true
     -- History bundles are already-captured data and survive every reset
     -- event (only eviction / HeaderReset / reload clear them). But pending
