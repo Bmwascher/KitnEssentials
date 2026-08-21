@@ -1594,8 +1594,9 @@ end
 -- does not filter secrets, so the secrecy test has to sit above them or a secret
 -- duration reaches them and throws.
 --
--- Zero and negative HIDE rather than rendering "[0:00]" -- a zero-length fight
--- did not happen, and the game's own meter blanks its timer on a zero duration.
+-- Anything under a second HIDES rather than rendering "[0:00]" -- a fight of no
+-- measurable length did not happen, and the game's own meter blanks its timer on
+-- a zero duration.
 local function ClockText(duration)
     if not duration then return nil end             -- truthiness: safe on a secret
     if issecretvalue(duration) then
@@ -1611,7 +1612,11 @@ local function ClockText(duration)
         return "[" .. str .. "]", strSecret
     end
     if type(duration) ~= "number" then return nil end
-    if duration <= 0 then return nil end
+    -- Under a second, not just zero or negative. FormatDeathTime floors, so 0.4
+    -- would render "0:00" -- the exact string this function exists to keep off
+    -- the screen. The live stopwatch passes through this range at the start of
+    -- every pull.
+    if duration < 1 then return nil end
     return "[" .. FormatDeathTime(duration) .. "]", false
 end
 

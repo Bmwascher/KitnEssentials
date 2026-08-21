@@ -69,6 +69,16 @@ describe("ClockText refusals", function()
         assert.is_nil(DM.ClockText(-90))
     end)
 
+    it("refuses anything under a second, not just zero", function()
+        -- The formatter floors, so 0.4 would render "[0:00]" -- the one string
+        -- this function exists to keep off the screen. The live stopwatch passes
+        -- through this range at the start of every pull.
+        assert.is_nil(DM.ClockText(0.4))
+        assert.is_nil(DM.ClockText(0.999))
+        -- ...and one second itself must still render.
+        assert.equals("[0:01]", (DM.ClockText(1)))
+    end)
+
     it("refuses a non-numeric duration", function()
         assert.is_nil(DM.ClockText("lots"))
         assert.is_nil(DM.ClockText({}))

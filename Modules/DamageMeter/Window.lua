@@ -791,9 +791,10 @@ function DM:ReapplyBarVisuals(W)
     -- where the live recolor actually sticks (matching how the bar colors
     -- live-update); a one-shot set here did not. See DM:ApplyHeaderColor.
     -- Combat clock tracks the header font; the re-apply resets the FontString
-    -- tint, so nil the frozen dirty key -- the ApplyHeaderIcons call at the end of
-    -- this function funnels into UpdateCombatClock, which re-tints from the live
-    -- frozen/running state (mirrors the value-color note below).
+    -- tint, so nil the frozen dirty key. The re-tint lands on the next render --
+    -- the ApplyHeaderIcons call at the end of this function only re-gates
+    -- visibility, and during a settings apply the clock cache has just been
+    -- cleared, so that call hides rather than re-tints.
     if W.clock then
         KE:ApplyFontToText(W.clock, face, headerSize, outline)
         W._clockFrozen = nil
@@ -1096,15 +1097,21 @@ end
 ---------------------------------------------------------------------------------
 
 -- May the clock be on screen at all? Shared so the two entry points below cannot
--- disagree. needStart is false on the stored branch: a zone change nils both
--- combat stamps WITHOUT clearing a pin, and requiring the stamp there would hide
--- a pinned window's perfectly valid duration for good.
-local function ClockGateOpen(self, W, needStart)
+-- disagree.
+--
+-- It does NOT test _combatStartT, and that is deliberate. The old function used
+-- the stamp as its "has a fight happened" proof, but two paths now produce a
+-- valid duration without one: a window on a stored session (a zone change nils
+-- both stamps without clearing a pin), and the reload fallback (which only runs
+-- BECAUSE the stamp is nil). Having TEXT is the proof, and both callers
+-- establish that before they get here -- the render path by computing it, the
+-- visibility path via _clockHasText. Re-testing the stamp here would compute the
+-- reload fallback and then hide it on the same paint.
+local function ClockGateOpen(self, W)
     local db = self.db
     if not (db and db.ShowCombatClock) then return false end
     if W._clockSuppressed then return false end
     if not (self._winDisplayPos and self._winDisplayPos[W.idx] == 1) then return false end
-    if needStart and not self._combatStartT then return false end
     return true
 end
 
@@ -1149,8 +1156,7 @@ end
 function DM:RefreshClockVisibility(W)
     local clock = W and W.clock
     if not clock then return end
-    local storedID = self.EffectiveSessionID and self:EffectiveSessionID(W)
-    if not W._clockHasText or not ClockGateOpen(self, W, not storedID) then
+    if not W._clockHasText or not ClockGateOpen(self, W) then
         HideClock(W, clock)
         return
     end
@@ -1227,7 +1233,7 @@ function DM:UpdateCombatClock(W, session)
 
     -- GATE hide, which clears NOTHING. The text above was just computed and is
     -- correct; it is simply not on screen right now.
-    if not ClockGateOpen(self, W, not storedID) then
+    if not ClockGateOpen(self, W) then
         HideClock(W, clock)
         return
     end
