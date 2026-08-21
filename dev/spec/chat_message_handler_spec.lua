@@ -62,6 +62,34 @@ describe("ChatMessageHandler achievement merging", function()
         assert.are.equal("|Tint:14:14|t |Hachievement:123:|h[Thing]|h Earned by Ana, Zed", lines[1])
     end)
 
+    it("keeps the colour the client wrapped the link in", function()
+        local coloured = "%s earned |cffffff00|Hachievement:123:|h[Thing]|h|r!"
+        CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, coloured, "Zed")
+        CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, coloured, "Ana")
+        CMH.FlushAchievements()
+        assert.are.equal("|cffffff00|Hachievement:123:|h[Thing]|h|r Earned by Ana, Zed", lines[1])
+    end)
+
+    it("keeps the colour around an icon the incoming filter prepended", function()
+        -- The filter inserts the icon INSIDE the colour scope, so a merged line
+        -- that carries only the icon prints the title in the channel's colour.
+        local both = "%s earned |cffffff00|Tint:14:14|t |Hachievement:123:|h[Thing]|h|r!"
+        CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, both, "Zed")
+        CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, both, "Ana")
+        CMH.FlushAchievements()
+        assert.are.equal(
+            "|cffffff00|Tint:14:14|t |Hachievement:123:|h[Thing]|h|r Earned by Ana, Zed", lines[1])
+    end)
+
+    it("still pairs a coloured link with its own achievement id", function()
+        local two = "%s got |cffffff00|Hachievement:111:|h[A]|h|r and " ..
+            "|cffffff00|Tint:14:14|t |Hachievement:222:|h[B]|h|r!"
+        CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, two, "Zed")
+        CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, two, "Ana")
+        CMH.FlushAchievements()
+        assert.are.equal("|cffffff00|Hachievement:111:|h[A]|h|r Earned by Ana, Zed", lines[1])
+    end)
+
     it("does not swallow an unrelated texture or the prose before the link", function()
         local noisy = "%s |Traid:14|t before |Hachievement:123:|h[Thing]|h!"
         CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, noisy, "Zed")

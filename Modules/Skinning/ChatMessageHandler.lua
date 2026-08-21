@@ -425,18 +425,30 @@ function CMH:CaptureAchievement(frame, event, info, message, playerLink)
     local achievementID = strmatch(message, "|Hachievement:(%d+):")
     if not achievementID then return end
 
-    -- The whole link INCLUDING any icon the incoming filter prepended -- that
-    -- filter builds "<icon> <link>", so a pattern anchored at |H would drop the
-    -- icon from every merged line.
+    -- The whole link INCLUDING any icon the incoming filter prepended AND the
+    -- colour escape that wraps both -- the client sends
+    -- "|cffffff00<link>|r" and the incoming filter builds
+    -- "|cffffff00<icon> <link>|r", so a pattern anchored at |T or |H drops the
+    -- icon, the colour, or both. Losing the colour is not cosmetic in one
+    -- place only: the merged line is printed in the channel's colour, so a
+    -- guild achievement rendered its title green while the identical personal
+    -- announcement rendered it gold.
     --
-    -- Both alternatives are bound to THIS achievement's id, and the texture is
-    -- [^|]- rather than .- so it cannot swallow an earlier unrelated escape or
-    -- the prose between them. An unbound pattern captured "|Traid:14|t before
-    -- |Tachievement:14|t |Hachievement:123..." as the link, and paired a second
-    -- achievement's decorated link with the first one's id. The id is digits
-    -- only, so splicing it into a pattern is safe.
-    local link = strmatch(message, "(|T[^|]-|t |Hachievement:" .. achievementID .. ":.-|h.-|h)")
-        or strmatch(message, "(|Hachievement:" .. achievementID .. ":.-|h.-|h)")
+    -- Four alternatives, widest first, all bound to THIS achievement's id. The
+    -- uncoloured pair stays because a caller that strips colour must still
+    -- merge. The texture is [^|]- rather than .- so it cannot swallow an
+    -- earlier unrelated escape or the prose between them. An unbound pattern
+    -- captured "|Traid:14|t before |Tachievement:14|t |Hachievement:123..." as
+    -- the link, and paired a second achievement's decorated link with the first
+    -- one's id. Nothing may sit between |c and the icon or |H, so the colour
+    -- cannot be borrowed from an unrelated escape earlier in the line. The id
+    -- is digits only, so splicing it into a pattern is safe.
+    local body = "|Hachievement:" .. achievementID .. ":.-|h.-|h"
+    local decorated = "|T[^|]-|t " .. body
+    local link = strmatch(message, "(|c%x%x%x%x%x%x%x%x" .. decorated .. "|r)")
+        or strmatch(message, "(|c%x%x%x%x%x%x%x%x" .. body .. "|r)")
+        or strmatch(message, "(" .. decorated .. ")")
+        or strmatch(message, "(" .. body .. ")")
     if not link then return end
 
     -- arg1 is a FORMAT string, so a literal percent in the title arrives
