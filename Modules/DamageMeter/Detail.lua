@@ -715,11 +715,86 @@ function DM:RenderEnemyBreakdown(W, src)
     d.content:SetHeight(math_max(10, count * stride))
 end
 
--- Death-recap timeline (out-of-combat only — OpenDetail is OOC-gated). Renders the
+-- One recap row's CONTENT: icon, fill, label, value. Both recap surfaces -- the
+-- click-inline panel and the hover tip -- called this body inline, near enough
+-- line for line that a guard fixed in one could go unfixed in the other. That
+-- shape has already produced one shipped defect in this module.
+--
+-- Anchoring stays with the callers: the two surfaces anchor to different parents,
+-- and the tip re-anchors its value column between the label's two SetPoints. Only
+-- the content is shared.
+local function RenderRecapRow(self, row, ev, i, count, barH, maxHP, deathTime)
+    -- Icon: spellId (lowercase d on recap events); pcall the lookup (parity with
+    -- RenderBreakdown's GetSpellName) so a throw can't abort the loop mid-render and
+    -- leave the row pool half-shown. Any failure (nil OR error) -> melee fallback 135274.
+    local spID = ev.spellId
+    local tex = 135274
+    if spID and spID > 0 and C_Spell and C_Spell.GetSpellTexture then
+        local okT, t = pcall(C_Spell.GetSpellTexture, spID)
+        if okT and t then tex = t end
+    end
+    row.icon:SetTexture(tex)
+    KE:ApplyIconZoom(row.icon)
+    row.iconFrame:SetSize(barH, barH)
+    row.iconFrame:Show()
+
+    local evType = ev.event or ""
+    local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
+    local isFatal = (i == count and not isHeal)
+
+    -- Fill = HP% remaining at the event (currentHP / maxHP), heal green / damage red.
+    -- GetRecapEvents is AllowedWhenUntainted, so ev.currentHP can be a secret number
+    -- in a tainted post-combat window -- sanitize before the division (matches ev.amount).
+    local curHP = ev.currentHP
+    if issecretvalue(curHP) or type(curHP) ~= "number" then curHP = 0 end
+    local hpPct = math_min(1, math_max(0, maxHP > 0 and (curHP / maxHP) or 0))
+    row.fill:SetMinMaxValues(0, 1)
+    row.fill:SetValue(hpPct)
+    if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
+    else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
+
+    -- Label: "-X.Xs SpellName" (+ " (Source)" when a non-secret sourceName exists).
+    local spellName = ev.spellName
+    if not spellName or issecretvalue(spellName) or spellName == "" then
+        if isHeal then spellName = "Heal"
+        elseif evType == "SWING_DAMAGE" then spellName = "Melee"
+        else spellName = "Unknown" end
+    end
+    local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
+    local srcName = ev.sourceName
+    if srcName and not issecretvalue(srcName) and srcName ~= "" and not isHeal then
+        label = label .. "  |cff999999(" .. srcName .. ")|r"
+    end
+    row.label:SetText(label)
+
+    -- Value: +heal / -damage (AbbreviateNumbers is AllowedWhenTainted), crit marker,
+    -- overkill on the killing blow, HP% suffix.
+    -- C_DeathRecap.GetRecapEvents is AllowedWhenUntainted, so ev.amount can be a
+    -- secret number if a tainted execution slips into the brief post-combat window.
+    -- Arithmetic (math_max) must run on a sanitized plain number.
+    local amt = ev.amount or 0
+    local amtPlain = amt
+    if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
+    local body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
+    local sign = isHeal and "+" or "-"
+    -- A boolean-truthiness test on a secret BOOLEAN throws -- sanitize to a plain
+    -- bool first (issecretvalue gate) so the marker test never touches a secret.
+    local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
+    local crit = critFlag and " |cffffd100*|r" or ""
+    local pctSuffix = format(" (%.0f%%)", hpPct * 100)
+    if isFatal and not issecretvalue(ev.overkill) and type(ev.overkill) == "number" and ev.overkill > 0 then
+        local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
+        row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
+    else
+        row.value:SetText(sign .. body .. crit .. pctSuffix)
+    end
+end
+
+-- Death-recap timeline (out-of-combat only -- OpenDetail is OOC-gated). Renders the
 -- source's C_DeathRecap events oldest-first: each row is one combat-log event leading
 -- to the death, with the HP-remaining fill, "-Xs SpellName from Source" label, and a
 -- +heal / -damage value (crit marker, killing-blow overkill, HP% suffix). Recap fields
--- use spellId (lowercase d) — distinct from combatSpells' spellID. Three-tier gate is
+-- use spellId (lowercase d) -- distinct from combatSpells' spellID. Three-tier gate is
 -- in DM:GetDeathRecap (no/secret/<=0 recapID, no events) which returns nil -> message.
 function DM:RenderDeathRecap(W)
     if W.detail and W.detail.msg then W.detail.msg:Hide() end
@@ -739,83 +814,16 @@ function DM:RenderDeathRecap(W)
         local bar = d.rows[i]
         local row = bar.row
         if i <= count then
-            local ev = events[i]
             row:ClearAllPoints()
             local yOff = -(i - 1) * stride
             row:SetPoint("TOPLEFT", d.content, "TOPLEFT", 0, yOff)
             row:SetPoint("TOPRIGHT", d.content, "TOPRIGHT", 0, yOff)
             row:SetHeight(barH)
-
-            -- Icon: spellId (lowercase d on recap events); pcall the lookup (parity with
-            -- RenderBreakdown's GetSpellName) so a throw can't abort the loop mid-render and
-            -- leave the row pool half-shown. Any failure (nil OR error) -> melee fallback 135274.
-            local spID = ev.spellId
-            local tex = 135274
-            if spID and spID > 0 and C_Spell and C_Spell.GetSpellTexture then
-                local okT, t = pcall(C_Spell.GetSpellTexture, spID)
-                if okT and t then tex = t end
-            end
-            row.icon:SetTexture(tex)
-            KE:ApplyIconZoom(row.icon)
-            row.iconFrame:SetSize(barH, barH)
-            row.iconFrame:Show()
             row.label:ClearAllPoints()
             row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
             row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
 
-            local evType = ev.event or ""
-            local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
-            local isFatal = (i == count and not isHeal)
-
-            -- Fill = HP% remaining at the event (currentHP / maxHP), heal green / damage red.
-            -- GetRecapEvents is AllowedWhenUntainted, so ev.currentHP can be a secret number
-            -- in a tainted post-combat window -- sanitize before the division (matches ev.amount).
-            local curHP = ev.currentHP
-            if issecretvalue(curHP) or type(curHP) ~= "number" then curHP = 0 end
-            local hpPct = math_min(1, math_max(0, maxHP > 0 and (curHP / maxHP) or 0))
-            row.fill:SetMinMaxValues(0, 1)
-            row.fill:SetValue(hpPct)
-            if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
-            else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
-
-            -- Label: "-X.Xs SpellName" (+ " (Source)" when a non-secret sourceName exists).
-            -- Parens form matches the hover-tip recap surface (Phase 4c).
-            local spellName = ev.spellName
-            if not spellName or issecretvalue(spellName) or spellName == "" then
-                if isHeal then spellName = "Heal"
-                elseif evType == "SWING_DAMAGE" then spellName = "Melee"
-                else spellName = "Unknown" end
-            end
-            local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
-            local srcName = ev.sourceName
-            if srcName and not issecretvalue(srcName) and srcName ~= "" and not isHeal then
-                label = label .. "  |cff999999(" .. srcName .. ")|r"
-            end
-            row.label:SetText(label)
-
-            -- Value: +heal / -damage (AbbreviateNumbers is AllowedWhenTainted), crit marker,
-            -- overkill on the killing blow, HP% suffix.
-            -- C_DeathRecap.GetRecapEvents is AllowedWhenUntainted, so ev.amount can be a
-            -- secret number if a tainted execution slips into the brief post-combat window.
-            -- Arithmetic (math_max) must run on a sanitized plain number; the raw amt is
-            -- never math'd here (FormatBarValue's plain branch and tostring also use amtPlain).
-            local amt = ev.amount or 0
-            local amtPlain = amt
-            if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
-            local body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
-            local sign = isHeal and "+" or "-"
-            -- ev.critical is AllowedWhenUntainted (same window as ev.amount, line 349).
-            -- A boolean-truthiness test on a secret BOOLEAN throws -- sanitize to a plain
-            -- bool first (issecretvalue gate) so the marker test never touches a secret.
-            local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
-            local crit = critFlag and " |cffffd100*|r" or ""
-            local pctSuffix = format(" (%.0f%%)", hpPct * 100)
-            if isFatal and not issecretvalue(ev.overkill) and type(ev.overkill) == "number" and ev.overkill > 0 then
-                local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
-                row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
-            else
-                row.value:SetText(sign .. body .. crit .. pctSuffix)
-            end
+            RenderRecapRow(self, row, events[i], i, count, barH, maxHP, deathTime)
 
             if not row:IsShown() then row:Show() end
         else
@@ -1483,78 +1491,19 @@ function DM:PopulateHoverTip(W, bar)
                 row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
                 row:SetHeight(barH)
 
-                -- Icon: spellId (lowercase d on recap events); pcall the lookup so a
-                -- throw can't abort the loop. nil/0/error -> melee fallback 135274.
-                local spID = ev.spellId
-                local tex = 135274
-                if spID and spID > 0 and C_Spell and C_Spell.GetSpellTexture then
-                    local okT, t = pcall(C_Spell.GetSpellTexture, spID)
-                    if okT and t then tex = t end
-                end
-                row.icon:SetTexture(tex)
-                KE:ApplyIconZoom(row.icon)
-                row.iconFrame:SetSize(barH, barH)
-                row.iconFrame:Show()
                 row.label:ClearAllPoints()
                 row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
                 -- Recap value is verbose ("-75.0K (overkill) (53%)") and uses the FULL right
-                -- edge (no Amount/DPS/% columns); per-path anchor below pins row.value to
-                -- -TIP_PAD. The label's RIGHT stops at row.value:LEFT so a long
-                -- "(Source)" suffix ellipsizes cleanly rather than overlapping.
+                -- edge (no Amount/DPS/% columns): pin row.value to -TIP_PAD, and stop the
+                -- label at its LEFT so a long "(Source)" suffix ellipsizes rather than
+                -- overlapping. This anchor is the tip's alone -- the panel has no columns
+                -- to work around -- which is why anchoring stays out of the shared row body.
                 row.value:ClearAllPoints()
                 row.value:SetPoint("RIGHT", row.fill, "RIGHT", -TIP_PAD, 0)
                 row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
 
-                local evType = ev.event or ""
-                local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
-                local isFatal = (i == count and not isHeal)
+                RenderRecapRow(self, row, ev, i, count, barH, maxHP, deathTime)
 
-                -- Fill = HP% remaining at the event; heal green / damage red.
-                -- ev.currentHP is AllowedWhenUntainted like ev.amount -> sanitize to a plain
-                -- number before the division (could be secret in a tainted post-combat window).
-                local curHP = ev.currentHP
-                if issecretvalue(curHP) or type(curHP) ~= "number" then curHP = 0 end
-                local hpPct = math_min(1, math_max(0, maxHP > 0 and (curHP / maxHP) or 0))
-                row.fill:SetMinMaxValues(0, 1)
-                row.fill:SetValue(hpPct)
-                if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
-                else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
-
-                -- Label: "-X.Xs SpellName (Source)". Secret-guard the
-                -- spellName return; append the event's source in parens when a plain
-                -- (non-secret) sourceName exists and it isn't a heal (gray, ellipsizes).
-                local spellName = ev.spellName
-                if not spellName or issecretvalue(spellName) or spellName == "" then
-                    if isHeal then spellName = "Heal"
-                    elseif evType == "SWING_DAMAGE" then spellName = "Melee"
-                    else spellName = "Unknown" end
-                end
-                local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
-                local sn = ev.sourceName
-                if sn and not issecretvalue(sn) and sn ~= "" and not isHeal then
-                    label = label .. "  |cff999999(" .. sn .. ")|r"
-                end
-                row.label:SetText(label)
-
-                -- Value: +heal / -damage (AbbreviateNumbers via FormatBarValue), crit marker,
-                -- killing-blow overkill, HP% suffix -- the exact secret-safe pattern as the
-                -- click-inline RenderDeathRecap. Sanitize amount to a plain number before any
-                -- math/tostring (GetRecapEvents is AllowedWhenUntainted -> could be secret in a
-                -- tainted post-combat window); crit/overkill guarded as RenderDeathRecap.
-                local amt = ev.amount or 0
-                local amtPlain = amt
-                if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
-                local body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
-                local sign = isHeal and "+" or "-"
-                local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
-                local crit = critFlag and " |cffffd100*|r" or ""
-                local pctSuffix = format(" (%.0f%%)", hpPct * 100)
-                if isFatal and not issecretvalue(ev.overkill) and type(ev.overkill) == "number" and ev.overkill > 0 then
-                    local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
-                    row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
-                else
-                    row.value:SetText(sign .. body .. crit .. pctSuffix)
-                end
                 -- Recap keeps a single value column: the breakdown's DPS/% columns are empty.
                 if row.dps then row.dps:SetText("") end
                 if row.pct then row.pct:SetText("") end

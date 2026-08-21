@@ -1522,32 +1522,85 @@ end
 DM.FormatBarValue = FormatBarValue
 DM.FormatDeathTime = FormatDeathTime
 
--- Returns the reversed (oldest-first) recap event list + maxHealth for a deathRecapID, or
--- nil. C_DeathRecap is a separate namespace (NOT C_DamageMeter); none of its getters is
--- SecretWhenInCombat, and recap data is post-death, so these are read out of combat only
--- (OpenDetail is OOC-gated). All calls pcall'd; deathRecapID is NeverSecret on the source.
+-- Marks a recap the client would not let us read, as opposed to one that simply
+-- is not there. The two look identical to a caller that only tests the events,
+-- and they mean different things to the user, so the distinction is a value
+-- rather than a comment. Lives on the module table because every consumer is in
+-- the detail renderer, a different file.
+DM.RECAP_UNREADABLE = "recap-unreadable"
+
+-- Reversed (oldest-first) recap events for a deathRecapID. C_DeathRecap is a
+-- separate namespace (NOT C_DamageMeter) and none of its getters declares any
+-- secrecy, but DeathRecapEventInfo is declared with an EMPTY field list, so every
+-- field is treated as possibly secret by the renderers. All calls pcall'd;
+-- deathRecapID is NeverSecret on the source.
+--
+-- EXACTLY THREE RETURN SHAPES, and callers must discriminate in this order:
+--   success     (events, sinkMax, plainMax)
+--   unreadable  (nil,    DM.RECAP_UNREADABLE, nil)
+--   absent      (nil,    nil,     nil)
+-- Test `events` FIRST and reach the second slot only in an else branch. On the
+-- success shape that slot holds sinkMax, which can be a secret number, and
+-- comparing a secret throws -- so a caller that tests it first crashes on the
+-- one shape that worked.
+--
+-- The two maxima are NOT interchangeable and neither substitutes for the other:
+--   sinkMax  -- for SetMinMaxValues and nothing else. The API's value when it is
+--              secret, the same number when it is a plain positive, nil for a
+--              failed call and for a plain zero, negative or non-number. A zero
+--              would draw a full-height empty bar, which asserts a death at full
+--              health; a maximum that cannot be a denominator is not a maximum.
+--   plainMax -- the ONLY one arithmetic may touch. Never secret. A plain positive
+--              number or nil, and nil means the percentage cannot be computed.
 function DM:GetDeathRecap(recapID)
+    -- Entry guards, all of them the ABSENT shape: nothing was unreadable, there is
+    -- simply nothing to fetch.
     if not C_DeathRecap then return nil end
     if not recapID or issecretvalue(recapID) or recapID <= 0 then return nil end
+
     if C_DeathRecap.HasRecapEvents then
         local okh, has = pcall(C_DeathRecap.HasRecapEvents, recapID)
-        -- HasRecapEvents is AllowedWhenUntainted -> `has` can be a secret BOOLEAN in a
-        -- tainted call path. A truthiness test on a secret boolean throws, so bail out
-        -- (treat secret as "no recap") rather than crash on the `not has` test.
-        if not okh or issecretvalue(has) or not has then return nil end
+        -- Only a returned, readable false refuses. A secret answer and a failed call
+        -- are both "we did not get an answer", and reading that as "no recap" would
+        -- hide a recap the fetch below would have returned -- this preflight is an
+        -- optimisation, and the fetch already handles a missing or empty result.
+        -- issecretvalue must stay before the truthiness test: a secret boolean throws.
+        if okh and not issecretvalue(has) and not has then return nil end
     end
+
     local ok, raw = pcall(C_DeathRecap.GetRecapEvents, recapID)
-    if not ok or not raw or #raw == 0 then return nil end
-    local maxHP = 1
+    if not ok or not raw then return nil end
+    -- canaccesstable asks "may I index this", which is NOT what issecrettable asks --
+    -- that one is true whenever access would yield secrets, i.e. normally in combat,
+    -- and refusing on it would refuse every in-combat recap. First contact with the
+    -- return, before the length operator, because the operator is what would throw.
+    -- An absent predicate means a client with no secret-table machinery to guard
+    -- against, so index it the way this code always has rather than inventing a
+    -- restriction the client never reported.
+    if canaccesstable and not canaccesstable(raw) then return nil, DM.RECAP_UNREADABLE end
+    if #raw == 0 then return nil end
+
+    local sinkMax, plainMax
     if C_DeathRecap.GetRecapMaxHealth then
         local okm, hp = pcall(C_DeathRecap.GetRecapMaxHealth, recapID)
-        if okm and hp and type(hp) == "number" and hp > 0 then maxHP = hp end
+        if okm and hp then
+            if issecretvalue(hp) then
+                sinkMax = hp
+            -- type() does NOT filter secrets, so the secrecy test has to come first or
+            -- a secret number reaches the comparison below and throws.
+            elseif type(hp) == "number" and hp > 0 then
+                sinkMax, plainMax = hp, hp
+            end
+        end
     end
-    -- API returns newest-first; reverse to oldest-first into a per-call table (recap is a
-    -- rare user action, so a fresh table is fine — not a hot path).
+
+    -- API returns newest-first; reverse to oldest-first into a per-call table. NO
+    -- per-event access gate: an element access yields a table rather than a secret,
+    -- the per-field guards in the renderers are what handle secret contents, and a
+    -- gate here would silently drop rows from a death recap.
     local rev = {}
     for i = #raw, 1, -1 do rev[#rev + 1] = raw[i] end
-    return rev, maxHP
+    return rev, sinkMax, plainMax
 end
 
 -- "-3.4s" style time-before-death. deathTime = the last (most recent) event's timestamp.
