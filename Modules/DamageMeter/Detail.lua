@@ -981,9 +981,9 @@ end
 -- ║  TOOLTIP strata, parented to UIParent, passive (never     ║
 -- ║  intercepts the mouse). A detach-when-idle poll keeps the ║
 -- ║  numbers live while a bar is hovered. UNLIKE the click-   ║
--- ║  inline panel a hover fires IN COMBAT, so the populate    ║
--- ║  path hard-gates on InCombatLockdown BEFORE any secret    ║
--- ║  read (spellID is secret in combat -> touching it taints).║
+-- ║  inline panel a hover fires IN COMBAT, where it shows     ║
+-- ║  the player's OWN breakdown and refuses every other row   ║
+-- ║  and every view whose renderer cannot survive secrets.    ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 local HOVER_TIP_ROWS = 15       -- top spells/events; the click-inline panel still shows the full list
@@ -1385,10 +1385,39 @@ local function TipHeaderName(self, bar)
     return nm or "Breakdown"
 end
 
--- Fill the tip from a bar's stashed source identity (set by RenderBar, Task 2).
--- Returns true if it has content to show, false if it should stay hidden. Mirrors
--- the secret contract of RenderBreakdown / RenderDeathRecap exactly. OOC ONLY for
--- real data: in combat it shows the secret message and reads NOTHING secret.
+-- Put the tip into its REFUSED state and size it for the message alone. Two
+-- separate paths refuse -- the eligibility gate at the top of PopulateHoverTip,
+-- and a fetch that could not legally substitute an identity partway down -- and
+-- both must leave the same tip behind. The second one used to only raise the
+-- message, so a tip already carrying rows, column headers and a Targets block
+-- kept all of it under a three-line frame.
+--
+-- Everything a data render can turn on is turned off here. The header is re-set
+-- from the hovered bar because the tip is a shared singleton: without it the
+-- refusal would carry the previous bar's name.
+local function ShowTipRefusal(self, bar, headerH, size)
+    for i = 1, HOVER_TIP_ROWS do _tip.rows[i].row:Hide() end
+    if _tip.colHdr then
+        _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
+    end
+    HideTipTargets()
+    _tip.header:SetText(TipHeaderName(self, bar))
+    -- Class-tint the title (bar._classFilename is NeverSecret). White fallback for
+    -- an unknown/enemy class so the centered title is always legible.
+    local chc = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
+    if chc then _tip.header:SetTextColor(chc.r, chc.g, chc.b) else _tip.header:SetTextColor(1, 1, 1) end
+    _tip.msg:SetText(REFUSAL_MSG)
+    _tip.msg:Show()
+    -- header + the two-line gray message; generous fixed height (no row math).
+    _tip:SetHeight(headerH + TIP_PAD + (size or 12) * 3)
+    return true
+end
+
+-- Fill the tip from a bar's stashed source identity (set by RenderBar). Returns
+-- true if it has content to show, false if it should stay hidden. Mirrors the
+-- secret contract of RenderBreakdown / RenderDeathRecap exactly -- which now
+-- includes an in-combat case: the player's own row renders real data from raw
+-- secret amounts, and every other row and view takes ShowTipRefusal.
 function DM:PopulateHoverTip(W, bar)
     self:EnsureHoverTip()
     local face = self.db and self.db.FontFace
@@ -1412,21 +1441,7 @@ function DM:PopulateHoverTip(W, bar)
     -- RenderBar set (nil while the name was secret) -- safe to display, never a
     -- secret string.
     if not self:DetailEligible(bar._isLocalPlayer, meterType) then
-        for i = 1, HOVER_TIP_ROWS do _tip.rows[i].row:Hide() end
-        if _tip.colHdr then
-            _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
-        end
-        HideTipTargets()
-        _tip.header:SetText(TipHeaderName(self, bar))
-        -- Class-tint the title (bar._classFilename is NeverSecret). White fallback for
-        -- an unknown/enemy class so the centered title is always legible.
-        local chc = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
-        if chc then _tip.header:SetTextColor(chc.r, chc.g, chc.b) else _tip.header:SetTextColor(1, 1, 1) end
-        _tip.msg:SetText(REFUSAL_MSG)
-        _tip.msg:Show()
-        -- header + the two-line gray message; generous fixed height (no row math).
-        _tip:SetHeight(headerH + TIP_PAD + (size or 12) * 3)
-        return true
+        return ShowTipRefusal(self, bar, headerH, size)
     end
     _tip.msg:Hide()
 
@@ -1665,10 +1680,7 @@ function DM:PopulateHoverTip(W, bar)
         -- A refused fetch is not an empty one: show the refusal rather than an
         -- empty tip, matching the click path.
         if refused then
-            _tip.msg:SetText(REFUSAL_MSG)
-            _tip.msg:Show()
-            _tip:SetHeight(headerH + TIP_PAD + (size or 12) * 3)
-            return true
+            return ShowTipRefusal(self, bar, headerH, size)
         end
         -- List + fill max together (parity with the click-inline breakdown, and
         -- the same function so the two can never diverge). See SelectSpellList.

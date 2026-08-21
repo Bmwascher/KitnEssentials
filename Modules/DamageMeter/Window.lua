@@ -1307,9 +1307,11 @@ function DM:RenderWindow(W)
         return
     end
 
-    -- Deaths: the API returns death sources most-recent-first and may include
-    -- feign deaths (deathRecapID <= 0 = no real recap). Reverse to chronological
-    -- and drop feigns into a reused per-window scratch table (no per-tick garbage).
+    -- Deaths: the API returns death sources most-recent-first. Reverse to
+    -- chronological into a reused per-window scratch table (no per-tick garbage),
+    -- keeping only rows that carry a usable recap id -- what the filter below
+    -- actually tests. It is NOT a feign test: a missing recap id is one reason a
+    -- row has nothing to open, and feigns are not reliably identifiable from it.
     -- deathRecapID is NeverSecret; still issecretvalue-guarded defensively.
     if isDeaths then
         W._deathScratch = W._deathScratch or {}
