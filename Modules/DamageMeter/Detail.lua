@@ -346,12 +346,20 @@ function DM:OpenDetail(bar, button)
     local preEvents, preSink, prePlain
     if W._isDeaths then
         preEvents, preSink, prePlain = self:GetDeathRecap(bar._deathRecapID)
-        -- UNREADABLE still OPENS -- the panel is what carries the message. Only a
-        -- genuinely absent recap declines, which is today's behaviour: a feign or a
-        -- no-recap death simply is not clickable. Compare the second return only in
-        -- this branch; on the success shape it holds the fill maximum, which can be
-        -- secret, and comparing a secret throws.
-        if not preEvents and preSink ~= DM.RECAP_UNREADABLE then return end
+        -- UNREADABLE still OPENS -- the panel is what carries the message -- but it
+        -- goes STRAIGHT to the message rather than through the renderer, so a prefetch
+        -- handed to the renderer can only ever be the success shape and no caller has
+        -- to discriminate shapes on a possibly-secret maximum. Only a genuinely absent
+        -- recap declines, which is today's behaviour: a feign or a no-recap death
+        -- simply is not clickable. Compare the second return only INSIDE this branch;
+        -- on the success shape it holds the fill maximum, which can be secret, and
+        -- comparing a secret throws.
+        if not preEvents then
+            if preSink == DM.RECAP_UNREADABLE then
+                self:ShowDetailMessage(W, RECAP_UNREADABLE_MSG)
+            end
+            return
+        end
     end
 
     self:EnsureDetail(W)
@@ -813,9 +821,11 @@ local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, 
         row.fill:SetMinMaxValues(0, 1)
         row.fill:SetValue(0)
     end
-    if not typeKnown then
-        -- Neutral: we did not read the direction, so we do not claim one. Red with a
-        -- minus sign is a positive claim about damage, not an absence of information.
+    -- Colour is picked AFTER the maximum test, not just on the event type. An empty
+    -- bar left red still reads as a damage row at zero health; grey reads as no data,
+    -- which is what an unusable maximum means. Same reasoning as the unknown type:
+    -- red with a minus sign is a positive claim, not an absence of information.
+    if not haveMax or not typeKnown then
         row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3])
     elseif isHeal then
         row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
@@ -882,19 +892,25 @@ local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, 
     end
 end
 
--- Death-recap timeline (out-of-combat only -- OpenDetail is OOC-gated). Renders the
+-- Death-recap timeline, reachable IN COMBAT as well as out of it. Renders the
 -- source's C_DeathRecap events oldest-first: each row is one combat-log event leading
 -- to the death, with the HP-remaining fill, "-Xs SpellName from Source" label, and a
 -- +heal / -damage value (crit marker, killing-blow overkill, HP% suffix). Recap fields
--- use spellId (lowercase d) -- distinct from combatSpells' spellID. Three-tier gate is
--- in DM:GetDeathRecap (no/secret/<=0 recapID, no events) which returns nil -> message.
+-- use spellId (lowercase d) -- distinct from combatSpells' spellID.
+--
+-- NOTHING here may assume a readable field. Every per-row value goes through
+-- RenderRecapRow, which treats each one as possibly secret; the parts that cannot
+-- survive a secret (the percentage, the overkill note, the +/- sign) are omitted
+-- rather than guessed. DM:GetDeathRecap has THREE return shapes and the message
+-- below distinguishes the two that carry no events: absent, and unreadable.
 function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
     if W.detail and W.detail.msg then W.detail.msg:Hide() end
     local d = W.detail
     -- The click path prefetches (OpenDetail) so one interaction is one fetch. The
-    -- tick and hover paths do not, so the parameters are optional and a fetch here
-    -- is the normal case. A prefetch can only ever carry the SUCCESS shape, because
-    -- the other two shapes never reach a render.
+    -- tick path does not, so the parameters are optional and a fetch here is the
+    -- normal case. A prefetch can only ever carry the SUCCESS shape: OpenDetail
+    -- declines on absent and goes straight to the message on unreadable, so neither
+    -- of those reaches this function with a prefetch in hand.
     local events, sinkMax, plainMax = preEvents, preSink, prePlain
     if not events then
         events, sinkMax, plainMax = self:GetDeathRecap(W._detailRecapID)
@@ -1501,17 +1517,19 @@ local function TipHeaderName(self, bar)
     return nm or "Breakdown"
 end
 
--- Put the tip into its REFUSED state and size it for the message alone. Two
--- separate paths refuse -- the eligibility gate at the top of PopulateHoverTip,
--- and a fetch that could not legally substitute an identity partway down -- and
--- both must leave the same tip behind. The second one used to only raise the
--- message, so a tip already carrying rows, column headers and a Targets block
--- kept all of it under a three-line frame.
+-- Put the tip into a MESSAGE state and size it for the message alone. Three
+-- separate paths raise one -- the eligibility gate at the top of PopulateHoverTip,
+-- a fetch that could not legally substitute an identity partway down, and a death
+-- recap the client would not let us read -- and all three must leave the same tip
+-- behind. One of them used to only raise the message, so a tip already carrying
+-- rows, column headers and a Targets block kept all of it under a three-line frame.
 --
 -- Everything a data render can turn on is turned off here. The header is re-set
 -- from the hovered bar because the tip is a shared singleton: without it the
--- refusal would carry the previous bar's name.
-local function ShowTipRefusal(self, bar, headerH, size)
+-- message would carry the previous bar's name.
+--
+-- msg defaults to the in-combat refusal, which is what two of the three callers want.
+local function ShowTipRefusal(self, bar, headerH, size, msg)
     for i = 1, HOVER_TIP_ROWS do _tip.rows[i].row:Hide() end
     if _tip.colHdr then
         _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
@@ -1522,7 +1540,7 @@ local function ShowTipRefusal(self, bar, headerH, size)
     -- an unknown/enemy class so the centered title is always legible.
     local chc = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
     if chc then _tip.header:SetTextColor(chc.r, chc.g, chc.b) else _tip.header:SetTextColor(1, 1, 1) end
-    _tip.msg:SetText(REFUSAL_MSG)
+    _tip.msg:SetText(msg or REFUSAL_MSG)
     _tip.msg:Show()
     -- header + the two-line gray message; generous fixed height (no row math).
     _tip:SetHeight(headerH + TIP_PAD + (size or 12) * 3)
@@ -1588,9 +1606,10 @@ function DM:PopulateHoverTip(W, bar, isInitial)
         end
         HideTipTargets()
         -- Top recap events (oldest-first) for this death; nil -> nothing to show.
-        -- The hover poll repopulates several times a second, and this branch fetches
-        -- and reverses the whole event array each time. A recap is immutable once the
-        -- death has happened, so a cursor held on one row has nothing to redraw.
+        -- Each repopulate fetches and reverses the whole event array. The poll only
+        -- repopulates on a data-change signal rather than every tick, so this is
+        -- defence in depth rather than a per-tick saving -- but a recap is immutable
+        -- once the death has happened, so a cursor held on one row never needs one.
         -- COMBAT only: out of combat the repaint still runs, because nothing documents
         -- a recap as final and freezing a partial one would be a regression. The recap
         -- id is NeverSecret, so comparing it is safe.
@@ -1606,12 +1625,12 @@ function DM:PopulateHoverTip(W, bar, isInitial)
             -- An UNREADABLE recap shows the message; a genuinely absent one keeps
             -- today's behaviour of leaving the tip hidden. A hover that silently does
             -- nothing in combat reads as a broken feature, which is why the two are
-            -- not treated alike here.
+            -- not treated alike here. Raising the message alone is NOT enough: this
+            -- returns before the common tail, so the rows and header the previous
+            -- hover left behind have to be cleared the same way every other message
+            -- path clears them.
             if sinkMax == DM.RECAP_UNREADABLE then
-                _tip.msg:SetText(RECAP_UNREADABLE_MSG)
-                _tip.msg:Show()
-                _tip:SetHeight(headerH + TIP_PAD + (size or 12) * 3)
-                return true
+                return ShowTipRefusal(self, bar, headerH, size, RECAP_UNREADABLE_MSG)
             end
             return false
         end
