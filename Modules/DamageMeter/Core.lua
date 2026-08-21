@@ -1264,9 +1264,96 @@ function DM:GetSession(sessionType, dmType, sessionID)
     return nil
 end
 
+-- Resolve the raw isLocalPlayer field to a PLAIN boolean. Every caller that
+-- needs the answer more than once resolves it here first, so the secrecy guard
+-- exists in one place and nothing downstream ever holds the raw field.
+function DM.PlainOwnRow(isLocalPlayer)
+    if issecretvalue(isLocalPlayer) then return false end
+    return isLocalPlayer == true
+end
+
+-- The combat test is deliberately BROADER than InCombatLockdown(). That flag drops
+-- to false the moment the player dies or feign-deaths mid-pull (see GroupInCombat),
+-- while the fight -- and the API's secrecy -- continues. Restricting on the union of
+-- the two signals can only refuse MORE often, never less, which is the safe direction
+-- for a gate whose failure mode is a thrown error mid-render.
+local function DetailCombatActive()
+    return InCombatLockdown() or UnitAffectingCombat("player")
+end
+-- Shared with Detail.lua: every detail path that asks "is combat on" must ask it the
+-- same way, or the gate and the renderers will disagree about which data is secret.
+DM.DetailCombatActive = DetailCombatActive
+
+-- May a detail panel open, and stay open? The single gate every detail path
+-- consults -- click, hover, combat-start, and the tick refresh.
+--
+-- OUT OF COMBAT this is unconditionally true, and the short-circuit lives HERE
+-- rather than in each caller. The tick path runs out of combat too (StopTicker's
+-- final paint, OnSessionUpdated's settle repaints), so a predicate that forgot
+-- it would close panels that work today -- another player's breakdown, a death
+-- recap -- the moment a session settled.
+--
+-- IN COMBAT it admits one thing: the local player's own row, on a view whose
+-- renderer can survive secret values.
+--   * isLocalPlayer is the only source identity the API guarantees readable
+--     mid-fight (NeverSecret). issecretvalue is tested BEFORE the comparison so
+--     a wrong annotation costs the feature instead of throwing.
+--   * Deaths is refused because OpenDetail dispatches it into RenderDeathRecap,
+--     which compares an unguarded spellId and event string. Reaching that in
+--     combat is a crash, not a feature.
+--   * EnemyDamageTaken is refused because its drill-down aggregates and compares
+--     amounts across sources, which secret values cannot survive.
+--
+-- meterType MUST be the EFFECTIVE type (DM:EffectiveMeterType), never
+-- cfg.MeterType. A view override changes the view without touching the config,
+-- and survives until a segment boundary, so the two disagree -- while the click
+-- dispatch follows the effective one. Feeding this the config value would admit
+-- a click that then lands in the death recap mid-fight.
+function DM:DetailEligible(isLocalPlayer, meterType)
+    if not DetailCombatActive() then return true end
+    if not DM.PlainOwnRow(isLocalPlayer) then return false end
+    if meterType == Enum.DamageMeterType.Deaths then return false end
+    if meterType == Enum.DamageMeterType.EnemyDamageTaken then return false end
+    return true
+end
+
 -- Returns the per-source detail table for a single combat source (keyed by
 -- sourceGUID), or nil on failure. Mirrors GetSession's FromID/FromType branch.
-function DM:GetSource(sessionType, dmType, sourceGUID, sourceCreatureID, sessionID)
+--
+-- isOwnRow is the LAST parameter on purpose. Three of the five call sites do not
+-- pass it (the targets aggregation and enemy branch in Detail.lua, the snapshot
+-- store in History.lua) and must not have to change: a mid-signature insert
+-- would shift their sessionID, and the history branch below TESTS its type
+-- rather than asserting it, so a shifted argument would degrade into the wrong
+-- lookup instead of failing loudly.
+--
+-- SECOND RETURN, "refused": the identity was secret and could not legally be
+-- substituted. It is a second return rather than a sentinel in the first
+-- position precisely because those three call sites never opt in -- History.lua
+-- tests the first return with a bare truthiness check before writing it into the
+-- persisted snapshot, so a truthy marker there would be stored as if it were
+-- real source data. nil is what they already handle.
+function DM:GetSource(sessionType, dmType, sourceGUID, sourceCreatureID, sessionID, isOwnRow)
+    -- In combat the stashed identity is secret, so the API call below cannot
+    -- legally receive it (SecretArguments = AllowedWhenUntainted, and addon code
+    -- is tainted). For the player's OWN row there is a legal substitute: a plain
+    -- GUID for the same unit. Every other case refuses.
+    if issecretvalue(sourceGUID) or issecretvalue(sourceCreatureID) then
+        if isOwnRow ~= true then return nil, "refused" end
+        -- A negative id is a stored History.lua snapshot, not the live API.
+        -- Looking that up with a live GUID could resolve a different row
+        -- entirely, so the substitution does not apply to it.
+        if type(sessionID) == "number" and sessionID < 0 then return nil, "refused" end
+        local plainGUID = UnitGUID("player")
+        -- UnitGUID is SecretWhenUnitIdentityRestricted AND its return is
+        -- nilable. A secret substitute is the illegal case this exists to
+        -- avoid; a nil one would send nil for both identity arguments and
+        -- resolve something unintended. Refuse on either -- and test secrecy
+        -- BEFORE the nil comparison, because comparing a secret throws.
+        if issecretvalue(plainGUID) or plainGUID == nil then return nil, "refused" end
+        sourceGUID, sourceCreatureID = plainGUID, nil
+    end
+
     if type(sessionID) == "number" and sessionID < 0 then
         if self.HistorySource then
             return self:HistorySource(sessionID, dmType, sourceGUID, sourceCreatureID)
