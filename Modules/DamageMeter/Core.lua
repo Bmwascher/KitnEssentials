@@ -296,6 +296,11 @@ function DM:ApplySettings()
     if not self.enabled then return end
 
     self.windows_rt = self.windows_rt or {}
+    -- The clock cache survives a plain re-gate, so it has to be dropped wherever
+    -- the module RE-SCOPES what a window shows. Here BEFORE the loop below:
+    -- ReapplyBarVisuals reaches ApplyHeaderIcons, which re-gates the header, so a
+    -- clear placed at the LayoutDock call would already be too late.
+    if self.ClearClockCache then self:ClearClockCache() end
     for _, W in pairs(self.windows_rt) do
         if W.frame then
             self:ApplyWindowGeometry(W)
@@ -691,6 +696,11 @@ function DM:OnEnable()
     -- frame (login hitch avoidance) and finishes with LayoutDock -> UpdateBackdrop
     -- -> Tick, so no explicit paint is needed here.
     self:EnsureDock()
+    -- Reused windows keep their cached clock text across a disable/enable, and the
+    -- build below lays them out -- which re-gates the header -- before the first
+    -- paint. Clear here rather than inside CreateAllWindows so the call stays in
+    -- this file.
+    if self.ClearClockCache then self:ClearClockCache() end
     self:CreateAllWindows()
 
     -- Settle the initial content context shortly after enable. Covers /reload inside
@@ -735,6 +745,9 @@ function DM:OnDisable()
     self._ctxCheckPending = false
     self._combatStartT = nil
     self._combatEndT = nil
+    -- The runtime windows survive a disable, so their cached clock text would
+    -- outlive the stamps above and could be re-shown by a bare visibility re-gate.
+    if self.ClearClockCache then self:ClearClockCache() end
     -- Pending provenance requires CONTINUOUS observation: a disabled module
     -- misses key boundaries (no START events), so an armed record can no
     -- longer be vouched for — one surviving disable->enable would mislabel
@@ -804,6 +817,46 @@ function DM:_RunTick()
     if DM.Tick then DM:Tick() end
 end
 
+-- Stamp the combat clock's start, BACKDATED to however long the game's own
+-- session says it has already been running. A bare GetTime() starts our clock
+-- when we noticed the fight, which is not when the session started -- the group
+-- can pull before us, and our own combat flag can beat the session's first
+-- recorded event. Every per-second figure on a bar is the session's, so an
+-- unanchored clock disagrees with the numbers beside it.
+--
+-- isArm is true ONLY from the arm-from-idle branch, where there is no stamp yet
+-- and one must be produced. From the retry it is false and an unusable read
+-- leaves the existing stamp ALONE: the return is nilable and the call can reject
+-- while execution is tainted, so a fallback there would replace a good backdate
+-- with a worse one.
+--
+-- The secrecy test comes BEFORE type(), which does not filter secrets: a secret
+-- number reaching the > 0 comparison throws, and so would the subtraction.
+function DM:AnchorCombatStart(isArm)
+    local anchor
+    if C_DamageMeter and C_DamageMeter.GetSessionDurationSeconds then
+        -- pcall'd like the module's other session reads: SecretArguments is
+        -- AllowedWhenUntainted, so the call itself can reject.
+        local ok, dur = pcall(C_DamageMeter.GetSessionDurationSeconds, Enum.DamageMeterSessionType.Current)
+        if ok then
+            if not dur then                             -- truthiness: safe on a secret
+                anchor = nil
+            elseif issecretvalue(dur) then
+                anchor = nil
+            elseif type(dur) ~= "number" then
+                anchor = nil
+            elseif dur > 0 then
+                anchor = dur
+            end
+        end
+    end
+    if anchor then
+        self._combatStartT = GetTime() - anchor
+    elseif isArm then
+        self._combatStartT = GetTime()
+    end
+end
+
 -- Starts (or restarts) the shared refresh ticker. Cancel-before-start so a
 -- stale ticker is never left orphaned if combat is re-entered without a clean
 -- stop. RefreshRate defaults to 0.5s when the DB value is missing.
@@ -817,7 +870,9 @@ function DM:StartTicker()
         -- slider re-calls StartTicker while running) never resets the clock.
         -- Plain GetTime numbers -- never secret. Rendered by Window.lua's
         -- UpdateCombatClock; _combatEndT (StopTicker) freezes it post-fight.
-        self._combatStartT = GetTime()
+        -- isArm true: there is no stamp to protect, so an unusable read falls
+        -- back to a bare GetTime() here and only here.
+        self:AnchorCombatStart(true)
         self._combatEndT = nil
     end
 
@@ -959,6 +1014,14 @@ function DM:OnRegenDisabled()
     if self.CloseAllSelectors then self:CloseAllSelectors() end
     if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
     if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED -> StartTicker") end
+    -- Combat clock RETRY, and the gate is load-bearing in both directions. With
+    -- the ticker DOWN, StartTicker is about to anchor anyway and a call here
+    -- would read the API twice for one combat entry. With the ticker already UP
+    -- -- UNIT_FLAGS armed because the group pulled first -- StartTicker skips its
+    -- stamp entirely, so this is the only chance to correct an anchor the game
+    -- had no duration to give yet. isArm false, so a failed read leaves the
+    -- existing stamp alone.
+    if self._ticker then self:AnchorCombatStart(false) end
     self:StartTicker()
 end
 
@@ -1235,6 +1298,10 @@ function DM:OnMeterReset()
         self._combatStartT = nil
         self._combatEndT = nil
     end
+    -- Closing an overlay re-gates the header, and the Tick that would recompute the
+    -- clock comes after it, so the cache goes first or a stale duration can be
+    -- re-shown in between.
+    if self.ClearClockCache then self:ClearClockCache() end
     -- A reset empties the bars; close any open selector so the cleared bars show
     -- (DAMAGE_METER_RESET can fire from an external reset with a selector still open).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
@@ -1520,12 +1587,41 @@ local function FormatDeathTime(sec)
     return format("%d:%02d", floor(sec / 60), floor(sec % 60)), false
 end
 
+-- Combat-clock text: "[M:SS]", or nil when the clock should HIDE. Returns
+-- (text, isSecret) so the caller can skip its dirty check on a secret string.
+--
+-- ORDER IS THE POINT OF THIS FUNCTION. Steps 3 and 4 are comparisons and type()
+-- does not filter secrets, so the secrecy test has to sit above them or a secret
+-- duration reaches them and throws.
+--
+-- Zero and negative HIDE rather than rendering "[0:00]" -- a zero-length fight
+-- did not happen, and the game's own meter blanks its timer on a zero duration.
+local function ClockText(duration)
+    if not duration then return nil end             -- truthiness: safe on a secret
+    if issecretvalue(duration) then
+        local str, strSecret = FormatDeathTime(duration)
+        -- FormatDeathTime falls back to the plain literal "0:00" when the
+        -- abbreviation yields nothing, and that must HIDE. strSecret alone cannot
+        -- tell the two apart: a secret whose abbreviation came back PLAIN also
+        -- reports false, and that is a real reading. Comparing the string is legal
+        -- only because strSecret false proves it is not secret -- hence the guard
+        -- on the same line, in that order. Every real abbreviation ends in "s".
+        if not strSecret and str == "0:00" then return nil end
+        -- strSecret, not a hardcoded true: a plain abbreviation keeps its dirty check.
+        return "[" .. str .. "]", strSecret
+    end
+    if type(duration) ~= "number" then return nil end
+    if duration <= 0 then return nil end
+    return "[" .. FormatDeathTime(duration) .. "]", false
+end
+
 -- Cross-chunk API: the render layer calls these directly. Non-underscore names
 -- because they are intentional public API on DM (underscore-prefix fields are
 -- private-to-file by KE convention); matches DM.RANK_STRINGS / DM.BAR_POOL_SIZE
 -- in Window.lua.
 DM.FormatBarValue = FormatBarValue
 DM.FormatDeathTime = FormatDeathTime
+DM.ClockText = ClockText
 
 -- Marks a recap the client would not let us read, as opposed to one that simply
 -- is not there. The two look identical to a caller that only tests the events,
@@ -1851,6 +1947,9 @@ function DM:HeaderReset(_)
         self._combatStartT = nil
         self._combatEndT = nil
     end
+    -- Same ordering as the reset handler: closing an overlay re-gates the header
+    -- and the Tick comes after, so drop the clock cache first.
+    if self.ClearClockCache then self:ClearClockCache() end
     -- Close any open view-selector too so the freshly-emptied bars are visible (the
     -- selector overlays the body with the same anchors, so it would block them).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
@@ -2120,6 +2219,9 @@ function DM:ApplyActiveContext()
         KE:Print("[DM] context " .. tostring(self._activeContext) .. " -> " .. tostring(ctx))
     end
     self._activeContext = ctx
+    -- A context change re-scopes every window, and LayoutDock re-gates the header
+    -- before the repaint below.
+    if self.ClearClockCache then self:ClearClockCache() end
     self:LayoutDock()
     self:UpdateBackdrop()
     if self.Tick then self:Tick() end
