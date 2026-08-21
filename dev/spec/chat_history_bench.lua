@@ -11,6 +11,25 @@ local ITERATIONS = 20000
 -- bottom needs enough pairs to tell a noisy machine from a real difference.
 local RUNS = 8
 
+-- The two caps compared: the shipped default and the slider's maximum.
+local CAP_DEFAULT = 100
+local CAP_MAX = 500
+
+-- The line at which the trim stops being merely cap-proportional and becomes
+-- the DOMINANT cost -- the ratio at which the trim is exactly half the call at
+-- the maximum cap. Derived rather than chosen, and written as the formula so it
+-- recomputes if the slider range ever changes.
+--
+-- The value this replaced was set before anything had been measured. Note also
+-- that 2.0 is NOT the half-way point: at a ratio of 2.0 the trim is already
+-- about 62% of the call, so a threshold of 2.0 does not mean what it looks like
+-- it means.
+--
+-- The margin is THIN and is recorded as thin rather than rounded away: measured
+-- ratios run 1.54 to 1.58, five to eight percent under this line rather than
+-- comfortably clear of it. A change to the store's hot path can cross it.
+local THRESHOLD = 2 * CAP_MAX / (CAP_MAX + CAP_DEFAULT)
+
 -- A realistic payload: seventeen positional arguments, as the covered events
 -- actually deliver, with a body of roughly typical chat length.
 local ARGS = { "a message of about forty characters in length", "Sender",
@@ -63,15 +82,15 @@ end
 -- every 500 with a machine that has been busy slightly longer, which is a
 -- systematic bias, not noise. Alternating the order cancels it, but only over
 -- an EVEN number of runs -- see RUNS above.
-local results = { [100] = {}, [500] = {} }
+local results = { [CAP_DEFAULT] = {}, [CAP_MAX] = {} }
 for run = 1, RUNS do
-    local order = (run % 2 == 1) and { 100, 500 } or { 500, 100 }
+    local order = (run % 2 == 1) and { CAP_DEFAULT, CAP_MAX } or { CAP_MAX, CAP_DEFAULT }
     for _, cap in ipairs(order) do
         results[cap][#results[cap] + 1] = once(cap)
     end
 end
 
-for _, cap in ipairs({ 100, 500 }) do
+for _, cap in ipairs({ CAP_DEFAULT, CAP_MAX }) do
     print(string.format("cap %d: %.3f us/call (median of %d)", cap,
         median(results[cap]), RUNS))
 end
@@ -92,7 +111,7 @@ end
 local ratios = {}
 local logsum = 0
 for i = 1, RUNS do
-    ratios[i] = results[500][i] / results[100][i]
+    ratios[i] = results[CAP_MAX][i] / results[CAP_DEFAULT][i]
     logsum = logsum + math.log(ratios[i])
 end
 local geo = math.exp(logsum / RUNS)
@@ -102,14 +121,15 @@ for i = 2, RUNS do
     if ratios[i] < lo then lo = ratios[i] end
     if ratios[i] > hi then hi = ratios[i] end
 end
-local straddles = (lo < 1.5) and (hi > 1.5)
+local straddles = (lo < THRESHOLD) and (hi > THRESHOLD)
 
-print(string.format("paired 500/100 ratio: %.3f (geometric mean of %d pairs)",
-    geo, RUNS))
+print(string.format("paired %d/%d ratio: %.3f (geometric mean of %d pairs), threshold %.3f%s",
+    CAP_MAX, CAP_DEFAULT, geo, RUNS, THRESHOLD,
+    geo > THRESHOLD and "  ** OVER THRESHOLD -- the trim is dominant **" or ""))
 -- Both void conditions are PRINTED, not left to the reader. The acceptance has
 -- three parts and an earlier version of this script surfaced only one, so a
 -- dispersion breach read as a clean run.
 local dispersed = (hi / lo) > 1.3
 print(string.format("pair spread: %.3f to %.3f (hi/lo %.3f)%s%s", lo, hi, hi / lo,
     dispersed and "  ** SPREAD OVER 1.3 -- run is VOID, retake **" or "",
-    straddles and "  ** STRADDLES 1.5 -- run is VOID, retake **" or ""))
+    straddles and string.format("  ** STRADDLES %.3f -- run is VOID, retake **", THRESHOLD) or ""))
