@@ -644,14 +644,17 @@ end
 
 local repairReportFrame, repairBill
 
--- canRepair answers "does this merchant repair", not "is anything damaged", so
--- it stays true across the repair that zeroes the bill. Nil means the bill is
--- unreadable, which disarms rather than reading as zero -- zero would announce
--- the whole outstanding bill as though it had just been paid.
+-- GetRepairAllCost's second return answers "is anything damaged", NOT "does
+-- this merchant repair" -- it flips to false the instant the last item is
+-- fixed, which is exactly the reading that proves a repair happened. Gating on
+-- it made the bill unreadable at the one moment it mattered. In-game probe:
+-- MERCHANT_SHOW read 2101783 with the flag true, and every reading after the
+-- repair read 0 with it false. Blizzard's own repair-all button agrees -- it
+-- disables itself on a false flag, which a permanent merchant property could
+-- never do. The cost alone is the bill.
 local function ReadRepairBill()
-    if not CanMerchantRepair() then return end
-    local cost, canRepair = GetRepairAllCost()
-    if not canRepair or type(cost) ~= "number" then return end
+    local cost = GetRepairAllCost()
+    if type(cost) ~= "number" then return end
     return cost
 end
 
@@ -681,6 +684,8 @@ local function SetupRepairReport()
         -- window this frame armed on can be reporting a repair.
         if repairBill == nil then return end
 
+        -- Only an unreadable cost gets here now, and a bill that cannot be
+        -- read cannot be compared against the armed one.
         local bill = ReadRepairBill()
         if bill == nil then
             repairBill = nil
