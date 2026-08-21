@@ -29,6 +29,7 @@ local GameMovieFinished = GameMovieFinished
 local C_Container = C_Container
 local C_Item = C_Item
 local C_CVar = C_CVar
+local C_CurrencyInfo = C_CurrencyInfo
 local C_Timer = C_Timer
 local StaticPopupDialogs = StaticPopupDialogs
 local StaticPopup_FindVisible = StaticPopup_FindVisible
@@ -615,6 +616,85 @@ local function SetupAutoSellRepair()
                     RepairAllItems(false)
                 end
             end
+        end
+    end)
+end
+
+-- Repair Cost Report --
+-- Independent of the two auto-repair toggles above: the bill is announced
+-- whoever paid it and whatever triggered it, so a hand-clicked repair, a single
+-- item dragged onto the merchant, and another addon's auto-repair all report.
+
+-- Announcing a repair means proving one happened, and the bill is the only
+-- honest witness. It falls by exactly what was paid, it does not move when the
+-- repair is refused for lack of funds, and it is blind to who paid -- so a
+-- guild-funded repair reports its figure without claiming a payer that cannot
+-- be verified from here. A RISE means gear was equipped, not repaired.
+--
+-- Residual: unequipping damaged gear at a merchant also lowers the bill and is
+-- announced as a repair. Nothing readable separates the two, and the trade is
+-- deliberate -- the alternative loses every guild-funded repair, which is far
+-- more common.
+function AU:RepairSpend(before, after)
+    if type(before) ~= "number" or type(after) ~= "number" then return end
+    local spent = before - after
+    if spent <= 0 then return end
+    return spent
+end
+
+local repairReportFrame, repairBill
+
+-- canRepair answers "does this merchant repair", not "is anything damaged", so
+-- it stays true across the repair that zeroes the bill. Nil means the bill is
+-- unreadable, which disarms rather than reading as zero -- zero would announce
+-- the whole outstanding bill as though it had just been paid.
+local function ReadRepairBill()
+    if not CanMerchantRepair() then return end
+    local cost, canRepair = GetRepairAllCost()
+    if not canRepair or type(cost) ~= "number" then return end
+    return cost
+end
+
+local function SetupRepairReport()
+    if repairReportFrame then return end
+    repairReportFrame = CreateFrame("Frame")
+    repairReportFrame:RegisterEvent("MERCHANT_SHOW")
+    repairReportFrame:RegisterEvent("MERCHANT_CLOSED")
+    repairReportFrame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
+    repairReportFrame:SetScript("OnEvent", function(_, event)
+        if not AU.db or not AU.db.Enabled or not AU.db.RepairReport then
+            repairBill = nil
+            return
+        end
+
+        if event == "MERCHANT_CLOSED" then
+            repairBill = nil
+            return
+        end
+
+        if event == "MERCHANT_SHOW" then
+            repairBill = ReadRepairBill()
+            return
+        end
+
+        -- Durability moves for plenty of reasons away from a merchant; only a
+        -- window this frame armed on can be reporting a repair.
+        if repairBill == nil then return end
+
+        local bill = ReadRepairBill()
+        if bill == nil then
+            repairBill = nil
+            return
+        end
+
+        local spent = AU:RepairSpend(repairBill, bill)
+        repairBill = bill
+        if not spent then return end
+
+        local money = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString
+            and C_CurrencyInfo.GetCoinTextureString(spent)
+        if money then
+            KE:Print(string_format("Repaired for %s.", money))
         end
     end)
 end
@@ -1966,6 +2046,7 @@ function AU:ApplySettings()
     SetupHideEventToasts()
     SetupHideZoneText()
     SetupAutoSellRepair()
+    SetupRepairReport()
     SetupAutoRoleCheck()
     SetupAutoQueueConfirm()
     SetupAutoSlotKeystone()

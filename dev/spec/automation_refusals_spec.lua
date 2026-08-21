@@ -6,6 +6,8 @@
 --   3. Master-off startup for Hide Helptips (Task 3 Step 10b).
 --   4. The effective-state predicates themselves, in all three
 --      (Enabled, feature key) states (Task 3 Step 10b).
+--   5. The repair-cost report's spend rule, which refuses to announce
+--      anything it cannot prove was paid.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
@@ -1075,5 +1077,46 @@ describe("Automation fishing outfit per-spell secrecy", function()
         fx.setSecrets({ ShouldSpellAuraBeSecret = function() return false end })
         fn()
         assert.equals(1, #fx.cancels)
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Behaviour 5: the repair-cost report's spend rule
+---------------------------------------------------------------------------------
+describe("Automation repair spend rule", function()
+    local AU
+
+    before_each(function()
+        AU = newFixture().AU
+    end)
+
+    it("reports the fall in the bill as the amount paid", function()
+        assert.are.equal(12345, AU:RepairSpend(12345, 0))
+    end)
+
+    it("reports a partial payment as what it actually covered", function()
+        assert.are.equal(400, AU:RepairSpend(1000, 600))
+    end)
+
+    it("says nothing when the bill did not move", function()
+        -- A repair refused for lack of funds leaves the bill standing, and
+        -- announcing one would be a plain lie.
+        assert.is_nil(AU:RepairSpend(1000, 1000))
+    end)
+
+    it("says nothing when the bill rose", function()
+        -- Damaged gear was equipped, not repaired.
+        assert.is_nil(AU:RepairSpend(1000, 1500))
+    end)
+
+    it("says nothing about a nil reading on either side", function()
+        assert.is_nil(AU:RepairSpend(nil, 0))
+        assert.is_nil(AU:RepairSpend(1000, nil))
+        assert.is_nil(AU:RepairSpend(nil, nil))
+    end)
+
+    it("says nothing about a reading that is not a number", function()
+        assert.is_nil(AU:RepairSpend("1000", 0))
+        assert.is_nil(AU:RepairSpend(1000, false))
     end)
 end)

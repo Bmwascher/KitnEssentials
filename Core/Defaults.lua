@@ -659,6 +659,7 @@ local Defaults = {
             AutoSellJunk = true,
             AutoRepair = true,
             UseGuildFunds = true,
+            RepairReport = true,
             AutoRoleCheck = true,
             AutoQueueConfirm = true,
             AutoSlotKeystone = true,

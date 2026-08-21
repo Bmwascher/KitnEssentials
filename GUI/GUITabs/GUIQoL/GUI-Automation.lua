@@ -597,6 +597,13 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
         })
         row1b:AddWidget(useGuildCheck, 0.5)
         manager:Register(useGuildCheck, "all")
+
+        local repairReportCheck = GUIFrame:CreateCheckbox(row1b, "Announce Repair Cost", {
+            value = db.RepairReport ~= false,
+            callback = function(checked) db.RepairReport = checked; ApplySettings() end,
+        })
+        row1b:AddWidget(repairReportCheck, 0.5)
+        manager:Register(repairReportCheck, "all")
         card1:AddRow(row1b, Theme.rowHeightLast, 0)
 
         yOffset = card1:GetNextOffset()
