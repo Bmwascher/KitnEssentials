@@ -1471,15 +1471,23 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     if not src then return end
     local row = bar.row
 
-    -- Stash the source identity onto the bar for DM:OpenDetail (Detail.lua). All
-    -- four are NeverSecret fields, so the assignments are taint-safe. deathRecapID
-    -- is only meaningful in the Deaths window (nil/<=0 elsewhere); the detail
-    -- renderers pick the right one off W._isDeaths. This is the "Task 2" write
-    -- that Detail.lua's OpenDetail comment anticipates.
+    -- Stash the source identity onto the bar for DM:OpenDetail (Detail.lua).
+    -- classFilename, deathRecapID and isLocalPlayer are NeverSecret; sourceGUID
+    -- and sourceCreatureID carry NO secrecy annotation and can be secret in
+    -- combat. All five assignments are still safe, but for a different reason
+    -- than the field annotations: a table-field write never compares the value.
+    -- Any later read that COMPARES one of the unannotated two must guard first.
+    -- deathRecapID is only meaningful in the Deaths window (nil/<=0 elsewhere);
+    -- the detail renderers pick the right one off W._isDeaths.
     bar._sourceGUID = src.sourceGUID
     bar._sourceCreatureID = src.sourceCreatureID
     bar._deathRecapID = src.deathRecapID
     bar._classFilename = src.classFilename
+    -- isLocalPlayer drives the in-combat detail gate: it is the only identity
+    -- the API guarantees readable mid-fight, so it is what decides whether a
+    -- breakdown may open at all. Stored raw; the eligibility predicate resolves
+    -- it to a plain boolean before anything compares it.
+    bar._isLocalPlayer = src.isLocalPlayer
 
     -- self.db is stable for the lifetime of a Tick (it is the AceDB profile
     -- table, never swapped mid-Tick), so read it once and reuse the local rather
