@@ -1438,18 +1438,36 @@ function DM:RenderWindow(W)
 
     -- Deaths: the API returns death sources most-recent-first. Reverse to
     -- chronological into a reused per-window scratch table (no per-tick garbage),
-    -- keeping only rows that carry a usable recap id -- what the filter below
-    -- actually tests. It is NOT a feign test: a missing recap id is one reason a
-    -- row has nothing to open, and feigns are not reliably identifiable from it.
-    -- deathRecapID is NeverSecret; still issecretvalue-guarded defensively.
+    -- and drop two kinds of row.
+    --
+    -- A missing or unusable recap id: that row has nothing to open. deathRecapID
+    -- is NeverSecret; still issecretvalue-guarded defensively.
+    --
+    -- A tagged Feign Death, but only inside feignScope. All four terms are
+    -- load-bearing. A pinned segment and an Overall window can show own-rows from
+    -- two different fights together, where an id -- the only identity a tag has --
+    -- stops identifying one death. A fallback session is a fight the tags never
+    -- watched. And a Current list keeps its rows after combat drops without
+    -- selecting a fallback, so without the combat term the filter would outlive
+    -- the fight it belongs to. Anything the scope excludes simply shows the feign,
+    -- which is the direction every refusal in this feature takes.
     if isDeaths then
+        local feignScope = not W._curSessionID
+            and not W._fallbackSessionID
+            and cfg.SessionType == Enum.DamageMeterSessionType.Current
+            and self:GroupInCombat()
+        -- Must run before the loop: FeignTagged consults the result per row.
+        if feignScope and self.ScanFeignAmbiguity then
+            self.ScanFeignAmbiguity(sources, self._feignTags, self._feignAmbig)
+        end
         W._deathScratch = W._deathScratch or {}
         local rev = W._deathScratch
         for k = #rev, 1, -1 do rev[k] = nil end
         for ri = #sources, 1, -1 do
             local s = sources[ri]
             local rid = s and s.deathRecapID
-            if rid and not issecretvalue(rid) and rid > 0 then
+            if rid and not issecretvalue(rid) and rid > 0
+                and not (feignScope and self:FeignTagged(rid, s.isLocalPlayer)) then
                 rev[#rev + 1] = s
             end
         end

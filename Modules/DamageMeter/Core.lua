@@ -618,6 +618,10 @@ function DM:OnEnable()
     self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatForceStop")
     self:RegisterEvent("UNIT_FLAGS", "OnUnitFlags")
+    -- Feign-death filtering. Registered broad; the handler's first two lines
+    -- reject every other cast in the game.
+    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
+    self:RegisterEvent("PLAYER_DEAD", "OnPlayerDead")
     -- PvP match end: arenas / battlegrounds can leave the player combat-tagged inside the
     -- closed instance with no live fighting, so UnitAffectingCombat stays true and the
     -- shared ticker would poll C_DamageMeter forever. Force it down on match completion and
@@ -726,6 +730,12 @@ function DM:OnEnable()
     -- Details! is a competing meter — recommend running only one.
     KE:WarnRedundantAddon("Details", "Details!", "Damage Meter", "/kes", self.db, "_detailsWarned")
 
+    -- Feign filtering starts OFF and only a meter reset turns it on. Disabling
+    -- the module does not reset the game's meter data, so a disable-and-enable
+    -- must not be a way around the rule -- which is why this is unconditional
+    -- and why it is the last statement here.
+    self._feignArmable = false
+
     if DEBUG_DM then
         KE:Print("[DM] OnEnable: module active")
     end
@@ -745,6 +755,8 @@ function DM:OnDisable()
     self._ctxCheckPending = false
     self._combatStartT = nil
     self._combatEndT = nil
+    self:ClearFeignTags("module disable")
+    self._feignArmable = false
     -- The runtime windows survive a disable, so their cached clock text would
     -- outlive the stamps above and could be re-shown by a bare visibility re-gate.
     if self.ClearClockCache then self:ClearClockCache() end
@@ -874,6 +886,10 @@ function DM:StartTicker()
         -- back to a bare GetTime() here and only here.
         self:AnchorCombatStart(true)
         self._combatEndT = nil
+        -- Tags describe one fight. This branch is also the mid-fight restart
+        -- funnel, which is why it wipes but does NOT re-enable filtering: an
+        -- absent ticker is not proof that a new fight started.
+        self:ClearFeignTags("combat start")
     end
 
     local rate = (self.db and self.db.RefreshRate) or 0.5
@@ -961,6 +977,189 @@ end
 -- when an encounter is actually active (a mid-encounter REGEN_ENABLED from a boss
 -- transition must not be treated as a real stop -- _inEncounter guards that).
 ---------------------------------------------------------------------------------
+
+-- Feign-death filtering (Deaths view)
+--
+-- Feign Death registers as a real death: the row carries a valid deathRecapID
+-- and is indistinguishable from a death that happened. The filter tags the ROW
+-- rather than the unit, because a unit key cannot separate a hunter's feign
+-- from that same hunter's later real death, and because row identity is the
+-- only identity readable mid-fight.
+--
+-- ONE PROPERTY GOVERNS EVERY REFUSAL HERE: this must never remove a real death
+-- from the list. It may fail to hide a feign as often as it likes. Every guard
+-- below fails toward showing a row.
+--
+-- Scope, and it is narrow on purpose: the player's OWN feign only, only while
+-- the group is fighting, only on an unpinned Current window reading the live
+-- session, and only until the player's first real death -- after which nothing
+-- is filtered until the meter's data is reset. The design notes carry the
+-- reasoning; the short version is that nothing in the API says which fight the
+-- live session belongs to, or when a death row appears in it, so anything
+-- looser can hide a real death.
+local FEIGN_SPELL_ID = 5384
+local FEIGN_POLL     = 0.2
+local FEIGN_TICKS    = 15
+
+-- Cancel the bounded watch. The handle may be LIVE or SPENT (a ticker that ran
+-- out its iterations leaves itself in the field), and cancelling a spent one is
+-- harmless -- which is why no expiry callback exists.
+function DM:StopFeignWatch()
+    if self._feignWatch then
+        self._feignWatch:Cancel()
+        self._feignWatch = nil
+    end
+end
+
+-- Drop every tag and the watch. Does NOT touch _feignArmable: dropping stale
+-- tags and deciding whether a fight may be watched are different questions, and
+-- conflating them disables the feature entirely (a combat start wipes).
+function DM:ClearFeignTags(site)
+    self:StopFeignWatch()
+    if self._feignTags then wipe(self._feignTags) else self._feignTags = {} end
+    if self._feignSnapshot then wipe(self._feignSnapshot) else self._feignSnapshot = {} end
+    if self._feignAmbig then wipe(self._feignAmbig) else self._feignAmbig = {} end
+    -- The per-render session memo has to go with them. It is only cleared at the
+    -- start of a render tick, and a mouse-wheel scroll renders directly without
+    -- that clear -- so a tag earned now could otherwise be applied to the
+    -- previous fight's cached table.
+    if self._sessionCache then wipe(self._sessionCache) end
+    if DEBUG_DM then KE:Print("[DM] feign tags cleared: " .. site) end
+end
+
+-- The one predicate Window.lua calls. Secrecy is tested before either table
+-- index because a secret key contaminates the read. Only an own-row may ever be
+-- hidden, and an id the collision scan flagged is never hidden.
+function DM:FeignTagged(recapID, isLocalPlayer)
+    if not self._feignTags then return false end
+    if recapID == nil or issecretvalue(recapID) then return false end
+    if not DM.PlainOwnRow(isLocalPlayer) then return false end
+    if not self._feignTags[recapID] then return false end
+    if self._feignAmbig and self._feignAmbig[recapID] then return false end
+    return true
+end
+
+-- Which new row is the feign? Returns id + status so the caller can tell "none
+-- yet" from "cannot tell": the watch keeps running on the first and stops on the
+-- second. Collapsing them into a bare nil kept the watch sampling through an
+-- ambiguity it had already detected.
+function DM.SelectFeignRow(sources, snapshot)
+    if not sources then return nil, "none" end
+    local found
+    for i = 1, #sources do
+        local row = sources[i]
+        local rid = row and row.deathRecapID
+        if rid ~= nil and not issecretvalue(rid) and rid > 0
+            and not (snapshot and snapshot[rid])
+            and DM.PlainOwnRow(row.isLocalPlayer) then
+            if found then return nil, "ambiguous" end
+            found = rid
+        end
+    end
+    if found then return found, "found" end
+    return nil, "none"
+end
+
+-- Tagged ids that appear on MORE THAN ONE own-row in this list. A tag names one
+-- death; if the list holds two rows carrying it, the tag cannot say which, so
+-- neither is hidden. Defence in depth, not the primary defence -- it sees one
+-- list at a time and cannot catch a collision that spans two.
+local feignSeen = {}
+function DM.ScanFeignAmbiguity(sources, tags, out)
+    if not out then return nil end
+    wipe(out)
+    if not sources or not tags or not next(tags) then return out end
+    wipe(feignSeen)
+    for i = 1, #sources do
+        local row = sources[i]
+        local rid = row and row.deathRecapID
+        if rid ~= nil and not issecretvalue(rid) and rid > 0 and tags[rid]
+            and DM.PlainOwnRow(row.isLocalPlayer) then
+            if feignSeen[rid] then out[rid] = true else feignSeen[rid] = true end
+        end
+    end
+    return out
+end
+
+-- The player cast Feign Death. Snapshot the Deaths list, then poll briefly for a
+-- row that was not there before. A failed session read refuses the watch: an
+-- unknown starting state cannot be diffed against.
+function DM:ArmFeignWatch()
+    self:StopFeignWatch()
+    -- Tags already earned are KEPT. The new snapshot contains the first feign's
+    -- row, so it cannot be re-selected, and dropping the tag would make that row
+    -- reappear.
+    local session = self:GetSession(Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.Deaths)
+    local sources = session and session.combatSources
+    if not sources then
+        if DEBUG_DM then KE:Print("[DM] feign watch refused: no session") end
+        return
+    end
+
+    if self._feignSnapshot then wipe(self._feignSnapshot) else self._feignSnapshot = {} end
+    local n = 0
+    for i = 1, #sources do
+        local row = sources[i]
+        local rid = row and row.deathRecapID
+        if rid ~= nil and not issecretvalue(rid) and rid > 0 then
+            self._feignSnapshot[rid] = true
+            n = n + 1
+        end
+    end
+    if DEBUG_DM then KE:Print("[DM] feign watch armed, snapshot " .. n) end
+
+    self._feignWatch = C_Timer.NewTicker(FEIGN_POLL, function()
+        if not DM.enabled then
+            DM:StopFeignWatch()
+            return
+        end
+        local s = DM:GetSession(Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.Deaths)
+        if not s then return end
+        local rid, status = DM.SelectFeignRow(s.combatSources, DM._feignSnapshot)
+        if status == "none" then return end
+        if DEBUG_DM then KE:Print("[DM] feign watch status: " .. status) end
+        if status == "ambiguous" then
+            DM:StopFeignWatch()
+            return
+        end
+        -- Resolve both predicates to PLAIN booleans before anything compares or
+        -- prints them. The raw returns may be secret; fdOk/deadOk cannot be.
+        local fd   = UnitIsFeignDeath("player")
+        local dead = UnitIsDead("player")
+        local fdOk   = not issecretvalue(fd) and fd == true
+        local deadOk = not issecretvalue(dead) and dead == false
+        if fdOk and deadOk then
+            DM._feignTags[rid] = true
+            if DEBUG_DM then KE:Print("[DM] feign tagged: " .. rid) end
+        elseif DEBUG_DM then
+            KE:Print("[DM] feign tag refused: fd=" .. tostring(fdOk) .. " dead=" .. tostring(deadOk))
+        end
+        DM:StopFeignWatch()
+    end, FEIGN_TICKS)
+end
+
+-- UNIT_SPELLCAST_SUCCEEDED is one of the highest-frequency events in the game,
+-- so the spell test is first and nothing may be added above it. The event is not
+-- a restricted callback (no HasRestrictions, no CallbackEvent) and several other
+-- KE modules already register it broad.
+function DM:OnSpellcastSucceeded(_, unitTarget, _, spellID)
+    if issecretvalue(spellID) then return end
+    if spellID ~= FEIGN_SPELL_ID then return end
+    -- nil must refuse, so this tests against false explicitly.
+    if self._feignArmable ~= true then return end
+    if issecretvalue(unitTarget) or unitTarget ~= "player" then return end
+    if not self:GroupInCombat() then return end
+    self:ArmFeignWatch()
+end
+
+-- A real death drops every tag AND ends eligibility until the meter's data is
+-- reset. That is what bounds the one exposure the design accepts: a death that
+-- lands during a live watch can be tagged before this handler runs, and this
+-- handler is what un-hides it.
+function DM:OnPlayerDead()
+    self._feignArmable = false
+    self:ClearFeignTags("player death")
+end
 
 -- Player entered combat: spin up the shared ticker.
 function DM:OnRegenDisabled()
@@ -1069,6 +1268,7 @@ function DM:OnEncounterStart()
     -- Segment boundary: a boss pull starts a new segment, so a view override from the
     -- previous boss/trash clears ("until another raid boss starts").
     self:BumpSegment()
+    self:ClearFeignTags("encounter start")
     -- Stored-id snapshot for the kill/wipe tint: OnEncounterEnd tags only sessions
     -- stored SINCE this pull. "Tag the newest" mis-tagged a key-completing final
     -- kill -- Blizzard stores the run-level "+NN" session on top of the boss's own
@@ -1193,6 +1393,7 @@ function DM:OnCombatForceStop()
     -- (ApplyActiveContext early-returns when the context is unchanged).
     self._combatStartT = nil
     self._combatEndT = nil
+    self:ClearFeignTags("zone change")
     self:StopTicker()
     -- Zoning may change the content context (entered/left an instance) -- schedule a
     -- settled re-check (debounced; IsInInstance isn't reliable until the world loads).
@@ -1259,6 +1460,13 @@ end
 -- Meter data was reset: repaint immediately so cleared bars show. Tick is
 -- guarded (resolved at runtime from the render chunk).
 function DM:OnMeterReset()
+    self:ClearFeignTags("meter reset")
+    -- The ONLY thing that enables feign filtering. A reset clears the data those
+    -- rows lived in, so nothing pending can be held against a later list. Every
+    -- cheaper signal -- leaving combat, an empty list, a login -- is an inference
+    -- about the game's internals, and each one reviewed as able to hide a real
+    -- death.
+    self._feignArmable = true
     -- History bundles are already-captured data and survive every reset
     -- event (only eviction / HeaderReset / reload clear them). But pending
     -- PROVENANCE does not: an external reset empties the native store, so
