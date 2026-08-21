@@ -121,15 +121,36 @@ for i = 2, RUNS do
     if ratios[i] < lo then lo = ratios[i] end
     if ratios[i] > hi then hi = ratios[i] end
 end
-local straddles = (lo < THRESHOLD) and (hi > THRESHOLD)
+-- The decision rests on the geometric MEAN, so the retake rule has to be about
+-- that mean's own uncertainty -- not about how far apart two individual pairs
+-- landed. The rule this replaced voided a run whenever any single pair fell on
+-- the far side of the threshold, which ordinary pair-level noise guarantees:
+-- ten consecutive runs voided while every one of their means sat clear of the
+-- line. The spread of single samples is not the error bar of their average, and
+-- treating it as one makes the acceptance unsatisfiable rather than strict.
+--
+-- The samples are ratios, so the arithmetic stays in log space for the same
+-- reason the mean is geometric. Two standard errors is the decisiveness bar:
+-- any closer to the threshold and this run genuinely cannot say which side of
+-- it the mean falls on, which is the one thing the old rule was right about.
+local logmean = logsum / RUNS
+local sumsq = 0
+for i = 1, RUNS do
+    local d = math.log(ratios[i]) - logmean
+    sumsq = sumsq + d * d
+end
+-- Sample standard deviation (RUNS - 1), then the standard error of the mean.
+local stderr = math.sqrt(sumsq / (RUNS - 1)) / math.sqrt(RUNS)
+local indecisive = math.abs(logmean - math.log(THRESHOLD)) < 2 * stderr
 
 print(string.format("paired %d/%d ratio: %.3f (geometric mean of %d pairs), threshold %.3f%s",
     CAP_MAX, CAP_DEFAULT, geo, RUNS, THRESHOLD,
-    geo > THRESHOLD and "  ** OVER THRESHOLD -- the trim is dominant **" or ""))
+    indecisive and "  ** WITHIN 2 STANDARD ERRORS OF THE THRESHOLD -- run is VOID, retake **"
+        or (geo > THRESHOLD and "  ** OVER THRESHOLD -- the trim is dominant **" or "")))
 -- Both void conditions are PRINTED, not left to the reader. The acceptance has
 -- three parts and an earlier version of this script surfaced only one, so a
 -- dispersion breach read as a clean run.
 local dispersed = (hi / lo) > 1.3
-print(string.format("pair spread: %.3f to %.3f (hi/lo %.3f)%s%s", lo, hi, hi / lo,
-    dispersed and "  ** SPREAD OVER 1.3 -- run is VOID, retake **" or "",
-    straddles and string.format("  ** STRADDLES %.3f -- run is VOID, retake **", THRESHOLD) or ""))
+print(string.format("pair spread: %.3f to %.3f (hi/lo %.3f); mean +/- 2 s.e. = %.3f to %.3f%s",
+    lo, hi, hi / lo, geo * math.exp(-2 * stderr), geo * math.exp(2 * stderr),
+    dispersed and "  ** SPREAD OVER 1.3 -- run is VOID, retake **" or ""))
