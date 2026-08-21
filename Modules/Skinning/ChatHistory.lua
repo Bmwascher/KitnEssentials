@@ -17,10 +17,7 @@ local CHAT = KitnEssentials:GetModule("Chat", true)
 
 -- `strfind` through `_G` because it is NOT in the project's .luacheckrc
 -- read_globals list, unlike `strsub` and `strlen` beside it. Every sibling in
--- this folder does the same; a bare `strfind` is an undefined-global warning
--- and Step 7 expects zero.
---
--- This block holds ONLY what this task's code uses. Task 4 extends it.
+-- this folder does the same; a bare `strfind` is an undefined-global warning.
 local _G = _G
 local pairs, pcall, select, type = pairs, pcall, select, type
 local tinsert, tremove, wipe = tinsert, tremove, wipe
@@ -462,10 +459,18 @@ function CH:DisplayChatHistory()
     local handler = geterrorhandler()
 
     -- From here to the clear, the only calls are the pcall-wrapped dispatch and
-    -- a pcall-wrapped handler. Everything else is table indexing and comparison
-    -- on values the prepass has already type-checked, so the flag cannot be
-    -- left up by a throw. Keep it that way: anything new that can raise belongs
-    -- above this line, not inside the window.
+    -- a pcall-wrapped handler. Everything else is table indexing and equality.
+    --
+    -- One value in that equality is NOT checked by the prepass: `wanted` comes
+    -- from a chat frame's own message-type list, and the prepass checks that
+    -- the list is a table, never its entries. Equality against a secret throws,
+    -- so the invariant rests on that list being Blizzard's, holding literal
+    -- strings, rather than on anything verified here. Checking each entry would
+    -- put a type call in the innermost loop of the replay to cover a case that
+    -- cannot arise from a list this module does not write to.
+    --
+    -- Keep the window as it stands: anything new that can raise belongs above
+    -- this line, not inside it.
     CMH.replaying = true
     do
         for j = 1, t do
