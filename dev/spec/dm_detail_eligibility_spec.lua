@@ -99,8 +99,20 @@ describe("DetailEligible in combat", function()
         assert.is_false(DM:DetailEligible(s, DAMAGE))
     end)
 
-    it("refuses the own row on Deaths -- that renderer throws on secrets", function()
-        assert.is_false(DM:DetailEligible(true, DEATHS))
+    it("ALLOWS the own row on Deaths -- identity is not consulted for it", function()
+        assert.is_true(DM:DetailEligible(true, DEATHS))
+    end)
+
+    -- This is the assertion that separates the guarantee from half of it. Deaths
+    -- is keyed on a NeverSecret recap id, so every row is addressable; a Deaths
+    -- test placed BELOW the own-row rule would open the recap for the player's
+    -- own death only and look identical until someone clicked another player's.
+    it("ALLOWS a NON-own row on Deaths -- identity is not consulted for it", function()
+        assert.is_true(DM:DetailEligible(false, DEATHS))
+    end)
+
+    it("ALLOWS a nil own-row answer on Deaths -- identity is not consulted for it", function()
+        assert.is_true(DM:DetailEligible(nil, DEATHS))
     end)
 
     it("refuses the own row on Enemy Damage Taken -- it aggregates across sources", function()
@@ -115,12 +127,16 @@ describe("DetailEligible combat detection", function()
         -- of both signals can only refuse more often, never less.
         LOCKDOWN, AFFECTING = false, true
         assert.is_false(DM:DetailEligible(false, DAMAGE))
-        assert.is_false(DM:DetailEligible(true, DEATHS))
+        -- Enemy Damage Taken rather than Deaths: Deaths is now admitted in combat,
+        -- so it can no longer show that a view-level refusal fired.
+        assert.is_false(DM:DetailEligible(true, ENEMY))
         assert.is_true(DM:DetailEligible(true, DAMAGE))
     end)
 
     it("is unrestricted only when BOTH signals are clear", function()
         LOCKDOWN, AFFECTING = false, false
-        assert.is_true(DM:DetailEligible(false, DEATHS))
+        -- A non-own row on an ordinary view: true ONLY because neither signal is
+        -- set. Deaths would answer true either way and prove nothing here.
+        assert.is_true(DM:DetailEligible(false, DAMAGE))
     end)
 end)

@@ -337,8 +337,8 @@ function DM:OpenDetail(bar, button)
 
     -- Deaths row with no usable recap: no-op rather than opening an empty
     -- "No death recap available" panel (a feign / no-recap death simply isn't
-    -- clickable). Reachable only out of combat -- DetailEligible refuses the Deaths
-    -- view in combat -- so GetDeathRecap runs on a plain recapID here.
+    -- clickable). Reachable IN combat as well -- DetailEligible admits the Deaths
+    -- view now -- so nothing below may assume a plain recapID or plain contents.
     -- W._isDeaths was re-stashed above; bar._deathRecapID comes from RenderBar.
     -- Fetch ONCE per click. The renderer below takes the result rather than
     -- refetching: the fetch now tests indexability and reverses the whole event
@@ -431,6 +431,15 @@ function DM:RenderWindowAndDetail(W)
     -- directly would redraw an out-of-combat death recap as a spell breakdown, fetching
     -- per-spell data that does not exist for it.
     if W._isDeaths then
+        -- A recap is immutable once the death has happened, so repainting the one
+        -- already on screen costs a fetch and a full array reversal for no change.
+        -- COMBAT only, and never the first paint: out of combat the settle repaints
+        -- still run, because nothing documents a recap as final and freezing a partial
+        -- one would be a regression against today's behaviour.
+        if DM.DetailCombatActive and DM.DetailCombatActive()
+            and W._detailPaintedRecapID ~= nil and W._detailPaintedRecapID == W._detailRecapID then
+            return
+        end
         self:RenderDeathRecap(W)
     else
         self:RenderBreakdown(W)
@@ -452,6 +461,7 @@ function DM:CloseDetail(W)
     W._detailOwnRow = nil
     W._detailMeterType = nil
     W._detailKind = nil
+    W._detailPaintedRecapID = nil
     W.detail:Hide()
     if W.body then W.body:Show() end
     if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
@@ -471,6 +481,7 @@ function DM:ShowDetailMessage(W, msg)
     -- previous breakdown.
     W._detailOwnRow = nil
     W._detailMeterType = nil
+    W._detailPaintedRecapID = nil
     W._detailKind = "message"
     W._detailOpen = true
     if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
@@ -919,6 +930,9 @@ function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
         end
     end
     d.content:SetHeight(math_max(10, count * stride))
+    -- Painted, so the tick refresh can skip an unchanged repaint. Set only here, at
+    -- the end of a successful paint; the message branch above deliberately does not.
+    W._detailPaintedRecapID = W._detailRecapID
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
@@ -1101,6 +1115,12 @@ local _tip                      -- module-level singleton (shared by all windows
 local _tipActiveBar             -- the bar currently hovered (nil = none); drives the poll
 local _tipPoll                  -- detach-when-idle OnUpdate frame
 local _tipPollAccum = 0
+-- Which recap the tip is currently SHOWING. The stash is on the tip, not on the
+-- hovered bar: the tip is a shared singleton, so a bar-keyed stash would let a
+-- re-hover skip a repaint while the tip still held another row's recap. Cleared at
+-- the top of every populate and re-set only by a successful recap paint, so any
+-- non-recap content leaves it nil.
+local _tipPaintedRecapID
 
 -- Tooltip text renders one point below the configured bar font so the quick-peek packs
 -- densely. Clamped to a readable floor. Every tip text element derives
@@ -1514,8 +1534,12 @@ end
 -- secret contract of RenderBreakdown / RenderDeathRecap exactly -- which now
 -- includes an in-combat case: the player's own row renders real data from raw
 -- secret amounts, and every other row and view takes ShowTipRefusal.
-function DM:PopulateHoverTip(W, bar)
+-- isInitial: forwarded from DM:ShowHoverTip, true only on the enter handler. Used
+-- by the recap skip below, which must never suppress a FIRST paint.
+function DM:PopulateHoverTip(W, bar, isInitial)
     self:EnsureHoverTip()
+    local prevPaintedRecapID = _tipPaintedRecapID
+    _tipPaintedRecapID = nil
     local face = self.db and self.db.FontFace
     local size = TipFontSize(self.db and self.db.FontSize)
     local outline = self.db and self.db.FontOutline
@@ -1564,6 +1588,19 @@ function DM:PopulateHoverTip(W, bar)
         end
         HideTipTargets()
         -- Top recap events (oldest-first) for this death; nil -> nothing to show.
+        -- The hover poll repopulates several times a second, and this branch fetches
+        -- and reverses the whole event array each time. A recap is immutable once the
+        -- death has happened, so a cursor held on one row has nothing to redraw.
+        -- COMBAT only: out of combat the repaint still runs, because nothing documents
+        -- a recap as final and freezing a partial one would be a regression. The recap
+        -- id is NeverSecret, so comparing it is safe.
+        -- NEVER on isInitial: an entering hover always paints, so the tip can never be
+        -- shown carrying whatever the last hover left in the shared rows.
+        if not isInitial and DM.DetailCombatActive and DM.DetailCombatActive()
+            and prevPaintedRecapID ~= nil and prevPaintedRecapID == bar._deathRecapID then
+            _tipPaintedRecapID = prevPaintedRecapID
+            return true
+        end
         local events, sinkMax, plainMax = self:GetDeathRecap(bar._deathRecapID)
         if not events then
             -- An UNREADABLE recap shows the message; a genuinely absent one keeps
@@ -1614,6 +1651,10 @@ function DM:PopulateHoverTip(W, bar)
                 if row:IsShown() then row:Hide() end
             end
         end
+        -- Painted, so the next poll tick can skip. Only a successful paint records;
+        -- the refusal and no-recap returns above leave it nil deliberately, since a
+        -- message is not a recap and re-asking is how it recovers.
+        _tipPaintedRecapID = bar._deathRecapID
     elseif isEnemyTaken then
         -- Enemy Damage Taken: per-player "who damaged this enemy" breakdown -- the enemy's
         -- combatSpells don't resolve to player-spell names. Same column layout as the spell
@@ -1918,7 +1959,7 @@ function DM:ShowHoverTip(W, bar, isInitial)
     if W._detailOpen then return end                                    -- click-inline open: suppress
     if not (bar._sourceGUID or bar._sourceCreatureID or bar._deathRecapID) then return end  -- empty/placeholder row
 
-    if self:PopulateHoverTip(W, bar) then
+    if self:PopulateHoverTip(W, bar, isInitial) then
         if isInitial then
             -- Phase 4c smart positioning. Modes: smart | bar | left | right | center.
             -- "smart" places the tip on the meter's OPEN side (away from the nearer screen

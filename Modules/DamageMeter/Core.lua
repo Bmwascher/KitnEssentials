@@ -1317,9 +1317,10 @@ DM.DetailCombatActive = DetailCombatActive
 --   * isLocalPlayer is the only source identity the API guarantees readable
 --     mid-fight (NeverSecret). issecretvalue is tested BEFORE the comparison so
 --     a wrong annotation costs the feature instead of throwing.
---   * Deaths is refused because OpenDetail dispatches it into RenderDeathRecap,
---     which compares an unguarded spellId and event string. Reaching that in
---     combat is a crash, not a feature.
+--   * Deaths is ADMITTED, for every row and without consulting the identity at
+--     all. It is keyed on deathRecapID, which is NeverSecret, so the recap is
+--     addressable for any row on screen -- a different authorization model from
+--     the own-row rule, not a widening of it. Its renderer guards every field.
 --   * EnemyDamageTaken is refused because its drill-down aggregates and compares
 --     amounts across sources, which secret values cannot survive.
 --
@@ -1330,8 +1331,12 @@ DM.DetailCombatActive = DetailCombatActive
 -- a click that then lands in the death recap mid-fight.
 function DM:DetailEligible(isLocalPlayer, meterType)
     if not DetailCombatActive() then return true end
+    -- ORDER IS LOAD-BEARING. Deaths is tested BEFORE the own-row rule because it does
+    -- not consult identity: admitting it below the own-row test would open the recap
+    -- for the player's own death only, which looks identical until someone clicks
+    -- another player's.
+    if meterType == Enum.DamageMeterType.Deaths then return true end
     if not DM.PlainOwnRow(isLocalPlayer) then return false end
-    if meterType == Enum.DamageMeterType.Deaths then return false end
     if meterType == Enum.DamageMeterType.EnemyDamageTaken then return false end
     return true
 end
