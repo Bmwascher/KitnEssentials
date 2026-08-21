@@ -7,9 +7,15 @@ local L = require("dev.spec._ke_loader")
 local ITERATIONS = 20000
 -- EVEN, so the counterbalance below actually balances. With an odd count one
 -- cap runs first more often than the other, which is the bias the alternation
--- exists to cancel. Eight rather than four because the dispersion rule at the
--- bottom needs enough pairs to tell a noisy machine from a real difference.
-local RUNS = 8
+-- exists to cancel.
+--
+-- THIRTY-TWO because the acceptance has to be able to ANSWER. The measured
+-- ratio sits only a few percent under the threshold, and at eight pairs the
+-- band below is wider than that gap, so the run voids however clean the machine
+-- is -- a rule that can only ever say "retake" is not an acceptance. The band
+-- narrows with the square root of the count; thirty-two brings it inside the
+-- gap, and the whole script still runs in about seven seconds.
+local RUNS = 32
 
 -- The two caps compared: the shipped default and the slider's maximum.
 local CAP_DEFAULT = 100
@@ -20,10 +26,8 @@ local CAP_MAX = 500
 -- the maximum cap. Derived rather than chosen, and written as the formula so it
 -- recomputes if the slider range ever changes.
 --
--- The value this replaced was set before anything had been measured. Note also
--- that 2.0 is NOT the half-way point: at a ratio of 2.0 the trim is already
--- about 62% of the call, so a threshold of 2.0 does not mean what it looks like
--- it means.
+-- 2.0 is NOT the half-way point, though it reads like one: at a ratio of 2.0
+-- the trim is already about 62% of the call.
 --
 -- The margin is THIN and is recorded as thin rather than rounded away: measured
 -- ratios run 1.54 to 1.58, five to eight percent under this line rather than
@@ -123,16 +127,22 @@ for i = 2, RUNS do
 end
 -- The decision rests on the geometric MEAN, so the retake rule has to be about
 -- that mean's own uncertainty -- not about how far apart two individual pairs
--- landed. The rule this replaced voided a run whenever any single pair fell on
--- the far side of the threshold, which ordinary pair-level noise guarantees:
--- ten consecutive runs voided while every one of their means sat clear of the
--- line. The spread of single samples is not the error bar of their average, and
--- treating it as one makes the acceptance unsatisfiable rather than strict.
+-- landed. A rule that voids whenever any single pair falls on the far side of
+-- the threshold voids nearly every run, because ordinary pair-level noise
+-- reaches that far while the mean stays well clear of the line. The spread of
+-- single samples is not the error bar of their average, and treating it as one
+-- makes the acceptance unsatisfiable rather than strict.
 --
 -- The samples are ratios, so the arithmetic stays in log space for the same
--- reason the mean is geometric. Two standard errors is the decisiveness bar:
--- any closer to the threshold and this run genuinely cannot say which side of
--- it the mean falls on, which is the one thing the old rule was right about.
+-- reason the mean is geometric. Inside the bar below, this run genuinely cannot
+-- say which side of the threshold the mean falls on, which is the one thing the
+-- rule it replaced was right about.
+--
+-- Student's t at RUNS-1 degrees of freedom, NOT the normal multiplier of 2: a
+-- bar of 2 falls short of 95% at these counts and so errs toward calling a run
+-- decisive, which is the wrong way to err when the measured ratio sits only a
+-- few percent from the threshold. The value below is t for RUNS = 32. Change
+-- the two together or the bar quietly stops meaning what it says.
 local logmean = logsum / RUNS
 local sumsq = 0
 for i = 1, RUNS do
@@ -141,21 +151,21 @@ for i = 1, RUNS do
 end
 -- Sample standard deviation (RUNS - 1), then the standard error of the mean.
 local stderr = math.sqrt(sumsq / (RUNS - 1)) / math.sqrt(RUNS)
-local indecisive = math.abs(logmean - math.log(THRESHOLD)) < 2 * stderr
+local T_95 = 2.040
+local indecisive = math.abs(logmean - math.log(THRESHOLD)) < T_95 * stderr
 
 print(string.format("paired %d/%d ratio: %.3f (geometric mean of %d pairs), threshold %.3f%s",
     CAP_MAX, CAP_DEFAULT, geo, RUNS, THRESHOLD,
-    indecisive and "  ** WITHIN 2 STANDARD ERRORS OF THE THRESHOLD -- run is VOID, retake **"
+    indecisive and "  ** THE 95% BAND COVERS THE THRESHOLD -- run is VOID, retake **"
         or (geo > THRESHOLD and "  ** OVER THRESHOLD -- the trim is dominant **" or "")))
 -- Spread is REPORTED, never a verdict. A fixed hi/lo limit is the same crude
 -- proxy for noise as the boundary rule it used to sit beside, and it rejected
--- runs the standard error had already found decisive -- two of the three
--- decisive runs in an eight-run sample. A noisy machine widens the error bar,
--- which voids the run on its own; a second rule reading the same noise a
--- cruder way only throws away answers.
+-- runs the standard error had already found decisive. A noisy machine widens
+-- the error bar, which voids the run on its own; a second rule reading the same
+-- noise a cruder way only throws away answers.
 --
 -- The one acceptance condition left is printed with the verdict above, and the
 -- band is printed here beside the spread it is easy to confuse with, so the
 -- difference between the two is visible rather than asserted.
-print(string.format("pair spread: %.3f to %.3f (hi/lo %.3f); mean +/- 2 s.e. = %.3f to %.3f",
-    lo, hi, hi / lo, geo * math.exp(-2 * stderr), geo * math.exp(2 * stderr)))
+print(string.format("pair spread: %.3f to %.3f (hi/lo %.3f); mean 95%% band = %.3f to %.3f",
+    lo, hi, hi / lo, geo * math.exp(-T_95 * stderr), geo * math.exp(T_95 * stderr)))
