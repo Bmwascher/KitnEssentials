@@ -922,12 +922,31 @@ function DM:OnRegenDisabled()
     -- fight's enemies on the next out-of-combat hover (or stays hidden if the prior fight
     -- had none). Wiped on every combat start; guarded for load order.
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
-    -- Close any open (out-of-combat-only) detail panel so combat shows the live bars
-    -- instead of a frozen pre-combat breakdown over a now-hidden body. CloseDetail is
-    -- nil-safe and a no-op when nothing is open.
+    -- An open detail panel used to be closed unconditionally here. Now a panel the
+    -- eligibility rule still permits stays open and keeps updating through the fight.
+    -- Everything else closes, as before.
+    --
+    -- The order matters. A MESSAGE panel closes outright: an out-of-combat refusal
+    -- left on screen is not eligible data to carry into a new fight, and unlike the
+    -- tick path there is no live refusal to preserve. A DATA panel is then checked for
+    -- view DRIFT -- if the effective view has changed since it opened it is showing a
+    -- view that is no longer selected, so it closes rather than re-rendering into one
+    -- it was never authorized for. Only then is eligibility applied, and to the CURRENT
+    -- view rather than the snapshotted one: the snapshot detects drift, it never
+    -- authorizes.
     if self.windows_rt then
         for _, W in pairs(self.windows_rt) do
-            if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+            if W._detailOpen and self.CloseDetail then
+                local keep = false
+                if W._detailKind == "data" then
+                    local cfg = self.ResolveWindowConfig and self:ResolveWindowConfig(W.idx)
+                    local nowType = cfg and self:EffectiveMeterType(W.idx, cfg)
+                    if nowType ~= nil and nowType == W._detailMeterType then
+                        keep = self:DetailEligible(W._detailOwnRow, nowType)
+                    end
+                end
+                if not keep then self:CloseDetail(W) end
+            end
             -- New fight = fresh list: scroll each pane back to the top so rank 1 shows.
             -- Otherwise a scroll offset left over from the last fight would open the new
             -- one mid-list. RenderWindow recomputes _scrollMax against the new count.
@@ -2355,14 +2374,14 @@ function DM:Tick()
             if not deferred then deferred = {} end
             deferred[#deferred + 1] = W
         else
-            self:RenderWindow(W)
+            self:RenderWindowAndDetail(W)
         end
     end
 
     if deferred then
         C_Timer.After(0, function()
             for _, W in ipairs(deferred) do
-                DM:RenderWindow(W)
+                DM:RenderWindowAndDetail(W)
             end
         end)
     end
