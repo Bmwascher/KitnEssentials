@@ -458,8 +458,9 @@ function CH:DisplayChatHistory()
     -- Fetched BEFORE the flag goes up, with everything else that can throw.
     local handler = geterrorhandler()
 
-    -- From here to the clear, the only calls are the pcall-wrapped dispatch and
-    -- a pcall-wrapped handler. Everything else is table indexing and equality.
+    -- From here to the clear, the only calls that can raise are the
+    -- pcall-wrapped dispatch and the pcall-wrapped handler. The rest is table
+    -- indexing, equality, and iterating a table nothing mutates mid-loop.
     --
     -- One value in that equality is NOT checked by the prepass: `wanted` comes
     -- from a chat frame's own message-type list, and the prepass checks that

@@ -30,8 +30,10 @@ local CAP_MAX = 500
 -- the trim is already about 62% of the call.
 --
 -- The margin is THIN and is recorded as thin rather than rounded away: measured
--- ratios run 1.54 to 1.58, five to eight percent under this line rather than
--- comfortably clear of it. A change to the store's hot path can cross it.
+-- ratios run 1.54 to 1.62, which is three to eight percent under this line
+-- rather than comfortably clear of it, and the closest single run cleared it by
+-- 0.002. A change to the store's hot path can cross it. Trust the band this
+-- script prints over this range, which is a record of past runs and will age.
 local THRESHOLD = 2 * CAP_MAX / (CAP_MAX + CAP_DEFAULT)
 
 -- A realistic payload: seventeen positional arguments, as the covered events
