@@ -33,6 +33,12 @@ local table_sort = table.sort
 -- must not drift apart.
 local REFUSAL_MSG = "Detailed information is\nsecret while in combat"
 
+-- The recap exists but the client would not let us read it. Deliberately DISTINCT
+-- from the no-recap message: they mean different things, and telling them apart in
+-- game is the only way to answer whether the recap is reachable in combat at all.
+local RECAP_UNREADABLE_MSG = "Death recap data is\nunreadable in combat"
+local RECAP_ABSENT_MSG = "No death recap available"
+
 -- Same fixed pool ceiling as the main bars; the detail list never exceeds it.
 local DETAIL_POOL_SIZE = DM.BAR_POOL_SIZE or 40
 
@@ -334,8 +340,18 @@ function DM:OpenDetail(bar, button)
     -- clickable). Reachable only out of combat -- DetailEligible refuses the Deaths
     -- view in combat -- so GetDeathRecap runs on a plain recapID here.
     -- W._isDeaths was re-stashed above; bar._deathRecapID comes from RenderBar.
-    if W._isDeaths and not self:GetDeathRecap(bar._deathRecapID) then
-        return
+    -- Fetch ONCE per click. The renderer below takes the result rather than
+    -- refetching: the fetch now tests indexability and reverses the whole event
+    -- array, and doing that twice for one click is real work on a combat path.
+    local preEvents, preSink, prePlain
+    if W._isDeaths then
+        preEvents, preSink, prePlain = self:GetDeathRecap(bar._deathRecapID)
+        -- UNREADABLE still OPENS -- the panel is what carries the message. Only a
+        -- genuinely absent recap declines, which is today's behaviour: a feign or a
+        -- no-recap death simply is not clickable. Compare the second return only in
+        -- this branch; on the success shape it holds the fill maximum, which can be
+        -- secret, and comparing a secret throws.
+        if not preEvents and preSink ~= DM.RECAP_UNREADABLE then return end
     end
 
     self:EnsureDetail(W)
@@ -360,7 +376,7 @@ function DM:OpenDetail(bar, button)
     W.detail:Show()
 
     if W._isDeaths then
-        self:RenderDeathRecap(W)
+        self:RenderDeathRecap(W, preEvents, preSink, prePlain)
     else
         self:RenderBreakdown(W)
     end
@@ -723,42 +739,100 @@ end
 -- Anchoring stays with the callers: the two surfaces anchor to different parents,
 -- and the tip re-anchors its value column between the label's two SetPoints. Only
 -- the content is shared.
-local function RenderRecapRow(self, row, ev, i, count, barH, maxHP, deathTime)
-    -- Icon: spellId (lowercase d on recap events); pcall the lookup (parity with
-    -- RenderBreakdown's GetSpellName) so a throw can't abort the loop mid-render and
-    -- leave the row pool half-shown. Any failure (nil OR error) -> melee fallback 135274.
+--
+-- EVERY DeathRecapEventInfo field is treated as possibly secret. The structure is
+-- declared with an EMPTY field list, so there is no annotation to trust either way,
+-- and each field below takes exactly one of three treatments: handed RAW to a sink
+-- that accepts secrets, sanitized to a plain default first, or dropped from the
+-- display entirely. Nothing reaches a comparison, tostring, format or arithmetic
+-- without having been sanitized.
+--
+-- sinkMax and plainMax are the two maxima from DM:GetDeathRecap and are NOT
+-- interchangeable: sinkMax drives the bar and may be secret, plainMax is the only
+-- one the percentage may divide by and is nil when there is no usable maximum.
+local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, deathTime)
+    -- Icon: the lookup accepts a secret spell id (AllowedWhenTainted), so a secret one
+    -- is still tried -- it just skips the > 0 test, whose only job is rejecting a plain
+    -- zero or negative id and which would throw on a secret. pcall'd either way so a
+    -- throw cannot abort the loop and leave the row pool half-drawn. Any failure falls
+    -- back to the melee texture.
     local spID = ev.spellId
     local tex = 135274
-    if spID and spID > 0 and C_Spell and C_Spell.GetSpellTexture then
-        local okT, t = pcall(C_Spell.GetSpellTexture, spID)
-        if okT and t then tex = t end
+    if C_Spell and C_Spell.GetSpellTexture and spID ~= nil then
+        if issecretvalue(spID) or (type(spID) == "number" and spID > 0) then
+            local okT, t = pcall(C_Spell.GetSpellTexture, spID)
+            if okT and t then tex = t end
+        end
     end
     row.icon:SetTexture(tex)
     KE:ApplyIconZoom(row.icon)
     row.iconFrame:SetSize(barH, barH)
     row.iconFrame:Show()
 
-    local evType = ev.event or ""
+    -- Event type decides the fill colour, the sign, the name fallback and the fatal
+    -- marker, so it is sanitized ONCE here and every test below runs on the result.
+    -- nil rather than "" because "" could match an empty-string branch by accident.
+    -- The old `or ""` default is deliberately gone: a MISSING type and an UNREADABLE
+    -- type are the same thing from the display's point of view, and both now take the
+    -- neutral row below instead of one of them being guessed as damage.
+    local evType = ev.event
+    if issecretvalue(evType) or type(evType) ~= "string" then evType = nil end
+    local typeKnown = (evType ~= nil)
     local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
-    local isFatal = (i == count and not isHeal)
+    -- A fatal marker is a claim about which event killed the player. Make it only from
+    -- a readable type; its one visible effect is the overkill annotation, which a
+    -- secret overkill already suppresses, so withholding it costs almost nothing.
+    local isFatal = typeKnown and (i == count) and not isHeal
 
-    -- Fill = HP% remaining at the event (currentHP / maxHP), heal green / damage red.
-    -- GetRecapEvents is AllowedWhenUntainted, so ev.currentHP can be a secret number
-    -- in a tainted post-combat window -- sanitize before the division (matches ev.amount).
+    -- Fill: hand the ENGINE both operands and let it compute the proportion, which
+    -- addon code may not do. SetValue and SetMinMaxValues both accept secrets, so a
+    -- secret current HP against a secret maximum still draws the real bar -- dividing
+    -- them here would sanitize both to zero and empty every row in combat.
     local curHP = ev.currentHP
-    if issecretvalue(curHP) or type(curHP) ~= "number" then curHP = 0 end
-    local hpPct = math_min(1, math_max(0, maxHP > 0 and (curHP / maxHP) or 0))
-    row.fill:SetMinMaxValues(0, 1)
-    row.fill:SetValue(hpPct)
-    if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
-    else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
+    local hpSecret = issecretvalue(curHP)
+    -- Raw means raw when SECRET. A plain nil or non-number would throw at the sink.
+    if not hpSecret and type(curHP) ~= "number" then curHP = 0 end
+    local haveMax = issecretvalue(sinkMax) or sinkMax ~= nil
+    if haveMax then
+        row.fill:SetMinMaxValues(0, sinkMax)
+        row.fill:SetValue(curHP)
+    else
+        -- No usable maximum: draw nothing rather than a full bar. A full bar would
+        -- assert the player died at full health.
+        row.fill:SetMinMaxValues(0, 1)
+        row.fill:SetValue(0)
+    end
+    if not typeKnown then
+        -- Neutral: we did not read the direction, so we do not claim one. Red with a
+        -- minus sign is a positive claim about damage, not an absence of information.
+        row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3])
+    elseif isHeal then
+        row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
+    else
+        row.fill:SetStatusBarColor(0.60, 0.08, 0.08)
+    end
 
-    -- Label: "-X.Xs SpellName" (+ " (Source)" when a non-secret sourceName exists).
+    -- Percent suffix: real arithmetic on two plain numbers, or nothing at all. No 0%
+    -- and no 100% placeholder -- a fabricated number reads as data.
+    local pctSuffix = ""
+    if plainMax and not hpSecret and type(curHP) == "number" then
+        local hpPct = math_min(1, math_max(0, curHP / plainMax))
+        pctSuffix = format(" (%.0f%%)", hpPct * 100)
+    end
+
+    -- Label: "-X.Xs SpellName" (+ " (Source)" when a plain sourceName exists).
+    -- A SECRET name is KEPT and displayed: a FontString renders one, and the label is
+    -- assembled by concatenation, which is safe on a secret string. Falling back to
+    -- "Unknown" would erase a name the engine was able to show, on most rows in
+    -- combat. The literal fallbacks stay for a missing or empty name.
     local spellName = ev.spellName
-    if not spellName or issecretvalue(spellName) or spellName == "" then
-        if isHeal then spellName = "Heal"
-        elseif evType == "SWING_DAMAGE" then spellName = "Melee"
-        else spellName = "Unknown" end
+    if not issecretvalue(spellName) then
+        if type(spellName) ~= "string" or spellName == "" then spellName = nil end
+        if spellName == nil then
+            if isHeal then spellName = "Heal"
+            elseif evType == "SWING_DAMAGE" then spellName = "Melee"
+            else spellName = "Unknown" end
+        end
     end
     local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
     local srcName = ev.sourceName
@@ -767,21 +841,28 @@ local function RenderRecapRow(self, row, ev, i, count, barH, maxHP, deathTime)
     end
     row.label:SetText(label)
 
-    -- Value: +heal / -damage (AbbreviateNumbers is AllowedWhenTainted), crit marker,
-    -- overkill on the killing blow, HP% suffix.
-    -- C_DeathRecap.GetRecapEvents is AllowedWhenUntainted, so ev.amount can be a
-    -- secret number if a tainted execution slips into the brief post-combat window.
-    -- Arithmetic (math_max) must run on a sanitized plain number.
-    local amt = ev.amount or 0
-    local amtPlain = amt
-    if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
-    local body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
-    local sign = isHeal and "+" or "-"
+    -- Value: the amount goes RAW to the formatter when it is secret. The formatter is
+    -- AllowedWhenTainted end to end; math_max and tostring are not, and routing a
+    -- secret through the sanitized copy would print 0 on every in-combat row.
+    local amt = ev.amount
+    local body
+    if issecretvalue(amt) then
+        -- No clamp is possible and none is needed: the sign is supplied separately.
+        -- Empty string rather than tostring on the missing-formatter branch -- a blank
+        -- cell beats a thrown conversion.
+        body = (self.FormatBarValue and select(1, self.FormatBarValue(amt, nil, false))) or ""
+    else
+        local amtPlain = (type(amt) == "number") and amt or 0
+        body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
+    end
+    -- No sign on an unreadable type: +/- is a direction we did not read.
+    local sign = (not typeKnown) and "" or (isHeal and "+" or "-")
     -- A boolean-truthiness test on a secret BOOLEAN throws -- sanitize to a plain
     -- bool first (issecretvalue gate) so the marker test never touches a secret.
     local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
     local crit = critFlag and " |cffffd100*|r" or ""
-    local pctSuffix = format(" (%.0f%%)", hpPct * 100)
+    -- Overkill is a conditional annotation, not a column: the > 0 test is what decides
+    -- whether to show it, and that test cannot run on a secret. Secret means absent.
     if isFatal and not issecretvalue(ev.overkill) and type(ev.overkill) == "number" and ev.overkill > 0 then
         local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
         row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
@@ -796,12 +877,19 @@ end
 -- +heal / -damage value (crit marker, killing-blow overkill, HP% suffix). Recap fields
 -- use spellId (lowercase d) -- distinct from combatSpells' spellID. Three-tier gate is
 -- in DM:GetDeathRecap (no/secret/<=0 recapID, no events) which returns nil -> message.
-function DM:RenderDeathRecap(W)
+function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
     if W.detail and W.detail.msg then W.detail.msg:Hide() end
     local d = W.detail
-    local events, maxHP = self:GetDeathRecap(W._detailRecapID)
+    -- The click path prefetches (OpenDetail) so one interaction is one fetch. The
+    -- tick and hover paths do not, so the parameters are optional and a fetch here
+    -- is the normal case. A prefetch can only ever carry the SUCCESS shape, because
+    -- the other two shapes never reach a render.
+    local events, sinkMax, plainMax = preEvents, preSink, prePlain
     if not events then
-        self:ShowDetailMessage(W, "No death recap available")
+        events, sinkMax, plainMax = self:GetDeathRecap(W._detailRecapID)
+    end
+    if not events then
+        self:ShowDetailMessage(W, sinkMax == DM.RECAP_UNREADABLE and RECAP_UNREADABLE_MSG or RECAP_ABSENT_MSG)
         return
     end
 
@@ -823,7 +911,7 @@ function DM:RenderDeathRecap(W)
             row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
             row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
 
-            RenderRecapRow(self, row, events[i], i, count, barH, maxHP, deathTime)
+            RenderRecapRow(self, row, events[i], i, count, barH, sinkMax, plainMax, deathTime)
 
             if not row:IsShown() then row:Show() end
         else
@@ -1476,8 +1564,20 @@ function DM:PopulateHoverTip(W, bar)
         end
         HideTipTargets()
         -- Top recap events (oldest-first) for this death; nil -> nothing to show.
-        local events, maxHP = self:GetDeathRecap(bar._deathRecapID)
-        if not events then return false end
+        local events, sinkMax, plainMax = self:GetDeathRecap(bar._deathRecapID)
+        if not events then
+            -- An UNREADABLE recap shows the message; a genuinely absent one keeps
+            -- today's behaviour of leaving the tip hidden. A hover that silently does
+            -- nothing in combat reads as a broken feature, which is why the two are
+            -- not treated alike here.
+            if sinkMax == DM.RECAP_UNREADABLE then
+                _tip.msg:SetText(RECAP_UNREADABLE_MSG)
+                _tip.msg:Show()
+                _tip:SetHeight(headerH + TIP_PAD + (size or 12) * 3)
+                return true
+            end
+            return false
+        end
         local deathTime = events[#events] and events[#events].timestamp
         local count = math_min(#events, HOVER_TIP_ROWS)
         for i = 1, HOVER_TIP_ROWS do
@@ -1502,7 +1602,7 @@ function DM:PopulateHoverTip(W, bar)
                 row.value:SetPoint("RIGHT", row.fill, "RIGHT", -TIP_PAD, 0)
                 row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
 
-                RenderRecapRow(self, row, ev, i, count, barH, maxHP, deathTime)
+                RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, deathTime)
 
                 -- Recap keeps a single value column: the breakdown's DPS/% columns are empty.
                 if row.dps then row.dps:SetText("") end
