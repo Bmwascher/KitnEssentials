@@ -72,6 +72,11 @@ function KitnEssentials:OnInitialize()
     if not defaults then
         defaults = { profile = {} }
     end
+    -- Must precede AceDB:New -- it reads the raw saved variables to tell a
+    -- module the user left on (no saved key, because the old default was true)
+    -- from one the user switched off. AceDB copies the new default in and
+    -- erases that difference.
+    KE:MigrateModuleEnableDefaults()
     KE.db = LibStub("AceDB-3.0"):New("KitnEssentialsDB", defaults, true) --[[@as AceDB]]
     if KE.LDS then
         KE.LDS:EnhanceDatabase(KE.db, "KitnEssentials")

@@ -161,7 +161,7 @@ local Defaults = {
         },
 
         CombatTexts = {
-            Enabled = true,
+            Enabled = false,
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
@@ -192,7 +192,7 @@ local Defaults = {
 
         Cursor = {
             SchemaVersion = 0,
-            Enabled    = true,
+            Enabled    = false,
             Size       = 67,
             Texture    = "circle_normal",
             ColorMode  = "theme",
@@ -267,7 +267,7 @@ local Defaults = {
         },
 
         PetStatusText = {
-            Enabled = true,
+            Enabled = false,
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
@@ -299,7 +299,7 @@ local Defaults = {
         },
 
         RaidNotifications = {
-            Enabled = true,
+            Enabled = false,
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
@@ -319,7 +319,7 @@ local Defaults = {
         },
 
         NoMovementAlert = {
-            Enabled = true,
+            Enabled = false,
             Position = DefaultPosition(0, -61),
             FontSize = 16,
             FontOutline = "OUTLINE",
@@ -350,7 +350,7 @@ local Defaults = {
         },
 
         FocusCastbar = {
-            Enabled = true,
+            Enabled = false,
             Width = 350,
             Height = 30,
             Strata = "HIGH",
@@ -482,7 +482,7 @@ local Defaults = {
         },
 
         BurningRush = {
-            Enabled = true,
+            Enabled = false,
             IconSize = 45,
             -- Glow (consumed by GUI-GlowSettingsCard — these are its default key names)
             GlowEnabled = true,
@@ -506,7 +506,7 @@ local Defaults = {
         },
 
         TotemTracker = {
-            Enabled = true,
+            Enabled = false,
             IconSize = 44,
             IconSpacing = 1,
             GrowDirection = "RIGHT", -- RIGHT | LEFT | UP | DOWN
@@ -525,7 +525,7 @@ local Defaults = {
         },
 
         InnervateTracker = {
-            Enabled = true,
+            Enabled = false,
             IconSize = 40,
             ShowLabel = true,
             LabelText = "FREE",
@@ -557,7 +557,7 @@ local Defaults = {
         },
 
         MaintenanceTracker = {
-            Enabled = true,
+            Enabled = false,
             IconSize = 34,
             CountFontSize = 14,
             CountColor = { 1, 1, 1, 1 },
@@ -708,7 +708,7 @@ local Defaults = {
         },
 
         AuctionHouseFilter = {
-            Enabled = true,
+            Enabled = false,
             AuctionHouse = {
                 CurrentExpansion = true,
                 FocusSearchBar = true,
@@ -720,7 +720,7 @@ local Defaults = {
         },
 
         CombatLogger = {
-            Enabled = true,
+            Enabled = false,
             DelayStop = true,
             DisableACLPrompt = false,
             QuietMode = false,
@@ -803,7 +803,7 @@ local Defaults = {
         },
 
         KickTracker = {
-            Enabled = true,
+            Enabled = false,
             Strata = "MEDIUM",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
@@ -892,7 +892,7 @@ local Defaults = {
         },
 
         PotionReady = {
-            Enabled = true,
+            Enabled = false,
             InstanceOnly = true,
             CombatOnly = false,
             DisableOnHealer = false,
@@ -917,7 +917,7 @@ local Defaults = {
         },
 
         FocusMarker = {
-            Enabled = true,
+            Enabled = false,
             SelectedMarker = "Star",
             MacroName = "FocusMarker",
             MacroIcon = 1033497,
@@ -930,16 +930,17 @@ local Defaults = {
         },
 
         KeystoneHelper = {
-            -- No GUI control. Core/Main.lua's module-enable loop and
-            -- PreviewManager both gate on this key, so the container-shaped
-            -- page leaves it permanently true rather than deleting it.
+            -- No GUI control, deliberately: the page is a container and each
+            -- feature tab owns its own switch. The container therefore stays
+            -- enabled so those switches remain reachable -- the module is
+            -- silent while all three features are off, which is how it ships.
             Enabled = true,
 
-            -- Feature toggles
-            ResetEnabled = true,
+            -- Feature toggles. These are the module's real off switches.
+            ResetEnabled = false,
             ResetMessage = "Instance reset!",
-            RerollEnabled = true,
-            YourKeyEnabled = true,
+            RerollEnabled = false,
+            YourKeyEnabled = false,
 
             -- Each reminder owns its own appearance. Position is the one
             -- thing they can share: YourKeyUseRerollPosition parks Your Key
@@ -1018,13 +1019,13 @@ local Defaults = {
         -- Finder group. Hides on entering the dungeon, leaving the group,
         -- or entering combat.
         LFGReminder = {
-            Enabled     = true,
+            Enabled     = false,
             Scale       = 1.05,
             ShowDisable = true,
         },
 
         PIMacroBuilder = {
-            Enabled = true,
+            Enabled = false,
             MacroName = "PI",
             MacroIcon = 135939,
             Trinket1 = true,
@@ -1054,7 +1055,7 @@ local Defaults = {
         },
 
         GreatVaultAlert = {
-            Enabled = true,
+            Enabled = false,
             PlaySound = true,
             SoundFile = "None",
             SoundChannel = "Master",
@@ -1079,14 +1080,14 @@ local Defaults = {
         },
 
         VantusRune = {
-            Enabled = true,
+            Enabled = false,
             ShowChatMessages = true,
             ConfirmationTimeout = 15,
         },
 
         CharacterPanel = {
             -- Master
-            Enabled                  = true,
+            Enabled                  = false,
 
             -- Warning text (KE-original, preserved)
             ShowEnchants             = true,
@@ -1135,10 +1136,8 @@ local Defaults = {
         -- Map scale. Extracted from the removed WorldMap module. Not a CVar:
         -- this is WorldMapFrame:SetScale(). Its own module (not a lodger in
         -- Automation) so it keeps an independent enable state.
-        -- Default matches the old WorldMap.ScaleEnabled so existing users keep
-        -- the behaviour they have today.
         MapScale = {
-            Enabled = true,
+            Enabled = false,
             Scale = 1.2,
         },
 
@@ -1148,7 +1147,7 @@ local Defaults = {
         },
 
         ReadyCheckConsumables = {
-            Enabled = true,
+            Enabled = false,
             -- Position override (default is auto-anchor to ReadyCheckListenerFrame)
             PositionMode = "auto",  -- "auto" or "custom"
             SelfPoint = "BOTTOM",
@@ -1202,7 +1201,7 @@ local Defaults = {
         },
 
         AuraExternals = {
-            Enabled           = true,
+            Enabled           = false,
             ShowBigDefensives = false,
             Strata            = "MEDIUM",
             anchorFrameType   = "PLAYERFRAME",
@@ -1242,7 +1241,7 @@ local Defaults = {
         },
 
         AuraDebuffs = {
-            Enabled            = true,
+            Enabled            = false,
             Strata             = "MEDIUM",
             anchorFrameType    = "PLAYERFRAME",
             ParentFrame        = "UIParent",
@@ -1376,7 +1375,7 @@ local Defaults = {
         },
 
         TargetedSpells = {
-            Enabled = true,
+            Enabled = false,
             IconSize = 36,
             Gap = 3,
             TextSpacing = 45,           -- middle countdown slot width (px)
@@ -1408,7 +1407,7 @@ local Defaults = {
         },
 
         AlertFrames = {
-            Enabled = true,
+            Enabled = false,
             Position = {
                 AnchorFrom = "TOP",
                 AnchorTo = "TOP",
@@ -1446,7 +1445,7 @@ local Defaults = {
         },
 
         CompareHeader = {
-            Enabled = true,
+            Enabled = false,
         },
 
         -----------------------------------------------------------------
@@ -1499,7 +1498,7 @@ local Defaults = {
                 HighManaColor = { 1, 1, 1, 1 },
             },
             DeathNotifications = {
-                Enabled = true,
+                Enabled = false,
                 EnableInDungeons = true,
                 EnableInRaids = false,
 
@@ -1532,7 +1531,7 @@ local Defaults = {
                 Position = DefaultPosition(0, 312),
             },
             DungeonCasts = {
-                Enabled = true,
+                Enabled = false,
 
                 -- Frame settings
                 Frame = {
@@ -1602,7 +1601,7 @@ local Defaults = {
         -----------------------------------------------------------------
 
         DungeonTimers = {
-            Enabled = true,
+            Enabled = false,
             RoleFilterEnabled = true,
             MutePresetSounds = false,
             SoundChannel = "Master",
@@ -1683,7 +1682,7 @@ local Defaults = {
         -----------------------------------------------------------------
 
         DungeonTrash = {
-            Enabled = true,
+            Enabled = false,
 
             -- Central bar/text alerts fully reuse DungeonTimers' Bar/Text groups:
             -- visuals (BarDisplay/TextDisplay) AND position/growth/reveal window
@@ -1957,7 +1956,7 @@ local Defaults = {
             -- objectives. Standalone module, not a skin key -- it hooks the
             -- widget mixins rather than a named window.
             UIWidgets = {
-                Enabled = true,
+                Enabled = false,
                 FontFace = "Expressway",
                 FontOutline = "OUTLINE",
                 -- Status bar widgets (M+ timer, power bars)
@@ -2002,7 +2001,7 @@ local Defaults = {
             -- our own; Replace = false skins and repositions Blizzard's own
             -- windows instead.
             LootRoll = {
-                Enabled = true,
+                Enabled = false,
                 Replace = true,
                 Width = 340,
                 Height = 22,
@@ -2062,4 +2061,127 @@ local Defaults = {
 
 function KE:GetDefaultDB()
     return Defaults
+end
+
+---------------------------------------------------------------------------------
+-- Module Enable-Default Migration
+---------------------------------------------------------------------------------
+-- Every module now ships disabled so a fresh install is opt-in. AceDB strips
+-- default-equal leaves at logout, so a profile that left one of these switches
+-- ON carries no saved key at all -- once the default is false that is
+-- indistinguishable from the user having switched it off. This walks the RAW
+-- saved variables BEFORE AceDB:New and writes an explicit true wherever the key
+-- is absent, so existing setups survive the flip and later profiles inherit the
+-- new default. It cannot run after AceDB:New: by then the new default has been
+-- copied in and the distinction is gone.
+--
+-- Each entry is a path whose LAST element is the key that flipped; everything
+-- before it is the table path under the profile.
+local FLIPPED_TO_OFF = {
+    { "AlertFrames", "Enabled" },
+    { "AuctionHouseFilter", "Enabled" },
+    { "AuraDebuffs", "Enabled" },
+    { "AuraExternals", "Enabled" },
+    { "BurningRush", "Enabled" },
+    { "CharacterPanel", "Enabled" },
+    { "CombatLogger", "Enabled" },
+    { "CombatTexts", "Enabled" },
+    { "CompareHeader", "Enabled" },
+    { "Cursor", "Enabled" },
+    { "DamageMeter", "Enabled" },
+    { "Dungeons", "DeathNotifications", "Enabled" },
+    { "Dungeons", "DungeonCasts", "Enabled" },
+    { "DungeonTimers", "Enabled" },
+    { "DungeonTrash", "Enabled" },
+    { "FocusCastbar", "Enabled" },
+    { "FocusMarker", "Enabled" },
+    { "GreatVaultAlert", "Enabled" },
+    { "InnervateTracker", "Enabled" },
+    { "KickTracker", "Enabled" },
+    { "LFGReminder", "Enabled" },
+    { "MaintenanceTracker", "Enabled" },
+    { "MapScale", "Enabled" },
+    { "MythicPlusTimer", "Enabled" },
+    { "NoMovementAlert", "Enabled" },
+    { "PetStatusText", "Enabled" },
+    { "PIMacroBuilder", "Enabled" },
+    { "PotionReady", "Enabled" },
+    { "RaidNotifications", "Enabled" },
+    { "ReadyCheckConsumables", "Enabled" },
+    { "Skinning", "LootRoll", "Enabled" },
+    { "Skinning", "UIWidgets", "Enabled" },
+    { "TargetedSpells", "Enabled" },
+    { "TotemTracker", "Enabled" },
+    { "VantusRune", "Enabled" },
+
+    -- KeystoneHelper's container stays enabled (its page has no master
+    -- switch); its three feature toggles are the keys that flipped.
+    { "KeystoneHelper", "ResetEnabled" },
+    { "KeystoneHelper", "RerollEnabled" },
+    { "KeystoneHelper", "YourKeyEnabled" },
+}
+
+-- Root-level table, outside every AceDB namespace so AceDB never strips it.
+-- It records each path this has already handled, NOT a single done flag: a flag
+-- would silently skip any entry appended to the list in a later version, and
+-- once that version's default has been saved a re-run cannot tell "left on"
+-- from "switched off" any more. Per path, the record is exact and self-
+-- maintaining -- adding an entry migrates it, on the one condition that the
+-- entry lands in the same COMMIT that flips its default. Not the same release:
+-- every commit here is live in game over the symlink, so a one-commit gap is
+-- long enough for a reload to save the new default and destroy the signal.
+local OPT_IN_RECORD = "ModuleDefaultsOptIn"
+
+-- Returns the table holding the flipped key, creating empty parents on the way
+-- down. Bails on a saved value that is not a table rather than clobbering it.
+local function ResolveParentTable(profile, path)
+    local tbl = profile
+    for depth = 1, #path - 1 do
+        local key = path[depth]
+        local node = tbl[key]
+        if node == nil then
+            node = {}
+            tbl[key] = node
+        elseif type(node) ~= "table" then
+            return nil
+        end
+        tbl = node
+    end
+    return tbl
+end
+
+function KE:MigrateModuleEnableDefaults()
+    local sv = _G.KitnEssentialsDB
+    if type(sv) ~= "table" then
+        -- Fresh install. Nothing to preserve, but the record still has to land
+        -- or the next login would read the brand-new profile as a legacy one
+        -- and switch every module back on.
+        sv = {}
+        _G.KitnEssentialsDB = sv
+    end
+    local record = sv[OPT_IN_RECORD]
+    if type(record) ~= "table" then
+        record = {}
+        sv[OPT_IN_RECORD] = record
+    end
+
+    local profiles = sv.profiles
+    for i = 1, #FLIPPED_TO_OFF do
+        local path = FLIPPED_TO_OFF[i]
+        local id = table.concat(path, ".")
+        if not record[id] then
+            record[id] = true
+            if type(profiles) == "table" then
+                local key = path[#path]
+                for _, profile in pairs(profiles) do
+                    if type(profile) == "table" then
+                        local parent = ResolveParentTable(profile, path)
+                        if parent and parent[key] == nil then
+                            parent[key] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
 end
