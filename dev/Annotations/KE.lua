@@ -229,7 +229,9 @@ function KE:IsFontValid(fontPath) end
 ---@return boolean
 function KE:ApplyFont(fontStr, name, size, outline) end
 
----@param fontStr FontString|EditBox|SimpleHTML
+--- Narrower than KE:ApplyFont on purpose: the shadow calls below the font
+--- application are unverified on a SimpleHTML frame, and nothing passes one.
+---@param fontStr FontString|EditBox
 ---@param face string?
 ---@param size number
 ---@param outline string?
