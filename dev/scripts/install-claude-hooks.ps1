@@ -20,7 +20,7 @@ $settingsPath = Join-Path $root '.claude\settings.json'
 New-Item -ItemType Directory -Force $hooksDir | Out-Null
 # (the superpowers review-companion hook ships in the crosscheck plugin,
 # user-scope - not here, or it would double-fire.)
-foreach ($name in @('branch-guard.ps1', 'luacheck-postedit.ps1')) {
+foreach ($name in @('branch-guard.ps1', 'luacheck-postedit.ps1', 'git-guard.ps1')) {
     Copy-Item (Join-Path $templates $name) (Join-Path $hooksDir $name) -Force
     Write-Host "[install] .claude/hooks/$name refreshed from dev/claude-hooks/"
 }
@@ -79,7 +79,23 @@ if (-not (Test-Path $settingsPath)) {
     }
 }
 
-# 3. Pre-push gate (per-clone config; dies on re-clone without this).
+# 3. Family skill junctions (KitnDev\.claude\skills -> project .claude\skills;
+#    they die with the checkout on a PC reset — family AGENTS.md requires
+#    re-creating them).
+$familySkills = Join-Path (Split-Path $root -Parent) '.claude\skills'
+$projSkills = Join-Path $root '.claude\skills'
+if (Test-Path $familySkills) {
+    New-Item -ItemType Directory -Force $projSkills | Out-Null
+    foreach ($dir in Get-ChildItem $familySkills -Directory) {
+        $link = Join-Path $projSkills $dir.Name
+        if (-not (Test-Path $link)) {
+            New-Item -ItemType Junction -Path $link -Target $dir.FullName | Out-Null
+            Write-Host "[install] junction .claude/skills/$($dir.Name) -> KitnDev family skills"
+        }
+    }
+}
+
+# 4. Pre-push gate (per-clone config; dies on re-clone without this).
 $current = git -C $root config core.hooksPath 2>$null
 if ($current -eq 'dev/githooks') {
     Write-Host "[install] core.hooksPath already dev/githooks"
