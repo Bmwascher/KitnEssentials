@@ -1,5 +1,70 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.0
+
+### Chat
+- **NEW:** Chat Links. Items, currencies, spells, achievements, keystones and
+  PvP talents linked in chat now show their icon in front of the link, and the
+  crafting quality can read as a coloured number instead of the small gem. Icon
+  height, width and aspect ratio are yours to set. Off by default, in
+  Skinning > Chat > Chat Links
+- **NEW:** Clickable web addresses. An address posted in chat is coloured, and
+  clicking it opens a copy box pinned above the chat window it came from, as
+  wide as that window and tall enough to show a long address in full. Part of
+  the Chat Links card, with its own colour picker
+- **NEW:** Chat History. Your chat comes back after a reload or a relogin, per
+  character, with the time each line first arrived. Keep 50 to 500 lines,
+  choose which chat types are stored, and clear everything with one button.
+  Anything received while you are inside a dungeon, raid or battleground is
+  never stored. Needs the chat skin on. Off by default
+- **NEW:** What you type in the chat box is kept per character too, so the Up
+  arrow still recalls it after a reload
+- **NEW:** Keyword Highlight. Words you list are coloured inside the message
+  body, with an optional sound and a switch that keeps the sound quiet while
+  you are fighting. Your own name is highlighted in mint by default
+- **NEW:** Class Colour Mentions colours player names typed inside a message.
+  Names that are also ordinary words can be excluded by name
+- **NEW:** Merge Achievement Spam collapses several people earning the same
+  achievement into one line, keeping the achievement's own colour
+- **NEW:** Match Damage Meter Size sizes the chat panel to the Damage Meter's
+  backdrop. The meter has no height setting, so matching the two by hand meant
+  guessing; the two panel sliders grey out while it is on and your own numbers
+  come back untouched when you turn it off
+- Fixed chat refusing to send any message that carried a link while you were in
+  combat. KE was replacing the chat frame's event script, which left Blizzard's
+  chat edit box tainted for the rest of the session
+- Messages the client hides from you inside instances carry their timestamp
+  again
+- The copy chat button now shows a copy icon
+
+### Damage Meter
+- **NEW:** the spell breakdown for your own bar opens and keeps refreshing
+  during combat, instead of waiting for the fight to end
+- **NEW:** death recaps open during combat, and for every row in the Deaths
+  list rather than only your own
+- Your own feign death no longer shows in the Deaths list as a death
+- The header combat clock now follows the fight the bars are counting instead
+  of timing from the moment KE noticed combat. A reload in the middle of a
+  fight no longer leaves the clock blank, and a fight under a second no longer
+  prints 0:00
+- Fixed a rebuild race. Switching the meter off and straight back on inside one
+  frame left two builds walking the windows, and the older one could leave a
+  window hidden
+
+### Automation
+- **NEW:** Announce Repair Cost prints what a repair cost in your own chat,
+  whoever paid for it and whatever started it. On by default, in
+  Quality of Life > Automation > Vendors
+
+### EllesmereUI
+- **NEW:** the chat panel and the Damage Meter dock are published into
+  EllesmereUI's unlock mode, so EUI elements can be anchored to them and can
+  match their width or height
+- KE anchors now survive an EllesmereUI layout import, and a size match still
+  reaches a KE frame that appears late
+
+---
+
 ## v4.2.0
 
 ### Automation
