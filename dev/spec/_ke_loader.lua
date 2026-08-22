@@ -902,7 +902,10 @@ function L.loadLootRollBars(overrides)
     helpers.loadModule("Modules/Skinning/LootRollBars.lua", KE)
     local LR = modules["LootRoll"]
     LR:UpdateDB()
-    return LR, iconCalls
+    local seams = {
+        setBlizzardRollsEnabled = findUpvalue(LR.SetupRollBars, "SetBlizzardRollsEnabled"),
+    }
+    return LR, iconCalls, seams
 end
 
 -- Modules/Skinning/LootFrame.lua. LF:UpdateDB/OnInitialize/OnEnable are never
@@ -1519,6 +1522,9 @@ function L.loadAlertFrames()
     local AF = modules["AlertFrames"]
     local seams = {
         shouldGrowUp = findUpvalue(AF.PostAlertMove, "ShouldGrowUp"),
+        -- Referenced only by the AddAlertFrame closure InstallHooks builds, which
+        -- makes it an upvalue of InstallHooks itself.
+        isDirectAlertFrame = findUpvalue(AF.InstallHooks, "IsDirectAlertFrame"),
     }
     return AF, KE, seams
 end

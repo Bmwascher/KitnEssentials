@@ -158,6 +158,21 @@ end
 
 local BONUS_ROLL_FRAMES = { "BonusRollFrame", "BonusRollLootWonFrame", "BonusRollMoneyWonFrame" }
 
+-- The only two frames GroupLootFrame.lua hands to AddAlertFrame directly. Every
+-- other alert arrives via AlertFrameQueueMixin:ShowAlert, which runs
+-- UpdateAnchors first, so it is already chained by the time our hook sees it --
+-- re-anchoring one of those onto the holder drops it out of the stack and it
+-- renders on top of the alert before it.
+local DIRECT_ALERT_FRAMES = {
+    BonusRollLootWonFrame = true,
+    BonusRollMoneyWonFrame = true,
+}
+
+local function IsDirectAlertFrame(frame)
+    if not (frame and frame.GetName) then return false end
+    return DIRECT_ALERT_FRAMES[frame:GetName()] == true
+end
+
 -- Only a frame the container is NOT holding needs placing: anything in
 -- rollFrames is already stacked by the game relative to the container, which
 -- PositionGroupLootContainer has just placed. Re-anchoring those piles them
@@ -296,9 +311,12 @@ function AF:InstallHooks()
 
     -- BonusRollLootWonFrame / BonusRollMoneyWonFrame are added through
     -- AddAlertFrame rather than as subsystems, so AdjustSubSystem never
-    -- sees them; place them directly when Blizzard adds them.
+    -- sees them; place them directly when Blizzard adds them. AddAlertFrame is
+    -- the shared entry point for every alert, so the filter is what keeps this
+    -- off the ones a subsystem already placed.
     hooksecurefunc(af, "AddAlertFrame", function(_, frame)
         if not (AF:IsEnabled() and AF.holder and frame and frame.ClearAllPoints) then return end
+        if not IsDirectAlertFrame(frame) then return end
         AF:PostAlertMove()
         frame:ClearAllPoints()
         frame:SetPoint(POSITION, GetPerksAnchor() or AF.holder, POINT, X_OFFSET, Y_OFFSET)

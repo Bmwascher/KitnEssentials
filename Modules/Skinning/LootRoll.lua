@@ -9,7 +9,7 @@ end
 
 ---@class LootRoll: AceModule, AceEvent-3.0
 ---@field editModeRegistered boolean? true while the EditMode element is registered; nil after OnDisable/UnregisterElement
----@field _barsWired boolean? true once SetupRollBars has registered START_LOOT_ROLL and unregistered UIParent's; nil after TeardownRollBars
+---@field _barsWired boolean? true once SetupRollBars has registered START_LOOT_ROLL and pulled Blizzard's routed handler; nil after TeardownRollBars
 ---@field _bonusWired boolean? true once the Replace-mode BonusRollFrame re-anchor hook is installed; never cleared (hooksecurefunc is permanent)
 ---@field _previewBar table? the RollBar table currently showing the GUI preview; nil when no preview is active
 ---@field _previewTimer table? the C_Timer handle draining the preview; nil once cancelled or fired

@@ -535,14 +535,35 @@ function LR:START_LOOT_ROLL(event, rollID, rollTime)
     bar:Show()
 end
 
+-- Blizzard's START_LOOT_ROLL handler does not sit on UIParent. It routes
+-- through GameEvent's own dispatcher frame, so unregistering UIParent silences
+-- nothing and GroupLootContainer_AddRoll keeps building the default roll
+-- windows underneath our bars.
+--
+-- Restore re-registers an equivalent closure because the original is not
+-- exposed; it calls the same GameEvent.HandleStartLootRoll the routing table
+-- does. CANCEL_LOOT_ROLL needs no handling either way -- it is registered per
+-- roll frame, and while suppressed no roll frame exists to hear it.
+local function SetBlizzardRollsEnabled(enabled)
+    local GE = _G.GameEvent
+    if not (GE and GE.RegisterInternalEvent and GE.UnregisterInternalEvent
+            and GE.HandleStartLootRoll) then
+        return false
+    end
+    if enabled then
+        GE.RegisterInternalEvent("START_LOOT_ROLL", function(...) GE.HandleStartLootRoll(...) end)
+    else
+        GE.UnregisterInternalEvent("START_LOOT_ROLL")
+    end
+    return true
+end
+
 function LR:SetupRollBars()
     self:RollBars_Layout()
 
     if not self._barsWired then
         self:RegisterEvent("START_LOOT_ROLL")
-
-        UIParent:UnregisterEvent("START_LOOT_ROLL")
-        UIParent:UnregisterEvent("CANCEL_LOOT_ROLL")
+        SetBlizzardRollsEnabled(false)
         self._barsWired = true
     end
 end
@@ -550,8 +571,7 @@ end
 function LR:TeardownRollBars()
     if not self._barsWired then return end
     self:UnregisterEvent("START_LOOT_ROLL")
-    UIParent:RegisterEvent("START_LOOT_ROLL")
-    UIParent:RegisterEvent("CANCEL_LOOT_ROLL")
+    SetBlizzardRollsEnabled(true)
     for _, bar in next, self.RollBars do
         bar.rollID = nil
         bar:Hide()
