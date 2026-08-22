@@ -124,7 +124,7 @@ end
 local RETIRED_FONT_FACE = "Expressway"
 
 local DM_DEFAULTS = {
-    Enabled = true,
+    Enabled = false,
     Locked = true,              -- when true, disables EditMode drag of the dock
     RefreshRate = 0.5,
     UIBudgetMs = 1.2,

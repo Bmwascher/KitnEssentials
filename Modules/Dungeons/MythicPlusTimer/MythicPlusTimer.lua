@@ -290,7 +290,7 @@ local RETIRED_FONT_FACE_KEYS = {
 }
 
 local MPT_DEFAULTS = {
-    Enabled = true,
+    Enabled = false,
 
     -- Position (consumed by KE:ApplyFramePosition / CreatePositionCard).
     -- ParentFrame deliberately unseeded (position card writes it on demand).

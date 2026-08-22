@@ -55,7 +55,7 @@ describe("DamageMeter UpdateDB migration refill (real DM_DEFAULTS)", function()
     it("seeds a fresh profile fully and binds self.db", function()
         local db = seed(nil)   -- section absent entirely -> created + filled
         assert.equals(db, DM.db)
-        assert.is_true(db.Enabled)
+        assert.is_false(db.Enabled)   -- ships off; a false default must still be seeded, not skipped
         assert.equals(212, db.Width)
         assert.equals("BOTTOMRIGHT", db.Position.AnchorFrom)
         assert.equals(1, db.Dock.Columns[1].Windows[1])

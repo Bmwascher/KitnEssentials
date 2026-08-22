@@ -253,6 +253,10 @@ function KE:ValidateProfileFonts() end
 
 function KE:FillProfileDefaults() end
 
+--- Rewrites the pre-opt-in "module left enabled" absence as an explicit true.
+--- Reads the raw saved variables, so it MUST run before AceDB:New.
+function KE:MigrateModuleEnableDefaults() end
+
 -- ─── Dungeon Timers registry (Modules/DungeonTimers/DungeonRegistry.lua) ─
 --- Distinct seasons present in `registry`, ascending.
 ---@param registry KE.DungeonTimerEntry[]
