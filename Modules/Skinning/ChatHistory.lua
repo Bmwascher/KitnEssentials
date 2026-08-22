@@ -358,6 +358,12 @@ end
 -- the user's per-type toggles can have changed since, and because a stored
 -- value can read secret in a session that the session which stored it did not.
 function CH:RowIsReplayable(row)
+    -- The row itself, before type() reads it. Rows come from SavedVariables and
+    -- should be ordinary tables, so this is breadth rather than a known hole --
+    -- but the premise the field checks below rest on is that a stored value can
+    -- read secret in a later session, and that premise cannot stop at the
+    -- container.
+    if KE:IsSecretValue(row) then return false end
     if type(row) ~= "table" then return false end
 
     local event = row.event
@@ -435,12 +441,32 @@ function CH:DisplayChatHistory()
     -- Blizzard global any addon can append to, so `_G[frameName]` can be a
     -- number or a boolean, and indexing one of those throws before any check on
     -- the field itself could run.
-    local targets, t = {}, 0
+    --
+    -- The wanted types are COPIED, not referenced. Dispatch runs third-party
+    -- message filters, and one of those can reconfigure a chat frame while the
+    -- replay is still walking the others -- so a list that was a table when
+    -- checked here is not guaranteed to still be one, and iterating it in the
+    -- window would throw with the mute flag up. Copying also type-checks each
+    -- entry once per frame instead of once per row, which is what made
+    -- checking them look expensive.
+    local targets, wantedTypes, t = {}, {}, 0
     for _, frameName in ipairs(frames) do
         local chat = _G[frameName]
         if type(chat) == "table" and type(chat.messageTypeList) == "table" then
-            t = t + 1
-            targets[t] = chat
+            local wanted, w = {}, 0
+            for _, chatType in pairs(chat.messageTypeList) do
+                -- issecretvalue before type(), the same first-contact rule as
+                -- everywhere else: the type check is itself a read.
+                if not KE:IsSecretValue(chatType) and type(chatType) == "string" then
+                    w = w + 1
+                    wanted[w] = chatType
+                end
+            end
+            if w > 0 then
+                t = t + 1
+                targets[t] = chat
+                wantedTypes[t] = wanted
+            end
         end
     end
     if t == 0 then return end
@@ -458,30 +484,32 @@ function CH:DisplayChatHistory()
     -- Fetched BEFORE the flag goes up, with everything else that can throw.
     local handler = geterrorhandler()
 
-    -- From here to the clear, the only calls that can raise are the
-    -- pcall-wrapped dispatch and the pcall-wrapped handler. The rest is table
-    -- indexing, equality, and iterating a table nothing mutates mid-loop.
+    -- The flag is cleared on EVERY exit, a throw included, because the pass runs
+    -- inside its own pcall. That is the whole point of the shape: two rounds of
+    -- review found raising call sites in here that a "nothing below can throw"
+    -- argument had already cleared twice, so the invariant is built rather than
+    -- argued. Adding a call inside the window is now safe by default.
     --
-    -- One value in that equality is NOT checked by the prepass: `wanted` comes
-    -- from a chat frame's own message-type list, and the prepass checks that
-    -- the list is a table, never its entries. Equality against a secret throws,
-    -- so the invariant rests on that list being Blizzard's, holding literal
-    -- strings, rather than on anything verified here. Checking each entry would
-    -- put a type call in the innermost loop of the replay to cover a case that
-    -- cannot arise from a list this module does not write to.
+    -- The inner per-dispatch pcall stays as well. It is doing a different job:
+    -- one bad row must not abort the rows after it, and it must still reach the
+    -- error handler. The outer one only catches what the inner one is not
+    -- wrapped around.
     --
-    -- Keep the window as it stands: anything new that can raise belongs above
-    -- this line, not inside it.
+    -- NO SPEC COVERS THE OUTER PCALL, and that is not an oversight. With the
+    -- types snapshotted above, every value the pass touches is one this module
+    -- built, so no test can make the pass throw without first reintroducing the
+    -- defect. A test that cannot fail is worse than none. It stays because the
+    -- next edit in here is the one it is for.
     CMH.replaying = true
-    do
+    local swept, sweepErr = pcall(function()
         for j = 1, t do
             local chat = targets[j]
-            local messageTypes = chat.messageTypeList
+            local messageTypes = wantedTypes[j]
             for i = 1, n do
                 local row = rows[i]
                 local chatType = types[i]
-                for _, wanted in pairs(messageTypes) do
-                    if wanted == chatType then
+                for k = 1, #messageTypes do
+                    if messageTypes[k] == chatType then
                         local ok, err = pcall(CMH.ChatFrame_MessageEventHandler,
                             CMH, chat, row.event,
                             row[1], row[2], row[3], row[4], row[5], row[6],
@@ -498,7 +526,10 @@ function CH:DisplayChatHistory()
                 end
             end
         end
-    end
+    end)
 
     CMH.replaying = false
+    -- Surfaced, never swallowed. A structural failure in the pass is a real
+    -- defect and hiding it behind a short replay is how it would stay one.
+    if not swept and handler then pcall(handler, sweepErr) end
 end

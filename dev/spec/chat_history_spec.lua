@@ -206,6 +206,41 @@ describe("ChatHistory storage guards", function()
         assert.is_true(registered.CHAT_MSG_YELL)
     end)
 
+    it("drops the old profile's registrations when settings change under it", function()
+        -- ProfileManager refreshes db and flips enable state only on a
+        -- mismatch, calling ApplySettings on everything else. Without the
+        -- unregister a profile that switches a type OFF keeps paying dispatch
+        -- for it, and one that switches a type ON never captures it until a
+        -- reload. The existing registration spec calls RegisterHistoryEvents
+        -- directly, so it cannot see either.
+        local CH, KE = L.loadChatHistory()
+        local registered, cleared = {}, 0
+        CH.RegisterEvent = function(_, event) registered[event] = true end
+        CH.UnregisterAllEvents = function() cleared = cleared + 1; registered = {} end
+
+        KE.db.profile.Skinning.ChatHistory.ShowTypes.SAY = false
+        CH:ApplySettings()
+        assert.equals(1, cleared)
+        assert.is_nil(registered.CHAT_MSG_SAY)
+
+        KE.db.profile.Skinning.ChatHistory.ShowTypes.SAY = true
+        CH:ApplySettings()
+        assert.equals(2, cleared)
+        assert.is_true(registered.CHAT_MSG_SAY)
+    end)
+
+    it("registers nothing at all once the feature is switched off", function()
+        local CH, KE = L.loadChatHistory()
+        local registered, cleared = {}, 0
+        CH.RegisterEvent = function(_, event) registered[event] = true end
+        CH.UnregisterAllEvents = function() cleared = cleared + 1; registered = {} end
+
+        KE.db.profile.Skinning.ChatHistory.Enabled = false
+        CH:ApplySettings()
+        assert.equals(1, cleared)
+        assert.is_nil(next(registered))
+    end)
+
     it("clears both stores", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
@@ -366,6 +401,42 @@ describe("ChatHistory replay", function()
         assert.equals(1, #caught)
         -- ... and live chat is not left muted.
         assert.is_false(KE.ChatMessageHandler.replaying)
+    end)
+
+    it("stays unmuted when a dispatch reconfigures a frame it has not reached", function()
+        -- Replay runs third-party message filters, so an addon reacting to a
+        -- replayed line can rewrite another chat frame's messageTypeList while
+        -- the pass is still walking the frames. Before the snapshot, the pass
+        -- read that list live and iterated it inside the mute window, so the
+        -- throw escaped with every live whisper sound, keyword sound, tab
+        -- flash and reply-target write silenced until reload.
+        --
+        -- Nothing else in this file can see the regression: every other replay
+        -- spec leaves the frame list alone from first dispatch to last.
+        local CH, KE, _, caught = L.loadChatHistory()
+        _G.ChatFrame1 = { messageTypeList = { "SAY" } }
+        _G.ChatFrame2 = { messageTypeList = { "SAY" } }
+        _G.CHAT_FRAMES = { "ChatFrame1", "ChatFrame2" }
+
+        KE.ChatMessageHandler = {
+            replaying = false,
+            ChatFrame_MessageEventHandler = function(_, frame)
+                if frame == _G.ChatFrame1 then
+                    -- What a filter reconfiguring a chat frame looks like from
+                    -- here: the list stops being a table mid-pass.
+                    _G.ChatFrame2.messageTypeList = 7
+                end
+            end,
+        }
+
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+        CH:DisplayChatHistory()
+
+        -- The pass survives it, because the types it compares were copied
+        -- before the flag went up ...
+        assert.is_false(KE.ChatMessageHandler.replaying)
+        -- ... and nothing was swallowed on the way through.
+        assert.equals(0, #caught)
     end)
 
     it("skips a CHAT_FRAMES entry that is not a frame, and stays unmuted", function()
