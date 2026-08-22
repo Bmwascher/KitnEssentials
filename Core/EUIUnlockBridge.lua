@@ -103,11 +103,24 @@ local function BuildElement(config, opts)
         group = (opts and opts.group) or DEFAULT_GROUP,
         order = (opts and opts.order) or DEFAULT_ORDER,
 
-        -- Size belongs to the module's own option sliders. A drag-resize handle
-        -- would fight them, so movers are position-only. noAnchorTo and
-        -- noAnchorTarget are deliberately NOT set: being an anchor target is the
-        -- whole reason for registering.
-        noResize = true,
+        -- noAnchorTo and noAnchorTarget are deliberately NOT set: being an
+        -- anchor target is the whole reason for registering.
+        --
+        -- noResize is deliberately NOT set either, and must not be re-added.
+        -- Unlock mode's validator deletes any width or height match whose
+        -- TARGET carries that flag, and it runs on every unlock-mode open, so
+        -- the flag silently destroys the one relationship these elements exist
+        -- to support. It also gates nothing worth keeping: unlock mode's
+        -- movers have no sizing grip, and the match apply reads a target
+        -- through getSize without ever consulting it. What the flag does cost
+        -- is the mover's X and Y position boxes, which work and are wanted.
+        --
+        -- Size still belongs to the module's own option sliders, which is what
+        -- matchUnavailable says: these elements may be matched TO, but they
+        -- never take their own size from something else.
+        matchUnavailable = function()
+            return "Size is set in the KitnEssentials options."
+        end,
 
         -- KE places and pixel-snaps its own frames, so unlock mode must not
         -- re-place them: its init pass would otherwise re-apply the position

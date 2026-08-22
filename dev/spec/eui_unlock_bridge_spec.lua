@@ -278,3 +278,53 @@ describe("EUIUnlockBridge profile-folder injection", function()
         assert.has_no.errors(function() KE.EUIUnlock.InjectProfileAddon() end)
     end)
 end)
+
+-- Two refusal rules in one shape. noResize must stay OFF: EllesmereUI's
+-- validator deletes any size match whose TARGET carries it, and it runs on
+-- every unlock-mode open, so re-adding the flag makes a user's height match
+-- vanish silently. matchUnavailable must stay ON: it is what refuses the
+-- match-SOURCE role now that the buttons are reachable.
+describe("EUIUnlockBridge element size contract", function()
+    local function publish()
+        local KE = L.loadEUIUnlockBridge()
+        local captured
+
+        _G.EllesmereUI = {
+            MakeUnlockElement = function(element) return element end,
+            RegisterUnlockElements = function(_, batch) captured = batch[1] end,
+        }
+
+        KE.EUIUnlock:Register({
+            key = "Thing",
+            displayName = "Thing",
+            frame = { GetWidth = function() return 100 end,
+                      GetHeight = function() return 50 end },
+            getPosition = function() return nil end,
+            setPosition = function() end,
+        })
+
+        return captured
+    end
+
+    after_each(function()
+        _G.EllesmereUI = nil
+    end)
+
+    it("does not mark the element noResize", function()
+        assert.is_nil(publish().noResize)
+    end)
+
+    it("refuses the match-source role with a reason", function()
+        local element = publish()
+        assert.is_function(element.matchUnavailable)
+        local why = element.matchUnavailable("KE_Thing")
+        assert.is_string(why)
+        assert.is_true(#why > 0)
+    end)
+
+    it("still reports its live size, which is what a match target is read for", function()
+        local w, h = publish().getSize()
+        assert.equal(100, w)
+        assert.equal(50, h)
+    end)
+end)
