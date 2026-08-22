@@ -1541,13 +1541,15 @@ end
 -- post-hook are only observable by driving that callback: a spec that calls the
 -- predicates instead still passes when the guard is deleted from the hook.
 --
--- Everything InstallHooks touches is stubbed rather than mocked in depth. It
--- reads AlertFrame, hooksecurefunc's four targets, GroupLootContainer and
--- GroupLootContainer_Update, and none of those need behaviour here -- the
--- callback under test is captured from hooksecurefunc and invoked directly.
--- AF:IsEnabled and AF.holder are set because the hook's first guard reads both.
+-- The stub is deliberately thin. InstallHooks registers several callbacks and
+-- reaches for optional globals; this route ignores every registration except
+-- AddAlertFrame, which it captures, and leaves the optional globals nil so the
+-- branches that want them simply do not run. AF:IsEnabled and AF.holder are set
+-- because the hook's first guard reads both, and PostAlertMove is replaced by a
+-- counter so the assertions can see the placement decision without the layout
+-- work behind it.
 --
--- Returns AF, hook, calls:
+-- Returns AF, hook, calls, KE:
 --   hook  the captured AddAlertFrame post-hook, called as hook(af, frame)
 --   calls {postAlertMove = n} -- the placement side effect the guards suppress;
 --         a placed frame also records its own clearAllPoints/setPoint counts
@@ -1580,9 +1582,6 @@ function L.loadAlertFramesWithHooks()
     AF.holder = { GetCenter = function() return 0, 0 end }
     AF.PostAlertMove = function() calls.postAlertMove = calls.postAlertMove + 1 end
 
-    -- The module registry hands back the SAME table between loads, so a run
-    -- after the first would find its own guard already set and install nothing.
-    AF.hooked = nil
     AF:InstallHooks()
     return AF, captured, calls, KE
 end
