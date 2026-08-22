@@ -155,6 +155,18 @@ describe("RefreshAllModules enabled-state sync", function()
         assert.is_true(seen)
     end)
 
+    -- Same guard one step earlier: three HidePreview bodies read self.db, so
+    -- stopping previews ahead of the rebind hands them the stripped profile.
+    it("stops previews only after the db rebind", function()
+        local sibling = fakeModule("B", { Enabled = false })
+        sibling.UpdateDB = function(self) self.db = { Enabled = false, Rebound = true } end
+        local seen
+        local PM, _, KE = harness({ fakeModule("A", { Enabled = false }), sibling })
+        KE.PreviewManager = { StopAllPreviews = function() seen = sibling.db.Rebound end }
+        PM:RefreshAllModules()
+        assert.is_true(seen)
+    end)
+
     it("enables a module the profile marks enabled and disables one it marks disabled", function()
         local on = fakeModule("A", { Enabled = true })
         local off = fakeModule("B", { Enabled = false })
