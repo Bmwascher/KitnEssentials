@@ -19,20 +19,16 @@ KitnEssentials adds HUD elements, aura trackers, automation, dungeon tools, and 
 
 The sections below mirror the settings panel, so anything listed here is where you will find it in game.
 
-## Settings
+## Core
 
 | Page | Description |
 |---|---|
+| Home Page | Welcome page and the general settings below |
 | Profile Manager | Import, export, copy, and reset profiles, with per-character and global support |
 | Addon Theme | 8 WoW-themed color presets, class color mode, and fully custom colors |
+| System Optimization | One-click performance pass covering frame rate, memory, latency, and related console variables |
 
 The home page also carries the general settings: minimap button, login message, Global Font, and Slug font rendering. Slug is Blizzard's GPU glyph renderer — it gives sharper text but is unavailable in some locales, so it can be turned off for everything at once.
-
-## Optimize
-
-| Page | Description |
-|---|---|
-| System Optimization | One-click performance pass covering frame rate, memory, latency, and related console variables |
 
 ## Combat
 
@@ -81,18 +77,6 @@ The home page also carries the general settings: minimap button, login message, 
 | Quality of Life | Four tools on one page: Spell Alert Opacity (per-spec opt-in grid for Blizzard's proc overlay flashes, plus an opacity slider), Move Frames (drag Blizzard windows anywhere), Copy Anything (pull spell, item, NPC, and aura IDs to the clipboard from tooltips), and Slash Commands (shorthand commands such as `/rl`, `/cd`, `/fs`, `/leave`, `/reset`, `/mute`, `/music`) |
 | Utilities | Six tools on one page: Combat Potion (a "Potion Ready" cue when a combat potion is in bags and off cooldown), Raid Notifications (gateway usability, reset and loot boss reminders, Mythic bench alert, seasonal bonus rolls), Ready Check (clickable consumable icons on ready check, including Warlock Soulstone with auto-target healer), Recuperate (one-click self-heal with health-based visibility), Time Spiral (movement proc tracker with glow and countdown, all classes), and World Markers (cycle markers at the cursor with drag-to-reorder priority) |
 
-## Skinning
-
-| Page | Description |
-|---|---|
-| Dark Theme | One skinning engine across roughly fifty Blizzard windows, dialogs, context menus, and toasts, on a four-tab page: General (window colors included), Fonts, Skins (Blizzard frames, with skins for several third-party addons below them), and Elements (loot roll, loot window, UI widgets, character screen). Also carries the Color Picker additions (typed RGB and alpha entry in Blizzard's picker) and Raid Control (a group panel with ready check, a 5, 10 or 20 second countdown, difficulty, everyone-assist, world markers, a role count, group sorting, a Vantus Rune check, and a raid buff strip) |
-| Vehicle Exit Button | The vehicle and taxi exit button, skinned to match, and placeable anywhere with anchor-to-frame support |
-| Chat | Custom movable chat panel with tab styling, short channel names, timestamps with live clock samples, chat copy, message fading, class-colored Battle.net whispers, guild login and logout messages, and whisper sounds. Also carries Chat Links (icons in front of linked items, currencies, spells, achievements, keystones and PvP talents, numerical crafting quality, and clickable web addresses with a copy box), Chat History (per-character chat and typing recall restored after a reload, with the original timestamps), keyword highlight with an optional sound, class-colored mentions, and achievement merging |
-| Damage Meter | Standalone multi-window damage and healing meter built on the 12.0 damage meter API, replacing Blizzard's built-in one. Proportional dock with shared backdrop, per-content auto-swapping layouts, eight meter types, class-colored bars with nickname support, header combat clock anchored to the game's own fight timer, spell breakdown for your own bar and death recaps for any row that stay open in combat, target details, segment history, and report-to-chat |
-| Mythic+ Timer | Self-contained keystone timer HUD — count-up timer with +3/+2/+1 threshold marks, aggregate forces bar, per-boss objective list with clear times and personal-best deltas, deaths line with class-colored hover log, personal-best splits, Challenger's Peril aware cutoffs, enemy tooltip and nameplate forces overlay, keystone auto-insert, Blizzard objective-tracker hider, boss-split party chat posts, and a live preview. Six-tab config page (`/kes mt`) |
-| Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
-| Tooltips | Tooltip backdrop and font restyling, cursor anchoring, spell, item, and aura IDs, guild rank, Mythic rating, target line, class-colored health bar, and hide-in-combat |
-
 ## Dungeon Tools
 
 | Module | Description |
@@ -116,6 +100,18 @@ Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast du
 | Text Settings | Font, outline, and label formatting |
 | Nameplate Settings | Trash tracker icons, countdowns, and per-ability sounds |
 | Per-dungeon pages | Algeth'ar Academy, Magisters' Terrace, Maisara Caverns, Nexus-Point Xenas, Pit of Saron, Seat of the Triumvirate, Skyreach, and Windrunner Spire |
+
+## Skinning
+
+| Page | Description |
+|---|---|
+| Dark Theme | One skinning engine across roughly fifty Blizzard windows, dialogs, context menus, and toasts, on a four-tab page: General (window colors included), Fonts, Skins (Blizzard frames, with skins for several third-party addons below them), and Elements (loot roll, loot window, UI widgets, character screen). Also carries the Color Picker additions (typed RGB and alpha entry in Blizzard's picker) and Raid Control (a group panel with ready check, a 5, 10 or 20 second countdown, difficulty, everyone-assist, world markers, a role count, group sorting, a Vantus Rune check, and a raid buff strip) |
+| Vehicle Exit Button | The vehicle and taxi exit button, skinned to match, and placeable anywhere with anchor-to-frame support |
+| Chat | Custom movable chat panel with tab styling, short channel names, timestamps with live clock samples, chat copy, message fading, class-colored Battle.net whispers, guild login and logout messages, and whisper sounds. Also carries Chat Links (icons in front of linked items, currencies, spells, achievements, keystones and PvP talents, numerical crafting quality, and clickable web addresses with a copy box), Chat History (per-character chat and typing recall restored after a reload, with the original timestamps), keyword highlight with an optional sound, class-colored mentions, and achievement merging |
+| Damage Meter | Standalone multi-window damage and healing meter built on the 12.0 damage meter API, replacing Blizzard's built-in one. Proportional dock with shared backdrop, per-content auto-swapping layouts, eight meter types, class-colored bars with nickname support, header combat clock anchored to the game's own fight timer, spell breakdown for your own bar and death recaps for any row that stay open in combat, target details, segment history, and report-to-chat |
+| Mythic+ Timer | Self-contained keystone timer HUD — count-up timer with +3/+2/+1 threshold marks, aggregate forces bar, per-boss objective list with clear times and personal-best deltas, deaths line with class-colored hover log, personal-best splits, Challenger's Peril aware cutoffs, enemy tooltip and nameplate forces overlay, keystone auto-insert, Blizzard objective-tracker hider, boss-split party chat posts, and a live preview. Six-tab config page (`/kes mt`) |
+| Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
+| Tooltips | Tooltip backdrop and font restyling, cursor anchoring, spell, item, and aura IDs, guild rank, Mythic rating, target line, class-colored health bar, and hide-in-combat |
 
 ## ElvUI Tags
 

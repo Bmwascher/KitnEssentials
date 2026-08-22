@@ -1,5 +1,29 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.3
+
+### Settings Window
+- The settings window is now see-through again. Each part of the window was
+  painting its own background on top of the others, and the stack added up to
+  nearly solid. The window paints one background now, so the sidebar, the
+  content area and the bottom bar all let the game show through
+- Changing your accent colour no longer paints the window solid again
+
+### Settings Sidebar
+- The Optimize section is gone. Its System Optimization page now sits in a new
+  Core section at the top, alongside Profile Manager and Addon Theme
+- Core also has a Home Page row, so the welcome page is reachable from the
+  sidebar instead of only from the house icon in the title bar
+- Skinning has moved to the bottom of the sidebar
+- The Combat section's first row is called Combat Res again. Searching for
+  "battle res" still finds it
+
+### Tabs
+- Tabs inside a page are now only as wide as their own labels, with a hairline
+  gap between them, instead of stretching to share the full row
+
+---
+
 ## v4.3.2
 
 ### Alerts and Loot Toasts
