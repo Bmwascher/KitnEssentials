@@ -37,7 +37,7 @@ foreach ($seg in $segments) {
 
     if ($seg -match "$git\s+checkout\b[^>]*\s--(\s|$)" -or
         $seg -match "$git\s+checkout\s+\.(\s|$)" -or
-        $seg -match "$git\s+checkout\s+(-f\b|--force\b)") {
+        $seg -match "$git\s+checkout\b[^>]*\s(-f|--force)\b") {
         $reason = "git checkout with a pathspec or --force discards uncommitted work (standing rule: never git checkout unstaged changes - it has destroyed live edits before). Stash or commit first, or copy the file aside; branch switches without a pathspec are allowed."
         break
     }
@@ -54,7 +54,8 @@ foreach ($seg in $segments) {
         # Tokenize the args after `add`; deny blanket-staging tokens.
         $args_ = ($seg -replace ".*?$git\s+add\b", '') -split '\s+' | Where-Object { $_ }
         foreach ($t in $args_) {
-            if ($t -in @('.', './', '-A', '--all', '-u', '--update')) {
+            # -cmatch catches clustered short options too (`-uv`, `-Av`).
+            if ($t -in @('.', './', '--all', '--update') -or $t -cmatch '^-[a-zA-Z]*[uA]') {
                 $reason = "Blanket staging is banned (family AGENTS.md git rules: stage by explicit path - git add -A once swept a user's in-flight file into an unrelated commit). List the files you mean to stage."
                 break
             }

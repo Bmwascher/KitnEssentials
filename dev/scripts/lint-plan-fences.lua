@@ -39,7 +39,7 @@ local function collect_blocks(path)
     return blocks
 end
 
-local run_id = tostring(os.time())
+local run_id = tostring(os.time()) .. "_" .. (tostring(os.clock()):gsub("%D", ""))
 
 local function lint_block(block, index, plan)
     -- Exact 5.1 syntax first: luacheck's parser accepts newer-Lua syntax
@@ -54,7 +54,7 @@ local function lint_block(block, index, plan)
     if not out then return false, "cannot write " .. snippet end
     local wrote = out:write(block.code, "\n")
     local closed = out:close()
-    if not wrote or closed == false then
+    if not wrote or not closed then
         os.remove(snippet)
         return false, "failed writing " .. snippet .. " (disk full?)"
     end
