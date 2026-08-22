@@ -6,8 +6,6 @@
 
     <!-- Reusable GUI infrastructure (KE.GUI factories) -->
     <Script file="GUIMain\GUI-KEScrollbar.lua" />
-    <Script file="GUIMain\GUI-ContentAreas.lua" />
-    <Script file="GUIMain\GUI-KESubTabPanel.lua" />
     <Script file="GUIMain\GUI-WidgetStateManager.lua" />
 
     <!-- Utilities -->
