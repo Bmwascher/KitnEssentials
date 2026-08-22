@@ -23,19 +23,12 @@ GUIFrame.sidebarConfig = {
     {
         id = "settings_section",
         type = "header",
-        text = "\226\128\162 Settings",
+        text = "\226\128\162 Core",
         defaultExpanded = true,
         items = {
+            { id = "HomePage", text = "Home Page", keywords = { "home", "home page", "start", "welcome", "overview", "about", "changelog" } },
             { id = "Profiles", text = "Profile Manager", keywords = { "profile", "profiles", "import", "export", "copy", "reset" } },
             { id = "Theme",    text = "Addon Theme", keywords = { "theme", "color", "accent", "appearance", "skin" } },
-        },
-    },
-    {
-        id = "optimize_section",
-        type = "header",
-        text = "\226\128\162 Optimize",
-        defaultExpanded = false,
-        items = {
             { id = "Optimize", text = "System Optimization", keywords = { "optimize", "performance", "fps", "cpu", "memory", "latency", "cvar" } },
         },
     },

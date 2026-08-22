@@ -58,8 +58,8 @@ local DEBUG_GUIDES = false
 local guideLogStamp
 
 -- Categories are the sidebar's own sections. A nil id means no filter.
--- The sidebar also has settings_section and optimize_section; neither registers
--- a mover, so a button for them would only ever be dimmed.
+-- The sidebar also has settings_section, which registers no mover, so a button
+-- for it would only ever be dimmed.
 local CATEGORIES = {
     { label = "All" },
     { id = "combat_section",   label = "Combat" },
