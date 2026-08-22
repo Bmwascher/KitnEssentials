@@ -214,6 +214,24 @@ function KE:NormalizeFontOutline(value) end
 ---@return string
 function KE:GetGlobalFont() end
 
+--- The list key every font dropdown offers as its first entry. Never stored.
+KE.FONT_FOLLOW_GLOBAL = "*global*"
+
+--- Adds the follow-the-global entry to an LSM font list and returns the list.
+--- Handles both the hash and the ordered-array list shapes. effectiveName
+--- overrides the label's font name where the pick inherits from a module face
+--- rather than the profile-wide one.
+---@param fontList table?
+---@param effectiveName string?
+---@return table
+function KE:AddFollowGlobalFont(fontList, effectiveName) end
+
+--- What a dropdown pick should store: nil for the follow-the-global sentinel,
+--- the key itself otherwise.
+---@param key string?
+---@return string?
+function KE:StoredFontFace(key) end
+
 ---@param fontPath string
 ---@return boolean
 function KE:IsFontValid(fontPath) end

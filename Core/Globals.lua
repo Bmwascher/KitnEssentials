@@ -15,6 +15,7 @@ local string_gsub = string.gsub
 local string_find = string.find
 local math_floor = math.floor
 local math_max = math.max
+local table_insert = table.insert
 local ReloadUI = ReloadUI
 local C_AddOns = C_AddOns
 local C_Timer = C_Timer
@@ -95,6 +96,48 @@ function KE:GetGlobalFont()
     return (profile and profile.GlobalFont) or "Expressway"
 end
 
+-- Every font dropdown offers this as its first entry. It is a LIST KEY ONLY --
+-- picking it stores nil, and an unset face is what resolves to the global font.
+KE.FONT_FOLLOW_GLOBAL = "*global*"
+
+-- Inserts the follow-the-global entry into an LSM font list and returns the
+-- list. Pass effectiveName when the pick inherits from something other than the
+-- profile-wide font, so the label names what will actually be used.
+--
+-- Font lists come in two shapes. An ARRAY of { key =, text = } entries becomes
+-- the dropdown's ordered key list, so the entry has to go at the FRONT --
+-- callers sort before calling, and appending would bury it under the Zs. A HASH
+-- is sorted by key at render time, and "*" is below every letter and digit, so
+-- the same entry lands first on its own. A hash key written onto an array-shaped
+-- list never renders at all, which is why the shape is detected rather than
+-- assumed. An empty list is treated as a hash; that is the one case the two
+-- shapes cannot be told apart.
+---@param fontList table?
+---@param effectiveName string?
+---@return table fontList
+function KE:AddFollowGlobalFont(fontList, effectiveName)
+    fontList = fontList or {}
+    local text = "Use Global Font (" .. (effectiveName or self:GetGlobalFont()) .. ")"
+
+    if #fontList > 0 and type(fontList[1]) == "table" then
+        table_insert(fontList, 1, { key = self.FONT_FOLLOW_GLOBAL, text = text })
+    else
+        fontList[self.FONT_FOLLOW_GLOBAL] = text
+    end
+
+    return fontList
+end
+
+-- What a dropdown pick should STORE. nil means follow the global, so this
+-- cannot be written as an and/or expression -- one can never yield nil, and the
+-- sentinel would be saved as if it were a real font name.
+---@param key string?
+---@return string?
+function KE:StoredFontFace(key)
+    if key == self.FONT_FOLLOW_GLOBAL then return nil end
+    return key
+end
+
 -- A nil fontName means "no per-module choice", which resolves to the global
 -- font. Every font application reaches this, so no module needs to read the
 -- setting itself.
@@ -113,10 +156,14 @@ end
 -- Hoisted from an inline copy in Tooltips.lua so the skin modules share one
 -- definition; two copies of a resolution rule drifting apart is a failure mode
 -- this project has already had.
+--
+-- nil is the correct answer for an unset module, not a stock face: it flows
+-- into KE:GetFontPath, which resolves it through the global font.
 ---@param moduleDB table? Module settings table
----@return string fontName
+---@return string? fontName
 function KE:GetEffectiveFont(moduleDB)
-    return moduleDB and (moduleDB.FontFace or moduleDB.Font or moduleDB.fontFace) or "Friz Quadrata TT"
+    if not moduleDB then return nil end
+    return moduleDB.FontFace or moduleDB.Font or moduleDB.fontFace
 end
 
 function KE:GetStatusbarPath(barName)

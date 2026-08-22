@@ -682,11 +682,124 @@ describe("KE:GetEffectiveFont", function()
         assert.equals("B", KE:GetEffectiveFont({ Font = "B", fontFace = "C" }))
     end)
 
-    it("returns the stock face for a nil table", function()
-        assert.equals("Friz Quadrata TT", KE:GetEffectiveFont(nil))
+    -- nil, not a face: the value flows into KE:GetFontPath, which resolves an
+    -- unset name through the global font. A literal here pinned every module
+    -- that never chose a face to that literal instead.
+    it("returns nil for a nil table", function()
+        assert.is_nil(KE:GetEffectiveFont(nil))
     end)
 
-    it("returns the stock face for a table with no font key", function()
-        assert.equals("Friz Quadrata TT", KE:GetEffectiveFont({ Size = 12 }))
+    it("returns nil for a table with no font key", function()
+        assert.is_nil(KE:GetEffectiveFont({ Size = 12 }))
+    end)
+end)
+
+describe("KE.FONT_FOLLOW_GLOBAL", function()
+    local KE
+
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    it("is the sentinel the dropdowns key their follow entry on", function()
+        assert.equals("*global*", KE.FONT_FOLLOW_GLOBAL)
+    end)
+end)
+
+describe("KE:StoredFontFace", function()
+    local KE
+
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    -- Why this is a function and not `key ~= SENTINEL and key or nil`: an
+    -- and/or expression can never yield nil, so that form would write the
+    -- sentinel string into the profile as though it were a font name.
+    it("stores nil for the sentinel", function()
+        assert.is_nil(KE:StoredFontFace(KE.FONT_FOLLOW_GLOBAL))
+    end)
+
+    it("stores a real font name unchanged", function()
+        assert.equals("GoodFont", KE:StoredFontFace("GoodFont"))
+    end)
+
+    it("passes nil through", function()
+        assert.is_nil(KE:StoredFontFace(nil))
+    end)
+end)
+
+describe("KE:AddFollowGlobalFont", function()
+    local KE
+
+    local function arrayList()
+        return { { key = "Arial", text = "Arial" }, { key = "Zapf", text = "Zapf" } }
+    end
+
+    before_each(function()
+        KE = L.loadGlobals()
+        KE.db = { profile = { GlobalFont = "GoodFont" } }
+    end)
+
+    it("labels the entry with the current global font", function()
+        local list = KE:AddFollowGlobalFont({ Arial = "Arial" })
+        assert.equals("Use Global Font (GoodFont)", list[KE.FONT_FOLLOW_GLOBAL])
+    end)
+
+    it("prefers an explicit effectiveName over the global font", function()
+        local list = KE:AddFollowGlobalFont({ Arial = "Arial" }, "Naowh")
+        assert.equals("Use Global Font (Naowh)", list[KE.FONT_FOLLOW_GLOBAL])
+    end)
+
+    it("returns the same table it was given", function()
+        local list = { Arial = "Arial" }
+        assert.equals(list, KE:AddFollowGlobalFont(list))
+    end)
+
+    it("leaves existing entries untouched", function()
+        local list = KE:AddFollowGlobalFont({ Arial = "Arial" })
+        assert.equals("Arial", list.Arial)
+    end)
+
+    it("builds a list when given nil", function()
+        local list = KE:AddFollowGlobalFont(nil)
+        assert.equals("Use Global Font (GoodFont)", list[KE.FONT_FOLLOW_GLOBAL])
+    end)
+
+    -- Shape detection, asserted on SHAPE and not merely on presence. Writing a
+    -- hash key onto an array-shaped list is invisible to the dropdown: it walks
+    -- the array part only, so the entry never renders and the selected sentinel
+    -- has no label to draw from.
+    describe("array-shaped lists", function()
+        it("inserts at index 1, ahead of the sorted faces", function()
+            local list = KE:AddFollowGlobalFont(arrayList())
+            assert.equals(KE.FONT_FOLLOW_GLOBAL, list[1].key)
+            assert.equals("Use Global Font (GoodFont)", list[1].text)
+        end)
+
+        it("does not also write a hash key", function()
+            local list = KE:AddFollowGlobalFont(arrayList())
+            assert.is_nil(list[KE.FONT_FOLLOW_GLOBAL])
+        end)
+
+        it("keeps the existing entries and their order", function()
+            local list = KE:AddFollowGlobalFont(arrayList())
+            assert.equals(3, #list)
+            assert.equals("Arial", list[2].key)
+            assert.equals("Zapf", list[3].key)
+        end)
+    end)
+
+    describe("hash-shaped lists", function()
+        it("gains no array element", function()
+            local list = KE:AddFollowGlobalFont({ Arial = "Arial" })
+            assert.equals(0, #list)
+        end)
+
+        it("treats an empty list as a hash", function()
+            local list = KE:AddFollowGlobalFont({})
+            assert.equals(0, #list)
+            assert.equals("Use Global Font (GoodFont)", list[KE.FONT_FOLLOW_GLOBAL])
+        end)
     end)
 end)
