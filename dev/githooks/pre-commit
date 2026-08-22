@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Pre-commit guard: the comment rules (KE AGENTS.md "Comments: lean, and
+# impersonal") ban personal/agent names, upstream addon names, plan-step
+# references, and review/session history from shipped source. Broken 8+ times
+# before this hook; every instance was greppable in the added lines.
+# Scans only ADDED lines of staged .lua/.xml addon source (dev/ and .claude/
+# are exempt — they never ship).
+# Deliberate exception: git commit --no-verify
+set -uo pipefail
+
+# Added lines only, staged, addon source only.
+added="$(git diff --cached -U0 --no-color -- '*.lua' '*.xml' ':(exclude)dev/*' ':(exclude).claude/*' \
+    | grep -E '^\+[^+]' || true)"
+[ -n "$added" ] || exit 0
+
+fail=0
+
+# Personal / agent names (word-bounded; case-sensitive where lowercase forms
+# are common English or code words).
+names='Brandon|Codex|Kimi|atrocityEssentials|NorskenUI|Norsken|EllesmereUI|Ellesmere|ExwindTools|WindTools|HighonHaste|AugBuffTracker'
+if hits="$(printf '%s\n' "$added" | grep -nwE "$names" | head -5)"; then
+    if [ -n "$hits" ]; then
+        echo "[pre-commit] BLOCKED: staged addon source adds personal/agent/upstream names:" >&2
+        printf '%s\n' "$hits" >&2
+        fail=1
+    fi
+fi
+
+# Plan-task references ("step A3", "Task 7") and review/session history.
+history='[Ss]tep [A-Z][0-9]+|[Tt]ask [0-9]+ of|round of review|review round|per the plan|References/'
+if hits="$(printf '%s\n' "$added" | grep -nE "$history" | head -5)"; then
+    if [ -n "$hits" ]; then
+        echo "[pre-commit] BLOCKED: staged addon source adds plan-step or review-history references:" >&2
+        printf '%s\n' "$hits" >&2
+        fail=1
+    fi
+fi
+
+if [ "$fail" -eq 1 ]; then
+    echo "[pre-commit] Comment rules (KE AGENTS.md): decisions stand on their own — no names, no plan steps, no session history in shipped source. Fix the lines, or override a deliberate exception with: git commit --no-verify" >&2
+    exit 1
+fi
+exit 0
