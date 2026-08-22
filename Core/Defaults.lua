@@ -2127,7 +2127,9 @@ local FLIPPED_TO_OFF = {
 -- once that version's default has been saved a re-run cannot tell "left on"
 -- from "switched off" any more. Per path, the record is exact and self-
 -- maintaining -- adding an entry migrates it, on the one condition that the
--- entry lands in the same version that flips its default.
+-- entry lands in the same COMMIT that flips its default. Not the same release:
+-- every commit here is live in game over the symlink, so a one-commit gap is
+-- long enough for a reload to save the new default and destroy the signal.
 local OPT_IN_RECORD = "ModuleDefaultsOptIn"
 
 -- Returns the table holding the flipped key, creating empty parents on the way
