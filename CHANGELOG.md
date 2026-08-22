@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.4
+
+### Fonts
+- Every font dropdown now starts with "Use Global Font", so a module can follow
+  the Global Font from the home page instead of being pinned to one face. The
+  entry names the font it will use, for example "Use Global Font (Expressway)"
+- Changing the Global Font now moves every module that is left on it, including
+  skinned Blizzard windows and tooltips. Those two stayed on Expressway before
+- If you deliberately picked Expressway for tooltips or UI widgets, they now
+  follow the Global Font instead. The game could not tell that choice apart from
+  never having picked one, so it reads as "follow the global font"
+- The Mythic+ Timer font cards name the font they actually inherit, so the
+  Deaths card shows the base card's font rather than the addon-wide one
+
 ## v4.3.3
 
 ### Settings Window
