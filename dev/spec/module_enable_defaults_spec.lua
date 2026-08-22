@@ -9,7 +9,7 @@
 -- that no module defaults on.
 local helpers = require("dev.spec._helpers")
 
-local STAMP = "ModuleEnableDefaultsMigrated"
+local RECORD = "ModuleDefaultsOptIn"
 
 -- Exempt from the modules-ship-off rule:
 --   UseElvUI      -- not a module; it selects ElvUI media when ElvUI is present.
@@ -87,18 +87,28 @@ describe("module enable defaults", function()
         assert.is_false(sv.profiles.Alt.CombatTexts.Enabled)
     end)
 
-    it("runs once per saved-variables file", function()
+    it("handles each path once per saved-variables file", function()
         local sv, KE = migrateWith({ profiles = { Default = {} } })
-        assert.is_true(sv[STAMP])
+        assert.is_true(sv[RECORD]["CombatTexts.Enabled"])
         sv.profiles.Default.CombatTexts.Enabled = false
         KE:MigrateModuleEnableDefaults()
         assert.is_false(sv.profiles.Default.CombatTexts.Enabled)
     end)
 
-    it("stamps a fresh install so the next login is not read as legacy", function()
+    -- The regression this record exists for: a single done-flag skipped every
+    -- path appended to the list after the flag was written.
+    it("still handles a path appended to the list in a later version", function()
+        local sv, KE = migrateWith({ profiles = { Default = {} } })
+        sv[RECORD]["CombatTexts.Enabled"] = nil          -- as if never listed
+        sv.profiles.Default.CombatTexts.Enabled = nil    -- AceDB stripped it
+        KE:MigrateModuleEnableDefaults()
+        assert.is_true(sv.profiles.Default.CombatTexts.Enabled)
+    end)
+
+    it("records a fresh install so the next login is not read as legacy", function()
         local sv, KE = migrateWith(nil)
         assert.is_table(sv)
-        assert.is_true(sv[STAMP])
+        assert.is_true(sv[RECORD]["CombatTexts.Enabled"])
         -- AceDB creates the profile on this same login; the next login must
         -- leave it alone.
         sv.profiles = { Default = {} }

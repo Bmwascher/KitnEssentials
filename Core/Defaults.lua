@@ -2121,9 +2121,14 @@ local FLIPPED_TO_OFF = {
     { "KeystoneHelper", "YourKeyEnabled" },
 }
 
--- Root-level key, outside every AceDB namespace, so AceDB never strips it and
--- the walk runs exactly once per saved-variables file.
-local OPT_IN_STAMP = "ModuleEnableDefaultsMigrated"
+-- Root-level table, outside every AceDB namespace so AceDB never strips it.
+-- It records each path this has already handled, NOT a single done flag: a flag
+-- would silently skip any entry appended to the list in a later version, and
+-- once that version's default has been saved a re-run cannot tell "left on"
+-- from "switched off" any more. Per path, the record is exact and self-
+-- maintaining -- adding an entry migrates it, on the one condition that the
+-- entry lands in the same version that flips its default.
+local OPT_IN_RECORD = "ModuleDefaultsOptIn"
 
 -- Returns the table holding the flipped key, creating empty parents on the way
 -- down. Bails on a saved value that is not a table rather than clobbering it.
@@ -2146,25 +2151,33 @@ end
 function KE:MigrateModuleEnableDefaults()
     local sv = _G.KitnEssentialsDB
     if type(sv) ~= "table" then
-        -- Fresh install. Nothing to preserve, but the stamp still has to land
+        -- Fresh install. Nothing to preserve, but the record still has to land
         -- or the next login would read the brand-new profile as a legacy one
         -- and switch every module back on.
         sv = {}
         _G.KitnEssentialsDB = sv
     end
-    if sv[OPT_IN_STAMP] then return end
-    sv[OPT_IN_STAMP] = true
+    local record = sv[OPT_IN_RECORD]
+    if type(record) ~= "table" then
+        record = {}
+        sv[OPT_IN_RECORD] = record
+    end
 
     local profiles = sv.profiles
-    if type(profiles) ~= "table" then return end
-    for _, profile in pairs(profiles) do
-        if type(profile) == "table" then
-            for i = 1, #FLIPPED_TO_OFF do
-                local path = FLIPPED_TO_OFF[i]
-                local parent = ResolveParentTable(profile, path)
+    for i = 1, #FLIPPED_TO_OFF do
+        local path = FLIPPED_TO_OFF[i]
+        local id = table.concat(path, ".")
+        if not record[id] then
+            record[id] = true
+            if type(profiles) == "table" then
                 local key = path[#path]
-                if parent and parent[key] == nil then
-                    parent[key] = true
+                for _, profile in pairs(profiles) do
+                    if type(profile) == "table" then
+                        local parent = ResolveParentTable(profile, path)
+                        if parent and parent[key] == nil then
+                            parent[key] = true
+                        end
+                    end
                 end
             end
         end
