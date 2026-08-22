@@ -510,23 +510,24 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     local card = GUIFrame:CreateCard(scrollChild, "Skin Font", yOffset)
     card:AddNote("Controls text inside windows KitnEssentials skins. Elements with a deliberately larger size, such as window titles and big counters, keep the gap between them and move together.")
 
-    -- An empty key is the addon's own font. A map of options is sorted by key,
-    -- and an empty string sorts before every font name, so this entry lands
-    -- first without needing an ordered list.
-    local fontOptions = { [""] = "Use Global Font" }
+    local fontOptions = {}
     if LSM then
         for name in pairs(LSM:HashTable("font")) do fontOptions[name] = name end
     end
 
     local rowFace = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     rowFace:AddWidget(GUIFrame:CreateDropdown(rowFace, "Font", {
-        options = fontOptions,
-        value = db.FontFace or "",
+        options = KE:AddFollowGlobalFont(fontOptions),
+        value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
         searchable = true,
         isFontPreview = true,
         callback = function(key)
-            db.FontFace = key
-            if S and S.SetSkinFont then S.SetSkinFont(key, nil, nil) end
+            db.FontFace = KE:StoredFontFace(key)
+            -- SetSkinFont reads nil as "leave the face alone", so the resolved
+            -- name goes across the wire rather than the unset marker.
+            if S and S.SetSkinFont then
+                S.SetSkinFont(db.FontFace or KE:GetGlobalFont(), nil, nil)
+            end
         end,
     }), 0.5)
 

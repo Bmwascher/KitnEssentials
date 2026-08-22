@@ -557,11 +557,7 @@ local function ValidateFontsRecursive(tbl, defaults)
 
     for key, value in pairs(tbl) do
         if IsFontKey(key) and type(value) == "string" then
-            -- An empty font key whose own default is empty is a deliberate
-            -- "use the addon's font" choice, not a broken value. Repairing it
-            -- would write a font name into every profile on every login.
-            local wantsEmpty = value == "" and (defaults and defaults[key]) == ""
-            if not wantsEmpty and not LSM:IsValid("font", value) then
+            if not LSM:IsValid("font", value) then
                 local defaultVal = defaults and defaults[key] or KE:GetGlobalFont()
                 if not LSM:IsValid("font", defaultVal) then
                     -- Backstop stays a literal. KE registers Expressway itself,

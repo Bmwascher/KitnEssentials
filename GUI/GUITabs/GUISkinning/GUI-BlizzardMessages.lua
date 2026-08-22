@@ -166,10 +166,10 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
     if db.Enabled ~= false then
         local rowFace = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
         local fontDropdown = GUIFrame:CreateDropdown(rowFace, "Font", {
-            options = fontList,
-            value = db.Font or KE:GetGlobalFont(),
+            options = KE:AddFollowGlobalFont(fontList),
+            value = db.Font or KE.FONT_FOLLOW_GLOBAL,
             callback = function(key)
-                db.Font = key
+                db.Font = KE:StoredFontFace(key)
                 ApplySettings()
             end,
             searchable = true,

@@ -218,9 +218,9 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     manager:Register(card3, "all")
     PairRow(card3,
-        MkDropdown("Font", BuildFontOptions(),
-            function() return db.FontFace or "Expressway" end,
-            function(v) db.FontFace = v end, true), 40,
+        MkDropdown("Font", KE:AddFollowGlobalFont(BuildFontOptions()),
+            function() return db.FontFace or KE.FONT_FOLLOW_GLOBAL end,
+            function(v) db.FontFace = KE:StoredFontFace(v) end, true), 40,
         MkDropdown("Outline", KE:GetFontOutlineOptions(),
             function() return KE:NormalizeFontOutline(db.FontOutline or "OUTLINE") end,
             function(v) db.FontOutline = v end), 40)
