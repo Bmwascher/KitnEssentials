@@ -176,11 +176,11 @@ GUIFrame:RegisterContent("MaintenanceTracker", function(scrollChild, yOffset)
 
     local rowFont = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
     local fontFaceDropdown = GUIFrame:CreateDropdown(rowFont, "Font", {
-        options = fontList,
-        value = db.FontFace or KE:GetGlobalFont(),
+        options = KE:AddFollowGlobalFont(fontList),
+        value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
         searchable = true,
         isFontPreview = true,
-        callback = function(key) db.FontFace = key; ApplySettings() end,
+        callback = function(key) db.FontFace = KE:StoredFontFace(key); ApplySettings() end,
     })
     rowFont:AddWidget(fontFaceDropdown, 0.5)
     manager:Register(fontFaceDropdown, "all")
