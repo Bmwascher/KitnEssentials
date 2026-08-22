@@ -545,7 +545,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     manager:Register(autoAcceptResCheck, "all")
     card3:AddRow(row3b, Theme.rowHeightLast, 0)
 
-    card3:AddLabel("|cff888888Battle res / Combat res / Soulstone are never auto-accepted; you stay in control during encounters.|r")
+    card3:AddLabel("|cff888888Combat res / Soulstone are never auto-accepted; you stay in control during encounters.|r")
 
     yOffset = card3:GetNextOffset()
 

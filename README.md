@@ -38,7 +38,7 @@ The home page also carries the general settings: minimap button, login message, 
 
 | Module | Description |
 |---|---|
-| Battle Res | Battle res charge tracker with timer |
+| Combat Res | Combat res charge tracker with timer |
 | Combat Texts | Combat enter/exit, no target warning, interrupt announce with spell icon, and low durability warnings |
 | Combat Timer | Configurable in-combat duration display |
 | Cursor Effects | Cursor-following ring with GCD overlay and multiple textures, plus optional dispel and taunt cooldown countdowns at the cursor — tabbed page |

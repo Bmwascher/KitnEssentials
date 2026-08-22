@@ -38,7 +38,7 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Combat",
         defaultExpanded = false,
         items = {
-            { id = "CombatRes",     text = "Battle Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
+            { id = "CombatRes",     text = "Combat Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "CombatTexts",   text = "Combat Texts", keywords = { "combat text", "scrolling", "no target", "interrupt", "durability" } },
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },
             { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle", "dispel", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff", "taunt" } },

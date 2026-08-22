@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-CombatRes.lua                                       ║
--- ║  GUI: Battle Res                                         ║
+-- ║  GUI: Combat Res                                         ║
 -- ║  Purpose: Configuration panel for the CombatRes module.  ║
 -- ╚══════════════════════════════════════════════════════════╝
 
