@@ -14,7 +14,7 @@ msg_file="$1"
 # has the --no-verify escape. But stop at the scissors line — `git commit -v`
 # appends the full staged diff below it, which git never commits and which
 # legitimately contains addon names (conflict-registry code).
-msg="$(sed '/^# -\{1,\} >8 -\{1,\}/q' "$msg_file")"
+msg="$(sed '/^# -\{8,\} >8 -\{8,\}/q' "$msg_file")"
 
 # Two passes: distinctive stems match anywhere in a token (catches
 # "atrocityUI"-style embeddings); short shorthand tokens need word boundaries

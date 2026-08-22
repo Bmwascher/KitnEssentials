@@ -39,7 +39,8 @@ local function collect_blocks(path)
     return blocks
 end
 
-local run_id = tostring(os.time()) .. "_" .. (tostring(os.clock()):gsub("%D", ""))
+-- Table address gives per-process entropy os.time/os.clock cannot.
+local run_id = tostring(os.time()) .. "_" .. (tostring({}):match("x(%x+)$") or "0")
 
 local function lint_block(block, index, plan)
     -- Exact 5.1 syntax first: luacheck's parser accepts newer-Lua syntax

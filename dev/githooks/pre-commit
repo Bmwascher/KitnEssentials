@@ -27,15 +27,18 @@ fail=0
 # No `head` inside these pipelines: under pipefail, grep dying on SIGPIPE
 # reads as "no match" and waves the commit through — truncate afterward.
 stems='atrocity|norsken|ellesmere|exwind|exboss|windtools|highonhaste|augbuff'
-names='Brandon|Codex|Claude|Kimi|Sol|Fable'
-hits="$( { printf '%s\n' "$comments" | grep -ioE "$stems"; printf '%s\n' "$comments" | grep -iwoE "$names"; } | sort -u | tr '\n' ' ' || true)"
+# Names that are not English/WoW words scan case-insensitively; Codex/Sol/
+# Fable stay case-sensitive ("codex" is a plausible WoW item word).
+namesCI='Brandon|Claude|Kimi'
+namesCS='Codex|Sol|Fable'
+hits="$( { printf '%s\n' "$comments" | grep -ioE "$stems"; printf '%s\n' "$comments" | grep -iwoE "$namesCI"; printf '%s\n' "$comments" | grep -woE "$namesCS"; } | sort -u | tr '\n' ' ' || true)"
 if [ -n "$hits" ]; then
     echo "[pre-commit] BLOCKED: staged addon-source comments contain personal/agent/upstream names: $hits" >&2
     fail=1
 fi
 
 # Plan-step references, review/session history, dates, file:line citations.
-history='[Ss]tep [A-Z][0-9]+|[Tt]ask [0-9]+|round of review|review round|per the plan|References/|20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]|[0-9][0-9]/[0-9][0-9]/20[0-9][0-9]|\bv[0-9]+\.[0-9]+|\.(lua|xml):[0-9]+'
+history='[Ss]tep [A-Z][0-9]+|[Tt]ask [0-9]+|round of review|review round|per the plan|References/|20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]|\bv[0-9]+\.[0-9]+|\.(lua|xml):[0-9]+'
 hhits="$(printf '%s\n' "$comments" | grep -nE "$history" || true)"
 if [ -n "$hhits" ]; then
     echo "[pre-commit] BLOCKED: staged addon-source comments carry plan-step/date/history references:" >&2
