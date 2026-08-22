@@ -9,6 +9,7 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 ---@class VehicleExit: AceModule, AceEvent-3.0
+---@field isPreview boolean? true while the GUI preview holds the button shown; nil once HidePreview runs
 local VE = KitnEssentials:NewModule("VehicleExit", "AceEvent-3.0")
 
 local InCombatLockdown = InCombatLockdown

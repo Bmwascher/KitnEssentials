@@ -207,7 +207,7 @@ function InspectPanel:OnInitialize()
     -- Cache the CharacterPanel module reference; InspectPanel reuses CP's
     -- shared render helpers and FFD accessor. If CharacterPanel was removed
     -- via custom .toc editing, degrade silently.
-    self.CP = KitnEssentials:GetModule("CharacterPanel", true)
+    self.CP = KitnEssentials:GetModule("CharacterPanel", true) --[[@as CharacterPanel?]]
     if not self.CP then
         KE:Print("InspectPanel disabled: CharacterPanel module not found.")
         self:SetEnabledState(false)

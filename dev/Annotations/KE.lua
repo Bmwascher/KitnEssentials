@@ -218,15 +218,19 @@ function KE:GetGlobalFont() end
 ---@return boolean
 function KE:IsFontValid(fontPath) end
 
----@param fontStr FontString
----@param name string
+--- Any object carrying SetFont, not just a FontString: EditBox and SimpleHTML
+--- both reach here, and SimpleHTML's textType-first signature is branched on
+--- inside. A nil name means "no per-module choice" and resolves to the global
+--- font (KE:GetFontPath).
+---@param fontStr FontString|EditBox|SimpleHTML
+---@param name string?
 ---@param size number
 ---@param outline string?
 ---@return boolean
 function KE:ApplyFont(fontStr, name, size, outline) end
 
----@param fontStr FontString
----@param face string
+---@param fontStr FontString|EditBox|SimpleHTML
+---@param face string?
 ---@param size number
 ---@param outline string?
 ---@param shadowConfig table?
