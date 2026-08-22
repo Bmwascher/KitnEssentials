@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.2
+
+### Alerts and Loot Toasts
+- Fixed achievement, task and loot toasts landing on top of each other instead
+  of stacking. Every toast was being pulled back to the top of the stack the
+  moment it appeared
+- Fixed a bonus roll reward toast appearing in the wrong place and then jumping.
+  The loot window already owns that toast, so it is now left where the loot
+  window puts it
+- The Talking Head frame (the portrait box that appears when an NPC speaks) no
+  longer gets dragged onto your toast stack, and no longer loses the position
+  you set for it in Edit Mode
+
+### Loot Roll
+- Fixed two sets of loot roll windows appearing at once, Blizzard's and ours.
+  The way we switched Blizzard's off stopped working in this patch
+- If we ever cannot switch Blizzard's windows off, KitnEssentials now says so in
+  chat instead of quietly showing you both
+
+---
+
 ## v4.3.1
 
 ### All modules
