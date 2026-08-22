@@ -485,21 +485,18 @@ function CH:DisplayChatHistory()
     local handler = geterrorhandler()
 
     -- The flag is cleared on EVERY exit, a throw included, because the pass runs
-    -- inside its own pcall. That is the whole point of the shape: two rounds of
-    -- review found raising call sites in here that a "nothing below can throw"
-    -- argument had already cleared twice, so the invariant is built rather than
-    -- argued. Adding a call inside the window is now safe by default.
+    -- inside its own pcall. The invariant is built rather than argued: an
+    -- argument that nothing below can raise has been wrong here more than once,
+    -- and this shape does not depend on one being right.
     --
-    -- The inner per-dispatch pcall stays as well. It is doing a different job:
-    -- one bad row must not abort the rows after it, and it must still reach the
-    -- error handler. The outer one only catches what the inner one is not
-    -- wrapped around.
-    --
-    -- NO SPEC COVERS THE OUTER PCALL, and that is not an oversight. With the
-    -- types snapshotted above, every value the pass touches is one this module
-    -- built, so no test can make the pass throw without first reintroducing the
-    -- defect. A test that cannot fail is worse than none. It stays because the
-    -- next edit in here is the one it is for.
+    -- The inner per-dispatch pcall stays as well, doing a different job: one bad
+    -- row must not abort the rows after it, and it must still reach the error
+    -- handler. The outer one covers what the inner one is not wrapped around --
+    -- which is not nothing. Lua evaluates the dispatch's ARGUMENTS before pcall
+    -- takes over, so every `row.event`, `row[1..17]` and `row.time` read below
+    -- happens inside the window and outside the inner pcall. Rows are
+    -- references into saved variables, so those reads are not this module's to
+    -- guarantee.
     CMH.replaying = true
     local swept, sweepErr = pcall(function()
         for j = 1, t do

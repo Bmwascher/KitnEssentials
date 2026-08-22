@@ -439,6 +439,47 @@ describe("ChatHistory replay", function()
         assert.equals(0, #caught)
     end)
 
+    it("stays unmuted when a row throws while the dispatch arguments are read", function()
+        -- Lua evaluates arguments before pcall takes over, so the seventeen
+        -- reads that build a dispatch happen inside the mute window and outside
+        -- the per-dispatch pcall. Rows are references into saved variables, so a
+        -- row that behaves differently after the prepass has cleared it puts a
+        -- throw exactly there -- reachable only by the OUTER pcall.
+        --
+        -- The metatable arms after the prepass rather than before, because the
+        -- prepass reads every slot too; arming early would throw there instead,
+        -- outside the window, and prove nothing about the flag.
+        local CH, KE, _, caught = L.loadChatHistory()
+        withFrame({ "SAY" })
+        KE.ChatMessageHandler = {
+            replaying = false,
+            ChatFrame_MessageEventHandler = function() end,
+        }
+        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+
+        local armed = false
+        setmetatable(KE.db.char.ChatHistory[1], {
+            __index = function(_, key)
+                if armed and type(key) == "number" then error("boom") end
+                return nil
+            end,
+        })
+
+        local realRow = CH.RowIsReplayable
+        CH.RowIsReplayable = function(self, row)
+            local ok = realRow(self, row)
+            armed = true
+            return ok
+        end
+
+        CH:DisplayChatHistory()
+
+        -- Live chat is not left muted ...
+        assert.is_false(KE.ChatMessageHandler.replaying)
+        -- ... and the structural failure was surfaced, not swallowed.
+        assert.equals(1, #caught)
+    end)
+
     it("skips a CHAT_FRAMES entry that is not a frame, and stays unmuted", function()
         -- CHAT_FRAMES is a Blizzard global any addon can append to. A number or
         -- a boolean there would throw on the field read, and the throw would
