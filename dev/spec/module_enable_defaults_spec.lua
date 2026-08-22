@@ -11,9 +11,12 @@ local helpers = require("dev.spec._helpers")
 
 local STAMP = "ModuleEnableDefaultsMigrated"
 
--- The one profile-level toggle that is not a module: it selects ElvUI media
--- when ElvUI is present, so it is exempt from the modules-ship-off rule.
-local NOT_A_MODULE = { UseElvUI = true }
+-- Exempt from the modules-ship-off rule:
+--   UseElvUI      -- not a module; it selects ElvUI media when ElvUI is present.
+--   KeystoneHelper -- a container whose page has no master switch by design, so
+--                     the container must stay reachable. Its three feature
+--                     toggles are the switches that ship off (asserted below).
+local SHIPS_ENABLED = { UseElvUI = true, KeystoneHelper = true }
 
 local function migrateWith(sv)
     _G.KitnEssentialsDB = sv
@@ -31,11 +34,20 @@ describe("module enable defaults", function()
         local _, KE = migrateWith(nil)
         for name, section in pairs(KE:GetDefaultDB().profile) do
             if type(section) == "table" and type(section.Enabled) == "boolean" then
-                if not NOT_A_MODULE[name] then
+                if not SHIPS_ENABLED[name] then
                     assert.is_false(section.Enabled, name .. " defaults enabled")
                 end
             end
         end
+    end)
+
+    it("ships KeystoneHelper's feature switches off behind its always-on container", function()
+        local _, KE = migrateWith(nil)
+        local kh = KE:GetDefaultDB().profile.KeystoneHelper
+        assert.is_true(kh.Enabled)
+        assert.is_false(kh.ResetEnabled)
+        assert.is_false(kh.RerollEnabled)
+        assert.is_false(kh.YourKeyEnabled)
     end)
 
     it("keeps a module a legacy profile left on", function()
@@ -45,6 +57,11 @@ describe("module enable defaults", function()
         -- Module-owned defaults (not registered with AceDB) ride the same list.
         assert.is_true(sv.profiles.Default.DamageMeter.Enabled)
         assert.is_true(sv.profiles.Default.MythicPlusTimer.Enabled)
+        -- KeystoneHelper migrates on its feature keys, not on the container.
+        assert.is_true(sv.profiles.Default.KeystoneHelper.ResetEnabled)
+        assert.is_true(sv.profiles.Default.KeystoneHelper.RerollEnabled)
+        assert.is_true(sv.profiles.Default.KeystoneHelper.YourKeyEnabled)
+        assert.is_nil(sv.profiles.Default.KeystoneHelper.Enabled)
     end)
 
     it("leaves a module the user switched off switched off", function()

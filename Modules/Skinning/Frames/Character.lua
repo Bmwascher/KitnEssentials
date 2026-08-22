@@ -26,9 +26,9 @@ local BRAND = S.palette.brand
 -- Removed: KE already draws all three from Modules/QoL/CharacterPanel.lua, at
 -- anchors within 2px of these, so every character slot rendered them TWICE
 -- whenever this skin was on.
--- CharacterPanel is the single owner now: it ships enabled by default, this
--- skin ships disabled, and it also covers the inspect frame, which this never
--- did. KE.GetEmptySocketIcons went with them -- nothing in KE called it.
+-- CharacterPanel is the single owner now, and it also covers the inspect
+-- frame, which this never did. KE.GetEmptySocketIcons went with them --
+-- nothing in KE called it.
 
 local function UpdateStatsPane()
     local pane = _G.CharacterStatsPane

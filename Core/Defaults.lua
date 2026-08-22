@@ -930,16 +930,17 @@ local Defaults = {
         },
 
         KeystoneHelper = {
-            -- No GUI control. Core/Main.lua's module-enable loop and
-            -- PreviewManager both gate on this key, so the container-shaped
-            -- page leaves it permanently true rather than deleting it.
-            Enabled = false,
+            -- No GUI control, deliberately: the page is a container and each
+            -- feature tab owns its own switch. The container therefore stays
+            -- enabled so those switches remain reachable -- the module is
+            -- silent while all three features are off, which is how it ships.
+            Enabled = true,
 
-            -- Feature toggles
-            ResetEnabled = true,
+            -- Feature toggles. These are the module's real off switches.
+            ResetEnabled = false,
             ResetMessage = "Instance reset!",
-            RerollEnabled = true,
-            YourKeyEnabled = true,
+            RerollEnabled = false,
+            YourKeyEnabled = false,
 
             -- Each reminder owns its own appearance. Position is the one
             -- thing they can share: YourKeyUseRerollPosition parks Your Key
@@ -1135,8 +1136,6 @@ local Defaults = {
         -- Map scale. Extracted from the removed WorldMap module. Not a CVar:
         -- this is WorldMapFrame:SetScale(). Its own module (not a lodger in
         -- Automation) so it keeps an independent enable state.
-        -- Default matches the old WorldMap.ScaleEnabled so existing users keep
-        -- the behaviour they have today.
         MapScale = {
             Enabled = false,
             Scale = 1.2,
@@ -2068,61 +2067,69 @@ end
 -- Module Enable-Default Migration
 ---------------------------------------------------------------------------------
 -- Every module now ships disabled so a fresh install is opt-in. AceDB strips
--- default-equal leaves at logout, so a profile that left one of these modules
--- ON carries no saved Enabled key at all -- once the default is false that is
+-- default-equal leaves at logout, so a profile that left one of these switches
+-- ON carries no saved key at all -- once the default is false that is
 -- indistinguishable from the user having switched it off. This walks the RAW
 -- saved variables BEFORE AceDB:New and writes an explicit true wherever the key
 -- is absent, so existing setups survive the flip and later profiles inherit the
 -- new default. It cannot run after AceDB:New: by then the new default has been
 -- copied in and the distinction is gone.
-local ENABLED_BEFORE_OPT_IN = {
-    { "AlertFrames" },
-    { "AuctionHouseFilter" },
-    { "AuraDebuffs" },
-    { "AuraExternals" },
-    { "BurningRush" },
-    { "CharacterPanel" },
-    { "CombatLogger" },
-    { "CombatTexts" },
-    { "CompareHeader" },
-    { "Cursor" },
-    { "DamageMeter" },
-    { "Dungeons", "DeathNotifications" },
-    { "Dungeons", "DungeonCasts" },
-    { "DungeonTimers" },
-    { "DungeonTrash" },
-    { "FocusCastbar" },
-    { "FocusMarker" },
-    { "GreatVaultAlert" },
-    { "InnervateTracker" },
-    { "KeystoneHelper" },
-    { "KickTracker" },
-    { "LFGReminder" },
-    { "MaintenanceTracker" },
-    { "MapScale" },
-    { "MythicPlusTimer" },
-    { "NoMovementAlert" },
-    { "PetStatusText" },
-    { "PIMacroBuilder" },
-    { "PotionReady" },
-    { "RaidNotifications" },
-    { "ReadyCheckConsumables" },
-    { "Skinning", "LootRoll" },
-    { "Skinning", "UIWidgets" },
-    { "TargetedSpells" },
-    { "TotemTracker" },
-    { "VantusRune" },
+--
+-- Each entry is a path whose LAST element is the key that flipped; everything
+-- before it is the table path under the profile.
+local FLIPPED_TO_OFF = {
+    { "AlertFrames", "Enabled" },
+    { "AuctionHouseFilter", "Enabled" },
+    { "AuraDebuffs", "Enabled" },
+    { "AuraExternals", "Enabled" },
+    { "BurningRush", "Enabled" },
+    { "CharacterPanel", "Enabled" },
+    { "CombatLogger", "Enabled" },
+    { "CombatTexts", "Enabled" },
+    { "CompareHeader", "Enabled" },
+    { "Cursor", "Enabled" },
+    { "DamageMeter", "Enabled" },
+    { "Dungeons", "DeathNotifications", "Enabled" },
+    { "Dungeons", "DungeonCasts", "Enabled" },
+    { "DungeonTimers", "Enabled" },
+    { "DungeonTrash", "Enabled" },
+    { "FocusCastbar", "Enabled" },
+    { "FocusMarker", "Enabled" },
+    { "GreatVaultAlert", "Enabled" },
+    { "InnervateTracker", "Enabled" },
+    { "KickTracker", "Enabled" },
+    { "LFGReminder", "Enabled" },
+    { "MaintenanceTracker", "Enabled" },
+    { "MapScale", "Enabled" },
+    { "MythicPlusTimer", "Enabled" },
+    { "NoMovementAlert", "Enabled" },
+    { "PetStatusText", "Enabled" },
+    { "PIMacroBuilder", "Enabled" },
+    { "PotionReady", "Enabled" },
+    { "RaidNotifications", "Enabled" },
+    { "ReadyCheckConsumables", "Enabled" },
+    { "Skinning", "LootRoll", "Enabled" },
+    { "Skinning", "UIWidgets", "Enabled" },
+    { "TargetedSpells", "Enabled" },
+    { "TotemTracker", "Enabled" },
+    { "VantusRune", "Enabled" },
+
+    -- KeystoneHelper's container stays enabled (its page has no master
+    -- switch); its three feature toggles are the keys that flipped.
+    { "KeystoneHelper", "ResetEnabled" },
+    { "KeystoneHelper", "RerollEnabled" },
+    { "KeystoneHelper", "YourKeyEnabled" },
 }
 
 -- Root-level key, outside every AceDB namespace, so AceDB never strips it and
 -- the walk runs exactly once per saved-variables file.
 local OPT_IN_STAMP = "ModuleEnableDefaultsMigrated"
 
--- Returns the module's saved table, creating empty parents on the way down.
--- Bails on a saved key that is not a table rather than clobbering it.
-local function ResolveModuleTable(profile, path)
+-- Returns the table holding the flipped key, creating empty parents on the way
+-- down. Bails on a saved value that is not a table rather than clobbering it.
+local function ResolveParentTable(profile, path)
     local tbl = profile
-    for depth = 1, #path do
+    for depth = 1, #path - 1 do
         local key = path[depth]
         local node = tbl[key]
         if node == nil then
@@ -2152,10 +2159,12 @@ function KE:MigrateModuleEnableDefaults()
     if type(profiles) ~= "table" then return end
     for _, profile in pairs(profiles) do
         if type(profile) == "table" then
-            for i = 1, #ENABLED_BEFORE_OPT_IN do
-                local module = ResolveModuleTable(profile, ENABLED_BEFORE_OPT_IN[i])
-                if module and module.Enabled == nil then
-                    module.Enabled = true
+            for i = 1, #FLIPPED_TO_OFF do
+                local path = FLIPPED_TO_OFF[i]
+                local parent = ResolveParentTable(profile, path)
+                local key = path[#path]
+                if parent and parent[key] == nil then
+                    parent[key] = true
                 end
             end
         end
