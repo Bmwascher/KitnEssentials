@@ -546,8 +546,9 @@ end
 -- and that reaches protected calls: GroupLootContainer_Update shows the
 -- container and lays out the bottom-managed set, re-anchoring each member
 -- through ClearAllPoints/SetPoint. One of those members is
--- ExtraAbilityContainer, which parents the extra action button and its secure
--- template. So an "action failed" report around loot rolls in combat suspects
+-- ExtraAbilityContainer, which parents ExtraActionBarFrame, whose
+-- ExtraActionButton1 inherits SecureActionButtonTemplate. So an
+-- "action failed" report around loot rolls in combat suspects
 -- this first. The exposure ends at the next reload or the next suppression,
 -- not at the end of the session -- re-enabling Replace mode re-runs
 -- SetupRollBars, which unregisters this closure again.
