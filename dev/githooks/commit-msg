@@ -8,23 +8,29 @@
 set -uo pipefail
 
 msg_file="$1"
-# Strip comment lines; scan subject and body both (violations landed in both).
-msg="$(grep -v '^#' "$msg_file" || true)"
+# Scan the whole file, comment lines included: -m messages keep '#' lines
+# under git's default cleanup, so stripping them would open a false-negative
+# hole; a '#' comment line tripping the guard on an editor commit is rare and
+# has the --no-verify escape.
+msg="$(cat "$msg_file")"
 
-# Word-bounded, case-insensitive. ElvUI is NOT listed: it is a public
+# Two passes: distinctive stems match anywhere in a token (catches
+# "atrocityUI"-style embeddings); short shorthand tokens need word boundaries
+# to avoid mangling ordinary words. ElvUI is NOT listed: it is a public
 # compatibility target and legitimately appears in user-facing entries.
-# "eui"/"aes"/"nui" are the shorthand forms that actually shipped in the
-# historical violations.
-upstream='atrocity|atrocityessentials|norsken|norskenui|ellesmere|ellesmereui|exwind|exwindtools|exboss|windtools|highonhaste|augbufftracker|aes|eui|nui'
-if hit="$(printf '%s\n' "$msg" | grep -iwoE "$upstream" | head -1)"; then
-    if [ -n "$hit" ]; then
-        echo "[commit-msg] BLOCKED: commit message contains upstream addon name '$hit'." >&2
-        echo "[commit-msg] Reference provenance belongs in local docs, never in published history. Reword the message, or override a deliberate exception with: git commit --no-verify" >&2
-        exit 1
-    fi
+# No `head` inside the pipelines: under pipefail, grep dying on SIGPIPE when
+# head exits early reads as "no match" and waves the commit through.
+stems='atrocity|norsken|ellesmere|exwind|exboss|windtools|highonhaste|augbuff'
+shorts='aes|eui|nui'
+hit="$(printf '%s\n' "$msg" | grep -ioE "$stems" | sort -u | tr '\n' ' ' || true)"
+hit2="$(printf '%s\n' "$msg" | grep -iwoE "$shorts" | sort -u | tr '\n' ' ' || true)"
+if [ -n "$hit$hit2" ]; then
+    echo "[commit-msg] BLOCKED: commit message contains upstream addon name(s): $hit$hit2" >&2
+    echo "[commit-msg] Reference provenance belongs in local docs, never in published history. Reword the message, or override a deliberate exception with: git commit --no-verify" >&2
+    exit 1
 fi
 
-if printf '%s\n' "$msg" | grep -qE '^(Co-Authored-By:|Claude-Session)'; then
+if printf '%s\n' "$msg" | grep -qiE '^(co-authored-by:|claude-session)'; then
     echo "[commit-msg] BLOCKED: AI-attribution trailer in commit message (family rule: never append them). Remove it, or override with: git commit --no-verify" >&2
     exit 1
 fi

@@ -4,9 +4,10 @@
 --
 --   lua dev/scripts/lint-plan-fences.lua <plan.md> [more.md ...]
 --
--- Exit 0: every block clean. Exit 1: luacheck reported warnings or errors
--- (each block is printed with its plan line range). Requires luacheck on
--- PATH (PowerShell — the hererocks tree is not on the Git Bash PATH).
+-- Exit 0: every block clean. Exit 1: a syntax error (checked with THIS Lua
+-- 5.1 parser via loadstring, which luacheck's multi-version parser cannot
+-- do), a luacheck warning/error, or an unterminated fence. Requires luacheck
+-- on PATH (PowerShell — the hererocks tree is not on the Git Bash PATH).
 
 local function collect_blocks(path)
     local f, err = io.open(path, "r")
@@ -16,7 +17,10 @@ local function collect_blocks(path)
     for line in f:lines() do
         n = n + 1
         if current then
-            if line:match("^%s*```") then
+            -- A closing fence is backticks only — "```lua" here would OPEN a
+            -- fence in markdown, and treating it as a close would silently
+            -- truncate the block under lint.
+            if line:match("^%s*```+%s*$") then
                 blocks[#blocks + 1] = {
                     first = start_line, last = n, code = table.concat(current, "\n"),
                 }
@@ -29,19 +33,35 @@ local function collect_blocks(path)
         end
     end
     f:close()
+    if current then
+        return nil, string.format("unterminated ```lua fence opened at line %d", start_line - 1)
+    end
     return blocks
 end
 
+local run_id = tostring(os.time())
+
 local function lint_block(block, index, plan)
+    -- Exact 5.1 syntax first: luacheck's parser accepts newer-Lua syntax
+    -- (e.g. `//`) that WoW's 5.1 runtime rejects.
+    local chunk, syntax_err = loadstring(block.code, "fence")
+    if not chunk then
+        return false, "Lua 5.1 syntax error: " .. tostring(syntax_err)
+    end
     local tmp = os.getenv("TEMP") or os.getenv("TMP") or "."
-    local snippet = string.format("%s\\plan-fence-%d-%d.lua", tmp, index, block.first)
+    local snippet = string.format("%s\\plan-fence-%s-%d-%d.lua", tmp, run_id, index, block.first)
     local out = io.open(snippet, "w")
     if not out then return false, "cannot write " .. snippet end
-    out:write(block.code, "\n")
-    out:close()
+    local wrote = out:write(block.code, "\n")
+    local closed = out:close()
+    if not wrote or closed == false then
+        os.remove(snippet)
+        return false, "failed writing " .. snippet .. " (disk full?)"
+    end
     -- Plan snippets reference project globals freely; syntax, shadowing,
     -- unused/undefined LOCALS are the defect classes this exists for, so
-    -- global warnings (11x) are silenced.
+    -- global warnings (11x) are silenced — a misspelled global read is the
+    -- accepted blind spot of that trade.
     local cmd = string.format('luacheck "%s" --codes --no-color --ignore 11 2>&1', snippet)
     local pipe = io.popen(cmd)
     local report = pipe:read("*a")
@@ -68,8 +88,8 @@ local dirty = false
 for _, plan in ipairs(args) do
     local blocks, err = collect_blocks(plan)
     if not blocks then
-        io.stderr:write(string.format("[plan-fences] cannot read %s: %s\n", plan, tostring(err)))
-        os.exit(2)
+        io.stderr:write(string.format("[plan-fences] %s: %s\n", plan, tostring(err)))
+        os.exit(err and tostring(err):match("unterminated") and 1 or 2)
     end
     if #blocks == 0 then
         print(string.format("[plan-fences] %s: no ```lua fences", plan))
