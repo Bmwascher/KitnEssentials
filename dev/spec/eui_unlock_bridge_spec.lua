@@ -221,3 +221,60 @@ describe("EUIUnlockBridge save branch", function()
         assert.same(r.resolveCalls[1], r.resolveCalls[2])
     end)
 end)
+
+-- The map entry is what makes EllesmereUI's export and import keep an anchor
+-- edge whose endpoint is a KE element. It is a guard rule: when it is missing
+-- or duplicated nothing errors, the anchors just quietly stop surviving.
+describe("EUIUnlockBridge profile-folder injection", function()
+    local KE
+
+    before_each(function()
+        KE = L.loadEUIUnlockBridge()
+    end)
+
+    after_each(function()
+        _G.EllesmereUI = nil
+    end)
+
+    it("adds one entry naming the real addon folder", function()
+        local map = {}
+        _G.EllesmereUI = { _ADDON_DB_MAP = map }
+
+        KE.EUIUnlock.InjectProfileAddon()
+
+        assert.equal(1, #map)
+        assert.equal("KitnEssentials", map[1].folder)
+        assert.is_string(map[1].display)
+    end)
+
+    it("does not insert twice when called again", function()
+        local map = {}
+        _G.EllesmereUI = { _ADDON_DB_MAP = map }
+
+        KE.EUIUnlock.InjectProfileAddon()
+        KE.EUIUnlock.InjectProfileAddon()
+
+        assert.equal(1, #map)
+    end)
+
+    it("leaves entries EllesmereUI already shipped alone", function()
+        local map = { { folder = "EllesmereUIActionBars", display = "Action Bars" } }
+        _G.EllesmereUI = { _ADDON_DB_MAP = map }
+
+        KE.EUIUnlock.InjectProfileAddon()
+
+        assert.equal(2, #map)
+        assert.equal("EllesmereUIActionBars", map[1].folder)
+        assert.equal("KitnEssentials", map[2].folder)
+    end)
+
+    it("does nothing when EllesmereUI is absent", function()
+        _G.EllesmereUI = nil
+        assert.has_no.errors(function() KE.EUIUnlock.InjectProfileAddon() end)
+    end)
+
+    it("does nothing when the map is not a table", function()
+        _G.EllesmereUI = { _ADDON_DB_MAP = "nope" }
+        assert.has_no.errors(function() KE.EUIUnlock.InjectProfileAddon() end)
+    end)
+end)

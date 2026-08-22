@@ -46,6 +46,10 @@ local KEY_PREFIX = "KE_"
 local DEFAULT_GROUP = "KitnEssentials"
 local DEFAULT_ORDER = 500
 
+-- Must equal the real addon folder name: EllesmereUI's export list ticks a row
+-- only when the folder reports as loaded.
+local PROFILE_FOLDER = "KitnEssentials"
+
 local pending = {}   -- configs handed over before EUI or the frame was ready
 local published = {}        -- euiKey -> true, so a re-register is a no-op
 local publishedConfigs = {} -- list of { config = ..., opts = ... }, never pruned
@@ -56,6 +60,29 @@ local function EUI()
     if not (eui.RegisterUnlockElements and eui.MakeUnlockElement) then return nil end
     return eui
 end
+
+-- EllesmereUI keeps an unlock-layout edge only when both of its endpoints
+-- resolve to a folder in its own profile map. KE is not one of its modules, so
+-- without this entry every anchor pointing at a KE element is dropped when a
+-- profile is exported AND when one is imported, and the import's merge then
+-- deletes the user's live edge as well. Stamping the element's folder is not
+-- enough on its own: that classifies the key, this admits the folder.
+--
+-- Folder and display are all an entry needs. The map's own loop over canon and
+-- suffix runs at file load, so it never sees this insert; every later consumer
+-- falls back to the folder name, and nothing reads a field we do not set.
+local function InjectProfileAddon()
+    local eui = _G.EllesmereUI
+    local map = eui and eui._ADDON_DB_MAP
+    if type(map) ~= "table" then return end
+
+    for _, entry in ipairs(map) do
+        if type(entry) == "table" and entry.folder == PROFILE_FOLDER then return end
+    end
+
+    map[#map + 1] = { folder = PROFILE_FOLDER, display = "KitnEssentials" }
+end
+Bridge.InjectProfileAddon = InjectProfileAddon
 
 local function ResolveFrame(config)
     if config.frame then return config.frame end
@@ -278,8 +305,13 @@ function Bridge:Register(config, opts)
     PublishPending()
 end
 
+-- PLAYER_LOGIN as well as the entering-world pass: the map entry has to be in
+-- place before anything can export or import a profile, and an installer runs
+-- on the user's command well after login. Both handlers are idempotent.
 local boot = CreateFrame("Frame")
+boot:RegisterEvent("PLAYER_LOGIN")
 boot:RegisterEvent("PLAYER_ENTERING_WORLD")
 boot:SetScript("OnEvent", function()
+    InjectProfileAddon()
     PublishPending()
 end)
