@@ -4,10 +4,12 @@
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- Loads the REAL Modules/DamageMeter/Dock.lua headlessly (L.loadDMDock) and
--- tests three functions: DM.GetBackdropRectSize, which reports the backdrop
+-- tests four functions: DM.GetBackdropRectSize, which reports the backdrop
 -- carrier rectangle Chat is sized to; DM.PushSizeToChat, which tells Chat the
--- rectangle changed; and DM.ReleaseChatSize, which hands Chat back its own size
--- when the module is disabled.
+-- rectangle changed; DM.ReleaseChatSize, which hands Chat back its own size
+-- when the module is disabled; and DM.CreateAllWindows, where the only thing
+-- checked is the supersede DECISION -- whether a build still walking gives way
+-- to a newer one -- never frame scheduling.
 --
 -- WHY THESE EARN A SPEC. None of it is a port -- there is no upstream feature
 -- to diff against -- so a test is the only mechanical check there is. The
@@ -24,6 +26,10 @@
 -- stub and the Chat module here is a three-field stand-in. A pass verifies
 -- BRANCH ROUTING and CALL ORDERING over plain numbers, never real frame
 -- geometry or the real Chat module. In-game /reload remains the gate for both.
+-- The supersede block adds one more stand-in: a C_Timer that queues its
+-- callbacks into a list the test drains. A pass there proves the ORDER those
+-- callbacks run in and what each decides -- never that the game runs them one
+-- per frame.
 local L = require("dev.spec._ke_loader")
 
 local DM
@@ -234,5 +240,109 @@ describe("PushSizeToChat and ReleaseChatSize", function()
         DM.enabled = true
         DM:PushSizeToChat()
         assert.equals(3, calls)
+    end)
+end)
+
+describe("CreateAllWindows supersedes a stale build", function()
+    local queue, created, finals
+
+    -- Run every callback queued NOW. Anything queued during the run lands in
+    -- the next batch, so a chain cannot starve the loop.
+    local function drain()
+        while #queue > 0 do
+            local batch = queue
+            queue = {}
+            for i = 1, #batch do batch[i]() end
+        end
+    end
+
+    -- Run exactly ONE queued callback, oldest first, leaving the rest pending.
+    -- This is what puts a chain mid-walk.
+    local function runOne()
+        local fn = table.remove(queue, 1)
+        if fn then fn() end
+    end
+
+    before_each(function()
+        queue, created, finals = {}, {}, { layout = 0, backdrop = 0, tick = 0 }
+        DM = L.loadDMDock({ C_Timer = {
+            After = function(_, fn) queue[#queue + 1] = fn end,
+            NewTicker = function() return { Cancel = function() end } end,
+        } })
+        -- The chain's FIRST statement is an enabled test, and only the real
+        -- OnEnable sets this flag; the headless shim hands back a bare table.
+        DM.enabled = true
+        -- EnsureDock builds a real frame and positions it through a helper
+        -- this loader does not install. Nothing here is about the dock frame,
+        -- so stub it out rather than widening the loader.
+        DM.EnsureDock = function() end
+
+        DM.windows_rt = {}
+        DM.CreateWindow = function(self, idx)
+            created[#created + 1] = idx
+            self.windows_rt[idx] = { idx = idx }
+        end
+        DM.LayoutDock = function() finals.layout = finals.layout + 1 end
+        DM.UpdateBackdrop = function() finals.backdrop = finals.backdrop + 1 end
+        DM.Tick = function() finals.tick = finals.tick + 1 end
+        -- The real one WIPES the scratch table before filling it; the caller
+        -- reuses one table across calls, so a stub that skips the wipe leaves
+        -- the previous call's indices in place.
+        DM.DockWindowIndices = function(_, out)
+            out = out or {}
+            for i = #out, 1, -1 do out[i] = nil end
+            out[1], out[2] = 1, 2
+            return out
+        end
+        DM.db = {}
+    end)
+
+    it("finishes an uninterrupted two-window build exactly once", function()
+        DM:CreateAllWindows()
+        drain()
+        assert.same({ 1, 2 }, created)
+        assert.equals(1, finals.layout)
+        assert.equals(1, finals.backdrop)
+        assert.equals(1, finals.tick)
+    end)
+
+    it("lets a second build supersede a pending first", function()
+        DM:CreateAllWindows()
+        runOne()
+        DM:CreateAllWindows()
+        drain()
+        -- The finaliser count is the whole assertion. A build that bumps the
+        -- counter and never compares fires the stale chain's finaliser too.
+        assert.equals(1, finals.layout)
+        assert.equals(1, finals.backdrop)
+        assert.equals(1, finals.tick)
+    end)
+
+    it("lets a zero-window second build invalidate a pending chain", function()
+        DM:CreateAllWindows()
+        runOne()
+        DM.DockWindowIndices = function(_, out)
+            out = out or {}
+            for i = #out, 1, -1 do out[i] = nil end
+            return out
+        end
+        DM:CreateAllWindows()
+        assert.equals(1, finals.layout)
+        local before = #created
+        drain()
+        -- The stale chain must stop without building anything more and
+        -- without finalising a second time.
+        assert.equals(before, #created)
+        assert.equals(1, finals.layout)
+        -- And it must NOT tear down: a superseded chain returns, so the window
+        -- it already built is still there for the new one. A build that
+        -- cancelled by wiping windows_rt passes every assertion above.
+        assert.is_table(DM.windows_rt[1])
+    end)
+
+    it("initialises the generation counter from nil", function()
+        assert.is_nil(DM._dockBuildGen)
+        DM:CreateAllWindows()
+        assert.equals(1, DM._dockBuildGen)
     end)
 end)

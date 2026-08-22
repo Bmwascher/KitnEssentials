@@ -273,6 +273,16 @@ end
 function DM:CreateAllWindows()
     self:EnsureDock()
 
+    -- Supersede any build still in flight. CreateAllWindows walks its windows
+    -- one per frame, so a disable and re-enable landing inside one frame
+    -- leaves two chains walking, each finishing with its own full layout,
+    -- backdrop and paint, and each holding its own index snapshot -- so a
+    -- stale one can build a window the current profile no longer references.
+    -- The enabled test inside the chain does not cover this: it is only
+    -- reached on the next frame, by which time the module is enabled again.
+    self._dockBuildGen = (self._dockBuildGen or 0) + 1
+    local buildGen = self._dockBuildGen
+
     self._dockCreateList = self._dockCreateList or {}
     local list = self:DockWindowIndices(self._dockCreateList)
 
@@ -295,6 +305,7 @@ function DM:CreateAllWindows()
     local pos = 0
     local function createNext()
         if not self.enabled then return end
+        if buildGen ~= self._dockBuildGen then return end
         pos = pos + 1
         if pos > #indices then
             -- All windows built: structural layout + backdrop + first paint.
