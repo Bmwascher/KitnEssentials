@@ -46,6 +46,10 @@ local KEY_PREFIX = "KE_"
 local DEFAULT_GROUP = "KitnEssentials"
 local DEFAULT_ORDER = 500
 
+-- Must equal the real addon folder name: EllesmereUI's export list ticks a row
+-- only when the folder reports as loaded.
+local PROFILE_FOLDER = "KitnEssentials"
+
 local pending = {}   -- configs handed over before EUI or the frame was ready
 local published = {}        -- euiKey -> true, so a re-register is a no-op
 local publishedConfigs = {} -- list of { config = ..., opts = ... }, never pruned
@@ -56,6 +60,29 @@ local function EUI()
     if not (eui.RegisterUnlockElements and eui.MakeUnlockElement) then return nil end
     return eui
 end
+
+-- EllesmereUI keeps an unlock-layout edge only when both of its endpoints
+-- resolve to a folder in its own profile map. KE is not one of its modules, so
+-- without this entry every anchor pointing at a KE element is dropped when a
+-- profile is exported AND when one is imported, and the import's merge then
+-- deletes the user's live edge as well. Stamping the element's folder is not
+-- enough on its own: that classifies the key, this admits the folder.
+--
+-- Folder and display are all an entry needs. The map's own loop over canon and
+-- suffix runs at file load, so it never sees this insert; every later consumer
+-- falls back to the folder name, and nothing reads a field we do not set.
+local function InjectProfileAddon()
+    local eui = _G.EllesmereUI
+    local map = eui and eui._ADDON_DB_MAP
+    if type(map) ~= "table" then return end
+
+    for _, entry in ipairs(map) do
+        if type(entry) == "table" and entry.folder == PROFILE_FOLDER then return end
+    end
+
+    map[#map + 1] = { folder = PROFILE_FOLDER, display = "KitnEssentials" }
+end
+Bridge.InjectProfileAddon = InjectProfileAddon
 
 local function ResolveFrame(config)
     if config.frame then return config.frame end
@@ -76,11 +103,24 @@ local function BuildElement(config, opts)
         group = (opts and opts.group) or DEFAULT_GROUP,
         order = (opts and opts.order) or DEFAULT_ORDER,
 
-        -- Size belongs to the module's own option sliders. A drag-resize handle
-        -- would fight them, so movers are position-only. noAnchorTo and
-        -- noAnchorTarget are deliberately NOT set: being an anchor target is the
-        -- whole reason for registering.
-        noResize = true,
+        -- noAnchorTo and noAnchorTarget are deliberately NOT set: being an
+        -- anchor target is the whole reason for registering.
+        --
+        -- noResize is deliberately NOT set either, and must not be re-added.
+        -- Unlock mode's validator deletes any width or height match whose
+        -- TARGET carries that flag, and it runs on every unlock-mode open, so
+        -- the flag silently destroys the one relationship these elements exist
+        -- to support. It also gates nothing worth keeping: unlock mode's
+        -- movers have no sizing grip, and the match apply reads a target
+        -- through getSize without ever consulting it. What the flag does cost
+        -- is the mover's X and Y position boxes, which work and are wanted.
+        --
+        -- Size still belongs to the module's own option sliders, which is what
+        -- matchUnavailable says: these elements may be matched TO, but they
+        -- never take their own size from something else.
+        matchUnavailable = function()
+            return "Size is set in the KitnEssentials options."
+        end,
 
         -- KE places and pixel-snaps its own frames, so unlock mode must not
         -- re-place them: its init pass would otherwise re-apply the position
@@ -210,6 +250,28 @@ local function ReapplyAnchorsToUs()
     end
 end
 
+-- Unlock mode runs several size-match passes, but none of them keys off an
+-- element REGISTERING, and the one hook that does fire on late registration
+-- re-applies anchors only. KE publishes after those passes have run, so a match
+-- naming a KE element would stay inert until something else happened to resize.
+-- There is no per-record re-apply to call; pushing from the target reaches every
+-- child matched to it, which is the same direction the anchor loop above works
+-- in.
+--
+-- Guarded per function, not per addon: EllesmereUI dropping one axis must cost
+-- that axis, not both.
+local function ReapplyMatchesToUs()
+    local eui = EUI()
+    if not eui then return end
+
+    for _, entry in ipairs(publishedConfigs) do
+        local euiKey = KEY_PREFIX .. entry.config.key
+        if eui.PropagateWidthMatch then pcall(eui.PropagateWidthMatch, euiKey) end
+        if eui.PropagateHeightMatch then pcall(eui.PropagateHeightMatch, euiKey) end
+    end
+end
+Bridge.ReapplyMatchesToUs = ReapplyMatchesToUs
+
 -- Reset when the ticker stops, not left latched: frames appear in waves, so a
 -- later batch publishes after this pass has already finished and its children
 -- need a pass of their own.
@@ -224,6 +286,7 @@ local function ScheduleReapply()
         tries = tries + 1
         if AllPublishedFramesLaidOut() then
             ReapplyAnchorsToUs()
+            ReapplyMatchesToUs()
             ticker:Cancel()
             reapplyScheduled = false
         elseif tries >= REAPPLY_MAX_TRIES then
@@ -278,8 +341,13 @@ function Bridge:Register(config, opts)
     PublishPending()
 end
 
+-- PLAYER_LOGIN as well as the entering-world pass: the map entry has to be in
+-- place before anything can export or import a profile, and an installer runs
+-- on the user's command well after login. Both handlers are idempotent.
 local boot = CreateFrame("Frame")
+boot:RegisterEvent("PLAYER_LOGIN")
 boot:RegisterEvent("PLAYER_ENTERING_WORLD")
 boot:SetScript("OnEvent", function()
+    InjectProfileAddon()
     PublishPending()
 end)

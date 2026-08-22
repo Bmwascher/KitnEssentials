@@ -221,3 +221,179 @@ describe("EUIUnlockBridge save branch", function()
         assert.same(r.resolveCalls[1], r.resolveCalls[2])
     end)
 end)
+
+-- The map entry is what makes EllesmereUI's export and import keep an anchor
+-- edge whose endpoint is a KE element. It is a guard rule: when it is missing
+-- or duplicated nothing errors, the anchors just quietly stop surviving.
+describe("EUIUnlockBridge profile-folder injection", function()
+    local KE
+
+    before_each(function()
+        KE = L.loadEUIUnlockBridge()
+    end)
+
+    after_each(function()
+        _G.EllesmereUI = nil
+    end)
+
+    it("adds one entry naming the real addon folder", function()
+        local map = {}
+        _G.EllesmereUI = { _ADDON_DB_MAP = map }
+
+        KE.EUIUnlock.InjectProfileAddon()
+
+        assert.equal(1, #map)
+        assert.equal("KitnEssentials", map[1].folder)
+        assert.is_string(map[1].display)
+    end)
+
+    it("does not insert twice when called again", function()
+        local map = {}
+        _G.EllesmereUI = { _ADDON_DB_MAP = map }
+
+        KE.EUIUnlock.InjectProfileAddon()
+        KE.EUIUnlock.InjectProfileAddon()
+
+        assert.equal(1, #map)
+    end)
+
+    it("leaves entries EllesmereUI already shipped alone", function()
+        local map = { { folder = "EllesmereUIActionBars", display = "Action Bars" } }
+        _G.EllesmereUI = { _ADDON_DB_MAP = map }
+
+        KE.EUIUnlock.InjectProfileAddon()
+
+        assert.equal(2, #map)
+        assert.equal("EllesmereUIActionBars", map[1].folder)
+        assert.equal("KitnEssentials", map[2].folder)
+    end)
+
+    it("does nothing when EllesmereUI is absent", function()
+        _G.EllesmereUI = nil
+        assert.has_no.errors(function() KE.EUIUnlock.InjectProfileAddon() end)
+    end)
+
+    it("does nothing when the map is not a table", function()
+        _G.EllesmereUI = { _ADDON_DB_MAP = "nope" }
+        assert.has_no.errors(function() KE.EUIUnlock.InjectProfileAddon() end)
+    end)
+end)
+
+-- Two refusal rules in one shape. noResize must stay OFF: EllesmereUI's
+-- validator deletes any size match whose TARGET carries it, and it runs on
+-- every unlock-mode open, so re-adding the flag makes a user's height match
+-- vanish silently. matchUnavailable must stay ON: it is what refuses the
+-- match-SOURCE role now that the buttons are reachable.
+describe("EUIUnlockBridge element size contract", function()
+    local function publish()
+        local KE = L.loadEUIUnlockBridge()
+        local captured
+
+        _G.EllesmereUI = {
+            MakeUnlockElement = function(element) return element end,
+            RegisterUnlockElements = function(_, batch) captured = batch[1] end,
+        }
+
+        KE.EUIUnlock:Register({
+            key = "Thing",
+            displayName = "Thing",
+            frame = { GetWidth = function() return 100 end,
+                      GetHeight = function() return 50 end },
+            getPosition = function() return nil end,
+            setPosition = function() end,
+        })
+
+        return captured
+    end
+
+    after_each(function()
+        _G.EllesmereUI = nil
+    end)
+
+    it("does not mark the element noResize", function()
+        assert.is_nil(publish().noResize)
+    end)
+
+    it("refuses the match-source role with a reason", function()
+        local element = publish()
+        assert.is_function(element.matchUnavailable)
+        local why = element.matchUnavailable("KE_Thing")
+        assert.is_string(why)
+        assert.is_true(#why > 0)
+    end)
+
+    it("still reports its live size, which is what a match target is read for", function()
+        local w, h = publish().getSize()
+        assert.equal(100, w)
+        assert.equal(50, h)
+    end)
+end)
+
+-- EllesmereUI runs several size-match passes but none of them keys off an
+-- element REGISTERING, and its late-registration hook re-applies anchors only.
+-- KE publishes after those passes, so without this push a match against a KE
+-- element stays inert for the session unless something else happens to resize.
+describe("EUIUnlockBridge size-match re-apply", function()
+    local function publishTwo(euiOverrides)
+        local KE = L.loadEUIUnlockBridge()
+
+        _G.EllesmereUI = euiOverrides
+        _G.EllesmereUI.MakeUnlockElement = function(element) return element end
+        _G.EllesmereUI.RegisterUnlockElements = function() end
+
+        for _, key in ipairs({ "Chat", "DamageMeter" }) do
+            KE.EUIUnlock:Register({
+                key = key,
+                displayName = key,
+                frame = { GetWidth = function() return 10 end,
+                          GetHeight = function() return 10 end },
+                getPosition = function() return nil end,
+                setPosition = function() end,
+            })
+        end
+
+        return KE
+    end
+
+    after_each(function()
+        _G.EllesmereUI = nil
+    end)
+
+    it("pushes both axes once for every published key", function()
+        local widths, heights = {}, {}
+        local KE = publishTwo({
+            PropagateWidthMatch  = function(key) widths[#widths + 1] = key end,
+            PropagateHeightMatch = function(key) heights[#heights + 1] = key end,
+        })
+
+        KE.EUIUnlock.ReapplyMatchesToUs()
+
+        assert.same({ "KE_Chat", "KE_DamageMeter" }, widths)
+        assert.same({ "KE_Chat", "KE_DamageMeter" }, heights)
+    end)
+
+    it("does the half it can when only one axis is available", function()
+        local heights = {}
+        local KE = publishTwo({
+            PropagateHeightMatch = function(key) heights[#heights + 1] = key end,
+        })
+
+        assert.has_no.errors(function() KE.EUIUnlock.ReapplyMatchesToUs() end)
+        assert.same({ "KE_Chat", "KE_DamageMeter" }, heights)
+    end)
+
+    it("survives a propagate call that throws", function()
+        local KE = publishTwo({
+            PropagateWidthMatch  = function() error("boom") end,
+            PropagateHeightMatch = function() error("boom") end,
+        })
+
+        assert.has_no.errors(function() KE.EUIUnlock.ReapplyMatchesToUs() end)
+    end)
+
+    it("does nothing when EllesmereUI is absent", function()
+        local KE = publishTwo({})
+        _G.EllesmereUI = nil
+        assert.has_no.errors(function() KE.EUIUnlock.ReapplyMatchesToUs() end)
+    end)
+end)
