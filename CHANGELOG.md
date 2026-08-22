@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.1
+
+### All modules
+- Every module now starts switched off. A fresh install shows nothing until
+  you turn on what you want, instead of arriving with three dozen features
+  already running
+- Your existing setup is untouched. On the first login after this update,
+  everything you had switched on stays switched on, and everything you had
+  switched off stays off
+- Keystone Helper is the one page without a single master switch, so its three
+  features (Instance Reset, Reroll Key, Your Key) each start switched off
+  instead
+
+---
+
 ## v4.3.0
 
 ### Chat
