@@ -152,10 +152,10 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
     container.buttons = buttons
 
     if fill and numTabs > 0 then
-        -- Each tab is as wide as its own label; the row's remaining width is
-        -- left empty. Measured at layout time rather than at creation: a
-        -- FontString can report short before its first layout pass, and there
-        -- is no longer any distributed slack to absorb a bad measurement.
+        -- The row's remaining width is left empty. Measured at layout time
+        -- rather than at creation: a FontString can report short before its
+        -- first layout pass, and there is no longer any distributed slack to
+        -- absorb a bad measurement.
         local tabPadding = T.paddingLarge * 2
         local function SizeTabsToText()
             for _, btn in ipairs(btnList) do
