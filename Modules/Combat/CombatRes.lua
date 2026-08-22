@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  CombatRes.lua                                           ║
--- ║  Module: Battle Res                                      ║
+-- ║  Module: Combat Res                                      ║
 -- ║  Purpose: Tracks battle resurrection charges and         ║
 -- ║           cooldown with configurable text display.       ║
 -- ╚══════════════════════════════════════════════════════════╝

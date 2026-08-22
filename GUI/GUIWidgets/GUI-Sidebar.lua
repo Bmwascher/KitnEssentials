@@ -413,7 +413,9 @@ function GUIFrame:CreateSidebar(parent)
     sidebar:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", T.borderSize, T.footerHeight)
     sidebar:SetWidth(T.sidebarWidth)
     sidebar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    sidebar:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4])
+    -- A light tint over the window's own fill, not a fill of its own: 0.40 is
+    -- the value the sidebar reads at against the single-fill body.
+    sidebar:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 0.40)
 
     -- Right border
     local rightBorder = sidebar:CreateTexture(nil, "BORDER")
@@ -433,7 +435,7 @@ function GUIFrame:CreateSidebar(parent)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    searchContainer:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
+    searchContainer:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], T.bgDark[4])
     searchContainer:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
 
     -- Search EditBox

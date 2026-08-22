@@ -44,7 +44,7 @@ end
 --           currentTab = newId
 --       end,
 --       tabWidth = 120,  -- optional, default 120 (ignored when fill = true)
---       fill = false,    -- optional, when true tabs evenly fill container width
+--       fill = false,    -- optional, when true each tab is sized to its own label
 --   })
 --
 -- onSwitch is called BEFORE the frame refresh schedules; callers only need to
@@ -58,7 +58,7 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
     local onSwitch = config.onSwitch
     local tabWidth = config.tabWidth or 120
     local tabHeight = config.tabHeight or 28
-    local spacing = config.spacing or 4
+    local spacing = config.spacing or 1
     local fill = config.fill == true
 
     local T = Theme
@@ -79,9 +79,8 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
         btnList[i] = btn
 
         if fill then
-            -- Evenly distribute tabs to fill container width.
-            -- TOPLEFT chains; widths are assigned reactively from the
-            -- container's actual width via the OnSizeChanged handler below.
+            -- TOPLEFT chains left to right; each width comes from that tab's
+            -- own label in the sizing pass below.
             if i == 1 then
                 btn:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
             else
@@ -153,18 +152,18 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
     container.buttons = buttons
 
     if fill and numTabs > 0 then
-        local function ResizeTabs(width)
-            if not width or width <= 0 then return end
-            local totalSpacing = spacing * (numTabs - 1)
-            local btnWidth = (width - totalSpacing) / numTabs
+        -- The row's remaining width is left empty. Measured at layout time
+        -- rather than at creation: a FontString can report short before its
+        -- first layout pass, and there is no longer any distributed slack to
+        -- absorb a bad measurement.
+        local tabPadding = T.paddingLarge * 2
+        local function SizeTabsToText()
             for _, btn in ipairs(btnList) do
-                btn:SetWidth(btnWidth)
+                btn:SetWidth((btn.label:GetStringWidth() or 0) + tabPadding)
             end
         end
-        container:SetScript("OnSizeChanged", function(_, w) ResizeTabs(w) end)
-        -- Apply once on next frame in case the container is laid out after this
-        -- function returns (e.g. if the parent's anchors haven't settled yet).
-        C_Timer.After(0, function() ResizeTabs(container:GetWidth()) end)
+        container:SetScript("OnSizeChanged", function() SizeTabsToText() end)
+        C_Timer.After(0, function() SizeTabsToText() end)
     end
 
     return container, yOffset + tabHeight + T.paddingSmall
