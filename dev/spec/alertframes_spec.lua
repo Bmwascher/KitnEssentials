@@ -64,4 +64,88 @@ describe("Modules/QoL/AlertFrames.lua", function()
             assert.is_false(isDirect(nil))
         end)
     end)
+
+    -- GroupLootFrame.lua puts a winnings toast into the container on the line
+    -- before it calls AddAlertFrame on the same frame, so "already ours to
+    -- place" and "already the container's" both look like a direct alert.
+    describe("IsHeldByLootContainer", function()
+        local isHeld
+
+        before_each(function()
+            local _, _, seams = loader.loadAlertFrames()
+            isHeld = seams.isHeldByLootContainer
+            _G.GroupLootContainer = nil
+        end)
+
+        after_each(function()
+            _G.GroupLootContainer = nil
+        end)
+
+        it("claims a frame the container is holding", function()
+            local toast = {}
+            _G.GroupLootContainer = { rollFrames = { [2] = toast } }
+            assert.is_true(isHeld(toast))
+        end)
+
+        it("refuses a frame the container is not holding", function()
+            _G.GroupLootContainer = { rollFrames = { [1] = {} } }
+            assert.is_false(isHeld({}))
+        end)
+
+        it("refuses everything when the container has no roll frames yet", function()
+            _G.GroupLootContainer = {}
+            assert.is_false(isHeld({}))
+        end)
+
+        it("refuses everything when the container does not exist", function()
+            assert.is_false(isHeld({}))
+        end)
+    end)
+
+    -- Blizzard's externally anchored subsystems exist to be passed through, not
+    -- moved: replacing their AdjustAnchors drags a frame something else owns
+    -- onto the toast stack and overwrites the position the player set.
+    describe("AdjustSubSystem", function()
+        local adjust
+
+        before_each(function()
+            local _, _, seams = loader.loadAlertFrames()
+            adjust = seams.adjustSubSystem
+            _G.AlertFrameExternallyAnchoredMixin = nil
+        end)
+
+        after_each(function()
+            _G.AlertFrameExternallyAnchoredMixin = nil
+        end)
+
+        it("leaves an externally anchored subsystem alone", function()
+            local passThrough = function() end
+            _G.AlertFrameExternallyAnchoredMixin = { AdjustAnchors = passThrough }
+            local sys = { anchorFrame = {}, AdjustAnchors = passThrough }
+            adjust(sys)
+            assert.equal(passThrough, sys.AdjustAnchors)
+        end)
+
+        it("takes over an auto-anchored subsystem, which shares the anchorFrame shape", function()
+            _G.AlertFrameExternallyAnchoredMixin = { AdjustAnchors = function() end }
+            local own = function() end
+            local sys = { anchorFrame = {}, AdjustAnchors = own }
+            adjust(sys)
+            assert.not_equal(own, sys.AdjustAnchors)
+        end)
+
+        it("takes over a pooled subsystem", function()
+            _G.AlertFrameExternallyAnchoredMixin = { AdjustAnchors = function() end }
+            local sys = { alertFramePool = {} }
+            adjust(sys)
+            assert.is_function(sys.AdjustAnchors)
+        end)
+
+        it("takes over everything when the mixin global is absent", function()
+            local own = function() end
+            local sys = { anchorFrame = {}, AdjustAnchors = own }
+            adjust(sys)
+            assert.not_equal(own, sys.AdjustAnchors)
+        end)
+    end)
 end)

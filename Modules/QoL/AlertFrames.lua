@@ -173,22 +173,29 @@ local function IsDirectAlertFrame(frame)
     return DIRECT_ALERT_FRAMES[frame:GetName()] == true
 end
 
--- Only a frame the container is NOT holding needs placing: anything in
--- rollFrames is already stacked by the game relative to the container, which
--- PositionGroupLootContainer has just placed. Re-anchoring those piles them
--- all onto one spot.
+-- A frame in rollFrames is already stacked by the game relative to the
+-- container, which PositionGroupLootContainer has just placed, so it is not
+-- ours to move. GroupLootFrame.lua puts a winnings toast there on the line
+-- BEFORE it calls AddAlertFrame on the same frame, which is why the alert hook
+-- needs this test too: placing a held toast renders it at our anchor and the
+-- container's next update then drags it to the loot roll anchor.
+local function IsHeldByLootContainer(frame)
+    local glc = _G.GroupLootContainer
+    if not (frame and glc and type(glc.rollFrames) == "table") then return false end
+    for _, f in pairs(glc.rollFrames) do
+        if f == frame then return true end
+    end
+    return false
+end
+
 function AF:PositionBonusRollToasts()
     if not self.holder then return end
     local glc = _G.GroupLootContainer
-    local held = {}
-    if glc and type(glc.rollFrames) == "table" then
-        for _, f in pairs(glc.rollFrames) do held[f] = true end
-    end
     local anchor = GetPerksAnchor() or self.holder
     if glc and glc:IsShown() then anchor = glc end
     for _, name in ipairs(BONUS_ROLL_FRAMES) do
         local f = _G[name]
-        if f and f:IsShown() and not held[f] and f.ClearAllPoints
+        if f and f:IsShown() and not IsHeldByLootContainer(f) and f.ClearAllPoints
            and not (name == "BonusRollFrame" and LootRollReplacesRolls()) then
             f:ClearAllPoints()
             f:SetPoint(POSITION, anchor, POINT, X_OFFSET, Y_OFFSET)
@@ -255,7 +262,23 @@ local function AdjustAnchorsNonAlert(sys, relativeAnchor)
     return relativeAnchor
 end
 
+-- Blizzard has two kinds of anchorFrame subsystem and the tests below cannot
+-- tell them apart. The auto-anchored kind positions itself among the other
+-- alerts and is ours to place. The externally anchored kind exists only to let
+-- the chain pass THROUGH a frame something else owns -- its own AdjustAnchors
+-- moves nothing and just returns the frame. TalkingHeadFrame is the second
+-- kind, and Edit Mode is the something else, so replacing its AdjustAnchors
+-- drags it onto the toast stack every alert pass and overwrites the position
+-- the player set. Matched on the mixin's own function rather than a name list,
+-- so anything Blizzard registers that way later is covered without an edit.
+local function IsExternallyAnchored(sys)
+    local mixin = _G.AlertFrameExternallyAnchoredMixin
+    return mixin ~= nil and sys.AdjustAnchors == mixin.AdjustAnchors
+end
+
 local function AdjustSubSystem(sys)
+    if IsExternallyAnchored(sys) then return end
+
     if sys.alertFramePool then
         sys.AdjustAnchors = AdjustQueuedAnchors
     elseif not sys.anchorFrame then
@@ -317,6 +340,7 @@ function AF:InstallHooks()
     hooksecurefunc(af, "AddAlertFrame", function(_, frame)
         if not (AF:IsEnabled() and AF.holder and frame and frame.ClearAllPoints) then return end
         if not IsDirectAlertFrame(frame) then return end
+        if IsHeldByLootContainer(frame) then return end
         AF:PostAlertMove()
         frame:ClearAllPoints()
         frame:SetPoint(POSITION, GetPerksAnchor() or AF.holder, POINT, X_OFFSET, Y_OFFSET)

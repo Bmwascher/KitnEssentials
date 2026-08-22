@@ -1525,6 +1525,11 @@ function L.loadAlertFrames()
         -- Referenced only by the AddAlertFrame closure InstallHooks builds, which
         -- makes it an upvalue of InstallHooks itself.
         isDirectAlertFrame = findUpvalue(AF.InstallHooks, "IsDirectAlertFrame"),
+        isHeldByLootContainer = findUpvalue(AF.PositionBonusRollToasts, "IsHeldByLootContainer"),
+        -- The refusal itself rather than its predicate: AdjustSubSystem is what
+        -- decides whether a subsystem's AdjustAnchors gets replaced, so a spec
+        -- that calls it observes the decision instead of restating the test.
+        adjustSubSystem = findUpvalue(AF.InstallHooks, "AdjustSubSystem"),
     }
     return AF, KE, seams
 end
