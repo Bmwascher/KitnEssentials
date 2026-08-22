@@ -17,6 +17,23 @@
             "statusMessage": "branch guard"
           }
         ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh",
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/git-guard.ps1\"; exit $LASTEXITCODE"
+            ],
+            "timeout": 10,
+            "statusMessage": "git guard"
+          }
+        ]
       }
     ],
     "PostToolUse": [
