@@ -544,9 +544,10 @@ end
 -- exposed; it calls the same GameEvent.HandleStartLootRoll the routing table
 -- does. That closure is ours, so every Blizzard roll it drives runs tainted,
 -- and that reaches protected calls: GroupLootContainer_Update shows the
--- container and lays out the bottom-managed set, whose members it re-anchors
--- through ClearAllPoints/SetPoint, and that set can include a secure action
--- button. So an "action failed" report around loot rolls in combat suspects
+-- container and lays out the bottom-managed set, re-anchoring each member
+-- through ClearAllPoints/SetPoint. One of those members is
+-- ExtraAbilityContainer, which parents the extra action button and its secure
+-- template. So an "action failed" report around loot rolls in combat suspects
 -- this first. The exposure ends at the next reload or the next suppression,
 -- not at the end of the session -- re-enabling Replace mode re-runs
 -- SetupRollBars, which unregisters this closure again.
