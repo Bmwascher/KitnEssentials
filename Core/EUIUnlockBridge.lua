@@ -285,8 +285,6 @@ local function ScheduleReapply()
     ticker = C_Timer.NewTicker(REAPPLY_INTERVAL, function()
         tries = tries + 1
         if AllPublishedFramesLaidOut() then
-            -- Matches after anchors, deliberately: a child that is both anchored
-            -- and matched should be placed before it is resized.
             ReapplyAnchorsToUs()
             ReapplyMatchesToUs()
             ticker:Cancel()
