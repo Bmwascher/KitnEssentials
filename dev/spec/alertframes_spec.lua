@@ -148,4 +148,65 @@ describe("Modules/QoL/AlertFrames.lua", function()
             assert.not_equal(own, sys.AdjustAnchors)
         end)
     end)
+
+    -- The hook itself, not its predicates. Testing the predicates alone leaves
+    -- every guard inside the hook deletable with the suite still green, which
+    -- is the shape of check this file is meant to prevent.
+    describe("the AddAlertFrame post-hook", function()
+        local AF, hook, calls
+
+        local function alert(name)
+            local f = { clears = 0, points = 0 }
+            f.GetName = function() return name end
+            f.ClearAllPoints = function() f.clears = f.clears + 1 end
+            f.SetPoint = function() f.points = f.points + 1 end
+            return f
+        end
+
+        local function placed(f)
+            return f.points > 0
+        end
+
+        before_each(function()
+            AF, hook, calls = loader.loadAlertFramesWithHooks()
+        end)
+
+        after_each(function()
+            _G.GroupLootContainer = nil
+            _G.AlertFrame = nil
+        end)
+
+        it("is installed at all", function()
+            assert.is_function(hook)
+        end)
+
+        it("places a direct winnings toast the container is not holding", function()
+            local f = alert("BonusRollLootWonFrame")
+            hook(_G.AlertFrame, f)
+            assert.is_true(placed(f))
+            assert.equal(1, calls.postAlertMove)
+        end)
+
+        it("stands aside when the container is holding that same toast", function()
+            local f = alert("BonusRollLootWonFrame")
+            _G.GroupLootContainer = { rollFrames = { [1] = f } }
+            hook(_G.AlertFrame, f)
+            assert.is_false(placed(f))
+            assert.equal(0, calls.postAlertMove)
+        end)
+
+        it("stands aside for a subsystem alert, which UpdateAnchors already chained", function()
+            local f = alert("AchievementAlertFrame1")
+            hook(_G.AlertFrame, f)
+            assert.is_false(placed(f))
+            assert.equal(0, calls.postAlertMove)
+        end)
+
+        it("stands aside while the module is disabled", function()
+            AF.IsEnabled = function() return false end
+            local f = alert("BonusRollLootWonFrame")
+            hook(_G.AlertFrame, f)
+            assert.is_false(placed(f))
+        end)
+    end)
 end)

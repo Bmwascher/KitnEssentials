@@ -1509,7 +1509,9 @@ end
 -- frame stubs are needed here. ShouldGrowUp is a file local with no stored
 -- handle, but AF:PostAlertMove calls it directly, so it sits in that method's
 -- upvalue slots; findUpvalue recovers it without ever creating a frame or
--- calling OnEnable. Returns AF, KE, seams (seams.shouldGrowUp).
+-- calling OnEnable. Returns AF, KE, seams -- seams.shouldGrowUp,
+-- seams.isDirectAlertFrame, seams.isHeldByLootContainer, seams.adjustSubSystem.
+-- For the AddAlertFrame post-hook itself, use L.loadAlertFramesWithHooks below.
 function L.loadAlertFrames()
     local modules = helpers.installAddonShim()
     local KE = {
@@ -1532,6 +1534,57 @@ function L.loadAlertFrames()
         adjustSubSystem = findUpvalue(AF.InstallHooks, "AdjustSubSystem"),
     }
     return AF, KE, seams
+end
+
+-- Modules/QoL/AlertFrames.lua with InstallHooks actually RUN, which the loader
+-- above deliberately avoids. Needed because the guards inside the AddAlertFrame
+-- post-hook are only observable by driving that callback: a spec that calls the
+-- predicates instead still passes when the guard is deleted from the hook.
+--
+-- Everything InstallHooks touches is stubbed rather than mocked in depth. It
+-- reads AlertFrame, hooksecurefunc's four targets, GroupLootContainer and
+-- GroupLootContainer_Update, and none of those need behaviour here -- the
+-- callback under test is captured from hooksecurefunc and invoked directly.
+-- AF:IsEnabled and AF.holder are set because the hook's first guard reads both.
+--
+-- Returns AF, hook, calls:
+--   hook  the captured AddAlertFrame post-hook, called as hook(af, frame)
+--   calls {postAlertMove = n} -- the placement side effect the guards suppress;
+--         a placed frame also records its own clearAllPoints/setPoint counts
+function L.loadAlertFramesWithHooks()
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { AlertFrames = {} } },
+        ApplyFramePosition = function() end,
+        CreateReloadPrompt = function() end,
+        Print = function() end,
+    }
+
+    -- BEFORE loadModule, not after: the file captures `local hooksecurefunc =
+    -- hooksecurefunc` at its own scope, so a stub installed later is never the
+    -- one InstallHooks calls.
+    local alertFrame = { alertFrameSubSystems = {} }
+    local captured
+    _G.AlertFrame = alertFrame
+    _G.GroupLootContainer = nil
+    _G.GroupLootContainer_Update = nil
+    _G.hooksecurefunc = function(target, name, fn)
+        if target == alertFrame and name == "AddAlertFrame" then captured = fn end
+    end
+
+    helpers.loadModule("Modules/QoL/AlertFrames.lua", KE)
+    local AF = modules["AlertFrames"]
+
+    local calls = { postAlertMove = 0 }
+    AF.IsEnabled = function() return true end
+    AF.holder = { GetCenter = function() return 0, 0 end }
+    AF.PostAlertMove = function() calls.postAlertMove = calls.postAlertMove + 1 end
+
+    -- The module registry hands back the SAME table between loads, so a run
+    -- after the first would find its own guard already set and install nothing.
+    AF.hooked = nil
+    AF:InstallHooks()
+    return AF, captured, calls, KE
 end
 
 -- Modules/QoL/ColorPicker.lua captures WoW string globals as file-scope

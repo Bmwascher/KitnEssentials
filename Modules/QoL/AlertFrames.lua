@@ -79,7 +79,8 @@ function AF:ApplyEventToastPosition()
 end
 
 -- Replace-mode LootRoll owns the BonusRollFrame PROMPT (it anchors it to its
--- own bar stack); the winnings toasts are nobody's either way.
+-- own bar stack). The winnings toasts belong to GroupLootContainer for as long
+-- as it holds them; only once it lets go are they this module's to stack.
 local function LootRollReplacesRolls()
     local LR = KitnEssentials.GetModule and KitnEssentials:GetModule("LootRoll", true)
     return LR and LR.db and LR.db.Enabled and LR.db.Replace and true or false
