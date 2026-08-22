@@ -250,6 +250,28 @@ local function ReapplyAnchorsToUs()
     end
 end
 
+-- Unlock mode runs several size-match passes, but none of them keys off an
+-- element REGISTERING, and the one hook that does fire on late registration
+-- re-applies anchors only. KE publishes after those passes have run, so a match
+-- naming a KE element would stay inert until something else happened to resize.
+-- There is no per-record re-apply to call; pushing from the target reaches every
+-- child matched to it, which is the same direction the anchor loop above works
+-- in.
+--
+-- Guarded per function, not per addon: EllesmereUI dropping one axis must cost
+-- that axis, not both.
+local function ReapplyMatchesToUs()
+    local eui = EUI()
+    if not eui then return end
+
+    for _, entry in ipairs(publishedConfigs) do
+        local euiKey = KEY_PREFIX .. entry.config.key
+        if eui.PropagateWidthMatch then pcall(eui.PropagateWidthMatch, euiKey) end
+        if eui.PropagateHeightMatch then pcall(eui.PropagateHeightMatch, euiKey) end
+    end
+end
+Bridge.ReapplyMatchesToUs = ReapplyMatchesToUs
+
 -- Reset when the ticker stops, not left latched: frames appear in waves, so a
 -- later batch publishes after this pass has already finished and its children
 -- need a pass of their own.
@@ -263,7 +285,10 @@ local function ScheduleReapply()
     ticker = C_Timer.NewTicker(REAPPLY_INTERVAL, function()
         tries = tries + 1
         if AllPublishedFramesLaidOut() then
+            -- Matches after anchors, deliberately: a child that is both anchored
+            -- and matched should be placed before it is resized.
             ReapplyAnchorsToUs()
+            ReapplyMatchesToUs()
             ticker:Cancel()
             reapplyScheduled = false
         elseif tries >= REAPPLY_MAX_TRIES then

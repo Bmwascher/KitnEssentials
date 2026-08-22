@@ -328,3 +328,72 @@ describe("EUIUnlockBridge element size contract", function()
         assert.equal(50, h)
     end)
 end)
+
+-- EllesmereUI runs several size-match passes but none of them keys off an
+-- element REGISTERING, and its late-registration hook re-applies anchors only.
+-- KE publishes after those passes, so without this push a match against a KE
+-- element stays inert for the session unless something else happens to resize.
+describe("EUIUnlockBridge size-match re-apply", function()
+    local function publishTwo(euiOverrides)
+        local KE = L.loadEUIUnlockBridge()
+
+        _G.EllesmereUI = euiOverrides
+        _G.EllesmereUI.MakeUnlockElement = function(element) return element end
+        _G.EllesmereUI.RegisterUnlockElements = function() end
+
+        for _, key in ipairs({ "Chat", "DamageMeter" }) do
+            KE.EUIUnlock:Register({
+                key = key,
+                displayName = key,
+                frame = { GetWidth = function() return 10 end,
+                          GetHeight = function() return 10 end },
+                getPosition = function() return nil end,
+                setPosition = function() end,
+            })
+        end
+
+        return KE
+    end
+
+    after_each(function()
+        _G.EllesmereUI = nil
+    end)
+
+    it("pushes both axes once for every published key", function()
+        local widths, heights = {}, {}
+        local KE = publishTwo({
+            PropagateWidthMatch  = function(key) widths[#widths + 1] = key end,
+            PropagateHeightMatch = function(key) heights[#heights + 1] = key end,
+        })
+
+        KE.EUIUnlock.ReapplyMatchesToUs()
+
+        assert.same({ "KE_Chat", "KE_DamageMeter" }, widths)
+        assert.same({ "KE_Chat", "KE_DamageMeter" }, heights)
+    end)
+
+    it("does the half it can when only one axis is available", function()
+        local heights = {}
+        local KE = publishTwo({
+            PropagateHeightMatch = function(key) heights[#heights + 1] = key end,
+        })
+
+        assert.has_no.errors(function() KE.EUIUnlock.ReapplyMatchesToUs() end)
+        assert.same({ "KE_Chat", "KE_DamageMeter" }, heights)
+    end)
+
+    it("survives a propagate call that throws", function()
+        local KE = publishTwo({
+            PropagateWidthMatch  = function() error("boom") end,
+            PropagateHeightMatch = function() error("boom") end,
+        })
+
+        assert.has_no.errors(function() KE.EUIUnlock.ReapplyMatchesToUs() end)
+    end)
+
+    it("does nothing when EllesmereUI is absent", function()
+        local KE = publishTwo({})
+        _G.EllesmereUI = nil
+        assert.has_no.errors(function() KE.EUIUnlock.ReapplyMatchesToUs() end)
+    end)
+end)
