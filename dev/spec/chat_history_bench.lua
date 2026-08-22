@@ -45,6 +45,15 @@ local ARGS = { "a message of about forty characters in length", "Sender",
 local function once(cap)
     local CH, KE = L.loadChatHistory()
     KE.db.profile.Skinning.ChatHistory.Size = cap
+    -- PREFILLED, so every timed call pays a trim. Started empty, only
+    -- ITERATIONS-minus-cap of them do, while the threshold this feeds assumes
+    -- all of them do -- the acceptance was comparing a cheaper workload against
+    -- a number describing a costlier one, and passed results the number should
+    -- have caught. Steady state is also the state the in-game reading was taken
+    -- in, so the two are now measuring the same thing.
+    for _ = 1, cap do
+        CH:SaveChatHistory("CHAT_MSG_SAY", unpack(ARGS))
+    end
     -- Garbage-collector state is a benchmark INPUT, not background noise: a
     -- measured loop that inherits the previous loop's garbage pays for
     -- collecting it. Blizzard's own benchmark utility collects and stops the
