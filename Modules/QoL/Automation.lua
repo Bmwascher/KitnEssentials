@@ -603,16 +603,26 @@ local function SetupAutoSellRepair()
             C_MerchantFrame.SellAllJunkItems()
         end
         if AU.db.AutoRepair and CanMerchantRepair() then
+            -- Every line below reads the cost: the truth test, the comparison,
+            -- and both affordability checks. issecretvalue comes first for the
+            -- same reason it does in ReadRepairBill, and the wallet gets the
+            -- same treatment -- a reference addon's report names both values.
+            -- Unreadable means do nothing: refusing to auto-repair is a
+            -- non-event, throwing here kills every later feature in this
+            -- handler.
             local repairCost, canRepair = GetRepairAllCost()
-            if repairCost and canRepair and repairCost > 0 then
+            if not KE:IsSecretValue(repairCost)
+                and repairCost and canRepair and repairCost > 0 then
                 if AU.db.UseGuildFunds and CanGuildBankRepair() then
                     local guildBankMoney = GetGuildBankWithdrawMoney()
-                    if guildBankMoney >= repairCost then
+                    if not KE:IsSecretValue(guildBankMoney)
+                        and guildBankMoney >= repairCost then
                         RepairAllItems(true)
                         return
                     end
                 end
-                if GetMoney() >= repairCost then
+                local wallet = GetMoney()
+                if not KE:IsSecretValue(wallet) and wallet >= repairCost then
                     RepairAllItems(false)
                 end
             end
@@ -625,16 +635,18 @@ end
 -- whoever paid it and whatever triggered it, so a hand-clicked repair, a single
 -- item dragged onto the merchant, and another addon's auto-repair all report.
 
--- Announcing a repair means proving one happened, and the bill is the only
--- honest witness. It falls by exactly what was paid, it does not move when the
--- repair is refused for lack of funds, and it is blind to who paid -- so a
--- guild-funded repair reports its figure without claiming a payer that cannot
--- be verified from here. A RISE means gear was equipped, not repaired.
+-- The bill is the best witness available, not proof. It falls by what a repair
+-- paid, it does not move when a repair is refused for lack of funds, and it is
+-- blind to who paid -- so a guild-funded repair reports its figure without
+-- claiming a payer that cannot be verified from here. A RISE means gear was
+-- equipped, not repaired.
 --
--- Residual: unequipping damaged gear at a merchant also lowers the bill and is
--- announced as a repair. Nothing readable separates the two, and the trade is
--- deliberate -- the alternative loses every guild-funded repair, which is far
--- more common.
+-- Residual, and the reason "witness" is the right word rather than "proof":
+-- anything that removes damaged gear at a merchant lowers the bill the same
+-- way, unequipping and selling included, and is announced as a repair. Nothing
+-- readable separates the two. The trade is deliberate -- watching the player's
+-- money instead would lose every guild-funded repair, which is far more common
+-- than either false positive.
 function AU:RepairSpend(before, after)
     if type(before) ~= "number" or type(after) ~= "number" then return end
     local spent = before - after
@@ -643,15 +655,42 @@ function AU:RepairSpend(before, after)
 end
 
 local repairReportFrame, repairBill
+local repairPending, repairPendingTotal = false, 0
 
--- GetRepairAllCost's second return answers "is anything damaged", NOT "does
--- this merchant repair" -- it flips to false the instant the last item is
--- fixed, which is exactly the reading that proves a repair happened. Gating on
--- it made the bill unreadable at the one moment it mattered. Blizzard's own
--- repair-all button agrees: it disables itself on a false flag, which a
--- permanent merchant property could never do. The cost alone is the bill.
+-- One repair action can surface as several durability events with the bill
+-- falling in stages, and announcing each drop turns one repair into a
+-- paragraph. Deltas accumulate and are announced once the bill stops moving.
+-- The sum is what was paid either way, so coalescing loses nothing, and the
+-- timer is deliberately left to fire after the merchant closes: the money was
+-- still spent.
+local function AnnounceRepair()
+    repairPending = false
+    local spent = repairPendingTotal
+    repairPendingTotal = 0
+    if spent <= 0 then return end
+
+    local money = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString
+        and C_CurrencyInfo.GetCoinTextureString(spent)
+    if money then
+        KE:Print(string_format("Repaired for %s.", money))
+    end
+end
+
+-- Only the cost is read. GetRepairAllCost's second return is NOT the merchant
+-- capability flag -- `CanMerchantRepair` is that, and Blizzard gates the repair
+-- UI on it separately -- and the second return goes false once nothing is
+-- damaged, which is precisely the reading a just-finished repair produces.
+-- Gating on it made the bill unreadable at the one moment it mattered. Its
+-- exact semantics are not documented, so nothing here depends on them.
+--
+-- issecretvalue before type(), because the type check is itself a read and a
+-- secret value throws on one. Whether this return can be secret is undocumented
+-- both ways; a reference addon records a user report of the comparison throwing
+-- here, and a single readable in-game sample cannot rule out a situational
+-- secret. Unreadable therefore means say nothing, not guess.
 local function ReadRepairBill()
     local cost = GetRepairAllCost()
+    if KE:IsSecretValue(cost) then return end
     if type(cost) ~= "number" then return end
     return cost
 end
@@ -694,10 +733,10 @@ local function SetupRepairReport()
         repairBill = bill
         if not spent then return end
 
-        local money = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString
-            and C_CurrencyInfo.GetCoinTextureString(spent)
-        if money then
-            KE:Print(string_format("Repaired for %s.", money))
+        repairPendingTotal = repairPendingTotal + spent
+        if not repairPending then
+            repairPending = true
+            C_Timer.After(0.5, AnnounceRepair)
         end
     end)
 end
