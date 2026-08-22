@@ -448,8 +448,19 @@ function ProfileManager:RefreshAllModules()
     local skipSkinning = KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()
     local skinningChanged = false
     local reloadNeeded = false
-    for name, module in KitnEssentials:IterateModules() do
+    -- Rebind EVERY module's db before any enable/disable runs. AceDB's
+    -- SetProfile calls removeDefaults on the outgoing profile: it strips
+    -- default-equal leaves and deletes the nested tables that empties, so a
+    -- module still holding the old table sees a half-gutted profile. Rebinding
+    -- inside the enable/disable loop left that window open to every module the
+    -- loop had not reached yet, and a teardown that touches a sibling
+    -- (DM:ReleaseChatSize -> CHAT:UpdatePanel) then indexed keys stripping had
+    -- removed -- while the flags it guards on, being non-default, survived.
+    for _, module in KitnEssentials:IterateModules() do
         if module.UpdateDB then module:UpdateDB() end
+    end
+
+    for name, module in KitnEssentials:IterateModules() do
         local wasEnabled = module:IsEnabled()
         local wantEnabled = module.db and module.db.Enabled
         local stateMismatch = wantEnabled ~= nil and not module.keSelfManagedEnable

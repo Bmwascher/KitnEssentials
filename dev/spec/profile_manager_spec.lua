@@ -117,7 +117,16 @@ describe("RefreshAllModules enabled-state sync", function()
         -- Mirror AceAddon semantics: EnableModule/DisableModule dispatch the
         -- lifecycle methods (AceAddon-3.0.lua), not just a flag flip.
         _G.KitnEssentials = {
-            IterateModules = function() return pairs(reg) end,
+            -- Ordered, matching AceAddon's own module list, so an
+            -- ordering-sensitive case is deterministic rather than lucky.
+            IterateModules = function()
+                local i = 0
+                return function()
+                    i = i + 1
+                    local m = mods[i]
+                    if m then return m.name, m end
+                end
+            end,
             EnableModule = function(_, name)
                 reg[name].enabled = true
                 if reg[name].OnEnable then reg[name]:OnEnable() end
@@ -129,6 +138,22 @@ describe("RefreshAllModules enabled-state sync", function()
         }
         return PM, reg, KE
     end
+
+    -- A teardown that reaches a sibling must see the sibling's CURRENT db.
+    -- AceDB's SetProfile strips the outgoing profile, so a sibling still
+    -- holding the old table reads keys that no longer exist -- while the
+    -- non-default flags such a reach usually guards on survive the strip.
+    it("rebinds every module's db before any enable or disable runs", function()
+        local leaving = fakeModule("A", { Enabled = false })
+        leaving.enabled = true
+        local sibling = fakeModule("B", { Enabled = false })
+        sibling.UpdateDB = function(self) self.db = { Enabled = false, Rebound = true } end
+        local seen
+        leaving.OnDisable = function() seen = sibling.db.Rebound end
+        local PM = harness({ leaving, sibling })
+        PM:RefreshAllModules()
+        assert.is_true(seen)
+    end)
 
     it("enables a module the profile marks enabled and disables one it marks disabled", function()
         local on = fakeModule("A", { Enabled = true })
