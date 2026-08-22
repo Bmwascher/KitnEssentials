@@ -1783,6 +1783,7 @@ local Defaults = {
                 Enabled = false,
                 Width = 448,
                 Height = 245,
+                MatchDamageMeterSize = false,
                 FontOutline = "OUTLINE",
                 FontSize = 14,
                 TabFontSize = 12,

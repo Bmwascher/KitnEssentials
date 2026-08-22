@@ -27,6 +27,18 @@ local tostring = tostring
 local pairs, ipairs = pairs, ipairs
 local table_sort = table.sort
 
+-- Shown wherever a detail view is refused: another player's row in combat, a view
+-- whose renderer cannot survive secret values, or an identity that could not be
+-- legally substituted. One constant because three separate paths raise it and they
+-- must not drift apart.
+local REFUSAL_MSG = "Detailed information is\nsecret while in combat"
+
+-- The recap exists but the client would not let us read it. Deliberately DISTINCT
+-- from the no-recap message: they mean different things, and telling them apart in
+-- game is the only way to answer whether the recap is reachable in combat at all.
+local RECAP_UNREADABLE_MSG = "Death recap data is\nunreadable in combat"
+local RECAP_ABSENT_MSG = "No death recap available"
+
 -- Same fixed pool ceiling as the main bars; the detail list never exceeds it.
 local DETAIL_POOL_SIZE = DM.BAR_POOL_SIZE or 40
 
@@ -150,6 +162,44 @@ local function MergeSpellsByName(spells)
     return list
 end
 
+-- Pick the spell list AND its fill maximum together, for both breakdown
+-- renderers. Returning them as one pair is the point: the two choices belong to
+-- the same decision, and letting a caller take one branch's list with the
+-- other's maximum would draw every bar at the wrong width.
+--
+-- IN COMBAT the merge is bypassed entirely. It cannot be made secret-safe --
+-- it sanitizes each amount to 0 before summing, and it sorts by the summed
+-- value, so the raw amounts never reach the render loop and the whole list
+-- collapses onto one key once the names and IDs are unreadable. There is no
+-- partial merge either: no combatSpell field is NeverSecret, so there is no
+-- plain key to group on, and summing would be illegal whatever the key.
+--
+-- The cost is that same-named DIFFERENT spell IDs stop combining, which shows
+-- up as melee on more than one row. It is bounded: the API already aggregates
+-- per spell ID, so nothing is scattered that the game itself had joined.
+--
+-- The in-combat maximum comes from src.maxAmount, the API's own per-spell
+-- figure, which is what Blizzard's own damage meter uses for exactly this
+-- unmerged case. It needs no arithmetic and no sort, so it stays correct even
+-- if the list arrives unordered -- and we may not sort it, because comparing
+-- secret amounts is forbidden.
+--
+-- OUT OF COMBAT nothing changes: the merged list, and the top merged row's
+-- total as the maximum (a merged melee line can exceed the API's per-spell
+-- figure, which is why this branch cannot use src.maxAmount).
+local function SelectSpellList(src)
+    if not src then return nil, 0 end
+    -- DM.DetailCombatActive, not InCombatLockdown: the latter drops to false the
+    -- moment the player dies mid-pull, and the merge would then run on amounts that
+    -- are still secret -- sanitizing every one of them to zero.
+    if DM.DetailCombatActive and DM.DetailCombatActive() then
+        return src.combatSpells, src.maxAmount
+    end
+    local merged = MergeSpellsByName(src.combatSpells)
+    if not merged then return nil, 0 end
+    return merged, (merged[1] and merged[1].totalAmount) or 0
+end
+
 -- One detail row: [icon] name .......... value. Scripts wired ONCE (pool reuse).
 -- Clicking any row closes the panel (the back gesture).
 local function MakeDetailRow(parent)
@@ -246,10 +296,12 @@ function DM:EnsureDetail(W)
     return d
 end
 
--- Left-click opens (out of combat only). Right-click on a bar is normally handled by
+-- Left-click opens. Out of combat that is unconditional; in combat only the local
+-- player's own row, and only on a view whose renderer survives secret values --
+-- DM:DetailEligible owns that rule. Right-click on a bar is normally handled by
 -- the window dispatcher (Selector.lua OnWindowRightClick) and doesn't reach here; the
 -- RightButton guard below remains as a safe fallback. bar carries the source identity
--- stashed by Window.lua RenderBar (Task 2).
+-- stashed by Window.lua RenderBar.
 function DM:OpenDetail(bar, button)
     local W = bar and bar.win
     if not W then return end
@@ -260,18 +312,54 @@ function DM:OpenDetail(bar, button)
     self:HideHoverTip()
     if button == "RightButton" then self:CloseDetail(W); return end
 
-    if InCombatLockdown() then
-        self:ShowDetailMessage(W, "Detailed information is\nsecret while in combat")
+    -- Resolve the EFFECTIVE meter type here, before anything below reads it. A view
+    -- override changes the view without touching cfg.MeterType and survives until a
+    -- segment boundary, so the config value is not the view the user is looking at.
+    local openCfg = self:ResolveWindowConfig(W.idx)
+    local openType = openCfg and self:EffectiveMeterType(W.idx, openCfg)
+    -- Re-stash W._isDeaths from that value. RenderWindow normally sets it, but only
+    -- on a repaint, and nothing repaints between a segment bump and the next tick --
+    -- BumpSegment schedules nothing, OnEncounterStart calls it and schedules nothing,
+    -- and the ticker period is user-configurable. Without this, for one tick after a
+    -- boss pull the gate below could admit a click on the fresh type while the
+    -- dispatch at the end of this function routed on the stale one, straight into the
+    -- death recap mid-fight. The gate's input and the dispatch's input must be the
+    -- same value.
+    if openType ~= nil then
+        W._isDeaths = (openType == Enum.DamageMeterType.Deaths)
+    end
+
+    local ownRow = DM.PlainOwnRow(bar._isLocalPlayer)
+    if not self:DetailEligible(bar._isLocalPlayer, openType) then
+        self:ShowDetailMessage(W, REFUSAL_MSG)
         return
     end
 
     -- Deaths row with no usable recap: no-op rather than opening an empty
     -- "No death recap available" panel (a feign / no-recap death simply isn't
-    -- clickable). OOC only -- the in-combat branch above already returned, so
-    -- GetDeathRecap (which reads C_DeathRecap, OOC-safe) runs on a plain recapID here.
-    -- W._isDeaths is stashed by RenderWindow; bar._deathRecapID by RenderBar.
-    if W._isDeaths and not self:GetDeathRecap(bar._deathRecapID) then
-        return
+    -- clickable). Reachable IN combat as well -- DetailEligible admits the Deaths
+    -- view now -- so nothing below may assume a plain recapID or plain contents.
+    -- W._isDeaths was re-stashed above; bar._deathRecapID comes from RenderBar.
+    -- Fetch ONCE per click. The renderer below takes the result rather than
+    -- refetching: the fetch now tests indexability and reverses the whole event
+    -- array, and doing that twice for one click is real work on a combat path.
+    local preEvents, preSink, prePlain
+    if W._isDeaths then
+        preEvents, preSink, prePlain = self:GetDeathRecap(bar._deathRecapID)
+        -- UNREADABLE still OPENS -- the panel is what carries the message -- but it
+        -- goes STRAIGHT to the message rather than through the renderer, so a prefetch
+        -- handed to the renderer can only ever be the success shape and no caller has
+        -- to discriminate shapes on a possibly-secret maximum. Only a genuinely absent
+        -- recap declines, which is today's behaviour: a feign or a no-recap death
+        -- simply is not clickable. Compare the second return only INSIDE this branch;
+        -- on the success shape it holds the fill maximum, which can be secret, and
+        -- comparing a secret throws.
+        if not preEvents then
+            if preSink == DM.RECAP_UNREADABLE then
+                self:ShowDetailMessage(W, RECAP_UNREADABLE_MSG)
+            end
+            return
+        end
     end
 
     self:EnsureDetail(W)
@@ -279,6 +367,16 @@ function DM:OpenDetail(bar, button)
     W._detailSourceCID  = bar._sourceCreatureID
     W._detailRecapID    = bar._deathRecapID
     W._detailClass      = bar._classFilename
+    -- Eligibility snapshot. The combat-start hook and the tick refresh both need to
+    -- re-judge this panel and neither one receives the bar, so the answer is stored
+    -- here: a PLAIN boolean (never the raw field -- nothing downstream should hold
+    -- something it cannot compare) and the EFFECTIVE meter type, so a later tick can
+    -- tell that the view has changed underneath the panel.
+    W._detailOwnRow = ownRow
+    W._detailMeterType = openType
+    -- Data panel, as opposed to the refusal message ShowDetailMessage puts up. The
+    -- refresh path must not treat one as the other.
+    W._detailKind = "data"
     W._detailOpen = true
     if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
 
@@ -286,6 +384,70 @@ function DM:OpenDetail(bar, button)
     W.detail:Show()
 
     if W._isDeaths then
+        self:RenderDeathRecap(W, preEvents, preSink, prePlain)
+    else
+        self:RenderBreakdown(W)
+    end
+end
+
+-- One per-window tick step: paint the window, THEN re-judge and repaint any open
+-- detail panel. Both of DM:Tick's render call sites go through this -- the immediate
+-- loop and the deferred one for windows that blew the frame budget -- so a deferred
+-- window's panel keeps updating too.
+--
+-- It runs AFTER RenderWindow on purpose. The detail fetch reads the window's session
+-- through EffectiveSessionID, and ResolveRenderSession only settles the "Current
+-- emptied, fall back to the newest stored" case during the window render; refreshing
+-- first would read the previous tick's answer. And it must live out here rather than
+-- at the tail of RenderWindow, which returns early when there is no session at all --
+-- precisely the state a settling session passes through.
+function DM:RenderWindowAndDetail(W)
+    self:RenderWindow(W)
+    if not W or not W._detailOpen then return end
+
+    -- KIND FIRST. A refusal message must survive ticks; ShowDetailMessage deliberately
+    -- clears the snapshots, so testing drift or eligibility before this would read
+    -- those cleared values, conclude the panel had drifted, and close the refusal on
+    -- the very next tick.
+    if W._detailKind ~= "data" then return end
+
+    -- The EFFECTIVE view, which is not cfg.MeterType while an override is active.
+    local cfg = self:ResolveWindowConfig(W.idx)
+    local nowType = cfg and self:EffectiveMeterType(W.idx, cfg)
+    if nowType == nil then return end
+
+    -- DRIFT: the view changed underneath the panel. Close rather than re-render -- the
+    -- panel is keyed to a view that is no longer showing, which is a different thing
+    -- from "you may not see this in combat", and closing returns the user to the bars
+    -- for the view they now have. A segment bump (any boss pull) can invalidate a view
+    -- override without repainting, which is how this happens without the user touching
+    -- anything.
+    if nowType ~= W._detailMeterType then
+        self:CloseDetail(W)
+        return
+    end
+
+    -- Eligibility against the CURRENT view and the snapshotted plain own-row answer.
+    -- The snapshot detects drift; it never authorizes. Out of combat the predicate
+    -- short-circuits to true, so nothing here restricts what already worked.
+    if not self:DetailEligible(W._detailOwnRow, nowType) then
+        self:CloseDetail(W)
+        return
+    end
+
+    -- Re-enter through the SAME dispatch OpenDetail uses. Calling RenderBreakdown
+    -- directly would redraw an out-of-combat death recap as a spell breakdown, fetching
+    -- per-spell data that does not exist for it.
+    if W._isDeaths then
+        -- A recap is immutable once the death has happened, so repainting the one
+        -- already on screen costs a fetch and a full array reversal for no change.
+        -- COMBAT only, and never the first paint: out of combat the settle repaints
+        -- still run, because nothing documents a recap as final and freezing a partial
+        -- one would be a regression against today's behaviour.
+        if DM.DetailCombatActive and DM.DetailCombatActive()
+            and W._detailPaintedRecapID ~= nil and W._detailPaintedRecapID == W._detailRecapID then
+            return
+        end
         self:RenderDeathRecap(W)
     else
         self:RenderBreakdown(W)
@@ -301,6 +463,13 @@ function DM:CloseDetail(W)
     -- segment menu). Gating on _detailOpen keeps the body owned by whatever overlay is up.
     if not W or not W.detail or not W._detailOpen then return end
     W._detailOpen = false
+    -- Clear the eligibility snapshot with the panel. A closed panel authorizes
+    -- nothing, and leaving these set would let the next thing that opens here --
+    -- including a refusal message -- inherit the last panel's permission.
+    W._detailOwnRow = nil
+    W._detailMeterType = nil
+    W._detailKind = nil
+    W._detailPaintedRecapID = nil
     W.detail:Hide()
     if W.body then W.body:Show() end
     if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
@@ -313,6 +482,15 @@ function DM:ShowDetailMessage(W, msg)
     -- here is what stops a still-active tip's poll.
     self:HideHoverTip()
     self:EnsureDetail(W)
+    -- A message is not a data panel and must not inherit one's authorization. This
+    -- sets _detailOpen without going through OpenDetail, so without clearing here the
+    -- sequence "open a permitted panel, close it, click a refused row" would leave the
+    -- old snapshot in place and let the next refresh overwrite the refusal with the
+    -- previous breakdown.
+    W._detailOwnRow = nil
+    W._detailMeterType = nil
+    W._detailPaintedRecapID = nil
+    W._detailKind = "message"
     W._detailOpen = true
     if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
     if W.body then W.body:Hide() end
@@ -329,12 +507,12 @@ function DM:ShowDetailMessage(W, msg)
     W.detail.msg:Show()
 end
 
--- Per-source spell breakdown (out-of-combat only — OpenDetail is OOC-gated, so
--- spellID is plain here and C_Spell.* lookups don't taint). Renders the breakdown
--- via KE helpers + the confirmed secret contract: amounts are plain OOC,
--- but percent math is still guarded with issecretvalue defensively (a stale combat
--- read could linger one frame). API pre-sorts combatSpells descending, so the index
--- IS the rank; maxAmount drives the proportional fill.
+-- Per-source spell breakdown. Reachable IN COMBAT for the player's own row, so
+-- nothing here may assume a plain spellID: the C_Spell lookups are pcall'd, the
+-- amounts reach the formatter raw, and every percent is gated on canPercent.
+-- combatSpells is OBSERVED to arrive descending -- it is not documented, and we
+-- may not sort it, because comparing secret amounts is forbidden -- so the index
+-- is the rank on trust. maxAmount drives the proportional fill.
 function DM:RenderBreakdown(W)
     if W.detail and W.detail.msg then W.detail.msg:Hide() end
     local cfg = self:ResolveWindowConfig(W.idx)
@@ -347,7 +525,16 @@ function DM:RenderBreakdown(W)
     -- Honor a live in-world view override (Selector.lua) so the breakdown matches the
     -- bars; EffectiveMeterType falls back to cfg.MeterType when no override is active.
     local meterType = self:EffectiveMeterType(W.idx, cfg)
-    local src = self:GetSource(cfg.SessionType, meterType, W._detailSourceGUID, W._detailSourceCID, sessionID)
+    -- The own-row answer comes from the snapshot OpenDetail took, not from a fresh
+    -- read: the bar is not available here. A "refused" second return means the
+    -- identity was secret and could not legally be substituted -- distinct from an
+    -- ordinary empty result, which is why it is a second return rather than a marker
+    -- in the first.
+    local src, refused = self:GetSource(cfg.SessionType, meterType, W._detailSourceGUID, W._detailSourceCID, sessionID, W._detailOwnRow)
+    if refused then
+        self:ShowDetailMessage(W, REFUSAL_MSG)
+        return
+    end
 
     -- Enemy Damage Taken: the enemy's combatSpells don't resolve to player-spell names;
     -- render a per-player "who damaged this enemy" breakdown instead. See
@@ -358,10 +545,12 @@ function DM:RenderBreakdown(W)
         return
     end
 
-    -- Merge same-named spells (the API splits melee into many "Auto Attack" spellIDs). See
-    -- MergeSpellsByName. The merged list keeps the combatSpell shape, so the row loop below
-    -- is unchanged -- only the fill max (recomputed from the merged totals) differs.
-    local spells = src and MergeSpellsByName(src.combatSpells)
+    -- List + fill max as one decision. Out of combat this merges same-named
+    -- spells (the API splits melee into many "Auto Attack" spellIDs) and takes
+    -- the top merged total; in combat it hands back the API list unmerged with
+    -- the API's own per-spell max. Either list keeps the combatSpell shape, so
+    -- the row loop below is unchanged. See SelectSpellList.
+    local spells, maxAmount = SelectSpellList(src)
     local d = W.detail
     if not spells then
         for i = 1, DETAIL_POOL_SIZE do d.rows[i].row:Hide() end
@@ -371,10 +560,9 @@ function DM:RenderBreakdown(W)
     local stride = W._snapStride or 18
     local barH = W._snapHeight or 16
 
-    -- maxAmount drives the fill width -- the TOP MERGED row's total (a merged melee line can
-    -- exceed the API's per-spell src.maxAmount), taken from the re-sorted merged list. Percent
-    -- basis is the source's whole total (unchanged by merging); gate it on issecretvalue + type.
-    local maxAmount = (spells[1] and spells[1].totalAmount) or 0
+    -- maxAmount came from SelectSpellList alongside the list itself. Percent basis
+    -- is the source's whole total (unchanged by either branch); gate it on
+    -- issecretvalue + type -- in combat it is secret, so no percent is shown.
     local canPercent = src.totalAmount and not issecretvalue(src.totalAmount) and type(src.totalAmount) == "number"
     local total = canPercent and src.totalAmount or 0
 
@@ -435,23 +623,34 @@ function DM:RenderBreakdown(W)
             row.fill:SetValue(amt or 0)
             row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3])
 
-            -- Name: GetSpellName (secret-guard the RETURN), fall back to creatureName/Unknown.
+            -- Name: GetSpellName, pcall'd because a secret spellID can make the
+            -- lookup fail. A secret NAME is kept and displayed -- SetText accepts
+            -- secrets, and discarding one would print "Unknown" beside a real
+            -- number, which reads as a bug rather than as a restriction.
             local nm
             if spID then
                 local ok, sn = pcall(C_Spell.GetSpellName, spID)
-                if ok and sn and not issecretvalue(sn) then nm = sn end
+                if ok and sn then nm = sn end
             end
             row.label:SetText(nm or spell.creatureName or "Unknown")
 
             -- Value: abbreviated amount + percent (when computable). FormatBarValue
-            -- uses AbbreviateNumbers (AllowedWhenTainted) for parity with the main bars.
-            -- Percent arithmetic runs on amtPlain (sanitized) so a stray secret amount
-            -- cannot taint via division/format; the source aggregates are also guarded.
-            local amtStr = (self.FormatBarValue and select(1, self.FormatBarValue(amtPlain, nil, false))) or ""
-            if canPercent and total > 0 then
+            -- uses AbbreviateNumbers (AllowedWhenTainted) for parity with the main
+            -- bars, so it takes the RAW amount -- handing it the sanitized copy
+            -- would print 0 for every in-combat row. The percent branch keeps the
+            -- sanitized copy: its division and format are plain Lua, and canPercent
+            -- is only true when the source total is plain anyway.
+            local amtStr, amtSecret = "", false
+            if self.FormatBarValue then amtStr, amtSecret = self.FormatBarValue(amt, nil, false) end
+            -- The percent branch CONCATENATES amtStr through format, which a secret
+            -- string cannot survive. canPercent should already be false whenever the
+            -- amount is secret (both come from the same fetch), but the cost of being
+            -- wrong here is a thrown error mid-render, so gate on the formatter's own
+            -- secrecy flag as well and fall through to the bare amount.
+            if canPercent and not amtSecret and total > 0 then
                 row.value:SetText(format("%s  %.1f%%", amtStr, (amtPlain / total) * 100))
             else
-                row.value:SetText(amtStr)
+                row.value:SetText(amtStr or "")
             end
 
             if not row:IsShown() then row:Show() end
@@ -551,18 +750,173 @@ function DM:RenderEnemyBreakdown(W, src)
     d.content:SetHeight(math_max(10, count * stride))
 end
 
--- Death-recap timeline (out-of-combat only — OpenDetail is OOC-gated). Renders the
+-- One recap row's CONTENT: icon, fill, label, value. Both recap surfaces -- the
+-- click-inline panel and the hover tip -- called this body inline, near enough
+-- line for line that a guard fixed in one could go unfixed in the other. That
+-- shape has already produced one shipped defect in this module.
+--
+-- Anchoring stays with the callers: the two surfaces anchor to different parents,
+-- and the tip re-anchors its value column between the label's two SetPoints. Only
+-- the content is shared.
+--
+-- EVERY DeathRecapEventInfo field is treated as possibly secret. The structure is
+-- declared with an EMPTY field list, so there is no annotation to trust either way,
+-- and each field below takes exactly one of three treatments: handed RAW to a sink
+-- that accepts secrets, sanitized to a plain default first, or dropped from the
+-- display entirely. Nothing reaches a comparison, tostring, format or arithmetic
+-- without having been sanitized.
+--
+-- sinkMax and plainMax are the two maxima from DM:GetDeathRecap and are NOT
+-- interchangeable: sinkMax drives the bar and may be secret, plainMax is the only
+-- one the percentage may divide by and is nil when there is no usable maximum.
+local function RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, deathTime)
+    -- Icon: the lookup accepts a secret spell id (AllowedWhenTainted), so a secret one
+    -- is still tried -- it just skips the > 0 test, whose only job is rejecting a plain
+    -- zero or negative id and which would throw on a secret. pcall'd either way so a
+    -- throw cannot abort the loop and leave the row pool half-drawn. Any failure falls
+    -- back to the melee texture.
+    local spID = ev.spellId
+    local tex = 135274
+    if C_Spell and C_Spell.GetSpellTexture and spID ~= nil then
+        if issecretvalue(spID) or (type(spID) == "number" and spID > 0) then
+            local okT, t = pcall(C_Spell.GetSpellTexture, spID)
+            if okT and t then tex = t end
+        end
+    end
+    row.icon:SetTexture(tex)
+    KE:ApplyIconZoom(row.icon)
+    row.iconFrame:SetSize(barH, barH)
+    row.iconFrame:Show()
+
+    -- Event type decides the fill colour, the sign, the name fallback and the fatal
+    -- marker, so it is sanitized ONCE here and every test below runs on the result.
+    -- nil rather than "" because "" could match an empty-string branch by accident.
+    -- The old `or ""` default is deliberately gone: a MISSING type and an UNREADABLE
+    -- type are the same thing from the display's point of view, and both now take the
+    -- neutral row below instead of one of them being guessed as damage.
+    local evType = ev.event
+    if issecretvalue(evType) or type(evType) ~= "string" then evType = nil end
+    local typeKnown = (evType ~= nil)
+    local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
+    -- A fatal marker is a claim about which event killed the player. Make it only from
+    -- a readable type; its one visible effect is the overkill annotation, which a
+    -- secret overkill already suppresses, so withholding it costs almost nothing.
+    local isFatal = typeKnown and (i == count) and not isHeal
+
+    -- Fill: hand the ENGINE both operands and let it compute the proportion, which
+    -- addon code may not do. SetValue and SetMinMaxValues both accept secrets, so a
+    -- secret current HP against a secret maximum still draws the real bar -- dividing
+    -- them here would sanitize both to zero and empty every row in combat.
+    local curHP = ev.currentHP
+    local hpSecret = issecretvalue(curHP)
+    -- Raw means raw when SECRET. A plain nil or non-number would throw at the sink.
+    if not hpSecret and type(curHP) ~= "number" then curHP = 0 end
+    local haveMax = issecretvalue(sinkMax) or sinkMax ~= nil
+    if haveMax then
+        row.fill:SetMinMaxValues(0, sinkMax)
+        row.fill:SetValue(curHP)
+    else
+        -- No usable maximum: draw nothing rather than a full bar. A full bar would
+        -- assert the player died at full health.
+        row.fill:SetMinMaxValues(0, 1)
+        row.fill:SetValue(0)
+    end
+    -- Colour is picked AFTER the maximum test, not just on the event type. An empty
+    -- bar left red still reads as a damage row at zero health; grey reads as no data,
+    -- which is what an unusable maximum means. Same reasoning as the unknown type:
+    -- red with a minus sign is a positive claim, not an absence of information.
+    if not haveMax or not typeKnown then
+        row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3])
+    elseif isHeal then
+        row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
+    else
+        row.fill:SetStatusBarColor(0.60, 0.08, 0.08)
+    end
+
+    -- Percent suffix: real arithmetic on two plain numbers, or nothing at all. No 0%
+    -- and no 100% placeholder -- a fabricated number reads as data.
+    local pctSuffix = ""
+    if plainMax and not hpSecret and type(curHP) == "number" then
+        local hpPct = math_min(1, math_max(0, curHP / plainMax))
+        pctSuffix = format(" (%.0f%%)", hpPct * 100)
+    end
+
+    -- Label: "-X.Xs SpellName" (+ " (Source)" when a plain sourceName exists).
+    -- A SECRET name is KEPT and displayed: a FontString renders one, and the label is
+    -- assembled by concatenation, which is safe on a secret string. Falling back to
+    -- "Unknown" would erase a name the engine was able to show, on most rows in
+    -- combat. The literal fallbacks stay for a missing or empty name.
+    local spellName = ev.spellName
+    if not issecretvalue(spellName) then
+        if type(spellName) ~= "string" or spellName == "" then spellName = nil end
+        if spellName == nil then
+            if isHeal then spellName = "Heal"
+            elseif evType == "SWING_DAMAGE" then spellName = "Melee"
+            else spellName = "Unknown" end
+        end
+    end
+    local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
+    local srcName = ev.sourceName
+    if srcName and not issecretvalue(srcName) and srcName ~= "" and not isHeal then
+        label = label .. "  |cff999999(" .. srcName .. ")|r"
+    end
+    row.label:SetText(label)
+
+    -- Value: the amount goes RAW to the formatter when it is secret. The formatter is
+    -- AllowedWhenTainted end to end; math_max and tostring are not, and routing a
+    -- secret through the sanitized copy would print 0 on every in-combat row.
+    local amt = ev.amount
+    local body
+    if issecretvalue(amt) then
+        -- No clamp is possible and none is needed: the sign is supplied separately.
+        -- Empty string rather than tostring on the missing-formatter branch -- a blank
+        -- cell beats a thrown conversion.
+        body = (self.FormatBarValue and select(1, self.FormatBarValue(amt, nil, false))) or ""
+    else
+        local amtPlain = (type(amt) == "number") and amt or 0
+        body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
+    end
+    -- No sign on an unreadable type: +/- is a direction we did not read.
+    local sign = (not typeKnown) and "" or (isHeal and "+" or "-")
+    -- A boolean-truthiness test on a secret BOOLEAN throws -- sanitize to a plain
+    -- bool first (issecretvalue gate) so the marker test never touches a secret.
+    local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
+    local crit = critFlag and " |cffffd100*|r" or ""
+    -- Overkill is a conditional annotation, not a column: the > 0 test is what decides
+    -- whether to show it, and that test cannot run on a secret. Secret means absent.
+    if isFatal and not issecretvalue(ev.overkill) and type(ev.overkill) == "number" and ev.overkill > 0 then
+        local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
+        row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
+    else
+        row.value:SetText(sign .. body .. crit .. pctSuffix)
+    end
+end
+
+-- Death-recap timeline, reachable IN COMBAT as well as out of it. Renders the
 -- source's C_DeathRecap events oldest-first: each row is one combat-log event leading
 -- to the death, with the HP-remaining fill, "-Xs SpellName from Source" label, and a
 -- +heal / -damage value (crit marker, killing-blow overkill, HP% suffix). Recap fields
--- use spellId (lowercase d) — distinct from combatSpells' spellID. Three-tier gate is
--- in DM:GetDeathRecap (no/secret/<=0 recapID, no events) which returns nil -> message.
-function DM:RenderDeathRecap(W)
+-- use spellId (lowercase d) -- distinct from combatSpells' spellID.
+--
+-- NOTHING here may assume a readable field. Every per-row value goes through
+-- RenderRecapRow, which treats each one as possibly secret; the parts that cannot
+-- survive a secret (the percentage, the overkill note, the +/- sign) are omitted
+-- rather than guessed. DM:GetDeathRecap has THREE return shapes and the message
+-- below distinguishes the two that carry no events: absent, and unreadable.
+function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
     if W.detail and W.detail.msg then W.detail.msg:Hide() end
     local d = W.detail
-    local events, maxHP = self:GetDeathRecap(W._detailRecapID)
+    -- The click path prefetches (OpenDetail) so one interaction is one fetch. The
+    -- tick path does not, so the parameters are optional and a fetch here is the
+    -- normal case. A prefetch can only ever carry the SUCCESS shape: OpenDetail
+    -- declines on absent and goes straight to the message on unreadable, so neither
+    -- of those reaches this function with a prefetch in hand.
+    local events, sinkMax, plainMax = preEvents, preSink, prePlain
     if not events then
-        self:ShowDetailMessage(W, "No death recap available")
+        events, sinkMax, plainMax = self:GetDeathRecap(W._detailRecapID)
+    end
+    if not events then
+        self:ShowDetailMessage(W, sinkMax == DM.RECAP_UNREADABLE and RECAP_UNREADABLE_MSG or RECAP_ABSENT_MSG)
         return
     end
 
@@ -575,83 +929,16 @@ function DM:RenderDeathRecap(W)
         local bar = d.rows[i]
         local row = bar.row
         if i <= count then
-            local ev = events[i]
             row:ClearAllPoints()
             local yOff = -(i - 1) * stride
             row:SetPoint("TOPLEFT", d.content, "TOPLEFT", 0, yOff)
             row:SetPoint("TOPRIGHT", d.content, "TOPRIGHT", 0, yOff)
             row:SetHeight(barH)
-
-            -- Icon: spellId (lowercase d on recap events); pcall the lookup (parity with
-            -- RenderBreakdown's GetSpellName) so a throw can't abort the loop mid-render and
-            -- leave the row pool half-shown. Any failure (nil OR error) -> melee fallback 135274.
-            local spID = ev.spellId
-            local tex = 135274
-            if spID and spID > 0 and C_Spell and C_Spell.GetSpellTexture then
-                local okT, t = pcall(C_Spell.GetSpellTexture, spID)
-                if okT and t then tex = t end
-            end
-            row.icon:SetTexture(tex)
-            KE:ApplyIconZoom(row.icon)
-            row.iconFrame:SetSize(barH, barH)
-            row.iconFrame:Show()
             row.label:ClearAllPoints()
             row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
             row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
 
-            local evType = ev.event or ""
-            local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
-            local isFatal = (i == count and not isHeal)
-
-            -- Fill = HP% remaining at the event (currentHP / maxHP), heal green / damage red.
-            -- GetRecapEvents is AllowedWhenUntainted, so ev.currentHP can be a secret number
-            -- in a tainted post-combat window -- sanitize before the division (matches ev.amount).
-            local curHP = ev.currentHP
-            if issecretvalue(curHP) or type(curHP) ~= "number" then curHP = 0 end
-            local hpPct = math_min(1, math_max(0, maxHP > 0 and (curHP / maxHP) or 0))
-            row.fill:SetMinMaxValues(0, 1)
-            row.fill:SetValue(hpPct)
-            if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
-            else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
-
-            -- Label: "-X.Xs SpellName" (+ " (Source)" when a non-secret sourceName exists).
-            -- Parens form matches the hover-tip recap surface (Phase 4c).
-            local spellName = ev.spellName
-            if not spellName or issecretvalue(spellName) or spellName == "" then
-                if isHeal then spellName = "Heal"
-                elseif evType == "SWING_DAMAGE" then spellName = "Melee"
-                else spellName = "Unknown" end
-            end
-            local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
-            local srcName = ev.sourceName
-            if srcName and not issecretvalue(srcName) and srcName ~= "" and not isHeal then
-                label = label .. "  |cff999999(" .. srcName .. ")|r"
-            end
-            row.label:SetText(label)
-
-            -- Value: +heal / -damage (AbbreviateNumbers is AllowedWhenTainted), crit marker,
-            -- overkill on the killing blow, HP% suffix.
-            -- C_DeathRecap.GetRecapEvents is AllowedWhenUntainted, so ev.amount can be a
-            -- secret number if a tainted execution slips into the brief post-combat window.
-            -- Arithmetic (math_max) must run on a sanitized plain number; the raw amt is
-            -- never math'd here (FormatBarValue's plain branch and tostring also use amtPlain).
-            local amt = ev.amount or 0
-            local amtPlain = amt
-            if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
-            local body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
-            local sign = isHeal and "+" or "-"
-            -- ev.critical is AllowedWhenUntainted (same window as ev.amount, line 349).
-            -- A boolean-truthiness test on a secret BOOLEAN throws -- sanitize to a plain
-            -- bool first (issecretvalue gate) so the marker test never touches a secret.
-            local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
-            local crit = critFlag and " |cffffd100*|r" or ""
-            local pctSuffix = format(" (%.0f%%)", hpPct * 100)
-            if isFatal and not issecretvalue(ev.overkill) and type(ev.overkill) == "number" and ev.overkill > 0 then
-                local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
-                row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
-            else
-                row.value:SetText(sign .. body .. crit .. pctSuffix)
-            end
+            RenderRecapRow(self, row, events[i], i, count, barH, sinkMax, plainMax, deathTime)
 
             if not row:IsShown() then row:Show() end
         else
@@ -659,6 +946,9 @@ function DM:RenderDeathRecap(W)
         end
     end
     d.content:SetHeight(math_max(10, count * stride))
+    -- Painted, so the tick refresh can skip an unchanged repaint. Set only here, at
+    -- the end of a successful paint; the message branch above deliberately does not.
+    W._detailPaintedRecapID = W._detailRecapID
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
@@ -817,9 +1107,9 @@ end
 -- ║  TOOLTIP strata, parented to UIParent, passive (never     ║
 -- ║  intercepts the mouse). A detach-when-idle poll keeps the ║
 -- ║  numbers live while a bar is hovered. UNLIKE the click-   ║
--- ║  inline panel a hover fires IN COMBAT, so the populate    ║
--- ║  path hard-gates on InCombatLockdown BEFORE any secret    ║
--- ║  read (spellID is secret in combat -> touching it taints).║
+-- ║  inline panel a hover fires IN COMBAT, where it shows     ║
+-- ║  the player's OWN breakdown and refuses every other row   ║
+-- ║  and every view whose renderer cannot survive secrets.    ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 local HOVER_TIP_ROWS = 15       -- top spells/events; the click-inline panel still shows the full list
@@ -841,6 +1131,12 @@ local _tip                      -- module-level singleton (shared by all windows
 local _tipActiveBar             -- the bar currently hovered (nil = none); drives the poll
 local _tipPoll                  -- detach-when-idle OnUpdate frame
 local _tipPollAccum = 0
+-- Which recap the tip is currently SHOWING. The stash is on the tip, not on the
+-- hovered bar: the tip is a shared singleton, so a bar-keyed stash would let a
+-- re-hover skip a repaint while the tip still held another row's recap. Cleared at
+-- the top of every populate and re-set only by a successful recap paint, so any
+-- non-recap content leaves it nil.
+local _tipPaintedRecapID
 
 -- Tooltip text renders one point below the configured bar font so the quick-peek packs
 -- densely. Clamped to a readable floor. Every tip text element derives
@@ -1221,46 +1517,71 @@ local function TipHeaderName(self, bar)
     return nm or "Breakdown"
 end
 
--- Fill the tip from a bar's stashed source identity (set by RenderBar, Task 2).
--- Returns true if it has content to show, false if it should stay hidden. Mirrors
--- the secret contract of RenderBreakdown / RenderDeathRecap exactly. OOC ONLY for
--- real data: in combat it shows the secret message and reads NOTHING secret.
-function DM:PopulateHoverTip(W, bar)
+-- Put the tip into a MESSAGE state and size it for the message alone. Three
+-- separate paths raise one -- the eligibility gate at the top of PopulateHoverTip,
+-- a fetch that could not legally substitute an identity partway down, and a death
+-- recap the client would not let us read -- and all three must leave the same tip
+-- behind. One of them used to only raise the message, so a tip already carrying
+-- rows, column headers and a Targets block kept all of it under a three-line frame.
+--
+-- Everything a data render can turn on is turned off here. The header is re-set
+-- from the hovered bar because the tip is a shared singleton: without it the
+-- message would carry the previous bar's name.
+--
+-- msg defaults to the in-combat refusal, which is what two of the three callers want.
+local function ShowTipRefusal(self, bar, headerH, size, msg)
+    for i = 1, HOVER_TIP_ROWS do _tip.rows[i].row:Hide() end
+    if _tip.colHdr then
+        _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
+    end
+    HideTipTargets()
+    _tip.header:SetText(TipHeaderName(self, bar))
+    -- Class-tint the title (bar._classFilename is NeverSecret). White fallback for
+    -- an unknown/enemy class so the centered title is always legible.
+    local chc = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
+    if chc then _tip.header:SetTextColor(chc.r, chc.g, chc.b) else _tip.header:SetTextColor(1, 1, 1) end
+    _tip.msg:SetText(msg or REFUSAL_MSG)
+    _tip.msg:Show()
+    -- header + the two-line gray message; generous fixed height (no row math).
+    _tip:SetHeight(headerH + TIP_PAD + (size or 12) * 3)
+    return true
+end
+
+-- Fill the tip from a bar's stashed source identity (set by RenderBar). Returns
+-- true if it has content to show, false if it should stay hidden. Mirrors the
+-- secret contract of RenderBreakdown / RenderDeathRecap exactly -- which now
+-- includes an in-combat case: the player's own row renders real data from raw
+-- secret amounts, and every other row and view takes ShowTipRefusal.
+-- isInitial: forwarded from DM:ShowHoverTip, true only on the enter handler. Used
+-- by the recap skip below, which must never suppress a FIRST paint.
+function DM:PopulateHoverTip(W, bar, isInitial)
     self:EnsureHoverTip()
+    local prevPaintedRecapID = _tipPaintedRecapID
+    _tipPaintedRecapID = nil
     local face = self.db and self.db.FontFace
     local size = TipFontSize(self.db and self.db.FontSize)
     local outline = self.db and self.db.FontOutline
     local headerH = TIP_PAD * 2 + (size or 12)
 
-    -- IN COMBAT: hover fires mid-fight, so this gate is mandatory and runs BEFORE
-    -- any secret read. bar._cachedName is the last PLAIN (non-secret) name RenderBar
-    -- set (nil while the name was secret) -- safe to display, never a secret string.
-    if InCombatLockdown() then
-        for i = 1, HOVER_TIP_ROWS do _tip.rows[i].row:Hide() end
-        if _tip.colHdr then
-            _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
-        end
-        HideTipTargets()
-        _tip.header:SetText(TipHeaderName(self, bar))
-        -- Class-tint the title (bar._classFilename is NeverSecret). White fallback for
-        -- an unknown/enemy class so the centered title is always legible.
-        local chc = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
-        if chc then _tip.header:SetTextColor(chc.r, chc.g, chc.b) else _tip.header:SetTextColor(1, 1, 1) end
-        _tip.msg:SetText("Detailed information is\nsecret while in combat")
-        _tip.msg:Show()
-        -- header + the two-line gray message; generous fixed height (no row math).
-        _tip:SetHeight(headerH + TIP_PAD + (size or 12) * 3)
-        return true
-    end
-    _tip.msg:Hide()
-
+    -- The meter type is resolved HERE, above the refusal branch, because the branch
+    -- now needs it: the eligibility rule depends on which view is showing, and the
+    -- EFFECTIVE view is not cfg.MeterType while an override is active. This
+    -- resolution used to sit below the branch; it moved rather than being duplicated.
     local cfg = self:ResolveWindowConfig(W.idx)
     if not cfg then return false end
-    -- Honor a live in-world view override (Selector.lua) so the hover quick-peek
-    -- matches the bars + click-inline breakdown; falls back to cfg.MeterType when none.
     local meterType = self:EffectiveMeterType(W.idx, cfg)
     local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
     local isEnemyTaken = (meterType == Enum.DamageMeterType.EnemyDamageTaken)
+    local ownRow = DM.PlainOwnRow(bar._isLocalPlayer)
+
+    -- REFUSED: another player's row in combat, or a view whose renderer cannot
+    -- survive secret values. bar._cachedName is the last PLAIN (non-secret) name
+    -- RenderBar set (nil while the name was secret) -- safe to display, never a
+    -- secret string.
+    if not self:DetailEligible(bar._isLocalPlayer, meterType) then
+        return ShowTipRefusal(self, bar, headerH, size)
+    end
+    _tip.msg:Hide()
 
     -- Tip rows run ~2px shorter than the configured bar height so the quick-peek packs
     -- the now-15 rows (+ Targets) densely.
@@ -1285,8 +1606,34 @@ function DM:PopulateHoverTip(W, bar)
         end
         HideTipTargets()
         -- Top recap events (oldest-first) for this death; nil -> nothing to show.
-        local events, maxHP = self:GetDeathRecap(bar._deathRecapID)
-        if not events then return false end
+        -- Each repopulate fetches and reverses the whole event array. The poll only
+        -- repopulates on a data-change signal rather than every tick, so this is
+        -- defence in depth rather than a per-tick saving -- but a recap is immutable
+        -- once the death has happened, so a cursor held on one row never needs one.
+        -- COMBAT only: out of combat the repaint still runs, because nothing documents
+        -- a recap as final and freezing a partial one would be a regression. The recap
+        -- id is NeverSecret, so comparing it is safe.
+        -- NEVER on isInitial: an entering hover always paints, so the tip can never be
+        -- shown carrying whatever the last hover left in the shared rows.
+        if not isInitial and DM.DetailCombatActive and DM.DetailCombatActive()
+            and prevPaintedRecapID ~= nil and prevPaintedRecapID == bar._deathRecapID then
+            _tipPaintedRecapID = prevPaintedRecapID
+            return true
+        end
+        local events, sinkMax, plainMax = self:GetDeathRecap(bar._deathRecapID)
+        if not events then
+            -- An UNREADABLE recap shows the message; a genuinely absent one keeps
+            -- today's behaviour of leaving the tip hidden. A hover that silently does
+            -- nothing in combat reads as a broken feature, which is why the two are
+            -- not treated alike here. Raising the message alone is NOT enough: this
+            -- returns before the common tail, so the rows and header the previous
+            -- hover left behind have to be cleared the same way every other message
+            -- path clears them.
+            if sinkMax == DM.RECAP_UNREADABLE then
+                return ShowTipRefusal(self, bar, headerH, size, RECAP_UNREADABLE_MSG)
+            end
+            return false
+        end
         local deathTime = events[#events] and events[#events].timestamp
         local count = math_min(#events, HOVER_TIP_ROWS)
         for i = 1, HOVER_TIP_ROWS do
@@ -1300,78 +1647,19 @@ function DM:PopulateHoverTip(W, bar)
                 row:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", -TIP_PAD, yOff)
                 row:SetHeight(barH)
 
-                -- Icon: spellId (lowercase d on recap events); pcall the lookup so a
-                -- throw can't abort the loop. nil/0/error -> melee fallback 135274.
-                local spID = ev.spellId
-                local tex = 135274
-                if spID and spID > 0 and C_Spell and C_Spell.GetSpellTexture then
-                    local okT, t = pcall(C_Spell.GetSpellTexture, spID)
-                    if okT and t then tex = t end
-                end
-                row.icon:SetTexture(tex)
-                KE:ApplyIconZoom(row.icon)
-                row.iconFrame:SetSize(barH, barH)
-                row.iconFrame:Show()
                 row.label:ClearAllPoints()
                 row.label:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
                 -- Recap value is verbose ("-75.0K (overkill) (53%)") and uses the FULL right
-                -- edge (no Amount/DPS/% columns); per-path anchor below pins row.value to
-                -- -TIP_PAD. The label's RIGHT stops at row.value:LEFT so a long
-                -- "(Source)" suffix ellipsizes cleanly rather than overlapping.
+                -- edge (no Amount/DPS/% columns): pin row.value to -TIP_PAD, and stop the
+                -- label at its LEFT so a long "(Source)" suffix ellipsizes rather than
+                -- overlapping. This anchor is the tip's alone -- the panel has no columns
+                -- to work around -- which is why anchoring stays out of the shared row body.
                 row.value:ClearAllPoints()
                 row.value:SetPoint("RIGHT", row.fill, "RIGHT", -TIP_PAD, 0)
                 row.label:SetPoint("RIGHT", row.value, "LEFT", -3, 0)
 
-                local evType = ev.event or ""
-                local isHeal = (evType == "SPELL_HEAL" or evType == "SPELL_PERIODIC_HEAL")
-                local isFatal = (i == count and not isHeal)
+                RenderRecapRow(self, row, ev, i, count, barH, sinkMax, plainMax, deathTime)
 
-                -- Fill = HP% remaining at the event; heal green / damage red.
-                -- ev.currentHP is AllowedWhenUntainted like ev.amount -> sanitize to a plain
-                -- number before the division (could be secret in a tainted post-combat window).
-                local curHP = ev.currentHP
-                if issecretvalue(curHP) or type(curHP) ~= "number" then curHP = 0 end
-                local hpPct = math_min(1, math_max(0, maxHP > 0 and (curHP / maxHP) or 0))
-                row.fill:SetMinMaxValues(0, 1)
-                row.fill:SetValue(hpPct)
-                if isHeal then row.fill:SetStatusBarColor(0.10, 0.50, 0.10)
-                else row.fill:SetStatusBarColor(0.60, 0.08, 0.08) end
-
-                -- Label: "-X.Xs SpellName (Source)". Secret-guard the
-                -- spellName return; append the event's source in parens when a plain
-                -- (non-secret) sourceName exists and it isn't a heal (gray, ellipsizes).
-                local spellName = ev.spellName
-                if not spellName or issecretvalue(spellName) or spellName == "" then
-                    if isHeal then spellName = "Heal"
-                    elseif evType == "SWING_DAMAGE" then spellName = "Melee"
-                    else spellName = "Unknown" end
-                end
-                local label = self.FormatRecapDelta(deathTime, ev.timestamp) .. " " .. spellName
-                local sn = ev.sourceName
-                if sn and not issecretvalue(sn) and sn ~= "" and not isHeal then
-                    label = label .. "  |cff999999(" .. sn .. ")|r"
-                end
-                row.label:SetText(label)
-
-                -- Value: +heal / -damage (AbbreviateNumbers via FormatBarValue), crit marker,
-                -- killing-blow overkill, HP% suffix -- the exact secret-safe pattern as the
-                -- click-inline RenderDeathRecap. Sanitize amount to a plain number before any
-                -- math/tostring (GetRecapEvents is AllowedWhenUntainted -> could be secret in a
-                -- tainted post-combat window); crit/overkill guarded as RenderDeathRecap.
-                local amt = ev.amount or 0
-                local amtPlain = amt
-                if issecretvalue(amt) or type(amt) ~= "number" then amtPlain = 0 end
-                local body = (self.FormatBarValue and select(1, self.FormatBarValue(math_max(0, amtPlain), nil, false))) or tostring(amtPlain)
-                local sign = isHeal and "+" or "-"
-                local critFlag = (not issecretvalue(ev.critical)) and ev.critical or false
-                local crit = critFlag and " |cffffd100*|r" or ""
-                local pctSuffix = format(" (%.0f%%)", hpPct * 100)
-                if isFatal and not issecretvalue(ev.overkill) and type(ev.overkill) == "number" and ev.overkill > 0 then
-                    local okStr = (self.FormatBarValue and select(1, self.FormatBarValue(ev.overkill, nil, false))) or tostring(ev.overkill)
-                    row.value:SetText(sign .. body .. crit .. " |cffff3333(" .. okStr .. " overkill)|r" .. pctSuffix)
-                else
-                    row.value:SetText(sign .. body .. crit .. pctSuffix)
-                end
                 -- Recap keeps a single value column: the breakdown's DPS/% columns are empty.
                 if row.dps then row.dps:SetText("") end
                 if row.pct then row.pct:SetText("") end
@@ -1382,6 +1670,10 @@ function DM:PopulateHoverTip(W, bar)
                 if row:IsShown() then row:Hide() end
             end
         end
+        -- Painted, so the next poll tick can skip. Only a successful paint records;
+        -- the refusal and no-recap returns above leave it nil deliberately, since a
+        -- message is not a recap and re-asking is how it recovers.
+        _tipPaintedRecapID = bar._deathRecapID
     elseif isEnemyTaken then
         -- Enemy Damage Taken: per-player "who damaged this enemy" breakdown -- the enemy's
         -- combatSpells don't resolve to player-spell names. Same column layout as the spell
@@ -1493,9 +1785,15 @@ function DM:PopulateHoverTip(W, bar)
         -- Top breakdown spells for this source (honor a pinned historical session and
         -- the Current-empty fallback -- the same segment the bars are rendering).
         local tipSessionID = self:EffectiveSessionID(W)
-        local src = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, tipSessionID)
-        -- Merge same-named spells (parity with the click-inline breakdown). See MergeSpellsByName.
-        local spells = src and MergeSpellsByName(src.combatSpells)
+        local src, refused = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, tipSessionID, ownRow)
+        -- A refused fetch is not an empty one: show the refusal rather than an
+        -- empty tip, matching the click path.
+        if refused then
+            return ShowTipRefusal(self, bar, headerH, size)
+        end
+        -- List + fill max together (parity with the click-inline breakdown, and
+        -- the same function so the two can never diverge). See SelectSpellList.
+        local spells, maxAmount = SelectSpellList(src)
         if not spells then return false end
 
         -- Breakdown path: show the column-header row and push the data rows down past it.
@@ -1527,9 +1825,8 @@ function DM:PopulateHoverTip(W, bar)
             if isRate then _tip.colHdr.dps:Show() else _tip.colHdr.dps:Hide() end
         end
 
-        -- Fill max = the top MERGED row's total (a merged melee line can exceed the API's
-        -- per-spell src.maxAmount); percent basis stays the source's whole total.
-        local maxAmount = (spells[1] and spells[1].totalAmount) or 0
+        -- Fill max came from SelectSpellList with the list; percent basis stays
+        -- the source's whole total, and is unavailable while it is secret.
         local canPercent = src.totalAmount and not issecretvalue(src.totalAmount) and type(src.totalAmount) == "number"
         local total = canPercent and src.totalAmount or 0
         local count = math_min(#spells, HOVER_TIP_ROWS)
@@ -1594,27 +1891,30 @@ function DM:PopulateHoverTip(W, bar)
                 -- Fill: neutral gray (DETAIL_BAR_COLOR) -- see constant note.
                 row.fill:SetStatusBarColor(DETAIL_BAR_COLOR[1], DETAIL_BAR_COLOR[2], DETAIL_BAR_COLOR[3])
 
+                -- A secret name is kept and displayed, exactly as the click-inline
+                -- breakdown does. Fixing one renderer and not the other would leave
+                -- the tip and the panel naming the same spell differently.
                 local nm
                 if spID then
                     local ok, sn = pcall(C_Spell.GetSpellName, spID)
-                    if ok and sn and not issecretvalue(sn) then nm = sn end
+                    if ok and sn then nm = sn end
                 end
                 row.label:SetText(nm or spell.creatureName or "Unknown")
 
-                -- Phase 4c columns: Amount, DPS, %. Each fed only by FormatBarValue
-                -- (AbbreviateNumbers, secret-safe) or %.1f on a sanitized plain number.
-                -- Amount column.
-                local amtStr = (self.FormatBarValue and select(1, self.FormatBarValue(amtPlain, nil, false))) or ""
+                -- Phase 4c columns: Amount, DPS, %. The two value columns take the
+                -- RAW figures -- FormatBarValue is AllowedWhenTainted end to end, and
+                -- feeding either one the sanitized copy would print 0 in combat. Only
+                -- the % column below runs plain-Lua arithmetic, on the sanitized copy.
+                local amtStr = (self.FormatBarValue and select(1, self.FormatBarValue(amt, nil, false))) or ""
                 row.value:SetText(amtStr)
 
-                -- DPS column: per-second value from spell.amountPerSecond, sanitized to a
-                -- plain number exactly like amtPlain before FormatBarValue (which itself is
-                -- AllowedWhenTainted / secret-safe). No bare math on the raw value. Count
-                -- types (isRate false) leave the column empty -- a rate on a count is noise.
+                -- DPS column: raw per-second value, same treatment as the amount. A
+                -- real damage figure beside a DPS of 0 reads as a bug, so the two
+                -- columns have to agree about whether they can show the truth. Count
+                -- types (isRate false) leave the column empty -- a rate on a count is
+                -- noise.
                 if isRate then
-                    local ps = spell.amountPerSecond
-                    if issecretvalue(ps) or type(ps) ~= "number" then ps = 0 end
-                    local dpsStr = (self.FormatBarValue and select(1, self.FormatBarValue(ps, nil, false))) or ""
+                    local dpsStr = (self.FormatBarValue and select(1, self.FormatBarValue(spell.amountPerSecond, nil, false))) or ""
                     row.dps:SetText(dpsStr)
                 else
                     row.dps:SetText("")
@@ -1638,7 +1938,12 @@ function DM:PopulateHoverTip(W, bar)
         -- Targets sub-section: DamageDone only. Renders below the spell rows; returns the
         -- extra height it consumed (0 / hides itself when there are no targets). For any
         -- other breakdown meter type (HealingDone, etc.) the section stays hidden.
-        if shown > 0 and meterType == Enum.DamageMeterType.DamageDone then
+        -- Targets is refused in combat, and this guard is NEW. The section builds
+        -- itself by cross-referencing and comparing amounts ACROSS sources, which
+        -- secret values cannot survive. It was safe until now only because the whole
+        -- hover path refused in combat; admitting the own row above removes that
+        -- cover, so the combat test has to be here explicitly.
+        if shown > 0 and not (DM.DetailCombatActive and DM.DetailCombatActive()) and meterType == Enum.DamageMeterType.DamageDone then
             local topY = -(headerH + bodyTop + shown * stride)
             tgtExtraH = RenderTipTargets(self, bar, cfg, tipSessionID, topY, stride, barH)
         else
@@ -1673,7 +1978,7 @@ function DM:ShowHoverTip(W, bar, isInitial)
     if W._detailOpen then return end                                    -- click-inline open: suppress
     if not (bar._sourceGUID or bar._sourceCreatureID or bar._deathRecapID) then return end  -- empty/placeholder row
 
-    if self:PopulateHoverTip(W, bar) then
+    if self:PopulateHoverTip(W, bar, isInitial) then
         if isInitial then
             -- Phase 4c smart positioning. Modes: smart | bar | left | right | center.
             -- "smart" places the tip on the meter's OPEN side (away from the nearer screen

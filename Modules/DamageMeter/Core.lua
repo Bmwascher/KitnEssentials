@@ -296,6 +296,11 @@ function DM:ApplySettings()
     if not self.enabled then return end
 
     self.windows_rt = self.windows_rt or {}
+    -- The clock cache survives a plain re-gate, so it has to be dropped wherever
+    -- the module RE-SCOPES what a window shows. Here BEFORE the loop below:
+    -- ReapplyBarVisuals reaches ApplyHeaderIcons, which re-gates the header, so a
+    -- clear placed at the LayoutDock call would already be too late.
+    if self.ClearClockCache then self:ClearClockCache() end
     for _, W in pairs(self.windows_rt) do
         if W.frame then
             self:ApplyWindowGeometry(W)
@@ -613,6 +618,10 @@ function DM:OnEnable()
     self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatForceStop")
     self:RegisterEvent("UNIT_FLAGS", "OnUnitFlags")
+    -- Feign-death filtering. Registered broad; the handler's first two lines
+    -- reject every other cast in the game.
+    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
+    self:RegisterEvent("PLAYER_DEAD", "OnPlayerDead")
     -- PvP match end: arenas / battlegrounds can leave the player combat-tagged inside the
     -- closed instance with no live fighting, so UnitAffectingCombat stays true and the
     -- shared ticker would poll C_DamageMeter forever. Force it down on match completion and
@@ -691,6 +700,11 @@ function DM:OnEnable()
     -- frame (login hitch avoidance) and finishes with LayoutDock -> UpdateBackdrop
     -- -> Tick, so no explicit paint is needed here.
     self:EnsureDock()
+    -- Reused windows keep their cached clock text across a disable/enable, and the
+    -- build below lays them out -- which re-gates the header -- before the first
+    -- paint. Clear here rather than inside CreateAllWindows so the call stays in
+    -- this file.
+    if self.ClearClockCache then self:ClearClockCache() end
     self:CreateAllWindows()
 
     -- Settle the initial content context shortly after enable. Covers /reload inside
@@ -716,6 +730,12 @@ function DM:OnEnable()
     -- Details! is a competing meter — recommend running only one.
     KE:WarnRedundantAddon("Details", "Details!", "Damage Meter", "/kes", self.db, "_detailsWarned")
 
+    -- Feign filtering starts OFF and only a meter reset turns it on. Disabling
+    -- the module does not reset the game's meter data, so a disable-and-enable
+    -- must not be a way around the rule -- which is why this is unconditional
+    -- and why it is the last statement here.
+    self._feignArmable = false
+
     if DEBUG_DM then
         KE:Print("[DM] OnEnable: module active")
     end
@@ -723,6 +743,12 @@ end
 
 function DM:OnDisable()
     self.enabled = false
+    -- Hand Chat back its own size, if it was matching ours. Must follow the
+    -- line above: that is what makes the rectangle query answer nil, which is
+    -- the whole release mechanism. OnDisable never reaches UpdateBackdrop, so
+    -- the push at the end of it cannot do this.
+    -- Guarded for load order (Dock.lua).
+    if self.ReleaseChatSize then self:ReleaseChatSize() end
 
     self:UnregisterAllEvents()
     if LibSpec then LibSpec.UnregisterGroup(self) end
@@ -735,6 +761,11 @@ function DM:OnDisable()
     self._ctxCheckPending = false
     self._combatStartT = nil
     self._combatEndT = nil
+    self:ClearFeignTags("module disable")
+    self._feignArmable = false
+    -- The runtime windows survive a disable, so their cached clock text would
+    -- outlive the stamps above and could be re-shown by a bare visibility re-gate.
+    if self.ClearClockCache then self:ClearClockCache() end
     -- Pending provenance requires CONTINUOUS observation: a disabled module
     -- misses key boundaries (no START events), so an armed record can no
     -- longer be vouched for — one surviving disable->enable would mislabel
@@ -804,6 +835,46 @@ function DM:_RunTick()
     if DM.Tick then DM:Tick() end
 end
 
+-- Stamp the combat clock's start, BACKDATED to however long the game's own
+-- session says it has already been running. A bare GetTime() starts our clock
+-- when we noticed the fight, which is not when the session started -- the group
+-- can pull before us, and our own combat flag can beat the session's first
+-- recorded event. Every per-second figure on a bar is the session's, so an
+-- unanchored clock disagrees with the numbers beside it.
+--
+-- isArm is true ONLY from the arm-from-idle branch, where there is no stamp yet
+-- and one must be produced. From the retry it is false and an unusable read
+-- leaves the existing stamp ALONE: the return is nilable and the call can reject
+-- while execution is tainted, so a fallback there would replace a good backdate
+-- with a worse one.
+--
+-- The secrecy test comes BEFORE type(), which does not filter secrets: a secret
+-- number reaching the > 0 comparison throws, and so would the subtraction.
+function DM:AnchorCombatStart(isArm)
+    local anchor
+    if C_DamageMeter and C_DamageMeter.GetSessionDurationSeconds then
+        -- pcall'd like the module's other session reads: SecretArguments is
+        -- AllowedWhenUntainted, so the call itself can reject.
+        local ok, dur = pcall(C_DamageMeter.GetSessionDurationSeconds, Enum.DamageMeterSessionType.Current)
+        if ok then
+            if not dur then                             -- truthiness: safe on a secret
+                anchor = nil
+            elseif issecretvalue(dur) then
+                anchor = nil
+            elseif type(dur) ~= "number" then
+                anchor = nil
+            elseif dur > 0 then
+                anchor = dur
+            end
+        end
+    end
+    if anchor then
+        self._combatStartT = GetTime() - anchor
+    elseif isArm then
+        self._combatStartT = GetTime()
+    end
+end
+
 -- Starts (or restarts) the shared refresh ticker. Cancel-before-start so a
 -- stale ticker is never left orphaned if combat is re-entered without a clean
 -- stop. RefreshRate defaults to 0.5s when the DB value is missing.
@@ -817,8 +888,14 @@ function DM:StartTicker()
         -- slider re-calls StartTicker while running) never resets the clock.
         -- Plain GetTime numbers -- never secret. Rendered by Window.lua's
         -- UpdateCombatClock; _combatEndT (StopTicker) freezes it post-fight.
-        self._combatStartT = GetTime()
+        -- isArm true: there is no stamp to protect, so an unusable read falls
+        -- back to a bare GetTime() here and only here.
+        self:AnchorCombatStart(true)
         self._combatEndT = nil
+        -- Tags describe one fight. This branch is also the mid-fight restart
+        -- funnel, which is why it wipes but does NOT re-enable filtering: an
+        -- absent ticker is not proof that a new fight started.
+        self:ClearFeignTags("combat start")
     end
 
     local rate = (self.db and self.db.RefreshRate) or 0.5
@@ -907,6 +984,189 @@ end
 -- transition must not be treated as a real stop -- _inEncounter guards that).
 ---------------------------------------------------------------------------------
 
+-- Feign-death filtering (Deaths view)
+--
+-- Feign Death registers as a real death: the row carries a valid deathRecapID
+-- and is indistinguishable from a death that happened. The filter tags the ROW
+-- rather than the unit, because a unit key cannot separate a hunter's feign
+-- from that same hunter's later real death, and because row identity is the
+-- only identity readable mid-fight.
+--
+-- ONE PROPERTY GOVERNS EVERY REFUSAL HERE: this must never remove a real death
+-- from the list. It may fail to hide a feign as often as it likes. Every guard
+-- below fails toward showing a row.
+--
+-- Scope, and it is narrow on purpose: the player's OWN feign only, only while
+-- the group is fighting, only on an unpinned Current window reading the live
+-- session, and only until the player's first real death -- after which nothing
+-- is filtered until the meter's data is reset. The design notes carry the
+-- reasoning; the short version is that nothing in the API says which fight the
+-- live session belongs to, or when a death row appears in it, so anything
+-- looser can hide a real death.
+local FEIGN_SPELL_ID = 5384
+local FEIGN_POLL     = 0.2
+local FEIGN_TICKS    = 15
+
+-- Cancel the bounded watch. The handle may be LIVE or SPENT (a ticker that ran
+-- out its iterations leaves itself in the field), and cancelling a spent one is
+-- harmless -- which is why no expiry callback exists.
+function DM:StopFeignWatch()
+    if self._feignWatch then
+        self._feignWatch:Cancel()
+        self._feignWatch = nil
+    end
+end
+
+-- Drop every tag and the watch. Does NOT touch _feignArmable: dropping stale
+-- tags and deciding whether a fight may be watched are different questions, and
+-- conflating them disables the feature entirely (a combat start wipes).
+function DM:ClearFeignTags(site)
+    self:StopFeignWatch()
+    if self._feignTags then wipe(self._feignTags) else self._feignTags = {} end
+    if self._feignSnapshot then wipe(self._feignSnapshot) else self._feignSnapshot = {} end
+    if self._feignAmbig then wipe(self._feignAmbig) else self._feignAmbig = {} end
+    -- The per-render session memo has to go with them. It is only cleared at the
+    -- start of a render tick, and a mouse-wheel scroll renders directly without
+    -- that clear -- so a tag earned now could otherwise be applied to the
+    -- previous fight's cached table.
+    if self._sessionCache then wipe(self._sessionCache) end
+    if DEBUG_DM then KE:Print("[DM] feign tags cleared: " .. site) end
+end
+
+-- The one predicate Window.lua calls. Secrecy is tested before either table
+-- index because a secret key contaminates the read. Only an own-row may ever be
+-- hidden, and an id the collision scan flagged is never hidden.
+function DM:FeignTagged(recapID, isLocalPlayer)
+    if not self._feignTags then return false end
+    if recapID == nil or issecretvalue(recapID) then return false end
+    if not DM.PlainOwnRow(isLocalPlayer) then return false end
+    if not self._feignTags[recapID] then return false end
+    if self._feignAmbig and self._feignAmbig[recapID] then return false end
+    return true
+end
+
+-- Which new row is the feign? Returns id + status so the caller can tell "none
+-- yet" from "cannot tell": the watch keeps running on the first and stops on the
+-- second. Collapsed into a bare nil, the watch keeps sampling through an
+-- ambiguity it has already detected, and can then tag a real death.
+function DM.SelectFeignRow(sources, snapshot)
+    if not sources then return nil, "none" end
+    local found
+    for i = 1, #sources do
+        local row = sources[i]
+        local rid = row and row.deathRecapID
+        if rid ~= nil and not issecretvalue(rid) and rid > 0
+            and not (snapshot and snapshot[rid])
+            and DM.PlainOwnRow(row.isLocalPlayer) then
+            if found then return nil, "ambiguous" end
+            found = rid
+        end
+    end
+    if found then return found, "found" end
+    return nil, "none"
+end
+
+-- Tagged ids that appear on MORE THAN ONE own-row in this list. A tag names one
+-- death; if the list holds two rows carrying it, the tag cannot say which, so
+-- neither is hidden. Defence in depth, not the primary defence -- it sees one
+-- list at a time and cannot catch a collision that spans two.
+local feignSeen = {}
+function DM.ScanFeignAmbiguity(sources, tags, out)
+    if not out then return nil end
+    wipe(out)
+    if not sources or not tags or not next(tags) then return out end
+    wipe(feignSeen)
+    for i = 1, #sources do
+        local row = sources[i]
+        local rid = row and row.deathRecapID
+        if rid ~= nil and not issecretvalue(rid) and rid > 0 and tags[rid]
+            and DM.PlainOwnRow(row.isLocalPlayer) then
+            if feignSeen[rid] then out[rid] = true else feignSeen[rid] = true end
+        end
+    end
+    return out
+end
+
+-- The player cast Feign Death. Snapshot the Deaths list, then poll briefly for a
+-- row that was not there before. A failed session read refuses the watch: an
+-- unknown starting state cannot be diffed against.
+function DM:ArmFeignWatch()
+    self:StopFeignWatch()
+    -- Tags already earned are KEPT. The new snapshot contains the first feign's
+    -- row, so it cannot be re-selected, and dropping the tag would make that row
+    -- reappear.
+    local session = self:GetSession(Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.Deaths)
+    local sources = session and session.combatSources
+    if not sources then
+        if DEBUG_DM then KE:Print("[DM] feign watch refused: no session") end
+        return
+    end
+
+    if self._feignSnapshot then wipe(self._feignSnapshot) else self._feignSnapshot = {} end
+    local n = 0
+    for i = 1, #sources do
+        local row = sources[i]
+        local rid = row and row.deathRecapID
+        if rid ~= nil and not issecretvalue(rid) and rid > 0 then
+            self._feignSnapshot[rid] = true
+            n = n + 1
+        end
+    end
+    if DEBUG_DM then KE:Print("[DM] feign watch armed, snapshot " .. n) end
+
+    self._feignWatch = C_Timer.NewTicker(FEIGN_POLL, function()
+        if not DM.enabled then
+            DM:StopFeignWatch()
+            return
+        end
+        local s = DM:GetSession(Enum.DamageMeterSessionType.Current, Enum.DamageMeterType.Deaths)
+        if not s then return end
+        local rid, status = DM.SelectFeignRow(s.combatSources, DM._feignSnapshot)
+        if status == "none" then return end
+        if DEBUG_DM then KE:Print("[DM] feign watch status: " .. status) end
+        if status == "ambiguous" then
+            DM:StopFeignWatch()
+            return
+        end
+        -- Resolve both predicates to PLAIN booleans before anything compares or
+        -- prints them. The raw returns may be secret; fdOk/deadOk cannot be.
+        local fd   = UnitIsFeignDeath("player")
+        local dead = UnitIsDead("player")
+        local fdOk   = not issecretvalue(fd) and fd == true
+        local deadOk = not issecretvalue(dead) and dead == false
+        if fdOk and deadOk then
+            DM._feignTags[rid] = true
+            if DEBUG_DM then KE:Print("[DM] feign tagged: " .. rid) end
+        elseif DEBUG_DM then
+            KE:Print("[DM] feign tag refused: fd=" .. tostring(fdOk) .. " dead=" .. tostring(deadOk))
+        end
+        DM:StopFeignWatch()
+    end, FEIGN_TICKS)
+end
+
+-- UNIT_SPELLCAST_SUCCEEDED is one of the highest-frequency events in the game,
+-- so the spell test is first and nothing may be added above it. The event is not
+-- a restricted callback (no HasRestrictions, no CallbackEvent) and several other
+-- KE modules already register it broad.
+function DM:OnSpellcastSucceeded(_, unitTarget, _, spellID)
+    if issecretvalue(spellID) then return end
+    if spellID ~= FEIGN_SPELL_ID then return end
+    -- nil must refuse, so this tests against false explicitly.
+    if self._feignArmable ~= true then return end
+    if issecretvalue(unitTarget) or unitTarget ~= "player" then return end
+    if not self:GroupInCombat() then return end
+    self:ArmFeignWatch()
+end
+
+-- A real death drops every tag AND ends eligibility until the meter's data is
+-- reset. That is what bounds the one exposure the design accepts: a death that
+-- lands during a live watch can be tagged before this handler runs, and this
+-- handler is what un-hides it.
+function DM:OnPlayerDead()
+    self._feignArmable = false
+    self:ClearFeignTags("player death")
+end
+
 -- Player entered combat: spin up the shared ticker.
 function DM:OnRegenDisabled()
     -- Genuine new combat overrides a prior PvP match-end suppression (lets the ticker
@@ -922,12 +1182,31 @@ function DM:OnRegenDisabled()
     -- fight's enemies on the next out-of-combat hover (or stays hidden if the prior fight
     -- had none). Wiped on every combat start; guarded for load order.
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
-    -- Close any open (out-of-combat-only) detail panel so combat shows the live bars
-    -- instead of a frozen pre-combat breakdown over a now-hidden body. CloseDetail is
-    -- nil-safe and a no-op when nothing is open.
+    -- An open detail panel used to be closed unconditionally here. Now a panel the
+    -- eligibility rule still permits stays open and keeps updating through the fight.
+    -- Everything else closes, as before.
+    --
+    -- The order matters. A MESSAGE panel closes outright: an out-of-combat refusal
+    -- left on screen is not eligible data to carry into a new fight, and unlike the
+    -- tick path there is no live refusal to preserve. A DATA panel is then checked for
+    -- view DRIFT -- if the effective view has changed since it opened it is showing a
+    -- view that is no longer selected, so it closes rather than re-rendering into one
+    -- it was never authorized for. Only then is eligibility applied, and to the CURRENT
+    -- view rather than the snapshotted one: the snapshot detects drift, it never
+    -- authorizes.
     if self.windows_rt then
         for _, W in pairs(self.windows_rt) do
-            if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+            if W._detailOpen and self.CloseDetail then
+                local keep = false
+                if W._detailKind == "data" then
+                    local cfg = self.ResolveWindowConfig and self:ResolveWindowConfig(W.idx)
+                    local nowType = cfg and self:EffectiveMeterType(W.idx, cfg)
+                    if nowType ~= nil and nowType == W._detailMeterType then
+                        keep = self:DetailEligible(W._detailOwnRow, nowType)
+                    end
+                end
+                if not keep then self:CloseDetail(W) end
+            end
             -- New fight = fresh list: scroll each pane back to the top so rank 1 shows.
             -- Otherwise a scroll offset left over from the last fight would open the new
             -- one mid-list. RenderWindow recomputes _scrollMax against the new count.
@@ -940,6 +1219,14 @@ function DM:OnRegenDisabled()
     if self.CloseAllSelectors then self:CloseAllSelectors() end
     if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
     if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED -> StartTicker") end
+    -- Combat clock RETRY, and the gate is load-bearing in both directions. With
+    -- the ticker DOWN, StartTicker is about to anchor anyway and a call here
+    -- would read the API twice for one combat entry. With the ticker already UP
+    -- -- UNIT_FLAGS armed because the group pulled first -- StartTicker skips its
+    -- stamp entirely, so this is the only chance to correct an anchor the game
+    -- had no duration to give yet. isArm false, so a failed read leaves the
+    -- existing stamp alone.
+    if self._ticker then self:AnchorCombatStart(false) end
     self:StartTicker()
 end
 
@@ -987,6 +1274,7 @@ function DM:OnEncounterStart()
     -- Segment boundary: a boss pull starts a new segment, so a view override from the
     -- previous boss/trash clears ("until another raid boss starts").
     self:BumpSegment()
+    self:ClearFeignTags("encounter start")
     -- Stored-id snapshot for the kill/wipe tint: OnEncounterEnd tags only sessions
     -- stored SINCE this pull. "Tag the newest" mis-tagged a key-completing final
     -- kill -- Blizzard stores the run-level "+NN" session on top of the boss's own
@@ -1111,6 +1399,7 @@ function DM:OnCombatForceStop()
     -- (ApplyActiveContext early-returns when the context is unchanged).
     self._combatStartT = nil
     self._combatEndT = nil
+    self:ClearFeignTags("zone change")
     self:StopTicker()
     -- Zoning may change the content context (entered/left an instance) -- schedule a
     -- settled re-check (debounced; IsInInstance isn't reliable until the world loads).
@@ -1177,6 +1466,13 @@ end
 -- Meter data was reset: repaint immediately so cleared bars show. Tick is
 -- guarded (resolved at runtime from the render chunk).
 function DM:OnMeterReset()
+    self:ClearFeignTags("meter reset")
+    -- The ONLY thing that enables feign filtering. A reset clears the data those
+    -- rows lived in, so nothing pending can be held against a later list. Every
+    -- cheaper signal -- leaving combat, an empty list, a login -- is an inference
+    -- about the game's internals, and each one can hide a real death when the
+    -- inference is wrong.
+    self._feignArmable = true
     -- History bundles are already-captured data and survive every reset
     -- event (only eviction / HeaderReset / reload clear them). But pending
     -- PROVENANCE does not: an external reset empties the native store, so
@@ -1216,6 +1512,10 @@ function DM:OnMeterReset()
         self._combatStartT = nil
         self._combatEndT = nil
     end
+    -- Closing an overlay re-gates the header, and the Tick that would recompute the
+    -- clock comes after it, so the cache goes first or a stale duration can be
+    -- re-shown in between.
+    if self.ClearClockCache then self:ClearClockCache() end
     -- A reset empties the bars; close any open selector so the cleared bars show
     -- (DAMAGE_METER_RESET can fire from an external reset with a selector still open).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
@@ -1264,9 +1564,101 @@ function DM:GetSession(sessionType, dmType, sessionID)
     return nil
 end
 
+-- Resolve the raw isLocalPlayer field to a PLAIN boolean. Every caller that
+-- needs the answer more than once resolves it here first, so the secrecy guard
+-- exists in one place and nothing downstream ever holds the raw field.
+function DM.PlainOwnRow(isLocalPlayer)
+    if issecretvalue(isLocalPlayer) then return false end
+    return isLocalPlayer == true
+end
+
+-- The combat test is deliberately BROADER than InCombatLockdown(). That flag drops
+-- to false the moment the player dies or feign-deaths mid-pull (see GroupInCombat),
+-- while the fight -- and the API's secrecy -- continues. Restricting on the union of
+-- the two signals can only refuse MORE often, never less, which is the safe direction
+-- for a gate whose failure mode is a thrown error mid-render.
+local function DetailCombatActive()
+    return InCombatLockdown() or UnitAffectingCombat("player")
+end
+-- Shared with Detail.lua: every detail path that asks "is combat on" must ask it the
+-- same way, or the gate and the renderers will disagree about which data is secret.
+DM.DetailCombatActive = DetailCombatActive
+
+-- May a detail panel open, and stay open? The single gate every detail path
+-- consults -- click, hover, combat-start, and the tick refresh.
+--
+-- OUT OF COMBAT this is unconditionally true, and the short-circuit lives HERE
+-- rather than in each caller. The tick path runs out of combat too (StopTicker's
+-- final paint, OnSessionUpdated's settle repaints), so a predicate that forgot
+-- it would close panels that work today -- another player's breakdown, a death
+-- recap -- the moment a session settled.
+--
+-- IN COMBAT it admits one thing: the local player's own row, on a view whose
+-- renderer can survive secret values.
+--   * isLocalPlayer is the only source identity the API guarantees readable
+--     mid-fight (NeverSecret). issecretvalue is tested BEFORE the comparison so
+--     a wrong annotation costs the feature instead of throwing.
+--   * Deaths is ADMITTED, for every row and without consulting the identity at
+--     all. It is keyed on deathRecapID, which is NeverSecret, so the recap is
+--     addressable for any row on screen -- a different authorization model from
+--     the own-row rule, not a widening of it. Its renderer guards every field.
+--   * EnemyDamageTaken is refused because its drill-down aggregates and compares
+--     amounts across sources, which secret values cannot survive.
+--
+-- meterType MUST be the EFFECTIVE type (DM:EffectiveMeterType), never
+-- cfg.MeterType. A view override changes the view without touching the config,
+-- and survives until a segment boundary, so the two disagree -- while the click
+-- dispatch follows the effective one. Feeding this the config value would admit
+-- a click that then lands in the death recap mid-fight.
+function DM:DetailEligible(isLocalPlayer, meterType)
+    if not DetailCombatActive() then return true end
+    -- ORDER IS LOAD-BEARING. Deaths is tested BEFORE the own-row rule because it does
+    -- not consult identity: admitting it below the own-row test would open the recap
+    -- for the player's own death only, which looks identical until someone clicks
+    -- another player's.
+    if meterType == Enum.DamageMeterType.Deaths then return true end
+    if not DM.PlainOwnRow(isLocalPlayer) then return false end
+    if meterType == Enum.DamageMeterType.EnemyDamageTaken then return false end
+    return true
+end
+
 -- Returns the per-source detail table for a single combat source (keyed by
 -- sourceGUID), or nil on failure. Mirrors GetSession's FromID/FromType branch.
-function DM:GetSource(sessionType, dmType, sourceGUID, sourceCreatureID, sessionID)
+--
+-- isOwnRow is the LAST parameter on purpose. Three of the five call sites do not
+-- pass it (the targets aggregation and enemy branch in Detail.lua, the snapshot
+-- store in History.lua) and must not have to change: a mid-signature insert
+-- would shift their sessionID, and the history branch below TESTS its type
+-- rather than asserting it, so a shifted argument would degrade into the wrong
+-- lookup instead of failing loudly.
+--
+-- SECOND RETURN, "refused": the identity was secret and could not legally be
+-- substituted. It is a second return rather than a sentinel in the first
+-- position precisely because those three call sites never opt in -- History.lua
+-- tests the first return with a bare truthiness check before writing it into the
+-- persisted snapshot, so a truthy marker there would be stored as if it were
+-- real source data. nil is what they already handle.
+function DM:GetSource(sessionType, dmType, sourceGUID, sourceCreatureID, sessionID, isOwnRow)
+    -- In combat the stashed identity is secret, so the API call below cannot
+    -- legally receive it (SecretArguments = AllowedWhenUntainted, and addon code
+    -- is tainted). For the player's OWN row there is a legal substitute: a plain
+    -- GUID for the same unit. Every other case refuses.
+    if issecretvalue(sourceGUID) or issecretvalue(sourceCreatureID) then
+        if isOwnRow ~= true then return nil, "refused" end
+        -- A negative id is a stored History.lua snapshot, not the live API.
+        -- Looking that up with a live GUID could resolve a different row
+        -- entirely, so the substitution does not apply to it.
+        if type(sessionID) == "number" and sessionID < 0 then return nil, "refused" end
+        local plainGUID = UnitGUID("player")
+        -- UnitGUID is SecretWhenUnitIdentityRestricted AND its return is
+        -- nilable. A secret substitute is the illegal case this exists to
+        -- avoid; a nil one would send nil for both identity arguments and
+        -- resolve something unintended. Refuse on either -- and test secrecy
+        -- BEFORE the nil comparison, because comparing a secret throws.
+        if issecretvalue(plainGUID) or plainGUID == nil then return nil, "refused" end
+        sourceGUID, sourceCreatureID = plainGUID, nil
+    end
+
     if type(sessionID) == "number" and sessionID < 0 then
         if self.HistorySource then
             return self:HistorySource(sessionID, dmType, sourceGUID, sourceCreatureID)
@@ -1409,39 +1801,126 @@ local function FormatDeathTime(sec)
     return format("%d:%02d", floor(sec / 60), floor(sec % 60)), false
 end
 
+-- Combat-clock text: "[M:SS]", or nil when the clock should HIDE. Returns
+-- (text, isSecret) so the caller can skip its dirty check on a secret string.
+--
+-- ORDER IS THE POINT OF THIS FUNCTION. Steps 3 and 4 are comparisons and type()
+-- does not filter secrets, so the secrecy test has to sit above them or a secret
+-- duration reaches them and throws.
+--
+-- Anything under a second HIDES rather than rendering "[0:00]" -- a fight of no
+-- measurable length did not happen, and the game's own meter blanks its timer on
+-- a zero duration.
+local function ClockText(duration)
+    if not duration then return nil end             -- truthiness: safe on a secret
+    if issecretvalue(duration) then
+        local str, strSecret = FormatDeathTime(duration)
+        -- FormatDeathTime falls back to the plain literal "0:00" when the
+        -- abbreviation yields nothing, and that must HIDE. strSecret alone cannot
+        -- tell the two apart: a secret whose abbreviation came back PLAIN also
+        -- reports false, and that is a real reading. Comparing the string is legal
+        -- only because strSecret false proves it is not secret -- hence the guard
+        -- on the same line, in that order. Every real abbreviation ends in "s".
+        if not strSecret and str == "0:00" then return nil end
+        -- strSecret, not a hardcoded true: a plain abbreviation keeps its dirty check.
+        return "[" .. str .. "]", strSecret
+    end
+    if type(duration) ~= "number" then return nil end
+    -- Under a second, not just zero or negative. FormatDeathTime floors, so 0.4
+    -- would render "0:00" -- the exact string this function exists to keep off
+    -- the screen. The live stopwatch passes through this range at the start of
+    -- every pull.
+    if duration < 1 then return nil end
+    return "[" .. FormatDeathTime(duration) .. "]", false
+end
+
 -- Cross-chunk API: the render layer calls these directly. Non-underscore names
 -- because they are intentional public API on DM (underscore-prefix fields are
 -- private-to-file by KE convention); matches DM.RANK_STRINGS / DM.BAR_POOL_SIZE
 -- in Window.lua.
 DM.FormatBarValue = FormatBarValue
 DM.FormatDeathTime = FormatDeathTime
+DM.ClockText = ClockText
 
--- Returns the reversed (oldest-first) recap event list + maxHealth for a deathRecapID, or
--- nil. C_DeathRecap is a separate namespace (NOT C_DamageMeter); none of its getters is
--- SecretWhenInCombat, and recap data is post-death, so these are read out of combat only
--- (OpenDetail is OOC-gated). All calls pcall'd; deathRecapID is NeverSecret on the source.
+-- Marks a recap the client would not let us read, as opposed to one that simply
+-- is not there. The two look identical to a caller that only tests the events,
+-- and they mean different things to the user, so the distinction is a value
+-- rather than a comment. Lives on the module table because every consumer is in
+-- the detail renderer, a different file.
+DM.RECAP_UNREADABLE = "recap-unreadable"
+
+-- Reversed (oldest-first) recap events for a deathRecapID. C_DeathRecap is a
+-- separate namespace (NOT C_DamageMeter) and none of its getters declares any
+-- secrecy, but DeathRecapEventInfo is declared with an EMPTY field list, so every
+-- field is treated as possibly secret by the renderers. All calls pcall'd;
+-- deathRecapID is NeverSecret on the source.
+--
+-- EXACTLY THREE RETURN SHAPES, and callers must discriminate in this order:
+--   success     (events, sinkMax, plainMax)
+--   unreadable  (nil,    DM.RECAP_UNREADABLE, nil)
+--   absent      (nil,    nil,     nil)
+-- Test `events` FIRST and reach the second slot only in an else branch. On the
+-- success shape that slot holds sinkMax, which can be a secret number, and
+-- comparing a secret throws -- so a caller that tests it first crashes on the
+-- one shape that worked.
+--
+-- The two maxima are NOT interchangeable and neither substitutes for the other:
+--   sinkMax  -- for SetMinMaxValues and nothing else. The API's value when it is
+--              secret, the same number when it is a plain positive, nil for a
+--              failed call and for a plain zero, negative or non-number. A zero
+--              would draw a full-height empty bar, which asserts a death at full
+--              health; a maximum that cannot be a denominator is not a maximum.
+--   plainMax -- the ONLY one arithmetic may touch. Never secret. A plain positive
+--              number or nil, and nil means the percentage cannot be computed.
 function DM:GetDeathRecap(recapID)
+    -- Entry guards, all of them the ABSENT shape: nothing was unreadable, there is
+    -- simply nothing to fetch.
     if not C_DeathRecap then return nil end
     if not recapID or issecretvalue(recapID) or recapID <= 0 then return nil end
+
     if C_DeathRecap.HasRecapEvents then
         local okh, has = pcall(C_DeathRecap.HasRecapEvents, recapID)
-        -- HasRecapEvents is AllowedWhenUntainted -> `has` can be a secret BOOLEAN in a
-        -- tainted call path. A truthiness test on a secret boolean throws, so bail out
-        -- (treat secret as "no recap") rather than crash on the `not has` test.
-        if not okh or issecretvalue(has) or not has then return nil end
+        -- Only a returned, readable false refuses. A secret answer and a failed call
+        -- are both "we did not get an answer", and reading that as "no recap" would
+        -- hide a recap the fetch below would have returned -- this preflight is an
+        -- optimisation, and the fetch already handles a missing or empty result.
+        -- issecretvalue must stay before the truthiness test: a secret boolean throws.
+        if okh and not issecretvalue(has) and not has then return nil end
     end
+
     local ok, raw = pcall(C_DeathRecap.GetRecapEvents, recapID)
-    if not ok or not raw or #raw == 0 then return nil end
-    local maxHP = 1
+    if not ok or not raw then return nil end
+    -- canaccesstable asks "may I index this", which is NOT what issecrettable asks --
+    -- that one is true whenever access would yield secrets, i.e. normally in combat,
+    -- and refusing on it would refuse every in-combat recap. First contact with the
+    -- return, before the length operator, because the operator is what would throw.
+    -- An absent predicate means a client with no secret-table machinery to guard
+    -- against, so index it the way this code always has rather than inventing a
+    -- restriction the client never reported.
+    if canaccesstable and not canaccesstable(raw) then return nil, DM.RECAP_UNREADABLE end
+    if #raw == 0 then return nil end
+
+    local sinkMax, plainMax
     if C_DeathRecap.GetRecapMaxHealth then
         local okm, hp = pcall(C_DeathRecap.GetRecapMaxHealth, recapID)
-        if okm and hp and type(hp) == "number" and hp > 0 then maxHP = hp end
+        if okm and hp then
+            if issecretvalue(hp) then
+                sinkMax = hp
+            -- type() does NOT filter secrets, so the secrecy test has to come first or
+            -- a secret number reaches the comparison below and throws.
+            elseif type(hp) == "number" and hp > 0 then
+                sinkMax, plainMax = hp, hp
+            end
+        end
     end
-    -- API returns newest-first; reverse to oldest-first into a per-call table (recap is a
-    -- rare user action, so a fresh table is fine — not a hot path).
+
+    -- API returns newest-first; reverse to oldest-first into a per-call table. NO
+    -- per-event access gate: an element access yields a table rather than a secret,
+    -- the per-field guards in the renderers are what handle secret contents, and a
+    -- gate here would silently drop rows from a death recap.
     local rev = {}
     for i = #raw, 1, -1 do rev[#rev + 1] = raw[i] end
-    return rev, maxHP
+    return rev, sinkMax, plainMax
 end
 
 -- "-3.4s" style time-before-death. deathTime = the last (most recent) event's timestamp.
@@ -1687,6 +2166,9 @@ function DM:HeaderReset(_)
         self._combatStartT = nil
         self._combatEndT = nil
     end
+    -- Same ordering as the reset handler: closing an overlay re-gates the header
+    -- and the Tick comes after, so drop the clock cache first.
+    if self.ClearClockCache then self:ClearClockCache() end
     -- Close any open view-selector too so the freshly-emptied bars are visible (the
     -- selector overlays the body with the same anchors, so it would block them).
     if self.CloseAllSelectors then self:CloseAllSelectors() end
@@ -1956,6 +2438,9 @@ function DM:ApplyActiveContext()
         KE:Print("[DM] context " .. tostring(self._activeContext) .. " -> " .. tostring(ctx))
     end
     self._activeContext = ctx
+    -- A context change re-scopes every window, and LayoutDock re-gates the header
+    -- before the repaint below.
+    if self.ClearClockCache then self:ClearClockCache() end
     self:LayoutDock()
     self:UpdateBackdrop()
     if self.Tick then self:Tick() end
@@ -2268,14 +2753,14 @@ function DM:Tick()
             if not deferred then deferred = {} end
             deferred[#deferred + 1] = W
         else
-            self:RenderWindow(W)
+            self:RenderWindowAndDetail(W)
         end
     end
 
     if deferred then
         C_Timer.After(0, function()
             for _, W in ipairs(deferred) do
-                DM:RenderWindow(W)
+                DM:RenderWindowAndDetail(W)
             end
         end)
     end

@@ -31,7 +31,6 @@ local UnitFullName = UnitFullName
 local GetNormalizedRealmName = GetNormalizedRealmName
 local GetTime = GetTime
 local wipe = wipe
-local format = string.format
 local math_min = math.min
 local math_max = math.max
 local math_floor = math.floor
@@ -792,9 +791,10 @@ function DM:ReapplyBarVisuals(W)
     -- where the live recolor actually sticks (matching how the bar colors
     -- live-update); a one-shot set here did not. See DM:ApplyHeaderColor.
     -- Combat clock tracks the header font; the re-apply resets the FontString
-    -- tint, so nil the frozen dirty key -- the ApplyHeaderIcons call at the end of
-    -- this function funnels into UpdateCombatClock, which re-tints from the live
-    -- frozen/running state (mirrors the value-color note below).
+    -- tint, so nil the frozen dirty key. The re-tint lands on the next render --
+    -- the ApplyHeaderIcons call at the end of this function only re-gates
+    -- visibility, and during a settings apply the clock cache has just been
+    -- cleared, so that call hides rather than re-tints.
     if W.clock then
         KE:ApplyFontToText(W.clock, face, headerSize, outline)
         W._clockFrozen = nil
@@ -947,8 +947,9 @@ function DM:ApplyHeaderIcons(W)
         -- rearrangement that moves display position 1 migrates the clock to the
         -- new #1 window immediately instead of leaving a stale one until the next
         -- Tick (Remove/Move/arrangement paths don't Tick on their own -- only
-        -- AddWindow sets _needsRenderAfterLayout).
-        self:UpdateCombatClock(W)
+        -- AddWindow sets _needsRenderAfterLayout). Visibility ONLY -- the text is
+        -- not recomputed here, so nothing is lost by re-gating.
+        self:RefreshClockVisibility(W)
     end
 
     if not show then
@@ -1012,7 +1013,9 @@ function DM:SetHeaderIconAlpha(W, a)
         b:SetAlpha(a)
     end
     W._clockSuppressed = (a or 0) > 0
-    self:UpdateCombatClock(W)
+    -- Visibility ONLY: suppression is temporary and does not change which fight
+    -- the window is showing, so the clock comes back intact when it lifts.
+    self:RefreshClockVisibility(W)
 end
 
 -- Force the header icons visible while any overlay is open, restore the at-rest alpha
@@ -1074,37 +1077,48 @@ end
 --
 -- Fight length "[M:SS]" at the right end of the display-position-1 window's
 -- header band (db.ShowCombatClock, default off). Driven by the same combat ticker
--- as the bars -- zero idle cost. Core.lua stamps _combatStartT when the ticker
--- arms from idle and _combatEndT in StopTicker, so an out-of-combat repaint
--- (scroll, GUI change, session settle) shows the FROZEN final duration instead of
--- a still-growing one; reset/zone paths nil both stamps and the clock hides. The
--- frozen time renders DIMMED so a settled fight reads at a glance as over; the
--- live tick is bright. _clockSuppressed (SetHeaderIconAlpha) yields the shared
--- slot while the mouseover icons are revealed. All plain GetTime numbers -- never
--- secret. Text dirty-gated on the whole second, tint on the frozen flip.
+-- as the bars -- zero idle cost.
+--
+-- TWO SOURCES, chosen by what the window is showing. A window on a STORED
+-- session -- pinned from the segment menu, or fallen back to the newest stored
+-- session out of combat -- reads that session's own durationSeconds, off the
+-- same object the bars render from, so the two cannot describe different fights.
+-- A window on a LIVE session type reads the stopwatch, which Core.lua anchors to
+-- the game's session at every arm (DM:AnchorCombatStart).
+--
+-- The stopwatch is a difference of two GetTime numbers and is always plain. A
+-- stored session's duration MAY BE SECRET, and DM.ClockText is what handles it:
+-- a secret renders as whole seconds and skips the dirty check, because comparing
+-- a secret throws.
+--
+-- The frozen time renders DIMMED so a settled fight reads at a glance as over;
+-- the live tick is bright. _clockSuppressed (SetHeaderIconAlpha) yields the
+-- shared slot while the mouseover icons are revealed.
 ---------------------------------------------------------------------------------
-function DM:UpdateCombatClock(W)
-    local clock = W.clock
-    if not clock then return end
+
+-- May the clock be on screen at all? Shared so the two entry points below cannot
+-- disagree.
+--
+-- It does NOT test _combatStartT, and that is deliberate. The old function used
+-- the stamp as its "has a fight happened" proof, but two paths now produce a
+-- valid duration without one: a window on a stored session (a zone change nils
+-- both stamps without clearing a pin), and the reload fallback (which only runs
+-- BECAUSE the stamp is nil). Having TEXT is the proof, and both callers
+-- establish that before they get here -- the render path by computing it, the
+-- visibility path via _clockHasText. Re-testing the stamp here would compute the
+-- reload fallback and then hide it on the same paint.
+local function ClockGateOpen(self, W)
     local db = self.db
-    local startT = self._combatStartT
-    local show = db and db.ShowCombatClock and startT
-        and not W._clockSuppressed
-        and self._winDisplayPos and self._winDisplayPos[W.idx] == 1
-    if not show then
-        if W._clockShown then W._clockShown = false; clock:Hide() end
-        return
-    end
-    local endT = self._combatEndT
-    local secs = math_floor(((endT or GetTime()) - startT) + 0.5)
-    if secs < 0 then secs = 0 end
-    if W._clockSecs ~= secs then
-        W._clockSecs = secs
-        clock:SetText(format("[%d:%02d]", math_floor(secs / 60), secs % 60))
-    end
-    -- Frozen = dimmed, live = bright. ReapplyBarVisuals nils _clockFrozen after a
-    -- font re-apply (which resets the FontString color) so this re-tints then too.
-    local frozen = endT ~= nil
+    if not (db and db.ShowCombatClock) then return false end
+    if W._clockSuppressed then return false end
+    if not (self._winDisplayPos and self._winDisplayPos[W.idx] == 1) then return false end
+    return true
+end
+
+-- Frozen = dimmed, live = bright. ReapplyBarVisuals nils _clockFrozen after a
+-- font re-apply (which resets the FontString color) so this re-tints then too.
+local function ApplyClockTint(self, W, clock)
+    local frozen = self._combatEndT ~= nil
     if W._clockFrozen ~= frozen then
         W._clockFrozen = frozen
         if frozen then
@@ -1113,7 +1127,118 @@ function DM:UpdateCombatClock(W)
             clock:SetTextColor(0.85, 0.85, 0.85)
         end
     end
+end
+
+local function ShowClock(W, clock)
     if W._clockShown ~= true then W._clockShown = true; clock:Show() end
+end
+
+local function HideClock(W, clock)
+    if W._clockShown then W._clockShown = false; clock:Hide() end
+end
+
+-- Drop every window's cached clock text. Called where the module RE-SCOPES what
+-- a window shows, never where it merely MOVES frames: a splitter drag reaches
+-- LayoutDock without re-scoping anything and without a render following, so
+-- clearing there would blank a valid clock until some unrelated repaint.
+function DM:ClearClockCache()
+    if not self.windows_rt then return end
+    for _, W in pairs(self.windows_rt) do
+        W._clockText = nil
+        W._clockHasText = false
+    end
+end
+
+-- Re-gate visibility ONLY. No duration is read and no text is written, so a
+-- suppressed clock comes back intact when the suppression lifts. _clockHasText
+-- is what says there is something to come back to -- _clockText cannot answer
+-- that, because it is also nil while a SECRET string is on screen.
+function DM:RefreshClockVisibility(W)
+    local clock = W and W.clock
+    if not clock then return end
+    if not W._clockHasText or not ClockGateOpen(self, W) then
+        HideClock(W, clock)
+        return
+    end
+    ApplyClockTint(self, W, clock)
+    ShowClock(W, clock)
+end
+
+-- The render path, and its only caller.
+--
+-- ORDER IS MANDATORY: COMPUTE, WRITE, THEN GATE. DM:SelectSegment re-scopes a
+-- window and repaints it WHILE the segment menu is still open, so that render
+-- runs suppressed and the gate fails. Testing the gate first would compute
+-- nothing, leave the new session's duration unwritten, and put the previous
+-- pin's number back on screen the moment the menu closed. Computing first is
+-- also what lets SelectSegment stay out of ClearClockCache's call sites.
+function DM:UpdateCombatClock(W, session)
+    local clock = W and W.clock
+    if not clock then return end
+
+    -- Stored or live. EffectiveSessionID is the module's own predicate for "this
+    -- window is showing a stored session" and covers BOTH the pin and the
+    -- out-of-combat fallback -- splitting on the pin alone would miss the case
+    -- where a key-completing kill makes the bars fall back to a run-level
+    -- session the stopwatch never timed. Both fields are plain.
+    local storedID = self.EffectiveSessionID and self:EffectiveSessionID(W)
+    local duration
+    if storedID then
+        duration = session and session.durationSeconds
+    elseif self._combatStartT then
+        -- Plain arithmetic on two GetTime values; _combatEndT freezes it.
+        duration = (self._combatEndT or GetTime()) - self._combatStartT
+        if duration < 0 then duration = 0 end
+    else
+        -- No stopwatch at all, which after a /reload mid-session is the normal
+        -- state. Ask for the WINDOW'S OWN session type rather than assuming
+        -- Current. The raw result goes to ClockText: unlike the anchor, which
+        -- feeds a subtraction, this feeds a formatter that accepts secrets, so
+        -- rejecting a secret here would blank the clock after every in-combat
+        -- reload.
+        local cfg = self.ResolveWindowConfig and self:ResolveWindowConfig(W.idx)
+        local sType = cfg and cfg.SessionType
+        if sType and C_DamageMeter and C_DamageMeter.GetSessionDurationSeconds then
+            local ok, dur = pcall(C_DamageMeter.GetSessionDurationSeconds, sType)
+            if ok then duration = dur end
+        end
+    end
+
+    -- Two returns, so the call cannot hide behind an `and`: `x and f()` keeps
+    -- only the first value, which would leave isSecret nil on every paint and
+    -- send a secret string into the comparison below.
+    local text, isSecret
+    if self.ClockText then text, isSecret = self.ClockText(duration) end
+
+    -- isSecret FIRST: text may be a SECRET string on the stored branch, and
+    -- testing it for nil would compare against a secret. One chain, not three
+    -- statements -- separate ifs put the nil test back on the secret path.
+    if isSecret then
+        clock:SetText(text)
+        W._clockText = nil          -- never cache a value that cannot be compared
+        W._clockHasText = true
+    elseif text then
+        if W._clockText ~= text then
+            W._clockText = text
+            clock:SetText(text)
+        end
+        W._clockHasText = true
+    else
+        -- COMPUTED hide: there is no duration, so the cache is stale by definition.
+        W._clockText = nil
+        W._clockHasText = false
+        HideClock(W, clock)
+        return
+    end
+
+    -- GATE hide, which clears NOTHING. The text above was just computed and is
+    -- correct; it is simply not on screen right now.
+    if not ClockGateOpen(self, W) then
+        HideClock(W, clock)
+        return
+    end
+    ApplyClockTint(self, W, clock)
+    ShowClock(W, clock)
 end
 
 ---------------------------------------------------------------------------------
@@ -1283,11 +1408,6 @@ function DM:RenderWindow(W)
         self:ApplyHeaderColor(W)
     end
 
-    -- Combat clock (display-position-1 window only; see UpdateCombatClock).
-    -- Placed BEFORE the session resolution so the frozen post-fight time keeps
-    -- painting even when the live session has emptied.
-    self:UpdateCombatClock(W)
-
     -- Phase 4 segment/history: W._curSessionID pins a specific stored session
     -- (set by the ⌚ menu, ToggleSegmentMenu). nil = live cfg.SessionType.
     -- ResolveRenderSession wraps CachedSession (per-Tick memo) and adds the
@@ -1295,6 +1415,15 @@ function DM:RenderWindow(W)
     -- whose live session emptied (post-encounter finalize) shows the newest
     -- stored session instead of blanking out.
     local session = self:ResolveRenderSession(W, cfg, meterType)
+
+    -- Combat clock (display-position-1 window only; see UpdateCombatClock).
+    -- Placed AFTER the session resolution, and that is load-bearing twice over:
+    -- a window on a stored session reads its duration off this very object, and
+    -- ResolveRenderSession is what sets _fallbackSessionID, which the stored/live
+    -- branch test depends on. A nil session here is real (no data this segment)
+    -- and takes the computed-hide path.
+    self:UpdateCombatClock(W, session)
+
     local sources = session and session.combatSources
     if not sources then
         -- No session/data this segment: hide every pooled row so stale bars from
@@ -1307,18 +1436,38 @@ function DM:RenderWindow(W)
         return
     end
 
-    -- Deaths: the API returns death sources most-recent-first and may include
-    -- feign deaths (deathRecapID <= 0 = no real recap). Reverse to chronological
-    -- and drop feigns into a reused per-window scratch table (no per-tick garbage).
-    -- deathRecapID is NeverSecret; still issecretvalue-guarded defensively.
+    -- Deaths: the API returns death sources most-recent-first. Reverse to
+    -- chronological into a reused per-window scratch table (no per-tick garbage),
+    -- and drop two kinds of row.
+    --
+    -- A missing or unusable recap id: that row has nothing to open. deathRecapID
+    -- is NeverSecret; still issecretvalue-guarded defensively.
+    --
+    -- A tagged Feign Death, but only inside feignScope. All four terms are
+    -- load-bearing. A pinned segment and an Overall window can show own-rows from
+    -- two different fights together, where an id -- the only identity a tag has --
+    -- stops identifying one death. A fallback session is a fight the tags never
+    -- watched. And a Current list keeps its rows after combat drops without
+    -- selecting a fallback, so without the combat term the filter would outlive
+    -- the fight it belongs to. Anything the scope excludes simply shows the feign,
+    -- which is the direction every refusal in this feature takes.
     if isDeaths then
+        local feignScope = not W._curSessionID
+            and not W._fallbackSessionID
+            and cfg.SessionType == Enum.DamageMeterSessionType.Current
+            and self:GroupInCombat()
+        -- Must run before the loop: FeignTagged consults the result per row.
+        if feignScope and self.ScanFeignAmbiguity then
+            self.ScanFeignAmbiguity(sources, self._feignTags, self._feignAmbig)
+        end
         W._deathScratch = W._deathScratch or {}
         local rev = W._deathScratch
         for k = #rev, 1, -1 do rev[k] = nil end
         for ri = #sources, 1, -1 do
             local s = sources[ri]
             local rid = s and s.deathRecapID
-            if rid and not issecretvalue(rid) and rid > 0 then
+            if rid and not issecretvalue(rid) and rid > 0
+                and not (feignScope and self:FeignTagged(rid, s.isLocalPlayer)) then
                 rev[#rev + 1] = s
             end
         end
@@ -1471,15 +1620,23 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     if not src then return end
     local row = bar.row
 
-    -- Stash the source identity onto the bar for DM:OpenDetail (Detail.lua). All
-    -- four are NeverSecret fields, so the assignments are taint-safe. deathRecapID
-    -- is only meaningful in the Deaths window (nil/<=0 elsewhere); the detail
-    -- renderers pick the right one off W._isDeaths. This is the "Task 2" write
-    -- that Detail.lua's OpenDetail comment anticipates.
+    -- Stash the source identity onto the bar for DM:OpenDetail (Detail.lua).
+    -- classFilename, deathRecapID and isLocalPlayer are NeverSecret; sourceGUID
+    -- and sourceCreatureID carry NO secrecy annotation and can be secret in
+    -- combat. All five assignments are still safe, but for a different reason
+    -- than the field annotations: a table-field write never compares the value.
+    -- Any later read that COMPARES one of the unannotated two must guard first.
+    -- deathRecapID is only meaningful in the Deaths window (nil/<=0 elsewhere);
+    -- the detail renderers pick the right one off W._isDeaths.
     bar._sourceGUID = src.sourceGUID
     bar._sourceCreatureID = src.sourceCreatureID
     bar._deathRecapID = src.deathRecapID
     bar._classFilename = src.classFilename
+    -- isLocalPlayer drives the in-combat detail gate: it is the only identity
+    -- the API guarantees readable mid-fight, so it is what decides whether a
+    -- breakdown may open at all. Stored raw; the eligibility predicate resolves
+    -- it to a plain boolean before anything compares it.
+    bar._isLocalPlayer = src.isLocalPlayer
 
     -- self.db is stable for the lifetime of a Tick (it is the AceDB profile
     -- table, never swapped mid-Tick), so read it once and reuse the local rather
