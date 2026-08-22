@@ -180,7 +180,9 @@ function GUIFrame:CreateContentArea(parent)
     content:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -T.borderSize, T.borderSize)
 
     content:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    content:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], T.bgDark[4])
+    -- The window paints one fill for the whole body. A second fill here would
+    -- stack with it and drive the result toward opaque.
+    content:SetBackdropColor(0, 0, 0, 0)
 
     -- Derived arithmetically rather than read off the frame: an anchor-only
     -- frame can still measure 1x1 before its first layout pass, and the content
@@ -663,7 +665,7 @@ function GUIFrame:CreateMainFrame()
     bottomBar:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", T.borderSize, T.borderSize)
     bottomBar:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -T.borderSize, T.borderSize)
     bottomBar:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    bottomBar:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
+    bottomBar:SetBackdropColor(0, 0, 0, 0)
     -- Held on the frame so ToggleMinimize can hide it with the rest of the body.
     GUIFrame.bottomBar = bottomBar
 

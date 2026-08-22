@@ -253,12 +253,12 @@ function GUIFrame:ApplyThemeColors()
 
     -- Sidebar
     if self.sidebar then
-        self.sidebar:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4])
+        self.sidebar:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 0.40)
     end
 
     -- Content area
     if frame.content then
-        frame.content:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], T.bgDark[4])
+        frame.content:SetBackdropColor(0, 0, 0, 0)
     end
 
     -- Refresh sidebar visuals
@@ -266,7 +266,7 @@ function GUIFrame:ApplyThemeColors()
 
     -- Search bar
     if self.searchContainer then
-        self.searchContainer:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
+        self.searchContainer:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], T.bgDark[4])
         self.searchContainer:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
     end
     if self.searchEditBox then
