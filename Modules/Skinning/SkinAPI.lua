@@ -2388,8 +2388,12 @@ local function EnsureFontInit()
     S.fontOutlineMode = S._ResolveOutlineMode(bs and bs.FontOutline)
     S.fontOutline = (S.fontOutlineMode ~= "NONE")
     S.fontBaseSize = (bs and tonumber(bs.FontSize)) or S.FONT_BASE_DEFAULT
+    -- No chosen skin face means follow the addon's global font, not the
+    -- bundled literal this file seeds at parse time.
     if bs and type(bs.FontFace) == "string" and bs.FontFace ~= "" then
         S.FONT_FACE = bs.FontFace
+    else
+        S.FONT_FACE = KE:GetGlobalFont()
     end
 end
 
@@ -2424,7 +2428,7 @@ function S.SetSkinFont(face, size, outline)
     -- An empty face means the addon's own font, which is what FONT_FACE already
     -- holds by default.
     if face ~= nil then
-        local resolved = (face == "") and "Expressway" or face
+        local resolved = (face == "") and KE:GetGlobalFont() or face
         if resolved ~= S.FONT_FACE then
             S.FONT_FACE = resolved
             changed = true
@@ -3263,8 +3267,11 @@ function BF:OnEnable()
     S.fontOutlineMode = S._ResolveOutlineMode(bs and bs.FontOutline)
     S.fontOutline = (S.fontOutlineMode ~= "NONE")
     S.fontBaseSize = (bs and tonumber(bs.FontSize)) or S.FONT_BASE_DEFAULT
+    -- Mirrors the resolution in EnsureFontInit; the two must not drift.
     if bs and type(bs.FontFace) == "string" and bs.FontFace ~= "" then
         S.FONT_FACE = bs.FontFace
+    else
+        S.FONT_FACE = KE:GetGlobalFont()
     end
 
     runList(earlySkins)
