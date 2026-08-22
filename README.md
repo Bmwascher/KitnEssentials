@@ -5,7 +5,7 @@
 
 Standalone combat, quality of life, dungeon, and skinning modules for **KitnUI**.
 
-KitnEssentials adds HUD elements, aura trackers, automation, dungeon tools, and Blizzard UI skinning through a fully themed settings panel. Every module is independently toggleable and repositionable via a built-in edit mode. ElvUI is optional throughout — nothing here requires it.
+KitnEssentials adds HUD elements, aura trackers, automation, dungeon tools, and Blizzard UI skinning through a fully themed settings panel. Every module starts switched off, so a fresh install shows nothing until you turn on what you want, and each one is independently toggleable and repositionable via a built-in edit mode. ElvUI is optional throughout — nothing here requires it.
 
 ## Features
 
@@ -98,7 +98,7 @@ The home page also carries the general settings: minimap button, login message, 
 | Module | Description |
 |---|---|
 | Keystone Helper | Keystone reminders and group tools on one tabbed page: party or raid announce on instance reset, a glowing "reroll your key" prompt after timing a key at or above your keystone's level, a "Your Key?" prompt when entering the Mythic 0 dungeon matching your keystone, plus a reworked group finder panel with filtering, a quick-create listing tool, and a reminder when you have a group listed and stop watching it |
-| Death Notifications | On-screen alert when party or raid members, or your focus target, die — class portrait and color, configurable text format, and an optional voice reminder when your focus dies in combat. Active in dungeons by default; raid activation is opt-in |
+| Death Notifications | On-screen alert when party or raid members, or your focus target, die — class portrait and color, configurable text format, and an optional voice reminder when your focus dies in combat. Covers dungeons once you switch it on; raid activation is opt-in |
 | Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible or shielded status colors |
 | Enemy Counter | Number of enemies currently in combat via nameplate scanning, with editable prefix and combat-only visibility |
 | Focus Marker | Auto-creates a focus targeting and raid marker macro, with optional party ready-check announce |

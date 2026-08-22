@@ -13,6 +13,11 @@
   features (Instance Reset, Reroll Key, Your Key) each start switched off
   instead
 
+### Profiles
+- Fixed an error when switching profiles. Every module now reads the new
+  profile before any of them are switched on or off, so a module shutting
+  down can no longer read settings the old profile no longer holds
+
 ---
 
 ## v4.3.0
