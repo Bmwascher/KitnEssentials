@@ -610,9 +610,15 @@ local function SetupAutoSellRepair()
             -- Unreadable means do nothing: refusing to auto-repair is a
             -- non-event, throwing here kills every later feature in this
             -- handler.
-            local repairCost, canRepair = GetRepairAllCost()
+            --
+            -- The second return is deliberately NOT read. Truth-testing it is a
+            -- read like any other and would throw on a secret, which is the very
+            -- thing this guard exists for; and it says nothing the cost does not
+            -- already say, since a cost above zero is itself the damage. The
+            -- merchant question is CanMerchantRepair, asked above.
+            local repairCost = GetRepairAllCost()
             if not KE:IsSecretValue(repairCost)
-                and repairCost and canRepair and repairCost > 0 then
+                and repairCost and repairCost > 0 then
                 if AU.db.UseGuildFunds and CanGuildBankRepair() then
                     local guildBankMoney = GetGuildBankWithdrawMoney()
                     if not KE:IsSecretValue(guildBankMoney)
