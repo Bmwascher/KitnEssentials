@@ -188,10 +188,10 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
 
     local rowT3 = GUIFrame:CreateRow(card3.content, 40)
     local fontDrop = GUIFrame:CreateDropdown(rowT3, "Font", {
-        options = fontList,
+        options = KE:AddFollowGlobalFont(fontList),
         searchable = true,
-        value = db.FontFace or KE:GetGlobalFont(),
-        callback = function(value) db.FontFace = value; ApplySettings() end,
+        value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
+        callback = function(value) db.FontFace = KE:StoredFontFace(value); ApplySettings() end,
     })
     rowT3:AddWidget(fontDrop, 0.34)
     local fontSize = GUIFrame:CreateSlider(rowT3, "Font Size", {

@@ -1320,9 +1320,9 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 
     local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local fontDropdown = GUIFrame:CreateDropdown(row3a, "Font", {
-        options = fontList,
-        value = db.FontFace or KE:GetGlobalFont(),
-        callback = function(key) db.FontFace = key; ApplySettings() end,
+        options = KE:AddFollowGlobalFont(fontList),
+        value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
+        callback = function(key) db.FontFace = KE:StoredFontFace(key); ApplySettings() end,
         searchable = true,
         isFontPreview = true,
     })

@@ -468,6 +468,8 @@ function L.loadSkinAPI(overrides)
     local KE = {
         Print = function() end,
         GetThemeColor = function(_, key) return SKINAPI_THEME[key] end,
+        -- EnsureFontInit resolves an unset skin face through this.
+        GetGlobalFont = function() return "Expressway" end,
         db = { profile = { Skinning = { BlizzardFrames = {} } } },
     }
     helpers.loadModule("Core/Secret.lua", KE)

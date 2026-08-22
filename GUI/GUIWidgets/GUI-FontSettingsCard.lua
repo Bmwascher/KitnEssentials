@@ -95,7 +95,7 @@ local function CreateFontSettingsCardKit(holder)
         isFontPreview = true,
         callback = function(key)
             if not kit._db or not kit._keys then return end
-            SetDbValue(kit._db, kit._keys.fontFace, key)
+            SetDbValue(kit._db, kit._keys.fontFace, KE:StoredFontFace(key))
             if kit._onChange then kit._onChange() end
         end,
     })
@@ -196,7 +196,7 @@ local function ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     -- Rebuild the LSM font list per Configure so a font media addon that
     -- loaded after the first render gets picked up. Cheap when the dropdown's
     -- item buttons aren't already created (collapsed state).
-    kit.fontDropdown:SetOptions(BuildFontList())
+    kit.fontDropdown:SetOptions(KE:AddFollowGlobalFont(BuildFontList()))
 
     kit.outlineDropdown:SetOptions(KE:GetFontOutlineOptions())
 
@@ -215,7 +215,7 @@ local function ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     -- which would otherwise write the clamp value to db before the SetValue
     -- below can restore it. (Surfaces as "font size resets to max" when
     -- navigating between modules with different fontSizeRanges.)
-    kit.fontDropdown:SetValue(GetDbValue(db, keys.fontFace, KE:GetGlobalFont()), true)
+    kit.fontDropdown:SetValue(GetDbValue(db, keys.fontFace, KE.FONT_FOLLOW_GLOBAL), true)
     kit.outlineDropdown:SetValue(KE:NormalizeFontOutline(GetDbValue(db, keys.fontOutline, "OUTLINE")), true)
     kit.fontSizeSlider:SetMinMaxValues(fontSizeRange[1], fontSizeRange[2], true)
     kit.fontSizeSlider:SetValue(GetDbValue(db, keys.fontSize, 18), true)
@@ -269,9 +269,9 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     local row1 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
 
     local fontDropdown = GUIFrame:CreateDropdown(row1, "Font", {
-        options = BuildFontList(),
-        value = getValue(keys.fontFace, KE:GetGlobalFont()),
-        callback = function(key) setValue(keys.fontFace, key) end,
+        options = KE:AddFollowGlobalFont(BuildFontList()),
+        value = getValue(keys.fontFace, KE.FONT_FOLLOW_GLOBAL),
+        callback = function(key) setValue(keys.fontFace, KE:StoredFontFace(key)) end,
         searchable = searchable,
         isFontPreview = true,
     })

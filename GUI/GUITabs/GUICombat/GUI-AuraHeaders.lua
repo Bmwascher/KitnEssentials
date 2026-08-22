@@ -222,10 +222,10 @@ local function BuildPage(opts)
 
         local rowG = GUIFrame:CreateRow(card4.content, 40)
         local fontDrop = GUIFrame:CreateDropdown(rowG, "Font", {
-            options = fontList,
+            options = KE:AddFollowGlobalFont(fontList),
             searchable = true,
-            value = db.FontFace or KE:GetGlobalFont(),
-            callback = function(v) db.FontFace = v; ApplySettings() end,
+            value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
+            callback = function(v) db.FontFace = KE:StoredFontFace(v); ApplySettings() end,
         })
         rowG:AddWidget(fontDrop, 0.5)
         local outline = GUIFrame:CreateDropdown(rowG, "Outline", {

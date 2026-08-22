@@ -100,10 +100,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         -- Font Dropdown
         local row2a = GUIFrame:CreateRow(card2.content, 36)
         local fontDropdown = GUIFrame:CreateDropdown(row2a, "Font", {
-            options = fontList,
-            value = db.FontFace or "Expressway",
+            options = KE:AddFollowGlobalFont(fontList),
+            value = db.FontFace or KE.FONT_FOLLOW_GLOBAL,
             callback = function(key)
-                db.FontFace = key
+                db.FontFace = KE:StoredFontFace(key)
                 ApplySettings()
             end,
             searchable = true,

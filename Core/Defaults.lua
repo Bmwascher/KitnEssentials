@@ -1739,7 +1739,6 @@ local Defaults = {
                 Enabled = false,
                 BackdropColor = { 0.063, 0.063, 0.063, 0.9 },
                 BorderColor = { 0, 0, 0, 1 },
-                FontFace = "Expressway",
                 FontOutline = "OUTLINE",
                 FontSize = 12,
                 HeaderFontSize = 14,
@@ -1931,7 +1930,6 @@ local Defaults = {
             BlizzardFrames = {
                 Enabled    = false,
                 FontOffset = 0,
-                FontFace = "",
                 FontSize = 12,
                 -- Three-state outline switch for skinned Blizzard text: NONE,
                 -- OUTLINE, or THICK. The skin asks for OUTLINE at over a
@@ -1957,7 +1955,6 @@ local Defaults = {
             -- widget mixins rather than a named window.
             UIWidgets = {
                 Enabled = false,
-                FontFace = "Expressway",
                 FontOutline = "OUTLINE",
                 -- Status bar widgets (M+ timer, power bars)
                 StatusBar = {

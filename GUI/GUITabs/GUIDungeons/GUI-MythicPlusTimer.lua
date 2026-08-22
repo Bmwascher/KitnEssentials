@@ -78,10 +78,16 @@ local function AddFontCard(scrollChild, yOffset, db, manager, prefix, opts)
 
     local rowH = opts.note and Theme.rowHeight or Theme.rowHeightLast
     local row = GUIFrame:CreateRow(card.content, rowH)
+    -- The HUD elements fall through to the module's own face before the global
+    -- font, so their follow entry is labelled with whatever that resolves to.
+    -- The base card has nothing above it, and the nameplate overlay reads its
+    -- own key directly, so neither inherits.
+    local inherited = (prefix ~= "" and not opts.noBaseFallback)
+        and (db.FontFace or KE:GetGlobalFont()) or nil
     local fontDrop = GUIFrame:CreateDropdown(row, "Font", {
-        options = MediaList("font", "Expressway"),
-        value = db[faceKey] or db.FontFace or KE:GetGlobalFont(),
-        callback = function(key) db[faceKey] = key; applyFn() end,
+        options = KE:AddFollowGlobalFont(MediaList("font", "Expressway"), inherited),
+        value = db[faceKey] or KE.FONT_FOLLOW_GLOBAL,
+        callback = function(key) db[faceKey] = KE:StoredFontFace(key); applyFn() end,
         searchable = true, isFontPreview = true,
     })
     row:AddWidget(fontDrop, 1 / 3)
@@ -962,6 +968,7 @@ BuildOverlayTab = function(scrollChild, yOffset, db, manager)
         group = "overlayNP",
         maxSize = 20,
         includeMono = true,
+        noBaseFallback = true,
         applyFn = ApplyOverlaySettings,
     })
 

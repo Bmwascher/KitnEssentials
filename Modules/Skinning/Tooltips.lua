@@ -57,14 +57,12 @@ local S = KE.Skins
 -- always has something with :GetRGB().
 local WHITE_COLOR = CreateColor(1, 1, 1)
 
--- KE:GetEffectiveFont returns the LSM NAME, not a file path -- every consumer
--- resolves it through LSM, and passing the raw name straight to SetFont throws
--- "Invalid font asset". Silent fetch plus a stock fallback so a missing
--- registration degrades instead of erroring.
+-- KE:GetEffectiveFont returns the LSM NAME, not a file path -- passing the raw
+-- name straight to SetFont throws "Invalid font asset". KE:GetFontPath does the
+-- resolution and carries its own fallback, and it is also what turns an unset
+-- face into the global font; fetching here directly would silently skip that.
 local function ResolveFont(db)
-    local name = KE:GetEffectiveFont(db)
-    local path = KE.LSM and KE.LSM:Fetch("font", name, true)
-    return path or _G.STANDARD_TEXT_FONT
+    return KE:GetFontPath(KE:GetEffectiveFont(db))
 end
 
 -- The tooltips that get the visual style. Existence-guarded at wire
