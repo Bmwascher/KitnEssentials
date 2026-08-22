@@ -542,11 +542,14 @@ end
 --
 -- Restore re-registers an equivalent closure because the original is not
 -- exposed; it calls the same GameEvent.HandleStartLootRoll the routing table
--- does. That closure is ours, so Blizzard's roll windows run tainted for the
--- rest of the session after a live teardown. Nothing on that path is
--- protected -- RollOnLoot and the confirm popup are both open calls, and our
--- own bars already drive RollOnLoot the same way -- but an "action failed"
--- report around loot rolls suspects this first.
+-- does. That closure is ours, so every Blizzard roll it drives runs tainted,
+-- and that reaches protected calls: GroupLootContainer_Update shows the
+-- container and lays out the bottom-managed set, whose members it re-anchors
+-- through ClearAllPoints/SetPoint, and that set can include a secure action
+-- button. So an "action failed" report around loot rolls in combat suspects
+-- this first. The exposure ends at the next reload or the next suppression,
+-- not at the end of the session -- re-enabling Replace mode re-runs
+-- SetupRollBars, which unregisters this closure again.
 --
 -- CANCEL_LOOT_ROLL needs no handling either way: it is registered per roll
 -- frame, and while suppressed no roll frame exists to hear it.
