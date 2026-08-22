@@ -11,6 +11,7 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 ---@class NoMovementAlert: AceModule, AceEvent-3.0
+---@field editModeRegistered boolean? true while the EditMode element is registered; nil after UnregisterAnchor
 local NMA = KitnEssentials:NewModule("NoMovementAlert", "AceEvent-3.0")
 
 -- Zero idle cost: no cooldown or aura events are registered at all until

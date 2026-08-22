@@ -74,6 +74,8 @@ local DEBUG_CHAT = false
 -- whether plain concatenation and format() actually throw on a secret sender.
 -- The two joins are probed under pcall precisely because their legality is the
 -- thing being measured.
+---@param arg1 string? message body
+---@param arg2 string? sender name
 local function ChatDebugLine(event, arg1, arg2, arg12, chatType)
     if not DEBUG_CHAT then return end
 
@@ -662,6 +664,9 @@ end
 -- Byte level, because a Lua pattern class would split a multi-byte name. Any
 -- byte at or above 128 belongs to a UTF-8 sequence and counts as a word
 -- character, so accented names stay whole.
+---@param text string
+---@param index number
+---@return boolean
 function CMH.IsBoundary(text, index)
     if index < 1 or index > #text then return true end
 
@@ -729,6 +734,8 @@ end
 -- each one up directly. Scanning once per cached name instead would be up to a
 -- thousand full-body searches per frame per message, because the class-name
 -- cache holds up to two entries for each cached GUID.
+---@param text string
+---@param lowered string
 local function ScanMentions(text, lowered, classNames, excluded, protectCount, hitCount)
     local length = #text
     local i = 1
@@ -802,6 +809,7 @@ local function StripRealm(realm)
     return strlower(gsub(realm, "[%s%p]", ""))
 end
 
+---@param author string?
 local function IsSelf(author)
     if KE:IsSecretValue(author) or not author then return false end
 
@@ -827,6 +835,8 @@ local function IsSelf(author)
     return myRealm ~= nil and StripRealm(realm) == myRealm
 end
 
+---@param text string
+---@param author string?
 function CMH.Highlight(text, author)
     if not text or text == "" then return text end
 

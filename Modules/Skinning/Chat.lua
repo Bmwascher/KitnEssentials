@@ -1187,6 +1187,10 @@ function CHAT:AddMessageEdits(_, msg, isHistory, historyTime)
     if not isProtected and db.ShortChannels then msg = self:HandleShortChannels(msg, false) end
 
     if db.TimestampFormat and db.TimestampFormat ~= "NONE" then
+        -- BetterDate types as string|osdate because date() hands back a table
+        -- for "*t". The format comes from a fixed dropdown of strftime patterns
+        -- with no such entry, so the string branch is the only reachable one.
+        ---@type string
         local timestamp = BetterDate(db.TimestampFormat, historyTimestamp or self:GetDateTime(db.UseLocalTime))
         timestamp = gsub(timestamp, " ", "")
         timestamp = gsub(timestamp, "AM", " AM")

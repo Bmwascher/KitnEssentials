@@ -722,7 +722,10 @@ function EditMode:SetupDragHandlers(overlay)
     -- Resolved once per drag: the anchor pair and the parent cannot change
     -- while the mouse is down, and re-reading them every frame would be the
     -- one input the per-frame conversion does not need.
-    local dragAnchorFrom, dragAnchorTo = nil, nil
+    ---@type string
+    local dragAnchorFrom = nil
+    ---@type string
+    local dragAnchorTo = nil
     local dragParent = nil
 
     overlay:SetScript("OnDragStart", function(self)

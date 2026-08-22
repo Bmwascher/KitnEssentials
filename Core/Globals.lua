@@ -589,8 +589,8 @@ function KE:ResolveColor(saved, default)
            saved[4] or default[4] or 1
 end
 
----@param fontString FontString
----@param fontName string
+---@param fontString FontString|EditBox|SimpleHTML
+---@param fontName string?
 ---@param fontSize number
 ---@param fontOutline string?
 ---@return boolean
