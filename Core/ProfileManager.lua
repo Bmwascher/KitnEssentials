@@ -432,9 +432,6 @@ function ProfileManager:RefreshAllModules()
     local KitnEssentials = _G.KitnEssentials
     if not KitnEssentials then return end
 
-    -- Stop previews before refreshing anything
-    if KE.PreviewManager then KE.PreviewManager:StopAllPreviews() end
-
     -- Sync module enabled state to the (possibly new) profile. Startup does
     -- this in Core/Main.lua OnEnable; profile switches previously didn't —
     -- modules enabled under the old profile kept their events/frames live,
@@ -448,8 +445,26 @@ function ProfileManager:RefreshAllModules()
     local skipSkinning = KE.ShouldNotLoadModule and KE:ShouldNotLoadModule()
     local skinningChanged = false
     local reloadNeeded = false
-    for name, module in KitnEssentials:IterateModules() do
+    -- Rebind EVERY module's db before any enable/disable runs. AceDB's
+    -- SetProfile calls removeDefaults on the outgoing profile: it strips
+    -- default-equal leaves and deletes the nested tables that empties, so a
+    -- module still holding the old table sees a half-gutted profile. Rebinding
+    -- inside the enable/disable loop left that window open to every module the
+    -- loop had not reached yet, and a teardown that touches a sibling
+    -- (DM:ReleaseChatSize -> CHAT:UpdatePanel) then indexed keys stripping had
+    -- removed -- while the flags it guards on, being non-default, survived.
+    for _, module in KitnEssentials:IterateModules() do
         if module.UpdateDB then module:UpdateDB() end
+    end
+
+    -- Previews stop AFTER the rebind, never before it. Several HidePreview
+    -- bodies read self.db (CR:Update, HM:FindHealers, and the visibility
+    -- driver in DR), so stopping first hands them the same stripped outgoing
+    -- profile the rebind exists to get rid of. Nothing in the rebind pass
+    -- needs previews stopped.
+    if KE.PreviewManager then KE.PreviewManager:StopAllPreviews() end
+
+    for name, module in KitnEssentials:IterateModules() do
         local wasEnabled = module:IsEnabled()
         local wantEnabled = module.db and module.db.Enabled
         local stateMismatch = wantEnabled ~= nil and not module.keSelfManagedEnable
