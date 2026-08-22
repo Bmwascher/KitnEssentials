@@ -83,6 +83,105 @@ function DM:_BackdropPad()
     return db.BackdropPadding or 1
 end
 
+---------------------------------------------------------------------------------
+-- Chat size sync (Damage Meter side)
+--
+-- The Chat module can be told to size its panel to this meter. What is matched
+-- is the backdrop CARRIER rectangle -- the rectangle the backdrop frame
+-- occupies, whether or not it is painting anything. Either module's backdrop
+-- can be switched off, and refusing to match an unpainted one would kill the
+-- feature for a legitimate configuration; the carrier still bounds the content
+-- either way.
+---------------------------------------------------------------------------------
+
+-- The carrier rectangle, or nil. Reads the extents LayoutDock already stashed
+-- rather than recomputing the column walk -- two copies of that arithmetic drift
+-- apart on the first change to either.
+--
+-- This is the rectangle the dock WOULD occupy. It is NOT a claim that the dock is
+-- on screen: a visibility condition can hide the meter while its rectangle stays
+-- perfectly well defined, and the hold rule depends on that separation.
+--
+-- nil means "no rectangle", never "a rectangle of zero size". A missing header
+-- stash on the behind-bars path returns nil rather than treating it as zero:
+-- UpdateBackdrop's own fallback recomputes the header instead of dropping it, so
+-- zero would report a rectangle one header band taller than what is drawn.
+function DM:GetBackdropRectSize()
+    if not self.enabled then return nil end
+    local db = self.db
+    if not db then return nil end
+
+    local w = self._dockContentW
+    local h = self._dockContentH
+    if not w or not h or w <= 0 or h <= 0 then return nil end
+
+    local pad = self:_BackdropPad()
+    w = w + 2 * pad
+    h = h + 2 * pad
+
+    -- Mirrors UpdateBackdrop exactly, including the enabled half: the flag is
+    -- only honoured while the backdrop is on.
+    if db.BackdropEnabled ~= false and db.BackdropBehindBarsOnly then
+        local headerH = self._dockHeaderH
+        if not headerH then return nil end
+        h = h - headerH
+    end
+    if h <= 0 then return nil end
+
+    return w, h
+end
+
+-- Tell Chat the rectangle changed. Guard order is load-bearing:
+--
+-- The Chat test comes FIRST so nothing is memoised while the toggle is off --
+-- a memo written then would go stale and suppress the first real push after it
+-- is turned on. db.Enabled is part of that test because Chat's own teardown
+-- hides the panel but leaves it allocated, so a panel test alone cannot answer
+-- "is Chat running".
+--
+-- The dirty check is NOT an optimisation. The splitter drag path re-lays the
+-- dock out every frame while the user drags, and UpdatePanel walks every chat
+-- frame in the game.
+--
+-- The memo is written BEFORE the call. Nothing in UpdatePanel reaches back here
+-- today, so the two orders are equivalent; this way round a future re-entrant
+-- path cannot loop.
+function DM:PushSizeToChat()
+    local CHAT = KitnEssentials:GetModule("Chat", true)
+    if not (CHAT and CHAT.db and CHAT.db.Enabled and CHAT.db.MatchDamageMeterSize) then return end
+    if not CHAT.panel or not CHAT.UpdatePanel then return end
+
+    local w, h = self:GetBackdropRectSize()
+    if not w or not h then return end
+    if self._chatPushW == w and self._chatPushH == h then return end
+
+    self._chatPushW, self._chatPushH = w, h
+    CHAT:UpdatePanel()
+end
+
+-- Hand Chat back its own size on a genuine module disable. Not for a temporary
+-- hide: a chat panel that resized on every combat transition would be
+-- intolerable, and the visibility early-returns in UpdateBackdrop already hold
+-- the last size for free.
+--
+-- The memo clear is unconditional and comes before the guards. Without it,
+-- disabling and re-enabling an unchanged meter computes the same rectangle the
+-- memo already holds, the dirty check suppresses the push, and Chat never comes
+-- back.
+--
+-- Nothing recomputes a size here. The caller has already cleared self.enabled,
+-- so GetBackdropRectSize answers nil and Chat's resolver falls back to the
+-- user's own saved values.
+function DM:ReleaseChatSize()
+    self._chatPushW, self._chatPushH = nil, nil
+
+    local CHAT = KitnEssentials:GetModule("Chat", true)
+    if not (CHAT and CHAT.db and CHAT.db.Enabled and CHAT.db.MatchDamageMeterSize) then return end
+    if not CHAT.panel or not CHAT.UpdatePanel then return end
+
+    CHAT:UpdatePanel()
+end
+
 function DM:EnsureDock()
     if self.dock then return self.dock end
 
@@ -644,6 +743,11 @@ function DM:UpdateBackdrop()
     KE:ApplyFramePosition(dock, db.Position, db)
 
     dock:Show()
+
+    -- Last, and only here: this is where the dock's outer size is actually set.
+    -- The early returns above hide without recomputing it, so there is nothing
+    -- new to push from any of them.
+    self:PushSizeToChat()
 end
 
 ---------------------------------------------------------------------------------

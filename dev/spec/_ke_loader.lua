@@ -202,6 +202,25 @@ function L.loadDMHistory(overrides)
     return DM, KE
 end
 
+-- Modules/DamageMeter/Dock.lua on top of a loaded DM Core. Dock.lua reads
+-- KE:PixelSnap at file scope and captures five platform globals as upvalues, so
+-- each must exist BEFORE the load; loadDMCore already supplies three of the
+-- five, and the two here are the remainder. Same honesty boundary as
+-- loadDMCore. Returns DM, KE.
+--
+-- PixelSnap is an IDENTITY stub, not the real snapper: the dock arithmetic
+-- these specs assert is addition and subtraction over already-snapped inputs, so
+-- a real snapper would only put grid rounding into assertions that are not about
+-- the grid.
+function L.loadDMDock(overrides)
+    local DM, KE = L.loadDMCore(overrides)
+    KE.PixelSnap = KE.PixelSnap or function(_, v) return v end
+    _G.GetCursorPosition = _G.GetCursorPosition or function() return 0, 0 end
+    _G.IsInInstance = _G.IsInInstance or function() return false, "none" end
+    helpers.loadModule("Modules/DamageMeter/Dock.lua", KE)
+    return DM, KE
+end
+
 -- Core/PixelPerfect.lua. Defaults model a PERFECT UI scale (768/1440 at
 -- 1440p → pixelSize exactly 1). The stubs read opts live: mutate
 -- opts.effectiveScale (or physicalHeight) and call KE:UpdatePixelCache() to

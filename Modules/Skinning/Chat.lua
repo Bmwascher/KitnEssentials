@@ -77,6 +77,15 @@ local BASE_OFFSET = 35
 local PADDING = 5
 local H_PADDING = 5
 local TAB_HEIGHT = 22
+
+-- Smallest panel the chat layout can still draw inside. PositionChat sizes the
+-- chat frame as (w - 2*H_PADDING) by (h - BASE_OFFSET - logOffset), where
+-- logOffset is TAB_HEIGHT + 4 on a combat-log tab. Each constant carries the +1
+-- that keeps that subtraction positive, so these two values are themselves
+-- acceptable and only anything below them is refused. Derived rather than typed
+-- so they track the constants above.
+local MIN_SYNC_W = H_PADDING * 2 + 1
+local MIN_SYNC_H = BASE_OFFSET + TAB_HEIGHT + 4 + 1
 local GUID_CACHE_MAX = 500
 
 local IGNORE_FRAMES = { [2] = "CombatLog", [3] = "Voice", }
@@ -569,7 +578,7 @@ function CHAT:CreateChatPanel()
 
     local db = self.db
     local panel = CreateFrame("Frame", "KE_ChatPanel", UIParent)
-    panel:SetSize(db.Width or PANEL_WIDTH, db.Height or PANEL_HEIGHT)
+    panel:SetSize(self:GetPanelSize())
     KE:ApplyFramePosition(panel, db.Position, db)
     panel:SetFrameStrata("BACKGROUND")
     panel:SetFrameLevel(PANEL_FRAME_LEVEL)
@@ -2241,9 +2250,7 @@ end
 function CHAT:PositionChats()
     if not self.panel then return end
 
-    local db = self.db
-    local panelWidth = db.Width or PANEL_WIDTH
-    local panelHeight = db.Height or PANEL_HEIGHT
+    local panelWidth, panelHeight = self:GetPanelSize()
 
     self.panel:SetSize(panelWidth, panelHeight)
 
@@ -2291,9 +2298,20 @@ function CHAT:PositionChat(chat)
         chat.FontStringContainer:SetPoint("BOTTOMRIGHT", chat, "BOTTOMRIGHT", 3, -3)
     end
 
-    local db = self.db
-    local panelWidth = db.Width or PANEL_WIDTH
-    local panelHeight = db.Height or PANEL_HEIGHT
+    -- The panel's LIVE size, not GetPanelSize. This function is reached without
+    -- a preceding resize -- OnDockStateChanged calls it directly, and its own
+    -- combat-deferred callback re-runs it after regen -- so asking the resolver
+    -- here would lay the text out for a size the panel does not currently have.
+    -- Every other size read in this file runs next to the SetSize it feeds.
+    --
+    -- GetWidth/GetHeight are SecretWhenAnchoringSecret, and the two subtractions
+    -- below would then be arithmetic on a secret value. The panel's anchor is
+    -- user-configurable, so fall back to the size it is SUPPOSED to be rather
+    -- than trusting the measurement.
+    local panelWidth, panelHeight = self.panel:GetWidth(), self.panel:GetHeight()
+    if issecretvalue(panelWidth) or issecretvalue(panelHeight) then
+        panelWidth, panelHeight = self:GetPanelSize()
+    end
 
     local logOffset = 0
     if _G.IsCombatLog and _G.IsCombatLog(chat) then
@@ -2532,11 +2550,40 @@ function CHAT:RestoreDockManager()
     end
 end
 
+-- What size the panel should be right now: the user's own saved size, or the
+-- Damage Meter's backdrop carrier rectangle when they have asked the two to
+-- match. db.Width / db.Height are never written by the sync -- turning it off
+-- has to give the user their own numbers back untouched.
+--
+-- The meter's answer is absent whenever it has no rectangle to offer (module
+-- off, dock never laid out, Chat running before the meter caught up), and is
+-- REFUSED when it is too small for this module to draw inside. Refusing falls
+-- back rather than clamping: a clamp would draw two different rectangles while
+-- the toggle claims they match.
+--
+-- GetModule is fetched here rather than cached at file scope so enable order
+-- between the two modules does not matter.
+function CHAT:GetPanelSize()
+    local db = self.db
+    local w = db and db.Width or PANEL_WIDTH
+    local h = db and db.Height or PANEL_HEIGHT
+    if not (db and db.MatchDamageMeterSize) then return w, h end
+
+    local DM = KitnEssentials:GetModule("DamageMeter", true)
+    if not (DM and DM.GetBackdropRectSize) then return w, h end
+
+    local mw, mh = DM:GetBackdropRectSize()
+    if mw and mh and mw >= MIN_SYNC_W and mh >= MIN_SYNC_H then
+        return mw, mh
+    end
+    return w, h
+end
+
 function CHAT:UpdatePanel()
     if not self.panel then return end
     local db = self.db
 
-    self.panel:SetSize(db.Width or PANEL_WIDTH, db.Height or PANEL_HEIGHT)
+    self.panel:SetSize(self:GetPanelSize())
     KE:ApplyFramePosition(self.panel, db.Position, db)
     self.panel:SetFrameStrata("BACKGROUND")
 

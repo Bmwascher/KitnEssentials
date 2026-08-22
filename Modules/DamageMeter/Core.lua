@@ -743,6 +743,12 @@ end
 
 function DM:OnDisable()
     self.enabled = false
+    -- Hand Chat back its own size, if it was matching ours. Must follow the
+    -- line above: that is what makes the rectangle query answer nil, which is
+    -- the whole release mechanism. OnDisable never reaches UpdateBackdrop, so
+    -- the push at the end of it cannot do this.
+    -- Guarded for load order (Dock.lua).
+    if self.ReleaseChatSize then self:ReleaseChatSize() end
 
     self:UnregisterAllEvents()
     if LibSpec then LibSpec.UnregisterGroup(self) end

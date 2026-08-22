@@ -91,6 +91,12 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     local CHAT = GetChatModule()
     local manager = GUIFrame:CreateWidgetStateManager()
+    -- The two panel-size sliders do nothing while the size is synced to the
+    -- Damage Meter, so they grey out. UpdateAll resolves a conditional group as
+    -- (module enabled AND condition), so the master gate is preserved and the
+    -- sliders must belong to this group INSTEAD of "all", never to both -- the
+    -- manager walks groups in unspecified order.
+    manager:SetCondition("panelsize", function() return not db.MatchDamageMeterSize end)
 
     local function ApplySettings()
         if CHAT and CHAT.ApplySettings then CHAT:ApplySettings() end
@@ -229,7 +235,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
         end,
     })
     row4a:AddWidget(widthSlider, 0.5)
-    manager:Register(widthSlider, "all")
+    manager:Register(widthSlider, "panelsize")
 
     local heightSlider = GUIFrame:CreateSlider(row4a, "Panel Height", {
         min = 120, max = 500, step = 1,
@@ -240,8 +246,23 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
         end,
     })
     row4a:AddWidget(heightSlider, 0.5)
-    manager:Register(heightSlider, "all")
+    manager:Register(heightSlider, "panelsize")
     card4:AddRow(row4a, Theme.rowHeight)
+
+    local row4match = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local matchChk = GUIFrame:CreateCheckbox(row4match, "Match Damage Meter Size", {
+        value = db.MatchDamageMeterSize == true,
+        tooltip = "Sizes the chat panel to the Damage Meter's backdrop. "
+            .. "If the meter is too small to hold a chat frame, the panel keeps its own size.",
+        callback = function(checked)
+            db.MatchDamageMeterSize = checked
+            ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    row4match:AddWidget(matchChk, 1)
+    manager:Register(matchChk, "all")
+    card4:AddRow(row4match, Theme.rowHeight)
 
     local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local editBoxPosDropdown = GUIFrame:CreateDropdown(row4b, "Edit Box Position", {
