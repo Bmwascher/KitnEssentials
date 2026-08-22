@@ -81,6 +81,17 @@ describe("ChatMessageHandler achievement merging", function()
             "|cffffff00|Tint:14:14|t |Hachievement:123:|h[Thing]|h|r Earned by Ana, Zed", lines[1])
     end)
 
+    it("refuses an unterminated link rather than borrowing the next one's text", function()
+        -- A message filter can hand this branch text the client would never
+        -- send. With a lazy body the first id ran through the SECOND link's
+        -- |h terminators and the merged line reported achievement 111 wearing
+        -- achievement 222's name. Refusing is the correct outcome: the line
+        -- then prints unmerged rather than merged and wrong.
+        local broken = "%s got |cffffff00|Hachievement:111:broken " ..
+            "|Hachievement:222:|h[B]|h|r"
+        assert.is_nil(CMH:CaptureAchievement(frame, "CHAT_MSG_GUILD_ACHIEVEMENT", INFO, broken, "Ana"))
+    end)
+
     it("still pairs a coloured link with its own achievement id", function()
         local two = "%s got |cffffff00|Hachievement:111:|h[A]|h|r and " ..
             "|cffffff00|Tint:14:14|t |Hachievement:222:|h[B]|h|r!"

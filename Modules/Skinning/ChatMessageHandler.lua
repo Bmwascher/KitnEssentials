@@ -120,9 +120,11 @@ end
 -- GROUP_ROSTER_UPDATE); values are ready-made |T|t texture strings.
 CMH.lfgRoles = {}
 
--- Set for the duration of a history replay. Anything that treats a message as
--- NEW checks it, which is wider than sound and light: the reply target neither
--- speaks nor flashes and still has to be guarded.
+-- Set for the duration of a history replay. Every place in THIS file that
+-- treats a message as new checks it, which is wider than sound and light: the
+-- reply target neither speaks nor flashes and still has to be guarded. It says
+-- nothing about third-party message filters, which run during replay and have
+-- no reason to know the flag exists.
 CMH.replaying = false
 local GROUP_CHAT_TYPES = {
     PARTY = true, PARTY_LEADER = true,
@@ -443,7 +445,14 @@ function CMH:CaptureAchievement(frame, event, info, message, playerLink)
     -- one's id. Nothing may sit between |c and the icon or |H, so the colour
     -- cannot be borrowed from an unrelated escape earlier in the line. The id
     -- is digits only, so splicing it into a pattern is safe.
-    local body = "|Hachievement:" .. achievementID .. ":.-|h.-|h"
+    -- [^|]* rather than .-: an unterminated prefix followed by a VALID link let
+    -- the lazy form run through the neighbour's |h terminators and report the
+    -- first id with the second link's text. Neither achievement link data nor a
+    -- display name can contain a bar -- one would break the client's own parser
+    -- -- so excluding it cannot cross into an adjacent escape. Well-formed
+    -- announcements match exactly as before; only text a filter has mangled
+    -- now refuses instead of mis-pairing.
+    local body = "|Hachievement:" .. achievementID .. ":[^|]*|h[^|]*|h"
     local decorated = "|T[^|]-|t " .. body
     local link = strmatch(message, "(|c%x%x%x%x%x%x%x%x" .. decorated .. "|r)")
         or strmatch(message, "(|c%x%x%x%x%x%x%x%x" .. body .. "|r)")
