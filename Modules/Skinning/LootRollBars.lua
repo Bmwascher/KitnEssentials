@@ -542,8 +542,14 @@ end
 --
 -- Restore re-registers an equivalent closure because the original is not
 -- exposed; it calls the same GameEvent.HandleStartLootRoll the routing table
--- does. CANCEL_LOOT_ROLL needs no handling either way -- it is registered per
--- roll frame, and while suppressed no roll frame exists to hear it.
+-- does. That closure is ours, so Blizzard's roll windows run tainted for the
+-- rest of the session after a live teardown. Nothing on that path is
+-- protected -- RollOnLoot and the confirm popup are both open calls, and our
+-- own bars already drive RollOnLoot the same way -- but an "action failed"
+-- report around loot rolls suspects this first.
+--
+-- CANCEL_LOOT_ROLL needs no handling either way: it is registered per roll
+-- frame, and while suppressed no roll frame exists to hear it.
 local function SetBlizzardRollsEnabled(enabled)
     local GE = _G.GameEvent
     if not (GE and GE.RegisterInternalEvent and GE.UnregisterInternalEvent
@@ -563,7 +569,12 @@ function LR:SetupRollBars()
 
     if not self._barsWired then
         self:RegisterEvent("START_LOOT_ROLL")
-        SetBlizzardRollsEnabled(false)
+        -- Say so rather than failing quiet. The bug this replaced was a
+        -- suppression call that stopped working and reported nothing, and the
+        -- symptom -- two roll stacks -- reads as a KE defect from the outside.
+        if not SetBlizzardRollsEnabled(false) then
+            KE:Print("Loot Roll: could not silence the default roll windows, so both stacks will show.")
+        end
         self._barsWired = true
     end
 end
