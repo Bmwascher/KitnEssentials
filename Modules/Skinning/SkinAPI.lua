@@ -2425,8 +2425,8 @@ function S.SetSkinFont(face, size, outline)
     EnsureFontInit()
     local changed = false
 
-    -- An empty face means the addon's own font, which is what FONT_FACE already
-    -- holds by default.
+    -- An empty face is a retired marker for the global font. Nothing writes one
+    -- now; the branch resolves it rather than storing it.
     if face ~= nil then
         local resolved = (face == "") and KE:GetGlobalFont() or face
         if resolved ~= S.FONT_FACE then

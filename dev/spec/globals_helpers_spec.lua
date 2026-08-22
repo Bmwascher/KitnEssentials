@@ -671,8 +671,7 @@ describe("KE:GetEffectiveFont", function()
     end)
 
     -- nil, not a face: the value flows into KE:GetFontPath, which resolves an
-    -- unset name through the global font. A literal here pinned every module
-    -- that never chose a face to that literal instead.
+    -- unset name through the global font.
     it("returns nil for a nil table", function()
         assert.is_nil(KE:GetEffectiveFont(nil))
     end)
@@ -701,9 +700,8 @@ describe("KE:StoredFontFace", function()
         KE = L.loadGlobals()
     end)
 
-    -- Why this is a function and not `key ~= SENTINEL and key or nil`: an
-    -- and/or expression can never yield nil, so that form would write the
-    -- sentinel string into the profile as though it were a font name.
+    -- Locks the nil return; KE:StoredFontFace carries why it cannot be an
+    -- and/or expression.
     it("stores nil for the sentinel", function()
         assert.is_nil(KE:StoredFontFace(KE.FONT_FOLLOW_GLOBAL))
     end)
@@ -754,10 +752,8 @@ describe("KE:AddFollowGlobalFont", function()
         assert.equals("Use Global Font (GoodFont)", list[KE.FONT_FOLLOW_GLOBAL])
     end)
 
-    -- Shape detection, asserted on SHAPE and not merely on presence. Writing a
-    -- hash key onto an array-shaped list is invisible to the dropdown: it walks
-    -- the array part only, so the entry never renders and the selected sentinel
-    -- has no label to draw from.
+    -- Asserted on SHAPE, not merely on presence; KE:AddFollowGlobalFont carries
+    -- why a hash key on an array-shaped list never renders.
     describe("array-shaped lists", function()
         it("inserts at index 1, ahead of the sorted faces", function()
             local list = KE:AddFollowGlobalFont(arrayList())

@@ -100,10 +100,6 @@ end
 -- picking it stores nil, and an unset face is what resolves to the global font.
 KE.FONT_FOLLOW_GLOBAL = "*global*"
 
--- Inserts the follow-the-global entry into an LSM font list and returns the
--- list. Pass effectiveName when the pick inherits from something other than the
--- profile-wide font, so the label names what will actually be used.
---
 -- Font lists come in two shapes. An ARRAY of { key =, text = } entries becomes
 -- the dropdown's ordered key list, so the entry has to go at the FRONT --
 -- callers sort before calling, and appending would bury it under the Zs. A HASH
