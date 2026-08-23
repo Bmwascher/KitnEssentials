@@ -133,6 +133,7 @@ local Defaults = {
             Position = DefaultPosition(0, -10),
             ColorMode = "custom",
             Color = { 0, 1, 0.169, 1 },
+            Shape = "cross",                  -- "cross" or "circle"
             AlwaysShow = false,               -- Show out of combat too, not only in combat
             Thickness = 22,
             Outline = true,

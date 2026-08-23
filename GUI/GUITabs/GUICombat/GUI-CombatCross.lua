@@ -102,6 +102,17 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     })
     row2b:AddWidget(alwaysShowCheck, 0.5)
     manager:Register(alwaysShowCheck, "all")
+
+    local shapeDropdown = GUIFrame:CreateDropdown(row2b, "Shape", {
+        options = {
+            { key = "cross",  text = "Cross" },
+            { key = "circle", text = "Circle" },
+        },
+        value = db.Shape or "cross",
+        callback = function(key) db.Shape = key; ApplySettings() end,
+    })
+    row2b:AddWidget(shapeDropdown, 0.5)
+    manager:Register(shapeDropdown, "all")
     card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()

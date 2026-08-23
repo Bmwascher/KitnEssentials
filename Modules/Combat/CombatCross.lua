@@ -26,6 +26,16 @@ local C_Spell = C_Spell
 local UnitExists = UnitExists
 
 local FONT_SIZE_MULTIPLIER = 2
+
+-- One character per shape. "\226\128\162" is U+2022 BULLET, in the General
+-- Punctuation block, which is present in far more fonts than U+25CF BLACK
+-- CIRCLE -- that one renders as a missing-glyph box. This module draws through
+-- whatever font the user picked, so the glyph has to survive all of them.
+local SHAPE_GLYPH = {
+    cross  = "+",
+    circle = "\226\128\162",
+}
+
 local RANGE_UPDATE_THROTTLE = 0.1
 local rangeUpdateElapsed = 0
 
@@ -226,7 +236,7 @@ function CC:CreateFrame()
     self.frame:SetFrameLevel(100)
     self.frame:Hide()
 
-    -- Create cross text ("+" rendered at large font size)
+    -- Shape glyph rendered at large font size.
     local fontSize = (self.db.Thickness or 22) * FONT_SIZE_MULTIPLIER
     local fontPath = KE:GetFontPath(self.db.FontFace) or KE.FONT
 
@@ -235,7 +245,7 @@ function CC:CreateFrame()
     -- The Outline toggle used to build a shadow halo around the cross. That
     -- renderer is gone, so it maps to the font's own outline flag.
     self.text:SetFont(fontPath, fontSize, self.db.Outline and "OUTLINE" or "")
-    self.text:SetText("+")
+    self.text:SetText(SHAPE_GLYPH[self.db.Shape] or SHAPE_GLYPH.cross)
 
     self.text:ClearAllPoints()
     self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
@@ -254,6 +264,7 @@ function CC:ApplySettings()
     local fontSize = (self.db.Thickness or 22) * FONT_SIZE_MULTIPLIER
     local fontPath = KE:GetFontPath(self.db.FontFace) or KE.FONT
     self.text:SetFont(fontPath, fontSize, self.db.Outline and "OUTLINE" or "")
+    self.text:SetText(SHAPE_GLYPH[self.db.Shape] or SHAPE_GLYPH.cross)
 
     -- Apply color
     local r, g, b, a = self:GetColor()
