@@ -838,6 +838,21 @@ local Defaults = {
             Color = { 1, 0.82, 0, 1 },
         },
 
+        HavocTracker = {
+            Enabled = false,
+            Strata = "MEDIUM",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            FontFace = nil,
+            FontOutline = "OUTLINE",
+            WarningText = "TARGET HAS HAVOC",
+            WarningColor = { 1, 0.1, 0.1, 1 },
+            WarningFontSize = 24,
+            -- The keys here are AnchorFrom/AnchorTo/XOffset/YOffset. Any other
+            -- spelling falls back to CENTER/CENTER/0/0 without an error.
+            WarningPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 180 },
+        },
+
         PotionReady = {
             Enabled = false,
             InstanceOnly = true,
