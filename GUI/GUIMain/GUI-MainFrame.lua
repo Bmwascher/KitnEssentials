@@ -47,7 +47,11 @@ GUIFrame.sidebarConfig = {
             { id = "PlayerAbsorbs", text = "Player Absorbs", keywords = { "absorb", "shield", "heal absorb", "necrotic", "pw:s", "power word shield", "damage absorb", "overlay" } },
             { id = "CombatCross",   text = "Player Crosshair", keywords = { "crosshair", "cross", "aim", "reticle", "player" } },
             { id = "RangeChecker",  text = "Range Display", keywords = { "range", "distance", "yards", "melee", "ranged" } },
-            { id = "StatusTexts",   text = "Status Texts", keywords = { "status", "status texts", "texts", "pet", "hunter", "warlock", "demon", "summon", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "evoker", "presence", "hunters mark", "mark", "marksman", "beast mastery", "survival", "healer", "mana", "oom", "raid", "dungeon", "party" } },
+            -- Search matches the whole query as ONE literal substring of the
+            -- title or of a single keyword, so a tab label has to appear here
+            -- as a phrase. The four tab labels and the two row titles this
+            -- page absorbed are all spelled out, apostrophe variants included.
+            { id = "StatusTexts",   text = "Status Texts", keywords = { "status", "status texts", "texts", "pet", "pet status texts", "hunter", "warlock", "demon", "summon", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "evoker", "presence", "hunters mark", "hunter's mark", "mark missing", "mark", "marksman", "beast mastery", "survival", "healer", "healer mana", "mana", "oom", "raid", "dungeon", "party" } },
         },
     },
     {
