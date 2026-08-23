@@ -12,10 +12,13 @@
 -- restricted outright.
 --
 -- It is text rather than an icon because an icon cannot be made to work. The
--- engine's aura button can report its own dimensions as secret numbers, so we
--- may not size it, and a texture stretched to fill it has nothing to fill. A
--- FontString on a single centre anchor needs no size at all: when a measurement
--- can be secret, find the layout that needs no measurement.
+-- engine's aura button becomes access-restricted while the bound unit's aura
+-- data is secret, so a Get or Set call on it can be refused outright rather
+-- than returning anything -- which is why every touch of it after AddAuraSlot
+-- returns is pcall'd rather than issecretvalue-guarded. A texture stretched to
+-- fill it therefore had nothing to fill. A FontString on a single centre
+-- anchor needs no size at all: when a measurement can be refused, find the
+-- layout that needs no measurement.
 
 ---@class KE
 local KE = select(2, ...)
@@ -245,7 +248,6 @@ function HT:Deactivate()
     self:UnregisterEvent("PLAYER_TARGET_CHANGED")
     if self.container then
         self.container:Hide()
-        pcall(self.container.SetUnit, self.container, nil)
     end
 end
 
