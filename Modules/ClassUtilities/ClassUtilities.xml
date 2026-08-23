@@ -10,6 +10,7 @@
     <Script file="EbonMightTracker.lua" />
     <Script file="PrescienceTracker.lua" />
     <Script file="HuntersMark.lua" />
+    <Script file="HavocTracker.lua" />
     <Script file="SpellAlerts.lua" />
     <Script file="BurningRush.lua" />
     <Script file="PIMacroBuilder.lua" />
