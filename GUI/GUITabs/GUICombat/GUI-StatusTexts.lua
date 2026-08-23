@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-StatusTexts.lua                                     ║
--- ║  GUI: Status Texts — four readout modules on one page.   ║
+-- ║  GUI: Status Texts — five readout modules on one page.   ║
 -- ║  The per-module builders stay registered under their own ║
 -- ║  ids and are dispatched here as tabs.                    ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -14,4 +14,5 @@ GUIFrame:RegisterTabbedContent("StatusTexts", {
     { id = "StanceText",    label = "Missing Forms" },
     { id = "HuntersMark",   label = "Hunter's Mark" },
     { id = "HealerMana",    label = "Healer Mana" },
+    { id = "HavocTracker",  label = "Havoc Tracker" },
 })

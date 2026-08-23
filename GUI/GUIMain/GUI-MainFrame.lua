@@ -51,7 +51,7 @@ GUIFrame.sidebarConfig = {
             -- title or of a single keyword, so a tab label has to appear here
             -- as a phrase. The four tab labels and the two row titles this
             -- page absorbed are all spelled out, apostrophe variants included.
-            { id = "StatusTexts",   text = "Status Texts", keywords = { "status", "status texts", "texts", "pet", "pet status texts", "hunter", "warlock", "demon", "summon", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "evoker", "presence", "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival", "healer", "healer mana", "mana", "oom", "raid", "dungeon", "party" } },
+            { id = "StatusTexts",   text = "Status Texts", keywords = { "status", "status texts", "texts", "pet", "pet status texts", "hunter", "warlock", "demon", "summon", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "evoker", "presence", "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival", "healer", "healer mana", "mana", "oom", "raid", "dungeon", "party", "havoc", "havoc tracker", "havoc warning", "target has havoc", "destruction", "destro", "destruction warlock", "warlock havoc" } },
         },
     },
     {
