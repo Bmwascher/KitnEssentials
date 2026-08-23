@@ -64,7 +64,7 @@ local DISPEL_SPELL_IDS = {
 -- What the countdown tracks, in priority order. No class knows two of these,
 -- so the first spellbook hit is the answer.
 --
--- The taunts are NOT described per tank spec, because the tank role is not the
+-- The taunts are NOT listed per specialization, because the tank role is not the
 -- gate: Hand of Reckoning, Dark Command, Provoke and Growl are known by their
 -- class's damage and healer specs too, and a Retribution Paladin taunting off
 -- a healer wants the same cooldown a Protection one does.
@@ -1028,25 +1028,7 @@ local _tauntFollowCursor = nil
 -- duration object's own booleans (in Midnight those are secret and throw on a
 -- raw truth test). We always call SetCooldownFromDurationObject, which is
 -- taint-safe and renders nothing at zero, so a ready taunt simply draws no text.
-local function _tauntOnEvent(self, event, unit)
-    if event == "PLAYER_ENTERING_WORLD" then
-        C:_TauntEvaluateGate()
-        return
-    end
-    -- PLAYER_SPECIALIZATION_CHANGED fires for ANY unit, not just the player
-    -- (UnitDocumentation.lua) -- filter out groupmates' spec swaps.
-    if event == "PLAYER_SPECIALIZATION_CHANGED" then
-        if unit and unit ~= "player" then return end
-        C:_TauntEvaluateGate()
-        return
-    end
-    -- SPELLS_CHANGED re-resolves the tracked spell without re-running the gate:
-    -- the spellbook can populate after PLAYER_ENTERING_WORLD, and without this
-    -- a login that lands before the spellbook is ready leaves the countdown
-    -- permanently blank. Undebounced on purpose -- see sanctioned deviation 3.
-    if event == "SPELLS_CHANGED" then
-        C:_TauntFindSpell()
-    end
+local function _tauntOnEvent(self)
     -- Don't clobber an active test preview. SPELL_UPDATE_COOLDOWN fires from
     -- background sources and would otherwise wipe the preview countdown.
     if C._tauntPreviewActive then return end
@@ -1099,14 +1081,15 @@ function C:CreateTauntSatellite()
     self.tauntFrame = tf
 end
 
+-- Only the cooldown event lives on the frame. Everything that decides WHETHER
+-- the satellite should exist is registered on the module instead, because this
+-- frame's events are unregistered whenever the gate turns the satellite off --
+-- a gate-in event registered here could never fire to turn it back on.
 function C:_AttachTauntScripts()
     local tf = self.tauntFrame
     if not tf then return end
     tf:UnregisterAllEvents()
     tf:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-    tf:RegisterEvent("SPELLS_CHANGED")
-    tf:RegisterEvent("PLAYER_ENTERING_WORLD")
-    tf:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 end
 
 function C:_DetachTauntScripts()
@@ -1156,7 +1139,6 @@ function C:ApplyTauntSatellite()
     if not self.tauntFrame then self:CreateTauntSatellite() end
     self:_AttachTauntScripts()
     applyLook()
-    self:_TauntFindSpell()
     self.tauntFrame:Show()
     -- Render the CURRENT cooldown immediately. Without this the frame shows
     -- nothing until the next SPELL_UPDATE_COOLDOWN happens to fire, so a taunt
@@ -1164,33 +1146,25 @@ function C:ApplyTauntSatellite()
     -- sibling omits this and gets away with it only because
     -- SPELL_UPDATE_COOLDOWN fires so often.
     if self.tauntFrame.cooldown then
-        _tauntOnEvent(self.tauntFrame, "SPELL_UPDATE_COOLDOWN")
+        _tauntOnEvent(self.tauntFrame)
     end
 end
 
--- File-local, declared right above its only caller so luacheck's unused-function
--- warning stays quiet.
-local function _isTankSpec()
-    local getSpec = C_SpecializationInfo.GetSpecialization
-    if not getSpec then return false end
-    local specIndex = getSpec()
-    if not specIndex then return false end
-    local getRole = _G.GetSpecializationRole
-    if not getRole then return false end
-    return getRole(specIndex) == "TANK"
-end
-
--- Tank-spec gating. The satellite stays configured but only activates its frame,
--- cursor follow and cooldown tracking on tank specs. PLAYER_SPECIALIZATION_CHANGED
--- and PLAYER_ENTERING_WORLD re-evaluate, so it gates in and out on a spec swap.
+-- Spellbook gating. The satellite stays configured but only activates its
+-- frame, cursor follow and cooldown tracking when the current spec actually
+-- has one of the tracked spells. Asking the spellbook covers every spec that
+-- has one without a per-spec list to keep in step with Blizzard, and it turns
+-- itself off on a spec that does not.
+-- PLAYER_SPECIALIZATION_CHANGED and PLAYER_ENTERING_WORLD re-evaluate, so it
+-- gates in and out on a spec swap.
 function C:_TauntEvaluateGate()
     if not self.db or not self.db.Taunt then return end
-    if _isTankSpec() then
+    self:_TauntFindSpell()
+    if self._tauntTrackedSpellID then
         self._tauntActive = true
         self:ApplyTauntSatellite()
     else
         self._tauntActive = false
-        self._tauntTrackedSpellID = nil
         -- Don't tear down visuals while a preview is showing.
         if self._tauntPreviewActive then return end
         if self.tauntFrame then
@@ -1216,11 +1190,28 @@ function C:_TauntSpecChanged(_, unit)
     self:UpdateVisibility()
 end
 
+-- PLAYER_ENTERING_WORLD serves the whole module, not just the taunt satellite:
+-- the gate runs first so a spellbook that is ready by now is picked up, then
+-- visibility is decided for every satellite.
+function C:_OnEnteringWorld()
+    self:_TauntEvaluateGate()
+    self:UpdateVisibility()
+end
+
+-- The spellbook can populate after the world does, and it changes again on
+-- every talent apply. Re-running the whole gate rather than only the lookup is
+-- deliberate -- "found a spell" IS the gate's answer now.
+function C:_TauntSpellsChanged()
+    self:_TauntEvaluateGate()
+    self:UpdateVisibility()
+end
+
 -- Test mode: force-show the taunt countdown for 7 seconds so users can verify
--- anchor/offset/font settings without being on a tank spec or waiting for a real
--- cooldown. Uses plain numbers with SetCooldown (not a secret duration object),
--- so it is taint-safe. Sets _tauntPreviewActive so ApplyTauntSatellite re-applies
--- visuals instead of hiding when sliders move during the preview window.
+-- anchor/offset/font settings without waiting for a real cooldown, or on a
+-- spec that tracks nothing. Uses plain numbers with SetCooldown (not a secret
+-- duration object), so it is taint-safe. Sets _tauntPreviewActive so
+-- ApplyTauntSatellite re-applies visuals instead of hiding when sliders move
+-- during the preview window.
 function C:TauntPreview()
     if not self.tauntFrame then self:CreateTauntSatellite() end
     if not self.tauntFrame or not self.tauntFrame.cooldown then return end
@@ -1438,12 +1429,17 @@ function C:OnEnable()
     self:ApplyCursorSettings()
 
     -- Module-level visibility events (all global state changes)
-    self:RegisterEvent("PLAYER_ENTERING_WORLD",  "UpdateVisibility")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD",  "_OnEnteringWorld")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA",  "UpdateVisibility")
     self:RegisterEvent("PLAYER_REGEN_DISABLED",  "UpdateVisibility")
     self:RegisterEvent("PLAYER_REGEN_ENABLED",   "UpdateVisibility")
     self:RegisterEvent("GROUP_ROSTER_UPDATE",    "UpdateVisibility")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "_TauntSpecChanged")
+    -- Stays registered for the module's whole life, including while the taunt
+    -- satellite is gated off: it is the only thing that can tell us a tracked
+    -- spell has appeared, and a listener that dies with the satellite can
+    -- never bring it back.
+    self:RegisterEvent("SPELLS_CHANGED", "_TauntSpellsChanged")
 
     -- Initial visibility decision for cursor (before satellites exist)
     self:UpdateVisibility()

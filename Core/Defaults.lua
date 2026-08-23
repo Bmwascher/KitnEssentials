@@ -249,10 +249,10 @@ local Defaults = {
                 InstanceOnly       = false,
             },
 
-            -- Taunt cooldown countdown at the cursor. Tank specs only --
-            -- C:_TauntEvaluateGate activates it on a tank spec and tears it
-            -- down otherwise, so Enabled=true still shows nothing on a healer.
-            -- Ships OFF for that reason.
+            -- Taunt cooldown countdown at the cursor. Gated on the spellbook --
+            -- C:_TauntEvaluateGate activates it on any spec that knows one of
+            -- the tracked spells and tears it down otherwise, so Enabled=true
+            -- still shows nothing on a spec that knows none. Ships OFF.
             Taunt = {
                 Enabled            = false,
                 Attached           = true,

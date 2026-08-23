@@ -987,14 +987,10 @@ function L.loadCursor(overrides)
     _G.C_SpellBook = overrides.C_SpellBook or {
         IsSpellInSpellBook = function() return false end,
     }
-    -- Cursor.lua reads C_SpecializationInfo.GetSpecialization plus the still
-    -- current GetSpecializationRole. installMock's namespace delegates to the
-    -- global below, so overriding either one drives the gate. With neither,
-    -- _isTankSpec returns false and the tank-positive test FAILS -- it does
-    -- not pass vacuously.
+    -- The taunt gate reads the SPELLBOOK, not the role. The loader's default
+    -- IsSpellInSpellBook returns false, so a gate-positive test FAILS without
+    -- an override rather than passing vacuously.
     _G.GetSpecialization = overrides.GetSpecialization or function() return 1 end
-    _G.GetSpecializationRole = overrides.GetSpecializationRole
-        or function() return "TANK" end
     -- The taunt gate reads the spec ID through C_SpecializationInfo, whose
     -- mock delegates to this global at call time. Without it every
     -- spec-gated entry in TRACKED_SPELLS is skipped, so a test asserting

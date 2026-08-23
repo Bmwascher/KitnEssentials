@@ -138,34 +138,60 @@ describe("Cursor module", function()
         end)
     end)
 
-    describe("tank gate", function()
-        it("activates on a tank spec", function()
+    describe("spellbook gate", function()
+        it("activates when the spellbook has a tracked spell", function()
             local C = loader.loadCursor({
-                GetSpecializationRole = function() return "TANK" end,
                 C_SpellBook = { IsSpellInSpellBook = function(id) return id == 355 end },
             })
             C:_TauntEvaluateGate()
             assert.is_true(C._tauntActive)
         end)
 
-        it("stays inactive on a damage spec", function()
+        it("stays inactive when the spellbook has none", function()
             local C = loader.loadCursor({
-                GetSpecializationRole = function() return "DAMAGER" end,
-                C_SpellBook = { IsSpellInSpellBook = function(id) return id == 355 end },
+                C_SpellBook = { IsSpellInSpellBook = function() return false end },
             })
             C:_TauntEvaluateGate()
             assert.is_false(C._tauntActive)
         end)
 
-        it("deactivates when the player swaps off a tank spec", function()
-            local role = "TANK"
+        it("activates on a damage spec that knows a taunt", function()
+            -- Retribution Paladin: the case the role gate refused. The role
+            -- override is what makes this FAIL against the old gate in Step 3;
+            -- Step 9 removes it once nothing reads the role any more.
             local C = loader.loadCursor({
-                GetSpecializationRole = function() return role end,
-                C_SpellBook = { IsSpellInSpellBook = function(id) return id == 355 end },
+                GetSpecializationInfo = function() return 70 end,
+                C_SpellBook = { IsSpellInSpellBook = function(id) return id == 62124 end },
             })
             C:_TauntEvaluateGate()
             assert.is_true(C._tauntActive)
-            role = "HEALER"
+        end)
+
+        it("deactivates when a spec swap loses the spell", function()
+            local known = 703
+            local C = loader.loadCursor({
+                GetSpecializationInfo = function() return 259 end,
+                C_SpellBook = { IsSpellInSpellBook = function(id) return id == known end },
+            })
+            C:_TauntEvaluateGate()
+            assert.is_true(C._tauntActive)
+            known = nil
+            C:_TauntEvaluateGate()
+            assert.is_false(C._tauntActive)
+        end)
+
+        it("deactivates when a spec swap makes the spell not want the cursor", function()
+            -- Assassination to Outlaw. Garrote is still in the spellbook; the
+            -- spec list is the only thing that can turn this off, so a gate
+            -- that only asked the spellbook would wrongly stay active.
+            local spec = 259
+            local C = loader.loadCursor({
+                GetSpecializationInfo = function() return spec end,
+                C_SpellBook = { IsSpellInSpellBook = function(id) return id == 703 end },
+            })
+            C:_TauntEvaluateGate()
+            assert.is_true(C._tauntActive)
+            spec = 260
             C:_TauntEvaluateGate()
             assert.is_false(C._tauntActive)
         end)
@@ -174,30 +200,69 @@ describe("Cursor module", function()
     describe("repaired paths", function()
         it("re-resolves the spell when the spellbook populates late", function()
             local ready = false
-            local C, _, seams = loader.loadCursor({
+            local C = loader.loadCursor({
                 C_SpellBook = {
                     IsSpellInSpellBook = function(id) return ready and id == 6795 end,
                 },
             })
-            C:_TauntFindSpell()
-            assert.is_nil(C._tauntTrackedSpellID)
+            C:_TauntEvaluateGate()
+            assert.is_false(C._tauntActive)
             ready = true
-            -- A REAL frame is required: after re-resolving, the handler falls
-            -- through to the cooldown branch and calls self.cooldown:Clear().
-            -- Passing a bare table errors there instead of asserting.
-            C:CreateTauntSatellite()
-
-            -- Pin the REGISTRATION as well as the handler branch. Invoking the
-            -- seam directly proves the branch works but would still pass if
-            -- _AttachTauntScripts never registered the event, leaving the whole
-            -- path dead in game.
-            local registered = {}
-            C.tauntFrame.RegisterEvent = function(_, ev) registered[ev] = true end
-            C:_AttachTauntScripts()
-            assert.is_true(registered["SPELLS_CHANGED"])
-
-            seams.tauntOnEvent(C.tauntFrame, "SPELLS_CHANGED")
+            C.UpdateVisibility = function() end
+            C:_TauntSpellsChanged()
             assert.equals(6795, C._tauntTrackedSpellID)
+            assert.is_true(C._tauntActive)
+        end)
+
+        it("keeps the spellbook listener alive while gated off", function()
+            -- The regression this whole restructure exists to prevent: if the
+            -- gate-in event were registered on the satellite frame, the
+            -- inactive gate's _DetachTauntScripts would unregister it and the
+            -- feature could never come back.
+            local C = loader.loadCursor({
+                C_SpellBook = { IsSpellInSpellBook = function() return false end },
+            })
+            -- Every stub OnEnable needs, given literally. The loader's noop
+            -- frame returns nil from CreateTexture, so CreateCursorFrame
+            -- cannot run here; these five replace exactly what it touches.
+            local registered, unregistered = {}, {}
+            C.cursorFrame = { SetScript = function() end }
+            C.CreateCursorFrame = function() end
+            C.ApplyCursorSettings = function() end
+            C.UpdateVisibility = function() end
+            C.RegisterEvent = function(_, ev, handler) registered[ev] = handler end
+            C.UnregisterEvent = function(_, ev) unregistered[ev] = true end
+
+            -- A tauntFrame MUST exist, or the negative gate skips its whole
+            -- `if self.tauntFrame` teardown branch and this test proves
+            -- nothing: the detachment it is supposed to survive never runs.
+            -- The frame's teardown calls are RECORDED, not swallowed. Stubbed
+            -- as no-ops, a gate that merely set _tauntActive = false without
+            -- tearing the satellite down would satisfy every assertion below,
+            -- and this test would prove only half of what it claims.
+            local frameUnregisterAll, frameHidden = 0, 0
+            C.tauntFrame = {
+                UnregisterAllEvents = function() frameUnregisterAll = frameUnregisterAll + 1 end,
+                SetScript = function() end,
+                Hide = function() frameHidden = frameHidden + 1 end,
+                cooldown = { Clear = function() end },
+            }
+
+            C:OnEnable()
+            -- The HANDLER NAME, not merely that something was registered: a
+            -- registration pointing at the wrong method would satisfy a
+            -- truthiness check and still be dead.
+            assert.equals("_TauntSpellsChanged", registered["SPELLS_CHANGED"])
+
+            C:_TauntEvaluateGate()
+            assert.is_false(C._tauntActive)
+            -- The satellite really was torn down...
+            assert.is_true(frameUnregisterAll > 0)
+            assert.is_true(frameHidden > 0)
+            -- ...and the MODULE listener survived that teardown. Only the two
+            -- together are the regression this restructure exists to prevent.
+            assert.is_nil(unregistered["SPELLS_CHANGED"])
+            assert.equals("_TauntSpellsChanged", registered["SPELLS_CHANGED"])
         end)
 
         it("renders the current cooldown as soon as the satellite applies", function()
@@ -215,7 +280,7 @@ describe("Cursor module", function()
                 applied = applied + 1
             end
             C.tauntFrame.cooldown.Clear = function() end
-            C:ApplyTauntSatellite()
+            C:_TauntEvaluateGate()
             assert.is_true(applied > 0)
         end)
 
@@ -250,10 +315,9 @@ describe("Cursor module", function()
             C:TauntPreview()
             assert.equals(1, #pending)
             C:OnDisable()
-            -- Count gate calls rather than reading _tauntActive. The loader
-            -- defaults to a TANK role, so a wrongly-executed callback would run
-            -- the gate's tank branch and SET _tauntActive true -- making an
-            -- is_true assertion pass on both the correct and the broken path.
+            -- Count gate calls rather than reading _tauntActive. The flag's
+            -- value is not the question here; whether the orphaned callback
+            -- ran at all is, and only a call count answers that.
             local gateCalls = 0
             C._TauntEvaluateGate = function() gateCalls = gateCalls + 1 end
             pending[1]()
