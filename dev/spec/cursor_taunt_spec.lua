@@ -156,9 +156,7 @@ describe("Cursor module", function()
         end)
 
         it("activates on a damage spec that knows a taunt", function()
-            -- Retribution Paladin: the case the role gate refused. The role
-            -- override is what makes this FAIL against the old gate in Step 3;
-            -- Step 9 removes it once nothing reads the role any more.
+            -- Retribution Paladin: the case the old role gate refused.
             local C = loader.loadCursor({
                 GetSpecializationInfo = function() return 70 end,
                 C_SpellBook = { IsSpellInSpellBook = function(id) return id == 62124 end },
