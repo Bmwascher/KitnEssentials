@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.5
+
+### Settings Sidebar
+- Pet Status Texts, Missing Forms, Hunter: Mark Missing and Healer Mana are now
+  four tabs on one Status Texts page at the bottom of the Combat section. They
+  were four separate rows spread across three sections
+- Searching the sidebar for any of those names still finds the page, including
+  the older names "Pet Status Texts" and "Hunter: Mark Missing"
+- Character Panel has its own row in the Skinning section, under Dark Theme. It
+  used to be buried as the fourth tab inside Dark Theme's Elements row
+- With ElvUI handling the skinning, Dark Theme now shows only its General tab.
+  The Elements tab is gone there because everything left on it configures a skin
+  that stands down for ElvUI. Character Panel stays available on its own row
+
+### Removed
+- Innervate Tracker and Maintenance Tracker are gone. Healer Mana, which shared
+  their page, moved to the Status Texts page above. If you had either enabled,
+  their saved settings stay in your profile but nothing reads them
+
 ## v4.3.4
 
 ### Fonts
