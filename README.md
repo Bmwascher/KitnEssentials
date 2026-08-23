@@ -65,6 +65,7 @@ The home page also carries the general settings: minimap button, login message, 
 | Priest: PI Macro | Dynamically builds a Power Infusion macro with trinkets, racials, and potions |
 | Totem Tracker | Bar tracker for active totems with destroy buttons, configurable layout, and edit-mode integration. Tracks **all four Augmentation Evoker dupes** with independent timers — the default UI shows only two |
 | Warlock: Burning Rush | Glowing icon reminder while Burning Rush is active |
+| Warlock: Havoc Tracker | On-screen warning when your own Havoc is on the target you are already hitting. Destruction only |
 
 ## QoL
 

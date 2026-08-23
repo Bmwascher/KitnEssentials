@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.6
+
+### Havoc Tracker (new, Destruction Warlock)
+- A new module warns you when your own Havoc is sitting on the target you are
+  already hitting, which wastes it. It shows a large text on screen, defaulting
+  to "Havoc Target", and hides again when you switch to a clean target
+- Off by default. Turn it on under Combat, Status Texts, Havoc Tracker, where it
+  is the fifth tab. You can set the text, colour, font, size and position
+- The position is draggable in `/kes edit` as "Havoc Warning"
+- Other classes and other Warlock specs see nothing at all, not even a mover
+
 ## v4.3.5
 
 ### Settings Sidebar
