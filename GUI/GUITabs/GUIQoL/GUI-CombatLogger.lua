@@ -84,10 +84,10 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
 
         local row
         for i, def in ipairs(defs) do
-            -- Index at which the final row starts. A plain `#defs - perRow`
-            -- only lands there when the last row is full, so a table whose
-            -- count is not a multiple of perRow would give the row above the
-            -- last one the last row's height and spacing.
+            -- The final row holds ((#defs - 1) % perRow) + 1 items, short of
+            -- perRow whenever the count does not divide evenly. A plain
+            -- `#defs - perRow` counts back a whole row, so on a short final
+            -- row it reaches into the row above when there is one.
             local isLastRow = i > #defs - ((#defs - 1) % perRow + 1)
             local rowHeight = isLastRow and Theme.rowHeightLast or Theme.rowHeight
             if not row then

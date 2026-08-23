@@ -3,7 +3,8 @@
 -- variables: ScenarioTorghast became Scenario, and DisableACLPrompt became
 -- PromptAdvanced with its polarity flipped. Both reads happen on the RAW saved
 -- variables before AceDB:New, because AceDB strips default-equal leaves at
--- logout and an absent key is the only evidence that the user never touched it.
+-- logout and re-supplies defaults on read: after that, a key absent from the
+-- saved file and one holding the new default are indistinguishable.
 local helpers = require("dev.spec._helpers")
 
 local RECORD = "KeyRenames"
