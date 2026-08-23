@@ -672,7 +672,7 @@ local Defaults = {
         CombatLogger = {
             Enabled = false,
             DelayStop = true,
-            DisableACLPrompt = false,
+            PromptAdvanced = true,
             QuietMode = false,
             -- Dungeons
             DungeonNormal = false,
@@ -694,7 +694,7 @@ local Defaults = {
             PvPSoloShuffle = false,
             PvPWarGame = false,
             -- Scenarios
-            ScenarioTorghast = false,
+            Scenario = false,
         },
 
         DragonRiding = {

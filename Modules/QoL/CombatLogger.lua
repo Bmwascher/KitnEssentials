@@ -90,13 +90,20 @@ function CL:EnableAdvanced()
     end
 end
 
+-- Split from CheckACL so the rule is testable without driving a popup.
+-- Absent means PROMPT: a user who has never seen the setting has not opted out
+-- of it.
+function CL:_ShouldPromptAdvanced()
+    return self.db.PromptAdvanced ~= false
+end
+
 -- Asks, and answers "yes" either way. Someone who turned the prompt off has not
 -- said they want logging disabled, and a basic log beats no log -- accepting
 -- the prompt later cycles the running log, which is what makes that ordering
 -- safe.
 function CL:CheckACL()
     if self:IsAdvanced() then return true end
-    if not self.db.DisableACLPrompt then
+    if self:_ShouldPromptAdvanced() then
         StaticPopup_Show("KE_COMBATLOGGER_ACL_PROMPT")
     end
     return true
@@ -224,8 +231,7 @@ function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
         return db.PvPRegularBG == true, "a battleground"
 
     elseif instanceType == "scenario" then
-        if difficultyID == 167 then return db.ScenarioTorghast == true, "Torghast" end
-        return false
+        return db.Scenario == true, "a scenario"
     end
 
     return false

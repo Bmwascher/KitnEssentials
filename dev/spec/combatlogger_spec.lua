@@ -15,7 +15,6 @@ describe("CombatLogger arena classification", function()
             Enabled = true,
             QuietMode = true,
             DelayStop = false,
-            DisableACLPrompt = true,
             PvPRatedArena = false,
             PvPArenaSkirmish = false,
             PvPSoloShuffle = false,
@@ -139,7 +138,7 @@ describe("CombatLogger arena classification", function()
             C_CVar = { GetCVar = function() return "0" end, SetCVar = function() end },
         })
         CL.isLogging = false
-        CL.db = db({ DisableACLPrompt = false, PvPRatedArena = true })
+        CL.db = db({ PromptAdvanced = true, PvPRatedArena = true })
         rec.pvp.ratedArena = true
         CL:CheckArenaLogging()
         assert.is_true(rec.logging)
@@ -151,7 +150,7 @@ describe("CombatLogger arena classification", function()
             C_CVar = { GetCVar = function() return "0" end, SetCVar = function() end },
         })
         CL.isLogging = false
-        CL.db = db({ DisableACLPrompt = true, PvPRatedArena = true })
+        CL.db = db({ PromptAdvanced = false, PvPRatedArena = true })
         rec.pvp.ratedArena = true
         CL:CheckArenaLogging()
         assert.is_true(rec.logging)
@@ -190,6 +189,60 @@ describe("CombatLogger arena classification", function()
         CL.db = db()
         CL:EnableAdvanced()
         assert.equals(0, #written)
+    end)
+
+    describe("scenario logging", function()
+        it("logs a Torghast scenario when Scenario is on", function()
+            CL.db = db({ Scenario = true })
+            local should, label = CL:ShouldLog("scenario", 167, 5)
+            assert.is_true(should)
+            assert.equals("a scenario", label)
+        end)
+
+        it("logs a delve scenario when Scenario is on", function()
+            -- The whole point of the widening: 208 is not 167, and the old
+            -- rule returned false for it without consulting any setting.
+            CL.db = db({ Scenario = true })
+            local should, label = CL:ShouldLog("scenario", 208, 5)
+            assert.is_true(should)
+            assert.equals("a scenario", label)
+        end)
+
+        it("logs a scenario of unknown difficulty when Scenario is on", function()
+            CL.db = db({ Scenario = true })
+            assert.is_true((CL:ShouldLog("scenario", nil, nil)))
+        end)
+
+        it("refuses every scenario when Scenario is off", function()
+            CL.db = db({ Scenario = false })
+            assert.is_false((CL:ShouldLog("scenario", 167, 5)))
+            assert.is_false((CL:ShouldLog("scenario", 208, 5)))
+        end)
+
+        it("returns a strict false, never nil, for an absent Scenario key", function()
+            -- Callers branch on the first return; nil and false are not the
+            -- same thing to a caller that stores it.
+            CL.db = db({})
+            local should = CL:ShouldLog("scenario", 167, 5)
+            assert.is_false(should)
+        end)
+    end)
+
+    describe("advanced logging prompt", function()
+        it("prompts when PromptAdvanced is absent", function()
+            CL.db = db({})
+            assert.is_true(CL:_ShouldPromptAdvanced())
+        end)
+
+        it("prompts when PromptAdvanced is true", function()
+            CL.db = db({ PromptAdvanced = true })
+            assert.is_true(CL:_ShouldPromptAdvanced())
+        end)
+
+        it("stays silent when PromptAdvanced is false", function()
+            CL.db = db({ PromptAdvanced = false })
+            assert.is_false(CL:_ShouldPromptAdvanced())
+        end)
     end)
 end)
 
