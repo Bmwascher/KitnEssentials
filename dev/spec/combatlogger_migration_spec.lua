@@ -1,10 +1,11 @@
 -- Tier 1: the Combat Logger key-rename migration (Core/Defaults.lua).
 -- Two keys were renamed inside a block that is already live in shipped saved
 -- variables: ScenarioTorghast became Scenario, and DisableACLPrompt became
--- PromptAdvanced with its polarity flipped. Both reads happen on the RAW saved
--- variables before AceDB:New, because AceDB strips default-equal leaves at
--- logout and re-supplies defaults on read: after that, a key absent from the
--- saved file and one holding the new default are indistinguishable.
+-- PromptAdvanced with its polarity flipped. An absent old key means it held its
+-- old default, because the build that wrote the file stripped default-equal
+-- leaves at logout. AceDB fills and strips only what its defaults table
+-- declares, so the retired keys survive it either way: reading them before
+-- AceDB:New is sequencing, not a requirement.
 local helpers = require("dev.spec._helpers")
 
 local RECORD = "KeyRenames"
