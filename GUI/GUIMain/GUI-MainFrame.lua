@@ -119,9 +119,8 @@ GUIFrame.sidebarConfig = {
             -- alwaysEnabled keeps it and Skyriding UI clickable while the
             -- section is greyed for ElvUI.
             -- Dark Theme's General tab carries Color Picker and Raid Control,
-            -- neither of which has an ElvUI gate of its own, and its Elements
-            -- tab nests the Character Screen, which keeps Character Panel's
-            -- non-overlapping features; Skyriding UI is not a skin. Chat and
+            -- neither of which has an ElvUI gate of its own; Character Panel
+            -- and Skyriding UI are not skins and hold their own rows. Chat and
             -- Tooltips carry no exemption because both modules genuinely do
             -- stand down.
             --
@@ -133,6 +132,7 @@ GUIFrame.sidebarConfig = {
                 "color", "colour", "picker", "rgb", "hex", "alpha", "opacity", "swatch", "class color",
                 "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "role", "roles", "tank", "healer", "raid manager", "raid tools", "shared notes", "group",
                 "text", "message", "error", "raid warning", "ui error", "fonts", "replace fonts", "quest text", "objective tracker", "mail", } },
+            { id = "CharacterPanel",     text = "Character Panel", alwaysEnabled = true, keywords = { "character", "panel", "character panel", "character screen", "stats", "item level", "ilvl", "gear", "durability", "inspect", "gems", "sockets", "enchant" } },
             { id = "Chat",               text = "Chat", keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
             { id = "DamageMeter",        text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" }, alwaysEnabled = true },
             { id = "MythicPlusTimer",    text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" }, alwaysEnabled = true },
