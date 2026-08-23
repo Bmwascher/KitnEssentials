@@ -74,7 +74,7 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
     manager:Register(card2, "all")
 
-    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local thicknessSlider = GUIFrame:CreateSlider(row2, "Size", {
         min = 8, max = 72, step = 1,
         value = db.Thickness or 22,
@@ -89,7 +89,20 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     })
     row2:AddWidget(outlineCheck, 0.5)
     manager:Register(outlineCheck, "all")
-    card2:AddRow(row2, Theme.rowHeightLast, 0)
+    card2:AddRow(row2, Theme.rowHeight)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local alwaysShowCheck = GUIFrame:CreateCheckbox(row2b, "Always Show", {
+        value = db.AlwaysShow == true,
+        tooltip = "Keep the crosshair on screen out of combat, not only during a fight.",
+        callback = function(checked)
+            db.AlwaysShow = checked
+            ApplySettings()
+        end,
+    })
+    row2b:AddWidget(alwaysShowCheck, 0.5)
+    manager:Register(alwaysShowCheck, "all")
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 

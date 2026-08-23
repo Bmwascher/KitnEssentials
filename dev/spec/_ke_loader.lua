@@ -1041,6 +1041,70 @@ function L.loadCursor(overrides)
     return C, KE, seams
 end
 
+-- Modules/Combat/CombatCross.lua. The file-scope `local X = X` captures
+-- include C_SpecializationInfo.GetSpecialization and C_Spell, so both must
+-- exist before load or the index throws. Nothing creates a frame at load time
+-- -- CreateFrame only runs from lifecycle methods, which this loader
+-- deliberately does not call, so a spec that needs a frame calls
+-- CC:CreateFrame() itself.
+--
+-- UnitAffectingCombat is UNMANAGED (dev/spec/_wow_mock.lua), so it is assigned
+-- to _G directly; handing it to installMock would silently drop it.
+-- Returns CC, KE.
+function L.loadCombatCross(overrides)
+    overrides = overrides or {}
+    installMock(managedSubset(overrides), {
+        C_Timer = inertTimer(),
+        GetTime = function() return 0 end,
+        InCombatLockdown = function() return false end,
+        CreateFrame = function() return noopFrame() end,
+        UnitExists = function() return true end,
+    })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+
+    _G.C_Spell = overrides.C_Spell or {
+        IsSpellInRange = function() return nil end,
+    }
+    -- Defaults to OUT of combat. A visibility test that expects the cross up
+    -- must say so, either through this override or through AlwaysShow -- it
+    -- cannot pass by inheriting a permissive default.
+    _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
+    _G.GetSpecialization = overrides.GetSpecialization or function() return 1 end
+    _G.GetSpecializationInfo = overrides.GetSpecializationInfo or function() return 73 end
+
+    local profile = {
+        CombatCross = {
+            Enabled = true,
+            Strata = "HIGH",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = {},
+            ColorMode = "custom",
+            Color = { 0, 1, 0.169, 1 },
+            Shape = "cross",
+            AlwaysShow = false,
+            Thickness = 22,
+            Outline = true,
+            RangeColorMeleeEnabled = false,
+            RangeColorRangedEnabled = false,
+            HideWhenInRange = false,
+            OutOfRangeColor = { 1, 0, 0, 1 },
+        },
+    }
+    local KE = {
+        db = { profile = profile },
+        FONT = "Fonts\\Expressway.TTF",
+        GetFontPath = function() return "Fonts\\Expressway.TTF" end,
+        GetAccentColor = function() return 1, 1, 1, 1 end,
+        ApplyFramePosition = function() end,
+    }
+    helpers.loadModule("Modules/Combat/CombatCross.lua", KE)
+    local CC = modules["CombatCross"]
+    CC:UpdateDB()
+    return CC, KE
+end
+
 -- Modules/QoL/SlashCommands.lua. The file guards on a truthy KitnEssentials at
 -- load, which installAddonShim supplies, and it indexes C_CVar at file scope
 -- (SlashCommands.lua), so C_CVar must exist before load. Nothing registers
