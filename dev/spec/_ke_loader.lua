@@ -995,6 +995,14 @@ function L.loadCursor(overrides)
     _G.GetSpecialization = overrides.GetSpecialization or function() return 1 end
     _G.GetSpecializationRole = overrides.GetSpecializationRole
         or function() return "TANK" end
+    -- The taunt gate reads the spec ID through C_SpecializationInfo, whose
+    -- mock delegates to this global at call time. Without it every
+    -- spec-gated entry in TRACKED_SPELLS is skipped, so a test asserting
+    -- one is NOT found passes for the wrong reason. 73 is Protection
+    -- Warrior: a spec in no `specs` table, so the default drives the plain
+    -- taunt entries and nothing else.
+    _G.GetSpecializationInfo = overrides.GetSpecializationInfo
+        or function() return 73 end
     _G.GetCursorPosition = overrides.GetCursorPosition or function() return 0, 0 end
     _G.UnitCastingInfo = overrides.UnitCastingInfo or function() return nil end
     _G.UnitChannelInfo = overrides.UnitChannelInfo or function() return nil end

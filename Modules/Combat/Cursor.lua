@@ -61,15 +61,50 @@ local DISPEL_SPELL_IDS = {
     119905, 213634, 218164, 213644, 2782, 475, 365585, 51886,  -- DPS/Tank dispels
 }
 
--- Taunt spell IDs per tank class (player spellbook). The satellite only
--- activates on tank specs, and each tank class has exactly one of these.
-local TAUNT_SPELL_IDS = {
-    355,    -- Taunt (Warrior - Protection)
-    62124,  -- Hand of Reckoning (Paladin - Protection)
-    56222,  -- Dark Command (Death Knight - Blood)
-    6795,   -- Growl (Druid - Guardian)
-    115546, -- Provoke (Monk - Brewmaster)
-    185245, -- Torment (Demon Hunter - Vengeance)
+-- What the countdown tracks, in priority order. No class knows two of these,
+-- so the first spellbook hit is the answer.
+--
+-- The taunts are NOT described per tank spec, because the tank role is not the
+-- gate: Hand of Reckoning, Dark Command, Provoke and Growl are known by their
+-- class's damage and healer specs too, and a Retribution Paladin taunting off
+-- a healer wants the same cooldown a Protection one does.
+--
+-- Flame Shock and Garrote are not taunts. They ride here because the display
+-- is the same thing -- one cooldown, at the cursor, for the spell the spec
+-- most needs to re-press -- and a satellite apiece for one spell id would be
+-- two of everything for no gain.
+--
+-- `specs` is the exception rather than the rule, and only the two non-taunts
+-- carry one: their sibling specs KNOW the spell and do not want it on the
+-- cursor. A taunt carries no `specs` because the spellbook alone answers
+-- correctly for every one of them -- do not add spec lists there for
+-- symmetry, that is the per-spec table this gate exists to avoid maintaining.
+--
+-- `ids` is a list because a TALENT CAN REPLACE THE SPELL, and the replacement
+-- is what ends up in the spellbook; the base id is then simply absent and a
+-- lookup on it finds nothing, silently. FindSpellOverrideByID resolves
+-- base -> live and covers this generally, so the list is a backstop for
+-- anything it does not answer for.
+local SPEC_ELEMENTAL = 262
+local SPEC_RESTORATION_SHAMAN = 264
+local SPEC_ASSASSINATION = 259
+
+local TRACKED_SPELLS = {
+    { ids = { 355 } },    -- Taunt (Warrior)
+    { ids = { 62124 } },  -- Hand of Reckoning (Paladin)
+    { ids = { 56222 } },  -- Dark Command (Death Knight)
+    { ids = { 6795 } },   -- Growl (Druid)
+    { ids = { 115546 } }, -- Provoke (Monk)
+    { ids = { 185245 } }, -- Torment (Demon Hunter)
+    -- Flame Shock, Elemental and Restoration only. 188389 is the base id;
+    -- 470411 is the live id seen on a bar and appears in no dump, so it is
+    -- carried as a backstop -- if it is ever wrong, the override lookup is
+    -- what will still find the spell and this entry costs nothing.
+    { ids = { 188389, 470411 },
+      specs = { [SPEC_ELEMENTAL] = true, [SPEC_RESTORATION_SHAMAN] = true } },
+    -- Garrote, Assassination only. Outlaw and Subtlety can know it and are
+    -- not waiting on it.
+    { ids = { 703 }, specs = { [SPEC_ASSASSINATION] = true } },
 }
 
 C.CIRCLE_TEXTURES = CIRCLE_TEXTURES
@@ -947,10 +982,39 @@ end
 function C:_TauntFindSpell()
     self._tauntTrackedSpellID = nil
     if not C_SpellBook or not C_SpellBook.IsSpellInSpellBook then return end
-    for _, spellID in ipairs(TAUNT_SPELL_IDS) do
-        if C_SpellBook.IsSpellInSpellBook(spellID) then
-            self._tauntTrackedSpellID = spellID
-            return
+
+    -- Resolved once, and only when an entry actually asks for it: on every
+    -- class but Shaman and Rogue the loop returns before this is needed.
+    local currentSpec
+    local function SpecID()
+        if currentSpec == nil then
+            local getSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization
+            local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo
+            local index = getSpec and getSpec()
+            currentSpec = (index and getInfo and select(1, getInfo(index))) or false
+        end
+        return currentSpec
+    end
+
+    for _, entry in ipairs(TRACKED_SPELLS) do
+        if not entry.specs or entry.specs[SpecID()] == true then
+            for _, id in ipairs(entry.ids) do
+                -- The LIVE id is what carries the cooldown, so resolve the
+                -- talent override first and test that. FindSpellOverrideByID
+                -- answers the id itself when nothing replaces it.
+                local live = C_SpellBook.FindSpellOverrideByID
+                    and C_SpellBook.FindSpellOverrideByID(id) or id
+                if live and live > 0 and C_SpellBook.IsSpellInSpellBook(live) then
+                    self._tauntTrackedSpellID = live
+                    return
+                end
+                -- Belt and braces: where the override lookup answers something
+                -- not in the book, the plain id may still be.
+                if C_SpellBook.IsSpellInSpellBook(id) then
+                    self._tauntTrackedSpellID = id
+                    return
+                end
+            end
         end
     end
 end

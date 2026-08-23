@@ -42,6 +42,100 @@ describe("Cursor module", function()
             C:_TauntFindSpell()
             assert.is_nil(C._tauntTrackedSpellID)
         end)
+
+        it("finds Flame Shock on Elemental", function()
+            local C = loader.loadCursor({
+                GetSpecializationInfo = function() return 262 end,
+                C_SpellBook = {
+                    IsSpellInSpellBook = function(id) return id == 188389 end,
+                },
+            })
+            C:_TauntFindSpell()
+            assert.equals(188389, C._tauntTrackedSpellID)
+        end)
+
+        it("ignores Flame Shock on Enhancement", function()
+            local C = loader.loadCursor({
+                GetSpecializationInfo = function() return 263 end,
+                C_SpellBook = {
+                    IsSpellInSpellBook = function(id) return id == 188389 end,
+                },
+            })
+            C:_TauntFindSpell()
+            assert.is_nil(C._tauntTrackedSpellID)
+        end)
+
+        it("finds Garrote on Assassination", function()
+            local C = loader.loadCursor({
+                GetSpecializationInfo = function() return 259 end,
+                C_SpellBook = {
+                    IsSpellInSpellBook = function(id) return id == 703 end,
+                },
+            })
+            C:_TauntFindSpell()
+            assert.equals(703, C._tauntTrackedSpellID)
+        end)
+
+        it("ignores Garrote on Outlaw", function()
+            local C = loader.loadCursor({
+                GetSpecializationInfo = function() return 260 end,
+                C_SpellBook = {
+                    IsSpellInSpellBook = function(id) return id == 703 end,
+                },
+            })
+            C:_TauntFindSpell()
+            assert.is_nil(C._tauntTrackedSpellID)
+        end)
+
+        it("finds a taunt on a damage spec of a class that has one", function()
+            -- Retribution Paladin. The old role gate is what this pins:
+            -- Hand of Reckoning is in the spellbook, and the spec is not a tank.
+            local C = loader.loadCursor({
+                GetSpecializationInfo = function() return 70 end,
+                C_SpellBook = {
+                    IsSpellInSpellBook = function(id) return id == 62124 end,
+                },
+            })
+            C:_TauntFindSpell()
+            assert.equals(62124, C._tauntTrackedSpellID)
+        end)
+
+        it("follows a talent override to the live spell id", function()
+            -- The base id is absent from the book; only the replacement is
+            -- there, which is what carries the cooldown.
+            --
+            -- 999999 is a synthetic override target, deliberately. Every REAL
+            -- override target in TRACKED_SPELLS is also listed as a plain id
+            -- beside its base (470411 sits next to 188389), so asserting on one
+            -- would pass against an implementation that never resolved an
+            -- override at all -- the plain-id loop would reach it anyway. An id
+            -- reachable ONLY through the override lookup is the only version of
+            -- this test that can fail.
+            local C = loader.loadCursor({
+                C_SpellBook = {
+                    FindSpellOverrideByID = function(id)
+                        if id == 355 then return 999999 end
+                        return id
+                    end,
+                    IsSpellInSpellBook = function(id) return id == 999999 end,
+                },
+            })
+            C:_TauntFindSpell()
+            assert.equals(999999, C._tauntTrackedSpellID)
+        end)
+
+        it("falls back to the plain id when the override lookup misses", function()
+            -- FindSpellOverrideByID answering something not in the book must
+            -- not shadow a base id that is.
+            local C = loader.loadCursor({
+                C_SpellBook = {
+                    FindSpellOverrideByID = function() return 999999 end,
+                    IsSpellInSpellBook = function(id) return id == 355 end,
+                },
+            })
+            C:_TauntFindSpell()
+            assert.equals(355, C._tauntTrackedSpellID)
+        end)
     end)
 
     describe("tank gate", function()
