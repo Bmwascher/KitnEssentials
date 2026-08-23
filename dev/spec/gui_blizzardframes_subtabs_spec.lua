@@ -232,10 +232,9 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
             assert.equals("SkinBlizzardFramesWidgets", buildRow())
         end)
 
-        -- A pending id that is no longer an element at all must be corrected
-        -- rather than rendering an empty page. Character Panel is exactly that
-        -- case now: it was in this row and is not any more, so a session that
-        -- remembered it must fall back rather than render nothing.
+        -- A pending id that is not an element at all must be corrected rather
+        -- than rendering an empty page. Character Panel is the live case: it
+        -- left this row, so a session that remembered it still has to resolve.
         it("is corrected by the validity loop when the id is not an element", function()
             elvui = false
             GUIFrame.pendingNestedTab["SkinBlizzardFramesElements"] = "CharacterPanel"
