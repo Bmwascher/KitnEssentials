@@ -27,10 +27,8 @@ describe("combat logger key renames", function()
     end)
 
     it("ships the new keys and neither old one", function()
-        -- Reads the defaults only. Deliberately does NOT go through
-        -- migrateWith, so this one assertion still runs before the migration
-        -- exists and pins Task 1's rename from the file where the rename story
-        -- lives.
+        -- Reads the defaults only, deliberately not through migrateWith: this
+        -- assertion holds whether or not the migration exists.
         local KE = helpers.loadModule("Core/Defaults.lua")
         local block = KE:GetDefaultDB().profile.CombatLogger
         assert.is_false(block.Scenario)
@@ -119,9 +117,8 @@ describe("combat logger key renames", function()
     end)
 
     it("does not disturb the enable-default record", function()
-        -- The two migrations keep separate record tables on purpose: an id here
-        -- is a rename, and an id there is a dotted profile path, and one table
-        -- would make them indistinguishable to a later reader.
+        -- The two migrations keep separate record tables; Core/Defaults.lua
+        -- says why.
         local sv = profileWith({ ScenarioTorghast = true })
         sv.ModuleDefaultsOptIn = { ["CombatLogger.Enabled"] = true }
         _G.KitnEssentialsDB = sv
