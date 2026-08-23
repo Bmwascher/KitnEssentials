@@ -845,7 +845,7 @@ local Defaults = {
             ParentFrame = "UIParent",
             FontFace = nil,
             FontOutline = "OUTLINE",
-            WarningText = "TARGET HAS HAVOC",
+            WarningText = "Havoc Target",
             WarningColor = { 1, 0.1, 0.1, 1 },
             WarningFontSize = 24,
             -- The keys here are AnchorFrom/AnchorTo/XOffset/YOffset. Any other

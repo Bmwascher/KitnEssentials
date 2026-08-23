@@ -62,7 +62,7 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
 
     local textRow = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local textBox = GUIFrame:CreateEditBox(textRow, "Text", {
-        value = db.WarningText or "TARGET HAS HAVOC",
+        value = db.WarningText or "Havoc Target",
         -- ApplySettings as well as the reload flag: the live display is built by
         -- the game and only reads this when it is created, but the preview is
         -- ours and updates now.

@@ -50,7 +50,7 @@ local DEBUG_HT = false
 -- id covers both.
 local HAVOC_IDS = { [80240] = true }
 local DESTRUCTION_SPEC = 267
-local DEFAULT_TEXT = "TARGET HAS HAVOC"
+local DEFAULT_TEXT = "Havoc Target"
 local ANCHOR_WIDTH = 280
 
 ---------------------------------------------------------------------------------
