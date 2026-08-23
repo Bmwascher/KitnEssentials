@@ -67,6 +67,7 @@
     <Script file="GUITabs\GUIClassUtilities\GUI-PetStatusText.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-StanceText.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-HuntersMark.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-HavocTracker.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-SpellAlerts.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-BurningRush.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-PIMacroBuilder.lua" />

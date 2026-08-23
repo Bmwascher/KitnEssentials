@@ -721,6 +721,7 @@ local PREVIEW_MODULES = {
     "LootRoll",
     "BuffTracking", "PlayerDebuffTracking",
     "VehicleExit",
+    "HavocTracker",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -732,7 +733,7 @@ local SECTION_PREVIEW_MODULES = {
         "Cursor",
         "HealerMana",
         "NoMovementAlert", "PlayerAbsorbs",
-        "PetStatusText", "StanceText", "HuntersMark",
+        "PetStatusText", "StanceText", "HuntersMark", "HavocTracker",
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",

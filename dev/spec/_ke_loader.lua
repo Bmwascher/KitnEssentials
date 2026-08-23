@@ -2184,6 +2184,44 @@ function L.loadBurningRush(overrides)
     return BURN, rec
 end
 
+-- Modules/ClassUtilities/HavocTracker.lua. Only the GATE is under test. The
+-- loader replaces the two sinks EvaluateGate can reach and counts which one
+-- fired, so a case reads as a decision rather than as frame state. Nothing here
+-- builds a container: the AuraContainer path is engine behaviour, verified in
+-- game.
+--
+-- The spec functions are driven through the bare globals. C_SpecializationInfo
+-- delegates to them at call time, so assigning them after installMock still
+-- reaches the module's file-scope upvalues.
+-- Returns HT, rec.
+function L.loadHavocTracker(overrides)
+    overrides = overrides or {}
+    local rec = { activate = 0, deactivate = 0 }
+
+    installMock(overrides, {
+        C_Timer = inertTimer(),
+    })
+
+    _G.UIParent  = noopFrame()
+    _G.UnitClass = function() return "Warlock", overrides.class or "WARLOCK" end
+    _G.GetSpecialization = function() return overrides.specIndex end
+    _G.GetSpecializationInfo = function(index) return index and overrides.specID or nil end
+    _G.LibStub   = function() return nil end
+
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { HavocTracker = overrides.db or { Enabled = true } } },
+        Print = function() end,
+    }
+    helpers.loadModule("Modules/ClassUtilities/HavocTracker.lua", KE)
+
+    local HT = modules["HavocTracker"]
+    HT.db = KE.db.profile.HavocTracker
+    HT.Activate = function() rec.activate = rec.activate + 1 end
+    HT.Deactivate = function() rec.deactivate = rec.deactivate + 1 end
+    return HT, rec
+end
+
 -- Modules/ClassUtilities/EbonMightHelper.lua. The module caches its whole API
 -- surface at file scope, so every name it reads has to exist on _G BEFORE
 -- loadModule. Only the keys _wow_mock manages may go through installMock --
