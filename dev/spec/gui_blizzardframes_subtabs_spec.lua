@@ -1,8 +1,8 @@
 -- The Dark Theme page is tabbed: GUI-BlizzardFrames.lua declares the strip via
 -- RegisterTabbedContent, and each entry's id must be matched by a
 -- GUIFrame:RegisterContent(id, fn) call -- which may live in a sibling file
--- (GUI-UIWidgets.lua, GUI-LootRoll.lua, GUI-LootFrame.lua, GUI-CharacterPanel.lua
--- and GUI-BlizzardMessages.lua all register into the same strip). Neither
+-- (GUI-UIWidgets.lua, GUI-LootRoll.lua, GUI-LootFrame.lua and
+-- GUI-BlizzardMessages.lua all register into the same strip). Neither
 -- tabbed_content_spec.lua (a synthetic TABS fixture, not GUI-BlizzardFrames.lua's
 -- own list) nor gui_blizzardframes_spec.lua (stubs RegisterTabbedContent to a
 -- no-op, discarding the strip entirely) proves every declared id actually
@@ -60,7 +60,6 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-LootRoll.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-LootFrame.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardMessages.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-CharacterPanel.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua", KE)
     end)
 
@@ -129,19 +128,17 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
     end)
 
     -- General survives ElvUI because Raid Control and the group-finder pages
-    -- ride on it and none has an ElvUI gate; Elements survives because it
-    -- nests the Character Screen, which keeps Character Panel's
-    -- non-overlapping features. Everything else on this page DOES stand down
-    -- under ElvUI, so offering those tabs would be the same
-    -- live-looking-but-dead failure.
-    it("keeps exactly General and Elements while ElvUI is active", function()
+    -- ride on it and none has an ElvUI gate. Elements does NOT survive: every
+    -- tab it still carries configures a skin this addon stands down from, so
+    -- offering them would be the same live-looking-but-dead failure.
+    it("keeps exactly General while ElvUI is active", function()
         local tabs = strip(true, true)
-        assert.equals(2, #tabs)
+        assert.equals(1, #tabs)
 
         local ids = idSet(tabs)
         assert.is_true(ids["SkinBlizzardFramesGeneral"])
-        assert.is_true(ids["SkinBlizzardFramesElements"])
 
+        assert.is_nil(ids["SkinBlizzardFramesElements"])
         assert.is_nil(ids["SkinBlizzardFramesSkins"])
         assert.is_nil(ids["SkinBlizzardFramesFrames"])
         assert.is_nil(ids["SkinBlizzardFramesAddons"])
@@ -156,15 +153,14 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
 
     -- ElvUI wins over the engine flag. Without this, a reader could believe the
     -- engine-on branch runs first and ElvUI only trims it.
-    it("shows the same two tabs under ElvUI whether the engine is on or off", function()
+    it("shows the same one tab under ElvUI whether the engine is on or off", function()
         -- One assertion covering both counts. Two scalar assert.equals calls
         -- would stop at the first failure, so the second state's count would be
         -- masked and the red run would under-report what is broken.
-        assert.same({ 2, 2 }, { #strip(true, true), #strip(false, true) })
+        assert.same({ 1, 1 }, { #strip(true, true), #strip(false, true) })
     end)
 
-    it("positive control: the two absorbed page ids resolve", function()
-        assert.is_function(GUIFrame.registeredContent["CharacterPanel"])
+    it("positive control: the absorbed page id resolves", function()
         assert.is_function(GUIFrame.registeredContent["SkinMessages"])
     end)
 
@@ -172,21 +168,23 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         assert.is_nil(GUIFrame.registeredContent["SkinBlizzardFramesBogus"])
     end)
 
-    -- The nested row keeps its own list, so its gate is a second decision that
-    -- the strip's tests cannot reach.
-    it("offers all four elements while no other suite is driving the frames", function()
+    -- The row no longer gates on the conflict state: the whole Elements tab
+    -- drops out of the strip there, so this list is the same either way.
+    it("offers the same three elements in both states", function()
         elvui = false
-        local tabs = GUIFrame._VisibleElementTabs()
-        assert.equals(4, #tabs)
-        assert.equals("SkinBlizzardFramesLootRoll", tabs[1].id)
-        assert.equals("CharacterPanel", tabs[4].id)
+        local offTabs = GUIFrame._VisibleElementTabs()
+        elvui = true
+        local onTabs = GUIFrame._VisibleElementTabs()
+
+        assert.same({ 3, 3 }, { #offTabs, #onTabs })
+        assert.equals("SkinBlizzardFramesLootRoll", offTabs[1].id)
+        assert.equals("SkinBlizzardFramesWidgets", offTabs[3].id)
+        assert.same(idSet(offTabs), idSet(onTabs))
     end)
 
-    it("offers only the character screen in the conflict state", function()
-        elvui = true
-        local tabs = GUIFrame._VisibleElementTabs()
-        assert.equals(1, #tabs)
-        assert.equals("CharacterPanel", tabs[1].id)
+    it("no longer carries the character screen", function()
+        elvui = false
+        assert.is_nil(idSet(GUIFrame._VisibleElementTabs())["CharacterPanel"])
     end)
 
     it("registers a builder for every element id in both states", function()
@@ -211,7 +209,7 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
                 return nil, yOffset
             end
             for _, id in ipairs({ "SkinBlizzardFramesLootRoll", "SkinBlizzardFramesLootWindow",
-                                  "SkinBlizzardFramesWidgets", "CharacterPanel" }) do
+                                  "SkinBlizzardFramesWidgets" }) do
                 GUIFrame.registeredContent[id] = function(_, yOffset) return yOffset end
             end
             GUIFrame.registeredContent["SkinBlizzardFramesElements"]({}, 0)
@@ -234,12 +232,13 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
             assert.equals("SkinBlizzardFramesWidgets", buildRow())
         end)
 
-        -- The conflict state hides three of the four. A pending id for one of
-        -- those must be corrected rather than rendering an empty page.
-        it("is corrected by the validity loop when the conflict state hides it", function()
-            elvui = true
-            GUIFrame.pendingNestedTab["SkinBlizzardFramesElements"] = "SkinBlizzardFramesLootRoll"
-            assert.equals("CharacterPanel", buildRow())
+        -- A pending id that is not an element at all must be corrected rather
+        -- than rendering an empty page. Character Panel is the live case: it
+        -- left this row, so a session that remembered it still has to resolve.
+        it("is corrected by the validity loop when the id is not an element", function()
+            elvui = false
+            GUIFrame.pendingNestedTab["SkinBlizzardFramesElements"] = "CharacterPanel"
+            assert.equals("SkinBlizzardFramesLootRoll", buildRow())
         end)
     end)
 end)

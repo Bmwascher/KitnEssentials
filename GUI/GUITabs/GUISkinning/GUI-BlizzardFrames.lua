@@ -615,7 +615,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffs
     return card:GetNextOffset()
 end)
 
--- The four single-element pages behind one sub-row. Each was a top-level tab,
+-- The three single-element pages behind one sub-row. Each was a top-level tab,
 -- which made the strip long enough to bury the settings people look for.
 --
 -- This row keeps its own active id. GUIFrame.tabbedPageState is keyed by PAGE,
@@ -624,7 +624,6 @@ local elementTabs = {
     { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" },
     { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" },
     { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" },
-    { id = "CharacterPanel",               label = "Character Screen" },
 }
 local activeElement = elementTabs[1].id
 
@@ -634,15 +633,12 @@ GUIFrame:RegisterNestedTabs("SkinBlizzardFramesElements", {
     "SkinBlizzardFramesLootRoll",
     "SkinBlizzardFramesLootWindow",
     "SkinBlizzardFramesWidgets",
-    "CharacterPanel",
 })
 
--- Only Character Screen survives the conflict state; the other three configure
--- skins this addon stands down from.
+-- No conflict branch here. Every tab on this row configures a skin this addon
+-- stands down from, so the whole Elements tab drops out of the strip under
+-- ElvUI rather than this row filtering itself.
 local function VisibleElementTabs()
-    if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
-        return { elementTabs[4] }
-    end
     return elementTabs
 end
 GUIFrame._VisibleElementTabs = VisibleElementTabs
@@ -688,15 +684,14 @@ end)
 -- drops with the engine's own tab. General's Window Colors card is the same
 -- case and drops on the same test, gated inside that builder rather than here.
 --
--- General and Elements are the two that stay in every state. General carries
--- Raid Control and the three group-finder pages, none of which is a skin;
--- Elements carries the Character Screen, which keeps its non-overlapping
--- features. That is why neither sits in the two groups above.
+-- General is the only tab that stays in every state. It carries Raid Control
+-- and the three group-finder pages, none of which is a skin, which is why it
+-- does not sit in the two groups above. Elements is engine-independent but not
+-- ElvUI-independent: its three pages all configure skins this addon stands
+-- down from, so it survives the engine flag and not the conflict state.
 --
 -- ElvUI is a stricter cut than the engine flag, not a wider one: it drops Fonts
--- and Window Colors too, alongside the skin lists, leaving only General and
--- Elements. General survives because Raid Control has no ElvUI gate at all;
--- Elements survives because Character Panel keeps its non-overlapping features.
+-- and Window Colors too, alongside the skin lists, leaving only General.
 -- Color Picker also rides on General but DOES stand down under ElvUI, by its
 -- own conflict list rather than the skin gate; its card already says so, which
 -- is why it does not change what this list offers.
@@ -711,13 +706,12 @@ GUIFrame:RegisterTabbedContent("SkinBlizzardFrames", function()
     local FRAMES   = { id = "SkinBlizzardFramesSkins",    label = "Frame Skins" }
     local ELEMENTS = { id = "SkinBlizzardFramesElements", label = "Elements" }
 
-    -- In the conflict state only the two tabs whose contents are not skins
-    -- survive: General carries Raid Control and the group-finder pages, and
-    -- Elements carries the Character Screen. Fonts drops with the skins,
+    -- In the conflict state only General survives: it carries Raid Control and
+    -- the group-finder pages, which are not skins. Fonts drops with the skins,
     -- because the text it styles is not drawn here -- and General's own Window
     -- Colors card drops with it, gated inside that builder.
     if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
-        return { GENERAL, ELEMENTS }
+        return { GENERAL }
     end
 
     -- Frame Skins is the only tab that configures the engine itself, so it is

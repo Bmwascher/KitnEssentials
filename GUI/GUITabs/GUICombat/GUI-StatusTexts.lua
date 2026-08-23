@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  GUI-HealerTools.lua                                     ║
--- ║  GUI: Healer Utilities — three modules on one page.      ║
+-- ║  GUI-StatusTexts.lua                                     ║
+-- ║  GUI: Status Texts — four readout modules on one page.   ║
 -- ║  The per-module builders stay registered under their own ║
 -- ║  ids and are dispatched here as tabs.                    ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -9,8 +9,9 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 
-GUIFrame:RegisterTabbedContent("HealerTools", {
-    { id = "InnervateTracker",   label = "Innervate Tracker" },
-    { id = "MaintenanceTracker", label = "Maintenance Tracker" },
-    { id = "HealerMana",         label = "Healer Mana" },
+GUIFrame:RegisterTabbedContent("StatusTexts", {
+    { id = "PetStatusText", label = "Pet Status" },
+    { id = "StanceText",    label = "Missing Forms" },
+    { id = "HuntersMark",   label = "Hunter's Mark" },
+    { id = "HealerMana",    label = "Healer Mana" },
 })

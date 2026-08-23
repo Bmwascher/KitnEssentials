@@ -12,7 +12,7 @@ describe("KE:GetSectionForItem", function()
                 {
                     id = "combat_section",
                     type = "header",
-                    items = { { id = "CombatTimer" }, { id = "HealerTools" } },
+                    items = { { id = "CombatTimer" }, { id = "StatusTexts" } },
                 },
                 {
                     id = "dungeons_section",
@@ -30,7 +30,7 @@ describe("KE:GetSectionForItem", function()
     end)
 
     it("resolves several items sharing one section", function()
-        assert.equals("combat_section", KE:GetSectionForItem("HealerTools"))
+        assert.equals("combat_section", KE:GetSectionForItem("StatusTexts"))
     end)
 
     it("returns nil for an id the sidebar does not contain", function()

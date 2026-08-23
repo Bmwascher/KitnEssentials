@@ -43,11 +43,15 @@ GUIFrame.sidebarConfig = {
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },
             { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle", "dispel", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff", "taunt" } },
             { id = "FocusCastbar",  text = "Focus Castbar", keywords = { "castbar", "cast", "focus", "casting", "interrupt" } },
-            { id = "HealerTools",   text = "Healer Tools", keywords = { "healer", "mana", "oom", "innervate", "maintenance", "buff", "uptime", "hot", "refresh", "tracker", "raid", "dungeon", "party", "druid", "cooldown", "duration", "count" } },
             { id = "NoMovementAlert", text = "No Movement Alert", keywords = { "movement", "alert", "cooldown" } },
             { id = "PlayerAbsorbs", text = "Player Absorbs", keywords = { "absorb", "shield", "heal absorb", "necrotic", "pw:s", "power word shield", "damage absorb", "overlay" } },
             { id = "CombatCross",   text = "Player Crosshair", keywords = { "crosshair", "cross", "aim", "reticle", "player" } },
             { id = "RangeChecker",  text = "Range Display", keywords = { "range", "distance", "yards", "melee", "ranged" } },
+            -- Search matches the whole query as ONE literal substring of the
+            -- title or of a single keyword, so a tab label has to appear here
+            -- as a phrase. The four tab labels and the two row titles this
+            -- page absorbed are all spelled out, apostrophe variants included.
+            { id = "StatusTexts",   text = "Status Texts", keywords = { "status", "status texts", "texts", "pet", "pet status texts", "hunter", "warlock", "demon", "summon", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "evoker", "presence", "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival", "healer", "healer mana", "mana", "oom", "raid", "dungeon", "party" } },
         },
     },
     {
@@ -60,7 +64,6 @@ GUIFrame.sidebarConfig = {
             { id = "AuraHeaders_Debuffs", text = "Player Debuffs", keywords = { "debuff", "debuffs", "player debuffs", "aura", "auras", "magic", "curse", "poison", "disease", "blizzard", "replace" } },
             { id = "AuraDebuffs",   text = "Advanced Debuffs", keywords = { "debuff", "debuffs", "aura", "boss", "dot", "magic", "curse", "poison", "disease" } },
             { id = "AuraExternals", text = "External Tracker", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
-            { id = "StanceText",    text = "Missing Forms", keywords = { "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "evoker", "presence" } },
         },
     },
     {
@@ -70,8 +73,6 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         items = {
             { id = "EvokerSuite",   text = "Evoker Suite", keywords = { "evoker", "dragon", "empower", "ebon might", "prescience", "disintegrate", "augmentation", "devastation", "preservation" } },
-            { id = "HuntersMark",   text = "Hunter: Mark Missing", keywords = { "hunter", "hunters mark", "mark", "marksman", "beast mastery", "survival" } },
-            { id = "PetStatusText", text = "Pet Status Texts", keywords = { "pet", "status", "hunter", "warlock", "demon", "summon" } },
             { id = "PIMacroBuilder", text = "Priest: PI Macro", keywords = { "priest", "power infusion", "pi", "macro", "builder", "trinket", "racial", "potion" } },
             { id = "TotemTracker",  text = "Totem Tracker", keywords = { "totem", "totems", "shaman", "evoker" } },
             { id = "BurningRush",   text = "Warlock: Burning Rush", keywords = { "warlock", "burning rush", "movement", "speed" } },
@@ -122,9 +123,8 @@ GUIFrame.sidebarConfig = {
             -- alwaysEnabled keeps it and Skyriding UI clickable while the
             -- section is greyed for ElvUI.
             -- Dark Theme's General tab carries Color Picker and Raid Control,
-            -- neither of which has an ElvUI gate of its own, and its Elements
-            -- tab nests the Character Screen, which keeps Character Panel's
-            -- non-overlapping features; Skyriding UI is not a skin. Chat and
+            -- neither of which has an ElvUI gate of its own; Character Panel
+            -- and Skyriding UI are not skins and hold their own rows. Chat and
             -- Tooltips carry no exemption because both modules genuinely do
             -- stand down.
             --
@@ -136,6 +136,7 @@ GUIFrame.sidebarConfig = {
                 "color", "colour", "picker", "rgb", "hex", "alpha", "opacity", "swatch", "class color",
                 "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "role", "roles", "tank", "healer", "raid manager", "raid tools", "shared notes", "group",
                 "text", "message", "error", "raid warning", "ui error", "fonts", "replace fonts", "quest text", "objective tracker", "mail", } },
+            { id = "CharacterPanel",     text = "Character Panel", alwaysEnabled = true, keywords = { "character", "panel", "character panel", "character screen", "stats", "item level", "ilvl", "gear", "durability", "inspect", "gems", "sockets", "enchant" } },
             { id = "Chat",               text = "Chat", keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
             { id = "DamageMeter",        text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" }, alwaysEnabled = true },
             { id = "MythicPlusTimer",    text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" }, alwaysEnabled = true },

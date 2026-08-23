@@ -9,9 +9,9 @@ describe("GUI-TabbedContent", function()
     local GUIFrame, rendered
 
     local TABS = {
-        { id = "InnervateTracker",   label = "Innervate Tracker" },
-        { id = "MaintenanceTracker", label = "Maintenance Tracker" },
-        { id = "HealerMana",         label = "Healer Mana" },
+        { id = "PetStatusText", label = "Pet Status" },
+        { id = "StanceText",    label = "Missing Forms" },
+        { id = "HealerMana",    label = "Healer Mana" },
     }
 
     before_each(function()
@@ -34,17 +34,17 @@ describe("GUI-TabbedContent", function()
 
     describe("ResolveActiveTab", function()
         it("defaults to the first tab when nothing is remembered", function()
-            assert.equals("InnervateTracker", GUIFrame:ResolveActiveTab("HealerTools", TABS))
+            assert.equals("PetStatusText", GUIFrame:ResolveActiveTab("StatusTexts", TABS))
         end)
 
         it("returns the remembered tab when it is still valid", function()
-            GUIFrame.tabbedPageState["HealerTools"] = "HealerMana"
-            assert.equals("HealerMana", GUIFrame:ResolveActiveTab("HealerTools", TABS))
+            GUIFrame.tabbedPageState["StatusTexts"] = "HealerMana"
+            assert.equals("HealerMana", GUIFrame:ResolveActiveTab("StatusTexts", TABS))
         end)
 
         it("falls back to the first tab when the remembered id no longer exists", function()
-            GUIFrame.tabbedPageState["HealerTools"] = "DispelGlow"
-            assert.equals("InnervateTracker", GUIFrame:ResolveActiveTab("HealerTools", TABS))
+            GUIFrame.tabbedPageState["StatusTexts"] = "DispelGlow"
+            assert.equals("PetStatusText", GUIFrame:ResolveActiveTab("StatusTexts", TABS))
         end)
     end)
 
@@ -53,94 +53,94 @@ describe("GUI-TabbedContent", function()
     -- never learns which of its children was asked for.
     describe("ResolveActiveTab with nested ids", function()
         before_each(function()
-            GUIFrame:RegisterNestedTabs("MaintenanceTracker", { "MTAuras", "MTLayout" })
+            GUIFrame:RegisterNestedTabs("StanceText", { "STForms", "STIcons" })
         end)
 
         it("leaves an outer tab alone", function()
-            GUIFrame.tabbedPageState["HealerTools"] = "HealerMana"
-            assert.equals("HealerMana", GUIFrame:ResolveActiveTab("HealerTools", TABS))
-            assert.is_nil(GUIFrame.pendingNestedTab["MaintenanceTracker"])
+            GUIFrame.tabbedPageState["StatusTexts"] = "HealerMana"
+            assert.equals("HealerMana", GUIFrame:ResolveActiveTab("StatusTexts", TABS))
+            assert.is_nil(GUIFrame.pendingNestedTab["StanceText"])
         end)
 
         it("resolves a nested id to its owning outer tab", function()
-            GUIFrame.tabbedPageState["HealerTools"] = "MTLayout"
-            assert.equals("MaintenanceTracker", GUIFrame:ResolveActiveTab("HealerTools", TABS))
+            GUIFrame.tabbedPageState["StatusTexts"] = "STIcons"
+            assert.equals("StanceText", GUIFrame:ResolveActiveTab("StatusTexts", TABS))
         end)
 
         -- Rewriting to the owner rather than clearing is the point: clearing
         -- would send the next rebuild back to the first tab.
         it("rewrites the page state to the owner, not to nil", function()
-            GUIFrame.tabbedPageState["HealerTools"] = "MTLayout"
-            GUIFrame:ResolveActiveTab("HealerTools", TABS)
-            assert.equals("MaintenanceTracker", GUIFrame.tabbedPageState["HealerTools"])
+            GUIFrame.tabbedPageState["StatusTexts"] = "STIcons"
+            GUIFrame:ResolveActiveTab("StatusTexts", TABS)
+            assert.equals("StanceText", GUIFrame.tabbedPageState["StatusTexts"])
         end)
 
         it("hands the nested id down under its owner", function()
-            GUIFrame.tabbedPageState["HealerTools"] = "MTAuras"
-            GUIFrame:ResolveActiveTab("HealerTools", TABS)
-            assert.equals("MTAuras", GUIFrame.pendingNestedTab["MaintenanceTracker"])
+            GUIFrame.tabbedPageState["StatusTexts"] = "STForms"
+            GUIFrame:ResolveActiveTab("StatusTexts", TABS)
+            assert.equals("STForms", GUIFrame.pendingNestedTab["StanceText"])
         end)
 
         it("falls back and sets nothing pending when the owner is not on offer", function()
-            GUIFrame.tabbedPageState["HealerTools"] = "MTAuras"
+            GUIFrame.tabbedPageState["StatusTexts"] = "STForms"
             local shortTabs = { { id = "HealerMana", label = "Healer Mana" } }
-            assert.equals("HealerMana", GUIFrame:ResolveActiveTab("HealerTools", shortTabs))
-            assert.is_nil(GUIFrame.pendingNestedTab["MaintenanceTracker"])
+            assert.equals("HealerMana", GUIFrame:ResolveActiveTab("StatusTexts", shortTabs))
+            assert.is_nil(GUIFrame.pendingNestedTab["StanceText"])
         end)
 
         it("still falls back for an id that is neither outer nor nested", function()
-            GUIFrame.tabbedPageState["HealerTools"] = "NotATabAtAll"
-            assert.equals("InnervateTracker", GUIFrame:ResolveActiveTab("HealerTools", TABS))
+            GUIFrame.tabbedPageState["StatusTexts"] = "NotATabAtAll"
+            assert.equals("PetStatusText", GUIFrame:ResolveActiveTab("StatusTexts", TABS))
         end)
     end)
 
     describe("dispatch", function()
         it("resolves builders live, so registration order does not matter", function()
-            GUIFrame:RegisterTabbedContent("HealerTools", TABS)
-            register("InnervateTracker")
-            GUIFrame.registeredContent["HealerTools"](nil, 0)
-            assert.same({ "InnervateTracker" }, rendered)
+            GUIFrame:RegisterTabbedContent("StatusTexts", TABS)
+            register("PetStatusText")
+            GUIFrame.registeredContent["StatusTexts"](nil, 0)
+            assert.same({ "PetStatusText" }, rendered)
         end)
 
         it("renders only the active tab", function()
-            register("InnervateTracker")
+            register("PetStatusText")
             register("HealerMana")
-            GUIFrame:RegisterTabbedContent("HealerTools", TABS)
-            GUIFrame.tabbedPageState["HealerTools"] = "HealerMana"
-            GUIFrame.registeredContent["HealerTools"](nil, 0)
+            GUIFrame:RegisterTabbedContent("StatusTexts", TABS)
+            GUIFrame.tabbedPageState["StatusTexts"] = "HealerMana"
+            GUIFrame.registeredContent["StatusTexts"](nil, 0)
             assert.same({ "HealerMana" }, rendered)
         end)
 
         it("returns an offset advanced past both the tab strip and the builder", function()
-            register("InnervateTracker")
-            GUIFrame:RegisterTabbedContent("HealerTools", TABS)
-            assert.equals(130, GUIFrame.registeredContent["HealerTools"](nil, 0))
+            register("PetStatusText")
+            GUIFrame:RegisterTabbedContent("StatusTexts", TABS)
+            assert.equals(130, GUIFrame.registeredContent["StatusTexts"](nil, 0))
         end)
 
         it("survives a tab whose builder is not registered", function()
-            GUIFrame:RegisterTabbedContent("HealerTools", TABS)
-            assert.equals(30, GUIFrame.registeredContent["HealerTools"](nil, 0))
+            GUIFrame:RegisterTabbedContent("StatusTexts", TABS)
+            assert.equals(30, GUIFrame.registeredContent["StatusTexts"](nil, 0))
             assert.same({}, rendered)
         end)
     end)
 
     describe("headerBuilder", function()
         it("short-circuits with no tab strip and no content when collapse is true", function()
-            register("InnervateTracker")
-            GUIFrame:RegisterTabbedContent("HealerTools", TABS, {
+            register("PetStatusText")
+            GUIFrame:RegisterTabbedContent("StatusTexts", TABS, {
                 headerBuilder = function(_, yOffset) return yOffset + 40, true end,
             })
-            assert.equals(40, GUIFrame.registeredContent["HealerTools"](nil, 0))
+            assert.equals(40, GUIFrame.registeredContent["StatusTexts"](nil, 0))
             assert.same({}, rendered)
         end)
 
         it("renders the tab strip and content when collapse is false", function()
-            register("InnervateTracker")
-            GUIFrame:RegisterTabbedContent("HealerTools", TABS, {
+            register("PetStatusText")
+            GUIFrame:RegisterTabbedContent("StatusTexts", TABS, {
                 headerBuilder = function(_, yOffset) return yOffset + 40, false end,
             })
-            assert.equals(170, GUIFrame.registeredContent["HealerTools"](nil, 0))
-            assert.same({ "InnervateTracker" }, rendered)
+            assert.equals(170, GUIFrame.registeredContent["StatusTexts"](nil, 0))
+            assert.same({ "PetStatusText" }, rendered)
         end)
     end)
 end)

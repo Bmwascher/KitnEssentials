@@ -48,6 +48,8 @@
     <Script file="GUITabs\GUICombat\GUI-Cursor.lua" />
     <Script file="GUITabs\GUICombat\GUI-FocusCastbar.lua" />
     <Script file="GUITabs\GUICombat\GUI-RangeChecker.lua" />
+    <Script file="GUITabs\GUICombat\GUI-StatusTexts.lua" />
+    <Script file="GUITabs\GUICombat\GUI-HealerMana.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraDebuffs.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraHeaders.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraExternals.lua" />
@@ -91,12 +93,6 @@
     <Script file="GUITabs\GUIDungeons\GUI-LFGReminder.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DeathNotifications.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-MythicPlusTimer.lua" />
-
-    <!-- Healer tabs -->
-    <Script file="GUITabs\GUIHealer\GUI-HealerMana.lua" />
-    <Script file="GUITabs\GUIHealer\GUI-InnervateTracker.lua" />
-    <Script file="GUITabs\GUIHealer\GUI-MaintenanceTracker.lua" />
-    <Script file="GUITabs\GUIHealer\GUI-HealerTools.lua" />
 
     <!-- DungeonsTimers tabs -->
     <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersCfg.lua" />

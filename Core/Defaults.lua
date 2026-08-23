@@ -524,59 +524,6 @@ local Defaults = {
             Position = { AnchorFrom = "LEFT", AnchorTo = "BOTTOMLEFT", XOffset = 0, YOffset = -61 },
         },
 
-        InnervateTracker = {
-            Enabled = false,
-            IconSize = 40,
-            ShowLabel = true,
-            LabelText = "FREE",
-            LabelColor = { 0, 1, 0, 1 }, -- #00ff00
-            LabelFontSize = 14,
-            ShowTimer = true,
-            TimerColor = { 1, 1, 1, 1 },
-            TimerFontSize = 18,
-            FontOutline = "OUTLINE",
-            -- Glow (CreateGlowSettingsCard default key names)
-            GlowEnabled   = false,
-            GlowType      = "pixel",
-            GlowColor     = { 0, 1, 0, 1 }, -- #00ff00
-            GlowLines     = 5,
-            GlowFrequency = 0.25,
-            GlowLength    = 10,
-            GlowThickness = 2,
-            GlowBorder    = true,
-            GlowScale     = 1.0,
-            GlowStartAnim = true,
-            GlowDuration  = 1.0,
-            -- Sound (CreateSoundSettingsCard default key names)
-            actionOnShowSound = "None",
-            actionOnHideSound = "None",
-            Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -120),
-        },
-
-        MaintenanceTracker = {
-            Enabled = false,
-            IconSize = 34,
-            CountFontSize = 14,
-            CountColor = { 1, 1, 1, 1 },
-            ShowLowest = true,
-            LowestFontSize = 14,
-            GrowthDirection = "LEFT",   -- RIGHT | LEFT | UP | DOWN
-            Spacing = 4,
-            LowThreshold = 3,
-            MidThreshold = 6,
-            LowDurationColor = { 1, 0.302, 0.302, 1 },  -- #ff4d4d
-            MidDurationColor = { 1, 0.749, 0.2, 1 },     -- #ffbf33
-            HighDurationColor = { 0, 1, 0.059, 1 },      -- #00ff0f
-            FontOutline = "OUTLINE",
-            Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -160),
-        },
-
         DisintegrateTicks = {
             Enabled = false,
             TickColor = { 1, 1, 1, 0.8 },
@@ -2093,10 +2040,8 @@ local FLIPPED_TO_OFF = {
     { "FocusCastbar", "Enabled" },
     { "FocusMarker", "Enabled" },
     { "GreatVaultAlert", "Enabled" },
-    { "InnervateTracker", "Enabled" },
     { "KickTracker", "Enabled" },
     { "LFGReminder", "Enabled" },
-    { "MaintenanceTracker", "Enabled" },
     { "MapScale", "Enabled" },
     { "MythicPlusTimer", "Enabled" },
     { "NoMovementAlert", "Enabled" },

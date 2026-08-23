@@ -654,7 +654,7 @@ function HM:RegWithEditMode()
                 local cfg = self:GetActiveAnchorConfig()
                 return KE:ResolveAnchorFrame(cfg.anchorFrameType, cfg.ParentFrame)
             end,
-            guiPath = "HealerTools",
+            guiPath = "StatusTexts",
             guiTab = "HealerMana",
         })
         self.editModeRegistered = true
