@@ -84,7 +84,11 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
 
         local row
         for i, def in ipairs(defs) do
-            local isLastRow = i > #defs - perRow
+            -- Index at which the final row starts. A plain `#defs - perRow`
+            -- only lands there when the last row is full, so a table whose
+            -- count is not a multiple of perRow would give the row above the
+            -- last one the last row's height and spacing.
+            local isLastRow = i > #defs - ((#defs - 1) % perRow + 1)
             local rowHeight = isLastRow and Theme.rowHeightLast or Theme.rowHeight
             if not row then
                 row = GUIFrame:CreateRow(card.content, rowHeight)
@@ -166,8 +170,9 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
         card2:AddRow(row, Theme.rowHeight)
     end
 
-    -- Live client state, not KE's copy: the CVar says what the NEXT log will
-    -- be, and this says what a running one IS.
+    -- Read at build time, so the label is stale if the CVar changes while the
+    -- page is open. Both button callbacks rebuild the page, which is what keeps
+    -- it honest after a click.
     local advancedOn = false
     if CL and CL.IsAdvanced then advancedOn = CL:IsAdvanced() end
 
