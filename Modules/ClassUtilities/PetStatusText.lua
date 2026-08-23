@@ -308,7 +308,8 @@ function PS:RegWithEditMode()
             getPosition = function() return self.db.Position end,
             setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-            guiPath = "PetStatusText",
+            guiPath = "StatusTexts",
+            guiTab = "PetStatusText",
         })
         self.editModeRegistered = true
     end

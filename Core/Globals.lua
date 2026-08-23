@@ -732,16 +732,16 @@ local SECTION_PREVIEW_MODULES = {
         "Cursor",
         "HealerMana", "InnervateTracker", "MaintenanceTracker",
         "NoMovementAlert", "PlayerAbsorbs",
+        "PetStatusText", "StanceText", "HuntersMark",
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",
-        "AuraDebuffs", "AuraExternals", "StanceText",
+        "AuraDebuffs", "AuraExternals",
     },
     class_section = {
         "BurningRush",
-        "PetStatusText", "TotemTracker",
+        "TotemTracker",
         "DisintegrateTicks", "StasisTracker", "EbonMightTracker", "PrescienceTracker",
-        "HuntersMark",
     },
     qol_section = {
         "GreatVaultAlert",

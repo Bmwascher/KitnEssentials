@@ -43,11 +43,11 @@ GUIFrame.sidebarConfig = {
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },
             { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle", "dispel", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff", "taunt" } },
             { id = "FocusCastbar",  text = "Focus Castbar", keywords = { "castbar", "cast", "focus", "casting", "interrupt" } },
-            { id = "HealerTools",   text = "Healer Tools", keywords = { "healer", "mana", "oom", "innervate", "maintenance", "buff", "uptime", "hot", "refresh", "tracker", "raid", "dungeon", "party", "druid", "cooldown", "duration", "count" } },
             { id = "NoMovementAlert", text = "No Movement Alert", keywords = { "movement", "alert", "cooldown" } },
             { id = "PlayerAbsorbs", text = "Player Absorbs", keywords = { "absorb", "shield", "heal absorb", "necrotic", "pw:s", "power word shield", "damage absorb", "overlay" } },
             { id = "CombatCross",   text = "Player Crosshair", keywords = { "crosshair", "cross", "aim", "reticle", "player" } },
             { id = "RangeChecker",  text = "Range Display", keywords = { "range", "distance", "yards", "melee", "ranged" } },
+            { id = "StatusTexts",   text = "Status Texts", keywords = { "status", "status texts", "texts", "pet", "hunter", "warlock", "demon", "summon", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "evoker", "presence", "hunters mark", "mark", "marksman", "beast mastery", "survival", "healer", "mana", "oom", "raid", "dungeon", "party" } },
         },
     },
     {
@@ -60,7 +60,6 @@ GUIFrame.sidebarConfig = {
             { id = "AuraHeaders_Debuffs", text = "Player Debuffs", keywords = { "debuff", "debuffs", "player debuffs", "aura", "auras", "magic", "curse", "poison", "disease", "blizzard", "replace" } },
             { id = "AuraDebuffs",   text = "Advanced Debuffs", keywords = { "debuff", "debuffs", "aura", "boss", "dot", "magic", "curse", "poison", "disease" } },
             { id = "AuraExternals", text = "External Tracker", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
-            { id = "StanceText",    text = "Missing Forms", keywords = { "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "evoker", "presence" } },
         },
     },
     {
@@ -70,8 +69,6 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         items = {
             { id = "EvokerSuite",   text = "Evoker Suite", keywords = { "evoker", "dragon", "empower", "ebon might", "prescience", "disintegrate", "augmentation", "devastation", "preservation" } },
-            { id = "HuntersMark",   text = "Hunter: Mark Missing", keywords = { "hunter", "hunters mark", "mark", "marksman", "beast mastery", "survival" } },
-            { id = "PetStatusText", text = "Pet Status Texts", keywords = { "pet", "status", "hunter", "warlock", "demon", "summon" } },
             { id = "PIMacroBuilder", text = "Priest: PI Macro", keywords = { "priest", "power infusion", "pi", "macro", "builder", "trinket", "racial", "potion" } },
             { id = "TotemTracker",  text = "Totem Tracker", keywords = { "totem", "totems", "shaman", "evoker" } },
             { id = "BurningRush",   text = "Warlock: Burning Rush", keywords = { "warlock", "burning rush", "movement", "speed" } },
