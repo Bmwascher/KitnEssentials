@@ -162,7 +162,7 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     local card4 = GUIFrame:CreateCard(scrollChild, "Range Warning", yOffset)
     manager:Register(card4, "all")
 
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local meleeRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for melee specs", {
         value = db.RangeColorMeleeEnabled == true,
         callback = function(checked)
@@ -194,7 +194,20 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     })
     row4a:AddWidget(outOfRangeColorPicker, 1/3)
     manager:Register(outOfRangeColorPicker, "rangeColor")
-    card4:AddRow(row4a, Theme.rowHeightLast, 0)
+    card4:AddRow(row4a, Theme.rowHeight)
+
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local hideInRangeCheck = GUIFrame:CreateCheckbox(row4b, "Hide When In Range", {
+        value = db.HideWhenInRange == true,
+        tooltip = "Only draw the crosshair while your target is out of range. Works on its own; the range warning colours above are a separate choice.",
+        callback = function(checked)
+            db.HideWhenInRange = checked
+            ApplySettings()
+        end,
+    })
+    row4b:AddWidget(hideInRangeCheck, 1)
+    manager:Register(hideInRangeCheck, "all")
+    card4:AddRow(row4b, Theme.rowHeightLast, 0)
 
     yOffset = card4:GetNextOffset()
 

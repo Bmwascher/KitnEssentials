@@ -142,3 +142,125 @@ describe("CombatCross visibility", function()
         assert.is_true(CC.onUpdateActive)
     end)
 end)
+
+describe("CombatCross hide when in range", function()
+    -- Protection Warrior (73) is in the melee table, so ResolveRangeAbility
+    -- gives the module something to range-check. gameplayActive must be true
+    -- or every alpha write is correctly suppressed.
+    local function faded(overrides)
+        local CC = loader.loadCombatCross(overrides)
+        CC.db.HideWhenInRange = true
+        CC:ResolveRangeAbility()
+        withFrame(CC)
+        CC.gameplayActive = true
+        return CC
+    end
+
+    it("fades out while the target is in range", function()
+        local CC = faded({ C_Spell = { IsSpellInRange = function() return 1 end } })
+        CC:UpdateRangeColor()
+        assert.equals(0, CC.frame._alpha)
+    end)
+
+    it("fades back in while the target is out of range", function()
+        local CC = faded({ C_Spell = { IsSpellInRange = function() return 0 end } })
+        CC:UpdateRangeColor()
+        assert.equals(1, CC.frame._alpha)
+    end)
+
+    it("hides when there is no target at all", function()
+        -- Nothing to be out of range of, so the cross goes away. This is the
+        -- reference's behaviour and it is the opposite of a restore.
+        local CC = faded({
+            C_Spell = { IsSpellInRange = function() return 1 end },
+            UnitExists = function() return false end,
+        })
+        CC.frame._alpha = 1
+        CC:UpdateRangeColor()
+        assert.equals(0, CC.frame._alpha)
+    end)
+
+    it("leaves alpha alone when the range answer is unreadable", function()
+        -- 0.37 rather than 1, deliberately. Seeding 1 and expecting 1 would be
+        -- satisfied by a wrong SetAlpha(1) as well as by the correct silence,
+        -- so the test could not tell "wrote nothing" from "wrote the value I
+        -- happened to seed". A value the code can never produce can.
+        local CC = faded({ C_Spell = { IsSpellInRange = function() return nil end } })
+        CC.frame._alpha = 0.37
+        CC:UpdateRangeColor()
+        assert.equals(0.37, CC.frame._alpha)
+    end)
+
+    it("leaves alpha alone when the option is off", function()
+        local CC = faded({ C_Spell = { IsSpellInRange = function() return 1 end } })
+        CC.db.HideWhenInRange = false
+        CC.frame._alpha = 0.37
+        CC:UpdateRangeColor()
+        assert.equals(0.37, CC.frame._alpha)
+    end)
+
+    it("does not fade while a preview is showing", function()
+        -- Edit Mode drags the frame. Fading it out mid-drag would leave the
+        -- user moving something they cannot see.
+        local CC = faded({ C_Spell = { IsSpellInRange = function() return 1 end } })
+        CC.previewActive = true
+        CC.frame._alpha = 0.37
+        CC:UpdateRangeColor()
+        assert.equals(0.37, CC.frame._alpha)
+    end)
+
+    it("re-asserts alpha when the range state has not changed", function()
+        -- Pins the write's position BEFORE the lastInRange early-out. Something
+        -- else raised alpha; the next evaluation must take it back down even
+        -- though in-range is what it already was.
+        local CC = faded({ C_Spell = { IsSpellInRange = function() return 1 end } })
+        CC:UpdateRangeColor()
+        assert.equals(0, CC.frame._alpha)
+        CC.frame._alpha = 1
+        CC:UpdateRangeColor()
+        assert.equals(0, CC.frame._alpha)
+    end)
+
+    it("runs the range loop for this option even with both colours off", function()
+        local CC = faded({ C_Spell = { IsSpellInRange = function() return 1 end } })
+        CC.db.RangeColorMeleeEnabled = false
+        CC.db.RangeColorRangedEnabled = false
+        assert.is_true(CC:ShouldRunRangeUpdate())
+    end)
+
+    it("restores alpha when the range loop is torn down", function()
+        local CC = faded({ C_Spell = { IsSpellInRange = function() return 1 end } })
+        CC:UpdateRangeColor()
+        assert.equals(0, CC.frame._alpha)
+        CC.onUpdateActive = true
+        CC.db.HideWhenInRange = false
+        CC.db.RangeColorMeleeEnabled = false
+        CC:UpdateOnUpdateState()
+        assert.equals(1, CC.frame._alpha)
+    end)
+
+    it("restores alpha when the option is turned off while colouring stays on", function()
+        -- The stranding case. The loop keeps running for colour, so nothing
+        -- tears it down, and the faded cross has no other route back.
+        local CC = faded({ C_Spell = { IsSpellInRange = function() return 1 end } })
+        CC.db.RangeColorMeleeEnabled = true
+        CC:UpdateRangeColor()
+        assert.equals(0, CC.frame._alpha)
+        CC.db.HideWhenInRange = false
+        CC:ApplySettings()
+        assert.equals(1, CC.frame._alpha)
+    end)
+
+    it("restores alpha when a preview starts on a faded cross", function()
+        local CC = faded({ C_Spell = { IsSpellInRange = function() return 1 end } })
+        -- Shown FIRST, which is the whole point. Show's pre-existing
+        -- `if not IsShown()` branch already restores alpha on a hidden frame,
+        -- so a test that leaves it hidden passes without the new isPreview
+        -- write. Only an already-shown, already-faded cross can tell them apart.
+        CC.frame:Show()
+        CC:UpdateRangeColor()
+        assert.equals(0, CC.frame._alpha)
+        CC:Show(true)
+        assert.equals(1, CC.frame._alpha)
+    end)
+end)

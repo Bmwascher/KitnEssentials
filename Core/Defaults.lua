@@ -139,6 +139,7 @@ local Defaults = {
             Outline = true,
             RangeColorMeleeEnabled = false,
             RangeColorRangedEnabled = false,
+            HideWhenInRange = false,          -- Only show the crosshair when the target is out of range
             OutOfRangeColor = { 1, 0, 0, 1 },
         },
 

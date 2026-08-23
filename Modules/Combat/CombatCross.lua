@@ -146,7 +146,18 @@ end
 
 function CC:UpdateRangeColor()
     if not self.text then return end
+    -- Read once. All three writes below share the same three-part condition:
+    -- the option is on, gameplay put the cross up, and no preview is running.
+    -- The preview half is not optional -- Edit Mode drags this frame, and
+    -- fading it mid-drag leaves the user moving something invisible.
+    local hideMode = self.db.HideWhenInRange
+
     if not UnitExists("target") then
+        -- Nothing to be out of range OF, so the cross goes away rather than
+        -- coming back. This is the option's whole meaning at zero targets.
+        if hideMode and self.gameplayActive and not self.previewActive then
+            self.frame:SetAlpha(0)
+        end
         if self.lastInRange == false then
             self.lastInRange = nil
             local r, g, b, a = self:GetColor()
@@ -155,9 +166,13 @@ function CC:UpdateRangeColor()
         return
     end
 
+    if not self.rangeAbility then return end
+
     local inRange = C_Spell.IsSpellInRange(self.rangeAbility, "target")
 
     if inRange == nil then
+        -- Deliberately no alpha write: an unreadable range is not an answer,
+        -- and guessing one would flicker the cross on every failed read.
         if self.lastInRange ~= nil then
             self.lastInRange = nil
             local r, g, b, a = self:GetColor()
@@ -167,6 +182,14 @@ function CC:UpdateRangeColor()
     end
 
     local nowInRange = (inRange == 1 or inRange == true)
+
+    -- BEFORE the unchanged-state early-out below, on purpose: other paths set
+    -- alpha back to 1, and a write that only fired on transitions would never
+    -- take it down again.
+    if hideMode and self.gameplayActive and not self.previewActive then
+        self.frame:SetAlpha(nowInRange and 0 or 1)
+    end
+
     if nowInRange == self.lastInRange then return end
     self.lastInRange = nowInRange
 
@@ -182,6 +205,9 @@ end
 function CC:ShouldRunRangeUpdate()
     if not self.gameplayActive then return false end
     if not self.rangeAbility or not self.specType then return false end
+    -- Hide When In Range needs the range answer whether or not anything is
+    -- being recoloured, so it drives the loop on its own.
+    if self.db.HideWhenInRange then return true end
     if self.specType == "melee" and not self.db.RangeColorMeleeEnabled then return false end
     if self.specType == "ranged" and not self.db.RangeColorRangedEnabled then return false end
     return true
@@ -200,6 +226,11 @@ function CC:UpdateOnUpdateState()
         if self.onUpdateActive then
             self.onUpdateActive = false
             self.frame:SetScript("OnUpdate", nil)
+            -- Unconditional, and not gated on the option: this branch runs
+            -- precisely when the user has just switched the option off, so a
+            -- condition that consulted it would decline the restore at the one
+            -- moment a faded cross needs it.
+            if self.frame then self.frame:SetAlpha(1) end
             -- Reset color to default when disabling
             if self.text then
                 local r, g, b, a = self:GetColor()
@@ -281,6 +312,10 @@ function CC:ApplySettings()
     -- profile ENABLES arrives through OnEnable instead, which ends in the same
     -- call. UpdateVisibility runs UpdateOnUpdateState itself, so the call that
     -- used to be here is not lost.
+    -- Hide When In Range is the only thing that ever lowers alpha, so turning
+    -- it off has to raise it again here. The loop may still be running for
+    -- colour, in which case nothing tears it down and no other path restores.
+    if not self.db.HideWhenInRange then self.frame:SetAlpha(1) end
     self:UpdateVisibility()
 end
 
@@ -301,6 +336,11 @@ function CC:Show(isPreview)
 
     if isPreview then
         self.previewActive = true
+        -- A preview that starts on an already-shown, already-faded cross would
+        -- otherwise inherit alpha 0. The fade is suppressed while previewing,
+        -- but the value it already wrote persists, and the restore below
+        -- cannot fire because the frame IS already shown.
+        self.frame:SetAlpha(1)
     else
         self.gameplayActive = true
     end
