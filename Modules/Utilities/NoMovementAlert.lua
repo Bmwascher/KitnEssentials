@@ -826,8 +826,7 @@ end
 -- Buff-active spells were previously detected ONLY by
 -- C_UnitAuras.GetPlayerAuraBySpellID. Midnight hides many buffs from the
 -- player's aura scan, so that returns nil while the effect is genuinely
--- active -- InnervateTracker.lua documents the same thing. It is not M+
--- specific: plain combat is restricted too.
+-- active. It is not M+ specific: plain combat is restricted too.
 --
 -- Fallback is the spell-activation overlay glow. Burning Rush glows while
 -- it is toggled on, and the glow events are not aura reads, so they keep

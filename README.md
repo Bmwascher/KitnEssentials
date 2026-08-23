@@ -39,7 +39,7 @@ The home page also carries the general settings: minimap button, login message, 
 | Combat Timer | Configurable in-combat duration display |
 | Cursor Effects | Cursor-following ring with GCD overlay and multiple textures, plus optional dispel and taunt cooldown countdowns at the cursor — tabbed page |
 | Focus Castbar | Repositionable cast bar with kick indicators, target names, focus raid marker, important-spell glow, out-of-range dimming, color settings, and cast sound alert |
-| Healer Tools | Healer Mana (current party healer's name, spec icon, and mana %; party only, hidden in raid; shows OFFLINE when the healer disconnects), Innervate Tracker (icon and countdown while Innervate is on you, healer-capable classes only), and Maintenance Tracker (one icon per key maintenance buff with group-member count and lowest remaining duration, color-coded by urgency, spec-aware for Atonement, Renewing/Enveloping Mist, Rejuvenation, Riptide, and Echo) — tabbed page |
+| Healer Mana | Healer mana readout with a name and spec icon per healer. Dungeon Mode shows the single party or M+ healer; Raid Mode, when enabled in raid instances, shows every raid healer stacked. Shows OFFLINE when a healer disconnects |
 | No Movement Alert | Remaining-cooldown alert when your movement ability is unavailable — auto-detects your highest-priority movement spell (all classes) |
 | Player Absorbs | On-screen readout of your active damage-absorb shield and heal-absorb, with optional icons, flexible layout (stacked, side-by-side, or split), and player-frame anchoring |
 | Player Crosshair | Static crosshair overlay with range warning (melee, ranged, healer) |

@@ -173,7 +173,7 @@ local function MakeBar(parent, db)
 
     -- Icon: square frame anchored left, holding the class/spec texture. The
     -- frame (not the texture) carries the pixel borders, per the KE icon
-    -- standard (matches HealerMana / MaintenanceTracker). Parented to the row
+    -- standard (matches HealerMana). Parented to the row
     -- (not the fill) so it tracks the row's frame level, like every other KE
     -- bar module.
     row.iconFrame = CreateFrame("Frame", nil, row)
