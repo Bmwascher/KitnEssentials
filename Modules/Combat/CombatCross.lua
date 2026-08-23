@@ -267,7 +267,6 @@ function CC:CreateFrame()
     self.frame:SetFrameLevel(100)
     self.frame:Hide()
 
-    -- Shape glyph rendered at large font size.
     local fontSize = (self.db.Thickness or 22) * FONT_SIZE_MULTIPLIER
     local fontPath = KE:GetFontPath(self.db.FontFace) or KE.FONT
 
