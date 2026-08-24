@@ -48,3 +48,47 @@ describe("Character skin: the rarity border refusal", function()
         assert.is_false(loadSkin()._QualityBordersOn({ SlotQualityBorders = false }))
     end)
 end)
+
+describe("Character skin: the gradient painter's idempotence latch", function()
+    -- A counting recorder, not a fake of Blizzard's texture subsystem. It answers
+    -- the six distinct methods the painter calls and records nothing else, so it
+    -- cannot drift as the painter's layout changes -- only as its METHOD SET does,
+    -- which is what the latch is about.
+    local function fakeRow()
+        local made = 0
+        local tex = {
+            SetTexture = function() end, SetPoint = function() end,
+            SetWidth = function() end, SetGradient = function() end,
+        }
+        return {
+            Background = { SetAlpha = function() end },
+            CreateTexture = function() made = made + 1; return tex end,
+        }, function() return made end
+    end
+
+    it("creates exactly two textures however many times it is called", function()
+        local S = loadSkin()
+        local row, count = fakeRow()
+        S._ColorizeStatPane(row)
+        S._ColorizeStatPane(row)
+        S._ColorizeStatPane(row)
+        assert.equals(2, count())
+    end)
+
+    it("still paints a row it has never seen", function()
+        local S = loadSkin()
+        local row, count = fakeRow()
+        S._ColorizeStatPane(row)
+        assert.equals(2, count())
+    end)
+
+    it("treats a second row as a separate row", function()
+        local S = loadSkin()
+        local rowA, countA = fakeRow()
+        local rowB, countB = fakeRow()
+        S._ColorizeStatPane(rowA)
+        S._ColorizeStatPane(rowB)
+        assert.equals(2, countA())
+        assert.equals(2, countB())
+    end)
+end)

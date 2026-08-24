@@ -20,6 +20,8 @@ local ILVL_FONT = 13
 local TAB_FONT = 13
 local TITLE_FONT = 13
 local BRAND = S.palette.brand
+local STAT_GRAD_WIDTH = 80
+local STAT_GRAD_TEX = "Interface\\Buttons\\WHITE8x8"
 
 -- Per-slot item level + gem icons used to be drawn here (EnsureSlotDisplay /
 -- UpdateSlotDisplay / GetEmptySocketIcons).
@@ -30,15 +32,54 @@ local BRAND = S.palette.brand
 -- frame, which this never did. KE.GetEmptySocketIcons went with them --
 -- nothing in KE called it.
 
+-- Two mirrored fades from the row's centre outward, replacing the plate rather
+-- than merely hiding it.
+--
+-- The alpha is re-asserted on EVERY pass, not once: these rows come from a
+-- frame pool and Blizzard re-shows the plate whenever a row is reacquired, so a
+-- one-time blank comes back.
+local function ColorizeStatPane(frame)
+    if not frame then return end
+
+    if frame.Background and frame.Background.SetAlpha then frame.Background:SetAlpha(0) end
+
+    if S.data(frame).statGrad then return end
+    S.data(frame).statGrad = true
+
+    local r, g, b = 0.8, 0.8, 0.8
+    local solid, clear = CreateColor(r, g, b, 0.25), CreateColor(r, g, b, 0)
+
+    local right = frame:CreateTexture(nil, "BORDER")
+    right:SetTexture(STAT_GRAD_TEX)
+    right:SetPoint("TOPLEFT", frame, "TOP")
+    right:SetPoint("BOTTOMLEFT", frame, "BOTTOM")
+    right:SetWidth(STAT_GRAD_WIDTH)
+    right:SetGradient("HORIZONTAL", solid, clear)
+
+    local left = frame:CreateTexture(nil, "BORDER")
+    left:SetTexture(STAT_GRAD_TEX)
+    left:SetPoint("TOPRIGHT", frame, "TOP")
+    left:SetPoint("BOTTOMRIGHT", frame, "BOTTOM")
+    left:SetWidth(STAT_GRAD_WIDTH)
+    left:SetGradient("HORIZONTAL", clear, solid)
+
+    -- Handles kept in S.data, never as fields on the Blizzard frame.
+    S.data(frame).statGradL, S.data(frame).statGradR = left, right
+end
+S._ColorizeStatPane = ColorizeStatPane
+
 local function UpdateStatsPane()
     local pane = _G.CharacterStatsPane
     if not pane then return end
 
-    if pane.ItemLevelFrame and pane.ItemLevelFrame.Value then
-        S.SetFont(pane.ItemLevelFrame.Value, ILVL_SIZE, "OUTLINE")
+    if pane.ItemLevelFrame then
+        ColorizeStatPane(pane.ItemLevelFrame)
+        if pane.ItemLevelFrame.Value then
+            S.SetFont(pane.ItemLevelFrame.Value, ILVL_SIZE, "OUTLINE")
 
-        local _, equipped = GetAverageItemLevel()
-        if equipped then pane.ItemLevelFrame.Value:SetText(string.format("%.2f", equipped)) end
+            local _, equipped = GetAverageItemLevel()
+            if equipped then pane.ItemLevelFrame.Value:SetText(string.format("%.2f", equipped)) end
+        end
     end
     for _, cat in ipairs(STAT_CATEGORIES) do
         if pane[cat] then S.FontStrings(pane[cat], HEADER_SIZE, "OUTLINE") end
@@ -52,9 +93,14 @@ local function UpdateStatsPane()
 
                 S.FontStrings(row, ROW_SIZE, "OUTLINE")
             end
-            if row.Background and row.Background.SetAlpha then
-                row.Background:SetAlpha(0)
-            end
+
+            -- Blizzard stripes the plate down the list, on for one row and off
+            -- for the next. Follow that rather than blooming every row.
+            local shown = row.Background and row.Background:IsShown()
+            ColorizeStatPane(row)
+            local d = S.data(row)
+            if d.statGradL then d.statGradL:SetShown(shown) end
+            if d.statGradR then d.statGradR:SetShown(shown) end
         end
     end
 end
