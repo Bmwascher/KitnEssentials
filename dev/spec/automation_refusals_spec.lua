@@ -53,6 +53,8 @@ local function newFixture()
             Show = function() shown = true; record(label, "Show") end,
             Hide = function() shown = false; record(label, "Hide") end,
             SetShown = function(_, v) shown = v and true or false; record(label, "SetShown", v) end,
+            SetPoint = function(_, point, rel, relPoint, x, y) record(label, "SetPoint", point, rel, relPoint, x, y) end,
+            SetSize = function(_, w, h) record(label, "SetSize", w, h) end,
             IsShown = function() return shown end,
             RegisterEvent = function(_, e) events[e] = true; record(label, "RegisterEvent", e) end,
             RegisterUnitEvent = function(_, e) events[e] = true; record(label, "RegisterUnitEvent", e) end,
@@ -189,6 +191,19 @@ local function newFixture()
     -- pre-empted by presetting the talking-head latch below rather than
     -- stubbed, since nothing in these four behaviours exercises it.
     AU.RegisterEvent = function(_, event) record("AU", "RegisterEvent:" .. event) end
+    AU.UnregisterEvent = function(_, event) record("AU", "UnregisterEvent:" .. event) end
+    -- MIRRORS the key by default, and is overridable per case. Existing cases turn
+    -- the module off by setting Enabled = false and then assert the button hides,
+    -- which now runs through this predicate; a constant true makes exactly those
+    -- go red. The override exists because mirroring alone can NEVER produce the
+    -- state this whole gate was added for -- Ace has marked the module disabled
+    -- while the player's key still reads true -- and a guard nothing can reach is
+    -- a guard nothing tests.
+    AU._specEnabled = nil
+    AU.IsEnabled = function()
+        if AU._specEnabled ~= nil then return AU._specEnabled end
+        return AU.db and AU.db.Enabled
+    end
     AU.SetEnabledState = function() end
     AU._talkingHeadHooked = true
 
@@ -213,6 +228,12 @@ local function newFixture()
         lastArg = function(label, method)
             for i = #ledger, 1, -1 do
                 if ledger[i].frame == label and ledger[i].method == method then return ledger[i][1] end
+            end
+            return nil
+        end,
+        lastCall = function(label, method)
+            for i = #ledger, 1, -1 do
+                if ledger[i].frame == label and ledger[i].method == method then return ledger[i] end
             end
             return nil
         end,
@@ -1118,5 +1139,77 @@ describe("Automation repair spend rule", function()
     it("says nothing about a reading that is not a number", function()
         assert.is_nil(AU:RepairSpend("1000", 0))
         assert.is_nil(AU:RepairSpend(1000, false))
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Character-window button placement (phase 6A Task 1)
+---------------------------------------------------------------------------------
+describe("Automation character-window button placement", function()
+    -- Reaches the file-local placement chain the same way this file's other
+    -- cases reach file-locals: through a public method's upvalues.
+    --
+    -- FOUR hops, not three. Upvalue lookup is not transitive: SetupOmniumButton
+    -- captures OmniumCreateButton, and PlaceCharButton is an upvalue of THAT,
+    -- not of the setup function.
+    local function placementChain(AU)
+        local setup = findUpvalue(AU.RetrySpawnDeferredButtons, "SetupOmniumButton")
+        assert.is_function(setup)
+        local create = findUpvalue(setup, "OmniumCreateButton")
+        assert.is_function(create)
+        local place = findUpvalue(create, "PlaceCharButton")
+        assert.is_function(place)
+        return place, findUpvalue(place, "CharBtnOffset"), findUpvalue(place, "CharBtnSize")
+    end
+
+    it("puts slot 0 at the shipped offset and slot 1 one button further left", function()
+        local fx = newFixture()
+        local _, offset = placementChain(fx.AU)
+        -- Slot 0 at the default size must reproduce the offset the Omnium
+        -- button has always had, or an existing user sees it move.
+        assert.equals(-8, offset(0, 26, 1))
+        assert.equals(-35, offset(1, 26, 1))
+    end)
+
+    it("scales the gap between slots with the button size", function()
+        local fx = newFixture()
+        local _, offset = placementChain(fx.AU)
+        assert.equals(-8, offset(0, 40, 2))
+        assert.equals(-50, offset(1, 40, 2))
+    end)
+
+    -- A shipped-regression invariant, not a test of the slider. With KE.db
+    -- absent the forbidden fallback chain would ALSO return 26, so this case
+    -- installs a gem size of 24 first: a chain implementation then returns 24
+    -- and fails, and only the plain-26 implementation passes.
+    it("falls back to 26 even when a gem size is set, never to the gem size", function()
+        local fx = newFixture()
+        local _, _, size = placementChain(fx.AU)
+        fx.KE.db = { profile = { CharacterPanel = { SocketButtonSize = 24, SocketButtonSpacing = 1 } } }
+
+        fx.AU.db = { WindowButtonSize = 40 }
+        assert.equals(40, size())
+
+        -- The discriminating case: no own key, gem size present and different.
+        fx.AU.db = { WindowButtonSize = nil }
+        assert.equals(26, size())
+
+        fx.AU.db = { WindowButtonSize = 2 }
+        assert.equals(26, size())
+    end)
+
+    it("places the real button through the real anchor call", function()
+        local fx = newFixture()
+        local AU = fx.AU
+        AU.db = { Enabled = true, OmniumCharButton = true }
+        AU:ApplySettings()
+        local call = fx.lastCall("KE_OmniumFoilButton", "SetPoint")
+        assert.is_not_nil(call)
+        assert.equals("BOTTOMRIGHT", call[1])
+        assert.equals(-8, call[4])
+        assert.equals(8, call[5])
+        local sized = fx.lastCall("KE_OmniumFoilButton", "SetSize")
+        assert.equals(26, sized[1])
+        assert.equals(26, sized[2])
     end)
 end)

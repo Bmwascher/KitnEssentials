@@ -1648,9 +1648,47 @@ end
 --     toggle; reuse its OnEnter so the tooltip stays whatever Blizzard
 --     says it is.
 
+local math_floor = math.floor
+local tonumber = tonumber
+
 local OMNI_ICON_FILEID = 7554214
 local omniCharButton
 local omniMinimapHooked = false
+
+-- Size is its own key rather than following the gem socket slider: the two
+-- rows are different shapes, and the gem default is 24 while this button has
+-- always been 26, so following it would resize a button that already shipped.
+local function CharBtnSize()
+    local size = tonumber(AU.db and AU.db.WindowButtonSize)
+    if size and size > 4 then return math_floor(size + 0.5) end
+    return 26
+end
+
+-- The gap DOES follow the gem spacing -- it is the one value the two rows
+-- genuinely share, and it already exists as a user-facing slider.
+local function CharBtnGap()
+    local cp = KE.db and KE.db.profile and KE.db.profile.CharacterPanel
+    local gap = cp and tonumber(cp.SocketButtonSpacing)
+    if gap and gap >= 0 then return gap end
+    return 1
+end
+
+-- Slot 0 is the corner, slot 1 sits one button-width to its left. Slots are
+-- fixed, so hiding one button never moves the other.
+local function CharBtnOffset(slot, size, gap)
+    return -(8 + slot * (size + gap))
+end
+
+-- Absolute on every call, so running it repeatedly produces the same layout
+-- and a size change lands without any remembered previous state.
+local function PlaceCharButton(b, slot)
+    local pdf = _G.PaperDollFrame
+    if not (b and pdf) then return end
+    local size = CharBtnSize()
+    b:SetSize(size, size)
+    b:ClearAllPoints()
+    b:SetPoint("BOTTOMRIGHT", pdf, "BOTTOMRIGHT", CharBtnOffset(slot, size, CharBtnGap()), 8)
+end
 
 local function OmniumAllowed()
     return _G.UnitLevel("player") >= _G.GetMaxPlayerLevel()
@@ -1679,8 +1717,7 @@ local function OmniumCreateButton()
     -- (position unchanged).
     local host = _G.CharacterStatsPane or _G.PaperDollFrame
     local b = CreateFrame("Button", "KE_OmniumFoilButton", host)
-    b:SetSize(26, 26)
-    b:SetPoint("BOTTOMRIGHT", _G.PaperDollFrame, "BOTTOMRIGHT", -8, 8)
+    PlaceCharButton(b, 0)
     b:SetFrameLevel(_G.PaperDollFrame:GetFrameLevel() + 10)
 
     local icon = b:CreateTexture(nil, "ARTWORK")
