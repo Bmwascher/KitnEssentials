@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.8
+
+### Combat Logger
+- The page is rebuilt around three content cards: Dungeons, Raids and a flat PvP
+  card that lists Rated Arena, Solo Shuffle, Skirmish, Rated BG, Battleground and
+  War Game as plain ticks
+- New Scenarios card. It covers delves, Torghast and anything else the game counts
+  as a scenario. It used to only cover Torghast
+- Two new buttons. One turns on Advanced Combat Logging without a reload and tells
+  you when it is already on. The other ticks every content type Warcraft Recorder
+  can record and turns Advanced Combat Logging on with it
+- The "Ask About Advanced Combat Logging" option now reads as a positive. It was
+  worded the other way round before. Your existing choice is carried over, so a
+  profile that had the question switched off keeps it switched off
+- Searching the sidebar now finds the page for "scenario", "delve" and "recorder"
+
 ## v4.3.7
 
 ### Cursor Effects

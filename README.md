@@ -72,7 +72,7 @@ The home page also carries the general settings: minimap button, login message, 
 | Page | Description |
 |---|---|
 | Automation | Auto-repair with a repair cost announcement, auto-sell, auto-confirm queues, auto-slot keystone, skip cinematics, hide event toasts and zone text, merchant and auction house conveniences, and one-click Vantus Rune withdrawal from the guild bank |
-| Combat Logger | Automatic combat logging for raids, dungeons, M+, PvP, and arenas with per-content toggles |
+| Combat Logger | Automatic combat logging for raids, dungeons, M+, PvP, arenas, and scenarios including delves, with per-content toggles, a one-click Advanced Combat Logging switch, and a Warcraft Recorder preset |
 | CVars | One-click console variable panel, including the adjustable minimized world map scale |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault, with class color and sound |
 | Quality of Life | Four tools on one page: Spell Alert Opacity (per-spec opt-in grid for Blizzard's proc overlay flashes, plus an opacity slider), Move Frames (drag Blizzard windows anywhere), Copy Anything (pull spell, item, NPC, and aura IDs to the clipboard from tooltips), and Slash Commands (shorthand commands such as `/rl`, `/cd`, `/fs`, `/leave`, `/reset`, `/mute`, `/music`) |
