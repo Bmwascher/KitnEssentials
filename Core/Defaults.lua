@@ -1057,6 +1057,9 @@ local Defaults = {
             ShowMissingGems          = true,
             HideCharacterBackground  = false,
 
+            -- Widen the character window so slot text clears the model
+            WiderFrame               = false,
+
             -- Decimal item level (ElvUI-gated)
             DecimalItemLevel         = true,
 

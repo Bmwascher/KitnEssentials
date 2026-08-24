@@ -808,6 +808,42 @@ local function RestoreCharacterBackground()
     backgroundsHidden = false
 end
 
+---------------------------------------------------------------------------------
+-- Wider character window
+---------------------------------------------------------------------------------
+-- Fixed, not a slider. Everything below is expressed as `add` or `add / 2`, so
+-- the layout re-centres itself at any value -- the number is a matter of taste
+-- rather than of geometry, and a slider would invite widths nobody has looked
+-- at.
+local WIDEN_BY = 40
+
+-- Stands down whenever another addon owns the character sheet. ElvUI reskins
+-- the frame, and an EUI themed sheet re-anchors every slot into its own
+-- two-column grid, so widening under either fights a layout we do not control.
+--
+-- The ElvUI test matches the one the GUI card is gated on. A behaviour gate
+-- that disagreed with its own control would act on a setting the user is being
+-- told is unavailable.
+local function ExtraWidth()
+    local db = CP.db
+    if not db or not db.WiderFrame then return 0 end
+    -- The module's LIFECYCLE STATE, not the preference key. The hooks below
+    -- install once and cannot be removed, so without this they keep re-widening
+    -- after the module is switched off -- and the control for this setting lives
+    -- inside that master gate, so the player could not reach it to stop them.
+    --
+    -- `IsEnabled()` rather than `db.Enabled` because the two can disagree:
+    -- `CP:Disable()` is reachable without the key changing, and Ace marks the
+    -- module disabled BEFORE running OnDisable, so this reads false there while
+    -- the key is still true. Reading the key would re-apply the widen from
+    -- inside the very teardown meant to undo it.
+    if not CP:IsEnabled() then return 0 end
+    if ElvUILoaded() then return 0 end
+    if KE:EUISheetActive("player") then return 0 end
+    return WIDEN_BY
+end
+CP._ExtraWidth = ExtraWidth
+
 local function HookCharacterPanel()
     if hooked then return end
 
