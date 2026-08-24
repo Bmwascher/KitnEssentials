@@ -77,6 +77,7 @@ function KitnEssentials:OnInitialize()
     -- from one the user switched off. AceDB copies the new default in and
     -- erases that difference.
     KE:MigrateModuleEnableDefaults()
+    KE:MigrateCombatLoggerKeys()
     KE.db = LibStub("AceDB-3.0"):New("KitnEssentialsDB", defaults, true) --[[@as AceDB]]
     if KE.LDS then
         KE.LDS:EnhanceDatabase(KE.db, "KitnEssentials")

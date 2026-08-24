@@ -672,7 +672,7 @@ local Defaults = {
         CombatLogger = {
             Enabled = false,
             DelayStop = true,
-            DisableACLPrompt = false,
+            PromptAdvanced = true,
             QuietMode = false,
             -- Dungeons
             DungeonNormal = false,
@@ -694,7 +694,7 @@ local Defaults = {
             PvPSoloShuffle = false,
             PvPWarGame = false,
             -- Scenarios
-            ScenarioTorghast = false,
+            Scenario = false,
         },
 
         DragonRiding = {
@@ -2138,6 +2138,72 @@ function KE:MigrateModuleEnableDefaults()
                         local parent = ResolveParentTable(profile, path)
                         if parent and parent[key] == nil then
                             parent[key] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Straight key renames inside a block AceDB already registers. Same once-only,
+-- per-entry marker as the enable-default migration above, but its own record
+-- table: an id here names a rename, an id there is a dotted profile path, and
+-- one table would leave a later reader unable to tell them apart.
+local KEY_RENAME_RECORD = "KeyRenames"
+
+-- `convert` turns the old saved value into the new one and is called with nil
+-- for an absent key, because absent means the key sat at its OLD default and
+-- AceDB stripped it at logout.
+local KEY_RENAMES = {
+    {
+        id = "CombatLogger.ScenarioTorghast->Scenario",
+        block = "CombatLogger",
+        old = "ScenarioTorghast",
+        new = "Scenario",
+        convert = function(value) return value == true end,
+    },
+    {
+        id = "CombatLogger.DisableACLPrompt->PromptAdvanced",
+        block = "CombatLogger",
+        old = "DisableACLPrompt",
+        new = "PromptAdvanced",
+        -- The polarity flips: the old key stored "do not ask".
+        convert = function(value) return value ~= true end,
+    },
+}
+
+function KE:MigrateCombatLoggerKeys()
+    local sv = _G.KitnEssentialsDB
+    if type(sv) ~= "table" then
+        -- Fresh install. Nothing to carry, but the stamp still has to land or
+        -- the next login would convert the brand-new profile's absent old keys
+        -- and overwrite what the user had just chosen.
+        sv = {}
+        _G.KitnEssentialsDB = sv
+    end
+
+    local record = sv[KEY_RENAME_RECORD]
+    if type(record) ~= "table" then
+        record = {}
+        sv[KEY_RENAME_RECORD] = record
+    end
+
+    local profiles = sv.profiles
+    for i = 1, #KEY_RENAMES do
+        local entry = KEY_RENAMES[i]
+        if not record[entry.id] then
+            record[entry.id] = true
+            if type(profiles) == "table" then
+                for _, profile in pairs(profiles) do
+                    if type(profile) == "table" then
+                        local block = profile[entry.block]
+                        if type(block) == "table" then
+                            -- A block with neither old key gets its new key at
+                            -- the new default, which AceDB strips again at
+                            -- logout. Harmless, and cheaper than a second test.
+                            block[entry.new] = entry.convert(block[entry.old])
+                            block[entry.old] = nil
                         end
                     end
                 end

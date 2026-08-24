@@ -10,6 +10,44 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
+-- The four lists live together so a change to one is made beside the others.
+-- They are independent tables: nothing here stops the preset naming a key no
+-- card offers.
+local DUNGEONS = {
+    { key = "DungeonNormal",      label = "Normal" },
+    { key = "DungeonHeroic",      label = "Heroic" },
+    { key = "DungeonMythic",      label = "Mythic" },
+    { key = "DungeonMythicPlus",  label = "Mythic+" },
+    { key = "DungeonTimewalking", label = "Timewalking" },
+}
+
+local RAIDS = {
+    { key = "RaidLFR",         label = "LFR" },
+    { key = "RaidNormal",      label = "Normal" },
+    { key = "RaidHeroic",      label = "Heroic" },
+    { key = "RaidMythic",      label = "Mythic" },
+    { key = "RaidTimewalking", label = "Timewalking" },
+}
+
+local PVP = {
+    { key = "PvPRatedArena",    label = "Rated Arena" },
+    { key = "PvPSoloShuffle",   label = "Solo Shuffle" },
+    { key = "PvPArenaSkirmish", label = "Skirmish" },
+    { key = "PvPRatedBG",       label = "Rated BG" },
+    { key = "PvPRegularBG",     label = "Battleground" },
+    { key = "PvPWarGame",       label = "War Game" },
+}
+
+-- What Warcraft Recorder can record. Scenarios are absent on purpose: it does
+-- not record delves or Torghast, so logging them would only grow the file.
+-- Timewalking dungeons and war games are absent for the same reason.
+local RECORDER_PRESET = {
+    "DungeonMythicPlus", "DungeonMythic", "DungeonHeroic", "DungeonNormal",
+    "RaidLFR", "RaidNormal", "RaidHeroic", "RaidMythic", "RaidTimewalking",
+    "PvPRatedArena", "PvPSoloShuffle", "PvPArenaSkirmish",
+    "PvPRatedBG", "PvPRegularBG",
+}
+
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("CombatLogger", true)
@@ -39,6 +77,43 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
         manager:UpdateAll(db.Enabled ~= false)
     end
 
+    -- Every content card is the same grid, so it is written once.
+    local function AddContentCard(title, defs, perRow)
+        local card = GUIFrame:CreateCard(scrollChild, title, yOffset)
+        manager:Register(card, "all")
+
+        local row
+        for i, def in ipairs(defs) do
+            -- The final row holds ((#defs - 1) % perRow) + 1 items, short of
+            -- perRow whenever the count does not divide evenly. A plain
+            -- `#defs - perRow` counts back a whole row, so on a short final
+            -- row it reaches into the row above when there is one.
+            local isLastRow = i > #defs - ((#defs - 1) % perRow + 1)
+            local rowHeight = isLastRow and Theme.rowHeightLast or Theme.rowHeight
+            if not row then
+                row = GUIFrame:CreateRow(card.content, rowHeight)
+            end
+            local checkbox = GUIFrame:CreateCheckbox(row, def.label, {
+                value = db[def.key] == true,
+                callback = function(val) db[def.key] = val; ApplySettings() end,
+            })
+            row:AddWidget(checkbox, 1 / perRow)
+            manager:Register(checkbox, "all")
+
+            if i % perRow == 0 or i == #defs then
+                if isLastRow then
+                    card:AddRow(row, rowHeight, 0)
+                else
+                    card:AddRow(row, rowHeight)
+                end
+                row = nil
+            end
+        end
+
+        yOffset = card:GetNextOffset()
+        return card
+    end
+
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
@@ -49,20 +124,19 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
         KE:Print("Combat Logger: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 70)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Automatically enables combat logging for selected content types.\n" ..
-        KE:ColorTextByTheme("-") .. " Requires " .. KE:ColorTextByTheme("Advanced Combat Logging") .. " CVar enabled for Warcraft Logs.\n" ..
-        "   You will be prompted to enable it on login if it is disabled.",
-        70, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 70, 0)
+    -- Lone header bar: a disabled module shows its switch and nothing else,
+    -- the label included.
+    if db.Enabled == false then return card1:GetNextOffset() end
+
+    card1:AddLabel("Turns the game's combat log on for the content you tick below, and " ..
+        "off again when you leave." ..
+        "\n\nThat log file is what |cffffd100Warcraft Logs|r uploads and what " ..
+        "|cffffd100Warcraft Recorder|r reads to know when a pull, a key or a match starts " ..
+        "and ends." ..
+        "\n\nA log you started yourself with |cffffd100/combatlog|r is left alone - this " ..
+        "only closes logs it opened.")
 
     yOffset = card1:GetNextOffset()
-
-    -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
 
     ----------------------------------------------------------------
     -- Card 2: Settings
@@ -71,124 +145,101 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
     manager:Register(card2, "all")
 
     local settingsDefs = {
-        { key = "DelayStop", label = "Delay Stop", desc = "Wait 30s before stopping log after leaving instance. (Warcraft Recorder)", default = true },
-        { key = "DisableACLPrompt", label = "Disable ACL Prompt", desc = "Hide the login popup to enable Advanced Combat Logging.", default = false },
-        { key = "QuietMode", label = "Quiet Mode", desc = "Suppress chat messages when logging starts/stops.", default = false },
+        { key = "DelayStop", label = "Delay Stop",
+          desc = "Keep logging for 30 seconds after you leave, so the lines that close a recording still land.",
+          default = true },
+        { key = "PromptAdvanced", label = "Ask About Advanced Combat Logging",
+          desc = "Offer to turn it on if it is off. Unticking only stops the question, not the logging.",
+          default = true },
+        { key = "QuietMode", label = "Quiet Mode",
+          desc = "No chat line when logging starts or stops.",
+          default = false },
     }
 
-    for i, def in ipairs(settingsDefs) do
+    for _, def in ipairs(settingsDefs) do
         local checked = db[def.key]
         if checked == nil then checked = def.default end
         local label = def.label .. "  |cff888888- " .. def.desc .. "|r"
-        local isLast = i == #settingsDefs
-        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
-        local row = GUIFrame:CreateRow(card2.content, rowHeight)
+        local row = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
         local checkbox = GUIFrame:CreateCheckbox(row, label, {
             value = checked,
             callback = function(val) db[def.key] = val end,
         })
         row:AddWidget(checkbox, 1)
         manager:Register(checkbox, "all")
-        if isLast then
-            card2:AddRow(row, rowHeight, 0)
-        else
-            card2:AddRow(row, rowHeight)
-        end
+        card2:AddRow(row, Theme.rowHeight)
     end
+
+    -- Read at build time, so the label is stale if the CVar changes while the
+    -- page is open. Both button callbacks rebuild the page, which is what keeps
+    -- it honest after a click.
+    local advancedOn = false
+    if CL and CL.IsAdvanced then advancedOn = CL:IsAdvanced() end
+
+    local buttonRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+
+    local advButton = GUIFrame:CreateButton(buttonRow,
+        advancedOn and "Advanced Logging Is On" or "Turn On Advanced Logging", {
+        width = 220,
+        height = 28,
+        tooltip = "Warcraft Logs requires this, and Warcraft Recorder needs it for detail. No reload.",
+        callback = function()
+            if CL and CL.EnableAdvanced then
+                CL:EnableAdvanced()
+                GUIFrame:RefreshContent()
+            end
+        end,
+    })
+    buttonRow:AddWidget(advButton, 1 / 2)
+    manager:Register(advButton, "all")
+
+    local presetButton = GUIFrame:CreateButton(buttonRow, "Warcraft Recorder Preset", {
+        width = 220,
+        height = 28,
+        tooltip = "Tick every content type Warcraft Recorder can record, and turn on Advanced Combat Logging.",
+        callback = function()
+            for _, key in ipairs(RECORDER_PRESET) do
+                db[key] = true
+            end
+            db.DelayStop = true
+            if CL and CL.EnableAdvanced then
+                CL:EnableAdvanced()
+                ApplySettings()
+            end
+            GUIFrame:RefreshContent()
+        end,
+    })
+    buttonRow:AddWidget(presetButton, 1 / 2)
+    manager:Register(presetButton, "all")
+
+    card2:AddRow(buttonRow, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Dungeons
+    -- Cards 3-5: what to log
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Dungeons", yOffset)
-    manager:Register(card3, "all")
-
-    local dungeonDefs = {
-        { key = "DungeonNormal", label = "Normal" },
-        { key = "DungeonHeroic", label = "Heroic" },
-        { key = "DungeonMythic", label = "Mythic" },
-        { key = "DungeonMythicPlus", label = "Mythic+" },
-        { key = "DungeonTimewalking", label = "Timewalking" },
-    }
-
-    local dungeonRow = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    for _, def in ipairs(dungeonDefs) do
-        local checkbox = GUIFrame:CreateCheckbox(dungeonRow, def.label, {
-            value = db[def.key] == true,
-            callback = function(val) db[def.key] = val; ApplySettings() end,
-        })
-        dungeonRow:AddWidget(checkbox, 1 / #dungeonDefs)
-        manager:Register(checkbox, "all")
-    end
-    card3:AddRow(dungeonRow, Theme.rowHeightLast, 0)
-
-    yOffset = card3:GetNextOffset()
+    AddContentCard("Dungeons", DUNGEONS, 5)
+    AddContentCard("Raids", RAIDS, 5)
+    AddContentCard("PvP", PVP, 3)
 
     ----------------------------------------------------------------
-    -- Card 4: Raids
+    -- Card 6: Scenarios
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Raids", yOffset)
-    manager:Register(card4, "all")
+    local card6 = GUIFrame:CreateCard(scrollChild, "Scenarios", yOffset)
+    manager:Register(card6, "all")
 
-    local raidDefs = {
-        { key = "RaidLFR", label = "LFR" },
-        { key = "RaidNormal", label = "Normal" },
-        { key = "RaidHeroic", label = "Heroic" },
-        { key = "RaidMythic", label = "Mythic" },
-        { key = "RaidTimewalking", label = "Timewalking" },
-    }
+    local scenarioRow = GUIFrame:CreateRow(card6.content, Theme.rowHeightLast)
+    local scenarioCheckbox = GUIFrame:CreateCheckbox(scenarioRow,
+        "Scenarios  |cff888888- Delves, Torghast and anything else the game counts as a scenario.|r", {
+        value = db.Scenario == true,
+        callback = function(val) db.Scenario = val; ApplySettings() end,
+    })
+    scenarioRow:AddWidget(scenarioCheckbox, 1)
+    manager:Register(scenarioCheckbox, "all")
+    card6:AddRow(scenarioRow, Theme.rowHeightLast, 0)
 
-    local raidRow = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    for _, def in ipairs(raidDefs) do
-        local checkbox = GUIFrame:CreateCheckbox(raidRow, def.label, {
-            value = db[def.key] == true,
-            callback = function(val) db[def.key] = val; ApplySettings() end,
-        })
-        raidRow:AddWidget(checkbox, 1 / #raidDefs)
-        manager:Register(checkbox, "all")
-    end
-    card4:AddRow(raidRow, Theme.rowHeightLast, 0)
-
-    yOffset = card4:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 5: PvP & Other
-    ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "PvP & Other", yOffset)
-    manager:Register(card5, "all")
-
-    -- Grouped 3-2-2: casual PvP/PvE | rated | practice/social.
-    local pvpRows = {
-        { { key = "PvPRegularBG", label = "Regular BG" },
-          { key = "PvPSoloShuffle", label = "Solo Shuffle" },
-          { key = "ScenarioTorghast", label = "Torghast" } },
-        { { key = "PvPRatedBG", label = "Rated BG" },
-          { key = "PvPRatedArena", label = "Rated Arena" } },
-        { { key = "PvPWarGame", label = "War Game" },
-          { key = "PvPArenaSkirmish", label = "Arena Skirmish" } },
-    }
-
-    for i, defs in ipairs(pvpRows) do
-        local isLast = i == #pvpRows
-        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
-        local row = GUIFrame:CreateRow(card5.content, rowHeight)
-        for _, def in ipairs(defs) do
-            local checkbox = GUIFrame:CreateCheckbox(row, def.label, {
-                value = db[def.key] == true,
-                callback = function(val) db[def.key] = val; ApplySettings() end,
-            })
-            row:AddWidget(checkbox, 1/3)
-            manager:Register(checkbox, "all")
-        end
-        if isLast then
-            card5:AddRow(row, rowHeight, 0)
-        else
-            card5:AddRow(row, rowHeight)
-        end
-    end
-
-    yOffset = card5:GetNextOffset()
+    yOffset = card6:GetNextOffset()
 
     RefreshStates()
     return yOffset
