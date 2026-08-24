@@ -248,12 +248,14 @@ for seek in pairs(enchantNicknames) do
 end
 table.sort(enchantNicknameOrder, function(a, b) return #a > #b end)
 
--- Pipeline (in order): strip the "Enchant <Slot> - " prefix from the raw effect
--- text, map the bare name through the nickname table, then abbreviate stat words.
--- Memoized because it runs ~76 gsubs per label and the same handful of equipped
--- enchant names re-resolve on every slot render, including inspect gem-race
--- retries. ProcessEnchantText owns the cache key; a pure function of its inputs
--- and the load-time constant tables, so entries never invalidate.
+-- The style decides which pipeline a label takes, and they diverge rather than
+-- nest. Every style strips the "Enchant <Slot> - " prefix; "full" is then done.
+-- "verbose" reduces what is left to its keyword. "short" skips the keyword step
+-- and instead maps through the nickname table, then abbreviates stat words.
+-- Memoized because that last path runs ~76 gsubs per label and the same handful
+-- of equipped enchant names re-resolve on every slot render, including inspect
+-- gem-race retries. ProcessEnchantText owns the cache key; a pure function of its
+-- inputs and the load-time constant tables, so entries never invalidate.
 -- Words that never carry the meaning of an enchant name, so the keyword walk
 -- below skips them rather than returning one.
 local ENCHANT_FILLER = { ["of"] = true, ["the"] = true, ["and"] = true, ["a"] = true }
