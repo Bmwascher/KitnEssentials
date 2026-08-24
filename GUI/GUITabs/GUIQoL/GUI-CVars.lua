@@ -46,8 +46,12 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
         end
         local row = existingRow or GUIFrame:CreateRow(card.content, Theme.rowHeight)
         local checkbox = GUIFrame:CreateCheckbox(row, label, {
-            value = db[key],
+            value = AU and AU:GetLiveCVar(def) or false,
             callback = function(checked)
+                -- The write still goes through the profile as well as the
+                -- client, so the value keeps travelling with the profile and
+                -- "Apply CVars on Login" keeps working. Only the display source
+                -- changed.
                 db[key] = checked
                 if AU then
                     AU._suppressCVarUpdate = true
@@ -61,6 +65,13 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
         if not existingRow then
             card:AddRow(row, Theme.rowHeight)
         end
+    end
+
+    -- The rule itself lives on the module so it can be tested; this only covers
+    -- the page being built before Automation exists.
+    local function LiveDefs(defs, match)
+        if not AU then return {} end
+        return AU:FilterLiveDefs(defs, match)
     end
 
     ----------------------------------------------------------------
@@ -89,70 +100,64 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 2: Floating Combat Text
     ----------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Floating Combat Text", yOffset)
-    manager:Register(card2, "all")
-
-    if AU then
-        for _, def in ipairs(AU.CVAR_DEFS) do
-            if def.key:find("^floatingCombatText") or def.key == "enableFloatingCombatText" then
-                AddCVarCheckbox(card2, def)
-            end
+    local ftDefs = LiveDefs(AU and AU.CVAR_DEFS or {}, function(def)
+        return def.key:find("^floatingCombatText") ~= nil or def.key == "enableFloatingCombatText"
+    end)
+    if #ftDefs > 0 then
+        local card2 = GUIFrame:CreateCard(scrollChild, "Floating Combat Text", yOffset)
+        manager:Register(card2, "all")
+        for _, def in ipairs(ftDefs) do
+            AddCVarCheckbox(card2, def)
         end
+        yOffset = card2:GetNextOffset()
     end
-
-    yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 3: Character Visibility
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Character Visibility", yOffset)
-    manager:Register(card3, "all")
-
-    if AU then
-        local charEffectKeys = {
-            findYourselfModeOutline = true,
-            occludedSilhouettePlayer = true,
-        }
-        for _, def in ipairs(AU.CVAR_DEFS) do
-            if charEffectKeys[def.key] then
-                AddCVarCheckbox(card3, def)
-            end
+    local charEffectKeys = {
+        findYourselfModeOutline = true,
+        occludedSilhouettePlayer = true,
+    }
+    local charDefs = LiveDefs(AU and AU.CVAR_DEFS or {}, function(def)
+        return charEffectKeys[def.key] == true
+    end)
+    if #charDefs > 0 then
+        local card3 = GUIFrame:CreateCard(scrollChild, "Character Visibility", yOffset)
+        manager:Register(card3, "all")
+        for _, def in ipairs(charDefs) do
+            AddCVarCheckbox(card3, def)
         end
+        yOffset = card3:GetNextOffset()
     end
-
-    yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 4: Tooltips
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Tooltips", yOffset)
-    manager:Register(card4, "all")
-
-    if AU then
-        for _, def in ipairs(AU.CVAR_DEFS) do
-            if def.key == "alwaysCompareItems" then
-                AddCVarCheckbox(card4, def)
-            end
+    local tooltipDefs = LiveDefs(AU and AU.CVAR_DEFS or {}, function(def)
+        return def.key == "alwaysCompareItems"
+    end)
+    if #tooltipDefs > 0 then
+        local card4 = GUIFrame:CreateCard(scrollChild, "Tooltips", yOffset)
+        manager:Register(card4, "all")
+        for _, def in ipairs(tooltipDefs) do
+            AddCVarCheckbox(card4, def)
         end
+        yOffset = card4:GetNextOffset()
     end
-
-    yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 5: Nameplates
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Nameplates", yOffset)
-    manager:Register(card5, "all")
+    local nameplateDefs = LiveDefs(AU and AU.CVAR_DEFS or {}, function(def)
+        return def.key:find("^nameplate") ~= nil
+    end)
+    if #nameplateDefs > 0 then
+        local card5 = GUIFrame:CreateCard(scrollChild, "Nameplates", yOffset)
+        manager:Register(card5, "all")
 
-    card5:AddLabel("|cffCC8800Friendly Player Nameplates must be |cff33ff33enabled|r|cffCC8800 for these to work.|r")
+        card5:AddLabel("|cffCC8800Friendly Player Nameplates must be |cff33ff33enabled|r|cffCC8800 for these to work.|r")
 
-    if AU then
-        local nameplateDefs = {}
-        for _, def in ipairs(AU.CVAR_DEFS) do
-            if def.key:find("^nameplate") then
-                nameplateDefs[#nameplateDefs + 1] = def
-            end
-        end
         local n = #nameplateDefs
         for i = 1, n, 2 do
             local isLastPair = (i + 1 >= n)
@@ -168,27 +173,24 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
                 card5:AddRow(row, rowHeight)
             end
         end
+        yOffset = card5:GetNextOffset()
     end
-
-    yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 6: Sliders
     ----------------------------------------------------------------
-    local card6 = GUIFrame:CreateCard(scrollChild, "Sliders", yOffset)
-    manager:Register(card6, "all")
+    local sliderDefs = LiveDefs(AU and AU.CVAR_SLIDER_DEFS or {})
+    if #sliderDefs > 0 then
+        local card6 = GUIFrame:CreateCard(scrollChild, "Sliders", yOffset)
+        manager:Register(card6, "all")
 
-    if AU then
         local currentSliderRow
-        for i, def in ipairs(AU.CVAR_SLIDER_DEFS) do
+        for i, def in ipairs(sliderDefs) do
             local key = def.key
-            local currentVal = db[key]
-            if currentVal == nil then
-                currentVal = tonumber(C_CVar.GetCVar(key)) or 0
-            end
+            local currentVal = AU:GetLiveCVar(def) or 0
 
             local isFirstInPair = (i % 2 == 1)
-            local isLastDef = (i == #AU.CVAR_SLIDER_DEFS)
+            local isLastDef = (i == #sliderDefs)
 
             if isFirstInPair then
                 currentSliderRow = GUIFrame:CreateRow(card6.content, 60)
@@ -199,11 +201,9 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
                 value = currentVal,
                 callback = function(val)
                     db[key] = val
-                    if AU then
-                        AU._suppressCVarUpdate = true
-                        C_CVar.SetCVar(key, tostring(val))
-                        AU._suppressCVarUpdate = false
-                    end
+                    AU._suppressCVarUpdate = true
+                    C_CVar.SetCVar(key, tostring(val))
+                    AU._suppressCVarUpdate = false
                 end,
             })
             currentSliderRow:AddWidget(slider, 0.5)
@@ -217,9 +217,8 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
                 end
             end
         end
+        yOffset = card6:GetNextOffset()
     end
-
-    yOffset = card6:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 7: Map Scale

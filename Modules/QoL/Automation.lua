@@ -166,6 +166,33 @@ local function FromCVarValue(value, cvarType)
     return value
 end
 
+-- Reads the client rather than the stored copy, so a value changed in Blizzard's
+-- own options or by a console command shows correctly. pcall because this list is
+-- deliberately made of CVars Blizzard does not surface in its own options, which
+-- are exactly the ones a patch is most likely to rename out from under a page the
+-- user merely opened. A CVar this client does not have reads nil, and nil is what
+-- tells the page to leave its row out entirely.
+function AU:GetLiveCVar(def)
+    local ok, raw = pcall(C_CVar.GetCVar, def.key)
+    if not ok or raw == nil then return nil end
+    if def.type == "boolean" then return raw == "1" end
+    return tonumber(raw)
+end
+
+-- A CVar this client does not have reads nil. Rendering it anyway produces a
+-- dead control sitting at its own minimum, so the row is dropped instead -- and
+-- a card that loses every row is not drawn at all. A plain filter, not `goto`:
+-- this runtime is Lua 5.1.
+function AU:FilterLiveDefs(defs, match)
+    local kept = {}
+    for _, def in ipairs(defs) do
+        if (not match or match(def)) and self:GetLiveCVar(def) ~= nil then
+            kept[#kept + 1] = def
+        end
+    end
+    return kept
+end
+
 -- Some CVars are only half a switch. `companion` is the master flag that has to
 -- be on for this one to do anything; `companionKeepAlive` lists the sibling
 -- modes that also depend on that master, so turning this one off does not take
