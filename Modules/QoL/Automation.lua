@@ -199,6 +199,11 @@ end
 -- theirs down with it.
 function AU:ApplyCompanion(def, value)
     if not def.companion then return end
+    -- The same refusal the primary gets, because a companion can go missing on
+    -- its own: a patch is free to retire the master flag while leaving the mode
+    -- flags in place, and every caller of this reaches SetCVar.
+    local ok, raw = pcall(C_CVar.GetCVar, def.companion)
+    if not ok or raw == nil then return end
     if value then
         C_CVar.SetCVar(def.companion, "1")
         return

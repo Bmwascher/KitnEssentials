@@ -17,6 +17,12 @@ local mock = require("dev.spec._wow_mock")
 -- nothing" is observable rather than inferred.
 local function newFixture(cvars)
     cvars = cvars or {}
+    -- The master exists on every real client, so it exists here unless a case
+    -- says otherwise. Cases below list only the CVars they care about, and that
+    -- is fine for reads that mean "off" -- but ApplyCompanion refuses to write a
+    -- companion that does not exist, so an omitted master would silently turn
+    -- every write case into a test of the absent-CVar refusal instead.
+    if cvars.findYourselfAnywhere == nil then cvars.findYourselfAnywhere = "0" end
     local writes = {}
 
     _G.C_CVar = {
@@ -142,6 +148,30 @@ describe("companion CVars", function()
     -- ApplyCVars refuses to touch a def whose own CVar is absent, companion
     -- included, so a fixture that omitted it would be testing the absent-CVar
     -- refusal rather than the keep-alive rule.
+    -- The guard on the primary does not cover this: the mode flag can be
+    -- present while the master it needs is gone, and every path into
+    -- ApplyCompanion ends in a SetCVar on that absent name.
+    it("writes nothing when the companion itself is absent and the mode is on", function()
+        local f = newFixture({ someFlag = "0" })
+        f.AU:ApplyCompanion({ key = "someFlag", companion = "someMaster" }, true)
+        assert.same({}, f.writesTo("someMaster"))
+    end)
+
+    it("writes nothing when the companion itself is absent and the mode is off", function()
+        local f = newFixture({ someFlag = "0" })
+        f.AU:ApplyCompanion({ key = "someFlag", companion = "someMaster",
+            companionKeepAlive = { "sibling" } }, false)
+        assert.same({}, f.writesTo("someMaster"))
+    end)
+
+    -- The control for both. A build that refuses every companion write passes
+    -- the two cases above and fails this one.
+    it("still writes a companion that exists", function()
+        local f = newFixture({ someFlag = "0", someMaster = "0" })
+        f.AU:ApplyCompanion({ key = "someFlag", companion = "someMaster" }, true)
+        assert.same({ "1" }, f.writesTo("someMaster"))
+    end)
+
     it("writes the master through the login pass, not only the direct call", function()
         local f = newFixture({ findYourselfModeOutline = "0", findYourselfModeCircle = "0", findYourselfModeIcon = "0" })
         f.AU.db = { CVarsEnabled = true, findYourselfModeOutline = true }
