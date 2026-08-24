@@ -224,8 +224,10 @@ function AU:ApplyCVars()
         elseif dbValue ~= currentValue then
             C_CVar.SetCVar(key, ToCVarValue(dbValue, def.type))
         end
-        -- Runs whether or not the primary changed: the master can be wrong on
-        -- its own, and a login pass is where that gets corrected.
+        -- Runs whether or not the primary changed, because the master can be
+        -- wrong on its own. It turns the master back on for a mode enabled
+        -- here; it never adopts one for a sibling mode, which the keep-alive
+        -- only protects from being switched off.
         if def.companion and self.db[key] ~= nil then
             self:ApplyCompanion(def, self.db[key] == true)
         end
