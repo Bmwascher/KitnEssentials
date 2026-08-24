@@ -28,6 +28,7 @@ local function loadCP(overrides)
     for _, name in ipairs({
         "GetInventoryItemLink", "GetExpansionForLevel", "UnitLevel",
         "GetInventoryItemQuality", "issecretvalue",
+        "CursorHasItem", "SpellIsTargeting", "PickupInventoryItem",
     }) do
         _G[name] = _G[name] or function() return nil end
     end
@@ -49,6 +50,7 @@ local function loadCP(overrides)
     local KE = {
         GEM_SOCKET_TYPES = { { name = "Prismatic", locale = "EMPTY_SOCKET_PRISMATIC", icon = 1 } },
         Print = function() end,
+        IsSafeValue = function(_, v) return v ~= nil end,
     }
     helpers.loadModule("Modules/QoL/CharacterPanel.lua", KE)
     return _G.KitnEssentials:GetModule("CharacterPanel"), KE
@@ -492,5 +494,198 @@ describe("Enchant name style", function()
         assert.equals("Strike", second)
         -- And back again, to catch a cache that only breaks in one direction.
         assert.equals("Radiant Critical Strike", CP._ProcessEnchantText(RAW, "full"))
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Item H: conditional auto-apply
+---------------------------------------------------------------------------------
+describe("Enchant auto-apply: unambiguous slot resolution", function()
+    it("returns the one slot when only one candidate is equipped", function()
+        local CP = loadCP({
+            GetInventoryItemLink = function(_, slot) return slot == 11 and "link" or nil end,
+        })
+        assert.equals(11, CP._UnambiguousEnchantSlot({ 11, 12 }))
+    end)
+
+    -- The whole reason the feature is safe. Two rings means the player picks.
+    it("returns nil when BOTH rings are equipped", function()
+        local CP = loadCP({
+            GetInventoryItemLink = function() return "link" end,
+        })
+        assert.is_nil(CP._UnambiguousEnchantSlot({ 11, 12 }))
+    end)
+
+    it("returns nil when no candidate is equipped", function()
+        local CP = loadCP({
+            GetInventoryItemLink = function() return nil end,
+        })
+        assert.is_nil(CP._UnambiguousEnchantSlot({ 11, 12 }))
+    end)
+
+    it("returns nil for a nil slot list", function()
+        local CP = loadCP()
+        assert.is_nil(CP._UnambiguousEnchantSlot(nil))
+    end)
+end)
+
+describe("Enchant auto-apply: the weapon-slot branch", function()
+    it("counts a real weapon as a candidate", function()
+        local CP = loadCP({
+            GetInventoryItemLink = function(_, slot) return slot == 16 and "link" or nil end,
+            C_Item = { GetItemInfoInstant = function() return 1, nil, nil, "INVTYPE_WEAPONMAINHAND" end },
+        })
+        assert.is_true(CP._SlotHoldsEnchantTarget(16))
+    end)
+
+    it("does not count an off-hand shield as a weapon candidate", function()
+        local CP = loadCP({
+            GetInventoryItemLink = function(_, slot) return slot == 17 and "link" or nil end,
+            C_Item = { GetItemInfoInstant = function() return 1, nil, nil, "INVTYPE_SHIELD" end },
+        })
+        assert.is_false(CP._SlotHoldsEnchantTarget(17))
+    end)
+
+    -- The fail-safe DIRECTION. Unreadable reports its own third state rather
+    -- than a boolean, so the resolver can refuse instead of guessing.
+    it("reports an UNREADABLE equip location as unknown, not as a plain candidate", function()
+        local CP = loadCP({
+            GetInventoryItemLink = function(_, slot) return slot == 16 and "link" or nil end,
+            C_Item = { GetItemInfoInstant = function() error("unreadable") end },
+        })
+        assert.equals("unknown", CP._SlotHoldsEnchantTarget(16))
+    end)
+
+    -- The case that makes the third state worth having. With unreadable
+    -- returning a plain `true`, a SOLE unreadable slot is the only candidate,
+    -- reads as unambiguous, and gets the enchant spent on it -- the opposite of
+    -- the intended caution, and invisible to the boolean case above.
+    it("REFUSES when the only candidate is a slot it cannot read", function()
+        local CP = loadCP({
+            GetInventoryItemLink = function(_, slot) return slot == 16 and "link" or nil end,
+            C_Item = { GetItemInfoInstant = function() error("unreadable") end },
+        })
+        assert.is_nil(CP._UnambiguousEnchantSlot({ 16, 17 }))
+    end)
+
+    it("counts any non-weapon slot holding an item, without asking about type", function()
+        local CP = loadCP({
+            GetInventoryItemLink = function(_, slot) return slot == 15 and "link" or nil end,
+        })
+        assert.is_true(CP._SlotHoldsEnchantTarget(15))
+    end)
+
+    it("counts an empty slot as no candidate", function()
+        local CP = loadCP({ GetInventoryItemLink = function() return nil end })
+        assert.is_false(CP._SlotHoldsEnchantTarget(15))
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Item H: the auto-apply ACTION itself
+--
+-- The predicate cases above prove which slot would be chosen. They say nothing
+-- about whether the action fires, so the whole PickupInventoryItem block could be
+-- deleted and every one of them would still pass. These six drive
+-- ApplyEnchantFromBags and assert on the call.
+---------------------------------------------------------------------------------
+describe("Enchant auto-apply: the action", function()
+    -- Returns the CP under test plus a ledger of PickupInventoryItem calls, with
+    -- the bag re-read and the offerable check satisfied so the function reaches
+    -- its tail. Overrides are merged in, so a case can flip one input.
+    -- SpellIsTargeting is STATEFUL here, and it has to be. The production code
+    -- refuses when a spell is already targeting on entry, then reads targeting
+    -- AFTER UseContainerItem as proof the enchant started. A stub that returns a
+    -- constant true would be refused at the door and could never reach the
+    -- pickup; a constant false could never reach it either. Only the false-to-true
+    -- transition the real API performs exercises the path.
+    local function applyFixture(overrides)
+        local picked, started = {}, false
+        local o = {
+            C_Container = {
+                GetContainerItemInfo = function() return { itemID = 1 } end,
+                UseContainerItem = function() started = true end,
+            },
+            GetInventoryItemLink = function(_, slot) return slot == 16 and "link" or nil end,
+            C_Item = { GetItemInfoInstant = function() return 1, nil, nil, "INVTYPE_WEAPON" end },
+            CursorHasItem = function() return false end,
+            SpellIsTargeting = function() return started end,
+            PickupInventoryItem = function(slot) picked[#picked + 1] = slot end,
+        }
+        for k, v in pairs(overrides or {}) do o[k] = v end
+        local CP = loadCP(o)
+        CP.HideEnchantPopup = function() end
+        CP.HideSlotHighlight = function() end
+        return CP, picked
+    end
+
+    local function enchantData()
+        return { itemID = 1, bagID = 0, slotID = 1, targetSlots = { 16, 17 } }
+    end
+
+    it("applies to the one candidate slot when a spell is waiting for a target", function()
+        local CP, picked = applyFixture()
+        CP:ApplyEnchantFromBags(enchantData())
+        assert.same({ 16 }, picked)
+    end)
+
+    -- The refusal that keeps a loaded cursor from being equipped into the slot.
+    it("REFUSES outright when something is already on the cursor", function()
+        local CP, picked = applyFixture({ CursorHasItem = function() return true end })
+        assert.is_false(CP:ApplyEnchantFromBags(enchantData()))
+        assert.same({}, picked)
+    end)
+
+    -- The other half of the same refusal, and the subtler one. Auto-apply reads
+    -- "a spell is now waiting for a target" as proof OUR enchant started. That
+    -- reading is only sound if nothing was waiting beforehand -- otherwise an
+    -- unrelated targeting spell plus a silently failed UseContainerItem fires the
+    -- pickup with no enchant pending, which unequips the item.
+    it("REFUSES outright when a spell is already waiting for a target", function()
+        -- True on ENTRY, before UseContainerItem runs. That is the state the
+        -- fixture's transition stub cannot reach on its own.
+        local CP, picked = applyFixture({ SpellIsTargeting = function() return true end })
+        assert.is_false(CP:ApplyEnchantFromBags(enchantData()))
+        assert.same({}, picked)
+    end)
+
+    -- Without this the call fires on an idle cursor and picks UP the equipped
+    -- item, which unequips it.
+    -- UseContainerItem ran but no spell ended up waiting -- a silent failure.
+    -- Overriding with a constant false defeats the fixture's transition, which is
+    -- exactly the state being tested.
+    it("does not fire when no spell is waiting for a target afterwards", function()
+        local CP, picked = applyFixture({ SpellIsTargeting = function() return false end })
+        CP:ApplyEnchantFromBags(enchantData())
+        assert.same({}, picked)
+    end)
+
+    -- The POST-call cursor check, which nothing else reaches. The entry refusal
+    -- sees an empty cursor; UseContainerItem then loads the cursor instead of
+    -- starting a targeting spell. Without the second check, PickupInventoryItem
+    -- equips that item into the slot -- the same accident, one step later.
+    it("does not fire when UseContainerItem loads the cursor instead", function()
+        -- Both stubs read one flag, so the ENTRY gate sees an idle cursor and the
+        -- POST-call test sees a loaded one. Overriding C_Container replaces the
+        -- fixture's own transition, so this case carries its own.
+        local used = false
+        local CP, picked = applyFixture({
+            CursorHasItem = function() return used end,
+            SpellIsTargeting = function() return used end,
+            C_Container = {
+                GetContainerItemInfo = function() return { itemID = 1 } end,
+                UseContainerItem = function() used = true end,
+            },
+        })
+        CP:ApplyEnchantFromBags(enchantData())
+        assert.same({}, picked)
+    end)
+
+    it("does not fire when the slot is a judgement call", function()
+        local CP, picked = applyFixture({
+            GetInventoryItemLink = function() return "link" end,
+        })
+        CP:ApplyEnchantFromBags(enchantData())
+        assert.same({}, picked)
     end)
 end)

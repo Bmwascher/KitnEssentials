@@ -18,6 +18,9 @@ local CreateFrame = CreateFrame
 local GetInventoryItemLink = GetInventoryItemLink
 local GetExpansionForLevel = GetExpansionForLevel
 local GetItemInfoInstant = C_Item.GetItemInfoInstant
+local CursorHasItem = CursorHasItem
+local SpellIsTargeting = SpellIsTargeting
+local PickupInventoryItem = PickupInventoryItem
 local UnitLevel = UnitLevel
 local GameRulesUtil = GameRulesUtil
 local C_TooltipInfo = C_TooltipInfo
@@ -2953,8 +2956,10 @@ end
 -- Enchant Helper
 ---------------------------------------------------------------------------------
 -- One extra button on the right end of the socket bar. Hovering it lists every
--- enchant in your bags; clicking a row starts Blizzard's normal "now click the
--- item" flow.
+-- enchant in your bags. Clicking a row applies the enchant outright where there
+-- is exactly one slot it could mean; where there is more than one, or a slot we
+-- cannot read, it leaves the cursor loaded for Blizzard's normal "now click the
+-- item" flow and the player picks.
 
 -- Enchanting profession icon. A named texture path rather than a bare fileID:
 -- it says what it is and survives an asset renumber.
@@ -3033,6 +3038,52 @@ local function GetEnchantDisplayName(itemLink)
     end
     return name
 end
+
+local WEAPON_SLOTS = { [16] = true, [17] = true }
+local WEAPON_EQUIP_LOCS = {
+    INVTYPE_WEAPON = true, INVTYPE_2HWEAPON = true,
+    INVTYPE_WEAPONMAINHAND = true, INVTYPE_WEAPONOFFHAND = true,
+    INVTYPE_RANGED = true, INVTYPE_RANGEDRIGHT = true,
+}
+
+-- THREE-VALUED, not boolean: `true` is definitely a target, `false` is
+-- definitely not, and the string `"unknown"` is equipped-but-unreadable.
+--
+-- The third state is the whole point. Treating unreadable as a plain candidate
+-- is NOT the safe reading it looks like: a slot we cannot read, sitting alone,
+-- would then be the ONLY candidate, read as unambiguous, and get the enchant
+-- spent on it -- the exact outcome the caution was meant to prevent. An unknown
+-- must never be the thing that decides.
+local function SlotHoldsEnchantTarget(slotID)
+    local link = GetInventoryItemLink("player", slotID)
+    if not link then return false end
+    if not WEAPON_SLOTS[slotID] then return true end
+
+    local ok, _, _, _, equipLoc = pcall(GetItemInfoInstant, link)
+    if not ok or not KE:IsSafeValue(equipLoc) then return "unknown" end
+    return WEAPON_EQUIP_LOCS[equipLoc] == true
+end
+CP._SlotHoldsEnchantTarget = SlotHoldsEnchantTarget
+
+-- The single slot this enchant can only mean, or nil when it is a judgement
+-- call. Two rings, a weapon in each hand, or nothing equipped all return nil.
+local function UnambiguousEnchantSlot(targetSlots)
+    if not targetSlots then return nil end
+    local found
+    for _, slotID in ipairs(targetSlots) do
+        local holds = SlotHoldsEnchantTarget(slotID)
+        -- ANY unreadable slot aborts the whole decision, even when it would
+        -- otherwise have been the sole candidate. Refusing costs the player a
+        -- click; guessing costs them the enchant.
+        if holds == "unknown" then return nil end
+        if holds then
+            if found then return nil end
+            found = slotID
+        end
+    end
+    return found
+end
+CP._UnambiguousEnchantSlot = UnambiguousEnchantSlot
 
 local function IsRingEnchant(targetSlots)
     if not targetSlots then return false end
@@ -3346,12 +3397,55 @@ function CP:ApplyEnchantFromBags(enchantData)
         self:HideSlotHighlight()
         return false
     end
+    -- REFUSE unless the cursor is idle in BOTH senses, before doing anything at
+    -- all. Auto-apply reads "a spell is now waiting for a target" as proof our
+    -- enchant started, and that reading is only sound if nothing was waiting
+    -- beforehand.
+    --
+    --   * An ITEM already held: UseContainerItem on a full cursor does not
+    --     reliably start the enchant, and PickupInventoryItem would then EQUIP
+    --     that item into the slot, swapping the player's weapon for a bag item.
+    --   * A SPELL already targeting: if our UseContainerItem then silently does
+    --     nothing, the earlier spell keeps SpellIsTargeting true and the pickup
+    --     fires with no enchant pending at all -- the exact unequip this guard
+    --     exists to stop.
+    --
+    -- Refusing costs one re-click after the player finishes what they started.
+    if CursorHasItem() or (SpellIsTargeting and SpellIsTargeting()) then
+        KE:Print("Cannot enchant while the cursor is busy")
+        return false
+    end
+
     -- Namespaced form, never the bare UseContainerItem global: Blizzard's own
-    -- code uses C_Container everywhere in 12.0.7 (ContainerFrame.lua,
-    -- SecureTemplates.lua), so the bare name is at best a deprecated shim.
-    -- This picks the enchant up; the player then clicks the item to apply it.
-    -- Deliberately NOT auto-applied.
+    -- code uses C_Container everywhere, so the bare name is at best a
+    -- deprecated shim. This starts the enchant.
     C_Container.UseContainerItem(enchantData.bagID, enchantData.slotID)
+
+    -- Where there is exactly one item it could mean, finish the job.
+    -- PickupInventoryItem is what Blizzard's own paperdoll slot OnClick calls
+    -- with a loaded cursor, and this runs inside a real button press, which is
+    -- what such a call needs. Where it is a judgement call -- two rings, a
+    -- weapon in each hand, a target we could not read -- the cursor is left
+    -- loaded and the player picks.
+    --
+    -- SpellIsTargeting is the signal, NOT CursorHasItem: using an enchant starts
+    -- a spell waiting for a target rather than putting an item on the cursor. The
+    -- refusal above established it was FALSE a moment ago, so true here means OUR
+    -- call set it. Without the check PickupInventoryItem picks UP the equipped
+    -- item when nothing is pending, unequipping a weapon.
+    --
+    -- The cursor is re-checked too. UseContainerItem can load the cursor rather
+    -- than start a targeting spell, and equipping that into the slot is the same
+    -- accident the entry refusal prevents.
+    --
+    -- Overwriting an existing enchant destroys the old one, so that
+    -- confirmation stays Blizzard's to raise and the player's to answer.
+    local only = UnambiguousEnchantSlot(enchantData.targetSlots)
+    local pending = (SpellIsTargeting and SpellIsTargeting()) and not CursorHasItem()
+    if only and pending then
+        PickupInventoryItem(only)
+    end
+
     self:HideEnchantPopup()
     self:HideSlotHighlight()
     return true

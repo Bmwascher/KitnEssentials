@@ -237,6 +237,7 @@ read_globals = {
     "GetWeaponEnchantInfo",
     "RegisterAttributeDriver",
     "ClearCursor", "ResetCursor", "SetCursor",
+    "CursorHasItem", "SpellIsTargeting", "PickupInventoryItem",
     "NUM_BAG_SLOTS",
 
     -- Collections (Mounts / Pets / Toys / Heirlooms)
