@@ -1213,3 +1213,70 @@ describe("Automation character-window button placement", function()
         assert.equals(26, sized[2])
     end)
 end)
+
+---------------------------------------------------------------------------------
+-- Great Vault button gates (phase 6A Task 2)
+---------------------------------------------------------------------------------
+describe("Automation Great Vault button", function()
+    it("does not create the button below max level", function()
+        local fx = newFixture()
+        _G.UnitLevel = function() return 70 end
+        _G.GetMaxPlayerLevel = function() return 80 end
+        fx.AU.db = { Enabled = true, VaultCharButton = true }
+        fx.AU:ApplySettings()
+        assert.is_nil(fx.named["KE_GreatVaultButton"])
+    end)
+
+    it("defers creation in combat, then creates it once combat ends", function()
+        local fx = newFixture()
+        fx.AU.db = { Enabled = true, VaultCharButton = true }
+        fx.setCombat(true)
+        fx.AU:ApplySettings()
+        assert.is_nil(fx.named["KE_GreatVaultButton"])
+        fx.setCombat(false)
+        fx.AU:RetrySpawnDeferredButtons()
+        assert.is_not_nil(fx.named["KE_GreatVaultButton"])
+    end)
+
+    it("creates it at slot 1, left of the Omnium button", function()
+        local fx = newFixture()
+        fx.AU.db = { Enabled = true, OmniumCharButton = true, VaultCharButton = true }
+        fx.AU:ApplySettings()
+        assert.equals(-8, fx.lastCall("KE_OmniumFoilButton", "SetPoint")[4])
+        assert.equals(-35, fx.lastCall("KE_GreatVaultButton", "SetPoint")[4])
+    end)
+
+    it("keeps the Omnium button at slot 0 when the Vault button is off", function()
+        local fx = newFixture()
+        fx.AU.db = { Enabled = true, OmniumCharButton = true, VaultCharButton = false }
+        fx.AU:ApplySettings()
+        assert.is_nil(fx.named["KE_GreatVaultButton"])
+        assert.equals(-8, fx.lastCall("KE_OmniumFoilButton", "SetPoint")[4])
+    end)
+
+    it("hides the button when its key is off but the module is on", function()
+        local fx = newFixture()
+        fx.AU.db = { Enabled = true, VaultCharButton = true }
+        fx.AU:ApplySettings()
+        fx.clearLedger()
+        fx.AU.db.VaultCharButton = false
+        fx.AU:ApplySettings()
+        assert.is_false(fx.lastArg("KE_GreatVaultButton", "SetShown"))
+    end)
+
+    -- The state the lifecycle predicate exists for, and the ONLY case in this file
+    -- that reaches it: the module is disabled while both keys still read true.
+    -- Ace's Disable() does exactly that, and TeardownPorts runs from inside it.
+    -- Without this case every gate added by this branch is asserted only in states
+    -- where the key would have answered identically.
+    it("refuses while the module is disabled, even with both keys on", function()
+        local fx = newFixture()
+        fx.AU.db = { Enabled = true, OmniumCharButton = true, VaultCharButton = true }
+        fx.AU:ApplySettings()
+        fx.clearLedger()
+        fx.AU._specEnabled = false
+        fx.AU:TeardownPorts()
+        assert.is_false(fx.lastArg("KE_GreatVaultButton", "SetShown"))
+        assert.is_false(fx.lastArg("KE_OmniumFoilButton", "SetShown"))
+    end)
+end)

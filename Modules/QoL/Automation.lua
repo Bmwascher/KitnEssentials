@@ -1652,7 +1652,9 @@ local math_floor = math.floor
 local tonumber = tonumber
 
 local OMNI_ICON_FILEID = 7554214
+local VAULT_ICON_FILEID = 2744751
 local omniCharButton
+local vaultCharButton
 local omniMinimapHooked = false
 
 -- Size is its own key rather than following the gem socket slider: the two
@@ -1694,9 +1696,17 @@ local function OmniumAllowed()
     return _G.UnitLevel("player") >= _G.GetMaxPlayerLevel()
 end
 
+-- `AU:IsEnabled()` and not the preference key. This function is reached from
+-- OnDisable through TeardownPorts, where the key can still read true, and a
+-- SetShown(true) there leaves a disabled module's buttons on screen. Both halves
+-- move together: half a function on the lifecycle predicate would hide one button
+-- and leave its neighbour behind.
 local function OmniumRefreshShown()
     if omniCharButton then
-        omniCharButton:SetShown(AU.db.Enabled and AU.db.OmniumCharButton and OmniumAllowed())
+        omniCharButton:SetShown(AU:IsEnabled() and AU.db.OmniumCharButton and OmniumAllowed())
+    end
+    if vaultCharButton then
+        vaultCharButton:SetShown(AU:IsEnabled() and AU.db.VaultCharButton and OmniumAllowed())
     end
 end
 
@@ -1750,14 +1760,111 @@ local function OmniumCreateButton()
     return b
 end
 
+-- Great Vault, in the slot left of the Omnium Foil button. Same max-level gate
+-- and same parent as its neighbour, so it inherits the stats-sidebar shown
+-- state instead of tracking it.
+local function VaultCreateButton()
+    if vaultCharButton then return vaultCharButton end
+    if not _G.PaperDollFrame then return nil end
+
+    if InCombatLockdown() then
+        -- Same reason as its neighbour: anchoring onto a Blizzard window
+        -- mid-fight is not established as safe in this expansion.
+        AU:RegisterEvent("PLAYER_REGEN_ENABLED", "RetrySpawnDeferredButtons")
+        return
+    end
+
+    local S = KE.Skins
+    local host = _G.CharacterStatsPane or _G.PaperDollFrame
+    local b = CreateFrame("Button", "KE_GreatVaultButton", host)
+    PlaceCharButton(b, 1)
+    b:SetFrameLevel(_G.PaperDollFrame:GetFrameLevel() + 10)
+
+    local icon = b:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", 1, -1)
+    icon:SetPoint("BOTTOMRIGHT", -1, 1)
+    icon:SetTexture(VAULT_ICON_FILEID)
+    b.icon = icon
+    if S then
+        S.Icon(icon)
+        S.Backdrop(b)
+        S.Hover(b)
+    end
+
+    b:SetScript("OnClick", function()
+        -- The panel manager refuses insecure show/hide in combat and prints the
+        -- blocked-action message when it does. Refusing here keeps that message
+        -- off the screen; the button is never urgent mid-fight.
+        if InCombatLockdown() then return end
+        -- Load-on-demand: the vault frame does not exist until something asks
+        -- for it, and on a fresh login that is usually this button.
+        if _G.C_AddOns and _G.C_AddOns.LoadAddOn then
+            _G.C_AddOns.LoadAddOn("Blizzard_WeeklyRewards")
+        end
+        local f = _G.WeeklyRewardsFrame
+        if not f then return end
+        -- Through the panel manager, never a raw Show/Hide. This frame carries a
+        -- center UIPanel area attribute, so the manager routes it to the secure
+        -- delegate and stacks it against the other center panels. A raw Show
+        -- puts it on screen with the manager still believing it hidden.
+        if f:IsShown() then
+            _G.HideUIPanel(f)
+        else
+            _G.ShowUIPanel(f, true)
+        end
+    end)
+    b:SetScript("OnEnter", function(self)
+        _G.GameTooltip:SetOwner(self, "ANCHOR_NONE")
+        _G.GameTooltip:ClearAllPoints()
+        _G.GameTooltip:SetPoint("BOTTOMRIGHT", self, "TOPLEFT", 0, 4)
+        _G.GameTooltip:SetText(_G.GREAT_VAULT_REWARDS or "Great Vault")
+        _G.GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
+
+    vaultCharButton = b
+    return b
+end
+
+-- Re-placed on every sheet open, not only at creation: the size follows a
+-- slider that has no reason to know these buttons exist.
+--
+-- Same combat refusal the creator uses. This runs from the sheet's OnShow, so
+-- without it opening the character window mid-fight re-anchors onto a Blizzard
+-- window -- the exact operation creation defers. A slider change made in combat
+-- lands on the next out-of-combat open.
+local function RefreshCharButtons()
+    if InCombatLockdown() then return end
+    -- The hook below is permanent and outlives AU:OnDisable, so without this it
+    -- keeps re-anchoring buttons for a module that is switched off. `IsEnabled()`
+    -- rather than the db key: Ace marks the module disabled BEFORE dispatching
+    -- OnDisable, and `AU:Disable()` is reachable without the key changing.
+    if not AU:IsEnabled() then return end
+    if omniCharButton then PlaceCharButton(omniCharButton, 0) end
+    if vaultCharButton then PlaceCharButton(vaultCharButton, 1) end
+end
+
+-- The hook cannot be removed once installed, so it goes on exactly once. The
+-- latch and its only reader live together here rather than being split across
+-- two edits, which would leave a local nothing reads yet.
+local charBtnShowHooked = false
+local function EnsureCharBtnShowHook()
+    if charBtnShowHooked or not _G.CharacterFrame then return end
+    charBtnShowHooked = true
+    _G.CharacterFrame:HookScript("OnShow", RefreshCharButtons)
+end
+
 local function SetupOmniumButton()
     local mm = _G.ExpansionLandingPageMinimapButton
-    local active = AU.db.Enabled and AU.db.OmniumCharButton and OmniumAllowed()
+    -- Lifecycle, not the key: this function is reached from OnDisable through
+    -- TeardownPorts, and creating the button there can re-register
+    -- PLAYER_REGEN_ENABLED on a module whose events were just unregistered.
+    local active = AU:IsEnabled() and AU.db.OmniumCharButton and OmniumAllowed()
 
     if mm and not omniMinimapHooked then
         omniMinimapHooked = true
         hooksecurefunc(mm, "Show", function(self)
-            if AU.db.Enabled and AU.db.OmniumCharButton and OmniumAllowed() then self:Hide() end
+            if AU:IsEnabled() and AU.db.OmniumCharButton and OmniumAllowed() then self:Hide() end
         end)
     end
 
@@ -1767,6 +1874,25 @@ local function SetupOmniumButton()
     elseif mm then
         mm:Show()
     end
+
+    -- `AU:IsEnabled()` and NOT the preference key, because this function is also
+    -- reached from OnDisable through TeardownPorts. Ace marks the module disabled
+    -- BEFORE dispatching OnDisable, and AU:Disable() is reachable without the key
+    -- changing, so the key can still read true here while the module is being torn
+    -- down. Creating a button -- which may register PLAYER_REGEN_ENABLED on a
+    -- module whose events were just unregistered -- and installing a permanent
+    -- hook, both from inside teardown, is what this gate stops.
+    if AU:IsEnabled() then
+        if AU.db.VaultCharButton and OmniumAllowed() then
+            VaultCreateButton()
+        end
+        EnsureCharBtnShowHook()
+    end
+
+    -- OUTSIDE the gate on purpose: it stands itself down on the same predicate,
+    -- so gating it here would only say the same thing twice.
+    RefreshCharButtons()
+
     OmniumRefreshShown()
 end
 
