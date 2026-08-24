@@ -1064,6 +1064,9 @@ local Defaults = {
             ShowRaceText             = true,
             ShowFactionOnLevel       = true,
 
+            -- Slot borders tinted by item rarity (KE skinning only; ElvUI paints its own)
+            SlotQualityBorders       = true,
+
             -- Item track indicators (no ElvUI conflict)
             TrackIndicatorsEnabled   = true,
             ShowUpgradeProgress      = true,

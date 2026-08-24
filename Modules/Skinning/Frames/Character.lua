@@ -412,6 +412,17 @@ local function KillPaperDollBackground(model)
     end
 end
 
+-- Rarity borders are ON unless the key says otherwise, and ON when the profile
+-- section is missing entirely, so a fresh profile gets the default look rather
+-- than a silently different one. Deliberately NOT gated on the CharacterPanel
+-- module's Enabled flag: this is skinning, it paints whether or not that module
+-- runs, which is why its control sits outside that module's gate.
+local function QualityBordersOn(cpDB)
+    if not cpDB then return true end
+    return cpDB.SlotQualityBorders ~= false
+end
+S._QualityBordersOn = QualityBordersOn
+
 local function Skin()
     local frame = _G.CharacterFrame
     if not frame then return end
@@ -451,10 +462,19 @@ local function Skin()
     -- Art only. The per-slot ilvl/gem text this loop used to add, and the
     -- PaperDollItemSlotButton_Update hook that refreshed it, are gone --
     -- CharacterPanel owns that display (see the note at the top of this file).
+    --
+    -- The rarity border is NOT a return of that display. S.ItemButton blanks
+    -- Blizzard's IconBorder; routing it through S.IconBorder instead tints the
+    -- backdrop by quality and inherits that helper's own hooks on the texture,
+    -- so it refreshes on Blizzard's repaint with nothing added here.
+    local qualityBorders = QualityBordersOn(KE.db and KE.db.profile and KE.db.profile.CharacterPanel)
     for _, slot in ipairs(SLOTS) do
         local button = _G["Character" .. slot .. "Slot"]
         if button then
             S.ItemButton(button)
+            if qualityBorders and button.IconBorder then
+                S.IconBorder(button.IconBorder, S.GetBackdrop(button))
+            end
         end
     end
 
