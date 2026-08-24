@@ -252,10 +252,12 @@ table.sort(enchantNicknameOrder, function(a, b) return #a > #b end)
 -- nest. Every style strips the "Enchant <Slot> - " prefix; "full" is then done.
 -- "verbose" reduces what is left to its keyword. "short" skips the keyword step
 -- and instead maps through the nickname table, then abbreviates stat words.
--- Memoized because that last path runs ~76 gsubs per label and the same handful
--- of equipped enchant names re-resolve on every slot render, including inspect
--- gem-race retries. ProcessEnchantText owns the cache key; a pure function of its
--- inputs and the load-time constant tables, so entries never invalidate.
+-- Memoized because that last path walks the nickname and stat-abbreviation tables
+-- entry by entry -- one gsub each, so the cost is their combined size and grows
+-- whenever either does -- while the same handful of equipped enchant names
+-- re-resolve on every slot render, including inspect gem-race retries.
+-- ProcessEnchantText owns the cache key; a pure function of its inputs and the
+-- load-time constant tables, so entries never invalidate.
 -- Words that never carry the meaning of an enchant name, so the keyword walk
 -- below skips them rather than returning one.
 local ENCHANT_FILLER = { ["of"] = true, ["the"] = true, ["and"] = true, ["a"] = true }
