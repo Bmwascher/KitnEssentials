@@ -192,13 +192,10 @@ local function newFixture()
     -- stubbed, since nothing in these four behaviours exercises it.
     AU.RegisterEvent = function(_, event) record("AU", "RegisterEvent:" .. event) end
     AU.UnregisterEvent = function(_, event) record("AU", "UnregisterEvent:" .. event) end
-    -- MIRRORS the key by default, and is overridable per case. Existing cases turn
-    -- the module off by setting Enabled = false and then assert the button hides,
-    -- which now runs through this predicate; a constant true makes exactly those
-    -- go red. The override exists because mirroring alone can NEVER produce the
-    -- state this whole gate was added for -- Ace has marked the module disabled
-    -- while the player's key still reads true -- and a guard nothing can reach is
-    -- a guard nothing tests.
+    -- Mirrors the key by default, since existing cases switch the module off
+    -- through it. Overridable because mirroring alone can never produce the state
+    -- the lifecycle gates exist for -- disabled while the key still reads true --
+    -- and a guard nothing can reach is a guard nothing tests.
     AU._specEnabled = nil
     AU.IsEnabled = function()
         if AU._specEnabled ~= nil then return AU._specEnabled end
@@ -1143,7 +1140,7 @@ describe("Automation repair spend rule", function()
 end)
 
 ---------------------------------------------------------------------------------
--- Character-window button placement (phase 6A Task 1)
+-- Character-window button placement
 ---------------------------------------------------------------------------------
 describe("Automation character-window button placement", function()
     -- Reaches the file-local placement chain the same way this file's other
@@ -1215,7 +1212,7 @@ describe("Automation character-window button placement", function()
 end)
 
 ---------------------------------------------------------------------------------
--- Great Vault button gates (phase 6A Task 2)
+-- Great Vault button gates
 ---------------------------------------------------------------------------------
 describe("Automation Great Vault button", function()
     it("does not create the button below max level", function()
@@ -1264,11 +1261,10 @@ describe("Automation Great Vault button", function()
         assert.is_false(fx.lastArg("KE_GreatVaultButton", "SetShown"))
     end)
 
-    -- The state the lifecycle predicate exists for, and the ONLY case in this file
-    -- that reaches it: the module is disabled while both keys still read true.
-    -- Ace's Disable() does exactly that, and TeardownPorts runs from inside it.
-    -- Without this case every gate added by this branch is asserted only in states
-    -- where the key would have answered identically.
+    -- The state the lifecycle predicate exists for, and the only case here that
+    -- reaches it: disabled while both keys still read true, which is what Ace's
+    -- Disable() produces. Without it the gates are only ever asserted where the
+    -- key would have answered identically.
     it("refuses while the module is disabled, even with both keys on", function()
         local fx = newFixture()
         fx.AU.db = { Enabled = true, OmniumCharButton = true, VaultCharButton = true }

@@ -1696,11 +1696,13 @@ local function OmniumAllowed()
     return _G.UnitLevel("player") >= _G.GetMaxPlayerLevel()
 end
 
--- `AU:IsEnabled()` and not the preference key. This function is reached from
--- OnDisable through TeardownPorts, where the key can still read true, and a
--- SetShown(true) there leaves a disabled module's buttons on screen. Both halves
--- move together: half a function on the lifecycle predicate would hide one button
--- and leave its neighbour behind.
+-- `AU:IsEnabled()` and not the preference key, here and at the other gates
+-- below. Ace marks the module disabled BEFORE dispatching OnDisable, and
+-- AU:Disable() is reachable without the key changing, so anything reached from
+-- teardown can still read a true key while the module is going down. Here that
+-- would leave a disabled module's buttons on screen. Both halves move together:
+-- half a function on the lifecycle predicate would hide one button and leave
+-- its neighbour behind.
 local function OmniumRefreshShown()
     if omniCharButton then
         omniCharButton:SetShown(AU:IsEnabled() and AU.db.OmniumCharButton and OmniumAllowed())
@@ -1836,9 +1838,7 @@ end
 local function RefreshCharButtons()
     if InCombatLockdown() then return end
     -- The hook below is permanent and outlives AU:OnDisable, so without this it
-    -- keeps re-anchoring buttons for a module that is switched off. `IsEnabled()`
-    -- rather than the db key: Ace marks the module disabled BEFORE dispatching
-    -- OnDisable, and `AU:Disable()` is reachable without the key changing.
+    -- keeps re-anchoring buttons for a module that is switched off.
     if not AU:IsEnabled() then return end
     if omniCharButton then PlaceCharButton(omniCharButton, 0) end
     if vaultCharButton then PlaceCharButton(vaultCharButton, 1) end
@@ -1875,13 +1875,9 @@ local function SetupOmniumButton()
         mm:Show()
     end
 
-    -- `AU:IsEnabled()` and NOT the preference key, because this function is also
-    -- reached from OnDisable through TeardownPorts. Ace marks the module disabled
-    -- BEFORE dispatching OnDisable, and AU:Disable() is reachable without the key
-    -- changing, so the key can still read true here while the module is being torn
-    -- down. Creating a button -- which may register PLAYER_REGEN_ENABLED on a
-    -- module whose events were just unregistered -- and installing a permanent
-    -- hook, both from inside teardown, is what this gate stops.
+    -- TeardownPorts reaches this function too, so the gate stops two things
+    -- happening from inside teardown: creating a button, and installing a hook
+    -- that can never be removed afterwards.
     if AU:IsEnabled() then
         if AU.db.VaultCharButton and OmniumAllowed() then
             VaultCreateButton()
