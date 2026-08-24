@@ -1,13 +1,21 @@
 -- Tier: invented refusal/lifecycle rules only (tiered test policy). The
 -- ported feature bodies (Task 1-3) are covered by the Step 8 structural diff
--- against the reference, not here. Four behaviours:
---   1. Combat deferral on the two Blizzard-window button creators (Task 2).
---   2. The master teardown + return trip (Task 3 Step 10b).
---   3. Master-off startup for Hide Helptips (Task 3 Step 10b).
---   4. The effective-state predicates themselves, in all three
---      (Enabled, feature key) states (Task 3 Step 10b).
---   5. The repair-cost report's spend rule, which refuses to announce
---      anything it cannot prove was paid.
+-- against the reference, not here. Unnumbered on purpose: the section banners
+-- below carry their own numbering and it has already collided once, so a second
+-- numbered list would be a third thing to keep in step. One entry per describe
+-- block, in file order:
+--   * Combat deferral on the two Blizzard-window button creators.
+--   * The master teardown and the return trip.
+--   * Master-off startup for Hide Helptips.
+--   * The effective-state predicates themselves, in all three
+--     (Enabled, feature key) states.
+--   * The Hide Helptips sweep lifecycle.
+--   * Per-spell secrecy on the fishing outfit cancel.
+--   * The repair-cost report's spend rule, which refuses to announce anything
+--     it cannot prove was paid.
+--   * Character-window button placement arithmetic.
+--   * The Great Vault button's gates, including the lifecycle predicate in the
+--     one state a preference key cannot reach.
 --
 -- Loaded directly against dev/spec/_helpers.lua (no dedicated _ke_loader.lua
 -- entry -- Automation's fixture is specific to this one spec).
