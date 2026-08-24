@@ -2,7 +2,7 @@
 -- ║  GUI-CVars.lua                                           ║
 -- ║  GUI: CVars                                              ║
 -- ║  Purpose: Configuration panel for the CVars module, and  ║
--- ║  the host page for the Map Scale card (its own module).  ║
+-- ║  the host page for the World Map Scale card.             ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -221,17 +221,17 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     end
 
     ----------------------------------------------------------------
-    -- Card 7: Map Scale
+    -- Card 7: World Map Scale
     ----------------------------------------------------------------
     if mapDB then
         -- Not registered with `manager` — MapScale has its own independent
         -- enable lifecycle (see the module-vs-Automation note above), so this
         -- card must not grey out when "Apply CVars on Login" is off.
-        local card7 = GUIFrame:CreateCard(scrollChild, "Map Scale", yOffset)
+        local card7 = GUIFrame:CreateCard(scrollChild, "World Map Scale", yOffset)
 
         local function ApplyMapScale()
             local MS = GetMapScaleModule()
-            if MS and MS.ApplyScale then MS:ApplyScale() end
+            if MS and MS.ApplySettings then MS:ApplySettings() end
         end
 
         card7:AddHeaderToggle(mapDB.Enabled ~= false, function(checked)
@@ -239,14 +239,14 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
             if checked then KitnEssentials:EnableModule("MapScale")
             else KitnEssentials:DisableModule("MapScale") end
             ApplyMapScale()
-            KE:Print("Map Scale: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+            KE:Print("World Map Scale: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
         yOffset = card7:GetNextOffset()
 
         if mapDB.Enabled ~= false then
-            -- Not a CVar: this drives WorldMapFrame:SetScale() directly, unlike
+            -- Not CVars: these drive WorldMapFrame:SetScale() directly, unlike
             -- every other slider on this page.
-            local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+            local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
             local mapScaleSlider = GUIFrame:CreateSlider(row7b, "Scale", {
                 min = 0.5, max = 2.0, step = 0.05,
                 value = mapDB.Scale or 1.2,
@@ -256,7 +256,21 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
                 end,
             })
             row7b:AddWidget(mapScaleSlider, 1)
-            card7:AddRow(row7b, Theme.rowHeightLast, 0)
+            card7:AddRow(row7b, Theme.rowHeight)
+
+            local row7c = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
+            local maxScaleSlider = GUIFrame:CreateSlider(row7c, "Maximized Scale", {
+                min = 0.5, max = 1.0, step = 0.05,
+                value = mapDB.MaximizedScale or 1,
+                callback = function(val)
+                    mapDB.MaximizedScale = val
+                    ApplyMapScale()
+                end,
+            })
+            row7c:AddWidget(maxScaleSlider, 1)
+            card7:AddRow(row7c, Theme.rowHeightLast, 0)
+
+            card7:AddLabel("Changes apply the next time you open the map.")
 
             yOffset = card7:GetNextOffset()
         end

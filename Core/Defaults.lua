@@ -1100,6 +1100,10 @@ local Defaults = {
         MapScale = {
             Enabled = false,
             Scale = 1.2,
+            -- 1 is Blizzard's true fullscreen. Below it the map keeps the
+            -- maximized layout but draws smaller, which needs the blackout
+            -- frame cleared or the result is letterboxing.
+            MaximizedScale = 1,
         },
 
         SpellAlerts = {
