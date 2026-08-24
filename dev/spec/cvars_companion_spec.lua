@@ -138,8 +138,12 @@ describe("companion CVars", function()
         assert.equals(2, #def.companionKeepAlive)
     end)
 
+    -- The primary is in every fixture below because it is in every real client.
+    -- ApplyCVars refuses to touch a def whose own CVar is absent, companion
+    -- included, so a fixture that omitted it would be testing the absent-CVar
+    -- refusal rather than the keep-alive rule.
     it("writes the master through the login pass, not only the direct call", function()
-        local f = newFixture({ findYourselfModeCircle = "0", findYourselfModeIcon = "0" })
+        local f = newFixture({ findYourselfModeOutline = "0", findYourselfModeCircle = "0", findYourselfModeIcon = "0" })
         f.AU.db = { CVarsEnabled = true, findYourselfModeOutline = true }
         f.AU:ApplyCVars()
         assert.same({ "1" }, f.writesTo("findYourselfAnywhere"))
@@ -154,12 +158,12 @@ describe("companion CVars", function()
     -- at all does, so the first assertion alone cannot fail for the right
     -- reason; the second is what proves the pass was a decision.
     it("keeps the master alive through the login pass when a sibling is on", function()
-        local kept = newFixture({ findYourselfModeCircle = "1", findYourselfAnywhere = "1" })
+        local kept = newFixture({ findYourselfModeOutline = "0", findYourselfModeCircle = "1", findYourselfAnywhere = "1" })
         kept.AU.db = { CVarsEnabled = true, findYourselfModeOutline = false }
         kept.AU:ApplyCVars()
         assert.same({}, kept.writesTo("findYourselfAnywhere"))
 
-        local dropped = newFixture({ findYourselfModeCircle = "0", findYourselfModeIcon = "0", findYourselfAnywhere = "1" })
+        local dropped = newFixture({ findYourselfModeOutline = "0", findYourselfModeCircle = "0", findYourselfModeIcon = "0", findYourselfAnywhere = "1" })
         dropped.AU.db = { CVarsEnabled = true, findYourselfModeOutline = false }
         dropped.AU:ApplyCVars()
         assert.same({ "0" }, dropped.writesTo("findYourselfAnywhere"))

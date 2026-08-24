@@ -216,32 +216,40 @@ function AU:ApplyCVars()
     -- Boolean CVars
     for _, def in ipairs(self.CVAR_DEFS) do
         local key = def.key
-        local dbValue = self.db[key]
-        local currentCVar = C_CVar.GetCVar(key)
-        local currentValue = FromCVarValue(currentCVar, def.type)
-        if dbValue == nil then
-            self.db[key] = currentValue
-        elseif dbValue ~= currentValue then
-            C_CVar.SetCVar(key, ToCVarValue(dbValue, def.type))
-        end
-        -- Runs whether or not the primary changed, because the master can be
-        -- wrong on its own. It turns the master back on for a mode enabled
-        -- here; it never adopts one for a sibling mode, which the keep-alive
-        -- only protects from being switched off.
-        if def.companion and self.db[key] ~= nil then
-            self:ApplyCompanion(def, self.db[key] == true)
+        local currentValue = self:GetLiveCVar(def)
+        -- SetCVar on a name this client does not have is an error, and a stored
+        -- value can outlive the CVar: a profile written on a client that had it,
+        -- or a patch that renamed it. The page already drops the row; this drops
+        -- the write, so both halves refuse on the same condition. The companion
+        -- write is inside the guard because a master flag is worth nothing when
+        -- the mode it serves is gone.
+        if currentValue ~= nil then
+            local dbValue = self.db[key]
+            if dbValue == nil then
+                self.db[key] = currentValue
+            elseif dbValue ~= currentValue then
+                C_CVar.SetCVar(key, ToCVarValue(dbValue, def.type))
+            end
+            -- Runs whether or not the primary changed, because the master can be
+            -- wrong on its own. It turns the master back on for a mode enabled
+            -- here; it never adopts one for a sibling mode, which the keep-alive
+            -- only protects from being switched off.
+            if def.companion and self.db[key] ~= nil then
+                self:ApplyCompanion(def, self.db[key] == true)
+            end
         end
     end
     -- Slider CVars
     for _, def in ipairs(self.CVAR_SLIDER_DEFS) do
         local key = def.key
-        local dbValue = self.db[key]
-        local currentCVar = C_CVar.GetCVar(key)
-        local currentValue = FromCVarValue(currentCVar, def.type)
-        if dbValue == nil then
-            self.db[key] = tonumber(currentValue) or 0
-        elseif tostring(dbValue) ~= tostring(currentValue) then
-            C_CVar.SetCVar(key, tostring(dbValue))
+        local currentValue = self:GetLiveCVar(def)
+        if currentValue ~= nil then
+            local dbValue = self.db[key]
+            if dbValue == nil then
+                self.db[key] = currentValue
+            elseif tostring(dbValue) ~= tostring(currentValue) then
+                C_CVar.SetCVar(key, tostring(dbValue))
+            end
         end
     end
 end
@@ -252,8 +260,10 @@ function AU:SyncFromCVars()
         self.db[def.key] = FromCVarValue(current, def.type)
     end
     for _, def in ipairs(self.CVAR_SLIDER_DEFS) do
-        local current = C_CVar.GetCVar(def.key)
-        self.db[def.key] = tonumber(current) or 0
+        -- nil, never 0. A CVar this client does not have has no value, and 0 is
+        -- a real setting for every slider here -- storing it makes ApplyCVars
+        -- write it back onto a name that does not exist.
+        self.db[def.key] = self:GetLiveCVar(def)
     end
 end
 

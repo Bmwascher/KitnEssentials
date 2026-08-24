@@ -16,10 +16,13 @@
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
 
+local writes
+
 local function newFixture(getCVar)
+    writes = {}
     _G.C_CVar = {
         GetCVar = getCVar,
-        SetCVar = function() end,
+        SetCVar = function(key, value) writes[#writes + 1] = { key, value } end,
     }
     _G.SetCVar = _G.C_CVar.SetCVar
     _G.GetCVar = _G.C_CVar.GetCVar
@@ -87,6 +90,76 @@ describe("live CVar reads", function()
     it("returns nil for a number CVar holding something that is not a number", function()
         local AU = newFixture(function() return "off" end)
         assert.is_nil(AU:GetLiveCVar(NUM))
+    end)
+end)
+
+
+-- The other half of the same refusal. Dropping the ROW keeps a dead control off
+-- the page; dropping the WRITE keeps SetCVar off a name this client does not
+-- have, which is an error rather than a no-op. A stored value outliving its
+-- CVar is not hypothetical: a profile written on a client that had it, or a
+-- patch that renames one, both produce it.
+describe("applying settings for a CVar the client lacks", function()
+    local BOOLDEF = { key = "someFlag", type = "boolean" }
+    local NUMDEF = { key = "someNumber", type = "number" }
+
+    local function applyWith(getCVar, defs, sliderDefs, db)
+        local AU = newFixture(getCVar)
+        AU.CVAR_DEFS = defs or {}
+        AU.CVAR_SLIDER_DEFS = sliderDefs or {}
+        AU.db = db or {}
+        AU.db.CVarsEnabled = true
+        AU:ApplyCVars()
+        return AU
+    end
+
+    local function wroteKeys()
+        local keys = {}
+        for i = 1, #writes do keys[#keys + 1] = writes[i][1] end
+        return table.concat(keys, ",")
+    end
+
+    it("writes nothing for an absent boolean the profile still has a value for", function()
+        applyWith(function() return nil end, { BOOLDEF }, nil, { someFlag = true })
+        assert.equals("", wroteKeys())
+    end)
+
+    it("writes nothing for an absent slider the profile still has a value for", function()
+        applyWith(function() return nil end, nil, { NUMDEF }, { someNumber = 3 })
+        assert.equals("", wroteKeys())
+    end)
+
+    -- The control. Without it the two cases above also pass on a build that
+    -- writes nothing ever.
+    it("still writes a present CVar whose stored value differs", function()
+        applyWith(only({ someFlag = "0" }), { BOOLDEF }, nil, { someFlag = true })
+        assert.equals("someFlag", wroteKeys())
+    end)
+
+    it("still writes a present slider whose stored value differs", function()
+        applyWith(only({ someNumber = "1" }), nil, { NUMDEF }, { someNumber = 3 })
+        assert.equals("someNumber", wroteKeys())
+    end)
+
+    -- An absent primary takes its companion with it: a master flag is worth
+    -- nothing when the mode it serves is gone, and writing it is the same
+    -- error on a different name.
+    it("writes no companion for an absent primary", function()
+        local def = { key = "someFlag", type = "boolean", companion = "someMaster" }
+        applyWith(function() return nil end, { def }, nil, { someFlag = true })
+        assert.equals("", wroteKeys())
+    end)
+
+    -- The stored copy must not gain a value the client cannot back. 0 is a real
+    -- setting for every slider on this page, so inventing it is what made the
+    -- write happen in the first place.
+    it("stores nil rather than zero when a slider CVar is absent", function()
+        local AU = newFixture(function() return nil end)
+        AU.CVAR_DEFS = {}
+        AU.CVAR_SLIDER_DEFS = { NUMDEF }
+        AU.db = {}
+        AU:SyncFromCVars()
+        assert.is_nil(AU.db.someNumber)
     end)
 end)
 
