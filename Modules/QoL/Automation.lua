@@ -85,10 +85,17 @@ AU.CVAR_DEFS = {
     },
     -- Character Visibility
     {
+        -- findYourselfModeOutline does nothing on its own. Blizzard's own
+        -- control writes four CVars together: the three mode flags plus
+        -- findYourselfAnywhere, which is what actually switches the feature on.
         key = "findYourselfModeOutline",
         label = "Find Yourself Anywhere: |cFF8080FFOutline|r",
         desc = "Adds Outline to Your Player Character.",
         type = "boolean",
+        companion = "findYourselfAnywhere",
+        -- The master stays on while ANY highlight mode is on, so turning the
+        -- outline off must not switch off someone's circle or icon.
+        companionKeepAlive = { "findYourselfModeCircle", "findYourselfModeIcon" },
     },
     {
         key = "occludedSilhouettePlayer",
@@ -159,6 +166,24 @@ local function FromCVarValue(value, cvarType)
     return value
 end
 
+-- Some CVars are only half a switch. `companion` is the master flag that has to
+-- be on for this one to do anything; `companionKeepAlive` lists the sibling
+-- modes that also depend on that master, so turning this one off does not take
+-- theirs down with it.
+function AU:ApplyCompanion(def, value)
+    if not def.companion then return end
+    if value then
+        C_CVar.SetCVar(def.companion, "1")
+        return
+    end
+    if def.companionKeepAlive then
+        for i = 1, #def.companionKeepAlive do
+            if C_CVar.GetCVar(def.companionKeepAlive[i]) == "1" then return end
+        end
+    end
+    C_CVar.SetCVar(def.companion, "0")
+end
+
 function AU:ApplyCVars()
     if not self.db.CVarsEnabled then return end
     -- Boolean CVars
@@ -171,6 +196,11 @@ function AU:ApplyCVars()
             self.db[key] = currentValue
         elseif dbValue ~= currentValue then
             C_CVar.SetCVar(key, ToCVarValue(dbValue, def.type))
+        end
+        -- Runs whether or not the primary changed: the master can be wrong on
+        -- its own, and a login pass is where that gets corrected.
+        if def.companion and self.db[key] ~= nil then
+            self:ApplyCompanion(def, self.db[key] == true)
         end
     end
     -- Slider CVars
