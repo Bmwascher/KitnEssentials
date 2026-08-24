@@ -97,7 +97,7 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
     manager:Register(autoLootCheck, "all")
     card:AddRow(row1, Theme.rowHeight)
 
-    local row2 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    local row2 = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     local autoConfirmLootRollCheck = GUIFrame:CreateCheckbox(row2, "Auto-Confirm Loot Roll Popup", {
         value = db.AutoConfirmLootRoll == true,
         callback = function(checked) db.AutoConfirmLootRoll = checked; ApplySettings() end,
@@ -111,17 +111,7 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
     })
     row2:AddWidget(confirmBonusRollCheck, 0.5)
     manager:Register(confirmBonusRollCheck, "all")
-    card:AddRow(row2, Theme.rowHeight)
-
-    local row3 = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    local omniumCharButtonCheck = GUIFrame:CreateCheckbox(row3, "Omnium Foil on Character Window", {
-        value = db.OmniumCharButton == true,
-        tooltip = "Hides the Omnium Foil minimap button and puts it on the bottom right of the Character window instead. Only available at max level.",
-        callback = function(checked) db.OmniumCharButton = checked; ApplySettings() end,
-    })
-    row3:AddWidget(omniumCharButtonCheck, 1)
-    manager:Register(omniumCharButtonCheck, "all")
-    card:AddRow(row3, Theme.rowHeightLast, 0)
+    card:AddRow(row2, Theme.rowHeightLast, 0)
 
     yOffset = card:GetNextOffset()
 
