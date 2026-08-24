@@ -3,9 +3,10 @@
 -- The eight closure gates on this branch live inside permanent hook closures, a
 -- frame script and C_Timer continuations. Reaching those needs Blizzard event
 -- timing and a real frame, so they are smoked, not specced. All eight METHOD
--- gates are here, plus the rebind that must survive Refresh's and the teardown
--- latch reset. Nothing below fakes a Blizzard layout: every stand-in is either a
--- method on this module or a table with the one or two fields the code reads.
+-- gates are here, plus the rebind that must survive Refresh's own gate, and the
+-- teardown latch reset. Nothing below fakes a Blizzard layout: every stand-in is
+-- either a method on this module or a table with the one or two fields the code
+-- reads.
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
 
@@ -87,7 +88,7 @@ describe("Character panel: refusals while the module is disabled", function()
         assert.is_false(touched)
     end)
 
-    -- Driven from six separate GUI callbacks.
+    -- Driven from every slot-display checkbox on the GUI page.
     it("RefreshSlotDisplays refuses while the module is disabled", function()
         local CP = loadCP()
         local drew = false

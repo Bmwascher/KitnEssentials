@@ -1006,9 +1006,9 @@ local function HookCharacterPanel()
     -- mattered was the dispatch overhead from always-listening.
     CP.eventFrame = CreateFrame("Frame")
     CP.eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
-        -- The script is set once and never cleared, so this gates on the module.
-        -- Belt and braces with the OnShow gate above: that one stops the
-        -- re-registration, this one stops anything already in flight.
+        -- The script is set once and never cleared. Belt and braces with the
+        -- OnShow gate above: that one stops the re-registration, this one stops
+        -- anything already in flight.
         if not CP:IsEnabled() then return end
         if event == "PLAYER_EQUIPMENT_CHANGED" then
             -- Route by slotID (arg1) so we update one slot's overlays, not all
