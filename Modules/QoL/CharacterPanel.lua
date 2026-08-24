@@ -728,11 +728,14 @@ end
 -- Debounced update — collapses bursts of equipment events into one update
 local function QueueUpdate()
     if updatePending then return end
+    if not CP:IsEnabled() then return end
     if not (CharacterFrame and CharacterFrame:IsShown()) then return end
     updatePending = true
     C_Timer.After(UPDATE_DEBOUNCE, function()
         updatePending = false
-        if CharacterFrame and CharacterFrame:IsShown() then
+        -- Re-checked rather than captured: this fires later and the module may
+        -- have been torn down in between.
+        if CP:IsEnabled() and CharacterFrame and CharacterFrame:IsShown() then
             UpdateDisplay()
         end
     end)
@@ -745,11 +748,12 @@ end
 local socketRefreshPending = false
 local function QueueSocketRefresh()
     if socketRefreshPending then return end
+    if not CP:IsEnabled() then return end
     if not (PaperDollFrame and PaperDollFrame:IsShown()) then return end
     socketRefreshPending = true
     C_Timer.After(UPDATE_DEBOUNCE, function()
         socketRefreshPending = false
-        if CP.db and CP.db.Enabled and CP.db.SocketHelperEnabled
+        if CP:IsEnabled() and CP.db and CP.db.SocketHelperEnabled
             and PaperDollFrame and PaperDollFrame:IsShown() then
             CP:RefreshSocketButtons()
         end
@@ -957,7 +961,9 @@ local function HookCharacterPanel()
 
     if PaperDollFrame then
         PaperDollFrame:HookScript("OnShow", function()
-            if not CP.db.Enabled then return end
+            -- This hook is permanent and outlives OnDisable, so it gates on the
+            -- module rather than on the key the player set.
+            if not CP:IsEnabled() then return end
             -- Register gear-tracking events ONLY while the pane is open. These
             -- fire heavily in combat (every consumable, every gear proc); idle
             -- dispatch was wasted work when the pane was closed.
@@ -1000,7 +1006,10 @@ local function HookCharacterPanel()
     -- mattered was the dispatch overhead from always-listening.
     CP.eventFrame = CreateFrame("Frame")
     CP.eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2)
-        if not CP.db.Enabled then return end
+        -- The script is set once and never cleared, so this gates on the module.
+        -- Belt and braces with the OnShow gate above: that one stops the
+        -- re-registration, this one stops anything already in flight.
+        if not CP:IsEnabled() then return end
         if event == "PLAYER_EQUIPMENT_CHANGED" then
             -- Route by slotID (arg1) so we update one slot's overlays, not all
             -- 17. The keyed-queue / debounce paths (QueueUpdate, socket helper)
@@ -1058,6 +1067,10 @@ function CP:Refresh()
     wipe(_lastSlotState)
 
     self:UpdateDB()
+    -- The rebind above always runs; the rest does not. The GUI calls this
+    -- method directly, and below it installs permanent hooks -- machinery for a
+    -- module that is switched off.
+    if not self:IsEnabled() then return end
     HookCharacterPanel()
     -- Inspect setup is owned by InspectPanel module (cascaded from CP:OnEnable);
     -- SetupInspectSupport is idempotent so any prior call still holds.
@@ -1135,6 +1148,7 @@ function CP:ApplyFont(fontString, size)
 end
 
 function CP:UpdateItemLevelText()
+    if not self:IsEnabled() then return end
     local itemLevelFrame = CharacterStatsPane and CharacterStatsPane.ItemLevelFrame
     if not itemLevelFrame or not itemLevelFrame.Value then return end
 
@@ -1278,7 +1292,7 @@ function CP:SetupStatTextHook()
     self._statTextHooked = true
 
     hooksecurefunc("PaperDollFrame_SetLabelAndText", function(statFrame)
-        if not CP.db.Enabled then return end
+        if not CP:IsEnabled() then return end
         if CharacterStatsPane and statFrame == CharacterStatsPane.ItemLevelFrame then return end
         local statsSize = CP.db.StatsFontSize or 12
         if statFrame.Label then CP:ApplyFont(statFrame.Label, statsSize) end
@@ -1290,6 +1304,7 @@ end
 -- Level Text Faction Indicator + Race Text
 ---------------------------------------------------------------------------------
 function CP:UpdateLevelTextWithFaction()
+    if not self:IsEnabled() then return end
     if ElvUILoaded() then return end
 
     local levelText = CharacterLevelText
@@ -1321,7 +1336,7 @@ function CP:SetupLevelTextHook()
     self._levelTextHooked = true
 
     hooksecurefunc("PaperDollFrame_SetLevel", function()
-        if not CP.db.Enabled then return end
+        if not CP:IsEnabled() then return end
         CP:UpdateLevelTextWithFaction()
         CP:UpdateRaceTextPosition()
     end)
@@ -1351,6 +1366,7 @@ function CP:UpdateRaceTextPosition()
 end
 
 function CP:ShowRaceText()
+    if not self:IsEnabled() then return end
     if ElvUILoaded() then return end
     if not self.db.ShowRaceText then return end
     -- Our race line sits under the level string, and getting it there means
@@ -1640,6 +1656,7 @@ end
 -- Deliberately NOT folded into the All-level updaters below: those also run on
 -- bag and equipment events, where the dirty check is the whole point.
 function CP:RefreshSlotDisplays()
+    if not self:IsEnabled() then return end
     wipe(_lastSlotState)
     InvalidateInspectSlots()
     if self.db.TrackIndicatorsEnabled then
@@ -1678,6 +1695,7 @@ function CP:HideAllTrackIndicators()
 end
 
 function CP:SetupTrackIndicators()
+    if not self:IsEnabled() then return end
     if not self.db.TrackIndicatorsEnabled then return end
     if self._trackIndicatorsHooked then return end
     self._trackIndicatorsHooked = true
@@ -2836,6 +2854,10 @@ function CP:CreateGemButton(index)
 end
 
 function CP:RefreshSocketButtons()
+    -- Two socket-click timers land here a tenth of a second later, and the
+    -- guards below cannot see a teardown: the container is only hidden, never
+    -- released, and the preference key is untouched.
+    if not self:IsEnabled() then return end
     if not self.socketContainer then return end
     if not self.db.SocketHelperEnabled then return end
 
@@ -3079,6 +3101,7 @@ function CP:HideSlotHighlight()
 end
 
 function CP:SetupGemSocketHelper()
+    if not self:IsEnabled() then return end
     if not self.db.SocketHelperEnabled then return end
     if self._gemSocketHooked then return end
     self._gemSocketHooked = true
@@ -3804,6 +3827,10 @@ function CP:OnDisable()
     wipe(_lastSlotState)
     wipe(_pendingGemLoads)
     wipe(_gemLoadAttempts)
+    -- AceHook removes the module's hooks on disable, so the latch that says
+    -- "already hooked" must go with them or re-enable silently skips the
+    -- reinstall.
+    self._decimalIlvlHooked = nil
     self:DisableGemSocketHelper()
     self:HideAllTrackIndicators()
     self:HideAllSlotDetails()
