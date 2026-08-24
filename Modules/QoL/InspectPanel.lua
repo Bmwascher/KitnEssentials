@@ -161,6 +161,7 @@ end
 -- Resolve the unit + slotID for an inspect button, applying the shared guards
 -- (db enabled, frame unit available, same-map). Returns (unit, slotID) or nil.
 local function ResolveInspectSlot(button)
+    if not InspectPanel:IsEnabled() then return end
     if not InspectPanel.CP or not InspectPanel.CP.db or not InspectPanel.CP.db.Enabled then return end
     if not button then return end
     local unit = InspectFrame and InspectFrame.unit
@@ -185,6 +186,7 @@ end
 -- deferred pass keeps that heavy tooltip-scan work off the busy load frame.
 local function QueueInspectUpdate()
     if inspectUpdatePending then return end
+    if not InspectPanel:IsEnabled() then return end
     if not (InspectPanel.CP and InspectPanel.CP.db and InspectPanel.CP.db.Enabled) then return end
     if not (InspectFrame and InspectFrame:IsShown()) then return end
     inspectUpdatePending = true
@@ -193,7 +195,10 @@ local function QueueInspectUpdate()
     -- debounce directly cuts the transient garbage generated while inspecting.
     C_Timer.After(0.2, function()
         inspectUpdatePending = false
-        if InspectPanel.CP and InspectPanel.CP.db and InspectPanel.CP.db.Enabled
+        -- Re-checked, not assumed: this fires 0.2s later and the module may have
+        -- been switched off in between.
+        if InspectPanel:IsEnabled()
+            and InspectPanel.CP and InspectPanel.CP.db and InspectPanel.CP.db.Enabled
             and InspectFrame and InspectFrame:IsShown() then
             InspectPanel:UpdateAllInspectSlots()
         end
@@ -456,6 +461,9 @@ end
 -- (A custom FontString on the inspect items frame; there is no native element
 -- to restyle the way the player panel reuses CharacterStatsPane.ItemLevelFrame.)
 function InspectPanel:UpdateInspectItemLevel()
+    -- Reached with an EMPTY per-slot queue, which is the normal state once the
+    -- gates above refuse every slot -- so this needs its own.
+    if not InspectPanel:IsEnabled() then return end
     if not self.CP.db.Enabled then return end
     local unit = InspectFrame and InspectFrame.unit
     if not unit then return end
@@ -543,7 +551,13 @@ function InspectPanel:SetupInspectSupport()
         -- it lands gem data with the equipped item's itemID. Registered only while
         -- the inspect frame is shown so we don't react to player-side item loads.
         if InspectFrame then
-            local function regData()   for _, e in ipairs(INSPECT_DATA_EVENTS) do f:RegisterEvent(e) end end
+            local function regData()
+                -- The hook that calls this is permanent and outlives OnDisable's
+                -- teardown, so without this it silently re-registers what
+                -- teardown just removed.
+                if not _self:IsEnabled() then return end
+                for _, e in ipairs(INSPECT_DATA_EVENTS) do f:RegisterEvent(e) end
+            end
             local function unregData()
                 for _, e in ipairs(INSPECT_DATA_EVENTS) do f:UnregisterEvent(e) end
                 if _self._inspectQueue then wipe(_self._inspectQueue) end

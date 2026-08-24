@@ -361,3 +361,68 @@ describe("Enchant helper: combat refusal", function()
         assert.equals(1, #used)
     end)
 end)
+
+---------------------------------------------------------------------------------
+-- Item F: the inspect-side toggle
+---------------------------------------------------------------------------------
+describe("Inspect Item Info toggle", function()
+    -- A recording stand-in for the InspectPanel module, so the assertion is
+    -- "was it asked to enable" rather than "did anything happen".
+    local function withInspectStub(fn)
+        local calls = {}
+        local CP = loadCP()
+        local addon = _G.KitnEssentials
+        local prior = addon.GetModule
+        addon.GetModule = function(_, name)
+            if name == "InspectPanel" then
+                return {
+                    Enable = function() calls[#calls + 1] = "Enable" end,
+                    Disable = function() calls[#calls + 1] = "Disable" end,
+                }
+            end
+            return nil
+        end
+        local ok, err = pcall(fn, CP, calls)
+        addon.GetModule = prior
+        if not ok then error(err, 0) end
+    end
+
+    it("enables the inspect module when the module is up and the key is on", function()
+        withInspectStub(function(CP, calls)
+            CP.db = { Enabled = true, InspectPanelEnabled = true }
+            CP.IsEnabled = function() return true end
+            CP:ApplyInspectPanelState()
+            assert.same({ "Enable" }, calls)
+        end)
+    end)
+
+    it("disables it when only the inspect key is off", function()
+        withInspectStub(function(CP, calls)
+            CP.db = { Enabled = true, InspectPanelEnabled = false }
+            CP.IsEnabled = function() return true end
+            CP:ApplyInspectPanelState()
+            assert.same({ "Disable" }, calls)
+        end)
+    end)
+
+    -- The key stays TRUE here. `CP:Disable()` is reachable without the profile
+    -- changing, so reading `db.Enabled` instead would wake the inspect module
+    -- while CharacterPanel itself is down.
+    it("disables it when the MODULE is down, whatever the inspect key says", function()
+        withInspectStub(function(CP, calls)
+            CP.db = { Enabled = true, InspectPanelEnabled = true }
+            CP.IsEnabled = function() return false end
+            CP:ApplyInspectPanelState()
+            assert.same({ "Disable" }, calls)
+        end)
+    end)
+
+    it("treats an absent inspect key as on, so an old profile keeps its overlays", function()
+        withInspectStub(function(CP, calls)
+            CP.db = { Enabled = true }
+            CP.IsEnabled = function() return true end
+            CP:ApplyInspectPanelState()
+            assert.same({ "Enable" }, calls)
+        end)
+    end)
+end)

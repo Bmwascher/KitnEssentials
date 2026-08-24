@@ -1077,6 +1077,8 @@ local Defaults = {
             EnchantHelperEnabled     = true,
 
             -- Per-slot detail overlays (no ElvUI conflict)
+            -- Inspect-side overlays (own toggle; the module is a separate AceModule)
+            InspectPanelEnabled  = true,
             ShowSlotItemLevel    = true,
             ShowEnchantNames     = true,
             ShowSlotGems         = true,

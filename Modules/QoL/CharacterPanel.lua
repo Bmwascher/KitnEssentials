@@ -874,6 +874,11 @@ function CP:ApplySettings()
 
     if not self.db.Enabled then return end
 
+    -- Wake or stand down InspectPanel; it owns the inspect orchestration. Here
+    -- rather than in OnEnable because the profile manager re-applies settings
+    -- without re-enabling, and this key can differ between profiles.
+    self:ApplyInspectPanelState()
+
     -- Live apply/restore of the character-panel background hide. Idempotent;
     -- lets the GUI toggle take effect immediately instead of only on the next
     -- PaperDollFrame OnShow.
@@ -3296,6 +3301,22 @@ function CP:OnInitialize()
     self:SetEnabledState(false)
 end
 
+-- The inspect overlays are a separate AceModule with its own lifecycle, so the
+-- user switch drives Enable/Disable rather than a draw flag. Absent means on,
+-- so a profile written before the switch existed keeps what it had.
+function CP:ApplyInspectPanelState()
+    local insp = KitnEssentials:GetModule("InspectPanel", true)
+    if not insp then return end
+    -- `IsEnabled()` for the master, not `db.Enabled`. `CP:Disable()` is reachable
+    -- without the key changing, so reading the key here would let a later GUI
+    -- callback wake InspectPanel while CharacterPanel itself is disabled.
+    if self:IsEnabled() and self.db.InspectPanelEnabled ~= false then
+        insp:Enable()
+    else
+        insp:Disable()
+    end
+end
+
 function CP:OnEnable()
     if not self.db.Enabled then return end
 
@@ -3313,10 +3334,6 @@ function CP:OnEnable()
     -- Warm the gem cache during the login loading screen (see PrimeGemCache).
     -- AceEvent unregisters automatically on module disable.
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "PrimeGemCache")
-
-    -- Wake InspectPanel; it owns the inspect orchestration.
-    local insp = KitnEssentials:GetModule("InspectPanel", true)
-    if insp then insp:Enable() end
 
     -- Race: if the character pane is already shown when the module enables
     -- (e.g. user toggled the module on with the pane open), the PaperDollFrame
