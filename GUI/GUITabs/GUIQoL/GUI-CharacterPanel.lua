@@ -65,6 +65,20 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         KE:ColorTextByTheme("-") .. " Adds optional decimal item level, race text, faction indicator, item track letters, missing enchant/gem warnings, and a gem socket helper.",
         50, "hide")
     noteRow:AddWidget(noteText, 1)
+
+    local row1Insp = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local inspectCheck = GUIFrame:CreateCheckbox(row1Insp, "Show on Inspect Frame", {
+        value = db.InspectPanelEnabled ~= false,
+        callback = function(checked)
+            db.InspectPanelEnabled = checked
+            if CP then CP:ApplyInspectPanelState() end
+        end,
+        tooltip = "Draws the same per-slot item levels, enchants and gems on the inspect window when you inspect another player.",
+    })
+    row1Insp:AddWidget(inspectCheck, 1)
+    manager:Register(inspectCheck, "all")
+    card1:AddRow(row1Insp, Theme.rowHeight)
+
     card1:AddRow(noteRow, Theme.rowHeightNote, 0)
 
     yOffset = card1:GetNextOffset()
@@ -169,6 +183,25 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     local card4 = GUIFrame:CreateCard(scrollChild, "Item Track Indicators", yOffset)
     manager:Register(card4, "all")
 
+    local row4Up = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local upgradeCheck = GUIFrame:CreateCheckbox(row4Up, "Show Upgrade Progress", {
+        value = db.ShowUpgradeProgress ~= false,
+        callback = function(checked)
+            db.ShowUpgradeProgress = checked
+            ApplySettings()
+            if CP then CP:RefreshSlotDisplays() end
+        end,
+        tooltip = "While an item is still upgrading, shows how far along it is next to its item level, e.g. 334 M4/6. A fully upgraded item goes back to the plain track letter in the corner.",
+    })
+    row4Up:AddWidget(upgradeCheck, 1)
+    -- "all", NOT "trackOn". The two toggles are independent by design: letters
+    -- off with progress on is a specified state that renders the count without a
+    -- letter. Gating this control on the letters toggle would grey it out in
+    -- exactly that state, so the player could not leave it without first turning
+    -- letters back on.
+    manager:Register(upgradeCheck, "all")
+    card4:AddRow(row4Up, Theme.rowHeight)
+
     local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local trackCheck = GUIFrame:CreateCheckbox(row4, "Show Track Letters", {
         value = db.TrackIndicatorsEnabled,
@@ -253,6 +286,25 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     rowSD1:AddWidget(slotGemsCheck, 1 / 3)
     manager:Register(slotGemsCheck, "all")
     cardSD:AddRow(rowSD1, Theme.rowHeight)
+
+    local rowSDStyle = GUIFrame:CreateRow(cardSD.content, Theme.rowHeight)
+    local enchantStyleDrop = GUIFrame:CreateDropdown(rowSDStyle, "Enchant Name Style", {
+        value = db.EnchantNameStyle or "short",
+        options = {
+            { key = "short",   text = "Short" },
+            { key = "verbose", text = "Verbose" },
+            { key = "full",    text = "Full" },
+        },
+        callback = function(key)
+            db.EnchantNameStyle = key
+            ApplySettings()
+            if CP then CP:RefreshSlotDisplays() end
+        end,
+        tooltip = "For Hex of Leeching: Short reads \"Leech\", Verbose reads \"Leeching\", Full reads \"Hex of Leeching\". Long names are shortened to fit beside the slot whichever style you pick.",
+    })
+    rowSDStyle:AddWidget(enchantStyleDrop, 1)
+    manager:Register(enchantStyleDrop, "all")
+    cardSD:AddRow(rowSDStyle, Theme.rowHeight)
 
     local rowSD2 = GUIFrame:CreateRow(cardSD.content, Theme.rowHeightLast)
     local infoSizeSlider = GUIFrame:CreateSlider(rowSD2, "Info Text Size", {
