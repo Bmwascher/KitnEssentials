@@ -1,5 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.7
+
+### Cursor Effects
+- The taunt countdown at the cursor now also tracks Flame Shock on Elemental and
+  Restoration Shaman, and Garrote on Assassination Rogue
+- The spell is read from your spellbook instead of your role, so any spec that
+  has one gets the countdown, talent overrides included. A spec with none draws
+  nothing
+
+### Player Crosshair
+- New Always Show option keeps the crosshair on screen out of combat, not only
+  during a fight
+- New Shape dropdown draws the crosshair as a circle instead of a cross
+- New Hide When In Range option draws the crosshair only while your target is
+  out of range. It works on its own, separate from the range warning colours
+- The crosshair now comes back up after a `/reload` in the middle of a fight. It
+  used to stay hidden until the next fight started
+
 ## v4.3.6
 
 ### Havoc Tracker (new, Destruction Warlock)
