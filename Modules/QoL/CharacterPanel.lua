@@ -1283,10 +1283,10 @@ function CP:GetItemTrack(unit, slotID, data)
 end
 
 -- The dirty key for everything a track wrapper can make a slot render. ONE
--- definition, used by the track indicator's dirty check: the count belongs in it
--- because an
--- upgrade from 5/6 to 6/6 leaves the letter alone, and a letter-only key would
--- skip that repaint and strand the slot in the wrong layout.
+-- definition, used by the track indicator's dirty check. The count belongs in it
+-- because an upgrade from 5/6 to 6/6 leaves the letter alone: a letter-only key
+-- would skip that repaint, and under the merged layout it would also strand the
+-- slot in the wrong one of the two layouts.
 local function TrackDirtyKey(w)
     if not w then return nil end
     return (w.track and w.track.letter or "") .. "/" .. (w.cur or "") .. "/" .. (w.max or "")
@@ -1433,10 +1433,7 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     local w = self:GetItemTrack(unit, slotID, data)
 
     -- Dirty-check (player path only): itemLink plus everything the render can
-    -- show. The count is part of the key because an upgrade from 5/6 to 6/6
-    -- leaves the letter alone -- keying on the letter would skip that repaint,
-    -- and under the merged layout it would also strand the slot in the wrong
-    -- one of the two layouts.
+    -- show, via TrackDirtyKey, which owns the reason the count is in there.
     if unit == "player" then
         local s = _slotState(slotID)
         local link = GetInventoryItemLink(unit, slotID)
