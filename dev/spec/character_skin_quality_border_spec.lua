@@ -6,9 +6,6 @@
 -- the rarity border paints at all, including the default-on branch a missing
 -- profile section takes; and the gradient painter's idempotence latch, which is
 -- what stops a pooled row from stacking a new pair of textures on every reacquire.
---
--- The latch cases are appended by Task 2, which is where the painter they call
--- gets written. They are not here.
 
 local helpers = require("dev.spec._helpers")
 
