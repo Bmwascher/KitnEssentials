@@ -449,10 +449,10 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             return nil
         end
 
-        local card8 = GUIFrame:CreateCard(scrollChild, "Compare Header", yOffset)
+        local cardCH = GUIFrame:CreateCard(scrollChild, "Compare Header", yOffset)
 
-        local row8 = GUIFrame:CreateRow(card8.content, Theme.rowHeightLast)
-        local compareHeaderCheck = GUIFrame:CreateCheckbox(row8, "Style Compare Header", {
+        local rowCH = GUIFrame:CreateRow(cardCH.content, Theme.rowHeightLast)
+        local compareHeaderCheck = GUIFrame:CreateCheckbox(rowCH, "Style Compare Header", {
             value = chDB.Enabled == true,
             callback = function(checked)
                 chDB.Enabled = checked
@@ -464,10 +464,10 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             end,
             tooltip = "Styles the \"Equipped\" header on item comparison tooltips to match the rest of the tooltip skin. Turning it off needs a reload.",
         })
-        row8:AddWidget(compareHeaderCheck, 1)
-        card8:AddRow(row8, Theme.rowHeightLast, 0)
+        rowCH:AddWidget(compareHeaderCheck, 1)
+        cardCH:AddRow(rowCH, Theme.rowHeightLast, 0)
 
-        yOffset = card8:GetNextOffset()
+        yOffset = cardCH:GetNextOffset()
     end
 
     return yOffset
