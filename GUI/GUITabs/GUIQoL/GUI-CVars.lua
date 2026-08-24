@@ -103,18 +103,15 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Character & Effects
+    -- Card 3: Character Visibility
     ----------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Character & Effects", yOffset)
+    local card3 = GUIFrame:CreateCard(scrollChild, "Character Visibility", yOffset)
     manager:Register(card3, "all")
 
     if AU then
         local charEffectKeys = {
             findYourselfModeOutline = true,
             occludedSilhouettePlayer = true,
-            ffxDeath = true,
-            ffxGlow = true,
-            ResampleAlwaysSharpen = true,
         }
         for _, def in ipairs(AU.CVAR_DEFS) do
             if charEffectKeys[def.key] then

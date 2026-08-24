@@ -96,25 +96,6 @@ AU.CVAR_DEFS = {
         desc = "Display a Silhouette of your Character when Obstructed.",
         type = "boolean",
     },
-    -- Effects
-    {
-        key = "ffxDeath",
-        label = "Death Effects",
-        desc = "Displays Death Overlay / Desaturation.",
-        type = "boolean",
-    },
-    {
-        key = "ffxGlow",
-        label = "Fullscreen Glow",
-        desc = "Displays Fullscreen Glow Effect. Can be a small FPS improvement.",
-        type = "boolean",
-    },
-    {
-        key = "ResampleAlwaysSharpen",
-        label = "Sharpen Textures",
-        desc = "Sharpens Up Textures.",
-        type = "boolean",
-    },
     -- Tooltips
     {
         key = "alwaysCompareItems",
@@ -141,12 +122,6 @@ AU.CVAR_SLIDER_DEFS = {
         label = "Spell Queue Window",
         type = "number",
         min = 0, max = 400, step = 1,
-    },
-    {
-        key = "RAIDWaterDetail",
-        label = "Raid: Water Detail",
-        type = "number",
-        min = 0, max = 3, step = 1,
     },
     {
         key = "RAIDweatherDensity",
