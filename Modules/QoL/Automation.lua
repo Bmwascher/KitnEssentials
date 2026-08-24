@@ -260,14 +260,14 @@ function AU:ApplyCVars()
 end
 
 function AU:SyncFromCVars()
+    -- nil, never a fabricated value. A CVar this client does not have has no
+    -- value, and both defaults are real settings here: a raw read turns an
+    -- absent boolean into false and an absent slider into 0, which is how a
+    -- profile ends up holding a setting the client cannot back.
     for _, def in ipairs(self.CVAR_DEFS) do
-        local current = C_CVar.GetCVar(def.key)
-        self.db[def.key] = FromCVarValue(current, def.type)
+        self.db[def.key] = self:GetLiveCVar(def)
     end
     for _, def in ipairs(self.CVAR_SLIDER_DEFS) do
-        -- nil, never 0. A CVar this client does not have has no value, and 0 is
-        -- a real setting for every slider here -- storing it makes ApplyCVars
-        -- write it back onto a name that does not exist.
         self.db[def.key] = self:GetLiveCVar(def)
     end
 end

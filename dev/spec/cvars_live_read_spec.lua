@@ -161,6 +161,27 @@ describe("applying settings for a CVar the client lacks", function()
         AU:SyncFromCVars()
         assert.is_nil(AU.db.someNumber)
     end)
+
+    -- The boolean half of the same rule. A raw read makes an absent boolean
+    -- `false`, which is a real setting rather than an absence.
+    it("stores nil rather than false when a boolean CVar is absent", function()
+        local AU = newFixture(function() return nil end)
+        AU.CVAR_DEFS = { BOOLDEF }
+        AU.CVAR_SLIDER_DEFS = {}
+        AU.db = {}
+        AU:SyncFromCVars()
+        assert.is_nil(AU.db.someFlag)
+    end)
+
+    -- The control: a present CVar still gets stored, and stored as its value.
+    it("still stores a present boolean that reads false", function()
+        local AU = newFixture(only({ someFlag = "0" }))
+        AU.CVAR_DEFS = { BOOLDEF }
+        AU.CVAR_SLIDER_DEFS = {}
+        AU.db = {}
+        AU:SyncFromCVars()
+        assert.is_false(AU.db.someFlag)
+    end)
 end)
 
 describe("filtering defs by what the client has", function()
