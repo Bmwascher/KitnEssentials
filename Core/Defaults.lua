@@ -644,15 +644,11 @@ local Defaults = {
             floatingCombatTextReactives_v2 = nil,
             findYourselfModeOutline = nil,
             occludedSilhouettePlayer = nil,
-            ffxDeath = nil,
-            ffxGlow = nil,
-            ResampleAlwaysSharpen = nil,
             alwaysCompareItems = false,
             nameplateShowOnlyNameForFriendlyPlayerUnits = nil,
             nameplateUseClassColorForFriendlyPlayerUnitNames = nil,
             -- CVars (merged) - sliders
             SpellQueueWindow = nil,
-            RAIDWaterDetail = nil,
             RAIDweatherDensity = nil,
             autoLootRate = nil,
         },
@@ -1104,6 +1100,10 @@ local Defaults = {
         MapScale = {
             Enabled = false,
             Scale = 1.2,
+            -- 1 is Blizzard's true fullscreen. Below it the map keeps the
+            -- maximized layout but draws smaller, which needs the blackout
+            -- frame cleared or the result is letterboxing.
+            MaximizedScale = 1,
         },
 
         SpellAlerts = {
