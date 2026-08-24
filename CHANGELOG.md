@@ -1,5 +1,28 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.9
+
+### CVars
+- Four rows are gone: Death Effects, Fullscreen Glow, Sharpen Textures and Raid:
+  Water Detail. System Optimization already owns all four
+- Every row now reads its real value from your client when the page opens, and a
+  row your client does not have is not drawn at all
+- "Find Yourself Anywhere: Outline" now works. It needs a master switch that was
+  never being written, so ticking it did nothing before. Turning it off no longer
+  switches off a circle or icon highlight you set elsewhere
+- The "Character & Effects" card is now called "Character Visibility"
+
+### World Map Scale
+- New Maximized Scale slider, so the full-screen map and the small map can have
+  different sizes. There was only one slider before
+- The map is only resized while it is closed. A change made with the map open, or
+  during a fight, is held and applied the moment it is safe
+- The card is now called "World Map Scale", and searching the sidebar finds it for
+  "maximized"
+
+### Cursor Effects
+- The Taunt Countdown description now highlights the spell names it tracks
+
 ## v4.3.8
 
 ### Combat Logger
