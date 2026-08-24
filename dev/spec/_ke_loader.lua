@@ -987,14 +987,18 @@ function L.loadCursor(overrides)
     _G.C_SpellBook = overrides.C_SpellBook or {
         IsSpellInSpellBook = function() return false end,
     }
-    -- Cursor.lua reads C_SpecializationInfo.GetSpecialization plus the still
-    -- current GetSpecializationRole. installMock's namespace delegates to the
-    -- global below, so overriding either one drives the gate. With neither,
-    -- _isTankSpec returns false and the tank-positive test FAILS -- it does
-    -- not pass vacuously.
+    -- The taunt gate reads the SPELLBOOK, not the role. The loader's default
+    -- IsSpellInSpellBook returns false, so a gate-positive test FAILS without
+    -- an override rather than passing vacuously.
     _G.GetSpecialization = overrides.GetSpecialization or function() return 1 end
-    _G.GetSpecializationRole = overrides.GetSpecializationRole
-        or function() return "TANK" end
+    -- The taunt gate reads the spec ID through C_SpecializationInfo, whose
+    -- mock delegates to this global at call time. Without it every
+    -- spec-gated entry in TRACKED_SPELLS is skipped, so a test asserting
+    -- one is NOT found passes for the wrong reason. 73 is Protection
+    -- Warrior: a spec in no `specs` table, so the default drives the plain
+    -- taunt entries and nothing else.
+    _G.GetSpecializationInfo = overrides.GetSpecializationInfo
+        or function() return 73 end
     _G.GetCursorPosition = overrides.GetCursorPosition or function() return 0, 0 end
     _G.UnitCastingInfo = overrides.UnitCastingInfo or function() return nil end
     _G.UnitChannelInfo = overrides.UnitChannelInfo or function() return nil end
@@ -1035,6 +1039,70 @@ function L.loadCursor(overrides)
         seams.tauntOnEvent = findUpvalue(C.CreateTauntSatellite, "_tauntOnEvent")
     end
     return C, KE, seams
+end
+
+-- Modules/Combat/CombatCross.lua. The file-scope `local X = X` captures
+-- include C_SpecializationInfo.GetSpecialization and C_Spell, so both must
+-- exist before load or the index throws. Nothing creates a frame at load time
+-- -- CreateFrame only runs from lifecycle methods, which this loader
+-- deliberately does not call, so a spec that needs a frame calls
+-- CC:CreateFrame() itself.
+--
+-- UnitAffectingCombat is UNMANAGED (dev/spec/_wow_mock.lua), so it is assigned
+-- to _G directly; handing it to installMock would silently drop it.
+-- Returns CC, KE.
+function L.loadCombatCross(overrides)
+    overrides = overrides or {}
+    installMock(managedSubset(overrides), {
+        C_Timer = inertTimer(),
+        GetTime = function() return 0 end,
+        InCombatLockdown = function() return false end,
+        CreateFrame = function() return noopFrame() end,
+        UnitExists = function() return true end,
+    })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+
+    _G.C_Spell = overrides.C_Spell or {
+        IsSpellInRange = function() return nil end,
+    }
+    -- Defaults to OUT of combat. A visibility test that expects the cross up
+    -- must say so, either through this override or through AlwaysShow -- it
+    -- cannot pass by inheriting a permissive default.
+    _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
+    _G.GetSpecialization = overrides.GetSpecialization or function() return 1 end
+    _G.GetSpecializationInfo = overrides.GetSpecializationInfo or function() return 73 end
+
+    local profile = {
+        CombatCross = {
+            Enabled = true,
+            Strata = "HIGH",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = {},
+            ColorMode = "custom",
+            Color = { 0, 1, 0.169, 1 },
+            Shape = "cross",
+            AlwaysShow = false,
+            Thickness = 22,
+            Outline = true,
+            RangeColorMeleeEnabled = false,
+            RangeColorRangedEnabled = false,
+            HideWhenInRange = false,
+            OutOfRangeColor = { 1, 0, 0, 1 },
+        },
+    }
+    local KE = {
+        db = { profile = profile },
+        FONT = "Fonts\\Expressway.TTF",
+        GetFontPath = function() return "Fonts\\Expressway.TTF" end,
+        GetAccentColor = function() return 1, 1, 1, 1 end,
+        ApplyFramePosition = function() end,
+    }
+    helpers.loadModule("Modules/Combat/CombatCross.lua", KE)
+    local CC = modules["CombatCross"]
+    CC:UpdateDB()
+    return CC, KE
 end
 
 -- Modules/QoL/SlashCommands.lua. The file guards on a truthy KitnEssentials at

@@ -34,7 +34,7 @@ function GUIFrame:CreateTauntCursorCard(scrollChild, yOffset, config)
     local card = GUIFrame:CreateCard(scrollChild, "Taunt Countdown", yOffset)
     manager:Register(card, "all")
 
-    card:AddLabel("|cff888888Shows your taunt cooldown at the cursor. Tank specs only; your class taunt is detected automatically. Nothing is drawn on a non-tank spec.|r")
+    card:AddLabel("|cff888888Shows the cooldown of your taunt at the cursor, or of Flame Shock on Elemental and Restoration and Garrote on Assassination. The spell is detected from your spellbook, so any spec that has one gets it. Nothing is drawn on a spec that has none.|r")
 
     local row1 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local tauntEnable = GUIFrame:CreateCheckbox(row1, "Enable Taunt Countdown", {
@@ -48,8 +48,9 @@ function GUIFrame:CreateTauntCursorCard(scrollChild, yOffset, config)
     row1:AddWidget(tauntEnable, 0.6)
     manager:Register(tauntEnable, "all")
 
-    -- Test button: 7-second preview so users can verify placement without being
-    -- on a tank spec. Always enabled (works with the feature off too).
+    -- Test button: 7-second preview so users can verify placement without
+    -- waiting for a real cooldown, or on a spec that tracks nothing. Always
+    -- enabled (works with the feature off too).
     local tauntTest = GUIFrame:CreateButton(row1, "Test (7s countdown)", {
         height = 30,
         callback = function()

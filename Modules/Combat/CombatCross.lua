@@ -18,6 +18,7 @@ local CC = KitnEssentials:NewModule("CombatCross", "AceEvent-3.0")
 local select = select
 local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
+local UnitAffectingCombat = UnitAffectingCombat
 local UIParent = UIParent
 local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
@@ -25,6 +26,16 @@ local C_Spell = C_Spell
 local UnitExists = UnitExists
 
 local FONT_SIZE_MULTIPLIER = 2
+
+-- One character per shape. "\226\128\162" is U+2022 BULLET, in the General
+-- Punctuation block, which is present in far more fonts than U+25CF BLACK
+-- CIRCLE -- that one renders as a missing-glyph box. This module draws through
+-- whatever font the user picked, so the glyph has to survive all of them.
+local SHAPE_GLYPH = {
+    cross  = "+",
+    circle = "\226\128\162",
+}
+
 local RANGE_UPDATE_THROTTLE = 0.1
 local rangeUpdateElapsed = 0
 
@@ -82,7 +93,9 @@ local HEALER_RANGE_ABILITIES = {
 CC.frame = nil
 CC.text = nil
 CC.previewActive = false
-CC.combatActive = false
+-- Not "in combat": with Always Show on this is true out of combat too. It is
+-- what carries the frame, whatever put it there.
+CC.gameplayActive = false
 CC.rangeAbility = nil
 CC.specType = nil
 CC.lastInRange = nil
@@ -133,7 +146,18 @@ end
 
 function CC:UpdateRangeColor()
     if not self.text then return end
+    -- Read once. All three writes below share the same three-part condition:
+    -- the option is on, gameplay put the cross up, and no preview is running.
+    -- The preview half is not optional -- Edit Mode drags this frame, and
+    -- fading it mid-drag leaves the user moving something invisible.
+    local hideMode = self.db.HideWhenInRange
+
     if not UnitExists("target") then
+        -- Nothing to be out of range OF, so the cross goes away rather than
+        -- coming back. This is the option's whole meaning at zero targets.
+        if hideMode and self.gameplayActive and not self.previewActive then
+            self.frame:SetAlpha(0)
+        end
         if self.lastInRange == false then
             self.lastInRange = nil
             local r, g, b, a = self:GetColor()
@@ -142,9 +166,13 @@ function CC:UpdateRangeColor()
         return
     end
 
+    if not self.rangeAbility then return end
+
     local inRange = C_Spell.IsSpellInRange(self.rangeAbility, "target")
 
     if inRange == nil then
+        -- Deliberately no alpha write: an unreadable range is not an answer,
+        -- and guessing one would flicker the cross on every failed read.
         if self.lastInRange ~= nil then
             self.lastInRange = nil
             local r, g, b, a = self:GetColor()
@@ -154,6 +182,14 @@ function CC:UpdateRangeColor()
     end
 
     local nowInRange = (inRange == 1 or inRange == true)
+
+    -- BEFORE the unchanged-state early-out below, on purpose: other paths set
+    -- alpha back to 1, and a write that only fired on transitions would never
+    -- take it down again.
+    if hideMode and self.gameplayActive and not self.previewActive then
+        self.frame:SetAlpha(nowInRange and 0 or 1)
+    end
+
     if nowInRange == self.lastInRange then return end
     self.lastInRange = nowInRange
 
@@ -167,8 +203,11 @@ function CC:UpdateRangeColor()
 end
 
 function CC:ShouldRunRangeUpdate()
-    if not self.combatActive then return false end
+    if not self.gameplayActive then return false end
     if not self.rangeAbility or not self.specType then return false end
+    -- Hide When In Range needs the range answer whether or not anything is
+    -- being recoloured, so it drives the loop on its own.
+    if self.db.HideWhenInRange then return true end
     if self.specType == "melee" and not self.db.RangeColorMeleeEnabled then return false end
     if self.specType == "ranged" and not self.db.RangeColorRangedEnabled then return false end
     return true
@@ -187,6 +226,11 @@ function CC:UpdateOnUpdateState()
         if self.onUpdateActive then
             self.onUpdateActive = false
             self.frame:SetScript("OnUpdate", nil)
+            -- Unconditional, and not gated on the option: this branch runs
+            -- precisely when the user has just switched the option off, so a
+            -- condition that consulted it would decline the restore at the one
+            -- moment a faded cross needs it.
+            if self.frame then self.frame:SetAlpha(1) end
             -- Reset color to default when disabling
             if self.text then
                 local r, g, b, a = self:GetColor()
@@ -223,7 +267,6 @@ function CC:CreateFrame()
     self.frame:SetFrameLevel(100)
     self.frame:Hide()
 
-    -- Create cross text ("+" rendered at large font size)
     local fontSize = (self.db.Thickness or 22) * FONT_SIZE_MULTIPLIER
     local fontPath = KE:GetFontPath(self.db.FontFace) or KE.FONT
 
@@ -232,7 +275,7 @@ function CC:CreateFrame()
     -- The Outline toggle used to build a shadow halo around the cross. That
     -- renderer is gone, so it maps to the font's own outline flag.
     self.text:SetFont(fontPath, fontSize, self.db.Outline and "OUTLINE" or "")
-    self.text:SetText("+")
+    self.text:SetText(SHAPE_GLYPH[self.db.Shape] or SHAPE_GLYPH.cross)
 
     self.text:ClearAllPoints()
     self.text:SetPoint("CENTER", self.frame, "CENTER", 0, 0)
@@ -251,6 +294,7 @@ function CC:ApplySettings()
     local fontSize = (self.db.Thickness or 22) * FONT_SIZE_MULTIPLIER
     local fontPath = KE:GetFontPath(self.db.FontFace) or KE.FONT
     self.text:SetFont(fontPath, fontSize, self.db.Outline and "OUTLINE" or "")
+    self.text:SetText(SHAPE_GLYPH[self.db.Shape] or SHAPE_GLYPH.cross)
 
     -- Apply color
     local r, g, b, a = self:GetColor()
@@ -259,8 +303,19 @@ function CC:ApplySettings()
     -- Force range color re-evaluation on next update cycle
     self.lastInRange = nil
 
-    -- Update range checking state
-    self:UpdateOnUpdateState()
+    -- Ends in a visibility decision because this is where a PROFILE SWITCH
+    -- lands for a module that was already enabled and stays enabled:
+    -- ProfileManager:RefreshAllModules calls ApplySettings on exactly those,
+    -- and never touches visibility. Without this, a profile that turns Always
+    -- Show on would not show the cross until the next fight. A module the new
+    -- profile ENABLES arrives through OnEnable instead, which ends in the same
+    -- call. UpdateVisibility runs UpdateOnUpdateState itself, so the call that
+    -- used to be here is not lost.
+    -- Hide When In Range is the only thing that ever lowers alpha, so turning
+    -- it off has to raise it again here. The loop may still be running for
+    -- colour, in which case nothing tears it down and no other path restores.
+    if not self.db.HideWhenInRange then self.frame:SetAlpha(1) end
+    self:UpdateVisibility()
 end
 
 function CC:ApplyPosition()
@@ -280,11 +335,16 @@ function CC:Show(isPreview)
 
     if isPreview then
         self.previewActive = true
+        -- A preview that starts on an already-shown, already-faded cross would
+        -- otherwise inherit alpha 0. The fade is suppressed while previewing,
+        -- but the value it already wrote persists, and the restore below
+        -- cannot fire because the frame IS already shown.
+        self.frame:SetAlpha(1)
     else
-        self.combatActive = true
+        self.gameplayActive = true
     end
 
-    if self.previewActive or self.combatActive then
+    if self.previewActive or self.gameplayActive then
         if not self.frame:IsShown() then
             self.frame:SetAlpha(1)
             self.frame:Show()
@@ -298,7 +358,7 @@ function CC:Hide(isPreview)
     if isPreview then
         self.previewActive = false
     else
-        self.combatActive = false
+        self.gameplayActive = false
         -- Restore normal color when leaving combat
         if self.text then
             local r, g, b, a = self:GetColor()
@@ -307,7 +367,7 @@ function CC:Hide(isPreview)
         self.lastInRange = nil
     end
 
-    if not self.previewActive and not self.combatActive then
+    if not self.previewActive and not self.gameplayActive then
         self.frame:Hide()
     end
 end
@@ -353,16 +413,39 @@ function CC:OnSpecChanged()
     self:UpdateOnUpdateState()
 end
 
+-- One decision point for every reason the cross goes up or down. Combat entry,
+-- combat exit, enabling the module and changing the setting all route here.
+--
+-- `InCombatLockdown()` IS NOT A COMBAT TEST. It answers whether secure frames
+-- are locked, which is a different question and reads false during real combat
+-- on some clients. `UnitAffectingCombat("player")` is the actual question, and
+-- it is what makes a reload mid-fight come back with the cross up:
+-- PLAYER_REGEN_DISABLED already fired for that fight and will not fire again.
+function CC:UpdateVisibility(inCombat)
+    if not self.db then return end
+    if inCombat == nil then
+        inCombat = UnitAffectingCombat("player") and true or false
+    end
+    if self.db.AlwaysShow or inCombat then
+        self:Show(false)
+    else
+        self:Hide(false)
+    end
+    -- The range loop is gated on gameplayActive, which the two calls above are
+    -- what set. Anything that changes visibility therefore has to re-decide the
+    -- loop in the same breath, or an Always Show cross can sit on screen with
+    -- range colouring configured and never start recolouring.
+    self:UpdateOnUpdateState()
+end
+
 function CC:OnEnterCombat()
     if not self.db.Enabled then return end
-    self:Show(false)
-    self:UpdateOnUpdateState()
+    self:UpdateVisibility(true)
 end
 
 function CC:OnExitCombat()
     if not self.db.Enabled then return end
-    self:Hide(false)
-    self:UpdateOnUpdateState()
+    self:UpdateVisibility(false)
 end
 
 function CC:Refresh()
@@ -382,6 +465,11 @@ function CC:OnEnable()
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnEnterCombat")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnExitCombat")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
+
+    -- Nothing else would put the cross up until the next combat, so a login or
+    -- reload that lands mid-fight, and any enable with Always Show on, both
+    -- depend on this.
+    self:UpdateVisibility()
 end
 
 function CC:OnThemeChanged()

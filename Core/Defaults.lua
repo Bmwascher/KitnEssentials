@@ -133,10 +133,13 @@ local Defaults = {
             Position = DefaultPosition(0, -10),
             ColorMode = "custom",
             Color = { 0, 1, 0.169, 1 },
+            Shape = "cross",                  -- "cross" or "circle"
+            AlwaysShow = false,               -- Show out of combat too, not only in combat
             Thickness = 22,
             Outline = true,
             RangeColorMeleeEnabled = false,
             RangeColorRangedEnabled = false,
+            HideWhenInRange = false,          -- Only show the crosshair when the target is out of range
             OutOfRangeColor = { 1, 0, 0, 1 },
         },
 
@@ -249,10 +252,10 @@ local Defaults = {
                 InstanceOnly       = false,
             },
 
-            -- Taunt cooldown countdown at the cursor. Tank specs only --
-            -- C:_TauntEvaluateGate activates it on a tank spec and tears it
-            -- down otherwise, so Enabled=true still shows nothing on a healer.
-            -- Ships OFF for that reason.
+            -- Taunt cooldown countdown at the cursor. Gated on the spellbook --
+            -- C:_TauntEvaluateGate activates it on any spec that knows one of
+            -- the tracked spells and tears it down otherwise, so Enabled=true
+            -- still shows nothing on a spec that knows none. Ships OFF.
             Taunt = {
                 Enabled            = false,
                 Attached           = true,

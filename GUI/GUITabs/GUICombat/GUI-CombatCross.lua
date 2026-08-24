@@ -74,7 +74,7 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     local card2 = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
     manager:Register(card2, "all")
 
-    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local thicknessSlider = GUIFrame:CreateSlider(row2, "Size", {
         min = 8, max = 72, step = 1,
         value = db.Thickness or 22,
@@ -89,7 +89,31 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     })
     row2:AddWidget(outlineCheck, 0.5)
     manager:Register(outlineCheck, "all")
-    card2:AddRow(row2, Theme.rowHeightLast, 0)
+    card2:AddRow(row2, Theme.rowHeight)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local alwaysShowCheck = GUIFrame:CreateCheckbox(row2b, "Always Show", {
+        value = db.AlwaysShow == true,
+        tooltip = "Keep the crosshair on screen out of combat, not only during a fight.",
+        callback = function(checked)
+            db.AlwaysShow = checked
+            ApplySettings()
+        end,
+    })
+    row2b:AddWidget(alwaysShowCheck, 0.5)
+    manager:Register(alwaysShowCheck, "all")
+
+    local shapeDropdown = GUIFrame:CreateDropdown(row2b, "Shape", {
+        options = {
+            { key = "cross",  text = "Cross" },
+            { key = "circle", text = "Circle" },
+        },
+        value = db.Shape or "cross",
+        callback = function(key) db.Shape = key; ApplySettings() end,
+    })
+    row2b:AddWidget(shapeDropdown, 0.5)
+    manager:Register(shapeDropdown, "all")
+    card2:AddRow(row2b, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
@@ -138,7 +162,7 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     local card4 = GUIFrame:CreateCard(scrollChild, "Range Warning", yOffset)
     manager:Register(card4, "all")
 
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local meleeRangeCheck = GUIFrame:CreateCheckbox(row4a, "Enable for melee specs", {
         value = db.RangeColorMeleeEnabled == true,
         callback = function(checked)
@@ -170,7 +194,20 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     })
     row4a:AddWidget(outOfRangeColorPicker, 1/3)
     manager:Register(outOfRangeColorPicker, "rangeColor")
-    card4:AddRow(row4a, Theme.rowHeightLast, 0)
+    card4:AddRow(row4a, Theme.rowHeight)
+
+    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
+    local hideInRangeCheck = GUIFrame:CreateCheckbox(row4b, "Hide When In Range", {
+        value = db.HideWhenInRange == true,
+        tooltip = "Only draw the crosshair while your target is out of range. Works on its own; the range warning colours above are a separate choice.",
+        callback = function(checked)
+            db.HideWhenInRange = checked
+            ApplySettings()
+        end,
+    })
+    row4b:AddWidget(hideInRangeCheck, 1)
+    manager:Register(hideInRangeCheck, "all")
+    card4:AddRow(row4b, Theme.rowHeightLast, 0)
 
     yOffset = card4:GetNextOffset()
 

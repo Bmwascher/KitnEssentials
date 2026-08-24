@@ -61,15 +61,50 @@ local DISPEL_SPELL_IDS = {
     119905, 213634, 218164, 213644, 2782, 475, 365585, 51886,  -- DPS/Tank dispels
 }
 
--- Taunt spell IDs per tank class (player spellbook). The satellite only
--- activates on tank specs, and each tank class has exactly one of these.
-local TAUNT_SPELL_IDS = {
-    355,    -- Taunt (Warrior - Protection)
-    62124,  -- Hand of Reckoning (Paladin - Protection)
-    56222,  -- Dark Command (Death Knight - Blood)
-    6795,   -- Growl (Druid - Guardian)
-    115546, -- Provoke (Monk - Brewmaster)
-    185245, -- Torment (Demon Hunter - Vengeance)
+-- What the countdown tracks, in priority order. No class knows two of these,
+-- so the first spellbook hit is the answer.
+--
+-- The taunts are NOT listed per specialization, because the tank role is not the
+-- gate: Hand of Reckoning, Dark Command, Provoke and Growl are known by their
+-- class's damage and healer specs too, and a Retribution Paladin taunting off
+-- a healer wants the same cooldown a Protection one does.
+--
+-- Flame Shock and Garrote are not taunts. They ride here because the display
+-- is the same thing -- one cooldown, at the cursor, for the spell the spec
+-- most needs to re-press -- and a satellite apiece for one spell id would be
+-- two of everything for no gain.
+--
+-- `specs` is the exception rather than the rule, and only the two non-taunts
+-- carry one: their sibling specs KNOW the spell and do not want it on the
+-- cursor. A taunt carries no `specs` because the spellbook alone answers
+-- correctly for every one of them -- do not add spec lists there for
+-- symmetry, that is the per-spec table this gate exists to avoid maintaining.
+--
+-- `ids` is a list because a TALENT CAN REPLACE THE SPELL, and the replacement
+-- is what ends up in the spellbook; the base id is then simply absent and a
+-- lookup on it finds nothing, silently. FindSpellOverrideByID resolves
+-- base -> live and covers this generally, so the list is a backstop for
+-- anything it does not answer for.
+local SPEC_ELEMENTAL = 262
+local SPEC_RESTORATION_SHAMAN = 264
+local SPEC_ASSASSINATION = 259
+
+local TRACKED_SPELLS = {
+    { ids = { 355 } },    -- Taunt (Warrior)
+    { ids = { 62124 } },  -- Hand of Reckoning (Paladin)
+    { ids = { 56222 } },  -- Dark Command (Death Knight)
+    { ids = { 6795 } },   -- Growl (Druid)
+    { ids = { 115546 } }, -- Provoke (Monk)
+    { ids = { 185245 } }, -- Torment (Demon Hunter)
+    -- Flame Shock, Elemental and Restoration only. 188389 is the base id;
+    -- 470411 is the live id seen on a bar and appears in no dump, so it is
+    -- carried as a backstop -- if it is ever wrong, the override lookup is
+    -- what will still find the spell and this entry costs nothing.
+    { ids = { 188389, 470411 },
+      specs = { [SPEC_ELEMENTAL] = true, [SPEC_RESTORATION_SHAMAN] = true } },
+    -- Garrote, Assassination only. Outlaw and Subtlety can know it and are
+    -- not waiting on it.
+    { ids = { 703 }, specs = { [SPEC_ASSASSINATION] = true } },
 }
 
 C.CIRCLE_TEXTURES = CIRCLE_TEXTURES
@@ -947,10 +982,39 @@ end
 function C:_TauntFindSpell()
     self._tauntTrackedSpellID = nil
     if not C_SpellBook or not C_SpellBook.IsSpellInSpellBook then return end
-    for _, spellID in ipairs(TAUNT_SPELL_IDS) do
-        if C_SpellBook.IsSpellInSpellBook(spellID) then
-            self._tauntTrackedSpellID = spellID
-            return
+
+    -- Resolved once, and only when an entry actually asks for it: on every
+    -- class but Shaman and Rogue the loop returns before this is needed.
+    local currentSpec
+    local function SpecID()
+        if currentSpec == nil then
+            local getSpec = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization
+            local getInfo = C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo
+            local index = getSpec and getSpec()
+            currentSpec = (index and getInfo and select(1, getInfo(index))) or false
+        end
+        return currentSpec
+    end
+
+    for _, entry in ipairs(TRACKED_SPELLS) do
+        if not entry.specs or entry.specs[SpecID()] == true then
+            for _, id in ipairs(entry.ids) do
+                -- The LIVE id is what carries the cooldown, so resolve the
+                -- talent override first and test that. FindSpellOverrideByID
+                -- answers the id itself when nothing replaces it.
+                local live = C_SpellBook.FindSpellOverrideByID
+                    and C_SpellBook.FindSpellOverrideByID(id) or id
+                if live and live > 0 and C_SpellBook.IsSpellInSpellBook(live) then
+                    self._tauntTrackedSpellID = live
+                    return
+                end
+                -- Belt and braces: where the override lookup answers something
+                -- not in the book, the plain id may still be.
+                if C_SpellBook.IsSpellInSpellBook(id) then
+                    self._tauntTrackedSpellID = id
+                    return
+                end
+            end
         end
     end
 end
@@ -964,25 +1028,7 @@ local _tauntFollowCursor = nil
 -- duration object's own booleans (in Midnight those are secret and throw on a
 -- raw truth test). We always call SetCooldownFromDurationObject, which is
 -- taint-safe and renders nothing at zero, so a ready taunt simply draws no text.
-local function _tauntOnEvent(self, event, unit)
-    if event == "PLAYER_ENTERING_WORLD" then
-        C:_TauntEvaluateGate()
-        return
-    end
-    -- PLAYER_SPECIALIZATION_CHANGED fires for ANY unit, not just the player
-    -- (UnitDocumentation.lua) -- filter out groupmates' spec swaps.
-    if event == "PLAYER_SPECIALIZATION_CHANGED" then
-        if unit and unit ~= "player" then return end
-        C:_TauntEvaluateGate()
-        return
-    end
-    -- SPELLS_CHANGED re-resolves the tracked spell without re-running the gate:
-    -- the spellbook can populate after PLAYER_ENTERING_WORLD, and without this
-    -- a login that lands before the spellbook is ready leaves the countdown
-    -- permanently blank. Undebounced on purpose -- see sanctioned deviation 3.
-    if event == "SPELLS_CHANGED" then
-        C:_TauntFindSpell()
-    end
+local function _tauntOnEvent(self)
     -- Don't clobber an active test preview. SPELL_UPDATE_COOLDOWN fires from
     -- background sources and would otherwise wipe the preview countdown.
     if C._tauntPreviewActive then return end
@@ -1035,14 +1081,15 @@ function C:CreateTauntSatellite()
     self.tauntFrame = tf
 end
 
+-- Only the cooldown event lives on the frame. Everything that decides WHETHER
+-- the satellite should exist is registered on the module instead, because this
+-- frame's events are unregistered whenever the gate turns the satellite off --
+-- a gate-in event registered here could never fire to turn it back on.
 function C:_AttachTauntScripts()
     local tf = self.tauntFrame
     if not tf then return end
     tf:UnregisterAllEvents()
     tf:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-    tf:RegisterEvent("SPELLS_CHANGED")
-    tf:RegisterEvent("PLAYER_ENTERING_WORLD")
-    tf:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 end
 
 function C:_DetachTauntScripts()
@@ -1092,7 +1139,6 @@ function C:ApplyTauntSatellite()
     if not self.tauntFrame then self:CreateTauntSatellite() end
     self:_AttachTauntScripts()
     applyLook()
-    self:_TauntFindSpell()
     self.tauntFrame:Show()
     -- Render the CURRENT cooldown immediately. Without this the frame shows
     -- nothing until the next SPELL_UPDATE_COOLDOWN happens to fire, so a taunt
@@ -1100,33 +1146,25 @@ function C:ApplyTauntSatellite()
     -- sibling omits this and gets away with it only because
     -- SPELL_UPDATE_COOLDOWN fires so often.
     if self.tauntFrame.cooldown then
-        _tauntOnEvent(self.tauntFrame, "SPELL_UPDATE_COOLDOWN")
+        _tauntOnEvent(self.tauntFrame)
     end
 end
 
--- File-local, declared right above its only caller so luacheck's unused-function
--- warning stays quiet.
-local function _isTankSpec()
-    local getSpec = C_SpecializationInfo.GetSpecialization
-    if not getSpec then return false end
-    local specIndex = getSpec()
-    if not specIndex then return false end
-    local getRole = _G.GetSpecializationRole
-    if not getRole then return false end
-    return getRole(specIndex) == "TANK"
-end
-
--- Tank-spec gating. The satellite stays configured but only activates its frame,
--- cursor follow and cooldown tracking on tank specs. PLAYER_SPECIALIZATION_CHANGED
--- and PLAYER_ENTERING_WORLD re-evaluate, so it gates in and out on a spec swap.
+-- Spellbook gating. The satellite stays configured but only activates its
+-- frame, cursor follow and cooldown tracking when the current spec actually
+-- has one of the tracked spells. Asking the spellbook covers every spec that
+-- has one without a per-spec list to keep in step with Blizzard, and it turns
+-- itself off on a spec that does not.
+-- PLAYER_SPECIALIZATION_CHANGED and PLAYER_ENTERING_WORLD re-evaluate, so it
+-- gates in and out on a spec swap.
 function C:_TauntEvaluateGate()
     if not self.db or not self.db.Taunt then return end
-    if _isTankSpec() then
+    self:_TauntFindSpell()
+    if self._tauntTrackedSpellID then
         self._tauntActive = true
         self:ApplyTauntSatellite()
     else
         self._tauntActive = false
-        self._tauntTrackedSpellID = nil
         -- Don't tear down visuals while a preview is showing.
         if self._tauntPreviewActive then return end
         if self.tauntFrame then
@@ -1152,11 +1190,28 @@ function C:_TauntSpecChanged(_, unit)
     self:UpdateVisibility()
 end
 
+-- PLAYER_ENTERING_WORLD serves the whole module, not just the taunt satellite:
+-- the gate runs first so a spellbook that is ready by now is picked up, then
+-- visibility is decided for every satellite.
+function C:_OnEnteringWorld()
+    self:_TauntEvaluateGate()
+    self:UpdateVisibility()
+end
+
+-- The spellbook can populate after the world does, and it changes again on
+-- every talent apply. Re-running the whole gate rather than only the lookup is
+-- deliberate -- "found a spell" IS the gate's answer now.
+function C:_TauntSpellsChanged()
+    self:_TauntEvaluateGate()
+    self:UpdateVisibility()
+end
+
 -- Test mode: force-show the taunt countdown for 7 seconds so users can verify
--- anchor/offset/font settings without being on a tank spec or waiting for a real
--- cooldown. Uses plain numbers with SetCooldown (not a secret duration object),
--- so it is taint-safe. Sets _tauntPreviewActive so ApplyTauntSatellite re-applies
--- visuals instead of hiding when sliders move during the preview window.
+-- anchor/offset/font settings without waiting for a real cooldown, or on a
+-- spec that tracks nothing. Uses plain numbers with SetCooldown (not a secret
+-- duration object), so it is taint-safe. Sets _tauntPreviewActive so
+-- ApplyTauntSatellite re-applies visuals instead of hiding when sliders move
+-- during the preview window.
 function C:TauntPreview()
     if not self.tauntFrame then self:CreateTauntSatellite() end
     if not self.tauntFrame or not self.tauntFrame.cooldown then return end
@@ -1374,12 +1429,17 @@ function C:OnEnable()
     self:ApplyCursorSettings()
 
     -- Module-level visibility events (all global state changes)
-    self:RegisterEvent("PLAYER_ENTERING_WORLD",  "UpdateVisibility")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD",  "_OnEnteringWorld")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA",  "UpdateVisibility")
     self:RegisterEvent("PLAYER_REGEN_DISABLED",  "UpdateVisibility")
     self:RegisterEvent("PLAYER_REGEN_ENABLED",   "UpdateVisibility")
     self:RegisterEvent("GROUP_ROSTER_UPDATE",    "UpdateVisibility")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "_TauntSpecChanged")
+    -- Stays registered for the module's whole life, including while the taunt
+    -- satellite is gated off: it is the only thing that can tell us a tracked
+    -- spell has appeared, and a listener that dies with the satellite can
+    -- never bring it back.
+    self:RegisterEvent("SPELLS_CHANGED", "_TauntSpellsChanged")
 
     -- Initial visibility decision for cursor (before satellites exist)
     self:UpdateVisibility()
