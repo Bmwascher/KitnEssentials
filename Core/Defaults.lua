@@ -1066,6 +1066,7 @@ local Defaults = {
 
             -- Item track indicators (no ElvUI conflict)
             TrackIndicatorsEnabled   = true,
+            ShowUpgradeProgress      = true,
             TrackLetterSize          = 14,
 
             -- Gem socket helper (no ElvUI conflict)

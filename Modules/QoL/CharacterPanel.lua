@@ -363,6 +363,11 @@ local RIGHT_SLOTS = {
     [11] = true, [12] = true, [13] = true, [14] = true, [17] = true,
 }
 
+-- The two weapon slots under the model. They appear in RIGHT_SLOTS too, for gem
+-- and enchant anchoring, but their item level is centred above the icon rather
+-- than pinned to an inner edge -- so anything ordering by side must exclude them.
+local CENTER_SLOTS = { [16] = true, [17] = true }
+
 -- Track indicator quality atlas regex (extracted from item link).
 local qualityAtlasPattern = "|A:(Professions%-ChatIcon%-Quality%-[^:]+):%d+:%d+"
 
@@ -1232,6 +1237,9 @@ end
 ---------------------------------------------------------------------------------
 -- Item Track Indicators
 ---------------------------------------------------------------------------------
+-- Returns a WRAPPER, never an ITEM_TRACKS entry: the entries are a shared
+-- constant, and writing the per-slot count onto one would leak that count onto
+-- every other slot of the same track.
 function CP:GetItemTrack(unit, slotID, data)
     unit = unit or "player"
     data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
@@ -1243,7 +1251,10 @@ function CP:GetItemTrack(unit, slotID, data)
         if text then
             if text:find("Upgrade Level:") or text:find("Ascendant Voidforged:") then
                 for _, track in ipairs(ITEM_TRACKS) do
-                    if text:find(track.keyword) then return track end
+                    if text:find(track.keyword) then
+                        local cur, max = text:match("(%d+)%s*/%s*(%d+)")
+                        return { track = track, cur = cur, max = max }
+                    end
                 end
             end
             if text:find("Crafted") then isCrafted = true end
@@ -1258,7 +1269,7 @@ function CP:GetItemTrack(unit, slotID, data)
                 local isWeapon = slotID == 16 or slotID == 17
                 for _, track in ipairs(CRAFTED_TRACKS) do
                     if ilvl >= track.minIlvl and (not track.weaponOnly or isWeapon) then
-                        return track
+                        return { track = track }
                     end
                 end
             end
@@ -1267,6 +1278,97 @@ function CP:GetItemTrack(unit, slotID, data)
 
     return nil
 end
+
+-- The dirty key for everything a track wrapper can make a slot render. ONE
+-- definition, used by the track indicator's dirty check: the count belongs in it
+-- because an
+-- upgrade from 5/6 to 6/6 leaves the letter alone, and a letter-only key would
+-- skip that repaint and strand the slot in the wrong layout.
+local function TrackDirtyKey(w)
+    if not w then return nil end
+    return (w.track and w.track.letter or "") .. "/" .. (w.cur or "") .. "/" .. (w.max or "")
+end
+CP._TrackDirtyKey = TrackDirtyKey
+
+-- Capped means there is nothing left to report. No count at all counts as
+-- capped: the progress display exists to show progress, and an item that does
+-- not report any has none to show.
+local function IsUpgradeCapped(w)
+    if not (w and w.cur and w.max) then return true end
+    local cur, max = tonumber(w.cur), tonumber(w.max)
+    if not (cur and max) then return true end
+    return cur >= max
+end
+CP._IsUpgradeCapped = IsUpgradeCapped
+
+-- The track letter and the upgrade count are two independent user toggles over
+-- one string. Either, both, or neither -- and neither means no span at all.
+local function UpgradeSpan(w, showLetter, showUpgrade)
+    if not (w and w.track) then return nil end
+    local inner = ""
+    if showLetter then inner = w.track.letter end
+    if showUpgrade and w.cur and w.max then inner = inner .. w.cur .. "/" .. w.max end
+    if inner == "" then return nil end
+    local c = w.track.color or { 1, 1, 1 }
+    return ("|cff%02x%02x%02x%s|r"):format(c[1] * 255, c[2] * 255, c[3] * 255, inner)
+end
+CP._UpgradeSpan = UpgradeSpan
+
+-- THE decision, in ONE place, consulted by both render paths.
+--
+-- The corner letter and the merged item-level span are drawn by two different
+-- functions, and the order they run in is not fixed -- some call sites do the
+-- track first, some the detail first, and the inspect side differs again. So
+-- neither may infer what the other did. Both call this instead.
+--
+-- Every condition here is one the corner path can answer as cheaply as the
+-- detail path can. Item level being unreadable is deliberately NOT a condition:
+-- when it is, the detail path still draws the span on its own, so the track is
+-- never lost. Splitting this across the two sites is what made the corner stand
+-- down while nothing replaced it whenever item levels were off or EUI owned
+-- them.
+local function MergeTrackIntoIlvl(db, w, euiOwnsIlvl, euiOwnsTrack)
+    if not db then return false end
+    if not db.ShowUpgradeProgress then return false end
+    if not db.ShowSlotItemLevel then return false end
+    if euiOwnsIlvl or euiOwnsTrack then return false end
+    return not IsUpgradeCapped(w)
+end
+CP._MergeTrackIntoIlvl = MergeTrackIntoIlvl
+
+-- The item level always sits nearest the icon, so the order flips with the
+-- column. Extracted rather than inlined because the design names this ordering
+-- as a decision to test, and a branch inside a render function cannot be
+-- reached from a spec.
+local function IlvlLine(base, span, isRight)
+    if not span then return base end
+    if isRight then return span .. " " .. base end
+    return base .. " " .. span
+end
+CP._IlvlLine = IlvlLine
+
+-- Which side to order for. RIGHT_SLOTS alone is wrong for the two weapons: the
+-- offhand is in it, but both weapon item levels anchor CENTRED above their icon
+-- rather than to an inner edge, so "nearest the icon" picks no side there. Left
+-- form for both, or the two adjacent weapons read in opposite orders.
+local function IlvlSpanOnLeft(slotID)
+    if CENTER_SLOTS[slotID] then return false end
+    return RIGHT_SLOTS[slotID] and true or false
+end
+CP._IlvlSpanOnLeft = IlvlSpanOnLeft
+
+-- Whether the track span this render drew is MISSING rather than absent, so the
+-- next call must not short-circuit past it. Extracted for the same reason as the
+-- helpers above: it is a guard, and a guard inside a render function cannot be
+-- reached from a spec without faking the whole frame.
+--
+-- An empty slot reports no tooltip either, and pending it would re-render every
+-- empty slot on every bag event, forever.
+local function TrackPending(held, data)
+    if not held then return nil end
+    return (not (data and data.lines)) or nil
+end
+CP._TrackPending = TrackPending
 
 function CP:CreateTrackOverlay(slotFrame, slotID)
     local ffd = self:GetFFD(slotFrame)
@@ -1325,25 +1427,39 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
 
     -- One tooltip read serves both the dirty-check and the render below (the
     -- render previously re-fetched identical data a second time).
-    local track = self:GetItemTrack(unit, slotID, data)
+    local w = self:GetItemTrack(unit, slotID, data)
 
-    -- Dirty-check (player path only): itemLink + track letter determine the
-    -- rendered output. Skip the font re-apply + SetText when unchanged.
+    -- Dirty-check (player path only): itemLink plus everything the render can
+    -- show. The count is part of the key because an upgrade from 5/6 to 6/6
+    -- leaves the letter alone -- keying on the letter would skip that repaint,
+    -- and under the merged layout it would also strand the slot in the wrong
+    -- one of the two layouts.
     if unit == "player" then
         local s = _slotState(slotID)
         local link = GetInventoryItemLink(unit, slotID)
-        local key = track and track.letter or nil
+        local key = TrackDirtyKey(w)
         if s.trackLink == link and s.trackKey == key then return end
         s.trackLink, s.trackKey = link, key
     end
 
     local overlay = self:CreateTrackOverlay(slotFrame, slotID)
 
-    if track then
+    -- While the item is still upgrading, the letter and its count are rendered
+    -- INTO the item level string instead, so the corner stands down. Once it is
+    -- capped there is no count to place, and the corner is where the letter has
+    -- always lived.
+    --
+    -- Asked of the SHARED predicate, never re-derived here. The detail path asks
+    -- the same question with the same inputs, so the two cannot disagree and
+    -- leave the track drawn nowhere.
+    local merged = MergeTrackIntoIlvl(self.db, w,
+        KE:EUIDrawsSlotElement(unit, "ilvl"), KE:EUIDrawsSlotElement(unit, "track"))
+
+    if w and w.track and not merged then
         -- Re-apply font each update so a TrackLetterSize change is live.
         KE:ApplyFontToText(overlay.text, self.db.FontFace, self.db.TrackLetterSize or 12, "OUTLINE")
-        overlay.text:SetText(track.letter)
-        overlay.text:SetTextColor(track.color[1], track.color[2], track.color[3])
+        overlay.text:SetText(w.track.letter)
+        overlay.text:SetTextColor(w.track.color[1], w.track.color[2], w.track.color[3])
         overlay:Show()
     else
         overlay:Hide()
@@ -1439,8 +1555,6 @@ local function GetQualityHex(quality)
     end
     return hex
 end
-
-local CENTER_SLOTS = { [16] = true, [17] = true }
 
 -- Anchor the gem-icon row inline beside the ilvl text.
 local function AnchorGemsRightOf(detail, parent)
@@ -1571,13 +1685,16 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     local euiOwnsEnchant = KE:EUIDrawsSlotElement(unit, "enchant")
     local euiOwnsIlvl    = KE:EUIDrawsSlotElement(unit, "ilvl")
     local euiOwnsGems    = KE:EUIDrawsSlotElement(unit, "gems")
+    -- The merged track span reads this too, so it belongs in the ownership
+    -- stamp below: EUI's track toggle is independent of its item level one.
+    local euiOwnsTrack   = KE:EUIDrawsSlotElement(unit, "track")
     -- Ownership is part of what this slot renders, so it has to be part of the
     -- dirty key below -- three elements means ownership can change while the
     -- item does not, and the item-only key cannot see that. Unlike the warning
     -- and track stand-downs, clearing the key on the way out is not enough here:
     -- those are all-or-nothing, this one keeps drawing whatever EUI left us.
     local ownKey = (euiOwnsEnchant and 1 or 0) + (euiOwnsIlvl and 2 or 0)
-        + (euiOwnsGems and 4 or 0)
+        + (euiOwnsGems and 4 or 0) + (euiOwnsTrack and 8 or 0)
 
     -- Nothing left for us to draw on this frame: bail before BOTH the dirty-check
     -- store and the tooltip read, and clear the key on the way out so a handback
@@ -1599,6 +1716,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         if unit == "player" then
             local s = _slotState(slotID)
             s.detailLink, s.detailEnchant, s.detailIlvl = nil, nil, nil
+            s.detailTrackPending = nil
         end
         return
     end
@@ -1616,8 +1734,15 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         -- detailGemsPending: the previous render ran on unhydrated gem data
         -- (cold item cache), so the link/enchant/ilvl key is NOT sufficient —
         -- skip the short-circuit and re-scan until the gems resolve.
+        -- detailTrackPending: same shape as detailGemsPending above. The item
+        -- level string now carries the track span, and a cold item cache
+        -- renders it without one. An actual upgrade rewrites the link and the
+        -- item level, so the keys above catch it; only the unhydrated first
+        -- render needs this, and re-reading the tooltip on every call to key on
+        -- the track value instead would cost a read per slot per bag event.
         if s.detailLink == link and s.detailEnchant == enchantID and s.detailIlvl == ilvl
-            and s.detailOwn == ownKey and not s.detailGemsPending then
+            and s.detailOwn == ownKey and not s.detailGemsPending
+            and not s.detailTrackPending then
             return
         end
         s.detailLink, s.detailEnchant, s.detailIlvl = link, enchantID, ilvl
@@ -1647,17 +1772,35 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         detail.enchantText:Hide()
     end
 
-    -- Item level, colored by the equipped item's quality.
+    -- Item level, colored by the equipped item's quality. While the item is
+    -- still upgrading, the track letter and count ride along on the same
+    -- string; the item level keeps its own quality colour, and the escape
+    -- overrides it for the track span only.
     if self.db.ShowSlotItemLevel and not euiOwnsIlvl then
         local lvl = self:GetSlotItemLevel(unit, slotID)
+
+        local span
+        local w = self:GetItemTrack(unit, slotID, data)
+        if MergeTrackIntoIlvl(self.db, w, euiOwnsIlvl, euiOwnsTrack) then
+            span = UpgradeSpan(w, self.db.TrackIndicatorsEnabled, true)
+        end
+
         if lvl then
             local quality = GetInventoryItemQuality(unit, slotID)
+            local base
             if quality then
-                local hex = GetQualityHex(quality)
-                detail.ilvlText:SetText("|c" .. hex .. lvl .. "|r")
+                base = "|c" .. GetQualityHex(quality) .. lvl .. "|r"
             else
-                detail.ilvlText:SetText(tostring(lvl))
+                base = tostring(lvl)
             end
+
+            detail.ilvlText:SetText(IlvlLine(base, span, IlvlSpanOnLeft(slotID)))
+            detail.ilvlText:Show()
+        elseif span then
+            -- The item level is unreadable but the corner has already stood
+            -- down, because the merge decision does not depend on it. Draw the
+            -- span alone rather than losing the track entirely.
+            detail.ilvlText:SetText(span)
             detail.ilvlText:Show()
         else
             detail.ilvlText:SetText("")
@@ -1709,7 +1852,20 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     end
 
     if unit == "player" then
-        _slotState(slotID).detailGemsPending = gemsPending or nil
+        local s = _slotState(slotID)
+        s.detailGemsPending = gemsPending or nil
+        -- An unusable tooltip means any track span this render should have
+        -- drawn is missing, not absent. Nothing else can change the span
+        -- behind an unchanged key, so this is the whole of the track's
+        -- staleness problem.
+        --
+        -- Gated on an equipped item. An EMPTY slot has no tooltip either, and
+        -- without this gate it would pend forever and re-render on every bag
+        -- event -- for every empty slot on the character.
+        -- GetInventoryItemLink, not the `link` from the dirty check: that one is
+        -- scoped to the block above and the inspect path never computes it. This
+        -- is a cached string lookup, not another tooltip allocation.
+        s.detailTrackPending = TrackPending(GetInventoryItemLink(unit, slotID), data)
     end
 
     -- Transparent container — element visibility controls what's drawn.
