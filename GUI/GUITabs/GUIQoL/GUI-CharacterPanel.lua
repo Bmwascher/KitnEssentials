@@ -144,7 +144,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
             -- so neither direction settles without a reload.
             KE:FlagReloadNeeded()
         end,
-        tooltip = "Makes the character window wider so the item level and enchant text has room clear of the model. Moves the right-hand slot column outward. Needs a reload, and has no effect while ElvUI or an EllesmereUI themed character sheet is in use.",
+        tooltip = "Makes the character window wider so the item level and enchant text have room clear of the model. Moves the right-hand slot column outward. Needs a reload, and has no effect while ElvUI or an EllesmereUI themed character sheet is in use.",
     })
     rowWW:AddWidget(widerCheck, 1)
     manager:Register(widerCheck, "elvuiOk")
