@@ -1081,6 +1081,8 @@ local Defaults = {
             InspectPanelEnabled  = true,
             ShowSlotItemLevel    = true,
             ShowEnchantNames     = true,
+            -- short = nickname + abbreviations, verbose = keyword only, full = as the tooltip gives it
+            EnchantNameStyle     = "short",
             ShowSlotGems         = true,
             SlotInfoFontSize     = 15,
 

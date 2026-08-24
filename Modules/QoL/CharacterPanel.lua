@@ -140,7 +140,6 @@ local enchantStripPrefixes = {
     ["Ring %- "]      = "",
     ["Boots %- "]     = "",
     ["Helm %- "]      = "",
-    ["%+"]            = "",
 }
 
 local enchantStatAbbrev = {
@@ -252,17 +251,60 @@ table.sort(enchantNicknameOrder, function(a, b) return #a > #b end)
 -- same handful of equipped enchant names re-resolve on every slot render
 -- (including inspect gem-race retries). Pure function of the input and the
 -- load-time constant tables above, so entries never invalidate.
+-- Words that never carry the meaning of an enchant name, so the keyword walk
+-- below skips them rather than returning one.
+local ENCHANT_FILLER = { ["of"] = true, ["the"] = true, ["and"] = true, ["a"] = true }
+
+-- The last word that is not filler. Splits by EXCLUSION on ASCII separators
+-- rather than with %w: Lua's character classes are ASCII-only, so %w matches no
+-- multi-byte byte at all and a non-Latin name would reduce to nothing.
+local function EnchantKeyword(name)
+    if not name or name == "" then return name end
+    local keyword
+    for word in name:gmatch("[^%s,:;/%.%(%)]+") do
+        if not ENCHANT_FILLER[word:lower()] then keyword = word end
+    end
+    return keyword or name
+end
+
 local _enchantLabelCache = {}
-local function ProcessEnchantText(text)
-    local cached = _enchantLabelCache[text]
+local function ProcessEnchantText(text, style)
+    if not text or text == "" then return text end
+    if style ~= "verbose" and style ~= "full" then style = "short" end
+
+    -- Keyed on style AND raw text. Keying on the raw text alone would serve
+    -- one style's label to another, and the entries never expire.
+    local cacheKey = style .. "\0" .. text
+    local cached = _enchantLabelCache[cacheKey]
     if cached then return cached end
-    local raw = text
-    -- Strip the "Enchant <Slot> - " prefix (and any stray "+") from the raw effect
-    -- text FIRST, so nickname lookups match the bare effect name and the "+"-strip
-    -- can't later eat a "+" a nickname value intentionally adds (e.g. "Crit%+").
+
+    -- Strip the "Enchant <Slot> - " preamble FIRST, so nickname lookups match the
+    -- bare effect name. Every style wants it gone -- naming the slot beside the
+    -- slot says nothing.
     for prefix, replacement in pairs(enchantStripPrefixes) do
         text = text:gsub(prefix, replacement)
     end
+
+    -- "full" is the effect name as the tooltip gives it, so it stops here and
+    -- KEEPS a leading "+": an enchant reading "+10 Stats" must not render as
+    -- "10 Stats".
+    if style == "full" then
+        _enchantLabelCache[cacheKey] = text
+        return text
+    end
+
+    -- The "+" strip is NOT a prefix -- it is unanchored and removes the sign
+    -- wherever it appears -- so it lives here rather than in the table above:
+    -- after the "full" exit, and before the nickname pass, where a value may
+    -- deliberately reintroduce one (e.g. "Crit%+").
+    text = text:gsub("%+", "")
+
+    if style == "verbose" then
+        text = EnchantKeyword(text)
+        _enchantLabelCache[cacheKey] = text
+        return text
+    end
+
     -- Nickname values are literal display labels. Iterate longest-key-first (see
     -- enchantNicknameOrder) and use a FUNCTION replacement so a "%" in the value
     -- (e.g. "Crit%+", "Haste%") is emitted verbatim instead of being treated as a
@@ -274,9 +316,10 @@ local function ProcessEnchantText(text)
     for word, abbrev in pairs(enchantStatAbbrev) do
         text = text:gsub(word, abbrev)
     end
-    _enchantLabelCache[raw] = text
+    _enchantLabelCache[cacheKey] = text
     return text
 end
+CP._ProcessEnchantText = ProcessEnchantText
 
 -- Item track tier metadata. Letter shown on slot, color RGB.
 local ITEM_TRACKS = {
@@ -490,7 +533,7 @@ function CP:ResolveEnchantLabel(unit, slot, data)
     if not self:GetSlotEnchantID(unit, slot) then return nil end
     local name = GetSlotEnchantName(unit, slot, data)
     if not name then return "Enchanted" end
-    name = ProcessEnchantText(name)
+    name = ProcessEnchantText(name, self.db.EnchantNameStyle)
     if #name > SLOT_ENCHANT_MAX_LEN then name = name:sub(1, SLOT_ENCHANT_MAX_LEN) end
     return name
 end

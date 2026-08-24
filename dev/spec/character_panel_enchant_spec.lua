@@ -426,3 +426,71 @@ describe("Inspect Item Info toggle", function()
         end)
     end)
 end)
+
+---------------------------------------------------------------------------------
+-- Item A: enchant name style
+---------------------------------------------------------------------------------
+describe("Enchant name style", function()
+    local RAW = "Enchant Ring - Radiant Critical Strike"
+
+    it("gives three DIFFERENT labels for one input", function()
+        local CP = loadCP()
+        local short = CP._ProcessEnchantText(RAW, "short")
+        local verbose = CP._ProcessEnchantText(RAW, "verbose")
+        local full = CP._ProcessEnchantText(RAW, "full")
+        -- If any two agree, the styles have not been distinguished and this
+        -- test has proved nothing.
+        assert.are_not.equal(short, verbose)
+        assert.are_not.equal(verbose, full)
+        assert.are_not.equal(short, full)
+    end)
+
+    it("full keeps the effect name and drops only the slot preamble", function()
+        local CP = loadCP()
+        assert.equals("Radiant Critical Strike", CP._ProcessEnchantText(RAW, "full"))
+    end)
+
+    it("verbose reduces to the last non-filler word", function()
+        local CP = loadCP()
+        assert.equals("Strike", CP._ProcessEnchantText(RAW, "verbose"))
+    end)
+
+    it("an unknown or absent style resolves as short", function()
+        local CP = loadCP()
+        local short = CP._ProcessEnchantText(RAW, "short")
+        assert.equals(short, CP._ProcessEnchantText(RAW, nil))
+        assert.equals(short, CP._ProcessEnchantText(RAW, "nonsense"))
+    end)
+
+    -- Both halves matter. The empty string survives the pipeline on its own, so
+    -- the empty half alone cannot be made to fail by any plausible mutation --
+    -- it is the NIL half that the entry guard actually earns its place on.
+    it("returns an empty or nil input unchanged rather than erroring", function()
+        local CP = loadCP()
+        assert.equals("", CP._ProcessEnchantText("", "full"))
+        assert.is_nil(CP._ProcessEnchantText(nil, "full"))
+    end)
+
+    -- The "+" strip is unanchored, so leaving it in the prefix table would eat
+    -- the sign under every style. "full" is defined as the tooltip's own text,
+    -- so it must keep it; short must still drop it.
+    it("full keeps a leading + that short drops", function()
+        local CP = loadCP()
+        local raw = "Enchant Ring - +10 Stats"
+        assert.equals("+10 Stats", CP._ProcessEnchantText(raw, "full"))
+        assert.is_nil(CP._ProcessEnchantText(raw, "short"):find("+", 1, true))
+    end)
+
+    -- The cache defect. This case MUST be seen to fail against a cache keyed
+    -- on the raw text alone: that is what proves it tests the key and not
+    -- merely the resolver.
+    it("does not serve one style's label from another style's cache entry", function()
+        local CP = loadCP()
+        local first = CP._ProcessEnchantText(RAW, "full")
+        local second = CP._ProcessEnchantText(RAW, "verbose")
+        assert.equals("Radiant Critical Strike", first)
+        assert.equals("Strike", second)
+        -- And back again, to catch a cache that only breaks in one direction.
+        assert.equals("Radiant Critical Strike", CP._ProcessEnchantText(RAW, "full"))
+    end)
+end)
