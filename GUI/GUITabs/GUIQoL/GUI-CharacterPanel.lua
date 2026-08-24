@@ -135,6 +135,21 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         card3:AddRow(elvuiNoteRow, 24)
     end
 
+    local rowWW = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local widerCheck = GUIFrame:CreateCheckbox(rowWW, "Widen Character Window", {
+        value = db.WiderFrame == true,
+        callback = function(checked)
+            db.WiderFrame = checked
+            -- The layout hooks install once per session and cannot be removed,
+            -- so neither direction settles without a reload.
+            KE:FlagReloadNeeded()
+        end,
+        tooltip = "Makes the character window wider so the item level and enchant text has room clear of the model. Moves the right-hand slot column outward. Needs a reload, and has no effect while ElvUI or an EllesmereUI themed character sheet is in use.",
+    })
+    rowWW:AddWidget(widerCheck, 1)
+    manager:Register(widerCheck, "elvuiOk")
+    card3:AddRow(rowWW, Theme.rowHeight)
+
     local row3 = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local decimalCheck = GUIFrame:CreateCheckbox(row3, "Decimal Item Level", {
         value = db.DecimalItemLevel,
