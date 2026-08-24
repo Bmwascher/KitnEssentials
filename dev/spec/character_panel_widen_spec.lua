@@ -122,3 +122,92 @@ describe("Widen character window: the stand-down gate", function()
         assert.equals(40, CP._ExtraWidth())
     end)
 end)
+
+describe("Widen character window: whether to write geometry at all", function()
+    it("writes the extra width on the paper doll tab", function()
+        local CP = loadCP()
+        assert.equals(40, CP._WidenAmount(40, true, false))
+    end)
+
+    -- Blizzard sizes the Reputation and Currency tabs at 400. UpdateSize is one
+    -- of the four hooked methods, so without this a tab switch takes the
+    -- paper-doll width.
+    it("writes NOTHING when the paper doll tab is not up", function()
+        assert.is_nil(loadCP()._WidenAmount(40, false, true))
+    end)
+
+    -- The state where another UI owns the sheet. Writing Blizzard's defaults here
+    -- would overwrite the anchors it just set.
+    it("writes NOTHING when the gate is off and it never widened", function()
+        assert.is_nil(loadCP()._WidenAmount(0, true, false))
+    end)
+
+    -- The reload prompt can be answered "Later", so the key really can go false
+    -- with a widened frame on screen.
+    it("writes ONE restoring pass when the gate turns off after widening", function()
+        assert.equals(0, loadCP()._WidenAmount(0, true, true))
+    end)
+
+    it("writes nothing on the pass after the restoring one", function()
+        assert.is_nil(loadCP()._WidenAmount(0, true, false))
+    end)
+end)
+
+-- The predicate cases above prove what the DECISION is. They say nothing about
+-- whether ApplyWiden obeys it: deleting `if not add then return end`, or moving
+-- it below the first `cf:SetWidth(...)`, leaves every one of them green. This
+-- block drives ApplyWiden itself and counts geometry writes.
+--
+-- It counts writes; it never asserts a coordinate. Frame LAYOUT is in the test
+-- policy's "don't try to test" column and is verified in game. "Did we write at
+-- all" is a refusal, and refusals are in the WRITE column.
+describe("Widen character window: the guard runs before any write", function()
+    -- Eight frames, one counter. Every method ApplyWiden calls on any of them is
+    -- a geometry write except IsShown, so the count is the whole assertion.
+    local function fakeSheet(pdfShown)
+        local writes = 0
+        local function frame()
+            return {
+                Expanded = false,
+                ClearAllPoints = function() writes = writes + 1 end,
+                SetPoint = function() writes = writes + 1 end,
+                SetWidth = function() writes = writes + 1 end,
+                IsShown = function() return pdfShown end,
+            }
+        end
+        for _, name in ipairs({
+            "CharacterFrame", "CharacterFrameInset", "CharacterFrameInsetRight",
+            "CharacterHandsSlot", "CharacterMainHandSlot", "CharacterModelScene",
+            "PaperDollItemsFrame", "PaperDollFrame",
+        }) do
+            _G[name] = frame()
+        end
+        return function() return writes end
+    end
+
+    it("writes NOTHING when the key is off and it never widened", function()
+        local CP = loadCP()
+        local writes = fakeSheet(true)
+        CP.db = { Enabled = true, WiderFrame = false }
+        CP._ApplyWiden()
+        assert.equals(0, writes())
+    end)
+
+    it("writes NOTHING when the paper doll tab is not up", function()
+        local CP = loadCP()
+        local writes = fakeSheet(false)
+        CP.db = { Enabled = true, WiderFrame = true }
+        CP._ApplyWiden()
+        assert.equals(0, writes())
+    end)
+
+    -- The control. Without it the two cases above would also pass against an
+    -- ApplyWiden that writes nothing under any circumstances.
+    it("DOES write when the key is on and the paper doll tab is up", function()
+        local CP = loadCP()
+        local writes = fakeSheet(true)
+        CP.db = { Enabled = true, WiderFrame = true }
+        CP._ApplyWiden()
+        assert.is_true(writes() > 0)
+    end)
+end)

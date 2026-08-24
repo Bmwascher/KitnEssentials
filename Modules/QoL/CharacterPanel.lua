@@ -844,6 +844,116 @@ local function ExtraWidth()
 end
 CP._ExtraWidth = ExtraWidth
 
+local widenHooked = false
+local widenApplied = false
+
+-- How much extra width to write, or nil to write NOTHING. Separated from
+-- ApplyWiden so the decision can be tested; ApplyWiden itself is pure frame
+-- geometry, which is not testable headless.
+--
+-- Three states, and the difference between the last two is the whole point:
+--
+--   * Paper doll not shown -> nil. The Reputation and Currency tabs are sized 400
+--     by Blizzard, not PANEL_DEFAULT_WIDTH, and UpdateSize is one of the four
+--     hooks, so writing a paper-doll width here corrupts the tab on every switch.
+--   * Gate off but we HAVE widened -> 0, exactly once. The reload prompt this
+--     setting raises can be answered "Later", so the key really can go false while
+--     a widened frame is on screen. One pass writes Blizzard's own numbers back.
+--   * Gate off and we have NOT widened -> nil. Never touch geometry we did not
+--     set: this is the state where another UI owns the sheet, and writing
+--     Blizzard's defaults would overwrite the anchors it just applied.
+local function WidenAmount(extra, pdfShown, applied)
+    if not pdfShown then return nil end
+    if extra > 0 then return extra end
+    if applied then return 0 end
+    return nil
+end
+CP._WidenAmount = WidenAmount
+
+-- ABSOLUTE anchors, never deltas. Every value is set to a computed absolute, so
+-- running this ten times produces the same layout as running it once. Four
+-- hooks call it and they do not agree on whether Blizzard has just rewritten
+-- the geometry, so any sum over live values eventually compounds.
+--
+-- The right slot column hangs off the STAT PANE'S LEFT EDGE rather than off the
+-- inset. Defining the column relative to the thing it would otherwise collide
+-- with makes a collision impossible at any width.
+local function ApplyWiden()
+    local cf = _G.CharacterFrame
+    local inset, insetR = _G.CharacterFrameInset, _G.CharacterFrameInsetRight
+    local hands, mh = _G.CharacterHandsSlot, _G.CharacterMainHandSlot
+    local model, items = _G.CharacterModelScene, _G.PaperDollItemsFrame
+    local pdf = _G.PaperDollFrame
+    if not (cf and inset and insetR and hands and mh and model and items and pdf) then return end
+
+    local add = WidenAmount(ExtraWidth(), pdf:IsShown() and true or false, widenApplied)
+    if not add then return end
+    widenApplied = add > 0
+
+    -- Blizzard's own values, with literal fallbacks.
+    local baseW = cf.Expanded and (_G.CHARACTERFRAME_EXPANDED_WIDTH or 540)
+        or (_G.PANEL_DEFAULT_WIDTH or 338)
+
+    cf:SetWidth(baseW + add)
+
+    -- Stat pane: left edge pushed out by the extra width, right edge still
+    -- pinned to the frame (which grew by the same amount), so it MOVES rather
+    -- than stretching.
+    insetR:ClearAllPoints()
+    insetR:SetPoint("TOPLEFT", inset, "TOPRIGHT", 1 + add, 0)
+    insetR:SetPoint("BOTTOMRIGHT", cf, "BOTTOMRIGHT", -4, 4)
+
+    -- While widened, anchored to the stat pane's LEFT EDGE rather than the inset:
+    -- defining the column relative to the thing it would otherwise collide with
+    -- makes a collision impossible at any width. On the single restoring pass
+    -- (add == 0) Blizzard's own anchor goes back.
+    hands:ClearAllPoints()
+    if add > 0 then
+        hands:SetPoint("TOPRIGHT", insetR, "TOPLEFT", -4, -2)
+    else
+        hands:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -4, -2)
+    end
+
+    -- Centred content moves by half the delta, from Blizzard's literal offsets.
+    model:ClearAllPoints()
+    model:SetPoint("TOPLEFT", pdf, "TOPLEFT", 52 + add / 2, -66)
+
+    mh:ClearAllPoints()
+    mh:SetPoint("BOTTOMLEFT", items, "BOTTOMLEFT", 130 + add / 2, 16)
+end
+
+-- FOUR hooks, not one. These are the methods that set the width back, and
+-- missing any one is what makes a widened frame snap back at random. All four
+-- do the same thing because ApplyWiden is absolute -- it does not matter which
+-- fired or what happened before it.
+--
+-- Post-hooks only. CharacterFrame is an ordinary unprotected frame whose panel
+-- registration pins no width, which is what keeps this taint-safe.
+function CP:SetupWiderFrame()
+    local cf = _G.CharacterFrame
+    if not cf then return end
+
+    -- The once-guard wraps ONLY the installation. `ApplyWiden` below runs on
+    -- every enable: re-enabling with the paper doll already open would otherwise
+    -- leave the frame narrow until some unrelated reset method happened to fire,
+    -- because an early return here skips it.
+    if not widenHooked then
+        widenHooked = true
+        for _, method in ipairs({ "Expand", "Collapse", "UpdateSize", "ShowSubFrame" }) do
+            if type(cf[method]) == "function" then
+                hooksecurefunc(cf, method, function() ApplyWiden() end)
+            end
+        end
+    end
+
+    ApplyWiden()
+end
+
+-- Exported so a spec can prove the nil guard runs BEFORE the first geometry
+-- write. The predicate alone cannot: deleting `if not add then return end`, or
+-- moving it below `cf:SetWidth(...)`, leaves every predicate case green.
+CP._ApplyWiden = ApplyWiden
+
 local function HookCharacterPanel()
     if hooked then return end
 
@@ -3660,6 +3770,7 @@ function CP:OnEnable()
     end
 
     HookCharacterPanel()
+    self:SetupWiderFrame()
 
     -- Warm the gem cache during the login loading screen (see PrimeGemCache).
     -- AceEvent unregisters automatically on module disable.
@@ -3693,6 +3804,9 @@ function CP:OnDisable()
     self:HideAllSlotDetails()
     self:HideRaceText()
     RestoreCharacterBackground()
+    -- Same shape as the line above: undo a geometry change this module made.
+    -- A no-op unless the frame is up and we actually widened it.
+    ApplyWiden()
     updatePending = false
 
     -- Cascade to InspectPanel; it owns its own state (queue, inspectUpdatePending,
