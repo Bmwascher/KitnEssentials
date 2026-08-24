@@ -1057,7 +1057,7 @@ function CP:Refresh()
     -- track letter size, etc.). Force a re-render by clearing the dirty cache.
     wipe(_lastSlotState)
 
-    self.db = KE.db.profile.CharacterPanel
+    self:UpdateDB()
     HookCharacterPanel()
     -- Inspect setup is owned by InspectPanel module (cascaded from CP:OnEnable);
     -- SetupInspectSupport is idempotent so any prior call still holds.
@@ -3734,8 +3734,15 @@ function CP:PrimeGemCache(_, isInitialLogin)
     end
 end
 
-function CP:OnInitialize()
+-- Called by the profile manager's rebind pass before any enable or disable
+-- runs. Without it this module keeps the OUTGOING profile table, which AceDB
+-- has already stripped default-equal keys out of by then.
+function CP:UpdateDB()
     self.db = KE.db.profile.CharacterPanel
+end
+
+function CP:OnInitialize()
+    self:UpdateDB()
     self:SetEnabledState(false)
 end
 
