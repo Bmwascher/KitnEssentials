@@ -490,7 +490,39 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     end
 
     ----------------------------------------------------------------
-    -- Card 9: Compare Header (independent module — own cascade)
+    -- Card 9: Character Skin (Skinning module keys -- own cascade)
+    ----------------------------------------------------------------
+    local cardCS = GUIFrame:CreateCard(scrollChild, "Character Skin", yOffset)
+
+    local rowSDQual = GUIFrame:CreateRow(cardCS.content, Theme.rowHeightLast)
+    local qualityBorderCheck = GUIFrame:CreateCheckbox(rowSDQual, "Item Rarity Borders", {
+        value = db.SlotQualityBorders ~= false,
+        callback = function(checked)
+            db.SlotQualityBorders = checked
+            -- The skin latches per frame and installs hooks that cannot be
+            -- removed for the session, so neither direction can take effect
+            -- live.
+            KE:FlagReloadNeeded()
+        end,
+        tooltip = "Colours each equipped slot's border by item rarity, the way a bag addon does. Off leaves the standard dark border. Needs a reload, and has no effect while ElvUI is skinning the character sheet.",
+    })
+    rowSDQual:AddWidget(qualityBorderCheck, 1)
+    -- Set DIRECTLY, not through the widget state manager. Two reasons, and the
+    -- manager gets neither right for a control that lives outside the gate:
+    --   * `Register` only stores a widget; only `UpdateAll` applies a condition.
+    --     `RefreshStates()` has already run by the time this card is built, so a
+    --     registration here would never be applied and the control would sit
+    --     enabled under ElvUI while its tooltip says it does nothing.
+    --   * Calling `RefreshStates()` again would apply `CharacterPanel.Enabled` to
+    --     it, which is exactly the coupling this card exists to avoid.
+    if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("ElvUI") then
+        qualityBorderCheck:SetEnabled(false)
+    end
+    cardCS:AddRow(rowSDQual, Theme.rowHeightLast, 0)
+    yOffset = cardCS:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 10: Compare Header (independent module — own cascade)
     ----------------------------------------------------------------
     local chDB = KE.db and KE.db.profile.CompareHeader
     if chDB then
