@@ -903,10 +903,8 @@ local function ApplyWiden()
     insetR:SetPoint("TOPLEFT", inset, "TOPRIGHT", 1 + add, 0)
     insetR:SetPoint("BOTTOMRIGHT", cf, "BOTTOMRIGHT", -4, 4)
 
-    -- While widened, anchored to the stat pane's LEFT EDGE rather than the inset:
-    -- defining the column relative to the thing it would otherwise collide with
-    -- makes a collision impossible at any width. On the single restoring pass
-    -- (add == 0) Blizzard's own anchor goes back.
+    -- The stat-pane-left-edge anchor described above. On the single restoring
+    -- pass (add == 0) Blizzard's own anchor goes back instead.
     hands:ClearAllPoints()
     if add > 0 then
         hands:SetPoint("TOPRIGHT", insetR, "TOPLEFT", -4, -2)
