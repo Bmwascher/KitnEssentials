@@ -1,41 +1,73 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.3.12
+## v4.4.0
 
-### Blizzard Frames
+### Settings Window
+- The settings window is now see-through again. Each part of the window was
+  painting its own background on top of the others, and the stack added up to
+  nearly solid. The window paints one background now, so the sidebar, the
+  content area and the bottom bar all let the game show through
+- Changing your accent colour no longer paints the window solid again
 
-- The Vehicle Exit Button settings have moved. They now sit on the Blizzard
-  Frames page, under Elements, next to Loot Roll and UI Widgets. The old
-  Vehicle Exit row in the sidebar is gone
-- The Vehicle Exit Button now stands down when ElvUI is running, because ElvUI
-  already places that button with its own mover. Two movers were fighting over
-  the same button
+### Settings Sidebar
+- The Optimize section is gone. Its System Optimization page now sits in a new
+  Core section at the top, alongside Profile Manager and Addon Theme
+- Core also has a Home Page row, so the welcome page is reachable from the
+  sidebar instead of only from the house icon in the title bar
+- Skinning has moved to the bottom of the sidebar
+- The Combat section's first row is called Combat Res again. Searching for
+  "battle res" still finds it
+- Pet Status Texts, Missing Forms, Hunter: Mark Missing and Healer Mana are now
+  four tabs on one Status Texts page at the bottom of the Combat section. They
+  were four separate rows spread across three sections
+- Searching the sidebar for any of those names still finds the page, including
+  the older names "Pet Status Texts" and "Hunter: Mark Missing"
+- Character Panel has its own row in the Skinning section, under Dark Theme. It
+  used to be buried as the fourth tab inside Dark Theme's Elements row
+- With ElvUI handling the skinning, Dark Theme now shows only its General tab.
+  The Elements tab is gone there because everything left on it configures a skin
+  that stands down for ElvUI. Character Panel stays available on its own row
 
-### Fixes
+### Tabs
+- Tabs inside a page are now only as wide as their own labels, with a hairline
+  gap between them, instead of stretching to share the full row
 
-- The player counts beside the role icons in the Group Finder no longer cut off
-  to "..." when a group needs two digits of damage dealers. The numbers sit
-  closer to their icons and the spare room now separates the roles
-- Combat Res no longer sits off to the right of its own backdrop. The frame was
-  measured before it had any text to measure, so it came out too narrow and the
-  display spilled past its box
-- The Combat Res backdrop now fits its text instead of sitting wider than it,
-  and it holds still as the timer counts down instead of shifting with the
-  digits
+### Fonts
+- Every font dropdown now starts with "Use Global Font", so a module can follow
+  the Global Font from the home page instead of being pinned to one face. The
+  entry names the font it will use, for example "Use Global Font (Expressway)"
+- Changing the Global Font now moves every module that is left on it, including
+  skinned Blizzard windows and tooltips. Those two stayed on Expressway before
+- If you deliberately picked Expressway for tooltips or UI widgets, they now
+  follow the Global Font instead. The game could not tell that choice apart from
+  never having picked one, so it reads as "follow the global font"
+- The Mythic+ Timer font cards name the font they actually inherit, so the
+  Deaths card shows the base card's font rather than the addon-wide one
 
-## v4.3.11
+### Havoc Tracker (new, Destruction Warlock)
+- A new module warns you when your own Havoc is sitting on the target you are
+  already hitting, which wastes it. It shows a large text on screen, defaulting
+  to "Havoc Target", and hides again when you switch to a clean target
+- Off by default. Turn it on under Combat, Status Texts, Havoc Tracker, where it
+  is the fifth tab. You can set the text, colour, font, size and position
+- The position is draggable in `/kes edit` as "Havoc Warning"
+- Other classes and other Warlock specs see nothing at all, not even a mover
 
-### Fixes
-
-- Raid Notifications no longer throws a red error the first time an alert
-  appears. The alert text was being written before its font was set
-- Tooltips no longer throw a red error when you hover a spell reward on the
-  world map. Those small built-in tooltips are now left alone properly
-
-## v4.3.10
+### Healer Mana
+- Separate Raid Settings now covers the whole look, not just the position. Font
+  sizes, icon size, frame width, spacing, grow direction, text offsets and the
+  high mana colour can all differ between Dungeon and Raid
+- New Configure For switcher picks which of the two you are editing, and the
+  on-screen preview follows your choice, so Raid can be set up from a party
+- Turning Separate Raid Settings on copies your current Dungeon look across, so
+  nothing changes until you deliberately edit a Raid value
+- Look and layout changes now apply the moment your group type changes, instead
+  of waiting for a reload
+- The tracker decides Dungeon or Raid once and holds it, instead of re-asking
+  part way through drawing itself. It used to be able to size itself for one
+  mode and place itself by the other
 
 ### Character Panel
-
 - New Great Vault button on the character window, beside the Omnium Foil button.
   Clicking it opens and closes the Great Vault. It does nothing in combat, on
   purpose, and no longer throws a red error when you try
@@ -55,30 +87,31 @@
 - The enchant helper now applies an enchant on a single click when only one slot
   can take it. It stands down if something is already on your cursor, or if a
   spell is already waiting for a target, and it will not guess between two rings
-- New toggle for the overlays drawn on other players' inspect frames. Turning it
-  off now sticks: the overlays used to come back the next time you inspected
-  someone
+- New toggle for the overlays drawn on the inspect frames of other players.
+  Turning it off now sticks: the overlays used to come back the next time you
+  inspected someone
 - The Gem Socket Helper card is now called "Socket & Enchant Helpers", and the
   two toggles sit side by side
 
 ### Character Skin
-
 - Equipped slot borders are now tinted by item rarity, with its own toggle on a
   new Character Skin card. ElvUI paints its own, so the option greys out when
   ElvUI is running
 - The character stat rows fade at both ends instead of sitting on a flat plate
 
-### Fixes
-
-- Character Panel settings now follow you when you switch profiles. Before, the
-  module kept reading the profile you just left
-- Switching the module off now actually stops it drawing. Overlays no longer
-  repaint when you change gear, open the paper doll tab, or click a setting with
-  the module off
-- Turning the module off and on again brings the decimal item level back. It
-  used to stay gone for the rest of the session
-
-## v4.3.9
+### Combat Logger
+- The page is rebuilt around three content cards: Dungeons, Raids and a flat PvP
+  card that lists Rated Arena, Solo Shuffle, Skirmish, Rated BG, Battleground and
+  War Game as plain ticks
+- New Scenarios card. It covers delves, Torghast and anything else the game counts
+  as a scenario. It used to only cover Torghast
+- Two new buttons. One turns on Advanced Combat Logging without a reload and tells
+  you when it is already on. The other ticks every content type Warcraft Recorder
+  can record and turns Advanced Combat Logging on with it
+- The "Ask About Advanced Combat Logging" option now reads as a positive. It was
+  worded the other way round before. Your existing choice is carried over, so a
+  profile that had the question switched off keeps it switched off
+- Searching the sidebar now finds the page for "scenario", "delve" and "recorder"
 
 ### CVars
 - Four rows are gone: Death Effects, Fullscreen Glow, Sharpen Textures and Raid:
@@ -99,32 +132,12 @@
   "maximized"
 
 ### Cursor Effects
-- The Taunt Countdown description now highlights the spell names it tracks
-
-## v4.3.8
-
-### Combat Logger
-- The page is rebuilt around three content cards: Dungeons, Raids and a flat PvP
-  card that lists Rated Arena, Solo Shuffle, Skirmish, Rated BG, Battleground and
-  War Game as plain ticks
-- New Scenarios card. It covers delves, Torghast and anything else the game counts
-  as a scenario. It used to only cover Torghast
-- Two new buttons. One turns on Advanced Combat Logging without a reload and tells
-  you when it is already on. The other ticks every content type Warcraft Recorder
-  can record and turns Advanced Combat Logging on with it
-- The "Ask About Advanced Combat Logging" option now reads as a positive. It was
-  worded the other way round before. Your existing choice is carried over, so a
-  profile that had the question switched off keeps it switched off
-- Searching the sidebar now finds the page for "scenario", "delve" and "recorder"
-
-## v4.3.7
-
-### Cursor Effects
 - The taunt countdown at the cursor now also tracks Flame Shock on Elemental and
   Restoration Shaman, and Garrote on Assassination Rogue
 - The spell is read from your spellbook instead of your role, so any spec that
   has one gets the countdown, talent overrides included. A spec with none draws
   nothing
+- The Taunt Countdown description now highlights the spell names it tracks
 
 ### Player Crosshair
 - New Always Show option keeps the crosshair on screen out of combat, not only
@@ -135,71 +148,40 @@
 - The crosshair now comes back up after a `/reload` in the middle of a fight. It
   used to stay hidden until the next fight started
 
-## v4.3.6
-
-### Havoc Tracker (new, Destruction Warlock)
-- A new module warns you when your own Havoc is sitting on the target you are
-  already hitting, which wastes it. It shows a large text on screen, defaulting
-  to "Havoc Target", and hides again when you switch to a clean target
-- Off by default. Turn it on under Combat, Status Texts, Havoc Tracker, where it
-  is the fifth tab. You can set the text, colour, font, size and position
-- The position is draggable in `/kes edit` as "Havoc Warning"
-- Other classes and other Warlock specs see nothing at all, not even a mover
-
-## v4.3.5
-
-### Settings Sidebar
-- Pet Status Texts, Missing Forms, Hunter: Mark Missing and Healer Mana are now
-  four tabs on one Status Texts page at the bottom of the Combat section. They
-  were four separate rows spread across three sections
-- Searching the sidebar for any of those names still finds the page, including
-  the older names "Pet Status Texts" and "Hunter: Mark Missing"
-- Character Panel has its own row in the Skinning section, under Dark Theme. It
-  used to be buried as the fourth tab inside Dark Theme's Elements row
-- With ElvUI handling the skinning, Dark Theme now shows only its General tab.
-  The Elements tab is gone there because everything left on it configures a skin
-  that stands down for ElvUI. Character Panel stays available on its own row
+### Blizzard Frames
+- The Vehicle Exit Button settings have moved. They now sit on the Blizzard
+  Frames page, under Elements, next to Loot Roll and UI Widgets. The old
+  Vehicle Exit row in the sidebar is gone
+- The Vehicle Exit Button now stands down when ElvUI is running, because ElvUI
+  already places that button with its own mover. Two movers were fighting over
+  the same button
 
 ### Removed
 - Innervate Tracker and Maintenance Tracker are gone. Healer Mana, which shared
   their page, moved to the Status Texts page above. If you had either enabled,
   their saved settings stay in your profile but nothing reads them
 
-## v4.3.4
-
-### Fonts
-- Every font dropdown now starts with "Use Global Font", so a module can follow
-  the Global Font from the home page instead of being pinned to one face. The
-  entry names the font it will use, for example "Use Global Font (Expressway)"
-- Changing the Global Font now moves every module that is left on it, including
-  skinned Blizzard windows and tooltips. Those two stayed on Expressway before
-- If you deliberately picked Expressway for tooltips or UI widgets, they now
-  follow the Global Font instead. The game could not tell that choice apart from
-  never having picked one, so it reads as "follow the global font"
-- The Mythic+ Timer font cards name the font they actually inherit, so the
-  Deaths card shows the base card's font rather than the addon-wide one
-
-## v4.3.3
-
-### Settings Window
-- The settings window is now see-through again. Each part of the window was
-  painting its own background on top of the others, and the stack added up to
-  nearly solid. The window paints one background now, so the sidebar, the
-  content area and the bottom bar all let the game show through
-- Changing your accent colour no longer paints the window solid again
-
-### Settings Sidebar
-- The Optimize section is gone. Its System Optimization page now sits in a new
-  Core section at the top, alongside Profile Manager and Addon Theme
-- Core also has a Home Page row, so the welcome page is reachable from the
-  sidebar instead of only from the house icon in the title bar
-- Skinning has moved to the bottom of the sidebar
-- The Combat section's first row is called Combat Res again. Searching for
-  "battle res" still finds it
-
-### Tabs
-- Tabs inside a page are now only as wide as their own labels, with a hairline
-  gap between them, instead of stretching to share the full row
+### Fixes
+- Character Panel settings now follow you when you switch profiles. Before, the
+  module kept reading the profile you just left
+- Switching the Character Panel off now actually stops it drawing. Overlays no
+  longer repaint when you change gear, open the paper doll tab, or click a
+  setting with the module off
+- Turning the Character Panel off and on again brings the decimal item level
+  back. It used to stay gone for the rest of the session
+- Raid Notifications no longer throws a red error the first time an alert
+  appears. The alert text was being written before its font was set
+- Tooltips no longer throw a red error when you hover a spell reward on the
+  world map. Those small built-in tooltips are now left alone properly
+- The player counts beside the role icons in the Group Finder no longer cut off
+  to "..." when a group needs two digits of damage dealers. The numbers sit
+  closer to their icons and the spare room now separates the roles
+- Combat Res no longer sits off to the right of its own backdrop. The frame was
+  measured before it had any text to measure, so it came out too narrow and the
+  display spilled past its box
+- The Combat Res backdrop now fits its text instead of sitting wider than it,
+  and it holds still as the timer counts down instead of shifting with the
+  digits
 
 ---
 
