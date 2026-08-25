@@ -393,16 +393,15 @@ function GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, config)
     -- pool's per-render cost matters less for these (page-navigation only)
     -- so building fresh is fine. searchable=false also routes here defensively
     -- — KEDropdown's searchable is set at construction with no setter, and
-    -- the pooled factory builds with searchable=true. Currently no live
-    -- caller passes false, but a future caller would get the correct
-    -- non-searchable dropdown via this path.
+    -- the pooled factory builds with searchable=true, so searchable=false
+    -- takes the legacy path to get the correct non-searchable dropdown.
     if (config.fontSizes and #config.fontSizes > 0)
         or config.extraSlider
         or config.searchable == false then
         return CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     end
 
-    -- Pool path — the simple shape, which is the large majority of callers.
+    -- Pool path — the simple shape.
     local kit = fontSettingsCardPool:Acquire(scrollChild)
     local card = ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     return card, card:GetNextOffset(), card.fontWidgets

@@ -558,7 +558,11 @@ function HM:FindHealers()
     end
 
     if DEBUG_HM then KE:Print("[HM] FindHealers mode=" .. mode .. " count=" .. #self.currentHealers) end
-    self.isPreview = false
+    -- Deliberately does NOT clear isPreview. Every caller that means to leave
+    -- preview clears it first (ShowPreview's live-healer path, HidePreview,
+    -- OnDisable). Clearing it here instead let a roster or spec event cancel an
+    -- open GUI preview, and since the preview context also selects the look
+    -- keys, the page would go on editing Raid while the frame drew Dungeon.
     self:UpdateHealerFrames()
 end
 
@@ -596,6 +600,10 @@ function HM:UpdateHealerFrames()
 
     for i = 1, count do
         local frame = self:GetHealerFrame(i)
+        -- Re-dress before drawing: the look keys are mode-resolved, so a frame
+        -- built under one mode carries the other's font, offsets and sizes
+        -- until it is redressed. Data alone would leave row 1 stale.
+        self:UpdateFrameAppearance(frame)
         self:UpdateOneHealerFrame(frame, self.currentHealers[i])
         frame:Show()
     end
