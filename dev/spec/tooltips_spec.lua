@@ -217,3 +217,41 @@ describe("Tooltips AddAuraIDLine", function()
         assert.same({ "|cff7c7c7cSpell ID:|r 403264" }, tt.lines)
     end)
 end)
+
+-- The zone-in re-assert. Another addon writing the same CVar from its own
+-- settings would otherwise decide the value for everyone.
+describe("Tooltips PLAYER_ENTERING_WORLD", function()
+    local function load(initial)
+        local deferred, writes = {}, {}
+        local store = { tooltipShowAuraSpellIDs = initial }
+        local TT = L.loadTooltips(nil, {
+            C_Timer = { After = function(_, fn) deferred[#deferred + 1] = fn end },
+            C_CVar = {
+                GetCVar = function(key) return store[key] end,
+                SetCVar = function(key, value) store[key] = value; writes[#writes + 1] = value end,
+            },
+        })
+        TT.db = { ShowIDs = "ALWAYS" }
+        TT.IsEnabled = function() return true end
+        return TT, deferred, writes, store
+    end
+
+    it("re-asserts once more after the same-frame handlers", function()
+        local TT, deferred, writes, store = load("0")
+        TT:PLAYER_ENTERING_WORLD()
+        assert.same({ "1" }, writes)
+        assert.equal(1, #deferred)
+
+        store.tooltipShowAuraSpellIDs = "0"   -- another addon, same frame
+        deferred[1]()
+        assert.same({ "1", "1" }, writes)
+        assert.equal("1", store.tooltipShowAuraSpellIDs)
+    end)
+
+    it("writes nothing on a zone-in where nothing disagrees", function()
+        local TT, deferred, writes = load("1")
+        TT:PLAYER_ENTERING_WORLD()
+        deferred[1]()
+        assert.same({}, writes)
+    end)
+end)

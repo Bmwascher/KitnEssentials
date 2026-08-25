@@ -1103,6 +1103,13 @@ function TT:OnEnable()
         self:SecureHook(_G.GameTooltip, "SetUnitBuffByAuraInstanceID", "AuraIDByInstance")
         self:SecureHook(_G.GameTooltip, "SetUnitDebuffByAuraInstanceID", "AuraIDByInstance")
     end
+    -- The filterless variant carries the player's own buff bar, nameplate auras
+    -- and the cooldown viewer; the Buff/Debuff pair above reaches only raid,
+    -- party, arena and target frames. AuraIDByInstance ignores the filter
+    -- argument either way.
+    if _G.GameTooltip.SetUnitAuraByAuraInstanceID then
+        self:SecureHook(_G.GameTooltip, "SetUnitAuraByAuraInstanceID", "AuraIDByInstance")
+    end
     self:SecureHook(_G.GameTooltip, "SetUnitAura", "AuraIDByIndex")
     self:SecureHook(_G.GameTooltip, "SetUnitBuff", "AuraIDByIndex")
     self:SecureHook(_G.GameTooltip, "SetUnitDebuff", "AuraIDByIndex")
@@ -1114,12 +1121,26 @@ function TT:OnEnable()
     self:RegisterEvent("MODIFIER_STATE_CHANGED")
     -- Not PLAYER_LOGIN: the client settles its session CVars after login and
     -- clobbers a write made that early. Kept registered so a later reset is
-    -- answered too -- one guarded read per zone-in.
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "SyncAuraSpellIDCVar")
+    -- answered too.
+    self:RegisterEvent("PLAYER_ENTERING_WORLD")
 
     self:EnsureAnchor()
     self:ApplySettings()
     S.InstallTooltipStatusBarHook()
+end
+
+-- Another addon can write this same CVar on this same event, unconditionally
+-- and from its own settings -- which turns the line off for anyone whose
+-- option there is off. The deferred pass runs after every same-frame handler,
+-- so ours is the value that stands. It is read-gated, so a zone-in where
+-- nothing disagrees costs one CVar read.
+local function ReassertAuraSpellIDCVar()
+    TT:SyncAuraSpellIDCVar()
+end
+
+function TT:PLAYER_ENTERING_WORLD()
+    self:SyncAuraSpellIDCVar()
+    C_Timer.After(0, ReassertAuraSpellIDCVar)
 end
 
 function TT:MODIFIER_STATE_CHANGED()
