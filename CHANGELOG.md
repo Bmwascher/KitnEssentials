@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.12
+
+### Blizzard Frames
+
+- The Vehicle Exit Button settings have moved. They now sit on the Blizzard
+  Frames page, under Elements, next to Loot Roll and UI Widgets. The old
+  Vehicle Exit row in the sidebar is gone
+- The Vehicle Exit Button now stands down when ElvUI is running, because ElvUI
+  already places that button with its own mover. Two movers were fighting over
+  the same button
+
+### Fixes
+
+- The player counts beside the role icons in the Group Finder no longer cut off
+  to "..." when a group needs two digits of damage dealers. The numbers sit
+  closer to their icons and the spare room now separates the roles
+
 ## v4.3.11
 
 ### Fixes
