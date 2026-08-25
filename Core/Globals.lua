@@ -47,10 +47,8 @@ KE.GEM_SOCKET_TYPES = {
     { name = "Fiber",      locale = "EMPTY_SOCKET_FIBER",      icon = 136260 },
 }
 
--- Bundled role art, keyed by the string Blizzard's role APIs return so a
--- lookup miss is the correct no-op. Two consumers with different treatments:
--- the group-finder count row draws it uncropped, Raid Control crops the frame
--- painted into it so that frame does not double its own border.
+-- Role icons for group-finder and role-check displays. Keyed by the string
+-- Blizzard's role APIs return, so a lookup miss is the correct no-op.
 KE.ROLE_ICONS = {
     TANK    = KE.PATH .. [[RoleIcons\tank-modern.png]],
     HEALER  = KE.PATH .. [[RoleIcons\healer-modern.png]],

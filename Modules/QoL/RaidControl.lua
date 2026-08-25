@@ -128,8 +128,8 @@ local WM = _G.SLASH_WORLD_MARKER1
 
 -- The art has a frame painted into it, which stacks with this plate's own
 -- 1px border and reads as a two-pixel edge. Crop the outer tenth off each
--- side so the only border is ours. The group-finder count row draws the same
--- art uncropped, because Blizzard's rows have no border to double.
+-- side so the only border is ours. Local, not on KE: the LFG skin draws the
+-- same art against Blizzard's rows, where there is no KE border to double.
 local ROLE_ICON_CROP = 0.10
 
 local roleRoster = {}
@@ -567,7 +567,8 @@ function RC:CreateRoleIcons(panel)
         frame:SetPoint("LEFT", RoleIcons, "LEFT",
             ROLE_PLATE_PAD / 2 + (i - 1) * ROLE_PAIR_WIDTH, 0)
 
-        -- 1px border (S.Backdrop), art inset 1px inside it.
+        -- Modern role icons (KE.ROLE_ICONS, shared with the LFG skin),
+        -- 1px border (S.Backdrop), art inset 1px.
         S.Backdrop(frame)
         local texture = frame:CreateTexture(nil, "OVERLAY")
         texture:SetTexture(KE.ROLE_ICONS[data.role])

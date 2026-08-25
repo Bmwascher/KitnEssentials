@@ -202,9 +202,6 @@ local FRAME_PER_ROW = 3
 local ADDON_PER_ROW = 2
 local CELL_H = 24
 local CELL_SPACING = 2
--- A dropdown needs more vertical room than a grid cell: its own row is 34 and
--- the label sits above the control.
-local DROPDOWN_H = 40
 
 -- Sorted by the name the USER reads, not by the internal key. Sorting by key put
 -- Key Bindings between Barbershop and Black Market, and Blizzard Fonts under G.
@@ -390,9 +387,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
         if colors then yOffset = colors(scrollChild, yOffset) end
     end
 
-    local roleIcons = GUIFrame.registeredContent and GUIFrame.registeredContent["SkinBlizzardFramesRoleIcons"]
-    if roleIcons then yOffset = roleIcons(scrollChild, yOffset) end
-
     local colorPicker = GUIFrame.registeredContent and GUIFrame.registeredContent["ColorPicker"]
     if colorPicker then yOffset = colorPicker(scrollChild, yOffset) end
 
@@ -574,35 +568,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     if messages then yOffset = messages(scrollChild, yOffset) end
 
     return yOffset
-end)
-
--- Chained onto General rather than owning a tab: one dropdown never filled one.
---
--- Gated on IsActive, which is false both while the skin engine is off and while
--- ElvUI has the skinning. The Group Finder skin installs nothing in either
--- state, so this setting would change nothing -- and a live-looking control
--- that does nothing reads as broken rather than as not applicable.
-GUIFrame:RegisterContent("SkinBlizzardFramesRoleIcons", function(scrollChild, yOffset)
-    local db = GetDB()
-    if not db then return yOffset end
-    local S = KE.Skins
-    if S and S.IsActive and not S:IsActive() then return yOffset end
-
-    local card = GUIFrame:CreateCard(scrollChild, "Group Finder Role Icons", yOffset)
-    card:AddLabel("How the member icons on each group listing are drawn. Blizzard's dungeon browser puts a class-coloured circle around every icon; the bar style replaces that with a class-coloured bar underneath. Changing this needs a /reload.")
-
-    local row = GUIFrame:CreateRow(card.content, DROPDOWN_H)
-    row:AddWidget(GUIFrame:CreateDropdown(row, "Style", {
-        options = { bar = "Role Icon With Class Bar", circle = "Blizzard Class Circles" },
-        value = db.LFGRoleStyle or "bar",
-        callback = function(key)
-            db.LFGRoleStyle = key
-            KE:FlagReloadNeeded()
-        end,
-    }), 0.5)
-    card:AddRow(row, DROPDOWN_H, 0)
-
-    return card:GetNextOffset()
 end)
 
 GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffset)

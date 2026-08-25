@@ -48,6 +48,17 @@ local function IncentiveHide(icon)
 end
 
 local unpack = unpack
+local ROLE_ICON = KE.ROLE_ICONS
+
+-- the modern role icons are now optional. When off we simply
+-- do not replace the texture, so Blizzard's own atlas stays -- nothing
+-- is blanked and no restore pass is needed.
+local function UseModernRoleIcons()
+    local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.BlizzardFrames
+    local opt = bs and bs.ModernRoleIcons
+    return not opt or opt.Enabled ~= false
+end
 local ROLE_ORDER = { "TANK", "HEALER", "DAMAGER" }
 
 local function ReskinMemberIcon(enumerate, icon, role, entry)
@@ -57,9 +68,11 @@ local function ReskinMemberIcon(enumerate, icon, role, entry)
         S.PixelSnap(icon)
         d.aeSnap = true
     end
-    if role and KE.ROLE_ICONS[role] then
-        icon:SetTexture(KE.ROLE_ICONS[role])
-        icon:SetTexCoord(0, 1, 0, 1)
+    if role and ROLE_ICON[role] then
+        if UseModernRoleIcons() then
+            icon:SetTexture(ROLE_ICON[role])
+            icon:SetTexCoord(0, 1, 0, 1)
+        end
         icon:SetAlpha(1)
     else
         icon:SetAlpha(0)
@@ -80,10 +93,7 @@ local function ReskinMemberIcon(enumerate, icon, role, entry)
     end
 
     local class = role and entry and entry[1]
-    -- IsSafeValue first: LFGList member data goes secret in restricted content
-    -- and a table keyed by a secret class token throws on the index.
-    local color = KE:IsSafeValue(class) and _G.RAID_CLASS_COLORS
-        and _G.RAID_CLASS_COLORS[class]
+    local color = class and _G.RAID_CLASS_COLORS and _G.RAID_CLASS_COLORS[class]
     if color then
         if not d.aeClassBar then
             local t = enumerate:CreateTexture(nil, "ARTWORK")
@@ -100,78 +110,22 @@ local function ReskinMemberIcon(enumerate, icon, role, entry)
     end
 end
 
--- Blizzard already draws these two ways and picks by category:
--- showClassesByRole is TRUE for the dungeon browser, which shows RoleIcon
--- inside a class-coloured ClassCircle, and false elsewhere, which shows the
--- plain RoleIconWithBackground.
---
--- "bar" is our treatment, the role icon with a class-coloured bar beneath, and
--- it works by hiding ClassCircle. "circle" simply stops doing that, so the
--- dungeon browser keeps the circles Blizzard drew.
-local function LFGRoleStyle()
-    local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
-        and KE.db.profile.Skinning.BlizzardFrames
-    return (bs and bs.LFGRoleStyle) or "bar"
-end
-
--- Hiding the circle from our own deferred pass is a frame too late: Blizzard
--- has already painted it, which is the flash. Hooking the texture's own Show
--- makes it hide itself the instant Blizzard shows it, inside the same frame.
---
--- The hook body reads no listing data and calls no API, which is what keeps it
--- clear of the taint wall the deferred pass exists to avoid.
---
--- Installed once per pooled slot and never removed. The style is re-read on
--- every call, so picking circles simply stops the hiding.
-local function SuppressClassCircle(slot)
-    local circle = slot and slot.ClassCircle
-    if not circle then return end
-    local d = S.data(circle)
-    if not d.aeCircleHook then
-        hooksecurefunc(circle, "Show", function(c)
-            if LFGRoleStyle() ~= "circle" then c:Hide() end
-        end)
-        d.aeCircleHook = true
-    end
-    if LFGRoleStyle() ~= "circle" then circle:Hide() end
-end
-
--- Our additions are created once per recycled icon, so switching to circles
--- has to take them off rather than merely stop making them.
--- Both regions, not the shown one: which region carried the extras depends on
--- the category they were created under, and this runs after a category switch.
-local function ClearIconExtras(icon)
-    if not icon then return end
-    local d = S.data(icon)
-    if d.aeClassBar then d.aeClassBar:Hide() end
-    if d.aeLeader then d.aeLeader:Hide() end
-end
-
-local function ClearMemberIconExtras(enumerate)
-    for i = 5, 1, -1 do
-        local slot = enumerate["Icon" .. i]
-        ClearIconExtras(slot and slot.RoleIconWithBackground)
-        ClearIconExtras(slot and slot.RoleIcon)
-    end
-end
-
+local lfgTraceShots = 0
 local function UpdateEnumerate(enumerate)
-    if LFGRoleStyle() == "circle" then
-        -- Leave every icon exactly as Blizzard's update left it. Returning
-        -- here also skips the per-member data walk below, which otherwise
-        -- runs once per visible row on every list update.
-        ClearMemberIconExtras(enumerate)
-        return
-    end
+    local trace = lfgTraceShots > 0
+    if trace then lfgTraceShots = lfgTraceShots - 1 end
     local parent = enumerate:GetParent()
     local button = parent and parent:GetParent()
     local resultID = button and button.resultID
+    if trace then print("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons|r fired; resultID=" .. tostring(resultID)) end
     if not resultID then return end
     local ok, result = pcall(_G.C_LFGList.GetSearchResultInfo, resultID)
+    if trace then print("  info ok=" .. tostring(ok) .. " result=" .. tostring(result and "table" or result)) end
     if not ok or not result then return end
     local cache = { TANK = {}, HEALER = {}, DAMAGER = {} }
     local okN, num = pcall(function() return result.numMembers end)
     num = (okN and num) or 0
+    if trace then print("  numMembers=" .. tostring(num)) end
     for i = 1, num do
         local ok2, p = pcall(_G.C_LFGList.GetSearchResultPlayerInfo, resultID, i)
         if ok2 and p and p.assignedRole and cache[p.assignedRole] then
@@ -179,25 +133,17 @@ local function UpdateEnumerate(enumerate)
             t[#t + 1] = { p.classFilename, p.isLeader }
         end
     end
+    if trace then
+        print(("  cache T=%d H=%d D=%d; Icon1=%s RoleIcon=%s"):format(
+            #cache.TANK, #cache.HEALER, #cache.DAMAGER,
+            tostring(enumerate.Icon1 ~= nil),
+            tostring(enumerate.Icon1 and enumerate.Icon1.RoleIcon ~= nil)))
+    end
     for i = 5, 1, -1 do
         local slot = enumerate["Icon" .. i]
 
-        -- Blizzard shows ONE of these two per slot and hides the other, and
-        -- which one depends on the category: the dungeon browser shows
-        -- RoleIcon, everything else shows RoleIconWithBackground. Preferring
-        -- RoleIconWithBackground unconditionally painted the hidden region in
-        -- the dungeon browser, so the art never appeared there and the leader
-        -- marker and class bar anchored to something invisible.
-        local withBg = slot and slot.RoleIconWithBackground
-        local plain = slot and slot.RoleIcon
-        local icon = (withBg and withBg:IsShown() and withBg)
-            or (plain and plain:IsShown() and plain)
-            or withBg or plain
+        local icon = slot and (slot.RoleIconWithBackground or slot.RoleIcon)
         if icon and icon.SetTexture then
-            -- The extras are anchored to the icon but parented to the
-            -- enumerate frame, so hiding a region does not hide them. After a
-            -- category switch the other region's leftovers have to come off.
-            ClearIconExtras(icon == withBg and plain or withBg)
             local role, entry
             for r = 1, 3 do
                 local list = cache[ROLE_ORDER[r]]
@@ -209,7 +155,7 @@ local function UpdateEnumerate(enumerate)
             end
             ReskinMemberIcon(enumerate, icon, role, entry)
         end
-        SuppressClassCircle(slot)
+        if slot and slot.ClassCircle then slot.ClassCircle:Hide() end
     end
 end
 
@@ -251,12 +197,6 @@ local function LayoutRoleCount(roleCount)
     d.aeCountLayout = true
 end
 
--- The count row keeps the bundled art. Blizzard's micro atlases here carry a
--- round background baked into the image, which reads as a heavier, busier row
--- than the member icons beside it in the other display.
---
--- Independent of LFGRoleStyle on purpose: that setting picks how the per-member
--- icons are drawn, and this row has no members to draw.
 local function UpdateRoleCount(roleCount)
     LayoutRoleCount(roleCount)
     for i = 1, 3 do
@@ -268,21 +208,13 @@ local function UpdateRoleCount(roleCount)
                 S.PixelSnap(icon)
                 d.aeSnap = true
             end
-            local art = KE.ROLE_ICONS[slot[3]]
-            if art then
-                icon:SetTexture(art)
+            if UseModernRoleIcons() then
+                icon:SetTexture(ROLE_ICON[slot[3]])
                 icon:SetTexCoord(0, 1, 0, 1)
             end
         end
     end
 end
-
--- No live refresh entry point. Repainting means asking Blizzard to redraw the
--- rows, and LFGListSearchPanel_UpdateResults called from our own execution
--- indexes the same secret activityIDs field that the hooks below have to defer
--- around. Sweeping the rows ourselves cannot restore ClassCircle when leaving
--- the bar style, because only Blizzard knows which slots should carry one. The
--- style change therefore asks for a reload.
 
 local lfgListIconsHooked = false
 local lfgListIconsReported = false
@@ -290,20 +222,15 @@ local function HookLFGListIcons()
     if lfgListIconsHooked then return end
     if _G.LFGListGroupDataDisplayEnumerate_Update and _G.C_LFGList
         and _G.C_LFGList.GetSearchResultPlayerInfo then
-        -- DEFERRED, and it must stay that way. Both the search panel and the
-        -- Application Viewer index SECRET listing fields inside the same
-        -- execution that drives the DataDisplay, so anything of ours running
-        -- there marks the execution and Blizzard's own next read throws:
+        -- DEFERRED, same reason as the applicant hooks below:
+        -- LFGListApplicationViewer_UpdateInfo drives the DataDisplay and
+        -- then compares SECRET values (the listing name is |Kl21|k), so
+        -- running our icon swap inside its execution taints it:
         --
-        --   LFGList.lua: attempt to index field 'activityIDs' (a secret
-        --   table value, while execution tainted by 'KitnEssentials')
+        --   LFGList.lua: attempt to compare a secret number value
+        --   (execution tainted by 'KitnEssentials')
         --
-        -- Doing this work from a post-hook on LFGListSearchEntry_Update
-        -- instead is NOT a way out: that function reads activityIDs itself,
-        -- and one row's hook taints the loop for every row after it.
-        --
-        -- The cost of deferring is one painted frame of Blizzard's class
-        -- circles before ours replace them, on every list refresh.
+        -- Icon swaps are cosmetic; a frame later is fine.
         local function Defer(fn, key)
             return function(frame, ...)
                 if not frame or S.data(frame)[key] then return end
@@ -328,6 +255,11 @@ local function HookLFGListIcons()
         lfgListIconsReported = true
         print("|cffFF008CKitn|r|cffffffffEssentials:|r group-finder role icons: hook site missing (will retry on rerun)")
     end
+end
+
+function S.DebugLFGIconsTrace(n)
+    lfgTraceShots = n or 3
+    print("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons trace armed for " .. lfgTraceShots .. " updates -- hooked=" .. tostring(lfgListIconsHooked))
 end
 
 local GROUP_BUTTON_ICONS = { 133076, 133074, 464820 }
@@ -856,6 +788,48 @@ local function Skin()
                 SkinApplicantRow(button)
             end)
         end)
+        if _G.LFGListApplicationViewer_UpdateRoleIcons then
+            -- Same chain, same deferral.
+            local function SkinRoleIcons(member)
+                if not member then return end
+                for i = 1, 3 do
+                    local roleBtn = member["RoleIcon" .. i]
+                    local nt = roleBtn and roleBtn.GetNormalTexture and roleBtn:GetNormalTexture()
+                    if nt then
+                        -- match LOWERCASED -- the micro-role
+                        -- atlases from GetMicroIconForRole are MixedCase,
+                        -- so the case-sensitive find never hit (:
+                        -- role icons weren't swapped).
+                        local atlas = nt.GetAtlas and nt:GetAtlas()
+                        atlas = atlas and atlas:lower()
+                        local role = atlas and (
+                            atlas:find("tank") and "TANK"
+                            or atlas:find("heal") and "HEALER"
+                            or (atlas:find("dps") or atlas:find("damage")) and "DAMAGER")
+                        if role and ROLE_ICON and ROLE_ICON[role]
+                            and UseModernRoleIcons() then
+                            nt:SetTexture(ROLE_ICON[role])
+                            nt:SetTexCoord(0, 1, 0, 1)
+                            local hl = roleBtn.GetHighlightTexture and roleBtn:GetHighlightTexture()
+                            if hl then
+                                hl:SetTexture(ROLE_ICON[role])
+                                hl:SetTexCoord(0, 1, 0, 1)
+                                hl:SetAlpha(0.3)
+                            end
+                        end
+                    end
+                end
+            end
+
+            hooksecurefunc("LFGListApplicationViewer_UpdateRoleIcons", function(member)
+                if not member or S.data(member).roleQueued then return end
+                S.data(member).roleQueued = true
+                C_Timer.After(0, function()
+                    S.data(member).roleQueued = nil
+                    SkinRoleIcons(member)
+                end)
+            end)
+        end
     end
 
     if _G.LFGListSearchEntry_Update and not S.data(lfgList).fontHook then

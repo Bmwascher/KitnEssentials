@@ -119,12 +119,6 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
                 function row:AddWidget(widget) self.widgets[#self.widgets + 1] = widget end
                 return row
             end,
-            -- The Frame Skins card carries one dropdown (the Group Finder role
-            -- icon style). Nothing here asserts on it; it only has to exist so
-            -- the builder runs to the grid below.
-            CreateDropdown = function(_, _, label, config)
-                return { label = label, value = config.value, callback = config.callback }
-            end,
             CreateCompactCheckbox = function(_, _, label, config)
                 local checkbox = {
                     label = label,
