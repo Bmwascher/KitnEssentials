@@ -16,6 +16,12 @@
 - The player counts beside the role icons in the Group Finder no longer cut off
   to "..." when a group needs two digits of damage dealers. The numbers sit
   closer to their icons and the spare room now separates the roles
+- Combat Res no longer sits off to the right of its own backdrop. The frame was
+  measured before it had any text to measure, so it came out too narrow and the
+  display spilled past its box
+- The Combat Res backdrop now fits its text instead of sitting wider than it,
+  and it holds still as the timer counts down instead of shifting with the
+  digits
 
 ## v4.3.11
 
