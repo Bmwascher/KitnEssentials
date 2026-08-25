@@ -112,7 +112,7 @@ local function CreateFontSettingsCardKit(holder)
     row1:AddWidget(outlineDropdown, 0.5)
     card:AddRow(row1, Theme.rowHeight)
 
-    -- Row 2: font size slider (single, full-width — covers 25/27 call sites).
+    -- Row 2: font size slider (single, full-width — the simple shape).
     local row2 = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     local fontSizeSlider = GUIFrame:CreateSlider(row2, "Font Size", {
         min = 8,
@@ -381,7 +381,7 @@ end
 -- Public entry: CreateFontSettingsCard
 --
 -- Routes to the pool path for the simple shape (no fontSizes array, no
--- extraSlider) and to the legacy build-fresh path for the two outliers.
+-- extraSlider) and to the legacy build-fresh path for the two outlier shapes.
 -- Signature unchanged from pre-pool: returns (card, nextOffset, widgets).
 ---------------------------------------------------------------------------------
 
@@ -402,7 +402,7 @@ function GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, config)
         return CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     end
 
-    -- Pool path — covers the 25 simple-shape call sites.
+    -- Pool path — the simple shape, which is the large majority of callers.
     local kit = fontSettingsCardPool:Acquire(scrollChild)
     local card = ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     return card, card:GetNextOffset(), card.fontWidgets

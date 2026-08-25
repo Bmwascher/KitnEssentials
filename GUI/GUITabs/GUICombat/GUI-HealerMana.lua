@@ -58,9 +58,9 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     if db.Enabled ~= true then return yOffset end
 
     ----------------------------------------------------------------
-    -- Card 2: Position Mode (split toggle + configure-for context)
+    -- Card 2: Raid Customization (split toggle + configure-for context)
     ----------------------------------------------------------------
-    -- Which context the Position Settings card edits this render. Only "RAID"
+    -- Which context the look/layout controls edit this render. Only "RAID"
     -- when split is on AND the module remembers Raid was selected; otherwise
     -- Dungeon. guiConfigContext is a transient module field (not saved) so it
     -- survives the page rebuild a context switch triggers.
@@ -140,7 +140,12 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
             if mod then
                 mod.guiConfigContext = key
                 mod.previewContext = key
-                if mod.isPreview then mod:ShowPreview() end
+                -- Unconditional, NOT gated on isPreview: ShowPreview clears
+                -- that flag whenever it finds a live party healer, and a
+                -- cleared flag makes GetActiveModeKey ignore previewContext
+                -- and answer with the live mode. The page would then edit
+                -- Raid keys while the frame kept rendering Dungeon ones.
+                if mod.ShowPreview then mod:ShowPreview() end
                 if mod.RefreshEditMode then mod:RefreshEditMode() end
             end
             RebuildPage()
@@ -150,8 +155,8 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     manager:Register(configureForDropdown, "splitConfig")  -- greyed when split off
     cardPosMode:AddRow(rowPosMode, Theme.rowHeight)
 
-    -- Clarify the scope of these controls: they only affect Position Settings,
-    -- not Appearance / Raid Mode / Font (those are shared across both modes).
+    -- Clarify the scope: the switcher reaches Position, Appearance and Font.
+    -- Max Healers, Ignore Bench Healers and Enable in Raid stay shared.
     local posModeNoteRow = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightNote)
     local posModeNote = GUIFrame:CreateText(posModeNoteRow,
         KE:ColorTextByTheme("Note"),

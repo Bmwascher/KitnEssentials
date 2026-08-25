@@ -4,7 +4,7 @@
 -- ║  Purpose: Displays healer mana. Dungeon Mode shows       ║
 -- ║           the single party/M+ healer; Raid Mode          ║
 -- ║           shows all raid healers, stacked.               ║
--- ║  Note: Mode auto-switches on instance type.              ║
+-- ║  Note: Mode auto-switches on group type.                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
