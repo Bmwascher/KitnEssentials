@@ -390,6 +390,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
         if colors then yOffset = colors(scrollChild, yOffset) end
     end
 
+    local roleIcons = GUIFrame.registeredContent and GUIFrame.registeredContent["SkinBlizzardFramesRoleIcons"]
+    if roleIcons then yOffset = roleIcons(scrollChild, yOffset) end
+
     local colorPicker = GUIFrame.registeredContent and GUIFrame.registeredContent["ColorPicker"]
     if colorPicker then yOffset = colorPicker(scrollChild, yOffset) end
 
@@ -446,24 +449,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
     if AnySuppressed(FRAME_SKINS) then
         card:AddNote("Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
     end
-
-    -- Group Finder member role icons: our bar treatment, or the class circles
-    -- Blizzard's dungeon browser draws natively. A STYLE rather than a skin
-    -- toggle, so it does not belong in the grid below -- and it needs no
-    -- reload, because the refresh redraws every visible row.
-    local rowRole = GUIFrame:CreateRow(card.content, DROPDOWN_H)
-    rowRole:AddWidget(GUIFrame:CreateDropdown(rowRole, "Group Finder Role Icons", {
-        options = { bar = "Role Icon With Class Bar", circle = "Blizzard Class Circles" },
-        value = db.LFGRoleStyle or "bar",
-        callback = function(key)
-            db.LFGRoleStyle = key
-            -- Resolved HERE: this file's other `S` locals live inside their
-            -- own callbacks, so a bare `S` at this depth is a nil global.
-            local Skins = KE.Skins
-            if Skins and Skins.RefreshLFGRoleIcons then Skins.RefreshLFGRoleIcons() end
-        end,
-    }), 0.5)
-    card:AddRow(rowRole, DROPDOWN_H)
 
     -- No solo rows in this list today -- Context Menus was one until its label
     -- was shortened to fit an ordinary cell. Called anyway so adding a flag to
@@ -589,6 +574,38 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     if messages then yOffset = messages(scrollChild, yOffset) end
 
     return yOffset
+end)
+
+-- Chained onto General rather than owning a tab: one dropdown never filled one.
+--
+-- Gated on IsActive, which is false both while the skin engine is off and while
+-- ElvUI has the skinning. The Group Finder skin installs nothing in either
+-- state, so this setting would change nothing -- and a live-looking control
+-- that does nothing reads as broken rather than as not applicable.
+GUIFrame:RegisterContent("SkinBlizzardFramesRoleIcons", function(scrollChild, yOffset)
+    local db = GetDB()
+    if not db then return yOffset end
+    local S = KE.Skins
+    if S and S.IsActive and not S:IsActive() then return yOffset end
+
+    local card = GUIFrame:CreateCard(scrollChild, "Group Finder Role Icons", yOffset)
+    card:AddLabel("How the member icons on each group listing are drawn. Blizzard's dungeon browser puts a class-coloured circle around every icon; the bar style replaces that with a class-coloured bar underneath.")
+
+    local row = GUIFrame:CreateRow(card.content, DROPDOWN_H)
+    row:AddWidget(GUIFrame:CreateDropdown(row, "Style", {
+        options = { bar = "Role Icon With Class Bar", circle = "Blizzard Class Circles" },
+        value = db.LFGRoleStyle or "bar",
+        callback = function(key)
+            db.LFGRoleStyle = key
+            -- Resolved HERE rather than reusing the `S` above: that one is
+            -- captured at build time, and this callback outlives the build.
+            local Skins = KE.Skins
+            if Skins and Skins.RefreshLFGRoleIcons then Skins.RefreshLFGRoleIcons() end
+        end,
+    }), 0.5)
+    card:AddRow(row, DROPDOWN_H, 0)
+
+    return card:GetNextOffset()
 end)
 
 GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffset)
