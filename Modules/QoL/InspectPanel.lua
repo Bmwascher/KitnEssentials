@@ -523,9 +523,9 @@ function InspectPanel:SetupInspectSupport()
     -- frame (the inspect frame doesn't exist yet at addon-load time).
     --
     -- ITEM_DATA_LOAD_RESULT fires with the equipped itemID once Blizzard has
-    -- fully loaded an item we requested (incl. its socketed gems). The Task 0
-    -- trace confirmed SOCKET_INFO_UPDATE and GET_ITEM_INFO_RECEIVED never fired
-    -- in the inspect path with active requests in place.
+    -- fully loaded an item we requested (incl. its socketed gems). The debug
+    -- trace below confirmed SOCKET_INFO_UPDATE and GET_ITEM_INFO_RECEIVED never
+    -- fired in the inspect path with active requests in place.
     local INSPECT_DATA_EVENTS = {
         "ITEM_DATA_LOAD_RESULT",
         "INSPECT_READY",
@@ -578,7 +578,7 @@ function InspectPanel:SetupInspectSupport()
     f = CreateFrame("Frame")
     f:RegisterEvent("ADDON_LOADED")
     f:SetScript("OnEvent", function(_, event, arg1, arg2)
-        -- Task 0 trace: log every inspect-related event with its args + timestamp so
+        -- Debug trace: log every inspect-related event with its args + timestamp so
         -- it can be correlated against the "FLIP" lines from ScanItemSockets to learn
         -- which event drives a late gem's resolution.
         if DEBUG_CP then

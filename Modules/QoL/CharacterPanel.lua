@@ -1700,7 +1700,7 @@ function CP:SetupTrackIndicators()
     if self._trackIndicatorsHooked then return end
     self._trackIndicatorsHooked = true
     -- Track indicators register on PaperDollFrame OnShow via the combined
-    -- HookCharacterPanel handler (added in Task 12). No separate hook here.
+    -- HookCharacterPanel handler. No separate hook here.
 end
 
 ---------------------------------------------------------------------------------
@@ -2042,9 +2042,8 @@ end
 -- builds the slot lookup map on first use, and runs each enabled update for
 -- the affected slot only — avoids the 17-slot iteration that
 -- UpdateAllSlotDetails / UpdateAllTrackIndicators do on a full refresh.
--- Each downstream Update* function performs its own dirty-check guard
--- (added in Tasks 8-10), so calling RefreshSlot for an unchanged slot is
--- effectively free.
+-- Each downstream Update* function performs its own dirty-check guard, so
+-- calling RefreshSlot for an unchanged slot is effectively free.
 function CP:RefreshSlot(slotID, unit)
     if not slotID then return end
     BuildSlotFramesByID()
@@ -2341,7 +2340,7 @@ function CP:ScanItemSockets(unit, slotID, data)
         end
     end
 
-    -- Task 0 trace: log when an inspected socketable slot's filled count CHANGES
+    -- Debug trace: log when an inspected socketable slot's filled count CHANGES
     -- (the red->gem flip), with a timestamp, so it can be correlated against the
     -- event log in SetupInspectSupport to learn which event drove the resolution.
     if DEBUG_CP and unit ~= "player" and socketableSlotSet[slotID] then
@@ -3109,7 +3108,7 @@ function CP:SetupGemSocketHelper()
     self:CreateSocketContainer()
     self:CreateGemPopup()
     -- PaperDollFrame OnShow/OnHide + PLAYER_EQUIPMENT_CHANGED + BAG_UPDATE_DELAYED
-    -- handlers are installed by the combined HookCharacterPanel in Task 12.
+    -- handlers are installed by the combined HookCharacterPanel.
 end
 
 function CP:DisableGemSocketHelper()
