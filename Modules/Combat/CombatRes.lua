@@ -247,8 +247,8 @@ function CR:ResizeToContent()
     self.frame.timerText:SetText(TIMER_REF)
     self.frame.charge:SetText(CHARGE_REF)
     -- The references are on screen until the restore below. Dropping the dirty
-    -- caches now means a throw in between cannot strand them there: Update
-    -- repaints on its next pass either way.
+    -- caches now means a throw in between cannot strand them until a reload;
+    -- the next Update repaints, whenever one arrives.
     self.lastTimerText = ""
     self.lastChargeText = ""
 
@@ -261,7 +261,9 @@ function CR:ResizeToContent()
                 -- One unreadable element vetoes the whole size: a partial sum
                 -- would be confidently wrong rather than merely stale.
                 secret = true
-            elseif sw > 0 then
+            else
+                -- Spacing is added even for a glyph that measures zero, because
+                -- UpdateAnchors reserves the gap either way.
                 totalWidth = totalWidth + sw + (self.db.TextSpacing or 4)
             end
         end
