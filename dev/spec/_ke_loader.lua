@@ -2691,4 +2691,77 @@ function L.loadChatHistory(overrides)
     return CH, KE, modules, caught
 end
 
+-- Modules/Healer/HealerMana.lua. Mode resolution is the spec target, so
+-- IsInRaid is the override that matters. The frame stubs serve the functions
+-- the specs call, not file load: nothing here creates a frame at load.
+function L.loadHealerMana(overrides)
+    overrides = overrides or {}
+    installMock(managedSubset(overrides), {
+        C_Timer = inertTimer(),
+        GetTime = function() return 0 end,
+        InCombatLockdown = function() return false end,
+        CreateFrame = function() return noopFrame() end,
+        UnitExists = function() return true end,
+    })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+
+    -- The module calls LibStub at file scope. It tolerates a nil RETURN, not a
+    -- nil LibStub, and neither the shim nor the mock installs one.
+    _G.LibStub = overrides.LibStub or function() return nil end
+    _G.IsInRaid = overrides.IsInRaid or function() return false end
+    _G.IsInGroup = overrides.IsInGroup or function() return true end
+    _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
+    _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
+    _G.UnitPowerPercent = overrides.UnitPowerPercent or function() return 100 end
+    _G.GetRaidRosterInfo = overrides.GetRaidRosterInfo or function() return nil end
+    -- Defaults to a non-healer, so a spec that drives the live roster scan
+    -- finds nobody and stops rather than needing the whole snapshot surface.
+    _G.UnitGroupRolesAssigned = overrides.UnitGroupRolesAssigned or function() return "DAMAGER" end
+
+    local profile = {
+        Dungeons = {
+            HealerMana = {
+                Enabled = true,
+                EnableInRaid = true,
+                SplitPositioning = false,
+                Strata = "MEDIUM",
+                anchorFrameType = "UIPARENT",
+                ParentFrame = "UIParent",
+                Position = {},
+                RaidPosition = {},
+                MaxHealers = 6,
+                FrameWidth = 120,
+                IconSize = 24,
+                IconType = "spec",
+                NameFontSize = 14,
+                NameXOffset = 4,
+                NameYOffset = 2,
+                ManaFontSize = 14,
+                ManaXOffset = 4,
+                ManaYOffset = -2,
+                FontOutline = "OUTLINE",
+                HighManaColor = { 1, 1, 1, 1 },
+                GrowDirection = "DOWN",
+                FrameSpacing = 4,
+            },
+        },
+    }
+    local KE = {
+        db = { profile = profile },
+        FONT = "Fonts\\Expressway.TTF",
+        GetFontPath = function() return "Fonts\\Expressway.TTF" end,
+        GetFontOutline = function() return "OUTLINE" end,
+        ApplyFramePosition = function() end,
+        AddIconBorders = function() end,
+        ApplyIconZoom = function() end,
+        IsPlayerHealerSpec = function() return false end,
+        Print = function() end,
+    }
+    helpers.loadModule("Modules/Healer/HealerMana.lua", KE)
+    local HM = modules["HealerMana"]
+    HM:UpdateDB()
+    return HM, KE
+end
+
 return L

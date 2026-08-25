@@ -4,10 +4,9 @@
 -- ║  Reusable across all text-displaying modules.            ║
 -- ║                                                          ║
 -- ║  Pooled via KE.FramePool for the simple shape (font      ║
--- ║  dropdown + outline dropdown + single size slider) which ║
--- ║  covers ~25 of 27 call sites. The two outlier shapes —   ║
--- ║  fontSizes-array (HealerMana) and extraSlider            ║
--- ║  (CombatTexts) — fall back to a legacy CreateCard path,  ║
+-- ║  dropdown + outline dropdown + single size slider).      ║
+-- ║  The two outlier shapes — fontSizes-array and            ║
+-- ║  extraSlider — fall back to the legacy path,             ║
 -- ║  preserving their existing layout. Public API            ║
 -- ║  CreateFontSettingsCard signature unchanged so call      ║
 -- ║  sites need no migration.                                ║
@@ -41,8 +40,8 @@ end
 
 -- Outline options are sourced from KE:GetFontOutlineOptions (Core/Globals.lua).
 
--- DB getter / setter helpers that support nested "a.b.c" keys. Match the
--- legacy CreateFontSettingsCard behavior — a couple of call sites use this.
+-- DB getter / setter helpers that support nested "a.b.c" keys, matching the
+-- legacy CreateFontSettingsCard behavior for callers whose dbKeys are nested.
 local function GetDbValue(db, key, default)
     if not db or key == nil then return default end
     if key:find("%.") then
@@ -113,7 +112,7 @@ local function CreateFontSettingsCardKit(holder)
     row1:AddWidget(outlineDropdown, 0.5)
     card:AddRow(row1, Theme.rowHeight)
 
-    -- Row 2: font size slider (single, full-width — covers 25/27 call sites).
+    -- Row 2: font size slider (single, full-width — the simple shape).
     local row2 = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     local fontSizeSlider = GUIFrame:CreateSlider(row2, "Font Size", {
         min = 8,
@@ -225,10 +224,9 @@ end
 
 ---------------------------------------------------------------------------------
 -- Legacy path: build a fresh card for the outlier shapes that the pool's
--- single-shape factory doesn't cover. Two known call sites:
---   - GUI-HealerMana.lua: fontSizes array (multiple slider rows)
---   - GUI-CombatTexts.lua: extraSlider (second slider next to font size)
--- Both are in modules whose GUI pages are navigated infrequently, so the
+-- single-shape factory doesn't cover: a fontSizes array (multiple slider
+-- rows) or an extraSlider (a second slider next to font size) routes here.
+-- Callers on this path have GUI pages navigated infrequently, so the
 -- per-render cost matters less than for the DungeonTimers panel cards.
 -- Build-fresh path matches the pre-refactor behavior bit for bit.
 ---------------------------------------------------------------------------------
@@ -254,12 +252,20 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
         fontOutline = dbKeys.fontOutline or "FontOutline",
     }
 
+    -- Optional caller-supplied accessors. HealerMana needs a read that falls
+    -- through to a shared key while the write stays mode-prefixed, which a
+    -- single dbKey cannot express. Absent, behaviour is unchanged. A supplied
+    -- accessor owns key resolution outright, nested "a.b.c" keys included.
+    local rawGet = config.getValue
+    local rawSet = config.setValue
+
     local function getValue(key, default)
+        if rawGet then return rawGet(key, default) end
         return GetDbValue(db, key, default)
     end
 
     local function setValue(key, val)
-        SetDbValue(db, key, val)
+        if rawSet then rawSet(key, val) else SetDbValue(db, key, val) end
         if onChange then onChange() end
     end
 
@@ -375,7 +381,7 @@ end
 -- Public entry: CreateFontSettingsCard
 --
 -- Routes to the pool path for the simple shape (no fontSizes array, no
--- extraSlider) and to the legacy build-fresh path for the two outliers.
+-- extraSlider) and to the legacy build-fresh path for the two outlier shapes.
 -- Signature unchanged from pre-pool: returns (card, nextOffset, widgets).
 ---------------------------------------------------------------------------------
 
@@ -387,16 +393,15 @@ function GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, config)
     -- pool's per-render cost matters less for these (page-navigation only)
     -- so building fresh is fine. searchable=false also routes here defensively
     -- — KEDropdown's searchable is set at construction with no setter, and
-    -- the pooled factory builds with searchable=true. Currently no live
-    -- caller passes false, but a future caller would get the correct
-    -- non-searchable dropdown via this path.
+    -- the pooled factory builds with searchable=true, so searchable=false
+    -- takes the legacy path to get the correct non-searchable dropdown.
     if (config.fontSizes and #config.fontSizes > 0)
         or config.extraSlider
         or config.searchable == false then
         return CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     end
 
-    -- Pool path — covers the 25 simple-shape call sites.
+    -- Pool path — the simple shape.
     local kit = fontSettingsCardPool:Acquire(scrollChild)
     local card = ConfigureFontSettingsCardKit(kit, scrollChild, yOffset, config)
     return card, card:GetNextOffset(), card.fontWidgets

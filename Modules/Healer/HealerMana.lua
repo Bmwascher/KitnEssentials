@@ -4,7 +4,7 @@
 -- ║  Purpose: Displays healer mana. Dungeon Mode shows       ║
 -- ║           the single party/M+ healer; Raid Mode          ║
 -- ║           shows all raid healers, stacked.               ║
--- ║  Note: Mode auto-switches on instance type.              ║
+-- ║  Note: Mode auto-switches on group type.                 ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -37,7 +37,6 @@ local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local GetSpecializationInfoByID = GetSpecializationInfoByID
 local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
-local IsInInstance = IsInInstance
 local GetNumGroupMembers = GetNumGroupMembers
 local GetRaidRosterInfo = GetRaidRosterInfo
 local C_Timer = C_Timer
@@ -71,6 +70,7 @@ HM.containerFrame = nil
 HM.updateTimer = nil
 HM.currentHealers = {}
 HM._lastMode = nil
+HM.mode = "DUNGEON"     -- held mode; only RefreshMode writes it
 HM.previewContext = nil  -- "RAID" | "DUNGEON" | nil (set by GUI preview switch)
 HM.guiConfigContext = nil  -- "RAID" | "DUNGEON" | nil (which context the GUI edits)
 HM.isPreview = false
@@ -126,7 +126,7 @@ end
 -- Disconnected: grey text + label "OFFLINE", grey icon vertex color.
 function HM:UpdateManaDisplay(frame, unit, connected)
     if connected then
-        local mc = self.db.HighManaColor
+        local mc = self:Look("HighManaColor")
         frame.mana:SetTextColor(
             (mc and mc[1]) or 1,
             (mc and mc[2]) or 1,
@@ -158,31 +158,84 @@ end
 ---------------------------------------------------------------------------------
 -- Mode + Position resolution
 ---------------------------------------------------------------------------------
--- Instance-type driven: raid instance (+ EnableInRaid) = Raid Mode (all
--- healers); everything else (party/M+ instance, open-world group, raid
--- instance with EnableInRaid off) = Dungeon Mode (single healer).
-function HM:GetMode()
-    if not self.db then return "DUNGEON" end
-    local _, instanceType = IsInInstance()
-    if instanceType == "raid" and self.db.EnableInRaid then
-        return "RAID"
+-- Group-type driven: a raid group (+ EnableInRaid) = Raid Mode (all healers);
+-- party, solo or EnableInRaid off = Dungeon Mode (single healer).
+--
+-- The answer is HELD, not queried: a reader resolving it per call can get a
+-- different answer mid-layout and swap the active position table under itself.
+-- Only RefreshMode writes it.
+function HM:RefreshMode()
+    local previous = self.mode
+    local mode = "DUNGEON"
+    if self.db and self.db.EnableInRaid and IsInRaid() then
+        mode = "RAID"
     end
-    return "DUNGEON"
+    self.mode = mode
+    return mode ~= previous
 end
 
--- Which DB position table is live right now. Single source of truth so the
--- reader (GetActivePosition / EditMode getPosition) and the writer (EditMode
--- setPosition) never disagree. Split off = shared "Position"; split on + Raid
--- Mode (or a Raid GUI preview) = "RaidPosition".
+function HM:GetMode()
+    return self.mode or "DUNGEON"
+end
+
+-- Which mode's settings are live right now. Single source of truth for both
+-- the position tables and the look/layout twins, so a reader and a writer can
+-- never disagree about which set a change lands in. Split off = always Dungeon;
+-- a GUI preview overrides the live mode so Raid can be configured from a party.
+function HM:GetActiveModeKey()
+    if not self.db or not self.db.SplitPositioning then return "DUNGEON" end
+    if self.isPreview and self.previewContext then
+        return (self.previewContext == "RAID") and "RAID" or "DUNGEON"
+    end
+    return self:GetMode()
+end
+
 function HM:GetActivePositionKey()
-    if not self.db then return "Position" end
-    if self.isPreview and self.previewContext and self.db.SplitPositioning then
-        return (self.previewContext == "RAID") and "RaidPosition" or "Position"
+    return (self:GetActiveModeKey() == "RAID") and "RaidPosition" or "Position"
+end
+
+-- Active value for a look/layout key. An absent twin means this mode follows
+-- Dungeon, so only nil falls through: `false` is a value a setting can hold.
+function HM:Look(key)
+    if not self.db then return nil end
+    if self:GetActiveModeKey() == "RAID" then
+        local value = self.db["Raid" .. key]
+        if value ~= nil then return value end
     end
-    if self.db.SplitPositioning and self:GetMode() == "RAID" then
-        return "RaidPosition"
+    return self.db[key]
+end
+
+-- The look/layout keys that carry a Raid twin. The seeder walks this; add a
+-- key here and it is seeded, but its GUI control still needs its own wiring.
+HM.LOOK_KEYS = {
+    "FrameWidth", "IconSize", "IconType",
+    "NameFontSize", "NameXOffset", "NameYOffset",
+    "ManaFontSize", "ManaXOffset", "ManaYOffset",
+    "FontOutline", "HighManaColor",
+    "GrowDirection", "FrameSpacing",
+}
+
+-- Fill absent Raid twins from their Dungeon counterparts so turning the split
+-- on changes nothing until a Raid value is deliberately edited. Tables are
+-- copied, not shared: a shared table would make both modes one setting.
+function HM:SeedRaidLook()
+    if not self.db then return end
+    for _, key in ipairs(HM.LOOK_KEYS) do
+        local raidKey = "Raid" .. key
+        if self.db[raidKey] == nil then
+            local value = self.db[key]
+            if type(value) == "table" then
+                -- pairs, not ipairs: the colour picker writes { r, g, b, a }
+                -- where alpha can be absent, and ipairs would stop at 3 and
+                -- copy a short colour.
+                local copy = {}
+                for k, v in pairs(value) do copy[k] = v end
+                self.db[raidKey] = copy
+            else
+                self.db[raidKey] = value
+            end
+        end
     end
-    return "Position"
 end
 
 -- Active position table, resolved via GetActivePositionKey.
@@ -222,7 +275,7 @@ end
 -- preserved.
 function HM:GetGrowAnchor(anchor)
     anchor = anchor or "CENTER"
-    local growDown = self.db.GrowDirection == "DOWN"
+    local growDown = self:Look("GrowDirection") == "DOWN"
     local verticalTarget = growDown and "TOP" or "BOTTOM"
     local verticalOpposite = growDown and "BOTTOM" or "TOP"
     if anchor:find(verticalOpposite) then
@@ -247,11 +300,11 @@ function HM:CreateHealerFrame()
     -- it. Nothing references these by name (the container holds them as children
     -- and EditMode anchors via frame reference, not name).
     local frame = CreateFrame("Frame", nil, self.containerFrame)
-    frame:SetSize(self.db.FrameWidth, self.db.IconSize)
+    frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
 
     -- Icon (standard KE: AddIconBorders + ApplyIconZoom from Core/Widgets.lua)
     frame.iconFrame = CreateFrame("Frame", nil, frame)
-    frame.iconFrame:SetSize(self.db.IconSize, self.db.IconSize)
+    frame.iconFrame:SetSize(self:Look("IconSize"), self:Look("IconSize"))
     frame.iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
     KE:AddIconBorders(frame.iconFrame)
 
@@ -261,17 +314,17 @@ function HM:CreateHealerFrame()
 
     -- Name
     local fontPath = KE:GetFontPath(self.db.FontFace)
-    local fontOutline = self.db.FontOutline or "OUTLINE"
+    local fontOutline = self:Look("FontOutline") or "OUTLINE"
 
     frame.name = frame:CreateFontString(nil, "OVERLAY")
-    frame.name:SetFont(fontPath, self.db.NameFontSize, KE:GetFontOutline(fontOutline))
-    frame.name:SetPoint("LEFT", frame.iconFrame, "RIGHT", self.db.NameXOffset, self.db.NameYOffset)
+    frame.name:SetFont(fontPath, self:Look("NameFontSize"), KE:GetFontOutline(fontOutline))
+    frame.name:SetPoint("LEFT", frame.iconFrame, "RIGHT", self:Look("NameXOffset"), self:Look("NameYOffset"))
     frame.name:SetJustifyH("LEFT")
 
     local manaOutline = (fontOutline == "NONE") and "" or "OUTLINE"
     frame.mana = frame:CreateFontString(nil, "OVERLAY")
-    frame.mana:SetFont(fontPath, self.db.ManaFontSize, manaOutline)
-    frame.mana:SetPoint("LEFT", frame.iconFrame, "RIGHT", self.db.ManaXOffset, self.db.ManaYOffset)
+    frame.mana:SetFont(fontPath, self:Look("ManaFontSize"), manaOutline)
+    frame.mana:SetPoint("LEFT", frame.iconFrame, "RIGHT", self:Look("ManaXOffset"), self:Look("ManaYOffset"))
     frame.mana:SetJustifyH("LEFT")
 
     frame:Hide()
@@ -287,17 +340,17 @@ end
 
 function HM:UpdateFrameAppearance(frame)
     local fontPath = KE:GetFontPath(self.db.FontFace)
-    local fontOutline = self.db.FontOutline
+    local fontOutline = self:Look("FontOutline")
     local manaOutline = (fontOutline == "NONE") and "" or "OUTLINE"
 
-    frame:SetSize(self.db.FrameWidth, self.db.IconSize)
-    frame.iconFrame:SetSize(self.db.IconSize, self.db.IconSize)
-    frame.name:SetFont(fontPath, self.db.NameFontSize, KE:GetFontOutline(fontOutline))
+    frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
+    frame.iconFrame:SetSize(self:Look("IconSize"), self:Look("IconSize"))
+    frame.name:SetFont(fontPath, self:Look("NameFontSize"), KE:GetFontOutline(fontOutline))
     frame.name:ClearAllPoints()
-    frame.name:SetPoint("LEFT", frame.iconFrame, "RIGHT", self.db.NameXOffset, self.db.NameYOffset)
-    frame.mana:SetFont(fontPath, self.db.ManaFontSize, manaOutline)
+    frame.name:SetPoint("LEFT", frame.iconFrame, "RIGHT", self:Look("NameXOffset"), self:Look("NameYOffset"))
+    frame.mana:SetFont(fontPath, self:Look("ManaFontSize"), manaOutline)
     frame.mana:ClearAllPoints()
-    frame.mana:SetPoint("LEFT", frame.iconFrame, "RIGHT", self.db.ManaXOffset, self.db.ManaYOffset)
+    frame.mana:SetPoint("LEFT", frame.iconFrame, "RIGHT", self:Look("ManaXOffset"), self:Look("ManaYOffset"))
 end
 
 function HM:CreateContainer()
@@ -306,7 +359,7 @@ function HM:CreateContainer()
     -- Anonymous: Refresh() nils + recreates the container; a fixed global name
     -- would clobber/orphan the prior one. EditMode tracks it by frame reference.
     local frame = CreateFrame("Frame", nil, UIParent)
-    frame:SetSize(self.db.FrameWidth, self.db.IconSize)
+    frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
     frame:SetFrameStrata(self.db.Strata or "HIGH")
 
     self.containerFrame = frame
@@ -319,18 +372,18 @@ function HM:UpdateContainerSize()
     if not self.containerFrame then return end
     local count = #self.currentHealers
     if count == 0 then
-        self.containerFrame:SetSize(self.db.FrameWidth, self.db.IconSize)
+        self.containerFrame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
         return
     end
-    local totalHeight = (self.db.IconSize * count) + (self.db.FrameSpacing * (count - 1))
-    self.containerFrame:SetSize(self.db.FrameWidth, totalHeight)
+    local totalHeight = (self:Look("IconSize") * count) + (self:Look("FrameSpacing") * (count - 1))
+    self.containerFrame:SetSize(self:Look("FrameWidth"), totalHeight)
 end
 
 -- Stack each healer frame within the container per GrowDirection.
 function HM:PositionFrames()
-    local growDown = self.db.GrowDirection == "DOWN"
-    local spacing = self.db.FrameSpacing
-    local iconSize = self.db.IconSize
+    local growDown = self:Look("GrowDirection") == "DOWN"
+    local spacing = self:Look("FrameSpacing")
+    local iconSize = self:Look("IconSize")
     for i = 1, #self.currentHealers do
         local frame = self.healerFrames[i]
         if frame then
@@ -421,9 +474,38 @@ function HM:BuildHealerSnapshot(unit)
     }
 end
 
+-- PreviewManager and the GUI page both write isPreview, and the manager's
+-- per-module cache can read "hidden" while a page rebuild has re-armed the
+-- flag. StopAllPreviews skips anything already cached hidden, so nothing would
+-- ever clear it: the player keeps a fabricated healer stack until a reload, and
+-- the GUI refuses to open in combat, so an encounter cannot recover. Called
+-- from every reader that would otherwise obey the flag, so the orphan is
+-- bounded by the 1Hz tick rather than by a roster event that may never come.
+-- Returns true when it actually healed, so a reader that does not redraw for
+-- itself can rebuild. Clearing the flag alone is NOT enough: the canned rows
+-- outlive it and keep drawing, wearing live numbers.
+function HM:HealOrphanedPreview()
+    if self.isPreview and not (KE.PreviewManager and KE.PreviewManager:IsPreviewActive()) then
+        self.isPreview = false
+        return true
+    end
+    return false
+end
+
 function HM:FindHealers()
     if DEBUG_HM then KE:Print("[HM] FindHealers entry isPreview=" .. tostring(self.isPreview) .. " enabled=" .. tostring(self.db and self.db.Enabled)) end
     if not self.db or not self.db.Enabled then return end
+
+    -- An open preview OWNS currentHealers and the drawn frames; a roster, zone
+    -- or spec event must not replace its canned rows with the live roster.
+    -- Every caller that means to leave preview clears isPreview before calling
+    -- in (ShowPreview's live-healer path, HidePreview), and ApplySettings
+    -- branches to UpdateHealerFrames rather than calling in here, so none of
+    -- them is blocked. OnDisable clears the flag and hides without coming
+    -- through at all. Without this the preview kept its Raid context and its
+    -- Raid appearance while collapsing to a single live Dungeon row.
+    self:HealOrphanedPreview()
+    if self.isPreview then return end
 
     local mode = self:GetMode()
 
@@ -438,14 +520,12 @@ function HM:FindHealers()
     -- DisableOnHealer only suppresses Dungeon Mode (Raid shows you as a healer).
     if mode == "DUNGEON" and self.db.DisableOnHealer and KE:IsPlayerHealerSpec() then
         if DEBUG_HM then KE:Print("[HM] FindHealers hide: DisableOnHealer + player healer (Dungeon)") end
-        if self.isPreview then return end
         self:HideFrames()
         return
     end
 
     if not IsInGroup() then
         if DEBUG_HM then KE:Print("[HM] FindHealers hide: not in group") end
-        if self.isPreview then return end
         self:HideFrames()
         return
     end
@@ -499,19 +579,17 @@ function HM:FindHealers()
 
     if #self.currentHealers == 0 then
         if DEBUG_HM then KE:Print("[HM] FindHealers no healer found mode=" .. mode) end
-        if self.isPreview then return end
         self:HideFrames()
         return
     end
 
     if DEBUG_HM then KE:Print("[HM] FindHealers mode=" .. mode .. " count=" .. #self.currentHealers) end
-    self.isPreview = false
     self:UpdateHealerFrames()
 end
 
 -- Render one frame's icon/name/mana for a healer snapshot (no positioning/show).
 function HM:UpdateOneHealerFrame(frame, healer)
-    local iconType = self.db.IconType or "spec"
+    local iconType = self:Look("IconType") or "spec"
     if iconType == "class" and healer.class then
         frame.icon:SetAtlas("classicon-" .. healer.class)
     else
@@ -527,7 +605,7 @@ function HM:UpdateOneHealerFrame(frame, healer)
     frame.name:SetTextColor(cc[1], cc[2], cc[3])
 
     if self.isPreview then
-        local mc = self.db.HighManaColor
+        local mc = self:Look("HighManaColor")
         frame.mana:SetTextColor((mc and mc[1]) or 1, (mc and mc[2]) or 1, (mc and mc[3]) or 1)
         frame.icon:SetVertexColor(1, 1, 1)
         frame.mana:SetText("100%")
@@ -543,6 +621,10 @@ function HM:UpdateHealerFrames()
 
     for i = 1, count do
         local frame = self:GetHealerFrame(i)
+        -- Re-dress before drawing: the look keys are mode-resolved, so a frame
+        -- built under one mode carries the other's font, offsets and sizes
+        -- until it is redressed. Data alone would leave row 1 stale.
+        self:UpdateFrameAppearance(frame)
         self:UpdateOneHealerFrame(frame, self.currentHealers[i])
         frame:Show()
     end
@@ -558,6 +640,10 @@ function HM:UpdateHealerFrames()
 end
 
 function HM:UpdateMana()
+    if self:HealOrphanedPreview() then
+        self:FindHealers()  -- the canned rows outlived the flag; rebuild
+        return
+    end
     if self.isPreview then return end
     local count = #self.currentHealers
     if count == 0 then return end
@@ -580,6 +666,7 @@ end
 function HM:ApplySettings()
     self:UpdateDB()
     if not self.db then return end
+    self:RefreshMode()
     if not self.db.Enabled and not self.isPreview then
         if self.containerFrame then self.containerFrame:Hide() end
         return
@@ -754,17 +841,33 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
+-- Not the only refresh point: EnableInRaid is half the mode predicate and the
+-- GUI writes it without a roster event, so ApplySettings refreshes too.
+function HM:OnGroupChanged()
+    if not self.db or not self.db.Enabled then return end
+    -- No re-dress here: UpdateHealerFrames redresses each frame immediately
+    -- before the only Show call, so a frame cannot become visible carrying the
+    -- previous mode's appearance.
+    self:RefreshMode()
+    -- No reposition here: FindHealers -> UpdateHealerFrames sizes the container
+    -- and then positions it. Repositioning first would hang the container at
+    -- the new mode's anchor with the old mode's row count, which is the mixed
+    -- frame this change exists to remove.
+    self:FindHealers()
+end
+
 function HM:OnEnable()
     self:UpdateDB()
     if not self.db or not self.db.Enabled then return end
+    self:RefreshMode()
     self:ApplySettings()
     C_Timer.After(0.5, function()
         if HM.containerFrame and HM.db then HM:ApplyContainerPosition() end
     end)
     self:RegWithEditMode()
     self:StartUpdates()
-    self:RegisterEvent("GROUP_ROSTER_UPDATE", "FindHealers")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "FindHealers")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnGroupChanged")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "FindHealers")
     if LibSpec then
         LibSpec.RegisterGroup(self, function(specID, role, position, playerName)
