@@ -1,8 +1,8 @@
 -- The Dark Theme page is tabbed: GUI-BlizzardFrames.lua declares the strip via
 -- RegisterTabbedContent, and each entry's id must be matched by a
 -- GUIFrame:RegisterContent(id, fn) call -- which may live in a sibling file
--- (GUI-UIWidgets.lua, GUI-LootRoll.lua, GUI-LootFrame.lua and
--- GUI-BlizzardMessages.lua all register into the same strip). Neither
+-- (GUI-UIWidgets.lua, GUI-LootRoll.lua, GUI-LootFrame.lua, GUI-VehicleExit.lua
+-- and GUI-BlizzardMessages.lua all register into the same strip). Neither
 -- tabbed_content_spec.lua (a synthetic TABS fixture, not GUI-BlizzardFrames.lua's
 -- own list) nor gui_blizzardframes_spec.lua (stubs RegisterTabbedContent to a
 -- no-op, discarding the strip entirely) proves every declared id actually
@@ -59,6 +59,7 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-UIWidgets.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-LootRoll.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-LootFrame.lua", KE)
+        helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-VehicleExit.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardMessages.lua", KE)
         helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua", KE)
     end)
@@ -170,15 +171,15 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
 
     -- The row no longer gates on the conflict state: the whole Elements tab
     -- drops out of the strip there, so this list is the same either way.
-    it("offers the same three elements in both states", function()
+    it("offers the same four elements in both states", function()
         elvui = false
         local offTabs = GUIFrame._VisibleElementTabs()
         elvui = true
         local onTabs = GUIFrame._VisibleElementTabs()
 
-        assert.same({ 3, 3 }, { #offTabs, #onTabs })
+        assert.same({ 4, 4 }, { #offTabs, #onTabs })
         assert.equals("SkinBlizzardFramesLootRoll", offTabs[1].id)
-        assert.equals("SkinBlizzardFramesWidgets", offTabs[3].id)
+        assert.equals("VehicleExit", offTabs[4].id)
         assert.same(idSet(offTabs), idSet(onTabs))
     end)
 
@@ -209,7 +210,7 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
                 return nil, yOffset
             end
             for _, id in ipairs({ "SkinBlizzardFramesLootRoll", "SkinBlizzardFramesLootWindow",
-                                  "SkinBlizzardFramesWidgets" }) do
+                                  "SkinBlizzardFramesWidgets", "VehicleExit" }) do
                 GUIFrame.registeredContent[id] = function(_, yOffset) return yOffset end
             end
             GUIFrame.registeredContent["SkinBlizzardFramesElements"]({}, 0)

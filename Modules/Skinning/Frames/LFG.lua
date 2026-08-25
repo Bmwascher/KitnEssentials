@@ -164,7 +164,41 @@ local ROLE_COUNT_SLOTS = {
     { "HealerIconWithBackground", "HealerIcon", "HEALER" },
     { "DamagerIconWithBackground", "DamagerIcon", "DAMAGER" },
 }
+-- RoleCountNoScriptsTemplate sizes each count as a fixed 17x14 CENTER box,
+-- against a stock GameFontHighlightSmall at 10. GlobalFonts.lua runs that font
+-- at 12 with an OUTLINE, so two-digit counts overflow and ellipsise, and CENTER
+-- strands about five dead pixels between every number and its icon.
+--
+-- RIGHT puts the number against its icon and moves the slack left, where it
+-- separates the roles instead. The width comes out of the damager icon's right
+-- inset: 6 + (17+1+19) + (4+17+1+19) + (4+17+1+19) is the strip's whole 125.
+local COUNT_WIDTH = 19
+local DAMAGER_INSET = -6
+local function LayoutRoleCount(roleCount)
+    local d = S.data(roleCount)
+    if d.aeCountLayout then return end
+
+    -- Only DamagerIcon moves: the template's anchor chain hangs off that exact
+    -- key, so the other five regions follow without being touched.
+    local damager = roleCount.DamagerIcon
+    local tankCount, healerCount, damagerCount =
+        roleCount.TankCount, roleCount.HealerCount, roleCount.DamagerCount
+    if not (damager and tankCount and healerCount and damagerCount) then return end
+
+    damager:ClearAllPoints()
+    damager:SetPoint("RIGHT", roleCount, "RIGHT", DAMAGER_INSET, 0)
+
+    local counts = { tankCount, healerCount, damagerCount }
+    for i = 1, 3 do
+        counts[i]:SetWidth(COUNT_WIDTH)
+        counts[i]:SetJustifyH("RIGHT")
+    end
+
+    d.aeCountLayout = true
+end
+
 local function UpdateRoleCount(roleCount)
+    LayoutRoleCount(roleCount)
     for i = 1, 3 do
         local slot = ROLE_COUNT_SLOTS[i]
         local icon = roleCount[slot[1]] or roleCount[slot[2]]

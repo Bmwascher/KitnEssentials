@@ -135,16 +135,13 @@ GUIFrame.sidebarConfig = {
                 "character", "panel", "stats", "item level", "ilvl", "gear", "durability", "inspect",
                 "color", "colour", "picker", "rgb", "hex", "alpha", "opacity", "swatch", "class color",
                 "raid", "control", "raid control", "ready check", "readycheck", "countdown", "pull", "timer", "marker", "markers", "world marker", "raid marker", "difficulty", "assist", "everyone assist", "role", "roles", "tank", "healer", "raid manager", "raid tools", "shared notes", "group",
-                "text", "message", "error", "raid warning", "ui error", "fonts", "replace fonts", "quest text", "objective tracker", "mail", } },
+                "text", "message", "error", "raid warning", "ui error", "fonts", "replace fonts", "quest text", "objective tracker", "mail",
+                "vehicle", "vehicle exit", "vehicle exit button", "exit", "leave", "eject", "dismount", "button", } },
             { id = "CharacterPanel",     text = "Character Panel", alwaysEnabled = true, keywords = { "character", "panel", "character panel", "character screen", "stats", "item level", "ilvl", "gear", "durability", "inspect", "gems", "sockets", "enchant", "great vault", "vault", "omnium", "window buttons" } },
             { id = "Chat",               text = "Chat", keywords = { "chat", "channel", "whisper", "tab", "timestamp", "copy", "guild", "message", "panel" } },
             { id = "DamageMeter",        text = "Damage Meter", keywords = { "damage meter", "dps", "damage", "healing", "threat", "meter", "recount", "details" }, alwaysEnabled = true },
             { id = "MythicPlusTimer",    text = "Mythic+ Timer", keywords = { "mythic plus", "m+", "keystone", "timer", "forces", "deaths", "splits", "objective", "personal best", "affix", "warpdeplete" }, alwaysEnabled = true },
             { id = "DragonRiding",       text = "Skyriding UI", alwaysEnabled = true, keywords = { "skyriding", "dragonriding", "dragon riding", "vigor", "speed", "fly" } },
-            -- alwaysEnabled like Skyriding UI: it moves a Blizzard frame and does
-            -- not depend on the skinning subsystem, so it must not grey out when
-            -- ElvUI takes this section over.
-            { id = "VehicleExit",        text = "Vehicle Exit Button", alwaysEnabled = true, keywords = { "vehicle", "exit", "leave", "eject", "dismount", "button", "position", "move", "anchor" } },
             { id = "SkinTooltips",       text = "Tooltips", keywords = { "tooltip", "tooltips", "blizzard", "mouseover", "skin", "anchor", "cursor", "spell id", "item id", "aura id", "guild rank", "mythic rating", "target", "health bar", "class color", "hide in combat" } },
         },
     },

@@ -12,6 +12,12 @@ if not KitnEssentials then return end
 ---@field isPreview boolean? true while the GUI preview holds the button shown; nil once HidePreview runs
 local VE = KitnEssentials:NewModule("VehicleExit", "AceEvent-3.0")
 
+-- ElvUI owns this button through its own VehicleLeaveButton mover, so two
+-- movers would fight over it. The ElvUI startup skip and the profile-switch
+-- path both gate on name:find("^Skin") or this flag (Core/Main.lua,
+-- Core/ProfileManager.lua), and "VehicleExit" fails the ^Skin test.
+VE.keDeferToReload = true
+
 local InCombatLockdown = InCombatLockdown
 local C_Timer = C_Timer
 local UnitInVehicle = UnitInVehicle
@@ -76,7 +82,12 @@ function VE:OnEnable()
         module = self,
         displayName = "Vehicle Exit Button",
         frameName = BUTTON_NAME,
-        guiPath = "VehicleExit",
+        -- guiPath is a SIDEBAR ITEM ID and there is no sidebar item
+        -- "VehicleExit": this page lives on the Elements sub-row of the
+        -- consolidated Blizzard Frames page, so route through it. guiTab is a
+        -- NESTED id; GUI-TabbedContent.lua translates it to its owning tab.
+        guiPath = "SkinBlizzardFrames",
+        guiTab = "VehicleExit",
         getPosition = function() return self.db.Position end,
         setPosition = function(pos)
             local p = self.db.Position
@@ -114,6 +125,9 @@ end
 -- to place against while the options page is open. Blizzard's own Edit Mode
 -- shows the Talking Head frame the same way.
 function VE:ShowPreview()
+    -- PreviewManager gates on db.Enabled, which stays true while the module is
+    -- stood down for ElvUI. Placing the button from here would move it anyway.
+    if not self:IsEnabled() then return end
     if InCombatLockdown() then return end
     local button = self:Button()
     if not button then return end
