@@ -504,7 +504,6 @@ function HM:FindHealers()
     -- them is blocked. OnDisable clears the flag and hides without coming
     -- through at all. Without this the preview kept its Raid context and its
     -- Raid appearance while collapsing to a single live Dungeon row.
-    --
     self:HealOrphanedPreview()
     if self.isPreview then return end
 
