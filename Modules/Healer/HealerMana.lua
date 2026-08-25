@@ -481,10 +481,15 @@ end
 -- the GUI refuses to open in combat, so an encounter cannot recover. Called
 -- from every reader that would otherwise obey the flag, so the orphan is
 -- bounded by the 1Hz tick rather than by a roster event that may never come.
+-- Returns true when it actually healed, so a reader that does not redraw for
+-- itself can rebuild. Clearing the flag alone is NOT enough: the canned rows
+-- outlive it and keep drawing, wearing live numbers.
 function HM:HealOrphanedPreview()
     if self.isPreview and not (KE.PreviewManager and KE.PreviewManager:IsPreviewActive()) then
         self.isPreview = false
+        return true
     end
+    return false
 end
 
 function HM:FindHealers()
@@ -636,7 +641,10 @@ function HM:UpdateHealerFrames()
 end
 
 function HM:UpdateMana()
-    self:HealOrphanedPreview()
+    if self:HealOrphanedPreview() then
+        self:FindHealers()  -- the canned rows outlived the flag; rebuild
+        return
+    end
     if self.isPreview then return end
     local count = #self.currentHealers
     if count == 0 then return end

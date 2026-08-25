@@ -132,15 +132,21 @@ describe("HealerMana:FindHealers preview ownership", function()
         assert.are.equal(0, #HM.currentHealers)
     end)
 
-    it("heals an orphaned flag from the mana tick too", function()
+    it("clears the canned rows from the mana tick, not just the flag", function()
         -- FindHealers only runs on roster, zone and spec events. A stable
         -- roster through an encounter fires none of them, so the tick is what
-        -- actually bounds the orphan.
+        -- actually bounds the orphan. Asserted on the ROWS: clearing the flag
+        -- alone left six fabricated rows drawing the player's own live mana.
         local HM, KE = L.loadHealerMana({ IsInRaid = function() return false end })
         KE.PreviewManager = { IsPreviewActive = function() return false end }
         HM.isPreview = true
+        HM.currentHealers = {
+            { unit = "player", name = "Healer 1", connected = true },
+            { unit = "player", name = "Healer 2", connected = true },
+        }
         HM:UpdateMana()
         assert.is_false(HM.isPreview)
+        assert.are.equal(0, #HM.currentHealers)
     end)
 
     it("leaves the flag alone on the mana tick while a preview is live", function()
