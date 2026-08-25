@@ -473,31 +473,29 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         local cardWB = GUIFrame:CreateCard(scrollChild, "Window Buttons", yOffset)
 
         local rowWB1 = GUIFrame:CreateRow(cardWB.content, Theme.rowHeight)
-        local omniumCheck = GUIFrame:CreateCheckbox(rowWB1, "Omnium Foil on Character Window", {
+        local omniumCheck = GUIFrame:CreateCheckbox(rowWB1, "Omnium Foil", {
             value = auDB.OmniumCharButton == true,
             callback = function(checked) auDB.OmniumCharButton = checked; ApplyAutomation() end,
             tooltip = "Hides the Omnium Foil minimap button and puts it in the bottom right of the character window instead. Only available at max level.",
         })
-        rowWB1:AddWidget(omniumCheck, 1)
-        cardWB:AddRow(rowWB1, Theme.rowHeight)
+        rowWB1:AddWidget(omniumCheck, 0.5)
 
-        local rowWB2 = GUIFrame:CreateRow(cardWB.content, Theme.rowHeight)
-        local vaultCheck = GUIFrame:CreateCheckbox(rowWB2, "Great Vault on Character Window", {
+        local vaultCheck = GUIFrame:CreateCheckbox(rowWB1, "Great Vault", {
             value = auDB.VaultCharButton == true,
             callback = function(checked) auDB.VaultCharButton = checked; ApplyAutomation() end,
             tooltip = "Adds a Great Vault button beside the Omnium Foil button. Only available at max level.",
         })
-        rowWB2:AddWidget(vaultCheck, 1)
-        cardWB:AddRow(rowWB2, Theme.rowHeight)
+        rowWB1:AddWidget(vaultCheck, 0.5)
+        cardWB:AddRow(rowWB1, Theme.rowHeight)
 
-        local rowWB3 = GUIFrame:CreateRow(cardWB.content, Theme.rowHeightLast)
-        local wbSizeSlider = GUIFrame:CreateSlider(rowWB3, "Button Size", {
+        local rowWB2 = GUIFrame:CreateRow(cardWB.content, Theme.rowHeightLast)
+        local wbSizeSlider = GUIFrame:CreateSlider(rowWB2, "Button Size", {
             min = 16, max = 48, step = 1,
             value = auDB.WindowButtonSize,
             callback = function(val) auDB.WindowButtonSize = val; ApplyAutomation() end,
         })
-        rowWB3:AddWidget(wbSizeSlider, 0.5)
-        cardWB:AddRow(rowWB3, Theme.rowHeightLast, 0)
+        rowWB2:AddWidget(wbSizeSlider, 1)
+        cardWB:AddRow(rowWB2, Theme.rowHeightLast, 0)
 
         yOffset = cardWB:GetNextOffset()
     end
