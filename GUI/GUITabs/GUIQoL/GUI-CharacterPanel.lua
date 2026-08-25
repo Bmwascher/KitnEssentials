@@ -198,8 +198,8 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     local card4 = GUIFrame:CreateCard(scrollChild, "Item Track Indicators", yOffset)
     manager:Register(card4, "all")
 
-    local row4Up = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local upgradeCheck = GUIFrame:CreateCheckbox(row4Up, "Show Upgrade Progress", {
+    local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+    local upgradeCheck = GUIFrame:CreateCheckbox(row4, "Show Upgrade Progress", {
         value = db.ShowUpgradeProgress ~= false,
         callback = function(checked)
             db.ShowUpgradeProgress = checked
@@ -208,16 +208,14 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         end,
         tooltip = "While an item is still upgrading, shows how far along it is next to its item level, e.g. 334 M4/6. A fully upgraded item goes back to the plain track letter in the corner.",
     })
-    row4Up:AddWidget(upgradeCheck, 1)
+    row4:AddWidget(upgradeCheck, 0.5)
     -- "all", NOT "trackOn". The two toggles are independent by design: letters
     -- off with progress on is a specified state that renders the count without a
     -- letter. Gating this control on the letters toggle would grey it out in
     -- exactly that state, so the player could not leave it without first turning
     -- letters back on.
     manager:Register(upgradeCheck, "all")
-    card4:AddRow(row4Up, Theme.rowHeight)
 
-    local row4 = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local trackCheck = GUIFrame:CreateCheckbox(row4, "Show Track Letters", {
         value = db.TrackIndicatorsEnabled,
         callback = function(checked)
@@ -231,7 +229,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         end,
         tooltip = "Shows M/H/C/V/A letters on gear slots indicating Myth/Hero/Champion/Veteran/Adventurer tracks. Crafted gear auto-detects tier from item level.",
     })
-    row4:AddWidget(trackCheck, 1)
+    row4:AddWidget(trackCheck, 0.5)
     manager:Register(trackCheck, "all")
     card4:AddRow(row4, Theme.rowHeight)
 
