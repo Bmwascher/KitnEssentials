@@ -1,5 +1,51 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.10
+
+### Character Panel
+
+- New Great Vault button on the character window, beside the Omnium Foil button.
+  Clicking it opens and closes the Great Vault. It does nothing in combat, on
+  purpose, and no longer throws a red error when you try
+- Both window buttons now share one Button Size slider, and both settings have
+  moved from the Automation page to the Character Panel page. The Omnium row is
+  gone from Automation
+- New Widen Character Window option. It makes the window wider so the item level
+  and enchant text on each slot clears the 3D model. The Reputation and Currency
+  tabs are left alone. Turning it off puts the window back exactly as Blizzard
+  had it
+- Enchant names have a new style choice: Short, Verbose or Full. For "Hex of
+  Leeching" those read "Leech", "Leeching" and "Hex of Leeching". Switching is
+  live
+- An item that is still upgrading now shows how far along it is next to its item
+  level, for example 334 M4/6. A fully upgraded item goes back to the plain
+  track letter in the corner. This can be switched off on its own
+- The enchant helper now applies an enchant on a single click when only one slot
+  can take it. It stands down if something is already on your cursor, or if a
+  spell is already waiting for a target, and it will not guess between two rings
+- New toggle for the overlays drawn on other players' inspect frames. Turning it
+  off now sticks: the overlays used to come back the next time you inspected
+  someone
+- The Gem Socket Helper card is now called "Socket & Enchant Helpers", and the
+  two toggles sit side by side
+
+### Character Skin
+
+- Equipped slot borders are now tinted by item rarity, with its own toggle on a
+  new Character Skin card. ElvUI paints its own, so the option greys out when
+  ElvUI is running
+- The character stat rows fade at both ends instead of sitting on a flat plate
+
+### Fixes
+
+- Character Panel settings now follow you when you switch profiles. Before, the
+  module kept reading the profile you just left
+- Switching the module off now actually stops it drawing. Overlays no longer
+  repaint when you change gear, open the paper doll tab, or click a setting with
+  the module off
+- Turning the module off and on again brings the decimal item level back. It
+  used to stay gone for the rest of the session
+
 ## v4.3.9
 
 ### CVars
