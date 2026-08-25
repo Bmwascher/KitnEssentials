@@ -82,7 +82,12 @@ function VE:OnEnable()
         module = self,
         displayName = "Vehicle Exit Button",
         frameName = BUTTON_NAME,
-        guiPath = "VehicleExit",
+        -- guiPath is a SIDEBAR ITEM ID and there is no sidebar item
+        -- "VehicleExit": this page lives on the Elements sub-row of the
+        -- consolidated Blizzard Frames page, so route through it. guiTab is a
+        -- NESTED id; GUI-TabbedContent.lua translates it to its owning tab.
+        guiPath = "SkinBlizzardFrames",
+        guiTab = "VehicleExit",
         getPosition = function() return self.db.Position end,
         setPosition = function(pos)
             local p = self.db.Position
