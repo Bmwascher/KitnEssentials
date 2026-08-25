@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.3.11
+
+### Fixes
+
+- Raid Notifications no longer throws a red error the first time an alert
+  appears. The alert text was being written before its font was set
+- Tooltips no longer throw a red error when you hover a spell reward on the
+  world map. Those small built-in tooltips are now left alone properly
+
 ## v4.3.10
 
 ### Character Panel
