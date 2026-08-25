@@ -25,6 +25,13 @@ local math_floor = math.floor
 
 
 local SPELL_ID = 20484 -- Rebirth
+
+-- The frame is sized against these rather than the live text, so its width
+-- never changes as the digits tick. Rebirth's recharge is minutes, so the
+-- hours branch in Update() is unreachable and MM:SS bounds the timer; the
+-- battle res pool is single-digit. Widest glyphs, not the values shown.
+local TIMER_REF = "88:88"
+local CHARGE_REF = "8"
 -- MM:SS display only changes ~1Hz; 0.5s polling is ample (0.1 = 10Hz was
 -- 10x oversampled for a seconds clock).
 local UPDATE_INTERVAL = 0.5
@@ -133,9 +140,12 @@ function CR:CreateFrame()
     frame.content = CreateFrame("Frame", nil, frame)
     frame.content:SetSize(1, 24)
 
-    -- Timer text
+    -- Seeded so the first sizing pass never measures an empty string, which
+    -- reads as 0 and collapses the width to the floor. The frame is hidden
+    -- until Update() overwrites this.
     frame.timerText = frame.content:CreateFontString(nil, "OVERLAY")
     frame.timerText:SetFont(fontPath, fontSize, "")
+    frame.timerText:SetText(TIMER_REF)
     frame.timerText:SetTextColor(1, 1, 1, 1)
 
     -- Separator text
@@ -144,9 +154,10 @@ function CR:CreateFrame()
     frame.separator:SetText("|")
     frame.separator:SetTextColor(1, 1, 1, 1)
 
-    -- Charge text
+    -- Charge text, seeded for the same reason as timerText.
     frame.charge = frame.content:CreateFontString(nil, "OVERLAY")
     frame.charge:SetFont(fontPath, fontSize, "")
+    frame.charge:SetText(CHARGE_REF)
     frame.charge:SetTextColor(1, 1, 1, 1)
 
     -- CR label text
@@ -223,6 +234,58 @@ function CR:ApplyTextSettings()
 end
 
 ---------------------------------------------------------------------------------
+-- Sizing
+---------------------------------------------------------------------------------
+-- Sizes from fixed references, not the live text. On a right-side anchor a
+-- width change walks the frame's left edge, and the content is anchored to
+-- that edge, so the text walks with it.
+function CR:ResizeToContent()
+    if not self.frame then return end
+
+    local timerLive = self.frame.timerText:GetText()
+    local chargeLive = self.frame.charge:GetText()
+    self.frame.timerText:SetText(TIMER_REF)
+    self.frame.charge:SetText(CHARGE_REF)
+    -- The references are on screen until the restore below. Dropping the dirty
+    -- caches now means a throw in between cannot strand them until a reload;
+    -- the next Update repaints, whenever one arrives.
+    self.lastTimerText = ""
+    self.lastChargeText = ""
+
+    local totalWidth = 8 -- padding
+    local secret = false
+    for _, fs in ipairs({ self.frame.bracketOpen, self.frame.CRText, self.frame.charge, self.frame.separator, self.frame.timerText, self.frame.bracketClose }) do
+        if fs and fs:GetText() and fs:GetText() ~= "" then
+            local sw = fs:GetStringWidth()
+            if not KE:IsSafeValue(sw) then
+                -- One unreadable element vetoes the whole size: a partial sum
+                -- would be confidently wrong rather than merely stale.
+                secret = true
+            else
+                totalWidth = totalWidth + sw
+            end
+        end
+    end
+
+    -- Spacing is per JOINT, not per element: UpdateAnchors spaces three joints
+    -- in either growth direction and gives the bracket joints fixed offsets.
+    -- Counting per element reserved gaps that are never drawn, and missed the
+    -- gap beside an element whose text is empty. The condition is the one
+    -- UpdateAnchors branches on, so the two cannot disagree.
+    totalWidth = totalWidth + (self.frame.CRText and 3 or 2) * (self.db.TextSpacing or 4)
+
+    if timerLive ~= nil then self.frame.timerText:SetText(timerLive) end
+    if chargeLive ~= nil then self.frame.charge:SetText(chargeLive) end
+
+    if not secret then
+        local h = (self.db.FontSize or 16) + 10
+        -- Both terms are snapped: PixelSnap rounds either way, so snapping the
+        -- result could land under the floor, and a raw floor is off-grid.
+        self.frame:SetSize(math.max(KE:PixelSnap(totalWidth), KE:PixelSnap(80)), h)
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Backdrop Settings
 ---------------------------------------------------------------------------------
 function CR:ApplyBackdropSettings()
@@ -230,23 +293,7 @@ function CR:ApplyBackdropSettings()
 
     local backdrop = self.db.Backdrop or {}
 
-    -- Size frame from content (GetStringWidth can return secret after combat)
-    local totalWidth = 8 -- padding
-    local tainted = false
-    for _, fs in ipairs({ self.frame.bracketOpen, self.frame.CRText, self.frame.charge, self.frame.separator, self.frame.timerText, self.frame.bracketClose }) do
-        if fs and fs:GetText() and fs:GetText() ~= "" then
-            local sw = fs:GetStringWidth()
-            if KE:IsSafeValue(sw) then
-                totalWidth = totalWidth + sw + (self.db.TextSpacing or 4)
-            else
-                tainted = true
-            end
-        end
-    end
-    if not tainted then
-        local h = (self.db.FontSize or 16) + 10
-        self.frame:SetSize(math.max(totalWidth, 80), h)
-    end
+    self:ResizeToContent()
 
     if backdrop.Enabled then
         local bgr, bgg, bgb, bga = KE:ResolveColor(backdrop.Color, { 0, 0, 0, 0.6 })
@@ -407,11 +454,6 @@ function CR:ApplySettings()
         return
     end
     self:Update()
-    -- ApplyTextSettings -> ApplyBackdropSettings sized the frame from
-    -- GetStringWidth before Update populated the timer/charge FontStrings,
-    -- so the result was too narrow until something re-sized it (e.g. a
-    -- second edit-mode entry). Re-size now that all content is in place.
-    self:ApplyBackdropSettings()
 end
 
 function CR:ApplyPosition()
