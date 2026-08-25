@@ -4,10 +4,9 @@
 -- ║  Reusable across all text-displaying modules.            ║
 -- ║                                                          ║
 -- ║  Pooled via KE.FramePool for the simple shape (font      ║
--- ║  dropdown + outline dropdown + single size slider) which ║
--- ║  covers ~25 of 27 call sites. The two outlier shapes —   ║
--- ║  fontSizes-array (HealerMana) and extraSlider            ║
--- ║  (CombatTexts) — fall back to a legacy CreateCard path,  ║
+-- ║  dropdown + outline dropdown + single size slider).      ║
+-- ║  The two outlier shapes — fontSizes-array and            ║
+-- ║  extraSlider — fall back to the legacy path,             ║
 -- ║  preserving their existing layout. Public API            ║
 -- ║  CreateFontSettingsCard signature unchanged so call      ║
 -- ║  sites need no migration.                                ║
@@ -225,10 +224,9 @@ end
 
 ---------------------------------------------------------------------------------
 -- Legacy path: build a fresh card for the outlier shapes that the pool's
--- single-shape factory doesn't cover. Two known call sites:
---   - GUI-HealerMana.lua: fontSizes array (multiple slider rows)
---   - GUI-CombatTexts.lua: extraSlider (second slider next to font size)
--- Both are in modules whose GUI pages are navigated infrequently, so the
+-- single-shape factory doesn't cover: a fontSizes array (multiple slider
+-- rows) or an extraSlider (a second slider next to font size) routes here.
+-- Callers on this path have GUI pages navigated infrequently, so the
 -- per-render cost matters less than for the DungeonTimers panel cards.
 -- Build-fresh path matches the pre-refactor behavior bit for bit.
 ---------------------------------------------------------------------------------
@@ -254,12 +252,20 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
         fontOutline = dbKeys.fontOutline or "FontOutline",
     }
 
+    -- Optional caller-supplied accessors. HealerMana needs a read that falls
+    -- through to a shared key while the write stays mode-prefixed, which a
+    -- single dbKey cannot express. Absent, behaviour is unchanged. A supplied
+    -- accessor owns key resolution outright, nested "a.b.c" keys included.
+    local rawGet = config.getValue
+    local rawSet = config.setValue
+
     local function getValue(key, default)
+        if rawGet then return rawGet(key, default) end
         return GetDbValue(db, key, default)
     end
 
     local function setValue(key, val)
-        SetDbValue(db, key, val)
+        if rawSet then rawSet(key, val) else SetDbValue(db, key, val) end
         if onChange then onChange() end
     end
 

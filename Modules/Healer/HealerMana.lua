@@ -205,6 +205,39 @@ function HM:Look(key)
     return self.db[key]
 end
 
+-- The look/layout keys that carry a Raid twin. The seeder walks this; add a
+-- key here and it is seeded, but its GUI control still needs its own wiring.
+HM.LOOK_KEYS = {
+    "FrameWidth", "IconSize", "IconType",
+    "NameFontSize", "NameXOffset", "NameYOffset",
+    "ManaFontSize", "ManaXOffset", "ManaYOffset",
+    "FontOutline", "HighManaColor",
+    "GrowDirection", "FrameSpacing",
+}
+
+-- Fill absent Raid twins from their Dungeon counterparts so turning the split
+-- on changes nothing until a Raid value is deliberately edited. Tables are
+-- copied, not shared: a shared table would make both modes one setting.
+function HM:SeedRaidLook()
+    if not self.db then return end
+    for _, key in ipairs(HM.LOOK_KEYS) do
+        local raidKey = "Raid" .. key
+        if self.db[raidKey] == nil then
+            local value = self.db[key]
+            if type(value) == "table" then
+                -- pairs, not ipairs: the colour picker writes { r, g, b, a }
+                -- where alpha can be absent, and ipairs would stop at 3 and
+                -- copy a short colour.
+                local copy = {}
+                for k, v in pairs(value) do copy[k] = v end
+                self.db[raidKey] = copy
+            else
+                self.db[raidKey] = value
+            end
+        end
+    end
+end
+
 -- Active position table, resolved via GetActivePositionKey.
 function HM:GetActivePosition()
     if not self.db then return nil end

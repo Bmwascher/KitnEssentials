@@ -68,6 +68,29 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     local isRaidCtx = db.SplitPositioning and activeMod and activeMod.guiConfigContext == "RAID" or false
     if activeMod then activeMod.previewContext = isRaidCtx and "RAID" or "DUNGEON" end
 
+    -- Which key the look controls WRITE. The switcher decides, not the live
+    -- mode: the page must be able to edit Raid settings from a party.
+    local lookKey = function(key)
+        return (isRaidCtx and ("Raid" .. key)) or key
+    end
+
+    -- What the look controls READ. A Raid twin only exists once the split has
+    -- been enabled, so an unseeded Raid page must fall back the same way the
+    -- module does rather than hand a widget nil -- a slider given nil silently
+    -- shows its own floor and commits it on the first drag.
+    local lookValue = function(key, fallback)
+        local value
+        -- Tested against nil, not truthiness: a stored `false` twin is a real
+        -- setting and must not fall through to the shared key.
+        if isRaidCtx then value = db["Raid" .. key] end
+        if value == nil then value = db[key] end
+        if value == nil then value = fallback end
+        return value
+    end
+
+    -- The font card edits four keys; only three of them are twinned.
+    local FONT_SPLIT = { FontOutline = true, NameFontSize = true, ManaFontSize = true }
+
     -- Per-context Anchored To lives in distinct root DB keys so Dungeon and
     -- Raid can anchor to different frames. Strata stays a shared root key.
     -- Switching context rebuilds the page (same path Anchored To changes use)
@@ -78,16 +101,17 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         end
     end
 
-    local cardPosMode = GUIFrame:CreateCard(scrollChild, "Position Mode", yOffset)
+    local cardPosMode = GUIFrame:CreateCard(scrollChild, "Raid Customization", yOffset)
     manager:Register(cardPosMode, "all")
     local rowPosMode = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightLast)
 
-    local splitToggle = GUIFrame:CreateCheckbox(rowPosMode, "Split Positioning", {
+    local splitToggle = GUIFrame:CreateCheckbox(rowPosMode, "Separate Raid Settings", {
         value = db.SplitPositioning == true,
         callback = function(checked)
             db.SplitPositioning = checked
             local mod = GetModule()
             if mod then
+                if checked then mod:SeedRaidLook() end
                 if not checked then mod.guiConfigContext = "DUNGEON" end
                 mod.previewContext = (checked and mod.guiConfigContext == "RAID") and "RAID" or "DUNGEON"
                 if mod.isPreview then mod:ShowPreview() end
@@ -131,8 +155,9 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     local posModeNoteRow = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightNote)
     local posModeNote = GUIFrame:CreateText(posModeNoteRow,
         KE:ColorTextByTheme("Note"),
-        "These controls only affect the Position Settings below. Appearance, " ..
-        "Raid Mode, and Font settings are shared between Dungeon and Raid.",
+        "Turning this on also gives Raid its own sizes, fonts, and colors, " ..
+        "separate from Dungeon. \"Configure For\" chooses which set the " ..
+        "controls below edit.",
         50, "hide")
     posModeNoteRow:AddWidget(posModeNote, 1)
     cardPosMode:AddRow(posModeNoteRow, Theme.rowHeightNote, 0)
@@ -214,8 +239,8 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     local rowRaid2 = GUIFrame:CreateRow(cardRaid.content, Theme.rowHeightLast)
     local spacingSlider = GUIFrame:CreateSlider(rowRaid2, "Frame Spacing", {
         min = 0, max = 20, step = 1,
-        value = db.FrameSpacing or 4,
-        callback = function(value) db.FrameSpacing = value; Refresh() end,
+        value = lookValue("FrameSpacing", 4),
+        callback = function(value) db[lookKey("FrameSpacing")] = value; Refresh() end,
     })
     rowRaid2:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "raidConfig")
@@ -225,8 +250,8 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
             { key = "DOWN", text = "Down" },
             { key = "UP",   text = "Up" },
         },
-        value = db.GrowDirection or "DOWN",
-        callback = function(key) db.GrowDirection = key; Refresh() end,
+        value = lookValue("GrowDirection", "DOWN"),
+        callback = function(key) db[lookKey("GrowDirection")] = key; Refresh() end,
     })
     rowRaid2:AddWidget(growDropdown, 0.5)
     manager:Register(growDropdown, "raidConfig")
@@ -258,8 +283,8 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     local rowAppearance1 = GUIFrame:CreateRow(cardAppearance.content, Theme.rowHeight)
     local iconSlider = GUIFrame:CreateSlider(rowAppearance1, "Icon Size", {
         min = 16, max = 64, step = 1,
-        value = db.IconSize or 24,
-        callback = function(value) db.IconSize = value; Refresh() end,
+        value = lookValue("IconSize", 24),
+        callback = function(value) db[lookKey("IconSize")] = value; Refresh() end,
     })
     rowAppearance1:AddWidget(iconSlider, 0.5)
     manager:Register(iconSlider, "all")
@@ -269,8 +294,8 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
             { key = "spec",  text = "Spec Icon" },
             { key = "class", text = "Class Icon" },
         },
-        value = db.IconType or "spec",
-        callback = function(key) db.IconType = key; Refresh() end,
+        value = lookValue("IconType", "spec"),
+        callback = function(key) db[lookKey("IconType")] = key; Refresh() end,
     })
     rowAppearance1:AddWidget(iconTypeDropdown, 0.5)
     manager:Register(iconTypeDropdown, "all")
@@ -278,9 +303,9 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
 
     local rowAppearance2 = GUIFrame:CreateRow(cardAppearance.content, Theme.rowHeightLast)
     local manaColorPicker = GUIFrame:CreateColorPicker(rowAppearance2, "Mana Text Color", {
-        color = db.HighManaColor or { 1, 1, 1, 1 },
+        color = lookValue("HighManaColor", { 1, 1, 1, 1 }),
         callback = function(r, g, b, a)
-            db.HighManaColor = { r, g, b, a }
+            db[lookKey("HighManaColor")] = { r, g, b, a }
             ApplySettings()
         end,
     })
@@ -303,15 +328,15 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     local rowNameOffset = GUIFrame:CreateRow(cardAppearance.content, Theme.rowHeight)
     local nameXSlider = GUIFrame:CreateSlider(rowNameOffset, "Name X Offset", {
         min = -40, max = 40, step = 1,
-        value = db.NameXOffset or 0,
-        callback = function(value) db.NameXOffset = value; Refresh() end,
+        value = lookValue("NameXOffset", 0),
+        callback = function(value) db[lookKey("NameXOffset")] = value; Refresh() end,
     })
     rowNameOffset:AddWidget(nameXSlider, 0.5)
     manager:Register(nameXSlider, "all")
     local nameYSlider = GUIFrame:CreateSlider(rowNameOffset, "Name Y Offset", {
         min = -40, max = 40, step = 1,
-        value = db.NameYOffset or 0,
-        callback = function(value) db.NameYOffset = value; Refresh() end,
+        value = lookValue("NameYOffset", 0),
+        callback = function(value) db[lookKey("NameYOffset")] = value; Refresh() end,
     })
     rowNameOffset:AddWidget(nameYSlider, 0.5)
     manager:Register(nameYSlider, "all")
@@ -320,15 +345,15 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     local rowManaOffset = GUIFrame:CreateRow(cardAppearance.content, Theme.rowHeightLast)
     local manaXSlider = GUIFrame:CreateSlider(rowManaOffset, "Mana X Offset", {
         min = -40, max = 40, step = 1,
-        value = db.ManaXOffset or 0,
-        callback = function(value) db.ManaXOffset = value; Refresh() end,
+        value = lookValue("ManaXOffset", 0),
+        callback = function(value) db[lookKey("ManaXOffset")] = value; Refresh() end,
     })
     rowManaOffset:AddWidget(manaXSlider, 0.5)
     manager:Register(manaXSlider, "all")
     local manaYSlider = GUIFrame:CreateSlider(rowManaOffset, "Mana Y Offset", {
         min = -40, max = 40, step = 1,
-        value = db.ManaYOffset or 0,
-        callback = function(value) db.ManaYOffset = value; Refresh() end,
+        value = lookValue("ManaYOffset", 0),
+        callback = function(value) db[lookKey("ManaYOffset")] = value; Refresh() end,
     })
     rowManaOffset:AddWidget(manaYSlider, 0.5)
     manager:Register(manaYSlider, "all")
@@ -351,6 +376,15 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         },
         fontSizeRange = { 8, 44 },
         onChangeCallback = Refresh,
+        getValue = function(key, default)
+            if FONT_SPLIT[key] then return lookValue(key, default) end
+            local value = db[key]
+            if value == nil then return default end
+            return value
+        end,
+        setValue = function(key, val)
+            db[FONT_SPLIT[key] and lookKey(key) or key] = val
+        end,
     })
     manager:Register(fontCard, "all")
     if fontWidgets then

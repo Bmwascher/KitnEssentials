@@ -55,3 +55,51 @@ describe("HealerMana:Look", function()
         assert.are.equal(false, HM:Look("GrowDirection"))
     end)
 end)
+
+describe("HealerMana:SeedRaidLook", function()
+    it("copies a plain value into an absent twin", function()
+        local HM = L.loadHealerMana()
+        HM.db.IconSize = 30
+        HM.db.RaidIconSize = nil
+        HM:SeedRaidLook()
+        assert.are.equal(30, HM.db.RaidIconSize)
+    end)
+
+    it("does not overwrite a twin that already holds a value", function()
+        local HM = L.loadHealerMana()
+        HM.db.IconSize = 30
+        HM.db.RaidIconSize = 48
+        HM:SeedRaidLook()
+        assert.are.equal(48, HM.db.RaidIconSize)
+    end)
+
+    it("copies colour tables by value, not by reference", function()
+        -- Sharing the table would make the two modes the same setting wearing
+        -- two names: editing Raid's colour would silently change Dungeon's.
+        local HM = L.loadHealerMana()
+        HM.db.HighManaColor = { 1, 0, 0, 1 }
+        HM.db.RaidHighManaColor = nil
+        HM:SeedRaidLook()
+        HM.db.RaidHighManaColor[1] = 0
+        assert.are.equal(1, HM.db.HighManaColor[1])
+    end)
+
+    it("covers every key the accessor can resolve", function()
+        -- Asserted against an INDEPENDENT list, not HM.LOOK_KEYS. Walking the
+        -- same list the implementation walks is a tautology: a key dropped
+        -- from LOOK_KEYS would vanish from both loops and still pass.
+        local EXPECTED = {
+            "FrameWidth", "IconSize", "IconType",
+            "NameFontSize", "NameXOffset", "NameYOffset",
+            "ManaFontSize", "ManaXOffset", "ManaYOffset",
+            "FontOutline", "HighManaColor",
+            "GrowDirection", "FrameSpacing",
+        }
+        local HM = L.loadHealerMana()
+        HM:SeedRaidLook()
+        for _, key in ipairs(EXPECTED) do
+            assert.is_not_nil(HM.db["Raid" .. key], key .. " was not seeded")
+        end
+        assert.are.equal(#EXPECTED, #HM.LOOK_KEYS)
+    end)
+end)
