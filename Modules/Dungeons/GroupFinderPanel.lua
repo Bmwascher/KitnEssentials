@@ -400,11 +400,6 @@ local function RefreshScoreCache(searchPanel)
     end
 end
 
-local function CacheScore(resultID)
-    if not resultID then return end
-    scoreCache[resultID] = SanitizeScore(resultID)
-end
-
 local function OnUpdateResultList(searchPanel)
     -- The advanced-filter API owns the dungeon/tank/healer predicates
     -- server-side and every filter change triggers a REAL re-search, so
@@ -1543,11 +1538,6 @@ function GFP:OnEnable()
             RefreshScoreCache(sp)
             OnUpdateResultList(sp)
         end
-    end)
-    -- Single-listing refreshes never reach the sweep above. Same reason for
-    -- doing it here: this is our own execution, not Blizzard's row loop.
-    self:RegisterEvent("LFG_LIST_SEARCH_RESULT_UPDATED", function(_, resultID)
-        CacheScore(resultID)
     end)
     -- Pane switching follows the M+ search state. SetCategory covers the
     -- quick buttons and manual navigation; Show/Hide covers back-outs.
