@@ -300,6 +300,9 @@ function RN:CreateAlertRow(index)
 
     local text = row:CreateFontString(nil, "OVERLAY")
     text:SetPoint("CENTER", row, "CENTER", 0, 0)
+    -- A FontString with no font THROWS on SetText, and ShowAlert writes the
+    -- alert label before ApplyRowVisuals runs, so the font is applied here.
+    KE:ApplyFontToText(text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
     row.text = text
 
     local iconSize = self.db.FontSize or 16
