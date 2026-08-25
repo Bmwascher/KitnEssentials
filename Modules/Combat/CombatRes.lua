@@ -234,7 +234,7 @@ function CR:ApplyTextSettings()
 end
 
 ---------------------------------------------------------------------------------
--- Backdrop Settings
+-- Sizing
 ---------------------------------------------------------------------------------
 -- Sizes from fixed references, not the live text. On a right-side anchor a
 -- width change walks the frame's left edge, and the content is anchored to
@@ -246,18 +246,23 @@ function CR:ResizeToContent()
     local chargeLive = self.frame.charge:GetText()
     self.frame.timerText:SetText(TIMER_REF)
     self.frame.charge:SetText(CHARGE_REF)
+    -- The references are on screen until the restore below. Dropping the dirty
+    -- caches now means a throw in between cannot strand them there: Update
+    -- repaints on its next pass either way.
+    self.lastTimerText = ""
+    self.lastChargeText = ""
 
     local totalWidth = 8 -- padding
-    local tainted = false
+    local secret = false
     for _, fs in ipairs({ self.frame.bracketOpen, self.frame.CRText, self.frame.charge, self.frame.separator, self.frame.timerText, self.frame.bracketClose }) do
         if fs and fs:GetText() and fs:GetText() ~= "" then
-            -- Refuses secret, non-numeric and zero-or-less; a zero reading
-            -- would collapse the box around text that is merely unlaid.
-            local sw = KE:MeasureFontString(fs)
-            if sw then
+            local sw = fs:GetStringWidth()
+            if not KE:IsSafeValue(sw) then
+                -- One unreadable element vetoes the whole size: a partial sum
+                -- would be confidently wrong rather than merely stale.
+                secret = true
+            elseif sw > 0 then
                 totalWidth = totalWidth + sw + (self.db.TextSpacing or 4)
-            else
-                tainted = true
             end
         end
     end
@@ -265,14 +270,17 @@ function CR:ResizeToContent()
     if timerLive ~= nil then self.frame.timerText:SetText(timerLive) end
     if chargeLive ~= nil then self.frame.charge:SetText(chargeLive) end
 
-    if not tainted then
+    if not secret then
         local h = (self.db.FontSize or 16) + 10
-        -- Snap before the floor: PixelSnap rounds either way, so snapping the
-        -- floored value can land under it.
-        self.frame:SetSize(math.max(KE:PixelSnap(totalWidth), 80), h)
+        -- Both terms are snapped: PixelSnap rounds either way, so snapping the
+        -- result could land under the floor, and a raw floor is off-grid.
+        self.frame:SetSize(math.max(KE:PixelSnap(totalWidth), KE:PixelSnap(80)), h)
     end
 end
 
+---------------------------------------------------------------------------------
+-- Backdrop Settings
+---------------------------------------------------------------------------------
 function CR:ApplyBackdropSettings()
     if not self.frame then return end
 
