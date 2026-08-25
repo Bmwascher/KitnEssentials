@@ -40,8 +40,8 @@ end
 
 -- Outline options are sourced from KE:GetFontOutlineOptions (Core/Globals.lua).
 
--- DB getter / setter helpers that support nested "a.b.c" keys. Match the
--- legacy CreateFontSettingsCard behavior — a couple of call sites use this.
+-- DB getter / setter helpers that support nested "a.b.c" keys, matching the
+-- legacy CreateFontSettingsCard behavior for callers whose dbKeys are nested.
 local function GetDbValue(db, key, default)
     if not db or key == nil then return default end
     if key:find("%.") then

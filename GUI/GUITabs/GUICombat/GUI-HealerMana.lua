@@ -114,7 +114,12 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
                 if checked then mod:SeedRaidLook() end
                 if not checked then mod.guiConfigContext = "DUNGEON" end
                 mod.previewContext = (checked and mod.guiConfigContext == "RAID") and "RAID" or "DUNGEON"
-                if mod.isPreview then mod:ShowPreview() end
+                -- Unconditional for the same reason as the Configure For
+                -- callback: a live party healer clears isPreview, and the
+                -- cleared flag makes GetActiveModeKey ignore previewContext.
+                -- guiConfigContext survives a profile switch, so turning the
+                -- split on can resurrect a RAID context here.
+                if mod.ShowPreview then mod:ShowPreview() end
                 if mod.RefreshEditMode then mod:RefreshEditMode() end
             end
             ApplySettings()
