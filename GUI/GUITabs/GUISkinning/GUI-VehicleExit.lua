@@ -18,6 +18,7 @@ local function GetModule()
 end
 
 GUIFrame:RegisterContent("VehicleExit", function(scrollChild, yOffset)
+    if KE:ShouldNotLoadModule() then return yOffset end
     local db = KE.db and KE.db.profile.VehicleExit
     if not db then return yOffset end
 

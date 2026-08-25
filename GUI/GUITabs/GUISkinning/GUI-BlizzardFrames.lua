@@ -615,7 +615,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffs
     return card:GetNextOffset()
 end)
 
--- The three single-element pages behind one sub-row. Each was a top-level tab,
+-- The single-element pages behind one sub-row. Each was a top-level tab,
 -- which made the strip long enough to bury the settings people look for.
 --
 -- This row keeps its own active id. GUIFrame.tabbedPageState is keyed by PAGE,
@@ -624,6 +624,7 @@ local elementTabs = {
     { id = "SkinBlizzardFramesLootRoll",   label = "Loot Roll" },
     { id = "SkinBlizzardFramesLootWindow", label = "Loot Window" },
     { id = "SkinBlizzardFramesWidgets",    label = "UI Widgets" },
+    { id = "VehicleExit",                  label = "Vehicle Exit" },
 }
 local activeElement = elementTabs[1].id
 
@@ -633,11 +634,12 @@ GUIFrame:RegisterNestedTabs("SkinBlizzardFramesElements", {
     "SkinBlizzardFramesLootRoll",
     "SkinBlizzardFramesLootWindow",
     "SkinBlizzardFramesWidgets",
+    "VehicleExit",
 })
 
--- No conflict branch here. Every tab on this row configures a skin this addon
--- stands down from, so the whole Elements tab drops out of the strip under
--- ElvUI rather than this row filtering itself.
+-- No conflict branch here. Every tab on this row configures a module that
+-- stands down under ElvUI, so the whole Elements tab drops out of the strip
+-- rather than this row filtering itself.
 local function VisibleElementTabs()
     return elementTabs
 end
@@ -687,8 +689,8 @@ end)
 -- General is the only tab that stays in every state. It carries Raid Control
 -- and the three group-finder pages, none of which is a skin, which is why it
 -- does not sit in the two groups above. Elements is engine-independent but not
--- ElvUI-independent: its three pages all configure skins this addon stands
--- down from, so it survives the engine flag and not the conflict state.
+-- ElvUI-independent: every page on it stands down under ElvUI, so it survives
+-- the engine flag and not the conflict state.
 --
 -- ElvUI is a stricter cut than the engine flag, not a wider one: it drops Fonts
 -- and Window Colors too, alongside the skin lists, leaving only General.
