@@ -103,3 +103,18 @@ describe("HealerMana:SeedRaidLook", function()
         assert.are.equal(#EXPECTED, #HM.LOOK_KEYS)
     end)
 end)
+
+describe("HealerMana:FindHealers preview ownership", function()
+    it("leaves an open preview's healer list alone", function()
+        -- A refusal rule: roster, zone and spec events all reach FindHealers,
+        -- and replacing the canned rows there left the page editing Raid while
+        -- the frame drew Dungeon.
+        local HM = L.loadHealerMana({ IsInRaid = function() return false end })
+        HM.isPreview = true
+        HM.currentHealers = { { unit = "player", name = "sentinel" } }
+        HM:FindHealers()
+        assert.are.equal(1, #HM.currentHealers)
+        assert.are.equal("sentinel", HM.currentHealers[1].name)
+        assert.is_true(HM.isPreview)
+    end)
+end)

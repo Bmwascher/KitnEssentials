@@ -66,7 +66,22 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
     -- survives the page rebuild a context switch triggers.
     local activeMod = GetModule()
     local isRaidCtx = db.SplitPositioning and activeMod and activeMod.guiConfigContext == "RAID" or false
-    if activeMod then activeMod.previewContext = isRaidCtx and "RAID" or "DUNGEON" end
+    if activeMod then
+        local wanted = isRaidCtx and "RAID" or "DUNGEON"
+        local changed = activeMod.previewContext ~= wanted
+        activeMod.previewContext = wanted
+        -- The preview is started per SECTION, before any page in it renders, so
+        -- it can be drawn while previewContext is still nil -- and then
+        -- GetActiveModeKey falls through to the LIVE mode. In a raid with the
+        -- split on, that draws Raid geometry before this page has said which
+        -- context it edits. Re-show when this render moves the context, or when
+        -- the page is about to edit Raid keys with no preview on screen to
+        -- show them.
+        if db.Enabled and activeMod.ShowPreview
+            and (changed or (isRaidCtx and not activeMod.isPreview)) then
+            activeMod:ShowPreview()
+        end
+    end
 
     -- Which key the look controls WRITE. The switcher decides, not the live
     -- mode: the page must be able to edit Raid settings from a party.

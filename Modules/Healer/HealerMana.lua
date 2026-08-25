@@ -818,10 +818,8 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
--- A mode flip changes sizes as well as position, so the frames are re-dressed
--- before FindHealers redraws them. Not the only refresh point: EnableInRaid is
--- half the mode predicate and the GUI writes it without a roster event, so
--- ApplySettings refreshes too.
+-- Not the only refresh point: EnableInRaid is half the mode predicate and the
+-- GUI writes it without a roster event, so ApplySettings refreshes too.
 function HM:OnGroupChanged()
     if not self.db or not self.db.Enabled then return end
     -- No re-dress here: UpdateHealerFrames redresses each frame immediately
