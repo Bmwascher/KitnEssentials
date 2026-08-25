@@ -126,7 +126,7 @@ end
 -- Disconnected: grey text + label "OFFLINE", grey icon vertex color.
 function HM:UpdateManaDisplay(frame, unit, connected)
     if connected then
-        local mc = self.db.HighManaColor
+        local mc = self:Look("HighManaColor")
         frame.mana:SetTextColor(
             (mc and mc[1]) or 1,
             (mc and mc[2]) or 1,
@@ -242,7 +242,7 @@ end
 -- preserved.
 function HM:GetGrowAnchor(anchor)
     anchor = anchor or "CENTER"
-    local growDown = self.db.GrowDirection == "DOWN"
+    local growDown = self:Look("GrowDirection") == "DOWN"
     local verticalTarget = growDown and "TOP" or "BOTTOM"
     local verticalOpposite = growDown and "BOTTOM" or "TOP"
     if anchor:find(verticalOpposite) then
@@ -267,11 +267,11 @@ function HM:CreateHealerFrame()
     -- it. Nothing references these by name (the container holds them as children
     -- and EditMode anchors via frame reference, not name).
     local frame = CreateFrame("Frame", nil, self.containerFrame)
-    frame:SetSize(self.db.FrameWidth, self.db.IconSize)
+    frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
 
     -- Icon (standard KE: AddIconBorders + ApplyIconZoom from Core/Widgets.lua)
     frame.iconFrame = CreateFrame("Frame", nil, frame)
-    frame.iconFrame:SetSize(self.db.IconSize, self.db.IconSize)
+    frame.iconFrame:SetSize(self:Look("IconSize"), self:Look("IconSize"))
     frame.iconFrame:SetPoint("LEFT", frame, "LEFT", 0, 0)
     KE:AddIconBorders(frame.iconFrame)
 
@@ -281,17 +281,17 @@ function HM:CreateHealerFrame()
 
     -- Name
     local fontPath = KE:GetFontPath(self.db.FontFace)
-    local fontOutline = self.db.FontOutline or "OUTLINE"
+    local fontOutline = self:Look("FontOutline") or "OUTLINE"
 
     frame.name = frame:CreateFontString(nil, "OVERLAY")
-    frame.name:SetFont(fontPath, self.db.NameFontSize, KE:GetFontOutline(fontOutline))
-    frame.name:SetPoint("LEFT", frame.iconFrame, "RIGHT", self.db.NameXOffset, self.db.NameYOffset)
+    frame.name:SetFont(fontPath, self:Look("NameFontSize"), KE:GetFontOutline(fontOutline))
+    frame.name:SetPoint("LEFT", frame.iconFrame, "RIGHT", self:Look("NameXOffset"), self:Look("NameYOffset"))
     frame.name:SetJustifyH("LEFT")
 
     local manaOutline = (fontOutline == "NONE") and "" or "OUTLINE"
     frame.mana = frame:CreateFontString(nil, "OVERLAY")
-    frame.mana:SetFont(fontPath, self.db.ManaFontSize, manaOutline)
-    frame.mana:SetPoint("LEFT", frame.iconFrame, "RIGHT", self.db.ManaXOffset, self.db.ManaYOffset)
+    frame.mana:SetFont(fontPath, self:Look("ManaFontSize"), manaOutline)
+    frame.mana:SetPoint("LEFT", frame.iconFrame, "RIGHT", self:Look("ManaXOffset"), self:Look("ManaYOffset"))
     frame.mana:SetJustifyH("LEFT")
 
     frame:Hide()
@@ -307,17 +307,17 @@ end
 
 function HM:UpdateFrameAppearance(frame)
     local fontPath = KE:GetFontPath(self.db.FontFace)
-    local fontOutline = self.db.FontOutline
+    local fontOutline = self:Look("FontOutline")
     local manaOutline = (fontOutline == "NONE") and "" or "OUTLINE"
 
-    frame:SetSize(self.db.FrameWidth, self.db.IconSize)
-    frame.iconFrame:SetSize(self.db.IconSize, self.db.IconSize)
-    frame.name:SetFont(fontPath, self.db.NameFontSize, KE:GetFontOutline(fontOutline))
+    frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
+    frame.iconFrame:SetSize(self:Look("IconSize"), self:Look("IconSize"))
+    frame.name:SetFont(fontPath, self:Look("NameFontSize"), KE:GetFontOutline(fontOutline))
     frame.name:ClearAllPoints()
-    frame.name:SetPoint("LEFT", frame.iconFrame, "RIGHT", self.db.NameXOffset, self.db.NameYOffset)
-    frame.mana:SetFont(fontPath, self.db.ManaFontSize, manaOutline)
+    frame.name:SetPoint("LEFT", frame.iconFrame, "RIGHT", self:Look("NameXOffset"), self:Look("NameYOffset"))
+    frame.mana:SetFont(fontPath, self:Look("ManaFontSize"), manaOutline)
     frame.mana:ClearAllPoints()
-    frame.mana:SetPoint("LEFT", frame.iconFrame, "RIGHT", self.db.ManaXOffset, self.db.ManaYOffset)
+    frame.mana:SetPoint("LEFT", frame.iconFrame, "RIGHT", self:Look("ManaXOffset"), self:Look("ManaYOffset"))
 end
 
 function HM:CreateContainer()
@@ -326,7 +326,7 @@ function HM:CreateContainer()
     -- Anonymous: Refresh() nils + recreates the container; a fixed global name
     -- would clobber/orphan the prior one. EditMode tracks it by frame reference.
     local frame = CreateFrame("Frame", nil, UIParent)
-    frame:SetSize(self.db.FrameWidth, self.db.IconSize)
+    frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
     frame:SetFrameStrata(self.db.Strata or "HIGH")
 
     self.containerFrame = frame
@@ -339,18 +339,18 @@ function HM:UpdateContainerSize()
     if not self.containerFrame then return end
     local count = #self.currentHealers
     if count == 0 then
-        self.containerFrame:SetSize(self.db.FrameWidth, self.db.IconSize)
+        self.containerFrame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
         return
     end
-    local totalHeight = (self.db.IconSize * count) + (self.db.FrameSpacing * (count - 1))
-    self.containerFrame:SetSize(self.db.FrameWidth, totalHeight)
+    local totalHeight = (self:Look("IconSize") * count) + (self:Look("FrameSpacing") * (count - 1))
+    self.containerFrame:SetSize(self:Look("FrameWidth"), totalHeight)
 end
 
 -- Stack each healer frame within the container per GrowDirection.
 function HM:PositionFrames()
-    local growDown = self.db.GrowDirection == "DOWN"
-    local spacing = self.db.FrameSpacing
-    local iconSize = self.db.IconSize
+    local growDown = self:Look("GrowDirection") == "DOWN"
+    local spacing = self:Look("FrameSpacing")
+    local iconSize = self:Look("IconSize")
     for i = 1, #self.currentHealers do
         local frame = self.healerFrames[i]
         if frame then
@@ -531,7 +531,7 @@ end
 
 -- Render one frame's icon/name/mana for a healer snapshot (no positioning/show).
 function HM:UpdateOneHealerFrame(frame, healer)
-    local iconType = self.db.IconType or "spec"
+    local iconType = self:Look("IconType") or "spec"
     if iconType == "class" and healer.class then
         frame.icon:SetAtlas("classicon-" .. healer.class)
     else
@@ -547,7 +547,7 @@ function HM:UpdateOneHealerFrame(frame, healer)
     frame.name:SetTextColor(cc[1], cc[2], cc[3])
 
     if self.isPreview then
-        local mc = self.db.HighManaColor
+        local mc = self:Look("HighManaColor")
         frame.mana:SetTextColor((mc and mc[1]) or 1, (mc and mc[2]) or 1, (mc and mc[3]) or 1)
         frame.icon:SetVertexColor(1, 1, 1)
         frame.mana:SetText("100%")
