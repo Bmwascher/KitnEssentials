@@ -205,7 +205,7 @@ describe("Tooltips AddAuraIDLine", function()
         local TT = L.loadTooltips()
         TT.engineAuraIDs = true
         local tt = tip()
-        TT._AddAuraIDLine(tt, nil, 403264)
+        TT._AddAuraIDLine(tt, 403264)
         assert.same({}, tt.lines)
     end)
 
@@ -213,7 +213,7 @@ describe("Tooltips AddAuraIDLine", function()
         local TT = L.loadTooltips()
         TT.engineAuraIDs = false
         local tt = tip()
-        TT._AddAuraIDLine(tt, nil, 403264)
+        TT._AddAuraIDLine(tt, 403264)
         assert.same({ "|cff7c7c7cSpell ID:|r 403264" }, tt.lines)
     end)
 end)
@@ -253,5 +253,53 @@ describe("Tooltips PLAYER_ENTERING_WORLD", function()
         TT:PLAYER_ENTERING_WORLD()
         deferred[1]()
         assert.same({}, writes)
+    end)
+end)
+
+-- Pins the field the aura line is read from. Blizzard documents neither id nor
+-- auraInstanceID on tooltip data, so a later edit "correcting" this to the
+-- instance id would print a plausible wrong number under a Spell ID label.
+describe("Tooltips OnTooltipSetUnitAura", function()
+    local function tip()
+        local lines = {}
+        return {
+            lines = lines,
+            IsForbidden = function() return false end,
+            GetName = function() return "GameTooltip" end,
+            AddLine = function(_, text) lines[#lines + 1] = text end,
+            Show = function() end,
+        }
+    end
+
+    it("reads the spell id from data.id, not data.auraInstanceID", function()
+        local TT = L.loadTooltips()
+        TT.db = { ShowIDs = "ALWAYS" }
+        local tt = tip()
+        TT:OnTooltipSetUnitAura(tt, { id = 383169, auraInstanceID = 42 })
+        assert.same({ "|cff7c7c7cSpell ID:|r 383169" }, tt.lines)
+    end)
+
+    it("adds nothing when the tooltip data carries no id", function()
+        local TT = L.loadTooltips()
+        TT.db = { ShowIDs = "ALWAYS" }
+        local tt = tip()
+        TT:OnTooltipSetUnitAura(tt, {})
+        assert.same({}, tt.lines)
+    end)
+
+    it("adds nothing when the id is secret", function()
+        local TT = L.loadTooltips(nil, { issecretvalue = function() return true end })
+        TT.db = { ShowIDs = "ALWAYS" }
+        local tt = tip()
+        TT:OnTooltipSetUnitAura(tt, { id = 383169 })
+        assert.same({}, tt.lines)
+    end)
+
+    it("respects the modifier setting", function()
+        local TT = L.loadTooltips({ IsModifierKeyDown = function() return false end })
+        TT.db = { ShowIDs = "MODIFIER" }
+        local tt = tip()
+        TT:OnTooltipSetUnitAura(tt, { id = 383169 })
+        assert.same({}, tt.lines)
     end)
 end)

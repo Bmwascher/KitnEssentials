@@ -905,7 +905,7 @@ function TT:SyncAuraSpellIDCVar()
     self.engineAuraIDs = (on == "1")
 end
 
-local function AddAuraIDLine(tt, _, spellId)
+local function AddAuraIDLine(tt, spellId)
     -- The engine already put the line there; a second one would be a duplicate.
     if TT.engineAuraIDs then return end
     if not spellId or (KE.IsSecretValue and KE:IsSecretValue(spellId)) then return end
@@ -913,20 +913,21 @@ local function AddAuraIDLine(tt, _, spellId)
     tt:Show()
 end
 
-function TT:AuraIDByInstance(tt, unit, auraInstanceID)
+-- One registration on the aura data type instead of a hook per aura setter.
+-- Blizzard has six of those and gains more; hooking them one at a time is how
+-- the player's own buff bar, nameplate auras and the cooldown viewer went
+-- without an ID line. It is also the cheaper read: data.id is already built and
+-- handed to every listener, where a setter hook has to call back into
+-- C_UnitAuras and allocate a whole aura table to reach the same number.
+--
+-- data.id on a UnitAura tooltip is the aura's spellId, not its
+-- auraInstanceID. Blizzard documents neither, so that was established by
+-- probe -- do not "correct" it to auraInstanceID on the strength of the name.
+function TT:OnTooltipSetUnitAura(tt, data)
     local db = self.db
-    if not db or tt ~= _G.GameTooltip or tt:IsForbidden() or not WantIDs(db) then return end
-    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID) then return end
-    local ok, aura = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, unit, auraInstanceID)
-    if ok and aura then AddAuraIDLine(tt, db, aura.spellId) end
-end
-
-function TT:AuraIDByIndex(tt, unit, index, filter)
-    local db = self.db
-    if not db or tt ~= _G.GameTooltip or tt:IsForbidden() or not WantIDs(db) then return end
-    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return end
-    local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, filter)
-    if ok and aura then AddAuraIDLine(tt, db, aura.spellId) end
+    if IsEmbeddedTip(tt) then return end
+    if not db or tt:IsForbidden() or not WantIDs(db) then return end
+    AddAuraIDLine(tt, data and data.id)
 end
 
 function TT:OnTooltipSetItem(tt, data)
@@ -1077,6 +1078,16 @@ function TT:OnEnable()
                     if TT:IsEnabled() then TT:OnTooltipSetSpell(tt, data) end
                 end)
             end
+            _G.TooltipDataProcessor.AddTooltipPostCall(T.UnitAura, function(tt, data)
+                if TT:IsEnabled() then TT:OnTooltipSetUnitAura(tt, data) end
+            end)
+            -- Pet bar buttons are their own data type and carry the spell in
+            -- the same id field.
+            if T.PetAction then
+                _G.TooltipDataProcessor.AddTooltipPostCall(T.PetAction, function(tt, data)
+                    if TT:IsEnabled() then TT:OnTooltipSetSpell(tt, data) end
+                end)
+            end
             _G.TooltipDataProcessor.AddTooltipPostCall(T.Item, function(tt, data)
                 if TT:IsEnabled() then TT:OnTooltipSetItem(tt, data) end
             end)
@@ -1093,26 +1104,6 @@ function TT:OnEnable()
     -- module disables, but self.hooked stays true -- so these live outside
     -- the guard above and re-register on every enable.
     self:SecureHook("GameTooltip_SetDefaultAnchor", "SetDefaultAnchor")
-
-    -- (buff frame missing Spell IDs with shift): the modern
-    -- BuffFrame builds its tooltips through SetUnitBuffByAuraInstanceID,
-    -- which is TooltipDataType.UnitAura -- the Spell post-call never
-    -- fires. ElvUI hooks the aura setters directly; same here, with
-    -- the spellId resolved from C_UnitAuras at hook time.
-    if _G.GameTooltip.SetUnitBuffByAuraInstanceID then
-        self:SecureHook(_G.GameTooltip, "SetUnitBuffByAuraInstanceID", "AuraIDByInstance")
-        self:SecureHook(_G.GameTooltip, "SetUnitDebuffByAuraInstanceID", "AuraIDByInstance")
-    end
-    -- The filterless variant carries the player's own buff bar, nameplate auras
-    -- and the cooldown viewer; the Buff/Debuff pair above reaches only raid,
-    -- party, arena and target frames. AuraIDByInstance ignores the filter
-    -- argument either way.
-    if _G.GameTooltip.SetUnitAuraByAuraInstanceID then
-        self:SecureHook(_G.GameTooltip, "SetUnitAuraByAuraInstanceID", "AuraIDByInstance")
-    end
-    self:SecureHook(_G.GameTooltip, "SetUnitAura", "AuraIDByIndex")
-    self:SecureHook(_G.GameTooltip, "SetUnitBuff", "AuraIDByIndex")
-    self:SecureHook(_G.GameTooltip, "SetUnitDebuff", "AuraIDByIndex")
 
     -- (holding a modifier after the tooltip was already
     -- up never added the ID lines): ElvUI's mechanism -- on modifier
