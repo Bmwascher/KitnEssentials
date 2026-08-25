@@ -1922,6 +1922,10 @@ local Defaults = {
                 -- from. Every font object keeps its own relative size; this
                 -- moves them together. 12 is Blizzard's own baseline.
                 FontBaseSize = 12,
+                -- Group Finder member icons: "bar" is the role icon with a
+                -- class-coloured bar beneath, "circle" leaves the dungeon
+                -- browser's own class circles alone.
+                LFGRoleStyle = "bar",
                 -- Per-frame opt-out. A missing key means ON; only an
                 -- explicit false disables a skin. The registry's gate reads
                 -- Skins[key] ~= false, so the polarity matters.

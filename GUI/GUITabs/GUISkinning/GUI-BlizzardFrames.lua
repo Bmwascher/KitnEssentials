@@ -202,6 +202,9 @@ local FRAME_PER_ROW = 3
 local ADDON_PER_ROW = 2
 local CELL_H = 24
 local CELL_SPACING = 2
+-- A dropdown needs more vertical room than a grid cell: its own row is 34 and
+-- the label sits above the control.
+local DROPDOWN_H = 40
 
 -- Sorted by the name the USER reads, not by the internal key. Sorting by key put
 -- Key Bindings between Barbershop and Black Market, and Blizzard Fonts under G.
@@ -443,6 +446,24 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
     if AnySuppressed(FRAME_SKINS) then
         card:AddNote("Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
     end
+
+    -- Group Finder member role icons: our bar treatment, or the class circles
+    -- Blizzard's dungeon browser draws natively. A STYLE rather than a skin
+    -- toggle, so it does not belong in the grid below -- and it needs no
+    -- reload, because the refresh redraws every visible row.
+    local rowRole = GUIFrame:CreateRow(card.content, DROPDOWN_H)
+    rowRole:AddWidget(GUIFrame:CreateDropdown(rowRole, "Group Finder Role Icons", {
+        options = { bar = "Role Icon With Class Bar", circle = "Blizzard Class Circles" },
+        value = db.LFGRoleStyle or "bar",
+        callback = function(key)
+            db.LFGRoleStyle = key
+            -- Resolved HERE: this file's other `S` locals live inside their
+            -- own callbacks, so a bare `S` at this depth is a nil global.
+            local Skins = KE.Skins
+            if Skins and Skins.RefreshLFGRoleIcons then Skins.RefreshLFGRoleIcons() end
+        end,
+    }), 0.5)
+    card:AddRow(rowRole, DROPDOWN_H)
 
     -- No solo rows in this list today -- Context Menus was one until its label
     -- was shortened to fit an ordinary cell. Called anyway so adding a flag to
