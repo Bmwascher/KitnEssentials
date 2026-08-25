@@ -478,6 +478,15 @@ function HM:FindHealers()
     if DEBUG_HM then KE:Print("[HM] FindHealers entry isPreview=" .. tostring(self.isPreview) .. " enabled=" .. tostring(self.db and self.db.Enabled)) end
     if not self.db or not self.db.Enabled then return end
 
+    -- An open preview OWNS currentHealers and the drawn frames; a roster, zone
+    -- or spec event must not replace its canned rows with the live roster.
+    -- Every caller that means to leave preview clears isPreview first
+    -- (ShowPreview's live-healer path, HidePreview, OnDisable), and
+    -- ApplySettings branches to UpdateHealerFrames instead of calling in here,
+    -- so they all pass. Without this the preview kept its Raid context and its
+    -- Raid appearance while collapsing to a single live Dungeon row.
+    if self.isPreview then return end
+
     local mode = self:GetMode()
 
     -- Clear stale frames when crossing the dungeon<->raid boundary so a smaller
@@ -491,14 +500,12 @@ function HM:FindHealers()
     -- DisableOnHealer only suppresses Dungeon Mode (Raid shows you as a healer).
     if mode == "DUNGEON" and self.db.DisableOnHealer and KE:IsPlayerHealerSpec() then
         if DEBUG_HM then KE:Print("[HM] FindHealers hide: DisableOnHealer + player healer (Dungeon)") end
-        if self.isPreview then return end
         self:HideFrames()
         return
     end
 
     if not IsInGroup() then
         if DEBUG_HM then KE:Print("[HM] FindHealers hide: not in group") end
-        if self.isPreview then return end
         self:HideFrames()
         return
     end
@@ -552,17 +559,11 @@ function HM:FindHealers()
 
     if #self.currentHealers == 0 then
         if DEBUG_HM then KE:Print("[HM] FindHealers no healer found mode=" .. mode) end
-        if self.isPreview then return end
         self:HideFrames()
         return
     end
 
     if DEBUG_HM then KE:Print("[HM] FindHealers mode=" .. mode .. " count=" .. #self.currentHealers) end
-    -- Deliberately does NOT clear isPreview. Every caller that means to leave
-    -- preview clears it first (ShowPreview's live-healer path, HidePreview,
-    -- OnDisable). Clearing it here instead let a roster or spec event cancel an
-    -- open GUI preview, and since the preview context also selects the look
-    -- keys, the page would go on editing Raid while the frame drew Dungeon.
     self:UpdateHealerFrames()
 end
 
