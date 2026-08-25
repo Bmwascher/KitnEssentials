@@ -1474,6 +1474,9 @@ local Defaults = {
                 ManaYOffset = -2,
                 FontOutline = "OUTLINE",
                 HighManaColor = { 1, 1, 1, 1 },
+                -- No Raid* keys here on purpose: AceDB rawsets every declared default into
+                -- the profile, so a declared twin could never be nil, and nil is what marks
+                -- a mode as following Dungeon. SeedRaidLook is their only writer.
             },
             DeathNotifications = {
                 Enabled = false,

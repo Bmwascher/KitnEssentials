@@ -178,19 +178,31 @@ function HM:GetMode()
     return self.mode or "DUNGEON"
 end
 
--- Which DB position table is live right now. Single source of truth so the
--- reader (GetActivePosition / EditMode getPosition) and the writer (EditMode
--- setPosition) never disagree. Split off = shared "Position"; split on + Raid
--- Mode (or a Raid GUI preview) = "RaidPosition".
+-- Which mode's settings are live right now. Single source of truth for both
+-- the position tables and the look/layout twins, so a reader and a writer can
+-- never disagree about which set a change lands in. Split off = always Dungeon;
+-- a GUI preview overrides the live mode so Raid can be configured from a party.
+function HM:GetActiveModeKey()
+    if not self.db or not self.db.SplitPositioning then return "DUNGEON" end
+    if self.isPreview and self.previewContext then
+        return (self.previewContext == "RAID") and "RAID" or "DUNGEON"
+    end
+    return self:GetMode()
+end
+
 function HM:GetActivePositionKey()
-    if not self.db then return "Position" end
-    if self.isPreview and self.previewContext and self.db.SplitPositioning then
-        return (self.previewContext == "RAID") and "RaidPosition" or "Position"
+    return (self:GetActiveModeKey() == "RAID") and "RaidPosition" or "Position"
+end
+
+-- Active value for a look/layout key. An absent twin means this mode follows
+-- Dungeon, so only nil falls through: `false` is a value a setting can hold.
+function HM:Look(key)
+    if not self.db then return nil end
+    if self:GetActiveModeKey() == "RAID" then
+        local value = self.db["Raid" .. key]
+        if value ~= nil then return value end
     end
-    if self.db.SplitPositioning and self:GetMode() == "RAID" then
-        return "RaidPosition"
-    end
-    return "Position"
+    return self.db[key]
 end
 
 -- Active position table, resolved via GetActivePositionKey.
