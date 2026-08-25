@@ -589,7 +589,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesRoleIcons", function(scrollChild, yO
     if S and S.IsActive and not S:IsActive() then return yOffset end
 
     local card = GUIFrame:CreateCard(scrollChild, "Group Finder Role Icons", yOffset)
-    card:AddLabel("How the member icons on each group listing are drawn. Blizzard's dungeon browser puts a class-coloured circle around every icon; the bar style replaces that with a class-coloured bar underneath.")
+    card:AddLabel("How the member icons on each group listing are drawn. Blizzard's dungeon browser puts a class-coloured circle around every icon; the bar style replaces that with a class-coloured bar underneath. Changing this needs a /reload.")
 
     local row = GUIFrame:CreateRow(card.content, DROPDOWN_H)
     row:AddWidget(GUIFrame:CreateDropdown(row, "Style", {
@@ -597,10 +597,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesRoleIcons", function(scrollChild, yO
         value = db.LFGRoleStyle or "bar",
         callback = function(key)
             db.LFGRoleStyle = key
-            -- Resolved HERE rather than reusing the `S` above: that one is
-            -- captured at build time, and this callback outlives the build.
-            local Skins = KE.Skins
-            if Skins and Skins.RefreshLFGRoleIcons then Skins.RefreshLFGRoleIcons() end
+            KE:FlagReloadNeeded()
         end,
     }), 0.5)
     card:AddRow(row, DROPDOWN_H, 0)

@@ -47,6 +47,7 @@ local function IncentiveHide(icon)
     if icon and icon.SetAlpha then icon:SetAlpha(0) end
 end
 
+local unpack = unpack
 local ROLE_ORDER = { "TANK", "HEALER", "DAMAGER" }
 
 local function ReskinMemberIcon(enumerate, icon, role, entry)
@@ -223,28 +224,12 @@ local function UpdateRoleCount(roleCount)
     end
 end
 
--- The Application Viewer's own data display, restyled from outside Blizzard's
--- call stack. Search-result rows are handled separately, inside the
--- LFGListSearchEntry_Update hook below.
-local function RestyleApplicationViewerIcons()
-    local av = _G.LFGListFrame and _G.LFGListFrame.ApplicationViewer
-    local dd = av and av.DataDisplay
-    if not dd or not av:IsShown() then return end
-    if dd.Enumerate then UpdateEnumerate(dd.Enumerate) end
-    if dd.RoleCount then UpdateRoleCount(dd.RoleCount) end
-end
-
--- The style is read at draw time, so it takes effect on the next row redraw --
--- which while browsing happens constantly, and with the window sitting open
--- happens not at all. One UpdateResults pass re-runs Blizzard's own enumerate
--- for every visible row, and our post-hook with it.
-function S.RefreshLFGRoleIcons()
-    local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
-    if sp and sp:IsShown() and _G.LFGListSearchPanel_UpdateResults then
-        pcall(_G.LFGListSearchPanel_UpdateResults, sp)
-    end
-    pcall(RestyleApplicationViewerIcons)
-end
+-- No live refresh entry point. Repainting means asking Blizzard to redraw the
+-- rows, and LFGListSearchPanel_UpdateResults called from our own execution
+-- indexes the same secret activityIDs field that the hooks below have to defer
+-- around. Sweeping the rows ourselves cannot restore ClassCircle when leaving
+-- the bar style, because only Blizzard knows which slots should carry one. The
+-- style change therefore asks for a reload.
 
 local lfgListIconsHooked = false
 local lfgListIconsReported = false
@@ -252,44 +237,37 @@ local function HookLFGListIcons()
     if lfgListIconsHooked then return end
     if _G.LFGListGroupDataDisplayEnumerate_Update and _G.C_LFGList
         and _G.C_LFGList.GetSearchResultPlayerInfo then
-        -- NOT hooked, and the mechanism is worth stating plainly:
+        -- DEFERRED, and it must stay that way. Both the search panel and the
+        -- Application Viewer index SECRET listing fields inside the same
+        -- execution that drives the DataDisplay, so anything of ours running
+        -- there marks the execution and Blizzard's own next read throws:
         --
-        --   GROUP_ROSTER_UPDATE -> LFGListApplicationViewer_UpdateGroupData
-        --   (which calls the two DataDisplay updaters) -> and then, in the
-        --   SAME execution, LFGListApplicationViewer_UpdateInfo, which
-        --   compares the listing's secret comment and item level:
+        --   LFGList.lua: attempt to index field 'activityIDs' (a secret
+        --   table value, while execution tainted by 'KitnEssentials')
         --
-        --     LFGList.lua: attempt to compare a secret number value
-        --     (execution tainted by 'KitnEssentials')
+        -- Doing this work from a post-hook on LFGListSearchEntry_Update
+        -- instead is NOT a way out: that function reads activityIDs itself,
+        -- and one row's hook taints the loop for every row after it.
         --
-        -- Wrapping the hooks in C_Timer.After(0) does not help: taint is about
-        -- whether our code RAN, not when it did its work. The wrapper itself
-        -- executes inside Blizzard's call stack. It also cost a visible frame
-        -- of Blizzard's class circles before ours replaced them.
-        --
-        -- So we leave that stack alone entirely and drive the sweep from our
-        -- OWN event frame. Search rows are handled in the same frame Blizzard
-        -- drew them, from the LFGListSearchEntry_Update hook in Skin().
-        local driver = CreateFrame("Frame")
-        driver:RegisterEvent("GROUP_ROSTER_UPDATE")
-        driver:RegisterEvent("PLAYER_ROLES_ASSIGNED")
-        driver:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
-        driver:RegisterEvent("LFG_LIST_APPLICANT_UPDATED")
-        driver:SetScript("OnEvent", function()
-            C_Timer.After(0, RestyleApplicationViewerIcons)
-        end)
-
-        -- Showing the panel, and scrolling it, are not covered by those events.
-        local av = _G.LFGListFrame and _G.LFGListFrame.ApplicationViewer
-        if av then
-            av:HookScript("OnShow", function()
-                C_Timer.After(0, RestyleApplicationViewerIcons)
-            end)
-            local listMixin = _G.ScrollBoxListMixin
-            if av.ScrollBox and av.ScrollBox.RegisterCallback and listMixin then
-                av.ScrollBox:RegisterCallback(listMixin.Event.OnUpdate,
-                    RestyleApplicationViewerIcons, av)
+        -- The cost of deferring is one painted frame of Blizzard's class
+        -- circles before ours replace them, on every list refresh.
+        local function Defer(fn, key)
+            return function(frame, ...)
+                if not frame or S.data(frame)[key] then return end
+                S.data(frame)[key] = true
+                local args = { ... }
+                C_Timer.After(0, function()
+                    S.data(frame)[key] = nil
+                    fn(frame, unpack(args))
+                end)
             end
+        end
+
+        hooksecurefunc("LFGListGroupDataDisplayEnumerate_Update",
+            Defer(UpdateEnumerate, "enumQueued"))
+        if _G.LFGListGroupDataDisplayRoleCount_Update then
+            hooksecurefunc("LFGListGroupDataDisplayRoleCount_Update",
+                Defer(UpdateRoleCount, "roleCountQueued"))
         end
         lfgListIconsHooked = true
     elseif not lfgListIconsReported then
@@ -838,15 +816,6 @@ local function Skin()
             end
             if entry.InviteButtonSmall and not S.data(entry.InviteButtonSmall).skinned then
                 S.Button(entry.InviteButtonSmall)
-            end
-            -- Search rows get their role icons here rather than from a hook on
-            -- the shared DataDisplay updaters -- those also run inside the
-            -- Application Viewer's secret-comparing path. This runs in the same
-            -- frame Blizzard drew the row, so the class circles never paint.
-            local dd = entry.DataDisplay
-            if dd then
-                if dd.Enumerate then UpdateEnumerate(dd.Enumerate) end
-                if dd.RoleCount then UpdateRoleCount(dd.RoleCount) end
             end
             if entry.Name then S.SetFont(entry.Name, 13, "") end
             if entry.ActivityName then S.SetFont(entry.ActivityName, 13, "") end
