@@ -113,6 +113,28 @@ local function LFGRoleStyle()
     return (bs and bs.LFGRoleStyle) or "bar"
 end
 
+-- Hiding the circle from our own deferred pass is a frame too late: Blizzard
+-- has already painted it, which is the flash. Hooking the texture's own Show
+-- makes it hide itself the instant Blizzard shows it, inside the same frame.
+--
+-- The hook body reads no listing data and calls no API, which is what keeps it
+-- clear of the taint wall the deferred pass exists to avoid.
+--
+-- Installed once per pooled slot and never removed. The style is re-read on
+-- every call, so picking circles simply stops the hiding.
+local function SuppressClassCircle(slot)
+    local circle = slot and slot.ClassCircle
+    if not circle then return end
+    local d = S.data(circle)
+    if not d.aeCircleHook then
+        hooksecurefunc(circle, "Show", function(c)
+            if LFGRoleStyle() ~= "circle" then c:Hide() end
+        end)
+        d.aeCircleHook = true
+    end
+    if LFGRoleStyle() ~= "circle" then circle:Hide() end
+end
+
 -- Our additions are created once per recycled icon, so switching to circles
 -- has to take them off rather than merely stop making them.
 local function ClearMemberIconExtras(enumerate)
@@ -167,7 +189,7 @@ local function UpdateEnumerate(enumerate)
             end
             ReskinMemberIcon(enumerate, icon, role, entry)
         end
-        if slot and slot.ClassCircle then slot.ClassCircle:Hide() end
+        SuppressClassCircle(slot)
     end
 end
 
