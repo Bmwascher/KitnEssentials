@@ -496,8 +496,16 @@ local function IsEmbeddedTip(tt)
     if not tt then return true end
     if tt.IsEmbedded then return true end
 
-    local name = tt.GetName and tt:GetName()
-    return name and name:find("EmbeddedTooltip", 1, true) and true or false
+    if tt.IsForbidden and tt:IsForbidden() then return true end
+
+    -- GetName on a widget-owned tooltip throws "forbidden object" when the
+    -- post-call runs from tainted code. A name we cannot read is a tooltip we
+    -- cannot prove is safe to write to, so treat the failure as embedded.
+    local ok, name = pcall(tt.GetName, tt)
+    if not ok then return true end
+
+    -- Matches both UIWidgetBaseItemEmbeddedTooltip* and EmbeddedItemTooltip.
+    return name and name:find("Embedded", 1, true) and true or false
 end
 
 -- Resolving a USABLE unit token.
