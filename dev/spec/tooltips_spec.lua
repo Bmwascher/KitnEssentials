@@ -214,7 +214,7 @@ describe("Tooltips AddAuraIDLine", function()
         TT.engineAuraIDs = false
         local tt = tip()
         TT._AddAuraIDLine(tt, 403264)
-        assert.same({ "|cff7c7c7cSpell ID:|r 403264" }, tt.lines)
+        assert.same({ "|cffca3c3cSpell ID:|r 403264" }, tt.lines)
     end)
 end)
 
@@ -276,7 +276,7 @@ describe("Tooltips OnTooltipSetUnitAura", function()
         TT.db = { ShowIDs = "ALWAYS" }
         local tt = tip()
         TT:OnTooltipSetUnitAura(tt, { id = 383169, auraInstanceID = 42 })
-        assert.same({ "|cff7c7c7cSpell ID:|r 383169" }, tt.lines)
+        assert.same({ "|cffca3c3cSpell ID:|r 383169" }, tt.lines)
     end)
 
     it("adds nothing when the tooltip data carries no id", function()

@@ -837,6 +837,10 @@ end
 
 -- Spell / item IDs ----------------------------------------------------
 
+-- The label colour for every ID line. One constant so Spell ID and Item ID
+-- cannot drift apart.
+local ID_LABEL_COLOR = "|cffca3c3c"
+
 local function WantIDs(db)
     local mode = db.ShowIDs or "MODIFIER"
     if mode == "NEVER" then return false end
@@ -867,7 +871,7 @@ function TT:OnTooltipSetSpell(tt, data)
     end
 
     if not id or KE:IsSecretValue(id) then return end
-    tt:AddLine(format("|cff7c7c7cSpell ID:|r %d", id))
+    tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", id))
     tt:Show()
 end
 
@@ -909,7 +913,7 @@ local function AddAuraIDLine(tt, spellId)
     -- The engine already put the line there; a second one would be a duplicate.
     if TT.engineAuraIDs then return end
     if not spellId or (KE.IsSecretValue and KE:IsSecretValue(spellId)) then return end
-    tt:AddLine(format("|cff7c7c7cSpell ID:|r %d", spellId))
+    tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellId))
     tt:Show()
 end
 
@@ -936,7 +940,7 @@ function TT:OnTooltipSetItem(tt, data)
     if not db or tt:IsForbidden() or not WantIDs(db) then return end
     local id = data and data.id
     if not id or KE:IsSecretValue(id) then return end
-    tt:AddLine(format("|cff7c7c7cItem ID:|r %d", id))
+    tt:AddLine(format(ID_LABEL_COLOR .. "Item ID:|r %d", id))
 end
 
 -- Anchor --------------------------------------------------------------
