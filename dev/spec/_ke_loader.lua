@@ -1790,7 +1790,12 @@ function L.loadRaidControl(overrides)
     -- module's captured upvalue -- ScreenPosition would read a stale table.
     _G.UIParent = overrides.UIParent
         or { GetSize = function() return 1600, 900 end, GetWidth = function() return 1600 end }
-    local KE = { db = { profile = { RaidControl = { Position = {} } } }, Skins = {} }
+    -- PATH is read at file scope to build the role-icon texture paths.
+    local KE = {
+        PATH = [[Interface\AddOns\KitnEssentials\Media\]],
+        db = { profile = { RaidControl = { Position = {} } } },
+        Skins = {},
+    }
     KE.Skins.SafeCenter = overrides.SafeCenter or function() return 0, 0 end
     helpers.loadModule("Core/Secret.lua", KE)
     helpers.loadModule("Modules/QoL/RaidControl.lua", KE)

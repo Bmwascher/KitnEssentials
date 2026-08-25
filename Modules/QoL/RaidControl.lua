@@ -126,11 +126,19 @@ local CLOSE_WIDTH      = PANEL_WIDTH - ROLE_PLATE_WIDTH
 local CWM = _G.SLASH_CLEAR_WORLD_MARKER1
 local WM = _G.SLASH_WORLD_MARKER1
 
+-- The bundled role art, kept for this row ONLY -- the Group Finder skin now
+-- leaves Blizzard's own atlases alone, and this row is three counts with
+-- nothing else to identify them. One consumer does not need a global.
+--
 -- The art has a frame painted into it, which stacks with this plate's own
 -- 1px border and reads as a two-pixel edge. Crop the outer tenth off each
--- side so the only border is ours. Local, not on KE: the LFG skin draws the
--- same art against Blizzard's rows, where there is no KE border to double.
+-- side so the only border is ours.
 local ROLE_ICON_CROP = 0.10
+local ROLE_ICONS = {
+    TANK    = KE.PATH .. [[RoleIcons\tank-modern.png]],
+    HEALER  = KE.PATH .. [[RoleIcons\healer-modern.png]],
+    DAMAGER = KE.PATH .. [[RoleIcons\dps-modern.png]],
+}
 
 local roleRoster = {}
 local roleCount = {}
@@ -567,11 +575,10 @@ function RC:CreateRoleIcons(panel)
         frame:SetPoint("LEFT", RoleIcons, "LEFT",
             ROLE_PLATE_PAD / 2 + (i - 1) * ROLE_PAIR_WIDTH, 0)
 
-        -- Modern role icons (KE.ROLE_ICONS, shared with the LFG skin),
-        -- 1px border (S.Backdrop), art inset 1px.
+        -- 1px border (S.Backdrop), art inset 1px inside it.
         S.Backdrop(frame)
         local texture = frame:CreateTexture(nil, "OVERLAY")
-        texture:SetTexture(KE.ROLE_ICONS[data.role])
+        texture:SetTexture(ROLE_ICONS[data.role])
         local c = ROLE_ICON_CROP
         texture:SetTexCoord(c, 1 - c, c, 1 - c)
         texture:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)

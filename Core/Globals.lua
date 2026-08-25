@@ -47,14 +47,6 @@ KE.GEM_SOCKET_TYPES = {
     { name = "Fiber",      locale = "EMPTY_SOCKET_FIBER",      icon = 136260 },
 }
 
--- Role icons for group-finder and role-check displays. Keyed by the string
--- Blizzard's role APIs return, so a lookup miss is the correct no-op.
-KE.ROLE_ICONS = {
-    TANK    = KE.PATH .. [[RoleIcons\tank-modern.png]],
-    HEALER  = KE.PATH .. [[RoleIcons\healer-modern.png]],
-    DAMAGER = KE.PATH .. [[RoleIcons\dps-modern.png]],
-}
-
 if KE.LSM then
     KE.LSM:Register("font", "Expressway", KE.FONT)
     KE.LSM:Register("statusbar", "KitnUI", KE.PATH .. [[Statusbars\KitnEssentials.blp]])
