@@ -231,6 +231,12 @@ local function LayoutRoleCount(roleCount)
     d.aeCountLayout = true
 end
 
+-- The count row keeps the bundled art. Blizzard's micro atlases here carry a
+-- round background baked into the image, which reads as a heavier, busier row
+-- than the member icons beside it in the other display.
+--
+-- Independent of LFGRoleStyle on purpose: that setting picks how the per-member
+-- icons are drawn, and this row has no members to draw.
 local function UpdateRoleCount(roleCount)
     LayoutRoleCount(roleCount)
     for i = 1, 3 do
@@ -241,6 +247,11 @@ local function UpdateRoleCount(roleCount)
             if not d.aeSnap then
                 S.PixelSnap(icon)
                 d.aeSnap = true
+            end
+            local art = KE.ROLE_ICONS[slot[3]]
+            if art then
+                icon:SetTexture(art)
+                icon:SetTexCoord(0, 1, 0, 1)
             end
         end
     end
