@@ -480,10 +480,11 @@ function HM:FindHealers()
 
     -- An open preview OWNS currentHealers and the drawn frames; a roster, zone
     -- or spec event must not replace its canned rows with the live roster.
-    -- Every caller that means to leave preview clears isPreview first
-    -- (ShowPreview's live-healer path, HidePreview, OnDisable), and
-    -- ApplySettings branches to UpdateHealerFrames instead of calling in here,
-    -- so they all pass. Without this the preview kept its Raid context and its
+    -- Every caller that means to leave preview clears isPreview before calling
+    -- in (ShowPreview's live-healer path, HidePreview), and ApplySettings
+    -- branches to UpdateHealerFrames rather than calling in here, so none of
+    -- them is blocked. OnDisable clears the flag and hides without coming
+    -- through at all. Without this the preview kept its Raid context and its
     -- Raid appearance while collapsing to a single live Dungeon row.
     if self.isPreview then return end
 
