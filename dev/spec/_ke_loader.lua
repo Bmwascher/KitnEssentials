@@ -484,6 +484,12 @@ end
 function L.loadTooltips(opts, overrides)
     opts = opts or {}
     installMock(overrides, { C_Timer = inertTimer() })
+    -- Not part of the shared mock surface, so it is wired here. The default
+    -- reports a client without the aura-ID CVar, which is the no-op branch.
+    _G.C_CVar = (overrides or {}).C_CVar or {
+        GetCVar = function() return nil end,
+        SetCVar = function() end,
+    }
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.CreateFrame = function() return noopFrame() end

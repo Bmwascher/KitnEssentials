@@ -871,7 +871,43 @@ function TT:OnTooltipSetSpell(tt, data)
     tt:Show()
 end
 
+-- 12.1 renders aura spell IDs ENGINE-SIDE, and that is the only route that ever
+-- reaches an aura-container tooltip: those buttons show a forbidden clone of
+-- GameTooltip that no AddLine of ours can touch.
+--
+-- It also reaches where the Lua line cannot: under aura restriction the id is a
+-- SECRET, so AddAuraIDLine bails and combat aura tooltips lose the line
+-- entirely. The engine formats it itself and is unaffected.
+--
+-- The CVar is session-only, so it needs re-asserting. Other addons drive the
+-- same one; writes are read-gated and event-driven, so two of them agreeing or
+-- disagreeing settles rather than loops.
+local AURA_ID_CVAR = "tooltipShowAuraSpellIDs"
+local auraIDCVarPresent
+
+function TT:SyncAuraSpellIDCVar()
+    if auraIDCVarPresent == nil then
+        local okProbe, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
+        auraIDCVarPresent = (okProbe and cur ~= nil) and true or false
+    end
+    if not auraIDCVarPresent then return end
+
+    -- Engine rendering is unconditional, so it can only stand in for ALWAYS.
+    -- Under MODIFIER the line is meant to appear while a key is held, which the
+    -- engine cannot honour -- the Lua hooks keep that mode, and forbidden aura
+    -- tooltips simply have no ID there.
+    local db = self.db
+    local on = (db and self:IsEnabled() and db.ShowIDs == "ALWAYS") and "1" or "0"
+    -- Read first: writing a CVar makes the client flush its config, and
+    -- ApplySettings runs on every options edit.
+    local ok, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
+    if ok and cur ~= on then pcall(C_CVar.SetCVar, AURA_ID_CVAR, on) end
+    self.engineAuraIDs = (on == "1")
+end
+
 local function AddAuraIDLine(tt, _, spellId)
+    -- The engine already put the line there; a second one would be a duplicate.
+    if TT.engineAuraIDs then return end
     if not spellId or (KE.IsSecretValue and KE:IsSecretValue(spellId)) then return end
     tt:AddLine(format("|cff7c7c7cSpell ID:|r %d", spellId))
     tt:Show()
@@ -991,6 +1027,7 @@ function TT:ApplySettings()
     self:ApplyFonts()
     self:StyleHealthBar()
     self:ApplyPosition()
+    self:SyncAuraSpellIDCVar()
     -- Restyle anything currently shown so color edits apply live.
     for _, name in pairs(STYLE_LIST) do
         local tt = _G[name]
@@ -1075,6 +1112,10 @@ function TT:OnEnable()
     -- change, RefreshData() re-fires the tooltip data processors, so the
     -- Unit/Spell/Item post-calls re-run with the new modifier state.
     self:RegisterEvent("MODIFIER_STATE_CHANGED")
+    -- Not PLAYER_LOGIN: the client settles its session CVars after login and
+    -- clobbers a write made that early. Kept registered so a later reset is
+    -- answered too -- one guarded read per zone-in.
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "SyncAuraSpellIDCVar")
 
     self:EnsureAnchor()
     self:ApplySettings()
@@ -1129,6 +1170,10 @@ end
 
 function TT:OnDisable()
     self:UnregisterEvent("MODIFIER_STATE_CHANGED")
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    -- AceAddon clears enabledState before dispatching this, so the sync
+    -- computes "off" and the engine stops drawing the line.
+    self:SyncAuraSpellIDCVar()
     -- The anchor frame survives, so the guard has to be cleared or a later
     -- enable would skip registration and leave the tool holding a dead key.
     if KE.EditMode then KE.EditMode:UnregisterElement("TooltipAnchor") end
@@ -1149,3 +1194,4 @@ TT._ColorsMatch = ColorsMatch
 TT._ReactionColor = ReactionColor
 TT._WantIDs = WantIDs
 TT._UnitColor = UnitColor
+TT._AddAuraIDLine = AddAuraIDLine

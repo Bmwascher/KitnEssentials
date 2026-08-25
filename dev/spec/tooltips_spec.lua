@@ -125,3 +125,95 @@ describe("Tooltips WantIDs", function()
         assert.is_true(held._WantIDs({}))
     end)
 end)
+
+-- The engine-side aura ID CVar. Two refusal rules live here and both fail
+-- silently: writing the CVar under MODIFIER would render IDs the user asked to
+-- see only while a key is held, and letting the Lua line through while the
+-- engine draws its own puts the ID on the tooltip twice.
+describe("Tooltips SyncAuraSpellIDCVar", function()
+    -- Returns the module plus the write log, with the CVar seeded to `initial`
+    -- ("1"/"0"), or absent from the client when `initial` is nil.
+    local function load(showIDs, enabled, initial)
+        local writes = {}
+        local store = { tooltipShowAuraSpellIDs = initial }
+        local TT = L.loadTooltips(nil, {
+            C_CVar = {
+                GetCVar = function(key) return store[key] end,
+                SetCVar = function(key, value)
+                    store[key] = value
+                    writes[#writes + 1] = { key, value }
+                end,
+            },
+        })
+        TT.db = { ShowIDs = showIDs }
+        TT.IsEnabled = function() return enabled end
+        return TT, writes
+    end
+
+    it("turns engine rendering on for ALWAYS", function()
+        local TT, writes = load("ALWAYS", true, "0")
+        TT:SyncAuraSpellIDCVar()
+        assert.same({ { "tooltipShowAuraSpellIDs", "1" } }, writes)
+        assert.is_true(TT.engineAuraIDs)
+    end)
+
+    it("leaves it off for MODIFIER, which the engine cannot honour", function()
+        local TT, writes = load("MODIFIER", true, "1")
+        TT:SyncAuraSpellIDCVar()
+        assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
+        assert.is_false(TT.engineAuraIDs)
+    end)
+
+    it("leaves it off for NEVER", function()
+        local TT, writes = load("NEVER", true, "1")
+        TT:SyncAuraSpellIDCVar()
+        assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
+    end)
+
+    it("hands the CVar back when the module is disabled", function()
+        local TT, writes = load("ALWAYS", false, "1")
+        TT:SyncAuraSpellIDCVar()
+        assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
+        assert.is_false(TT.engineAuraIDs)
+    end)
+
+    it("does not write when the CVar already holds the wanted value", function()
+        local TT, writes = load("ALWAYS", true, "1")
+        TT:SyncAuraSpellIDCVar()
+        assert.same({}, writes)
+        assert.is_true(TT.engineAuraIDs)
+    end)
+
+    it("never writes a CVar this client does not have", function()
+        local TT, writes = load("ALWAYS", true, nil)
+        TT:SyncAuraSpellIDCVar()
+        assert.same({}, writes)
+    end)
+end)
+
+describe("Tooltips AddAuraIDLine", function()
+    local function tip()
+        local lines = {}
+        return {
+            lines = lines,
+            AddLine = function(_, text) lines[#lines + 1] = text end,
+            Show = function() end,
+        }
+    end
+
+    it("adds nothing while the engine is drawing the ID itself", function()
+        local TT = L.loadTooltips()
+        TT.engineAuraIDs = true
+        local tt = tip()
+        TT._AddAuraIDLine(tt, nil, 403264)
+        assert.same({}, tt.lines)
+    end)
+
+    it("adds the line when the engine is not", function()
+        local TT = L.loadTooltips()
+        TT.engineAuraIDs = false
+        local tt = tip()
+        TT._AddAuraIDLine(tt, nil, 403264)
+        assert.same({ "|cff7c7c7cSpell ID:|r 403264" }, tt.lines)
+    end)
+end)
