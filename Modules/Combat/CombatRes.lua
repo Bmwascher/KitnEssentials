@@ -262,12 +262,16 @@ function CR:ResizeToContent()
                 -- would be confidently wrong rather than merely stale.
                 secret = true
             else
-                -- Spacing is added even for a glyph that measures zero, because
-                -- UpdateAnchors reserves the gap either way.
-                totalWidth = totalWidth + sw + (self.db.TextSpacing or 4)
+                totalWidth = totalWidth + sw
             end
         end
     end
+
+    -- Spacing is per JOINT, not per element, and the joints are the ones
+    -- UpdateAnchors actually spaces: charge, separator, timer. The bracket
+    -- joints use fixed offsets. Counting per element reserved three gaps that
+    -- are never drawn, and missed the gap beside an element rendering empty.
+    totalWidth = totalWidth + (self.frame.CRText and 3 or 2) * (self.db.TextSpacing or 4)
 
     if timerLive ~= nil then self.frame.timerText:SetText(timerLive) end
     if chargeLive ~= nil then self.frame.charge:SetText(chargeLive) end
