@@ -267,10 +267,11 @@ function CR:ResizeToContent()
         end
     end
 
-    -- Spacing is per JOINT, not per element, and the joints are the ones
-    -- UpdateAnchors actually spaces: charge, separator, timer. The bracket
-    -- joints use fixed offsets. Counting per element reserved three gaps that
-    -- are never drawn, and missed the gap beside an element rendering empty.
+    -- Spacing is per JOINT, not per element: UpdateAnchors spaces three joints
+    -- in either growth direction and gives the bracket joints fixed offsets.
+    -- Counting per element reserved gaps that are never drawn, and missed the
+    -- gap beside an element whose text is empty. The condition is the one
+    -- UpdateAnchors branches on, so the two cannot disagree.
     totalWidth = totalWidth + (self.frame.CRText and 3 or 2) * (self.db.TextSpacing or 4)
 
     if timerLive ~= nil then self.frame.timerText:SetText(timerLive) end
