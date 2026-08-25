@@ -474,6 +474,19 @@ function HM:BuildHealerSnapshot(unit)
     }
 end
 
+-- PreviewManager and the GUI page both write isPreview, and the manager's
+-- per-module cache can read "hidden" while a page rebuild has re-armed the
+-- flag. StopAllPreviews skips anything already cached hidden, so nothing would
+-- ever clear it: the player keeps a fabricated healer stack until a reload, and
+-- the GUI refuses to open in combat, so an encounter cannot recover. Called
+-- from every reader that would otherwise obey the flag, so the orphan is
+-- bounded by the 1Hz tick rather than by a roster event that may never come.
+function HM:HealOrphanedPreview()
+    if self.isPreview and not (KE.PreviewManager and KE.PreviewManager:IsPreviewActive()) then
+        self.isPreview = false
+    end
+end
+
 function HM:FindHealers()
     if DEBUG_HM then KE:Print("[HM] FindHealers entry isPreview=" .. tostring(self.isPreview) .. " enabled=" .. tostring(self.db and self.db.Enabled)) end
     if not self.db or not self.db.Enabled then return end
@@ -487,15 +500,7 @@ function HM:FindHealers()
     -- through at all. Without this the preview kept its Raid context and its
     -- Raid appearance while collapsing to a single live Dungeon row.
     --
-    -- An ORPHANED flag is healed first rather than obeyed. PreviewManager and
-    -- the GUI page both write isPreview, and the manager's per-module cache can
-    -- read "hidden" while a page rebuild has re-armed the flag; StopAllPreviews
-    -- skips a module already cached hidden, so nothing would ever clear it.
-    -- Left alone the player keeps a fabricated healer stack until a reload, and
-    -- the GUI refuses to open in combat, so an encounter cannot recover.
-    if self.isPreview and not (KE.PreviewManager and KE.PreviewManager:IsPreviewActive()) then
-        self.isPreview = false
-    end
+    self:HealOrphanedPreview()
     if self.isPreview then return end
 
     local mode = self:GetMode()
@@ -631,6 +636,7 @@ function HM:UpdateHealerFrames()
 end
 
 function HM:UpdateMana()
+    self:HealOrphanedPreview()
     if self.isPreview then return end
     local count = #self.currentHealers
     if count == 0 then return end

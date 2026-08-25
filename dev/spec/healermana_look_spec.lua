@@ -131,4 +131,23 @@ describe("HealerMana:FindHealers preview ownership", function()
         assert.is_false(HM.isPreview)
         assert.are.equal(0, #HM.currentHealers)
     end)
+
+    it("heals an orphaned flag from the mana tick too", function()
+        -- FindHealers only runs on roster, zone and spec events. A stable
+        -- roster through an encounter fires none of them, so the tick is what
+        -- actually bounds the orphan.
+        local HM, KE = L.loadHealerMana({ IsInRaid = function() return false end })
+        KE.PreviewManager = { IsPreviewActive = function() return false end }
+        HM.isPreview = true
+        HM:UpdateMana()
+        assert.is_false(HM.isPreview)
+    end)
+
+    it("leaves the flag alone on the mana tick while a preview is live", function()
+        local HM, KE = L.loadHealerMana({ IsInRaid = function() return false end })
+        KE.PreviewManager = { IsPreviewActive = function() return true end }
+        HM.isPreview = true
+        HM:UpdateMana()
+        assert.is_true(HM.isPreview)
+    end)
 end)
