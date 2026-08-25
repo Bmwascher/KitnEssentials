@@ -336,9 +336,9 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     yOffset = cardSD:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 6: Gem Socket Helper
+    -- Card 6: Socket & Enchant Helpers
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Gem Socket Helper", yOffset)
+    local card5 = GUIFrame:CreateCard(scrollChild, "Socket & Enchant Helpers", yOffset)
     manager:Register(card5, "all")
 
     local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
@@ -359,8 +359,23 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         end,
         tooltip = "Shows equipped gem sockets beside the character panel tabs with quick gem replacement on hover.",
     })
-    row5a:AddWidget(socketEnableCheck, 1)
+    row5a:AddWidget(socketEnableCheck, 0.5)
     manager:Register(socketEnableCheck, "all")
+
+    local enchantHelperCheck = GUIFrame:CreateCheckbox(row5a, "Enable Enchant Helper", {
+        value = db.EnchantHelperEnabled,
+        callback = function(checked)
+            db.EnchantHelperEnabled = checked
+            local CP = GetModule()
+            if CP then CP:RefreshSocketButtons() end
+        end,
+        tooltip = "Adds a button at the end of the socket bar listing every enchant in your bags. "
+            .. "Clicking one picks it up so you can click the item you want it on.",
+    })
+    row5a:AddWidget(enchantHelperCheck, 0.5)
+    -- The enchant button is drawn on the socket bar, so it needs the socket
+    -- helper running even though it sits beside its master toggle.
+    manager:Register(enchantHelperCheck, "socketHelperOn")
     card5:AddRow(row5a, Theme.rowHeight)
 
     local sep5 = GUIFrame:CreateSeparator(card5.content)
@@ -392,7 +407,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     manager:Register(spacingSlider, "socketHelperOn")
     card5:AddRow(row5b, Theme.rowHeight)
 
-    local row5c = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local row5c = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
     local emptyOnlyCheck = GUIFrame:CreateCheckbox(row5c, "Show Only Empty Sockets", {
         value = db.ShowOnlyEmptySockets,
         callback = function(checked)
@@ -404,22 +419,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     })
     row5c:AddWidget(emptyOnlyCheck, 1)
     manager:Register(emptyOnlyCheck, "socketHelperOn")
-    card5:AddRow(row5c, Theme.rowHeight)
-
-    local row5d = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
-    local enchantHelperCheck = GUIFrame:CreateCheckbox(row5d, "Enable Enchant Helper", {
-        value = db.EnchantHelperEnabled,
-        callback = function(checked)
-            db.EnchantHelperEnabled = checked
-            local CP = GetModule()
-            if CP then CP:RefreshSocketButtons() end
-        end,
-        tooltip = "Adds a button at the end of the socket bar listing every enchant in your bags. "
-            .. "Clicking one picks it up so you can click the item you want it on.",
-    })
-    row5d:AddWidget(enchantHelperCheck, 1)
-    manager:Register(enchantHelperCheck, "socketHelperOn")
-    card5:AddRow(row5d, Theme.rowHeightLast, 0)
+    card5:AddRow(row5c, Theme.rowHeightLast, 0)
 
     yOffset = card5:GetNextOffset()
 
