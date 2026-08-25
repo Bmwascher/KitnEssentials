@@ -77,7 +77,7 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         -- context it edits. Re-show when this render moves the context, or when
         -- the page is about to edit Raid keys with no preview on screen to
         -- show them.
-        if db.Enabled and activeMod.ShowPreview
+        if activeMod.ShowPreview
             and (changed or (isRaidCtx and not activeMod.isPreview)) then
             activeMod:ShowPreview()
         end
@@ -236,17 +236,20 @@ GUIFrame:RegisterContent("HealerMana", function(scrollChild, yOffset)
         callback = function(checked)
             db.EnableInRaid = checked
             local mod = GetModule()
-            local wasRaidCtx = mod and mod.guiConfigContext == "RAID"
             if not checked and mod then
                 -- Raid Mode off -> no Raid context to edit; fall back to Dungeon.
                 mod.guiConfigContext = "DUNGEON"
                 mod.previewContext = "DUNGEON"
-                if mod.isPreview then mod:ShowPreview() end
                 if mod.RefreshEditMode then mod:RefreshEditMode() end
             end
+            -- Unconditional, and on BOTH edges. This flag is half the mode
+            -- predicate, so ticking it ON in a raid group flips the held mode
+            -- and moves the frame to the Raid anchor and sizes while the page
+            -- goes on editing the plain keys.
+            if mod and mod.ShowPreview then mod:ShowPreview() end
             ApplySettings()
             RefreshStates()  -- grey/ungrey Split Positioning + raid-only settings
-            if not checked and wasRaidCtx then RebuildPage() end  -- collapse to Dungeon
+            RebuildPage()  -- the page's context and control set both move
         end,
     })
     rowRaid1:AddWidget(enableRaidCheck, 0.5)

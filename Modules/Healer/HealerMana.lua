@@ -486,6 +486,16 @@ function HM:FindHealers()
     -- them is blocked. OnDisable clears the flag and hides without coming
     -- through at all. Without this the preview kept its Raid context and its
     -- Raid appearance while collapsing to a single live Dungeon row.
+    --
+    -- An ORPHANED flag is healed first rather than obeyed. PreviewManager and
+    -- the GUI page both write isPreview, and the manager's per-module cache can
+    -- read "hidden" while a page rebuild has re-armed the flag; StopAllPreviews
+    -- skips a module already cached hidden, so nothing would ever clear it.
+    -- Left alone the player keeps a fabricated healer stack until a reload, and
+    -- the GUI refuses to open in combat, so an encounter cannot recover.
+    if self.isPreview and not (KE.PreviewManager and KE.PreviewManager:IsPreviewActive()) then
+        self.isPreview = false
+    end
     if self.isPreview then return end
 
     local mode = self:GetMode()

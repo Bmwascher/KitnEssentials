@@ -2715,6 +2715,9 @@ function L.loadHealerMana(overrides)
     _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
     _G.UnitPowerPercent = overrides.UnitPowerPercent or function() return 100 end
     _G.GetRaidRosterInfo = overrides.GetRaidRosterInfo or function() return nil end
+    -- Defaults to a non-healer, so a spec that drives the live roster scan
+    -- finds nobody and stops rather than needing the whole snapshot surface.
+    _G.UnitGroupRolesAssigned = overrides.UnitGroupRolesAssigned or function() return "DAMAGER" end
 
     local profile = {
         Dungeons = {

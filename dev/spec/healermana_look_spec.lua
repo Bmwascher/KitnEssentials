@@ -109,12 +109,26 @@ describe("HealerMana:FindHealers preview ownership", function()
         -- A refusal rule: roster, zone and spec events all reach FindHealers,
         -- and replacing the canned rows there left the page editing Raid while
         -- the frame drew Dungeon.
-        local HM = L.loadHealerMana({ IsInRaid = function() return false end })
+        local HM, KE = L.loadHealerMana({ IsInRaid = function() return false end })
+        KE.PreviewManager = { IsPreviewActive = function() return true end }
         HM.isPreview = true
         HM.currentHealers = { { unit = "player", name = "sentinel" } }
         HM:FindHealers()
         assert.are.equal(1, #HM.currentHealers)
         assert.are.equal("sentinel", HM.currentHealers[1].name)
         assert.is_true(HM.isPreview)
+    end)
+
+    it("heals an orphaned flag when no preview owner is live", function()
+        -- The manager's per-module cache can read "hidden" while the flag is
+        -- still set, and StopAllPreviews skips anything already cached hidden.
+        -- Obeying the flag then strands fabricated rows on screen for good.
+        local HM, KE = L.loadHealerMana({ IsInRaid = function() return false end })
+        KE.PreviewManager = { IsPreviewActive = function() return false end }
+        HM.isPreview = true
+        HM.currentHealers = { { unit = "player", name = "sentinel" } }
+        HM:FindHealers()
+        assert.is_false(HM.isPreview)
+        assert.are.equal(0, #HM.currentHealers)
     end)
 end)
