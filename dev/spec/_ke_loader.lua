@@ -490,6 +490,14 @@ function L.loadTooltips(opts, overrides)
         GetCVar = function() return nil end,
         SetCVar = function() end,
     }
+    -- Real values: a spec that made these up would agree with itself and
+    -- disagree with the client.
+    _G.Enum = (overrides or {}).Enum or {
+        TooltipDataType = {
+            Item = 0, Spell = 1, Unit = 2, UnitAura = 7, PetAction = 11, Macro = 25,
+        },
+        TooltipDataLineType = { None = 0 },
+    }
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.CreateFrame = function() return noopFrame() end

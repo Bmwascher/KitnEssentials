@@ -910,11 +910,38 @@ function TT:SyncAuraSpellIDCVar()
 end
 
 local function AddAuraIDLine(tt, spellId)
-    -- The engine already put the line there; a second one would be a duplicate.
-    if TT.engineAuraIDs then return end
     if not spellId or (KE.IsSecretValue and KE:IsSecretValue(spellId)) then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellId))
     tt:Show()
+end
+
+-- The engine draws its aura ID line second from the top and in white, and a
+-- line the engine drew cannot be restyled or moved afterwards. Swallowing it
+-- on the way in lets OnTooltipSetUnitAura re-issue it at the bottom in our
+-- colour, so every ID line reads the same.
+--
+-- Blizzard gives the line no type of its own -- it arrives untyped, the same
+-- as the aura's name and description -- so its text is the only thing that
+-- identifies it. That makes the wording load-bearing: if Blizzard rewords it
+-- the match stops firing, which leaves the engine's line in place and skips
+-- ours. Degrading to the engine's own placement is the intended failure.
+local ENGINE_ID_PATTERN = "^Spell ID: %d+$"
+local swallowedEngineID = false
+
+local function SwallowEngineAuraIDLine(tt, lineData)
+    if not TT.engineAuraIDs or not TT.db then return end
+    if not (tt.IsTooltipType and tt:IsTooltipType(_G.Enum.TooltipDataType.UnitAura)) then return end
+
+    -- Both halves of the swap have to be readable or the engine's line is
+    -- better left alone: under aura restriction the id is secret, so a
+    -- swallowed line could not be re-issued and the ID would be lost. An ID in
+    -- the engine's place beats no ID.
+    local text = lineData and lineData.leftText
+    if not text or KE:IsSecretValue(text) or not text:match(ENGINE_ID_PATTERN) then return end
+    if IsEmbeddedTip(tt) then return end
+
+    swallowedEngineID = true
+    return true
 end
 
 -- One registration on the aura data type instead of a hook per aura setter.
@@ -928,9 +955,15 @@ end
 -- auraInstanceID. Blizzard documents neither, so that was established by
 -- probe -- do not "correct" it to auraInstanceID on the strength of the name.
 function TT:OnTooltipSetUnitAura(tt, data)
+    local swallowed = swallowedEngineID
+    swallowedEngineID = false
+
     local db = self.db
     if IsEmbeddedTip(tt) then return end
     if not db or tt:IsForbidden() or not WantIDs(db) then return end
+    -- Nothing was swallowed, so the engine's own line is still on the tooltip
+    -- and a second one would be a duplicate.
+    if self.engineAuraIDs and not swallowed then return end
     AddAuraIDLine(tt, data and data.id)
 end
 
@@ -1085,6 +1118,14 @@ function TT:OnEnable()
             _G.TooltipDataProcessor.AddTooltipPostCall(T.UnitAura, function(tt, data)
                 if TT:IsEnabled() then TT:OnTooltipSetUnitAura(tt, data) end
             end)
+            -- Untyped lines are common, so the handler's first test is the
+            -- engine flag: off outside ALWAYS, which costs one field read.
+            local LT = _G.Enum.TooltipDataLineType
+            if LT and _G.TooltipDataProcessor.AddLinePreCall then
+                _G.TooltipDataProcessor.AddLinePreCall(LT.None, function(tt, lineData)
+                    if TT:IsEnabled() then return SwallowEngineAuraIDLine(tt, lineData) end
+                end)
+            end
             -- Pet bar buttons are their own data type and carry the spell in
             -- the same id field.
             if T.PetAction then
@@ -1211,3 +1252,4 @@ TT._ReactionColor = ReactionColor
 TT._WantIDs = WantIDs
 TT._UnitColor = UnitColor
 TT._AddAuraIDLine = AddAuraIDLine
+TT._SwallowEngineAuraIDLine = SwallowEngineAuraIDLine

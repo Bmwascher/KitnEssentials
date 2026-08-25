@@ -201,20 +201,18 @@ describe("Tooltips AddAuraIDLine", function()
         }
     end
 
-    it("adds nothing while the engine is drawing the ID itself", function()
+    it("adds the line", function()
         local TT = L.loadTooltips()
-        TT.engineAuraIDs = true
-        local tt = tip()
-        TT._AddAuraIDLine(tt, 403264)
-        assert.same({}, tt.lines)
-    end)
-
-    it("adds the line when the engine is not", function()
-        local TT = L.loadTooltips()
-        TT.engineAuraIDs = false
         local tt = tip()
         TT._AddAuraIDLine(tt, 403264)
         assert.same({ "|cffca3c3cSpell ID:|r 403264" }, tt.lines)
+    end)
+
+    it("adds nothing for a secret id", function()
+        local TT = L.loadTooltips(nil, { issecretvalue = function() return true end })
+        local tt = tip()
+        TT._AddAuraIDLine(tt, 403264)
+        assert.same({}, tt.lines)
     end)
 end)
 
@@ -301,5 +299,75 @@ describe("Tooltips OnTooltipSetUnitAura", function()
         local tt = tip()
         TT:OnTooltipSetUnitAura(tt, { id = 383169 })
         assert.same({}, tt.lines)
+    end)
+end)
+
+-- Moving the engine's own aura ID line to the bottom. The swallow and the
+-- re-issue are one decision split across two callbacks, so they are driven
+-- together: swallowing without re-issuing loses the ID outright.
+describe("Tooltips engine aura ID relocation", function()
+    local function tip(isAura)
+        local lines = {}
+        return {
+            lines = lines,
+            IsForbidden = function() return false end,
+            GetName = function() return "GameTooltip" end,
+            IsTooltipType = function(_, t) return isAura and t == 7 end,
+            AddLine = function(_, text) lines[#lines + 1] = text end,
+            Show = function() end,
+        }
+    end
+
+    local function load(overrides)
+        local TT = L.loadTooltips(nil, overrides)
+        TT.db = { ShowIDs = "ALWAYS" }
+        TT.engineAuraIDs = true
+        return TT
+    end
+
+    it("swallows the engine line and re-issues it at the bottom in our colour", function()
+        local TT = load()
+        local tt = tip(true)
+        assert.is_true(TT._SwallowEngineAuraIDLine(tt, { leftText = "Spell ID: 381748" }))
+        TT:OnTooltipSetUnitAura(tt, { id = 381748 })
+        assert.same({ "|cffca3c3cSpell ID:|r 381748" }, tt.lines)
+    end)
+
+    it("leaves the engine line alone and adds none of its own when the wording does not match", function()
+        local TT = load()
+        local tt = tip(true)
+        assert.is_nil(TT._SwallowEngineAuraIDLine(tt, { leftText = "You feel lucky." }))
+        TT:OnTooltipSetUnitAura(tt, { id = 381748 })
+        assert.same({}, tt.lines)
+    end)
+
+    it("never swallows on a tooltip that is not an aura", function()
+        local TT = load()
+        local tt = tip(false)
+        assert.is_nil(TT._SwallowEngineAuraIDLine(tt, { leftText = "Spell ID: 381748" }))
+    end)
+
+    it("never swallows a line it cannot read, so combat keeps the engine's line", function()
+        local TT = load({ issecretvalue = function() return true end })
+        local tt = tip(true)
+        assert.is_nil(TT._SwallowEngineAuraIDLine(tt, { leftText = "Spell ID: 381748" }))
+    end)
+
+    it("does not swallow while the engine is not drawing at all", function()
+        local TT = load()
+        TT.engineAuraIDs = false
+        local tt = tip(true)
+        assert.is_nil(TT._SwallowEngineAuraIDLine(tt, { leftText = "Spell ID: 381748" }))
+    end)
+
+    it("does not carry a swallow over to the next tooltip", function()
+        local TT = load()
+        local first = tip(true)
+        TT._SwallowEngineAuraIDLine(first, { leftText = "Spell ID: 381748" })
+        TT:OnTooltipSetUnitAura(first, { id = 381748 })
+
+        local second = tip(true)   -- no engine line on this one
+        TT:OnTooltipSetUnitAura(second, { id = 999 })
+        assert.same({}, second.lines)
     end)
 end)
