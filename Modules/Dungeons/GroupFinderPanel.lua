@@ -378,6 +378,33 @@ local function SanitizeScore(resultID)
     return score
 end
 
+-- Scores are read HERE and nowhere else. GetSearchResultInfo reads the secret
+-- listing table, and calling it from a hook on LFGListSearchEntry_Update marks
+-- that execution -- Blizzard's own next read of activityIDs then throws:
+--
+--   LFGList.lua: attempt to index field 'activityIDs' (a secret table value,
+--   while execution tainted by 'KitnEssentials')
+--
+-- This runs from our own event handler instead, which is a separate execution,
+-- so the row hook only ever reads this table. Keyed by resultID, which is
+-- stable, so a stale entry is still the right score.
+local scoreCache = {}
+local function RefreshScoreCache(searchPanel)
+    wipe(scoreCache)
+    local results = searchPanel and searchPanel.results
+    if not results then return end
+    for i = 1, #results do
+        local id = results[i]
+        local score = SanitizeScore(id)
+        if score then scoreCache[id] = score end
+    end
+end
+
+local function CacheScore(resultID)
+    if not resultID then return end
+    scoreCache[resultID] = SanitizeScore(resultID)
+end
+
 local function OnUpdateResultList(searchPanel)
     -- The advanced-filter API owns the dungeon/tank/healer predicates
     -- server-side and every filter change triggers a REAL re-search, so
@@ -524,7 +551,8 @@ end
 local function DecorateSearchEntry(entry)
     if not IsActive() or not IsDungeonSearchMode() then return end
     if not entry.resultID or not entry.Name then return end
-    local score = SanitizeScore(entry.resultID)
+    -- Cache only. See RefreshScoreCache for why this must not call the API.
+    local score = scoreCache[entry.resultID]
     if not score then return end
     local color = C_ChallengeMode and C_ChallengeMode.GetDungeonScoreRarityColor
         and C_ChallengeMode.GetDungeonScoreRarityColor(score)
@@ -540,6 +568,8 @@ GFP._SanitizeScore       = SanitizeScore
 GFP._OnUpdateResultList  = OnUpdateResultList
 GFP._ReSort              = ReSort
 GFP._DecorateSearchEntry = DecorateSearchEntry
+GFP._RefreshScoreCache   = RefreshScoreCache
+GFP._ScoreCache          = scoreCache
 
 ------------------------------------------------------------------------
 -- Weekly runs footer: vault-aware tooltip (top runs + reward levels).
@@ -1507,7 +1537,17 @@ function GFP:OnEnable()
     -- masked it because results were already cached.
     self:RegisterEvent("LFG_LIST_SEARCH_RESULTS_RECEIVED", function()
         local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
-        if sp and sp:IsShown() then OnUpdateResultList(sp) end
+        if sp and sp:IsShown() then
+            -- Before OnUpdateResultList: that triggers the row redraw, and the
+            -- row hook reads this cache.
+            RefreshScoreCache(sp)
+            OnUpdateResultList(sp)
+        end
+    end)
+    -- Single-listing refreshes never reach the sweep above. Same reason for
+    -- doing it here: this is our own execution, not Blizzard's row loop.
+    self:RegisterEvent("LFG_LIST_SEARCH_RESULT_UPDATED", function(_, resultID)
+        CacheScore(resultID)
     end)
     -- Pane switching follows the M+ search state. SetCategory covers the
     -- quick buttons and manual navigation; Show/Hide covers back-outs.
