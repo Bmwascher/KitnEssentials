@@ -823,11 +823,10 @@ end
 -- ApplySettings refreshes too.
 function HM:OnGroupChanged()
     if not self.db or not self.db.Enabled then return end
-    if self:RefreshMode() then
-        for _, frame in pairs(self.healerFrames) do
-            self:UpdateFrameAppearance(frame)
-        end
-    end
+    -- No re-dress here: UpdateHealerFrames redresses each frame immediately
+    -- before the only Show call, so a frame cannot become visible carrying the
+    -- previous mode's appearance.
+    self:RefreshMode()
     -- No reposition here: FindHealers -> UpdateHealerFrames sizes the container
     -- and then positions it. Repositioning first would hang the container at
     -- the new mode's anchor with the old mode's row count, which is the mixed
