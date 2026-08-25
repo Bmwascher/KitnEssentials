@@ -37,7 +37,6 @@ local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local GetSpecializationInfoByID = GetSpecializationInfoByID
 local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
-local IsInInstance = IsInInstance
 local GetNumGroupMembers = GetNumGroupMembers
 local GetRaidRosterInfo = GetRaidRosterInfo
 local C_Timer = C_Timer
@@ -71,6 +70,7 @@ HM.containerFrame = nil
 HM.updateTimer = nil
 HM.currentHealers = {}
 HM._lastMode = nil
+HM.mode = "DUNGEON"     -- held mode; only RefreshMode writes it
 HM.previewContext = nil  -- "RAID" | "DUNGEON" | nil (set by GUI preview switch)
 HM.guiConfigContext = nil  -- "RAID" | "DUNGEON" | nil (which context the GUI edits)
 HM.isPreview = false
@@ -158,16 +158,24 @@ end
 ---------------------------------------------------------------------------------
 -- Mode + Position resolution
 ---------------------------------------------------------------------------------
--- Instance-type driven: raid instance (+ EnableInRaid) = Raid Mode (all
--- healers); everything else (party/M+ instance, open-world group, raid
--- instance with EnableInRaid off) = Dungeon Mode (single healer).
-function HM:GetMode()
-    if not self.db then return "DUNGEON" end
-    local _, instanceType = IsInInstance()
-    if instanceType == "raid" and self.db.EnableInRaid then
-        return "RAID"
+-- Group-type driven: a raid group (+ EnableInRaid) = Raid Mode (all healers);
+-- party, solo or EnableInRaid off = Dungeon Mode (single healer).
+--
+-- The answer is HELD, not queried: a reader resolving it per call can get a
+-- different answer mid-layout and swap the active position table under itself.
+-- Only RefreshMode writes it.
+function HM:RefreshMode()
+    local previous = self.mode
+    local mode = "DUNGEON"
+    if self.db and self.db.EnableInRaid and IsInRaid() then
+        mode = "RAID"
     end
-    return "DUNGEON"
+    self.mode = mode
+    return mode ~= previous
+end
+
+function HM:GetMode()
+    return self.mode or "DUNGEON"
 end
 
 -- Which DB position table is live right now. Single source of truth so the
@@ -580,6 +588,7 @@ end
 function HM:ApplySettings()
     self:UpdateDB()
     if not self.db then return end
+    self:RefreshMode()
     if not self.db.Enabled and not self.isPreview then
         if self.containerFrame then self.containerFrame:Hide() end
         return
@@ -754,17 +763,36 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
+-- A mode flip changes sizes as well as position, so the frames are re-dressed
+-- before FindHealers redraws them. Not the only refresh point: EnableInRaid is
+-- half the mode predicate and the GUI writes it without a roster event, so
+-- ApplySettings refreshes too.
+function HM:OnGroupChanged()
+    if not self.db or not self.db.Enabled then return end
+    if self:RefreshMode() then
+        for _, frame in pairs(self.healerFrames) do
+            self:UpdateFrameAppearance(frame)
+        end
+    end
+    -- No reposition here: FindHealers -> UpdateHealerFrames sizes the container
+    -- and then positions it. Repositioning first would hang the container at
+    -- the new mode's anchor with the old mode's row count, which is the mixed
+    -- frame this change exists to remove.
+    self:FindHealers()
+end
+
 function HM:OnEnable()
     self:UpdateDB()
     if not self.db or not self.db.Enabled then return end
+    self:RefreshMode()
     self:ApplySettings()
     C_Timer.After(0.5, function()
         if HM.containerFrame and HM.db then HM:ApplyContainerPosition() end
     end)
     self:RegWithEditMode()
     self:StartUpdates()
-    self:RegisterEvent("GROUP_ROSTER_UPDATE", "FindHealers")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "FindHealers")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnGroupChanged")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "FindHealers")
     if LibSpec then
         LibSpec.RegisterGroup(self, function(specID, role, position, playerName)
