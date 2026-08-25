@@ -57,8 +57,9 @@ local function ReskinMemberIcon(enumerate, icon, role, entry)
         S.PixelSnap(icon)
         d.aeSnap = true
     end
-    -- Blizzard's own role atlas is left in place; we only control visibility.
-    if role then
+    if role and KE.ROLE_ICONS[role] then
+        icon:SetTexture(KE.ROLE_ICONS[role])
+        icon:SetTexCoord(0, 1, 0, 1)
         icon:SetAlpha(1)
     else
         icon:SetAlpha(0)
@@ -137,15 +138,20 @@ end
 
 -- Our additions are created once per recycled icon, so switching to circles
 -- has to take them off rather than merely stop making them.
+-- Both regions, not the shown one: which region carried the extras depends on
+-- the category they were created under, and this runs after a category switch.
+local function ClearIconExtras(icon)
+    if not icon then return end
+    local d = S.data(icon)
+    if d.aeClassBar then d.aeClassBar:Hide() end
+    if d.aeLeader then d.aeLeader:Hide() end
+end
+
 local function ClearMemberIconExtras(enumerate)
     for i = 5, 1, -1 do
         local slot = enumerate["Icon" .. i]
-        local icon = slot and (slot.RoleIconWithBackground or slot.RoleIcon)
-        if icon then
-            local d = S.data(icon)
-            if d.aeClassBar then d.aeClassBar:Hide() end
-            if d.aeLeader then d.aeLeader:Hide() end
-        end
+        ClearIconExtras(slot and slot.RoleIconWithBackground)
+        ClearIconExtras(slot and slot.RoleIcon)
     end
 end
 
@@ -176,8 +182,22 @@ local function UpdateEnumerate(enumerate)
     for i = 5, 1, -1 do
         local slot = enumerate["Icon" .. i]
 
-        local icon = slot and (slot.RoleIconWithBackground or slot.RoleIcon)
+        -- Blizzard shows ONE of these two per slot and hides the other, and
+        -- which one depends on the category: the dungeon browser shows
+        -- RoleIcon, everything else shows RoleIconWithBackground. Preferring
+        -- RoleIconWithBackground unconditionally painted the hidden region in
+        -- the dungeon browser, so the art never appeared there and the leader
+        -- marker and class bar anchored to something invisible.
+        local withBg = slot and slot.RoleIconWithBackground
+        local plain = slot and slot.RoleIcon
+        local icon = (withBg and withBg:IsShown() and withBg)
+            or (plain and plain:IsShown() and plain)
+            or withBg or plain
         if icon and icon.SetTexture then
+            -- The extras are anchored to the icon but parented to the
+            -- enumerate frame, so hiding a region does not hide them. After a
+            -- category switch the other region's leftovers have to come off.
+            ClearIconExtras(icon == withBg and plain or withBg)
             local role, entry
             for r = 1, 3 do
                 local list = cache[ROLE_ORDER[r]]
