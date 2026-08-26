@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.4
+
+### Character Panel
+- Weapon upgrade progress now faces outward above the main-hand and off-hand
+  slots, keeping the two labels from crowding each other. When neither weapon
+  has upgrade progress to show, both item levels stay centered over their icons
+
+---
+
 ## v4.4.3
 
 ### Advanced Debuffs
