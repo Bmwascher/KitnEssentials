@@ -11,13 +11,14 @@
 --     GameTooltip_SetDefaultAnchor hook for anchoring,
 --     NineSlice:SetAlpha(0) + own backdrop for the style, global font
 --     objects for text, statusbar height/texture/text.
--- Zero idle cost: every code path is a tooltip event or hook; no
--- OnUpdate, no timers.
+-- Zero idle cost: every code path is a tooltip event or hook. No OnUpdate;
+-- the only timer is a single next-frame CVar re-assert per zone-in.
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local TT = KitnEssentials:NewModule("SkinTooltips", "AceEvent-3.0", "AceHook-3.0")
+local DEBUG_TT = false
 
 -- Hoisted locals ------------------------------------------------------
 local _G = _G
@@ -49,9 +50,56 @@ local hooksecurefunc = hooksecurefunc
 local UnitTokenFromGUID = UnitTokenFromGUID
 local GetMouseFoci = GetMouseFoci
 local GetPlayerInfoByGUID = GetPlayerInfoByGUID
+local GetPetActionInfo = GetPetActionInfo
 local CreateColor = CreateColor
 local type = type
 local S = KE.Skins
+
+local function DebugIsSecret(value)
+    return KE.IsSecretValue and KE:IsSecretValue(value) and true or false
+end
+
+local function DebugIsSecretTable(value)
+    return KE.IsSecretTable and KE:IsSecretTable(value) and true or false
+end
+
+local function DebugValue(value)
+    if DebugIsSecret(value) then return "<secret>" end
+    return tostring(value)
+end
+
+local function ReadTooltipDataFields(data)
+    return data.type, data.id
+end
+
+local function DebugPetActionSetter(slot, spellID)
+    KE:Print("[TT] GameTooltip:SetPetAction entry: slot=" .. DebugValue(slot)
+        .. " slotSecret=" .. tostring(DebugIsSecret(slot))
+        .. " GetPetActionInfo[7].spellID=" .. DebugValue(spellID)
+        .. " spellIDSecret=" .. tostring(DebugIsSecret(spellID)))
+end
+
+local function DebugPetActionPostCall(data)
+    local dataExists = type(data) ~= "nil"
+    local dataSecret = DebugIsSecret(data)
+    local tableSecret = "unreadable"
+    local fieldsReadable, dtype, id = false, nil, nil
+    if not dataExists then
+        tableSecret = "false"
+    elseif not dataSecret then
+        tableSecret = tostring(DebugIsSecretTable(data))
+        fieldsReadable, dtype, id = pcall(ReadTooltipDataFields, data)
+    end
+    local typeText = fieldsReadable and DebugValue(dtype) or "<unreadable>"
+    local idText = fieldsReadable and DebugValue(id) or "<unreadable>"
+    local idSecret = fieldsReadable and tostring(DebugIsSecret(id)) or "unreadable"
+    KE:Print("[TT] TooltipDataProcessor PetAction post-call: dataExists="
+        .. tostring(dataExists) .. " dataSecret=" .. tostring(dataSecret)
+        .. " tableSecret=" .. tableSecret
+        .. " fieldsReadable=" .. tostring(fieldsReadable)
+        .. " data.type=" .. typeText .. " data.id=" .. idText
+        .. " idSecret=" .. idSecret .. " enabled=" .. tostring(TT:IsEnabled()))
+end
 
 -- Fallback for a unit whose colour cannot be resolved, so a display sink
 -- always has something with :GetRGB().
@@ -837,11 +885,20 @@ end
 
 -- Spell / item IDs ----------------------------------------------------
 
+local ID_LABEL_COLOR = "|cffe65353"
+
 local function WantIDs(db)
     local mode = db.ShowIDs or "MODIFIER"
     if mode == "NEVER" then return false end
     if mode == "MODIFIER" then return IsModifierKeyDown() end
     return true
+end
+
+local function AddSpellIDLine(tt, spellID)
+    if KE.IsSecretValue and KE:IsSecretValue(spellID) then return end
+    if not spellID then return end
+    tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellID))
+    tt:Show()
 end
 
 -- (field: no Spell ID on macro tooltips despite #showtooltip):
@@ -866,31 +923,70 @@ function TT:OnTooltipSetSpell(tt, data)
         id = data and data.id
     end
 
-    if not id or KE:IsSecretValue(id) then return end
-    tt:AddLine(format("|cff7c7c7cSpell ID:|r %d", id))
+    AddSpellIDLine(tt, id)
+end
+
+function TT:OnTooltipSetPetAction(tt, slot)
+    local db = self.db
+    if IsEmbeddedTip(tt) then return end
+    if not db or tt:IsForbidden() or not WantIDs(db) then return end
+
+    local _, _, _, _, _, _, spellID = GetPetActionInfo(slot)
+    if DEBUG_TT then DebugPetActionSetter(slot, spellID) end
+    AddSpellIDLine(tt, spellID)
+end
+
+-- Engine-rendered aura IDs reach forbidden aura-container tooltips and secret
+-- aura IDs that addon Lua cannot format. The session CVar is shared, so writes
+-- are read-gated and event-driven.
+local AURA_ID_CVAR = "tooltipShowAuraSpellIDs"
+local auraIDCVarPresent
+local auraIDCVarLifecycleToken = 0
+
+-- Parent teardown calls OnDisable before the module's enabled flag clears, so
+-- forceOff records teardown intent.
+function TT:SyncAuraSpellIDCVar(forceOff)
+    if not auraIDCVarPresent then
+        local okProbe, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
+        if not okProbe or cur == nil then return end
+        auraIDCVarPresent = true
+    end
+
+    -- Engine rendering is unconditional, so it can only stand in for ALWAYS.
+    -- Under MODIFIER the line is meant to appear while a key is held, which the
+    -- engine cannot honour -- the Lua hooks keep that mode, and forbidden aura
+    -- tooltips simply have no ID there.
+    local db = self.db
+    local on = (not forceOff and db and self:IsEnabled() and db.ShowIDs == "ALWAYS")
+        and "1" or "0"
+    -- Read first: writing a CVar makes the client flush its config, and
+    -- ApplySettings runs on every options edit.
+    local ok, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
+    if ok and cur ~= on then pcall(C_CVar.SetCVar, AURA_ID_CVAR, on) end
+end
+
+-- Read the shared CVar live because another writer or a refused write can make
+-- cached state suppress the Lua fallback while engine rendering is off.
+local function EngineDrawsAuraIDs()
+    local ok, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
+    return ok and cur == "1"
+end
+
+local function AddAuraIDLine(tt, spellId)
+    if EngineDrawsAuraIDs() then return end
+    if KE.IsSecretValue and KE:IsSecretValue(spellId) then return end
+    if not spellId then return end
+    tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellId))
     tt:Show()
 end
 
-local function AddAuraIDLine(tt, _, spellId)
-    if not spellId or (KE.IsSecretValue and KE:IsSecretValue(spellId)) then return end
-    tt:AddLine(format("|cff7c7c7cSpell ID:|r %d", spellId))
-    tt:Show()
-end
-
-function TT:AuraIDByInstance(tt, unit, auraInstanceID)
+-- The UnitAura post-call covers every aura setter without another aura API
+-- read. Its undocumented data.id field is the spell ID, not the aura instance.
+function TT:OnTooltipSetUnitAura(tt, data)
     local db = self.db
-    if not db or tt ~= _G.GameTooltip or tt:IsForbidden() or not WantIDs(db) then return end
-    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByAuraInstanceID) then return end
-    local ok, aura = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, unit, auraInstanceID)
-    if ok and aura then AddAuraIDLine(tt, db, aura.spellId) end
-end
-
-function TT:AuraIDByIndex(tt, unit, index, filter)
-    local db = self.db
-    if not db or tt ~= _G.GameTooltip or tt:IsForbidden() or not WantIDs(db) then return end
-    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return end
-    local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, filter)
-    if ok and aura then AddAuraIDLine(tt, db, aura.spellId) end
+    if IsEmbeddedTip(tt) then return end
+    if not db or tt:IsForbidden() or not WantIDs(db) then return end
+    AddAuraIDLine(tt, data and data.id)
 end
 
 function TT:OnTooltipSetItem(tt, data)
@@ -899,7 +995,7 @@ function TT:OnTooltipSetItem(tt, data)
     if not db or tt:IsForbidden() or not WantIDs(db) then return end
     local id = data and data.id
     if not id or KE:IsSecretValue(id) then return end
-    tt:AddLine(format("|cff7c7c7cItem ID:|r %d", id))
+    tt:AddLine(format(ID_LABEL_COLOR .. "Item ID:|r %d", id))
 end
 
 -- Anchor --------------------------------------------------------------
@@ -991,6 +1087,7 @@ function TT:ApplySettings()
     self:ApplyFonts()
     self:StyleHealthBar()
     self:ApplyPosition()
+    self:SyncAuraSpellIDCVar()
     -- Restyle anything currently shown so color edits apply live.
     for _, name in pairs(STYLE_LIST) do
         local tt = _G[name]
@@ -1004,6 +1101,7 @@ function TT:OnInitialize()
 end
 
 function TT:OnEnable()
+    auraIDCVarLifecycleToken = auraIDCVarLifecycleToken + 1
     self:UpdateDB()
 
     if not self.hooked then
@@ -1025,6 +1123,12 @@ function TT:OnEnable()
             end)
         end
 
+        if _G.GameTooltip and _G.GameTooltip.SetPetAction then
+            hooksecurefunc(_G.GameTooltip, "SetPetAction", function(tt, slot)
+                if TT:IsEnabled() then TT:OnTooltipSetPetAction(tt, slot) end
+            end)
+        end
+
         if _G.TooltipDataProcessor and _G.TooltipDataProcessor.AddTooltipPostCall then
             local T = _G.Enum.TooltipDataType
             _G.TooltipDataProcessor.AddTooltipPostCall(T.Unit, function(tt, data)
@@ -1038,6 +1142,14 @@ function TT:OnEnable()
             if T.Macro then
                 _G.TooltipDataProcessor.AddTooltipPostCall(T.Macro, function(tt, data)
                     if TT:IsEnabled() then TT:OnTooltipSetSpell(tt, data) end
+                end)
+            end
+            _G.TooltipDataProcessor.AddTooltipPostCall(T.UnitAura, function(tt, data)
+                if TT:IsEnabled() then TT:OnTooltipSetUnitAura(tt, data) end
+            end)
+            if DEBUG_TT and T.PetAction then
+                _G.TooltipDataProcessor.AddTooltipPostCall(T.PetAction, function(_, data)
+                    DebugPetActionPostCall(data)
                 end)
             end
             _G.TooltipDataProcessor.AddTooltipPostCall(T.Item, function(tt, data)
@@ -1057,28 +1169,32 @@ function TT:OnEnable()
     -- the guard above and re-register on every enable.
     self:SecureHook("GameTooltip_SetDefaultAnchor", "SetDefaultAnchor")
 
-    -- (buff frame missing Spell IDs with shift): the modern
-    -- BuffFrame builds its tooltips through SetUnitBuffByAuraInstanceID,
-    -- which is TooltipDataType.UnitAura -- the Spell post-call never
-    -- fires. ElvUI hooks the aura setters directly; same here, with
-    -- the spellId resolved from C_UnitAuras at hook time.
-    if _G.GameTooltip.SetUnitBuffByAuraInstanceID then
-        self:SecureHook(_G.GameTooltip, "SetUnitBuffByAuraInstanceID", "AuraIDByInstance")
-        self:SecureHook(_G.GameTooltip, "SetUnitDebuffByAuraInstanceID", "AuraIDByInstance")
-    end
-    self:SecureHook(_G.GameTooltip, "SetUnitAura", "AuraIDByIndex")
-    self:SecureHook(_G.GameTooltip, "SetUnitBuff", "AuraIDByIndex")
-    self:SecureHook(_G.GameTooltip, "SetUnitDebuff", "AuraIDByIndex")
-
     -- (holding a modifier after the tooltip was already
     -- up never added the ID lines): ElvUI's mechanism -- on modifier
     -- change, RefreshData() re-fires the tooltip data processors, so the
     -- Unit/Spell/Item post-calls re-run with the new modifier state.
     self:RegisterEvent("MODIFIER_STATE_CHANGED")
+    -- Not PLAYER_LOGIN: the client settles its session CVars after login and
+    -- clobbers a write made that early. Kept registered so a later reset is
+    -- answered too.
+    self:RegisterEvent("PLAYER_ENTERING_WORLD")
 
     self:EnsureAnchor()
     self:ApplySettings()
     S.InstallTooltipStatusBarHook()
+end
+
+-- Reassert after same-frame CVar writers, but reject callbacks from an older
+-- module lifecycle.
+local function ReassertAuraSpellIDCVar(token)
+    if token ~= auraIDCVarLifecycleToken then return end
+    TT:SyncAuraSpellIDCVar()
+end
+
+function TT:PLAYER_ENTERING_WORLD()
+    self:SyncAuraSpellIDCVar()
+    local token = auraIDCVarLifecycleToken
+    C_Timer.After(0, function() ReassertAuraSpellIDCVar(token) end)
 end
 
 function TT:MODIFIER_STATE_CHANGED()
@@ -1128,7 +1244,10 @@ function TT:MODIFIER_STATE_CHANGED()
 end
 
 function TT:OnDisable()
+    auraIDCVarLifecycleToken = auraIDCVarLifecycleToken + 1
     self:UnregisterEvent("MODIFIER_STATE_CHANGED")
+    self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    self:SyncAuraSpellIDCVar(true)
     -- The anchor frame survives, so the guard has to be cleared or a later
     -- enable would skip registration and leave the tool holding a dead key.
     if KE.EditMode then KE.EditMode:UnregisterElement("TooltipAnchor") end
@@ -1143,9 +1262,11 @@ function TT:OnDisable()
     end
 end
 
--- Test seams. dev/spec/tooltips_spec.lua reaches the pure helpers through
--- these; nothing in the addon calls them.
+-- Test seams; addon code never calls them.
 TT._ColorsMatch = ColorsMatch
 TT._ReactionColor = ReactionColor
 TT._WantIDs = WantIDs
 TT._UnitColor = UnitColor
+TT._AddAuraIDLine = AddAuraIDLine
+TT._EngineDrawsAuraIDs = EngineDrawsAuraIDs
+TT._GetAuraIDCVarLifecycleToken = function() return auraIDCVarLifecycleToken, "petaction-setter" end

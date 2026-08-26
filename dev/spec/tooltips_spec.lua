@@ -1,7 +1,15 @@
--- Tier 2: Modules/Skinning/Tooltips.lua. Only the four pure helpers are
--- reachable headlessly; everything that dresses a live tooltip is verified
--- in-game (spec section 10).
+-- Tier 2: Modules/Skinning/Tooltips.lua. Pure helpers and the CVar lifecycle
+-- are reachable headlessly; live tooltip dressing is verified in-game.
 local L = require("dev.spec._ke_loader")
+
+local function auraTip()
+    local lines = {}
+    return {
+        lines = lines,
+        AddLine = function(_, text) lines[#lines + 1] = text end,
+        Show = function() end,
+    }
+end
 
 describe("Tooltips ColorsMatch", function()
     local TT
@@ -123,5 +131,303 @@ describe("Tooltips WantIDs", function()
     it("defaults to MODIFIER when the setting is missing", function()
         local held = L.loadTooltips({ IsModifierKeyDown = function() return true end })
         assert.is_true(held._WantIDs({}))
+    end)
+end)
+
+describe("Tooltips SyncAuraSpellIDCVar", function()
+    local function load(showIDs, enabled, initial, opts)
+        opts = opts or {}
+        local writes = {}
+        local store = { tooltipShowAuraSpellIDs = initial }
+        local TT = L.loadTooltips(nil, {
+            C_CVar = {
+                GetCVar = function(key) return store[key] end,
+                SetCVar = function(key, value)
+                    writes[#writes + 1] = { key, value }
+                    if opts.refuse then return false end
+                    store[key] = value
+                    return true
+                end,
+            },
+        })
+        TT.db = { ShowIDs = showIDs }
+        TT.IsEnabled = function() return enabled end
+        return TT, writes, store
+    end
+
+    it("turns engine rendering on for ALWAYS", function()
+        local TT, writes, store = load("ALWAYS", true, "0")
+        TT:SyncAuraSpellIDCVar()
+        assert.same({ { "tooltipShowAuraSpellIDs", "1" } }, writes)
+        assert.equal("1", store.tooltipShowAuraSpellIDs)
+    end)
+
+    it("leaves it off for MODIFIER, which the engine cannot honour", function()
+        local TT, writes, store = load("MODIFIER", true, "1")
+        TT:SyncAuraSpellIDCVar()
+        assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
+        assert.equal("0", store.tooltipShowAuraSpellIDs)
+    end)
+
+    it("leaves it off for NEVER", function()
+        local TT, writes = load("NEVER", true, "1")
+        TT:SyncAuraSpellIDCVar()
+        assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
+    end)
+
+    it("hands the CVar back when the module is disabled", function()
+        local TT, writes = load("ALWAYS", false, "1")
+        TT:SyncAuraSpellIDCVar()
+        assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
+    end)
+
+    it("turns it off on an explicit force-off even while still enabled", function()
+        local TT, writes, store = load("ALWAYS", true, "1")
+        TT:SyncAuraSpellIDCVar(true)
+        assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
+        assert.equal("0", store.tooltipShowAuraSpellIDs)
+    end)
+
+    it("does not write when the CVar already holds the wanted value", function()
+        local TT, writes = load("ALWAYS", true, "1")
+        TT:SyncAuraSpellIDCVar()
+        assert.same({}, writes)
+    end)
+
+    it("never writes a CVar this client does not have", function()
+        local TT, writes = load("ALWAYS", true, nil)
+        TT:SyncAuraSpellIDCVar()
+        assert.same({}, writes)
+    end)
+
+    it("leaves the Lua line available when the client refuses the write", function()
+        local TT, writes, store = load("ALWAYS", true, "0", { refuse = true })
+        TT:SyncAuraSpellIDCVar()
+        assert.same({ { "tooltipShowAuraSpellIDs", "1" } }, writes)
+        assert.equal("0", store.tooltipShowAuraSpellIDs)
+        local tt = auraTip()
+        TT._AddAuraIDLine(tt, 403264)
+        assert.same({ "|cffe65353Spell ID:|r 403264" }, tt.lines)
+    end)
+
+    it("follows a mid-session flip by another addon", function()
+        local TT, _, store = load("ALWAYS", true, "0")
+        TT:SyncAuraSpellIDCVar()
+        assert.is_true(TT._EngineDrawsAuraIDs())
+        store.tooltipShowAuraSpellIDs = "0"
+        local tt = auraTip()
+        TT._AddAuraIDLine(tt, 403264)
+        assert.same({ "|cffe65353Spell ID:|r 403264" }, tt.lines)
+    end)
+end)
+
+describe("Tooltips AddAuraIDLine", function()
+    local function load(cvar)
+        return L.loadTooltips(nil, {
+            C_CVar = {
+                GetCVar = function() return cvar end,
+                SetCVar = function() return true end,
+            },
+        })
+    end
+
+    it("adds nothing while the engine is drawing the ID itself", function()
+        local TT = load("1")
+        local tt = auraTip()
+        TT._AddAuraIDLine(tt, 403264)
+        assert.same({}, tt.lines)
+    end)
+
+    it("adds the line when the engine is not", function()
+        local TT = load("0")
+        local tt = auraTip()
+        TT._AddAuraIDLine(tt, 403264)
+        assert.same({ "|cffe65353Spell ID:|r 403264" }, tt.lines)
+    end)
+end)
+
+describe("Tooltips OnTooltipSetPetAction", function()
+    local function tip()
+        local lines = {}
+        return {
+            lines = lines,
+            IsForbidden = function() return false end,
+            GetName = function() return "GameTooltip" end,
+            AddLine = function(_, text) lines[#lines + 1] = text end,
+            Show = function() end,
+        }
+    end
+
+    it("renders the seventh GetPetActionInfo return for an ability", function()
+        local calls, seenSlot = 0, nil
+        local TT = L.loadTooltips({
+            GetPetActionInfo = function(slot)
+                calls = calls + 1
+                seenSlot = slot
+                return "Attack", nil, nil, nil, nil, nil, 344351
+            end,
+        })
+        TT.db = { ShowIDs = "ALWAYS" }
+        assert.is_function(TT.OnTooltipSetPetAction)
+        local tt = tip()
+        TT:OnTooltipSetPetAction(tt, 6)
+        assert.equal(1, calls)
+        assert.equal(6, seenSlot)
+        assert.same({ "|cffe65353Spell ID:|r 344351" }, tt.lines)
+    end)
+
+    it("adds nothing when the seventh return is nil", function()
+        local calls = 0
+        local TT = L.loadTooltips({
+            GetPetActionInfo = function()
+                calls = calls + 1
+                return "Assist", nil, nil, nil, nil, nil, nil
+            end,
+        })
+        TT.db = { ShowIDs = "ALWAYS" }
+        assert.is_function(TT.OnTooltipSetPetAction)
+        local tt = tip()
+        TT:OnTooltipSetPetAction(tt, 8)
+        assert.equal(1, calls)
+        assert.same({}, tt.lines)
+    end)
+end)
+
+describe("Tooltips PLAYER_ENTERING_WORLD", function()
+    local function load(initial)
+        local deferred, writes = {}, {}
+        local store = { tooltipShowAuraSpellIDs = initial }
+        local TT = L.loadTooltips(nil, {
+            C_Timer = { After = function(_, fn) deferred[#deferred + 1] = fn end },
+            C_CVar = {
+                GetCVar = function(key) return store[key] end,
+                SetCVar = function(key, value) store[key] = value; writes[#writes + 1] = value end,
+            },
+        })
+        TT.db = { ShowIDs = "ALWAYS" }
+        TT.IsEnabled = function() return true end
+        return TT, deferred, writes, store
+    end
+
+    it("re-asserts once more after the same-frame handlers", function()
+        local TT, deferred, writes, store = load("0")
+        TT:PLAYER_ENTERING_WORLD()
+        assert.same({ "1" }, writes)
+        assert.equal(1, #deferred)
+
+        store.tooltipShowAuraSpellIDs = "0"
+        deferred[1]()
+        assert.same({ "1", "1" }, writes)
+        assert.equal("1", store.tooltipShowAuraSpellIDs)
+    end)
+
+    it("writes nothing on a zone-in where nothing disagrees", function()
+        local TT, deferred, writes = load("1")
+        TT:PLAYER_ENTERING_WORLD()
+        deferred[1]()
+        assert.same({}, writes)
+    end)
+
+    it("keeps the CVar off when a queued reassert runs after teardown", function()
+        local TT, deferred, writes, store = load("0")
+        TT.UnregisterEvent = function() end
+
+        TT:PLAYER_ENTERING_WORLD()
+        assert.equal(1, #deferred)
+        assert.is_true(TT:IsEnabled())
+
+        TT:OnDisable()
+        assert.is_true(TT:IsEnabled())
+        assert.equal("0", store.tooltipShowAuraSpellIDs)
+
+        deferred[1]()
+        assert.same({ "1", "0" }, writes)
+        assert.equal("0", store.tooltipShowAuraSpellIDs)
+    end)
+end)
+
+-- Tooltip data does not document these fields; data.id is the spell ID.
+describe("Tooltips OnTooltipSetUnitAura", function()
+    local function tip()
+        local lines = {}
+        return {
+            lines = lines,
+            IsForbidden = function() return false end,
+            GetName = function() return "GameTooltip" end,
+            AddLine = function(_, text) lines[#lines + 1] = text end,
+            Show = function() end,
+        }
+    end
+
+    it("reads the spell id from data.id, not data.auraInstanceID", function()
+        local TT = L.loadTooltips()
+        TT.db = { ShowIDs = "ALWAYS" }
+        local tt = tip()
+        TT:OnTooltipSetUnitAura(tt, { id = 383169, auraInstanceID = 42 })
+        assert.same({ "|cffe65353Spell ID:|r 383169" }, tt.lines)
+    end)
+
+    it("adds nothing when the tooltip data carries no id", function()
+        local TT = L.loadTooltips()
+        TT.db = { ShowIDs = "ALWAYS" }
+        local tt = tip()
+        TT:OnTooltipSetUnitAura(tt, {})
+        assert.same({}, tt.lines)
+    end)
+
+    it("adds nothing when the id is secret", function()
+        local TT = L.loadTooltips(nil, { issecretvalue = function() return true end })
+        TT.db = { ShowIDs = "ALWAYS" }
+        local tt = tip()
+        TT:OnTooltipSetUnitAura(tt, { id = 383169 })
+        assert.same({}, tt.lines)
+    end)
+
+    it("respects the modifier setting", function()
+        local TT = L.loadTooltips({ IsModifierKeyDown = function() return false end })
+        TT.db = { ShowIDs = "MODIFIER" }
+        local tt = tip()
+        TT:OnTooltipSetUnitAura(tt, { id = 383169 })
+        assert.same({}, tt.lines)
+    end)
+end)
+
+describe("Tooltips OnTooltipSetUnitAura embedded refusal", function()
+    local function tip(name, throws)
+        local lines = {}
+        return {
+            lines = lines,
+            IsForbidden = function() return false end,
+            GetName = function() if throws then error("forbidden object") end return name end,
+            AddLine = function(_, text) lines[#lines + 1] = text end,
+            Show = function() end,
+        }
+    end
+
+    local function load()
+        local TT = L.loadTooltips()
+        TT.db = { ShowIDs = "ALWAYS" }
+        return TT
+    end
+
+    it("refuses an embedded tooltip by name", function()
+        local TT = load()
+        local tt = tip("EmbeddedItemTooltip")
+        TT:OnTooltipSetUnitAura(tt, { id = 383169 })
+        assert.same({}, tt.lines)
+    end)
+
+    it("refuses a widget-owned tooltip whose name cannot be read", function()
+        local TT = load()
+        local tt = tip(nil, true)
+        TT:OnTooltipSetUnitAura(tt, { id = 383169 })
+        assert.same({}, tt.lines)
+    end)
+
+    it("still writes to an ordinary named tooltip", function()
+        local TT = load()
+        local tt = tip("GameTooltip")
+        TT:OnTooltipSetUnitAura(tt, { id = 383169 })
+        assert.same({ "|cffe65353Spell ID:|r 383169" }, tt.lines)
     end)
 end)

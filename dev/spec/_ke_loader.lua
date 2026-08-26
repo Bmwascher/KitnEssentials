@@ -478,12 +478,17 @@ end
 
 -- Modules/Skinning/Tooltips.lua. TT is a file-local never assigned onto KE --
 -- the shim registry is the only handle to it. Returns TT, KE.
--- `opts` carries globals _wow_mock does NOT manage (UnitReaction,
--- IsModifierKeyDown): those go straight on _G, so the `overrides` path cannot
--- reach them. `overrides` is for mock-managed keys only.
+-- `opts` carries globals _wow_mock does not manage; `overrides` is for
+-- mock-managed keys only.
 function L.loadTooltips(opts, overrides)
     opts = opts or {}
     installMock(overrides, { C_Timer = inertTimer() })
+    -- C_CVar is outside the shared mock; the default models a client without
+    -- the optional aura-ID CVar.
+    _G.C_CVar = (overrides or {}).C_CVar or {
+        GetCVar = function() return nil end,
+        SetCVar = function() return true end,
+    }
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.CreateFrame = function() return noopFrame() end
@@ -501,15 +506,15 @@ function L.loadTooltips(opts, overrides)
     }
     _G.UnitReaction = opts.UnitReaction or function() return 5 end
     _G.IsModifierKeyDown = opts.IsModifierKeyDown or function() return false end
+    _G.GetPetActionInfo = opts.GetPetActionInfo or function() return nil end
     -- UnitColor's inputs. The class-colour branches are refusal rules, so they
     -- are driven from here rather than left to the live tooltip.
     _G.UnitIsPlayer = opts.UnitIsPlayer or function() return false end
     _G.UnitClass = opts.UnitClass or function() return "Evoker", "EVOKER" end
     _G.GetPlayerInfoByGUID = opts.GetPlayerInfoByGUID or function() return "Evoker", "EVOKER" end
     _G.C_ClassColor = opts.C_ClassColor or nil
-    -- Only _ShortValue/_ColorsMatch/_ReactionColor/_WantIDs/_UnitColor are
-    -- reachable from a spec; nothing here calls OnEnable, so only the globals
-    -- those five touch need a stub.
+    -- Specs drive helpers, module methods and PLAYER_ENTERING_WORLD directly;
+    -- OnEnable remains outside this fixture.
     local KE = {
         Print = function() end,
         ShouldNotLoadModule = function() return false end,
