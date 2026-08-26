@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.7
+
+### Tooltips
+- Show IDs in Always mode now also works on Blizzard's player aura tooltips,
+  including combat-restricted buffs
+- Spell and Item ID lines now stay at the bottom with brighter red labels
+- Pet ability tooltips now show Spell IDs, while pet mode buttons without an
+  ID stay clean
+
+---
+
 ## v4.4.6
 
 ### Character Panel
