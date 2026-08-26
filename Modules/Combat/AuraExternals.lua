@@ -19,7 +19,7 @@ local PREVIEW_ICONS_BIG = { 136097, 615341, 136120 }
 
 -- Externals has no user blocklist, so this is the hardcoded set alone. It is
 -- still routed through the shared rule rather than being built here, so both
--- displays exclude the same nine and one change reaches both.
+-- displays exclude the same entries and one change reaches both.
 local function BuildCandidates()
     return { excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(nil) }
 end

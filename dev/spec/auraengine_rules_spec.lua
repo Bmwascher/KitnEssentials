@@ -1,10 +1,10 @@
 local L = require("dev.spec._ke_loader")
 
 describe("Advanced Debuffs filter-string construction", function()
-    it("negates every ordinary enabled filter", function()
+    it("ignores the legacy PLAYER setting while negating optional filters", function()
         local R = L.loadAuraRules()
         local s = R.BuildDebuffFilter({ PLAYER = true, RAID = true })
-        assert.truthy(s:find("!PLAYER", 1, true))
+        assert.is_nil(s:find("PLAYER", 1, true))
         assert.truthy(s:find("!RAID", 1, true))
     end)
 
@@ -45,7 +45,7 @@ describe("Advanced Debuffs filter-string construction", function()
     it("emits tokens in a stable order regardless of table iteration", function()
         local R = L.loadAuraRules()
         assert.equals(
-            "HARMFUL|!PLAYER|!RAID|!CROWD_CONTROL|!IMPORTANT|!RAID_PLAYER_DISPELLABLE|INCLUDE_NAME_PLATE_ONLY",
+            "HARMFUL|!RAID|!CROWD_CONTROL|!IMPORTANT|!RAID_PLAYER_DISPELLABLE|INCLUDE_NAME_PLATE_ONLY",
             R.BuildDebuffFilter({
                 PLAYER                  = true,
                 RAID                    = true,
@@ -71,14 +71,14 @@ describe("blocklist record conversion", function()
     end)
 
     it("keeps a hardcoded id even when the user disabled its row", function()
-        -- 80354 Time Warp ships as a default row AND is one of the nine, so a
+        -- 80354 Time Warp ships as a default row AND is hardcoded, so a
         -- user can switch it off and it must still filter.
         local R = L.loadAuraRules()
         local set = R.BuildExcludeSpellIDs({ [80354] = { label = "TW", enabled = false, default = true } })
         assert.is_true(set[80354])
     end)
 
-    it("contains all nine hardcoded ids given an empty saved table", function()
+    it("contains every hardcoded id given an empty saved table", function()
         local R = L.loadAuraRules()
         local set = R.BuildExcludeSpellIDs({})
         for _, id in ipairs(R.HARDCODED_BLOCKLIST) do
