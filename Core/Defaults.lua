@@ -1246,13 +1246,11 @@ local Defaults = {
                 Bleed   = nil,
                 Enrage  = nil,
             },
-            -- "Filtering Options" — each enabled filter REMOVES matching auras
-            -- from tracking. Default PLAYER=true because the player's own
-            -- debuffs are usually not what you want on a boss-debuff tracker.
+            -- Optional exclusions: each enabled filter removes additional
+            -- matching auras. Player/player-pet source filtering is mandatory.
             -- RAID_IN_COMBAT is HELPFUL-only per AuraUtil.AuraFilters, so it
             -- isn't surfaced here.
             Filters = {
-                PLAYER                  = true,
                 RAID                    = false,
                 CROWD_CONTROL           = false,
                 IMPORTANT               = false,

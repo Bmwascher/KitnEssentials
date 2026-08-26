@@ -17,7 +17,6 @@ KE.AuraRules = Rules
 -- INCLUDE_NAME_PLATE_ONLY is deliberately absent: it is handled separately
 -- below because it does not follow the negation rule.
 local NEGATABLE_FILTERS = {
-    "PLAYER",
     "RAID",
     "CROWD_CONTROL",
     "IMPORTANT",

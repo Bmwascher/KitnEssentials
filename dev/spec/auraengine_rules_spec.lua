@@ -1,10 +1,10 @@
 local L = require("dev.spec._ke_loader")
 
 describe("Advanced Debuffs filter-string construction", function()
-    it("negates every ordinary enabled filter", function()
+    it("ignores the legacy PLAYER setting while negating optional filters", function()
         local R = L.loadAuraRules()
         local s = R.BuildDebuffFilter({ PLAYER = true, RAID = true })
-        assert.truthy(s:find("!PLAYER", 1, true))
+        assert.is_nil(s:find("PLAYER", 1, true))
         assert.truthy(s:find("!RAID", 1, true))
     end)
 
@@ -45,7 +45,7 @@ describe("Advanced Debuffs filter-string construction", function()
     it("emits tokens in a stable order regardless of table iteration", function()
         local R = L.loadAuraRules()
         assert.equals(
-            "HARMFUL|!PLAYER|!RAID|!CROWD_CONTROL|!IMPORTANT|!RAID_PLAYER_DISPELLABLE|INCLUDE_NAME_PLATE_ONLY",
+            "HARMFUL|!RAID|!CROWD_CONTROL|!IMPORTANT|!RAID_PLAYER_DISPELLABLE|INCLUDE_NAME_PLATE_ONLY",
             R.BuildDebuffFilter({
                 PLAYER                  = true,
                 RAID                    = true,

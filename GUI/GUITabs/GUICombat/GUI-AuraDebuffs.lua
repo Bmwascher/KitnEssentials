@@ -270,7 +270,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
     local filterNote = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Filter Info"),
-        KE:ColorTextByTheme("-") .. " Select filter(s) that you want to remove from tracking.",
+        KE:ColorTextByTheme("-") .. " Each checked option hides additional matching debuffs.",
         Theme.rowHeight, "hide")
     noteRow:AddWidget(filterNote, 1)
     manager:Register(filterNote, "all")
@@ -288,24 +288,21 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     -- HELPFUL-side token (see the AuraDebuffs Filters defaults comment in
     -- Core/Defaults.lua).
     local FILTERS = {
-        { key = "PLAYER",
-          label   = "PLAYER",
-          tooltip = "Filters out auras applied by the player (self-cast debuffs)." },
         { key = "RAID",
           label   = "RAID",
-          tooltip = "Filters out certain debuffs that only show up on raid frames, e.g. most debuffs that are relevant in a raid context." },
+          tooltip = "Filters out harmful auras your character can dispel." },
         { key = "CROWD_CONTROL",
           label   = "CROWD_CONTROL",
-          tooltip = "Filters out auras flagged as crowd control (stuns, fears, roots, silences, etc.)." },
+          tooltip = "Filters out auras with a crowd-control effect." },
         { key = "IMPORTANT",
           label   = "IMPORTANT",
-          tooltip = "Filters out auras flagged Important by the game (boss mechanics, key encounter debuffs)." },
+          tooltip = "Filters out auras Blizzard flags as important." },
         { key = "RAID_PLAYER_DISPELLABLE",
           label   = "RAID_PLAYER_DISPELLABLE",
-          tooltip = "Filters out auras with a dispel type that your class can dispel." },
+          tooltip = "Filters out harmful auras someone in your raid can dispel." },
         { key = "INCLUDE_NAME_PLATE_ONLY",
           label   = "INCLUDE_NAME_PLATE_ONLY",
-          tooltip = "Filters out auras flagged to appear only on enemy nameplates." },
+          tooltip = "Filters out auras flagged to appear only on nameplates." },
     }
 
     local filters = db.Filters or {}
