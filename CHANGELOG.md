@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.6
+
+### Character Panel
+- Inspecting a player whose specialization is hidden no longer throws a secret
+  value error. Average item level waits until the specialization can be read
+  safely
+
+---
+
 ## v4.4.5
 
 ### Housing Dashboard
