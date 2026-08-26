@@ -208,17 +208,33 @@ describe("Slot track: which side the span goes on", function()
         assert.equals("250", loadCP()._IlvlLine("250", nil, true))
     end)
 
-    -- The offhand is in RIGHT_SLOTS, for gem and enchant anchoring, but its item
-    -- level is centred above the icon like the main hand's. Ordering it by
-    -- RIGHT_SLOTS alone makes the two adjacent weapons read in opposite orders.
-    it("orders both weapon slots the same way, despite one being a right slot", function()
+    it("puts each weapon span on the outside edge", function()
         local CP = loadCP()
-        assert.is_false(CP._IlvlSpanOnLeft(16))
+        assert.is_true(CP._IlvlSpanOnLeft(16))
         assert.is_false(CP._IlvlSpanOnLeft(17))
     end)
 
     it("still orders an ordinary right-column slot to the right", function()
         assert.is_true(loadCP()._IlvlSpanOnLeft(6))
+    end)
+end)
+
+describe("Slot track: weapon row offset", function()
+    it("nudges both weapons outward when the row has a span", function()
+        local offset = loadCP()._WeaponIlvlOffset
+        assert.equals(-2, offset and offset(16, true))
+        assert.equals(2, offset and offset(17, true))
+    end)
+
+    it("centers both weapons when the row has no span", function()
+        local offset = loadCP()._WeaponIlvlOffset
+        assert.equals(0, offset and offset(16, false))
+        assert.equals(0, offset and offset(17, false))
+    end)
+
+    it("does not move ordinary slots", function()
+        local offset = loadCP()._WeaponIlvlOffset
+        assert.equals(0, offset and offset(6, true))
     end)
 end)
 

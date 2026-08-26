@@ -1514,15 +1514,32 @@ local function IlvlLine(base, span, isRight)
 end
 CP._IlvlLine = IlvlLine
 
--- Which side to order for. RIGHT_SLOTS alone is wrong for the two weapons: the
--- offhand is in it, but both weapon item levels anchor CENTRED above their icon
--- rather than to an inner edge, so "nearest the icon" picks no side there. Left
--- form for both, or the two adjacent weapons read in opposite orders.
+-- Weapon spans face outward; other slots follow their column.
 local function IlvlSpanOnLeft(slotID)
+    if slotID == INVSLOT_MAINHAND then return true end
     if CENTER_SLOTS[slotID] then return false end
     return RIGHT_SLOTS[slotID] and true or false
 end
 CP._IlvlSpanOnLeft = IlvlSpanOnLeft
+
+local function WeaponIlvlOffset(slotID, rowHasSpan)
+    if not (rowHasSpan and CENTER_SLOTS[slotID]) then return 0 end
+    return slotID == INVSLOT_MAINHAND and -2 or 2
+end
+CP._WeaponIlvlOffset = WeaponIlvlOffset
+
+local function ApplyWeaponIlvlOffsets(unit, rowHasSpan)
+    local slotFrames = unit == "player" and SLOT_FRAMES or INSPECT_SLOT_FRAMES
+    for slotID in pairs(CENTER_SLOTS) do
+        local slotFrame = _G[slotFrames[slotID]]
+        local detail = slotFrame and FFD[slotFrame] and FFD[slotFrame].detail
+        if detail then
+            detail.ilvlText:ClearAllPoints()
+            detail.ilvlText:SetPoint("BOTTOM", slotFrame, "TOP",
+                WeaponIlvlOffset(slotID, rowHasSpan), 3)
+        end
+    end
+end
 
 -- Whether the track span this render drew is MISSING rather than absent, so the
 -- next call must not short-circuit past it. Extracted for the same reason as the
@@ -1949,6 +1966,18 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         local w = self:GetItemTrack(unit, slotID, data)
         if MergeTrackIntoIlvl(self.db, w, euiOwnsIlvl, euiOwnsTrack) then
             span = UpgradeSpan(w, self.db.TrackIndicatorsEnabled, true)
+        end
+
+        if CENTER_SLOTS[slotID] then
+            local rowHasSpan = span ~= nil
+            if not rowHasSpan then
+                local otherSlotID = slotID == INVSLOT_MAINHAND
+                    and INVSLOT_OFFHAND or INVSLOT_MAINHAND
+                local otherTrack = self:GetItemTrack(unit, otherSlotID)
+                rowHasSpan = MergeTrackIntoIlvl(self.db, otherTrack,
+                    euiOwnsIlvl, euiOwnsTrack)
+            end
+            ApplyWeaponIlvlOffsets(unit, rowHasSpan)
         end
 
         if lvl then
