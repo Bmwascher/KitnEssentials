@@ -317,6 +317,13 @@ function AF:InstallHooks()
     -- (Modules/Skinning/LootRoll.lua), so nothing here needs to reparent it.
     local glc = _G.GroupLootContainer
     if glc then glc:EnableMouse(false) end
+    -- Managed-frame relayouts can run without GroupLootContainer_Update.
+    local layoutParent = glc and glc.layoutParent
+    if layoutParent and type(layoutParent.Layout) == "function" then
+        hooksecurefunc(layoutParent, "Layout", function()
+            if AF:IsEnabled() then AF:PositionGroupLootContainer() end
+        end)
+    end
     -- Place the container in the SAME execution that shows it.
     if type(_G.GroupLootContainer_Update) == "function" then
         hooksecurefunc("GroupLootContainer_Update", function()

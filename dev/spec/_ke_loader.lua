@@ -1656,6 +1656,58 @@ function L.loadAlertFramesWithHooks()
     return AF, captured, calls, KE
 end
 
+-- Modules/QoL/AlertFrames.lua with the managed-frame layout parent present.
+-- The layout pass restores GroupLootContainer's stock screen-bottom anchor;
+-- rec.fireManagedLayout runs that pass and then the post-hook InstallHooks
+-- registered, matching hooksecurefunc's order. Returns AF, rec, KE.
+function L.loadAlertFramesWithManagedLayout()
+    local modules = helpers.installAddonShim()
+    local KE = {
+        db = { profile = { AlertFrames = {} } },
+        ApplyFramePosition = function() end,
+        CreateReloadPrompt = function() end,
+        Print = function() end,
+    }
+
+    local uiParent = trackablePointFrame()
+    local holder = trackablePointFrame()
+    local container = trackablePointFrame()
+    local alertFrame = { alertFrameSubSystems = {} }
+    local layoutParent = {}
+    local layoutHook
+
+    function layoutParent:Layout()
+        container:ClearAllPoints()
+        container:SetPoint("BOTTOM", uiParent, "BOTTOM", 0, 0)
+    end
+    container.layoutParent = layoutParent
+
+    _G.UIParent = uiParent
+    _G.AlertFrame = alertFrame
+    _G.GroupLootContainer = container
+    _G.GroupLootContainer_Update = function() end
+    _G.hooksecurefunc = function(target, name, fn)
+        if target == layoutParent and name == "Layout" then layoutHook = fn end
+    end
+
+    helpers.loadModule("Modules/QoL/AlertFrames.lua", KE)
+    local AF = modules["AlertFrames"]
+    AF.IsEnabled = function() return true end
+    AF.holder = holder
+    AF:InstallHooks()
+
+    local rec = {
+        container = container,
+        holder = holder,
+        uiParent = uiParent,
+    }
+    rec.fireManagedLayout = function()
+        layoutParent:Layout()
+        if layoutHook then layoutHook(layoutParent) end
+    end
+    return AF, rec, KE
+end
+
 -- Modules/QoL/ColorPicker.lua captures WoW string globals as file-scope
 -- upvalues at load time (`local format, strlen, strjoin = format, strlen,
 -- strjoin`, plus gsub/strsub/floor separately), so real Lua equivalents must
