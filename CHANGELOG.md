@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.5
+
+### Housing Dashboard
+- Fixed the dashboard sometimes opening blank even though the character owned a
+  house. It now refreshes the house list once when Blizzard's panel gets stuck
+
+---
+
 ## v4.4.4
 
 ### Character Panel
