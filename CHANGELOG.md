@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.2
+
+### Player Buffs
+- Long-duration buffs now show whole hours once they reach one hour, so a
+  23-hour buff reads `23h` instead of `1406m`
+
+---
+
 ## v4.4.1
 
 ### Auction House Filter
