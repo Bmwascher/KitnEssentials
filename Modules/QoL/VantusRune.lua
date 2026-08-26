@@ -26,7 +26,7 @@ local BUTTON_HEIGHT = 35
 
 -- Vantus Rune item IDs in priority order (best quality first)
 -- Update these each raid tier
-local RUNE_PRIORITY = { 245880, 245879 }
+local RUNE_PRIORITY = { 272195, 272194 }
 local RUNE_SET = {}
 for _, id in ipairs(RUNE_PRIORITY) do RUNE_SET[id] = true end
 

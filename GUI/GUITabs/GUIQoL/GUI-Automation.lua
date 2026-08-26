@@ -194,7 +194,7 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
             vrManager:Register(vrTimeoutSlider, "all")
             cardVR:AddRow(rowVR2, Theme.rowHeightLast, 0)
 
-            cardVR:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nPriority: Radiant Gold (245880) > Radiant Silver (245879).\nYou must be on the same realm as your guild to withdraw.|r")
+            cardVR:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nThe highest-quality current-tier rune is chosen first.\nYou must be on the same realm as your guild to withdraw.|r")
 
             yOffset = cardVR:GetNextOffset()
         end
