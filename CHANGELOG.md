@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.1
+
+### Auction House Filter
+- The Current Expansion filter applies automatically again on patch 12.1.
+  The filter moved behind the Auction House button API, so the old direct
+  setting no longer changed it
+
+### Alerts and Loot Toasts
+- Bonus Roll prompts now appear at the configured alert position immediately.
+  They previously opened at the bottom of the screen and moved only after an
+  item alert appeared
+
+---
+
 ## v4.4.0
 
 ### Settings Window
