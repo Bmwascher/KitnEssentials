@@ -131,37 +131,42 @@ end)
 -- see only while a key is held, and letting the Lua line through while the
 -- engine draws its own puts the ID on the tooltip twice.
 describe("Tooltips SyncAuraSpellIDCVar", function()
-    -- Returns the module plus the write log, with the CVar seeded to `initial`
-    -- ("1"/"0"), or absent from the client when `initial` is nil.
-    local function load(showIDs, enabled, initial)
+    -- Returns the module, the write log and the CVar store, seeded to `initial`
+    -- ("1"/"0") or absent from the client when `initial` is nil. opts.refuse
+    -- makes the client reject writes the way SetCVar's documented success
+    -- boolean reports: the call returns false and the value does not move.
+    local function load(showIDs, enabled, initial, opts)
+        opts = opts or {}
         local writes = {}
         local store = { tooltipShowAuraSpellIDs = initial }
         local TT = L.loadTooltips(nil, {
             C_CVar = {
                 GetCVar = function(key) return store[key] end,
                 SetCVar = function(key, value)
-                    store[key] = value
                     writes[#writes + 1] = { key, value }
+                    if opts.refuse then return false end
+                    store[key] = value
+                    return true
                 end,
             },
         })
         TT.db = { ShowIDs = showIDs }
         TT.IsEnabled = function() return enabled end
-        return TT, writes
+        return TT, writes, store
     end
 
     it("turns engine rendering on for ALWAYS", function()
-        local TT, writes = load("ALWAYS", true, "0")
+        local TT, writes, store = load("ALWAYS", true, "0")
         TT:SyncAuraSpellIDCVar()
         assert.same({ { "tooltipShowAuraSpellIDs", "1" } }, writes)
-        assert.is_true(TT.engineAuraIDs)
+        assert.equal("1", store.tooltipShowAuraSpellIDs)
     end)
 
     it("leaves it off for MODIFIER, which the engine cannot honour", function()
-        local TT, writes = load("MODIFIER", true, "1")
+        local TT, writes, store = load("MODIFIER", true, "1")
         TT:SyncAuraSpellIDCVar()
         assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
-        assert.is_false(TT.engineAuraIDs)
+        assert.equal("0", store.tooltipShowAuraSpellIDs)
     end)
 
     it("leaves it off for NEVER", function()
@@ -174,20 +179,48 @@ describe("Tooltips SyncAuraSpellIDCVar", function()
         local TT, writes = load("ALWAYS", false, "1")
         TT:SyncAuraSpellIDCVar()
         assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
-        assert.is_false(TT.engineAuraIDs)
+    end)
+
+    -- Teardown cannot ask IsEnabled and get a useful answer: disabling the
+    -- parent addon recurses into modules without clearing the module's own
+    -- flag, so a sync that trusted it would leave the engine drawing.
+    it("turns it off on an explicit force-off even while still enabled", function()
+        local TT, writes, store = load("ALWAYS", true, "1")
+        TT:SyncAuraSpellIDCVar(true)
+        assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
+        assert.equal("0", store.tooltipShowAuraSpellIDs)
     end)
 
     it("does not write when the CVar already holds the wanted value", function()
         local TT, writes = load("ALWAYS", true, "1")
         TT:SyncAuraSpellIDCVar()
         assert.same({}, writes)
-        assert.is_true(TT.engineAuraIDs)
     end)
 
     it("never writes a CVar this client does not have", function()
         local TT, writes = load("ALWAYS", true, nil)
         TT:SyncAuraSpellIDCVar()
         assert.same({}, writes)
+    end)
+
+    -- The refusal that used to be invisible. A write the client rejects must
+    -- not leave the module believing the engine took over, or the Lua line is
+    -- suppressed while nothing draws one.
+    it("leaves the Lua line available when the client refuses the write", function()
+        local TT, writes, store = load("ALWAYS", true, "0", { refuse = true })
+        TT:SyncAuraSpellIDCVar()
+        assert.same({ { "tooltipShowAuraSpellIDs", "1" } }, writes)
+        assert.equal("0", store.tooltipShowAuraSpellIDs)
+        assert.is_false(TT._EngineDrawsAuraIDs())
+    end)
+
+    -- Another addon owns this CVar too, and can flip it at any time.
+    it("follows a mid-session flip by another addon", function()
+        local TT, _, store = load("ALWAYS", true, "0")
+        TT:SyncAuraSpellIDCVar()
+        assert.is_true(TT._EngineDrawsAuraIDs())
+        store.tooltipShowAuraSpellIDs = "0"
+        assert.is_false(TT._EngineDrawsAuraIDs())
     end)
 end)
 
@@ -201,17 +234,24 @@ describe("Tooltips AddAuraIDLine", function()
         }
     end
 
+    local function load(cvar)
+        return L.loadTooltips(nil, {
+            C_CVar = {
+                GetCVar = function() return cvar end,
+                SetCVar = function() return true end,
+            },
+        })
+    end
+
     it("adds nothing while the engine is drawing the ID itself", function()
-        local TT = L.loadTooltips()
-        TT.engineAuraIDs = true
+        local TT = load("1")
         local tt = tip()
         TT._AddAuraIDLine(tt, 403264)
         assert.same({}, tt.lines)
     end)
 
     it("adds the line when the engine is not", function()
-        local TT = L.loadTooltips()
-        TT.engineAuraIDs = false
+        local TT = load("0")
         local tt = tip()
         TT._AddAuraIDLine(tt, 403264)
         assert.same({ "|cffca3c3cSpell ID:|r 403264" }, tt.lines)
@@ -301,5 +341,49 @@ describe("Tooltips OnTooltipSetUnitAura", function()
         local tt = tip()
         TT:OnTooltipSetUnitAura(tt, { id = 383169 })
         assert.same({}, tt.lines)
+    end)
+end)
+
+-- The refusal the widened aura handler now leans on. Dropping the old
+-- GameTooltip-only restriction left IsEmbeddedTip as the only thing keeping the
+-- line off tooltips that are not ours to write to, and a name we cannot read is
+-- treated as one of them.
+describe("Tooltips OnTooltipSetUnitAura embedded refusal", function()
+    local function tip(name, throws)
+        local lines = {}
+        return {
+            lines = lines,
+            IsForbidden = function() return false end,
+            GetName = function() if throws then error("forbidden object") end return name end,
+            AddLine = function(_, text) lines[#lines + 1] = text end,
+            Show = function() end,
+        }
+    end
+
+    local function load()
+        local TT = L.loadTooltips()
+        TT.db = { ShowIDs = "ALWAYS" }
+        return TT
+    end
+
+    it("refuses an embedded tooltip by name", function()
+        local TT = load()
+        local tt = tip("EmbeddedItemTooltip")
+        TT:OnTooltipSetUnitAura(tt, { id = 383169 })
+        assert.same({}, tt.lines)
+    end)
+
+    it("refuses a widget-owned tooltip whose name cannot be read", function()
+        local TT = load()
+        local tt = tip(nil, true)
+        TT:OnTooltipSetUnitAura(tt, { id = 383169 })
+        assert.same({}, tt.lines)
+    end)
+
+    it("still writes to an ordinary named tooltip", function()
+        local TT = load()
+        local tt = tip("GameTooltip")
+        TT:OnTooltipSetUnitAura(tt, { id = 383169 })
+        assert.same({ "|cffca3c3cSpell ID:|r 383169" }, tt.lines)
     end)
 end)

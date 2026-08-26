@@ -11,8 +11,8 @@
 --     GameTooltip_SetDefaultAnchor hook for anchoring,
 --     NineSlice:SetAlpha(0) + own backdrop for the style, global font
 --     objects for text, statusbar height/texture/text.
--- Zero idle cost: every code path is a tooltip event or hook; no
--- OnUpdate, no timers.
+-- Zero idle cost: every code path is a tooltip event or hook. No OnUpdate;
+-- the only timer is a single next-frame CVar re-assert per zone-in.
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -889,7 +889,11 @@ end
 local AURA_ID_CVAR = "tooltipShowAuraSpellIDs"
 local auraIDCVarPresent
 
-function TT:SyncAuraSpellIDCVar()
+-- forceOff exists because teardown cannot ask whether the module is enabled and
+-- get a useful answer: disabling the parent addon recurses into its modules
+-- without clearing the module's own flag, so OnDisable states its intent
+-- instead.
+function TT:SyncAuraSpellIDCVar(forceOff)
     if auraIDCVarPresent == nil then
         local okProbe, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
         auraIDCVarPresent = (okProbe and cur ~= nil) and true or false
@@ -901,17 +905,27 @@ function TT:SyncAuraSpellIDCVar()
     -- engine cannot honour -- the Lua hooks keep that mode, and forbidden aura
     -- tooltips simply have no ID there.
     local db = self.db
-    local on = (db and self:IsEnabled() and db.ShowIDs == "ALWAYS") and "1" or "0"
+    local on = (not forceOff and db and self:IsEnabled() and db.ShowIDs == "ALWAYS")
+        and "1" or "0"
     -- Read first: writing a CVar makes the client flush its config, and
     -- ApplySettings runs on every options edit.
     local ok, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
     if ok and cur ~= on then pcall(C_CVar.SetCVar, AURA_ID_CVAR, on) end
-    self.engineAuraIDs = (on == "1")
+end
+
+-- Asked, never remembered. The CVar is shared and the client can refuse a
+-- write outright, so a stored answer goes stale in two different ways -- and a
+-- stale "yes" is the one state with NO id at all, because it suppresses the
+-- line below while nothing else draws one. One CVar read per aura tooltip,
+-- which is a hover, not a frame.
+local function EngineDrawsAuraIDs()
+    local ok, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
+    return ok and cur == "1"
 end
 
 local function AddAuraIDLine(tt, spellId)
     -- The engine already put the line there; a second one would be a duplicate.
-    if TT.engineAuraIDs then return end
+    if EngineDrawsAuraIDs() then return end
     if not spellId or (KE.IsSecretValue and KE:IsSecretValue(spellId)) then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellId))
     tt:Show()
@@ -1187,9 +1201,7 @@ end
 function TT:OnDisable()
     self:UnregisterEvent("MODIFIER_STATE_CHANGED")
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
-    -- AceAddon clears enabledState before dispatching this, so the sync
-    -- computes "off" and the engine stops drawing the line.
-    self:SyncAuraSpellIDCVar()
+    self:SyncAuraSpellIDCVar(true)
     -- The anchor frame survives, so the guard has to be cleared or a later
     -- enable would skip registration and leave the tool holding a dead key.
     if KE.EditMode then KE.EditMode:UnregisterElement("TooltipAnchor") end
@@ -1211,3 +1223,4 @@ TT._ReactionColor = ReactionColor
 TT._WantIDs = WantIDs
 TT._UnitColor = UnitColor
 TT._AddAuraIDLine = AddAuraIDLine
+TT._EngineDrawsAuraIDs = EngineDrawsAuraIDs
