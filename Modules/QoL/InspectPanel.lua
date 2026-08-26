@@ -19,6 +19,7 @@ local CreateFrame = CreateFrame
 local GetInventoryItemLink = GetInventoryItemLink
 local GetInventoryItemTexture = GetInventoryItemTexture
 local GetInspectSpecialization = GetInspectSpecialization
+local issecretvalue = issecretvalue
 local C_Timer = C_Timer
 local C_Item = C_Item
 local C_TooltipInfo = C_TooltipInfo
@@ -407,6 +408,8 @@ end
 -- data isn't ready yet (caller retries on the next INSPECT_READY / late-data event).
 function InspectPanel:GetInspectAverageItemLevel(unit)
     local spec = GetInspectSpecialization(unit)
+    -- The Fury weapon-slot branch requires a clean specialization value.
+    if issecretvalue(spec) then return nil end
     if not spec or spec == 0 then return nil end  -- inspect data not resolved yet
 
     local total = 0
