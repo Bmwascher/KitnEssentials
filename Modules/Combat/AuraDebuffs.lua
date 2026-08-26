@@ -193,7 +193,10 @@ local DECLARATION = {
                 return KE.AuraRules.BuildDebuffFilter(settings.Filters)
             end,
             buildCandidates = function(settings)
-                return { excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(settings.Blocklist) }
+                return {
+                    isFromPlayerOrPlayerPet = false,
+                    excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(settings.Blocklist),
+                }
             end,
             capabilities = { hasBorder = true, hasDispelBadge = true, hasDispelRing = true, hasGlow = false },
 
