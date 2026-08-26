@@ -885,7 +885,7 @@ end
 
 -- Spell / item IDs ----------------------------------------------------
 
-local ID_LABEL_COLOR = "|cffca3c3c"
+local ID_LABEL_COLOR = "|cffe65353"
 
 local function WantIDs(db)
     local mode = db.ShowIDs or "MODIFIER"
