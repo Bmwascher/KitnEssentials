@@ -2,7 +2,7 @@
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
-KE.HousingDashboardFixLoaded = true
+KE.HousingDashboardFixLoaded = 2
 
 local _G = _G
 local C_AddOns_IsAddOnLoaded = C_AddOns and C_AddOns.IsAddOnLoaded

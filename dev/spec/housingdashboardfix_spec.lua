@@ -47,7 +47,7 @@ describe("HousingDashboardFix", function()
         local houses = { { houseGUID = "House-1" } }
         local KE, dashboard, scheduled, getRefetches = loadFix(houses, true, false)
 
-        assert.is_true(KE.HousingDashboardFixLoaded)
+        assert.equal(2, KE.HousingDashboardFixLoaded)
         dashboard:GetScript("OnShow")(dashboard)
 
         assert.equal(1, #scheduled)
