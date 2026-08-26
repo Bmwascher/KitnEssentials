@@ -35,9 +35,19 @@ function AHF:ApplyAuctionHouseFilter()
         if self.db.AuctionHouse.CurrentExpansion then
             local frame = AuctionHouseFrame
             if frame and frame.SearchBar and frame.SearchBar.FilterButton then
+                local searchBar = frame.SearchBar
                 local filterButton = frame.SearchBar.FilterButton
-                if filterButton.filters then
-                    filterButton.filters[Enum.AuctionHouseFilter.CurrentExpansionOnly] = true
+                local filter = Enum.AuctionHouseFilter.CurrentExpansionOnly
+                local filters = filterButton.GetFilters and filterButton:GetFilters() or filterButton.filters
+                if filters and not filters[filter] then
+                    if filterButton.ToggleFilter then
+                        filterButton:ToggleFilter(filter)
+                    else
+                        filters[filter] = true
+                        if searchBar.UpdateClearFiltersButton then
+                            searchBar:UpdateClearFiltersButton()
+                        end
+                    end
                 end
             end
         end
