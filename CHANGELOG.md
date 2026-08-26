@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.3
+
+### Advanced Debuffs
+- Debuffs applied by you or your pet are now always hidden. The old PLAYER
+  filter toggle is gone; the remaining filter options are optional extra
+  exclusions, and their descriptions now say exactly what each one hides
+- Stagger and two additional Deserter variants no longer appear in the display
+
+---
+
 ## v4.4.2
 
 ### Auction House Filter
