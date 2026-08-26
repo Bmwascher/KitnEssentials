@@ -40,7 +40,14 @@ local function HookDashboard()
     end)
 end
 
-if C_AddOns_IsAddOnLoaded and C_AddOns_IsAddOnLoaded("Blizzard_HousingDashboard") then
+local function IsHousingDashboardLoaded()
+    if not C_AddOns_IsAddOnLoaded then return false end
+
+    local _, loaded = C_AddOns_IsAddOnLoaded("Blizzard_HousingDashboard")
+    return loaded == true
+end
+
+if IsHousingDashboardLoaded() then
     HookDashboard()
 else
     local watcher = CreateFrame("Frame")

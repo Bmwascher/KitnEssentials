@@ -1,11 +1,11 @@
 local helpers = require("dev.spec._helpers")
 local mock = require("dev.spec._wow_mock")
 
-local function loadFix(list, tabsInitialized, noHousesShown)
+local function loadFix(list, tabsInitialized, noHousesShown, dashboardLoaded)
     local scheduled = {}
     local refetches = 0
 
-    mock.install({
+    local frames = mock.install({
         C_Timer = {
             After = function(delay, callback)
                 scheduled[#scheduled + 1] = { delay = delay, callback = callback }
@@ -16,7 +16,8 @@ local function loadFix(list, tabsInitialized, noHousesShown)
 
     _G.C_AddOns = {
         IsAddOnLoaded = function(addon)
-            return addon == "Blizzard_HousingDashboard"
+            local isDashboard = addon == "Blizzard_HousingDashboard"
+            return isDashboard, isDashboard and dashboardLoaded ~= false
         end,
     }
     _G.C_Housing = {
@@ -38,7 +39,7 @@ local function loadFix(list, tabsInitialized, noHousesShown)
     local KE = {}
     helpers.loadModule("Modules/QoL/HousingDashboardFix.lua", KE)
 
-    return KE, dashboard, scheduled, function() return refetches end
+    return KE, dashboard, scheduled, function() return refetches end, frames
 end
 
 describe("HousingDashboardFix", function()
@@ -54,6 +55,28 @@ describe("HousingDashboardFix", function()
         scheduled[1].callback()
         assert.equal(0, getRefetches())
         assert.equal(houses, dashboard.HouseDropdown.playerHouseList)
+    end)
+
+    it("leaves a healthy empty cached list alone", function()
+        local houses = {}
+        local _, dashboard, scheduled, getRefetches = loadFix(houses, true, true)
+
+        dashboard:GetScript("OnShow")(dashboard)
+        scheduled[1].callback()
+
+        assert.equal(0, getRefetches())
+        assert.equal(houses, dashboard.HouseDropdown.playerHouseList)
+    end)
+
+    it("waits for the dashboard to finish loading before hooking it", function()
+        local _, dashboard, _, _, frames = loadFix({}, true, true, false)
+
+        assert.is_nil(dashboard:GetScript("OnShow"))
+        local watcher = frames[2]
+        assert.is_true(watcher:IsEventRegistered("ADDON_LOADED"))
+        watcher:Fire("ADDON_LOADED", "Blizzard_HousingDashboard")
+        assert.is_function(dashboard:GetScript("OnShow"))
+        assert.is_false(watcher:IsEventRegistered("ADDON_LOADED"))
     end)
 
     it("repairs a nonempty cached list without initialized tabs", function()
