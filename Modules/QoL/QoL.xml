@@ -7,6 +7,7 @@
     <Script file="SlashCommands.lua" />
     <Script file="CombatLogger.lua" />
     <Script file="AuctionHouseFilter.lua" />
+    <Script file="HousingDashboardFix.lua" />
     <Script file="GreatVaultAlert.lua" />
     <Script file="VantusRune.lua" />
     <Script file="CharacterPanel.lua" />
