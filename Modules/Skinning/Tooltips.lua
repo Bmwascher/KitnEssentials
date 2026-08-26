@@ -18,6 +18,7 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 local TT = KitnEssentials:NewModule("SkinTooltips", "AceEvent-3.0", "AceHook-3.0")
+local DEBUG_TT = false
 
 -- Hoisted locals ------------------------------------------------------
 local _G = _G
@@ -49,9 +50,56 @@ local hooksecurefunc = hooksecurefunc
 local UnitTokenFromGUID = UnitTokenFromGUID
 local GetMouseFoci = GetMouseFoci
 local GetPlayerInfoByGUID = GetPlayerInfoByGUID
+local GetPetActionInfo = GetPetActionInfo
 local CreateColor = CreateColor
 local type = type
 local S = KE.Skins
+
+local function DebugIsSecret(value)
+    return KE.IsSecretValue and KE:IsSecretValue(value) and true or false
+end
+
+local function DebugIsSecretTable(value)
+    return KE.IsSecretTable and KE:IsSecretTable(value) and true or false
+end
+
+local function DebugValue(value)
+    if DebugIsSecret(value) then return "<secret>" end
+    return tostring(value)
+end
+
+local function ReadTooltipDataFields(data)
+    return data.type, data.id
+end
+
+local function DebugPetActionSetter(slot, spellID)
+    KE:Print("[TT] GameTooltip:SetPetAction entry: slot=" .. DebugValue(slot)
+        .. " slotSecret=" .. tostring(DebugIsSecret(slot))
+        .. " GetPetActionInfo[7].spellID=" .. DebugValue(spellID)
+        .. " spellIDSecret=" .. tostring(DebugIsSecret(spellID)))
+end
+
+local function DebugPetActionPostCall(data)
+    local dataExists = type(data) ~= "nil"
+    local dataSecret = DebugIsSecret(data)
+    local tableSecret = "unreadable"
+    local fieldsReadable, dtype, id = false, nil, nil
+    if not dataExists then
+        tableSecret = "false"
+    elseif not dataSecret then
+        tableSecret = tostring(DebugIsSecretTable(data))
+        fieldsReadable, dtype, id = pcall(ReadTooltipDataFields, data)
+    end
+    local typeText = fieldsReadable and DebugValue(dtype) or "<unreadable>"
+    local idText = fieldsReadable and DebugValue(id) or "<unreadable>"
+    local idSecret = fieldsReadable and tostring(DebugIsSecret(id)) or "unreadable"
+    KE:Print("[TT] TooltipDataProcessor PetAction post-call: dataExists="
+        .. tostring(dataExists) .. " dataSecret=" .. tostring(dataSecret)
+        .. " tableSecret=" .. tableSecret
+        .. " fieldsReadable=" .. tostring(fieldsReadable)
+        .. " data.type=" .. typeText .. " data.id=" .. idText
+        .. " idSecret=" .. idSecret .. " enabled=" .. tostring(TT:IsEnabled()))
+end
 
 -- Fallback for a unit whose colour cannot be resolved, so a display sink
 -- always has something with :GetRGB().
@@ -846,6 +894,13 @@ local function WantIDs(db)
     return true
 end
 
+local function AddSpellIDLine(tt, spellID)
+    if KE.IsSecretValue and KE:IsSecretValue(spellID) then return end
+    if not spellID then return end
+    tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellID))
+    tt:Show()
+end
+
 -- (field: no Spell ID on macro tooltips despite #showtooltip):
 -- a macro's tooltip is TooltipDataType.MACRO, not SPELL, so the Spell
 -- post-call never fired -- the same disease as the buff frame
@@ -868,10 +923,17 @@ function TT:OnTooltipSetSpell(tt, data)
         id = data and data.id
     end
 
-    if KE.IsSecretValue and KE:IsSecretValue(id) then return end
-    if not id then return end
-    tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", id))
-    tt:Show()
+    AddSpellIDLine(tt, id)
+end
+
+function TT:OnTooltipSetPetAction(tt, slot)
+    local db = self.db
+    if IsEmbeddedTip(tt) then return end
+    if not db or tt:IsForbidden() or not WantIDs(db) then return end
+
+    local _, _, _, _, _, _, spellID = GetPetActionInfo(slot)
+    if DEBUG_TT then DebugPetActionSetter(slot, spellID) end
+    AddSpellIDLine(tt, spellID)
 end
 
 -- Engine-rendered aura IDs reach forbidden aura-container tooltips and secret
@@ -1061,6 +1123,12 @@ function TT:OnEnable()
             end)
         end
 
+        if _G.GameTooltip and _G.GameTooltip.SetPetAction then
+            hooksecurefunc(_G.GameTooltip, "SetPetAction", function(tt, slot)
+                if TT:IsEnabled() then TT:OnTooltipSetPetAction(tt, slot) end
+            end)
+        end
+
         if _G.TooltipDataProcessor and _G.TooltipDataProcessor.AddTooltipPostCall then
             local T = _G.Enum.TooltipDataType
             _G.TooltipDataProcessor.AddTooltipPostCall(T.Unit, function(tt, data)
@@ -1079,9 +1147,9 @@ function TT:OnEnable()
             _G.TooltipDataProcessor.AddTooltipPostCall(T.UnitAura, function(tt, data)
                 if TT:IsEnabled() then TT:OnTooltipSetUnitAura(tt, data) end
             end)
-            if T.PetAction then
-                _G.TooltipDataProcessor.AddTooltipPostCall(T.PetAction, function(tt, data)
-                    if TT:IsEnabled() then TT:OnTooltipSetSpell(tt, data) end
+            if DEBUG_TT and T.PetAction then
+                _G.TooltipDataProcessor.AddTooltipPostCall(T.PetAction, function(_, data)
+                    DebugPetActionPostCall(data)
                 end)
             end
             _G.TooltipDataProcessor.AddTooltipPostCall(T.Item, function(tt, data)
@@ -1201,4 +1269,4 @@ TT._WantIDs = WantIDs
 TT._UnitColor = UnitColor
 TT._AddAuraIDLine = AddAuraIDLine
 TT._EngineDrawsAuraIDs = EngineDrawsAuraIDs
-TT._GetAuraIDCVarLifecycleToken = function() return auraIDCVarLifecycleToken, "secret-first" end
+TT._GetAuraIDCVarLifecycleToken = function() return auraIDCVarLifecycleToken, "petaction-setter" end

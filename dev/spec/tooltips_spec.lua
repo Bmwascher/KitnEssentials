@@ -246,6 +246,53 @@ describe("Tooltips AddAuraIDLine", function()
     end)
 end)
 
+describe("Tooltips OnTooltipSetPetAction", function()
+    local function tip()
+        local lines = {}
+        return {
+            lines = lines,
+            IsForbidden = function() return false end,
+            GetName = function() return "GameTooltip" end,
+            AddLine = function(_, text) lines[#lines + 1] = text end,
+            Show = function() end,
+        }
+    end
+
+    it("renders the seventh GetPetActionInfo return for an ability", function()
+        local calls, seenSlot = 0, nil
+        local TT = L.loadTooltips({
+            GetPetActionInfo = function(slot)
+                calls = calls + 1
+                seenSlot = slot
+                return "Attack", nil, nil, nil, nil, nil, 344351
+            end,
+        })
+        TT.db = { ShowIDs = "ALWAYS" }
+        assert.is_function(TT.OnTooltipSetPetAction)
+        local tt = tip()
+        TT:OnTooltipSetPetAction(tt, 6)
+        assert.equal(1, calls)
+        assert.equal(6, seenSlot)
+        assert.same({ "|cffca3c3cSpell ID:|r 344351" }, tt.lines)
+    end)
+
+    it("adds nothing when the seventh return is nil", function()
+        local calls = 0
+        local TT = L.loadTooltips({
+            GetPetActionInfo = function()
+                calls = calls + 1
+                return "Assist", nil, nil, nil, nil, nil, nil
+            end,
+        })
+        TT.db = { ShowIDs = "ALWAYS" }
+        assert.is_function(TT.OnTooltipSetPetAction)
+        local tt = tip()
+        TT:OnTooltipSetPetAction(tt, 8)
+        assert.equal(1, calls)
+        assert.same({}, tt.lines)
+    end)
+end)
+
 describe("Tooltips PLAYER_ENTERING_WORLD", function()
     local function load(initial)
         local deferred, writes = {}, {}

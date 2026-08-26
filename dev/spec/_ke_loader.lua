@@ -478,9 +478,8 @@ end
 
 -- Modules/Skinning/Tooltips.lua. TT is a file-local never assigned onto KE --
 -- the shim registry is the only handle to it. Returns TT, KE.
--- `opts` carries globals _wow_mock does NOT manage (UnitReaction,
--- IsModifierKeyDown): those go straight on _G, so the `overrides` path cannot
--- reach them. `overrides` is for mock-managed keys only.
+-- `opts` carries globals _wow_mock does not manage; `overrides` is for
+-- mock-managed keys only.
 function L.loadTooltips(opts, overrides)
     opts = opts or {}
     installMock(overrides, { C_Timer = inertTimer() })
@@ -507,6 +506,7 @@ function L.loadTooltips(opts, overrides)
     }
     _G.UnitReaction = opts.UnitReaction or function() return 5 end
     _G.IsModifierKeyDown = opts.IsModifierKeyDown or function() return false end
+    _G.GetPetActionInfo = opts.GetPetActionInfo or function() return nil end
     -- UnitColor's inputs. The class-colour branches are refusal rules, so they
     -- are driven from here rather than left to the live tooltip.
     _G.UnitIsPlayer = opts.UnitIsPlayer or function() return false end
