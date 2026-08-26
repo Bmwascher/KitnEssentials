@@ -484,10 +484,8 @@ end
 function L.loadTooltips(opts, overrides)
     opts = opts or {}
     installMock(overrides, { C_Timer = inertTimer() })
-    -- Not part of the shared mock surface, so it is wired here. The default
-    -- reports a client without the aura-ID CVar, which is the no-op branch.
-    -- SetCVar returns a documented non-nilable success boolean; a mock that
-    -- returned nil is what hid a refused write from these specs.
+    -- C_CVar is outside the shared mock; the default models a client without
+    -- the optional aura-ID CVar.
     _G.C_CVar = (overrides or {}).C_CVar or {
         GetCVar = function() return nil end,
         SetCVar = function() return true end,
@@ -515,9 +513,8 @@ function L.loadTooltips(opts, overrides)
     _G.UnitClass = opts.UnitClass or function() return "Evoker", "EVOKER" end
     _G.GetPlayerInfoByGUID = opts.GetPlayerInfoByGUID or function() return "Evoker", "EVOKER" end
     _G.C_ClassColor = opts.C_ClassColor or nil
-    -- Nothing here calls OnEnable, so the stubs cover only what the reachable
-    -- surface touches: the pure helpers behind the _-prefixed seams, plus the
-    -- module methods and the zone-in handler the specs drive directly.
+    -- Specs drive helpers, module methods and PLAYER_ENTERING_WORLD directly;
+    -- OnEnable remains outside this fixture.
     local KE = {
         Print = function() end,
         ShouldNotLoadModule = function() return false end,

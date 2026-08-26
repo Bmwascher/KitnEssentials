@@ -1,7 +1,15 @@
--- Tier 2: Modules/Skinning/Tooltips.lua. Only the four pure helpers are
--- reachable headlessly; everything that dresses a live tooltip is verified
--- in-game (spec section 10).
+-- Tier 2: Modules/Skinning/Tooltips.lua. Pure helpers and the CVar lifecycle
+-- are reachable headlessly; live tooltip dressing is verified in-game.
 local L = require("dev.spec._ke_loader")
+
+local function auraTip()
+    local lines = {}
+    return {
+        lines = lines,
+        AddLine = function(_, text) lines[#lines + 1] = text end,
+        Show = function() end,
+    }
+end
 
 describe("Tooltips ColorsMatch", function()
     local TT
@@ -126,15 +134,7 @@ describe("Tooltips WantIDs", function()
     end)
 end)
 
--- The engine-side aura ID CVar. Two refusal rules live here and both fail
--- silently: writing the CVar under MODIFIER would render IDs the user asked to
--- see only while a key is held, and letting the Lua line through while the
--- engine draws its own puts the ID on the tooltip twice.
 describe("Tooltips SyncAuraSpellIDCVar", function()
-    -- Returns the module, the write log and the CVar store, seeded to `initial`
-    -- ("1"/"0") or absent from the client when `initial` is nil. opts.refuse
-    -- makes the client reject writes the way SetCVar's documented success
-    -- boolean reports: the call returns false and the value does not move.
     local function load(showIDs, enabled, initial, opts)
         opts = opts or {}
         local writes = {}
@@ -181,9 +181,6 @@ describe("Tooltips SyncAuraSpellIDCVar", function()
         assert.same({ { "tooltipShowAuraSpellIDs", "0" } }, writes)
     end)
 
-    -- Teardown cannot ask IsEnabled and get a useful answer: disabling the
-    -- parent addon recurses into modules without clearing the module's own
-    -- flag, so a sync that trusted it would leave the engine drawing.
     it("turns it off on an explicit force-off even while still enabled", function()
         local TT, writes, store = load("ALWAYS", true, "1")
         TT:SyncAuraSpellIDCVar(true)
@@ -203,37 +200,28 @@ describe("Tooltips SyncAuraSpellIDCVar", function()
         assert.same({}, writes)
     end)
 
-    -- The refusal that used to be invisible. A write the client rejects must
-    -- not leave the module believing the engine took over, or the Lua line is
-    -- suppressed while nothing draws one.
     it("leaves the Lua line available when the client refuses the write", function()
         local TT, writes, store = load("ALWAYS", true, "0", { refuse = true })
         TT:SyncAuraSpellIDCVar()
         assert.same({ { "tooltipShowAuraSpellIDs", "1" } }, writes)
         assert.equal("0", store.tooltipShowAuraSpellIDs)
-        assert.is_false(TT._EngineDrawsAuraIDs())
+        local tt = auraTip()
+        TT._AddAuraIDLine(tt, 403264)
+        assert.same({ "|cffca3c3cSpell ID:|r 403264" }, tt.lines)
     end)
 
-    -- Another addon owns this CVar too, and can flip it at any time.
     it("follows a mid-session flip by another addon", function()
         local TT, _, store = load("ALWAYS", true, "0")
         TT:SyncAuraSpellIDCVar()
         assert.is_true(TT._EngineDrawsAuraIDs())
         store.tooltipShowAuraSpellIDs = "0"
-        assert.is_false(TT._EngineDrawsAuraIDs())
+        local tt = auraTip()
+        TT._AddAuraIDLine(tt, 403264)
+        assert.same({ "|cffca3c3cSpell ID:|r 403264" }, tt.lines)
     end)
 end)
 
 describe("Tooltips AddAuraIDLine", function()
-    local function tip()
-        local lines = {}
-        return {
-            lines = lines,
-            AddLine = function(_, text) lines[#lines + 1] = text end,
-            Show = function() end,
-        }
-    end
-
     local function load(cvar)
         return L.loadTooltips(nil, {
             C_CVar = {
@@ -245,21 +233,19 @@ describe("Tooltips AddAuraIDLine", function()
 
     it("adds nothing while the engine is drawing the ID itself", function()
         local TT = load("1")
-        local tt = tip()
+        local tt = auraTip()
         TT._AddAuraIDLine(tt, 403264)
         assert.same({}, tt.lines)
     end)
 
     it("adds the line when the engine is not", function()
         local TT = load("0")
-        local tt = tip()
+        local tt = auraTip()
         TT._AddAuraIDLine(tt, 403264)
         assert.same({ "|cffca3c3cSpell ID:|r 403264" }, tt.lines)
     end)
 end)
 
--- The zone-in re-assert. Another addon writing the same CVar from its own
--- settings would otherwise decide the value for everyone.
 describe("Tooltips PLAYER_ENTERING_WORLD", function()
     local function load(initial)
         local deferred, writes = {}, {}
@@ -282,7 +268,7 @@ describe("Tooltips PLAYER_ENTERING_WORLD", function()
         assert.same({ "1" }, writes)
         assert.equal(1, #deferred)
 
-        store.tooltipShowAuraSpellIDs = "0"   -- another addon, same frame
+        store.tooltipShowAuraSpellIDs = "0"
         deferred[1]()
         assert.same({ "1", "1" }, writes)
         assert.equal("1", store.tooltipShowAuraSpellIDs)
@@ -294,11 +280,26 @@ describe("Tooltips PLAYER_ENTERING_WORLD", function()
         deferred[1]()
         assert.same({}, writes)
     end)
+
+    it("keeps the CVar off when a queued reassert runs after teardown", function()
+        local TT, deferred, writes, store = load("0")
+        TT.UnregisterEvent = function() end
+
+        TT:PLAYER_ENTERING_WORLD()
+        assert.equal(1, #deferred)
+        assert.is_true(TT:IsEnabled())
+
+        TT:OnDisable()
+        assert.is_true(TT:IsEnabled())
+        assert.equal("0", store.tooltipShowAuraSpellIDs)
+
+        deferred[1]()
+        assert.same({ "1", "0" }, writes)
+        assert.equal("0", store.tooltipShowAuraSpellIDs)
+    end)
 end)
 
--- Pins the field the aura line is read from. Blizzard documents neither id nor
--- auraInstanceID on tooltip data, so a later edit "correcting" this to the
--- instance id would print a plausible wrong number under a Spell ID label.
+-- Tooltip data does not document these fields; data.id is the spell ID.
 describe("Tooltips OnTooltipSetUnitAura", function()
     local function tip()
         local lines = {}
@@ -344,10 +345,6 @@ describe("Tooltips OnTooltipSetUnitAura", function()
     end)
 end)
 
--- The refusal the widened aura handler now leans on. Dropping the old
--- GameTooltip-only restriction left IsEmbeddedTip as the only thing keeping the
--- line off tooltips that are not ours to write to, and a name we cannot read is
--- treated as one of them.
 describe("Tooltips OnTooltipSetUnitAura embedded refusal", function()
     local function tip(name, throws)
         local lines = {}

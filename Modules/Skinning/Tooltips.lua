@@ -837,8 +837,6 @@ end
 
 -- Spell / item IDs ----------------------------------------------------
 
--- The label colour for every ID line. One constant so Spell ID and Item ID
--- cannot drift apart.
 local ID_LABEL_COLOR = "|cffca3c3c"
 
 local function WantIDs(db)
@@ -875,24 +873,15 @@ function TT:OnTooltipSetSpell(tt, data)
     tt:Show()
 end
 
--- 12.1 renders aura spell IDs ENGINE-SIDE, and that is the only route that ever
--- reaches an aura-container tooltip: those buttons show a forbidden clone of
--- GameTooltip that no AddLine of ours can touch.
---
--- It also reaches where the Lua line cannot: under aura restriction the id is a
--- SECRET, so AddAuraIDLine bails and combat aura tooltips lose the line
--- entirely. The engine formats it itself and is unaffected.
---
--- The CVar is session-only, so it needs re-asserting. Other addons drive the
--- same one; writes are read-gated and event-driven, so two of them agreeing or
--- disagreeing settles rather than loops.
+-- Engine-rendered aura IDs reach forbidden aura-container tooltips and secret
+-- aura IDs that addon Lua cannot format. The session CVar is shared, so writes
+-- are read-gated and event-driven.
 local AURA_ID_CVAR = "tooltipShowAuraSpellIDs"
 local auraIDCVarPresent
+local auraIDCVarLifecycleToken = 0
 
--- forceOff exists because teardown cannot ask whether the module is enabled and
--- get a useful answer: disabling the parent addon recurses into its modules
--- without clearing the module's own flag, so OnDisable states its intent
--- instead.
+-- Parent teardown calls OnDisable before the module's enabled flag clears, so
+-- forceOff records teardown intent.
 function TT:SyncAuraSpellIDCVar(forceOff)
     if auraIDCVarPresent == nil then
         local okProbe, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
@@ -913,34 +902,22 @@ function TT:SyncAuraSpellIDCVar(forceOff)
     if ok and cur ~= on then pcall(C_CVar.SetCVar, AURA_ID_CVAR, on) end
 end
 
--- Asked, never remembered. The CVar is shared and the client can refuse a
--- write outright, so a stored answer goes stale in two different ways -- and a
--- stale "yes" is the one state with NO id at all, because it suppresses the
--- line below while nothing else draws one. One CVar read per aura tooltip,
--- which is a hover, not a frame.
+-- Read the shared CVar live because another writer or a refused write can make
+-- cached state suppress the Lua fallback while engine rendering is off.
 local function EngineDrawsAuraIDs()
     local ok, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
     return ok and cur == "1"
 end
 
 local function AddAuraIDLine(tt, spellId)
-    -- The engine already put the line there; a second one would be a duplicate.
     if EngineDrawsAuraIDs() then return end
     if not spellId or (KE.IsSecretValue and KE:IsSecretValue(spellId)) then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellId))
     tt:Show()
 end
 
--- One registration on the aura data type instead of a hook per aura setter.
--- Blizzard has six of those and gains more; hooking them one at a time is how
--- the player's own buff bar, nameplate auras and the cooldown viewer went
--- without an ID line. It is also the cheaper read: data.id is already built and
--- handed to every listener, where a setter hook has to call back into
--- C_UnitAuras and allocate a whole aura table to reach the same number.
---
--- data.id on a UnitAura tooltip is the aura's spellId, not its
--- auraInstanceID. Blizzard documents neither, so that was established by
--- probe -- do not "correct" it to auraInstanceID on the strength of the name.
+-- The UnitAura post-call covers every aura setter without another aura API
+-- read. Its undocumented data.id field is the spell ID, not the aura instance.
 function TT:OnTooltipSetUnitAura(tt, data)
     local db = self.db
     if IsEmbeddedTip(tt) then return end
@@ -1060,6 +1037,7 @@ function TT:OnInitialize()
 end
 
 function TT:OnEnable()
+    auraIDCVarLifecycleToken = auraIDCVarLifecycleToken + 1
     self:UpdateDB()
 
     if not self.hooked then
@@ -1099,8 +1077,6 @@ function TT:OnEnable()
             _G.TooltipDataProcessor.AddTooltipPostCall(T.UnitAura, function(tt, data)
                 if TT:IsEnabled() then TT:OnTooltipSetUnitAura(tt, data) end
             end)
-            -- Pet bar buttons are their own data type and carry the spell in
-            -- the same id field.
             if T.PetAction then
                 _G.TooltipDataProcessor.AddTooltipPostCall(T.PetAction, function(tt, data)
                     if TT:IsEnabled() then TT:OnTooltipSetSpell(tt, data) end
@@ -1138,18 +1114,17 @@ function TT:OnEnable()
     S.InstallTooltipStatusBarHook()
 end
 
--- Another addon can write this same CVar on this same event, unconditionally
--- and from its own settings -- which turns the line off for anyone whose
--- option there is off. The deferred pass runs after every same-frame handler,
--- so ours is the value that stands. It is read-gated, so a zone-in where
--- nothing disagrees costs one CVar read.
-local function ReassertAuraSpellIDCVar()
+-- Reassert after same-frame CVar writers, but reject callbacks from an older
+-- module lifecycle.
+local function ReassertAuraSpellIDCVar(token)
+    if token ~= auraIDCVarLifecycleToken then return end
     TT:SyncAuraSpellIDCVar()
 end
 
 function TT:PLAYER_ENTERING_WORLD()
     self:SyncAuraSpellIDCVar()
-    C_Timer.After(0, ReassertAuraSpellIDCVar)
+    local token = auraIDCVarLifecycleToken
+    C_Timer.After(0, function() ReassertAuraSpellIDCVar(token) end)
 end
 
 function TT:MODIFIER_STATE_CHANGED()
@@ -1199,6 +1174,7 @@ function TT:MODIFIER_STATE_CHANGED()
 end
 
 function TT:OnDisable()
+    auraIDCVarLifecycleToken = auraIDCVarLifecycleToken + 1
     self:UnregisterEvent("MODIFIER_STATE_CHANGED")
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     self:SyncAuraSpellIDCVar(true)
@@ -1216,11 +1192,11 @@ function TT:OnDisable()
     end
 end
 
--- Test seams. dev/spec/tooltips_spec.lua reaches the pure helpers through
--- these; nothing in the addon calls them.
+-- Test seams; addon code never calls them.
 TT._ColorsMatch = ColorsMatch
 TT._ReactionColor = ReactionColor
 TT._WantIDs = WantIDs
 TT._UnitColor = UnitColor
 TT._AddAuraIDLine = AddAuraIDLine
 TT._EngineDrawsAuraIDs = EngineDrawsAuraIDs
+TT._GetAuraIDCVarLifecycleToken = function() return auraIDCVarLifecycleToken end
