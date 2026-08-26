@@ -1201,4 +1201,4 @@ TT._WantIDs = WantIDs
 TT._UnitColor = UnitColor
 TT._AddAuraIDLine = AddAuraIDLine
 TT._EngineDrawsAuraIDs = EngineDrawsAuraIDs
-TT._GetAuraIDCVarLifecycleToken = function() return auraIDCVarLifecycleToken end
+TT._GetAuraIDCVarLifecycleToken = function() return auraIDCVarLifecycleToken, "secret-first" end
