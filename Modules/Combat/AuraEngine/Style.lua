@@ -35,6 +35,13 @@ local function GetDurationFormatter(settings)
     local formatter = C_StringUtil.CreateNumericRuleFormatter()
     formatter:SetBreakpoints({
         {
+            threshold = 3600,
+            format    = "%dh",
+            components = {
+                { div = 3600, step = 1, rounding = Enum.NumericRuleFormatRounding.Down },
+            },
+        },
+        {
             threshold = 60,
             format    = "%dm",
             components = {

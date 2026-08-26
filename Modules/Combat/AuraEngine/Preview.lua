@@ -132,6 +132,9 @@ end
 -- SetDurationText, a registration call plain preview frames cannot accept.
 local function FormatRemaining(seconds)
     if seconds <= 0 then return "" end
+    if seconds >= 3600 then
+        return math_floor(seconds / 3600) .. "h"
+    end
     if seconds >= 60 then
         return math_floor(seconds / 60) .. "m"
     end
