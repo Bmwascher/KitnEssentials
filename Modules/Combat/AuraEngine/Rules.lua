@@ -65,17 +65,20 @@ Rules.HARDCODED_BLOCKLIST = {
     160455,  -- Fatigued
     95809,   -- Insanity
     80354,   -- Time Warp
+    26013,   -- Deserter
     71041,   -- Dungeon Deserter
     206151,  -- Challenger's Burden
+    1313593, -- Deserter
+    124255,  -- Stagger
 }
 
 -- Saved blocklist entries are RECORDS with an enabled flag, not a boolean
--- set, so a disabled row must not filter. The hardcoded nine are added after
+-- set, so a disabled row must not filter. The hardcoded entries are added after
 -- the user's rows and therefore override a disabled row for the same id --
 -- the GUI shows those rows as always-on for exactly this reason.
 --
 -- MERGE OR ALIAS, and never an unconditional fresh table: it ports the
--- reference's shape, where the nine merge INTO the user's set when the user
+-- reference's shape, where the constants merge INTO the user's set when the user
 -- has entries, and the shared constant set is returned BY REFERENCE when
 -- they have none. Nothing may then mutate the returned table. A defensive
 -- copy here would violate the merge-or-alias rule above: it makes the

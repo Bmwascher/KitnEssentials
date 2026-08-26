@@ -26,9 +26,9 @@ local pairs, ipairs = pairs, ipairs
 -- Constants
 ---------------------------------------------------------------------------------
 
--- Default blocklist entries (populated once on first enable).
--- Non-boss Bloodlust variants the player never wants cluttering the display.
 local DEFAULT_BLOCKLIST = {
+    [26013]  = { label = "Deserter",    enabled = true, default = true },
+    [1313593] = { label = "Deserter",   enabled = true, default = true },
     [390435] = { label = "BL (Hunter)", enabled = true, default = true },
     [57723]  = { label = "BL (Drums)",  enabled = true, default = true },
     [95809]  = { label = "BL (Hunter)", enabled = true, default = true },
@@ -37,6 +37,7 @@ local DEFAULT_BLOCKLIST = {
     [57724]  = { label = "BL (Shaman)", enabled = true, default = true },
     [160455] = { label = "BL (Hunter)", enabled = true, default = true },
     [264689] = { label = "BL (Hunter)", enabled = true, default = true },
+    [124255] = { label = "Stagger",     enabled = true, default = true },
 }
 
 -- Per-dispel-type defaults (matches the GUI's Dispel Type Colors card 1:1).
