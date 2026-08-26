@@ -868,7 +868,8 @@ function TT:OnTooltipSetSpell(tt, data)
         id = data and data.id
     end
 
-    if not id or KE:IsSecretValue(id) then return end
+    if KE.IsSecretValue and KE:IsSecretValue(id) then return end
+    if not id then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", id))
     tt:Show()
 end
@@ -883,11 +884,11 @@ local auraIDCVarLifecycleToken = 0
 -- Parent teardown calls OnDisable before the module's enabled flag clears, so
 -- forceOff records teardown intent.
 function TT:SyncAuraSpellIDCVar(forceOff)
-    if auraIDCVarPresent == nil then
+    if not auraIDCVarPresent then
         local okProbe, cur = pcall(C_CVar.GetCVar, AURA_ID_CVAR)
-        auraIDCVarPresent = (okProbe and cur ~= nil) and true or false
+        if not okProbe or cur == nil then return end
+        auraIDCVarPresent = true
     end
-    if not auraIDCVarPresent then return end
 
     -- Engine rendering is unconditional, so it can only stand in for ALWAYS.
     -- Under MODIFIER the line is meant to appear while a key is held, which the
@@ -911,7 +912,8 @@ end
 
 local function AddAuraIDLine(tt, spellId)
     if EngineDrawsAuraIDs() then return end
-    if not spellId or (KE.IsSecretValue and KE:IsSecretValue(spellId)) then return end
+    if KE.IsSecretValue and KE:IsSecretValue(spellId) then return end
+    if not spellId then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellId))
     tt:Show()
 end
