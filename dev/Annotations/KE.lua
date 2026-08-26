@@ -626,6 +626,13 @@ function AceModule:RawHook(object, method, handler, hookSecure) end
 ---@param msg string
 function AceModule:Hide(msg) end
 
+-- Module lifecycle fields cleared back to nil on disable.
+---@class CharacterPanel
+---@field _decimalIlvlHooked boolean?
+
+---@class MapScale
+---@field _regenPending boolean?
+
 -- Automation's transform picker is a cross-module public surface (the GUI
 -- reads it from a different file in Task 4), unlike the module-private
 -- methods the AceModule note above says to skip. GetHideTransformItem is a

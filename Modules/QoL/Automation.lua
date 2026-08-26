@@ -1812,6 +1812,8 @@ local function VaultCreateButton()
         if f:IsShown() then
             _G.HideUIPanel(f)
         else
+            -- WeeklyRewards_ShowUI uses boolean force; the generated stub is wrong.
+            ---@diagnostic disable-next-line: type-mismatch
             _G.ShowUIPanel(f, true)
         end
     end)

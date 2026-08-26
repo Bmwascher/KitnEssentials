@@ -2,14 +2,6 @@
 
 ## v4.4.2
 
-### Player Buffs
-- Long-duration buffs now show whole hours once they reach one hour, so a
-  23-hour buff reads `23h` instead of `1406m`
-
----
-
-## v4.4.1
-
 ### Auction House Filter
 - The Current Expansion filter applies automatically again on patch 12.1.
   The filter moved behind the Auction House button API, so the old direct
@@ -19,6 +11,10 @@
 - Bonus Roll prompts now appear at the configured alert position immediately.
   They previously opened at the bottom of the screen and moved only after an
   item alert appeared
+
+### Player Buffs
+- Long-duration buffs now show whole hours once they reach one hour, so a
+  23-hour buff reads `23h` instead of `1406m`
 
 ---
 
