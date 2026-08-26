@@ -68,6 +68,18 @@ describe("HousingDashboardFix", function()
         assert.equal(houses, dashboard.HouseDropdown.playerHouseList)
     end)
 
+    it("leaves a missing cached list alone", function()
+        local _, dashboard, scheduled, getRefetches = loadFix(nil, true, true)
+
+        dashboard:GetScript("OnShow")(dashboard)
+        assert.equal(1, #scheduled)
+        assert.equal(0, scheduled[1].delay)
+        scheduled[1].callback()
+
+        assert.equal(0, getRefetches())
+        assert.is_nil(dashboard.HouseDropdown.playerHouseList)
+    end)
+
     it("waits for the dashboard to finish loading before hooking it", function()
         local _, dashboard, _, _, frames = loadFix({}, true, true, false)
 
