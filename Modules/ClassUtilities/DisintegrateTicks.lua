@@ -45,7 +45,6 @@ local PRESERVATION = 1468
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
-DT.ticks = {}
 DT.maxTicks = 4
 DT.channeling = false
 DT.massDisintegrateStacks = 0
@@ -57,8 +56,17 @@ DT.firstTick = 0
 DT.prevEndTime = nil
 DT.prevHastedTickInterval = nil
 DT.lastKnownHaste = 0  -- 12.0.5: derived from cast duration instead of UnitSpellHaste (secret-valued)
-DT.castBarInfo = { width = 0, height = 0, anchor = nil }
-DT.hooksInstalled = false
+local CastBarRegistry = {
+    providers = {},
+    handles = {},
+    retryTickers = {},
+    pendingLoads = {},
+    resolvedProviders = {},
+    generation = 0,
+}
+
+local hookedScripts = setmetatable({}, { __mode = "k" })
+local hookedMethods = setmetatable({}, { __mode = "k" })
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -69,6 +77,7 @@ end
 
 function DT:OnInitialize()
     self:UpdateDB()
+    CastBarRegistry.frame = self
     self:SetEnabledState(false)
 end
 
@@ -94,56 +103,244 @@ function DT:QueryTalentsAndHide()
 end
 
 ---------------------------------------------------------------------------------
--- Cast Bar Discovery
+-- Cast Bar Registry
 ---------------------------------------------------------------------------------
-function DT:DiscoverCastBar()
-    if self.castBarInfo.anchor then return self.castBarInfo.anchor end
-
-    -- UUF (most common for KitnUI users)
-    if UUF_Player_CastBar then
-        self:SetCastBarAnchor(UUF_Player_CastBar)
-        return self.castBarInfo.anchor
-    end
-
-    -- BCDM
-    if BCDM_CastBar and BCDM_CastBar.Status then
-        self:SetCastBarAnchor(BCDM_CastBar.Status)
-        return self.castBarInfo.anchor
-    end
-
-    -- Ayije CDM
-    if Ayije_CastBar and Ayije_CastBar.castBar then
-        self:SetCastBarAnchor(Ayije_CastBar.castBar)
-        return self.castBarInfo.anchor
-    end
-
-    -- Blizzard default
-    if PlayerCastingBarFrame then
-        self:SetCastBarAnchor(PlayerCastingBarFrame)
-        return self.castBarInfo.anchor
-    end
-
-    return nil
+function CastBarRegistry:RegisterProvider(provider)
+    table.insert(self.providers, provider)
 end
 
-function DT:SetCastBarAnchor(anchor)
-    if self.castBarInfo.anchor == anchor then return end
-    self.castBarInfo.anchor = anchor
-    local w, h = anchor:GetSize()
-    self.castBarInfo.width = math_ceil(w)
-    self.castBarInfo.height = math_ceil(h)
-    self:HideTicks()
-    self:UpdateWarningPosition()
+function CastBarRegistry:ResolveProvider(provider, generation)
+    if generation ~= self.generation or not DT:IsEnabled() then
+        return
+    end
+
+    if self.resolvedProviders[provider.id] == generation then
+        return
+    end
+
+    if provider.addon ~= nil then
+        local _, loaded = C_AddOns.IsAddOnLoaded(provider.addon)
+        if not loaded then
+            if self.pendingLoads[provider.id] == generation then
+                return
+            end
+
+            self.pendingLoads[provider.id] = generation
+            EventUtil.ContinueOnAddOnLoaded(provider.addon, function()
+                if not DT:IsEnabled() then
+                    return
+                end
+
+                if self.pendingLoads[provider.id] == generation then
+                    self.pendingLoads[provider.id] = nil
+                end
+
+                if generation ~= self.generation then
+                    return
+                end
+
+                self:ResolveProvider(provider, generation)
+            end)
+            return
+        end
+    end
+
+    if provider.isEnabled ~= nil and not provider.isEnabled() then
+        return
+    end
+
+    self.resolvedProviders[provider.id] = generation
+    provider.register(self, self.frame)
 end
 
-function DT:AdjustDimensions(width, height)
+function CastBarRegistry:EnsureHandle(id, anchor, priority, textFrame)
+    local handle = self.handles[id]
+
+    if handle == nil then
+        handle = {
+            id = id,
+            anchor = anchor,
+            textFrame = textFrame,
+            width = 0,
+            height = 0,
+            priority = priority,
+            ticks = {},
+            isActive = nil,
+        }
+        self.handles[id] = handle
+    else
+        handle.anchor = anchor
+        handle.textFrame = textFrame
+        handle.priority = priority
+    end
+
+    return handle
+end
+
+function CastBarRegistry:GetHandle(id)
+    return self.handles[id]
+end
+
+function CastBarRegistry:SyncDimensions(id, anchor)
+    local handle = self:GetHandle(id)
+    if handle == nil or anchor == nil then
+        return
+    end
+
+    local width, height = anchor:GetSize()
+    if not KE:IsSafeValue(width) or not KE:IsSafeValue(height) then
+        return
+    end
+
     width = math_ceil(width)
     height = math_ceil(height)
-    if width ~= self.castBarInfo.width or height ~= self.castBarInfo.height then
-        self.castBarInfo.width = width
-        self.castBarInfo.height = height
-        self:QueryTalentsAndHide()
+    if width ~= handle.width or height ~= handle.height then
+        handle.width = width
+        handle.height = height
+        self.frame:QueryTalentsAndHide()
     end
+end
+
+function CastBarRegistry:GetVisibleBars()
+    local candidates = {}
+
+    for _, handle in pairs(self.handles) do
+        if handle.anchor ~= nil then
+            local shown = handle.anchor:IsShown()
+            if KE:IsSafeValue(shown) and shown then
+                if handle.isActive == nil or handle.isActive(handle) then
+                    table.insert(candidates, handle)
+                end
+            end
+        end
+    end
+
+    table.sort(candidates, function(a, b)
+        if a.priority == b.priority then
+            return a.id < b.id
+        end
+
+        return a.priority > b.priority
+    end)
+
+    local visible = {}
+    local seen = {}
+
+    for _, handle in ipairs(candidates) do
+        if not seen[handle.anchor] then
+            seen[handle.anchor] = true
+            table.insert(visible, handle)
+        end
+    end
+
+    return visible
+end
+
+function CastBarRegistry:GetPrimaryHandle()
+    local visible = self:GetVisibleBars()
+    if visible[1] ~= nil then
+        return visible[1]
+    end
+
+    local bestFallback = nil
+    for _, handle in pairs(self.handles) do
+        if handle.anchor ~= nil and (not bestFallback or handle.priority > bestFallback.priority) then
+            bestFallback = handle
+        end
+    end
+
+    return bestFallback
+end
+
+function CastBarRegistry:ResolveWithRetry(resolve, callback, maxAttempts, interval)
+    maxAttempts = maxAttempts or 5
+    interval = interval or 1
+
+    local generation = self.generation
+    if not DT:IsEnabled() or generation ~= self.generation then
+        return
+    end
+
+    local immediate = resolve()
+    if immediate ~= nil then
+        callback(immediate)
+        return
+    end
+
+    local attempts = 0
+    local ticker = nil
+    ticker = C_Timer.NewTicker(interval, function()
+        if not DT:IsEnabled() or generation ~= self.generation then
+            if ticker ~= nil then
+                ticker:Cancel()
+                self.retryTickers[ticker] = nil
+            end
+            return
+        end
+
+        attempts = attempts + 1
+        local anchor = resolve()
+        if anchor ~= nil then
+            if ticker ~= nil then
+                ticker:Cancel()
+                self.retryTickers[ticker] = nil
+            end
+            callback(anchor)
+            return
+        end
+
+        if attempts >= maxAttempts and ticker ~= nil then
+            ticker:Cancel()
+            self.retryTickers[ticker] = nil
+        end
+    end)
+    self.retryTickers[ticker] = true
+end
+
+function CastBarRegistry:CancelRetries()
+    for ticker in pairs(self.retryTickers) do
+        ticker:Cancel()
+        self.retryTickers[ticker] = nil
+    end
+end
+
+function CastBarRegistry:ResolveAllProviders()
+    self.generation = self.generation + 1
+    self.resolvedProviders = {}
+
+    for _, provider in ipairs(self.providers) do
+        self:ResolveProvider(provider, self.generation)
+    end
+end
+
+function CastBarRegistry.HookFrameScriptOnce(frame, scriptName, callback)
+    local scripts = hookedScripts[frame]
+    if scripts == nil then
+        scripts = {}
+        hookedScripts[frame] = scripts
+    end
+
+    if scripts[scriptName] then
+        return
+    end
+
+    frame:HookScript(scriptName, callback)
+    scripts[scriptName] = true
+end
+
+function CastBarRegistry.HookMethodOnce(object, methodName, callback)
+    local methods = hookedMethods[object]
+    if methods == nil then
+        methods = {}
+        hookedMethods[object] = methods
+    end
+
+    if methods[methodName] then
+        return
+    end
+
+    hooksecurefunc(object, methodName, callback)
+    methods[methodName] = true
 end
 
 ---------------------------------------------------------------------------------
@@ -185,45 +382,46 @@ end
 ---------------------------------------------------------------------------------
 -- Tick Management
 ---------------------------------------------------------------------------------
-function DT:CreateTick(index)
-    local anchor = self.castBarInfo.anchor
-    if not anchor then return nil end
+function DT:CreateTick(index, handle)
+    if handle == nil or handle.anchor == nil then return nil end
 
     local db = self.db
     local r, g, b, a = KE:ResolveColor(db.TickColor, { 1, 1, 1, 0.8 })
-    local tick = anchor:CreateTexture("KE_DisintegrateTick" .. index, "OVERLAY")
+    local tick = handle.anchor:CreateTexture("KE_DisintegrateTick" .. index, "OVERLAY")
     tick:SetColorTexture(r, g, b, a)
     tick:Hide()
     return tick
 end
 
 function DT:HideTicks()
-    for _, tick in next, self.ticks do
-        tick:Hide()
+    for _, handle in pairs(CastBarRegistry.handles) do
+        for _, tick in next, handle.ticks do
+            tick:Hide()
+        end
     end
 end
 
-function DT:UpdateTicks(castBarFrame, duration)
+function DT:UpdateTicks(handle, duration)
     self:HideTicks()
-    if not castBarFrame then return end
+    if handle == nil or handle.anchor == nil then return end
 
     local db = self.db
     -- TickWidth is screen-pixel intent; multiply by GetPixelSize so a
     -- value of 2 renders as exactly 2 screen pixels at any UI scale.
     local tickWidth = (db.TickWidth or 2) * KE:GetPixelSize()
     local hastedTickInterval = self:GetTickInterval() / self:GetHaste()
-    local pixelsPerSecond = self.castBarInfo.width / duration
+    local pixelsPerSecond = handle.width / duration
 
     for i = 1, self.maxTicks do
-        local tick = self.ticks[i]
+        local tick = handle.ticks[i]
 
-        if tick == nil or tick:GetParent() ~= castBarFrame then
-            tick = self:CreateTick(i)
-            self.ticks[i] = tick
+        if tick == nil or tick:GetParent() ~= handle.anchor then
+            tick = self:CreateTick(i, handle)
+            handle.ticks[i] = tick
         end
 
         if tick then
-            tick:SetSize(tickWidth, self.castBarInfo.height * 0.95)
+            tick:SetSize(tickWidth, handle.height * 0.95)
             tick:ClearAllPoints()
 
             local tickTime = i * hastedTickInterval
@@ -233,7 +431,7 @@ function DT:UpdateTicks(castBarFrame, duration)
                 tickTime = self.firstTick + (i - 1) * interval
             end
 
-            tick:SetPoint("CENTER", castBarFrame, "LEFT", (duration - tickTime) * pixelsPerSecond, 0)
+            tick:SetPoint("CENTER", handle.anchor, "LEFT", (duration - tickTime) * pixelsPerSecond, 0)
 
             if tickTime < duration * 0.99 then
                 tick:Show()
@@ -247,8 +445,10 @@ end
 function DT:ApplyTickColor()
     local db = self.db
     local r, g, b, a = KE:ResolveColor(db.TickColor, { 1, 1, 1, 0.8 })
-    for _, tick in next, self.ticks do
-        tick:SetColorTexture(r, g, b, a)
+    for _, handle in pairs(CastBarRegistry.handles) do
+        for _, tick in next, handle.ticks do
+            tick:SetColorTexture(r, g, b, a)
+        end
     end
 end
 
@@ -320,64 +520,6 @@ function DT:HideWarning()
     end
 end
 
----------------------------------------------------------------------------------
--- Cast Bar Hooks
----------------------------------------------------------------------------------
-function DT:InstallCastBarHooks()
-    if self.hooksInstalled then return end
-    self.hooksInstalled = true
-
-    local self_ = self
-
-    -- UUF
-    if C_AddOns.IsAddOnLoaded("UnhaltedUnitFrames") and UUF_Player_CastBar then
-        hooksecurefunc(UUF_Player_CastBar, "Show", function(cb)
-            local w, h = cb:GetSize()
-            self_:AdjustDimensions(w, h)
-            self_:SetCastBarAnchor(cb)
-        end)
-    end
-
-    -- BCDM
-    if C_AddOns.IsAddOnLoaded("BetterCooldownManager") and BCDM_CastBar then
-        hooksecurefunc(BCDM_CastBar, "Show", function(cb)
-            local w, h = cb:GetSize()
-            self_:AdjustDimensions(w, h)
-            if cb.Status then self_:SetCastBarAnchor(cb.Status) end
-        end)
-    end
-
-    -- Ayije CDM
-    if C_AddOns.IsAddOnLoaded("Ayije_CDM") and Ayije_CastBar then
-        hooksecurefunc(Ayije_CastBar, "Show", function(cb)
-            local w, h = cb:GetSize()
-            self_:AdjustDimensions(w, h)
-            if cb.castBar then self_:SetCastBarAnchor(cb.castBar) end
-        end)
-    end
-
-    -- Blizzard EditMode resize
-    if EditModeManagerFrame then
-        hooksecurefunc(EditModeManagerFrame, "UpdateLayoutInfo", function()
-            if not PlayerCastingBarFrame then return end
-            local locked = PlayerCastingBarFrame:IsAttachedToPlayerFrame()
-            self_:AdjustDimensions(locked and 150 or 208, locked and 10 or 11)
-        end)
-    end
-
-    -- ActionBarsEnhanced resize
-    if C_AddOns.IsAddOnLoaded("ActionBarsEnhanced") and PlayerCastingBarFrame then
-        PlayerCastingBarFrame:HookScript("OnSizeChanged", function(cb)
-            if self_.castBarInfo.anchor ~= cb then return end
-            local w, h = cb:GetSize()
-            self_:AdjustDimensions(w, h)
-        end)
-    end
-end
-
----------------------------------------------------------------------------------
--- Event Handlers
----------------------------------------------------------------------------------
 function DT:OnEvent(event, unit, ...)
     -- Filter unit-specific events to player only
     if event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_STOP"
@@ -387,7 +529,6 @@ function DT:OnEvent(event, unit, ...)
     end
 
     if event == "LOADING_SCREEN_DISABLED" then
-        self:DiscoverCastBar()
         self:QueryTalentsAndHide()
         self:HideWarning()
 
@@ -456,19 +597,13 @@ function DT:OnEvent(event, unit, ...)
                 self:ShowWarning()
                 self.massDisintegrateStacks = self.massDisintegrateStacks - 1
 
-                -- Update cast bar text to show Mass Disintegrate name
-                local anchor = self.castBarInfo.anchor
-                if anchor and anchor.Text then
-                    anchor.Text:SetText(C_Spell.GetSpellName(MASS_DISINTEGRATE))
+                local handle = CastBarRegistry:GetPrimaryHandle()
+                if handle and handle.textFrame then
+                    handle.textFrame:SetText(C_Spell.GetSpellName(MASS_DISINTEGRATE))
                 end
             end
         else
             self:HideWarning()
-        end
-
-        -- Discover cast bar if we haven't yet
-        if not self.castBarInfo.anchor then
-            self:DiscoverCastBar()
         end
 
         local nextEndTime = endTimeMS / 1000
@@ -489,7 +624,7 @@ function DT:OnEvent(event, unit, ...)
         self.chaining = self.channeling
         self.channeling = true
 
-        self:UpdateTicks(self.castBarInfo.anchor, nextEndTime - startTime)
+        self:UpdateTicks(CastBarRegistry:GetPrimaryHandle(), nextEndTime - startTime)
 
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
         -- unit param captures spellId for non-unit events
@@ -583,14 +718,11 @@ function DT:ShowPreview()
     -- Show warning text in preview
     self.warningText:Show()
 
-    -- Try to show ticks on the cast bar
-    self:DiscoverCastBar()
-    if self.castBarInfo.anchor then
-        local w, h = self.castBarInfo.anchor:GetSize()
-        self.castBarInfo.width = math_ceil(w)
-        self.castBarInfo.height = math_ceil(h)
+    local handle = CastBarRegistry:GetPrimaryHandle()
+    if handle then
+        CastBarRegistry:SyncDimensions(handle.id, handle.anchor)
         local previewDuration = self.maxTicks * (self:GetTickInterval() / self:GetHaste())
-        self:UpdateTicks(self.castBarInfo.anchor, previewDuration)
+        self:UpdateTicks(handle, previewDuration)
     end
 end
 
@@ -620,12 +752,8 @@ function DT:OnEnable()
     self:RegisterEvent("LOADING_SCREEN_DISABLED", "OnEvent")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnEvent")
 
-    -- Install cast bar hooks once
-    C_Timer.After(0.5, function()
-        self:DiscoverCastBar()
-        self:InstallCastBarHooks()
-        self:ApplyPosition()
-    end)
+    CastBarRegistry:ResolveAllProviders()
+    self:ApplyPosition()
 
     -- Register spec events if valid spec
     if self:IsValidSpec() then
@@ -646,5 +774,6 @@ function DT:OnDisable()
     self.prevEndTime = nil
     self.prevHastedTickInterval = nil
     self.massDisintegrateStacks = 0
+    CastBarRegistry:CancelRetries()
     self:UnregisterAllEvents()
 end
