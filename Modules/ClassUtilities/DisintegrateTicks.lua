@@ -382,12 +382,12 @@ end
 ---------------------------------------------------------------------------------
 -- Tick Management
 ---------------------------------------------------------------------------------
-function DT:CreateTick(index, handle)
+function DT:CreateTick(_index, handle)
     if handle == nil or handle.anchor == nil then return nil end
 
     local db = self.db
     local r, g, b, a = KE:ResolveColor(db.TickColor, { 1, 1, 1, 0.8 })
-    local tick = handle.anchor:CreateTexture("KE_DisintegrateTick" .. index, "OVERLAY")
+    local tick = handle.anchor:CreateTexture(nil, "OVERLAY")
     tick:SetColorTexture(r, g, b, a)
     tick:Hide()
     return tick
