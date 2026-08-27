@@ -942,7 +942,8 @@ function CP:SetupWiderFrame()
     if not widenHooked then
         widenHooked = true
         for _, method in ipairs({ "Expand", "Collapse", "UpdateSize", "ShowSubFrame" }) do
-            if type(cf[method]) == "function" then
+            local methodFunc = cf[method]
+            if type(methodFunc) == "function" then
                 hooksecurefunc(cf, method, function() ApplyWiden() end)
             end
         end
