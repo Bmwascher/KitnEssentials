@@ -31,10 +31,7 @@ local ipairs, pairs = ipairs, pairs
 local math_max = math.max
 local string_format = string.format
 
--- Flip to true to trace the interrupt-announce event flow. Logs at every
--- decision point (SUCCEEDED entry, flag set/skip, INTERRUPTED entry, GUID
--- check, announce trigger). Leave this in place after diagnosis — free
--- tracing if a regression surfaces later.
+-- Flip to true to log the classified landed-event decision tuple.
 local DEBUG_CT = false
 
 local EQUIP_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 }
