@@ -22,9 +22,10 @@ local InCombatLockdown = InCombatLockdown
 local UnitExists = UnitExists
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local GetInventoryItemDurability = GetInventoryItemDurability
+local GetTime = GetTime
+local UnitGUID = UnitGUID
+local UnitCanAttack = UnitCanAttack
 local C_Spell_GetSpellInfo = C_Spell.GetSpellInfo
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local ipairs, pairs = ipairs, pairs
 local math_max = math.max
 local string_format = string.format
@@ -51,9 +52,14 @@ CM.activeMessages = {}
 CM.isPreview = false
 CM.inCombat = false
 CM.noTargetCheckGeneration = 0
-CM.interruptFlag = false
-CM.interruptTimer = nil
-CM.currentInterrupts = nil
+CM.interruptCastFrame = nil
+CM.interruptEventsRegistered = false
+CM.interruptAnnounceSpells = nil
+CM.pendingInterruptAt = nil
+CM.pendingInterruptSpellID = nil
+CM.pendingInterruptUnit = nil
+CM.lastAcceptedCastGUID = nil
+CM.lastUnkeyedAcceptAt = nil
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -371,6 +377,7 @@ end
 -- Apply Settings
 ---------------------------------------------------------------------------------
 function CM:ApplySettings()
+    self:UpdateInterruptEventRegistration()
     if not self.container then return end
     KE:ApplyFramePosition(self.container, self.db.Position, self.db)
 
@@ -476,96 +483,146 @@ end
 ---------------------------------------------------------------------------------
 -- Interrupt Announce
 ---------------------------------------------------------------------------------
-function CM:CacheInterruptSpells()
-    local specIndex = GetSpecialization()
-    if not specIndex then
-        self.currentInterrupts = nil
-        return
-    end
-    local specID = GetSpecializationInfo(specIndex)
-    if not specID then
-        self.currentInterrupts = nil
-        return
-    end
-    self.currentInterrupts = KE:GetInterruptSpellSet(specID)
+function CM.ResolveReadableInterruptOwner(interruptedBy, playerGUID, playerKnown, petGUID, petKnown)
+    if playerKnown and interruptedBy == playerGUID then return "OWN" end
+    if petKnown and petGUID ~= nil and interruptedBy == petGUID then return "OWN" end
+    if not playerKnown or not petKnown then return "UNKNOWN" end
+    return "OTHER"
 end
 
-function CM:OnSpellcastSucceeded(_, unit, _, spellID)
-    if not self.db or self.db.InterruptEnabled == false then return end
-    if not self.currentInterrupts then
-        if DEBUG_CT then KE:Print("[CT] SUCCEEDED: currentInterrupts nil (spec not cached)") end
-        return
-    end
-    if KE:IsSecretValue(unit) then
-        if DEBUG_CT then KE:Print("[CT] SUCCEEDED: unit is secret, skip") end
-        return
-    end
-    if unit ~= "player" and unit ~= "pet" then return end
-    if KE:IsSecretValue(spellID) then
-        if DEBUG_CT then KE:Print(string_format("[CT] SUCCEEDED: unit=%s spellID is secret, skip", tostring(unit))) end
-        return
-    end
-    if not self.currentInterrupts[spellID] then
-        if DEBUG_CT then KE:Print(string_format("[CT] SUCCEEDED: unit=%s spellID=%s NOT in interrupt set", tostring(unit), tostring(spellID))) end
-        return
-    end
-
-    if DEBUG_CT then KE:Print(string_format("[CT] SUCCEEDED: flag SET for unit=%s spellID=%s (window 0.35s)", tostring(unit), tostring(spellID))) end
-
-    -- 0.5s window covers close-to-mid range projectile interrupts (e.g.
-    -- Avenger's Shield) that fire UNIT_SPELLCAST_INTERRUPTED on projectile
-    -- landing. Blizzard omits interruptedBy for AS-style interrupts in 12.0,
-    -- so we fall back to flag correlation — any INTERRUPTED within the
-    -- window after our known-interrupt cast is presumed ours. Max-range AS
-    -- on high-latency connections may occasionally exceed this window.
-    self.interruptFlag = true
-    if self.interruptTimer then
-        self.interruptTimer:Cancel()
-    end
-    self.interruptTimer = C_Timer.NewTimer(0.35, function()
-        if DEBUG_CT and self.interruptFlag then KE:Print("[CT] flag TIMEOUT (0.35s elapsed, no interrupt landed)") end
-        self.interruptFlag = false
-    end)
+function CM.ResolvePendingInterruptSource(unit, unitKnown)
+    if not unitKnown then return nil end
+    if unit == "player" or unit == "pet" then return unit end
+    return nil
 end
 
-function CM:OnSpellcastInterrupted(_, _, _, spellID, interruptedBy)
-    if not self.interruptFlag then
-        if DEBUG_CT then KE:Print(string_format("[CT] INTERRUPTED: no pending flag, skip (spellID=%s)", tostring(spellID))) end
-        return
+function CM:ClearPendingInterrupt()
+    self.pendingInterruptAt = nil
+    self.pendingInterruptSpellID = nil
+    self.pendingInterruptUnit = nil
+end
+
+function CM:ClearInterruptState()
+    self:ClearPendingInterrupt()
+    self.lastAcceptedCastGUID = nil
+    self.lastUnkeyedAcceptAt = nil
+end
+
+function CM:RecordPendingInterrupt(spellID, source, now)
+    self.pendingInterruptAt = now
+    self.pendingInterruptSpellID = spellID
+    self.pendingInterruptUnit = source
+end
+
+function CM:ClassifyInterruptOwnership(interruptedBy)
+    if KE:IsSecretValue(interruptedBy) then return "UNKNOWN", false end
+    if interruptedBy == nil then return "UNKNOWN", true end
+
+    local playerGUID = UnitGUID("player")
+    local playerSecret = KE:IsSecretValue(playerGUID)
+    local playerKnown = not playerSecret and playerGUID ~= nil
+    if not playerKnown then playerGUID = nil end
+
+    local petGUID = UnitGUID("pet")
+    local petSecret = KE:IsSecretValue(petGUID)
+    local petKnown = not petSecret
+    if petSecret then petGUID = nil end
+
+    return CM.ResolveReadableInterruptOwner(interruptedBy, playerGUID,
+        playerKnown, petGUID, petKnown), false
+end
+
+function CM:ClassifyInterruptTarget(unitTarget)
+    if KE:IsSecretValue(unitTarget) then return "UNKNOWN" end
+    if type(unitTarget) ~= "string" then return "INVALID" end
+    if unitTarget == "player" or unitTarget == "pet" then return "FRIENDLY" end
+
+    local ok, hostile = pcall(UnitCanAttack, "player", unitTarget)
+    if not ok or not KE:IsSafeValue(hostile) then return "UNKNOWN" end
+    if hostile == true then return "HOSTILE" end
+    if hostile == false then return "FRIENDLY" end
+    return "UNKNOWN"
+end
+
+function CM:HasFreshPendingInterrupt(now)
+    if self.pendingInterruptAt == nil then return false, nil, "none", "none" end
+
+    local elapsed = now - self.pendingInterruptAt
+    local pendingSource = self.pendingInterruptUnit or "unknown"
+    if now <= self.pendingInterruptAt + 0.35 then
+        return true, elapsed, pendingSource, "fresh"
     end
 
-    if DEBUG_CT then
-        local isSafe = interruptedBy and KE:IsSafeValue(interruptedBy) or false
-        local byStr = interruptedBy and (isSafe and tostring(interruptedBy) or "<secret>") or "<nil>"
-        local playerGUID = UnitGUID("player")
-        local petGUID = UnitGUID("pet")
-        KE:Print(string_format("[CT] INTERRUPTED: spellID=%s interruptedBy=%s safe=%s playerGUID=%s petGUID=%s",
-            tostring(spellID), byStr, tostring(isSafe), tostring(playerGUID), tostring(petGUID)))
+    self:ClearPendingInterrupt()
+    return false, elapsed, pendingSource, "expired"
+end
+
+function CM:ShouldAcceptInterrupt(event, unitTarget, castGUID, interruptedBy, now)
+    local ownership, nilOwnership = self:ClassifyInterruptOwnership(interruptedBy)
+    local fresh, elapsed, pendingSource, pendingState = self:HasFreshPendingInterrupt(now)
+    if ownership == "OTHER" then
+        return false, ownership, "UNKNOWN", pendingSource, pendingState, "other-owner", elapsed
     end
 
-    -- When interruptedBy is present and safe, verify it matches our player
-    -- or pet GUID to filter out ally interrupts landing in the window. When
-    -- interruptedBy is nil (Avenger's Shield, some projectile interrupts)
-    -- or secret (M+/rated PvP), trust the flag correlation alone.
-    if interruptedBy and KE:IsSafeValue(interruptedBy) then
-        local playerGUID = UnitGUID("player")
-        local petGUID = UnitGUID("pet")
-        if interruptedBy ~= playerGUID and interruptedBy ~= petGUID then
-            if DEBUG_CT then KE:Print("[CT] INTERRUPTED: GUID mismatch (ally interrupt), skip") end
-            return
+    if ownership == "UNKNOWN" then
+        if nilOwnership and event == "UNIT_SPELLCAST_CHANNEL_STOP" then
+            return false, ownership, "UNKNOWN", pendingSource, pendingState, "nil-channel-stop", elapsed
+        end
+        if not fresh then
+            return false, ownership, "UNKNOWN", pendingSource, pendingState, "no-fresh-pending", elapsed
         end
     end
 
-    if DEBUG_CT then KE:Print("[CT] INTERRUPTED: announcing") end
-
-    self.interruptFlag = false
-    if self.interruptTimer then
-        self.interruptTimer:Cancel()
-        self.interruptTimer = nil
+    local target = self:ClassifyInterruptTarget(unitTarget)
+    if target == "FRIENDLY" then
+        return false, ownership, target, pendingSource, pendingState, "friendly-target", elapsed
+    end
+    if target == "INVALID" then
+        return false, ownership, target, pendingSource, pendingState, "invalid-target", elapsed
     end
 
-    -- Build display: "Interrupted |Ticon|t [Spell Name]"
-    -- C_Spell.GetSpellInfo accepts secret spellIDs (AllowedWhenTainted) and returns clean data
+    local readableCastGUID = not KE:IsSecretValue(castGUID) and type(castGUID) == "string"
+    if readableCastGUID and castGUID == self.lastAcceptedCastGUID then
+        return false, ownership, target, pendingSource, pendingState, "duplicate-cast-guid", elapsed
+    end
+    if not readableCastGUID and ownership == "OWN" and self.lastUnkeyedAcceptAt ~= nil
+        and now < self.lastUnkeyedAcceptAt + 0.10 then
+        return false, ownership, target, pendingSource, pendingState, "unkeyed-throttle", elapsed
+    end
+
+    if readableCastGUID then
+        self.lastAcceptedCastGUID = castGUID
+    elseif ownership == "OWN" then
+        self.lastUnkeyedAcceptAt = now
+    end
+    self:ClearPendingInterrupt()
+    local reason = ownership == "OWN" and "direct-owner" or "fallback"
+    return true, ownership, target, pendingSource, pendingState, reason, elapsed
+end
+
+function CM:OnSpellcastSucceeded(_, unit, _, spellID)
+    if not self.db or self.db.InterruptEnabled == false or not self.interruptAnnounceSpells then return end
+    if not KE:IsSafeValue(spellID) then return end
+    if not self.interruptAnnounceSpells[spellID] then return end
+
+    local unitKnown = not KE:IsSecretValue(unit)
+    local source = CM.ResolvePendingInterruptSource(unit, unitKnown)
+    if unitKnown and source == nil then return end
+    self:RecordPendingInterrupt(spellID, source, GetTime())
+end
+
+function CM:OnSpellcastInterrupted(event, unitTarget, castGUID, spellID, interruptedBy)
+    if not self.db or self.db.InterruptEnabled == false then return end
+
+    local accepted, ownership, target, pendingSource, pendingState, reason, elapsed =
+        self:ShouldAcceptInterrupt(event, unitTarget, castGUID, interruptedBy, GetTime())
+    if DEBUG_CT then
+        local elapsedText = elapsed and string_format("%.3f", elapsed) or "none"
+        KE:Print(string_format("[CT] event=%s owner=%s target=%s pending=%s state=%s elapsed=%s reason=%s",
+            event, ownership, target, pendingSource, pendingState, elapsedText, reason))
+    end
+    if not accepted then return end
+
     local prefix = self.db.InterruptText or "Interrupted"
     local spellInfo = C_Spell_GetSpellInfo(spellID)
     if spellInfo and spellInfo.iconID and spellInfo.name then
@@ -580,11 +637,47 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
+function CM:EnsureInterruptCastFrame()
+    if self.interruptCastFrame then return end
+    local frame = CreateFrame("Frame")
+    frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
+        self:OnSpellcastSucceeded(event, unit, castGUID, spellID)
+    end)
+    self.interruptCastFrame = frame
+end
+
+function CM:UpdateInterruptEventRegistration(forceDisabled)
+    local enabled = not forceDisabled
+        and self:IsEnabled()
+        and self.db
+        and self.db.Enabled ~= false
+        and self.db.InterruptEnabled ~= false
+
+    if enabled and not self.interruptEventsRegistered then
+        self:EnsureInterruptCastFrame()
+        self.interruptCastFrame:RegisterUnitEvent(
+            "UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
+        self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
+        self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnSpellcastInterrupted")
+        self.interruptEventsRegistered = true
+    elseif not enabled and self.interruptEventsRegistered then
+        self.interruptCastFrame:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+        self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+        self.interruptEventsRegistered = false
+        self:ClearInterruptState()
+    elseif not enabled then
+        self:ClearInterruptState()
+    end
+end
+
 function CM:OnEnable()
-    if not self.db.Enabled then return end
+    if self.db.Enabled == false then return end
 
     self:CreateContainer()
     self:RegWithEditMode()
+    self.interruptAnnounceSpells = KE:GetInterruptAnnounceSpellSet()
+    self:EnsureInterruptCastFrame()
 
     -- Pre-create message frames
     for _, msgType in ipairs(MESSAGE_TYPES) do
@@ -602,13 +695,7 @@ function CM:OnEnable()
     self:RegisterEvent("PLAYER_DEAD", "OnPlayerDead")
     self:RegisterEvent("UPDATE_INVENTORY_DURABILITY", "CheckDurability")
 
-    -- Interrupt announce events
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
-    self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
-    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnSpellcastInterrupted")
-    self:RegisterEvent("ACTIVE_PLAYER_SPECIALIZATION_CHANGED", "CacheInterruptSpells")
-    self:RegisterEvent("SPELLS_CHANGED", "CacheInterruptSpells")
-    self:CacheInterruptSpells()
+    self:UpdateInterruptEventRegistration()
 
     -- Track initial combat state
     self.inCombat = InCombatLockdown()
@@ -629,11 +716,7 @@ function CM:OnDisable()
     self.isPreview = false
     self.inCombat = false
     self.noTargetCheckGeneration = self.noTargetCheckGeneration + 1
-    self.interruptFlag = false
-    if self.interruptTimer then
-        self.interruptTimer:Cancel()
-        self.interruptTimer = nil
-    end
-    self.currentInterrupts = nil
+    self:UpdateInterruptEventRegistration(true)
+    self.interruptAnnounceSpells = nil
     self:UnregisterAllEvents()
 end
