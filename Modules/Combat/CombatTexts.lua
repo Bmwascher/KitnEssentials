@@ -37,6 +37,7 @@ local DEBUG_CT = false
 local EQUIP_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 }
 local INTERRUPT_ICON_GAP = 4
 local INTERRUPT_FONT_EMPHASIS = 2
+local SPELL_LINK_BLUE = { 113 / 255, 213 / 255, 1 }
 
 local MESSAGE_TYPES = {
     "enterCombat",
@@ -237,7 +238,7 @@ function CM:ShowFlashMessage(msgType, textOverride, iconOverride, nameOverride)
     frame.text:SetTextColor(color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
     if frame.interruptName then
         frame.interruptName:SetTextColor(
-            color[1] or 1, color[2] or 1, color[3] or 1, color[4] or 1)
+            SPELL_LINK_BLUE[1], SPELL_LINK_BLUE[2], SPELL_LINK_BLUE[3], color[4] or 1)
     end
 
     -- Show and arrange
