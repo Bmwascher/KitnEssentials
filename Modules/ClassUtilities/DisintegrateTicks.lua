@@ -797,10 +797,9 @@ function DT:ShowPreview()
     -- Show warning text in preview
     self.warningText:Show()
 
-    local handle = CastBarRegistry:GetPrimaryHandle()
-    if handle then
+    local previewDuration = self.maxTicks * (self:GetTickInterval() / self:GetHaste())
+    for _, handle in ipairs(CastBarRegistry:GetVisibleBars()) do
         CastBarRegistry:SyncDimensions(handle.id, handle.anchor)
-        local previewDuration = self.maxTicks * (self:GetTickInterval() / self:GetHaste())
         self:UpdateHandleTicks(handle, previewDuration)
     end
 end
