@@ -59,8 +59,8 @@ local function loadCombatTexts(options)
     local aceRegisterCalls = {}
     local aceUnregisterCalls = {}
     modules.CombatTexts = {
-        RegisterEvent = function(_, event)
-            aceEvents[event] = true
+        RegisterEvent = function(_, event, handler)
+            aceEvents[event] = handler
             aceRegisterCalls[event] = (aceRegisterCalls[event] or 0) + 1
         end,
         UnregisterEvent = function(_, event)
@@ -145,7 +145,7 @@ describe("Combat Texts interrupt attribution", function()
         assert.is_nil(CM.pendingInterruptAt)
     end)
 
-    it("accepts readable player and pet ownership without pending state", function()
+    it("accepts two distinct readable owned casts without pending state", function()
         local CM = loadCombatTexts()
         CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
             "enemy-cast-a", 777, "Player-1-00000001")
@@ -240,13 +240,14 @@ describe("Combat Texts interrupt attribution", function()
     end)
 
     it("preserves pending across a readable duplicate rejection", function()
-        local CM = loadCombatTexts()
+        local CM, _, _, setNow = loadCombatTexts()
         CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
             "enemy-cast-a", 777, "Player-1-00000001")
+        setNow(100.051)
         CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-a", 6552)
         CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
             "enemy-cast-a", 777, "Player-1-00000001")
-        assert.equals(100, CM.pendingInterruptAt)
+        assert.equals(100.051, CM.pendingInterruptAt)
         assert.equals(6552, CM.pendingInterruptSpellID)
         assert.equals("player", CM.pendingInterruptUnit)
         CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
@@ -259,11 +260,12 @@ describe("Combat Texts interrupt attribution", function()
         local CM, _, _, setNow = loadCombatTexts({ now = 0 })
         CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
             nil, 777, "Player-1-00000001")
+        setNow(0.051)
         CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-a", 6552)
         setNow(0.099)
         CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
             nil, 778, "Player-1-00000001")
-        assert.equals(0, CM.pendingInterruptAt)
+        assert.equals(0.051, CM.pendingInterruptAt)
         assert.equals(6552, CM.pendingInterruptSpellID)
         assert.equals("player", CM.pendingInterruptUnit)
         CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
@@ -322,6 +324,121 @@ describe("Combat Texts interrupt attribution", function()
         assert.equals(0.25, elapsed)
         assert.is_nil(CM.pendingInterruptAt)
     end)
+
+    it("suppresses a recognized success at the reverse-order deadline", function()
+        local CM, _, _, setNow = loadCombatTexts({ now = 0 })
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, "Player-1-00000001")
+        setNow(0.05)
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-a", 6552)
+        assert.equals(1, #CM.shown)
+        assert.is_nil(CM.pendingInterruptAt)
+        assert.equals("accepted", CM.reverseInterruptState)
+    end)
+
+    it("arms normal pending after the reverse-order deadline", function()
+        local CM, _, _, setNow = loadCombatTexts({ now = 0 })
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, "Player-1-00000001")
+        setNow(0.051)
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-a", 6552)
+        assert.equals(1, #CM.shown)
+        assert.equals(0.051, CM.pendingInterruptAt)
+        assert.equals(6552, CM.pendingInterruptSpellID)
+        assert.is_nil(CM.reverseInterruptState)
+    end)
+
+    it("suppresses player and pet aliases through the accepted deadline", function()
+        local CM, _, _, setNow = loadCombatTexts({ now = 0 })
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, "Player-1-00000001")
+        setNow(0.01)
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-a", 6552)
+        setNow(0.05)
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "pet", "kick-b", 119910)
+        assert.equals(1, #CM.shown)
+        assert.is_nil(CM.pendingInterruptAt)
+        assert.equals("accepted", CM.reverseInterruptState)
+    end)
+
+    it("promotes an unknown interrupted event at the reverse-order deadline", function()
+        local CM, _, _, setNow = loadCombatTexts({ now = 0 })
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, nil)
+        assert.equals(0, #CM.shown)
+        assert.equals("candidate", CM.reverseInterruptState)
+        setNow(0.05)
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-a", 6552)
+        assert.equals(1, #CM.shown)
+        assert.same({ 777 }, CM.spellNameCalls)
+        assert.is_nil(CM.pendingInterruptAt)
+        assert.equals("accepted", CM.reverseInterruptState)
+    end)
+
+    it("expires an unknown reverse candidate before a later success", function()
+        local CM, _, _, setNow = loadCombatTexts({ now = 0 })
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, nil)
+        setNow(0.051)
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-a", 6552)
+        assert.equals(0, #CM.shown)
+        assert.equals(0.051, CM.pendingInterruptAt)
+        assert.equals(6552, CM.pendingInterruptSpellID)
+        assert.is_nil(CM.reverseInterruptState)
+    end)
+
+    it("buffers a secret-owner channel stop but not a nil-owner channel stop", function()
+        local CM = loadCombatTexts({ secretValues = { SECRET_OWNER = true } })
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_CHANNEL_STOP", "target",
+            "enemy-channel-a", 777, nil)
+        assert.is_nil(CM.reverseInterruptState)
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_CHANNEL_STOP", "target",
+            "enemy-channel-b", 778, "SECRET_OWNER")
+        assert.equals("candidate", CM.reverseInterruptState)
+        assert.equals(778, CM.reverseInterruptSpellID)
+    end)
+
+    it("never buffers other-owner friendly or invalid landed events", function()
+        local CM = loadCombatTexts()
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, "Player-1-OTHER")
+        assert.is_nil(CM.reverseInterruptState)
+
+        CM = loadCombatTexts({ UnitCanAttack = function() return false end })
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "party1",
+            "friendly-cast-a", 777, nil)
+        assert.is_nil(CM.reverseInterruptState)
+
+        CM = loadCombatTexts()
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", nil,
+            "invalid-cast-a", 777, nil)
+        assert.is_nil(CM.reverseInterruptState)
+    end)
+
+    it("preserves the first fresh reverse candidate", function()
+        local CM, _, _, setNow = loadCombatTexts({ now = 0 })
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, nil)
+        setNow(0.02)
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-b", 778, nil)
+        setNow(0.03)
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-a", 6552)
+        assert.equals(1, #CM.shown)
+        assert.same({ 777 }, CM.spellNameCalls)
+    end)
+
+    it("promotes a readable candidate cast GUID into dedupe state", function()
+        local CM, _, _, setNow = loadCombatTexts({ now = 0 })
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, nil)
+        setNow(0.02)
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-a", 6552)
+        assert.equals("enemy-cast-a", CM.lastAcceptedCastGUID)
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, "Player-1-00000001")
+        assert.equals(1, #CM.shown)
+    end)
 end)
 
 local function packValues(...)
@@ -351,7 +468,7 @@ local decisionCases = {
         options = { now = 0 },
         prepare = function(CM) CM:RecordPendingInterrupt(6552, "player", 0) end,
         args = packValues("UNIT_SPELLCAST_INTERRUPTED", "target", "enemy-cast-a", nil, 0.351),
-        expected = packValues(false, "UNKNOWN", "UNKNOWN", "player", "expired", "no-fresh-pending", 0.351),
+        expected = packValues(false, "UNKNOWN", "HOSTILE", "player", "expired", "no-fresh-pending", 0.351),
     },
     {
         name = "friendly-target",
@@ -426,22 +543,18 @@ it("logs only the frozen plain decision tuple", function()
     }, CM.printed)
 end)
 
-it("routes declared-secret spell name and texture to the interrupt display", function()
-    local spellName = "SECRET_SPELL_NAME"
+-- This proves opaque mock values are passed through; runtime secrecy remains in-game.
+it("routes opaque spell lookup outputs to the interrupt display", function()
+    local spellName = "OPAQUE_SPELL_NAME"
     local iconID = 24680
     local CM = loadCombatTexts({
-        secretValues = {
-            SECRET_SPELL_ID = true,
-            [spellName] = true,
-            [iconID] = true,
-        },
         getSpellName = function() return spellName end,
         getSpellTexture = function() return iconID end,
     })
     CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
-        "enemy-cast", "SECRET_SPELL_ID", "Player-1-00000001")
-    assert.same({ "SECRET_SPELL_ID" }, CM.spellNameCalls)
-    assert.same({ "SECRET_SPELL_ID" }, CM.spellTextureCalls)
+        "enemy-cast", "OPAQUE_SPELL_ID", "Player-1-00000001")
+    assert.same({ "OPAQUE_SPELL_ID" }, CM.spellNameCalls)
+    assert.same({ "OPAQUE_SPELL_ID" }, CM.spellTextureCalls)
     assert.equals(1, #CM.shown)
     assert.equals("interrupt", CM.shown[1].kind)
     assert.equals("Interrupted", CM.shown[1].prefix)
@@ -480,11 +593,16 @@ it("registers interrupt events once and removes them when toggled off", function
     CM:UpdateInterruptEventRegistration()
     assert.equals(1, CM._aceRegisterCalls.UNIT_SPELLCAST_INTERRUPTED)
     assert.equals(1, CM._aceRegisterCalls.UNIT_SPELLCAST_CHANNEL_STOP)
+    assert.equals("OnSpellcastInterrupted", CM._aceEvents.UNIT_SPELLCAST_INTERRUPTED)
+    assert.equals("OnSpellcastInterrupted", CM._aceEvents.UNIT_SPELLCAST_CHANNEL_STOP)
     assert.equals(1, CM.interruptCastFrame._unitRegisterCalls)
     assert.same({ "UNIT_SPELLCAST_SUCCEEDED", "player", "pet" },
         CM.interruptCastFrame._unitRegisterArgs)
 
     CM:RecordPendingInterrupt(6552, "player", 100)
+    CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+        "reverse-candidate", 777, nil)
+    CM.shown = {}
     CM.lastAcceptedCastGUID = "enemy-cast"
     CM.lastUnkeyedAcceptAt = 100
     CM.db.InterruptEnabled = false
@@ -501,6 +619,10 @@ it("registers interrupt events once and removes them when toggled off", function
     assert.is_nil(CM.pendingInterruptUnit)
     assert.is_nil(CM.lastAcceptedCastGUID)
     assert.is_nil(CM.lastUnkeyedAcceptAt)
+    assert.is_nil(CM.reverseInterruptState)
+    assert.is_nil(CM.reverseInterruptAt)
+    assert.is_nil(CM.reverseInterruptSpellID)
+    assert.is_nil(CM.reverseInterruptCastGUID)
 
     CM.db.InterruptEnabled = true
     CM:UpdateInterruptEventRegistration()
@@ -547,6 +669,8 @@ it("module disable tears down both event owners and transient state", function()
     CM:EnsureInterruptCastFrame()
     CM:UpdateInterruptEventRegistration()
     CM:RecordPendingInterrupt(6552, "player", 100)
+    CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+        "reverse-accepted", 777, "Player-1-00000001")
     CM.lastAcceptedCastGUID = "enemy-cast"
     CM.lastUnkeyedAcceptAt = 100
     CM:OnDisable()
@@ -561,6 +685,10 @@ it("module disable tears down both event owners and transient state", function()
     assert.is_nil(CM.pendingInterruptUnit)
     assert.is_nil(CM.lastAcceptedCastGUID)
     assert.is_nil(CM.lastUnkeyedAcceptAt)
+    assert.is_nil(CM.reverseInterruptState)
+    assert.is_nil(CM.reverseInterruptAt)
+    assert.is_nil(CM.reverseInterruptSpellID)
+    assert.is_nil(CM.reverseInterruptCastGUID)
 end)
 
 it("wires and restores the filtered frame through the real lifecycle", function()
@@ -582,8 +710,8 @@ it("wires and restores the filtered frame through the real lifecycle", function(
     assert.equals(2, frame._unitRegisterCalls)
     assert.equals(2, CM._aceRegisterCalls.UNIT_SPELLCAST_INTERRUPTED)
     assert.equals(2, CM._aceRegisterCalls.UNIT_SPELLCAST_CHANNEL_STOP)
-    assert.is_true(CM._aceEvents.UNIT_SPELLCAST_INTERRUPTED)
-    assert.is_true(CM._aceEvents.UNIT_SPELLCAST_CHANNEL_STOP)
+    assert.equals("OnSpellcastInterrupted", CM._aceEvents.UNIT_SPELLCAST_INTERRUPTED)
+    assert.equals("OnSpellcastInterrupted", CM._aceEvents.UNIT_SPELLCAST_CHANNEL_STOP)
     frame:Fire("UNIT_SPELLCAST_SUCCEEDED", "pet", "kick-b", 119910)
     assert.equals(119910, CM.pendingInterruptSpellID)
     assert.equals("pet", CM.pendingInterruptUnit)

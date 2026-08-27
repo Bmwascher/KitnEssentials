@@ -498,9 +498,8 @@ function CL:ShowURLPopup(url, sourceFrame)
     -- First contact, and NOT redundant. The filter never wraps a secret body, so
     -- no keurl link should carry one -- but this is fed by Blizzard's dispatch,
     -- not by us, and a shipping addon's click handler was amended to refuse a
-    -- secret link at exactly this boundary. IsSafeValue covers nil and secrecy
-    -- in one call; the nil comparison it makes first is a different-type
-    -- compare, which is not the same-type case that throws.
+    -- secret link at exactly this boundary. IsSafeValue checks secrecy before
+    -- testing whether the value is nil.
     if not KE:IsSafeValue(url) then return end
     if not urlPopup then BuildURLPopup() end
 
