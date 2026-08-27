@@ -414,14 +414,15 @@ it("logs only the frozen plain decision tuple", function()
     }, CM.printed)
 end)
 
-it("never passes a secret interrupted spell ID to GetSpellInfo", function()
+it("renders a declared-secret interrupted spell ID through GetSpellInfo", function()
     local CM = loadCombatTexts({ secretValues = { SECRET_SPELL_ID = true } })
     CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
         "enemy-cast", "SECRET_SPELL_ID", "Player-1-00000001")
-    assert.equals(0, #CM.spellInfoCalls)
+    assert.equals(1, #CM.spellInfoCalls)
+    assert.equals("SECRET_SPELL_ID", CM.spellInfoCalls[1])
     assert.equals(1, #CM.shown)
     assert.equals("interrupt", CM.shown[1].kind)
-    assert.is_nil(CM.shown[1].text)
+    assert.equals("Interrupted |T12345:16|t [Enemy Spell]", CM.shown[1].text)
 end)
 
 it("falls back generically for unsafe spell-info fields", function()

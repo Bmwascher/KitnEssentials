@@ -612,8 +612,6 @@ function CM:OnSpellcastSucceeded(_, unit, _, spellID)
 end
 
 function CM:BuildInterruptDisplayText(spellID)
-    if not KE:IsSafeValue(spellID) then return nil end
-
     local spellInfo = C_Spell_GetSpellInfo(spellID)
     if not KE:IsSafeValue(spellInfo) then return nil end
 
