@@ -40,11 +40,23 @@ local function loadCombatTexts(options)
     _G.GetInventoryItemDurability = function() return nil end
     _G.UIParent = {}
     local spellInfoCalls = {}
+    local spellNameCalls = {}
+    local spellTextureCalls = {}
     _G.C_Spell = {
         GetSpellInfo = function(spellID)
             spellInfoCalls[#spellInfoCalls + 1] = spellID
             if options.getSpellInfo then return options.getSpellInfo(spellID) end
             return { name = "Enemy Spell", iconID = 12345 }
+        end,
+        GetSpellName = function(spellID)
+            spellNameCalls[#spellNameCalls + 1] = spellID
+            if options.getSpellName then return options.getSpellName(spellID) end
+            return "Enemy Spell"
+        end,
+        GetSpellTexture = function(spellID)
+            spellTextureCalls[#spellTextureCalls + 1] = spellID
+            if options.getSpellTexture then return options.getSpellTexture(spellID) end
+            return 12345
         end,
     }
 
@@ -103,10 +115,12 @@ local function loadCombatTexts(options)
     CM._aceUnregisterCalls = aceUnregisterCalls
     CM._unregisterAllCalls = 0
     CM.spellInfoCalls = spellInfoCalls
+    CM.spellNameCalls = spellNameCalls
+    CM.spellTextureCalls = spellTextureCalls
     CM.printed = printed
     CM.shown = {}
-    CM.ShowFlashMessage = function(self, kind, text)
-        self.shown[#self.shown + 1] = { kind = kind, text = text }
+    CM.ShowFlashMessage = function(self, kind, text, icon)
+        self.shown[#self.shown + 1] = { kind = kind, text = text, icon = icon }
     end
     return CM, KE, frames, function(value) now = value end
 end
@@ -414,33 +428,39 @@ it("logs only the frozen plain decision tuple", function()
     }, CM.printed)
 end)
 
-it("renders a declared-secret interrupted spell ID through GetSpellInfo", function()
-    local CM = loadCombatTexts({ secretValues = { SECRET_SPELL_ID = true } })
+it("routes declared-secret spell name and texture to the interrupt display", function()
+    local spellName = "SECRET_SPELL_NAME"
+    local iconID = 24680
+    local CM = loadCombatTexts({
+        secretValues = {
+            SECRET_SPELL_ID = true,
+            [spellName] = true,
+            [iconID] = true,
+        },
+        getSpellInfo = function()
+            return { name = spellName, iconID = iconID }
+        end,
+        getSpellName = function() return spellName end,
+        getSpellTexture = function() return iconID end,
+    })
     CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
         "enemy-cast", "SECRET_SPELL_ID", "Player-1-00000001")
-    assert.equals(1, #CM.spellInfoCalls)
-    assert.equals("SECRET_SPELL_ID", CM.spellInfoCalls[1])
+    assert.same({ "SECRET_SPELL_ID" }, CM.spellNameCalls)
+    assert.same({ "SECRET_SPELL_ID" }, CM.spellTextureCalls)
+    assert.equals(0, #CM.spellInfoCalls)
     assert.equals(1, #CM.shown)
     assert.equals("interrupt", CM.shown[1].kind)
-    assert.equals("Interrupted |T12345:16|t [Enemy Spell]", CM.shown[1].text)
+    assert.equals("Interrupted [" .. spellName .. "]", CM.shown[1].text)
+    assert.equals(iconID, CM.shown[1].icon)
 end)
 
-it("falls back generically for unsafe spell-info fields", function()
-    local unsafeSpellInfo = { name = "Enemy Spell", iconID = 12345 }
-    local unsafeIconID = 12345
-    local unsafeName = "Enemy Spell"
+it("falls back generically only when spell name or texture is nil", function()
     local cases = {
         {
-            secretValues = { [unsafeSpellInfo] = true },
-            getSpellInfo = function() return unsafeSpellInfo end,
+            getSpellName = function() return nil end,
         },
         {
-            secretValues = { [unsafeIconID] = true },
-            getSpellInfo = function() return { name = "Enemy Spell", iconID = unsafeIconID } end,
-        },
-        {
-            secretValues = { [unsafeName] = true },
-            getSpellInfo = function() return { name = unsafeName, iconID = 12345 } end,
+            getSpellTexture = function() return nil end,
         },
     }
 
@@ -448,10 +468,12 @@ it("falls back generically for unsafe spell-info fields", function()
         local CM = loadCombatTexts(case)
         CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
             "enemy-cast", 777, "Player-1-00000001")
-        assert.equals(1, #CM.spellInfoCalls)
+        assert.equals(1, #CM.spellNameCalls)
+        assert.equals(1, #CM.spellTextureCalls)
         assert.equals(1, #CM.shown)
         assert.equals("interrupt", CM.shown[1].kind)
         assert.is_nil(CM.shown[1].text)
+        assert.is_nil(CM.shown[1].icon)
     end
 end)
 

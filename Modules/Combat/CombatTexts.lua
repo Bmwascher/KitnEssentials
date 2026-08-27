@@ -25,7 +25,8 @@ local GetInventoryItemDurability = GetInventoryItemDurability
 local GetTime = GetTime
 local UnitGUID = UnitGUID
 local UnitCanAttack = UnitCanAttack
-local C_Spell_GetSpellInfo = C_Spell.GetSpellInfo
+local C_Spell_GetSpellName = C_Spell.GetSpellName
+local C_Spell_GetSpellTexture = C_Spell.GetSpellTexture
 local ipairs, pairs = ipairs, pairs
 local math_max = math.max
 local string_format = string.format
@@ -135,6 +136,11 @@ function CM:GetMessageFrame(msgType)
     self.messageFrames[msgType] = frame
 
     if msgType == "interrupt" then
+        local icon = frame:CreateTexture(nil, "OVERLAY")
+        icon:SetSize(fontSize, fontSize)
+        icon:SetPoint("RIGHT", text, "LEFT", -4, 0)
+        icon:Hide()
+        frame.interruptIcon = icon
         KE:ApplyFont(text, self.db.FontFace, self.db.FontSize,
             KE:GetFontOutline(self.db.FontOutline))
     else
@@ -168,16 +174,24 @@ end
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
-function CM:ShowFlashMessage(msgType, textOverride)
+function CM:ShowFlashMessage(msgType, textOverride, iconOverride)
     if not self.db or self.db.Enabled == false then return end
     if self.isPreview then return end
 
     local enabled, msgText, color = GetMessageConfig(self.db, msgType)
     if not enabled then return end
-    if textOverride then msgText = textOverride end
+    if textOverride ~= nil then msgText = textOverride end
 
     local frame = self:GetMessageFrame(msgType)
     if not frame then return end
+    if frame.interruptIcon then
+        if iconOverride ~= nil then
+            frame.interruptIcon:SetTexture(iconOverride)
+            frame.interruptIcon:Show()
+        else
+            frame.interruptIcon:Hide()
+        end
+    end
 
     local duration
     if msgType == "enterCombat" or msgType == "exitCombat" then
@@ -387,6 +401,7 @@ function CM:ApplySettings()
         frame:SetHeight(fontSize + 2)
         if frame.text then
             if frame.msgType == "interrupt" then
+                frame.interruptIcon:SetSize(fontSize, fontSize)
                 KE:ApplyFont(frame.text, self.db.FontFace, self.db.FontSize,
                     KE:GetFontOutline(self.db.FontOutline))
             else
@@ -401,6 +416,7 @@ function CM:ApplySettings()
             local frame = self.messageFrames[msgType]
             if frame then
                 local _, msgText, msgColor = GetMessageConfig(self.db, msgType)
+                if frame.interruptIcon then frame.interruptIcon:Hide() end
                 frame.text:SetText(msgText)
                 frame.text:SetTextColor(msgColor[1] or 1, msgColor[2] or 1, msgColor[3] or 1, msgColor[4] or 1)
             end
@@ -452,6 +468,7 @@ function CM:ShowPreview()
         local frame = self:GetMessageFrame(msgType)
         if frame then
             local _, msgText, msgColor = GetMessageConfig(self.db, msgType)
+            if frame.interruptIcon then frame.interruptIcon:Hide() end
             frame.text:SetText(msgText)
             frame.text:SetTextColor(msgColor[1] or 1, msgColor[2] or 1, msgColor[3] or 1, msgColor[4] or 1)
             frame:SetAlpha(1)
@@ -612,18 +629,12 @@ function CM:OnSpellcastSucceeded(_, unit, _, spellID)
 end
 
 function CM:BuildInterruptDisplayText(spellID)
-    local spellInfo = C_Spell_GetSpellInfo(spellID)
-    if not KE:IsSafeValue(spellInfo) then return nil end
-
-    local iconID = spellInfo.iconID
-    if not KE:IsSafeValue(iconID) then return nil end
-
-    local name = spellInfo.name
-    if not KE:IsSafeValue(name) then return nil end
+    local name = C_Spell_GetSpellName(spellID)
+    local iconID = C_Spell_GetSpellTexture(spellID)
+    if name == nil or iconID == nil then return nil, nil end
 
     local prefix = self.db.InterruptText or "Interrupted"
-    local iconSize = self.db.FontSize or 16
-    return string_format("%s |T%d:%d|t [%s]", prefix, iconID, iconSize, name)
+    return prefix .. " [" .. name .. "]", iconID
 end
 
 function CM:OnSpellcastInterrupted(event, unitTarget, castGUID, spellID, interruptedBy)
@@ -638,8 +649,8 @@ function CM:OnSpellcastInterrupted(event, unitTarget, castGUID, spellID, interru
     end
     if not accepted then return end
 
-    local text = self:BuildInterruptDisplayText(spellID)
-    self:ShowFlashMessage("interrupt", text)
+    local text, icon = self:BuildInterruptDisplayText(spellID)
+    self:ShowFlashMessage("interrupt", text, icon)
 end
 
 ---------------------------------------------------------------------------------
