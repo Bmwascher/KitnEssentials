@@ -902,9 +902,9 @@ function DT:OnEvent(event, unit, ...)
             if expired then
                 self.massDisintegrateStacks = 0
             else
-                local handle = self.primaryHandle
-                if handle and handle.textFrame then
-                    handle.textFrame:SetText(C_Spell.GetSpellName(MASS_DISINTEGRATE))
+                local textFrame = self.primaryHandle and self.primaryHandle.textFrame
+                if textFrame ~= nil then
+                    textFrame:SetText(C_Spell.GetSpellName(MASS_DISINTEGRATE))
                 end
 
                 if cw.Enabled then
