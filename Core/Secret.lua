@@ -44,7 +44,8 @@ end
 
 -- Combined check: value exists and is NOT a secret
 function KE:IsSafeValue(value)
-    return value ~= nil and not self:IsSecretValue(value)
+    if self:IsSecretValue(value) then return false end
+    return type(value) ~= "nil"
 end
 
 function KE:IsSecretTable(object)

@@ -132,6 +132,20 @@ describe("Secret.lua value guards — the HONESTY BOUNDARY", function()
         assert.is_true(KE:IsSafeValue("plain"))
         assert.is_true(KE:IsSafeValue(42))
     end)
+
+    -- luacheck: globals it assert
+    it("checks secrecy before deciding that nil is absent", function()
+        local calls = 0
+        mock.install()
+        local KE = helpers.loadModule("Core/Secret.lua", { Print = function() end })
+        KE.IsSecretValue = function()
+            calls = calls + 1
+            return false
+        end
+
+        assert.is_false(KE:IsSafeValue(nil))
+        assert.equals(1, calls)
+    end)
 end)
 
 -- AreAuraIdentitiesHidden gates every aura index scan KE runs, and the API it
