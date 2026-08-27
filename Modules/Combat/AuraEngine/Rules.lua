@@ -77,9 +77,9 @@ Rules.HARDCODED_BLOCKLIST = {
 -- the user's rows and therefore override a disabled row for the same id --
 -- the GUI shows those rows as always-on for exactly this reason.
 --
--- MERGE OR ALIAS, and never an unconditional fresh table: it ports the
--- reference's shape, where the constants merge INTO the user's set when the user
--- has entries, and the shared constant set is returned BY REFERENCE when
+-- MERGE OR ALIAS, and never an unconditional fresh table: the constants merge
+-- INTO the user's set when the user has entries, and the shared constant set is
+-- returned BY REFERENCE when
 -- they have none. Nothing may then mutate the returned table. A defensive
 -- copy here would violate the merge-or-alias rule above: it makes the
 -- no-entries case an unconditional fresh table.
