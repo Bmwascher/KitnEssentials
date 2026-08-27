@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.8
+
+### Character Panel
+- Main-hand and off-hand upgrade progress now sits on its own centered line
+  above each item level in both the Character and Inspect panels, preventing
+  the two weapon labels from overlapping
+
+### Vantus Rune
+- Updated the Guild Bank helper to withdraw the highest-quality current-tier
+  Vantus Rune
+
+---
+
 ## v4.4.7
 
 ### Tooltips
