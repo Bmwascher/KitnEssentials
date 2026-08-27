@@ -391,6 +391,43 @@ describe("Combat Texts interrupt attribution", function()
         assert.equals(19647, CM.reverseInterruptSuccessSpellID)
     end)
 
+    it("allows a different rapid success after consuming fresh pending", function()
+        local CM, _, _, setNow = loadCombatTexts({ now = 0 })
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-a", 19647)
+        setNow(0.01)
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, nil)
+        assert.equals(1, #CM.shown)
+        assert.equals(19647, CM.reverseInterruptSuccessSpellID)
+
+        setNow(0.02)
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-b", 6552)
+        assert.equals(0.02, CM.pendingInterruptAt)
+        assert.equals(6552, CM.pendingInterruptSpellID)
+
+        setNow(0.03)
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-b", 778, nil)
+        assert.equals(2, #CM.shown)
+        assert.same({ 777, 778 }, CM.spellNameCalls)
+        assert.is_nil(CM.pendingInterruptAt)
+    end)
+
+    it("quarantines an alias after consuming its fresh wrapper pending", function()
+        local CM, _, _, setNow = loadCombatTexts({ now = 0 })
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "pet", "kick-a", 119910)
+        setNow(0.01)
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast-a", 777, nil)
+        assert.equals(19647, CM.reverseInterruptSuccessSpellID)
+
+        setNow(0.05)
+        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "kick-b", 19647)
+        assert.is_nil(CM.pendingInterruptAt)
+        assert.equals(0.01, CM.reverseInterruptAt)
+        assert.equals(19647, CM.reverseInterruptSuccessSpellID)
+    end)
+
     it("arms pending for a different second success inside quarantine", function()
         local CM, _, _, setNow = loadCombatTexts({ now = 0 })
         CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",

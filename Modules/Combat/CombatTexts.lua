@@ -606,9 +606,10 @@ function CM:HasFreshInterruptQuarantine(now)
     return false
 end
 
-function CM:RecordInterruptQuarantine(now)
+function CM:RecordInterruptQuarantine(now, seedSpellID)
     self.reverseInterruptAt = now
-    self.reverseInterruptSuccessSpellID = nil
+    self.reverseInterruptSuccessSpellID = seedSpellID ~= nil
+        and CM.NormalizeInterruptSuccessSpellID(seedSpellID) or nil
 end
 
 function CM:ClassifyInterruptOwnership(interruptedBy)
@@ -732,6 +733,7 @@ function CM:OnSpellcastInterrupted(event, unitTarget, castGUID, spellID, interru
     if not self.db or self.db.InterruptEnabled == false then return end
 
     local now = GetTime()
+    local pendingSpellID = self.pendingInterruptSpellID
     local accepted, ownership, target, pendingSource, pendingState, reason, elapsed =
         self:ShouldAcceptInterrupt(event, unitTarget, castGUID, interruptedBy, now)
     if DEBUG_CT then
@@ -741,7 +743,8 @@ function CM:OnSpellcastInterrupted(event, unitTarget, castGUID, spellID, interru
     end
     if not accepted then return end
 
-    self:RecordInterruptQuarantine(now)
+    local quarantineSeed = pendingState == "fresh" and pendingSpellID or nil
+    self:RecordInterruptQuarantine(now, quarantineSeed)
     local prefix, icon, name = self:BuildInterruptDisplayText(spellID)
     self:ShowFlashMessage("interrupt", prefix, icon, name)
 end
