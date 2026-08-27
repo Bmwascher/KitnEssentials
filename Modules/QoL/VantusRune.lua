@@ -23,6 +23,8 @@ local string_format = string.format
 ---------------------------------------------------------------------------------
 local BUTTON_WIDTH = 150
 local BUTTON_HEIGHT = 35
+local RUNE_ICON_ID = 7549087
+local RUNE_ICON_SIZE = 22
 
 -- Vantus Rune item IDs in priority order (best quality first)
 -- Update these each raid tier
@@ -289,13 +291,18 @@ function VR:ClosePopup()
 end
 
 function VR:CreateGuildBankButton()
+    local parent = self:GetGuildBankParent()
+    if not parent then return end
+
     if self.vantusButton then
+        if self.vantusButton:GetParent() ~= parent then
+            self.vantusButton:SetParent(parent)
+            self.vantusButton:ClearAllPoints()
+            self.vantusButton:SetPoint("TOPRIGHT", parent, "BOTTOMRIGHT", -1, -2)
+        end
         self.vantusButton:Show()
         return
     end
-
-    local parent = _G.Baganator_SingleViewGuildViewFrameelvui or _G.GuildBankFrame
-    if not parent then return end
 
     -- Parent to the guild bank, use textures instead of BackdropTemplate
     local btn = CreateFrame("Button", "KE_VantusRuneButton", parent)
@@ -320,15 +327,22 @@ function VR:CreateGuildBankButton()
         btn.border:SetPoint("BOTTOMRIGHT", px, -px)
         btn.border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = px })
     end
-    btn.border:SetBackdropBorderColor(0, 0, 0, 1)
 
-    -- Text
-    local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549, 1 }
+    btn.iconFrame = CreateFrame("Frame", nil, btn)
+    btn.iconFrame:SetSize(RUNE_ICON_SIZE, RUNE_ICON_SIZE)
+    btn.icon = btn.iconFrame:CreateTexture(nil, "ARTWORK")
+    btn.icon:SetAllPoints()
+    btn.icon:SetTexture(RUNE_ICON_ID)
+    KE:ApplyIconZoom(btn.icon)
+    KE:AddIconBorders(btn.iconFrame)
+
     btn.text = btn:CreateFontString(nil, "ARTWORK")
-    btn.text:SetPoint("CENTER")
     KE:ApplyFont(btn.text, "Expressway", 15, "OUTLINE")
     btn.text:SetText("Vantus Rune")
-    btn.text:SetTextColor(accent[1], accent[2], accent[3], 1)
+
+    local contentWidth = RUNE_ICON_SIZE + 6 + btn.text:GetStringWidth()
+    btn.iconFrame:SetPoint("LEFT", btn, "CENTER", -contentWidth / 2, 0)
+    btn.text:SetPoint("LEFT", btn.iconFrame, "RIGHT", 6, 0)
 
     btn:SetScript("OnClick", function() self:StartWithdrawal() end)
     btn:SetScript("OnEnter", function()
@@ -342,8 +356,9 @@ function VR:CreateGuildBankButton()
         GameTooltip_Hide()
     end)
 
-    btn:Show()
     self.vantusButton = btn
+    self:OnThemeChanged()
+    btn:Show()
 end
 
 ---------------------------------------------------------------------------------
@@ -355,11 +370,36 @@ function VR:OnInitialize()
 end
 
 function VR:GetGuildBankParent()
-    return _G.Baganator_SingleViewGuildViewFrameelvui or _G.GuildBankFrame
+    local skins = _G.Baganator and _G.Baganator.API and _G.Baganator.API.Skins
+    local skin = skins and skins.GetCurrentSkin and skins.GetCurrentSkin()
+    if skin then
+        return _G["Baganator_SingleViewGuildViewFrame" .. skin]
+    end
+    return _G.GuildBankFrame
+end
+
+function VR:OnBaganatorFrameGroupSwapped()
+    C_Timer.After(0, function()
+        if self._isActive and self.db and self.db.Enabled then
+            self:CreateGuildBankButton()
+        end
+    end)
+end
+
+function VR:RegisterBaganatorCallback()
+    local callbacks = _G.Baganator and _G.Baganator.CallbackRegistry
+    if not callbacks or self._baganatorCallbackRegistered then return end
+
+    callbacks:RegisterCallback("FrameGroupSwapped", function()
+        self:OnBaganatorFrameGroupSwapped()
+    end, self)
+    self._baganatorCallbackRegistered = true
 end
 
 function VR:OnEnable()
     if not self.db.Enabled then return end
+    self._isActive = true
+    self:RegisterBaganatorCallback()
 
     -- Try to create button immediately if parent frame exists
     local parent = self:GetGuildBankParent()
@@ -374,7 +414,7 @@ function VR:OnEnable()
             local gbf = self:GetGuildBankParent()
             if gbf and not self._hooked then
                 gbf:HookScript("OnShow", function()
-                    if self.db and self.db.Enabled then
+                    if self._isActive and self.db and self.db.Enabled then
                         self:CreateGuildBankButton()
                     end
                 end)
@@ -401,7 +441,25 @@ function VR:OnEnable()
     end
 end
 
+function VR:OnThemeChanged()
+    local btn = self.vantusButton
+    if not btn then return end
+
+    local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549, 1 }
+    local alpha = accent[4] or 1
+    btn.text:SetTextColor(accent[1], accent[2], accent[3], alpha)
+    btn.border:SetBackdropBorderColor(accent[1], accent[2], accent[3], alpha)
+end
+
 function VR:OnDisable()
+    self._isActive = nil
+    if self._baganatorCallbackRegistered then
+        local callbacks = _G.Baganator and _G.Baganator.CallbackRegistry
+        if callbacks then
+            callbacks:UnregisterCallback("FrameGroupSwapped", self)
+        end
+        self._baganatorCallbackRegistered = nil
+    end
     if self.eventFrame then
         self.eventFrame:UnregisterAllEvents()
     end
