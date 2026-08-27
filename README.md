@@ -51,7 +51,7 @@ The home page also carries the general settings: minimap button, login message, 
 |---|---|
 | Player Buffs | Replacement player buff header with weapon-enchant support and full layout control |
 | Player Debuffs | Replacement player debuff header with dispel-type coloring and full layout control |
-| Advanced Debuffs | Bar-based dispellable-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, PLAYER filter, per-type include/exclude, a nameplate-only toggle, and a blocklist covering the spells the game lets addons identify by name (subsumes the older Boss Debuffs module) |
+| Advanced Debuffs | Bar-based harmful-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, automatic player/pet-source exclusion, optional extra exclusion filters, a nameplate-only toggle, and a blocklist covering the spells the game lets addons identify by name (subsumes the older Boss Debuffs module) |
 | External Tracker | External defensive cooldowns cast onto you (Pain Suppression, Ironbark, Blessing of Sacrifice, and similar) with cooldown swipe, native countdown text, configurable glow per cast, BigWigs glow integration on incoming raid hits, and a sound test |
 | Missing Forms | Icon alert when you are not in the stance, form, aura, or attunement your specialization expects. Covers Warrior stances, Druid forms, Paladin auras, Priest Shadowform, and Evoker attunements, with a per-spec required choice, combat-only option, and a "show current form" mode that names what you are in instead |
 
@@ -71,7 +71,7 @@ The home page also carries the general settings: minimap button, login message, 
 
 | Page | Description |
 |---|---|
-| Automation | Auto-repair with a repair cost announcement, auto-sell, auto-confirm queues, auto-slot keystone, skip cinematics, hide event toasts and zone text, merchant and auction house conveniences, and one-click Vantus Rune withdrawal from the guild bank |
+| Automation | Auto-repair with a repair cost announcement, auto-sell, auto-confirm queues, auto-slot keystone, skip cinematics, hide event toasts and zone text, merchant and auction house conveniences, and one-click withdrawal of the highest-quality current-tier Vantus Rune from the guild bank |
 | Combat Logger | Automatic combat logging for raids, dungeons, M+, PvP, arenas, and scenarios including delves, with per-content toggles, a one-click Advanced Combat Logging switch, and a Warcraft Recorder preset |
 | CVars | One-click console variable panel that reads its values live from your client, including separate scale sliders for the windowed and maximized world map |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault, with class color and sound |
@@ -112,7 +112,7 @@ Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast du
 | Damage Meter | Standalone multi-window damage and healing meter built on the 12.0 damage meter API, replacing Blizzard's built-in one. Proportional dock with shared backdrop, per-content auto-swapping layouts, eight meter types, class-colored bars with nickname support, header combat clock anchored to the game's own fight timer, spell breakdown for your own bar and death recaps for any row that stay open in combat, target details, segment history, and report-to-chat |
 | Mythic+ Timer | Self-contained keystone timer HUD — count-up timer with +3/+2/+1 threshold marks, aggregate forces bar, per-boss objective list with clear times and personal-best deltas, deaths line with class-colored hover log, personal-best splits, Challenger's Peril aware cutoffs, enemy tooltip and nameplate forces overlay, keystone auto-insert, Blizzard objective-tracker hider, boss-split party chat posts, and a live preview. Six-tab config page (`/kes mt`) |
 | Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
-| Tooltips | Tooltip backdrop and font restyling, cursor anchoring, spell, item, and aura IDs, guild rank, Mythic rating, target line, class-colored health bar, and hide-in-combat |
+| Tooltips | Tooltip backdrop and font restyling, cursor anchoring, spell, item, aura, and pet ability IDs including Always-mode Blizzard aura coverage, guild rank, Mythic rating, target line, class-colored health bar, and hide-in-combat |
 
 ## ElvUI Tags
 

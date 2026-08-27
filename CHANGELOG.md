@@ -2,61 +2,31 @@
 
 ## v4.4.8
 
+### Advanced Debuffs
+- Debuffs cast by you or your pet are now always excluded. The old PLAYER filter
+  toggle is gone; the remaining filters are optional extra exclusions
+- Stagger and two additional Deserter variants no longer appear in the display
+
 ### Character Panel
-- Main-hand and off-hand upgrade progress now sits on its own centered line
-  above each item level in both the Character and Inspect panels, preventing
-  the two weapon labels from overlapping
+- Main-hand and off-hand upgrade ranks now use their own centered line above
+  each centered item level in both the Character and Inspect panels, preventing
+  the weapon labels from overlapping
+- Inspecting a player whose specialization is hidden no longer throws a secret
+  value error; the average item level waits until it can be read safely
+
+### Housing Dashboard
+- Fixed the dashboard sometimes opening blank even though the character owns a
+  house. It now refreshes the house list once when Blizzard's panel gets stuck
+
+### Tooltips
+- Show IDs in Always mode now also works on Blizzard player-aura tooltips,
+  including combat-restricted buffs
+- Spell and Item ID labels are brighter red, and pet ability tooltips now show
+  Spell IDs when one is available
 
 ### Vantus Rune
 - Updated the Guild Bank helper to withdraw the highest-quality current-tier
   Vantus Rune
-
----
-
-## v4.4.7
-
-### Tooltips
-- Show IDs in Always mode now also works on Blizzard's player aura tooltips,
-  including combat-restricted buffs
-- Spell and Item ID lines now stay at the bottom with brighter red labels
-- Pet ability tooltips now show Spell IDs, while pet mode buttons without an
-  ID stay clean
-
----
-
-## v4.4.6
-
-### Character Panel
-- Inspecting a player whose specialization is hidden no longer throws a secret
-  value error. Average item level waits until the specialization can be read
-  safely
-
----
-
-## v4.4.5
-
-### Housing Dashboard
-- Fixed the dashboard sometimes opening blank even though the character owned a
-  house. It now refreshes the house list once when Blizzard's panel gets stuck
-
----
-
-## v4.4.4
-
-### Character Panel
-- Weapon upgrade progress now faces outward above the main-hand and off-hand
-  slots, keeping the two labels from crowding each other. When neither weapon
-  has upgrade progress to show, both item levels stay centered over their icons
-
----
-
-## v4.4.3
-
-### Advanced Debuffs
-- Debuffs applied by you or your pet are now always hidden. The old PLAYER
-  filter toggle is gone; the remaining filter options are optional extra
-  exclusions, and their descriptions now say exactly what each one hides
-- Stagger and two additional Deserter variants no longer appear in the display
 
 ---
 
