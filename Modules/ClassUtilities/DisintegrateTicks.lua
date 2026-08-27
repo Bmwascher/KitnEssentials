@@ -129,15 +129,11 @@ function CastBarRegistry:ResolveProvider(provider, generation)
 
             self.pendingLoads[provider.id] = generation
             EventUtil.ContinueOnAddOnLoaded(provider.addon, function()
-                if not DT:IsEnabled() then
-                    return
-                end
-
                 if self.pendingLoads[provider.id] == generation then
                     self.pendingLoads[provider.id] = nil
                 end
 
-                if generation ~= self.generation then
+                if not DT:IsEnabled() or generation ~= self.generation then
                     return
                 end
 
@@ -341,9 +337,36 @@ function CastBarRegistry.HookMethodOnce(object, methodName, callback)
     methods[methodName] = true
 end
 
+local function RegisterOverlayCallbacks()
+    if overlayCallbacksRegistered then
+        return
+    end
+
+    EventRegistry:RegisterCallback("OverlayPlayerCastBar.OnShow", function()
+        if not DT:IsEnabled() then
+            return
+        end
+
+        DT:OnCastBarShown(
+            "blizzard_overlay",
+            OverlayPlayerCastingBarFrame,
+            OverlayPlayerCastingBarFrame.Text,
+            12
+        )
+    end, DT)
+
+    EventRegistry:RegisterCallback("OverlayPlayerCastBar.OnHide", function()
+        if not DT:IsEnabled() then
+            return
+        end
+
+        DT:OnCastBarHidden("blizzard_overlay")
+    end, DT)
+    overlayCallbacksRegistered = true
+end
+
 local function RegisterBlizzardCastBarProvider()
     local blizzardId = "blizzard"
-    local overlayId = "blizzard_overlay"
     local playerCastBar = PlayerCastingBarFrame
 
     local handle = CastBarRegistry:EnsureHandle(blizzardId, playerCastBar, 10, playerCastBar.Text)
@@ -401,30 +424,6 @@ local function RegisterBlizzardCastBarProvider()
         CastBarRegistry:SyncDimensions(blizzardId, PlayerCastingBarFrame)
         DT:RefreshPrimaryHandle()
     end)
-
-    if not overlayCallbacksRegistered then
-        EventRegistry:RegisterCallback("OverlayPlayerCastBar.OnShow", function()
-            if not DT:IsEnabled() then
-                return
-            end
-
-            DT:OnCastBarShown(
-                overlayId,
-                OverlayPlayerCastingBarFrame,
-                OverlayPlayerCastingBarFrame.Text,
-                12
-            )
-        end, DT)
-
-        EventRegistry:RegisterCallback("OverlayPlayerCastBar.OnHide", function()
-            if not DT:IsEnabled() then
-                return
-            end
-
-            DT:OnCastBarHidden(overlayId)
-        end, DT)
-        overlayCallbacksRegistered = true
-    end
 end
 
 CastBarRegistry:RegisterProvider({
@@ -754,6 +753,15 @@ function DT:OnCastBarHidden(id)
     self:RefreshPrimaryHandle()
 end
 
+function DT:SyncBlizzardCastBar()
+    local playerCastBar = PlayerCastingBarFrame
+    if playerCastBar == nil then
+        return
+    end
+
+    self:OnCastBarShown("blizzard", playerCastBar, playerCastBar.Text, 10)
+end
+
 ---------------------------------------------------------------------------------
 -- Warning Frame
 ---------------------------------------------------------------------------------
@@ -982,6 +990,7 @@ function DT:UnregisterSpecEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
     self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    self:UnregisterEvent("TRAIT_CONFIG_UPDATED")
     self:UnregisterEvent("PLAYER_DEAD")
     self:UnregisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
     self:UnregisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
@@ -1051,6 +1060,7 @@ end
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function DT:OnEnable()
+    self:UpdateDB()
     if not self.db.Enabled then return end
 
     -- Only Evokers
@@ -1059,7 +1069,6 @@ function DT:OnEnable()
     end
 
     self:CreateWarningFrame()
-    self:RegWithEditMode()
     self:ApplySettings()
     self:HideWarning()
 
@@ -1067,33 +1076,44 @@ function DT:OnEnable()
     self:RegisterEvent("LOADING_SCREEN_DISABLED", "OnEvent")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnEvent")
 
-    CastBarRegistry:ResolveAllProviders()
-    self:ApplyPosition()
-
     -- Register spec events if valid spec
     if self:IsValidSpec() then
         self:RegisterSpecEvents()
         self:QueryTalentsAndHide()
     end
+
+    RegisterOverlayCallbacks()
+    CastBarRegistry:ResolveAllProviders()
+    self:SyncBlizzardCastBar()
+    self:RegWithEditMode()
 end
 
 function DT:OnDisable()
+    self:UnregisterSpecEvents()
+    self:UnregisterEvent("LOADING_SCREEN_DISABLED")
+    self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+
+    if overlayCallbacksRegistered then
+        EventRegistry:UnregisterCallback("OverlayPlayerCastBar.OnShow", self)
+        EventRegistry:UnregisterCallback("OverlayPlayerCastBar.OnHide", self)
+        overlayCallbacksRegistered = false
+    end
+
+    CastBarRegistry:CancelRetries()
     self:HideTicks()
     self:HideWarning()
     if self.warningFrame then
         self.warningFrame:Hide()
     end
     self.isPreview = false
+    self.activeChannelDuration = nil
     self.channeling = false
     self.chaining = false
+    self.firstTick = 0
     self.prevEndTime = nil
     self.prevHastedTickInterval = nil
+    self.primaryHandle = nil
     self.massDisintegrateStacks = 0
-    CastBarRegistry:CancelRetries()
-    if overlayCallbacksRegistered then
-        EventRegistry:UnregisterCallback("OverlayPlayerCastBar.OnShow", self)
-        EventRegistry:UnregisterCallback("OverlayPlayerCastBar.OnHide", self)
-        overlayCallbacksRegistered = false
-    end
-    self:UnregisterAllEvents()
+    self.lastGainedStack = 0
+    self.hasTipTheScalesActive = false
 end
