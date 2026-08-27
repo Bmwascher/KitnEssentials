@@ -21,7 +21,6 @@ local C_AddOns = C_AddOns
 local PlayerUtil = PlayerUtil
 local hooksecurefunc = hooksecurefunc
 local math_ceil = math.ceil
-local math_max = math.max
 local UnitChannelInfo = UnitChannelInfo
 
 
@@ -194,11 +193,7 @@ function CastBarRegistry:SyncDimensions(id, anchor)
 
     width = math_ceil(width)
     height = math_ceil(height)
-    if width ~= handle.width or height ~= handle.height then
-        handle.width = width
-        handle.height = height
-        self.frame:QueryTalentsAndHide()
-    end
+    self.frame:UpdateHandleDimensions(id, width, height)
 end
 
 function CastBarRegistry:GetVisibleBars()
@@ -382,9 +377,7 @@ end
 ---------------------------------------------------------------------------------
 -- Tick Management
 ---------------------------------------------------------------------------------
-function DT:CreateTick(_index, handle)
-    if handle == nil or handle.anchor == nil then return nil end
-
+function DT:CreateTick(handle)
     local db = self.db
     local r, g, b, a = KE:ResolveColor(db.TickColor, { 1, 1, 1, 0.8 })
     local tick = handle.anchor:CreateTexture(nil, "OVERLAY")
@@ -393,52 +386,77 @@ function DT:CreateTick(_index, handle)
     return tick
 end
 
-function DT:HideTicks()
-    for _, handle in pairs(CastBarRegistry.handles) do
+function DT:HideTicks(handle)
+    if handle ~= nil then
         for _, tick in next, handle.ticks do
             tick:Hide()
+        end
+    else
+        for _, registeredHandle in pairs(CastBarRegistry.handles) do
+            for _, tick in next, registeredHandle.ticks do
+                tick:Hide()
+            end
         end
     end
 end
 
-function DT:UpdateTicks(handle, duration)
-    self:HideTicks()
-    if handle == nil or handle.anchor == nil then return end
+function DT:UpdateHandleTicks(handle, duration)
+    if handle.anchor == nil or handle.width <= 0 or duration == nil or duration <= 0 then
+        return
+    end
 
-    local db = self.db
-    -- TickWidth is screen-pixel intent; multiply by GetPixelSize so a
-    -- value of 2 renders as exactly 2 screen pixels at any UI scale.
-    local tickWidth = (db.TickWidth or 2) * KE:GetPixelSize()
+    self:HideTicks(handle)
+
     local hastedTickInterval = self:GetTickInterval() / self:GetHaste()
     local pixelsPerSecond = handle.width / duration
 
     for i = 1, self.maxTicks do
         local tick = handle.ticks[i]
 
-        if tick == nil or tick:GetParent() ~= handle.anchor then
-            tick = self:CreateTick(i, handle)
+        if tick == nil then
+            tick = self:CreateTick(handle)
             handle.ticks[i] = tick
-        end
+        else
+            local tickParent = tick:GetParent()
 
-        if tick then
-            tick:SetSize(tickWidth, handle.height * 0.95)
-            tick:ClearAllPoints()
-
-            local tickTime = i * hastedTickInterval
-
-            if self.chaining then
-                local interval = (duration - self.firstTick) / (self.maxTicks - 1)
-                tickTime = self.firstTick + (i - 1) * interval
-            end
-
-            tick:SetPoint("CENTER", handle.anchor, "LEFT", (duration - tickTime) * pixelsPerSecond, 0)
-
-            if tickTime < duration * 0.99 then
-                tick:Show()
-            else
-                tick:Hide()
+            if not KE:IsSafeValue(tickParent) or tickParent ~= handle.anchor then
+                tick = self:CreateTick(handle)
+                handle.ticks[i] = tick
             end
         end
+
+        local tickWidth = (self.db.TickWidth or 2) * KE:GetPixelSize()
+        tick:SetSize(tickWidth, handle.height * 0.95)
+        tick:ClearAllPoints()
+
+        local tickTime = i * hastedTickInterval
+
+        if self.chaining then
+            local interval = (duration - self.firstTick) / (self.maxTicks - 1)
+            tickTime = self.firstTick + (i - 1) * interval
+        end
+
+        tick:SetPoint("CENTER", handle.anchor, "LEFT", (duration - tickTime) * pixelsPerSecond, 0)
+
+        if tickTime < duration * 0.99 then
+            tick:Show()
+        else
+            tick:Hide()
+        end
+    end
+end
+
+function DT:UpdateTicksAll(duration)
+    if duration == nil or duration <= 0 then
+        return
+    end
+
+    self.activeChannelDuration = duration
+
+    self:HideTicks()
+
+    for _, handle in ipairs(CastBarRegistry:GetVisibleBars()) do
+        self:UpdateHandleTicks(handle, duration)
     end
 end
 
@@ -450,6 +468,53 @@ function DT:ApplyTickColor()
             tick:SetColorTexture(r, g, b, a)
         end
     end
+end
+
+function DT:UpdateHandleDimensions(id, width, height)
+    local handle = CastBarRegistry:GetHandle(id)
+
+    if handle == nil then
+        return
+    end
+
+    if width ~= handle.width or height ~= handle.height then
+        handle.width = width
+        handle.height = height
+
+        if self.channeling and self.activeChannelDuration ~= nil then
+            self:UpdateHandleTicks(handle, self.activeChannelDuration)
+        else
+            self:HideTicks(handle)
+        end
+    end
+end
+
+function DT:RefreshPrimaryHandle()
+    self.primaryHandle = CastBarRegistry:GetPrimaryHandle()
+end
+
+function DT:OnCastBarShown(id, anchor, textFrame, priority)
+    CastBarRegistry:EnsureHandle(id, anchor, priority, textFrame)
+    CastBarRegistry:SyncDimensions(id, anchor)
+    self:RefreshPrimaryHandle()
+
+    if self.channeling and self.activeChannelDuration ~= nil then
+        local handle = CastBarRegistry:GetHandle(id)
+
+        if handle ~= nil then
+            self:UpdateHandleTicks(handle, self.activeChannelDuration)
+        end
+    end
+end
+
+function DT:OnCastBarHidden(id)
+    local handle = CastBarRegistry:GetHandle(id)
+
+    if handle ~= nil then
+        self:HideTicks(handle)
+    end
+
+    self:RefreshPrimaryHandle()
 end
 
 ---------------------------------------------------------------------------------
@@ -556,6 +621,10 @@ function DT:OnEvent(event, unit, ...)
             self.lastGainedStack = GetTime()
         end
 
+        if spellId == 358267 then
+            self:RefreshPrimaryHandle()
+        end
+
     elseif event == "UNIT_SPELLCAST_EMPOWER_STOP" then
         local _, spellId, complete = ...  -- castGUID, spellID, complete
         if not complete or not IsEmpower(spellId) or not KnowsMassDisintegrate() then
@@ -587,20 +656,29 @@ function DT:OnEvent(event, unit, ...)
 
         self.lastStart = startTime
 
+        self:RefreshPrimaryHandle()
+
         local cw = self.db.ClipWarning or {}
 
-        if cw.Enabled and self.massDisintegrateStacks > 0 then
+        if self.massDisintegrateStacks > 0 then
             local expired = GetTime() - self.lastGainedStack > STACK_EXPIRY
             if expired then
                 self.massDisintegrateStacks = 0
             else
-                self:ShowWarning()
-                self.massDisintegrateStacks = self.massDisintegrateStacks - 1
-
-                local handle = CastBarRegistry:GetPrimaryHandle()
+                local handle = self.primaryHandle
                 if handle and handle.textFrame then
                     handle.textFrame:SetText(C_Spell.GetSpellName(MASS_DISINTEGRATE))
                 end
+
+                if cw.Enabled then
+                    self:ShowWarning()
+                end
+
+                self.massDisintegrateStacks = self.massDisintegrateStacks - 1
+            end
+
+            if not cw.Enabled then
+                self:HideWarning()
             end
         else
             self:HideWarning()
@@ -616,7 +694,7 @@ function DT:OnEvent(event, unit, ...)
         if self.channeling and self.prevEndTime and self.prevHastedTickInterval then
             local remaining = self.prevEndTime - startTime
             -- modulo gives time to the next tick that would've fired, not just the last
-            self.firstTick = math_max(0, math.fmod(remaining, self.prevHastedTickInterval))
+            self.firstTick = math.max(0, math.fmod(remaining, self.prevHastedTickInterval))
         end
 
         self.prevEndTime = nextEndTime
@@ -624,7 +702,7 @@ function DT:OnEvent(event, unit, ...)
         self.chaining = self.channeling
         self.channeling = true
 
-        self:UpdateTicks(CastBarRegistry:GetPrimaryHandle(), nextEndTime - startTime)
+        self:UpdateTicksAll(nextEndTime - startTime)
 
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
         -- unit param captures spellId for non-unit events
@@ -645,6 +723,7 @@ function DT:OnEvent(event, unit, ...)
         self:HideTicks()
         self.channeling = false
         self.chaining = false
+        self.activeChannelDuration = nil
     end
 end
 
@@ -722,7 +801,7 @@ function DT:ShowPreview()
     if handle then
         CastBarRegistry:SyncDimensions(handle.id, handle.anchor)
         local previewDuration = self.maxTicks * (self:GetTickInterval() / self:GetHaste())
-        self:UpdateTicks(handle, previewDuration)
+        self:UpdateHandleTicks(handle, previewDuration)
     end
 end
 
