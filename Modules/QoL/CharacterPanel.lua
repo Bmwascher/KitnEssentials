@@ -1514,32 +1514,19 @@ local function IlvlLine(base, span, isRight)
 end
 CP._IlvlLine = IlvlLine
 
--- Weapon spans face outward; other slots follow their column.
 local function IlvlSpanOnLeft(slotID)
-    if slotID == INVSLOT_MAINHAND then return true end
-    if CENTER_SLOTS[slotID] then return false end
     return RIGHT_SLOTS[slotID] and true or false
 end
 CP._IlvlSpanOnLeft = IlvlSpanOnLeft
 
-local function WeaponIlvlOffset(slotID, rowHasSpan)
-    if not (rowHasSpan and CENTER_SLOTS[slotID]) then return 0 end
-    return slotID == INVSLOT_MAINHAND and -2 or 2
+-- Weapons use a second centered line so two upgrade spans cannot meet between
+-- the slots. Every other slot keeps the span inline with its item level.
+local function SlotIlvlLines(slotID, base, span)
+    if CENTER_SLOTS[slotID] then return base, span end
+    if not base then return span, nil end
+    return IlvlLine(base, span, IlvlSpanOnLeft(slotID)), nil
 end
-CP._WeaponIlvlOffset = WeaponIlvlOffset
-
-local function ApplyWeaponIlvlOffsets(unit, rowHasSpan)
-    local slotFrames = unit == "player" and SLOT_FRAMES or INSPECT_SLOT_FRAMES
-    for slotID in pairs(CENTER_SLOTS) do
-        local slotFrame = _G[slotFrames[slotID]]
-        local detail = slotFrame and FFD[slotFrame] and FFD[slotFrame].detail
-        if detail then
-            detail.ilvlText:ClearAllPoints()
-            detail.ilvlText:SetPoint("BOTTOM", slotFrame, "TOP",
-                WeaponIlvlOffset(slotID, rowHasSpan), 3)
-        end
-    end
-end
+CP._SlotIlvlLines = SlotIlvlLines
 
 -- Whether the track span this render drew is MISSING rather than absent, so the
 -- next call must not short-circuit past it. Extracted for the same reason as the
@@ -1625,10 +1612,10 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
 
     local overlay = self:CreateTrackOverlay(slotFrame, slotID)
 
-    -- While the item is still upgrading, the letter and its count are rendered
-    -- INTO the item level string instead, so the corner stands down. Once it is
-    -- capped there is no count to place, and the corner is where the letter has
-    -- always lived.
+    -- While the item is still upgrading, the letter and its count move to the
+    -- item-level detail row, so the corner stands down. Weapons use a separate
+    -- upper line; other slots keep the span inline. Once capped, the corner is
+    -- where the letter has always lived.
     --
     -- Asked of the SHARED predicate, never re-derived here. The detail path asks
     -- the same question with the same inputs, so the two cannot disagree and
@@ -1791,6 +1778,12 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
     detail.ilvlText:SetShadowColor(0, 0, 0, 0)
 
+    if isCenter then
+        detail.weaponSpanText = detail:CreateFontString(nil, "OVERLAY")
+        KE:ApplyFont(detail.weaponSpanText, fontFace, fontSize, fontOutline)
+        detail.weaponSpanText:SetShadowColor(0, 0, 0, 0)
+    end
+
     local iconSize = SLOT_GEM_ICON_SIZE
     detail.gemIcons = {}
     for i = 1, SLOT_DETAIL_MAX_GEMS do
@@ -1818,6 +1811,7 @@ function CP:CreateSlotDetail(slotFrame, slotID)
         detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", -100, 0)
         detail:SetPoint("TOPRIGHT", slotFrame, "TOPRIGHT", 0, -100)
         detail.ilvlText:SetPoint("BOTTOM", slotFrame, "TOP", 0, 3)
+        detail.weaponSpanText:SetPoint("BOTTOM", detail.ilvlText, "TOP", 0, 1)
         if slotID == 16 then
             detail.enchantText:SetJustifyH("RIGHT")
             detail.enchantText:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", -3, 4)
@@ -1944,6 +1938,9 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     -- Re-apply font each call so the size slider is live.
     KE:ApplyFont(detail.enchantText, fontFace, fontSize, fontOutline)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
+    if detail.weaponSpanText then
+        KE:ApplyFont(detail.weaponSpanText, fontFace, fontSize, fontOutline)
+    end
 
     -- Enchant label (green). "No Enchant" stays with the warning feature.
     if self.db.ShowEnchantNames and not euiOwnsEnchant then
@@ -1956,9 +1953,9 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     end
 
     -- Item level, colored by the equipped item's quality. While the item is
-    -- still upgrading, the track letter and count ride along on the same
-    -- string; the item level keeps its own quality colour, and the escape
-    -- overrides it for the track span only.
+    -- still upgrading, weapons put the track span on a separate upper line;
+    -- other slots keep it inline. The item level retains its quality colour,
+    -- while the span carries the track colour.
     if self.db.ShowSlotItemLevel and not euiOwnsIlvl then
         local lvl = self:GetSlotItemLevel(unit, slotID)
 
@@ -1968,42 +1965,30 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
             span = UpgradeSpan(w, self.db.TrackIndicatorsEnabled, true)
         end
 
-        if CENTER_SLOTS[slotID] then
-            local rowHasSpan = span ~= nil
-            if not rowHasSpan then
-                local otherSlotID = slotID == INVSLOT_MAINHAND
-                    and INVSLOT_OFFHAND or INVSLOT_MAINHAND
-                local otherTrack = self:GetItemTrack(unit, otherSlotID)
-                rowHasSpan = MergeTrackIntoIlvl(self.db, otherTrack,
-                    euiOwnsIlvl, euiOwnsTrack)
-            end
-            ApplyWeaponIlvlOffsets(unit, rowHasSpan)
-        end
-
+        local base
         if lvl then
             local quality = GetInventoryItemQuality(unit, slotID)
-            local base
             if quality then
                 base = "|c" .. GetQualityHex(quality) .. lvl .. "|r"
             else
                 base = tostring(lvl)
             end
+        end
 
-            detail.ilvlText:SetText(IlvlLine(base, span, IlvlSpanOnLeft(slotID)))
-            detail.ilvlText:Show()
-        elseif span then
-            -- The item level is unreadable but the corner has already stood
-            -- down, because the merge decision does not depend on it. Draw the
-            -- span alone rather than losing the track entirely.
-            detail.ilvlText:SetText(span)
-            detail.ilvlText:Show()
-        else
-            detail.ilvlText:SetText("")
-            detail.ilvlText:Hide()
+        local ilvlLine, weaponSpanLine = SlotIlvlLines(slotID, base, span)
+        detail.ilvlText:SetText(ilvlLine or "")
+        detail.ilvlText:SetShown(ilvlLine ~= nil)
+        if detail.weaponSpanText then
+            detail.weaponSpanText:SetText(weaponSpanLine or "")
+            detail.weaponSpanText:SetShown(weaponSpanLine ~= nil)
         end
     else
         detail.ilvlText:SetText("")
         detail.ilvlText:Hide()
+        if detail.weaponSpanText then
+            detail.weaponSpanText:SetText("")
+            detail.weaponSpanText:Hide()
+        end
     end
 
     -- Gem icons inline beside the ilvl text (only scan socketable slots).

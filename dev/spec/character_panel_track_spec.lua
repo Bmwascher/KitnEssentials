@@ -208,33 +208,54 @@ describe("Slot track: which side the span goes on", function()
         assert.equals("250", loadCP()._IlvlLine("250", nil, true))
     end)
 
-    it("puts each weapon span on the outside edge", function()
-        local CP = loadCP()
-        assert.is_true(CP._IlvlSpanOnLeft(16))
-        assert.is_false(CP._IlvlSpanOnLeft(17))
-    end)
-
     it("still orders an ordinary right-column slot to the right", function()
         assert.is_true(loadCP()._IlvlSpanOnLeft(6))
     end)
 end)
 
-describe("Slot track: weapon row offset", function()
-    it("nudges both weapons outward when the row has a span", function()
-        local offset = loadCP()._WeaponIlvlOffset
-        assert.equals(-2, offset and offset(16, true))
-        assert.equals(2, offset and offset(17, true))
+describe("Slot track: item-level line composition", function()
+    it("splits weapon spans onto their own upper line", function()
+        local compose = loadCP()._SlotIlvlLines
+        local mainIlvl, mainSpan
+        local offIlvl, offSpan
+        if compose then
+            mainIlvl, mainSpan = compose(16, "250", "M4/6")
+            offIlvl, offSpan = compose(17, "260", "H2/6")
+        end
+        assert.equals("250", mainIlvl)
+        assert.equals("M4/6", mainSpan)
+        assert.equals("260", offIlvl)
+        assert.equals("H2/6", offSpan)
     end)
 
-    it("centers both weapons when the row has no span", function()
-        local offset = loadCP()._WeaponIlvlOffset
-        assert.equals(0, offset and offset(16, false))
-        assert.equals(0, offset and offset(17, false))
+    it("keeps ordinary slot spans inline", function()
+        local compose = loadCP()._SlotIlvlLines
+        local rightLine, rightSpan
+        local leftLine, leftSpan
+        if compose then
+            rightLine, rightSpan = compose(6, "250", "M4/6")
+            leftLine, leftSpan = compose(1, "260", "H2/6")
+        end
+        assert.equals("M4/6 250", rightLine)
+        assert.is_nil(rightSpan)
+        assert.equals("260 H2/6", leftLine)
+        assert.is_nil(leftSpan)
     end)
 
-    it("does not move ordinary slots", function()
-        local offset = loadCP()._WeaponIlvlOffset
-        assert.equals(0, offset and offset(6, true))
+    it("returns only the centered item level when a weapon has no span", function()
+        local compose = loadCP()._SlotIlvlLines
+        local ilvlLine, spanLine
+        if compose then ilvlLine, spanLine = compose(16, "250", nil) end
+        assert.equals("250", ilvlLine)
+        assert.is_nil(spanLine)
+    end)
+
+    it("keeps a weapon span when its item level is unreadable", function()
+        local compose = loadCP()._SlotIlvlLines
+        local ilvlLine, spanLine
+        if compose then ilvlLine, spanLine = compose(17, nil, "H2/6") end
+        assert.is_nil(ilvlLine)
+        assert.equals("H2/6", spanLine)
     end)
 end)
 
