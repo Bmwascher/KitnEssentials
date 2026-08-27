@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.10
+
+### Vantus Rune
+- The Guild Bank button now follows the active Baganator skin and falls back to
+  Blizzard's Guild Bank, so changing skins no longer makes the button disappear
+- Added the current rune icon with KitnEssentials styling. The button border and
+  label now update immediately when the theme accent changes
+
+---
+
 ## v4.4.9
 
 ### Disintegrate Ticks
