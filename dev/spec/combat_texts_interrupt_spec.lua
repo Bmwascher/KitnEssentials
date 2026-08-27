@@ -59,7 +59,9 @@ local function loadCombatTexts(options)
             aceUnregisterCalls[event] = (aceUnregisterCalls[event] or 0) + 1
         end,
         UnregisterAllEvents = function(self)
-            self._aceEvents = {}
+            for event in pairs(aceEvents) do
+                aceEvents[event] = nil
+            end
             self._unregisterAllCalls = self._unregisterAllCalls + 1
         end,
         IsEnabled = function() return options.moduleEnabled ~= false end,
@@ -517,6 +519,8 @@ it("wires and restores the filtered frame through the real lifecycle", function(
     assert.equals(2, frame._unitRegisterCalls)
     assert.equals(2, CM._aceRegisterCalls.UNIT_SPELLCAST_INTERRUPTED)
     assert.equals(2, CM._aceRegisterCalls.UNIT_SPELLCAST_CHANNEL_STOP)
+    assert.is_true(CM._aceEvents.UNIT_SPELLCAST_INTERRUPTED)
+    assert.is_true(CM._aceEvents.UNIT_SPELLCAST_CHANNEL_STOP)
     frame:Fire("UNIT_SPELLCAST_SUCCEEDED", "pet", "kick-b", 119910)
     assert.equals(119910, CM.pendingInterruptSpellID)
     assert.equals("pet", CM.pendingInterruptUnit)
