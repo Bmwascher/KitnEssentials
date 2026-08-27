@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.9
+
+### Disintegrate Ticks
+- Updated normal and chained Disintegrate tick placement to follow the current
+  channel timing, including four- and five-tick talent setups
+- Cast-bar detection now draws ticks on every visible supported Blizzard,
+  Midnight Simple Unit Frames, EllesmereUI, AzortharionUI and EQOL bar. The
+  obsolete UUF, BCDM, Ayije and NephUI integrations are removed, while existing
+  warning text, appearance and tick-width settings remain intact
+
+---
+
 ## v4.4.8
 
 ### Advanced Debuffs
