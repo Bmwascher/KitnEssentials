@@ -62,10 +62,8 @@ CM.pendingInterruptSpellID = nil
 CM.pendingInterruptUnit = nil
 CM.lastAcceptedCastGUID = nil
 CM.lastUnkeyedAcceptAt = nil
-CM.reverseInterruptState = nil
 CM.reverseInterruptAt = nil
-CM.reverseInterruptSpellID = nil
-CM.reverseInterruptCastGUID = nil
+CM.reverseInterruptSuccessSpellID = nil
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -575,16 +573,14 @@ function CM:ClearPendingInterrupt()
     self.pendingInterruptUnit = nil
 end
 
-function CM:ClearReverseInterrupt()
-    self.reverseInterruptState = nil
+function CM:ClearInterruptQuarantine()
     self.reverseInterruptAt = nil
-    self.reverseInterruptSpellID = nil
-    self.reverseInterruptCastGUID = nil
+    self.reverseInterruptSuccessSpellID = nil
 end
 
 function CM:ClearInterruptState()
     self:ClearPendingInterrupt()
-    self:ClearReverseInterrupt()
+    self:ClearInterruptQuarantine()
     self.lastAcceptedCastGUID = nil
     self.lastUnkeyedAcceptAt = nil
 end
@@ -595,31 +591,24 @@ function CM:RecordPendingInterrupt(spellID, source, now)
     self.pendingInterruptUnit = source
 end
 
-function CM:HasFreshReverseInterrupt(now)
-    if self.reverseInterruptState == nil or self.reverseInterruptAt == nil then
-        return nil
-    end
+function CM.NormalizeInterruptSuccessSpellID(spellID)
+    if spellID == 19647 or spellID == 119910 or spellID == 132409 then return 19647 end
+    if spellID == 89766 or spellID == 119914 then return 89766 end
+    return spellID
+end
+
+function CM:HasFreshInterruptQuarantine(now)
+    if self.reverseInterruptAt == nil then return false end
     if now <= self.reverseInterruptAt + REVERSE_EVENT_WINDOW then
-        return self.reverseInterruptState
+        return true
     end
-    self:ClearReverseInterrupt()
-    return nil
+    self:ClearInterruptQuarantine()
+    return false
 end
 
-function CM:RecordReverseInterrupt(state, spellID, castGUID, now)
-    self.reverseInterruptState = state
+function CM:RecordInterruptQuarantine(now)
     self.reverseInterruptAt = now
-    self.reverseInterruptSpellID = spellID
-    if not KE:IsSecretValue(castGUID) and type(castGUID) == "string" then
-        self.reverseInterruptCastGUID = castGUID
-    else
-        self.reverseInterruptCastGUID = nil
-    end
-end
-
-function CM:RecordReverseInterruptCandidate(spellID, castGUID, now)
-    if self:HasFreshReverseInterrupt(now) ~= nil then return end
-    self:RecordReverseInterrupt("candidate", spellID, castGUID, now)
+    self.reverseInterruptSuccessSpellID = nil
 end
 
 function CM:ClassifyInterruptOwnership(interruptedBy)
@@ -676,6 +665,9 @@ function CM:ShouldAcceptInterrupt(event, unitTarget, castGUID, interruptedBy, no
         if nilOwnership and event == "UNIT_SPELLCAST_CHANNEL_STOP" then
             return false, ownership, "UNKNOWN", pendingSource, pendingState, "nil-channel-stop", elapsed
         end
+        if not fresh then
+            return false, ownership, "UNKNOWN", pendingSource, pendingState, "no-fresh-pending", elapsed
+        end
     end
 
     local target = self:ClassifyInterruptTarget(unitTarget)
@@ -685,10 +677,6 @@ function CM:ShouldAcceptInterrupt(event, unitTarget, castGUID, interruptedBy, no
     if target == "INVALID" then
         return false, ownership, target, pendingSource, pendingState, "invalid-target", elapsed
     end
-    if ownership == "UNKNOWN" and not fresh then
-        return false, ownership, target, pendingSource, pendingState, "no-fresh-pending", elapsed
-    end
-
     local readableCastGUID = not KE:IsSecretValue(castGUID) and type(castGUID) == "string"
     if readableCastGUID and castGUID == self.lastAcceptedCastGUID then
         return false, ownership, target, pendingSource, pendingState, "duplicate-cast-guid", elapsed
@@ -718,17 +706,14 @@ function CM:OnSpellcastSucceeded(_, unit, _, spellID)
     if unitKnown and source == nil then return end
 
     local now = GetTime()
-    local reverseState = self:HasFreshReverseInterrupt(now)
-    if reverseState == "accepted" then return end
-    if reverseState == "candidate" then
-        self.reverseInterruptState = "accepted"
-        if self.reverseInterruptCastGUID ~= nil then
-            self.lastAcceptedCastGUID = self.reverseInterruptCastGUID
+    if self:HasFreshInterruptQuarantine(now) then
+        local normalizedSpellID = CM.NormalizeInterruptSuccessSpellID(spellID)
+        if self.reverseInterruptSuccessSpellID == nil then
+            self.reverseInterruptSuccessSpellID = normalizedSpellID
+            return
         end
-        self:ClearPendingInterrupt()
-        local prefix, icon, name = self:BuildInterruptDisplayText(self.reverseInterruptSpellID)
-        self:ShowFlashMessage("interrupt", prefix, icon, name)
-        return
+        if self.reverseInterruptSuccessSpellID == normalizedSpellID then return end
+        self:ClearInterruptQuarantine()
     end
 
     self:RecordPendingInterrupt(spellID, source, now)
@@ -754,14 +739,9 @@ function CM:OnSpellcastInterrupted(event, unitTarget, castGUID, spellID, interru
         KE:Print(string_format("[CT] event=%s owner=%s target=%s pending=%s state=%s elapsed=%s reason=%s",
             event, ownership, target, pendingSource, pendingState, elapsedText, reason))
     end
-    if not accepted then
-        if ownership == "UNKNOWN" and reason == "no-fresh-pending" then
-            self:RecordReverseInterruptCandidate(spellID, castGUID, now)
-        end
-        return
-    end
+    if not accepted then return end
 
-    self:RecordReverseInterrupt("accepted", spellID, castGUID, now)
+    self:RecordInterruptQuarantine(now)
     local prefix, icon, name = self:BuildInterruptDisplayText(spellID)
     self:ShowFlashMessage("interrupt", prefix, icon, name)
 end
