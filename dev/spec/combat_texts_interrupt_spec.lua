@@ -39,15 +39,9 @@ local function loadCombatTexts(options)
     _G.UnitCanAttack = options.UnitCanAttack or function() return true end
     _G.GetInventoryItemDurability = function() return nil end
     _G.UIParent = {}
-    local spellInfoCalls = {}
     local spellNameCalls = {}
     local spellTextureCalls = {}
     _G.C_Spell = {
-        GetSpellInfo = function(spellID)
-            spellInfoCalls[#spellInfoCalls + 1] = spellID
-            if options.getSpellInfo then return options.getSpellInfo(spellID) end
-            return { name = "Enemy Spell", iconID = 12345 }
-        end,
         GetSpellName = function(spellID)
             spellNameCalls[#spellNameCalls + 1] = spellID
             if options.getSpellName then return options.getSpellName(spellID) end
@@ -114,7 +108,6 @@ local function loadCombatTexts(options)
     CM._aceRegisterCalls = aceRegisterCalls
     CM._aceUnregisterCalls = aceUnregisterCalls
     CM._unregisterAllCalls = 0
-    CM.spellInfoCalls = spellInfoCalls
     CM.spellNameCalls = spellNameCalls
     CM.spellTextureCalls = spellTextureCalls
     CM.printed = printed
@@ -437,9 +430,6 @@ it("routes declared-secret spell name and texture to the interrupt display", fun
             [spellName] = true,
             [iconID] = true,
         },
-        getSpellInfo = function()
-            return { name = spellName, iconID = iconID }
-        end,
         getSpellName = function() return spellName end,
         getSpellTexture = function() return iconID end,
     })
@@ -447,7 +437,6 @@ it("routes declared-secret spell name and texture to the interrupt display", fun
         "enemy-cast", "SECRET_SPELL_ID", "Player-1-00000001")
     assert.same({ "SECRET_SPELL_ID" }, CM.spellNameCalls)
     assert.same({ "SECRET_SPELL_ID" }, CM.spellTextureCalls)
-    assert.equals(0, #CM.spellInfoCalls)
     assert.equals(1, #CM.shown)
     assert.equals("interrupt", CM.shown[1].kind)
     assert.equals("Interrupted [" .. spellName .. "]", CM.shown[1].text)

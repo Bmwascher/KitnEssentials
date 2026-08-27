@@ -38,6 +38,7 @@ local string_format = string.format
 local DEBUG_CT = false
 
 local EQUIP_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 }
+local INTERRUPT_ICON_GAP = 4
 
 local MESSAGE_TYPES = {
     "enterCombat",
@@ -124,7 +125,15 @@ function CM:GetMessageFrame(msgType)
     frame:Hide()
 
     local text = frame:CreateFontString(nil, "OVERLAY")
-    text:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    if msgType == "interrupt" then
+        local content = CreateFrame("Frame", nil, frame)
+        content:SetSize(1, 1)
+        content:SetPoint("CENTER", frame, "CENTER", 0, 0)
+        frame.interruptContent = content
+        text:SetPoint("CENTER", content, "CENTER", 0, 0)
+    else
+        text:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    end
     text:SetJustifyH("CENTER")
     text:SetJustifyV("MIDDLE")
     text:SetWordWrap(false)
@@ -138,9 +147,10 @@ function CM:GetMessageFrame(msgType)
     if msgType == "interrupt" then
         local icon = frame:CreateTexture(nil, "OVERLAY")
         icon:SetSize(fontSize, fontSize)
-        icon:SetPoint("RIGHT", text, "LEFT", -4, 0)
+        icon:SetPoint("RIGHT", text, "LEFT", -INTERRUPT_ICON_GAP, 0)
         icon:Hide()
         frame.interruptIcon = icon
+        frame.interruptHasIcon = false
         KE:ApplyFont(text, self.db.FontFace, self.db.FontSize,
             KE:GetFontOutline(self.db.FontOutline))
     else
@@ -148,6 +158,19 @@ function CM:GetMessageFrame(msgType)
     end
 
     return frame
+end
+
+local function LayoutInterruptDisplay(frame, hasIcon, fontSize)
+    frame.interruptContent:ClearAllPoints()
+    if hasIcon then
+        frame.interruptContent:SetPoint("CENTER", frame, "CENTER",
+            (fontSize + INTERRUPT_ICON_GAP) / 2, 0)
+        frame.interruptIcon:Show()
+    else
+        frame.interruptContent:SetPoint("CENTER", frame, "CENTER", 0, 0)
+        frame.interruptIcon:Hide()
+    end
+    frame.interruptHasIcon = hasIcon
 end
 
 ---------------------------------------------------------------------------------
@@ -187,9 +210,9 @@ function CM:ShowFlashMessage(msgType, textOverride, iconOverride)
     if frame.interruptIcon then
         if iconOverride ~= nil then
             frame.interruptIcon:SetTexture(iconOverride)
-            frame.interruptIcon:Show()
+            LayoutInterruptDisplay(frame, true, self.db.FontSize or 16)
         else
-            frame.interruptIcon:Hide()
+            LayoutInterruptDisplay(frame, false, self.db.FontSize or 16)
         end
     end
 
@@ -402,6 +425,9 @@ function CM:ApplySettings()
         if frame.text then
             if frame.msgType == "interrupt" then
                 frame.interruptIcon:SetSize(fontSize, fontSize)
+                if not self.isPreview then
+                    LayoutInterruptDisplay(frame, frame.interruptHasIcon, fontSize)
+                end
                 KE:ApplyFont(frame.text, self.db.FontFace, self.db.FontSize,
                     KE:GetFontOutline(self.db.FontOutline))
             else
@@ -416,7 +442,9 @@ function CM:ApplySettings()
             local frame = self.messageFrames[msgType]
             if frame then
                 local _, msgText, msgColor = GetMessageConfig(self.db, msgType)
-                if frame.interruptIcon then frame.interruptIcon:Hide() end
+                if frame.interruptIcon then
+                    LayoutInterruptDisplay(frame, false, fontSize)
+                end
                 frame.text:SetText(msgText)
                 frame.text:SetTextColor(msgColor[1] or 1, msgColor[2] or 1, msgColor[3] or 1, msgColor[4] or 1)
             end
@@ -463,12 +491,15 @@ function CM:ShowPreview()
     self:RegWithEditMode()
 
     self.isPreview = true
+    local fontSize = self.db.FontSize or 16
 
     for _, msgType in ipairs(MESSAGE_TYPES) do
         local frame = self:GetMessageFrame(msgType)
         if frame then
             local _, msgText, msgColor = GetMessageConfig(self.db, msgType)
-            if frame.interruptIcon then frame.interruptIcon:Hide() end
+            if frame.interruptIcon then
+                LayoutInterruptDisplay(frame, false, fontSize)
+            end
             frame.text:SetText(msgText)
             frame.text:SetTextColor(msgColor[1] or 1, msgColor[2] or 1, msgColor[3] or 1, msgColor[4] or 1)
             frame:SetAlpha(1)
