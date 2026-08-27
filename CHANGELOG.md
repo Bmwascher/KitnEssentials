@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.11
+
+### Combat Texts
+- Interrupt notices now correlate your own, pet and supported projectile
+  interrupts to the hostile cast they stopped, rather than accepting any nearby
+  interrupted cast. This prevents the friendly-spell misattributions caused by
+  a missed kick while retaining Warlock pet interrupts, Avenger's Shield and
+  Solar Beam
+- The notice now shows `Interrupted`, the stopped spell's icon in standard
+  KitnEssentials styling, and a muted blue spell name on one aligned line
+
+---
+
 ## v4.4.10
 
 ### Vantus Rune
