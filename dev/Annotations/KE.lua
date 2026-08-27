@@ -114,6 +114,11 @@ function KE:RunAfterCombat(fn) end
 ---@param key string         once-flag field on `state`
 function KE:WarnRedundantAddon(addon, label, moduleName, slash, state, key) end
 
+--- All interrupt spell IDs represented by Core/Interrupts.lua, shared by
+--- announce consumers. Callers treat the returned table as read-only.
+---@return table<number, true>
+function KE:GetInterruptAnnounceSpellSet() end
+
 --- Row matcher for searchable dropdowns (Core/Globals.lua). True when
 --- `query` matches `displayText` as a case-insensitive plain substring,
 --- with inline |T...|t texture tags stripped first; falls back to `key`

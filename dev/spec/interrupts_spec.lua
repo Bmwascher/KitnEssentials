@@ -1,6 +1,12 @@
 -- Tier 1: pure data + accessors, zero WoW API. Core/Interrupts.lua.
 local helpers = require("dev.spec._helpers")
 
+local EXPECTED_ANNOUNCE_IDS = {
+    6552, 96231, 31935, 375576, 147362, 187707, 1766,
+    15487, 47528, 57994, 2139, 19647, 89766, 119910,
+    132409, 119914, 116705, 78675, 106839, 183752, 351338,
+}
+
 describe("Interrupts (Core/Interrupts.lua)", function()
     local KE
     setup(function()
@@ -31,6 +37,21 @@ describe("Interrupts (Core/Interrupts.lua)", function()
         assert.is_true(set[96231]) -- Rebuke (primary)
         assert.is_true(set[31935]) -- Avenger's Shield (announceExtra)
         assert.is_true(set[375576])
+    end)
+
+    it("publishes the complete cross-spec announce set", function()
+        local set = KE:GetInterruptAnnounceSpellSet()
+        local count = 0
+        for id in pairs(set) do
+            count = count + 1
+            assert.is_number(id)
+            assert.is_true(set[id])
+        end
+        assert.equals(#EXPECTED_ANNOUNCE_IDS, count)
+        for _, id in ipairs(EXPECTED_ANNOUNCE_IDS) do
+            assert.is_true(set[id], "missing interrupt ID " .. id)
+        end
+        assert.is_nil(set[999999])
     end)
 
     it("handles a spec with no single-target kick (Balance Druid 102)", function()

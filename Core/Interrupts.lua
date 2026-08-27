@@ -26,6 +26,8 @@ local KE = select(2, ...)
 local ipairs = ipairs
 local pairs = pairs
 
+local INTERRUPT_ANNOUNCE_SET = {}
+
 local INTERRUPTS = {
     -- Warrior: Pummel 15s
     [71]   = { primary = { id = 6552,  cd = 15 } },
@@ -117,11 +119,15 @@ for _, entry in pairs(INTERRUPTS) do
 
     local set = {}
     for _, c in ipairs(list) do
-        if c.id then set[c.id] = true end
+        if c.id then
+            set[c.id] = true
+            INTERRUPT_ANNOUNCE_SET[c.id] = true
+        end
     end
     if entry.announceExtras then
         for _, id in ipairs(entry.announceExtras) do
             set[id] = true
+            INTERRUPT_ANNOUNCE_SET[id] = true
         end
     end
     entry.announceSet = set
@@ -148,4 +154,8 @@ function KE:GetInterruptSpellSet(specID)
     local d = INTERRUPTS[specID]
     if not d then return nil end
     return d.announceSet
+end
+
+function KE:GetInterruptAnnounceSpellSet()
+    return INTERRUPT_ANNOUNCE_SET
 end
