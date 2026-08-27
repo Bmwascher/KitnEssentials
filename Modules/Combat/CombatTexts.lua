@@ -136,6 +136,8 @@ function CM:GetMessageFrame(msgType)
     if msgType == "interrupt" then
         local icon = frame:CreateTexture(nil, "OVERLAY")
         icon:SetSize(fontSize, fontSize)
+        -- Trim the baked spell-icon border.
+        icon:SetTexCoord(5 / 64, 59 / 64, 5 / 64, 59 / 64)
         icon:SetPoint("CENTER", frame, "CENTER", 0, 0)
         icon:Hide()
         frame.interruptIcon = icon
@@ -150,8 +152,10 @@ function CM:GetMessageFrame(msgType)
 
         KE:ApplyFont(text, self.db.FontFace, self.db.FontSize,
             KE:GetFontOutline(self.db.FontOutline))
+        text:SetHeight(fontSize + 2)
         KE:ApplyFont(name, self.db.FontFace, self.db.FontSize,
             KE:GetFontOutline(self.db.FontOutline))
+        name:SetHeight(fontSize + 2)
     else
         KE:ApplyFontToText(text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
     end
@@ -424,8 +428,10 @@ function CM:ApplySettings()
                 frame.interruptIcon:SetSize(fontSize, fontSize)
                 KE:ApplyFont(frame.text, self.db.FontFace, self.db.FontSize,
                     KE:GetFontOutline(self.db.FontOutline))
+                frame.text:SetHeight(fontSize + 2)
                 KE:ApplyFont(frame.interruptName, self.db.FontFace, self.db.FontSize,
                     KE:GetFontOutline(self.db.FontOutline))
+                frame.interruptName:SetHeight(fontSize + 2)
             else
                 KE:ApplyFontToText(frame.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
             end
