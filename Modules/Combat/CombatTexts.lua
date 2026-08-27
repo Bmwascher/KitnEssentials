@@ -611,6 +611,23 @@ function CM:OnSpellcastSucceeded(_, unit, _, spellID)
     self:RecordPendingInterrupt(spellID, source, GetTime())
 end
 
+function CM:BuildInterruptDisplayText(spellID)
+    if not KE:IsSafeValue(spellID) then return nil end
+
+    local spellInfo = C_Spell_GetSpellInfo(spellID)
+    if not KE:IsSafeValue(spellInfo) then return nil end
+
+    local iconID = spellInfo.iconID
+    if not KE:IsSafeValue(iconID) then return nil end
+
+    local name = spellInfo.name
+    if not KE:IsSafeValue(name) then return nil end
+
+    local prefix = self.db.InterruptText or "Interrupted"
+    local iconSize = self.db.FontSize or 16
+    return string_format("%s |T%d:%d|t [%s]", prefix, iconID, iconSize, name)
+end
+
 function CM:OnSpellcastInterrupted(event, unitTarget, castGUID, spellID, interruptedBy)
     if not self.db or self.db.InterruptEnabled == false then return end
 
@@ -623,15 +640,8 @@ function CM:OnSpellcastInterrupted(event, unitTarget, castGUID, spellID, interru
     end
     if not accepted then return end
 
-    local prefix = self.db.InterruptText or "Interrupted"
-    local spellInfo = C_Spell_GetSpellInfo(spellID)
-    if spellInfo and spellInfo.iconID and spellInfo.name then
-        local iconSize = self.db.FontSize or 16
-        local text = string_format("%s |T%d:%d|t [%s]", prefix, spellInfo.iconID, iconSize, spellInfo.name)
-        self:ShowFlashMessage("interrupt", text)
-    else
-        self:ShowFlashMessage("interrupt")
-    end
+    local text = self:BuildInterruptDisplayText(spellID)
+    self:ShowFlashMessage("interrupt", text)
 end
 
 ---------------------------------------------------------------------------------

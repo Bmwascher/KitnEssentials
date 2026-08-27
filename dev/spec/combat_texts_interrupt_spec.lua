@@ -39,8 +39,11 @@ local function loadCombatTexts(options)
     _G.UnitCanAttack = options.UnitCanAttack or function() return true end
     _G.GetInventoryItemDurability = function() return nil end
     _G.UIParent = {}
+    local spellInfoCalls = {}
     _G.C_Spell = {
-        GetSpellInfo = function()
+        GetSpellInfo = function(spellID)
+            spellInfoCalls[#spellInfoCalls + 1] = spellID
+            if options.getSpellInfo then return options.getSpellInfo(spellID) end
             return { name = "Enemy Spell", iconID = 12345 }
         end,
     }
@@ -99,6 +102,7 @@ local function loadCombatTexts(options)
     CM._aceRegisterCalls = aceRegisterCalls
     CM._aceUnregisterCalls = aceUnregisterCalls
     CM._unregisterAllCalls = 0
+    CM.spellInfoCalls = spellInfoCalls
     CM.printed = printed
     CM.shown = {}
     CM.ShowFlashMessage = function(self, kind, text)
@@ -408,6 +412,46 @@ it("logs only the frozen plain decision tuple", function()
         "[CT] event=UNIT_SPELLCAST_INTERRUPTED owner=OWN target=HOSTILE " ..
         "pending=none state=none elapsed=none reason=direct-owner",
     }, CM.printed)
+end)
+
+it("never passes a secret interrupted spell ID to GetSpellInfo", function()
+    local CM = loadCombatTexts({ secretValues = { SECRET_SPELL_ID = true } })
+    CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+        "enemy-cast", "SECRET_SPELL_ID", "Player-1-00000001")
+    assert.equals(0, #CM.spellInfoCalls)
+    assert.equals(1, #CM.shown)
+    assert.equals("interrupt", CM.shown[1].kind)
+    assert.is_nil(CM.shown[1].text)
+end)
+
+it("falls back generically for unsafe spell-info fields", function()
+    local unsafeSpellInfo = { name = "Enemy Spell", iconID = 12345 }
+    local unsafeIconID = 12345
+    local unsafeName = "Enemy Spell"
+    local cases = {
+        {
+            secretValues = { [unsafeSpellInfo] = true },
+            getSpellInfo = function() return unsafeSpellInfo end,
+        },
+        {
+            secretValues = { [unsafeIconID] = true },
+            getSpellInfo = function() return { name = "Enemy Spell", iconID = unsafeIconID } end,
+        },
+        {
+            secretValues = { [unsafeName] = true },
+            getSpellInfo = function() return { name = unsafeName, iconID = 12345 } end,
+        },
+    }
+
+    for _, case in ipairs(cases) do
+        local CM = loadCombatTexts(case)
+        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
+            "enemy-cast", 777, "Player-1-00000001")
+        assert.equals(1, #CM.spellInfoCalls)
+        assert.equals(1, #CM.shown)
+        assert.equals("interrupt", CM.shown[1].kind)
+        assert.is_nil(CM.shown[1].text)
+    end
 end)
 
 it("registers interrupt events once and removes them when toggled off", function()
