@@ -1060,7 +1060,6 @@ end
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function DT:OnEnable()
-    self:UpdateDB()
     if not self.db.Enabled then return end
 
     -- Only Evokers
@@ -1068,6 +1067,7 @@ function DT:OnEnable()
         return
     end
 
+    self:UpdateDB()
     self:CreateWarningFrame()
     self:ApplySettings()
     self:HideWarning()
