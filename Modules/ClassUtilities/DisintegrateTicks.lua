@@ -6,6 +6,8 @@
 -- ║  Note: Evoker only (Devastation/Preservation).           ║
 -- ╚══════════════════════════════════════════════════════════╝
 
+-- luacheck: globals OverlayPlayerCastingBarFrame
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -66,6 +68,7 @@ local CastBarRegistry = {
 
 local hookedScripts = setmetatable({}, { __mode = "k" })
 local hookedMethods = setmetatable({}, { __mode = "k" })
+local overlayCallbacksRegistered = false
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -119,7 +122,7 @@ function CastBarRegistry:ResolveProvider(provider, generation)
 
     if provider.addon ~= nil then
         local _, loaded = C_AddOns.IsAddOnLoaded(provider.addon)
-        if not loaded then
+        if not KE:IsSafeValue(loaded) or not loaded then
             if self.pendingLoads[provider.id] == generation then
                 return
             end
@@ -336,6 +339,240 @@ function CastBarRegistry.HookMethodOnce(object, methodName, callback)
 
     hooksecurefunc(object, methodName, callback)
     methods[methodName] = true
+end
+
+local function RegisterBlizzardCastBarProvider()
+    local blizzardId = "blizzard"
+    local overlayId = "blizzard_overlay"
+    local playerCastBar = PlayerCastingBarFrame
+
+    local handle = CastBarRegistry:EnsureHandle(blizzardId, playerCastBar, 10, playerCastBar.Text)
+    handle.isActive = function(self)
+        local anchor = self.anchor
+        local showCastbar = anchor.showCastbar
+        local shouldShow = GameRulesUtil.ShouldShowPlayerCastBar()
+
+        if not KE:IsSafeValue(showCastbar) or not KE:IsSafeValue(shouldShow) then
+            return false
+        end
+
+        return showCastbar ~= false and shouldShow
+    end
+
+    DT:OnCastBarShown(blizzardId, playerCastBar, playerCastBar.Text, 10)
+
+    CastBarRegistry.HookFrameScriptOnce(playerCastBar, "OnShow", function(self)
+        if not DT:IsEnabled() then
+            return
+        end
+
+        DT:OnCastBarShown(blizzardId, self, self.Text, 10)
+    end)
+
+    CastBarRegistry.HookFrameScriptOnce(playerCastBar, "OnHide", function()
+        if not DT:IsEnabled() then
+            return
+        end
+
+        DT:OnCastBarHidden(blizzardId)
+    end)
+
+    CastBarRegistry.HookFrameScriptOnce(playerCastBar, "OnSizeChanged", function(self)
+        if not DT:IsEnabled() then
+            return
+        end
+
+        CastBarRegistry:SyncDimensions(blizzardId, self)
+    end)
+
+    CastBarRegistry.HookMethodOnce(playerCastBar, "SetLook", function(self)
+        if not DT:IsEnabled() then
+            return
+        end
+
+        CastBarRegistry:SyncDimensions(blizzardId, self)
+    end)
+
+    CastBarRegistry.HookMethodOnce(EditModeManagerFrame, "UpdateLayoutInfo", function()
+        if not DT:IsEnabled() then
+            return
+        end
+
+        CastBarRegistry:SyncDimensions(blizzardId, PlayerCastingBarFrame)
+        DT:RefreshPrimaryHandle()
+    end)
+
+    if not overlayCallbacksRegistered then
+        EventRegistry:RegisterCallback("OverlayPlayerCastBar.OnShow", function()
+            if not DT:IsEnabled() then
+                return
+            end
+
+            DT:OnCastBarShown(
+                overlayId,
+                OverlayPlayerCastingBarFrame,
+                OverlayPlayerCastingBarFrame.Text,
+                12
+            )
+        end, DT)
+
+        EventRegistry:RegisterCallback("OverlayPlayerCastBar.OnHide", function()
+            if not DT:IsEnabled() then
+                return
+            end
+
+            DT:OnCastBarHidden(overlayId)
+        end, DT)
+        overlayCallbacksRegistered = true
+    end
+end
+
+CastBarRegistry:RegisterProvider({
+    id = "blizzard",
+    addon = nil,
+    priority = 10,
+    isEnabled = function()
+        return true
+    end,
+    register = function()
+        RegisterBlizzardCastBarProvider()
+    end,
+})
+
+local thirdPartyCastBars = {
+    {
+        id = "msuf",
+        addon = "MidnightSimpleUnitFrames",
+        priority = 50,
+        container = function()
+            return rawget(_G, "MSUF_PlayerCastbar")
+        end,
+        anchor = function(container)
+            return container.statusBar
+        end,
+    },
+    {
+        id = "eqol_castbar",
+        addon = "EnhanceQOL",
+        priority = 40,
+        container = function()
+            return rawget(_G, "EQOLPlayerCastBar")
+        end,
+        anchor = function(container)
+            return container
+        end,
+        text = function(container)
+            return container.Text
+        end,
+    },
+    {
+        id = "eqol_uf",
+        addon = "EnhanceQOL",
+        priority = 40,
+        container = function()
+            return rawget(_G, "EQOLUFPlayerHealthCast")
+        end,
+        anchor = function(container)
+            return container
+        end,
+        text = function(container)
+            return container.Text
+        end,
+    },
+    {
+        id = "azortharion",
+        addon = "AzortharionUI",
+        priority = 45,
+        container = function()
+            return rawget(_G, "AUI_Castbar_player")
+        end,
+        anchor = function(container)
+            return container._castbar
+        end,
+    },
+    {
+        id = "ellesmere",
+        addon = "EllesmereUI",
+        priority = 45,
+        container = function()
+            return rawget(_G, "ERB_CastBarFrame")
+        end,
+        anchor = function(container)
+            return container._bar
+        end,
+    },
+}
+
+for _, castBar in ipairs(thirdPartyCastBars) do
+    CastBarRegistry:RegisterProvider({
+        id = castBar.id,
+        addon = castBar.addon,
+        priority = castBar.priority,
+        isEnabled = function()
+            local _, loaded = C_AddOns.IsAddOnLoaded(castBar.addon)
+            return KE:IsSafeValue(loaded) and loaded
+        end,
+        register = function(registry, owner)
+            if not DT:IsEnabled() then
+                return
+            end
+
+            local function Resolve()
+                local container = castBar.container()
+                if container == nil then
+                    return nil
+                end
+
+                local anchor = castBar.anchor(container)
+                if anchor == nil then
+                    return nil
+                end
+
+                return container
+            end
+
+            local function RegisterContainer(container)
+                local function Sync()
+                    if not DT:IsEnabled() then
+                        return
+                    end
+
+                    local currentContainer = castBar.container()
+                    if currentContainer == nil then
+                        return
+                    end
+
+                    local anchor = castBar.anchor(currentContainer)
+                    if anchor == nil then
+                        return
+                    end
+
+                    local textFrame = castBar.text ~= nil and castBar.text(currentContainer) or nil
+                    owner:OnCastBarShown(castBar.id, anchor, textFrame, castBar.priority)
+                end
+
+                local function OnHide()
+                    if not DT:IsEnabled() then
+                        return
+                    end
+
+                    owner:OnCastBarHidden(castBar.id)
+                end
+
+                Sync()
+
+                if container.HookScript ~= nil then
+                    CastBarRegistry.HookFrameScriptOnce(container, "OnShow", Sync)
+                    CastBarRegistry.HookFrameScriptOnce(container, "OnHide", OnHide)
+                else
+                    CastBarRegistry.HookMethodOnce(container, "Show", Sync)
+                    CastBarRegistry.HookMethodOnce(container, "Hide", OnHide)
+                end
+            end
+
+            registry:ResolveWithRetry(Resolve, RegisterContainer, 5, 1)
+        end,
+    })
 end
 
 ---------------------------------------------------------------------------------
@@ -853,5 +1090,10 @@ function DT:OnDisable()
     self.prevHastedTickInterval = nil
     self.massDisintegrateStacks = 0
     CastBarRegistry:CancelRetries()
+    if overlayCallbacksRegistered then
+        EventRegistry:UnregisterCallback("OverlayPlayerCastBar.OnShow", self)
+        EventRegistry:UnregisterCallback("OverlayPlayerCastBar.OnHide", self)
+        overlayCallbacksRegistered = false
+    end
     self:UnregisterAllEvents()
 end
