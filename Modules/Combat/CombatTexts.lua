@@ -36,8 +36,7 @@ local DEBUG_CT = false
 
 local EQUIP_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 }
 local INTERRUPT_ICON_GAP = 4
-local INTERRUPT_PREFIX_EMPHASIS = 2
-local INTERRUPT_ICON_EMPHASIS = 1
+local INTERRUPT_FONT_EMPHASIS = 2
 
 local MESSAGE_TYPES = {
     "enterCombat",
@@ -136,9 +135,9 @@ function CM:GetMessageFrame(msgType)
     self.messageFrames[msgType] = frame
 
     if msgType == "interrupt" then
-        frame:SetHeight(fontSize + INTERRUPT_PREFIX_EMPHASIS * 2)
+        frame:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
         local icon = frame:CreateTexture(nil, "OVERLAY")
-        icon:SetSize(fontSize + INTERRUPT_ICON_EMPHASIS, fontSize + INTERRUPT_ICON_EMPHASIS)
+        icon:SetSize(fontSize + INTERRUPT_FONT_EMPHASIS, fontSize + INTERRUPT_FONT_EMPHASIS)
         -- Trim the baked spell-icon border.
         icon:SetTexCoord(5 / 64, 59 / 64, 5 / 64, 59 / 64)
         icon:SetPoint("CENTER", frame, "CENTER", 0, 0)
@@ -153,12 +152,12 @@ function CM:GetMessageFrame(msgType)
         name:Hide()
         frame.interruptName = name
 
-        KE:ApplyFont(text, self.db.FontFace, fontSize + INTERRUPT_PREFIX_EMPHASIS,
+        KE:ApplyFont(text, self.db.FontFace, fontSize + INTERRUPT_FONT_EMPHASIS,
             KE:GetFontOutline(self.db.FontOutline))
-        text:SetHeight(fontSize + INTERRUPT_PREFIX_EMPHASIS * 2)
+        text:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
         KE:ApplyFont(name, self.db.FontFace, fontSize,
             KE:GetFontOutline(self.db.FontOutline))
-        name:SetHeight(fontSize + INTERRUPT_PREFIX_EMPHASIS * 2)
+        name:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
     else
         KE:ApplyFontToText(text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
     end
@@ -428,15 +427,15 @@ function CM:ApplySettings()
         frame:SetHeight(fontSize + 2)
         if frame.text then
             if frame.msgType == "interrupt" then
-                frame:SetHeight(fontSize + INTERRUPT_PREFIX_EMPHASIS * 2)
-                frame.interruptIcon:SetSize(fontSize + INTERRUPT_ICON_EMPHASIS,
-                    fontSize + INTERRUPT_ICON_EMPHASIS)
-                KE:ApplyFont(frame.text, self.db.FontFace, fontSize + INTERRUPT_PREFIX_EMPHASIS,
+                frame:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
+                frame.interruptIcon:SetSize(fontSize + INTERRUPT_FONT_EMPHASIS,
+                    fontSize + INTERRUPT_FONT_EMPHASIS)
+                KE:ApplyFont(frame.text, self.db.FontFace, fontSize + INTERRUPT_FONT_EMPHASIS,
                     KE:GetFontOutline(self.db.FontOutline))
-                frame.text:SetHeight(fontSize + INTERRUPT_PREFIX_EMPHASIS * 2)
+                frame.text:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
                 KE:ApplyFont(frame.interruptName, self.db.FontFace, fontSize,
                     KE:GetFontOutline(self.db.FontOutline))
-                frame.interruptName:SetHeight(fontSize + INTERRUPT_PREFIX_EMPHASIS * 2)
+                frame.interruptName:SetHeight(fontSize + INTERRUPT_FONT_EMPHASIS * 2)
             else
                 KE:ApplyFontToText(frame.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
             end
