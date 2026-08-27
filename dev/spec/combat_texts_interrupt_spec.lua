@@ -112,8 +112,13 @@ local function loadCombatTexts(options)
     CM.spellTextureCalls = spellTextureCalls
     CM.printed = printed
     CM.shown = {}
-    CM.ShowFlashMessage = function(self, kind, text, icon)
-        self.shown[#self.shown + 1] = { kind = kind, text = text, icon = icon }
+    CM.ShowFlashMessage = function(self, kind, prefix, icon, name)
+        self.shown[#self.shown + 1] = {
+            kind = kind,
+            prefix = prefix,
+            icon = icon,
+            name = name,
+        }
     end
     return CM, KE, frames, function(value) now = value end
 end
@@ -439,8 +444,9 @@ it("routes declared-secret spell name and texture to the interrupt display", fun
     assert.same({ "SECRET_SPELL_ID" }, CM.spellTextureCalls)
     assert.equals(1, #CM.shown)
     assert.equals("interrupt", CM.shown[1].kind)
-    assert.equals("Interrupted [" .. spellName .. "]", CM.shown[1].text)
+    assert.equals("Interrupted", CM.shown[1].prefix)
     assert.equals(iconID, CM.shown[1].icon)
+    assert.equals(spellName, CM.shown[1].name)
 end)
 
 it("falls back generically only when spell name or texture is nil", function()
@@ -461,8 +467,9 @@ it("falls back generically only when spell name or texture is nil", function()
         assert.equals(1, #CM.spellTextureCalls)
         assert.equals(1, #CM.shown)
         assert.equals("interrupt", CM.shown[1].kind)
-        assert.is_nil(CM.shown[1].text)
+        assert.is_nil(CM.shown[1].prefix)
         assert.is_nil(CM.shown[1].icon)
+        assert.is_nil(CM.shown[1].name)
     end
 end)
 
