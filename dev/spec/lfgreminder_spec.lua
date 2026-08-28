@@ -1,3 +1,6 @@
+-- Fixture dungeon is season-volatile: it must be a key that exists in
+-- TELEPORT_BY_NAME, so a season rotation changes it here too. These tests
+-- are about join handling and cooldown refusal, not about the table.
 local loader = require("dev.spec._ke_loader")
 
 describe("LFGReminder module", function()
@@ -11,17 +14,19 @@ describe("LFGReminder module", function()
     describe("teleport lookup", function()
         it("resolves an exact lowercase name", function()
             local _, _, seams = loader.loadLFGReminder()
-            assert.equals(159898, seams.resolveByName("skyreach"))
+            assert.equals(1286809, seams.resolveByName("murder row"))
         end)
 
         it("is case-insensitive", function()
             local _, _, seams = loader.loadLFGReminder()
-            assert.equals(159898, seams.resolveByName("Skyreach"))
+            assert.equals(1286809, seams.resolveByName("Murder Row"))
         end)
 
         it("strips a trailing difficulty suffix", function()
             local _, _, seams = loader.loadLFGReminder()
-            assert.equals(393273, seams.resolveByName("Algeth'ar Academy (Mythic)"))
+            -- Apostrophe kept deliberately: it exercises the key that a
+            -- misplaced apostrophe would silently fail to match.
+            assert.equals(1286831, seams.resolveByName("Kings' Rest (Mythic)"))
         end)
 
         it("returns nil for an unknown dungeon", function()
@@ -71,15 +76,15 @@ describe("LFGReminder module", function()
         end
 
         it("resolves a known dungeon on join", function()
-            local LR = joinedWith("Skyreach")
+            local LR = joinedWith("Murder Row")
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
-            assert.equals(159898, LR:_GetPendingSpellID())
+            assert.equals(1286809, LR:_GetPendingSpellID())
         end)
 
         it("still resolves through the legacy activityID field", function()
-            local LR = joinedWith("Skyreach", { searchResult = { activityID = 7 } })
+            local LR = joinedWith("Murder Row", { searchResult = { activityID = 7 } })
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
-            assert.equals(159898, LR:_GetPendingSpellID())
+            assert.equals(1286809, LR:_GetPendingSpellID())
         end)
 
         it("ignores a dungeon with no known teleport", function()
@@ -89,9 +94,9 @@ describe("LFGReminder module", function()
         end)
 
         it("strips the difficulty suffix from the displayed name", function()
-            local LR = joinedWith("Skyreach (Mythic)")
+            local LR = joinedWith("Murder Row (Mythic)")
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
-            assert.equals("Skyreach", LR:_GetPendingName())
+            assert.equals("Murder Row", LR:_GetPendingName())
         end)
 
         it("survives a search result that throws", function()
@@ -107,11 +112,11 @@ describe("LFGReminder module", function()
 
         it("clears pending state when the group breaks up", function()
             local inGroup = true
-            local LR = joinedWith("Skyreach", {
+            local LR = joinedWith("Murder Row", {
                 IsInGroup = function() return inGroup end,
             })
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
-            assert.equals(159898, LR:_GetPendingSpellID())
+            assert.equals(1286809, LR:_GetPendingSpellID())
             inGroup = false
             LR:GROUP_ROSTER_UPDATE()
             assert.is_nil(LR:_GetPendingSpellID())
@@ -119,7 +124,7 @@ describe("LFGReminder module", function()
 
         it("clears pending state on entering the dungeon", function()
             local inst = { false, "none" }
-            local LR = joinedWith("Skyreach", {
+            local LR = joinedWith("Murder Row", {
                 IsInInstance = function() return inst[1], inst[2] end,
             })
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
@@ -130,13 +135,13 @@ describe("LFGReminder module", function()
 
         it("does not clear pending state in a raid instance", function()
             local inst = { false, "none" }
-            local LR = joinedWith("Skyreach", {
+            local LR = joinedWith("Murder Row", {
                 IsInInstance = function() return inst[1], inst[2] end,
             })
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
             inst = { true, "raid" }
             LR:CheckInstance()
-            assert.equals(159898, LR:_GetPendingSpellID())
+            assert.equals(1286809, LR:_GetPendingSpellID())
         end)
 
         -- Regression for the deviation-7 fix, covering BOTH halves: a join
@@ -144,12 +149,12 @@ describe("LFGReminder module", function()
         -- attribute), and combat ending must actually build and show it.
         it("defers a join in combat, then builds it when combat ends", function()
             local inCombat, builds = true, 0
-            local LR, seams = joinedWith("Skyreach", {
+            local LR, seams = joinedWith("Murder Row", {
                 inCombatFn    = function() return inCombat end,
                 onCreateFrame = function() builds = builds + 1 end,
             })
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
-            assert.equals(159898, LR:_GetPendingSpellID())
+            assert.equals(1286809, LR:_GetPendingSpellID())
             assert.equals(0, builds)      -- nothing built during combat
             inCombat = false
             LR:PLAYER_REGEN_ENABLED()
@@ -160,7 +165,7 @@ describe("LFGReminder module", function()
             local popup = seams.frames["KE_LFGReminderPopup"]
             local btn   = seams.frames["KE_LFGReminderTeleport"]
             assert.is_true(popup:IsShown())
-            assert.equals(159898, btn:GetAttribute("spell"))
+            assert.equals(1286809, btn:GetAttribute("spell"))
         end)
 
         -- A join cancelled during combat must not arm the button later.
@@ -170,12 +175,12 @@ describe("LFGReminder module", function()
         -- exists to protect.
         it("does not arm the button when a combat join is cancelled", function()
             local inCombat, inGroup = true, true
-            local LR = joinedWith("Skyreach", {
+            local LR = joinedWith("Murder Row", {
                 inCombatFn = function() return inCombat end,
                 IsInGroup  = function() return inGroup end,
             })
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
-            assert.equals(159898, LR:_GetPendingAttrSpellID())  -- armed for later
+            assert.equals(1286809, LR:_GetPendingAttrSpellID())  -- armed for later
             inGroup = false
             LR:GROUP_ROSTER_UPDATE()      -- group breaks while still in combat
             assert.is_nil(LR:_GetPendingAttrSpellID())          -- cancelled
@@ -197,7 +202,7 @@ describe("LFGReminder module", function()
                 inCombatFn = function() return inCombat end,
                 C_LFGList = {
                     GetSearchResultInfo = function() return { activityID = 7 } end,
-                    GetActivityInfoTable = function() return { fullName = "Skyreach" } end,
+                    GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
                 },
             })
             -- Stays enabled throughout: this is the re-enabled-before-combat-
@@ -207,7 +212,7 @@ describe("LFGReminder module", function()
             local popup = seams.frames["KE_LFGReminderPopup"]
             local btn   = seams.frames["KE_LFGReminderTeleport"]
             assert.is_true(popup:IsShown())
-            assert.equals(159898, btn:GetAttribute("spell"))
+            assert.equals(1286809, btn:GetAttribute("spell"))
             inCombat = true
             LR:OnDisable()                     -- queues the teardown
             inCombat = false
@@ -228,7 +233,7 @@ describe("LFGReminder module", function()
                         if entryPresent then return { activityID = 7 } end
                         return nil
                     end,
-                    GetActivityInfoTable = function() return { fullName = "Skyreach" } end,
+                    GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
                 },
                 GetNumGroupMembers = function() return 5 end,
                 IsInRaid = function() return false end,
@@ -236,7 +241,7 @@ describe("LFGReminder module", function()
             LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()  -- listing up: arms
             entryPresent = false
             LR:LFG_LIST_ACTIVE_ENTRY_UPDATE()  -- listing gone, group full: prompts
-            assert.equals(159898, LR:_GetPendingSpellID())
+            assert.equals(1286809, LR:_GetPendingSpellID())
         end)
 
         it("does not prompt the leader when the listing drops short-handed", function()
@@ -247,7 +252,7 @@ describe("LFGReminder module", function()
                         if entryPresent then return { activityID = 7 } end
                         return nil
                     end,
-                    GetActivityInfoTable = function() return { fullName = "Skyreach" } end,
+                    GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
                 },
                 GetNumGroupMembers = function() return 3 end,
                 IsInRaid = function() return false end,
@@ -259,9 +264,9 @@ describe("LFGReminder module", function()
         end)
 
         it("refuses to open the prompt while the teleport is on cooldown", function()
-            local LR, seams = joinedWith("Skyreach")
+            local LR, seams = joinedWith("Murder Row")
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
-            assert.equals(159898, LR:_GetPendingSpellID())
+            assert.equals(1286809, LR:_GetPendingSpellID())
             local popup = seams.frames["KE_LFGReminderPopup"]
             popup:Hide()
             _G.C_Spell.GetSpellCooldown = function()

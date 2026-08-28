@@ -74,15 +74,18 @@ local issecrettable = issecrettable or function() return false end
 -- KE ships no localisation, so
 -- carrying them would imply support that does not exist. Adding real
 -- Russian support means Cyrillic-aware case folding, not these keys.
+-- Each ID was confirmed by its own spell description naming the destination,
+-- not by the shape of the spell name. Note the apostrophe in "kings' rest":
+-- it follows the s, and a key with it in the other place cannot match.
 local TELEPORT_BY_NAME = {
-    ["magisters' terrace"]         = 1254572,
-    ["maisara caverns"]            = 1254559,
-    ["nexus-point xenas"]          = 1254563,
-    ["windrunner spire"]           = 1254400,
-    ["algeth'ar academy"]          = 393273,
-    ["pit of saron"]               = 1254555,
-    ["seat of the triumvirate"]    = 1254551,
-    ["skyreach"]                   = 159898,
+    ["the blinding vale"]          = 1286801,
+    ["voidscar arena"]             = 1286804,
+    ["den of nalorakk"]            = 1286807,
+    ["murder row"]                 = 1286809,
+    ["altar of fangs"]             = 1286812,
+    ["ruby life pools"]            = 393256,
+    ["temple of sethraliss"]       = 1286828,
+    ["kings' rest"]                = 1286831,
 }
 
 local function ResolveTeleportSpellByName(displayName)
@@ -167,8 +170,14 @@ function LR:UpdateDB()
     end
 end
 
+-- ANCHOR_RIGHT places the tooltip from the owner's rect without reconciling
+-- the two scales, and this popup carries its own SetScale (default 1.05, user
+-- adjustable). At any scale but 1.0 the tooltip lands offset from the button.
+-- Anchor it explicitly instead: SetPoint resolves across differing scales.
 local function ShowTip(owner, text)
-    GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+    GameTooltip:SetOwner(owner, "ANCHOR_NONE")
+    GameTooltip:ClearAllPoints()
+    GameTooltip:SetPoint("TOPLEFT", owner, "TOPRIGHT", 4, 0)
     GameTooltip:SetText(text, 1, 1, 1, 1, true)
     GameTooltip:Show()
 end
