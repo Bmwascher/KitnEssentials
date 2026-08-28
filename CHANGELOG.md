@@ -1,5 +1,37 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.13
+
+### No Movement Alert
+- Abilities with a single charge, such as Shimmer, are now tracked as charge
+  abilities instead of plain cooldowns
+- Only the talent you actually have shows for a paired choice. Blink and
+  Shimmer, Dash and Tiger Dash, and Roll and Chi Torpedo no longer appear
+  together, and the untalented half is no longer the one that shows
+- Cooldowns now count down for their full length. Some abilities, such as
+  Flying Serpent Kick, appeared for about a second and then vanished
+
+### LFG Reminder
+- The dungeon teleport shortcuts point at the current season's dungeons
+- The teleport tooltip now sits beside the button at any interface scale
+
+### LFG Quick Create
+- Double-clicking a category tile starts a group again straight after the
+  Group Finder opens, instead of only once the season data had loaded. The
+  window to double-click is also a little longer
+
+### Skinning
+- The BigWigs queue timer bar now follows the ready check box that is actually
+  shown, instead of drifting off the popup
+- Multi-row tab strips in addon options no longer overlap
+- Character frame tabs keep the standard tab text size
+
+### Settings Sidebar
+- The highlight on the selected page now follows the theme accent and is easier
+  to see
+
+---
+
 ## v4.4.12
 
 ### Targeted Spells
