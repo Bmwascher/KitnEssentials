@@ -23,7 +23,7 @@
 -- ║      CreateListing payload, which is clean.              ║
 -- ║    * The double-click feature is a SECURE CLICK RELAY,   ║
 -- ║      not an insecure Click(). A SecureActionButton       ║
--- ║      overlay is armed over the tile for 0.35s and the    ║
+-- ║      overlay is armed over the tile for 0.5s and the     ║
 -- ║      second physical click drives Blizzard's own Start   ║
 -- ║      button, so the whole flow stays secure. Its         ║
 -- ║      RegisterForClicks MUST include the DOWN edge --     ║
@@ -121,9 +121,121 @@ local updateTicker = nil
 
 local Init, MakeButton, RefreshGlow, SyncVisibility
 local SaveLayout, PushLayout, PopLayout
--- Assigned inside Init (Task 5). Forward-declared so OnDisable can reach the
--- secure overlay, which otherwise lives only in Init's closure.
-local HideDoubleClickOverlay
+
+-- The relay lives at file scope, not in Init. Init returns early until
+-- C_MythicPlus.GetCurrentSeason() resolves and reschedules itself every 0.5s,
+-- so anything below that gate installs late -- and the double click is wanted
+-- from the moment the Group Finder opens, season data or not.
+local dblOverlay, dblTimer
+local dblHooked = false
+
+-- Secure click relay -- see the file header. The overlay exists only while
+-- the Group Finder is in use, is armed for 0.5s after a category click,
+-- and hides after firing or on timeout. Every secure-frame write is
+-- combat-guarded.
+
+-- Hiding the overlay only when out of combat, with no retry, leaves it
+-- SHOWN indefinitely when combat starts inside the 0.5s window: still
+-- covering that category tile and still
+-- armed to click Start a Group. Route every hide through KE:RunAfterCombat
+-- (Core/Globals.lua), which owns its own frame and its own
+-- PLAYER_REGEN_ENABLED registration and therefore survives module disable.
+local function HideDoubleClickOverlay()
+    if not dblOverlay then return end
+    if InCombatLockdown() then
+        KE:RunAfterCombat(function()
+            if dblOverlay then dblOverlay:Hide() end
+        end)
+        return
+    end
+    dblOverlay:Hide()
+end
+
+-- Idempotent, and safe to call from every entry point that might be first to
+-- see a live CategorySelection. The category tiles already exist at login,
+-- before the Group Finder is ever opened, so this needs no retry loop.
+local function InstallDoubleClick()
+    local function EnsureDoubleClickOverlay(cs)
+        if dblOverlay then return dblOverlay end
+        if InCombatLockdown() then return nil end
+        dblOverlay = CreateFrame("Button", "KE_LFGQCDblClick", cs, "SecureActionButtonTemplate")
+        -- MUST include the DOWN edge: modern secure buttons ignore mouse
+        -- input registered up-only, which is what stopped the relay working.
+        dblOverlay:RegisterForClicks("LeftButtonDown", "LeftButtonUp")
+        dblOverlay:SetAttribute("type", "click")
+        dblOverlay:SetAttribute("clickbutton", cs.StartGroupButton)
+        dblOverlay:Hide()
+        dblOverlay:SetScript("PostClick", function()
+            if dblTimer then dblTimer:Cancel(); dblTimer = nil end
+            HideDoubleClickOverlay()
+        end)
+        return dblOverlay
+    end
+    local function ArmDoubleClick(catBtn)
+        qcdbg("tile clicked, categoryID=" .. tostring(catBtn and catBtn.categoryID)
+            .. " filters=" .. tostring(catBtn and catBtn.filters))
+        if not (QC.db and QC.db.Enabled ~= false and QC.db.DoubleClickStart ~= false) then
+            qcdbg("bail: feature off")
+            return
+        end
+        if InCombatLockdown() then
+            qcdbg("bail: in combat")
+            return
+        end
+        local cs = catBtn:GetParent()
+        local sgb = cs and cs.StartGroupButton
+        if not (sgb and sgb:IsEnabled()) then
+            qcdbg("bail: start button missing or disabled, tooltip="
+                .. tostring(sgb and sgb.tooltip))
+            return
+        end
+        local ov = EnsureDoubleClickOverlay(cs)
+        if not ov then
+            qcdbg("bail: overlay could not be created")
+            return
+        end
+        qcdbg("armed over the tile")
+        -- Stack against the button being covered, every arm: a category
+        -- button inside a scroll list can out-rank a level fixed at creation,
+        -- and a buried relay swallows the second click silently.
+        ov:SetFrameStrata(catBtn:GetFrameStrata())
+        ov:SetFrameLevel(catBtn:GetFrameLevel() + 10)
+        ov:ClearAllPoints()
+        ov:SetAllPoints(catBtn)
+        ov:Show()
+        if dblTimer then dblTimer:Cancel() end
+        dblTimer = C_Timer.NewTimer(0.5, function()
+            dblTimer = nil
+            HideDoubleClickOverlay()
+        end)
+    end
+    -- Hook the TILES, not LFGListCategorySelectionButton_OnClick.
+    --
+    -- The Questing tile carries its own OnClick and never reaches that global,
+    -- so hooking the global armed every category except Questing. In-game
+    -- probe on the six live tiles: categoryID 1 (Questing) compared
+    -- NOT equal to the global handler, 121/2/3/3/6 all compared equal, and
+    -- Questing was exactly the one the double-click never worked on.
+    --
+    -- Tiles are pooled and reused across category lists, so each is hooked
+    -- once and the handler reads catBtn.categoryID at click time.
+    local function HookCategoryTiles(cs)
+        if not (cs and cs.CategoryButtons) then return end
+        for _, catBtn in ipairs(cs.CategoryButtons) do
+            if not catBtn.__keQCDoubleClickHooked then
+                catBtn.__keQCDoubleClickHooked = true
+                catBtn:HookScript("OnClick", ArmDoubleClick)
+            end
+        end
+    end
+    -- Hook the global once. HookCategoryTiles is idempotent per tile via
+        -- __keQCDoubleClickHooked, so repeat Install calls cost nothing.
+        if not dblHooked and _G.LFGListCategorySelection_UpdateCategoryButtons then
+            dblHooked = true
+            hooksecurefunc("LFGListCategorySelection_UpdateCategoryButtons", HookCategoryTiles)
+        end
+    HookCategoryTiles(_G.LFGListFrame and _G.LFGListFrame.CategorySelection)
+end
 
 -- Filters DUNGEONS to those active in the current season. Falls back to the
 -- season-1 slice when the active set is empty, which happens at early login
@@ -516,106 +628,6 @@ Init = function()
         buttons[#buttons + 1] = MakeButton(container, d, i)
     end
 
-    -- Secure click relay -- see the file header. The overlay exists only while
-    -- the Group Finder is in use, is armed for 0.35s after a category click,
-    -- and hides after firing or on timeout. Every secure-frame write is
-    -- combat-guarded.
-    local dblOverlay, dblTimer
-
-    -- Hiding the overlay only when out of combat, with no retry, leaves it
-    -- SHOWN indefinitely when combat starts inside the 0.35s window: still
-    -- covering that category tile and still
-    -- armed to click Start a Group. Route every hide through KE:RunAfterCombat
-    -- (Core/Globals.lua), which owns its own frame and its own
-    -- PLAYER_REGEN_ENABLED registration and therefore survives module disable.
-    HideDoubleClickOverlay = function()
-        if not dblOverlay then return end
-        if InCombatLockdown() then
-            KE:RunAfterCombat(function()
-                if dblOverlay then dblOverlay:Hide() end
-            end)
-            return
-        end
-        dblOverlay:Hide()
-    end
-
-    local function EnsureDoubleClickOverlay(cs)
-        if dblOverlay then return dblOverlay end
-        if InCombatLockdown() then return nil end
-        dblOverlay = CreateFrame("Button", "KE_LFGQCDblClick", cs, "SecureActionButtonTemplate")
-        -- MUST include the DOWN edge: modern secure buttons ignore mouse
-        -- input registered up-only, which is what stopped the relay working.
-        dblOverlay:RegisterForClicks("LeftButtonDown", "LeftButtonUp")
-        dblOverlay:SetAttribute("type", "click")
-        dblOverlay:SetAttribute("clickbutton", cs.StartGroupButton)
-        dblOverlay:Hide()
-        dblOverlay:SetScript("PostClick", function()
-            if dblTimer then dblTimer:Cancel(); dblTimer = nil end
-            HideDoubleClickOverlay()
-        end)
-        return dblOverlay
-    end
-    local function ArmDoubleClick(catBtn)
-        qcdbg("tile clicked, categoryID=" .. tostring(catBtn and catBtn.categoryID)
-            .. " filters=" .. tostring(catBtn and catBtn.filters))
-        if not (QC.db and QC.db.Enabled ~= false and QC.db.DoubleClickStart ~= false) then
-            qcdbg("bail: feature off")
-            return
-        end
-        if InCombatLockdown() then
-            qcdbg("bail: in combat")
-            return
-        end
-        local cs = catBtn:GetParent()
-        local sgb = cs and cs.StartGroupButton
-        if not (sgb and sgb:IsEnabled()) then
-            qcdbg("bail: start button missing or disabled, tooltip="
-                .. tostring(sgb and sgb.tooltip))
-            return
-        end
-        local ov = EnsureDoubleClickOverlay(cs)
-        if not ov then
-            qcdbg("bail: overlay could not be created")
-            return
-        end
-        qcdbg("armed over the tile")
-        -- Stack against the button being covered, every arm: a category
-        -- button inside a scroll list can out-rank a level fixed at creation,
-        -- and a buried relay swallows the second click silently.
-        ov:SetFrameStrata(catBtn:GetFrameStrata())
-        ov:SetFrameLevel(catBtn:GetFrameLevel() + 10)
-        ov:ClearAllPoints()
-        ov:SetAllPoints(catBtn)
-        ov:Show()
-        if dblTimer then dblTimer:Cancel() end
-        dblTimer = C_Timer.NewTimer(0.35, function()
-            dblTimer = nil
-            HideDoubleClickOverlay()
-        end)
-    end
-    -- Hook the TILES, not LFGListCategorySelectionButton_OnClick.
-    --
-    -- The Questing tile carries its own OnClick and never reaches that global,
-    -- so hooking the global armed every category except Questing. In-game
-    -- probe on the six live tiles: categoryID 1 (Questing) compared
-    -- NOT equal to the global handler, 121/2/3/3/6 all compared equal, and
-    -- Questing was exactly the one the double-click never worked on.
-    --
-    -- Tiles are pooled and reused across category lists, so each is hooked
-    -- once and the handler reads catBtn.categoryID at click time.
-    local function HookCategoryTiles(cs)
-        if not (cs and cs.CategoryButtons) then return end
-        for _, catBtn in ipairs(cs.CategoryButtons) do
-            if not catBtn.__keQCDoubleClickHooked then
-                catBtn.__keQCDoubleClickHooked = true
-                catBtn:HookScript("OnClick", ArmDoubleClick)
-            end
-        end
-    end
-    if _G.LFGListCategorySelection_UpdateCategoryButtons then
-        hooksecurefunc("LFGListCategorySelection_UpdateCategoryButtons", HookCategoryTiles)
-    end
-    HookCategoryTiles(_G.LFGListFrame and _G.LFGListFrame.CategorySelection)
 
     local function HookDD(dd)
         if not dd then return end
@@ -689,6 +701,7 @@ function QC:OnAddonLoaded()
     -- Fires for every addon load, so it is cheap and it cannot miss.
     if not _G.LFGListFrame then return end
     self:UnregisterEvent("ADDON_LOADED")
+    InstallDoubleClick()
     C_Timer.After(0.1, Init)
 end
 
@@ -737,6 +750,7 @@ function QC:OnEnable()
     -- The object is what Init actually needs, and gating on it does not
     -- depend on how Blizzard lays its files out next patch.
     if _G.LFGListFrame then
+        InstallDoubleClick()
         C_Timer.After(0.1, Init)
     else
         self:RegisterEvent("ADDON_LOADED", "OnAddonLoaded")
@@ -746,6 +760,7 @@ end
 
 function QC:OnPEW()
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    InstallDoubleClick()
     C_Timer.After(0.5, Init)
 end
 
