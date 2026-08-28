@@ -2,25 +2,55 @@ local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G
 local next = next
+local ipairs = ipairs
 local pcall = pcall
 local format = format
 local hooksecurefunc = hooksecurefunc
+
+-- The bar's PARENT is LFGDungeonReadyPopup, the outer container that holds
+-- BOTH the status box and the dialog box and is resized when they swap. Anchor
+-- to whichever box is actually shown instead, or the bar detaches from the
+-- thing it is timing.
+local queueTimer
+local function AnchorQueueTimer()
+    local f = queueTimer
+    if not f then return end
+    local status = _G.LFGDungeonReadyStatus
+    local dialog = _G.LFGDungeonReadyDialog
+    local target = (status and status:IsShown() and status)
+        or (dialog and dialog:IsShown() and dialog)
+        or dialog
+    if not target then return end
+
+    f:ClearAllPoints()
+    -- Height only. The two anchors size the bar to whichever box it is on;
+    -- a width copied from the container would be the wrong width now.
+    f:SetHeight(10)
+    -- 1px in each side keeps the bar inside the box's border art; the 5px drop
+    -- is the gap beneath it.
+    f:SetPoint("TOPLEFT", target, "BOTTOMLEFT", 1, -5)
+    f:SetPoint("TOPRIGHT", target, "BOTTOMRIGHT", -1, -5)
+
+    -- Installed from here, not at file scope: the two boxes need not exist
+    -- when this file runs, but by the time a queue bar exists the popup is up.
+    for _, box in ipairs({ status, dialog }) do
+        if box and not S.data(box).keQueueAnchorHook then
+            S.data(box).keQueueAnchorHook = true
+            box:HookScript("OnShow", AnchorQueueTimer)
+        end
+    end
+end
 
 local function SkinQueueTimer()
     if not _G.BigWigsLoader or not _G.BigWigsLoader.RegisterMessage then return end
     _G.BigWigsLoader.RegisterMessage("KitnEssentials", "BigWigs_FrameCreated", function(_, frame, name)
         if name ~= "QueueTimer" then return end
-        local parent = frame:GetParent()
         S.StripTextures(frame)
 
         S.StatusBar(frame)
         S.ProgressFill(frame)
-        if parent then
-            frame:SetSize(parent:GetWidth(), 10)
-            frame:ClearAllPoints()
-            frame:SetPoint("TOPLEFT", parent, "BOTTOMLEFT", 1, -5)
-            frame:SetPoint("TOPRIGHT", parent, "BOTTOMRIGHT", -1, -5)
-        end
+        queueTimer = frame
+        AnchorQueueTimer()
         if frame.text then
             frame.text.SetFormattedText = function(tf, _, time) tf:SetText(format("%d", time)) end
             S.SetFont(frame.text, 15, "OUTLINE")
