@@ -258,17 +258,18 @@ end
 -- like Dash. In-game measurement refuted that: C_Spell.GetOverrideSpell
 -- answers correctly for baseline spells, returning the id it was given.
 --
--- The list stays, but only as the SET of spells this rule applies to. Order
--- within a group no longer matters -- the override API says which half is
--- live, so nothing here encodes a priority.
+-- The list stays as the SET of spells this rule applies to, but which half is
+-- which still matters: only the base can be asked. Named fields, so the two
+-- cannot be swapped by a reorder.
 local EXCLUSIVE_GROUPS = {
-    { 252216, 1850 },   -- Tiger Dash replaces Dash
-    { 212653, 1953 },   -- Shimmer replaces Blink
-    { 115008, 109132 }, -- Chi Torpedo replaces Roll
+    { replacement = 252216, base = 1850 },   -- Tiger Dash replaces Dash
+    { replacement = 212653, base = 1953 },   -- Shimmer replaces Blink
+    { replacement = 115008, base = 109132 }, -- Chi Torpedo replaces Roll
 }
 local EXCLUSIVE_OF = {}
 for _, group in ipairs(EXCLUSIVE_GROUPS) do
-    for _, id in ipairs(group) do EXCLUSIVE_OF[id] = group end
+    EXCLUSIVE_OF[group.replacement] = group
+    EXCLUSIVE_OF[group.base] = group
 end
 
 -- True when this spell is currently REPLACED by another, so the player does
@@ -297,12 +298,11 @@ local function ReplacedByKnownChoice(spellId)
     -- Asking each spell about ITSELF is not enough and was wrong: an
     -- untalented replacement is overridden by nothing, so it resolves to
     -- itself and reads as live. That showed Tiger Dash next to Dash.
-    local replacement, base = group[1], group[2]
-    local ok, live = pcall(C_Spell.GetOverrideSpell, base)
+    local ok, live = pcall(C_Spell.GetOverrideSpell, group.base)
     if not ok or type(live) ~= "number" then return false end
     -- A third spell overriding the base is outside what this rule describes.
     -- Suppress nothing rather than hide both halves.
-    if live ~= base and live ~= replacement then return false end
+    if live ~= group.base and live ~= group.replacement then return false end
     return spellId ~= live
 end
 

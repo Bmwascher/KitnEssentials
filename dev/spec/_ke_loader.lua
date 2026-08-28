@@ -2080,7 +2080,6 @@ function L.loadMovementAlert(overrides)
     -- was given unless a case declares a replacement, which is how the real
     -- API reports "nothing overrides this".
     _G.C_Spell = overrides.C_Spell or {
-        overrideSpell = {},
         GetSpellCooldown = function() return nil end,
         GetSpellCharges = function() return nil end,
         GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,

@@ -12,7 +12,14 @@ local hooksecurefunc = hooksecurefunc
 -- to whichever box is actually shown instead, or the bar detaches from the
 -- thing it is timing.
 local queueTimer
-local function AnchorQueueTimer()
+local AnchorQueueTimer
+local function HookQueueBox(box)
+    if not box or S.data(box).keQueueAnchorHook then return end
+    S.data(box).keQueueAnchorHook = true
+    box:HookScript("OnShow", function() AnchorQueueTimer() end)
+end
+
+function AnchorQueueTimer()
     local f = queueTimer
     if not f then return end
     local status = _G.LFGDungeonReadyStatus
@@ -33,12 +40,8 @@ local function AnchorQueueTimer()
 
     -- Installed from here, not at file scope: the two boxes need not exist
     -- when this file runs, but by the time a queue bar exists the popup is up.
-    for _, box in ipairs({ status, dialog }) do
-        if box and not S.data(box).keQueueAnchorHook then
-            S.data(box).keQueueAnchorHook = true
-            box:HookScript("OnShow", AnchorQueueTimer)
-        end
-    end
+    HookQueueBox(status)
+    HookQueueBox(dialog)
 end
 
 local function SkinQueueTimer()

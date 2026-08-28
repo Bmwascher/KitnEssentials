@@ -229,11 +229,11 @@ local function InstallDoubleClick()
         end
     end
     -- Hook the global once. HookCategoryTiles is idempotent per tile via
-        -- __keQCDoubleClickHooked, so repeat Install calls cost nothing.
-        if not dblHooked and _G.LFGListCategorySelection_UpdateCategoryButtons then
-            dblHooked = true
-            hooksecurefunc("LFGListCategorySelection_UpdateCategoryButtons", HookCategoryTiles)
-        end
+    -- __keQCDoubleClickHooked, so repeat Install calls cost nothing.
+    if not dblHooked and _G.LFGListCategorySelection_UpdateCategoryButtons then
+        dblHooked = true
+        hooksecurefunc("LFGListCategorySelection_UpdateCategoryButtons", HookCategoryTiles)
+    end
     HookCategoryTiles(_G.LFGListFrame and _G.LFGListFrame.CategorySelection)
 end
 

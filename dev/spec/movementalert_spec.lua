@@ -266,6 +266,46 @@ describe("NoMovementAlert RoleColor", function()
         end)
     end)
 
+    -- A charge table at all means a charge spell. Requiring more than one
+    -- charge dropped Shimmer, which has exactly one, onto the plain-cooldown
+    -- path where its recharge was never tracked.
+    describe("what counts as a charge spell", function()
+        -- OnEnable never runs headlessly, so the two charge caches it seeds
+        -- start empty here instead.
+        local function withCharges(info)
+            local NMA = L.loadMovementAlert({
+                C_Spell = {
+                    GetSpellCooldown = function() return nil end,
+                    GetSpellCharges = function() return info end,
+                    GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,
+                },
+            })
+            NMA.chargeMeta, NMA.chargeCount = {}, {}
+            return NMA
+        end
+
+        it("treats a single-charge spell as a charge spell", function()
+            local NMA = withCharges({ currentCharges = 0, maxCharges = 1, cooldownDuration = 20 })
+            local left, isChargeSpell = NMA:ResolveCharges(212653)
+            assert.equals(0, left)
+            assert.is_true(isChargeSpell)
+        end)
+
+        it("still treats a multi-charge spell as a charge spell", function()
+            local NMA = withCharges({ currentCharges = 2, maxCharges = 2, cooldownDuration = 20 })
+            local left, isChargeSpell = NMA:ResolveCharges(109132)
+            assert.equals(2, left)
+            assert.is_true(isChargeSpell)
+        end)
+
+        it("reports no charges for a spell with no charge table", function()
+            local NMA = withCharges(nil)
+            local left, isChargeSpell = NMA:ResolveCharges(101545)
+            assert.is_nil(left)
+            assert.is_false(isChargeSpell)
+        end)
+    end)
+
 end)
 
 local BURNING_RUSH = 111400
