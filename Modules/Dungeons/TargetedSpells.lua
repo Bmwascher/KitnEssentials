@@ -24,7 +24,8 @@ local C_Timer = C_Timer
 local C_StringUtil = C_StringUtil
 local tinsert, tremove, tsort = table.insert, table.remove, table.sort
 local tconcat = table.concat
-local strmatch = string.match
+local UnitAffectingCombat, UnitExists = UnitAffectingCombat, UnitExists
+local UnitCanAttack = UnitCanAttack
 local type, ipairs = type, ipairs
 
 -- Size-parameterized pixel glow fork (TargetedSpellsGlow.lua, loads first);
@@ -57,8 +58,16 @@ TS.DELVE_DIFFICULTY_ID = 208
 local FALLBACK_ICON = 136243
 -- GUI close-button cross (GUI-MainFrame.lua idiom: rotate 45° into an X).
 local INTERRUPT_ICON = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png"
-local NAMEPLATE_PATTERN = "^nameplate%d+$"
-local MAX_NAMEPLATES = 40
+-- RegisterUnitEvent takes at most this many unit tokens per call, so the
+-- nameplate range is covered by one shard frame per slice. The guard is not
+-- decoration: Constants does not exist in the headless spec environment, and an
+-- unguarded read here throws at module load.
+local UNITS_PER_SHARD = (Constants and Constants.UnitEventConstants
+    and Constants.UnitEventConstants.MAX_UNIT_TOKENS_IN_EVENT) or 4
+-- The full documented nameplate token range. Sharding a shorter range silently
+-- drops casts from units the module shows today: the previous cap bounded only
+-- the rescan loop, while event delivery was unfiltered and accepted any index.
+local MAX_NAMEPLATE_TOKENS = 150
 local SETTLE_DELAY = 0.2
 local INTERRUPT_LINGER = 1.0   -- seconds the desaturated icon stays up post-interrupt
 local INTERRUPT_HOLD = 0.95    -- Release() suppression window; < LINGER avoids a same-tick race with the linger timer
@@ -99,6 +108,28 @@ TS.isPreview = false
 -- aborts unless its token still matches, coalescing stale/superseded
 -- dispatches without comparing any secret cast id (see BumpDispatchToken).
 TS.pendingDispatch = {}
+TS.UNITS_PER_SHARD = UNITS_PER_SHARD
+TS.MAX_NAMEPLATE_TOKENS = MAX_NAMEPLATE_TOKENS
+-- Cast and target events arrive here instead of on AceEvent, which has no
+-- unit-filtered registration: a plain RegisterEvent wakes this module for every
+-- casting unit in the world, including every party member's global cooldown,
+-- only to fail a nameplate test.
+TS.shards = {}
+-- Delayed cast starts as a FIFO. SETTLE_DELAY is constant, so arrival order is
+-- due order and nothing needs sorting. One scheduled drain covers the queue.
+TS.pendingCasts = {}
+TS.pendingHead = 1
+TS.pendingTail = 0
+TS.drainScheduled = false
+-- C_Timer.After cannot be cancelled, so a drain scheduled before the queue was
+-- discarded still runs. It compares this on entry and returns if stale.
+TS.drainEpoch = 0
+-- Reused by RepositionEntries. Never escapes that function.
+TS.sortScratch = {}
+-- Resolved once per rebuild rather than per cast. Both are pure functions of
+-- settings, and every settings change already drops the entry pool.
+TS.cachedFontPath = nil
+TS.cachedFontOutline = nil
 
 ---------------------------------------------------------------------------------
 -- Pure helpers (busted-covered — keep WoW-API-free)
@@ -124,6 +155,34 @@ end
 -- compared); strict less-than keeps table.sort stable-safe.
 function TS.CompareEntries(a, b)
     return (a.receiptTime or 0) < (b.receiptTime or 0)
+end
+
+-- Number of shard frames needed to cover maxTokens at perShard each.
+function TS.ShardCount(perShard, maxTokens)
+    return math.ceil(maxTokens / perShard)
+end
+
+-- Index of the first entry not yet due. Pure so ordering is testable without
+-- C_Timer or GetTime.
+function TS.FirstNotDue(pending, head, tail, now)
+    local i = head
+    while i <= tail and pending[i] and pending[i].dueAt <= now do
+        i = i + 1
+    end
+    return i
+end
+
+-- The unit tokens one shard registers. Returns nil past the end of the range.
+-- The final shard holds the remainder when the range does not divide evenly.
+function TS.ShardTokens(shardIndex, perShard, maxTokens)
+    local first = (shardIndex - 1) * perShard + 1
+    if first > maxTokens then return nil end
+    local last = math.min(first + perShard - 1, maxTokens)
+    local tokens = {}
+    for i = first, last do
+        tokens[#tokens + 1] = "nameplate" .. i
+    end
+    return tokens
 end
 
 -- Every setting a pooled entry frame bakes in when it is built, as one
@@ -251,10 +310,61 @@ function TS:OnInitialize()
     self:SetEnabledState(false)
 end
 
+local SHARD_EVENTS = {
+    "UNIT_SPELLCAST_START",
+    "UNIT_SPELLCAST_CHANNEL_START",
+    "UNIT_SPELLCAST_EMPOWER_START",
+    "UNIT_SPELLCAST_STOP",
+    "UNIT_SPELLCAST_CHANNEL_STOP",
+    "UNIT_SPELLCAST_EMPOWER_STOP",
+    "UNIT_SPELLCAST_INTERRUPTED",
+    "UNIT_TARGET",
+}
+TS.SHARD_EVENTS = SHARD_EVENTS
+
+-- AceEvent strips the receiver before calling its handlers, so the raw frame
+-- callback adapts to the signatures the handlers already have.
+local function ShardOnEvent(_, event, unit, ...)
+    if event == "UNIT_TARGET" then
+        TS:OnUnitTarget(nil, unit)
+    else
+        TS:OnCastEvent(event, unit, ...)
+    end
+end
+TS.ShardOnEvent = ShardOnEvent
+
+function TS:CreateShards()
+    if #self.shards > 0 then return end
+    for i = 1, TS.ShardCount(UNITS_PER_SHARD, MAX_NAMEPLATE_TOKENS) do
+        local shard = CreateFrame("Frame")
+        shard.tokens = TS.ShardTokens(i, UNITS_PER_SHARD, MAX_NAMEPLATE_TOKENS)
+        shard:SetScript("OnEvent", ShardOnEvent)
+        self.shards[i] = shard
+    end
+end
+
+function TS:RegisterShardEvents()
+    for _, shard in ipairs(self.shards) do
+        for _, event in ipairs(SHARD_EVENTS) do
+            shard:RegisterUnitEvent(event, unpack(shard.tokens))
+        end
+    end
+end
+
+function TS:UnregisterShardEvents()
+    for _, shard in ipairs(self.shards) do
+        shard:UnregisterAllEvents()
+    end
+end
+
 function TS:OnEnable()
     self:UpdateDB()
     if not self.db or not self.db.Enabled then return end
 
+    -- Before SyncStructure, which reaches CheckContentGate: registering an
+    -- empty shard list is a silent no-op that then marks the gate active, after
+    -- which nothing registers again.
+    self:CreateShards()
     self:CreateAnchorFrame()
     -- Before anything can acquire an entry. A re-enable under a different
     -- profile finds the pool still holding the previous profile's frames, and
@@ -267,14 +377,6 @@ function TS:OnEnable()
     -- parented to a hidden frame until a preview fires or /reload.
     self.anchorFrame:Show()
 
-    self:RegisterEvent("UNIT_SPELLCAST_START", "OnCastEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "OnCastEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_START", "OnCastEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_STOP", "OnCastEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnCastEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP", "OnCastEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnCastEvent")
-    self:RegisterEvent("UNIT_TARGET", "OnUnitTarget")
     self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnNameplateAdded")
     self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnNameplateRemoved")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "CheckContentGate")
@@ -286,8 +388,17 @@ function TS:OnEnable()
 end
 
 function TS:OnDisable()
+    self:UnregisterShardEvents()
+    self:DiscardPendingCasts()
     self:UnregisterAllEvents()
     self:ReleaseAllEntries()
+    for _, entry in ipairs(self.entryPool) do
+        self:ReleaseGlow(entry)
+    end
+    -- Nothing else clears this, and a stale true sends the next gate check down
+    -- the already-active branch, which never registers: the module would come
+    -- back enabled and permanently deaf.
+    self.contentActive = false
     if self.anchorFrame then self.anchorFrame:Hide() end
 end
 
@@ -311,9 +422,12 @@ function TS:CheckContentGate()
     if shouldBeActive and not self.contentActive then
         self.contentActive = true
         dbg("gate ON")
+        self:RegisterShardEvents()
         self:ScanExistingNameplates()
     elseif not shouldBeActive and self.contentActive then
         self.contentActive = false
+        self:UnregisterShardEvents()
+        self:DiscardPendingCasts()
         dbg("gate OFF")
         if not self.isPreview then
             self:ReleaseAllEntries()
@@ -521,7 +635,7 @@ function TS:Release(entry, generation, reason)
     entry.rightIcon.tex:SetDesaturated(false)
     entry.interruptX:Hide()
     entry.leftIcon.cooldown:SetScript("OnCooldownDone", nil)
-    self:StopGlow(entry)
+    self:HideGlow(entry)
     entry:Hide()
     entry:ClearAllPoints()
     entry.Spacer:ClearAllPoints()
@@ -550,29 +664,53 @@ end
 function TS:UpdateGlow(entry)
     if not Glows then return end
     if not self.db.GlowImportant or not entry.spellId then
-        self:StopGlow(entry)
+        self:HideGlow(entry)
         return
     end
     local isImportant = C_Spell and C_Spell.IsSpellImportant
         and C_Spell.IsSpellImportant(entry.spellId)
     if type(isImportant) == "nil" then isImportant = false end  -- taint-safe nil check
     local size = self.db.IconSize
-    for _, iconFrame in ipairs({ entry.leftIcon, entry.rightIcon }) do
-        Glows.PixelGlow_Start(iconFrame, size, size)
-        local child = iconFrame._PixelGlow
-        if child then
-            child:SetAlphaFromBoolean(isImportant, 1, 0)
-        end
+
+    -- Alpha BEFORE show: a parked child keeps the previous cast's alpha,
+    -- because the pool resetter that restores alpha 1 never ran on it.
+    local left = entry.leftIcon._PixelGlow
+    if left then
+        left:SetAlphaFromBoolean(isImportant, 1, 0)
+        left:Show()
+    else
+        Glows.PixelGlow_Start(entry.leftIcon, size, size)
+        left = entry.leftIcon._PixelGlow
+        if left then left:SetAlphaFromBoolean(isImportant, 1, 0) end
+    end
+
+    local right = entry.rightIcon._PixelGlow
+    if right then
+        right:SetAlphaFromBoolean(isImportant, 1, 0)
+        right:Show()
+    else
+        Glows.PixelGlow_Start(entry.rightIcon, size, size)
+        right = entry.rightIcon._PixelGlow
+        if right then right:SetAlphaFromBoolean(isImportant, 1, 0) end
     end
 end
 
--- The fork's pool resetter restores alpha 1 as the child is released, so no
--- pre-stop reset is needed here (pool is private to this module).
-function TS:StopGlow(entry)
+-- Parks the glow: hidden, still attached, ready to be shown again. Cheaper than
+-- rebuilding it per cast, which is what releasing to the pool costs.
+function TS:HideGlow(entry)
     if not Glows or not entry.leftIcon then return end
-    for _, iconFrame in ipairs({ entry.leftIcon, entry.rightIcon }) do
-        Glows.PixelGlow_Stop(iconFrame)
-    end
+    local left = entry.leftIcon._PixelGlow
+    if left then left:Hide() end
+    local right = entry.rightIcon._PixelGlow
+    if right then right:Hide() end
+end
+
+-- Retires the glow to its pool. Only for entries that will not be reused: a
+-- parked child whose entry is discarded never returns to the pool.
+function TS:ReleaseGlow(entry)
+    if not Glows or not entry.leftIcon then return end
+    Glows.PixelGlow_Stop(entry.leftIcon)
+    Glows.PixelGlow_Stop(entry.rightIcon)
 end
 
 ---------------------------------------------------------------------------------
@@ -581,6 +719,12 @@ end
 
 -- info: { kind = "cast"|"channel"|"empower", castBarID, name, texture,
 --         spellId, duration (LuaDurationObject) }
+function TS:RefreshFontCache()
+    local db = self.db
+    self.cachedFontPath = KE:GetFontPath(db.FontFace)
+    self.cachedFontOutline = KE:GetFontOutline(db.FontOutline)
+end
+
 function TS:PopulateEntry(entry, unit, info)
     local db = self.db
     entry.castBarID = info.castBarID
@@ -608,8 +752,8 @@ function TS:PopulateEntry(entry, unit, info)
     if fs then
         fs:ClearAllPoints()
         fs:SetPoint("CENTER", entry, "CENTER", 0, 0)
-        local ok = pcall(fs.SetFont, fs, KE:GetFontPath(db.FontFace), db.FontSize,
-            KE:GetFontOutline(db.FontOutline))
+        local ok = pcall(fs.SetFont, fs, self.cachedFontPath, db.FontSize,
+            self.cachedFontOutline)
         if not ok then
             pcall(fs.SetFont, fs, KE:GetFontPath("Expressway"), db.FontSize, "OUTLINE")
         end
@@ -669,7 +813,7 @@ end
 
 function TS:RepositionEntries()
     local db = self.db
-    local list = {}
+    local list = wipe(self.sortScratch)
     for _, entry in pairs(self.activeEntries) do tinsert(list, entry) end
     tsort(list, TS.CompareEntries)
 
@@ -694,10 +838,15 @@ end
 -- Cast start pipeline
 ---------------------------------------------------------------------------------
 
+-- Combat leads: it rejects the most, and it is the gate a later edit is most
+-- likely to drop. Shards deliver nameplate tokens only, so no token test here.
 local function IsRelevantUnit(unit)
-    return unit and strmatch(unit, NAMEPLATE_PATTERN)
-        and UnitExists(unit) and UnitCanAttack("player", unit)
+    return unit
+        and UnitAffectingCombat(unit)
+        and UnitExists(unit)
+        and UnitCanAttack("player", unit)
 end
+TS.IsRelevantUnit = IsRelevantUnit
 
 -- Every delayed-start dispatch (event-driven or scan/retarget-driven) bumps
 -- the unit's token before scheduling; TryStart aborts unless its token is
@@ -762,15 +911,59 @@ function TS:TryStart(unit, token)
     dbg("started", unit, info.kind)
 end
 
-function TS:OnCastEvent(event, unit, ...)
-    if not strmatch(unit or "", NAMEPLATE_PATTERN) then return end
+function TS:DiscardPendingCasts()
+    self.pendingCasts = {}
+    self.pendingHead = 1
+    self.pendingTail = 0
+    self.drainScheduled = false
+    self.drainEpoch = self.drainEpoch + 1
+end
 
+function TS:ScheduleDrain(delay)
+    if self.drainScheduled then return end
+    self.drainScheduled = true
+    local epoch = self.drainEpoch
+    C_Timer.After(delay, function() TS:DrainPendingCasts(epoch) end)
+end
+
+function TS:DrainPendingCasts(epoch)
+    if epoch ~= self.drainEpoch then return end
+    self.drainScheduled = false
+
+    local pending, now = self.pendingCasts, GetTime()
+    local stop = TS.FirstNotDue(pending, self.pendingHead, self.pendingTail, now)
+    for i = self.pendingHead, stop - 1 do
+        local info = pending[i]
+        pending[i] = nil
+        self:TryStart(info.unit, info.token)
+    end
+    self.pendingHead = stop
+
+    if self.pendingHead > self.pendingTail then
+        self.pendingCasts = {}
+        self.pendingHead = 1
+        self.pendingTail = 0
+        return
+    end
+
+    self:ScheduleDrain(pending[self.pendingHead].dueAt - now)
+end
+
+function TS:OnCastEvent(event, unit, ...)
     if event == "UNIT_SPELLCAST_START" or event == "UNIT_SPELLCAST_CHANNEL_START"
         or event == "UNIT_SPELLCAST_EMPOWER_START" then
-        local token = self:BumpDispatchToken(unit)
-        C_Timer.After(SETTLE_DELAY, function()
-            TS:TryStart(unit, token)
-        end)
+        -- Deliberately NOT relevance-filtered here. The settle delay exists so a
+        -- cast can be re-read once its data lands, and discarding now would drop
+        -- a unit that becomes relevant during the window. TryStart re-checks.
+        local now = GetTime()
+        local tail = self.pendingTail + 1
+        self.pendingCasts[tail] = {
+            unit = unit,
+            token = self:BumpDispatchToken(unit),
+            dueAt = now + SETTLE_DELAY,
+        }
+        self.pendingTail = tail
+        self:ScheduleDrain(SETTLE_DELAY)
     elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
         -- Payload: castGUID, spellID, interruptedBy, castBarID (plain, NeverSecret).
         local castBarID = select(4, ...)
@@ -807,7 +1000,7 @@ function TS:OnInterrupted(unit, castBarID)
     -- Interrupted look: X on, countdown numbers off, glow off.
     entry.interruptX:Show()
     entry.leftIcon.cooldown:SetHideCountdownNumbers(true)
-    self:StopGlow(entry)
+    self:HideGlow(entry)
     local gen = entry.generation
     C_Timer.After(INTERRUPT_LINGER, function()
         TS:Release(entry, gen, "force")
@@ -819,9 +1012,9 @@ end
 -- the START event — a cast discovered already in flight is settled, and
 -- delaying it just shows the entry 0.2s late for nothing.
 function TS:ScanExistingNameplates()
-    for i = 1, MAX_NAMEPLATES do
+    for i = 1, MAX_NAMEPLATE_TOKENS do
         local unit = "nameplate" .. i
-        if UnitExists(unit) and UnitCanAttack("player", unit) then
+        if IsRelevantUnit(unit) then
             self:TryStart(unit, self:BumpDispatchToken(unit))
         end
     end
@@ -836,7 +1029,8 @@ end
 function TS:OnNameplateRemoved(_, unit)
     -- pendingDispatch[unit] is deliberately NOT cleared: keeping the counter
     -- monotonic closes the token-collision window when a nameplate token is
-    -- recycled to a new mob within the settle delay (bounded at 40 keys).
+    -- recycled to a new mob within the settle delay (bounded by the nameplate
+    -- token range).
     local entry = self.activeEntries[unit]
     if entry then
         entry.wasInterrupted = nil
@@ -845,12 +1039,12 @@ function TS:OnNameplateRemoved(_, unit)
 end
 
 function TS:OnUnitTarget(_, unit)
-    -- Retarget mid-cast rebuilds the binding; ALSO the first-target case
-    -- is covered: a mob that starts casting untargeted and
-    -- acquires you during the settle window shows NOW, not at +0.2s — so no
-    -- existing-entry gate. Bumping the token supersedes the pending delayed
-    -- dispatch; TryStart's early returns cover no-cast/irrelevant units.
-    if not strmatch(unit or "", NAMEPLATE_PATTERN) then return end
+    -- Retarget mid-cast rebuilds the binding; ALSO the first-target case is
+    -- covered: a mob that starts casting untargeted and acquires you during the
+    -- settle window shows NOW, not at +0.2s — so no existing-entry gate.
+    -- Relevance is checked BEFORE the bump: bumping for a unit that cannot
+    -- start supersedes a queued dispatch that would have succeeded.
+    if not IsRelevantUnit(unit) then return end
     self:TryStart(unit, self:BumpDispatchToken(unit))
 end
 
@@ -871,8 +1065,12 @@ function TS:RebuildEntries()
     -- rebuild so the GUI preview reflects the new settings.
     local wasPreview = self.isPreview
     self:HidePreview()
+    -- A rebuild drops the pool a queued cast would have populated.
+    self:DiscardPendingCasts()
     self:ReleaseAllEntries()
     for _, entry in ipairs(self.entryPool) do
+        -- A parked child on a discarded entry never returns to the glow pool.
+        self:ReleaseGlow(entry)
         entry:SetParent(nil)
         entry:Hide()
     end
@@ -882,6 +1080,7 @@ function TS:RebuildEntries()
     end
     -- Stamped HERE and nowhere else: this is the only function that drops the
     -- pool, so it is the only one that can honestly claim the frames match.
+    self:RefreshFontCache()
     self.builtRebuildKey = self:CurrentRebuildKey()
     self:ApplyPosition()
     if wasPreview then self:ShowPreview() end
@@ -1011,6 +1210,7 @@ function TS:HidePreview()
             entry.Spacer:ClearAllPoints()
             entry.leftIcon.cooldown:Clear()
             entry.rightIcon.cooldown:Clear()
+            self:HideGlow(entry)
             tinsert(self.entryPool, entry)
         end
         self.previewEntries = nil
