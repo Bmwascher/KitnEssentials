@@ -339,6 +339,65 @@ describe("TargetedSpells drain queue", function()
         assert.is_false(TS.drainScheduled)
     end)
 
+    -- Driving the three real call sites, not DiscardPendingCasts directly.
+    -- Deleting the call from any one of them passes every other assertion here.
+    describe("discard call sites", function()
+        local function seed()
+            enqueue("nameplate1", 1, 0)
+            TS.drainScheduled = true
+            return TS.drainEpoch
+        end
+
+        local function assertDiscarded(before)
+            assert.are.equal(before + 1, TS.drainEpoch)
+            assert.are.equal(1, TS.pendingHead)
+            assert.are.equal(0, TS.pendingTail)
+            assert.is_false(TS.drainScheduled)
+        end
+
+        it("empties the queue when the content gate closes", function()
+            local before = seed()
+            TS.contentActive = true
+            TS.isPreview = false
+            TS.IsEnabled = function() return true end
+            TS.ShouldBeActive = function() return false end
+            TS.ReleaseAllEntries = function() end
+            TS.UnregisterShardEvents = function() end
+
+            TS:CheckContentGate()
+
+            assert.is_false(TS.contentActive)
+            assertDiscarded(before)
+        end)
+
+        it("empties the queue on disable", function()
+            local before = seed()
+            TS.UnregisterShardEvents = function() end
+            TS.UnregisterAllEvents = function() end
+            TS.ReleaseAllEntries = function() end
+            TS.entryPool = {}
+
+            TS:OnDisable()
+
+            assertDiscarded(before)
+        end)
+
+        it("empties the queue on a profile rebuild", function()
+            local before = seed()
+            TS.HidePreview = function() end
+            TS.ReleaseAllEntries = function() end
+            TS.entryPool = {}
+            TS.CurrentRebuildKey = function() return "k" end
+            TS.RefreshFontCache = function() end
+            TS.ApplyPosition = function() end
+            TS.CheckContentGate = function() end
+
+            TS:RebuildEntries()
+
+            assertDiscarded(before)
+        end)
+    end)
+
     it("leaves only the new drain scheduled across a gate cycle", function()
         enqueue("nameplate1", 1, 0)
         TS.drainScheduled = true
@@ -373,6 +432,15 @@ describe("TargetedSpells drain queue", function()
         TS:OnUnitTarget(nil, "nameplate5")
 
         inCombat = true
+        local started = {}
+        TS.TryStart = function(_, unit, token)
+            started[#started + 1] = { unit = unit, token = token }
+        end
+
+        TS:DrainPendingCasts(TS.drainEpoch)
+
+        assert.are.equal(1, #started)
+        assert.are.equal(queuedToken, started[1].token)
         assert.are.equal(queuedToken, TS.pendingDispatch["nameplate5"])
     end)
 end)
@@ -391,6 +459,30 @@ describe("TargetedSpells font cache", function()
 
         TS.db.FontFace = "Arial"
         TS:RefreshFontCache()
+        assert.are.equal("path/Arial", TS.cachedFontPath)
+    end)
+
+    -- Through a real rebuild, not a direct call: moving the refresh out of
+    -- RebuildEntries restores the stale-cache-on-re-enable defect the plan's
+    -- single-site rule exists to prevent, and only this notices.
+    it("refreshes through a rebuild after a settings change", function()
+        local TS, KE = load()
+        KE.GetFontPath = function(_, face) return "path/" .. face end
+        KE.GetFontOutline = function(_, outline) return "OL/" .. outline end
+        TS.db = { FontFace = "Expressway", FontOutline = "NONE" }
+        TS.entryPool = {}
+        TS.HidePreview = function() end
+        TS.ReleaseAllEntries = function() end
+        TS.DiscardPendingCasts = function() end
+        TS.CurrentRebuildKey = function() return "k" end
+        TS.ApplyPosition = function() end
+        TS.CheckContentGate = function() end
+
+        TS:RebuildEntries()
+        assert.are.equal("path/Expressway", TS.cachedFontPath)
+
+        TS.db.FontFace = "Arial"
+        TS:RebuildEntries()
         assert.are.equal("path/Arial", TS.cachedFontPath)
     end)
 end)
@@ -425,12 +517,30 @@ describe("TargetedSpells allocation shape", function()
 
     -- A missing ReleaseGlow in RebuildEntries is the frame leak, and this is the
     -- only automated check that sees it.
+    -- Named per function, not counted: a count cannot tell a call moved to the
+    -- wrong function from the right placement, and a missing ReleaseGlow in
+    -- RebuildEntries is the frame leak this is here to catch.
     it("parks on the reuse paths and retires only where the entry is discarded", function()
+        local function bodyOf(name)
+            local body = source:match("\nfunction TS:" .. name .. "%b()(.-)\nend\n")
+            assert.is_string(body, "could not find TS:" .. name)
+            return body
+        end
+
         assert.is_nil(source:find("StopGlow", 1, true))
         assert.are.equal(1, select(2, source:gsub("function TS:HideGlow", "")))
         assert.are.equal(1, select(2, source:gsub("function TS:ReleaseGlow", "")))
-        assert.are.equal(4, select(2, source:gsub("self:HideGlow%(entry%)", "")))
-        assert.are.equal(2, select(2, source:gsub("self:ReleaseGlow%(entry%)", "")))
+
+        for _, name in ipairs({ "Release", "UpdateGlow", "OnInterrupted", "HidePreview" }) do
+            assert.is_truthy(bodyOf(name):find("self:HideGlow(entry)", 1, true),
+                name .. " does not park the glow")
+        end
+        for _, name in ipairs({ "RebuildEntries", "OnDisable" }) do
+            assert.is_truthy(bodyOf(name):find("self:ReleaseGlow(entry)", 1, true),
+                name .. " does not retire the glow")
+        end
+        assert.is_nil(bodyOf("Release"):find("ReleaseGlow", 1, true))
+        assert.is_nil(bodyOf("HidePreview"):find("ReleaseGlow", 1, true))
     end)
 end)
 

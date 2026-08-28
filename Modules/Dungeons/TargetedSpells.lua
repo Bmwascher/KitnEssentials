@@ -717,14 +717,14 @@ end
 -- Populate + visibility binding
 ---------------------------------------------------------------------------------
 
--- info: { kind = "cast"|"channel"|"empower", castBarID, name, texture,
---         spellId, duration (LuaDurationObject) }
 function TS:RefreshFontCache()
     local db = self.db
     self.cachedFontPath = KE:GetFontPath(db.FontFace)
     self.cachedFontOutline = KE:GetFontOutline(db.FontOutline)
 end
 
+-- info: { kind = "cast"|"channel"|"empower", castBarID, name, texture,
+--         spellId, duration (LuaDurationObject) }
 function TS:PopulateEntry(entry, unit, info)
     local db = self.db
     entry.castBarID = info.castBarID
