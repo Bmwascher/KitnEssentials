@@ -142,6 +142,7 @@ local GlowFramePool = CreateFramePool(
         frame.info = {}
         frame.name = nil
         frame.timer = nil
+        frame.throttle = nil
         -- KE delta: the consumer binds glow visibility via
         -- SetAlphaFromBoolean (possibly 0) — pooled frames must come back
         -- neutral or the next user inherits an invisible glow.
@@ -232,8 +233,14 @@ do
         return floor(coord + 0.5)
     end
 
+    local GLOW_UPDATE_INTERVAL = 1 / 60
+
     local function PUpdate(self, elapsed)
-        self.timer = self.timer + elapsed / self.info.period
+        self.throttle = (self.throttle or 0) + elapsed
+        if self.throttle < GLOW_UPDATE_INTERVAL then return end
+        local step = self.throttle
+        self.throttle = 0
+        self.timer = self.timer + step / self.info.period
 
         if self.timer > 1 or self.timer < -1 then
             self.timer = self.timer % 1
@@ -360,6 +367,7 @@ do
         end
 
         GlowFrame.timer = GlowFrame.timer or 0
+        GlowFrame.throttle = 0
         GlowFrame.info = GlowFrame.info or {}
         GlowFrame.info.step = 1 / count
         GlowFrame.info.period = 4
@@ -371,7 +379,7 @@ do
             GlowFrame.info.needsUpdate = true
         end
 
-        PUpdate(GlowFrame, 0)
+        PUpdate(GlowFrame, GLOW_UPDATE_INTERVAL)
 
         GlowFrame:SetScript("OnUpdate", PUpdate)
     end
