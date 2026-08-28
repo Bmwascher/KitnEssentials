@@ -121,7 +121,7 @@ local function PinTreeButtonFont(button)
 end
 
 local function RefreshTree(self, ...)
-    if self.ae_oldRefreshTree then self.ae_oldRefreshTree(self, ...) end
+    if self.ke_oldRefreshTree then self.ke_oldRefreshTree(self, ...) end
     local buttons, lines = self.buttons, self.lines
     if not (buttons and lines) then return end
     local status = self.status or self.localstatus
@@ -599,8 +599,8 @@ local function SkinContainer(widget)
             end
         end
 
-        if t == "TreeGroup" and widget.RefreshTree and not widget.ae_oldRefreshTree then
-            widget.ae_oldRefreshTree = widget.RefreshTree
+        if t == "TreeGroup" and widget.RefreshTree and not widget.ke_oldRefreshTree then
+            widget.ke_oldRefreshTree = widget.RefreshTree
             widget.RefreshTree = RefreshTree
         end
 
@@ -658,10 +658,10 @@ end
 
 function S.AceSkinTabGroup(widget)
     if not widget then return end
-    if not widget.ae_oldCreateTab and widget.CreateTab then
-        widget.ae_oldCreateTab = widget.CreateTab
+    if not widget.ke_oldCreateTab and widget.CreateTab then
+        widget.ke_oldCreateTab = widget.CreateTab
         widget.CreateTab = function(self, id)
-            local tab = self.ae_oldCreateTab(self, id)
+            local tab = self.ke_oldCreateTab(self, id)
             pcall(SkinTab, tab)
             return tab
         end

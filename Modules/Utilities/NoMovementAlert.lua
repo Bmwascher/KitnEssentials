@@ -253,10 +253,8 @@ end
 -- name dedupe separates them, and both render as two rows counting the same
 -- cooldown.
 --
--- An earlier note here said an override resolver could not work, because it
--- would either misfire on unrelated spells or never fire for a baseline spell
--- like Dash. In-game measurement refuted that: C_Spell.GetOverrideSpell
--- answers correctly for baseline spells, returning the id it was given.
+-- C_Spell.GetOverrideSpell answers for baseline spells too, returning the id
+-- it was given, so it can separate the pair where knownness cannot.
 --
 -- The list stays as the SET of spells this rule applies to, but which half is
 -- which still matters: only the base can be asked. Named fields, so the two
@@ -275,11 +273,10 @@ end
 -- True when this spell is currently REPLACED by another, so the player does
 -- not actually have it.
 --
--- Do NOT go back to asking whether the other half is "known".
--- C_SpellBook.IsSpellKnownOrInSpellBook with includeOverrides answers true for
--- an untalented replacement, which hid Blink for every Mage in every talent
--- state, and answers false for both halves of the Dash and Roll pairs, which
--- hid nothing at all.
+-- Do NOT decide this from spell-book knowledge. IsSpellKnownOrInSpellBook
+-- with overrides included answers true for an untalented replacement as
+-- readily as for its base, so it cannot separate the pair in either
+-- direction.
 --
 -- GetOverrideSpell returns the id it was given when nothing replaces it, so
 -- "overridden" is exactly "the answer differs from the question". Failing open
@@ -295,9 +292,9 @@ local function ReplacedByKnownChoice(spellId)
     -- so one query names the live half and everything else in the group is
     -- suppressed.
     --
-    -- Asking each spell about ITSELF is not enough and was wrong: an
-    -- untalented replacement is overridden by nothing, so it resolves to
-    -- itself and reads as live. That showed Tiger Dash next to Dash.
+    -- Asking each spell about ITSELF is not enough: an untalented replacement
+    -- is overridden by nothing, so it resolves to itself and reads as live
+    -- alongside the base it does not replace.
     local ok, live = pcall(C_Spell.GetOverrideSpell, group.base)
     if not ok or type(live) ~= "number" then return false end
     -- A third spell overriding the base is outside what this rule describes.
@@ -610,9 +607,9 @@ end
 -- Truth when the client will give it, memory when it will not.
 function NMA:ResolveCharges(spellId)
     local info = SafeCharges(spellId)
-    -- Any charge table at all means a charge spell. Gating above 1 dropped
-    -- single-charge spells into the no-charges path, which is wrong: Shimmer
-    -- reports maxCharges 1 and was being tracked as a plain cooldown.
+    -- Any charge table at all means a charge spell. Gating above 1 drops
+    -- single-charge spells into the no-charges path, where their recharge is
+    -- never tracked; Shimmer reports maxCharges 1.
     if info and info.maxCharges and info.maxCharges >= 1 then
         self.chargeMeta[spellId] = {
             max = info.maxCharges,

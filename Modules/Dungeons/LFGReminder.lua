@@ -74,9 +74,8 @@ local issecrettable = issecrettable or function() return false end
 -- KE ships no localisation, so
 -- carrying them would imply support that does not exist. Adding real
 -- Russian support means Cyrillic-aware case folding, not these keys.
--- Each ID was confirmed by its own spell description naming the destination,
--- not by the shape of the spell name. Note the apostrophe in "kings' rest":
--- it follows the s, and a key with it in the other place cannot match.
+-- Note the apostrophe in "kings' rest": it follows the s, and a key with it
+-- in the other place cannot match.
 local TELEPORT_BY_NAME = {
     ["the blinding vale"]          = 1286801,
     ["voidscar arena"]             = 1286804,

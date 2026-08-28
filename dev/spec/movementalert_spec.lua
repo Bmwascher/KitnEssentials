@@ -82,12 +82,10 @@ describe("movement alert spell resolution", function()
         end)
     end)
 
-    -- These cases model GetOverrideSpell, not spellbook known-ness. The
-    -- known-ness route is measurably wrong in game: it reported
-    -- an untalented replacement as known, hiding Blink for every Mage, and
-    -- reported both halves of the Dash and Roll pairs as unknown, hiding
-    -- neither. The mock returns the id it was given unless a case says
-    -- otherwise, which is what the real API does.
+    -- These cases model GetOverrideSpell, not spellbook known-ness, which
+    -- reports an untalented replacement as known just as it reports its base
+    -- and so cannot separate a pair. The mock returns the id it was given
+    -- unless a case says otherwise, which is what the real API does.
     describe("talent choice pairs", function()
         it("suppresses the base when the replacement is live", function()
             _G.C_Spell.overrideSpell[1953] = 212653 -- Blink -> Shimmer
@@ -97,8 +95,8 @@ describe("movement alert spell resolution", function()
         it("suppresses the REPLACEMENT when the base is the live half", function()
             -- No override entry: the base resolves to itself, so the base is
             -- live and the untalented replacement must be hidden. Asking each
-            -- spell about itself got this wrong and put Tiger Dash on screen
-            -- beside Dash.
+            -- spell about itself cannot see this: the replacement is
+            -- overridden by nothing and so reads as live too.
             assert.is_false(NMA:IsReplacedChoice(1953))  -- Blink is live
             assert.is_true(NMA:IsReplacedChoice(212653)) -- Shimmer is not
             assert.is_false(NMA:IsReplacedChoice(1850))   -- Dash is live
@@ -112,15 +110,49 @@ describe("movement alert spell resolution", function()
             assert.is_false(NMA:IsReplacedChoice(212653))
         end)
         it("does not fail shut for a baseline spell", function()
-            -- The first regression hid nothing for Dash and Roll because it
-            -- answered false for both halves. Baseline spells resolve to
-            -- themselves and must stay visible.
+            -- Baseline spells resolve to themselves and must stay visible.
             assert.is_false(NMA:IsReplacedChoice(1850))   -- Dash
             assert.is_false(NMA:IsReplacedChoice(109132)) -- Roll
         end)
         it("never touches spells outside a choice pair", function()
             _G.C_Spell.overrideSpell[358267] = 999999
             assert.is_false(NMA:IsReplacedChoice(358267)) -- Hover
+        end)
+
+        -- End to end, because the suppression sits behind the knownness gate
+        -- in BuildTracked and both halves of a pair pass that gate. Arcane
+        -- Mage, with both halves of the Blink pair reading as known.
+        local function mage()
+            local M = L.loadMovementAlert({
+                UnitClass = function() return "Mage", "MAGE", 8 end,
+            })
+            _G.GetSpecialization = function() return 1 end
+            _G.GetSpecializationInfo = function() return 62 end
+            _G.C_SpellBook.known = { [1953] = true, [212653] = true }
+            M.db = {}
+            -- Seeded by OnEnable, which never runs headlessly.
+            M.chargeMeta, M.chargeCount = {}, {}
+            return M
+        end
+
+        local function trackedIds(M)
+            local ids = {}
+            for _, entry in ipairs(M:BuildTracked()) do ids[entry.spellId] = true end
+            return ids
+        end
+
+        it("tracks the base alone when the replacement is untalented", function()
+            local ids = trackedIds(mage())
+            assert.is_true(ids[1953])    -- Blink
+            assert.is_nil(ids[212653])   -- Shimmer
+        end)
+
+        it("tracks the replacement alone once it is talented", function()
+            local M = mage()
+            _G.C_Spell.overrideSpell[1953] = 212653
+            local ids = trackedIds(M)
+            assert.is_true(ids[212653])
+            assert.is_nil(ids[1953])
         end)
     end)
 
@@ -228,10 +260,9 @@ describe("NoMovementAlert RoleColor", function()
         end)
 
         it("reports a cooldown the client stopped flagging", function()
-            -- The Flying Serpent Kick case. isOnGCD goes nil a second into a
-            -- real cooldown while the remaining time keeps counting. The old
-            -- rule required an explicit false and hid the ability for the
-            -- other 28 seconds.
+            -- isOnGCD goes nil a second into a real cooldown while the
+            -- remaining time keeps counting, so requiring an explicit false
+            -- hides the ability for the rest of its cooldown.
             cooldown = { isOnGCD = nil, timeUntilEndOfStartRecovery = 28.6, duration = 30 }
             local rem, total = load():ReadCooldown(1)
             assert.equals(28.6, rem)
