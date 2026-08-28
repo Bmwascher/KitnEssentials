@@ -17,7 +17,6 @@ local HEADER_INSET = 6
 local ItemLocation = ItemLocation
 
 local ILVL_FONT = 13
-local TAB_FONT = 13
 local TITLE_FONT = 13
 local BRAND = S.palette.brand
 local STAT_GRAD_WIDTH = 80
@@ -496,15 +495,6 @@ local function Skin()
     local current = frame.activeSubFrame
     UpdateCharacterInset(current)
     S.Tabs("CharacterFrameTab", 6)
-
-    for i = 1, 4 do
-        local tab = _G["CharacterFrameTab" .. i]
-        local fs = tab and tab.GetFontString and tab:GetFontString()
-        if fs then
-            S.SetFont(fs, TAB_FONT, "")
-            if PanelTemplates_TabResize then PanelTemplates_TabResize(tab, 0) end
-        end
-    end
     -- Art only. The per-slot ilvl/gem text this loop used to add, and the
     -- PaperDollItemSlotButton_Update hook that refreshed it, are gone --
     -- CharacterPanel owns that display (see the note at the top of this file).

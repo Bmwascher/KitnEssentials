@@ -100,7 +100,7 @@ end
 local aceTreeFont
 local TREENOOP = function() end
 local function PinTreeButtonFont(button)
-    if S.data(button).aeTreeFont then return end
+    if S.data(button).keTreeFont then return end
     if not (button.SetNormalFontObject and button.text) then return end
     if not aceTreeFont then
         local face = button.text:GetFont()
@@ -111,7 +111,7 @@ local function PinTreeButtonFont(button)
         f:SetTextColor(1, 0.82, 0)
         aceTreeFont = f
     end
-    S.data(button).aeTreeFont = true
+    S.data(button).keTreeFont = true
 
     if button.SetPushedTextOffset then button:SetPushedTextOffset(0, 0) end
     button:SetNormalFontObject(aceTreeFont)
@@ -121,7 +121,7 @@ local function PinTreeButtonFont(button)
 end
 
 local function RefreshTree(self, ...)
-    if self.ae_oldRefreshTree then self.ae_oldRefreshTree(self, ...) end
+    if self.ke_oldRefreshTree then self.ke_oldRefreshTree(self, ...) end
     local buttons, lines = self.buttons, self.lines
     if not (buttons and lines) then return end
     local status = self.status or self.localstatus
@@ -133,8 +133,8 @@ local function RefreshTree(self, ...)
         if button then
             local line = lines[i]
             if button.highlight then
-                if not S.data(button).aeFlatHL then
-                    S.data(button).aeFlatHL = true
+                if not S.data(button).keFlatHL then
+                    S.data(button).keFlatHL = true
                     button.highlight:SetTexture("Interface\\Buttons\\WHITE8X8")
                 end
                 local isSel = selected and line and line.uniquevalue == selected
@@ -197,8 +197,8 @@ local function MakeFontPin(size)
     end
 end
 local function HookFontBump(fs, size)
-    if not fs or S.data(fs).aeFontBump then return end
-    S.data(fs).aeFontBump = true
+    if not fs or S.data(fs).keFontBump then return end
+    S.data(fs).keFontBump = true
     local pin = MakeFontPin(size or 12)
     hooksecurefunc(fs, "SetFontObject", pin)
     pin(fs)
@@ -229,15 +229,15 @@ local function SkinWidget(widget)
         HookFontBump(widget.text, 13)
 
         HookFontBump(widget.desc, 13)
-        if widget.SetDescription and not S.data(widget).aeDescHook then
-            S.data(widget).aeDescHook = true
+        if widget.SetDescription and not S.data(widget).keDescHook then
+            S.data(widget).keDescHook = true
             hooksecurefunc(widget, "SetDescription", function(w)
                 HookFontBump(w.desc, 13)
             end)
         end
 
-        if widget.SetType and not S.data(widget).aeTypeHook then
-            S.data(widget).aeTypeHook = true
+        if widget.SetType and not S.data(widget).keTypeHook then
+            S.data(widget).keTypeHook = true
             hooksecurefunc(widget, "SetType", function(w, kind)
                 if kind == "radio" and w.checkbg then w.checkbg:SetSize(20, 20) end
             end)
@@ -309,8 +309,8 @@ local function SkinWidget(widget)
             if button then
                 S.ArrowButton(button, "down")
 
-                if not S.data(button).aeLSMHook then
-                    S.data(button).aeLSMHook = true
+                if not S.data(button).keLSMHook then
+                    S.data(button).keLSMHook = true
                     button:HookScript("OnClick", function()
                         if _G.C_Timer then
                             _G.C_Timer.After(0, function()
@@ -378,13 +378,13 @@ local function SkinWidget(widget)
 
             local eb = widget.editbox
             local function pinEB()
-                if S.data(eb).aePinning then return end
-                S.data(eb).aePinning = true
+                if S.data(eb).kePinning then return end
+                S.data(eb).kePinning = true
                 S.SetFont(eb, 13, "OUTLINE")
-                S.data(eb).aePinning = nil
+                S.data(eb).kePinning = nil
             end
-            if not S.data(eb).aeEBHook then
-                S.data(eb).aeEBHook = true
+            if not S.data(eb).keEBHook then
+                S.data(eb).keEBHook = true
                 hooksecurefunc(eb, "SetFontObject", pinEB)
             end
             pinEB()
@@ -440,8 +440,8 @@ local function SkinWidget(widget)
     elseif t == "SharedDropdown" then
 
         local dd = widget.dropdown
-        if dd and dd.GetName and not S.data(dd).aeSharedSkinned then
-            S.data(dd).aeSharedSkinned = true
+        if dd and dd.GetName and not S.data(dd).keSharedSkinned then
+            S.data(dd).keSharedSkinned = true
             local n = dd:GetName()
             for _, suffix in ipairs({ "Left", "Middle", "Right" }) do
                 local tex = _G[n .. suffix]
@@ -477,8 +477,8 @@ local function SkinWidget(widget)
                     if bd then bd:Show(); bd:SetBackdropColor(S.controlBg[1], S.controlBg[2], S.controlBg[3], S.controlBg[4]) end
                 end
             end
-            if not S.data(frame).aePulloutHook then
-                S.data(frame).aePulloutHook = true
+            if not S.data(frame).kePulloutHook then
+                S.data(frame).kePulloutHook = true
                 if frame.HookScript then frame:HookScript("OnShow", reassert) end
             end
             reassert()
@@ -493,8 +493,8 @@ local function SkinWidget(widget)
         local itemFrame = widget.frame and widget.frame.GetParent and widget.frame:GetParent()
         local scrollFrame = itemFrame and itemFrame.GetParent and itemFrame:GetParent()
         local pulloutFrame = scrollFrame and scrollFrame.GetParent and scrollFrame:GetParent()
-        if pulloutFrame and not S.data(pulloutFrame).aePulloutSkinned then
-            S.data(pulloutFrame).aePulloutSkinned = true
+        if pulloutFrame and not S.data(pulloutFrame).kePulloutSkinned then
+            S.data(pulloutFrame).kePulloutSkinned = true
             local function reassert()
                 if pulloutFrame.SetBackdrop then pulloutFrame:SetBackdrop(nil) end
                 S.StripTextures(pulloutFrame)
@@ -599,8 +599,8 @@ local function SkinContainer(widget)
             end
         end
 
-        if t == "TreeGroup" and widget.RefreshTree and not widget.ae_oldRefreshTree then
-            widget.ae_oldRefreshTree = widget.RefreshTree
+        if t == "TreeGroup" and widget.RefreshTree and not widget.ke_oldRefreshTree then
+            widget.ke_oldRefreshTree = widget.RefreshTree
             widget.RefreshTree = RefreshTree
         end
 
@@ -641,15 +641,15 @@ local function HasSinkTargets(f, widget)
 end
 function LevelLock(f, widget)
     if not f then return end
-    if not S.data(f).aeLvlLock and not HasSinkTargets(f, widget) then return end
+    if not S.data(f).keLvlLock and not HasSinkTargets(f, widget) then return end
     local function sinkAll()
         sinkOne(f)
         if widget then
             for i = 1, #SUB_BD_KEYS do sinkOne(widget[SUB_BD_KEYS[i]]) end
         end
     end
-    if S.data(f).aeLvlLock then sinkAll() return end
-    S.data(f).aeLvlLock = true
+    if S.data(f).keLvlLock then sinkAll() return end
+    S.data(f).keLvlLock = true
     hooksecurefunc(f, "SetFrameLevel", sinkAll)
     hooksecurefunc(f, "SetParent", sinkAll)
     if f.HookScript then f:HookScript("OnShow", sinkAll) end
@@ -658,10 +658,10 @@ end
 
 function S.AceSkinTabGroup(widget)
     if not widget then return end
-    if not widget.ae_oldCreateTab and widget.CreateTab then
-        widget.ae_oldCreateTab = widget.CreateTab
+    if not widget.ke_oldCreateTab and widget.CreateTab then
+        widget.ke_oldCreateTab = widget.CreateTab
         widget.CreateTab = function(self, id)
-            local tab = self.ae_oldCreateTab(self, id)
+            local tab = self.ke_oldCreateTab(self, id)
             pcall(SkinTab, tab)
             return tab
         end
@@ -671,16 +671,33 @@ function S.AceSkinTabGroup(widget)
         for i = 1, #widget.tabs do pcall(SkinTab, widget.tabs[i]) end
     end
 
+    -- Nudge the ROW LEADER, not tabs[1]. A multi-row strip has one leader per
+    -- row -- each anchored to w.frame -- and re-pointing tabs[1] alone drags
+    -- its row over the one above it. Two or more leaders means more than one
+    -- row, and the nudge is not defined for that, so do nothing.
+    --
+    -- Counting is also what makes this idempotent, which it must be: it runs
+    -- directly AND from a hooksecurefunc on BuildTabs. After the nudge the
+    -- leader points at border rather than w.frame, so the second pass counts
+    -- zero leaders and returns.
     local function AnchorRow(w)
-        local t1 = w.tabs and w.tabs[1]
-        if t1 and w.border then
-            t1:ClearAllPoints()
-
-            t1:SetPoint("BOTTOMLEFT", w.border, "TOPLEFT", -3, 1)
+        if not (w.tabs and w.border and w.frame) then return end
+        local leader, count = nil, 0
+        for _, tab in ipairs(w.tabs) do
+            if tab:IsShown() and tab:GetNumPoints() > 0 then
+                local _, rel = tab:GetPoint(1)
+                if rel == w.frame then
+                    count = count + 1
+                    leader = leader or tab
+                end
+            end
         end
+        if count ~= 1 or not leader then return end
+        leader:ClearAllPoints()
+        leader:SetPoint("BOTTOMLEFT", w.border, "TOPLEFT", -3, 1)
     end
-    if not S.data(widget).aeTabRowHook and widget.BuildTabs then
-        S.data(widget).aeTabRowHook = true
+    if not S.data(widget).keTabRowHook and widget.BuildTabs then
+        S.data(widget).keTabRowHook = true
         hooksecurefunc(widget, "BuildTabs", AnchorRow)
     end
     AnchorRow(widget)
@@ -688,8 +705,8 @@ end
 
 function S.AceFixPullout(dropdown)
     local p = dropdown and dropdown.pullout
-    if not p or S.data(p).aeLevelFix then return end
-    S.data(p).aeLevelFix = true
+    if not p or S.data(p).keLevelFix then return end
+    S.data(p).keLevelFix = true
     local math_max = math.max -- luacheck: ignore 431/math_max
     local function Relevel(pull)
         local f = pull.frame
@@ -709,8 +726,8 @@ end
 S.AceWidgetSkinners = S.AceWidgetSkinners or {}
 
 local function SkinPulloutFrame(pf)
-    if not pf or S.data(pf).aeBackdropLocked then return end
-    S.data(pf).aeBackdropLocked = true
+    if not pf or S.data(pf).keBackdropLocked then return end
+    S.data(pf).keBackdropLocked = true
     S.StripTextures(pf)
     local abd = S.Template(pf, "Default")
 
@@ -735,10 +752,10 @@ local function SkinPulloutFrame(pf)
     local EMPTY_BD = { bgFile = nil, edgeFile = nil, tile = false, edgeSize = 0,
         insets = { left = 0, right = 0, top = 0, bottom = 0 } }
     hooksecurefunc(pf, "SetBackdrop", function(self, bkd)
-        if bkd and bkd.bgFile and not S.data(self).aeClearing then
-            S.data(self).aeClearing = true
+        if bkd and bkd.bgFile and not S.data(self).keClearing then
+            S.data(self).keClearing = true
             self:SetBackdrop(EMPTY_BD)
-            S.data(self).aeClearing = nil
+            S.data(self).keClearing = nil
         end
     end)
     pf:SetBackdrop(EMPTY_BD)
@@ -788,8 +805,8 @@ local function WrapCreate(orig)
             pcall(SkinPulloutFrame, w.frame)
             -- Create fires per pool ACQUIRE, not per construction: guard so
             -- recycled pullouts don't accumulate duplicate OnShow hooks.
-            if w.frame.HookScript and not S.data(w.frame).aeShowHooked then
-                S.data(w.frame).aeShowHooked = true
+            if w.frame.HookScript and not S.data(w.frame).keShowHooked then
+                S.data(w.frame).keShowHooked = true
                 w.frame:HookScript("OnShow", function(f) pcall(SkinPulloutFrame, f) end)
             end
         end
@@ -799,9 +816,9 @@ end
 
 -- marker key ("did we wrap the current value?") per trapped method
 local TRAP = {
-    RegisterAsWidget    = { wrap = WrapRegisterAsWidget,    mark = "aeRAW" },
-    RegisterAsContainer = { wrap = WrapRegisterAsContainer, mark = "aeRAC" },
-    Create              = { wrap = WrapCreate,              mark = "aeCreate" },
+    RegisterAsWidget    = { wrap = WrapRegisterAsWidget,    mark = "keRAW" },
+    RegisterAsContainer = { wrap = WrapRegisterAsContainer, mark = "keRAC" },
+    Create              = { wrap = WrapCreate,              mark = "keCreate" },
 }
 
 local function AceGUIMetaNewIndex(lib, k, v)
@@ -856,8 +873,8 @@ local function HookAceGUI(AceGUI, minor, upgrading)
         local pf = _G["AceGUI30Pullout" .. n]
         if pf then
             pcall(SkinPulloutFrame, pf)
-            if pf.HookScript and not S.data(pf).aeShowHooked then
-                S.data(pf).aeShowHooked = true
+            if pf.HookScript and not S.data(pf).keShowHooked then
+                S.data(pf).keShowHooked = true
                 pf:HookScript("OnShow", function(f) pcall(SkinPulloutFrame, f) end)
             end
         end
@@ -899,7 +916,7 @@ local function SetupAce3()
         HookAceGUI(AceGUI, LibStub.minors and LibStub.minors["AceGUI-3.0"])
     end
 
-    if not LibStub.aeNewLibHooked and type(LibStub.NewLibrary) == "function" then
+    if not LibStub.keNewLibHooked and type(LibStub.NewLibrary) == "function" then
         hooksecurefunc(LibStub, "NewLibrary", function(self, major)
             if type(major) ~= "string" then return end
             if major == "AceGUI-3.0" then
@@ -918,7 +935,7 @@ local function SetupAce3()
                 _G.C_Timer.After(0, StyleConfigDialog)
             end
         end)
-        LibStub.aeNewLibHooked = true
+        LibStub.keNewLibHooked = true
     end
 end
 

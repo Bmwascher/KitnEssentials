@@ -32,7 +32,7 @@ local ThemeDefaults = {
     textPrimary    = { 1, 1, 1, 1 },
     textSecondary  = { 1, 1, 1, 1 },
     textMuted      = { 1, 1, 1, 1 },
-    selectedBg     = { 1.0, 0.0, 0.549, 0.20 },
+    selectedBg     = { 1.0, 0.0, 0.549, 0.35 },
     selectedText   = { 0.902, 0.902, 0.902, 1 },
     error          = { 0.90, 0.30, 0.30, 1 },
     success        = { 0.30, 0.80, 0.40, 1 },
@@ -78,7 +78,7 @@ local function MakePreset(r, g, b)
         accent      = { r, g, b, 1 },
         accentHover = { r, g, b, 0.25 },
         accentDim   = { r * 0.8, g * 0.8, b * 0.8, 1 },
-        selectedBg  = { r, g, b, 0.20 },
+        selectedBg  = { r, g, b, 0.35 },
         selectedText = { 0.902, 0.902, 0.902, 1 },
     }
 end

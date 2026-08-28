@@ -65,7 +65,7 @@ function GUIFrame:CreateSectionHeader()
     local selectedOverlay = header:CreateTexture(nil, "ARTWORK")
     selectedOverlay:SetTexture("Interface\\Buttons\\WHITE8X8")
     selectedOverlay:SetBlendMode("ADD")
-    selectedOverlay:SetVertexColor(T.selectedBg[1], T.selectedBg[2], T.selectedBg[3], T.selectedBg[4] or 0.25)
+    selectedOverlay:SetVertexColor(T.selectedBg[1], T.selectedBg[2], T.selectedBg[3], T.selectedBg[4] or 0.35)
     selectedOverlay:SetAllPoints()
     selectedOverlay:Hide()
     header.selectedOverlay = selectedOverlay
@@ -300,7 +300,10 @@ function GUIFrame:CreateStaticSidebarItem()
     local selectedOverlay = item:CreateTexture(nil, "ARTWORK")
     selectedOverlay:SetAllPoints()
     selectedOverlay:SetColorTexture(1, 1, 1, 1)
-    selectedOverlay:SetGradient("HORIZONTAL", CreateColor(r, g, b, 0.25), CreateColor(r, g, b, 0))
+    -- Selected strength follows the theme. The item BACKGROUND gradient above
+    -- carries the same literal and is the HOVER state -- leave it alone.
+    selectedOverlay:SetGradient("HORIZONTAL",
+        CreateColor(r, g, b, T.selectedBg[4] or 0.35), CreateColor(r, g, b, 0))
     selectedOverlay:SetTexelSnappingBias(0)
     selectedOverlay:SetSnapToPixelGrid(false)
     selectedOverlay:Hide()
@@ -695,7 +698,7 @@ function GUIFrame:RefreshSidebar()
                         item.selectedBar:Show()
                         item.selectedOverlay:SetColorTexture(1, 1, 1, 1)
                         item.selectedOverlay:SetGradient("HORIZONTAL",
-                            CreateColor(T.accent[1], T.accent[2], T.accent[3], 0.25),
+                            CreateColor(T.accent[1], T.accent[2], T.accent[3], T.selectedBg[4] or 0.35),
                             CreateColor(T.accent[1], T.accent[2], T.accent[3], 0))
                         item.background:SetColorTexture(1, 1, 1, 1)
                         item.background:SetGradient("HORIZONTAL",

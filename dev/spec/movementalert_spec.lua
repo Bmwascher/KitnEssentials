@@ -82,19 +82,77 @@ describe("movement alert spell resolution", function()
         end)
     end)
 
+    -- These cases model GetOverrideSpell, not spellbook known-ness, which
+    -- reports an untalented replacement as known just as it reports its base
+    -- and so cannot separate a pair. The mock returns the id it was given
+    -- unless a case says otherwise, which is what the real API does.
     describe("talent choice pairs", function()
-        it("suppresses the replaced half when the replacement is known", function()
-            _G.C_SpellBook.known[212653] = true -- Shimmer
+        it("suppresses the base when the replacement is live", function()
+            _G.C_Spell.overrideSpell[1953] = 212653 -- Blink -> Shimmer
             assert.is_true(NMA:IsReplacedChoice(1953))    -- Blink is replaced
-            assert.is_false(NMA:IsReplacedChoice(212653)) -- Shimmer is not
+            assert.is_false(NMA:IsReplacedChoice(212653)) -- Shimmer is live
         end)
-        it("suppresses nothing when only the base is known", function()
-            _G.C_SpellBook.known[1953] = true -- Blink alone
+        it("suppresses the REPLACEMENT when the base is the live half", function()
+            -- No override entry: the base resolves to itself, so the base is
+            -- live and the untalented replacement must be hidden. Asking each
+            -- spell about itself cannot see this: the replacement is
+            -- overridden by nothing and so reads as live too.
+            assert.is_false(NMA:IsReplacedChoice(1953))  -- Blink is live
+            assert.is_true(NMA:IsReplacedChoice(212653)) -- Shimmer is not
+            assert.is_false(NMA:IsReplacedChoice(1850))   -- Dash is live
+            assert.is_true(NMA:IsReplacedChoice(252216))  -- Tiger Dash is not
+        end)
+        it("suppresses nothing when a third spell overrides the base", function()
+            -- Outside what this rule describes; hiding both halves would be
+            -- worse than showing one too many.
+            _G.C_Spell.overrideSpell[1953] = 999999
             assert.is_false(NMA:IsReplacedChoice(1953))
             assert.is_false(NMA:IsReplacedChoice(212653))
         end)
+        it("does not fail shut for a baseline spell", function()
+            -- Baseline spells resolve to themselves and must stay visible.
+            assert.is_false(NMA:IsReplacedChoice(1850))   -- Dash
+            assert.is_false(NMA:IsReplacedChoice(109132)) -- Roll
+        end)
         it("never touches spells outside a choice pair", function()
+            _G.C_Spell.overrideSpell[358267] = 999999
             assert.is_false(NMA:IsReplacedChoice(358267)) -- Hover
+        end)
+
+        -- End to end, because the suppression sits behind the knownness gate
+        -- in BuildTracked and both halves of a pair pass that gate. Arcane
+        -- Mage, with both halves of the Blink pair reading as known.
+        local function mage()
+            local M = L.loadMovementAlert({
+                UnitClass = function() return "Mage", "MAGE", 8 end,
+            })
+            _G.GetSpecialization = function() return 1 end
+            _G.GetSpecializationInfo = function() return 62 end
+            _G.C_SpellBook.known = { [1953] = true, [212653] = true }
+            M.db = {}
+            -- Seeded by OnEnable, which never runs headlessly.
+            M.chargeMeta, M.chargeCount = {}, {}
+            return M
+        end
+
+        local function trackedIds(M)
+            local ids = {}
+            for _, entry in ipairs(M:BuildTracked()) do ids[entry.spellId] = true end
+            return ids
+        end
+
+        it("tracks the base alone when the replacement is untalented", function()
+            local ids = trackedIds(mage())
+            assert.is_true(ids[1953])    -- Blink
+            assert.is_nil(ids[212653])   -- Shimmer
+        end)
+
+        it("tracks the replacement alone once it is talented", function()
+            local M = mage()
+            _G.C_Spell.overrideSpell[1953] = 212653
+            local ids = trackedIds(M)
+            assert.is_true(ids[212653])
+            assert.is_nil(ids[1953])
         end)
     end)
 
@@ -155,11 +213,15 @@ describe("NoMovementAlert RoleColor", function()
         assert.same({ 1, 0, 0, 1 }, NMA:RoleColor("TimerColor"))
     end)
 
-    -- isOnGCD is three-valued and only an explicit false means "a real cooldown
-    -- is running". Treating its nil as "cannot tell" and reading the cooldown
-    -- duration object instead is what drew a one-second countdown under an
-    -- ability whose cooldown is half a minute, so the nil case is the one these
-    -- exist to pin. The behaviour is the same in and out of restricted content.
+    -- isOnGCD is three-valued and its nil is AMBIGUOUS: a live 30s cooldown
+    -- reports false for one second and then nil for the remaining 28, while
+    -- the remaining time keeps counting down throughout.
+    -- So timeUntilEndOfStartRecovery decides, and isOnGCD only vetoes the GCD.
+    --
+    -- The duration OBJECT is a separate trap and its gate does not move: it
+    -- answers even when the spell is ready, which drew a one-second countdown
+    -- under a half-minute ability. It stays reachable only on explicit false.
+    -- The behaviour is the same in and out of restricted content.
     describe("what counts as a cooldown worth reporting", function()
         local cooldown, durationRemaining
 
@@ -197,11 +259,20 @@ describe("NoMovementAlert RoleColor", function()
             assert.is_nil(load():ReadCooldown(1))
         end)
 
-        it("stays quiet when the client declines to answer", function()
-            -- isOnGCD absent (neither true nor false) means the client is not
-            -- saying. Nothing may render -- and the duration object below
-            -- must not be consulted either.
-            cooldown = { timeUntilEndOfStartRecovery = 1 }
+        it("reports a cooldown the client stopped flagging", function()
+            -- isOnGCD goes nil a second into a real cooldown while the
+            -- remaining time keeps counting, so requiring an explicit false
+            -- hides the ability for the rest of its cooldown.
+            cooldown = { isOnGCD = nil, timeUntilEndOfStartRecovery = 28.6, duration = 30 }
+            local rem, total = load():ReadCooldown(1)
+            assert.equals(28.6, rem)
+            assert.equals(30, total)
+        end)
+
+        it("does NOT consult the duration object when isOnGCD is nil", function()
+            -- Ready reads as nil/nil, and the duration object answers anyway.
+            -- Reaching it here is what drew a countdown under a ready spell.
+            cooldown = {}
             durationRemaining = 1
             assert.is_nil(load():ReadCooldown(1))
         end)
@@ -223,6 +294,46 @@ describe("NoMovementAlert RoleColor", function()
             cooldown = { isOnGCD = false }
             durationRemaining = 22
             assert.equals(22, load():ReadCooldown(1))
+        end)
+    end)
+
+    -- A charge table at all means a charge spell. Requiring more than one
+    -- charge dropped Shimmer, which has exactly one, onto the plain-cooldown
+    -- path where its recharge was never tracked.
+    describe("what counts as a charge spell", function()
+        -- OnEnable never runs headlessly, so the two charge caches it seeds
+        -- start empty here instead.
+        local function withCharges(info)
+            local NMA = L.loadMovementAlert({
+                C_Spell = {
+                    GetSpellCooldown = function() return nil end,
+                    GetSpellCharges = function() return info end,
+                    GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,
+                },
+            })
+            NMA.chargeMeta, NMA.chargeCount = {}, {}
+            return NMA
+        end
+
+        it("treats a single-charge spell as a charge spell", function()
+            local NMA = withCharges({ currentCharges = 0, maxCharges = 1, cooldownDuration = 20 })
+            local left, isChargeSpell = NMA:ResolveCharges(212653)
+            assert.equals(0, left)
+            assert.is_true(isChargeSpell)
+        end)
+
+        it("still treats a multi-charge spell as a charge spell", function()
+            local NMA = withCharges({ currentCharges = 2, maxCharges = 2, cooldownDuration = 20 })
+            local left, isChargeSpell = NMA:ResolveCharges(109132)
+            assert.equals(2, left)
+            assert.is_true(isChargeSpell)
+        end)
+
+        it("reports no charges for a spell with no charge table", function()
+            local NMA = withCharges(nil)
+            local left, isChargeSpell = NMA:ResolveCharges(101545)
+            assert.is_nil(left)
+            assert.is_false(isChargeSpell)
         end)
     end)
 
