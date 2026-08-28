@@ -10,14 +10,21 @@ local L = require("dev.spec._ke_loader")
 -- The cast-info pair is captured at file scope, so a test that reaches TryStart
 -- needs them present before the load or it dies on a nil upvalue rather than
 -- failing an assertion.
+-- Tests that drive the real START branch need the clock to move, or the settle
+-- delay never elapses and nothing ever drains.
+local now = 0
+local function setNow(t) now = t end
+
 local function load(opts)
     opts = opts or {}
+    now = 0
     _G.UnitAffectingCombat = opts.combat or function() return true end
     _G.UnitCanAttack = opts.canAttack or function() return true end
     _G.UnitCastingInfo = function() return nil end
     _G.UnitChannelInfo = function() return nil end
     return L.loadTargetedSpells({
         UnitExists = opts.exists or function() return true end,
+        GetTime = function() return now end,
     })
 end
 
@@ -295,6 +302,10 @@ describe("TargetedSpells drain queue", function()
     it("drains to empty in FIFO order and resets without rescheduling", function()
         enqueue("nameplate1", 11, 0)
         enqueue("nameplate2", 22, 0)
+        -- Held so the reset can be asserted as a table REPLACEMENT. Checking
+        -- only the indices passes with `self.pendingCasts = {}` deleted, which
+        -- leaves the drained slots on the table forever.
+        local original = TS.pendingCasts
         local order, scheduled = {}, 0
         TS.TryStart = function(_, unit, token)
             order[#order + 1] = unit .. ":" .. token
@@ -304,6 +315,7 @@ describe("TargetedSpells drain queue", function()
         TS:DrainPendingCasts(0)
 
         assert.are.same({ "nameplate1:11", "nameplate2:22" }, order)
+        assert.are_not.equal(original, TS.pendingCasts)
         assert.are.equal(1, TS.pendingHead)
         assert.are.equal(0, TS.pendingTail)
         assert.are.equal(0, scheduled)
@@ -398,40 +410,64 @@ describe("TargetedSpells drain queue", function()
         end)
     end)
 
+    -- Driven through the real surfaces: a START enqueues and schedules, the
+    -- content gate closing discards, a second START schedules afresh, and only
+    -- then does the callback from the FIRST schedule arrive.
     it("leaves only the new drain scheduled across a gate cycle", function()
-        enqueue("nameplate1", 1, 0)
-        TS.drainScheduled = true
-        local stale = TS.drainEpoch
-
-        TS:DiscardPendingCasts()
-
-        enqueue("nameplate2", 1, 99)
-        TS.drainScheduled = true
         local started = 0
         TS.TryStart = function() started = started + 1 end
+        TS.IsEnabled = function() return true end
+        TS.ReleaseAllEntries = function() end
+        TS.UnregisterShardEvents = function() end
+        TS.RegisterShardEvents = function() end
+        TS.ScanExistingNameplates = function() end
+        TS.contentActive = true
+        TS.isPreview = false
 
-        TS:DrainPendingCasts(stale)
+        TS:OnCastEvent("UNIT_SPELLCAST_START", "nameplate1")
+        assert.is_true(TS.drainScheduled)
+        local staleEpoch = TS.drainEpoch
+
+        TS.ShouldBeActive = function() return false end
+        TS:CheckContentGate()
+        assert.is_false(TS.contentActive)
+        assert.is_false(TS.drainScheduled)
+
+        TS.ShouldBeActive = function() return true end
+        TS:CheckContentGate()
+        TS:OnCastEvent("UNIT_SPELLCAST_START", "nameplate2")
+        assert.is_true(TS.drainScheduled)
+        assert.are.equal(1, TS.pendingTail)
+
+        TS:DrainPendingCasts(staleEpoch)
 
         assert.are.equal(0, started)
         assert.are.equal(1, TS.pendingTail)
         assert.is_true(TS.drainScheduled)
     end)
 
-    -- The regression the combat gate would otherwise introduce. Asserted on the
-    -- token rather than on a visible entry: TryStart builds frames the headless
-    -- harness cannot supply, and stubbing it would hide the very defect.
+    -- The regression the combat gate would otherwise introduce. Driven through
+    -- the real START branch, not a manual enqueue: the plan forbids filtering
+    -- relevance at enqueue time, and a hand-built queue entry would pass with
+    -- that forbidden filter added. Asserted on the token rather than a visible
+    -- entry, because TryStart builds frames the headless harness cannot supply
+    -- and stubbing it earlier would hide the defect itself.
     it("does not supersede a queued dispatch on a pre-combat retarget", function()
         local inCombat = false
         TS = load({ combat = function() return inCombat end })
         TS.pendingCasts, TS.pendingHead, TS.pendingTail = {}, 1, 0
         TS.drainScheduled, TS.drainEpoch = false, 0
 
-        local queuedToken = TS:BumpDispatchToken("nameplate5")
-        enqueue("nameplate5", queuedToken, 0)
+        -- Not in combat yet, so this cast MUST still be queued.
+        TS:OnCastEvent("UNIT_SPELLCAST_START", "nameplate5")
+        assert.are.equal(1, TS.pendingTail)
+        local queuedToken = TS.pendingCasts[1].token
+        assert.are.equal(queuedToken, TS.pendingDispatch["nameplate5"])
 
         TS:OnUnitTarget(nil, "nameplate5")
 
         inCombat = true
+        setNow(1)
         local started = {}
         TS.TryStart = function(_, unit, token)
             started[#started + 1] = { unit = unit, token = token }
@@ -539,8 +575,13 @@ describe("TargetedSpells allocation shape", function()
             assert.is_truthy(bodyOf(name):find("self:ReleaseGlow(entry)", 1, true),
                 name .. " does not retire the glow")
         end
-        assert.is_nil(bodyOf("Release"):find("ReleaseGlow", 1, true))
-        assert.is_nil(bodyOf("HidePreview"):find("ReleaseGlow", 1, true))
+        -- Absence on every reuse path, not just two: a stray ReleaseGlow in
+        -- UpdateGlow or OnInterrupted retires a child that is about to be
+        -- reused, which is the rebuild cost this change exists to remove.
+        for _, name in ipairs({ "Release", "UpdateGlow", "OnInterrupted", "HidePreview" }) do
+            assert.is_nil(bodyOf(name):find("ReleaseGlow", 1, true),
+                name .. " retires a glow it should only park)")
+        end
     end)
 end)
 
