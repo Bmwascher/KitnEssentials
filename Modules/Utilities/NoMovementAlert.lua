@@ -131,15 +131,25 @@ end
 -- Same doctrine as Cursor.lua's SetCooldownFromDurationObject note --
 -- never boolean-test a secret.
 --
--- isOnGCD carries the whole answer, and it is three-valued rather than two:
---   false -- a real cooldown is running, so report it
+-- isOnGCD is three-valued, and the third value is AMBIGUOUS:
+--   false -- a real cooldown is running
 --   true  -- the global cooldown only, so stay quiet
---   nil   -- nothing worth reporting: an idle spell
--- Only an explicit false renders. Reading nil as "cannot tell" and falling
--- through to the cooldown duration object instead is what put a one-second
--- countdown under an ability whose real cooldown is half a minute: that
--- object hands back a value whenever it is asked, including when the spell
--- is ready, and the value is secret so nothing about it can be checked.
+--   nil   -- could be either ready OR still on cooldown
+--
+-- Gating on an explicit false hides abilities mid-cooldown. Flying Serpent
+-- Kick reports false for about a second and then nil for the remaining 28,
+-- while timeUntilEndOfStartRecovery keeps counting down throughout. Roll and
+-- Chi Torpedo hold false for their whole cooldown, so the fault looks
+-- spell-specific and is not.
+--
+-- timeUntilEndOfStartRecovery is the discriminator, not isOnGCD: with the
+-- spell READY it is nil. So reject only the GCD case and trust that field.
+--
+-- The duration-object fallback below is a DIFFERENT thing and its gate does
+-- not move. It hands back a value whenever it is asked, including when the
+-- spell is ready, and the value is secret so nothing about it can be checked
+-- -- that is what once drew a one-second countdown under a half-minute
+-- ability. It stays reachable only on an explicit false, never on nil.
 --
 -- This holds identically inside and outside addon restrictions. The field
 -- tracks the cooldown, not the environment.
@@ -148,10 +158,12 @@ function NMA:ReadCooldown(spellId)
     local ok, info = pcall(C_Spell.GetSpellCooldown, spellId)
     if not ok or type(info) ~= "table" then return nil end
 
-    if info.isOnGCD ~= false then return nil end
+    if info.isOnGCD == true then return nil end
 
     local rem = info.timeUntilEndOfStartRecovery
-    if rem == nil and C_Spell.GetSpellCooldownDuration then
+    -- Only on an explicit false, never on nil: see the duration-object note
+    -- above. On nil, a missing rem means ready.
+    if rem == nil and info.isOnGCD == false and C_Spell.GetSpellCooldownDuration then
         local duration = C_Spell.GetSpellCooldownDuration(spellId)
         if duration then
             local okD, r = pcall(duration.GetRemainingDuration, duration)
@@ -241,13 +253,14 @@ end
 -- name dedupe separates them, and both render as two rows counting the same
 -- cooldown.
 --
--- Asking the API which one is live does not work: an override resolver either
--- misfires on unrelated spells or, once narrowed to spells the player does
--- not have, never fires at all for a baseline spell like Dash. The
--- relationships are a fixed three-entry list; stating them is exact and costs
--- nothing.
+-- An earlier note here said an override resolver could not work, because it
+-- would either misfire on unrelated spells or never fire for a baseline spell
+-- like Dash. In-game measurement refuted that: C_Spell.GetOverrideSpell
+-- answers correctly for baseline spells, returning the id it was given.
 --
--- MOST SPECIFIC FIRST: the talent that replaces, then the one it replaces.
+-- The list stays, but only as the SET of spells this rule applies to. Order
+-- within a group no longer matters -- the override API says which half is
+-- live, so nothing here encodes a priority.
 local EXCLUSIVE_GROUPS = {
     { 252216, 1850 },   -- Tiger Dash replaces Dash
     { 212653, 1953 },   -- Shimmer replaces Blink
@@ -258,18 +271,39 @@ for _, group in ipairs(EXCLUSIVE_GROUPS) do
     for _, id in ipairs(group) do EXCLUSIVE_OF[id] = group end
 end
 
--- True when a MORE SPECIFIC member of this spell's group is known: that is
--- the one the player actually has, so this one is the replaced half. Order
--- within the group is the priority, so this holds whichever way round the
--- list is written.
+-- True when this spell is currently REPLACED by another, so the player does
+-- not actually have it.
+--
+-- Do NOT go back to asking whether the other half is "known".
+-- C_SpellBook.IsSpellKnownOrInSpellBook with includeOverrides answers true for
+-- an untalented replacement, which hid Blink for every Mage in every talent
+-- state, and answers false for both halves of the Dash and Roll pairs, which
+-- hid nothing at all.
+--
+-- GetOverrideSpell returns the id it was given when nothing replaces it, so
+-- "overridden" is exactly "the answer differs from the question". Failing open
+-- on an unavailable API is deliberate: showing a replaced ability is a smaller
+-- fault than hiding a live one.
 local function ReplacedByKnownChoice(spellId)
     local group = EXCLUSIVE_OF[spellId]
     if not group then return false end
-    for _, other in ipairs(group) do
-        if other == spellId then return false end
-        if SpellKnown(other) then return true end
-    end
-    return false
+    if not (C_Spell and C_Spell.GetOverrideSpell) then return false end
+
+    -- Ask the BASE, always, whichever half was passed in. The base resolves to
+    -- itself when it is the live half and to the replacement when it is not,
+    -- so one query names the live half and everything else in the group is
+    -- suppressed.
+    --
+    -- Asking each spell about ITSELF is not enough and was wrong: an
+    -- untalented replacement is overridden by nothing, so it resolves to
+    -- itself and reads as live. That showed Tiger Dash next to Dash.
+    local replacement, base = group[1], group[2]
+    local ok, live = pcall(C_Spell.GetOverrideSpell, base)
+    if not ok or type(live) ~= "number" then return false end
+    -- A third spell overriding the base is outside what this rule describes.
+    -- Suppress nothing rather than hide both halves.
+    if live ~= base and live ~= replacement then return false end
+    return spellId ~= live
 end
 
 ------------------------------------------------------------------------
@@ -576,7 +610,10 @@ end
 -- Truth when the client will give it, memory when it will not.
 function NMA:ResolveCharges(spellId)
     local info = SafeCharges(spellId)
-    if info and info.maxCharges and info.maxCharges > 1 then
+    -- Any charge table at all means a charge spell. Gating above 1 dropped
+    -- single-charge spells into the no-charges path, which is wrong: Shimmer
+    -- reports maxCharges 1 and was being tracked as a plain cooldown.
+    if info and info.maxCharges and info.maxCharges >= 1 then
         self.chargeMeta[spellId] = {
             max = info.maxCharges,
             recharge = info.cooldownDuration or 0,

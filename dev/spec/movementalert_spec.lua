@@ -82,18 +82,44 @@ describe("movement alert spell resolution", function()
         end)
     end)
 
+    -- These cases model GetOverrideSpell, not spellbook known-ness. The
+    -- known-ness route is measurably wrong in game: it reported
+    -- an untalented replacement as known, hiding Blink for every Mage, and
+    -- reported both halves of the Dash and Roll pairs as unknown, hiding
+    -- neither. The mock returns the id it was given unless a case says
+    -- otherwise, which is what the real API does.
     describe("talent choice pairs", function()
-        it("suppresses the replaced half when the replacement is known", function()
-            _G.C_SpellBook.known[212653] = true -- Shimmer
+        it("suppresses the base when the replacement is live", function()
+            _G.C_Spell.overrideSpell[1953] = 212653 -- Blink -> Shimmer
             assert.is_true(NMA:IsReplacedChoice(1953))    -- Blink is replaced
-            assert.is_false(NMA:IsReplacedChoice(212653)) -- Shimmer is not
+            assert.is_false(NMA:IsReplacedChoice(212653)) -- Shimmer is live
         end)
-        it("suppresses nothing when only the base is known", function()
-            _G.C_SpellBook.known[1953] = true -- Blink alone
+        it("suppresses the REPLACEMENT when the base is the live half", function()
+            -- No override entry: the base resolves to itself, so the base is
+            -- live and the untalented replacement must be hidden. Asking each
+            -- spell about itself got this wrong and put Tiger Dash on screen
+            -- beside Dash.
+            assert.is_false(NMA:IsReplacedChoice(1953))  -- Blink is live
+            assert.is_true(NMA:IsReplacedChoice(212653)) -- Shimmer is not
+            assert.is_false(NMA:IsReplacedChoice(1850))   -- Dash is live
+            assert.is_true(NMA:IsReplacedChoice(252216))  -- Tiger Dash is not
+        end)
+        it("suppresses nothing when a third spell overrides the base", function()
+            -- Outside what this rule describes; hiding both halves would be
+            -- worse than showing one too many.
+            _G.C_Spell.overrideSpell[1953] = 999999
             assert.is_false(NMA:IsReplacedChoice(1953))
             assert.is_false(NMA:IsReplacedChoice(212653))
         end)
+        it("does not fail shut for a baseline spell", function()
+            -- The first regression hid nothing for Dash and Roll because it
+            -- answered false for both halves. Baseline spells resolve to
+            -- themselves and must stay visible.
+            assert.is_false(NMA:IsReplacedChoice(1850))   -- Dash
+            assert.is_false(NMA:IsReplacedChoice(109132)) -- Roll
+        end)
         it("never touches spells outside a choice pair", function()
+            _G.C_Spell.overrideSpell[358267] = 999999
             assert.is_false(NMA:IsReplacedChoice(358267)) -- Hover
         end)
     end)
@@ -155,11 +181,15 @@ describe("NoMovementAlert RoleColor", function()
         assert.same({ 1, 0, 0, 1 }, NMA:RoleColor("TimerColor"))
     end)
 
-    -- isOnGCD is three-valued and only an explicit false means "a real cooldown
-    -- is running". Treating its nil as "cannot tell" and reading the cooldown
-    -- duration object instead is what drew a one-second countdown under an
-    -- ability whose cooldown is half a minute, so the nil case is the one these
-    -- exist to pin. The behaviour is the same in and out of restricted content.
+    -- isOnGCD is three-valued and its nil is AMBIGUOUS: a live 30s cooldown
+    -- reports false for one second and then nil for the remaining 28, while
+    -- the remaining time keeps counting down throughout.
+    -- So timeUntilEndOfStartRecovery decides, and isOnGCD only vetoes the GCD.
+    --
+    -- The duration OBJECT is a separate trap and its gate does not move: it
+    -- answers even when the spell is ready, which drew a one-second countdown
+    -- under a half-minute ability. It stays reachable only on explicit false.
+    -- The behaviour is the same in and out of restricted content.
     describe("what counts as a cooldown worth reporting", function()
         local cooldown, durationRemaining
 
@@ -197,11 +227,21 @@ describe("NoMovementAlert RoleColor", function()
             assert.is_nil(load():ReadCooldown(1))
         end)
 
-        it("stays quiet when the client declines to answer", function()
-            -- isOnGCD absent (neither true nor false) means the client is not
-            -- saying. Nothing may render -- and the duration object below
-            -- must not be consulted either.
-            cooldown = { timeUntilEndOfStartRecovery = 1 }
+        it("reports a cooldown the client stopped flagging", function()
+            -- The Flying Serpent Kick case. isOnGCD goes nil a second into a
+            -- real cooldown while the remaining time keeps counting. The old
+            -- rule required an explicit false and hid the ability for the
+            -- other 28 seconds.
+            cooldown = { isOnGCD = nil, timeUntilEndOfStartRecovery = 28.6, duration = 30 }
+            local rem, total = load():ReadCooldown(1)
+            assert.equals(28.6, rem)
+            assert.equals(30, total)
+        end)
+
+        it("does NOT consult the duration object when isOnGCD is nil", function()
+            -- Ready reads as nil/nil, and the duration object answers anyway.
+            -- Reaching it here is what drew a countdown under a ready spell.
+            cooldown = {}
             durationRemaining = 1
             assert.is_nil(load():ReadCooldown(1))
         end)

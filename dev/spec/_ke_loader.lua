@@ -2076,12 +2076,20 @@ function L.loadMovementAlert(overrides)
     _G.GetTime = overrides.GetTime or function() return 1000 end
     _G.UnitClass = overrides.UnitClass or function() return "Druid", "DRUID", 11 end
     _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
+    -- overrideSpell models the live client: GetOverrideSpell returns the id it
+    -- was given unless a case declares a replacement, which is how the real
+    -- API reports "nothing overrides this".
     _G.C_Spell = overrides.C_Spell or {
+        overrideSpell = {},
         GetSpellCooldown = function() return nil end,
         GetSpellCharges = function() return nil end,
         GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,
     }
-    -- The module resolves known-ness through C_SpellBook. Specs override
+    _G.C_Spell.overrideSpell = _G.C_Spell.overrideSpell or {}
+    _G.C_Spell.GetOverrideSpell = _G.C_Spell.GetOverrideSpell or function(spellId)
+        return _G.C_Spell.overrideSpell[spellId] or spellId
+    end
+    -- Still used for the learned check on non-paired spells. Specs override
     -- .known per-case; everything defaults to unknown.
     _G.C_SpellBook = overrides.C_SpellBook or {
         known = {},
