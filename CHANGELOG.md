@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.12
+
+### Targeted Spells
+- Enemies that begin casting at you before they are in combat no longer create
+  an entry. Casts from enemies already fighting are unaffected
+- Significantly reduced the cost of tracking casts. The module now listens only
+  to the nameplates around you instead of every casting unit in the world, uses
+  one shared timer for pending casts instead of one per cast, reuses the
+  important-cast glow between casts, and caps its animation at 60 frames a
+  second
+- Casts from enemies on nameplates beyond the first forty are now tracked
+
+---
+
 ## v4.4.11
 
 ### Combat Texts
