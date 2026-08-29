@@ -555,6 +555,35 @@ function KE.Skins.SetSkinColors(bg, border) end
 ---@param outline string? "NONE" | "OUTLINE" | "THICK", nil to leave unchanged
 function KE.Skins.SetSkinFont(face, size, outline) end
 
+-- ─── Skinning (Modules/Skinning/Frames/LFG.lua) ──────────
+--- Returns the selected role icon set: "modern", "blizzard" or "circle".
+---@return string
+function KE.Skins.GetRoleIconSet() end
+
+--- Repaints the Group Finder's three role-art surfaces with the current set.
+function KE.Skins.RefreshLFGRoleIcons() end
+
+-- ─── Skinning (Modules/Skinning/ChatRoleIcons.lua) ───────
+--- Builds the chat role icon escape strings for one set.
+---@param set string
+---@param classes string[]
+---@return table<string, string>
+function KE.BuildChatRoleIconStrings(set, classes) end
+
+--- Resolves which set can be drawn for one member; only circle degrades.
+---@param set string
+---@param hasClass boolean
+---@return string
+function KE.ResolveChatRoleIconSet(set, hasClass) end
+
+--- Accepts or refuses one chat member by identity readability.
+---@param role any
+---@param name any
+---@param realm any
+---@return string|nil name
+---@return string|nil realm
+function KE.AcceptChatMember(role, name, realm) end
+
 -- ─── KitnEssentials AceAddon globals ──────────────────────
 ---@class KitnEssentials
 ---@field db AceDB
