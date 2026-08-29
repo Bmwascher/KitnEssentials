@@ -51,7 +51,6 @@ local function IncentiveHide(icon)
     if icon and icon.SetAlpha then icon:SetAlpha(0) end
 end
 
-local unpack = unpack
 local ROLE_ICON = KE.ROLE_ICONS
 
 local ROLE_ICON_SETS = { modern = true, blizzard = true, circle = true }
@@ -72,14 +71,6 @@ local BORDERLESS_ROLE_ATLASES = {
     HEALER  = "groupfinder-icon-role-micro-heal",
     DAMAGER = "groupfinder-icon-role-micro-dps",
 }
-
--- RoleEnumerate and ClassEnumerate activities share this hook. In the class
--- case the icons carry class art and Blizzard's displayData is keyed by
--- class, so role art painted over it is wrong. Identity, not contents: our
--- own ROLE_ORDER holds the same three strings in the same order.
-function S.ShouldPaintEnumerate(iconOrder)
-    return iconOrder ~= nil and iconOrder == _G.LFG_LIST_GROUP_DATA_ROLE_ORDER
-end
 
 -- Three states, not two. An unfilled slot carries Blizzard's own
 -- groupfinder-icon-emptyslot placeholder and must keep it; a slot above the
@@ -102,6 +93,19 @@ end
 local function HideIconExtras(d)
     if d.aeClassBar then d.aeClassBar:Hide() end
     if d.aeLeader then d.aeLeader:Hide() end
+end
+
+-- Every path that declines to paint must run this before returning. The rows
+-- are pooled: one that drew a member last time keeps our class bar and leader
+-- mark parented to its slot, and a refusal that only returns leaves them
+-- standing over whatever Blizzard drew instead.
+local function ClearEnumerateExtras(enumerate)
+    local icons = enumerate and enumerate.Icons
+    if not icons then return end
+    for i = 1, #icons do
+        local slot = icons[i]
+        if slot then HideIconExtras(S.data(slot)) end
+    end
 end
 
 -- Every set writes every layer. Icons are pooled and categories switch under
@@ -202,12 +206,13 @@ local function UpdateEnumerate(enumerate, numPlayers, _, disabled, iconOrder)
     local ed = S.data(enumerate)
     ed.aeArgs = nil
 
-    if not S.ShouldPaintEnumerate(iconOrder) then
-        if trace then
-            print("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons: not a role enumerate; skipped")
-        end
-        return
-    end
+    -- Every display type is painted, including the class enumerates Blizzard
+    -- fills by class. The member list is re-derived from the search result
+    -- rather than read out of Blizzard's display data, so the fill order it
+    -- chose does not constrain us, and the selected set means the same thing
+    -- in every category. `modern` carries the class in its bar and `circle`
+    -- in its ring, so painting a class display does not lose the class.
+    --
     -- `disabled` is Blizzard's own searchResultInfo.isDelisted, and
     -- GetSearchResultInfo is declared SecretInChatMessagingLockdown. A secret
     -- BOOLEAN cannot be used in if/and/or at all, so `disabled and 0.5 or 1`
@@ -216,6 +221,7 @@ local function UpdateEnumerate(enumerate, numPlayers, _, disabled, iconOrder)
         if trace then
             print("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons: disabled is secret; left Blizzard's paint")
         end
+        ClearEnumerateExtras(enumerate)
         return
     end
 
@@ -232,9 +238,15 @@ local function UpdateEnumerate(enumerate, numPlayers, _, disabled, iconOrder)
     local parent = enumerate:GetParent()
     local button = parent and parent:GetParent()
     local resultID = button and button.resultID
-    if not resultID then return end
+    if not resultID then
+        ClearEnumerateExtras(enumerate)
+        return
+    end
     local ok, result = pcall(_G.C_LFGList.GetSearchResultInfo, resultID)
-    if not ok or not result then return end
+    if not ok or not result then
+        ClearEnumerateExtras(enumerate)
+        return
+    end
 
     -- A successful pcall can still hand back a SECRET number. Truth-testing
     -- it or using it as a loop bound is where it throws, and both sit outside
@@ -244,6 +256,7 @@ local function UpdateEnumerate(enumerate, numPlayers, _, disabled, iconOrder)
         if trace then
             print("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons: numMembers unreadable; left Blizzard's paint")
         end
+        ClearEnumerateExtras(enumerate)
         return
     end
 
@@ -363,32 +376,18 @@ local function HookLFGListIcons()
     if lfgListIconsHooked then return end
     if _G.LFGListGroupDataDisplayEnumerate_Update and _G.C_LFGList
         and _G.C_LFGList.GetSearchResultPlayerInfo then
-        -- DEFERRED, same reason as the applicant hooks below:
-        -- LFGListApplicationViewer_UpdateInfo drives the DataDisplay and
-        -- then compares SECRET values (the listing name is |Kl21|k), so
-        -- running our icon swap inside its execution taints it:
+        -- SYNCHRONOUS, unlike the applicant hooks below. These two run inside
+        -- Blizzard's own update, before the frame is presented, so its art
+        -- never reaches a draw. Deferring them by even one frame is visible:
+        -- the stock icons paint, then ours replace them on the next tick, and
+        -- a class enumerate flashes its class circles on every refresh
+        -- because we hide them a frame late.
         --
-        --   LFGList.lua: attempt to compare a secret number value
-        --   (execution tainted by 'KitnEssentials')
-        --
-        -- Icon swaps are cosmetic; a frame later is fine.
-        local function Defer(fn, key)
-            return function(frame, ...)
-                if not frame or S.data(frame)[key] then return end
-                S.data(frame)[key] = true
-                local args = { ... }
-                C_Timer.After(0, function()
-                    S.data(frame)[key] = nil
-                    fn(frame, unpack(args))
-                end)
-            end
-        end
-
-        hooksecurefunc("LFGListGroupDataDisplayEnumerate_Update",
-            Defer(UpdateEnumerate, "enumQueued"))
+        -- The taint the applicant hooks defer around comes from
+        -- LFGListApplicationViewer_UpdateInfo, which is not in this call path.
+        hooksecurefunc("LFGListGroupDataDisplayEnumerate_Update", UpdateEnumerate)
         if _G.LFGListGroupDataDisplayRoleCount_Update then
-            hooksecurefunc("LFGListGroupDataDisplayRoleCount_Update",
-                Defer(UpdateRoleCount, "roleCountQueued"))
+            hooksecurefunc("LFGListGroupDataDisplayRoleCount_Update", UpdateRoleCount)
         end
         lfgListIconsHooked = true
     elseif not lfgListIconsReported then

@@ -37,28 +37,6 @@ describe("S.GetRoleIconSet", function()
     end)
 end)
 
-describe("LFG role icons: the display-type gate", function()
-    -- Blizzard routes RoleEnumerate and ClassEnumerate activities through the
-    -- SAME hook. In ClassEnumerate the icons carry CLASS art, so painting
-    -- role art over them is a defect. The two are told apart by iconOrder
-    -- IDENTITY -- KE's own ROLE_ORDER holds the same three strings, so a
-    -- contents comparison passes while being wrong.
-    it("paints when iconOrder is Blizzard's role order table", function()
-        local _, S = loader.loadLFGSkin({})
-        assert.is_true(S.ShouldPaintEnumerate(_G.LFG_LIST_GROUP_DATA_ROLE_ORDER))
-    end)
-
-    it("refuses a different table with identical contents", function()
-        local _, S = loader.loadLFGSkin({})
-        assert.is_false(S.ShouldPaintEnumerate({ "TANK", "HEALER", "DAMAGER" }))
-    end)
-
-    it("refuses when iconOrder is absent", function()
-        local _, S = loader.loadLFGSkin({})
-        assert.is_false(S.ShouldPaintEnumerate(nil))
-    end)
-end)
-
 describe("LFG role icons: slot classification", function()
     local function slot(shown) return { shown = shown, IsShown = function(s) return s.shown end } end
 
