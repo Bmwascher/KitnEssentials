@@ -413,7 +413,10 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
             else
                 label = tostring(spellId)
             end
-            local isDisabled = type(entry) == "table" and not entry.enabled
+            -- `== false`, not `not entry.enabled`: the filter rule treats a row
+            -- with no enabled key as ENABLED, and a spec pins that. Greying it
+            -- here would show a row as off while its spell still gets through.
+            local isDisabled = type(entry) == "table" and entry.enabled == false
             local text = label .. " (" .. spellId .. ")"
             if isDisabled then
                 text = "|cff666666" .. text .. "|r"

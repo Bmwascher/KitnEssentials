@@ -107,6 +107,24 @@ end
 -- calls this once to seed a valid starting state, Apply calls it again on
 -- every reconfiguration to pick up changed settings.
 local function ConfigureHost(host, settings)
+    -- Glow off stops every group rather than only hiding the host. A playing
+    -- animation on a hidden texture still costs a C-side update, which is the
+    -- same reason the pixel branch below stops the sheet layers instead of
+    -- hiding them. appliedFlip is cleared so re-enabling is seen as a change
+    -- and replays -- the reconfiguration that re-enables is the restart hook.
+    if not settings.GlowEnabled then
+        host.animGroup:Stop()
+        if host.overlayGroup then
+            host.overlayGroup:Stop()
+            host.overlay:Hide()
+        end
+        HidePixel(host)
+        host.texture:Hide()
+        host.appliedFlip = nil
+        host:Hide()
+        return
+    end
+
     local key = GlowRules.ResolveType(settings.GlowType)
     local style = GlowRules.STYLES[key] or GlowRules.STYLES.ants
 
