@@ -368,8 +368,8 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     -- Conditional group: Delete Entry button is only enabled when a
     -- non-default entry is selected. The master `db.Enabled` gate is
     -- handled by `manager:UpdateAll(mainEnabled)` BEFORE conditions run
-    -- (see GUI-WidgetStateManager line 50), so the predicate only needs
-    -- to check the per-selection condition.
+    -- (GUI-WidgetStateManager), so the predicate only needs to check the
+    -- per-selection condition.
     manager:SetCondition("deletable", function()
         if not selectedSpellId then return false end
         local entry = db.Allowlist[selectedSpellId]

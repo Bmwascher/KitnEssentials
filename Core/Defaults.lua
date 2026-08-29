@@ -1220,11 +1220,11 @@ local Defaults = {
             GlowEnabled       = true,
             GlowType          = "pixel",
             GlowColor         = { 0, 1, 0, 1 },
-            -- Six of the keys below are retained but unread -- GlowLines,
-            -- GlowLength, GlowThickness, GlowBorder, GlowScale and
-            -- GlowStartAnim -- so a profile saved by an older version still
-            -- loads cleanly. GlowFrequency and GlowDuration in the same run
-            -- are NOT dead and are still read.
+            -- Four of the keys below are retained but unread -- GlowLength,
+            -- GlowBorder, GlowScale and GlowStartAnim -- so a profile saved by
+            -- an older version still loads cleanly. GlowLines and GlowThickness
+            -- became live again with the pixel style; GlowFrequency and
+            -- GlowDuration were never dead.
             GlowLines         = 8,
             GlowFrequency     = 0.25,
             GlowLength        = 10,
