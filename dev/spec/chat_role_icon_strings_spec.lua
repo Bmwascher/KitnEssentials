@@ -24,6 +24,20 @@ describe("Chat role icon strings", function()
         assert.is_truthy(s.TANK:find("|t$"))
     end)
 
+    -- Every art set takes the texture path, not just modern. Pinning one new
+    -- set by name would pass even if the builder still tested `== "modern"`
+    -- and happened to be handed that one key, so this walks them all.
+    it("builds texture escapes for every art set", function()
+        for _, set in ipairs({ "ringed", "outlined", "framed", "hexagon",
+                              "plain", "muted", "shaded" }) do
+            local s = build(set)
+            assert.is_truthy(s.TANK:find("^|T"), set .. " should draw a texture")
+            assert.is_truthy(s.TANK:find("tank%-" .. set .. "%.png"), set .. " should draw its own art")
+            assert.is_truthy(s.HEALER:find("healer%-" .. set .. "%.png"))
+            assert.is_truthy(s.DAMAGER:find("dps%-" .. set .. "%.png"))
+        end
+    end)
+
     -- circle draws the Blizzard badge in chat. Its Group Finder art composes
     -- a class ring and a role glyph, which an |A| escape cannot express: the
     -- declared width IS the advance, so an overlay reserves the sum of both

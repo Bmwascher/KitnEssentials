@@ -37,12 +37,18 @@ end
 -- one thing a role icon exists to show.
 --
 -- Chat therefore needs no class at all, which is why nothing here reads one.
+--
+-- The art table is read directly rather than through the skinning helper that
+-- the Group Finder painters share. This file exists so a spec can load the
+-- builder without the skinning tree, and that loader supplies no KE.Skins at
+-- all; one duplicated table lookup is the price of keeping it loadable alone.
 function KE.BuildChatRoleIconStrings(set)
     local out = {}
+    local art = KE.ROLE_ICON_ART and KE.ROLE_ICON_ART[set]
     for i = 1, #ROLES do
         local role = ROLES[i]
-        if set == "modern" then
-            out[role] = format("|T%s:14:14|t", KE.ROLE_ICONS[role])
+        if art then
+            out[role] = format("|T%s:14:14|t", art[role])
         else
             out[role] = format("|A:%s:14:14|a", LARGE_ROLE_ATLASES[role])
         end

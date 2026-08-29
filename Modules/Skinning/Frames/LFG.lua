@@ -52,9 +52,20 @@ local function IncentiveHide(icon)
 end
 
 local unpack = unpack
-local ROLE_ICON = KE.ROLE_ICONS
 
-local ROLE_ICON_SETS = { modern = true, blizzard = true, circle = true }
+-- The one place the art decision is made. Returns a texture path for an art
+-- set, or nil for a set that draws atlases instead. Exported so the routing
+-- can be tested without a mocked frame tree; the painters below are file-local
+-- and reachable only through Blizzard's hooks.
+function S.RoleArtPath(set, role)
+    local art = KE.ROLE_ICON_ART[set]
+    return art and art[role] or nil
+end
+
+-- Derived, so adding a set means adding art and nothing else. The two
+-- non-art keys are the only literals.
+local ROLE_ICON_SETS = { blizzard = true, circle = true }
+for set in pairs(KE.ROLE_ICON_ART) do ROLE_ICON_SETS[set] = true end
 
 -- The single read path for the saved role-icon-set key. LFG.lua, Chat.lua and
 -- the GUI callback all come through GetRoleIconSet, so an absent or
@@ -142,8 +153,9 @@ local function ReskinMemberIcon(slot, set, role, class, isLeader, alpha)
         if plain then plain:Hide() end
         if circle then circle:Hide() end
         if withBg then
-            if set == "modern" then
-                withBg:SetTexture(ROLE_ICON[role])
+            local path = S.RoleArtPath(set, role)
+            if path then
+                withBg:SetTexture(path)
                 withBg:SetTexCoord(0, 1, 0, 1)
             else
                 withBg:SetAtlas(_G.LFG_LIST_GROUP_DATA_ATLASES[role], false)
@@ -172,7 +184,9 @@ local function ReskinMemberIcon(slot, set, role, class, isLeader, alpha)
         d.aeLeader:Hide()
     end
 
-    local color = set == "modern" and _G.RAID_CLASS_COLORS
+    -- Every KE art set carries the bar; blizzard draws no class indicator at
+    -- all, and circle composes the class into its ring instead.
+    local color = KE.ROLE_ICON_ART[set] and _G.RAID_CLASS_COLORS
         and _G.RAID_CLASS_COLORS[class]
     if color then
         if not d.aeClassBar then
@@ -359,8 +373,9 @@ local function UpdateRoleCount(roleCount)
                 S.PixelSnap(icon)
                 d.aeSnap = true
             end
-            if set == "modern" then
-                icon:SetTexture(ROLE_ICON[slot[3]])
+            local path = S.RoleArtPath(set, slot[3])
+            if path then
+                icon:SetTexture(path)
                 icon:SetTexCoord(0, 1, 0, 1)
             else
                 -- Blizzard's own update never re-sets this atlas, so leaving

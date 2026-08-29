@@ -970,6 +970,26 @@ local function managedSubset(overrides)
     return t
 end
 
+-- Mirrors Core/Globals.lua's art table. Membership is what makes a set an ART
+-- set, so a fixture that omits a set changes what the code under test decides.
+local ROLE_ICON_ART_SETS = {
+    "modern", "ringed", "outlined", "framed",
+    "hexagon", "plain", "muted", "shaded",
+}
+
+local function roleIconArt(PATH)
+    local art = {}
+    for i = 1, #ROLE_ICON_ART_SETS do
+        local set = ROLE_ICON_ART_SETS[i]
+        art[set] = {
+            TANK = PATH .. [[RoleIcons\tank-]] .. set .. ".png",
+            HEALER = PATH .. [[RoleIcons\healer-]] .. set .. ".png",
+            DAMAGER = PATH .. [[RoleIcons\dps-]] .. set .. ".png",
+        }
+    end
+    return art
+end
+
 -- Modules/Skinning/Frames/LFG.lua. Only the role-icon resolver and painters
 -- are under test; the S stub carries the minimum the file touches at load,
 -- which is Register (called at file scope) plus the data/PixelSnap pair the
@@ -998,11 +1018,8 @@ function L.loadLFGSkin(overrides)
         PATH = [[Interface\AddOns\KitnEssentials\Media\]],
         db = { profile = { Skinning = overrides.Skinning or { BlizzardFrames = {} } } },
     }
-    KE.ROLE_ICONS = {
-        TANK = KE.PATH .. [[RoleIcons\tank-modern.png]],
-        HEALER = KE.PATH .. [[RoleIcons\healer-modern.png]],
-        DAMAGER = KE.PATH .. [[RoleIcons\dps-modern.png]],
-    }
+    KE.ROLE_ICON_ART = roleIconArt(KE.PATH)
+    KE.ROLE_ICONS = KE.ROLE_ICON_ART.modern
     KE.Skins = {
         Register = function() end,
         -- LFG.lua calls S:RegisterEarly(Skin, "LFG") at file scope. Without
@@ -1030,15 +1047,23 @@ end
 function L.loadChatRoleIconStrings()
     local helpersLocal = require("dev.spec._helpers")
     local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]] }
-    KE.ROLE_ICONS = {
-        TANK = KE.PATH .. [[RoleIcons\tank-modern.png]],
-        HEALER = KE.PATH .. [[RoleIcons\healer-modern.png]],
-        DAMAGER = KE.PATH .. [[RoleIcons\dps-modern.png]],
-    }
+    KE.ROLE_ICON_ART = roleIconArt(KE.PATH)
+    KE.ROLE_ICONS = KE.ROLE_ICON_ART.modern
     -- loadModule returns the KE table, never the chunk's own return value,
     -- so the builder is taken off KE explicitly.
     helpersLocal.loadModule("Modules/Skinning/ChatRoleIcons.lua", KE)
     return KE.BuildChatRoleIconStrings
+end
+
+-- Modules/Skinning/RoleIconSamples.lua. Same reason as the chat builder above:
+-- the file holds one pure function and needs no KE.Skins and no frames, so it
+-- loads against a bare KE carrying only the art table.
+function L.loadRoleIconSample()
+    local helpersLocal = require("dev.spec._helpers")
+    local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]] }
+    KE.ROLE_ICON_ART = roleIconArt(KE.PATH)
+    helpersLocal.loadModule("Modules/Skinning/RoleIconSamples.lua", KE)
+    return KE.BuildRoleIconSample, KE.ROLE_ICON_ART
 end
 
 function L.loadChatMemberAcceptor(overrides)
@@ -1053,7 +1078,7 @@ function L.loadChatMemberAcceptor(overrides)
         issecretvalue = overrides.issecretvalue or function() return false end,
     })
     local helpersLocal = require("dev.spec._helpers")
-    local KE = { PATH = "", ROLE_ICONS = {} }
+    local KE = { PATH = "", ROLE_ICONS = {}, ROLE_ICON_ART = {} }
     helpersLocal.loadModule("Core/Secret.lua", KE)
     helpersLocal.loadModule("Modules/Skinning/ChatRoleIcons.lua", KE)
     return KE.AcceptChatMember

@@ -25,6 +25,20 @@ describe("S.GetRoleIconSet", function()
         assert.are.equal("modern", resolverWith({ RoleIconSet = "nonsense" }))
     end)
 
+    -- Iterating is the point. Asserting only the fallback passes even if the
+    -- validity list is never derived from the art table; asserting one named
+    -- art key passes even if the list is hand-maintained and drifts from the
+    -- art. Only "every art key resolves to itself" tests what the design says.
+    it("accepts every key the art table defines", function()
+        local KE = loader.loadLFGSkin({})
+        local seen = 0
+        for set in pairs(KE.ROLE_ICON_ART) do
+            assert.are.equal(set, resolverWith({ RoleIconSet = set }))
+            seen = seen + 1
+        end
+        assert.is_true(seen >= 8)
+    end)
+
     -- The old key was a TABLE with an .Enabled field. A reader that still
     -- expected that shape would index a string and silently get nil.
     it("falls back to modern for the retired table-shaped value", function()
@@ -34,6 +48,43 @@ describe("S.GetRoleIconSet", function()
     it("returns modern when the BlizzardFrames block itself is absent", function()
         local _, S = loader.loadLFGSkin({ Skinning = {} })
         assert.are.equal("modern", S.GetRoleIconSet())
+    end)
+end)
+
+-- The one place the PNG-versus-atlas decision is made. The painters that call
+-- it are file-local and reachable only through Blizzard's hooks, so this is
+-- the seam that makes the routing testable at all.
+describe("S.RoleArtPath", function()
+    local KE, S
+
+    before_each(function()
+        KE, S = loader.loadLFGSkin({})
+    end)
+
+    it("returns the set's own art, not modern's", function()
+        assert.are.equal(KE.ROLE_ICON_ART.ringed.TANK, S.RoleArtPath("ringed", "TANK"))
+        assert.are.equal(KE.ROLE_ICON_ART.shaded.DAMAGER, S.RoleArtPath("shaded", "DAMAGER"))
+        assert.are_not.equal(S.RoleArtPath("modern", "TANK"), S.RoleArtPath("framed", "TANK"))
+    end)
+
+    it("returns a path for every art set and role", function()
+        for set, art in pairs(KE.ROLE_ICON_ART) do
+            for _, role in ipairs({ "TANK", "HEALER", "DAMAGER" }) do
+                assert.are.equal(art[role], S.RoleArtPath(set, role))
+            end
+        end
+    end)
+
+    -- nil is the signal to draw an atlas instead, so these two are the whole
+    -- reason blizzard and circle keep their current look.
+    it("returns nil for the two sets that draw atlases", function()
+        assert.is_nil(S.RoleArtPath("blizzard", "TANK"))
+        assert.is_nil(S.RoleArtPath("circle", "TANK"))
+    end)
+
+    it("returns nil for an unknown set or role", function()
+        assert.is_nil(S.RoleArtPath("nonsense", "TANK"))
+        assert.is_nil(S.RoleArtPath("modern", "NONSENSE"))
     end)
 end)
 

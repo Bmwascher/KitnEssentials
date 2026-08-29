@@ -47,13 +47,30 @@ KE.GEM_SOCKET_TYPES = {
     { name = "Fiber",      locale = "EMPTY_SOCKET_FIBER",      icon = 136260 },
 }
 
--- Role icons for group-finder and role-check displays. Keyed by the string
--- Blizzard's role APIs return, so a lookup miss is the correct no-op.
-KE.ROLE_ICONS = {
-    TANK    = KE.PATH .. [[RoleIcons\tank-modern.png]],
-    HEALER  = KE.PATH .. [[RoleIcons\healer-modern.png]],
-    DAMAGER = KE.PATH .. [[RoleIcons\dps-modern.png]],
-}
+-- Role icon art, one table per selectable set. Keyed by the string Blizzard's
+-- role APIs return, so a lookup miss is the correct no-op. Membership of this
+-- table is what makes a set an ART set: `blizzard` and `circle` are absent
+-- because they draw atlases rather than bundled art, and the painters, the
+-- set-validity list and the class-bar rule all derive from that one fact.
+KE.ROLE_ICON_ART = {}
+do
+    local SETS = {
+        "modern", "ringed", "outlined", "framed",
+        "hexagon", "plain", "muted", "shaded",
+    }
+    for i = 1, #SETS do
+        local set = SETS[i]
+        KE.ROLE_ICON_ART[set] = {
+            TANK    = KE.PATH .. [[RoleIcons\tank-]] .. set .. ".png",
+            HEALER  = KE.PATH .. [[RoleIcons\healer-]] .. set .. ".png",
+            DAMAGER = KE.PATH .. [[RoleIcons\dps-]] .. set .. ".png",
+        }
+    end
+end
+
+-- Kept as the modern table so RaidControl, which has no set of its own to
+-- follow, keeps drawing exactly what it drew before.
+KE.ROLE_ICONS = KE.ROLE_ICON_ART.modern
 
 if KE.LSM then
     KE.LSM:Register("font", "Expressway", KE.FONT)
