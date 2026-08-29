@@ -51,6 +51,7 @@ local function IncentiveHide(icon)
     if icon and icon.SetAlpha then icon:SetAlpha(0) end
 end
 
+local unpack = unpack
 local ROLE_ICON = KE.ROLE_ICONS
 
 local ROLE_ICON_SETS = { modern = true, blizzard = true, circle = true }
@@ -376,18 +377,33 @@ local function HookLFGListIcons()
     if lfgListIconsHooked then return end
     if _G.LFGListGroupDataDisplayEnumerate_Update and _G.C_LFGList
         and _G.C_LFGList.GetSearchResultPlayerInfo then
-        -- SYNCHRONOUS, unlike the applicant hooks below. These two run inside
-        -- Blizzard's own update, before the frame is presented, so its art
-        -- never reaches a draw. Deferring them by even one frame is visible:
-        -- the stock icons paint, then ours replace them on the next tick, and
-        -- a class enumerate flashes its class circles on every refresh
-        -- because we hide them a frame late.
+        -- DEFERRED, and it must stay that way. Both callers of
+        -- LFGListGroupDataDisplay_Update keep using secret values after it
+        -- returns: LFGListSearchEntry_Update compares searchResultInfo.voiceChat
+        -- three lines later, and the applicant viewer's GROUP_ROSTER_UPDATE
+        -- path continues into UpdateInviteState, which reads active entry data.
+        -- Painting inside that stack taints it and Blizzard throws on the first
+        -- secret it touches -- only under chat messaging lockdown, so an open
+        -- world test looks clean and a dungeon crashes.
         --
-        -- The taint the applicant hooks defer around comes from
-        -- LFGListApplicationViewer_UpdateInfo, which is not in this call path.
-        hooksecurefunc("LFGListGroupDataDisplayEnumerate_Update", UpdateEnumerate)
+        -- The cost is one frame of Blizzard's art on every refresh.
+        local function Defer(fn, key)
+            return function(frame, ...)
+                if not frame or S.data(frame)[key] then return end
+                S.data(frame)[key] = true
+                local args = { ... }
+                C_Timer.After(0, function()
+                    S.data(frame)[key] = nil
+                    fn(frame, unpack(args))
+                end)
+            end
+        end
+
+        hooksecurefunc("LFGListGroupDataDisplayEnumerate_Update",
+            Defer(UpdateEnumerate, "enumQueued"))
         if _G.LFGListGroupDataDisplayRoleCount_Update then
-            hooksecurefunc("LFGListGroupDataDisplayRoleCount_Update", UpdateRoleCount)
+            hooksecurefunc("LFGListGroupDataDisplayRoleCount_Update",
+                Defer(UpdateRoleCount, "roleCountQueued"))
         end
         lfgListIconsHooked = true
     elseif not lfgListIconsReported then
