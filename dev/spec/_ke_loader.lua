@@ -1059,15 +1059,6 @@ function L.loadChatMemberAcceptor(overrides)
     return KE.AcceptChatMember
 end
 
--- No mock environment here on purpose: ChatRoleIcons.lua touches no WoW API at
--- file scope, and this resolver consults no secret helper.
-function L.loadChatRoleIconSetResolver()
-    local helpersLocal = require("dev.spec._helpers")
-    local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]], ROLE_ICONS = {} }
-    helpersLocal.loadModule("Modules/Skinning/ChatRoleIcons.lua", KE)
-    return KE.ResolveChatRoleIconSet
-end
-
 function L.loadCursor(overrides)
     overrides = overrides or {}
     -- Managed overrides go THROUGH installMock so the caller still wins on

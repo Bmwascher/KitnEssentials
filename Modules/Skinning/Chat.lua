@@ -2739,23 +2739,18 @@ function RebuildLFGRoles()
 
     local set = KE.Skins and KE.Skins.GetRoleIconSet and KE.Skins.GetRoleIconSet() or "modern"
 
-    -- Three secret-capable values per member, all guarded before any truth
-    -- test, comparison, concatenation or table index. One secret member is
-    -- skipped; it does not downgrade the others and does not abort the walk.
-    ---@param class string? already filtered to safe-or-nil by both callers
-    local function store(name, realm, role, class)
+    -- One table for the whole walk. Nothing here varies per member, so
+    -- rebuilding it inside the loop would only repeat the same work.
+    local strings = KE.BuildChatRoleIconStrings(set)
+
+    -- Role, name and realm are all secret-capable and all guarded before any
+    -- truth test, comparison, concatenation or table index. One secret member
+    -- is skipped; it does not downgrade the others or abort the walk.
+    local function store(name, realm, role)
         local okName, okRealm = KE.AcceptChatMember(role, name, realm)
         if not okName then return end
         name, realm = okName, okRealm
-        -- Only `circle` composes the class into the string. When the class is
-        -- unreadable that set alone falls back, and it falls back to the
-        -- Blizzard role badge because a circle without its class cannot be
-        -- drawn. `modern` and `blizzard` never read the class, so a secret
-        -- class changes nothing for them.
-        local effectiveSet = KE.ResolveChatRoleIconSet(set, class ~= nil)
-        local strings = KE.BuildChatRoleIconStrings(effectiveSet, class and { class } or {})
-        local icon = (effectiveSet == "circle" and strings[role .. "_" .. class])
-            or strings[role]
+        local icon = strings[role]
         if not icon then return end
         CMH.lfgRoles[name] = icon
         if realm then
@@ -2764,9 +2759,7 @@ function RebuildLFGRoles()
     end
 
     local myName, myRealm = UnitFullName("player")
-    local myClass = select(2, UnitClass("player"))
-    store(myName, myRealm, UnitGroupRolesAssigned("player"),
-        KE:IsSafeValue(myClass) and myClass or nil)
+    store(myName, myRealm, UnitGroupRolesAssigned("player"))
 
     local unit = IsInRaid() and "raid" or "party"
     for i = 1, GetNumGroupMembers() do
@@ -2780,9 +2773,7 @@ function RebuildLFGRoles()
             local isPlayer = UnitIsUnit(u, "player")
             if KE:IsSecretValue(isPlayer) or not isPlayer then
                 local name, realm = UnitName(u)
-                local class = select(2, UnitClass(u))
-                store(name, realm, UnitGroupRolesAssigned(u),
-                    KE:IsSafeValue(class) and class or nil)
+                store(name, realm, UnitGroupRolesAssigned(u))
             end
         end
     end

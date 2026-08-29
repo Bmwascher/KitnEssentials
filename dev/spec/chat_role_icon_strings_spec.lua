@@ -24,54 +24,37 @@ describe("Chat role icon strings", function()
         assert.is_truthy(s.TANK:find("|t$"))
     end)
 
-    -- ONE atlas, deliberately. An |A| escape advances by its declared width,
-    -- so overlaying a second glyph reserves the sum of both widths no matter
-    -- how far back it is offset, and the surplus reads as a gap before the
-    -- name. A second atlas here is the defect, not an improvement.
-    it("builds a class-keyed single ring for circle", function()
-        local s = build("circle", { "MAGE", "Adventurer" })
-        assert.are.equal("|A:groupfinder-icon-class-color-MAGE:14:14|a", s.DAMAGER_MAGE)
+    -- circle draws the Blizzard badge in chat. Its Group Finder art composes
+    -- a class ring and a role glyph, which an |A| escape cannot express: the
+    -- declared width IS the advance, so an overlay reserves the sum of both
+    -- widths however far back the second is offset, and the surplus reads as
+    -- a gap before the name. Dropping the role glyph instead loses the one
+    -- thing a role icon is for. Chat therefore needs no class at all.
+    it("draws circle as the blizzard role badge", function()
+        assert.are.equal(build("blizzard").TANK, build("circle").TANK)
     end)
 
-    it("keeps the circle string to a single escape", function()
-        local s = build("circle", { "MAGE" })
-        local _, count = s.DAMAGER_MAGE:gsub("|A:", "")
-        assert.are.equal(1, count)
+    it("keeps every string to a single escape", function()
+        for _, set in ipairs({ "modern", "blizzard", "circle" }) do
+            for _, role in ipairs({ "TANK", "HEALER", "DAMAGER" }) do
+                local s = build(set)[role]
+                local _, count = s:gsub("|[TA]", "")
+                assert.are.equal(1, count, set .. " " .. role .. " is not one escape: " .. s)
+            end
+        end
     end)
 
-    it("does not case-convert the class token", function()
-        local s = build("circle", { "MAGE", "Adventurer" })
-        assert.is_truthy(s.TANK_Adventurer)
-        assert.is_truthy(s.TANK_Adventurer:find("color%-Adventurer"))
+    it("emits no class-keyed entries", function()
+        local s = build("circle")
+        for key in pairs(s) do
+            assert.is_nil(key:find("_"), "unexpected class-keyed entry: " .. key)
+        end
     end)
 
     -- The memoisation bug this replaces: one cache for the session meant the
     -- first set built won permanently.
     it("returns different strings for different sets", function()
         assert.are_not.equal(build("blizzard").TANK, build("modern").TANK)
-    end)
-end)
-
-describe("Chat role icons: which set a member can actually be drawn in", function()
-    local resolve
-
-    before_each(function()
-        resolve = loader.loadChatRoleIconSetResolver()
-    end)
-
-    -- Only circle composes the class in, so only circle degrades.
-    it("falls circle back to blizzard when the class is unreadable", function()
-        assert.are.equal("blizzard", resolve("circle", false))
-    end)
-
-    it("keeps circle when the class is readable", function()
-        assert.are.equal("circle", resolve("circle", true))
-    end)
-
-    it("leaves modern and blizzard alone whatever the class", function()
-        assert.are.equal("modern", resolve("modern", false))
-        assert.are.equal("modern", resolve("modern", true))
-        assert.are.equal("blizzard", resolve("blizzard", false))
     end)
 end)
 

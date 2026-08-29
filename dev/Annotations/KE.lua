@@ -567,15 +567,8 @@ function KE.Skins.RefreshLFGRoleIcons() end
 -- ─── Skinning (Modules/Skinning/ChatRoleIcons.lua) ───────
 --- Builds the chat role icon escape strings for one set.
 ---@param set string
----@param classes string[]
 ---@return table<string, string>
-function KE.BuildChatRoleIconStrings(set, classes) end
-
---- Resolves which set can be drawn for one member; only circle degrades.
----@param set string
----@param hasClass boolean
----@return string
-function KE.ResolveChatRoleIconSet(set, hasClass) end
+function KE.BuildChatRoleIconStrings(set) end
 
 --- Accepts or refuses one chat member by identity readability.
 ---@param role any
