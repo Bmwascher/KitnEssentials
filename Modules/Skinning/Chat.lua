@@ -2771,11 +2771,19 @@ function RebuildLFGRoles()
     local unit = IsInRaid() and "raid" or "party"
     for i = 1, GetNumGroupMembers() do
         local u = unit .. i
-        if UnitExists(u) and not UnitIsUnit(u, "player") then
-            local name, realm = UnitName(u)
-            local class = select(2, UnitClass(u))
-            store(name, realm, UnitGroupRolesAssigned(u),
-                KE:IsSafeValue(class) and class or nil)
+        if UnitExists(u) then
+            -- UnitIsUnit is secret under unit comparison restriction, so the
+            -- result cannot be truth-tested directly. An unreadable comparison
+            -- falls through to processing the unit: re-storing the player
+            -- overwrites its own keys with the same icon, while skipping a real
+            -- member would silently drop them from the cache.
+            local isPlayer = UnitIsUnit(u, "player")
+            if KE:IsSecretValue(isPlayer) or not isPlayer then
+                local name, realm = UnitName(u)
+                local class = select(2, UnitClass(u))
+                store(name, realm, UnitGroupRolesAssigned(u),
+                    KE:IsSafeValue(class) and class or nil)
+            end
         end
     end
 end
