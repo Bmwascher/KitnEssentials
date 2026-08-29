@@ -62,8 +62,9 @@ function S.RoleArtPath(set, role)
     return art and art[role] or nil
 end
 
--- Derived, so adding a set means adding art and nothing else. The two
--- non-art keys are the only literals.
+-- Derived from the art table, so this list never drifts from the art. The two
+-- non-art keys are the only literals. A new set still needs its own entry in
+-- the GUI's display order and in the spec loader's mirror of the art table.
 local ROLE_ICON_SETS = { blizzard = true, circle = true }
 for set in pairs(KE.ROLE_ICON_ART) do ROLE_ICON_SETS[set] = true end
 
@@ -1001,7 +1002,7 @@ local function Skin()
     -- LFGListApplicationViewer_UpdateApplicant for the buttons; role
     -- icons restyle in LFGListApplicationViewer_UpdateRoleIcons, where
     -- Blizzard atlases RoleIcon1..3 -- swap those atlases for the same
-    -- flat ROLE_ICON textures the search-results skin uses.
+    -- per-set art the search-results skin draws.
     if _G.LFGListApplicationViewer_UpdateApplicant and not S.data(lfgList).applicantHook then
         S.data(lfgList).applicantHook = true
         local function SkinApplicantAction(btn)

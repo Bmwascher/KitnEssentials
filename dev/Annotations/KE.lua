@@ -556,7 +556,8 @@ function KE.Skins.SetSkinColors(bg, border) end
 function KE.Skins.SetSkinFont(face, size, outline) end
 
 -- ─── Skinning (Modules/Skinning/Frames/LFG.lua) ──────────
---- Returns the selected role icon set: "modern", "blizzard" or "circle".
+--- Returns the selected role icon set: any key of KE.ROLE_ICON_ART, or
+--- "blizzard" or "circle". Falls back to "modern" for anything else.
 ---@return string
 function KE.Skins.GetRoleIconSet() end
 
@@ -570,12 +571,6 @@ function KE.Skins.RefreshLFGRoleIcons() end
 ---@return table<string, string>
 function KE.BuildChatRoleIconStrings(set) end
 
--- ─── Skinning (Modules/Skinning/RoleIconSamples.lua) ───────
---- Builds one role icon set's dropdown label: three inline icons, no text.
----@param set string
----@return string
-function KE.BuildRoleIconSample(set) end
-
 --- Accepts or refuses one chat member by identity readability.
 ---@param role any
 ---@param name any
@@ -583,6 +578,12 @@ function KE.BuildRoleIconSample(set) end
 ---@return string|nil name
 ---@return string|nil realm
 function KE.AcceptChatMember(role, name, realm) end
+
+-- ─── Skinning (Modules/Skinning/RoleIconSamples.lua) ───────
+--- Builds one role icon set's dropdown label: three inline icons, no text.
+---@param set string
+---@return string
+function KE.BuildRoleIconSample(set) end
 
 -- ─── KitnEssentials AceAddon globals ──────────────────────
 ---@class KitnEssentials
