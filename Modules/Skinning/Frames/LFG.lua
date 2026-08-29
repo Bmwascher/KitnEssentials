@@ -388,16 +388,29 @@ local function HookLFGListIcons()
         -- continues into UpdateInviteState. Tainted execution reaching either
         -- throws and leaves the panel half drawn.
         --
-        -- Those fields are only SECRET under chat messaging lockdown, which is
-        -- instances, raids and PvP matches. Outside one there is no secret to
-        -- compare and nothing to throw, so the fast path is safe exactly where
-        -- searching actually happens; inside one the flash returns and the
-        -- panel keeps working. IsInInstance carries no secret annotation, so
-        -- reading it here costs nothing.
+        -- Those fields are only SECRET under chat messaging lockdown, so ask
+        -- whether the lockdown is actually in effect rather than inferring it
+        -- from the map: C_ChatInfo.InChatMessagingLockdown reports the
+        -- restriction state itself, and carries no secret annotation. Outside
+        -- a lockdown there is nothing secret to compare and nothing to throw,
+        -- so the fast path covers the open world where searching happens;
+        -- inside one the flash returns and the panel keeps working.
+        --
+        -- IsInInstance is the fallback if the query ever disappears. It is
+        -- broader than the truth -- it also catches scenarios and garrison
+        -- maps -- which costs a flash and never safety.
+        local function InLockdown()
+            local chatInfo = _G.C_ChatInfo
+            if chatInfo and chatInfo.InChatMessagingLockdown then
+                return chatInfo.InChatMessagingLockdown()
+            end
+            return IsInInstance()
+        end
+
         local function Defer(fn, key)
             return function(frame, ...)
                 if not frame then return end
-                if not IsInInstance() then return fn(frame, ...) end
+                if not InLockdown() then return fn(frame, ...) end
                 if S.data(frame)[key] then return end
                 S.data(frame)[key] = true
                 local args = { ... }
