@@ -83,6 +83,8 @@ SlashCmdList["KESBENCH"] = function()
     end
 
     staged = true
-    print("kesbench: staged " .. (groupCount * BATCH) .. " extra hosts, provider now at "
+    -- "live-side total", not "this provider": each aura group owns its own frame
+    -- provider, so the filler hosts sit beside the real group's rather than in it.
+    print("kesbench: staged " .. (groupCount * BATCH) .. " extra hosts, live-side host total now at "
         .. TARGET_HOSTS .. ". /reload to undo.")
 end
