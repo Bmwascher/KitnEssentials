@@ -36,7 +36,7 @@ describe("S.GetRoleIconSet", function()
     end)
 
     -- The case above is NOT enough on its own: a hand-maintained list holding
-    -- exactly today's ten keys satisfies it while the derivation is gone. Only
+    -- exactly today's nine keys satisfies it while the derivation is gone. Only
     -- a set the code could not have been written to know about proves the list
     -- is built from the art table.
     it("accepts an art set that did not exist when the code was written", function()
