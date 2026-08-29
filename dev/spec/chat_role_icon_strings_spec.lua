@@ -144,6 +144,32 @@ describe("Chat role icon cache keys", function()
         assert.are.equal("Ally-Draenor", qualified)
     end)
 
+    -- The unit API returns a DISPLAY realm that keeps its spaces and
+    -- punctuation; a chat sender's suffix has both stripped. A key built from
+    -- the raw value never matches on any multiword realm, which is most of
+    -- the failure the realm fallback was supposed to fix.
+    it("strips spaces from a multiword member realm", function()
+        local _, qualified = keys("Ally", "Twisting Nether", nil)
+        assert.are.equal("Ally-TwistingNether", qualified)
+    end)
+
+    it("strips spaces from the player realm fallback too", function()
+        local _, qualified = keys("Ally", nil, "Twisting Nether")
+        assert.are.equal("Ally-TwistingNether", qualified)
+    end)
+
+    it("strips punctuation but keeps accented characters", function()
+        local _, qualified = keys("Ally", "Aggra (Português)", nil)
+        assert.are.equal("Ally-AggraPortuguês", qualified)
+    end)
+
+    -- Case is NOT folded: the chat suffix keeps its capitals, so folding here
+    -- would break every realm it was meant to match.
+    it("does not change case", function()
+        local _, qualified = keys("Ally", "Draenor", nil)
+        assert.are.equal("Ally-Draenor", qualified)
+    end)
+
     it("returns the bare key alone when no realm is known at all", function()
         local bare, qualified = keys("Ally", nil, nil)
         assert.are.equal("Ally", bare)

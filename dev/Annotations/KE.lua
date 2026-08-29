@@ -571,6 +571,16 @@ function KE.Skins.RefreshLFGRoleIcons() end
 ---@return table<string, string>
 function KE.BuildChatRoleIconStrings(set) end
 
+--- Cache keys for one group member's chat role icon: the bare name, and the
+--- name qualified with a normalized realm. playerRealm substitutes for a
+--- missing member realm. Callers must pass already-guarded plain values.
+---@param name string?
+---@param realm string?
+---@param playerRealm string?
+---@return string|nil bareKey
+---@return string|nil qualifiedKey
+function KE.ChatRoleIconKeys(name, realm, playerRealm) end
+
 --- Accepts or refuses one chat member by identity readability.
 ---@param role any
 ---@param name any

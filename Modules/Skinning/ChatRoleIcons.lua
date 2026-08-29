@@ -1,5 +1,6 @@
 local KE = select(2, ...)
 local format = string.format
+local gsub = string.gsub
 
 local LARGE_ROLE_ATLASES = {
     TANK    = "groupfinder-icon-role-large-tank",
@@ -33,11 +34,23 @@ end
 --
 -- Returns the bare key and the qualified key. playerRealm stands in for a
 -- missing member realm, since an absent realm IS the player's own realm.
+--
+-- The realm is NORMALIZED before it becomes a key. The unit API hands back a
+-- display realm that keeps its spaces and punctuation, while a chat sender's
+-- suffix has both stripped -- so a key built from the raw value reads
+-- "Twisting Nether" against a sender's "TwistingNether" and never matches on
+-- any multiword realm. Case is left alone: the suffix keeps its capitals.
+-- Lua's %p is ASCII under the C locale, so bytes at or above 128 survive and
+-- an accented realm still matches.
+local function NormalizeRealm(realm)
+    if type(realm) ~= "string" or realm == "" then return nil end
+    local stripped = gsub(realm, "[%s%p]", "")
+    return stripped ~= "" and stripped or nil
+end
+
 function KE.ChatRoleIconKeys(name, realm, playerRealm)
     if type(name) ~= "string" or name == "" then return nil end
-    local qualifier = (type(realm) == "string" and realm ~= "" and realm)
-        or (type(playerRealm) == "string" and playerRealm ~= "" and playerRealm)
-        or nil
+    local qualifier = NormalizeRealm(realm) or NormalizeRealm(playerRealm)
     if not qualifier then return name end
     return name, name .. "-" .. qualifier
 end
