@@ -2742,6 +2742,7 @@ function RebuildLFGRoles()
     -- Three secret-capable values per member, all guarded before any truth
     -- test, comparison, concatenation or table index. One secret member is
     -- skipped; it does not downgrade the others and does not abort the walk.
+    ---@param class string? already filtered to safe-or-nil by both callers
     local function store(name, realm, role, class)
         local okName, okRealm = KE.AcceptChatMember(role, name, realm)
         if not okName then return end

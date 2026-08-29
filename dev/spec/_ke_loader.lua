@@ -1024,8 +1024,9 @@ function L.loadLFGSkin(overrides)
     return KE, KE.Skins
 end
 
--- Modules/Skinning/Chat.lua is far too large to load for one pure builder, so
--- this loader exposes the builder alone through the module's own test hook.
+-- The builder lives in its own file precisely so a spec can load it without
+-- Modules/Skinning/Chat.lua, which is far too large to pull in for one pure
+-- function.
 function L.loadChatRoleIconStrings()
     local helpersLocal = require("dev.spec._helpers")
     local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]] }

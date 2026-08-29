@@ -70,5 +70,3 @@ function KE.BuildChatRoleIconStrings(set, classes)
     end
     return out
 end
-
-return KE.BuildChatRoleIconStrings
