@@ -1,27 +1,30 @@
 -- Benchmark-only staging for the glow cost gate. Adds aura groups that can
 -- never show an aura but still force the container's frame provider to
 -- allocate, which is the only way to reach the display's allocation
--- high-water without eleven simultaneous externals on one player.
+-- high-water without more simultaneous auras than a player can carry.
 --
 -- This addon is never packaged. Nothing in KitnEssentials references it.
 
 local NS = KITNESSENTIALS_NS
 
-local GROUP_COUNT = 3
+local BATCH        = 10
+local TARGET_HOSTS = 40
+
+local staged = false
 
 SLASH_KESBENCH1 = "/kesbench"
 SlashCmdList["KESBENCH"] = function()
+    -- A local flag, not a group-key probe: the number of groups added varies
+    -- with what the provider already owns, so no single key proves the state.
+    if staged then
+        print("kesbench: already staged -- /reload first if you want to start over")
+        return
+    end
+
     local module = KitnEssentials and KitnEssentials:GetModule("AuraExternals", true)
     local display = module and module.display
     if not display or not display.handle then
         print("kesbench: the externals display is not built -- enable the module first")
-        return
-    end
-
-    -- AddAuraGroup asserts the key is new, so a second /kesbench would throw
-    -- mid-measurement into the BugSack the smoke run expects clean.
-    if display.handle.container:HasAuraGroup("kebench1") then
-        print("kesbench: already staged -- /reload first if you want to start over")
         return
     end
 
@@ -31,7 +34,26 @@ SlashCmdList["KESBENCH"] = function()
     -- identical to the real ones rather than merely numerous.
     local template = display.groups[1]
 
-    for i = 1, GROUP_COUNT do
+    -- Fill to the target rather than adding a fixed count. A provider that
+    -- already grew this session keeps its frames, so a fixed count would stage
+    -- a heavier load than the cost table documents and the framerate gate
+    -- would be judging the wrong workload.
+    local owned = display.handle.container:GetAuraGroupFrameCount(template.key)
+    if type(owned) ~= "number" or owned < BATCH or owned > TARGET_HOSTS
+        or owned % BATCH ~= 0 then
+        print("kesbench: unexpected owned frame count " .. tostring(owned)
+            .. " -- /reload and run this before anything else")
+        return
+    end
+
+    local groupCount = (TARGET_HOSTS - owned) / BATCH
+    if groupCount == 0 then
+        staged = true
+        print("kesbench: provider already owns " .. TARGET_HOSTS .. " hosts, nothing to stage")
+        return
+    end
+
+    for i = 1, groupCount do
         local key = "kebench" .. i
 
         display.handle.container:AddAuraGroup(key, template.buildFilter(settings), {
@@ -60,6 +82,7 @@ SlashCmdList["KESBENCH"] = function()
         }
     end
 
-    print("kesbench: " .. GROUP_COUNT .. " zero-cap groups added ("
-        .. (GROUP_COUNT * 10) .. " extra hosts). /reload to undo.")
+    staged = true
+    print("kesbench: staged " .. (groupCount * BATCH) .. " extra hosts, provider now at "
+        .. TARGET_HOSTS .. ". /reload to undo.")
 end
