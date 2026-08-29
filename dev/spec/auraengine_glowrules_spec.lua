@@ -145,3 +145,46 @@ describe("glow type settling", function()
         assert.is_false(db.GlowFrequency == 0.25)
     end)
 end)
+
+describe("flipbook restart predicate", function()
+    it("restarts when nothing has been applied yet", function()
+        local G = L.loadAuraGlowRules()
+        local wanted = G.FlipbookState(G.FLIPBOOKS.ants, 1)
+        assert.is_true(G.NeedsRestart(nil, wanted))
+    end)
+
+    it("restarts on an atlas swap between two styles sharing a grid", function()
+        local G = L.loadAuraGlowRules()
+        local ants = G.FLIPBOOKS.ants
+        local proc = G.FLIPBOOKS.procloop
+        assert.equals(ants.rows, proc.rows)
+        assert.equals(ants.columns, proc.columns)
+        assert.equals(ants.frames, proc.frames)
+        assert.is_true(G.NeedsRestart(
+            G.FlipbookState(ants, 1), G.FlipbookState(proc, 1)))
+    end)
+
+    it("does not restart when only unrelated settings changed", function()
+        local G = L.loadAuraGlowRules()
+        local applied = G.FlipbookState(G.FLIPBOOKS.ants, 1)
+        local wanted  = G.FlipbookState(G.FLIPBOOKS.ants, 1)
+        assert.is_false(G.NeedsRestart(applied, wanted))
+    end)
+
+    it("restarts when the duration changes", function()
+        local G = L.loadAuraGlowRules()
+        assert.is_true(G.NeedsRestart(
+            G.FlipbookState(G.FLIPBOOKS.ants, 1),
+            G.FlipbookState(G.FLIPBOOKS.ants, 2)))
+    end)
+
+    it("gives the raw-texture style a real cell size and the atlases none", function()
+        local G = L.loadAuraGlowRules()
+        assert.equals(48, G.FLIPBOOKS.alert.frameWidth)
+        assert.equals(48, G.FLIPBOOKS.alert.frameHeight)
+        assert.equals(0, G.FLIPBOOKS.ants.frameWidth)
+        assert.equals(0, G.FLIPBOOKS.ants.frameHeight)
+        assert.equals(0, G.FLIPBOOKS.procloop.frameWidth)
+        assert.equals(0, G.FLIPBOOKS.procloop.frameHeight)
+    end)
+end)

@@ -15,23 +15,31 @@ local DEFAULT_FREQUENCY = 0.25
 
 -- Grid data, not guesses: both atlases are declared 6x5 with 30 frames in
 -- Blizzard's own action-bar templates, and the alert sheet holds 25 cells of
--- which only the first 22 are real — playing all 25 flashes an empty gap that
+-- which only the first 22 are real -- playing all 25 flashes an empty gap that
 -- reads as a backwards stutter. The size factor scales the TEXTURE, never the
 -- host frame.
+--
+-- frameWidth/frameHeight are the flipbook's CELL size. Zero means "derive it",
+-- which an atlas can do because it carries its own region. A raw texture file
+-- has no region to measure, so the alert sheet must state its cell size or the
+-- animation has no geometry to step through.
 GlowRules.FLIPBOOKS = {
     ants = {
         -- Lowercase, exactly as Blizzard declares it. A capitalised spelling
         -- finds nothing when searching the client source.
         atlas = "rotationhelper_ants_flipbook",
         rows = 6, columns = 5, frames = 30, sizeFactor = 1.6,
+        frameWidth = 0, frameHeight = 0,
     },
     procloop = {
         atlas = "UI-HUD-ActionBar-Proc-Loop-Flipbook",
         rows = 6, columns = 5, frames = 30, sizeFactor = 1.4,
+        frameWidth = 0, frameHeight = 0,
     },
     alert = {
         texture = [[Interface\SpellActivationOverlay\IconAlertAnts]],
         rows = 5, columns = 5, frames = 22, sizeFactor = 1.25,
+        frameWidth = 48, frameHeight = 48,
     },
 }
 
@@ -105,4 +113,32 @@ function GlowRules.SetType(db, keys, chosen)
     db[keys.frequency] = speed
     db[keys.type]      = chosen
     return db[keys.frequency], db[keys.type]
+end
+
+-- The flipbook's OWN inputs, and nothing else. Icon size and colour are
+-- deliberately absent: changing them must not restart a playing animation.
+function GlowRules.FlipbookState(entry, duration)
+    return {
+        source      = entry.atlas or entry.texture,
+        rows        = entry.rows,
+        columns     = entry.columns,
+        frames      = entry.frames,
+        frameWidth  = entry.frameWidth or 0,
+        frameHeight = entry.frameHeight or 0,
+        duration    = duration,
+    }
+end
+
+-- `source` is the field the older test was missing. Two styles can declare an
+-- identical grid, so comparing the grid alone reports "unchanged" across a
+-- texture swap and the animation is never stopped and replayed.
+function GlowRules.NeedsRestart(applied, wanted)
+    if not applied then return true end
+    return applied.source      ~= wanted.source
+        or applied.rows        ~= wanted.rows
+        or applied.columns     ~= wanted.columns
+        or applied.frames      ~= wanted.frames
+        or applied.frameWidth  ~= wanted.frameWidth
+        or applied.frameHeight ~= wanted.frameHeight
+        or applied.duration    ~= wanted.duration
 end
