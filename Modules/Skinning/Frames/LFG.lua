@@ -50,14 +50,16 @@ end
 local unpack = unpack
 local ROLE_ICON = KE.ROLE_ICONS
 
--- the modern role icons are now optional. When off we simply
--- do not replace the texture, so Blizzard's own atlas stays -- nothing
--- is blanked and no restore pass is needed.
-local function UseModernRoleIcons()
+local ROLE_ICON_SETS = { modern = true, blizzard = true, circle = true }
+
+-- The single read path for the saved role-icon-set key. LFG.lua, Chat.lua and
+-- the GUI callback all come through GetRoleIconSet, so an absent or
+-- unrecognised value cannot mean different things on different surfaces.
+function S.GetRoleIconSet()
     local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
-    local opt = bs and bs.ModernRoleIcons
-    return not opt or opt.Enabled ~= false
+    local set = bs and bs.RoleIconSet
+    return ROLE_ICON_SETS[set] and set or "modern"
 end
 local ROLE_ORDER = { "TANK", "HEALER", "DAMAGER" }
 
@@ -69,7 +71,7 @@ local function ReskinMemberIcon(enumerate, icon, role, entry)
         d.aeSnap = true
     end
     if role and ROLE_ICON[role] then
-        if UseModernRoleIcons() then
+        if S.GetRoleIconSet() == "modern" then
             icon:SetTexture(ROLE_ICON[role])
             icon:SetTexCoord(0, 1, 0, 1)
         end
@@ -208,7 +210,7 @@ local function UpdateRoleCount(roleCount)
                 S.PixelSnap(icon)
                 d.aeSnap = true
             end
-            if UseModernRoleIcons() then
+            if S.GetRoleIconSet() == "modern" then
                 icon:SetTexture(ROLE_ICON[slot[3]])
                 icon:SetTexCoord(0, 1, 0, 1)
             end
@@ -807,7 +809,7 @@ local function Skin()
                             or atlas:find("heal") and "HEALER"
                             or (atlas:find("dps") or atlas:find("damage")) and "DAMAGER")
                         if role and ROLE_ICON and ROLE_ICON[role]
-                            and UseModernRoleIcons() then
+                            and S.GetRoleIconSet() == "modern" then
                             nt:SetTexture(ROLE_ICON[role])
                             nt:SetTexCoord(0, 1, 0, 1)
                             local hl = roleBtn.GetHighlightTexture and roleBtn:GetHighlightTexture()

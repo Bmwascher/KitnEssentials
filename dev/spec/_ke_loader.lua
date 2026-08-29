@@ -970,6 +970,60 @@ local function managedSubset(overrides)
     return t
 end
 
+-- Modules/Skinning/Frames/LFG.lua. Only the role-icon resolver and painters
+-- are under test; the S stub carries the minimum the file touches at load,
+-- which is Register (called at file scope) plus the data/PixelSnap pair the
+-- painters use.
+function L.loadLFGSkin(overrides)
+    overrides = overrides or {}
+    installMock(managedSubset(overrides), {
+        C_Timer = inertTimer(),
+        InCombatLockdown = function() return false end,
+        -- Overridable so a case can mark a sentinel secret; Core/Secret.lua
+        -- reads this global and nothing else.
+        issecretvalue = overrides.issecretvalue or function() return false end,
+    })
+    helpers.installAddonShim()
+    _G.hooksecurefunc = overrides.hooksecurefunc or function() end
+    _G.CreateFrame = overrides.CreateFrame or function() return noopFrame() end
+    _G.C_LFGList = overrides.C_LFGList or {}
+    _G.RAID_CLASS_COLORS = overrides.RAID_CLASS_COLORS or {}
+    _G.LFG_LIST_GROUP_DATA_ATLASES = overrides.LFG_LIST_GROUP_DATA_ATLASES
+        or { TANK = "atlas-tank", HEALER = "atlas-heal", DAMAGER = "atlas-dps" }
+    _G.LFG_LIST_GROUP_DATA_ROLE_ORDER = overrides.LFG_LIST_GROUP_DATA_ROLE_ORDER
+        or { "TANK", "HEALER", "DAMAGER" }
+
+    local frameData = {}
+    local KE = {
+        PATH = [[Interface\AddOns\KitnEssentials\Media\]],
+        db = { profile = { Skinning = overrides.Skinning or { BlizzardFrames = {} } } },
+    }
+    KE.ROLE_ICONS = {
+        TANK = KE.PATH .. [[RoleIcons\tank-modern.png]],
+        HEALER = KE.PATH .. [[RoleIcons\healer-modern.png]],
+        DAMAGER = KE.PATH .. [[RoleIcons\dps-modern.png]],
+    }
+    KE.Skins = {
+        Register = function() end,
+        -- LFG.lua calls S:RegisterEarly(Skin, "LFG") at file scope. Without
+        -- this the module errors while loading and no case ever runs.
+        RegisterEarly = function() end,
+        PixelSnap = function() end,
+        data = function(_, f)
+            frameData[f] = frameData[f] or {}
+            return frameData[f]
+        end,
+    }
+    -- S.data is called as a plain function, not a method, in this file.
+    KE.Skins.data = function(f)
+        frameData[f] = frameData[f] or {}
+        return frameData[f]
+    end
+    helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Modules/Skinning/Frames/LFG.lua", KE)
+    return KE, KE.Skins
+end
+
 function L.loadCursor(overrides)
     overrides = overrides or {}
     -- Managed overrides go THROUGH installMock so the caller still wins on
