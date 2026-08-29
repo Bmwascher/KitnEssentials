@@ -1024,6 +1024,49 @@ function L.loadLFGSkin(overrides)
     return KE, KE.Skins
 end
 
+-- Modules/Skinning/Chat.lua is far too large to load for one pure builder, so
+-- this loader exposes the builder alone through the module's own test hook.
+function L.loadChatRoleIconStrings()
+    local helpersLocal = require("dev.spec._helpers")
+    local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]] }
+    KE.ROLE_ICONS = {
+        TANK = KE.PATH .. [[RoleIcons\tank-modern.png]],
+        HEALER = KE.PATH .. [[RoleIcons\healer-modern.png]],
+        DAMAGER = KE.PATH .. [[RoleIcons\dps-modern.png]],
+    }
+    -- loadModule returns the KE table, never the chunk's own return value,
+    -- so the builder is taken off KE explicitly.
+    helpersLocal.loadModule("Modules/Skinning/ChatRoleIcons.lua", KE)
+    return KE.BuildChatRoleIconStrings
+end
+
+function L.loadChatMemberAcceptor(overrides)
+    overrides = overrides or {}
+    -- Core/Secret.lua calls CreateFrame at FILE SCOPE and registers events on
+    -- the result, so the mock environment has to be installed before it loads
+    -- rather than just the one global the helper under test consults.
+    installMock(managedSubset(overrides), {
+        C_Timer = inertTimer(),
+        InCombatLockdown = function() return false end,
+        CreateFrame = function() return noopFrame() end,
+        issecretvalue = overrides.issecretvalue or function() return false end,
+    })
+    local helpersLocal = require("dev.spec._helpers")
+    local KE = { PATH = "", ROLE_ICONS = {} }
+    helpersLocal.loadModule("Core/Secret.lua", KE)
+    helpersLocal.loadModule("Modules/Skinning/ChatRoleIcons.lua", KE)
+    return KE.AcceptChatMember
+end
+
+-- No mock environment here on purpose: ChatRoleIcons.lua touches no WoW API at
+-- file scope, and this resolver consults no secret helper.
+function L.loadChatRoleIconSetResolver()
+    local helpersLocal = require("dev.spec._helpers")
+    local KE = { PATH = [[Interface\AddOns\KitnEssentials\Media\]], ROLE_ICONS = {} }
+    helpersLocal.loadModule("Modules/Skinning/ChatRoleIcons.lua", KE)
+    return KE.ResolveChatRoleIconSet
+end
+
 function L.loadCursor(overrides)
     overrides = overrides or {}
     -- Managed overrides go THROUGH installMock so the caller still wins on

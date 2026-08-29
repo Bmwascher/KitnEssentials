@@ -2728,24 +2728,6 @@ function CHAT:TeardownGuildMemberStatus()
     self:RemoveGuildMemberStatusFilter()
 end
 
--- Role icon textures: Blizzard's own group-finder role atlases (the same
--- atlas names PrescienceTracker uses for its role badges), so there is no
--- custom art to ship and no broken texture path.
-local ROLE_ICON_ATLASES = {
-    TANK    = "groupfinder-icon-role-large-tank",
-    HEALER  = "groupfinder-icon-role-large-heal",
-    DAMAGER = "groupfinder-icon-role-large-dps",
-}
-
-local ROLE_ICON_STRINGS
-local function BuildRoleIconStrings()
-    if ROLE_ICON_STRINGS then return end
-    ROLE_ICON_STRINGS = {}
-    for role, atlas in pairs(ROLE_ICON_ATLASES) do
-        ROLE_ICON_STRINGS[role] = format("|A:%s:14:14|a", atlas)
-    end
-end
-
 function RebuildLFGRoles()
     local CMH = KE.ChatMessageHandler
     if not CMH then return end
@@ -2754,32 +2736,53 @@ function RebuildLFGRoles()
     local db = CHAT.db
     if not (db and db.Enabled and db.RoleIcons ~= false) then return end
     if not IsInGroup() then return end
-    BuildRoleIconStrings()
 
-    local myRole = UnitGroupRolesAssigned("player")
-    local myName, myRealm = UnitFullName("player")
-    if myRole and myName and ROLE_ICON_STRINGS[myRole] then
-        CMH.lfgRoles[myName] = ROLE_ICON_STRINGS[myRole]
-        if myRealm and myRealm ~= "" then
-            CMH.lfgRoles[myName .. "-" .. myRealm] = ROLE_ICON_STRINGS[myRole]
+    local set = KE.Skins and KE.Skins.GetRoleIconSet and KE.Skins.GetRoleIconSet() or "modern"
+
+    -- Three secret-capable values per member, all guarded before any truth
+    -- test, comparison, concatenation or table index. One secret member is
+    -- skipped; it does not downgrade the others and does not abort the walk.
+    local function store(name, realm, role, class)
+        local okName, okRealm = KE.AcceptChatMember(role, name, realm)
+        if not okName then return end
+        name, realm = okName, okRealm
+        -- Only `circle` composes the class into the string. When the class is
+        -- unreadable that set alone falls back, and it falls back to the
+        -- Blizzard role badge because a circle without its class cannot be
+        -- drawn. `modern` and `blizzard` never read the class, so a secret
+        -- class changes nothing for them.
+        local effectiveSet = KE.ResolveChatRoleIconSet(set, class ~= nil)
+        local strings = KE.BuildChatRoleIconStrings(effectiveSet, class and { class } or {})
+        local icon = (effectiveSet == "circle" and strings[role .. "_" .. class])
+            or strings[role]
+        if not icon then return end
+        CMH.lfgRoles[name] = icon
+        if realm then
+            CMH.lfgRoles[name .. "-" .. realm] = icon
         end
     end
+
+    local myName, myRealm = UnitFullName("player")
+    local myClass = select(2, UnitClass("player"))
+    store(myName, myRealm, UnitGroupRolesAssigned("player"),
+        KE:IsSafeValue(myClass) and myClass or nil)
 
     local unit = IsInRaid() and "raid" or "party"
     for i = 1, GetNumGroupMembers() do
         local u = unit .. i
         if UnitExists(u) and not UnitIsUnit(u, "player") then
-            local role = UnitGroupRolesAssigned(u)
-            local icon = role and ROLE_ICON_STRINGS[role]
             local name, realm = UnitName(u)
-            if icon and name then
-                CMH.lfgRoles[name] = icon
-                if realm and realm ~= "" then
-                    CMH.lfgRoles[name .. "-" .. realm] = icon
-                end
-            end
+            local class = select(2, UnitClass(u))
+            store(name, realm, UnitGroupRolesAssigned(u),
+                KE:IsSafeValue(class) and class or nil)
         end
     end
+end
+
+-- The GUI role icon set callback lives in another file and cannot reach a
+-- file-local. The internal callers keep going through the local directly.
+function CHAT:RebuildLFGRoles()
+    RebuildLFGRoles()
 end
 
 -- Guarded on the registration state (self.socialEventsRegistered), not the
