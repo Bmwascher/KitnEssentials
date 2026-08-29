@@ -377,19 +377,28 @@ local function HookLFGListIcons()
     if lfgListIconsHooked then return end
     if _G.LFGListGroupDataDisplayEnumerate_Update and _G.C_LFGList
         and _G.C_LFGList.GetSearchResultPlayerInfo then
-        -- DEFERRED, and it must stay that way. Both callers of
-        -- LFGListGroupDataDisplay_Update keep using secret values after it
-        -- returns: LFGListSearchEntry_Update compares searchResultInfo.voiceChat
-        -- three lines later, and the applicant viewer's GROUP_ROSTER_UPDATE
-        -- path continues into UpdateInviteState, which reads active entry data.
-        -- Painting inside that stack taints it and Blizzard throws on the first
-        -- secret it touches -- only under chat messaging lockdown, so an open
-        -- world test looks clean and a dungeon crashes.
+        -- Synchronous outside instances, deferred inside them.
         --
-        -- The cost is one frame of Blizzard's art on every refresh.
+        -- Painting inside Blizzard's stack is what removes the one-frame flash
+        -- of stock art, because its own paint never reaches a draw. It is also
+        -- what taints that stack, and both callers of
+        -- LFGListGroupDataDisplay_Update keep using secret values afterwards:
+        -- LFGListSearchEntry_Update compares searchResultInfo.voiceChat three
+        -- lines later, and the applicant viewer's GROUP_ROSTER_UPDATE path
+        -- continues into UpdateInviteState. Tainted execution reaching either
+        -- throws and leaves the panel half drawn.
+        --
+        -- Those fields are only SECRET under chat messaging lockdown, which is
+        -- instances, raids and PvP matches. Outside one there is no secret to
+        -- compare and nothing to throw, so the fast path is safe exactly where
+        -- searching actually happens; inside one the flash returns and the
+        -- panel keeps working. IsInInstance carries no secret annotation, so
+        -- reading it here costs nothing.
         local function Defer(fn, key)
             return function(frame, ...)
-                if not frame or S.data(frame)[key] then return end
+                if not frame then return end
+                if not IsInInstance() then return fn(frame, ...) end
+                if S.data(frame)[key] then return end
                 S.data(frame)[key] = true
                 local args = { ... }
                 C_Timer.After(0, function()
