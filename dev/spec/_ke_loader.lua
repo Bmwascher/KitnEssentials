@@ -973,7 +973,7 @@ end
 -- Mirrors Core/Globals.lua's art table. Membership is what makes a set an ART
 -- set, so a fixture that omits a set changes what the code under test decides.
 local ROLE_ICON_ART_SETS = {
-    "modern", "ringed", "outlined", "framed",
+    "modern", "outlined", "framed",
     "hexagon", "plain", "muted", "shaded",
 }
 

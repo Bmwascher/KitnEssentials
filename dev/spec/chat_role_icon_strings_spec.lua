@@ -29,7 +29,7 @@ describe("Chat role icon strings", function()
     -- builder that reached for modern's art whatever set it was handed, which
     -- is the failure the shared-decision refactor exists to prevent.
     it("builds texture escapes for every art set", function()
-        for _, set in ipairs({ "ringed", "outlined", "framed", "hexagon",
+        for _, set in ipairs({ "outlined", "framed", "hexagon",
                               "plain", "muted", "shaded" }) do
             local s = build(set)
             assert.is_truthy(s.TANK:find("^|T"), set .. " should draw a texture")

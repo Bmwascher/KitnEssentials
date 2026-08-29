@@ -32,7 +32,7 @@ describe("S.GetRoleIconSet", function()
             assert.are.equal(set, resolverWith({ RoleIconSet = set }))
             seen = seen + 1
         end
-        assert.is_true(seen >= 8)
+        assert.is_true(seen >= 7)
     end)
 
     -- The case above is NOT enough on its own: a hand-maintained list holding
@@ -80,7 +80,7 @@ describe("S.RoleArtPath", function()
     end)
 
     it("returns the set's own art, not modern's", function()
-        assert.are.equal(KE.ROLE_ICON_ART.ringed.TANK, S.RoleArtPath("ringed", "TANK"))
+        assert.are.equal(KE.ROLE_ICON_ART.outlined.TANK, S.RoleArtPath("outlined", "TANK"))
         assert.are.equal(KE.ROLE_ICON_ART.shaded.DAMAGER, S.RoleArtPath("shaded", "DAMAGER"))
         assert.are_not.equal(S.RoleArtPath("modern", "TANK"), S.RoleArtPath("framed", "TANK"))
     end)

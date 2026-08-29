@@ -12,10 +12,10 @@ describe("KE.BuildRoleIconSample", function()
     end)
 
     it("draws three of the set's own textures, space separated", function()
-        local s = build("ringed")
+        local s = build("outlined")
         assert.are.equal(
             ("|T%s:16:16|t |T%s:16:16|t |T%s:16:16|t"):format(
-                art.ringed.TANK, art.ringed.HEALER, art.ringed.DAMAGER),
+                art.outlined.TANK, art.outlined.HEALER, art.outlined.DAMAGER),
             s)
     end)
 

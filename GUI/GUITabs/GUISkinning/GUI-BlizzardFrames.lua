@@ -426,7 +426,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGroupFinder", function(scrollChild, 
     -- strips |T|t escapes but not |A|a, so the art rows would match nothing
     -- while the two atlas rows matched raw atlas names.
     local ROLE_ICON_SET_ORDER = {
-        "modern", "blizzard", "circle", "ringed",
+        "modern", "blizzard", "circle",
         "outlined", "framed", "hexagon", "plain", "muted", "shaded",
     }
     local roleIconOptions = {}

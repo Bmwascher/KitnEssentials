@@ -55,7 +55,7 @@ KE.GEM_SOCKET_TYPES = {
 KE.ROLE_ICON_ART = {}
 do
     local SETS = {
-        "modern", "ringed", "outlined", "framed",
+        "modern", "outlined", "framed",
         "hexagon", "plain", "muted", "shaded",
     }
     for i = 1, #SETS do
