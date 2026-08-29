@@ -349,3 +349,51 @@ describe("include spell id set", function()
         assert.is_not.equal(a, b)
     end)
 end)
+
+describe("CanRekeyAllowlistEntry", function()
+    -- `R` is loaded per case in this file, not once at the top. Follow that:
+    -- a describe-level local would diverge from every other block here.
+    local function saved()
+        return {
+            [111] = { label = "Shipped", enabled = true, default = true },
+            [222] = { label = "Custom",  enabled = true },
+            [333] = { label = "Other",   enabled = true },
+        }
+    end
+
+    it("allows moving a custom row to a free id", function()
+        local R = L.loadAuraRules()
+        assert.is_true(R.CanRekeyAllowlistEntry(saved(), 222, 444))
+    end)
+
+    it("refuses to move a shipped row", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), 111, 444))
+    end)
+
+    it("refuses a destination that is already taken", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), 222, 333))
+    end)
+
+    it("refuses a destination taken by a shipped row", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), 222, 111))
+    end)
+
+    it("refuses a row that is not there", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), 999, 444))
+    end)
+
+    it("refuses a move onto itself", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), 222, 222))
+    end)
+
+    it("refuses non-numeric ids and a missing table", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), "222", 444))
+        assert.is_false(R.CanRekeyAllowlistEntry(nil, 222, 444))
+    end)
+end)

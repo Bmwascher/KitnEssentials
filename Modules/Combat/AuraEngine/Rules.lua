@@ -232,3 +232,23 @@ function Rules.ConvertGrowthDirection(value)
     local out = GROWTH_CONVERSION[value] or GROWTH_CONVERSION.LEFT_DOWN
     return out[1], out[2], out[3]
 end
+
+-- Decides whether an allowlist row may be re-keyed onto another spell ID.
+--
+-- Two refusals, and neither is reachable through the Delete button, so this is
+-- the only place they can live. Re-keying a shipped row would carry its
+-- `default` flag onto an ID that was never shipped, and the delete guard refuses
+-- exactly that flag -- the row becomes permanently undeletable. Re-keying onto an
+-- occupied ID deletes whatever was there, which is a shipped-row deletion by
+-- another route.
+function Rules.CanRekeyAllowlistEntry(saved, fromID, toID)
+    if type(saved) ~= "table" then return false end
+    if type(fromID) ~= "number" or type(toID) ~= "number" then return false end
+    if fromID == toID then return false end
+
+    local entry = saved[fromID]
+    if type(entry) ~= "table" then return false end
+    if entry.default then return false end
+
+    return saved[toID] == nil
+end
