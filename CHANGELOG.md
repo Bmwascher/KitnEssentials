@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.14
+
+### Group Finder & Chat Role Icons
+- One setting now picks which role icons the Group Finder and group chat both
+  draw, replacing a hidden option that only half the addon read
+- Nine icon styles to choose from, including six new bundled sets
+- The style list shows each set's actual icons instead of naming them, so you
+  pick by looking rather than by guessing
+- Role icons in party and raid chat now appear for everyone in the group. They
+  previously appeared for you alone
+- The icons no longer flash the stock artwork before ours while you browse
+  groups outside a dungeon
+
 ## v4.4.13
 
 ### No Movement Alert
