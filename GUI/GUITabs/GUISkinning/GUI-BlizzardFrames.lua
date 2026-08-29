@@ -16,6 +16,13 @@ local function GetDB()
     return KE.db and KE.db.profile.Skinning.BlizzardFrames
 end
 
+-- Chat can be disabled, so the module may legitimately be absent.
+local function GetChatModule()
+    if KitnEssentials and KitnEssentials.GetModule then
+        return KitnEssentials:GetModule("Chat", true)
+    end
+end
+
 -- Key strings must match the LAST string argument of each Register /
 -- RegisterEarly call under Modules/Skinning/. A mismatch silently disables
 -- nothing -- the gate reads Skins[key] ~= false, so an unknown key is
@@ -202,6 +209,10 @@ local FRAME_PER_ROW = 3
 local ADDON_PER_ROW = 2
 local CELL_H = 24
 local CELL_SPACING = 2
+
+-- A dropdown needs more vertical room than a grid cell: its own row is 34 and
+-- the label sits above the control.
+local DROPDOWN_H = 40
 
 -- Sorted by the name the USER reads, not by the internal key. Sorting by key put
 -- Key Bindings between Barbershop and Black Market, and Blizzard Fonts under G.
@@ -393,7 +404,42 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGeneral", function(scrollChild, yOff
     local raidControl = GUIFrame.registeredContent and GUIFrame.registeredContent["RaidControl"]
     if raidControl then yOffset = raidControl(scrollChild, yOffset) end
 
+    local groupFinder = GUIFrame.registeredContent and GUIFrame.registeredContent["SkinBlizzardFramesGroupFinder"]
+    if groupFinder then yOffset = groupFinder(scrollChild, yOffset) end
+
     return yOffset
+end)
+
+-- Chained onto General, not the Frame Skins tab: that tab is dropped whenever
+-- BlizzardFrames.Enabled is false, which is the default, and this one setting
+-- also drives chat -- which someone may want without frame skinning at all.
+GUIFrame:RegisterContent("SkinBlizzardFramesGroupFinder", function(scrollChild, yOffset)
+    local db = GetDB()
+    if not db then return yOffset end
+
+    local card = GUIFrame:CreateCard(scrollChild, "Group Finder", yOffset)
+    card:AddLabel("Which role icons the Group Finder and group chat both draw.")
+
+    local row = GUIFrame:CreateRow(card.content, DROPDOWN_H)
+    row:AddWidget(GUIFrame:CreateDropdown(row, "Role Icon Style", {
+        -- ORDERED array form. A key/value map is sorted by key, which would
+        -- display Blizzard, Class Circle, Modern.
+        options = {
+            { value = "modern", text = "Modern" },
+            { value = "blizzard", text = "Blizzard" },
+            { value = "circle", text = "Class Circle" },
+        },
+        value = KE.Skins.GetRoleIconSet(),
+        callback = function(key)
+            db.RoleIconSet = key
+            KE.Skins.RefreshLFGRoleIcons()
+            local CHAT = GetChatModule()
+            if CHAT and CHAT.RebuildLFGRoles then CHAT:RebuildLFGRoles() end
+        end,
+    }), 0.5)
+    card:AddRow(row, DROPDOWN_H, 0)
+
+    return card:GetNextOffset()
 end)
 
 GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffset)
