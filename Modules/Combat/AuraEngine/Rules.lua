@@ -111,6 +111,30 @@ function Rules.BuildExcludeSpellIDs(saved)
     return set
 end
 
+-- Saved allowlist entries are RECORDS with an enabled flag, matching the
+-- blocklist's shape, so a disabled row must not admit its spell.
+--
+-- ALWAYS A TABLE, never nil. A nil includeSpellIDs means "no whitelist", and a
+-- group filtering plain HELPFUL with no whitelist shows every buff on the
+-- player. That failure is silent and reads as a flood rather than an error.
+--
+-- A FRESH table every call, unlike the exclude builder: there is no shared
+-- constant set to alias here, so there is nothing to protect from mutation and
+-- nothing to be gained by returning one.
+function Rules.BuildIncludeSpellIDs(saved)
+    local set = {}
+
+    if saved then
+        for spellID, record in pairs(saved) do
+            if type(record) == "table" and record.enabled ~= false then
+                set[spellID] = true
+            end
+        end
+    end
+
+    return set
+end
+
 -- maxFrameCount is per group and unused capacity cannot cross a group
 -- boundary, so the limit is divided rather than shared. The remainder goes to
 -- externals: they are the reason the module exists, and a single slot showing

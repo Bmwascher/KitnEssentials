@@ -291,3 +291,61 @@ describe("ConvertGrowthDirection", function()
         assert.are.equal("HORIZONTAL", axis)
     end)
 end)
+
+describe("include spell id set", function()
+    it("returns an empty table rather than nil when nothing is saved", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs(nil)
+        assert.is_table(set)
+        assert.is_nil(next(set))
+    end)
+
+    it("returns an empty table rather than nil when every row is disabled", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({
+            [33206] = { label = "Pain Suppression", enabled = false },
+            [47788] = { label = "Guardian Spirit",  enabled = false },
+        })
+        assert.is_table(set)
+        assert.is_nil(next(set))
+    end)
+
+    it("includes an enabled row", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({
+            [33206] = { label = "Pain Suppression", enabled = true },
+        })
+        assert.is_true(set[33206])
+    end)
+
+    it("treats a row with no enabled flag as enabled", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({
+            [33206] = { label = "Pain Suppression" },
+        })
+        assert.is_true(set[33206])
+    end)
+
+    it("omits a disabled row while keeping its enabled neighbours", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({
+            [33206] = { label = "Pain Suppression", enabled = false },
+            [47788] = { label = "Guardian Spirit",  enabled = true },
+        })
+        assert.is_nil(set[33206])
+        assert.is_true(set[47788])
+    end)
+
+    it("ignores a non-table row", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({ [33206] = true })
+        assert.is_nil(set[33206])
+    end)
+
+    it("returns a fresh table each call", function()
+        local R = L.loadAuraRules()
+        local a = R.BuildIncludeSpellIDs(nil)
+        local b = R.BuildIncludeSpellIDs(nil)
+        assert.is_not.equal(a, b)
+    end)
+end)
