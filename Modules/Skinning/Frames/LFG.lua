@@ -63,49 +63,120 @@ function S.GetRoleIconSet()
 end
 local ROLE_ORDER = { "TANK", "HEALER", "DAMAGER" }
 
-local function ReskinMemberIcon(enumerate, icon, role, entry)
-    local d = S.data(icon)
-    if not d.aeSnap then
+local BORDERLESS_ROLE_ATLASES = {
+    TANK    = "groupfinder-icon-role-micro-tank",
+    HEALER  = "groupfinder-icon-role-micro-heal",
+    DAMAGER = "groupfinder-icon-role-micro-dps",
+}
 
-        S.PixelSnap(icon)
+-- RoleEnumerate and ClassEnumerate activities share this hook. In the class
+-- case the icons carry class art and Blizzard's displayData is keyed by
+-- class, so role art painted over it is wrong. Identity, not contents: our
+-- own ROLE_ORDER holds the same three strings in the same order.
+function S.ShouldPaintEnumerate(iconOrder)
+    return iconOrder ~= nil and iconOrder == _G.LFG_LIST_GROUP_DATA_ROLE_ORDER
+end
+
+-- Three states, not two. An unfilled slot carries Blizzard's own
+-- groupfinder-icon-emptyslot placeholder and must keep it; a slot above the
+-- activity's player count is hidden entirely.
+function S.ClassifySlot(slot, hasEntry)
+    if not slot or not slot:IsShown() then return "hidden" end
+    return hasEntry and "filled" or "empty"
+end
+
+-- The per-member refusal rule, as its own decision so it can be tested
+-- without a fake of the search API. A member is usable only when BOTH its
+-- role and its class are readable; either one secret leaves that slot with
+-- Blizzard's art. Returns the cache entry, or nil to skip the member.
+function S.AcceptMember(role, class, isLeader)
+    if not (KE:IsSafeValue(role) and KE:IsSafeValue(class)) then return nil end
+    if type(role) ~= "string" or type(class) ~= "string" then return nil end
+    return { class, KE:IsSafeValue(isLeader) and isLeader or nil }
+end
+
+local function HideIconExtras(d)
+    if d.aeClassBar then d.aeClassBar:Hide() end
+    if d.aeLeader then d.aeLeader:Hide() end
+end
+
+-- Every set writes every layer. Icons are pooled and categories switch under
+-- them, so a layer left to whatever the previous set wrote is how the old
+-- build ended up drawing class bars with no icon between them.
+--
+-- `alpha` carries Blizzard's delisted state: its own pass sets every template
+-- texture to 0.5 when the listing is disabled, and a paint that hardcodes 1
+-- makes a delisted row look live.
+local function ReskinMemberIcon(slot, set, role, class, isLeader, alpha)
+    local withBg, plain, circle = slot.RoleIconWithBackground, slot.RoleIcon, slot.ClassCircle
+    local d = S.data(slot)
+    if not d.aeSnap then
+        if withBg then S.PixelSnap(withBg) end
         d.aeSnap = true
     end
-    if role and ROLE_ICON[role] then
-        if S.GetRoleIconSet() == "modern" then
-            icon:SetTexture(ROLE_ICON[role])
-            icon:SetTexCoord(0, 1, 0, 1)
-        end
-        icon:SetAlpha(1)
-    else
-        icon:SetAlpha(0)
-    end
 
-    local isLeader = role and entry and entry[2]
+    local anchor = withBg
+    if set == "circle" then
+        if withBg then withBg:Hide() end
+        if plain then
+            plain:SetAtlas(BORDERLESS_ROLE_ATLASES[role], false)
+            plain:SetAlpha(alpha)
+            plain:Show()
+            anchor = plain
+        end
+        if circle then
+            circle:SetAtlas("groupfinder-icon-class-color-" .. class, false)
+            circle:SetAlpha(alpha)
+            circle:Show()
+        end
+    else
+        if plain then plain:Hide() end
+        if circle then circle:Hide() end
+        if withBg then
+            if set == "modern" then
+                withBg:SetTexture(ROLE_ICON[role])
+                withBg:SetTexCoord(0, 1, 0, 1)
+            else
+                withBg:SetAtlas(_G.LFG_LIST_GROUP_DATA_ATLASES[role], false)
+            end
+            withBg:SetAlpha(alpha)
+            withBg:Show()
+        end
+    end
+    if not anchor then return end
+
+    -- Parented to the SLOT, not to the enumerate frame. Blizzard hides slot
+    -- frames above the activity's player count, and a texture parented to
+    -- enumerate outlives that hide as a bar floating over nothing.
     if isLeader then
         if not d.aeLeader then
-            local t = enumerate:CreateTexture(nil, "OVERLAY")
+            local t = slot:CreateTexture(nil, "OVERLAY")
             t:SetAtlas("groupfinder-icon-leader", true)
             t:SetSize(10, 8)
-            t:SetPoint("BOTTOM", icon, "TOP", 0, 1)
             d.aeLeader = t
         end
+        d.aeLeader:ClearAllPoints()
+        d.aeLeader:SetPoint("BOTTOM", anchor, "TOP", 0, 1)
+        d.aeLeader:SetAlpha(alpha)
         d.aeLeader:Show()
     elseif d.aeLeader then
         d.aeLeader:Hide()
     end
 
-    local class = role and entry and entry[1]
-    local color = class and _G.RAID_CLASS_COLORS and _G.RAID_CLASS_COLORS[class]
+    local color = set == "modern" and _G.RAID_CLASS_COLORS
+        and _G.RAID_CLASS_COLORS[class]
     if color then
         if not d.aeClassBar then
-            local t = enumerate:CreateTexture(nil, "ARTWORK")
-            t:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\Statusbars\\KitnEssentials")
+            local t = slot:CreateTexture(nil, "ARTWORK")
+            t:SetTexture(KE.PATH .. [[Statusbars\KitnEssentials]])
             t:SetSize(16, 4)
-            t:SetPoint("TOP", icon, "BOTTOM", 0, -1)
             S.PixelSnap(t)
             d.aeClassBar = t
         end
+        d.aeClassBar:ClearAllPoints()
+        d.aeClassBar:SetPoint("TOP", anchor, "BOTTOM", 0, -1)
         d.aeClassBar:SetVertexColor(color.r, color.g, color.b)
+        d.aeClassBar:SetAlpha(alpha)
         d.aeClassBar:Show()
     elseif d.aeClassBar then
         d.aeClassBar:Hide()
@@ -113,51 +184,110 @@ local function ReskinMemberIcon(enumerate, icon, role, entry)
 end
 
 local lfgTraceShots = 0
-local function UpdateEnumerate(enumerate)
+local function UpdateEnumerate(enumerate, numPlayers, _, disabled, iconOrder)
+    -- The trace stays. S.DebugLFGIconsTrace arms it and the project's
+    -- debug-first rule keeps instrumentation in the file after a diagnosis
+    -- rather than deleting it; dropping the reads here would also leave
+    -- lfgTraceShots written and never read, which luacheck rejects.
     local trace = lfgTraceShots > 0
     if trace then lfgTraceShots = lfgTraceShots - 1 end
+
+    -- Clear FIRST, before any gate. These frames are pooled: one reused from a
+    -- role display into a class display would otherwise keep the old role
+    -- arguments, and a later fallback would replay them over class art.
+    local ed = S.data(enumerate)
+    ed.aeArgs = nil
+
+    if not S.ShouldPaintEnumerate(iconOrder) then
+        if trace then
+            print("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons: not a role enumerate; skipped")
+        end
+        return
+    end
+    -- `disabled` is Blizzard's own searchResultInfo.isDelisted, and
+    -- GetSearchResultInfo is declared SecretInChatMessagingLockdown. A secret
+    -- BOOLEAN cannot be used in if/and/or at all, so `disabled and 0.5 or 1`
+    -- below would throw. Leave Blizzard's finished paint standing instead.
+    if KE:IsSecretValue(disabled) then
+        if trace then
+            print("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons: disabled is secret; left Blizzard's paint")
+        end
+        return
+    end
+
+    local set = S.GetRoleIconSet()
+    if trace then
+        print(("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons: set=%s numPlayers=%s"):format(
+            tostring(set), tostring(numPlayers)))
+    end
+    -- Stash the hook's own arguments so the settings refresh can replay a
+    -- real paint. Without them the refresh cannot tell a role display from a
+    -- class display and correctly refuses to paint at all.
+    ed.aeArgs = { numPlayers, nil, disabled, iconOrder }
+
     local parent = enumerate:GetParent()
     local button = parent and parent:GetParent()
     local resultID = button and button.resultID
-    if trace then print("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons|r fired; resultID=" .. tostring(resultID)) end
     if not resultID then return end
     local ok, result = pcall(_G.C_LFGList.GetSearchResultInfo, resultID)
-    if trace then print("  info ok=" .. tostring(ok) .. " result=" .. tostring(result and "table" or result)) end
     if not ok or not result then return end
-    local cache = { TANK = {}, HEALER = {}, DAMAGER = {} }
+
+    -- A successful pcall can still hand back a SECRET number. Truth-testing
+    -- it or using it as a loop bound is where it throws, and both sit outside
+    -- the protected call.
     local okN, num = pcall(function() return result.numMembers end)
-    num = (okN and num) or 0
-    if trace then print("  numMembers=" .. tostring(num)) end
+    if not okN or KE:IsSecretValue(num) or type(num) ~= "number" then
+        if trace then
+            print("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons: numMembers unreadable; left Blizzard's paint")
+        end
+        return
+    end
+
+    local cache = { TANK = {}, HEALER = {}, DAMAGER = {} }
     for i = 1, num do
         local ok2, p = pcall(_G.C_LFGList.GetSearchResultPlayerInfo, resultID, i)
-        if ok2 and p and p.assignedRole and cache[p.assignedRole] then
-            local t = cache[p.assignedRole]
-            t[#t + 1] = { p.classFilename, p.isLeader }
-        end
-    end
-    if trace then
-        print(("  cache T=%d H=%d D=%d; Icon1=%s RoleIcon=%s"):format(
-            #cache.TANK, #cache.HEALER, #cache.DAMAGER,
-            tostring(enumerate.Icon1 ~= nil),
-            tostring(enumerate.Icon1 and enumerate.Icon1.RoleIcon ~= nil)))
-    end
-    for i = 5, 1, -1 do
-        local slot = enumerate["Icon" .. i]
-
-        local icon = slot and (slot.RoleIconWithBackground or slot.RoleIcon)
-        if icon and icon.SetTexture then
-            local role, entry
-            for r = 1, 3 do
-                local list = cache[ROLE_ORDER[r]]
-                if #list > 0 then
-                    role, entry = ROLE_ORDER[r], list[1]
-                    table.remove(list, 1)
-                    break
-                end
+        if ok2 and p then
+            local entry = S.AcceptMember(p.assignedRole, p.classFilename, p.isLeader)
+            -- One skipped member never aborts the rest of the walk.
+            if entry and cache[p.assignedRole] then
+                local t = cache[p.assignedRole]
+                t[#t + 1] = entry
             end
-            ReskinMemberIcon(enumerate, icon, role, entry)
         end
-        if slot and slot.ClassCircle then slot.ClassCircle:Hide() end
+    end
+
+    local icons = enumerate.Icons
+    if not icons then return end
+    if trace then
+        print(("|cffFF008CKitn|r|cffffffffEssentials:|r lfgicons: cache T=%d H=%d D=%d of %d members"):format(
+            #cache.TANK, #cache.HEALER, #cache.DAMAGER, num))
+    end
+    local alpha = disabled and 0.5 or 1
+    -- Blizzard fills from numPlayers downward and hides everything above it.
+    -- The old hard-coded 5,1,-1 walk started on a hidden frame whenever the
+    -- activity seated fewer than five, so every member landed one or two
+    -- slots off.
+    local top = numPlayers or #icons
+    if top > #icons then top = #icons end
+    for i = top, 1, -1 do
+        local slot = icons[i]
+        local role, entry
+        for r = 1, 3 do
+            local list = cache[ROLE_ORDER[r]]
+            if #list > 0 then
+                role, entry = ROLE_ORDER[r], list[1]
+                table.remove(list, 1)
+                break
+            end
+        end
+        local state = S.ClassifySlot(slot, role ~= nil)
+        if state == "filled" then
+            ReskinMemberIcon(slot, set, role, entry[1], entry[2], alpha)
+        elseif state == "empty" then
+            -- Blizzard's own placeholder art. Leave all four of its layers
+            -- alone and take only our own additions off.
+            HideIconExtras(S.data(slot))
+        end
     end
 end
 
