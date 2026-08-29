@@ -61,7 +61,9 @@ local function ConfigureHost(host, settings)
     -- "unchanged" across a sheet swap and the animation is never replayed.
     local wanted = GlowRules.FlipbookState(entry, duration)
 
-    if GlowRules.NeedsRestart(host.appliedFlip, wanted) then
+    local restarted = GlowRules.NeedsRestart(host.appliedFlip, wanted)
+
+    if restarted then
         host.animGroup:Stop()
         host.flip:SetFlipBookRows(wanted.rows)
         host.flip:SetFlipBookColumns(wanted.columns)
@@ -78,6 +80,40 @@ local function ConfigureHost(host, settings)
     texture:SetDesaturated(true)
     local r, g, b, a = KE:ResolveColor(settings.GlowColor, { 0, 1, 0, 1 })
     texture:SetVertexColor(r, g, b, a)
+
+    -- Atlas styles only. The alert sheet is already high-contrast and a
+    -- doubled additive copy of it blows out to white.
+    local overlay = host.overlay
+    if overlay then
+        if entry.atlas then
+            overlay:SetSize(size, size)
+            overlay:ClearAllPoints()
+            overlay:SetPoint("CENTER", host, "CENTER", 0, 0)
+            overlay:SetAtlas(entry.atlas, false)
+            overlay:SetDesaturated(false)
+            overlay:SetVertexColor(1, 1, 1, 1)
+            overlay:SetAlpha(0.35)
+            overlay:Show()
+
+            -- Gated on the SAME predicate as the main texture so the two
+            -- animations start together. Restarting one without the other
+            -- leaves the highlight layer a frame or more out of phase, which
+            -- reads as a double image.
+            if restarted then
+                host.overlayGroup:Stop()
+                host.overlayFlip:SetFlipBookRows(wanted.rows)
+                host.overlayFlip:SetFlipBookColumns(wanted.columns)
+                host.overlayFlip:SetFlipBookFrames(wanted.frames)
+                host.overlayFlip:SetFlipBookFrameWidth(wanted.frameWidth)
+                host.overlayFlip:SetFlipBookFrameHeight(wanted.frameHeight)
+                host.overlayFlip:SetDuration(wanted.duration)
+                host.overlayGroup:Play()
+            end
+        else
+            overlay:Hide()
+            host.overlayGroup:Stop()
+        end
+    end
 
     host:SetShown(settings.GlowEnabled and true or false)
 end
@@ -105,6 +141,20 @@ function Glow.CreateHost(button, settings)
     host.texture   = texture
     host.animGroup = animGroup
     host.flip      = flip
+
+    -- A desaturated, tinted atlas loses the artwork's own highlights. An
+    -- untinted additive copy of the same animation restores them. Created
+    -- here rather than lazily because this is the only window in which a
+    -- child may be parented to an aura button.
+    local overlay = host:CreateTexture(nil, "OVERLAY")
+    overlay:SetBlendMode("ADD")
+    local overlayGroup = overlay:CreateAnimationGroup()
+    overlayGroup:SetLooping("REPEAT")
+    local overlayFlip = overlayGroup:CreateAnimation("FlipBook")
+
+    host.overlay      = overlay
+    host.overlayGroup = overlayGroup
+    host.overlayFlip  = overlayFlip
 
     ConfigureHost(host, settings)
 
