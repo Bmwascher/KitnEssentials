@@ -19,6 +19,11 @@ files["dev/spec"] = {
     read_globals = { "lfs" },
 }
 
+-- Benchmark-only companion addon (in-game Lua, not a spec). Never shipped.
+files["dev/bench"] = {
+    globals = { "SLASH_KESBENCH1" },
+}
+
 -- Suppress legitimate patterns:
 --  212/_      — unused argument with _ name (discard)
 --  212/self   — unused self in methods
