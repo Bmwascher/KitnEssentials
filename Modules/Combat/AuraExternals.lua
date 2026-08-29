@@ -17,11 +17,18 @@ local AX = KitnEssentials:NewModule("AuraExternals", "AceEvent-3.0")
 local PREVIEW_ICONS     = { 135936, 572025, 135966, 627485, 4622478, 237542 }
 local PREVIEW_ICONS_BIG = { 136097, 615341, 136120 }
 
--- Externals has no user blocklist, so this is the hardcoded set alone. It is
--- still routed through the shared rule rather than being built here, so both
--- displays exclude the same entries and one change reaches both.
+-- The BIG defensives group still leans on Blizzard's own curation, so it takes
+-- the exclude set alone. The externals group is user-defined instead, and its
+-- whitelist is what bounds it.
 local function BuildCandidates()
     return { excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(nil) }
+end
+
+local function BuildExternalCandidates(settings)
+    return {
+        excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(nil),
+        includeSpellIDs = KE.AuraRules.BuildIncludeSpellIDs(settings.Allowlist),
+    }
 end
 
 local DECLARATION = {
@@ -38,8 +45,13 @@ local DECLARATION = {
     groups = {
         {
             key          = "external",
-            buildFilter  = function() return "HELPFUL|EXTERNAL_DEFENSIVE" end,
-            buildCandidates = BuildCandidates,
+            -- EXTERNAL_DEFENSIVE is deliberately absent. The candidate
+            -- whitelist can only NARROW what the filter string admits, so
+            -- keeping Blizzard's component would make the user's list an
+            -- intersection with it rather than a replacement for it, and an
+            -- added spell would never appear.
+            buildFilter  = function() return "HELPFUL" end,
+            buildCandidates = BuildExternalCandidates,
             capabilities = { hasBorder = true, hasDispelBadge = false, hasDispelRing = false, hasGlow = true },
         },
         {

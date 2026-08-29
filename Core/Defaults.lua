@@ -1191,6 +1191,30 @@ local Defaults = {
             MaxRows           = 2,
             Swipe             = false,
             Reverse           = true,
+            -- Seeded rows carry default = true, which makes them undeletable
+            -- in the GUI and lets the restore buttons tell a shipped row from
+            -- one the user typed in. Any row may still be switched off.
+            --
+            -- Two pairs share a name because the game returns the same name
+            -- for both members. They are still distinguishable: the dropdown's
+            -- own option builder appends the spell ID to every row, so the
+            -- label must NOT carry one or it renders twice.
+            Allowlist = {
+                [33206]  = { label = "Pain Suppression",          enabled = true, default = true },
+                [47788]  = { label = "Guardian Spirit",           enabled = true, default = true },
+                [255312] = { label = "Guardian Spirit",           enabled = true, default = true },
+                [197268] = { label = "Ray of Hope",               enabled = true, default = true },
+                [1022]   = { label = "Blessing of Protection",    enabled = true, default = true },
+                [6940]   = { label = "Blessing of Sacrifice",     enabled = true, default = true },
+                [204018] = { label = "Blessing of Spellwarding",  enabled = true, default = true },
+                [102342] = { label = "Ironbark",                  enabled = true, default = true },
+                [116849] = { label = "Life Cocoon",               enabled = true, default = true },
+                [357170] = { label = "Time Dilation",             enabled = true, default = true },
+                [3411]   = { label = "Intervene",                 enabled = true, default = true },
+                [147833] = { label = "Intervene",                 enabled = true, default = true },
+                [223658] = { label = "Safeguard",                 enabled = true, default = true },
+                [53480]  = { label = "Roar of Sacrifice",         enabled = true, default = true },
+            },
             GrowHorizontal    = "LEFT",
             GrowVertical      = "UP",
             GlowEnabled       = true,
