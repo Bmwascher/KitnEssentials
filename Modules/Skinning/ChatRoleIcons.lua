@@ -24,6 +24,24 @@ function KE.AcceptChatMember(role, name, realm)
     return name, realm
 end
 
+-- Which cache keys one group member gets. Chat delivers a sender name that
+-- may or may not carry a realm suffix, so the cache has to answer to both
+-- forms. A same-realm member reads back from the unit API with NO realm, so
+-- keying on the bare name alone leaves that member unreachable whenever chat
+-- supplies the qualified form -- which is why role icons appeared for the
+-- player, whose own realm is always readable, and for nobody else.
+--
+-- Returns the bare key and the qualified key. playerRealm stands in for a
+-- missing member realm, since an absent realm IS the player's own realm.
+function KE.ChatRoleIconKeys(name, realm, playerRealm)
+    if type(name) ~= "string" or name == "" then return nil end
+    local qualifier = (type(realm) == "string" and realm ~= "" and realm)
+        or (type(playerRealm) == "string" and playerRealm ~= "" and playerRealm)
+        or nil
+    if not qualifier then return name end
+    return name, name .. "-" .. qualifier
+end
+
 -- One table per SET, not one per session. The previous builder returned early
 -- if it had ever run, so whichever set was built first would have been the
 -- only set chat could ever show.

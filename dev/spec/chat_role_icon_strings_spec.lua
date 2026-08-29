@@ -114,3 +114,44 @@ describe("Chat role icons: the identity refusal", function()
         assert.are.equal("Kitn", (accept("DAMAGER", "Kitn", nil)))
     end)
 end)
+
+-- The cache answers to whichever sender-name form chat delivers. A same-realm
+-- member reads back from the unit API with NO realm, so keying on the bare
+-- name alone left every such member unreachable while the player -- whose own
+-- realm is always readable -- kept working. That asymmetry is the bug these
+-- cases pin.
+describe("Chat role icon cache keys", function()
+    local keys
+
+    before_each(function()
+        keys = loader.loadChatRoleIconKeys()
+    end)
+
+    it("qualifies a same-realm member with the player's realm", function()
+        local bare, qualified = keys("Ally", nil, "Stormrage")
+        assert.are.equal("Ally", bare)
+        assert.are.equal("Ally-Stormrage", qualified)
+    end)
+
+    it("treats an empty realm as same-realm", function()
+        local _, qualified = keys("Ally", "", "Stormrage")
+        assert.are.equal("Ally-Stormrage", qualified)
+    end)
+
+    it("keeps a cross-realm member's own realm", function()
+        local bare, qualified = keys("Ally", "Draenor", "Stormrage")
+        assert.are.equal("Ally", bare)
+        assert.are.equal("Ally-Draenor", qualified)
+    end)
+
+    it("returns the bare key alone when no realm is known at all", function()
+        local bare, qualified = keys("Ally", nil, nil)
+        assert.are.equal("Ally", bare)
+        assert.is_nil(qualified)
+    end)
+
+    it("refuses a nameless member", function()
+        assert.is_nil(keys(nil, nil, "Stormrage"))
+        assert.is_nil(keys("", nil, "Stormrage"))
+    end)
+end)

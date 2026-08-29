@@ -1060,6 +1060,15 @@ function L.loadChatRoleIconStrings()
     return KE.BuildChatRoleIconStrings
 end
 
+-- The cache-key rule from the same file. Pure, so it needs no art table and
+-- no mock environment at all.
+function L.loadChatRoleIconKeys()
+    local helpersLocal = require("dev.spec._helpers")
+    local KE = { PATH = "", ROLE_ICON_ART = {} }
+    helpersLocal.loadModule("Modules/Skinning/ChatRoleIcons.lua", KE)
+    return KE.ChatRoleIconKeys
+end
+
 -- Modules/Skinning/RoleIconSamples.lua. Same reason as the chat builder above:
 -- the file holds one pure function and needs no KE.Skins and no frames, so it
 -- loads against a bare KE carrying only the art table.

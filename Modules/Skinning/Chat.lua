@@ -2746,19 +2746,21 @@ function RebuildLFGRoles()
     -- Role, name and realm are all secret-capable and all guarded before any
     -- truth test, comparison, concatenation or table index. One secret member
     -- is skipped; it does not downgrade the others or abort the walk.
+    -- Stands in for a member realm the unit API omits. Read once, and only
+    -- used when it is a plain string.
+    local myName, myRealm = UnitFullName("player")
+    local playerRealm = (not KE:IsSecretValue(myRealm)) and myRealm or nil
+
     local function store(name, realm, role)
         local okName, okRealm = KE.AcceptChatMember(role, name, realm)
         if not okName then return end
-        name, realm = okName, okRealm
         local icon = strings[role]
         if not icon then return end
-        CMH.lfgRoles[name] = icon
-        if realm then
-            CMH.lfgRoles[name .. "-" .. realm] = icon
-        end
+        local bare, qualified = KE.ChatRoleIconKeys(okName, okRealm, playerRealm)
+        if bare then CMH.lfgRoles[bare] = icon end
+        if qualified then CMH.lfgRoles[qualified] = icon end
     end
 
-    local myName, myRealm = UnitFullName("player")
     store(myName, myRealm, UnitGroupRolesAssigned("player"))
 
     local unit = IsInRaid() and "raid" or "party"
