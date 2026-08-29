@@ -1924,11 +1924,15 @@ local Defaults = {
                 -- moves them together. 12 is Blizzard's own baseline.
                 FontBaseSize = 12,
                 -- Which role icon SET the Group Finder and group chat both
-                -- draw. Any key of KE.ROLE_ICON_ART selects that bundled art
-                -- and a class-coloured bar; "blizzard" is the stock role
-                -- icons with no class indicator; "circle" is the class circle
-                -- with a borderless role glyph. One setting, two surfaces --
-                -- chat follows whatever this says.
+                -- draw. Any key of KE.ROLE_ICON_ART selects that bundled art;
+                -- "blizzard" is the stock role icons; "circle" is the class
+                -- circle with a borderless role glyph.
+                --
+                -- Those descriptions are the GROUP FINDER, which also adds a
+                -- class-coloured bar under every art set. Chat reads no class
+                -- at all, so it draws the art alone and falls back to the
+                -- Blizzard badge for "circle" -- an icon string cannot
+                -- compose a glyph over a ring. One setting, two surfaces.
                 RoleIconSet = "modern",
                 -- Per-frame opt-out. A missing key means ON; only an
                 -- explicit false disables a skin. The registry's gate reads
