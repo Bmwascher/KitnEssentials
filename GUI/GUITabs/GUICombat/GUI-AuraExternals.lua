@@ -235,7 +235,8 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
         -- Pixel is now a real resolved type, so the card's default lookup
         -- would show its Length and Border controls too. This display's
         -- border is animation-driven and honours neither, so the override
-        -- maps `pixel` to the two rows it does honour and omits every other
+        -- maps `pixel` to the one row carrying the two controls it does
+        -- honour, Lines and Thickness, and omits every other
         -- group -- which is also what keeps the retired autocast and proc
         -- geometry rows hidden.
         -- Every group must stay REACHABLE by the visibility loop, including the
