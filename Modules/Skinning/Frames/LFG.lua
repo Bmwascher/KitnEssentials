@@ -407,10 +407,28 @@ local function HookLFGListIcons()
             return IsInInstance()
         end
 
+        -- Search rows only. The applicant viewer routes through these same
+        -- hooks, and its GROUP_ROSTER_UPDATE handler runs UpdateGroupData and
+        -- then UpdateInviteState, which adds button.numMembers to a count.
+        -- GetApplicantInfo stores that field, so a value captured during an
+        -- earlier lockdown is still secret after the lockdown lifts and the
+        -- arithmetic throws in execution a synchronous paint has tainted:
+        -- list a key, take applicants in the instance, zone out, and the next
+        -- roster update breaks the invite buttons. Nothing is lost by
+        -- deferring there, because that display carries no resultID and the
+        -- painter refuses it regardless.
+        local function OwnedBySearchRow(frame)
+            local display = frame.GetParent and frame:GetParent()
+            local button = display and display.GetParent and display:GetParent()
+            return button ~= nil and button.resultID ~= nil
+        end
+
         local function Defer(fn, key)
             return function(frame, ...)
                 if not frame then return end
-                if not InLockdown() then return fn(frame, ...) end
+                if OwnedBySearchRow(frame) and not InLockdown() then
+                    return fn(frame, ...)
+                end
                 if S.data(frame)[key] then return end
                 S.data(frame)[key] = true
                 local args = { ... }
