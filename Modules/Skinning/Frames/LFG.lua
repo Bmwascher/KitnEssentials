@@ -292,9 +292,9 @@ local function UpdateEnumerate(enumerate, numPlayers, _, disabled, iconOrder)
 end
 
 local ROLE_COUNT_SLOTS = {
-    { "TankIconWithBackground", "TankIcon", "TANK" },
-    { "HealerIconWithBackground", "HealerIcon", "HEALER" },
-    { "DamagerIconWithBackground", "DamagerIcon", "DAMAGER" },
+    { "TankIconWithBackground", "TankIcon", "TANK", "UI-LFG-RoleIcon-Tank-Micro-GroupFinder" },
+    { "HealerIconWithBackground", "HealerIcon", "HEALER", "UI-LFG-RoleIcon-Healer-Micro-GroupFinder" },
+    { "DamagerIconWithBackground", "DamagerIcon", "DAMAGER", "UI-LFG-RoleIcon-DPS-Micro-GroupFinder" },
 }
 -- RoleCountNoScriptsTemplate sizes each count as a fixed 17x14 CENTER box,
 -- against a stock GameFontHighlightSmall at 10. GlobalFonts.lua runs that font
@@ -331,6 +331,7 @@ end
 
 local function UpdateRoleCount(roleCount)
     LayoutRoleCount(roleCount)
+    local set = S.GetRoleIconSet()
     for i = 1, 3 do
         local slot = ROLE_COUNT_SLOTS[i]
         local icon = roleCount[slot[1]] or roleCount[slot[2]]
@@ -340,9 +341,13 @@ local function UpdateRoleCount(roleCount)
                 S.PixelSnap(icon)
                 d.aeSnap = true
             end
-            if S.GetRoleIconSet() == "modern" then
+            if set == "modern" then
                 icon:SetTexture(ROLE_ICON[slot[3]])
                 icon:SetTexCoord(0, 1, 0, 1)
+            else
+                -- Blizzard's own update never re-sets this atlas, so leaving
+                -- it alone would keep the bundled art after a switch away.
+                icon:SetAtlas(slot[4], false)
             end
         end
     end
