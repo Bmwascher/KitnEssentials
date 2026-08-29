@@ -420,15 +420,26 @@ GUIFrame:RegisterContent("SkinBlizzardFramesGroupFinder", function(scrollChild, 
     local card = GUIFrame:CreateCard(scrollChild, "Group Finder", yOffset)
     card:AddLabel("Which role icons the Group Finder and group chat both draw.")
 
+    -- Each entry's label IS its sample: three inline role icons and no text,
+    -- so the list shows the art rather than naming it. Built once here, not
+    -- per row paint. Never mark this dropdown searchable -- the matcher
+    -- strips |T|t escapes but not |A|a, so the art rows would match nothing
+    -- while the two atlas rows matched raw atlas names.
+    local ROLE_ICON_SET_ORDER = {
+        "modern", "blizzard", "circle", "ringed",
+        "outlined", "framed", "hexagon", "plain", "muted", "shaded",
+    }
+    local roleIconOptions = {}
+    for i = 1, #ROLE_ICON_SET_ORDER do
+        local set = ROLE_ICON_SET_ORDER[i]
+        roleIconOptions[i] = { value = set, text = KE.BuildRoleIconSample(set) }
+    end
+
     local row = GUIFrame:CreateRow(card.content, DROPDOWN_H)
     row:AddWidget(GUIFrame:CreateDropdown(row, "Role Icon Style", {
         -- ORDERED array form. A key/value map is sorted by key, which would
-        -- display Blizzard, Class Circle, Modern.
-        options = {
-            { value = "modern", text = "Modern" },
-            { value = "blizzard", text = "Blizzard" },
-            { value = "circle", text = "Class Circle" },
-        },
+        -- put the three original entries in an arbitrary order.
+        options = roleIconOptions,
         value = KE.Skins.GetRoleIconSet(),
         callback = function(key)
             db.RoleIconSet = key

@@ -570,6 +570,12 @@ function KE.Skins.RefreshLFGRoleIcons() end
 ---@return table<string, string>
 function KE.BuildChatRoleIconStrings(set) end
 
+-- ─── Skinning (Modules/Skinning/RoleIconSamples.lua) ───────
+--- Builds one role icon set's dropdown label: three inline icons, no text.
+---@param set string
+---@return string
+function KE.BuildRoleIconSample(set) end
+
 --- Accepts or refuses one chat member by identity readability.
 ---@param role any
 ---@param name any
