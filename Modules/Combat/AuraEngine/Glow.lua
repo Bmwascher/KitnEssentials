@@ -55,23 +55,22 @@ local function ConfigureHost(host, settings)
     -- No in-client case mutates a PLAYING flipbook's grid or duration; every
     -- one sets them on a stopped group and plays it afterward. Restarting
     -- unconditionally on every reconfigure would stutter an unrelated change
-    -- (icon size, colour), so the group is only stopped and replayed when a
-    -- flipbook property actually differs from what is already applied.
-    local applied = host.appliedFlip
-    local changed = not applied
-        or applied.rows ~= entry.rows
-        or applied.columns ~= entry.columns
-        or applied.frames ~= entry.frames
-        or applied.duration ~= duration
+    -- (icon size, colour), so the group is only stopped and replayed when
+    -- something the flipbook itself reads actually differs. The TEXTURE SOURCE
+    -- counts: two styles can share a grid, so comparing the grid alone reports
+    -- "unchanged" across a sheet swap and the animation is never replayed.
+    local wanted = GlowRules.FlipbookState(entry, duration)
 
-    if changed then
+    if GlowRules.NeedsRestart(host.appliedFlip, wanted) then
         host.animGroup:Stop()
-        host.flip:SetFlipBookRows(entry.rows)
-        host.flip:SetFlipBookColumns(entry.columns)
-        host.flip:SetFlipBookFrames(entry.frames)
-        host.flip:SetDuration(duration)
+        host.flip:SetFlipBookRows(wanted.rows)
+        host.flip:SetFlipBookColumns(wanted.columns)
+        host.flip:SetFlipBookFrames(wanted.frames)
+        host.flip:SetFlipBookFrameWidth(wanted.frameWidth)
+        host.flip:SetFlipBookFrameHeight(wanted.frameHeight)
+        host.flip:SetDuration(wanted.duration)
         host.animGroup:Play()
-        host.appliedFlip = { rows = entry.rows, columns = entry.columns, frames = entry.frames, duration = duration }
+        host.appliedFlip = wanted
     end
 
     -- Without the desaturate the atlas keeps its own hue and the colour
@@ -102,8 +101,6 @@ function Glow.CreateHost(button, settings)
     local animGroup = texture:CreateAnimationGroup()
     animGroup:SetLooping("REPEAT")
     local flip = animGroup:CreateAnimation("FlipBook")
-    flip:SetFlipBookFrameWidth(0)
-    flip:SetFlipBookFrameHeight(0)
 
     host.texture   = texture
     host.animGroup = animGroup
