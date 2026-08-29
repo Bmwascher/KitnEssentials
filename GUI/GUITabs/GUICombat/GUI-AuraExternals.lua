@@ -226,18 +226,31 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
             duration  = "GlowDuration",
         },
         types = {
+            { key = "pixel",    text = "Pixel" },
             { key = "ants",     text = "Ants" },
             { key = "procloop", text = "Proc Loop" },
             { key = "alert",    text = "Alert" },
         },
         resolveType = KE.AuraGlowRules.ResolveType,
-        -- No typeRows override: the card's own default lookup keys its
-        -- type-only geometry rows "pixel"/"autocast"/"proc", and a resolved
-        -- flipbook type is always "ants"/"procloop"/"alert" -- never one of
-        -- those keys. Passing an override here (even an empty one) would
-        -- replace that lookup and stop the card from ever hiding those rows,
-        -- leaving the retired Lines/Length/Thickness/Border/Scale/Start
-        -- Animation controls permanently visible.
+        -- Pixel is now a real resolved type, so the card's default lookup
+        -- would show its Length and Border controls too. This display's
+        -- border is animation-driven and honours neither, so the override
+        -- maps `pixel` to the two rows it does honour and omits every other
+        -- group -- which is also what keeps the retired autocast and proc
+        -- geometry rows hidden.
+        -- Every group must stay REACHABLE by the visibility loop, including the
+        -- ones that must never show: the loop is what calls SetShown(false),
+        -- so a group left out of this table is a group nothing ever hides.
+        -- Length and Border therefore move to a key no resolved type equals,
+        -- rather than being dropped.
+        typeRows = function(rows)
+            return {
+                pixel       = rows.pixel,
+                unsupported = rows.pixelExtras,
+                autocast    = rows.autocast,
+                proc        = rows.proc,
+            }
+        end,
         showSpeed = function() return true end,
         speedAdapter = {
             -- WRAPPED, not passed bare. The read rule's result needs

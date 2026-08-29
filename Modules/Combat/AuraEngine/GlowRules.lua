@@ -43,17 +43,28 @@ GlowRules.FLIPBOOKS = {
     },
 }
 
+-- Every selectable style, and which host draws it. The flipbook host steps a
+-- sheet; the pixel host marches four masked dash strips. ResolveType keys off
+-- this rather than FLIPBOOKS, which knows only about the sheet-based three.
+GlowRules.STYLES = {
+    pixel    = { kind = "pixel" },
+    ants     = { kind = "flipbook" },
+    procloop = { kind = "flipbook" },
+    alert    = { kind = "flipbook" },
+}
+
 -- Read-time coercion, never a profile rewrite: a migration would write a
 -- value the user could not yet have chosen.
+-- `pixel` is absent on purpose: it renders again, so it resolves to itself
+-- through the STYLES lookup and must not be coerced away.
 local TYPE_MAP = {
-    pixel    = "ants",      -- both trace the button edge
-    autocast = "ants",
+    autocast = "pixel",     -- both trace the button edge
     button   = "procloop",  -- both are a soft fill rather than an outline
     proc     = "procloop",
 }
 
 function GlowRules.ResolveType(stored)
-    if GlowRules.FLIPBOOKS[stored] then return stored end
+    if GlowRules.STYLES[stored] then return stored end
     return TYPE_MAP[stored] or DEFAULT_TYPE
 end
 
@@ -141,4 +152,53 @@ function GlowRules.NeedsRestart(applied, wanted)
         or applied.frameWidth  ~= wanted.frameWidth
         or applied.frameHeight ~= wanted.frameHeight
         or applied.duration    ~= wanted.duration
+end
+
+local math_floor = math.floor
+
+-- Clamped to the range the Lines slider offers, so a hand-edited profile
+-- cannot ask for a dash count the geometry was never solved for.
+function GlowRules.NormalisePixelCount(value)
+    local n = tonumber(value)
+    if not n or n < 1 then return 8 end
+    if n > 16 then return 16 end
+    return math_floor(n)
+end
+
+-- Same rule for the Thickness slider's range.
+function GlowRules.NormalisePixelThickness(value)
+    local t = tonumber(value)
+    if not t or t < 1 then return 1 end
+    if t > 8 then return 8 end
+    return math_floor(t)
+end
+
+-- The marching border, as scalars.
+--
+-- `cycle` is the pixel span of one dash plus its gap. Each strip is drawn one
+-- whole cycle LONGER than its edge and translated by exactly one cycle, so the
+-- snap back at the end of the loop lands on identical pixels and is invisible.
+-- `phase` is each edge's cumulative distance around the perimeter, expressed in
+-- cycles, which is what keeps the dashes continuous across a corner: phase
+-- matters only modulo one cycle, so the one-cycle strip overhang cancels out.
+--
+-- Edge order is clockwise from the top: top, right, bottom, left.
+function GlowRules.PixelPerimeter(count, width, height, period)
+    local n = GlowRules.NormalisePixelCount(count)
+    local perimeter = 2 * (width + height)
+    local cycle = perimeter / n
+
+    return {
+        count = n,
+        cycle = cycle,
+        step  = period / n,
+        phase = {
+            0,
+            width / cycle,
+            (width + height) / cycle,
+            (width + height + width) / cycle,
+        },
+        spanH = (width + cycle) / cycle,
+        spanV = (height + cycle) / cycle,
+    }
 end
