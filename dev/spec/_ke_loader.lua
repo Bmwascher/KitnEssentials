@@ -977,16 +977,21 @@ local ROLE_ICON_ART_SETS = {
     "hexagon", "plain", "muted", "shaded",
 }
 
-local function roleIconArt(PATH)
+-- `extra` injects art sets the production table does not have. That is what
+-- makes derivation falsifiable: a hand-maintained validity list containing
+-- exactly today's keys satisfies every assertion about today's keys, so only
+-- a set the list CANNOT know about proves the list is derived at all.
+local function roleIconArt(PATH, extra)
     local art = {}
-    for i = 1, #ROLE_ICON_ART_SETS do
-        local set = ROLE_ICON_ART_SETS[i]
+    local function add(set)
         art[set] = {
             TANK = PATH .. [[RoleIcons\tank-]] .. set .. ".png",
             HEALER = PATH .. [[RoleIcons\healer-]] .. set .. ".png",
             DAMAGER = PATH .. [[RoleIcons\dps-]] .. set .. ".png",
         }
     end
+    for i = 1, #ROLE_ICON_ART_SETS do add(ROLE_ICON_ART_SETS[i]) end
+    for i = 1, #(extra or {}) do add(extra[i]) end
     return art
 end
 
@@ -1018,7 +1023,7 @@ function L.loadLFGSkin(overrides)
         PATH = [[Interface\AddOns\KitnEssentials\Media\]],
         db = { profile = { Skinning = overrides.Skinning or { BlizzardFrames = {} } } },
     }
-    KE.ROLE_ICON_ART = roleIconArt(KE.PATH)
+    KE.ROLE_ICON_ART = roleIconArt(KE.PATH, overrides.extraRoleIconArt)
     KE.ROLE_ICONS = KE.ROLE_ICON_ART.modern
     KE.Skins = {
         Register = function() end,

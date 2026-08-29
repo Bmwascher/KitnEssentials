@@ -997,12 +997,10 @@ local function Skin()
         end
     end
 
-    -- (applicant accept/decline unskinned; role icons
-    -- not matching our apply skin). ElvUI hooks
-    -- LFGListApplicationViewer_UpdateApplicant for the buttons; role
-    -- icons restyle in LFGListApplicationViewer_UpdateRoleIcons, where
-    -- Blizzard atlases RoleIcon1..3 -- swap those atlases for the same
-    -- per-set art the search-results skin draws.
+    -- Skins the applicant accept/decline buttons only. The role icons on
+    -- those rows are deliberately NOT painted and keep Blizzard's own art --
+    -- see the reason at the hook below, which is a taint constraint rather
+    -- than an oversight.
     if _G.LFGListApplicationViewer_UpdateApplicant and not S.data(lfgList).applicantHook then
         S.data(lfgList).applicantHook = true
         local function SkinApplicantAction(btn)

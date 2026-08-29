@@ -24,9 +24,10 @@ describe("Chat role icon strings", function()
         assert.is_truthy(s.TANK:find("|t$"))
     end)
 
-    -- Every art set takes the texture path, not just modern. Pinning one new
-    -- set by name would pass even if the builder still tested `== "modern"`
-    -- and happened to be handed that one key, so this walks them all.
+    -- Every art set takes the texture path, not just modern, and each draws
+    -- its OWN files. Asserting only that the escape is a texture would pass a
+    -- builder that reached for modern's art whatever set it was handed, which
+    -- is the failure the shared-decision refactor exists to prevent.
     it("builds texture escapes for every art set", function()
         for _, set in ipairs({ "ringed", "outlined", "framed", "hexagon",
                               "plain", "muted", "shaded" }) do

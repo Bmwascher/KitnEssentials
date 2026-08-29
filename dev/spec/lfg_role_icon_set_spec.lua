@@ -25,10 +25,6 @@ describe("S.GetRoleIconSet", function()
         assert.are.equal("modern", resolverWith({ RoleIconSet = "nonsense" }))
     end)
 
-    -- Iterating is the point. Asserting only the fallback passes even if the
-    -- validity list is never derived from the art table; asserting one named
-    -- art key passes even if the list is hand-maintained and drifts from the
-    -- art. Only "every art key resolves to itself" tests what the design says.
     it("accepts every key the art table defines", function()
         local KE = loader.loadLFGSkin({})
         local seen = 0
@@ -37,6 +33,28 @@ describe("S.GetRoleIconSet", function()
             seen = seen + 1
         end
         assert.is_true(seen >= 8)
+    end)
+
+    -- The case above is NOT enough on its own: a hand-maintained list holding
+    -- exactly today's ten keys satisfies it while the derivation is gone. Only
+    -- a set the code could not have been written to know about proves the list
+    -- is built from the art table.
+    it("accepts an art set that did not exist when the code was written", function()
+        local _, S = loader.loadLFGSkin({
+            extraRoleIconArt = { "sentinel" },
+            Skinning = { BlizzardFrames = { RoleIconSet = "sentinel" } },
+        })
+        assert.are.equal("sentinel", S.GetRoleIconSet())
+    end)
+
+    -- The mirror image: absence from the art table is what makes a key
+    -- invalid, so a plausible-looking set that was never added still refuses.
+    it("still refuses a set the art table does not define", function()
+        local _, S = loader.loadLFGSkin({
+            extraRoleIconArt = { "sentinel" },
+            Skinning = { BlizzardFrames = { RoleIconSet = "notsentinel" } },
+        })
+        assert.are.equal("modern", S.GetRoleIconSet())
     end)
 
     -- The old key was a TABLE with an .Enabled field. A reader that still
