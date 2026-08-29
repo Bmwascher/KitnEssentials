@@ -6,11 +6,6 @@ local LARGE_ROLE_ATLASES = {
     HEALER  = "groupfinder-icon-role-large-heal",
     DAMAGER = "groupfinder-icon-role-large-dps",
 }
-local MICRO_ROLE_ATLASES = {
-    TANK    = "groupfinder-icon-role-micro-tank",
-    HEALER  = "groupfinder-icon-role-micro-heal",
-    DAMAGER = "groupfinder-icon-role-micro-dps",
-}
 local ROLES = { "TANK", "HEALER", "DAMAGER" }
 
 -- Which set can actually be drawn for one member. Only `circle` composes the
@@ -43,8 +38,15 @@ end
 -- if it had ever run, so whichever set was built first would have been the
 -- only set chat could ever show.
 --
--- circle is keyed ROLE_CLASS as well as ROLE: the composite needs the class,
--- and a member whose class is unreadable still gets the plain ROLE entry.
+-- circle is keyed ROLE_CLASS as well as ROLE: it draws the class ring, and a
+-- member whose class is unreadable still gets the plain ROLE entry.
+--
+-- In an |A| escape the declared width IS the advance, so a two-atlas overlay
+-- reserves the sum of both widths however far the second is offset back --
+-- roughly 26 pixels of run for 14 pixels of art, which reads as a gap before
+-- the name. Chat therefore draws the class ring alone; the Group Finder,
+-- laying out real textures rather than an escape sequence, keeps the role
+-- glyph on top of it.
 function KE.BuildChatRoleIconStrings(set, classes)
     local out = {}
     for i = 1, #ROLES do
@@ -64,8 +66,7 @@ function KE.BuildChatRoleIconStrings(set, classes)
             -- The class token is concatenated as-is. The atlas lookup is
             -- case-insensitive and the key set is not uniformly upper case.
             out[role .. "_" .. class] = format(
-                "|A:groupfinder-icon-class-color-%s:14:14|a|A:%s:12:12:-13:0|a",
-                class, MICRO_ROLE_ATLASES[role])
+                "|A:groupfinder-icon-class-color-%s:14:14|a", class)
         end
     end
     return out

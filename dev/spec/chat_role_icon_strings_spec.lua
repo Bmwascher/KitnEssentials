@@ -24,14 +24,19 @@ describe("Chat role icon strings", function()
         assert.is_truthy(s.TANK:find("|t$"))
     end)
 
-    -- circle is a composite: the class colour block with the borderless role
-    -- glyph pulled back over it by a negative offset.
-    it("builds a class-keyed composite for circle", function()
+    -- ONE atlas, deliberately. An |A| escape advances by its declared width,
+    -- so overlaying a second glyph reserves the sum of both widths no matter
+    -- how far back it is offset, and the surplus reads as a gap before the
+    -- name. A second atlas here is the defect, not an improvement.
+    it("builds a class-keyed single ring for circle", function()
         local s = build("circle", { "MAGE", "Adventurer" })
-        assert.are.equal(
-            "|A:groupfinder-icon-class-color-MAGE:14:14|a"
-                .. "|A:groupfinder-icon-role-micro-dps:12:12:-13:0|a",
-            s.DAMAGER_MAGE)
+        assert.are.equal("|A:groupfinder-icon-class-color-MAGE:14:14|a", s.DAMAGER_MAGE)
+    end)
+
+    it("keeps the circle string to a single escape", function()
+        local s = build("circle", { "MAGE" })
+        local _, count = s.DAMAGER_MAGE:gsub("|A:", "")
+        assert.are.equal(1, count)
     end)
 
     it("does not case-convert the class token", function()
