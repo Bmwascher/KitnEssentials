@@ -5,8 +5,8 @@ local ipairs, pairs, next = ipairs, pairs, next -- luacheck: ignore 211/pairs
 local CreateFrame, InCombatLockdown = CreateFrame, InCombatLockdown
 
 -- Assigned inside Skin(); declared here so the public refresh below can reach
--- them. Only the declarations move -- the bodies stay where they are.
-local SkinApplicantRow, SkinRoleIcons
+-- it. Only the declaration moves -- the body stays where it is.
+local SkinApplicantRow
 
 local NOOP = function() end -- luacheck: ignore 211/NOOP
 local function KillFrame(f)
@@ -441,16 +441,11 @@ function S.RefreshLFGRoleIcons()
     -- Applicant rows. NOT LFGListApplicationViewer_UpdateResultList: it sorts
     -- through table.sort on a secret isNew, and a settings callback is
     -- tainted execution by construction.
+    -- Row chrome only. The role buttons inside each row are Blizzard's and
+    -- stay that way; see the applicant hooks for why.
     local box = viewer.ScrollBox
-    if box and box.ForEachFrame and SkinApplicantRow and SkinRoleIcons then
-        box:ForEachFrame(function(row)
-            SkinApplicantRow(row)
-            if row and row.Members then
-                for _, member in ipairs(row.Members) do
-                    SkinRoleIcons(member)
-                end
-            end
-        end)
+    if box and box.ForEachFrame and SkinApplicantRow then
+        box:ForEachFrame(SkinApplicantRow)
     end
 
     -- The viewer's own aggregate header. Neither call above reaches it, and
@@ -985,55 +980,14 @@ local function Skin()
                 SkinApplicantRow(button)
             end)
         end)
-        if _G.LFGListApplicationViewer_UpdateRoleIcons then
-            -- Same chain, same deferral.
-            function SkinRoleIcons(member)
-                if not member then return end
-                -- circle is deliberately identical to blizzard here. These three buttons
-                -- set ONE member's role, so all three belong to the same person: a class
-                -- circle would draw that class three times across a row that already
-                -- colours the name by class, and the template carries no circle layer to
-                -- draw it into.
-                local set = S.GetRoleIconSet()
-                for i = 1, 3 do
-                    local roleBtn = member["RoleIcon" .. i]
-                    local nt = roleBtn and roleBtn.GetNormalTexture and roleBtn:GetNormalTexture()
-                    -- Blizzard stores the role on the button. Parsing it back out of the
-                    -- atlas fails once the modern path has replaced the atlas.
-                    local role = roleBtn and roleBtn.role
-                    if nt and role and ROLE_ICON[role] then
-                        local hl = roleBtn.GetHighlightTexture and roleBtn:GetHighlightTexture()
-                        if set == "modern" then
-                            nt:SetTexture(ROLE_ICON[role])
-                            nt:SetTexCoord(0, 1, 0, 1)
-                            if hl then
-                                hl:SetTexture(ROLE_ICON[role])
-                                hl:SetTexCoord(0, 1, 0, 1)
-                                hl:SetAlpha(0.3)
-                            end
-                        else
-                            local atlas = _G.LFG_LIST_GROUP_DATA_ATLASES[role]
-                            if atlas then
-                                nt:SetAtlas(atlas)
-                                if hl then
-                                    hl:SetAtlas(atlas)
-                                    hl:SetAlpha(1)
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-
-            hooksecurefunc("LFGListApplicationViewer_UpdateRoleIcons", function(member)
-                if not member or S.data(member).roleQueued then return end
-                S.data(member).roleQueued = true
-                C_Timer.After(0, function()
-                    S.data(member).roleQueued = nil
-                    SkinRoleIcons(member)
-                end)
-            end)
-        end
+        -- The applicant role buttons keep Blizzard's own art. Painting them
+        -- means running inside LFGListApplicationViewer_UpdateApplicantMember,
+        -- which does arithmetic on item level and dungeon score AFTER it
+        -- updates the role icons, so our execution there taints the rest of
+        -- the function and Blizzard throws on the first secret number. The
+        -- only way around that is to defer a frame, which makes the stock
+        -- icons visibly flash on every applicant refresh -- worst on a busy
+        -- listing, which is exactly when the panel is being read.
     end
 
     if _G.LFGListSearchEntry_Update and not S.data(lfgList).fontHook then

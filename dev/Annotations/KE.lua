@@ -560,7 +560,8 @@ function KE.Skins.SetSkinFont(face, size, outline) end
 ---@return string
 function KE.Skins.GetRoleIconSet() end
 
---- Repaints the Group Finder's three role-art surfaces with the current set.
+--- Repaints the Group Finder search rows and role count strips with the
+--- current set. Applicant role buttons keep Blizzard's art.
 function KE.Skins.RefreshLFGRoleIcons() end
 
 -- ─── Skinning (Modules/Skinning/ChatRoleIcons.lua) ───────
