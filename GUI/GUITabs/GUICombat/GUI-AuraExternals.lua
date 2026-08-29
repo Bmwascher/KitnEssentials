@@ -349,6 +349,15 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     local card = GUIFrame:CreateCard(scrollChild, "Allowlist", yOffset)
     manager:Register(card, "all")
 
+    -- The shipped rows, read from the defaults rather than duplicated here.
+    -- A second copy would drift the first time the seed changed.
+    local function ShippedAllowlist()
+        if not KE.GetDefaultDB then return {} end
+        local root = KE:GetDefaultDB()
+        local section = root and root.profile and root.profile.AuraExternals
+        return (section and section.Allowlist) or {}
+    end
+
     db.Allowlist = db.Allowlist or {}
 
     local selectedSpellId = nil
@@ -462,7 +471,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     -- rebuilds the dropdown and re-selects something valid. Selection is not
     -- preserved across a restore: the previously selected row may no longer
     -- exist.
-    local function RefreshAllowlist() -- luacheck: ignore 211/RefreshAllowlist
+    local function RefreshAllowlist()
         allowlistDropdown:SetOptions(BuildDropdownOptions())
         local first = GetFirstSpellId()
         if first then
@@ -640,6 +649,55 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     sep3Row:AddWidget(sep3, 1)
     manager:Register(sep3, "all")
     card:AddRow(sep3Row, Theme.rowHeightSeparator)
+
+    local restoreRowH = Theme.rowHeightLast - 14
+    local restoreRow = GUIFrame:CreateRow(card.content, restoreRowH)
+
+    local kitnBtn = GUIFrame:CreateButton(restoreRow, "Kitn Defaults", {
+        height = 24,
+        callback = function()
+            for spellId, seed in pairs(ShippedAllowlist()) do
+                db.Allowlist[spellId] = {
+                    label   = seed.label,
+                    enabled = true,
+                    default = true,
+                }
+            end
+            RefreshAllowlist()
+        end,
+    })
+    restoreRow:AddWidget(kitnBtn, 0.5, 7, 3)
+    manager:Register(kitnBtn, "all")
+
+    -- Labelled for what it actually reads. "Blizzard Defaults" would claim
+    -- this matches Blizzard's own external-defensives frame, and it does not:
+    -- it reads the spell-level query, which can disagree with what the
+    -- container shows. The tooltip states the limitation in full.
+    local blizzBtn = GUIFrame:CreateButton(restoreRow, "Blizzard Flagged", {
+        tooltip = "Enables only the spells this client flags as external defensives, and switches the rest off without deleting them. This reads the game's per-spell flag, which can differ from what Blizzard's own external defensives frame shows.",
+        height = 24,
+        callback = function()
+            for spellId, seed in pairs(ShippedAllowlist()) do
+                -- Asked per spell rather than read from a stored list, so the
+                -- answer follows the game. pcall because a spell id the client
+                -- does not know is a plausible input from an edited profile.
+                local ok, flagged = pcall(C_Spell.IsExternalDefensive, spellId)
+                db.Allowlist[spellId] = {
+                    label   = seed.label,
+                    -- Switched OFF rather than removed. Deleting would throw
+                    -- away a row the user may want back, and the seeded rows
+                    -- are undeletable by design anyway.
+                    enabled = (ok and flagged) and true or false,
+                    default = true,
+                }
+            end
+            RefreshAllowlist()
+        end,
+    })
+    restoreRow:AddWidget(blizzBtn, 0.5, 3)
+    manager:Register(blizzBtn, "all")
+
+    card:AddRow(restoreRow, restoreRowH)
 
     -- Row: Add New Entry + Delete Entry buttons. Uses a shorter row height
     -- to drop the unused gap below the buttons.
