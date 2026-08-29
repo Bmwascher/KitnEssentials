@@ -929,29 +929,36 @@ local function Skin()
             -- Same chain, same deferral.
             local function SkinRoleIcons(member)
                 if not member then return end
+                -- circle is deliberately identical to blizzard here. These three buttons
+                -- set ONE member's role, so all three belong to the same person: a class
+                -- circle would draw that class three times across a row that already
+                -- colours the name by class, and the template carries no circle layer to
+                -- draw it into.
+                local set = S.GetRoleIconSet()
                 for i = 1, 3 do
                     local roleBtn = member["RoleIcon" .. i]
                     local nt = roleBtn and roleBtn.GetNormalTexture and roleBtn:GetNormalTexture()
-                    if nt then
-                        -- match LOWERCASED -- the micro-role
-                        -- atlases from GetMicroIconForRole are MixedCase,
-                        -- so the case-sensitive find never hit (:
-                        -- role icons weren't swapped).
-                        local atlas = nt.GetAtlas and nt:GetAtlas()
-                        atlas = atlas and atlas:lower()
-                        local role = atlas and (
-                            atlas:find("tank") and "TANK"
-                            or atlas:find("heal") and "HEALER"
-                            or (atlas:find("dps") or atlas:find("damage")) and "DAMAGER")
-                        if role and ROLE_ICON and ROLE_ICON[role]
-                            and S.GetRoleIconSet() == "modern" then
+                    -- Blizzard stores the role on the button. Parsing it back out of the
+                    -- atlas fails once the modern path has replaced the atlas.
+                    local role = roleBtn and roleBtn.role
+                    if nt and role and ROLE_ICON[role] then
+                        local hl = roleBtn.GetHighlightTexture and roleBtn:GetHighlightTexture()
+                        if set == "modern" then
                             nt:SetTexture(ROLE_ICON[role])
                             nt:SetTexCoord(0, 1, 0, 1)
-                            local hl = roleBtn.GetHighlightTexture and roleBtn:GetHighlightTexture()
                             if hl then
                                 hl:SetTexture(ROLE_ICON[role])
                                 hl:SetTexCoord(0, 1, 0, 1)
                                 hl:SetAlpha(0.3)
+                            end
+                        else
+                            local atlas = _G.LFG_LIST_GROUP_DATA_ATLASES[role]
+                            if atlas then
+                                nt:SetAtlas(atlas)
+                                if hl then
+                                    hl:SetAtlas(atlas)
+                                    hl:SetAlpha(1)
+                                end
                             end
                         end
                     end
