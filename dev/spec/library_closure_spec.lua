@@ -10,108 +10,41 @@
 -- function(_, name) and discards the mixin arguments entirely, so every spec in
 -- this suite loads modules whose library requests are never resolved at all.
 --
--- The scanner below fails LOUD on any call shape it cannot read with certainty.
--- A guard test that silently skips what it does not understand buys false
--- confidence, which is worse than no test: every unreadable form is reported as
--- a failure asking for the scanner to be extended, never quietly dropped.
+-- FAIL-CLOSED BY CONSTRUCTION. This does not parse Lua. It recognises ONE
+-- declaration shape, the single shape all current declarations use, and reports
+-- every other occurrence of NewAddon/NewModule as unreadable, which fails the
+-- suite. A guard test that silently skips what it cannot read buys false
+-- confidence, which is worse than no test -- so an unrecognised form must never
+-- pass quietly. Widening the grammar is a deliberate edit with its own review;
+-- an author who hits a false failure here extends CANONICAL below on purpose.
 --
 -- Scope: mixin arguments only. Direct LibStub lookups elsewhere are a related
 -- failure class, but they mix required calls with deliberately optional ones,
 -- so separating them needs a guard-aware parser and belongs in its own spec.
 local lfs = require("lfs")
 
--- Marks every byte as code or not, so a call site inside a comment or a string
--- is never mistaken for a real declaration, and records the span and value of
--- each quoted string so arguments can be read back.
-local function lexLua(src)
-    local isCode, strings = {}, {}
-    local i, n = 1, #src
-    while i <= n do
-        local c = src:sub(i, i)
-        local commentLevel = src:match("^%-%-%[(=*)%[", i)
-        local longLevel = src:match("^%[(=*)%[", i)
-        if commentLevel then
-            local close = src:find("]" .. commentLevel .. "]", i, true)
-            local finish = close and (close + #commentLevel + 1) or n
-            for j = i, finish do isCode[j] = false end
-            i = finish + 1
-        elseif c == "-" and src:sub(i + 1, i + 1) == "-" then
-            local finish = src:find("\n", i, true) or (n + 1)
-            for j = i, finish - 1 do isCode[j] = false end
-            i = finish
-        elseif c == '"' or c == "'" then
-            local j, value = i + 1, {}
-            while j <= n do
-                local d = src:sub(j, j)
-                if d == "\\" then
-                    value[#value + 1] = src:sub(j + 1, j + 1)
-                    j = j + 2
-                elseif d == c or d == "\n" then
-                    break
-                else
-                    value[#value + 1] = d
-                    j = j + 1
-                end
-            end
-            strings[i] = { finish = j, value = table.concat(value), quote = c }
-            for k = i, j do isCode[k] = false end
-            i = j + 1
-        elseif longLevel then
-            local close = src:find("]" .. longLevel .. "]", i, true)
-            local finish = close and (close + #longLevel + 1) or n
-            for j = i, finish do isCode[j] = false end
-            i = finish + 1
-        else
-            isCode[i] = true
-            i = i + 1
-        end
-    end
-    return isCode, strings
+-- local NAME = expr:NewModule(<args>)  -- the whole grammar, anchored end to end
+local CANONICAL = "^%s*local%s+[%w_]+%s*=%s*[%w_%.]+:(New%a+)%s*%((.*)%)%s*$"
+
+-- A mixin argument is one double-quoted literal with no backslash in it. Escapes
+-- are excluded rather than decoded: the scanner's idea of an escaped name and
+-- Lua's would differ, and a name that only matches after decoding would resolve
+-- here while failing in game. Library names never need an escape.
+local LITERAL = '^%s*"([^"\\]*)"%s*$'
+
+-- The first argument is the addon or module NAME, so it may also be a plain or
+-- dotted name expression that this scanner does not need to resolve.
+local NAME_EXPR = "^%s*[%w_][%w_%.]*%s*$"
+
+local function isCommentLine(line)
+    return line:match("^%s*%-%-") ~= nil
 end
 
--- Splits one call's arguments at top-level commas, stepping over nested calls
--- and over strings. Returns nil when the closing parenthesis is absent.
-local function splitArgs(src, openPos, isCode, strings)
-    local args, current, depth = {}, {}, 0
-    local i, n = openPos + 1, #src
-    while i <= n do
-        local str = strings[i]
-        if str then
-            current[#current + 1] = { kind = "string", value = str.value, quote = str.quote }
-            i = str.finish + 1
-        elseif not isCode[i] then
-            i = i + 1
-        else
-            local c = src:sub(i, i)
-            if c == "(" then
-                depth = depth + 1
-                current[#current + 1] = { kind = "other" }
-            elseif c == ")" then
-                if depth == 0 then
-                    args[#args + 1] = current
-                    return args
-                end
-                depth = depth - 1
-            elseif c == "," and depth == 0 then
-                args[#args + 1] = current
-                current = {}
-            elseif c:match("[%w_%.:%[%]{}]") then
-                current[#current + 1] = { kind = "other" }
-            end
-            i = i + 1
-        end
-    end
-    return nil
-end
-
--- An argument yields a library name only when it is one lone double-quoted
--- literal. Anything else in a mixin position is unreadable and must fail loud.
-local function classify(tokens)
-    if #tokens == 0 then return "empty" end
-    if #tokens == 1 and tokens[1].kind == "string" and tokens[1].quote == '"' then
-        return "literal", tokens[1].value
-    end
-    return "unreadable"
+local function countCalls(line)
+    local n = 0
+    for _ in line:gmatch("NewAddon") do n = n + 1 end
+    for _ in line:gmatch("NewModule") do n = n + 1 end
+    return n
 end
 
 local function luaFilesUnder(dir, out)
@@ -130,11 +63,27 @@ local function luaFilesUnder(dir, out)
     return out
 end
 
-local function readFile(path)
+local function readLines(path)
+    local lines = {}
     local f = assert(io.open(path, "r"), "cannot open " .. path)
-    local src = f:read("*a")
+    for line in f:lines() do lines[#lines + 1] = line end
     f:close()
-    return src
+    return lines
+end
+
+local function splitCommas(text)
+    local parts, current = {}, ""
+    for i = 1, #text do
+        local c = text:sub(i, i)
+        if c == "," then
+            parts[#parts + 1] = current
+            current = ""
+        else
+            current = current .. c
+        end
+    end
+    parts[#parts + 1] = current
+    return parts
 end
 
 -- Libraries the addon ships that AceAddon can actually embed. A directory in the
@@ -142,7 +91,9 @@ end
 -- when the resolved library exposes no Embed, so a shipped library without one
 -- kills the module exactly as a missing library does.
 local function shippedEmbeddableLibraries()
-    local xml = readFile("Libs/Init.xml"):gsub("<!%-%-.-%-%->", "")
+    local f = assert(io.open("Libs/Init.xml", "r"))
+    local xml = f:read("*a"):gsub("<!%-%-.-%-%->", "")
+    f:close()
 
     local dirs = {}
     for path in xml:gmatch('file%s*=%s*"([^"]+)"') do
@@ -153,39 +104,54 @@ local function shippedEmbeddableLibraries()
     local embeddable = {}
     for dir in pairs(dirs) do
         for _, path in ipairs(luaFilesUnder("Libs/" .. dir)) do
-            if readFile(path):match("function%s+[%w_]+:Embed%s*%(") then
-                embeddable[dir] = true
+            for _, line in ipairs(readLines(path)) do
+                if not isCommentLine(line)
+                    and (line:match("function%s+[%w_]+[:%.]Embed%s*%(")
+                        or line:match("[%w_]+%.Embed%s*=")) then
+                    embeddable[dir] = true
+                end
             end
         end
     end
     return embeddable, dirs
 end
 
--- Every mixin argument of every NewAddon/NewModule call, plus every call this
--- scanner could not read. The first argument is the addon or module NAME.
+-- Every mixin argument of every declaration, plus every occurrence this scanner
+-- refused to read. Whole-line comments are skipped; anything else containing the
+-- identifiers must match CANONICAL exactly, once.
 local function scanRequests()
     local requests, unreadable = {}, {}
+
+    local function refuse(path, lineNo, why)
+        unreadable[#unreadable + 1] = path .. ":" .. lineNo .. " " .. why
+    end
+
     for _, root in ipairs({ "Core", "GUI", "Modules" }) do
         for _, path in ipairs(luaFilesUnder(root)) do
-            local src = readFile(path)
-            local isCode, strings = lexLua(src)
-            local pos = 1
-            while true do
-                local s, e, call = src:find(":(New%a+)%s*%(", pos)
-                if not s then break end
-                pos = e + 1
-                if isCode[s] and (call == "NewAddon" or call == "NewModule") then
-                    local args = splitArgs(src, e, isCode, strings)
-                    if not args then
-                        unreadable[#unreadable + 1] = path .. ": unterminated " .. call .. " call"
+            for lineNo, line in ipairs(readLines(path)) do
+                local occurrences = isCommentLine(line) and 0 or countCalls(line)
+                if occurrences > 0 then
+                    local call, argText = line:match(CANONICAL)
+                    if occurrences > 1 then
+                        refuse(path, lineNo, "more than one declaration on the line")
+                    elseif not call then
+                        refuse(path, lineNo, "not a recognised declaration shape")
+                    elseif call ~= "NewAddon" and call ~= "NewModule" then
+                        refuse(path, lineNo, "unexpected constructor " .. call)
+                    elseif argText:match("[%(%)]") then
+                        refuse(path, lineNo, "arguments contain a nested call")
                     else
+                        local args = splitCommas(argText)
+                        if not (args[1]:match(LITERAL) or args[1]:match(NAME_EXPR)) then
+                            refuse(path, lineNo, "first argument is neither a literal nor a name")
+                        end
                         for i = 2, #args do
-                            local kind, value = classify(args[i])
-                            if kind == "literal" then
-                                requests[#requests + 1] = { file = path, lib = value }
-                            elseif kind ~= "empty" then
-                                unreadable[#unreadable + 1] =
-                                    path .. ": " .. call .. " argument " .. i .. " is not a plain string literal"
+                            local lib = args[i]:match(LITERAL)
+                            if lib then
+                                requests[#requests + 1] = { file = path, lib = lib }
+                            else
+                                refuse(path, lineNo,
+                                    "argument " .. i .. " is not a plain double-quoted literal")
                             end
                         end
                     end
@@ -230,7 +196,7 @@ describe("library closure (every requested mixin is shipped and embeddable)", fu
         assert.is_true(roots["Modules"])
     end)
 
-    it("can read every NewAddon and NewModule call it found", function()
+    it("could read every declaration it found", function()
         assert.same({}, unreadable)
     end)
 
