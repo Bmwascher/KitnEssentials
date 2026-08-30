@@ -1191,9 +1191,11 @@ end
 -- predicate without touching the panel, the category, the roster or the
 -- affixes, so no other input fires.
 --
--- ADDON_LOADED fires once per addon, dozens of times at login, so the cheap
--- checks happen here rather than deferring a Refresh for each. Both are
--- needed: the restore hands the filter back, and the Refresh clears a panel
+-- Late loads only, in practice. Most of an installation's ADDON_LOADED
+-- events land before this module enables, and a conflict already present at
+-- enable returns before the registration ever happens -- so this handler
+-- exists for the addon that arrives afterwards. Both of its actions are
+-- needed: the restore hands the filter back, and the refresh clears a panel
 -- left on screen when the Group Finder was already open.
 function GFP:OnAddonLoaded()
     if IsActive() then return end
@@ -1205,9 +1207,8 @@ function GFP:OnAddonLoaded()
     if g and g.GroupFinderPanelOwnsFilter then
         RestorePermissiveFilter()
     end
-    -- Costs one deferred no-op per addon load while the module is off,
-    -- dozens of times at login. Refresh's first act is a handful of nil
-    -- checks, so that is cheaper than the addon query above it.
+    -- Unconditional. Later loads arm another deferred pass, which writes
+    -- nothing once ownership is released and repeats idempotent teardown.
     self:Refresh()
 end
 
