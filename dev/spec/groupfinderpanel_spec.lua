@@ -528,18 +528,18 @@ describe("GroupFinderPanel shortcut buttons", function()
         assert.equals(3, state.categories[#state.categories])
     end)
 
-    it("walks to the category page and preselects, without searching", function()
-        -- Navigating this far is probed safe. Showing the search panel is
-        -- not, so the search must NOT happen here -- Blizzard's own Find a
-        -- Group button does it, in Blizzard's execution.
+    it("walks to the category page and stops, selecting nothing", function()
+        -- Navigating this far is probed safe. Two things must NOT happen:
+        -- searching, which would mean showing the search panel; and
+        -- preselecting, which taints the Find a Group handler that reads
+        -- selectedCategory and makes ITS search poison the provider.
         local GFP, _, state, seams = loadWithFilter({ panelShown = false })
         GFP.db.MinScore = 2500
         seams.runQuickSearch(3, 1)
         assert.equals(2500, state.saved.minimumRating)
         -- Already on the Dungeons and Raids tab, so no tab switch is needed.
         assert.same({ "premade" }, state.nav)
-        assert.equals(3, state.selected.categoryID)
-        assert.equals(1, state.selected.filters)
+        assert.is_nil(state.selected)
         assert.equals(0, state.searches)
         assert.equals(0, #state.categories)
     end)

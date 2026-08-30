@@ -473,9 +473,14 @@ end
 -- distinction is the whole of the design below.
 --
 -- Route 1, results already on screen: set the category and search in place.
--- Route 2, anywhere else: walk to the category page with the category
--- preselected and stop. Blizzard's own Find a Group button finishes the job
--- in Blizzard's execution, which is what keeps the provider clean.
+-- Route 2, anywhere else: walk to the category page and stop.
+--
+-- Route 2 must NOT preselect the category. LFGListCategorySelection_SelectCategory
+-- looks inert -- it sets two fields -- but Blizzard's Find a Group handler
+-- reads selectedCategory as its first act, so writing it from here taints
+-- that handler, and the search it runs then builds the provider tainted.
+-- Proven in game: the failure arrives attributed to this addon, not to the
+-- probe that set it up. The player picks the category.
 ------------------------------------------------------------------------
 local function RunQuickSearch(categoryID, filters)
     if not IsActive() then return end
@@ -523,12 +528,6 @@ local function RunQuickSearch(categoryID, filters)
     -- scenarios are enabled.
     if _G.GroupFinderFrame_ShowGroupFrame and _G.LFGListPVEStub then
         _G.GroupFinderFrame_ShowGroupFrame(_G.LFGListPVEStub)
-    end
-    -- Sets two fields and refreshes the category art and nav buttons. No
-    -- result list, so no provider.
-    local cs = lfg.CategorySelection
-    if cs and _G.LFGListCategorySelection_SelectCategory then
-        _G.LFGListCategorySelection_SelectCategory(cs, categoryID, filters)
     end
 end
 
