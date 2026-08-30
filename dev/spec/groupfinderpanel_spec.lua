@@ -495,6 +495,21 @@ describe("GroupFinderPanel shortcut buttons", function()
         assert.equals(0, #state.categories)
     end)
 
+    it("saves BEFORE it searches on the shown path", function()
+        local GFP, _, state, seams = loadWithFilter()
+        local order = {}
+        _G.C_LFGList.SaveAdvancedFilter = function(f)
+            order[#order + 1] = "save"; state.saved = f
+        end
+        _G.C_LFGList.Search = function()
+            order[#order + 1] = "search"; state.searches = state.searches + 1
+        end
+        GFP.db.MinScore = 2500
+        seams.runQuickSearch(3, 1)
+        assert.same({ "save", "search" }, order)
+        assert.equals(2500, state.saved.minimumRating)
+    end)
+
     it("writes nothing at all while the module is inactive", function()
         local GFP, _, state, seams = loadWithFilter()
         GFP.db.Enabled = false
@@ -570,9 +585,10 @@ describe("GroupFinderPanel live slider authority", function()
     end)
 
     it("carries the ROW value across an enabled-to-enabled profile switch", function()
-        -- A switch inside the slider's trailing-timer window used to copy the
-        -- stale key; ApplySettings then pushed that back into the row, so the
-        -- player's final drag was lost outright.
+        -- The carry must reconcile first. A switch inside the slider's
+        -- trailing-timer window otherwise copies the stale key, and the
+        -- ApplySettings that follows pushes it back into the row -- losing
+        -- the value the player chose.
         local GFP, KE = loadWithFilter()
         GFP.db.Enabled = true
         GFP.db.MinScore = 2400

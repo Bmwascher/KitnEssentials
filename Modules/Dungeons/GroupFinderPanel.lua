@@ -1053,15 +1053,15 @@ local function CreateFilterPanel()
     return f
 end
 
--- Widget show/hide on our own frames, and nothing else. The filter write
--- that used to live here reached a provider build three ways -- the
--- SetCategory hook, the search panel's own OnShow, and Refresh from the
--- PVEFrame OnShow hook. It is gone rather than deferred: Blizzard runs
--- Clear, SetCategory, DoSearch and SetActivePanel back to back, and DoSearch
--- reads the saved filter in that same execution, so a deferred write would
--- deterministically land a frame too late for it. The filter already holds
--- the player's settings, written at login, on their last control click, or
--- on their last roster change.
+-- Widget show/hide on our own frames, and nothing else. NEVER write the
+-- filter from here, and do not think deferring the write makes it safe.
+-- All three entry points reach a provider build -- the SetCategory hook, the
+-- search panel's own OnShow, and Refresh from the PVEFrame OnShow hook --
+-- and Blizzard runs Clear, SetCategory, DoSearch and SetActivePanel back to
+-- back, with DoSearch reading the saved filter in that same execution, so a
+-- deferred write lands a frame too late for it. Nothing needs writing here:
+-- the filter already holds the player's settings, written at login, on their
+-- last control click, or on their last roster change.
 --
 -- Every caller defers this by a frame so Blizzard's synchronous
 -- continuation, provider build included, has unwound first.
@@ -1325,10 +1325,9 @@ function GFP:OnDisable()
     -- after it, rewrite the restrictive filter, and re-claim ownership on a
     -- module that is now off.
     CancelMinScoreSave()
-    -- Under the old permissive design the leftover filter was harmless. The
-    -- inversion makes it restrictive, so a player who sets a score floor and
-    -- three dungeons and then turns the module off would keep that filter in
-    -- Blizzard's own Group Finder indefinitely.
+    -- The filter this module writes is restrictive, so leaving it behind
+    -- would keep a player's score floor and dungeon picks active in
+    -- Blizzard's own Group Finder with the module off.
     RestorePermissiveFilter()
     -- UNCONDITIONAL. IsActive() is already false by the time this runs,
     -- because the config page writes db.Enabled = false first.
