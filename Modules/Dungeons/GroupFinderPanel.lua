@@ -1065,8 +1065,11 @@ end
 -- written at login, on their last control click, or on their last roster
 -- change.
 --
--- Every caller defers this by a frame so Blizzard's synchronous
--- continuation, provider build included, has unwound first.
+-- The three hook callers defer this by a frame so Blizzard's synchronous
+-- continuation, provider build included, has unwound first. Refresh does
+-- NOT defer it again: Refresh is already deferred whole, and calling it a
+-- second time there would show the quick pane for a frame on every
+-- dungeon-mode open.
 function GFP:UpdateMode()
     if not panel then return end
     if not IsActive() then return end
