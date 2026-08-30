@@ -281,69 +281,6 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     yOffset = glowOffset
 
     ----------------------------------------------------------------
-    -- Card 5: Sound (Seven Tracked Externals)
-    --
-    -- Plays the configured sound when one of a fixed list of seven
-    -- external-defensive spells lands on you -- Blizzard's sound-trigger
-    -- API takes a spell ID, not a filter, so this can't cover every
-    -- external defensive. Self-applied big defensives are silent.
-    ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Sound (Seven Tracked Externals)", yOffset)
-    manager:Register(card5, "all")
-
-    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-    local soundEnabledCheck = GUIFrame:CreateCheckbox(row5a, "Enable Sound", {
-        value = db.SoundEnabled ~= false,
-        callback = function(checked) db.SoundEnabled = checked; ApplySettings() end,
-    })
-    row5a:AddWidget(soundEnabledCheck, 1)
-    manager:Register(soundEnabledCheck, "all")
-    card5:AddRow(row5a, Theme.rowHeight)
-
-    -- Separator between Enable toggle and the sound dropdown/test row
-    local row5sep = GUIFrame:CreateRow(card5.content, Theme.rowHeightSeparator)
-    local sep5 = GUIFrame:CreateSeparator(row5sep)
-    row5sep:AddWidget(sep5, 1)
-    manager:Register(sep5, "all")
-    card5:AddRow(row5sep, Theme.rowHeightSeparator)
-
-    local soundList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("sound")) do
-            soundList[name] = name
-        end
-    end
-    soundList["None"] = "None"
-
-    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
-    local soundDropdown = GUIFrame:CreateDropdown(row5b, "On Application Sound", {
-        options = soundList,
-        value = db.SoundName or "None",
-        searchable = true,
-        callback = function(key) db.SoundName = key; ApplySettings() end,
-    })
-    row5b:AddWidget(soundDropdown, 0.5)
-    manager:Register(soundDropdown, "all")
-
-    -- Test button: plays whatever sound is currently selected. y=-12 places
-    -- the 28px button center on the dropdown bar center (matches the pattern
-    -- used in DungeonTimers detail panel).
-    local soundTestBtn = GUIFrame:CreateButton(row5b, "Test", {
-        height = 28,
-        callback = function()
-            local name = db.SoundName
-            if not name or name == "None" or not LSM then return end
-            local soundPath = LSM:Fetch("sound", name)
-            if soundPath then PlaySoundFile(soundPath) end
-        end,
-    })
-    row5b:AddWidget(soundTestBtn, 0.5, nil, 0, -12)
-    manager:Register(soundTestBtn, "all")
-    card5:AddRow(row5b, Theme.rowHeightLast, 0)
-
-    yOffset = card5:GetNextOffset()
-
-    ----------------------------------------------------------------
     -- Allowlist
     --
     -- Per-entry editable list: Select Entry dropdown + Enabled toggle on
@@ -407,6 +344,12 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
         return sorted
     end
 
+    -- The dropdown widget has no icon slot, so the icon rides in the option
+    -- text as an inline texture escape. 5 and 59 on a 64-texel sheet is the
+    -- same crop KE:ApplyIconZoom applies at its default zoom, so a list row
+    -- matches the preview icon under it.
+    local ICON_ESCAPE = "|T%d:16:16:0:0:64:64:5:59:5:59|t "
+
     local function BuildDropdownOptions()
         local options = {}
         for spellId, entry in pairs(db.Allowlist) do
@@ -426,7 +369,9 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
             if isDisabled then
                 text = "|cff666666" .. text .. "|r"
             end
-            options[tostring(spellId)] = text
+            local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellId)
+            options[tostring(spellId)] =
+                ICON_ESCAPE:format(info and info.iconID or 134400) .. text
         end
         return options
     end
@@ -513,7 +458,56 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     manager:Register(infoText, "all")
     card:AddRow(infoRow, textRowSize)
 
-    -- Separator under the info note
+    local restoreRowH = Theme.rowHeightLast - 10
+    local restoreRow = GUIFrame:CreateRow(card.content, restoreRowH)
+
+    local kitnBtn = GUIFrame:CreateButton(restoreRow, "Kitn Defaults", {
+        height = 28,
+        callback = function()
+            for spellId, seed in pairs(ShippedAllowlist()) do
+                db.Allowlist[spellId] = {
+                    label   = seed.label,
+                    enabled = true,
+                    default = true,
+                }
+            end
+            RefreshAllowlist()
+        end,
+    })
+    restoreRow:AddWidget(kitnBtn, 0.5, 7, 3)
+    manager:Register(kitnBtn, "all")
+
+    -- Labelled for what it actually reads. "Blizzard Defaults" would claim
+    -- this matches Blizzard's own external-defensives frame, and it does not:
+    -- it reads the spell-level query, which can disagree with what the
+    -- container shows. The tooltip states the limitation in full.
+    local blizzBtn = GUIFrame:CreateButton(restoreRow, "Blizzard Flagged", {
+        tooltip = "Enables only the spells this client flags as external defensives, and switches the rest off without deleting them. This reads the game's per-spell flag, which can differ from what Blizzard's own external defensives frame shows.",
+        height = 28,
+        callback = function()
+            for spellId, seed in pairs(ShippedAllowlist()) do
+                -- Asked per spell rather than read from a stored list, so the
+                -- answer follows the game. pcall because a spell id the client
+                -- does not know is a plausible input from an edited profile.
+                local ok, flagged = pcall(C_Spell.IsExternalDefensive, spellId)
+                db.Allowlist[spellId] = {
+                    label   = seed.label,
+                    -- Switched OFF rather than removed. Deleting would throw
+                    -- away a row the user may want back, and the seeded rows
+                    -- are undeletable by design anyway.
+                    enabled = (ok and flagged) and true or false,
+                    default = true,
+                }
+            end
+            RefreshAllowlist()
+        end,
+    })
+    restoreRow:AddWidget(blizzBtn, 0.5, 3)
+    manager:Register(blizzBtn, "all")
+
+    card:AddRow(restoreRow, restoreRowH)
+
+    -- Separator under the restore buttons
     local sep1Row = GUIFrame:CreateRow(card.content, Theme.rowHeightSeparator)
     local sep1 = GUIFrame:CreateSeparator(sep1Row)
     sep1Row:AddWidget(sep1, 1)
@@ -658,55 +652,6 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     manager:Register(sep3, "all")
     card:AddRow(sep3Row, Theme.rowHeightSeparator)
 
-    local restoreRowH = Theme.rowHeightLast - 14
-    local restoreRow = GUIFrame:CreateRow(card.content, restoreRowH)
-
-    local kitnBtn = GUIFrame:CreateButton(restoreRow, "Kitn Defaults", {
-        height = 24,
-        callback = function()
-            for spellId, seed in pairs(ShippedAllowlist()) do
-                db.Allowlist[spellId] = {
-                    label   = seed.label,
-                    enabled = true,
-                    default = true,
-                }
-            end
-            RefreshAllowlist()
-        end,
-    })
-    restoreRow:AddWidget(kitnBtn, 0.5, 7, 3)
-    manager:Register(kitnBtn, "all")
-
-    -- Labelled for what it actually reads. "Blizzard Defaults" would claim
-    -- this matches Blizzard's own external-defensives frame, and it does not:
-    -- it reads the spell-level query, which can disagree with what the
-    -- container shows. The tooltip states the limitation in full.
-    local blizzBtn = GUIFrame:CreateButton(restoreRow, "Blizzard Flagged", {
-        tooltip = "Enables only the spells this client flags as external defensives, and switches the rest off without deleting them. This reads the game's per-spell flag, which can differ from what Blizzard's own external defensives frame shows.",
-        height = 24,
-        callback = function()
-            for spellId, seed in pairs(ShippedAllowlist()) do
-                -- Asked per spell rather than read from a stored list, so the
-                -- answer follows the game. pcall because a spell id the client
-                -- does not know is a plausible input from an edited profile.
-                local ok, flagged = pcall(C_Spell.IsExternalDefensive, spellId)
-                db.Allowlist[spellId] = {
-                    label   = seed.label,
-                    -- Switched OFF rather than removed. Deleting would throw
-                    -- away a row the user may want back, and the seeded rows
-                    -- are undeletable by design anyway.
-                    enabled = (ok and flagged) and true or false,
-                    default = true,
-                }
-            end
-            RefreshAllowlist()
-        end,
-    })
-    restoreRow:AddWidget(blizzBtn, 0.5, 3)
-    manager:Register(blizzBtn, "all")
-
-    card:AddRow(restoreRow, restoreRowH)
-
     -- Row: Add New Entry + Delete Entry buttons. Uses a shorter row height
     -- to drop the unused gap below the buttons.
     local buttonRowH = Theme.rowHeightLast - 14
@@ -777,6 +722,69 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     end
 
     yOffset = card:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 5: Sound (Seven Tracked Externals)
+    --
+    -- Plays the configured sound when one of a fixed list of seven
+    -- external-defensive spells lands on you -- Blizzard's sound-trigger
+    -- API takes a spell ID, not a filter, so this can't cover every
+    -- external defensive. Self-applied big defensives are silent.
+    ----------------------------------------------------------------
+    local card5 = GUIFrame:CreateCard(scrollChild, "Sound (Seven Tracked Externals)", yOffset)
+    manager:Register(card5, "all")
+
+    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+    local soundEnabledCheck = GUIFrame:CreateCheckbox(row5a, "Enable Sound", {
+        value = db.SoundEnabled ~= false,
+        callback = function(checked) db.SoundEnabled = checked; ApplySettings() end,
+    })
+    row5a:AddWidget(soundEnabledCheck, 1)
+    manager:Register(soundEnabledCheck, "all")
+    card5:AddRow(row5a, Theme.rowHeight)
+
+    -- Separator between Enable toggle and the sound dropdown/test row
+    local row5sep = GUIFrame:CreateRow(card5.content, Theme.rowHeightSeparator)
+    local sep5 = GUIFrame:CreateSeparator(row5sep)
+    row5sep:AddWidget(sep5, 1)
+    manager:Register(sep5, "all")
+    card5:AddRow(row5sep, Theme.rowHeightSeparator)
+
+    local soundList = {}
+    if LSM then
+        for name in pairs(LSM:HashTable("sound")) do
+            soundList[name] = name
+        end
+    end
+    soundList["None"] = "None"
+
+    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
+    local soundDropdown = GUIFrame:CreateDropdown(row5b, "On Application Sound", {
+        options = soundList,
+        value = db.SoundName or "None",
+        searchable = true,
+        callback = function(key) db.SoundName = key; ApplySettings() end,
+    })
+    row5b:AddWidget(soundDropdown, 0.5)
+    manager:Register(soundDropdown, "all")
+
+    -- Test button: plays whatever sound is currently selected. y=-12 places
+    -- the 28px button center on the dropdown bar center (matches the pattern
+    -- used in DungeonTimers detail panel).
+    local soundTestBtn = GUIFrame:CreateButton(row5b, "Test", {
+        height = 28,
+        callback = function()
+            local name = db.SoundName
+            if not name or name == "None" or not LSM then return end
+            local soundPath = LSM:Fetch("sound", name)
+            if soundPath then PlaySoundFile(soundPath) end
+        end,
+    })
+    row5b:AddWidget(soundTestBtn, 0.5, nil, 0, -12)
+    manager:Register(soundTestBtn, "all")
+    card5:AddRow(row5b, Theme.rowHeightLast, 0)
+
+    yOffset = card5:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 6: Font Settings
