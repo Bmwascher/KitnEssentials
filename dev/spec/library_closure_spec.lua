@@ -36,11 +36,15 @@ local LITERAL = '^%s*"([^"\\]*)"%s*$'
 -- dotted name expression that this scanner does not need to resolve.
 local NAME_EXPR = "^%s*[%w_][%w_%.]*%s*$"
 
--- A long-comment opener is NOT a whole-line comment: `--[[ note ]] local M = ...`
--- closes the comment and runs the declaration, so skipping the line would hide
--- live code. Such lines fall through to the grammar and are refused instead.
+-- A leading `--` does not make the line inert. `--[[ note ]] local M = ...` opens
+-- and closes a comment before running the declaration, and inside an already-open
+-- long comment the `--` of `--]] local M = ...` is content, so the `]]` closes the
+-- block and the rest of the line runs. Either delimiter therefore disqualifies the
+-- line from being skipped; it falls through to the grammar and is refused there.
 local function isCommentLine(line)
-    return line:match("^%s*%-%-") ~= nil and line:match("^%s*%-%-%[=*%[") == nil
+    return line:match("^%s*%-%-") ~= nil
+        and line:match("^%s*%-%-%[=*%[") == nil
+        and line:match("%]=*%]") == nil
 end
 
 -- Mixins can also be requested away from a declaration: SetDefaultModuleLibraries
