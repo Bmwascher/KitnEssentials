@@ -1,5 +1,30 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.15
+
+### Aura Externals
+- You now choose which buffs the display shows. A list of thirty-eight spells
+  ships enabled, covering externals, raid-wide cooldowns and support buffs, and
+  you can add any spell you like
+- Two buttons refill the list: one restores everything we ship, the other
+  enables only the spells the game itself flags as external defensives
+- Each entry in the list shows its spell icon, and the list reads alphabetically
+- A new option hides buffs you cast on yourself, leaving only what other players
+  put on you. Note this hides your own raid cooldowns too
+- The sound now plays for anything on your list, including spells you added.
+  It previously played for a fixed seven and ignored everything else
+- Timers count down the same way the Cooldown Manager does, rather than reading
+  a second higher
+
+### Glow Settings
+- Pixel Glow is back. It was quietly replaced by the Ants style and now draws
+  its marching dashed border again, including inside dungeons where the old
+  version froze
+- The Ants glow no longer draws from the wrong part of its artwork
+- The Alert glow animates instead of crawling
+- Tinted glows look lit again rather than flat
+- Switching a glow off now stops its animations instead of only hiding them
+
 ## v4.4.14
 
 ### Group Finder & Chat Role Icons
