@@ -40,6 +40,36 @@ describe("AuraEngine duration formatting", function()
         assert.equals("down", breakpoints[1].components[1].rounding)
     end)
 
+    -- Down, not up: the Cooldown Manager's icons keep the game's own countdown
+    -- numbers while these displays draw their own text, and a rounding flip
+    -- here silently puts the same buff a second apart between the two.
+    it("rounds the sub-minute seconds DOWN, so it agrees with the game's own numbers", function()
+        local breakpoints
+        _G.C_StringUtil = {
+            CreateNumericRuleFormatter = function()
+                return {
+                    SetBreakpoints = function(_, value)
+                        breakpoints = value
+                    end,
+                }
+            end,
+        }
+        _G.Enum = {
+            NumericRuleFormatRounding = {
+                Down = "down",
+                Up = "up",
+            },
+        }
+
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
+        getDurationFormatter({})
+
+        assert.equals(0, breakpoints[3].threshold)
+        assert.equals("%d", breakpoints[3].format)
+        assert.equals("down", breakpoints[3].rounding)
+    end)
+
     it("formats preview durations in hours from the one-hour boundary", function()
         local Preview = L.loadAuraPreview()
         local buildFrames = findUpvalue(Preview.Enter, "BuildFrames")

@@ -51,7 +51,11 @@ local function GetDurationFormatter(settings)
         {
             threshold = 0,
             step      = 1,
-            rounding  = Enum.NumericRuleFormatRounding.Up,
+            -- Down, to agree with the Cooldown Manager. Its icons keep the
+            -- game's own countdown numbers while these displays draw their
+            -- own text, and rounding up read a second higher than the same
+            -- buff shown there.
+            rounding  = Enum.NumericRuleFormatRounding.Down,
             format    = "%d",
         },
     })
