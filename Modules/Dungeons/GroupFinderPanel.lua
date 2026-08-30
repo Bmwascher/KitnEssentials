@@ -1133,26 +1133,36 @@ function GFP:Refresh()
         -- by a late conflict, and an early return would leave it on screen.
         local enabled = self:IsEnabled() and IsActive()
         local pve = _G.PVEFrame
-        if enabled and pve and pve:IsShown() and IsDungeonSearchMode() then
+        if not (enabled and pve and pve:IsShown()) then
+            TeardownRaiderIO()
+            if panel then panel:Hide() end
+            return
+        end
+
+        if IsDungeonSearchMode() then
             local p = CreatePanel()
             if p then
                 p:Show()
-                -- CreateFrame births frames VISIBLE, so on the session's
-                -- first open p:Show() is a no-op on an already-shown frame
-                -- and the OnShow hook registered during CreatePanel never
-                -- fires -- the RIO wrap would only install at first CLOSE.
-                -- Install from the show PATH instead of the show EVENT.
-                EnsureRaiderIOWrap()
                 if C_MythicPlus and C_MythicPlus.RequestMapInfo then C_MythicPlus.RequestMapInfo() end
                 UpdateAffixes()
                 UpdateRuns()
                 local f = CreateFilterPanel()
                 if f then f:Show() end
             end
-        else
-            TeardownRaiderIO()
-            if panel then panel:Hide() end
+        elseif panel then
+            panel:Hide()
         end
+
+        -- OUTSIDE the mode branch, and after the panel has settled. The
+        -- profile anchor needs its gap whether or not our panel is up, and
+        -- the panel is absent in most views -- installing the wrapper from
+        -- the panel's own show path would leave it unwrapped there.
+        --
+        -- Called from the show PATH rather than the show EVENT because
+        -- CreateFrame births frames VISIBLE: on the session's first open
+        -- p:Show() is a no-op on an already-shown frame, so the OnShow hook
+        -- never fires and the wrapper would wait for the first CLOSE.
+        EnsureRaiderIOWrap()
     end)
 end
 
