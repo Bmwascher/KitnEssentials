@@ -17,6 +17,7 @@ local GetFrameCPUUsage   = GetFrameCPUUsage
 local UpdateAddOnCPUUsage = UpdateAddOnCPUUsage
 local UpdateAddOnMemoryUsage = UpdateAddOnMemoryUsage
 local ResetCPUUsage      = ResetCPUUsage
+local GetTime            = GetTime
 
 local print     = print
 local format    = string.format
@@ -29,6 +30,7 @@ local pcall     = pcall
 local tonumber  = tonumber
 local tostring  = tostring
 local math_min  = math.min
+local math_max  = math.max
 local math_abs  = math.abs
 local time      = time
 local date      = date
@@ -78,16 +80,84 @@ local function ProfilingEnabled()
     return tonumber(C_CVar_GetCVar("scriptProfile")) == 1
 end
 
+local cpuWindowSequence = 0
+local cpuWindow
+local frameIds = {}
+local nextFrameId = 0
+
+local function ResetFrameIds()
+    frameIds = {}
+    nextFrameId = 0
+end
+
+local function ResolveFrameId(frameObject)
+    local frameId = frameIds[frameObject]
+    if not frameId then
+        nextFrameId = nextFrameId + 1
+        frameId = nextFrameId
+        frameIds[frameObject] = frameId
+    end
+    return frameId
+end
+
+local function StartCpuWindow()
+    cpuWindowSequence = cpuWindowSequence + 1
+    local startedAt = GetTime()
+    ResetFrameIds()
+    cpuWindow = {
+        id = format("%d:%.6f:%d", time(), startedAt, cpuWindowSequence),
+        startedAt = startedAt,
+    }
+end
+
+local function GetMetricEnum(metricName)
+    local enum = Enum and Enum.AddOnProfilerMetric
+    return enum and enum[metricName]
+end
+
+local function GetMetricValue(metricName)
+    if not (C_AddOnProfiler and C_AddOnProfiler.GetAddOnMetric) then
+        return nil
+    end
+    local metric = GetMetricEnum(metricName)
+    if not metric then return nil end
+    return C_AddOnProfiler.GetAddOnMetric("KitnEssentials", metric)
+end
+
+local function CaptureCpuSummary()
+    UpdateAddOnCPUUsage()
+    local addonMs = GetAddOnCPUUsage("KitnEssentials") or 0
+    local elapsed
+    if cpuWindow then
+        elapsed = math_max(GetTime() - cpuWindow.startedAt, 0)
+    end
+    local rate
+    local percent
+    if elapsed and elapsed > 0 then
+        rate = addonMs / elapsed
+        percent = rate / 10
+    end
+    return {
+        addonMs = addonMs,
+        windowId = cpuWindow and cpuWindow.id or nil,
+        elapsed = elapsed,
+        rate = rate,
+        percent = percent,
+        recentMs = GetMetricValue("RecentAverageTime"),
+        peakMs = GetMetricValue("PeakTime"),
+    }
+end
+
 ---------------------------------------------------------------------------------
 -- Frame discovery
 ---------------------------------------------------------------------------------
 -- 12.0 removed GetFunctionCPUUsage. Per-frame CPU is now the finest granularity
 -- available. We walk _G for KE-named globals + Ace modules' .frame attribute
--- and call GetFrameCPUUsage(frame, true) to get inclusive CPU per subtree.
+-- and sample direct and inclusive CPU for each discovered frame.
 --
 -- Inclusive (includeChildren=true) over-counts when both a parent and its child
--- frame are reported separately, but it's the right default for "which module
--- is hot" — the parent rises to the top with the cost of its bars/icons folded in.
+-- frame are reported separately, but it reveals the cost folded into a module's
+-- bars and icons.
 
 local function IsFrame(v)
     if type(v) ~= "table" then return false end
@@ -96,50 +166,95 @@ local function IsFrame(v)
     return ok
 end
 
-local function TryAddFrame(rows, name, frame, seen)
-    if not IsFrame(frame) then return end
-    if seen[frame] then return end
-    seen[frame] = true
-    local ok, ms, calls = pcall(GetFrameCPUUsage, frame, true)
-    if ok and type(ms) == "number" and ms > 0 then
-        insert(rows, { name = name, ms = ms, calls = calls or 0 })
+local function AddCandidate(candidates, name, frameObject, priority)
+    if not IsFrame(frameObject) then return end
+    insert(candidates, {
+        name = name,
+        frame = frameObject,
+        priority = priority,
+    })
+end
+
+local function BuildFrameCandidates()
+    local candidates = {}
+
+    for key, value in pairs(_G) do
+        if type(key) == "string"
+            and (key:sub(1, 3) == "KE_" or key:sub(1, 14) == "KitnEssentials") then
+            AddCandidate(candidates, key, value, 1)
+        end
     end
+
+    if KitnEssentials and KitnEssentials.IterateModules then
+        for name, module in KitnEssentials:IterateModules() do
+            AddCandidate(candidates, name .. ".frame", module.frame, 2)
+            AddCandidate(candidates, name .. ".bar", module.bar, 2)
+            AddCandidate(candidates, name .. ".container", module.container, 2)
+            AddCandidate(candidates, name .. ".panel", module.panel, 2)
+        end
+    end
+
+    if KE and type(KE.GUIFrame) == "table" then
+        AddCandidate(candidates, "KE.GUIFrame.frame", KE.GUIFrame.frame, 3)
+        AddCandidate(candidates, "KE.GUIFrame", KE.GUIFrame, 3)
+    end
+
+    sort(candidates, function(a, b)
+        if a.priority ~= b.priority then
+            return a.priority < b.priority
+        end
+        return a.name < b.name
+    end)
+    return candidates
 end
 
 local function GatherCpuRows()
-    UpdateAddOnCPUUsage()
     local rows = {}
     local seen = {}
 
-    -- 1) KE-named globals. Project convention: KE_ModuleName + KitnEssentials_*.
-    for k, v in pairs(_G) do
-        if type(k) == "string" then
-            if k:sub(1, 3) == "KE_" or k:sub(1, 14) == "KitnEssentials" then
-                TryAddFrame(rows, k, v, seen)
+    for _, candidate in ipairs(BuildFrameCandidates()) do
+        local frameObject = candidate.frame
+        if not seen[frameObject] then
+            seen[frameObject] = true
+            local selfOK, selfMs, selfCalls = pcall(GetFrameCPUUsage, frameObject, false)
+            local treeOK, treeMs, treeCalls = pcall(GetFrameCPUUsage, frameObject, true)
+            if selfOK and treeOK
+                and type(selfMs) == "number" and type(treeMs) == "number"
+                and (selfMs > 0 or treeMs > 0) then
+                insert(rows, {
+                    frameId = ResolveFrameId(frameObject),
+                    name = candidate.name,
+                    selfMs = selfMs,
+                    selfCalls = selfCalls or 0,
+                    treeMs = treeMs,
+                    treeCalls = treeCalls or 0,
+                    childMs = math_max(treeMs - selfMs, 0),
+                })
             end
         end
     end
 
-    -- 2) Ace module-owned frames. Try common attribute names; .frame is the
-    --    canonical one in this codebase, .bar / .container show up too.
-    if KitnEssentials and KitnEssentials.IterateModules then
-        for name, mod in KitnEssentials:IterateModules() do
-            TryAddFrame(rows, name .. ".frame",     mod.frame,     seen)
-            TryAddFrame(rows, name .. ".bar",       mod.bar,       seen)
-            TryAddFrame(rows, name .. ".container", mod.container, seen)
-            TryAddFrame(rows, name .. ".panel",     mod.panel,     seen)
+    sort(rows, function(a, b)
+        if a.treeMs ~= b.treeMs then
+            return a.treeMs > b.treeMs
         end
-    end
-
-    -- 3) KE.GUIFrame is a known top-level GUI host that lives on the KE table,
-    --    not a global. Surface its underlying frame if exposed.
-    if KE and type(KE.GUIFrame) == "table" then
-        TryAddFrame(rows, "KE.GUIFrame.frame", KE.GUIFrame.frame, seen)
-        TryAddFrame(rows, "KE.GUIFrame",        KE.GUIFrame,       seen)
-    end
-
-    sort(rows, function(a, b) return a.ms > b.ms end)
+        return a.name < b.name
+    end)
     return rows
+end
+
+local function SortedRows(rows, key)
+    local copy = {}
+    for _, row in ipairs(rows) do
+        copy[#copy + 1] = row
+    end
+    sort(copy, function(a, b)
+        if a[key] ~= b[key] then
+            return a[key] > b[key]
+        end
+        return a.name < b.name
+    end)
+    return copy
 end
 
 ---------------------------------------------------------------------------------
@@ -168,24 +283,61 @@ end
 
 local function PrintCpuTop(arg)
     if not ProfilingEnabled() then
-        p("Profiling is OFF.  /kes profiler on then /reload to enable CPU profiling.")
+        p("Profiling is OFF. /kes profiler on then /reload to enable CPU profiling.")
         return
     end
+
     local n = tonumber(arg) or 15
+    local summary = CaptureCpuSummary()
     local rows = GatherCpuRows()
+
+    if summary.rate then
+        pf("CPU window: %.1f sec since /kes profiler reset.", summary.elapsed)
+        pf("KitnEssentials: %.2f ms total | %.2f ms/sec | %.2f%% of one CPU-second.",
+            summary.addonMs, summary.rate, summary.percent)
+    elseif summary.elapsed ~= nil then
+        pf("CPU window: %.1f sec since /kes profiler reset; exercise the UI before calculating a rate.",
+            summary.elapsed)
+        pf("KitnEssentials total: %.2f ms.", summary.addonMs)
+    else
+        pf("KitnEssentials total: %.2f ms (sampling duration unknown; use /kes profiler reset for a normalized rate).",
+            summary.addonMs)
+    end
+
+    if summary.recentMs ~= nil and summary.peakMs ~= nil then
+        pf("Live profiler: recent avg %.4f ms/tick | peak since launch %.4f ms.",
+            summary.recentMs, summary.peakMs)
+    end
+
     if #rows == 0 then
-        p("No frame CPU samples yet.  Try /kes profiler reset, exercise the UI for a bit, then /kes profiler cpu again.")
+        p("No frame CPU samples yet. Try /kes profiler reset, exercise the UI, then /kes profiler cpu again.")
         return
     end
-    UpdateAddOnCPUUsage()
-    local addonMs = GetAddOnCPUUsage("KitnEssentials") or 0
-    pf("Top %d KE frames by inclusive ms (KitnEssentials total: %.2f ms):", n, addonMs)
-    for i = 1, math_min(n, #rows) do
-        local r = rows[i]
-        local perCall = (r.calls > 0) and (r.ms / r.calls) or 0
-        pf("  %2d. %.2f ms  (calls=%d, %.4f ms/call)  %s",
-            i, r.ms, r.calls, perCall, r.name)
+
+    local selfRows = SortedRows(rows, "selfMs")
+    pf("Top %d named KE frames by direct CPU:", n)
+    local selfRank = 0
+    for _, row in ipairs(selfRows) do
+        if row.selfMs > 0 and selfRank < n then
+            selfRank = selfRank + 1
+            local perCall = row.selfCalls > 0 and row.selfMs / row.selfCalls or 0
+            pf("  %2d. %.2f ms (calls=%d, %.4f ms/call) %s",
+                selfRank, row.selfMs, row.selfCalls, perCall, row.name)
+        end
     end
+    if selfRank == 0 then
+        p("  No direct frame work recorded.")
+    end
+
+    local treeRows = SortedRows(rows, "treeMs")
+    pf("Top %d named KE frame trees by inclusive CPU:", n)
+    for index = 1, math_min(n, #treeRows) do
+        local row = treeRows[index]
+        pf("  %2d. %.2f ms tree (self=%.2f, descendants=%.2f, calls=%d) %s",
+            index, row.treeMs, row.selfMs, row.childMs, row.treeCalls, row.name)
+    end
+    p("Tree rows overlap and may include non-KE descendant work; do not add them or compare them directly with addon total.")
+    p("Frame rankings omit timer and plain Lua callback attribution. /kes profiler peak reports addon-wide tick metrics only; it cannot identify which callback caused a spike.")
 end
 
 local function PrintMemory()
@@ -205,7 +357,8 @@ end
 
 local function ResetCpu()
     ResetCPUUsage()
-    p("CPU counters reset.  Exercise the UI, then /kes profiler cpu.")
+    StartCpuWindow()
+    p("CPU counters reset. Exercise the UI, then /kes profiler cpu.")
 end
 
 local function CaptureSnapshot(label)
@@ -223,7 +376,11 @@ local function CaptureSnapshot(label)
         local rows = GatherCpuRows()
         for i = 1, math_min(50, #rows) do
             local r = rows[i]
-            snap.functions[#snap.functions + 1] = { name = r.name, ms = r.ms, calls = r.calls }
+            snap.functions[#snap.functions + 1] = {
+                name = r.name,
+                ms = r.treeMs,
+                calls = r.treeCalls,
+            }
         end
     end
     return snap
@@ -299,15 +456,6 @@ local function ClearSnapshots()
     p("Snapshots cleared.")
 end
 
----------------------------------------------------------------------------------
--- C_AddOnProfiler-backed live metrics
----------------------------------------------------------------------------------
-
-local function GetMetricEnum(name)
-    local enum = Enum and Enum.AddOnProfilerMetric
-    return enum and enum[name]
-end
-
 local function PrintTopAddOns(arg)
     if not (C_AddOnProfiler and C_AddOnProfiler.GetTopKAddOnsForMetric) then
         p("C_AddOnProfiler.GetTopKAddOnsForMetric not available.")
@@ -356,7 +504,7 @@ local function PrintHelp()
     p("Usage: /kes profiler <subcommand>")
     p("  on | off          — toggle scriptProfile cvar. /reload required to take effect.")
     p("  status            — show whether profiling is ON/OFF.")
-    p("  cpu [N]           — top-N hottest KE frames by inclusive ms (default 15).")
+    p("  cpu [N]           — top-N named KE frames by direct and inclusive CPU (default 15).")
     p("  top [N]           — top-N addons (any) by RecentAverageTime (default 10).")
     p("  peak              — KE live metrics: last tick / recent avg / session avg / peak.")
     p("  mem               — KE memory + delta from previous mem call.")
