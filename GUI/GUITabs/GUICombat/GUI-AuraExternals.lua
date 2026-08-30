@@ -340,7 +340,13 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
             end
             table.insert(sorted, { spellId = spellId, label = label, entry = entry })
         end
-        table.sort(sorted, function(a, b) return a.label < b.label end)
+        -- Tie-broken on the id: nine spells ship under more than one id, and
+        -- comparing labels alone leaves their order to whatever `pairs`
+        -- happened to yield, so the list would reshuffle between rebuilds.
+        table.sort(sorted, function(a, b)
+            if a.label == b.label then return a.spellId < b.spellId end
+            return a.label < b.label
+        end)
         return sorted
     end
 
@@ -350,17 +356,14 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     -- matches the preview icon under it.
     local ICON_ESCAPE = "|T%d:16:16:0:0:64:64:5:59:5:59|t "
 
+    -- ORDERED array form, not a key/value map: the widget sorts a map by key,
+    -- which on this card means by spell id rendered as a string.
     local function BuildDropdownOptions()
         local options = {}
-        for spellId, entry in pairs(db.Allowlist) do
-            local label
-            if type(entry) == "table" then
-                label = entry.label or tostring(spellId)
-            elseif type(entry) == "string" then
-                label = entry
-            else
-                label = tostring(spellId)
-            end
+        local sorted = GetSortedAllowlist()
+
+        for i = 1, #sorted do
+            local spellId, entry, label = sorted[i].spellId, sorted[i].entry, sorted[i].label
             -- `== false`, not `not entry.enabled`: the filter rule treats a row
             -- with no enabled key as ENABLED, and a spec pins that. Greying it
             -- here would show a row as off while its spell still gets through.
@@ -370,9 +373,12 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
                 text = "|cff666666" .. text .. "|r"
             end
             local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellId)
-            options[tostring(spellId)] =
-                ICON_ESCAPE:format(info and info.iconID or 134400) .. text
+            options[i] = {
+                value = tostring(spellId),
+                text  = ICON_ESCAPE:format(info and info.iconID or 134400) .. text,
+            }
         end
+
         return options
     end
 
