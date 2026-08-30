@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GroupFinderPanel.lua                                    ║
--- ║  Group Finder quick-access side panel                    ║
--- ║  Purpose: affixes, one-click category searches, a M+     ║
--- ║           dungeon/role filter pane, weekly runs footer.  ║
+-- ║  Group Finder side panel                                 ║
+-- ║  Purpose: affixes, a M+ dungeon/role filter pane and a    ║
+-- ║           weekly runs footer, beside the M+ search.       ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- TAINT POSTURE -- read this before changing anything below.
@@ -67,12 +67,10 @@ local bit = _G.bit
 -- loads before Skinning.xml in the toc, so a file-top capture is nil.
 -- Never hoist it, even though every S.* name it uses does exist.
 
--- Sized to read comfortably next to the Group Finder. The Mythic+ button is
--- deliberately larger than the rest because it is the one people click most.
+-- Sized to read comfortably next to the Group Finder.
 local PANEL_WIDTH   = 220
 local AFFIX_SIZE    = 34
 local BUTTON_HEIGHT = 32
-local MPLUS_HEIGHT  = 46   -- the headline button, deliberately taller
 local BUTTON_GAP    = 6
 local TOGGLE_HEIGHT = 30   -- filter-pane toggles, up from 24
 local TOGGLE_ICON   = 22   -- dungeon icon, left of the short name
@@ -87,17 +85,6 @@ local KE_PINK = { 1, 0, 0.549 }
 local function Accent()
     return KE.Theme and KE.Theme.accent or KE_PINK
 end
-
--- categoryID/filters pairs as Blizzard's category buttons carry them.
--- 121 (Delves) is a hardcoded magic number with no fallback -- known
--- fragility, accepted deliberately.
-local CATEGORY_DATA = {
-    { key = "Mythic+", categoryID = _G.GROUP_FINDER_CATEGORY_ID_DUNGEONS or 2, filters = 0 },
-    { key = "Raids",   categoryID = 3,   filters = 1 },
-    { key = "Delves",  categoryID = 121, filters = 0 },
-    { key = "Quest",   categoryID = 1,   filters = 0 },
-    { key = "Custom",  categoryID = 6,   filters = 0 },
-}
 
 local DUNGEON_CAT = _G.GROUP_FINDER_CATEGORY_ID_DUNGEONS or 2
 
@@ -474,92 +461,6 @@ local function TeardownRaiderIO()
 end
 
 ------------------------------------------------------------------------
--- Quick search. Two routes, and the difference is load-bearing.
---
--- NEVER show Blizzard's search panel from our own execution. Its OnShow
--- builds the result data provider, and building that provider while our
--- code is on the stack poisons it for the whole session.
---
--- Navigating is a different thing, and it is safe. PVEFrame_ShowFrame and
--- GroupFinderFrame_ShowGroupFrame show whichever panel LFGListFrame has
--- active, which is the category list unless a search is already up. That
--- distinction is the whole of the design below.
---
--- Route 1, results already on screen: set the category and search in place.
--- Route 2, anywhere else: walk to the category page and stop.
---
--- Route 2 must NOT preselect the category. LFGListCategorySelection_SelectCategory
--- looks inert -- it sets two fields -- but Blizzard's Find a Group handler
--- reads selectedCategory as its first act, so writing it from here taints
--- that handler, and the search it runs then builds the provider tainted.
--- Proven in game: the failure arrives attributed to this addon, not to the
--- probe that set it up. The player picks the category.
-------------------------------------------------------------------------
--- No parameters any more. Every shortcut now does the same two things --
--- save the filter, then walk to the category list -- because choosing the
--- category is exactly the part that has to happen on Blizzard's own stack.
-local function RunQuickSearch()
-    if not IsActive() then return end
-    GFP:ApplyAdvancedFilters()
-
-    local lfg = _G.LFGListFrame
-    local sp = lfg and lfg.SearchPanel
-    if not sp then return end
-
-    -- Results are already up, and there is nothing safe to do here. Changing
-    -- the category needs LFGListSearchPanel_SetCategory, which writes
-    -- categoryID, filters and preferredFilters onto Blizzard's panel table --
-    -- the table every later UpdateResultList reads to build the ScrollBox
-    -- provider. Searching without it would run the OLD category under a new
-    -- button's name, which is worse than declining.
-    --
-    -- IsVisible, not IsShown: only LFGListFrame_SetActivePanel hides this
-    -- panel, so it keeps its own shown flag while an ancestor is hidden.
-    if sp:IsVisible() then
-        KE:Print("Press Back to reach the category list -- your filter is saved and applies to the next search.")
-        return
-    end
-
-    -- Navigating shows LFGListFrame's active panel, but activePanel is not a
-    -- perfect prediction of which one: OnShow runs FixPanelValid, which
-    -- swaps an invalid panel for GetBestPanel's choice. So the allowlist has
-    -- to hold for the redirect too.
-    --
-    -- It does. Both allowed panels can only redirect to each other -- the
-    -- no-categories and restricted-account branches -- because the one
-    -- redirect that reaches the applicant viewer needs the player to be
-    -- listed, and becoming listed fires LFG_LIST_ACTIVE_ENTRY_UPDATE, which
-    -- runs the same validation on Blizzard's own stack and moves activePanel
-    -- off the category list before any click of ours can see it.
-    --
-    -- Neither allowed panel is inert on show -- the category list rebuilds
-    -- its buttons -- they are probe-clean, which is a different claim. The
-    -- refused panels do work that has been measured to poison: the search
-    -- panel builds the result provider, and the applicant viewer refreshes
-    -- and sorts the applicant list.
-    --
-    -- An allowlist rather than a check against the search panel, so a panel
-    -- added later is refused until someone probes it.
-    local ap = lfg.activePanel
-    if ap ~= nil and ap ~= lfg.CategorySelection and ap ~= lfg.NothingAvailable then
-        KE:Print("Open Premade Groups yourself -- the Group Finder is holding another view.")
-        return
-    end
-
-    local pve = _G.PVEFrame
-    if pve and pve.activeTabIndex ~= 1 and _G.PVEFrame_ShowFrame then
-        _G.PVEFrame_ShowFrame("GroupFinderFrame")
-    end
-    -- By frame identity, not by button index: the index shifts when
-    -- scenarios are enabled.
-    if _G.GroupFinderFrame_ShowGroupFrame and _G.LFGListPVEStub then
-        _G.GroupFinderFrame_ShowGroupFrame(_G.LFGListPVEStub)
-    end
-end
-
-GFP._RunQuickSearch = RunQuickSearch
-
-------------------------------------------------------------------------
 -- Panel construction (lazy, once)
 ------------------------------------------------------------------------
 local function CreatePanel()
@@ -567,7 +468,6 @@ local function CreatePanel()
     local pve = _G.PVEFrame
     local S = KE.Skins            -- CALL time. Never hoist.
     if not pve or not S then return nil end
-    local accent = Accent()
 
     panel = CreateFrame("Frame", "KE_GroupFinderPanel", pve)
     panel:SetPoint("TOPLEFT", pve, "TOPRIGHT", 1, 0)
@@ -599,43 +499,6 @@ local function CreatePanel()
         panel.affixes[i] = holder
     end
 
-    -- Quick Access pane (swapped for the Filters pane in M+ search mode).
-    -- Top offset clears the taller affix row.
-    panel.quick = CreateFrame("Frame", nil, panel)
-    panel.quick:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, -(AFFIX_SIZE + 22))
-    panel.quick:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
-
-    local title = panel.quick:CreateFontString(nil, "OVERLAY")
-    S.SetFont(title, 16, "")
-    title:SetPoint("TOP", panel.quick, "TOP", 0, -6)
-    title:SetText("Quick Access")
-    title:SetTextColor(accent[1], accent[2], accent[3])
-
-    -- Category buttons. Mythic+ is first and deliberately taller than the
-    -- rest -- it is the one people come here for.
-    local prev
-    for _, data in ipairs(CATEGORY_DATA) do
-        local btn = CreateFrame("Button", nil, panel.quick)
-        local isMPlus = (data.key == "Mythic+")
-        btn:SetHeight(isMPlus and MPLUS_HEIGHT or BUTTON_HEIGHT)
-        if not prev then
-            btn:SetPoint("TOPLEFT", panel.quick, "TOPLEFT", 10, -32)
-            btn:SetPoint("TOPRIGHT", panel.quick, "TOPRIGHT", -10, -32)
-        else
-            btn:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -BUTTON_GAP)
-            btn:SetPoint("TOPRIGHT", prev, "BOTTOMRIGHT", 0, -BUTTON_GAP)
-        end
-        prev = btn
-        S.Button(btn)
-        local fs = btn:CreateFontString(nil, "OVERLAY")
-        S.SetFont(fs, isMPlus and 15 or 13, "")
-        fs:SetPoint("CENTER")
-        fs:SetText(data.key)
-        btn:SetScript("OnClick", function()
-            RunQuickSearch()
-        end)
-    end
-
     -- Weekly runs footer
     local footer = CreateFrame("Frame", nil, panel)
     panel.footer = footer          -- the filter pane anchors its bottom to this
@@ -656,8 +519,8 @@ end
 
 ------------------------------------------------------------------------
 -- Mythic+ filter pane: dungeon toggles, Role Opening, Has Tank/Healer and
--- a minimum leader score. Shown in place of the Quick Access buttons
--- whenever the M+ search is active.
+-- a minimum leader score. This is the panel's whole content; the panel is
+-- only on screen while the M+ search is.
 ------------------------------------------------------------------------
 
 -- The slider row is the authority whenever it exists. The widget throttles
@@ -793,8 +656,9 @@ end
 -- the provider synchronously.
 function GFP:RunSearch()
     local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
-    -- IsVisible for the same reason the shortcuts use it: a shown-but-hidden
-    -- search panel would take a real server search nobody can see.
+    -- IsVisible, not IsShown: only LFGListFrame_SetActivePanel hides this
+    -- panel, so a shown-but-hidden one would take a real server search
+    -- nobody can see.
     if not (sp and sp:IsVisible()) then return end
     if not (C_LFGList and C_LFGList.Search and sp.categoryID) then return end
     self._lastServerSearch = GetTime()
@@ -1144,24 +1008,10 @@ end
 -- written at login, on their last control click, or on their last roster
 -- change.
 --
--- The three hook callers defer this by a frame so Blizzard's synchronous
--- continuation, provider build included, has unwound first. Refresh does
--- NOT defer it again: Refresh is already deferred whole, and calling it a
--- second time there would show the quick pane for a frame on every
--- dungeon-mode open.
-function GFP:UpdateMode()
-    if not panel then return end
-    if not IsActive() then return end
-    if IsDungeonSearchMode() then
-        local f = CreateFilterPanel()
-        if f then f:Show() end
-        if panel.quick then panel.quick:Hide() end
-    else
-        if panel.filters then panel.filters:Hide() end
-        if panel.quick then panel.quick:Show() end
-    end
-end
-
+-- The panel exists ONLY in M+ search mode, so the mode question and the
+-- visibility question are the same question. Refresh answers it, and its own
+-- deferral gives Blizzard's synchronous continuation -- provider build
+-- included -- a frame to unwind first.
 ------------------------------------------------------------------------
 -- Lifecycle
 ------------------------------------------------------------------------
@@ -1252,17 +1102,16 @@ function GFP:ApplySettings()
     self:Refresh()
 end
 
--- The WHOLE body is deferred, not just the UpdateMode call. Its main driver
--- is the PVEFrame OnShow hook, and Blizzard materializes the result provider
--- inside that same Show execution -- so the RaiderIO reposition, the map
--- info request, the affix and run refreshes all sit in it too. Deferring one
--- of five would not be a rule. Nothing Blizzard does next reads any of this
--- and the OnShow hook discards the result, so a frame's delay costs nothing.
+-- The WHOLE body is deferred. Its main driver is the PVEFrame OnShow hook,
+-- and Blizzard materializes the result provider inside that same Show
+-- execution -- so the RaiderIO reposition, the map info request, the affix
+-- and run refreshes all sit in it too. Deferring one of four would not be a
+-- rule. Nothing Blizzard does next reads any of this and the OnShow hook
+-- discards the result, so a frame's delay costs nothing.
 --
--- ONE callback, UpdateMode included. CreatePanel brings the panel up with
--- the quick pane visible and UpdateMode is what swaps in the filter pane, so
--- deferring UpdateMode a second time inside here would show the wrong pane
--- for a frame on every dungeon-mode open.
+-- This is also the module's only visibility decision. The panel is the M+
+-- filter pane and nothing else, so it is on screen exactly while the M+
+-- search is, and RaiderIO gets the right edge back the rest of the time.
 function GFP:Refresh()
     C_Timer.After(0, function()
         -- IsActive() folds into the existing condition. It does NOT
@@ -1270,7 +1119,7 @@ function GFP:Refresh()
         -- by a late conflict, and an early return would leave it on screen.
         local enabled = self:IsEnabled() and IsActive()
         local pve = _G.PVEFrame
-        if enabled and pve and pve:IsShown() then
+        if enabled and pve and pve:IsShown() and IsDungeonSearchMode() then
             local p = CreatePanel()
             if p then
                 p:Show()
@@ -1283,7 +1132,8 @@ function GFP:Refresh()
                 if C_MythicPlus and C_MythicPlus.RequestMapInfo then C_MythicPlus.RequestMapInfo() end
                 UpdateAffixes()
                 UpdateRuns()
-                self:UpdateMode()
+                local f = CreateFilterPanel()
+                if f then f:Show() end
             end
         else
             TeardownRaiderIO()
@@ -1379,26 +1229,21 @@ function GFP:OnEnable()
     self:RegisterEvent("CHALLENGE_MODE_MAPS_UPDATE", "Refresh")
     self:RegisterEvent("MYTHIC_PLUS_CURRENT_AFFIX_UPDATE", "Refresh")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterChanged")
-    -- Pane switching follows the M+ search state. SetCategory covers the
-    -- quick buttons and manual navigation; Show/Hide covers back-outs.
+    -- The panel follows the M+ search state, so every edge that can change
+    -- it re-asks Refresh. SetCategory covers arriving at a category,
+    -- Show/Hide covers back-outs. Refresh defers itself, so these do not.
     if not self.modeHooks then
         self.modeHooks = true
         if _G.LFGListSearchPanel_SetCategory then
-            hooksecurefunc("LFGListSearchPanel_SetCategory", function()
-                C_Timer.After(0, function() self:UpdateMode() end)
-            end)
+            hooksecurefunc("LFGListSearchPanel_SetCategory", function() self:Refresh() end)
         end
         if _G.LFGListSearchEntry_Update then
             hooksecurefunc("LFGListSearchEntry_Update", DecorateSearchEntry)
         end
         local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
         if sp then
-            sp:HookScript("OnShow", function()
-                C_Timer.After(0, function() self:UpdateMode() end)
-            end)
-            sp:HookScript("OnHide", function()
-                C_Timer.After(0, function() self:UpdateMode() end)
-            end)
+            sp:HookScript("OnShow", function() self:Refresh() end)
+            sp:HookScript("OnHide", function() self:Refresh() end)
         end
     end
     self:Refresh()
