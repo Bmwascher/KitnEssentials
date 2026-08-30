@@ -396,12 +396,17 @@ local function RepositionRaiderIO()
             -- While inactive this wrapper delegates straight to `orig`
             -- without substituting `rel` or nudging `x`. It stays
             -- installed; it stops changing behaviour.
+            -- Record EVERY request, as it arrived, before any substitution.
+            -- Two reasons, and the second is why this sits outside the branch
+            -- below. A re-anchor replays this rather than the anchor's
+            -- current point, because reading our own adjusted output back
+            -- through this wrapper adjusts it again and the gap grows by a
+            -- pixel per render. And storing only the requests we adjust would
+            -- leave a stale one behind whenever the profile moves to a frame
+            -- we do not own, so the next replay would drag it back to our
+            -- edge.
+            anchor.__keGFPReq = { p = p, rel = rel, rp = rp, x = x, y = y }
             if IsActive() and rel and (rel == _G.PVEFrame or rel == panel) then
-                -- Keep RIO's request exactly as RIO made it. Every re-anchor
-                -- replays THIS, never the offset computed below: reading our
-                -- own output back through this wrapper nudges it a second
-                -- time, and the gap then grows by a pixel per profile render.
-                anchor.__keGFPReq = { p = p, rel = rel, rp = rp, x = x, y = y }
                 rel = (panel and panel:IsShown()) and panel or _G.PVEFrame
                 -- RIO's stock x tucks the profile flush against the frame it
                 -- anchors to. One screen pixel of daylight instead, against
@@ -584,12 +589,15 @@ GFP._ArmMinScoreSave = ArmMinScoreSave
 -- of them -- including the slider's trailing timer, which must not land
 -- after a disable. RestorePermissiveFilter below is the other writer, and it
 -- is ungated on purpose; do not fold the two together.
+-- Returns whether the filter was actually written. Searching without that
+-- write would send whichever settings the last owner left in place, so the
+-- callers refuse rather than search on someone else's filter.
 function GFP:ApplyAdvancedFilters()
-    if not IsActive() then return end
+    if not IsActive() then return false end
     local db = self.db
-    if not db or not (C_LFGList and C_LFGList.GetAdvancedFilter) then return end
+    if not db or not (C_LFGList and C_LFGList.GetAdvancedFilter) then return false end
     local adv = C_LFGList.GetAdvancedFilter()
-    if not adv then return end
+    if not adv then return false end
 
     -- Only the fields this module exposes are written. Everything else --
     -- needsMyClass, the difficulty flags, the playstyles -- is whatever the
@@ -627,6 +635,7 @@ function GFP:ApplyAdvancedFilters()
     -- restore clobber a filter this module never touched.
     local g = KE.db and KE.db.global
     if g then g.GroupFinderPanelOwnsFilter = true end
+    return true
 end
 
 -- The restore writer. Deliberately NOT gated by IsActive(): every caller
@@ -688,7 +697,7 @@ end
 -- rule can be verified without a frame.
 function GFP:ManualSearch()
     if not IsActive() then return end
-    self:ApplyAdvancedFilters()
+    if not self:ApplyAdvancedFilters() then return end
     self:RunSearch()
 end
 
@@ -702,7 +711,7 @@ end
 local SEARCH_WINDOW = 10
 function GFP:ApplyAndRefresh()
     if not IsActive() then return end
-    self:ApplyAdvancedFilters()
+    if not self:ApplyAdvancedFilters() then return end
     -- nil, not 0, is "never searched": GetTime counts from login, so a zero
     -- baseline would swallow every toggle for the first ten seconds of a
     -- session.
@@ -1126,6 +1135,13 @@ function GFP:Refresh()
         local enabled = self:IsEnabled() and IsActive()
         local pve = _G.PVEFrame
         if not (enabled and pve and pve:IsShown()) then
+            -- A conflict can arrive mid-session. The conflict predicate is
+            -- evaluated at call time, so a competing addon loading after
+            -- OnEnable stands this module down here rather than through a
+            -- disable, and the filter would otherwise stay claimed until the
+            -- next reload. The restore is gated on the ownership flag, so it
+            -- is a no-op on the ordinary closed-frame path.
+            if not IsActive() then RestorePermissiveFilter() end
             TeardownRaiderIO()
             if panel then panel:Hide() end
             return

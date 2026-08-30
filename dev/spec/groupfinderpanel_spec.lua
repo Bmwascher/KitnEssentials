@@ -182,7 +182,9 @@ local function loadWithFilter(opts)
         -- Captures the timer the slider arms instead of running it, so a
         -- test decides when -- and whether -- the callback fires.
         C_Timer = {
-            After = function() end,
+            -- Captured, not run. Refresh defers its whole body through
+            -- this, so a spec that wants that body fires afterFn itself.
+            After = function(_, fn) state.afterFn = fn end,
             NewTicker = function() return { Cancel = function() end } end,
             NewTimer = function(_, fn)
                 state.timerFn = fn
@@ -440,6 +442,59 @@ describe("GroupFinderPanel search rules", function()
         local GFP, _, state = loadWithFilter({ panelShown = false })
         GFP:RunSearch()
         assert.equals(0, state.searches)
+    end)
+
+    it("REFUSES to search when the filter could not be written", function()
+        -- Searching anyway would send whichever settings the last owner of
+        -- Blizzard's filter left in place, under this module's name.
+        local GFP, _, state = loadWithFilter()
+        _G.C_LFGList.GetAdvancedFilter = function() return nil end
+        GFP:ApplyAndRefresh()
+        assert.is_nil(state.saved)
+        assert.equals(0, state.searches)
+    end)
+
+    it("REFUSES the manual search too when the filter could not be written", function()
+        -- The Search button is the escape from the ten-second window, so it
+        -- needs its own assertion: the window is not what stops it here.
+        local GFP, _, state = loadWithFilter()
+        _G.C_LFGList.GetAdvancedFilter = function() return nil end
+        GFP:ManualSearch()
+        assert.is_nil(state.saved)
+        assert.equals(0, state.searches)
+    end)
+end)
+
+describe("GroupFinderPanel mid-session conflict", function()
+    it("hands the filter back when a conflict appears after enable", function()
+        -- The conflict predicate is evaluated at call time, so a competing
+        -- addon that loads later stands this module down without any
+        -- disable ever running. The filter would stay claimed until reload.
+        local GFP, KE, state = loadWithFilter()
+        GFP:ApplyAdvancedFilters()
+        assert.is_true(KE.db.global.GroupFinderPanelOwnsFilter)
+        state.saved = nil
+        _G.C_AddOns.IsAddOnLoaded = function(name)
+            return name == "PremadeGroupsFilter"
+        end
+        GFP:Refresh()
+        state.afterFn()
+        assert.is_not_nil(state.saved)          -- fail, rather than error, on no restore
+        assert.equals(0, state.saved.minimumRating)
+        assert.is_false(KE.db.global.GroupFinderPanelOwnsFilter)
+    end)
+
+    it("leaves an unowned filter alone when the frame simply closes", function()
+        -- The same branch runs every time the player closes the Group
+        -- Finder. It must not wipe the filter then.
+        local GFP, KE, state = loadWithFilter()
+        GFP:ApplyAdvancedFilters()
+        state.saved = nil
+        _G.PVEFrame.IsShown = function() return false end
+        GFP:Refresh()
+        state.afterFn()
+        assert.is_nil(state.saved)
+        assert.is_true(KE.db.global.GroupFinderPanelOwnsFilter)
     end)
 end)
 
