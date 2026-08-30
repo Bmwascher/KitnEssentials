@@ -748,6 +748,11 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Sound", yOffset)
     card5:AddNote("Plays for any enabled spell on the Allowlist above.")
+    -- Not a caution about the GUI but about the sound registry: removing a
+    -- registration is always allowed, adding one is not while aura identities
+    -- are hidden, so an Allowlist edit made in there retires the old set and
+    -- cannot build the new one until the restriction lifts.
+    card5:AddNote("Allowlist changes made inside a dungeon or raid take effect when you leave. The sound stays silent until then.")
     manager:Register(card5, "all")
 
     local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
