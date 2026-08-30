@@ -724,14 +724,15 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     yOffset = card:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Sound (Seven Tracked Externals)
+    -- Card 5: Sound
     --
-    -- Plays the configured sound when one of a fixed list of seven
-    -- external-defensive spells lands on you -- Blizzard's sound-trigger
-    -- API takes a spell ID, not a filter, so this can't cover every
-    -- external defensive. Self-applied big defensives are silent.
+    -- Plays the configured sound when any enabled allowlist row lands on
+    -- you. Blizzard's sound-trigger API takes a spell ID rather than a
+    -- filter, so the registry is one registration per enabled row. Big
+    -- defensives are not on the allowlist and stay silent.
     ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Sound (Seven Tracked Externals)", yOffset)
+    local card5 = GUIFrame:CreateCard(scrollChild, "Sound", yOffset)
+    card5:AddNote("Plays for any enabled spell on the Allowlist above.")
     manager:Register(card5, "all")
 
     local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)

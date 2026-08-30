@@ -397,3 +397,32 @@ describe("CanRekeyAllowlistEntry", function()
         assert.is_false(R.CanRekeyAllowlistEntry(nil, 222, 444))
     end)
 end)
+
+describe("sound spell id array", function()
+    it("returns an empty table rather than nil when nothing is saved", function()
+        local R = L.loadAuraRules()
+        local ids = R.BuildSoundSpellIDs(nil)
+        assert.is_table(ids)
+        assert.equals(0, #ids)
+    end)
+
+    it("carries only the enabled rows", function()
+        local R = L.loadAuraRules()
+        local ids = R.BuildSoundSpellIDs({
+            [33206] = { label = "Pain Suppression", enabled = true },
+            [47788] = { label = "Guardian Spirit",  enabled = false },
+            [1022]  = { label = "Blessing of Protection" },
+        })
+        assert.same({ 1022, 33206 }, ids)
+    end)
+
+    it("sorts ascending, so the array is a stable change signature", function()
+        local R = L.loadAuraRules()
+        local ids = R.BuildSoundSpellIDs({
+            [357170] = { enabled = true },
+            [6940]   = { enabled = true },
+            [102342] = { enabled = true },
+        })
+        assert.same({ 6940, 102342, 357170 }, ids)
+    end)
+end)

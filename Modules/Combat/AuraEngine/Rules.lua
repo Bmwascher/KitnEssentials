@@ -9,6 +9,7 @@ local KE = select(2, ...)
 
 local table_concat = table.concat
 local table_insert = table.insert
+local table_sort = table.sort
 
 local Rules = {}
 KE.AuraRules = Rules
@@ -133,6 +134,22 @@ function Rules.BuildIncludeSpellIDs(saved)
     end
 
     return set
+end
+
+-- The sound registry takes one spell id per registration, so it needs the
+-- allowlist as an ordered array rather than the set the container filter
+-- wants. Sorted because the array also serves as the registry's change
+-- signature: an unsorted `pairs` walk would reorder after a rehash and force
+-- a retire-and-rebuild that changed nothing.
+function Rules.BuildSoundSpellIDs(saved)
+    local ids = {}
+
+    for spellID in pairs(Rules.BuildIncludeSpellIDs(saved)) do
+        ids[#ids + 1] = spellID
+    end
+    table_sort(ids)
+
+    return ids
 end
 
 -- maxFrameCount is per group and unused capacity cannot cross a group

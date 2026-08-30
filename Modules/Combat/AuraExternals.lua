@@ -70,7 +70,12 @@ local DECLARATION = {
     end,
 
     sounds = {
-        spellIDs    = { 6940, 47788, 255312, 102342, 116849, 357170, 53480 },
+        -- Follows the allowlist rather than a fixed list. Blizzard's sound
+        -- trigger takes one spell id, never a filter, so the registry is one
+        -- registration per enabled row and grows with what the user adds.
+        buildSpellIDs = function(settings)
+            return KE.AuraRules.BuildSoundSpellIDs(settings and settings.Allowlist)
+        end,
         unit        = "player",
         settingKeys = { enabled = "SoundEnabled", name = "SoundName" },
     },
