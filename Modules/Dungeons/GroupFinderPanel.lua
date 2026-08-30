@@ -1055,13 +1055,15 @@ end
 
 -- Widget show/hide on our own frames, and nothing else. NEVER write the
 -- filter from here, and do not think deferring the write makes it safe.
--- All three entry points reach a provider build -- the SetCategory hook, the
--- search panel's own OnShow, and Refresh from the PVEFrame OnShow hook --
--- and Blizzard runs Clear, SetCategory, DoSearch and SetActivePanel back to
--- back, with DoSearch reading the saved filter in that same execution, so a
--- deferred write lands a frame too late for it. Nothing needs writing here:
--- the filter already holds the player's settings, written at login, on their
--- last control click, or on their last roster change.
+-- Three of the four callers reach a provider build -- the SetCategory hook,
+-- the search panel's own OnShow, and Refresh from the PVEFrame OnShow hook;
+-- the panel's OnHide is deferred with them for consistency rather than
+-- necessity. Blizzard runs Clear, SetCategory, DoSearch and SetActivePanel
+-- back to back, with DoSearch reading the saved filter in that same
+-- execution, so a deferred write lands a frame too late for it. Nothing
+-- needs writing here: the filter already holds the player's settings,
+-- written at login, on their last control click, or on their last roster
+-- change.
 --
 -- Every caller defers this by a frame so Blizzard's synchronous
 -- continuation, provider build included, has unwound first.
@@ -1325,7 +1327,7 @@ function GFP:OnDisable()
     -- after it, rewrite the restrictive filter, and re-claim ownership on a
     -- module that is now off.
     CancelMinScoreSave()
-    -- The filter this module writes is restrictive, so leaving it behind
+    -- The filter this module writes CAN be restrictive, so leaving it behind
     -- would keep a player's score floor and dungeon picks active in
     -- Blizzard's own Group Finder with the module off.
     RestorePermissiveFilter()
