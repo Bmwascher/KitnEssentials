@@ -17,7 +17,9 @@
 -- user's choices into Blizzard's own advanced filter and lets Blizzard build
 -- the list. Never reintroduce a pass over searchPanel.results, never call
 -- LFGListSearchPanel_UpdateResults / _UpdateResultList / _DoSearch / _Clear /
--- _SelectResult, and never reorder Blizzard's table even in place.
+-- _SelectResult, and never reorder Blizzard's table even in place. Never
+-- show the search panel yourself either -- LFGListFrame_SetActivePanel onto
+-- it is the same fault by another door.
 --
 -- What it still does inside Blizzard's row update, as an accepted exception:
 -- decorates rows (friend backdrop, leader score). That exception is the
@@ -459,27 +461,66 @@ local function TeardownRaiderIO()
 end
 
 ------------------------------------------------------------------------
--- Quick search: set the category and search, but ONLY when the search
--- panel is already the shown panel.
+-- Quick search. Two routes, and the difference is load-bearing.
 --
--- Navigating there ourselves is not available any more. PVEFrame_ShowFrame,
--- GroupFinderFrameGroupButton_OnClick, LFGListSearchPanel_Clear and
--- LFGListFrame_SetActivePanel all build Blizzard's result provider inside
--- our execution, which poisons it for the session. So when the search panel
--- is not up we set the filter and stop; the player clicks Premade Groups.
+-- NEVER show Blizzard's search panel from our own execution. Its OnShow
+-- builds the result data provider, and building that provider while our
+-- code is on the stack poisons it for the whole session.
+--
+-- Navigating is a different thing, and it is safe. PVEFrame_ShowFrame and
+-- GroupFinderFrame_ShowGroupFrame show whichever panel LFGListFrame has
+-- active, which is the category list unless a search is already up. That
+-- distinction is the whole of the design below.
+--
+-- Route 1, results already on screen: set the category and search in place.
+-- Route 2, anywhere else: walk to the category page with the category
+-- preselected and stop. Blizzard's own Find a Group button finishes the job
+-- in Blizzard's execution, which is what keeps the provider clean.
 ------------------------------------------------------------------------
 local function RunQuickSearch(categoryID, filters)
     if not IsActive() then return end
     GFP:ApplyAdvancedFilters()
+
     local lfg = _G.LFGListFrame
-    local searchPanel = lfg and lfg.SearchPanel
-    if not (searchPanel and searchPanel:IsShown()) then return end
-    if _G.LFGListSearchPanel_SetCategory then
-        _G.LFGListSearchPanel_SetCategory(searchPanel, categoryID, filters, lfg.baseFilters or 0)
+    local sp = lfg and lfg.SearchPanel
+    if not sp then return end
+
+    if sp:IsShown() then
+        if _G.LFGListSearchPanel_SetCategory then
+            _G.LFGListSearchPanel_SetCategory(sp, categoryID, filters, lfg.baseFilters or 0)
+        end
+        -- Exempt from the 10s window: a shortcut changes the category, so
+        -- suppressing its search would leave the old results under a new
+        -- heading.
+        GFP:RunSearch()
+        return
     end
-    -- Exempt from the 10s window: a shortcut changes the category, so
-    -- suppressing its search would leave the old results under a new heading.
-    GFP:RunSearch()
+
+    -- Hidden, but still the panel LFGListFrame restores on show
+    -- (LFGListFrame_OnShow runs FixPanelValid, which keeps activePanel).
+    -- Navigating here would show the search panel, which is the unsafe half.
+    -- Say so rather than no-op: a control that does nothing reads as broken.
+    if lfg.activePanel == sp then
+        KE:Print("Go back to the category list first -- the Group Finder is still holding your last search.")
+        return
+    end
+
+    local pve = _G.PVEFrame
+    if pve and pve.activeTabIndex ~= 1 and _G.PVEFrame_ShowFrame then
+        _G.PVEFrame_ShowFrame("GroupFinderFrame")
+    end
+    -- By frame identity, not by button index. The old code picked
+    -- groupButton4 when scenarios were enabled and groupButton3 otherwise,
+    -- and that guess is wrong on the live build.
+    if _G.GroupFinderFrame_ShowGroupFrame and _G.LFGListPVEStub then
+        _G.GroupFinderFrame_ShowGroupFrame(_G.LFGListPVEStub)
+    end
+    -- Sets two fields and refreshes the category art and nav buttons. No
+    -- result list, so no provider.
+    local cs = lfg.CategorySelection
+    if cs and _G.LFGListCategorySelection_SelectCategory then
+        _G.LFGListCategorySelection_SelectCategory(cs, categoryID, filters)
+    end
 end
 
 GFP._RunQuickSearch = RunQuickSearch
@@ -495,8 +536,8 @@ local function CreatePanel()
     local accent = Accent()
 
     panel = CreateFrame("Frame", "KE_GroupFinderPanel", pve)
-    panel:SetPoint("TOPLEFT", pve, "TOPRIGHT", 2, 0)
-    panel:SetPoint("BOTTOMLEFT", pve, "BOTTOMRIGHT", 2, 0)
+    panel:SetPoint("TOPLEFT", pve, "TOPRIGHT", 1, 0)
+    panel:SetPoint("BOTTOMLEFT", pve, "BOTTOMRIGHT", 1, 0)
     panel:SetWidth(PANEL_WIDTH)
     S.Backdrop(panel)
     -- The Show/Hide METHODS, not the OnShow/OnHide scripts. Method hooks

@@ -223,6 +223,20 @@ local function loadWithFilter(opts)
     _G.LFGListSearchPanel_SetCategory = function(_, categoryID)
         state.categories[#state.categories + 1] = categoryID
     end
+    -- Navigation surface. Recorded rather than swallowed so a spec can tell
+    -- "walked to the category page" from "did nothing".
+    state.nav = {}
+    _G.LFGListPVEStub = {}
+    _G.PVEFrame_ShowFrame = function() state.nav[#state.nav + 1] = "pve" end
+    _G.GroupFinderFrame_ShowGroupFrame = function(f)
+        state.nav[#state.nav + 1] = (f == _G.LFGListPVEStub) and "premade" or "wrong"
+    end
+    _G.LFGListCategorySelection_SelectCategory = function(_, categoryID, filters)
+        state.selected = { categoryID = categoryID, filters = filters }
+    end
+    _G.LFGListFrame.CategorySelection = {}
+    -- Hidden search panel defaults to NOT being the restored panel.
+    _G.LFGListFrame.activePanel = _G.LFGListFrame.CategorySelection
     -- AceEvent/AceAddon lifecycle methods are deliberately unstubbed by the
     -- loader, and OnDisable/OnEnable call into them.
     GFP.UnregisterAllEvents = function() end
@@ -507,15 +521,40 @@ describe("GroupFinderPanel shortcut buttons", function()
         assert.equals(3, state.categories[#state.categories])
     end)
 
-    it("saves and STOPS when the search panel is not shown", function()
-        -- Navigating there ourselves would build Blizzard's provider inside
-        -- our execution. The player clicks Premade Groups instead.
+    it("walks to the category page and preselects, without searching", function()
+        -- Navigating this far is probed safe. Showing the search panel is
+        -- not, so the search must NOT happen here -- Blizzard's own Find a
+        -- Group button does it, in Blizzard's execution.
         local GFP, _, state, seams = loadWithFilter({ panelShown = false })
         GFP.db.MinScore = 2500
         seams.runQuickSearch(3, 1)
         assert.equals(2500, state.saved.minimumRating)
+        -- Already on the Dungeons and Raids tab, so no tab switch is needed.
+        assert.same({ "premade" }, state.nav)
+        assert.equals(3, state.selected.categoryID)
+        assert.equals(1, state.selected.filters)
         assert.equals(0, state.searches)
         assert.equals(0, #state.categories)
+    end)
+
+    it("switches the PVE tab first when the player is on another one", function()
+        local _, _, state, seams = loadWithFilter({ panelShown = false })
+        _G.PVEFrame.activeTabIndex = 2
+        seams.runQuickSearch(3, 1)
+        assert.same({ "pve", "premade" }, state.nav)
+    end)
+
+    it("REFUSES to navigate when the hidden search panel is the restored one", function()
+        -- LFGListFrame_OnShow keeps activePanel, so navigating would show the
+        -- search panel and poison the provider. This is the one case that
+        -- must decline rather than walk.
+        local _, _, state, seams = loadWithFilter({ panelShown = false })
+        _G.LFGListFrame.activePanel = _G.LFGListFrame.SearchPanel
+        seams.runQuickSearch(3, 1)
+        assert.is_not_nil(state.saved)
+        assert.equals(0, #state.nav)
+        assert.is_nil(state.selected)
+        assert.equals(0, state.searches)
     end)
 
     it("saves BEFORE it searches on the shown path", function()
@@ -531,14 +570,17 @@ describe("GroupFinderPanel shortcut buttons", function()
         seams.runQuickSearch(3, 1)
         assert.same({ "save", "search" }, order)
         assert.equals(2500, state.saved.minimumRating)
+        -- Already on results: search in place, never re-navigate.
+        assert.equals(0, #state.nav)
     end)
 
-    it("writes nothing at all while the module is inactive", function()
+    it("writes nothing and navigates nowhere while the module is inactive", function()
         local GFP, _, state, seams = loadWithFilter()
         GFP.db.Enabled = false
         seams.runQuickSearch(3, 1)
         assert.is_nil(state.saved)
         assert.equals(0, state.searches)
+        assert.equals(0, #state.nav)
     end)
 end)
 
