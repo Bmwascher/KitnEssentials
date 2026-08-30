@@ -1185,11 +1185,11 @@ local Defaults = {
             Strata            = "MEDIUM",
             anchorFrameType   = "PLAYERFRAME",
             ParentFrame       = "UIParent",
-            Position          = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "TOPRIGHT", XOffset = 0, YOffset = 81 },
+            Position          = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "TOPRIGHT", XOffset = 0, YOffset = 79 },
             IconSize          = 52,
             IconSpacing       = 1,
             IconsPerRow       = 2,
-            MaxRows           = 2,
+            MaxRows           = 1,
             Swipe             = false,
             Reverse           = true,
             -- Seeded rows carry default = true, which makes them undeletable
@@ -1256,21 +1256,24 @@ local Defaults = {
             -- an older version still loads cleanly. GlowLines and GlowThickness
             -- became live again with the pixel style; GlowFrequency and
             -- GlowDuration were never dead.
-            GlowLines         = 8,
-            GlowFrequency     = 0.25,
+            GlowLines         = 5,
+            GlowFrequency     = 0.35,
             GlowLength        = 10,
-            GlowThickness     = 1,
+            GlowThickness     = 2,
             GlowBorder        = false,
             GlowScale         = 1.0,
             GlowStartAnim     = true,
             GlowDuration      = 1.0,
-            SoundEnabled      = false,
-            SoundName         = "None",
+            SoundEnabled      = true,
+            -- A BigWigs sound, not one this addon ships. LibSharedMedia returns
+            -- nothing for it without BigWigs installed, which reads as a sound
+            -- switched on that never plays.
+            SoundName         = "BigWigs: Info",
             FontSize          = 14,
             FontOutline       = "OUTLINE",
             TimerFontSize     = 18,
             TimerPosition     = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
-            StackPosition     = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = -1, YOffset = 1 },
+            StackPosition     = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = -1, YOffset = 2 },
         },
 
         AuraDebuffs = {
