@@ -355,4 +355,16 @@ describe("declarations that build their spell list", function()
         reg:Sync(builtDecl(), { SoundEnabled = true, SoundName = "Bell", ids = {} }, true)
         assert.equals(0, #rec.added)
     end)
+
+    -- The Add New Entry button leaves the list holding only a placeholder the
+    -- id builder drops, so the registry is empty until a real id is typed. It
+    -- has to register on that later sync rather than treat empty as settled.
+    it("registers once an empty list gains an id", function()
+        local rec = apiRecording()
+        local reg = registryWith(rec, false)
+        reg:Sync(builtDecl(), { SoundEnabled = true, SoundName = "Bell", ids = {} }, true)
+        reg:Sync(builtDecl(), { SoundEnabled = true, SoundName = "Bell", ids = { 33206 } }, true)
+        assert.equals(1, #rec.added)
+        assert.equals(33206, rec.added[1].spellID)
+    end)
 end)

@@ -349,7 +349,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
             end
             table.insert(sorted, { spellId = spellId, label = label, entry = entry })
         end
-        -- Tie-broken on the id: nine spells ship under more than one id, and
+        -- Tie-broken on the id: many names ship under more than one id, and
         -- comparing labels alone leaves their order to whatever `pairs`
         -- happened to yield, so the list would reshuffle between rebuilds.
         table.sort(sorted, function(a, b)

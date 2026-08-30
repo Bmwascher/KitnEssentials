@@ -154,7 +154,14 @@ function Rules.BuildSoundSpellIDs(saved)
     local ids = {}
 
     for spellID in pairs(Rules.BuildIncludeSpellIDs(saved)) do
-        ids[#ids + 1] = spellID
+        -- The Add New Entry button reserves a NEGATIVE id until the user types
+        -- a real one, and it reserves it enabled. The container simply matches
+        -- no aura on such an id, but the sound API is asked to register it, and
+        -- one nil return there rolls the whole registry back to silence -- so
+        -- pressing Add would mute every external until the id was filled in.
+        if type(spellID) == "number" and spellID > 0 then
+            ids[#ids + 1] = spellID
+        end
     end
     table_sort(ids)
 

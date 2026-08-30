@@ -443,3 +443,24 @@ describe("self-cast candidate filter value", function()
         assert.is_nil(R.SelfCastFilterValue(nil))
     end)
 end)
+
+describe("sound spell id array placeholder handling", function()
+    it("drops the negative id the Add New Entry button reserves", function()
+        local R = L.loadAuraRules()
+        local ids = R.BuildSoundSpellIDs({
+            [-1]    = { label = "Entry 1", enabled = true },
+            [-2]    = { label = "Entry 2", enabled = true },
+            [33206] = { label = "Pain Suppression", enabled = true },
+        })
+        assert.same({ 33206 }, ids)
+    end)
+
+    it("drops a non-numeric key from a hand-edited profile", function()
+        local R = L.loadAuraRules()
+        local ids = R.BuildSoundSpellIDs({
+            ["33206"] = { enabled = true },
+            [47788]   = { enabled = true },
+        })
+        assert.same({ 47788 }, ids)
+    end)
+end)
