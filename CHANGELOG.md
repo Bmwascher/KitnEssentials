@@ -15,6 +15,8 @@
   It previously played for a fixed seven and ignored everything else
 - Timers count down the same way the Cooldown Manager does, rather than reading
   a second higher
+- Shipped settings retuned: three icons per row across two rows, a slower and
+  chunkier pixel glow, and the application sound on by default
 
 ### Glow Settings
 - Pixel Glow is back. It was quietly replaced by the Ants style and now draws
