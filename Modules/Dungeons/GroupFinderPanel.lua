@@ -21,16 +21,28 @@
 -- show the search panel yourself either -- LFGListFrame_SetActivePanel onto
 -- it is the same fault by another door.
 --
--- The rule that catches all of those doors at once, and cost two field
--- failures to learn: a Blizzard field written from our execution is not
--- inert, however trivial the setter looks. Our taint sits on that field and
--- travels into every Blizzard handler that later reads it, and THAT
--- handler's reach decides the damage, not ours. Two setters that look
--- harmless and are not: LFGListSearchPanel_SetCategory, whose three fields
--- are read by every UpdateResultList; and
--- LFGListCategorySelection_SelectCategory, whose one field is read by the
--- Find a Group button. Before calling any Blizzard setter, find its
--- readers.
+-- Two rules, not one, because neither covers the other.
+--
+-- FIRST: for any write to live Blizzard Lua state, trace the readers. A field
+-- written from our execution is not inert however trivial the setter looks --
+-- our taint sits on it and travels into every Blizzard handler that reads it
+-- later, and THAT handler's reach decides the damage, not ours. Two setters
+-- that look harmless and are not: LFGListSearchPanel_SetCategory, whose three
+-- fields are read by every UpdateResultList, and
+-- LFGListCategorySelection_SelectCategory, whose one field is read by the Find
+-- a Group button. Both cost a field failure to learn.
+--
+-- SECOND, and independent: keep our execution and our values out of any
+-- synchronous chain that materializes the result provider. A direct call into
+-- a provider builder is dangerous having written no field at all, so the first
+-- rule would not catch it.
+--
+-- Explicit C API payload channels are NOT covered by the first rule and must
+-- not be read as violations of it. Mutating the table C_LFGList.GetAdvancedFilter
+-- returns and handing it to SaveAdvancedFilter is Blizzard's own idiom, used
+-- by its own filter controls; the saved value is re-read through the C API,
+-- not off a frame field we left behind. Judge those by their observed
+-- boundary.
 --
 -- What it still does inside Blizzard's row update, as an accepted exception:
 -- decorates rows (friend backdrop, leader score). That exception is the
