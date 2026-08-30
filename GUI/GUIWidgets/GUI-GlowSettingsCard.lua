@@ -95,6 +95,7 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
 
     local typeDropdown = GUIFrame:CreateDropdown(row1, "Type", {
         options = types,
+        tooltip = config.typeTooltip,
         value = resolveType(db[keys.type]),
         callback = function(val)
             -- The adapter's setType (when present) settles a legacy value
