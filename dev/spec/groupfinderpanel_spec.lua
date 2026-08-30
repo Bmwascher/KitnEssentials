@@ -496,6 +496,21 @@ describe("GroupFinderPanel mid-session conflict", function()
         assert.is_true(KE.db.global.GroupFinderPanelOwnsFilter)
     end)
 
+    it("clears a panel left on screen even when it owns no filter", function()
+        -- The one-shot write at enable is allowed to fail, and the panel
+        -- does not depend on it, so the panel can be up with the flag
+        -- clear. Gating the refresh on ownership stranded it.
+        local GFP, KE, state = loadWithFilter()
+        KE.db.global.GroupFinderPanelOwnsFilter = false
+        _G.C_AddOns.IsAddOnLoaded = function(name)
+            return name == "PremadeGroupsFilter"
+        end
+        state.afterFn = nil
+        GFP:OnAddonLoaded()
+        assert.is_not_nil(state.afterFn)    -- the refresh was entered
+        assert.is_nil(state.saved)          -- and wrote nothing it does not own
+    end)
+
     it("does not re-restore a filter it has already handed back", function()
         -- Every later load re-enters the handler with the predicate still
         -- false. Ownership is what stops it, so the write happens once.

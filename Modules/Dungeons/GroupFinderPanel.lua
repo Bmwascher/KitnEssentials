@@ -1197,9 +1197,17 @@ end
 -- left on screen when the Group Finder was already open.
 function GFP:OnAddonLoaded()
     if IsActive() then return end
+    -- Two jobs, and only the first is about ownership. The panel can be on
+    -- screen without the flag set, because the one-shot write at enable is
+    -- allowed to fail and the panel does not depend on it -- so gating the
+    -- refresh on ownership would leave that panel up.
     local g = KE.db and KE.db.global
-    if not (g and g.GroupFinderPanelOwnsFilter) then return end
-    RestorePermissiveFilter()
+    if g and g.GroupFinderPanelOwnsFilter then
+        RestorePermissiveFilter()
+    end
+    -- Costs one deferred no-op per addon load while the module is off,
+    -- dozens of times at login. Refresh's first act is a handful of nil
+    -- checks, so that is cheaper than the addon query above it.
     self:Refresh()
 end
 
