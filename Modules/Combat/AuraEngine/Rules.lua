@@ -136,6 +136,15 @@ function Rules.BuildIncludeSpellIDs(saved)
     return set
 end
 
+-- Three-valued on purpose, and the middle value is the trap. `false` drops the
+-- auras you and your pet applied, absent filters nothing, and `true` would show
+-- ONLY your own -- the exact opposite of what the setting reads as. So the
+-- stored boolean is never passed through.
+function Rules.SelfCastFilterValue(hideSelfCast)
+    if hideSelfCast then return false end
+    return nil
+end
+
 -- The sound registry takes one spell id per registration, so it needs the
 -- allowlist as an ordered array rather than the set the container filter
 -- wants. Sorted because the array also serves as the registry's change

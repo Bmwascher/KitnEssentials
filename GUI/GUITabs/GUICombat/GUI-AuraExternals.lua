@@ -67,7 +67,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     local cardTracked = GUIFrame:CreateCard(scrollChild, "Tracked Auras", yOffset)
     manager:Register(cardTracked, "all")
 
-    local row1b = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightLast)
+    local row1b = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeight)
     local defensivesCheck = GUIFrame:CreateCheckbox(row1b, "Include Defensives", {
         value = db.ShowBigDefensives ~= false,
         callback = function(checked) db.ShowBigDefensives = checked; ApplySettings() end,
@@ -75,7 +75,17 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     })
     row1b:AddWidget(defensivesCheck, 1)
     manager:Register(defensivesCheck, "all")
-    cardTracked:AddRow(row1b, Theme.rowHeightLast, 0)
+    cardTracked:AddRow(row1b, Theme.rowHeight)
+
+    local row1c = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightLast)
+    local selfCastCheck = GUIFrame:CreateCheckbox(row1c, "Hide Buffs You Cast Yourself", {
+        value = db.HideSelfCast == true,
+        callback = function(checked) db.HideSelfCast = checked; ApplySettings() end,
+        tooltip = "Shows only what other players put on you. Your own casts are hidden, which includes your own raid cooldowns such as Rallying Cry or Aura Mastery.",
+    })
+    row1c:AddWidget(selfCastCheck, 1)
+    manager:Register(selfCastCheck, "all")
+    cardTracked:AddRow(row1c, Theme.rowHeightLast, 0)
 
     yOffset = cardTracked:GetNextOffset()
 

@@ -1181,6 +1181,7 @@ local Defaults = {
         AuraExternals = {
             Enabled           = false,
             ShowBigDefensives = false,
+            HideSelfCast      = false,
             Strata            = "MEDIUM",
             anchorFrameType   = "PLAYERFRAME",
             ParentFrame       = "UIParent",

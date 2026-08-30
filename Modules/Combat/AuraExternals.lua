@@ -28,6 +28,10 @@ local function BuildExternalCandidates(settings)
     return {
         excludeSpellIDs = KE.AuraRules.BuildExcludeSpellIDs(nil),
         includeSpellIDs = KE.AuraRules.BuildIncludeSpellIDs(settings.Allowlist),
+        -- Evaluated outside the container's identity permission, unlike the
+        -- spell-id sets above, so it holds in combat and in a keystone where
+        -- reading the caster in Lua does not.
+        isFromPlayerOrPlayerPet = KE.AuraRules.SelfCastFilterValue(settings.HideSelfCast),
     }
 end
 
