@@ -73,7 +73,7 @@ local function ProfilingEnabled()
     -- docs: "AddOn profiler will be enabled for all users"), but it
     -- governs the *new* C_AddOnProfiler.GetAddOnMetric data path —
     -- a different data source. If we trust IsEnabled() and scriptProfile
-    -- happens to be 0, snap output reads `cpu=0.00 ms, fns=0` while
+    -- happens to be 0, snap output reads `cpu=0.00 ms, frames=0` while
     -- claiming profiling is on. The cvar is the authoritative gate for
     -- the legacy API we actually call.
     return tonumber(C_CVar_GetCVar("scriptProfile")) == 1
@@ -150,9 +150,9 @@ end
 ---------------------------------------------------------------------------------
 -- Frame discovery
 ---------------------------------------------------------------------------------
--- 12.0 removed GetFunctionCPUUsage. Per-frame CPU is now the finest granularity
--- available. We walk _G for KE-named globals + Ace modules' .frame attribute
--- and sample direct and inclusive CPU for each discovered frame.
+-- This developer profiler intentionally reports per-frame CPU; function-level
+-- attribution is out of scope. We walk _G for KE-named globals + Ace modules'
+-- .frame attribute and sample direct and inclusive CPU for each discovered frame.
 --
 -- Inclusive (includeChildren=true) over-counts when both a parent and its child
 -- frame are reported separately, but it reveals the cost folded into a module's
@@ -310,6 +310,7 @@ local function PrintCpuTop(arg)
 
     if #rows == 0 then
         p("No frame CPU samples yet. Try /kes profiler reset, exercise the UI, then /kes profiler cpu again.")
+        p("Frame rankings omit timer and plain Lua callback attribution. /kes profiler peak reports addon-wide tick metrics only; it cannot identify which callback caused a spike.")
         return
     end
 

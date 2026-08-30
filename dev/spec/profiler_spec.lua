@@ -359,6 +359,17 @@ describe("Profiler CPU report", function()
         assert.is_nil(output:find("sampling duration unknown", 1, true))
     end)
 
+    it("explains callback attribution when addon CPU has no frame rows", function()
+        local state = loadProfiler({
+            addonMs = 42,
+        })
+        state.profiler.RunCommand("cpu 1")
+
+        local output = table.concat(state.printed, "\n")
+        assert.is_truthy(output:find("No frame CPU samples yet", 1, true))
+        assert.is_truthy(output:find("Frame rankings omit timer and plain Lua callback attribution", 1, true))
+    end)
+
     it("labels direct work, overlapping trees, and callback limits", function()
         local subject = frame()
         _G.KE_Alpha = subject
