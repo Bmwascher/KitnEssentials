@@ -31,7 +31,6 @@ local tonumber  = tonumber
 local tostring  = tostring
 local math_min  = math.min
 local math_max  = math.max
-local math_abs  = math.abs
 local time      = time
 local date      = date
 
@@ -361,52 +360,69 @@ local function ResetCpu()
     p("CPU counters reset. Exercise the UI, then /kes profiler cpu.")
 end
 
+local CPU_REPORT_SCHEMA = 2
+
 local function CaptureSnapshot(label)
-    UpdateAddOnMemoryUsage()
-    UpdateAddOnCPUUsage()
-    local snap = {
-        label = label,
-        time  = time(),
-        date  = date("%Y-%m-%d %H:%M:%S"),
-        memKB = GetAddOnMemoryUsage("KitnEssentials") or 0,
-        cpuMS = GetAddOnCPUUsage("KitnEssentials") or 0,
-        functions = {},
-    }
+    local summary
     if ProfilingEnabled() then
-        local rows = GatherCpuRows()
-        for i = 1, math_min(50, #rows) do
-            local r = rows[i]
-            snap.functions[#snap.functions + 1] = {
-                name = r.name,
-                ms = r.treeMs,
-                calls = r.treeCalls,
-            }
-        end
+        summary = CaptureCpuSummary()
+    end
+    UpdateAddOnMemoryUsage()
+    local rows = summary and GatherCpuRows() or {}
+
+    local snap = {
+        schema = CPU_REPORT_SCHEMA,
+        label = label,
+        time = time(),
+        date = date("%Y-%m-%d %H:%M:%S"),
+        memKB = GetAddOnMemoryUsage("KitnEssentials") or 0,
+        cpuMS = summary and summary.addonMs or 0,
+        cpuWindowId = summary and summary.windowId or nil,
+        cpuElapsed = summary and summary.elapsed or nil,
+        frames = {},
+    }
+
+    for _, row in ipairs(rows) do
+        snap.frames[#snap.frames + 1] = {
+            frameId = row.frameId,
+            name = row.name,
+            selfMs = row.selfMs,
+            selfCalls = row.selfCalls,
+            treeMs = row.treeMs,
+            treeCalls = row.treeCalls,
+        }
     end
     return snap
+end
+
+local function SnapshotFrameCount(snapshot)
+    return #(snapshot.frames or snapshot.functions or {})
 end
 
 local function TakeSnapshot(label)
     local snap = CaptureSnapshot(label)
     ResolveDB().snapshots[label] = snap
-    pf("Snapshot saved: %s  (mem=%.1f KB, cpu=%.2f ms, fns=%d)",
-        label, snap.memKB, snap.cpuMS, #snap.functions)
+    pf("Snapshot saved: %s (mem=%.1f KB, cpu=%.2f ms, frames=%d)",
+        label, snap.memKB, snap.cpuMS, SnapshotFrameCount(snap))
 end
 
 local function ListSnapshots()
     local db = ResolveDB()
     local names = {}
-    for k in pairs(db.snapshots) do insert(names, k) end
+    for key in pairs(db.snapshots) do
+        insert(names, key)
+    end
     sort(names)
     if #names == 0 then
         p("No snapshots saved.")
         return
     end
     pf("Snapshots (%d):", #names)
-    for _, k in ipairs(names) do
-        local s = db.snapshots[k]
-        pf("  [%s]  mem=%.1f KB  cpu=%.2f ms  @%s",
-            k, s.memKB or 0, s.cpuMS or 0, s.date or "?")
+    for _, key in ipairs(names) do
+        local snapshot = db.snapshots[key]
+        pf("  [%s] mem=%.1f KB cpu=%.2f ms frames=%d @%s",
+            key, snapshot.memKB or 0, snapshot.cpuMS or 0,
+            SnapshotFrameCount(snapshot), snapshot.date or "?")
     end
 end
 
@@ -417,6 +433,89 @@ local function SnapshotByName(name)
     return ResolveDB().snapshots[name]
 end
 
+local function HasComparableCpuWindow(a, b)
+    return a.schema == CPU_REPORT_SCHEMA
+        and b.schema == CPU_REPORT_SCHEMA
+        and a.cpuWindowId ~= nil
+        and a.cpuWindowId == b.cpuWindowId
+        and type(a.cpuElapsed) == "number"
+        and type(b.cpuElapsed) == "number"
+        and b.cpuElapsed > a.cpuElapsed
+        and type(a.cpuMS) == "number"
+        and type(b.cpuMS) == "number"
+        and b.cpuMS >= a.cpuMS
+end
+
+local function BuildFrameIndexes(snapshot)
+    local byId = {}
+    local byName = {}
+    for _, row in ipairs(snapshot.frames or {}) do
+        if row.frameId == nil or type(row.name) ~= "string"
+            or byId[row.frameId] or byName[row.name] then
+            return nil, nil
+        end
+        byId[row.frameId] = row
+        byName[row.name] = row.frameId
+    end
+    return byId, byName
+end
+
+local function FrameCountersComparable(a, b)
+    local beforeById, beforeByName = BuildFrameIndexes(a)
+    local afterById, afterByName = BuildFrameIndexes(b)
+    if not beforeById or not afterById then
+        return nil, "identity"
+    end
+
+    for name, beforeId in pairs(beforeByName) do
+        local afterId = afterByName[name]
+        if afterId and afterId ~= beforeId then
+            return nil, "identity"
+        end
+    end
+
+    for frameId, row in pairs(afterById) do
+        local old = beforeById[frameId]
+        if old and ((row.selfMs or 0) < (old.selfMs or 0)
+            or (row.selfCalls or 0) < (old.selfCalls or 0)
+            or (row.treeMs or 0) < (old.treeMs or 0)
+            or (row.treeCalls or 0) < (old.treeCalls or 0)) then
+            return nil, "counter"
+        end
+    end
+    return beforeById
+end
+
+local function PositiveFrameDeltas(beforeById, b, key)
+    local deltas = {}
+    local newlyObserved = 0
+    for _, row in ipairs(b.frames or {}) do
+        local old = beforeById[row.frameId]
+        if not old then
+            newlyObserved = newlyObserved + 1
+        else
+            local prior = old[key] or 0
+            local current = row[key] or 0
+            local delta = current - prior
+            if delta > 0.01 then
+                deltas[#deltas + 1] = {
+                    name = row.name,
+                    delta = delta,
+                    prior = prior,
+                    current = current,
+                }
+            end
+        end
+    end
+    sort(deltas, function(x, y)
+        if x.delta ~= y.delta then
+            return x.delta > y.delta
+        end
+        return x.name < y.name
+    end)
+    return deltas, newlyObserved
+end
+
 local function DiffSnapshots(aName, bName)
     bName = bName or "now"
     local a = SnapshotByName(aName)
@@ -425,28 +524,51 @@ local function DiffSnapshots(aName, bName)
     if not b then pf("Snapshot '%s' not found.", bName); return end
 
     pf("Diff: '%s' -> '%s'", aName, bName)
-    pf("  Memory: %.1f KB -> %.1f KB  (%+.1f KB)",
-        a.memKB, b.memKB, b.memKB - a.memKB)
-    pf("  CPU:    %.2f ms -> %.2f ms  (%+.2f ms)",
-        a.cpuMS, b.cpuMS, b.cpuMS - a.cpuMS)
+    pf("  Memory: %.1f KB -> %.1f KB (%+.1f KB)",
+        a.memKB or 0, b.memKB or 0, (b.memKB or 0) - (a.memKB or 0))
 
-    local aMap = {}
-    for _, f in ipairs(a.functions or {}) do aMap[f.name] = f end
-    local diffs = {}
-    for _, f in ipairs(b.functions or {}) do
-        local af = aMap[f.name]
-        local prev = af and af.ms or 0
-        local d = f.ms - prev
-        if math_abs(d) > 0.01 then
-            insert(diffs, { name = f.name, prev = prev, now = f.ms, d = d })
+    if not HasComparableCpuWindow(a, b) then
+        p("  CPU/frame deltas unavailable: snapshots are not comparable within one known /kes profiler reset window.")
+        return
+    end
+
+    local seconds = b.cpuElapsed - a.cpuElapsed
+    local cpuDelta = b.cpuMS - a.cpuMS
+    pf("  CPU: %+.2f ms over %.1f sec (%.2f ms/sec)",
+        cpuDelta, seconds, cpuDelta / seconds)
+
+    local beforeById, frameProblem = FrameCountersComparable(a, b)
+    if not beforeById then
+        if frameProblem == "identity" then
+            p("  Frame deltas unavailable: a saved name resolved to a different frame object or frame identity was missing.")
+        else
+            p("  Frame deltas unavailable: a frame counter decreased, indicating an external reset or invalid sample.")
+        end
+        return
+    end
+
+    local selfDeltas, newlyObserved = PositiveFrameDeltas(beforeById, b, "selfMs")
+    if newlyObserved > 0 then
+        pf("  %d newly observed frame(s) omitted from frame deltas.", newlyObserved)
+    end
+    if #selfDeltas > 0 then
+        p("  Top direct-frame deltas:")
+        for index = 1, math_min(10, #selfDeltas) do
+            local delta = selfDeltas[index]
+            pf("    %+.2f ms (%.2f -> %.2f) %s",
+                delta.delta, delta.prior, delta.current, delta.name)
         end
     end
-    sort(diffs, function(x, y) return x.d > y.d end)
-    if #diffs == 0 then return end
-    pf("  Top function deltas:")
-    for i = 1, math_min(10, #diffs) do
-        local d = diffs[i]
-        pf("    %+.2f ms  (%.2f -> %.2f)  %s", d.d, d.prev, d.now, d.name)
+
+    local treeDeltas = PositiveFrameDeltas(beforeById, b, "treeMs")
+    if #treeDeltas > 0 then
+        p("  Top inclusive frame-tree deltas:")
+        for index = 1, math_min(10, #treeDeltas) do
+            local delta = treeDeltas[index]
+            pf("    %+.2f ms (%.2f -> %.2f) %s",
+                delta.delta, delta.prior, delta.current, delta.name)
+        end
+        p("  Tree deltas overlap; do not add them together.")
     end
 end
 
@@ -504,14 +626,14 @@ local function PrintHelp()
     p("Usage: /kes profiler <subcommand>")
     p("  on | off          — toggle scriptProfile cvar. /reload required to take effect.")
     p("  status            — show whether profiling is ON/OFF.")
-    p("  cpu [N]           — top-N named KE frames by direct and inclusive CPU (default 15).")
+    p("  cpu [N]           — addon rate plus direct-frame and inclusive-tree rankings (default 15).")
     p("  top [N]           — top-N addons (any) by RecentAverageTime (default 10).")
-    p("  peak              — KE live metrics: last tick / recent avg / session avg / peak.")
+    p("  peak              — addon-wide live tick metrics; does not identify callbacks.")
     p("  mem               — KE memory + delta from previous mem call.")
-    p("  reset             — reset CPU counters (fresh sampling window).")
-    p("  snap <label>      — capture a labeled snapshot to KitnEssentialsDB.")
+    p("  reset             — reset CPU counters and begin a known sampling window.")
+    p("  snap <label>      — capture memory, addon CPU, and named-frame counters.")
     p("  list              — list saved snapshots.")
-    p("  diff <a> [b]      — diff snapshot 'a' against 'b' (default b = now).")
+    p("  diff <a> [b]      — diff snapshots in one reset window (default b = now).")
     p("  clear             — delete all saved snapshots.")
     p("Workflow: /kes profiler on -> /reload -> /kes profiler reset -> exercise UI -> /kes profiler cpu")
 end
@@ -521,6 +643,8 @@ end
 ---------------------------------------------------------------------------------
 
 local Profiler = {}
+
+Profiler.CPU_REPORT_SCHEMA = CPU_REPORT_SCHEMA
 
 function Profiler.RunCommand(input)
     input = input or ""
