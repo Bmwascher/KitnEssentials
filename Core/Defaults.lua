@@ -958,8 +958,8 @@ local Defaults = {
         -- Quick-access side panel docked to the right of the Group Finder:
         -- this week's affixes, one-click category searches, a Mythic+
         -- dungeon/role filter pane, and a weekly-runs footer.
-        -- Ships DISABLED: it rewrites Blizzard's LFGList search results, so
-        -- it is opt-in.
+        -- Ships DISABLED: it takes over Blizzard's own Group Finder filter
+        -- while enabled, so it is opt-in.
         --
         -- The keys below Enabled are SESSION state, not preferences: the
         -- module overwrites every one of them on each OnEnable (login, reload
@@ -967,10 +967,8 @@ local Defaults = {
         -- session. Do not "fix" the values here by deleting the reset; the
         -- reset is the behaviour.
         --
-        -- SortBy and SortDescending are DEAD. Client-side sorting was removed
-        -- when the module moved to Blizzard's server-side filter; nothing
-        -- reads them. They stay so a saved profile carrying them is still a
-        -- valid shape.
+        -- SortBy and SortDescending are DEAD -- nothing reads them. They stay
+        -- so a saved profile carrying them is still a valid shape.
         GroupFinderPanel = {
             Enabled        = false,
             DungeonFilter  = {},        -- [activityGroupID] = true

@@ -174,9 +174,11 @@ end)
 local function loadWithFilter(opts)
     opts = opts or {}
     local state = { saved = nil, searches = 0, categories = {}, cancels = 0,
-                    panelShown = opts.panelShown ~= false }
+                    now = 0, panelShown = opts.panelShown ~= false }
     state.adv = opts.adv or {}
     local GFP, KE, seams = loader.loadGroupFinderPanel({
+        -- A clock the test drives, so the search window can expire.
+        GetTime = function() return state.now end,
         -- Captures the timer the slider arms instead of running it, so a
         -- test decides when -- and whether -- the callback fires.
         C_Timer = {
@@ -348,15 +350,49 @@ describe("GroupFinderPanel search rules", function()
         assert.equals(1, state.searches)
     end)
 
-    it("RunSearch carries NO window of its own -- that is the button's escape", function()
-        -- The Search button's OnClick is a GUI closure this suite cannot
-        -- reach; that the button calls this is smoke's job. What is testable
-        -- is the property the escape rests on: adding a window check inside
-        -- RunSearch would break it here.
+    it("the Search button's action escapes the window", function()
+        -- ManualSearch is the whole body of the button's OnClick, so routing
+        -- it through the gated path fails here. The one-line handler that
+        -- calls it is a GUI closure and is smoke's job.
         local GFP, _, state = loadWithFilter()
         GFP:ApplyAndRefresh()
         assert.equals(1, state.searches)
-        GFP:RunSearch()
+        GFP:ManualSearch()
+        assert.equals(2, state.searches)
+    end)
+
+    it("the Search button's action saves BEFORE it searches", function()
+        local GFP, _, state = loadWithFilter()
+        local order = {}
+        _G.C_LFGList.SaveAdvancedFilter = function(f)
+            order[#order + 1] = "save"; state.saved = f
+        end
+        _G.C_LFGList.Search = function()
+            order[#order + 1] = "search"; state.searches = state.searches + 1
+        end
+        GFP:ManualSearch()
+        assert.same({ "save", "search" }, order)
+    end)
+
+    it("the Search button's action is inert while the module is inactive", function()
+        local GFP, _, state = loadWithFilter()
+        GFP.db.Enabled = false
+        GFP:ManualSearch()
+        assert.is_nil(state.saved)
+        assert.equals(0, state.searches)
+    end)
+
+    it("a toggle searches again once the window EXPIRES", function()
+        -- Without the clock this could not tell a ten-second window from a
+        -- gate that closes permanently after the first search.
+        local GFP, _, state = loadWithFilter()
+        GFP:ApplyAndRefresh()
+        assert.equals(1, state.searches)
+        state.now = 9
+        GFP:ApplyAndRefresh()
+        assert.equals(1, state.searches)
+        state.now = 11
+        GFP:ApplyAndRefresh()
         assert.equals(2, state.searches)
     end)
 
@@ -499,5 +535,50 @@ describe("GroupFinderPanel minimum-score slider", function()
         state.timerFn()                 -- fires anyway: the gate must hold
         assert.is_nil(state.saved)
         assert.is_false(KE.db.global.GroupFinderPanelOwnsFilter)
+    end)
+end)
+
+describe("GroupFinderPanel live slider authority", function()
+    -- Rule 5(a): whenever a slider row exists it outranks the saved key,
+    -- because the widget's throttle can leave the key an interaction behind.
+    local function withRow(GFP, value)
+        GFP.minScoreRow = { GetValue = function() return value end }
+    end
+
+    it("saves the value the ROW shows, not the older one in the key", function()
+        local GFP, _, state = loadWithFilter()
+        GFP.db.MinScore = 2400
+        withRow(GFP, 2500)
+        GFP:ApplyAdvancedFilters()
+        assert.equals(2500, state.saved.minimumRating)
+    end)
+
+    it("writes the reconciled value back into the key", function()
+        local GFP, _, state = loadWithFilter()
+        GFP.db.MinScore = 2400
+        withRow(GFP, 2500)
+        GFP:ApplyAdvancedFilters()
+        assert.equals(2500, GFP.db.MinScore)
+        assert.equals(2500, state.saved.minimumRating)
+    end)
+
+    it("falls back to the key before the pane has ever been built", function()
+        local GFP, _, state = loadWithFilter()
+        GFP.db.MinScore = 2400
+        GFP:ApplyAdvancedFilters()
+        assert.equals(2400, state.saved.minimumRating)
+    end)
+
+    it("carries the ROW value across an enabled-to-enabled profile switch", function()
+        -- A switch inside the slider's trailing-timer window used to copy the
+        -- stale key; ApplySettings then pushed that back into the row, so the
+        -- player's final drag was lost outright.
+        local GFP, KE = loadWithFilter()
+        GFP.db.Enabled = true
+        GFP.db.MinScore = 2400
+        withRow(GFP, 2500)
+        KE.db.profile.GroupFinderPanel = { Enabled = true, DungeonFilter = {}, MinScore = 0 }
+        GFP:UpdateDB()
+        assert.equals(2500, GFP.db.MinScore)
     end)
 end)

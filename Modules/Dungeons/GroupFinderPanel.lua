@@ -580,8 +580,8 @@ local function CreatePanel()
 end
 
 ------------------------------------------------------------------------
--- Mythic+ filter pane: dungeon toggles, Needs Role, Has Tank/Healer, and
--- client-side sorting. Shown in place of the Quick Access buttons
+-- Mythic+ filter pane: dungeon toggles, Role Opening, Has Tank/Healer and
+-- a minimum leader score. Shown in place of the Quick Access buttons
 -- whenever the M+ search is active.
 ------------------------------------------------------------------------
 
@@ -591,7 +591,7 @@ end
 -- also refreshes the key, which is what the profile carry then copies.
 function GFP:CurrentMinScore()
     local db = self.db
-    local row = panel and panel.filters and panel.filters.minScoreRow
+    local row = self.minScoreRow
     if row then
         local v = math.floor(row:GetValue() + 0.5)
         if db then db.MinScore = v end
@@ -712,8 +712,8 @@ end
 -- produces ADDON_ACTION_BLOCKED. Whether an ordinary OnClick counts as legal
 -- provenance is UNVERIFIED -- it works in practice and the smoke exercises it.
 --
--- There is NO fallback. The old one was LFGListSearchPanel_DoSearch, which
--- builds the provider synchronously.
+-- There is NO fallback, and never LFGListSearchPanel_DoSearch: it builds
+-- the provider synchronously.
 function GFP:RunSearch()
     local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
     if not (sp and sp:IsShown()) then return end
@@ -724,6 +724,15 @@ function GFP:RunSearch()
     local adv = IsDungeonSearchMode() and C_LFGList.GetAdvancedFilter
         and C_LFGList.GetAdvancedFilter() or nil
     pcall(C_LFGList.Search, sp.categoryID, filters, sp.preferredFilters, languages, nil, adv)
+end
+
+-- The Search button's action, and the escape from the window: always saves,
+-- always searches. Named rather than inlined in the button's OnClick so the
+-- rule can be verified without a frame.
+function GFP:ManualSearch()
+    if not IsActive() then return end
+    self:ApplyAdvancedFilters()
+    self:RunSearch()
 end
 
 -- Toggle clicks: save first, then search only if the window has elapsed.
@@ -980,7 +989,7 @@ local function CreateFilterPanel()
         })
         scoreRow:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
         scoreRow:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, y)
-        f.minScoreRow = scoreRow
+        GFP.minScoreRow = scoreRow
         visualRefreshers[#visualRefreshers + 1] = function()
             -- Silent: the display is what the save reads, so it must track
             -- the key without arming a save of its own.
@@ -989,10 +998,8 @@ local function CreateFilterPanel()
     end
 
     -- The two action buttons share ONE row at the BOTTOM of the pane, not the
-    -- running `y`. Two reasons: the dungeon grid's height changes with the
-    -- season, so a top-down flow can push them into the footer; and stacking
-    -- them cost a full row the pane does not have -- they ran into the sort
-    -- row above.
+    -- running `y`: the dungeon grid's height changes with the season, so a
+    -- top-down flow can push them into the footer.
     local searchBtn = CreateFrame("Button", nil, f)
     S.Button(searchBtn)
     searchBtn:SetSize(BW, BUTTON_HEIGHT)
@@ -1001,13 +1008,7 @@ local function CreateFilterPanel()
     S.SetFont(st, 13, "")
     st:SetPoint("CENTER")
     st:SetText("Search")
-    searchBtn:SetScript("OnClick", function()
-        -- The escape from the 10-second window: always saves, always
-        -- searches. RunSearch resets the stamp.
-        if not IsActive() then return end
-        GFP:ApplyAdvancedFilters()
-        GFP:RunSearch()
-    end)
+    searchBtn:SetScript("OnClick", function() GFP:ManualSearch() end)
 
     -- Reset: every filter back to its shipped default, which is the widest
     -- possible result list. Writes the profile directly rather than calling
@@ -1128,6 +1129,12 @@ end
 -- it the module keeps writing to the previous profile's table.
 function GFP:UpdateDB()
     local old = self.db
+    -- Reconcile BEFORE rebinding. The slider's save rides a trailing timer,
+    -- so between the last drag and that timer the row holds a newer value
+    -- than the key. Carrying the key would copy the older one, and the
+    -- ApplySettings that follows this rebind would then push it back into
+    -- the row -- losing the value the player actually chose.
+    self:CurrentMinScore()
     self.db = KE.db and KE.db.profile and KE.db.profile.GroupFinderPanel
     local new = self.db
     if not new then return end
