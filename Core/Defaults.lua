@@ -1188,8 +1188,8 @@ local Defaults = {
             Position          = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "TOPRIGHT", XOffset = 0, YOffset = 79 },
             IconSize          = 52,
             IconSpacing       = 1,
-            IconsPerRow       = 2,
-            MaxRows           = 1,
+            IconsPerRow       = 3,
+            MaxRows           = 2,
             Swipe             = false,
             Reverse           = true,
             -- Seeded rows carry default = true, which makes them undeletable
