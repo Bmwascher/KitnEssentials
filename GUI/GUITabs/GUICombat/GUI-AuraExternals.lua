@@ -747,7 +747,11 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     -- defensives are not on the allowlist and stay silent.
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Sound", yOffset)
-    card5:AddNote("Plays for any enabled spell on the Allowlist above.")
+    -- Says "including your own" because the sound CANNOT honour
+    -- HideSelfCast. Blizzard's UnitAuraSoundInfo carries a unit and a spell
+    -- id and no caster field, so a registration fires for the spell however
+    -- it was applied. The display filters on the caster; the sound cannot.
+    card5:AddNote("Plays for any enabled spell on the Allowlist above, including ones you cast on yourself.")
     -- Not a caution about the GUI but about the sound registry: removing a
     -- registration is always allowed, adding one is not while aura identities
     -- are hidden, so an Allowlist edit made in there retires the old set and

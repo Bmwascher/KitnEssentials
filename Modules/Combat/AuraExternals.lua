@@ -77,6 +77,12 @@ local DECLARATION = {
         -- Follows the allowlist rather than a fixed list. Blizzard's sound
         -- trigger takes one spell id, never a filter, so the registry is one
         -- registration per enabled row and grows with what the user adds.
+        --
+        -- HideSelfCast is deliberately NOT read here. UnitAuraSoundInfo carries
+        -- a unit token and a spell id and nothing about who applied the aura,
+        -- so a registration fires however the spell landed. Reading the caster
+        -- in Lua instead is blocked while aura identities are hidden, which is
+        -- every case that matters. The card says so.
         buildSpellIDs = function(settings)
             return KE.AuraRules.BuildSoundSpellIDs(settings and settings.Allowlist)
         end,
