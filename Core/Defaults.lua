@@ -1238,6 +1238,12 @@ local Defaults = {
                 [98008]   = { label = "Spirit Link Totem",          enabled = true, default = true },
                 [97463]   = { label = "Rallying Cry",               enabled = true, default = true },
                 [97462]   = { label = "Rallying Cry",               enabled = true, default = true },
+
+                -- Support buffs someone else casts on you rather than
+                -- defensives, so the game flags none of them.
+                [29166]   = { label = "Innervate",                  enabled = true, default = true },
+                [10060]   = { label = "Power Infusion",             enabled = true, default = true },
+                [406732]  = { label = "Spatial Paradox",            enabled = true, default = true },
             },
             GrowHorizontal    = "LEFT",
             GrowVertical      = "UP",
