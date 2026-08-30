@@ -21,6 +21,17 @@
 -- show the search panel yourself either -- LFGListFrame_SetActivePanel onto
 -- it is the same fault by another door.
 --
+-- The rule that catches all of those doors at once, and cost two field
+-- failures to learn: a Blizzard field written from our execution is not
+-- inert, however trivial the setter looks. Our taint sits on that field and
+-- travels into every Blizzard handler that later reads it, and THAT
+-- handler's reach decides the damage, not ours. Two setters that look
+-- harmless and are not: LFGListSearchPanel_SetCategory, whose three fields
+-- are read by every UpdateResultList; and
+-- LFGListCategorySelection_SelectCategory, whose one field is read by the
+-- Find a Group button. Before calling any Blizzard setter, find its
+-- readers.
+--
 -- What it still does inside Blizzard's row update, as an accepted exception:
 -- decorates rows (friend backdrop, leader score). That exception is the
 -- design's one blocking assumption, not a proven safe pattern.
@@ -484,7 +495,10 @@ end
 -- Proven in game: the failure arrives attributed to this addon, not to the
 -- probe that set it up. The player picks the category.
 ------------------------------------------------------------------------
-local function RunQuickSearch(categoryID, filters)
+-- No parameters any more. Every shortcut now does the same two things --
+-- save the filter, then walk to the category list -- because choosing the
+-- category is exactly the part that has to happen on Blizzard's own stack.
+local function RunQuickSearch()
     if not IsActive() then return end
     GFP:ApplyAdvancedFilters()
 
@@ -492,19 +506,17 @@ local function RunQuickSearch(categoryID, filters)
     local sp = lfg and lfg.SearchPanel
     if not sp then return end
 
-    -- IsVisible, not IsShown. Only LFGListFrame_SetActivePanel ever hides the
-    -- search panel, so it keeps its own shown flag while an ancestor is
-    -- hidden -- another PVE tab, or a different group frame. Searching there
-    -- fires a real server search that nobody can see, which is the silent
-    -- no-op this whole path exists to avoid.
+    -- Results are already up, and there is nothing safe to do here. Changing
+    -- the category needs LFGListSearchPanel_SetCategory, which writes
+    -- categoryID, filters and preferredFilters onto Blizzard's panel table --
+    -- the table every later UpdateResultList reads to build the ScrollBox
+    -- provider. Searching without it would run the OLD category under a new
+    -- button's name, which is worse than declining.
+    --
+    -- IsVisible, not IsShown: only LFGListFrame_SetActivePanel hides this
+    -- panel, so it keeps its own shown flag while an ancestor is hidden.
     if sp:IsVisible() then
-        if _G.LFGListSearchPanel_SetCategory then
-            _G.LFGListSearchPanel_SetCategory(sp, categoryID, filters, lfg.baseFilters or 0)
-        end
-        -- Exempt from the 10s window: a shortcut changes the category, so
-        -- suppressing its search would leave the old results under a new
-        -- heading.
-        GFP:RunSearch()
+        KE:Print("Press Back to reach the category list -- your filter is saved and applies to the next search.")
         return
     end
 
@@ -620,7 +632,7 @@ local function CreatePanel()
         fs:SetPoint("CENTER")
         fs:SetText(data.key)
         btn:SetScript("OnClick", function()
-            RunQuickSearch(data.categoryID, data.filters)
+            RunQuickSearch()
         end)
     end
 

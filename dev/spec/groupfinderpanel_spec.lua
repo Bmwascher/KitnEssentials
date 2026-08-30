@@ -517,15 +517,17 @@ describe("GroupFinderPanel filter ownership", function()
 end)
 
 describe("GroupFinderPanel shortcut buttons", function()
-    it("searches even INSIDE the window", function()
-        -- A shortcut changes the category, so suppressing its search would
-        -- leave the previous category's results under a new heading.
+    it("DECLINES on the shown path rather than set the category", function()
+        -- SetCategory writes three fields onto Blizzard's panel table, and
+        -- every later UpdateResultList reads that table to build the
+        -- provider. Searching without it would run the previous category
+        -- under a new button's name, so neither half may happen.
         local GFP, _, state, seams = loadWithFilter()
         GFP:ApplyAndRefresh()
         assert.equals(1, state.searches)
-        seams.runQuickSearch(3, 1)
-        assert.equals(2, state.searches)
-        assert.equals(3, state.categories[#state.categories])
+        seams.runQuickSearch()
+        assert.equals(1, state.searches)
+        assert.equals(0, #state.categories)
     end)
 
     it("walks to the category page and stops, selecting nothing", function()
@@ -535,7 +537,7 @@ describe("GroupFinderPanel shortcut buttons", function()
         -- selectedCategory and makes ITS search poison the provider.
         local GFP, _, state, seams = loadWithFilter({ panelShown = false })
         GFP.db.MinScore = 2500
-        seams.runQuickSearch(3, 1)
+        seams.runQuickSearch()
         assert.equals(2500, state.saved.minimumRating)
         -- Already on the Dungeons and Raids tab, so no tab switch is needed.
         assert.same({ "premade" }, state.nav)
@@ -553,14 +555,14 @@ describe("GroupFinderPanel shortcut buttons", function()
         _G.GroupFinderFrame_ShowGroupFrame = function()
             order[#order + 1] = "navigate"
         end
-        seams.runQuickSearch(3, 1)
+        seams.runQuickSearch()
         assert.same({ "save", "navigate" }, order)
     end)
 
     it("switches the PVE tab first when the player is on another one", function()
         local _, _, state, seams = loadWithFilter({ panelShown = false })
         _G.PVEFrame.activeTabIndex = 2
-        seams.runQuickSearch(3, 1)
+        seams.runQuickSearch()
         assert.same({ "pve", "premade" }, state.nav)
     end)
 
@@ -571,7 +573,7 @@ describe("GroupFinderPanel shortcut buttons", function()
         local _, _, state, seams = loadWithFilter()
         state.panelVisible = false
         _G.LFGListFrame.activePanel = _G.LFGListFrame.SearchPanel
-        seams.runQuickSearch(3, 1)
+        seams.runQuickSearch()
         assert.equals(0, state.searches)
         assert.equals(0, #state.categories)
         -- and it must not navigate either, because that would show it
@@ -581,7 +583,7 @@ describe("GroupFinderPanel shortcut buttons", function()
     it("navigates when the restored panel is NothingAvailable", function()
         local _, _, state, seams = loadWithFilter({ panelShown = false })
         _G.LFGListFrame.activePanel = _G.LFGListFrame.NothingAvailable
-        seams.runQuickSearch(3, 1)
+        seams.runQuickSearch()
         assert.same({ "premade" }, state.nav)
     end)
 
@@ -592,7 +594,7 @@ describe("GroupFinderPanel shortcut buttons", function()
         local _, _, state, seams = loadWithFilter({ panelShown = false })
         _G.LFGListFrame.ApplicationViewer = {}
         _G.LFGListFrame.activePanel = _G.LFGListFrame.ApplicationViewer
-        seams.runQuickSearch(3, 1)
+        seams.runQuickSearch()
         assert.is_not_nil(state.saved)
         assert.equals(0, #state.nav)
         assert.is_nil(state.selected)
@@ -604,14 +606,16 @@ describe("GroupFinderPanel shortcut buttons", function()
         -- must decline rather than walk.
         local _, _, state, seams = loadWithFilter({ panelShown = false })
         _G.LFGListFrame.activePanel = _G.LFGListFrame.SearchPanel
-        seams.runQuickSearch(3, 1)
+        seams.runQuickSearch()
         assert.is_not_nil(state.saved)
         assert.equals(0, #state.nav)
         assert.is_nil(state.selected)
         assert.equals(0, state.searches)
     end)
 
-    it("saves BEFORE it searches on the shown path", function()
+    it("still saves the filter on the shown path before declining", function()
+        -- The decline is not a no-op: the filter is the useful half, and it
+        -- has to land so the player's own next search honours it.
         local GFP, _, state, seams = loadWithFilter()
         local order = {}
         _G.C_LFGList.SaveAdvancedFilter = function(f)
@@ -621,17 +625,18 @@ describe("GroupFinderPanel shortcut buttons", function()
             order[#order + 1] = "search"; state.searches = state.searches + 1
         end
         GFP.db.MinScore = 2500
-        seams.runQuickSearch(3, 1)
-        assert.same({ "save", "search" }, order)
+        seams.runQuickSearch()
+        assert.same({ "save" }, order)
         assert.equals(2500, state.saved.minimumRating)
-        -- Already on results: search in place, never re-navigate.
+        -- Already on results: never navigate, never search, never set.
         assert.equals(0, #state.nav)
+        assert.equals(0, #state.categories)
     end)
 
     it("writes nothing and navigates nowhere while the module is inactive", function()
         local GFP, _, state, seams = loadWithFilter()
         GFP.db.Enabled = false
-        seams.runQuickSearch(3, 1)
+        seams.runQuickSearch()
         assert.is_nil(state.saved)
         assert.equals(0, state.searches)
         assert.equals(0, #state.nav)
