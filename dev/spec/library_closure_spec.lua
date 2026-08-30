@@ -36,14 +36,27 @@ local LITERAL = '^%s*"([^"\\]*)"%s*$'
 -- dotted name expression that this scanner does not need to resolve.
 local NAME_EXPR = "^%s*[%w_][%w_%.]*%s*$"
 
+-- A long-comment opener is NOT a whole-line comment: `--[[ note ]] local M = ...`
+-- closes the comment and runs the declaration, so skipping the line would hide
+-- live code. Such lines fall through to the grammar and are refused instead.
 local function isCommentLine(line)
-    return line:match("^%s*%-%-") ~= nil
+    return line:match("^%s*%-%-") ~= nil and line:match("^%s*%-%-%[=*%[") == nil
 end
 
-local function countCalls(line)
+-- Mixins can also be requested away from a declaration: SetDefaultModuleLibraries
+-- applies them to every later module, and the Embed entry points add them to an
+-- existing object. Nothing here uses those, and a declaration site alone would
+-- read as "no mixins" while resolving one, so any occurrence is refused.
+local TRIGGERS = {
+    "NewAddon", "NewModule",
+    "SetDefaultModuleLibraries", "EmbedLibraries", "EmbedLibrary",
+}
+
+local function countTriggers(line)
     local n = 0
-    for _ in line:gmatch("NewAddon") do n = n + 1 end
-    for _ in line:gmatch("NewModule") do n = n + 1 end
+    for _, id in ipairs(TRIGGERS) do
+        for _ in line:gmatch(id) do n = n + 1 end
+    end
     return n
 end
 
@@ -107,7 +120,7 @@ local function shippedEmbeddableLibraries()
             for _, line in ipairs(readLines(path)) do
                 if not isCommentLine(line)
                     and (line:match("function%s+[%w_]+[:%.]Embed%s*%(")
-                        or line:match("[%w_]+%.Embed%s*=")) then
+                        or line:match("[%w_]+%.Embed%s*=%s*function")) then
                     embeddable[dir] = true
                 end
             end
@@ -129,7 +142,7 @@ local function scanRequests()
     for _, root in ipairs({ "Core", "GUI", "Modules" }) do
         for _, path in ipairs(luaFilesUnder(root)) do
             for lineNo, line in ipairs(readLines(path)) do
-                local occurrences = isCommentLine(line) and 0 or countCalls(line)
+                local occurrences = isCommentLine(line) and 0 or countTriggers(line)
                 if occurrences > 0 then
                     local call, argText = line:match(CANONICAL)
                     if occurrences > 1 then
