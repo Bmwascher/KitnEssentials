@@ -485,7 +485,12 @@ local function RunQuickSearch(categoryID, filters)
     local sp = lfg and lfg.SearchPanel
     if not sp then return end
 
-    if sp:IsShown() then
+    -- IsVisible, not IsShown. Only LFGListFrame_SetActivePanel ever hides the
+    -- search panel, so it keeps its own shown flag while an ancestor is
+    -- hidden -- another PVE tab, or a different group frame. Searching there
+    -- fires a real server search that nobody can see, which is the silent
+    -- no-op this whole path exists to avoid.
+    if sp:IsVisible() then
         if _G.LFGListSearchPanel_SetCategory then
             _G.LFGListSearchPanel_SetCategory(sp, categoryID, filters, lfg.baseFilters or 0)
         end
@@ -496,12 +501,17 @@ local function RunQuickSearch(categoryID, filters)
         return
     end
 
-    -- Hidden, but still the panel LFGListFrame restores on show
-    -- (LFGListFrame_OnShow runs FixPanelValid, which keeps activePanel).
-    -- Navigating here would show the search panel, which is the unsafe half.
-    -- Say so rather than no-op: a control that does nothing reads as broken.
-    if lfg.activePanel == sp then
-        KE:Print("Go back to the category list first -- the Group Finder is still holding your last search.")
+    -- Navigating shows whatever panel LFGListFrame has active, because its
+    -- OnShow keeps that panel rather than resetting it. So allow only the
+    -- two that do nothing on show. The other two both do real work in our
+    -- execution: the search panel builds the result provider, and the
+    -- application viewer refreshes and sorts the applicant list.
+    --
+    -- An allowlist rather than a check against the search panel, so a panel
+    -- added later is refused until someone looks at it.
+    local ap = lfg.activePanel
+    if ap ~= nil and ap ~= lfg.CategorySelection and ap ~= lfg.NothingAvailable then
+        KE:Print("Open Premade Groups yourself -- the Group Finder is holding another view.")
         return
     end
 
@@ -509,9 +519,8 @@ local function RunQuickSearch(categoryID, filters)
     if pve and pve.activeTabIndex ~= 1 and _G.PVEFrame_ShowFrame then
         _G.PVEFrame_ShowFrame("GroupFinderFrame")
     end
-    -- By frame identity, not by button index. The old code picked
-    -- groupButton4 when scenarios were enabled and groupButton3 otherwise,
-    -- and that guess is wrong on the live build.
+    -- By frame identity, not by button index: the index shifts when
+    -- scenarios are enabled.
     if _G.GroupFinderFrame_ShowGroupFrame and _G.LFGListPVEStub then
         _G.GroupFinderFrame_ShowGroupFrame(_G.LFGListPVEStub)
     end
@@ -759,7 +768,9 @@ end
 -- the provider synchronously.
 function GFP:RunSearch()
     local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
-    if not (sp and sp:IsShown()) then return end
+    -- IsVisible for the same reason the shortcuts use it: a shown-but-hidden
+    -- search panel would take a real server search nobody can see.
+    if not (sp and sp:IsVisible()) then return end
     if not (C_LFGList and C_LFGList.Search and sp.categoryID) then return end
     self._lastServerSearch = GetTime()
     local filters = ResolveCategoryFilters(sp.categoryID, sp.filters)

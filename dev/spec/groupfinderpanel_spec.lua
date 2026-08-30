@@ -218,6 +218,12 @@ local function loadWithFilter(opts)
             categoryID = 2,
             filters = 0,
             IsShown = function() return state.panelShown end,
+            -- Defaults to tracking IsShown; a spec sets panelVisible on its
+            -- own to build the shown-but-hidden-ancestor case.
+            IsVisible = function()
+                if state.panelVisible ~= nil then return state.panelVisible end
+                return state.panelShown
+            end,
         },
     }
     _G.LFGListSearchPanel_SetCategory = function(_, categoryID)
@@ -235,6 +241,7 @@ local function loadWithFilter(opts)
         state.selected = { categoryID = categoryID, filters = filters }
     end
     _G.LFGListFrame.CategorySelection = {}
+    _G.LFGListFrame.NothingAvailable = {}
     -- Hidden search panel defaults to NOT being the restored panel.
     _G.LFGListFrame.activePanel = _G.LFGListFrame.CategorySelection
     -- AceEvent/AceAddon lifecycle methods are deliberately unstubbed by the
@@ -537,11 +544,58 @@ describe("GroupFinderPanel shortcut buttons", function()
         assert.equals(0, #state.categories)
     end)
 
+    it("saves BEFORE it navigates on the walk path", function()
+        local _, _, state, seams = loadWithFilter({ panelShown = false })
+        local order = {}
+        _G.C_LFGList.SaveAdvancedFilter = function(f)
+            order[#order + 1] = "save"; state.saved = f
+        end
+        _G.GroupFinderFrame_ShowGroupFrame = function()
+            order[#order + 1] = "navigate"
+        end
+        seams.runQuickSearch(3, 1)
+        assert.same({ "save", "navigate" }, order)
+    end)
+
     it("switches the PVE tab first when the player is on another one", function()
         local _, _, state, seams = loadWithFilter({ panelShown = false })
         _G.PVEFrame.activeTabIndex = 2
         seams.runQuickSearch(3, 1)
         assert.same({ "pve", "premade" }, state.nav)
+    end)
+
+    it("does NOT search a search panel that is shown but not visible", function()
+        -- Only SetActivePanel hides that panel, so it keeps its shown flag
+        -- while an ancestor is hidden -- another PVE tab, say. Searching
+        -- there would fire a real server search nobody can see.
+        local _, _, state, seams = loadWithFilter()
+        state.panelVisible = false
+        _G.LFGListFrame.activePanel = _G.LFGListFrame.SearchPanel
+        seams.runQuickSearch(3, 1)
+        assert.equals(0, state.searches)
+        assert.equals(0, #state.categories)
+        -- and it must not navigate either, because that would show it
+        assert.equals(0, #state.nav)
+    end)
+
+    it("navigates when the restored panel is NothingAvailable", function()
+        local _, _, state, seams = loadWithFilter({ panelShown = false })
+        _G.LFGListFrame.activePanel = _G.LFGListFrame.NothingAvailable
+        seams.runQuickSearch(3, 1)
+        assert.same({ "premade" }, state.nav)
+    end)
+
+    it("REFUSES to navigate onto any panel outside the allowlist", function()
+        -- A listed player restores the application viewer, whose OnShow
+        -- refreshes and sorts the applicant list. Same class of fault as the
+        -- search panel, so the rule is an allowlist, not one exclusion.
+        local _, _, state, seams = loadWithFilter({ panelShown = false })
+        _G.LFGListFrame.ApplicationViewer = {}
+        _G.LFGListFrame.activePanel = _G.LFGListFrame.ApplicationViewer
+        seams.runQuickSearch(3, 1)
+        assert.is_not_nil(state.saved)
+        assert.equals(0, #state.nav)
+        assert.is_nil(state.selected)
     end)
 
     it("REFUSES to navigate when the hidden search panel is the restored one", function()
