@@ -1646,7 +1646,6 @@ function L.loadGroupFinderPanel(overrides)
         seasonGroups        = GFP._SeasonGroups,
         isDungeonSearchMode = GFP._IsDungeonSearchMode,
         abbreviate          = GFP._Abbreviate,
-        runQuickSearch      = GFP._RunQuickSearch,
         armMinScoreSave     = GFP._ArmMinScoreSave,
     }
     return GFP, KE, seams

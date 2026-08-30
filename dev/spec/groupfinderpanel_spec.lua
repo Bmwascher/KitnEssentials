@@ -218,8 +218,9 @@ local function loadWithFilter(opts)
             categoryID = 2,
             filters = 0,
             IsShown = function() return state.panelShown end,
-            -- Defaults to tracking IsShown; a spec sets panelVisible on its
-            -- own to build the shown-but-hidden-ancestor case.
+            -- Defaults to tracking IsShown. A spec sets panelVisible on its
+            -- own to build the shown-but-hidden-ancestor case, which is the
+            -- one RunSearch has to refuse.
             IsVisible = function()
                 if state.panelVisible ~= nil then return state.panelVisible end
                 return state.panelShown
@@ -229,21 +230,6 @@ local function loadWithFilter(opts)
     _G.LFGListSearchPanel_SetCategory = function(_, categoryID)
         state.categories[#state.categories + 1] = categoryID
     end
-    -- Navigation surface. Recorded rather than swallowed so a spec can tell
-    -- "walked to the category page" from "did nothing".
-    state.nav = {}
-    _G.LFGListPVEStub = {}
-    _G.PVEFrame_ShowFrame = function() state.nav[#state.nav + 1] = "pve" end
-    _G.GroupFinderFrame_ShowGroupFrame = function(f)
-        state.nav[#state.nav + 1] = (f == _G.LFGListPVEStub) and "premade" or "wrong"
-    end
-    _G.LFGListCategorySelection_SelectCategory = function(_, categoryID, filters)
-        state.selected = { categoryID = categoryID, filters = filters }
-    end
-    _G.LFGListFrame.CategorySelection = {}
-    _G.LFGListFrame.NothingAvailable = {}
-    -- Hidden search panel defaults to NOT being the restored panel.
-    _G.LFGListFrame.activePanel = _G.LFGListFrame.CategorySelection
     -- AceEvent/AceAddon lifecycle methods are deliberately unstubbed by the
     -- loader, and OnDisable/OnEnable call into them.
     GFP.UnregisterAllEvents = function() end
@@ -356,6 +342,30 @@ describe("GroupFinderPanel search rules", function()
         end
         GFP:ApplyAndRefresh()
         assert.same({ "save", "search" }, order)
+    end)
+
+    it("REFUSES to search a search panel that is shown but not visible", function()
+        -- Only LFGListFrame_SetActivePanel hides that panel, so it keeps its
+        -- own shown flag whenever an ancestor is hidden -- another PVE tab,
+        -- or the Group Finder closed entirely. Searching there spends a real
+        -- server search on results nobody can see.
+        local GFP, _, state = loadWithFilter()
+        state.panelVisible = false
+        GFP:ApplyAndRefresh()
+        assert.is_not_nil(state.saved)          -- the filter still lands
+        assert.equals(0, state.searches)
+    end)
+
+    it("searches once the same panel becomes visible again", function()
+        -- Pins the refusal to visibility rather than to some other state the
+        -- previous spec happens to set.
+        local GFP, _, state = loadWithFilter()
+        state.panelVisible = false
+        GFP:ApplyAndRefresh()
+        assert.equals(0, state.searches)
+        state.panelVisible = true
+        GFP:ApplyAndRefresh()
+        assert.equals(1, state.searches)
     end)
 
     it("searches on the first toggle click of a session", function()

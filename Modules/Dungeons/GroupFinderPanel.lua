@@ -1010,22 +1010,6 @@ local function CreateFilterPanel()
     return f
 end
 
--- Widget show/hide on our own frames, and nothing else. NEVER write the
--- filter from here, and do not think deferring the write makes it safe.
--- Three of the four callers reach a provider build -- the SetCategory hook,
--- the search panel's own OnShow, and Refresh from the PVEFrame OnShow hook;
--- the panel's OnHide is deferred with them for consistency rather than
--- necessity. Blizzard runs Clear, SetCategory, DoSearch and SetActivePanel
--- back to back, with DoSearch reading the saved filter in that same
--- execution, so a deferred write lands a frame too late for it. Nothing
--- needs writing here: the filter already holds the player's settings,
--- written at login, on their last control click, or on their last roster
--- change.
---
--- The panel exists ONLY in M+ search mode, so the mode question and the
--- visibility question are the same question. Refresh answers it, and its own
--- deferral gives Blizzard's synchronous continuation -- provider build
--- included -- a frame to unwind first.
 ------------------------------------------------------------------------
 -- Lifecycle
 ------------------------------------------------------------------------
@@ -1049,10 +1033,10 @@ end
 -- module, so IsActive() is already false when OnDisable runs -- gating
 -- teardown on it would skip the cleanup it exists to perform.
 --
--- Assigned (not `local function`) because IsActive is forward-declared at
--- file scope, above CATEGORY_DATA -- every gate site earlier in this file
--- closes over that same upvalue, and a fresh `local function IsActive`
--- here would shadow it instead of filling it in.
+-- Assigned (not `local function`) because IsActive is forward-declared near
+-- the top of the file -- every gate site earlier in this file closes over
+-- that same upvalue, and a fresh `local function IsActive` here would shadow
+-- it instead of filling it in.
 IsActive = function()
     local db = GFP.db
     return (db and db.Enabled == true and not PGFPresent()) and true or false
@@ -1126,6 +1110,14 @@ end
 -- This is also the module's only visibility decision. The panel is the M+
 -- filter pane and nothing else, so it is on screen exactly while the M+
 -- search is, and RaiderIO gets the right edge back the rest of the time.
+--
+-- Widget show/hide only. NEVER write the filter from here, and deferring the
+-- write does not make it safe. Most callers reach a provider build, where
+-- Blizzard runs Clear, SetCategory, DoSearch and SetActivePanel back to back
+-- and DoSearch reads the saved filter in that same execution -- a deferred
+-- write lands a frame too late for it. Nothing needs writing: the filter
+-- already holds the player's settings from login, their last control click,
+-- or their last roster change.
 function GFP:Refresh()
     C_Timer.After(0, function()
         -- IsActive() folds into the existing condition. It does NOT

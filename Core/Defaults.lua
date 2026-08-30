@@ -955,9 +955,9 @@ local Defaults = {
             YourKeyGlowThickness = 2,
         },
 
-        -- Quick-access side panel docked to the right of the Group Finder:
-        -- this week's affixes, one-click category searches, a Mythic+
-        -- dungeon/role filter pane, and a weekly-runs footer.
+        -- Mythic+ filter pane docked to the right of the Group Finder,
+        -- with this week's affixes and a weekly-runs footer. On screen only
+        -- while the Mythic+ search is.
         -- Ships DISABLED: it takes over Blizzard's own Group Finder filter
         -- while enabled, so it is opt-in.
         --
