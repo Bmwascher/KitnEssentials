@@ -170,6 +170,8 @@ local function IsDungeonSearchMode()
     local pve, gff, lfg = _G.PVEFrame, _G.GroupFinderFrame, _G.LFGListFrame
     return pve and pve.activeTabIndex == 1
         and gff and gff.selection == _G.LFGListPVEStub
+        -- IsShown, not IsVisible, only because the two lines above already
+        -- walk this panel's ancestors by hand.
         and lfg and lfg.SearchPanel and lfg.SearchPanel:IsShown()
         and lfg.SearchPanel.categoryID == DUNGEON_CAT
 end
@@ -506,14 +508,26 @@ local function RunQuickSearch(categoryID, filters)
         return
     end
 
-    -- Navigating shows whatever panel LFGListFrame has active, because its
-    -- OnShow keeps that panel rather than resetting it. So allow only the
-    -- two that do nothing on show. The other two both do real work in our
-    -- execution: the search panel builds the result provider, and the
-    -- application viewer refreshes and sorts the applicant list.
+    -- Navigating shows LFGListFrame's active panel, but activePanel is not a
+    -- perfect prediction of which one: OnShow runs FixPanelValid, which
+    -- swaps an invalid panel for GetBestPanel's choice. So the allowlist has
+    -- to hold for the redirect too.
+    --
+    -- It does. Both allowed panels can only redirect to each other -- the
+    -- no-categories and restricted-account branches -- because the one
+    -- redirect that reaches the applicant viewer needs the player to be
+    -- listed, and becoming listed fires LFG_LIST_ACTIVE_ENTRY_UPDATE, which
+    -- runs the same validation on Blizzard's own stack and moves activePanel
+    -- off the category list before any click of ours can see it.
+    --
+    -- Neither allowed panel is inert on show -- the category list rebuilds
+    -- its buttons -- they are probe-clean, which is a different claim. The
+    -- refused panels do work that has been measured to poison: the search
+    -- panel builds the result provider, and the applicant viewer refreshes
+    -- and sorts the applicant list.
     --
     -- An allowlist rather than a check against the search panel, so a panel
-    -- added later is refused until someone looks at it.
+    -- added later is refused until someone probes it.
     local ap = lfg.activePanel
     if ap ~= nil and ap ~= lfg.CategorySelection and ap ~= lfg.NothingAvailable then
         KE:Print("Open Premade Groups yourself -- the Group Finder is holding another view.")
