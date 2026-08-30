@@ -961,11 +961,11 @@ local Defaults = {
         -- Ships DISABLED: it takes over Blizzard's own Group Finder filter
         -- while enabled, so it is opt-in.
         --
-        -- The keys below Enabled are SESSION state, not preferences: the
-        -- module overwrites every one of them on each OnEnable (login, reload
-        -- and toggle) by design -- filters are meant to start clean each
-        -- session. Do not "fix" the values here by deleting the reset; the
-        -- reset is the behaviour.
+        -- The live filter keys below are SESSION state, not preferences: the
+        -- module overwrites each of them on every OnEnable (login, reload and
+        -- toggle) by design -- filters are meant to start clean each session.
+        -- Do not "fix" the values here by deleting the reset; the reset is
+        -- the behaviour.
         --
         -- SortBy and SortDescending are DEAD -- nothing reads them. They stay
         -- so a saved profile carrying them is still a valid shape.

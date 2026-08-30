@@ -626,10 +626,12 @@ end
 
 GFP._ArmMinScoreSave = ArmMinScoreSave
 
--- The one place the module writes Blizzard's filter, and the one place
--- ownership is claimed. Every caller reaches SaveAdvancedFilter through
--- here, so the IsActive() gate covers all of them -- including the slider's
--- trailing timer, which must not land after a disable.
+-- The one place the module writes the player's SETTINGS into Blizzard's
+-- filter, and the one place ownership is claimed. Every settings write
+-- reaches SaveAdvancedFilter through here, so the IsActive() gate covers all
+-- of them -- including the slider's trailing timer, which must not land
+-- after a disable. RestorePermissiveFilter below is the other writer, and it
+-- is ungated on purpose; do not fold the two together.
 function GFP:ApplyAdvancedFilters()
     if not IsActive() then return end
     local db = self.db
@@ -1271,7 +1273,8 @@ function GFP:OnEnable()
 
     InstallEntryHook()
     -- Filters are session state, not preferences: every login and reload
-    -- starts clean. This overwrites every saved key except Enabled.
+    -- starts clean. This overwrites every LIVE filter key -- all except
+    -- Enabled and the two dead sort keys nothing reads.
     if self.db then
         self.db.DungeonFilter = {}
         self.db.HasTank = false

@@ -192,10 +192,12 @@ local function loadWithFilter(opts)
         C_LFGList = {
             GetAvailableActivityGroups = function() return {} end,
             GetActivityGroupInfo = function() return nil end,
-            GetAdvancedFilter = function()
+            -- noFilterAPI omits the function entirely, which is a different
+            -- guard from one that returns nil.
+            GetAdvancedFilter = (not opts.noFilterAPI) and function()
                 if opts.nilFilter then return nil end
                 return state.adv
-            end,
+            end or nil,
             SaveAdvancedFilter = function(f) state.saved = f end,
             Search = function() state.searches = state.searches + 1 end,
             GetLanguageSearchFilter = function() return nil end,
@@ -457,6 +459,27 @@ describe("GroupFinderPanel filter ownership", function()
         state.saved = nil
         GFP:OnInitialize()
         assert.is_nil(state.saved)
+    end)
+
+    it("KEEPS ownership when the filter API is absent", function()
+        -- Clearing the flag without restoring would relinquish ownership of a
+        -- filter still holding our settings, and nothing would ever clean it
+        -- up. Hoisting the clear above these guards passes every other spec.
+        local GFP, KE, state = loadWithFilter({ noFilterAPI = true })
+        KE.db.global.GroupFinderPanelOwnsFilter = true
+        GFP.db.Enabled = false
+        GFP:OnDisable()
+        assert.is_nil(state.saved)
+        assert.is_true(KE.db.global.GroupFinderPanelOwnsFilter)
+    end)
+
+    it("KEEPS ownership when the filter structure is unavailable", function()
+        local GFP, KE, state = loadWithFilter({ nilFilter = true })
+        KE.db.global.GroupFinderPanelOwnsFilter = true
+        GFP.db.Enabled = false
+        GFP:OnDisable()
+        assert.is_nil(state.saved)
+        assert.is_true(KE.db.global.GroupFinderPanelOwnsFilter)
     end)
 
     it("restores when Premade Groups Filter takes over", function()
