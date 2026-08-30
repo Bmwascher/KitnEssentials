@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.18
+
+### Profiler
+- `/kes profiler cpu` now separates direct frame CPU from overlapping frame-tree
+  totals, reports normalized reset-window rates, and explains callback
+  attribution limits
+- Snapshot comparisons now refuse CPU and frame deltas after a profiler reset
+  instead of presenting incomparable numbers
+
+---
+
 ## v4.4.17
 
 ### Damage Meter
