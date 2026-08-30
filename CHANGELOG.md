@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.16
+
+### Group Finder Panel
+- Fixed the bug that filled your screen with errors after browsing groups. The
+  panel used to filter Blizzard's result list itself, which broke the list for
+  the rest of the session; it now hands your choices to Blizzard's own group
+  filter and lets the game do the work
+- The panel is now the Mythic+ filter pane and nothing else. It appears when you
+  search for Mythic+ groups and hides the rest of the time
+- The Quick Access buttons are gone. Every one of them had become a trip to the
+  Premade Groups page, and any of them that did more than that reintroduced the
+  errors above
+- Raider.IO's profile now sits one pixel from whichever panel is on the right,
+  and stays there. The gap used to grow a pixel every time a profile drew
+- Turning the module off hands Blizzard's filter back the way it found it, and
+  so does a filter addon loading while you play
+
 ## v4.4.15
 
 ### Aura Externals
