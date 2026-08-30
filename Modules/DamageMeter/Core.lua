@@ -10,8 +10,8 @@
 local KE = select(2, ...)
 if not KitnEssentials then return end
 
----@class DamageMeter: AceModule, AceEvent-3.0, AceConsole-3.0
-local DM = KitnEssentials:NewModule("DamageMeter", "AceEvent-3.0", "AceConsole-3.0")
+---@class DamageMeter: AceModule, AceEvent-3.0
+local DM = KitnEssentials:NewModule("DamageMeter", "AceEvent-3.0")
 
 KE.DamageMeter = DM
 
