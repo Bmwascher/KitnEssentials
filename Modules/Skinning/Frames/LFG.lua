@@ -481,29 +481,31 @@ function S.RefreshLFGRoleIcons()
     local lfgList = _G.LFGListFrame
     if not lfgList then return end
 
-    -- Search panel. Blizzard's own UpdateResults reaches
-    -- ValidateSelected/UpdateButtonStatus, which inspect secret search-result
-    -- fields, so a failure there has to leave the art standing rather than
-    -- look like the setting doing nothing.
+    -- Search panel. NEVER call LFGListSearchPanel_UpdateResults here. It
+    -- builds Blizzard's result data provider inside our execution, which
+    -- poisons that provider for the rest of the session -- every later
+    -- Blizzard-only refresh then throws on its own secret fields, with no
+    -- addon frame on the stack, and only a reload clears it. A pcall catches
+    -- the throw but does not stop the poisoned provider being built.
+    --
+    -- Repaint our own per-row art instead. That is the safe half: our
+    -- functions on materialized rows, never Blizzard's row updater.
     local search = lfgList.SearchPanel
     if search and search:IsShown() then
-        local ok = pcall(_G.LFGListSearchPanel_UpdateResults, search)
-        if not ok then
-            local box = search.ScrollBox
-            if box and box.ForEachFrame then
-                box:ForEachFrame(function(row)
-                    local dd = row and row.DataDisplay
-                    if not dd then return end
-                    if dd.Enumerate then
-                        -- Replay the arguments Blizzard's hook gave this
-                        -- frame. Calling with none refuses, because nothing
-                        -- then distinguishes a role display from a class one.
-                        local a = S.data(dd.Enumerate).aeArgs
-                        if a then UpdateEnumerate(dd.Enumerate, a[1], a[2], a[3], a[4]) end
-                    end
-                    if dd.RoleCount then UpdateRoleCount(dd.RoleCount) end
-                end)
-            end
+        local box = search.ScrollBox
+        if box and box.ForEachFrame then
+            box:ForEachFrame(function(row)
+                local dd = row and row.DataDisplay
+                if not dd then return end
+                if dd.Enumerate then
+                    -- Replay the arguments Blizzard's hook gave this frame.
+                    -- Calling with none refuses, because nothing then
+                    -- distinguishes a role display from a class one.
+                    local a = S.data(dd.Enumerate).aeArgs
+                    if a then UpdateEnumerate(dd.Enumerate, a[1], a[2], a[3], a[4]) end
+                end
+                if dd.RoleCount then UpdateRoleCount(dd.RoleCount) end
+            end)
         end
     end
 

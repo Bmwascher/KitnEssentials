@@ -49,6 +49,15 @@ local Defaults = {
         UseGlobalProfile = false,
         GlobalProfile = "Default",
 
+        -- Blizzard's Group Finder advanced filter is ONE account-wide store
+        -- (probed in game), so the record of whether the Group Finder Panel
+        -- put the current filter there has to be account-wide too. A
+        -- profile-scoped flag misses every restore: the profile manager
+        -- rebinds each module's db before the enable/disable loop, so the
+        -- disable would read the incoming profile's flag and skip the
+        -- restore, leaving a restrictive filter behind with the module off.
+        GroupFinderPanelOwnsFilter = false,
+
         -- Tool preferences, not module settings: they describe how edit mode
         -- behaves, so they sit beside the other account-wide entries here
         -- rather than in a profile. A per-profile grid would mean switching
@@ -952,19 +961,24 @@ local Defaults = {
         -- Ships DISABLED: it rewrites Blizzard's LFGList search results, so
         -- it is opt-in.
         --
-        -- The six keys below Enabled are SESSION state, not preferences: the
+        -- The keys below Enabled are SESSION state, not preferences: the
         -- module overwrites every one of them on each OnEnable (login, reload
         -- and toggle) by design -- filters are meant to start clean each
-        -- session. That makes the SortBy and SortDescending values here
-        -- effectively dead. They are kept so the shape is complete. Do not
-        -- "fix" them by deleting the reset; the reset is the behaviour.
+        -- session. Do not "fix" the values here by deleting the reset; the
+        -- reset is the behaviour.
+        --
+        -- SortBy and SortDescending are DEAD. Client-side sorting was removed
+        -- when the module moved to Blizzard's server-side filter; nothing
+        -- reads them. They stay so a saved profile carrying them is still a
+        -- valid shape.
         GroupFinderPanel = {
             Enabled        = false,
             DungeonFilter  = {},        -- [activityGroupID] = true
-            PartyFit       = false,     -- shown as "Needs Role"
+            PartyFit       = false,     -- shown as "Role Opening"
             HasTank        = false,
             HasHealer      = false,
-            SortBy         = "DEFAULT", -- DEFAULT / OVERALL_SCORE / DUNGEON_SCORE
+            MinScore       = 0,         -- floor on the leader's overall M+ rating
+            SortBy         = "DEFAULT",
             SortDescending = true,
         },
 

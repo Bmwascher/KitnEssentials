@@ -61,27 +61,6 @@ describe("GroupFinderPanel pure helpers", function()
         end)
     end)
 
-    describe("SORT_MODE comparators", function()
-        it("orders by overall score", function()
-            local _, _, seams = loader.loadGroupFinderPanel()
-            local f = seams.sortMode.OVERALL_SCORE.func
-            assert.equals(1, f({ overall = 3000 }, { overall = 2000 }))
-            assert.equals(-1, f({ overall = 1000 }, { overall = 2000 }))
-            assert.equals(0, f({ overall = 2000 }, { overall = 2000 }))
-        end)
-
-        it("orders by this dungeon's leader score", function()
-            local _, _, seams = loader.loadGroupFinderPanel()
-            local f = seams.sortMode.DUNGEON_SCORE.func
-            assert.equals(1, f({ leaderScore = 200 }, { leaderScore = 100 }))
-        end)
-
-        it("has no comparator for DEFAULT", function()
-            local _, _, seams = loader.loadGroupFinderPanel()
-            assert.is_nil(seams.sortMode.DEFAULT.func)
-        end)
-    end)
-
     describe("PlayerSpecRole", function()
         it("returns nil rather than calling a deprecated global when the API is absent", function()
             local _, _, seams = loader.loadGroupFinderPanel({
@@ -89,86 +68,6 @@ describe("GroupFinderPanel pure helpers", function()
             })
             assert.is_nil(seams.playerSpecRole())
         end)
-    end)
-end)
-
-describe("GroupFinderPanel SanitizeResult", function()
-    local function load(secretFields)
-        secretFields = secretFields or {}
-        return loader.loadGroupFinderPanel({
-            issecretvalue = function(v)
-                for _, s in ipairs(secretFields) do if rawequal(v, s) then return true end end
-                return false
-            end,
-        })
-    end
-
-    local info
-    before_each(function()
-        info = {
-            activityIDs = { 42 },
-            numMembers = 3,
-            numBNetFriends = 1, numCharFriends = 0, numGuildMates = 2,
-            leaderOverallDungeonScore = 2500,
-            leaderBestDungeonScoreInfo = { mapScore = 180 },
-        }
-    end)
-
-    it("derives plain values when nothing is secret", function()
-        local GFP = load()
-        _G.C_LFGList.GetActivityInfoTable = function() return { groupFinderActivityGroupID = 7 } end
-        _G.C_LFGList.GetSearchResultPlayerInfo = function() return { assignedRole = "DAMAGER" } end
-        local rec = GFP._SanitizeResult(1, info, true, true)
-        assert.is_true(rec.gidKnown)
-        assert.equals(7, rec.gid)
-        assert.equals(3, rec.roles.DAMAGER)
-        assert.equals(3, rec.friends)
-        assert.equals(2500, rec.overall)
-        assert.equals(180, rec.leaderScore)
-    end)
-
-    it("returns no raw API field -- the record is newly constructed", function()
-        local GFP = load()
-        _G.C_LFGList.GetActivityInfoTable = function() return { groupFinderActivityGroupID = 7 } end
-        _G.C_LFGList.GetSearchResultPlayerInfo = function() return { assignedRole = "TANK" } end
-        local rec = GFP._SanitizeResult(1, info, true, true)
-        assert.is_false(rawequal(rec.roles, info))
-        assert.is_false(rawequal(rec.leaderScore, info.leaderBestDungeonScoreInfo))
-    end)
-
-    it("zeroes a secret score rather than carrying it", function()
-        local GFP = load({ 2500 })
-        local rec = GFP._SanitizeResult(1, info, false, false)
-        assert.equals(0, rec.overall)
-    end)
-
-    it("reports the group as UNKNOWN when numMembers is secret, and keeps roles nil", function()
-        local GFP = load({ 3 })
-        local rec = GFP._SanitizeResult(1, info, false, true)
-        assert.is_nil(rec.roles)
-    end)
-
-    it("skips a secret role rather than using it as a table key", function()
-        local GFP = load({ "HEALER" })
-        _G.C_LFGList.GetSearchResultPlayerInfo = function() return { assignedRole = "HEALER" } end
-        local rec = GFP._SanitizeResult(1, info, false, true)
-        assert.equals(0, rec.roles.HEALER)
-    end)
-
-    it("zeroes friend counts when any one of the three is secret", function()
-        local GFP = load({ 2 })  -- numGuildMates
-        local rec = GFP._SanitizeResult(1, info, false, false)
-        assert.equals(0, rec.friends)
-    end)
-
-    it("fails OPEN -- a throwing guard yields neutral values, not a dropped result", function()
-        local GFP = loader.loadGroupFinderPanel({
-            issecretvalue = function() error("simulated taint throw") end,
-        })
-        local rec = GFP._SanitizeResult(1, info, true, true)
-        assert.equals(0, rec.overall)
-        assert.is_false(rec.gidKnown)
-        assert.is_nil(rec.roles)
     end)
 end)
 
@@ -230,18 +129,17 @@ describe("GroupFinderPanel lifecycle", function()
         assert.is_true(GFP._PGFPresent())
     end)
 
-    it("carries the six session keys across an enabled-to-enabled switch", function()
+    it("carries the session keys across an enabled-to-enabled switch", function()
         local GFP, KE = loader.loadGroupFinderPanel()
         GFP.db.Enabled = true
-        GFP.db.SortBy = "OVERALL_SCORE"
+        GFP.db.MinScore = 2500
         GFP.db.HasTank = true
         GFP.db.DungeonFilter[7] = true
-        local incoming = { Enabled = true, DungeonFilter = { [99] = true }, SortBy = "DEFAULT",
-                           HasTank = false, HasHealer = false, PartyFit = false,
-                           SortDescending = true }
+        local incoming = { Enabled = true, DungeonFilter = { [99] = true }, MinScore = 0,
+                           HasTank = false, HasHealer = false, PartyFit = false }
         KE.db.profile.GroupFinderPanel = incoming
         GFP:UpdateDB()
-        assert.equals("OVERALL_SCORE", GFP.db.SortBy)
+        assert.equals(2500, GFP.db.MinScore)
         assert.is_true(GFP.db.HasTank)
         assert.is_true(GFP.db.DungeonFilter[7])
         assert.is_nil(GFP.db.DungeonFilter[99])
@@ -262,20 +160,262 @@ describe("GroupFinderPanel lifecycle", function()
     it("does not carry state when the incoming profile has the module off", function()
         local GFP, KE = loader.loadGroupFinderPanel()
         GFP.db.Enabled = true
-        GFP.db.SortBy = "OVERALL_SCORE"
-        KE.db.profile.GroupFinderPanel = { Enabled = false, DungeonFilter = {}, SortBy = "DEFAULT" }
+        GFP.db.HasTank = true
+        KE.db.profile.GroupFinderPanel = { Enabled = false, DungeonFilter = {}, HasTank = false }
         GFP:UpdateDB()
-        assert.equals("DEFAULT", GFP.db.SortBy)
+        assert.is_false(GFP.db.HasTank)
+    end)
+end)
+
+-- The advanced-filter mapping and the rules around when a search fires.
+-- `saved` is the LAST table handed to SaveAdvancedFilter; `adv` is the table
+-- GetAdvancedFilter returns, so a test can seed fields the module does not
+-- expose and check they survive.
+local function loadWithFilter(opts)
+    opts = opts or {}
+    local state = { saved = nil, searches = 0, panelShown = opts.panelShown ~= false }
+    state.adv = opts.adv or {}
+    local GFP, KE = loader.loadGroupFinderPanel({
+        C_LFGList = {
+            GetAvailableActivityGroups = function() return {} end,
+            GetActivityGroupInfo = function() return nil end,
+            GetAdvancedFilter = function()
+                if opts.nilFilter then return nil end
+                return state.adv
+            end,
+            SaveAdvancedFilter = function(f) state.saved = f end,
+            Search = function() state.searches = state.searches + 1 end,
+            GetLanguageSearchFilter = function() return nil end,
+        },
+        C_AddOns = { IsAddOnLoaded = function() return opts.pgf == true end },
+        IsInGroup = opts.IsInGroup,
+        GetNumGroupMembers = opts.GetNumGroupMembers,
+        UnitGroupRolesAssigned = opts.UnitGroupRolesAssigned,
+    })
+    -- IsDungeonSearchMode reads all four of these; RunSearch needs the panel
+    -- shown and a categoryID.
+    _G.LFGListPVEStub = {}
+    _G.PVEFrame = { activeTabIndex = 1 }
+    _G.GroupFinderFrame = { selection = _G.LFGListPVEStub }
+    _G.LFGListFrame = {
+        baseFilters = 0,
+        SearchPanel = {
+            categoryID = 2,
+            filters = 0,
+            IsShown = function() return state.panelShown end,
+        },
+    }
+    -- AceEvent/AceAddon lifecycle methods are deliberately unstubbed by the
+    -- loader, and OnDisable/OnEnable call into them.
+    GFP.UnregisterAllEvents = function() end
+    GFP.RegisterEvent = function() end
+    GFP.SetEnabledState = function() end
+    GFP.IsEnabled = function() return GFP.db.Enabled == true end
+    GFP.db.Enabled = opts.pgf and false or true
+    return GFP, KE, state
+end
+
+describe("GroupFinderPanel advanced filter mapping", function()
+    it("maps the presence toggles exactly", function()
+        local GFP, _, state = loadWithFilter()
+        GFP.db.HasTank, GFP.db.HasHealer = true, false
+        GFP:ApplyAdvancedFilters()
+        assert.is_true(state.saved.hasTank)
+        assert.is_false(state.saved.hasHealer)
     end)
 
-    it("sanitizes an unknown saved sort mode", function()
-        local GFP, KE = loader.loadGroupFinderPanel()
-        KE.db.profile.GroupFinderPanel.SortBy = "NO_SUCH_MODE"
-        -- SetEnabledState is an Ace module lifecycle method; installAddonShim
-        -- deliberately leaves those unstubbed (see _ke_loader.lua's
-        -- loadLFGReminder note), so a test that drives OnInitialize stubs it.
-        GFP.SetEnabledState = function() end
+    it("clears every needs flag when party fit is off", function()
+        local GFP, _, state = loadWithFilter()
+        GFP.db.PartyFit = false
+        GFP:ApplyAdvancedFilters()
+        assert.is_false(state.saved.needsTank)
+        assert.is_false(state.saved.needsHealer)
+        assert.is_false(state.saved.needsDamage)
+    end)
+
+    it("asks for an opening for each role type the party brings", function()
+        local GFP, _, state = loadWithFilter({
+            IsInGroup = function() return true end,
+            GetNumGroupMembers = function() return 2 end,
+            UnitGroupRolesAssigned = function(unit)
+                return unit == "player" and "HEALER" or "DAMAGER"
+            end,
+        })
+        GFP.db.PartyFit = true
+        GFP:ApplyAdvancedFilters()
+        assert.is_false(state.saved.needsTank)
+        assert.is_true(state.saved.needsHealer)
+        assert.is_true(state.saved.needsDamage)
+    end)
+
+    it("sends an EMPTY activities list when no dungeon is selected", function()
+        -- Blizzard's own "all". Building the season plus expansion list by
+        -- hand instead omits the timerunning groups Blizzard adds.
+        local GFP, _, state = loadWithFilter()
+        GFP.db.DungeonFilter = {}
+        GFP:ApplyAdvancedFilters()
+        assert.equals(0, #state.saved.activities)
+    end)
+
+    it("sends the selected activity group IDs", function()
+        local GFP, _, state = loadWithFilter()
+        GFP.db.DungeonFilter = { [7] = true, [9] = false }
+        GFP:ApplyAdvancedFilters()
+        assert.equals(1, #state.saved.activities)
+        assert.equals(7, state.saved.activities[1])
+    end)
+
+    it("carries the minimum score", function()
+        local GFP, _, state = loadWithFilter()
+        GFP.db.MinScore = 2500
+        GFP:ApplyAdvancedFilters()
+        assert.equals(2500, state.saved.minimumRating)
+    end)
+
+    it("PRESERVES the fields the module does not expose", function()
+        local GFP, _, state = loadWithFilter({
+            adv = { needsMyClass = true, playstyle = 3 },
+        })
+        GFP:ApplyAdvancedFilters()
+        assert.is_true(state.saved.needsMyClass)
+        assert.equals(3, state.saved.playstyle)
+    end)
+
+    it("writes nothing while the module is inactive", function()
+        local GFP, _, state = loadWithFilter()
+        GFP.db.Enabled = false
+        GFP:ApplyAdvancedFilters()
+        assert.is_nil(state.saved)
+    end)
+
+    it("does NOT claim ownership when the filter structure is unavailable", function()
+        -- Ownership follows the write. A flag set with no write behind it
+        -- would make the restore clobber a filter we never touched.
+        local GFP, KE, state = loadWithFilter({ nilFilter = true })
+        GFP:ApplyAdvancedFilters()
+        assert.is_nil(state.saved)
+        assert.is_falsy(KE.db.global.GroupFinderPanelOwnsFilter)
+    end)
+
+    it("claims ownership on a successful write", function()
+        local GFP, KE = loadWithFilter()
+        GFP:ApplyAdvancedFilters()
+        assert.is_true(KE.db.global.GroupFinderPanelOwnsFilter)
+    end)
+end)
+
+describe("GroupFinderPanel search rules", function()
+    it("saves BEFORE it searches, so no search can send stale settings", function()
+        local GFP, _, state = loadWithFilter()
+        local order = {}
+        local realSave = _G.C_LFGList.SaveAdvancedFilter
+        _G.C_LFGList.SaveAdvancedFilter = function(f)
+            order[#order + 1] = "save"; realSave(f)
+        end
+        _G.C_LFGList.Search = function()
+            order[#order + 1] = "search"; state.searches = state.searches + 1
+        end
+        GFP:ApplyAndRefresh()
+        assert.same({ "save", "search" }, order)
+    end)
+
+    it("searches on the first toggle click of a session", function()
+        local GFP, _, state = loadWithFilter()
+        GFP:ApplyAndRefresh()
+        assert.equals(1, state.searches)
+    end)
+
+    it("saves but does NOT search on a second toggle inside the window", function()
+        local GFP, _, state = loadWithFilter()
+        GFP:ApplyAndRefresh()
+        state.saved = nil
+        GFP:ApplyAndRefresh()
+        assert.is_not_nil(state.saved)
+        assert.equals(1, state.searches)
+    end)
+
+    it("the Search button escapes the window", function()
+        -- The button calls the writer and RunSearch directly rather than
+        -- going through the gated path.
+        local GFP, _, state = loadWithFilter()
+        GFP:ApplyAndRefresh()
+        GFP:ApplyAdvancedFilters()
+        GFP:RunSearch()
+        assert.equals(2, state.searches)
+    end)
+
+    it("never searches while the module is inactive", function()
+        local GFP, _, state = loadWithFilter()
+        GFP.db.Enabled = false
+        GFP:ApplyAndRefresh()
+        assert.equals(0, state.searches)
+    end)
+
+    it("does not search when the search panel is not shown", function()
+        local GFP, _, state = loadWithFilter({ panelShown = false })
+        GFP:RunSearch()
+        assert.equals(0, state.searches)
+    end)
+end)
+
+describe("GroupFinderPanel filter ownership", function()
+    local PERMISSIVE = {
+        hasTank = false, hasHealer = false,
+        needsTank = false, needsHealer = false, needsDamage = false,
+        minimumRating = 0,
+    }
+    local function assertPermissive(saved)
+        for k, v in pairs(PERMISSIVE) do assert.equals(v, saved[k]) end
+        assert.equals(0, #saved.activities)
+    end
+
+    it("restores permissive on disable and gives ownership back", function()
+        local GFP, KE, state = loadWithFilter()
+        GFP.db.MinScore = 2500
+        GFP:ApplyAdvancedFilters()
+        state.saved = nil
+        GFP:OnDisable()
+        assertPermissive(state.saved)
+        assert.is_false(KE.db.global.GroupFinderPanelOwnsFilter)
+    end)
+
+    it("leaves the filter ALONE on disable when the module never wrote it", function()
+        -- The flag is what stops the restore destroying a filter set in
+        -- Blizzard's own UI, or by another addon.
+        local GFP, _, state = loadWithFilter()
+        GFP:OnDisable()
+        assert.is_nil(state.saved)
+    end)
+
+    it("restores at OnInitialize when this session will not enable the module", function()
+        local GFP, KE, state = loadWithFilter()
+        GFP:ApplyAdvancedFilters()
+        state.saved = nil
+        KE.db.profile.GroupFinderPanel.Enabled = false
         GFP:OnInitialize()
-        assert.equals("DEFAULT", GFP.db.SortBy)
+        assertPermissive(state.saved)
+        assert.is_false(KE.db.global.GroupFinderPanelOwnsFilter)
+    end)
+
+    it("leaves the filter alone at OnInitialize when the module WILL enable", function()
+        -- OnEnable's one-shot write owns that case; restoring here would
+        -- wipe the settings a moment before rewriting them.
+        local GFP, _, state = loadWithFilter()
+        GFP:ApplyAdvancedFilters()
+        state.saved = nil
+        GFP:OnInitialize()
+        assert.is_nil(state.saved)
+    end)
+
+    it("restores when Premade Groups Filter takes over", function()
+        -- AceAddon has already marked the module enabled by the time
+        -- OnEnable steps aside, so stepping aside is not enough on its own.
+        local GFP, KE, state = loadWithFilter()
+        GFP:ApplyAdvancedFilters()
+        state.saved = nil
+        _G.C_AddOns.IsAddOnLoaded = function(n) return n == "PremadeGroupsFilter" end
+        GFP:OnEnable()
+        assertPermissive(state.saved)
+        assert.is_false(KE.db.global.GroupFinderPanelOwnsFilter)
     end)
 end)

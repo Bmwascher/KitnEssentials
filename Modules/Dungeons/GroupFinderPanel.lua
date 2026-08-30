@@ -6,23 +6,26 @@
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- TAINT POSTURE -- read this before changing anything below.
--- This module deliberately taints Blizzard's secure LFGList system, by
--- explicit design grant. It rewrites
--- searchPanel.results in place, re-drives LFGListSearchPanel_UpdateResults,
--- calls the restricted C_LFGList.Search directly, and synthesises a click
--- on a Blizzard group button. It steps aside entirely when Premade Groups
--- Filter is installed, because that addon rewrites the same table.
+-- Blizzard's Group Finder result provider must be created, populated and
+-- assigned with no addon code in that execution. Three in-game probes each
+-- showed on their own that violating it poisons the provider for the whole
+-- session: later Blizzard-only refreshes then throw on Blizzard's own
+-- SecretInChatMessagingLockdown fields with no addon frame on the stack, and
+-- the errors follow the player back out of the instance.
 --
--- What it does NOT do: it never reads or writes
--- CategorySelection.selectedCategory or .selectedFilters.
--- Do NOT describe the search as driven "purely" through
--- LFGListSearchPanel_SetCategory/_DoSearch -- the happy path calls
--- C_LFGList.Search directly and only falls back to _DoSearch.
+-- So this module does NOT filter or sort the result list. It pushes the
+-- user's choices into Blizzard's own advanced filter and lets Blizzard build
+-- the list. Never reintroduce a pass over searchPanel.results, never call
+-- LFGListSearchPanel_UpdateResults / _UpdateResultList / _DoSearch / _Clear /
+-- _SelectResult, and never reorder Blizzard's table even in place.
 --
--- Do not harden any of the above. Do add the secret-value guards -- see
--- SanitizeResult, which exists because GetSearchResultInfo and
--- GetSearchResultPlayerInfo are SecretInChatMessagingLockdown, and
--- browsing the group finder from inside a dungeon is ordinary.
+-- What it still does inside Blizzard's row update, as an accepted exception:
+-- decorates rows (friend backdrop, leader score). That exception is the
+-- design's one blocking assumption, not a proven safe pattern.
+--
+-- The module OWNS Blizzard's advanced filter while enabled, and restores it
+-- when disabled -- see the ownership flag in the Lifecycle section. The filter
+-- is account-wide (probed in game), which is why the flag lives in db.global.
 
 ---@class KE
 local KE = select(2, ...)
@@ -88,12 +91,11 @@ local DUNGEON_CAT = _G.GROUP_FINDER_CATEGORY_ID_DUNGEONS or 2
 local panel
 
 -- Forward declared, assigned in the Lifecycle section at the bottom of
--- this file. Every one of the fourteen gate sites above that section
--- closes over this same upvalue -- declaring IsActive inline down there
--- (as `local function IsActive`) would leave every earlier `IsActive()`
--- read resolving to the global namespace instead, which luacheck reports
--- as W113 and which is nil at call time. Same scoping trap as
--- resortFromSnapshot above, same fix: declare where the readers are.
+-- this file. Every gate site above that section closes over this same
+-- upvalue -- declaring IsActive inline down there (as `local function
+-- IsActive`) would leave every earlier `IsActive()` read resolving to the
+-- global namespace instead, which luacheck reports as W113 and which is nil
+-- at call time. Declare where the readers are.
 local IsActive
 
 -- Preferred short names (Midnight Season 1); anything unlisted falls back
@@ -162,13 +164,6 @@ local function SeasonGroups()
     return C_LFGList.GetAvailableActivityGroups(DUNGEON_CAT, bit.bor(F.CurrentSeason, F.PvE)) or {}
 end
 
-local function ExpansionGroups()
-    local F = Enum and Enum.LFGListFilter
-    if not (F and C_LFGList and C_LFGList.GetAvailableActivityGroups) then return {} end
-    return C_LFGList.GetAvailableActivityGroups(DUNGEON_CAT,
-        bit.bor(F.CurrentExpansion, F.NotCurrentSeason, F.PvE)) or {}
-end
-
 local function IsDungeonSearchMode()
     local pve, gff, lfg = _G.PVEFrame, _G.GroupFinderFrame, _G.LFGListFrame
     return pve and pve.activeTabIndex == 1
@@ -177,40 +172,32 @@ local function IsDungeonSearchMode()
         and lfg.SearchPanel.categoryID == DUNGEON_CAT
 end
 
-local SORT_ORDER = { "DEFAULT", "OVERALL_SCORE", "DUNGEON_SCORE" }
-local SORT_MODE = {
-    DEFAULT       = { text = "Default" },
-    OVERALL_SCORE = { text = "Overall Score",
-        func = function(a, b) return a.overall > b.overall and 1 or a.overall < b.overall and -1 or 0 end },
-    -- Leader's best score for THIS dungeon.
-    DUNGEON_SCORE = { text = "Dungeon Score",
-        func = function(a, b) return a.leaderScore > b.leaderScore and 1 or a.leaderScore < b.leaderScore and -1 or 0 end },
-}
-
 -- Test seams. Nothing in the module reads these; they exist so the spec can
 -- reach file-locals without exporting them into the module's real surface.
 GFP._PlayerSpecRole      = PlayerSpecRole
 GFP._GetPartyRoles       = GetPartyRoles
 GFP._SeasonGroups        = SeasonGroups
-GFP._ExpansionGroups     = ExpansionGroups
 GFP._IsDungeonSearchMode = IsDungeonSearchMode
 GFP._Abbreviate          = Abbreviate
-GFP._SORT_ORDER          = SORT_ORDER
-GFP._SORT_MODE           = SORT_MODE
 
 ------------------------------------------------------------------------
--- Result list: post-hook LFGListSearchPanel_UpdateResultList and reorder
--- searchPanel.results -- pending applications first, friends' groups
--- pinned above strangers, then the chosen comparator.
+-- Friend groups. While BROWSING on Midnight, search-result friend counts
+-- come back empty/secret -- even Blizzard's own BATTLENET_FONT_COLOR branch
+-- never fires. C_SocialQueue is the authoritative source: build a set of
+-- friends' active LFGList searchResultIDs the way Blizzard_QuickJoin does.
+--
+-- Refreshed from the row decoration hook, throttled on a GetTime() stamp so
+-- one provider repaint rebuilds the set once rather than per row. GetTime is
+-- frame-cached, so an equality test coalesces a whole repaint; if that ever
+-- stops holding the throttle degrades to per-row work, which costs
+-- performance and not correctness.
 ------------------------------------------------------------------------
-
--- While BROWSING on Midnight, search-result friend counts come back
--- empty/secret -- even Blizzard's own BATTLENET_FONT_COLOR branch never
--- fires. C_SocialQueue is the authoritative source: build a set of
--- friends' active LFGList searchResultIDs the way Blizzard_QuickJoin
--- does, refreshed per hook run.
 local friendResultSet = {}
-local function RefreshFriendResultSet()
+local friendSetStamp = -1
+local function RefreshFriendResultSet(force)
+    local now = GetTime()
+    if not force and now == friendSetStamp then return end
+    friendSetStamp = now
     wipe(friendResultSet)
     if not (C_SocialQueue and C_SocialQueue.GetAllGroups) then return end
     local ok = pcall(function()
@@ -230,133 +217,19 @@ local function RefreshFriendResultSet()
     if not ok then wipe(friendResultSet) end
 end
 
-local resorting = false
--- Snapshot of the last RAW result list Blizzard delivered, before our
--- filtering. ReSort re-runs the whole predicate + sort pass from THIS, so
--- relaxing a filter instantly restores entries without a server
--- re-search -- which also sidesteps the "Search failed, please wait"
--- throttle that per-click re-searches were tripping.
-local lastRawResults = {}
--- DELIBERATELY declared here rather than below OnUpdateResultList. Lua
--- scopes a local from its declaration onward, so a later declaration makes
--- this read compile as a never-assigned GLOBAL, permanently nil,
--- and the guard below permanently true -- re-snapshotting from the
--- already-filtered list on every ReSort and defeating the whole
--- resurrect-on-filter-relax design. luacheck reports both halves.
-local resortFromSnapshot = false
-
 ------------------------------------------------------------------------
--- Secret-value boundary. GetSearchResultInfo and
--- GetSearchResultPlayerInfo are both SecretInChatMessagingLockdown, which
--- includes "the player is on a communication-restricted map such as a
--- dungeon" -- browsing the group finder from inside a dungeon is ordinary,
--- so treat every field except partyGUID as secret-capable.
+-- Secret-value boundary for the ONE value this module still reads off a
+-- search result: the leader's overall score, for row decoration.
 --
--- FOUR RULES, each of which fixes a design that looked safe and was not:
---  1. A pcall does NOT declassify what it returns. It returns ok=true with
---     a still-secret number. So this boundary does the COMPUTATION, not
---     the extraction.
---  2. A fresh table does not cleanse its contents either. So every scalar
---     is tested, not merely "not a raw field".
---  3. issecretvalue, NOT canaccessvalue. canaccessvalue answers "may THIS
---     function operate on it" -- the wrong scope for a boundary whose job
---     is to hand values to the table.sort comparator later.
---  4. The test is FIRST CONTACT, before any arithmetic, and inside the
---     pcall -- issecretvalue is itself AllowedWhenUntainted, so calling it
---     on an already-tainted path can throw. A throw here is caught and
---     takes the fail-open path.
--- Arithmetic on a secret is recorded as sometimes throwing and sometimes
--- silently propagating, which is why outputs are re-tested on the way out.
+-- GetSearchResultInfo is SecretInChatMessagingLockdown, and browsing the
+-- group finder from inside a dungeon is ordinary. A pcall does not
+-- declassify what it returns, so the test is issecretvalue on FIRST
+-- CONTACT, inside the pcall -- issecretvalue is itself AllowedWhenUntainted
+-- and can throw on an already-tainted path.
 ------------------------------------------------------------------------
 
 local function Secret(v)
     return _G.issecretvalue and _G.issecretvalue(v)
-end
-
-local function SecretTable(t)
-    return _G.issecrettable and _G.issecrettable(t)
-end
-
--- Returns a NEWLY CONSTRUCTED record of derived plain values. It never
--- returns a raw API field, and never a value that failed a test.
---   gid / gidKnown  -- nil+false means "unreadable", skip the dungeon predicate
---   roles           -- nil means "unreadable", skip the role predicates
---   friends, overall, leaderScore -- 0 when unreadable
--- FAIL OPEN: an unreadable result is KEPT with neutral values.
-local function SanitizeResult(resultID, info, wantGroups, wantRoles)
-    local rec = { gid = nil, gidKnown = false, roles = nil,
-                  friends = 0, overall = 0, leaderScore = 0 }
-
-    local ok = pcall(function()
-        if wantGroups then
-            local ids = info.activityIDs
-            -- `info.activityID` singular does not exist on LfgSearchResultData
-            -- in 12.0.7, so the `or` branch is dead. Kept as a guard anyway.
-            local act = (ids and not SecretTable(ids)) and ids[1] or info.activityID
-            if act ~= nil and not Secret(act) and C_LFGList.GetActivityInfoTable then
-                -- GetActivityInfoTable is AllowedWhenUntainted: the argument
-                -- has to clear the test BEFORE this call, not after.
-                local t = C_LFGList.GetActivityInfoTable(act)
-                local gid = t and t.groupFinderActivityGroupID
-                if gid ~= nil and not Secret(gid) then
-                    rec.gid, rec.gidKnown = gid, true
-                end
-            end
-        end
-
-        if wantRoles then
-            local n = info.numMembers
-            if n ~= nil and not Secret(n) then
-                local roles = { TANK = 0, HEALER = 0, DAMAGER = 0 }
-                for i = 1, n do
-                    local pInfo = C_LFGList.GetSearchResultPlayerInfo(resultID, i)
-                    local r = pInfo and pInfo.assignedRole
-                    -- Table-key behaviour on a secret is UNVERIFIED, which is
-                    -- a reason to refuse the key, not to risk it.
-                    if r ~= nil and not Secret(r) and roles[r] then
-                        roles[r] = roles[r] + 1
-                    end
-                end
-                rec.roles = roles
-            end
-        end
-
-        local bn, cf, gm = info.numBNetFriends, info.numCharFriends, info.numGuildMates
-        if not (Secret(bn) or Secret(cf) or Secret(gm)) then
-            rec.friends = (bn or 0) + (cf or 0) + (gm or 0)
-        end
-
-        local overall = info.leaderOverallDungeonScore
-        if overall ~= nil and not Secret(overall) then rec.overall = overall end
-
-        local best = info.leaderBestDungeonScoreInfo
-        if best ~= nil and not SecretTable(best) then
-            local ms = best.mapScore
-            if ms ~= nil and not Secret(ms) then rec.leaderScore = ms end
-        end
-    end)
-
-    -- Re-test on the way OUT. The input tests prove the inputs were clean;
-    -- they cannot prove a derived value is, because arithmetic on a secret
-    -- may propagate rather than throw. The boundary guarantees its outputs.
-    local okOut = pcall(function()
-        if Secret(rec.friends) then rec.friends = 0 end
-        if Secret(rec.overall) then rec.overall = 0 end
-        if Secret(rec.leaderScore) then rec.leaderScore = 0 end
-        if Secret(rec.gid) then rec.gid, rec.gidKnown = nil, false end
-        -- Three explicit checks, not a loop over a table literal: this runs
-        -- once per search result and the literal would allocate every time.
-        if rec.roles and (Secret(rec.roles.TANK) or Secret(rec.roles.HEALER)
-            or Secret(rec.roles.DAMAGER)) then
-            rec.roles = nil
-        end
-    end)
-
-    if not (ok and okOut) then
-        return { gid = nil, gidKnown = false, roles = nil,
-                 friends = 0, overall = 0, leaderScore = 0 }
-    end
-    return rec
 end
 
 -- Decoration's own boundary. FAIL CLOSED -- never decorate an unreadable
@@ -378,145 +251,6 @@ local function SanitizeScore(resultID)
     return score
 end
 
-local function OnUpdateResultList(searchPanel)
-    -- The advanced-filter API owns the dungeon/tank/healer predicates
-    -- server-side and every filter change triggers a REAL re-search, so
-    -- this hook always receives a fresh list. The client-side pass over
-    -- the raw snapshot is the authority and is non-destructive by
-    -- construction -- it filters the SNAPSHOT, never the already-shrunk
-    -- output. Filtering the output is what monotonically emptied the list
-    -- in earlier versions.
-    if resorting then return end
-    local db = GFP.db
-    if not IsActive() then return end
-    if not IsDungeonSearchMode() then return end
-    local results = searchPanel.results
-    if not results or #results == 0 then return end
-
-    local sortBy = db.SortBy or "DEFAULT"
-    local comparator = SORT_MODE[sortBy] and SORT_MODE[sortBy].func
-    local partyRoles = db.PartyFit and GetPartyRoles()
-    -- No early-out on Default sort: friend groups pin to the top in EVERY
-    -- mode. anyFriends tracks whether a pinning pass is needed at all.
-    local anyFriends = false
-
-    local selectedGroups
-    for groupID, on in pairs(db.DungeonFilter or {}) do
-        if on then
-            selectedGroups = selectedGroups or {}
-            selectedGroups[groupID] = true
-        end
-    end
-    local wantTank, wantHealer = db.HasTank == true, db.HasHealer == true
-
-    -- Fresh delivery from Blizzard, not our own write-back re-entry:
-    -- snapshot it as the raw universe for client-side filtering.
-    if not resorting and not resortFromSnapshot then
-        wipe(lastRawResults)
-        for i = 1, #results do lastRawResults[i] = results[i] end
-    end
-    results = lastRawResults
-    if #results == 0 then return end
-
-    RefreshFriendResultSet()
-
-    local pending, sortable = {}, {}
-    for _, resultID in ipairs(results) do
-        local pendingStatus = select(3, C_LFGList.GetApplicationInfo(resultID))
-        -- EVERY id handed back has to still resolve. Blizzard builds its
-        -- entry buttons from this list and reads GetSearchResultInfo on
-        -- hover with no nil check. Pending applications are exactly the
-        -- entries that outlive their listing: a group you applied to gets
-        -- delisted, GetApplicationInfo still reports pending,
-        -- GetSearchResultInfo returns nil, and the dead id sits in the
-        -- list until someone hovers it.
-        local info = C_LFGList.GetSearchResultInfo(resultID)
-        -- Positive tests, never an empty leading
-        -- branch. A nil info means the listing died between Blizzard
-        -- building the id list and us reading it back; it is dropped by
-        -- falling through, which is safe because no button is built for it
-        -- and so nothing can hover it.
-        if info and pendingStatus then
-            pending[#pending + 1] = resultID
-        elseif info then
-            local ok = true
-            -- Friends' groups BYPASS every predicate.
-            local isFriend = friendResultSet[resultID] and true or false
-            local wantRoles = (partyRoles or wantTank or wantHealer) and true or false
-            local rec = SanitizeResult(resultID, info,
-                (not isFriend) and selectedGroups ~= nil, (not isFriend) and wantRoles)
-
-            -- Dungeon selection. gidKnown false means unreadable -> KEEP.
-            if not isFriend and selectedGroups and rec.gidKnown
-                and not selectedGroups[rec.gid] then
-                ok = false
-            end
-
-            local grpRoles = (not isFriend) and rec.roles or nil
-            if ok and grpRoles and wantTank and grpRoles.TANK == 0 then ok = false end
-            if ok and grpRoles and wantHealer and grpRoles.HEALER == 0 then ok = false end
-            -- Our party's damagers must still fit -- the needs* filters
-            -- cannot express this.
-            if ok and grpRoles and partyRoles then
-                if partyRoles.TANK > 0 and grpRoles.TANK > 0 then ok = false end
-                if ok and partyRoles.HEALER > 0 and grpRoles.HEALER > 0 then ok = false end
-                if ok and partyRoles.DAMAGER + grpRoles.DAMAGER > 3 then ok = false end
-            end
-
-            if ok then
-                local friends = isFriend and 1 or rec.friends
-                if friends > 0 then anyFriends = true end
-                sortable[#sortable + 1] = {
-                    id = resultID,
-                    idx = #sortable + 1, -- original order for the stable Default fallback
-                    overall = rec.overall,
-                    leaderScore = rec.leaderScore,
-                    friends = friends,
-                }
-            end
-        end
-    end
-
-    -- Sorts when a comparator is chosen OR any friend group exists.
-    -- Default + friends = pin only; everything else keeps Blizzard's order
-    -- via the original-index tiebreak, because table.sort is not stable.
-    if comparator or anyFriends then
-        table.sort(sortable, function(a, b)
-            if not a or not b then return false end
-            -- Blizzard's social priority: friends and guildmates on top.
-            local aF, bF = a.friends > 0, b.friends > 0
-            if aF ~= bF then return aF end
-            if comparator then
-                local r = comparator(a, b)
-                if not db.SortDescending then r = -r end
-                if r ~= 0 then return r == 1 end
-            end
-            return a.idx < b.idx
-        end)
-    end
-
-    local out = {}
-    for _, id in ipairs(pending) do out[#out + 1] = id end
-    for _, e in ipairs(sortable) do out[#out + 1] = e.id end
-    searchPanel.results = out
-    searchPanel.totalResults = #out
-    resorting = true
-    if _G.LFGListSearchPanel_UpdateResults then _G.LFGListSearchPanel_UpdateResults(searchPanel) end
-    resorting = false
-end
-
-local function ReSort()
-    -- Runs the full pass from the raw snapshot. searchPanel.results holds
-    -- our previous filtered output, but the hook body substitutes the
-    -- snapshot, so relaxing filters resurrects entries.
-    local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
-    if sp and sp:IsShown() then
-        resortFromSnapshot = true
-        OnUpdateResultList(sp)
-        resortFromSnapshot = false
-    end
-end
-
 ------------------------------------------------------------------------
 -- Leader score on result rows: prepend the coloured overall score to each
 -- entry's name line, using Blizzard's own rarity ramp.
@@ -535,10 +269,7 @@ local function DecorateSearchEntry(entry)
     entry.Name:SetFormattedText("|c%s%d|r  %s", hex, score, entry.Name:GetText() or "")
 end
 
-GFP._SanitizeResult      = SanitizeResult
 GFP._SanitizeScore       = SanitizeScore
-GFP._OnUpdateResultList  = OnUpdateResultList
-GFP._ReSort              = ReSort
 GFP._DecorateSearchEntry = DecorateSearchEntry
 
 ------------------------------------------------------------------------
@@ -728,37 +459,27 @@ local function TeardownRaiderIO()
 end
 
 ------------------------------------------------------------------------
--- Quick search: navigate to Premade Groups if needed, then set category
--- and fire the search. All calls are Blizzard's own public flow.
+-- Quick search: set the category and search, but ONLY when the search
+-- panel is already the shown panel.
+--
+-- Navigating there ourselves is not available any more. PVEFrame_ShowFrame,
+-- GroupFinderFrameGroupButton_OnClick, LFGListSearchPanel_Clear and
+-- LFGListFrame_SetActivePanel all build Blizzard's result provider inside
+-- our execution, which poisons it for the session. So when the search panel
+-- is not up we set the filter and stop; the player clicks Premade Groups.
 ------------------------------------------------------------------------
 local function RunQuickSearch(categoryID, filters)
     if not IsActive() then return end
-    local pve = _G.PVEFrame
-    if not pve then return end
-    if pve.activeTabIndex ~= 1 and _G.PVEFrame_ShowFrame then
-        _G.PVEFrame_ShowFrame("GroupFinderFrame")
-    end
+    GFP:ApplyAdvancedFilters()
     local lfg = _G.LFGListFrame
-    local gff = _G.GroupFinderFrame
-    if not lfg or not gff then return end
-    -- Select the Premade Groups sub-panel if it is not active. The button
-    -- index depends on whether the scenarios button is present this season.
-    if (not lfg.SearchPanel or not lfg.SearchPanel:IsShown())
-        or gff.selection ~= _G.LFGListPVEStub then
-        local premade = (pve.ScenariosEnabled and pve:ScenariosEnabled() and gff.groupButton4)
-            or gff.groupButton3
-        if premade and _G.GroupFinderFrameGroupButton_OnClick then
-            _G.GroupFinderFrameGroupButton_OnClick(premade)
-        end
-    end
-    local searchPanel = lfg.SearchPanel
-    if not searchPanel then return end
-    if _G.LFGListSearchPanel_Clear then _G.LFGListSearchPanel_Clear(searchPanel) end
+    local searchPanel = lfg and lfg.SearchPanel
+    if not (searchPanel and searchPanel:IsShown()) then return end
     if _G.LFGListSearchPanel_SetCategory then
         _G.LFGListSearchPanel_SetCategory(searchPanel, categoryID, filters, lfg.baseFilters or 0)
     end
-    if _G.LFGListSearchPanel_DoSearch then _G.LFGListSearchPanel_DoSearch(searchPanel) end
-    if _G.LFGListFrame_SetActivePanel then _G.LFGListFrame_SetActivePanel(lfg, searchPanel) end
+    -- Exempt from the 10s window: a shortcut changes the category, so
+    -- suppressing its search would leave the old results under a new heading.
+    GFP:RunSearch()
 end
 
 ------------------------------------------------------------------------
@@ -862,28 +583,114 @@ end
 -- whenever the M+ search is active.
 ------------------------------------------------------------------------
 
+-- The slider row is the authority whenever it exists. The widget throttles
+-- OnValueChanged leading-edge and DROPS the trailing call, so the saved key
+-- can sit one interaction behind what the player sees. Reading the region
+-- also refreshes the key, which is what the profile carry then copies.
+function GFP:CurrentMinScore()
+    local db = self.db
+    local row = panel and panel.filters and panel.filters.minScoreRow
+    if row then
+        local v = math.floor(row:GetValue() + 0.5)
+        if db then db.MinScore = v end
+        return v
+    end
+    return (db and db.MinScore) or 0
+end
+
+-- Must be at least the widget's own 0.1s throttle window. A shorter delay
+-- can fire in the gap between the last delivered callback and the dropped
+-- one and save the pre-drop value -- and the dropped callback arms nothing,
+-- so the final value would never reach the store at all.
+local MIN_SCORE_SAVE_DELAY = 0.2
+local minScoreTimer
+
+-- NewTimer, not After: After returns no handle, and the invariant here is
+-- that the newest interaction owns the one pending save.
+local function ArmMinScoreSave()
+    if minScoreTimer then minScoreTimer:Cancel() end
+    minScoreTimer = C_Timer.NewTimer(MIN_SCORE_SAVE_DELAY, function()
+        minScoreTimer = nil
+        GFP:ApplyAdvancedFilters()
+    end)
+end
+
+local function CancelMinScoreSave()
+    if minScoreTimer then
+        minScoreTimer:Cancel()
+        minScoreTimer = nil
+    end
+end
+
+-- The one place the module writes Blizzard's filter, and the one place
+-- ownership is claimed. Every caller reaches SaveAdvancedFilter through
+-- here, so the IsActive() gate covers all of them -- including the slider's
+-- trailing timer, which must not land after a disable.
 function GFP:ApplyAdvancedFilters()
-    -- This reaches C_LFGList.SaveAdvancedFilter, which persists BLIZZARD's
-    -- own filter state -- it is the single most important thing to stop
-    -- while inactive.
     if not IsActive() then return end
-    --
-    -- The server-side filter is kept PERMISSIVE: all dungeons, no
-    -- has/needs constraints. The client pass over the raw snapshot is the
-    -- authority, and a broad server list is what lets friends' groups
-    -- bypass filters -- a server-excluded result cannot be resurrected
-    -- client-side.
     local db = self.db
     if not db or not (C_LFGList and C_LFGList.GetAdvancedFilter) then return end
     local adv = C_LFGList.GetAdvancedFilter()
     if not adv then return end
-    adv.needsTank, adv.needsHealer, adv.needsDamage = false, false, false
-    adv.hasTank, adv.hasHealer = false, false
+
+    -- Only the fields this module exposes are written. Everything else --
+    -- needsMyClass, the difficulty flags, the playstyles -- is whatever the
+    -- player set in Blizzard's own filter UI, and stays.
+    adv.hasTank    = db.HasTank == true
+    adv.hasHealer  = db.HasHealer == true
+
+    -- Party fit, degraded and deliberately so. Blizzard's needs* fields are
+    -- single booleans: needsDamage means "fewer than three damagers", not
+    -- "room for MINE". Exact for a party bringing 0-1 damagers, too
+    -- permissive for 2-3. AdvancedFilterOptions has no vacancy count.
+    if db.PartyFit then
+        local roles = GetPartyRoles()
+        adv.needsTank   = roles.TANK > 0
+        adv.needsHealer = roles.HEALER > 0
+        adv.needsDamage = roles.DAMAGER > 0
+    else
+        adv.needsTank, adv.needsHealer, adv.needsDamage = false, false, false
+    end
+
+    adv.minimumRating = self:CurrentMinScore()
+
+    -- An EMPTY activities list is Blizzard's own "all" -- its default check
+    -- is #activities == 0, and the list it would otherwise build includes
+    -- timerunning groups a hand-rolled season+expansion list would miss.
     local activities = {}
-    for _, g in ipairs(SeasonGroups()) do activities[#activities + 1] = g end
-    for _, g in ipairs(ExpansionGroups()) do activities[#activities + 1] = g end
+    for groupID, on in pairs(db.DungeonFilter or {}) do
+        if on then activities[#activities + 1] = groupID end
+    end
     adv.activities = activities
+
     C_LFGList.SaveAdvancedFilter(adv)
+    -- Ownership follows the WRITE, not the caller: everything above can
+    -- return early, and a flag set without a write behind it would make the
+    -- restore clobber a filter this module never touched.
+    local g = KE.db and KE.db.global
+    if g then g.GroupFinderPanelOwnsFilter = true end
+end
+
+-- The restore writer. Deliberately NOT gated by IsActive(): every caller
+-- runs when the module is already off, standing down, or was never enabled
+-- this session, so the gate would skip the cleanup it exists to perform.
+--
+-- Only writes when the ownership flag says this module put the current
+-- filter there, so a filter set in Blizzard's own UI or by another addon is
+-- never clobbered. An absent API leaves the flag set: clearing it would
+-- relinquish ownership without restoring anything.
+local function RestorePermissiveFilter()
+    local g = KE.db and KE.db.global
+    if not (g and g.GroupFinderPanelOwnsFilter) then return end
+    if not (C_LFGList and C_LFGList.GetAdvancedFilter) then return end
+    local adv = C_LFGList.GetAdvancedFilter()
+    if not adv then return end
+    adv.hasTank, adv.hasHealer = false, false
+    adv.needsTank, adv.needsHealer, adv.needsDamage = false, false, false
+    adv.minimumRating = 0
+    adv.activities = {}
+    C_LFGList.SaveAdvancedFilter(adv)
+    g.GroupFinderPanelOwnsFilter = false
 end
 
 -- Blizzard's ResolveCategoryFilters is file-local; replicated verbatim
@@ -896,53 +703,42 @@ local function ResolveCategoryFilters(categoryID, filters)
     return filters
 end
 
+-- C_LFGList.Search is HasRestrictions and needs the click that asked for it
+-- still on the stack: deferring to a timer sheds the hardware context and
+-- produces ADDON_ACTION_BLOCKED. Whether an ordinary OnClick counts as legal
+-- provenance is UNVERIFIED -- it works in practice and the smoke exercises it.
+--
+-- There is NO fallback. The old one was LFGListSearchPanel_DoSearch, which
+-- builds the provider synchronously.
+function GFP:RunSearch()
+    local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
+    if not (sp and sp:IsShown()) then return end
+    if not (C_LFGList and C_LFGList.Search and sp.categoryID) then return end
+    self._lastServerSearch = GetTime()
+    local filters = ResolveCategoryFilters(sp.categoryID, sp.filters)
+    local languages = C_LFGList.GetLanguageSearchFilter and C_LFGList.GetLanguageSearchFilter()
+    local adv = IsDungeonSearchMode() and C_LFGList.GetAdvancedFilter
+        and C_LFGList.GetAdvancedFilter() or nil
+    pcall(C_LFGList.Search, sp.categoryID, filters, sp.preferredFilters, languages, nil, adv)
+end
+
+-- Toggle clicks: save first, then search only if the window has elapsed.
+-- Saving always precedes searching, so no search can send stale state.
+-- Inside the window the save still lands and nothing visible happens --
+-- Blizzard re-reads the saved filter only when it repaints a row, which is
+-- why its own filter UI repaints them by hand. We cannot copy that repaint:
+-- LFGListSearchEntry_Update reads searchResultInfo.activityIDs from OUR
+-- execution, which is the original failure signature inside a lockdown.
+local SEARCH_WINDOW = 10
 function GFP:ApplyAndRefresh()
     if not IsActive() then return end
     self:ApplyAdvancedFilters()
-    -- The client-side pass over the raw snapshot is authoritative and
-    -- INSTANT -- run it unconditionally. The real server re-search is a
-    -- freshness assist only, and Blizzard throttles it hard; per-click
-    -- DoSearch was tripping "Search failed, please wait a moment". Gate
-    -- the server hit to one per 10s window; skipped refreshes cost
-    -- nothing because the snapshot filter already answered the click.
-    ReSort()
-    local now = GetTime()
-    if (now - (self._lastServerSearch or 0)) < 10 then return end
-    local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
-    if not (sp and sp:IsShown()) then return end
-    self._lastServerSearch = now
-    -- C_LFGList.Search is HasRestrictions. It is reached SYNCHRONOUSLY
-    -- from the click handler: deferring to a timer sheds the hardware
-    -- context and produces ADDON_ACTION_BLOCKED. Whether an ordinary
-    -- OnClick counts as legal provenance is UNVERIFIED -- it works in
-    -- practice and is exercised by the smoke.
-    if C_LFGList and C_LFGList.Search and sp.categoryID then
-        local filters = ResolveCategoryFilters(sp.categoryID, sp.filters)
-        local languages = C_LFGList.GetLanguageSearchFilter and C_LFGList.GetLanguageSearchFilter()
-        local adv = IsDungeonSearchMode() and C_LFGList.GetAdvancedFilter and C_LFGList.GetAdvancedFilter() or nil
-        local ok = pcall(C_LFGList.Search, sp.categoryID, filters, sp.preferredFilters, languages, nil, adv)
-        if ok then return end
-    end
-    if _G.LFGListSearchPanel_DoSearch then
-        _G.LFGListSearchPanel_DoSearch(sp)
-    end
-end
-
--- Re-run a button's own OnEnter so its tooltip redraws IN PLACE after a
--- click. GameTooltip otherwise keeps the lines built on the last
--- mouse-enter, and since the cursor never leaves the button, OnLeave/OnEnter
--- do not fire again -- the user has to move off and back on to see the new
--- state (smoke D-6). The button's own label updates immediately, which is
--- what made the stale tooltip obvious.
---
--- Guarded twice on purpose: still hovered AND the tooltip still belongs to
--- this button, so a programmatic state change can never hijack a tooltip
--- some other frame owns.
-local function RefreshTooltip(btn)
-    if not (btn and btn.IsMouseOver and btn:IsMouseOver()) then return end
-    if _G.GameTooltip:GetOwner() ~= btn then return end
-    local onEnter = btn:GetScript("OnEnter")
-    if onEnter then onEnter(btn) end
+    -- nil, not 0, is "never searched": GetTime counts from login, so a zero
+    -- baseline would swallow every toggle for the first ten seconds of a
+    -- session.
+    local last = self._lastServerSearch
+    if last and (GetTime() - last) < SEARCH_WINDOW then return end
+    self:RunSearch()
 end
 
 -- Dungeon art for a filter toggle, keyed on the activity group's NAME.
@@ -1104,7 +900,7 @@ local function CreateFilterPanel()
     local y = -22 - rowN * ROW_PITCH - 8
 
     -- Needs Role / Has Tank / Has Healer
-    local pf = MakeToggle(f, S, "Role Available",
+    local pf = MakeToggle(f, S, "Role Opening",
         function() return GFP.db and GFP.db.PartyFit end,
         function()
             local db = GFP.db
@@ -1114,6 +910,17 @@ local function CreateFilterPanel()
         end)
     pf:SetSize(PANEL_WIDTH - 20, TOGGLE_HEIGHT)
     pf:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+    pf:SetScript("OnEnter", function(b)
+        _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
+        _G.GameTooltip:SetText("Role Opening", 1, 1, 1)
+        -- Worded to promise exactly what the server filter delivers. Its
+        -- needs* fields are single booleans, so a party bringing two or
+        -- three damagers still matches a group with one open damage slot.
+        _G.GameTooltip:AddLine("Show only groups with one opening for each "
+            .. "role type your party brings.", 0.85, 0.85, 0.85, true)
+        _G.GameTooltip:Show()
+    end)
+    pf:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
     visualRefreshers[#visualRefreshers + 1] = function()
         SetToggleVisual(pf, GFP.db and GFP.db.PartyFit)
     end
@@ -1148,92 +955,34 @@ local function CreateFilterPanel()
     end
     y = y - (TOGGLE_HEIGHT + 10)
 
-    -- Sort: click cycles the modes; the arrow toggles direction. Reorders
-    -- the current list immediately.
-    local sortTitle = f:CreateFontString(nil, "OVERLAY")
-    S.SetFont(sortTitle, 12, "")
-    sortTitle:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
-    sortTitle:SetText("Sort")
-    sortTitle:SetTextColor(accent[1], accent[2], accent[3])
-    y = y - 18
-
-    local sortBtn = CreateFrame("Button", nil, f)
-    S.Button(sortBtn)
-    sortBtn:SetSize(PANEL_WIDTH - 20 - TOGGLE_HEIGHT - BUTTON_GAP, TOGGLE_HEIGHT)
-    sortBtn:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
-    local sortText = sortBtn:CreateFontString(nil, "OVERLAY")
-    S.SetFont(sortText, 12, "")
-    sortText:SetPoint("CENTER")
-    local function SortLabel()
-        local db = GFP.db
-        local mode = SORT_MODE[(db and db.SortBy) or "DEFAULT"]
-        sortText:SetText(mode and mode.text or "Default")
-    end
-    SortLabel()
-    visualRefreshers[#visualRefreshers + 1] = SortLabel
-    sortBtn:SetScript("OnEnter", function(b)
-        local db = GFP.db
-        _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
-        _G.GameTooltip:SetText("Sort", 1, 1, 1)
-        for _, key in ipairs(SORT_ORDER) do
-            local isCur = ((db and db.SortBy) or "DEFAULT") == key
-            if isCur then
-                _G.GameTooltip:AddLine(SORT_MODE[key].text, accent[1], accent[2], accent[3])
-            else
-                _G.GameTooltip:AddLine(SORT_MODE[key].text, 0.85, 0.85, 0.85)
-            end
+    -- Minimum leader score. Blizzard applies this as a floor on the leader's
+    -- OVERALL Mythic+ rating, not a per-dungeon one.
+    local G = KE.GUIFrame
+    if G then
+        local scoreRow = G:CreateSlider(f, "Min Score", {
+            min = 0,
+            max = 4000,
+            step = 50,
+            value = (GFP.db and GFP.db.MinScore) or 0,
+            tooltip = "Hide groups whose leader is below this Mythic+ rating.",
+            callback = function()
+                -- The callback never writes the filter itself. It is
+                -- throttled leading-edge and the trailing call is dropped,
+                -- so the value handed to us can already be stale; the timer
+                -- re-reads the slider region instead. One slider writer.
+                if not IsActive() then return end
+                ArmMinScoreSave()
+            end,
+        })
+        scoreRow:SetPoint("TOPLEFT", f, "TOPLEFT", 0, y)
+        scoreRow:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, y)
+        f.minScoreRow = scoreRow
+        visualRefreshers[#visualRefreshers + 1] = function()
+            -- Silent: the display is what the save reads, so it must track
+            -- the key without arming a save of its own.
+            scoreRow:SetValue((GFP.db and GFP.db.MinScore) or 0, true)
         end
-        _G.GameTooltip:Show()
-    end)
-    sortBtn:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
-    sortBtn:SetScript("OnClick", function()
-        -- This handler does not go through MakeToggle, so it needs its own
-        -- gate -- and it mutates before it refreshes, same as the toggles.
-        if not IsActive() then return end
-        local db = GFP.db
-        if not db then return end
-        local cur = db.SortBy or "DEFAULT"
-        for i, key in ipairs(SORT_ORDER) do
-            if key == cur then
-                db.SortBy = SORT_ORDER[(i % #SORT_ORDER) + 1]
-                break
-            end
-        end
-        SortLabel()
-        RefreshTooltip(sortBtn)
-        GFP:ApplyAndRefresh()
-    end)
-
-    local dirBtn = CreateFrame("Button", nil, f)
-    S.ArrowButton(dirBtn, "down")
-    dirBtn:SetSize(TOGGLE_HEIGHT, TOGGLE_HEIGHT)
-    dirBtn:SetPoint("LEFT", sortBtn, "RIGHT", BUTTON_GAP, 0)
-    local function DirVisual()
-        local a = S.data(dirBtn).arrow
-        if a then a:SetRotation((GFP.db and GFP.db.SortDescending ~= false) and 0 or 3.14159) end
     end
-    DirVisual()
-    visualRefreshers[#visualRefreshers + 1] = DirVisual
-    dirBtn:SetScript("OnEnter", function(b)
-        _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
-        _G.GameTooltip:SetText((GFP.db and GFP.db.SortDescending ~= false)
-            and "Descending" or "Ascending", 1, 1, 1)
-        _G.GameTooltip:Show()
-    end)
-    dirBtn:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
-    dirBtn:SetScript("OnClick", function()
-        -- Same reason as sortBtn.
-        if not IsActive() then return end
-        local db = GFP.db
-        if not db then return end
-        -- Deviation 15. Was `not (db.SortDescending ~= false)`, which
-        -- luacheck reports as W581. Identical for every value including
-        -- nil: true->false, false->true, nil->false.
-        db.SortDescending = (db.SortDescending == false)
-        DirVisual()
-        RefreshTooltip(dirBtn)  -- same stale-tooltip bug as sortBtn
-        GFP:ApplyAndRefresh()
-    end)
 
     -- The two action buttons share ONE row at the BOTTOM of the pane, not the
     -- running `y`. Two reasons: the dungeon grid's height changes with the
@@ -1249,15 +998,11 @@ local function CreateFilterPanel()
     st:SetPoint("CENTER")
     st:SetText("Search")
     searchBtn:SetScript("OnClick", function()
-        -- This calls ApplyAdvancedFilters directly, so gating
-        -- ApplyAndRefresh does not cover it.
+        -- The escape from the 10-second window: always saves, always
+        -- searches. RunSearch resets the stamp.
         if not IsActive() then return end
         GFP:ApplyAdvancedFilters()
-        local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
-        if not sp then return end
-        if _G.LFGListSearchPanel_DoSearch then
-            _G.LFGListSearchPanel_DoSearch(sp) -- hardware event: allowed
-        end
+        GFP:RunSearch()
     end)
 
     -- Reset: every filter back to its shipped default, which is the widest
@@ -1275,7 +1020,7 @@ local function CreateFilterPanel()
         _G.GameTooltip:SetOwner(b, "ANCHOR_TOP")
         _G.GameTooltip:SetText("Reset Filters", 1, 1, 1)
         _G.GameTooltip:AddLine("Clears every dungeon and role filter and "
-            .. "returns the sort to Default.", 0.85, 0.85, 0.85, true)
+            .. "removes the score floor.", 0.85, 0.85, 0.85, true)
         _G.GameTooltip:Show()
     end)
     resetBtn:SetScript("OnLeave", function() _G.GameTooltip:Hide() end)
@@ -1288,8 +1033,7 @@ local function CreateFilterPanel()
         db.PartyFit = false
         db.HasTank = false
         db.HasHealer = false
-        db.SortBy = "DEFAULT"
-        db.SortDescending = true
+        db.MinScore = 0
         if f._refreshVisuals then f._refreshVisuals() end
         GFP:ApplyAndRefresh()
     end)
@@ -1304,19 +1048,25 @@ local function CreateFilterPanel()
     return f
 end
 
+-- Widget show/hide on our own frames, and nothing else. The filter write
+-- that used to live here reached a provider build three ways -- the
+-- SetCategory hook, the search panel's own OnShow, and Refresh from the
+-- PVEFrame OnShow hook. It is gone rather than deferred: Blizzard runs
+-- Clear, SetCategory, DoSearch and SetActivePanel back to back, and DoSearch
+-- reads the saved filter in that same execution, so a deferred write would
+-- deterministically land a frame too late for it. The filter already holds
+-- the player's settings, written at login, on their last control click, or
+-- on their last roster change.
+--
+-- Every caller defers this by a frame so Blizzard's synchronous
+-- continuation, provider build included, has unwound first.
 function GFP:UpdateMode()
-    -- The enabled check is load-bearing: UpdateMode reaches
-    -- SaveAdvancedFilter through ApplyAdvancedFilters, so without it a
-    -- disabled module keeps overwriting the user's Blizzard filter settings
-    -- on every category change.
     if not panel then return end
     if not IsActive() then return end
-    local dungeonMode = IsDungeonSearchMode()
-    if dungeonMode then
+    if IsDungeonSearchMode() then
         local f = CreateFilterPanel()
         if f then f:Show() end
         if panel.quick then panel.quick:Hide() end
-        self:ApplyAdvancedFilters()
     else
         if panel.filters then panel.filters:Hide() end
         if panel.quick then panel.quick:Show() end
@@ -1357,9 +1107,14 @@ end
 
 function GFP:OnInitialize()
     self.db = KE.db and KE.db.profile and KE.db.profile.GroupFinderPanel
-    -- Sanitize a sort mode that no longer exists in a saved profile.
-    if self.db and self.db.SortBy and not SORT_MODE[self.db.SortBy] then
-        self.db.SortBy = "DEFAULT"
+    -- Blizzard's advanced filter is account-wide, so a restrictive filter
+    -- written on one character is live on every character -- including ones
+    -- where this module never enables and OnEnable never runs. AceAddon
+    -- calls OnInitialize regardless of enabled state, which makes it the
+    -- only place that catches those. When the module WILL enable, OnEnable's
+    -- one-shot write handles it and this does nothing.
+    if not ((self.db and self.db.Enabled) == true and not PGFPresent()) then
+        RestorePermissiveFilter()
     end
     -- Respect the saved toggle at login; Ace defaults modules to enabled.
     self:SetEnabledState((self.db and self.db.Enabled) == true)
@@ -1372,7 +1127,7 @@ function GFP:UpdateDB()
     self.db = KE.db and KE.db.profile and KE.db.profile.GroupFinderPanel
     local new = self.db
     if not new then return end
-    -- The six filter/sort keys are MODULE-SESSION state, independent of
+    -- The filter keys are MODULE-SESSION state, independent of
     -- profile. On an enabled-to-enabled switch, carry the CURRENT values
     -- across rather than adopting whatever the incoming profile was left
     -- with in some past session -- a bare rebind resurrects stale filters.
@@ -1386,8 +1141,7 @@ function GFP:UpdateDB()
         new.HasTank        = old.HasTank
         new.HasHealer      = old.HasHealer
         new.PartyFit       = old.PartyFit
-        new.SortBy         = old.SortBy
-        new.SortDescending = old.SortDescending
+        new.MinScore       = old.MinScore
     end
 end
 
@@ -1403,31 +1157,44 @@ function GFP:ApplySettings()
     self:Refresh()
 end
 
+-- The WHOLE body is deferred, not just the UpdateMode call. Its main driver
+-- is the PVEFrame OnShow hook, and Blizzard materializes the result provider
+-- inside that same Show execution -- so the RaiderIO reposition, the map
+-- info request, the affix and run refreshes all sit in it too. Deferring one
+-- of five would not be a rule. Nothing Blizzard does next reads any of this
+-- and the OnShow hook discards the result, so a frame's delay costs nothing.
+--
+-- ONE callback, UpdateMode included. CreatePanel brings the panel up with
+-- the quick pane visible and UpdateMode is what swaps in the filter pane, so
+-- deferring UpdateMode a second time inside here would show the wrong pane
+-- for a frame on every dungeon-mode open.
 function GFP:Refresh()
-    -- IsActive() folds into the existing condition. It does NOT
-    -- early-return: the else branch below is what hides a panel stranded
-    -- by a late conflict, and an early return would leave it on screen.
-    local enabled = self:IsEnabled() and IsActive()
-    local pve = _G.PVEFrame
-    if enabled and pve and pve:IsShown() then
-        local p = CreatePanel()
-        if p then
-            p:Show()
-            -- CreateFrame births frames VISIBLE, so on the session's first
-            -- open p:Show() is a no-op on an already-shown frame and the
-            -- OnShow hook registered during CreatePanel never fires --
-            -- the RIO wrap would only install at first CLOSE. Install
-            -- from the show PATH instead of the show EVENT.
-            EnsureRaiderIOWrap()
-            if C_MythicPlus and C_MythicPlus.RequestMapInfo then C_MythicPlus.RequestMapInfo() end
-            UpdateAffixes()
-            UpdateRuns()
-            self:UpdateMode()
+    C_Timer.After(0, function()
+        -- IsActive() folds into the existing condition. It does NOT
+        -- early-return: the else branch below is what hides a panel stranded
+        -- by a late conflict, and an early return would leave it on screen.
+        local enabled = self:IsEnabled() and IsActive()
+        local pve = _G.PVEFrame
+        if enabled and pve and pve:IsShown() then
+            local p = CreatePanel()
+            if p then
+                p:Show()
+                -- CreateFrame births frames VISIBLE, so on the session's
+                -- first open p:Show() is a no-op on an already-shown frame
+                -- and the OnShow hook registered during CreatePanel never
+                -- fires -- the RIO wrap would only install at first CLOSE.
+                -- Install from the show PATH instead of the show EVENT.
+                EnsureRaiderIOWrap()
+                if C_MythicPlus and C_MythicPlus.RequestMapInfo then C_MythicPlus.RequestMapInfo() end
+                UpdateAffixes()
+                UpdateRuns()
+                self:UpdateMode()
+            end
+        else
+            TeardownRaiderIO()
+            if panel then panel:Hide() end
         end
-    else
-        TeardownRaiderIO()
-        if panel then panel:Hide() end
-    end
+    end)
 end
 
 function GFP:OnRosterChanged()
@@ -1448,6 +1215,10 @@ local function InstallEntryHook()
             if entry._keFriendBG then entry._keFriendBG:Hide() end
             return
         end
+        -- The set used to be rebuilt by the deleted result pass. Rebuilt
+        -- here instead, throttled on the frame stamp so one full list
+        -- repaint costs one rebuild rather than one per row.
+        RefreshFriendResultSet()
         local id = entry.resultID
         local isFriend = id and friendResultSet[id] or false
         -- Full blue backdrop, not just the name: created once per recycled
@@ -1470,27 +1241,39 @@ end
 
 function GFP:OnEnable()
     -- The PGF bail comes FIRST. With InstallEntryHook and the session-state
-    -- reset above it, a permanent unremovable hook plus six DB writes land
-    -- even on the "stepping aside" path, and installing a permanent hook is
-    -- not stepping aside.
+    -- reset above it, a permanent unremovable hook and the whole key reset
+    -- land even on the "stepping aside" path, and installing a permanent
+    -- hook is not stepping aside.
     if PGFPresent() then
+        -- Stepping aside is not enough on its own. AceAddon has already
+        -- marked the module enabled and will not undo that, so a restrictive
+        -- filter this module wrote in an earlier session would otherwise
+        -- survive with our pane gone and no indication why results are thin.
+        RestorePermissiveFilter()
         KE:Print("Group Finder Panel disabled: Premade Groups Filter is installed and provides the same filtering.")
         return
     end
 
     InstallEntryHook()
     -- Filters are session state, not preferences: every login and reload
-    -- starts clean. This overwrites six of the seven saved keys -- every
-    -- one except Enabled -- which is why the Core/Defaults.lua entries for
-    -- SortBy and SortDescending are effectively dead.
+    -- starts clean. This overwrites every saved key except Enabled.
     if self.db then
         self.db.DungeonFilter = {}
         self.db.HasTank = false
         self.db.HasHealer = false
         self.db.PartyFit = false
-        self.db.SortBy = "OVERALL_SCORE"
-        self.db.SortDescending = true
+        self.db.MinScore = 0
     end
+    -- The pane survives a live disable, so its slider can still be showing
+    -- the old value against the key just reset above -- and the slider is
+    -- what every save reads. Push the reset into the display first.
+    if panel and panel.filters and panel.filters._refreshVisuals then
+        panel.filters._refreshVisuals()
+    end
+    -- One-shot write. Our keys reset every login while Blizzard's filter
+    -- persists, so without this the two disagree until the player touches
+    -- something. This is also what claims ownership.
+    self:ApplyAdvancedFilters()
 
     local pve = _G.PVEFrame
     if pve and not self.hooked then
@@ -1501,31 +1284,26 @@ function GFP:OnEnable()
     self:RegisterEvent("CHALLENGE_MODE_MAPS_UPDATE", "Refresh")
     self:RegisterEvent("MYTHIC_PLUS_CURRENT_AFFIX_UPDATE", "Refresh")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterChanged")
-    -- Our UpdateResultList hook fires once, but on first open the search
-    -- is still in flight, so searchPanel.results is empty and we bail --
-    -- and nothing re-filtered when the async results arrived. A /reload
-    -- masked it because results were already cached.
-    self:RegisterEvent("LFG_LIST_SEARCH_RESULTS_RECEIVED", function()
-        local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
-        if sp and sp:IsShown() then OnUpdateResultList(sp) end
-    end)
     -- Pane switching follows the M+ search state. SetCategory covers the
     -- quick buttons and manual navigation; Show/Hide covers back-outs.
     if not self.modeHooks then
         self.modeHooks = true
         if _G.LFGListSearchPanel_SetCategory then
-            hooksecurefunc("LFGListSearchPanel_SetCategory", function() self:UpdateMode() end)
-        end
-        if _G.LFGListSearchPanel_UpdateResultList then
-            hooksecurefunc("LFGListSearchPanel_UpdateResultList", OnUpdateResultList)
+            hooksecurefunc("LFGListSearchPanel_SetCategory", function()
+                C_Timer.After(0, function() self:UpdateMode() end)
+            end)
         end
         if _G.LFGListSearchEntry_Update then
             hooksecurefunc("LFGListSearchEntry_Update", DecorateSearchEntry)
         end
         local sp = _G.LFGListFrame and _G.LFGListFrame.SearchPanel
         if sp then
-            sp:HookScript("OnShow", function() self:UpdateMode() end)
-            sp:HookScript("OnHide", function() self:UpdateMode() end)
+            sp:HookScript("OnShow", function()
+                C_Timer.After(0, function() self:UpdateMode() end)
+            end)
+            sp:HookScript("OnHide", function()
+                C_Timer.After(0, function() self:UpdateMode() end)
+            end)
         end
     end
     self:Refresh()
@@ -1533,6 +1311,15 @@ end
 
 function GFP:OnDisable()
     self:UnregisterAllEvents()
+    -- Before the restore: a save armed just before this would otherwise land
+    -- after it, rewrite the restrictive filter, and re-claim ownership on a
+    -- module that is now off.
+    CancelMinScoreSave()
+    -- Under the old permissive design the leftover filter was harmless. The
+    -- inversion makes it restrictive, so a player who sets a score floor and
+    -- three dungeons and then turns the module off would keep that filter in
+    -- Blizzard's own Group Finder indefinitely.
+    RestorePermissiveFilter()
     -- UNCONDITIONAL. IsActive() is already false by the time this runs,
     -- because the config page writes db.Enabled = false first.
     TeardownRaiderIO()

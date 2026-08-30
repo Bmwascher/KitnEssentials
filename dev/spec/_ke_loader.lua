@@ -1620,12 +1620,11 @@ function L.loadGroupFinderPanel(overrides)
             PartyFit       = false,
             HasTank        = false,
             HasHealer      = false,
-            SortBy         = "DEFAULT",
-            SortDescending = true,
+            MinScore       = 0,
         },
     }
     local KE = {
-        db = { profile = profile },
+        db = { profile = profile, global = {} },
         FONT = "Fonts\\FRIZQT__.TTF",
         Print = function() end,
         Theme = { accent = { 1, 0, 0.549, 1 } },
@@ -1644,11 +1643,8 @@ function L.loadGroupFinderPanel(overrides)
         playerSpecRole      = GFP._PlayerSpecRole,
         getPartyRoles       = GFP._GetPartyRoles,
         seasonGroups        = GFP._SeasonGroups,
-        expansionGroups     = GFP._ExpansionGroups,
         isDungeonSearchMode = GFP._IsDungeonSearchMode,
         abbreviate          = GFP._Abbreviate,
-        sortOrder           = GFP._SORT_ORDER,
-        sortMode            = GFP._SORT_MODE,
     }
     return GFP, KE, seams
 end
