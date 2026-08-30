@@ -8,7 +8,6 @@
     <Script file="WorldMarkerCycler.lua" />
     <Script file="PotionReady.lua" />
     <Script file="ReadyCheckConsumables.lua" />
-    <Script file="Profiler.lua" />
     <Script file="PlayerAbsorbsFormat.lua" />
     <Script file="PlayerAbsorbs.lua" />
 </Ui>
