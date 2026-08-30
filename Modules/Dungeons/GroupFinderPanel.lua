@@ -1186,6 +1186,23 @@ function GFP:Refresh()
     end)
 end
 
+-- The trigger for a mid-session conflict. Refresh answers the question, but
+-- nothing was asking it: a competing addon loading changes the call-time
+-- predicate without touching the panel, the category, the roster or the
+-- affixes, so no other input fires.
+--
+-- ADDON_LOADED fires once per addon, dozens of times at login, so the cheap
+-- checks happen here rather than deferring a Refresh for each. Both are
+-- needed: the restore hands the filter back, and the Refresh clears a panel
+-- left on screen when the Group Finder was already open.
+function GFP:OnAddonLoaded()
+    if IsActive() then return end
+    local g = KE.db and KE.db.global
+    if not (g and g.GroupFinderPanelOwnsFilter) then return end
+    RestorePermissiveFilter()
+    self:Refresh()
+end
+
 function GFP:OnRosterChanged()
     -- No gate of its own: ApplyAdvancedFilters has one, and gating both
     -- would be two places to keep in sync.
@@ -1273,6 +1290,7 @@ function GFP:OnEnable()
     self:RegisterEvent("CHALLENGE_MODE_MAPS_UPDATE", "Refresh")
     self:RegisterEvent("MYTHIC_PLUS_CURRENT_AFFIX_UPDATE", "Refresh")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterChanged")
+    self:RegisterEvent("ADDON_LOADED", "OnAddonLoaded")
     -- The panel follows the M+ search state, so every edge that can change
     -- it re-asks Refresh. SetCategory covers arriving at a category,
     -- Show/Hide covers back-outs. Refresh defers itself, so these do not.

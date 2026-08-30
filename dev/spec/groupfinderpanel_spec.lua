@@ -469,7 +469,9 @@ describe("GroupFinderPanel mid-session conflict", function()
     it("hands the filter back when a conflict appears after enable", function()
         -- The conflict predicate is evaluated at call time, so a competing
         -- addon that loads later stands this module down without any
-        -- disable ever running. The filter would stay claimed until reload.
+        -- disable ever running. Driven through the load handler, not through
+        -- Refresh: calling Refresh here would supply by hand the very
+        -- notification the module has to arrange for itself.
         local GFP, KE, state = loadWithFilter()
         GFP:ApplyAdvancedFilters()
         assert.is_true(KE.db.global.GroupFinderPanelOwnsFilter)
@@ -477,11 +479,36 @@ describe("GroupFinderPanel mid-session conflict", function()
         _G.C_AddOns.IsAddOnLoaded = function(name)
             return name == "PremadeGroupsFilter"
         end
-        GFP:Refresh()
-        state.afterFn()
+        GFP:OnAddonLoaded()
         assert.is_not_nil(state.saved)          -- fail, rather than error, on no restore
         assert.equals(0, state.saved.minimumRating)
         assert.is_false(KE.db.global.GroupFinderPanelOwnsFilter)
+    end)
+
+    it("does nothing on the dozens of loads that are not the conflict", function()
+        -- ADDON_LOADED fires once per addon at login. The handler must not
+        -- touch the filter it legitimately owns.
+        local GFP, KE, state = loadWithFilter()
+        GFP:ApplyAdvancedFilters()
+        state.saved = nil
+        GFP:OnAddonLoaded()
+        assert.is_nil(state.saved)
+        assert.is_true(KE.db.global.GroupFinderPanelOwnsFilter)
+    end)
+
+    it("does not re-restore a filter it has already handed back", function()
+        -- Every later load re-enters the handler with the predicate still
+        -- false. Ownership is what stops it, so the write happens once.
+        local GFP, KE, state = loadWithFilter()
+        GFP:ApplyAdvancedFilters()
+        _G.C_AddOns.IsAddOnLoaded = function(name)
+            return name == "PremadeGroupsFilter"
+        end
+        GFP:OnAddonLoaded()
+        assert.is_false(KE.db.global.GroupFinderPanelOwnsFilter)
+        state.saved = nil
+        GFP:OnAddonLoaded()
+        assert.is_nil(state.saved)
     end)
 
     it("leaves an unowned filter alone when the frame simply closes", function()
