@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.17
+
+### Damage Meter
+- The meter loads on a fresh install again. It asked for a piece of shared code
+  the addon never actually included, so it only ever worked when some other
+  addon you happened to have installed supplied it first. When none did, the
+  meter never started and the screen filled with errors
+
 ## v4.4.16
 
 ### Group Finder Panel
