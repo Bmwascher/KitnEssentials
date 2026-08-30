@@ -15,37 +15,56 @@ local DEFAULT_FREQUENCY = 0.25
 
 -- Grid data, not guesses: both atlases are declared 6x5 with 30 frames in
 -- Blizzard's own action-bar templates, and the alert sheet holds 25 cells of
--- which only the first 22 are real — playing all 25 flashes an empty gap that
+-- which only the first 22 are real -- playing all 25 flashes an empty gap that
 -- reads as a backwards stutter. The size factor scales the TEXTURE, never the
 -- host frame.
+--
+-- frameWidth/frameHeight are the flipbook's CELL size. Zero means "derive it",
+-- which an atlas can do because it carries its own region. A raw texture file
+-- has no region to measure, so the alert sheet must state its cell size or the
+-- animation has no geometry to step through.
 GlowRules.FLIPBOOKS = {
     ants = {
         -- Lowercase, exactly as Blizzard declares it. A capitalised spelling
         -- finds nothing when searching the client source.
         atlas = "rotationhelper_ants_flipbook",
         rows = 6, columns = 5, frames = 30, sizeFactor = 1.6,
+        frameWidth = 0, frameHeight = 0,
     },
     procloop = {
         atlas = "UI-HUD-ActionBar-Proc-Loop-Flipbook",
         rows = 6, columns = 5, frames = 30, sizeFactor = 1.4,
+        frameWidth = 0, frameHeight = 0,
     },
     alert = {
         texture = [[Interface\SpellActivationOverlay\IconAlertAnts]],
         rows = 5, columns = 5, frames = 22, sizeFactor = 1.25,
+        frameWidth = 48, frameHeight = 48,
     },
+}
+
+-- Every selectable style, and which host draws it. The flipbook host steps a
+-- sheet; the pixel host marches four masked dash strips. ResolveType keys off
+-- this rather than FLIPBOOKS, which knows only about the sheet-based three.
+GlowRules.STYLES = {
+    pixel    = { kind = "pixel" },
+    ants     = { kind = "flipbook" },
+    procloop = { kind = "flipbook" },
+    alert    = { kind = "flipbook" },
 }
 
 -- Read-time coercion, never a profile rewrite: a migration would write a
 -- value the user could not yet have chosen.
+-- `pixel` is absent on purpose: it renders again, so it resolves to itself
+-- through the STYLES lookup and must not be coerced away.
 local TYPE_MAP = {
-    pixel    = "ants",      -- both trace the button edge
-    autocast = "ants",
+    autocast = "pixel",     -- both trace the button edge
     button   = "procloop",  -- both are a soft fill rather than an outline
     proc     = "procloop",
 }
 
 function GlowRules.ResolveType(stored)
-    if GlowRules.FLIPBOOKS[stored] then return stored end
+    if GlowRules.STYLES[stored] then return stored end
     return TYPE_MAP[stored] or DEFAULT_TYPE
 end
 
@@ -105,4 +124,81 @@ function GlowRules.SetType(db, keys, chosen)
     db[keys.frequency] = speed
     db[keys.type]      = chosen
     return db[keys.frequency], db[keys.type]
+end
+
+-- The flipbook's OWN inputs, and nothing else. Icon size and colour are
+-- deliberately absent: changing them must not restart a playing animation.
+function GlowRules.FlipbookState(entry, duration)
+    return {
+        source      = entry.atlas or entry.texture,
+        rows        = entry.rows,
+        columns     = entry.columns,
+        frames      = entry.frames,
+        frameWidth  = entry.frameWidth or 0,
+        frameHeight = entry.frameHeight or 0,
+        duration    = duration,
+    }
+end
+
+-- `source` is the field the older test was missing. Two styles can declare an
+-- identical grid, so comparing the grid alone reports "unchanged" across a
+-- texture swap and the animation is never stopped and replayed.
+function GlowRules.NeedsRestart(applied, wanted)
+    if not applied then return true end
+    return applied.source      ~= wanted.source
+        or applied.rows        ~= wanted.rows
+        or applied.columns     ~= wanted.columns
+        or applied.frames      ~= wanted.frames
+        or applied.frameWidth  ~= wanted.frameWidth
+        or applied.frameHeight ~= wanted.frameHeight
+        or applied.duration    ~= wanted.duration
+end
+
+local math_floor = math.floor
+
+-- Clamped to the range the Lines slider offers, so a hand-edited profile
+-- cannot ask for a dash count the geometry was never solved for.
+function GlowRules.NormalisePixelCount(value)
+    local n = tonumber(value)
+    if not n or n < 1 then return 8 end
+    if n > 16 then return 16 end
+    return math_floor(n)
+end
+
+-- Same rule for the Thickness slider's range.
+function GlowRules.NormalisePixelThickness(value)
+    local t = tonumber(value)
+    if not t or t < 1 then return 1 end
+    if t > 8 then return 8 end
+    return math_floor(t)
+end
+
+-- The marching border, as scalars.
+--
+-- `cycle` is the pixel span of one dash plus its gap. Each strip is drawn one
+-- whole cycle LONGER than its edge and translated by exactly one cycle, so the
+-- snap back at the end of the loop lands on identical pixels and is invisible.
+-- `phase` is each edge's cumulative distance around the perimeter, expressed in
+-- cycles, which is what keeps the dashes continuous across a corner: phase
+-- matters only modulo one cycle, so the one-cycle strip overhang cancels out.
+--
+-- Edge order is clockwise from the top: top, right, bottom, left.
+function GlowRules.PixelPerimeter(count, width, height, period)
+    local n = GlowRules.NormalisePixelCount(count)
+    local perimeter = 2 * (width + height)
+    local cycle = perimeter / n
+
+    return {
+        count = n,
+        cycle = cycle,
+        step  = period / n,
+        phase = {
+            0,
+            width / cycle,
+            (width + height) / cycle,
+            (width + height + width) / cycle,
+        },
+        spanH = (width + cycle) / cycle,
+        spanV = (height + cycle) / cycle,
+    }
 end

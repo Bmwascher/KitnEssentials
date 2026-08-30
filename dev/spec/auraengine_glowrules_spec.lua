@@ -1,10 +1,9 @@
 local L = require("dev.spec._ke_loader")
 
 describe("glow type coercion", function()
-    it("maps the two edge-tracing styles to ants", function()
+    it("maps the retired autocast style onto the pixel border", function()
         local G = L.loadAuraGlowRules()
-        assert.equals("ants", G.ResolveType("pixel"))
-        assert.equals("ants", G.ResolveType("autocast"))
+        assert.equals("pixel", G.ResolveType("autocast"))
     end)
 
     it("maps the two fill styles to procloop", function()
@@ -143,5 +142,115 @@ describe("glow type settling", function()
         local db = { GlowType = "proc", GlowDuration = 0.5, GlowFrequency = 0.25 }
         G.SetType(db, KEYS, "alert")
         assert.is_false(db.GlowFrequency == 0.25)
+    end)
+end)
+
+describe("flipbook restart predicate", function()
+    it("restarts when nothing has been applied yet", function()
+        local G = L.loadAuraGlowRules()
+        local wanted = G.FlipbookState(G.FLIPBOOKS.ants, 1)
+        assert.is_true(G.NeedsRestart(nil, wanted))
+    end)
+
+    it("restarts on an atlas swap between two styles sharing a grid", function()
+        local G = L.loadAuraGlowRules()
+        local ants = G.FLIPBOOKS.ants
+        local proc = G.FLIPBOOKS.procloop
+        assert.equals(ants.rows, proc.rows)
+        assert.equals(ants.columns, proc.columns)
+        assert.equals(ants.frames, proc.frames)
+        assert.is_true(G.NeedsRestart(
+            G.FlipbookState(ants, 1), G.FlipbookState(proc, 1)))
+    end)
+
+    it("does not restart when only unrelated settings changed", function()
+        local G = L.loadAuraGlowRules()
+        local applied = G.FlipbookState(G.FLIPBOOKS.ants, 1)
+        local wanted  = G.FlipbookState(G.FLIPBOOKS.ants, 1)
+        assert.is_false(G.NeedsRestart(applied, wanted))
+    end)
+
+    it("restarts when the duration changes", function()
+        local G = L.loadAuraGlowRules()
+        assert.is_true(G.NeedsRestart(
+            G.FlipbookState(G.FLIPBOOKS.ants, 1),
+            G.FlipbookState(G.FLIPBOOKS.ants, 2)))
+    end)
+
+    it("gives the raw-texture style a real cell size and the atlases none", function()
+        local G = L.loadAuraGlowRules()
+        assert.equals(48, G.FLIPBOOKS.alert.frameWidth)
+        assert.equals(48, G.FLIPBOOKS.alert.frameHeight)
+        assert.equals(0, G.FLIPBOOKS.ants.frameWidth)
+        assert.equals(0, G.FLIPBOOKS.ants.frameHeight)
+        assert.equals(0, G.FLIPBOOKS.procloop.frameWidth)
+        assert.equals(0, G.FLIPBOOKS.procloop.frameHeight)
+    end)
+end)
+
+describe("pixel glow rules", function()
+    it("lists all four selectable styles with a kind", function()
+        local G = L.loadAuraGlowRules()
+        assert.equals("pixel", G.STYLES.pixel.kind)
+        assert.equals("flipbook", G.STYLES.ants.kind)
+        assert.equals("flipbook", G.STYLES.procloop.kind)
+        assert.equals("flipbook", G.STYLES.alert.kind)
+    end)
+
+    it("resolves pixel to itself now that it renders again", function()
+        local G = L.loadAuraGlowRules()
+        assert.equals("pixel", G.ResolveType("pixel"))
+    end)
+
+    it("clamps the dash count and defaults a bad one to eight", function()
+        local G = L.loadAuraGlowRules()
+        assert.equals(8, G.NormalisePixelCount(nil))
+        assert.equals(8, G.NormalisePixelCount(0))
+        assert.equals(8, G.NormalisePixelCount("not a number"))
+        assert.equals(1, G.NormalisePixelCount(1))
+        assert.equals(16, G.NormalisePixelCount(99))
+        assert.equals(5, G.NormalisePixelCount(5.7))
+    end)
+
+    it("clamps the dash thickness and defaults a bad one to one", function()
+        local G = L.loadAuraGlowRules()
+        assert.equals(1, G.NormalisePixelThickness(nil))
+        assert.equals(1, G.NormalisePixelThickness(0))
+        assert.equals(8, G.NormalisePixelThickness(99))
+        assert.equals(3, G.NormalisePixelThickness(3))
+    end)
+
+    it("divides the perimeter into equal dash cycles", function()
+        local G = L.loadAuraGlowRules()
+        local p = G.PixelPerimeter(8, 40, 40, 4)
+        assert.equals(8, p.count)
+        -- perimeter 160 over 8 dashes
+        assert.equals(20, p.cycle)
+        -- one cycle of travel per dash, over the whole period
+        assert.equals(0.5, p.step)
+    end)
+
+    it("phases each edge by its cumulative perimeter offset in cycles", function()
+        local G = L.loadAuraGlowRules()
+        local p = G.PixelPerimeter(8, 40, 40, 4)
+        assert.equals(0, p.phase[1])
+        assert.equals(2, p.phase[2])
+        assert.equals(4, p.phase[3])
+        assert.equals(6, p.phase[4])
+    end)
+
+    it("spans a strip one whole cycle longer than its edge", function()
+        local G = L.loadAuraGlowRules()
+        local p = G.PixelPerimeter(8, 40, 60, 4)
+        -- cycle = 200/8 = 25; horizontal edge 40 long, vertical 60
+        assert.equals(25, p.cycle)
+        assert.equals((40 + 25) / 25, p.spanH)
+        assert.equals((60 + 25) / 25, p.spanV)
+    end)
+
+    it("falls back to a sane count when the caller passes rubbish", function()
+        local G = L.loadAuraGlowRules()
+        local p = G.PixelPerimeter(0, 40, 40, 4)
+        assert.equals(8, p.count)
     end)
 end)

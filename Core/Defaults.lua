@@ -1181,6 +1181,7 @@ local Defaults = {
         AuraExternals = {
             Enabled           = false,
             ShowBigDefensives = false,
+            HideSelfCast      = false,
             Strata            = "MEDIUM",
             anchorFrameType   = "PLAYERFRAME",
             ParentFrame       = "UIParent",
@@ -1191,16 +1192,70 @@ local Defaults = {
             MaxRows           = 2,
             Swipe             = false,
             Reverse           = true,
+            -- Seeded rows carry default = true, which makes them undeletable
+            -- in the GUI and lets the restore buttons tell a shipped row from
+            -- one the user typed in. Any row may still be switched off.
+            --
+            -- Many rows share a name because the game returns the same name for
+            -- every id of a spell. They are still distinguishable: the
+            -- dropdown's own option builder appends the spell ID to every row,
+            -- so the label must NOT carry one or it renders twice.
+            Allowlist = {
+                [33206]   = { label = "Pain Suppression",           enabled = true, default = true },
+                [47788]   = { label = "Guardian Spirit",            enabled = true, default = true },
+                [255312]  = { label = "Guardian Spirit",            enabled = true, default = true },
+                [197268]  = { label = "Ray of Hope",                enabled = true, default = true },
+                [1022]    = { label = "Blessing of Protection",     enabled = true, default = true },
+                [6940]    = { label = "Blessing of Sacrifice",      enabled = true, default = true },
+                [204018]  = { label = "Blessing of Spellwarding",   enabled = true, default = true },
+                [102342]  = { label = "Ironbark",                   enabled = true, default = true },
+                [116849]  = { label = "Life Cocoon",                enabled = true, default = true },
+                [357170]  = { label = "Time Dilation",              enabled = true, default = true },
+                [3411]    = { label = "Intervene",                  enabled = true, default = true },
+                [147833]  = { label = "Intervene",                  enabled = true, default = true },
+                [223658]  = { label = "Safeguard",                  enabled = true, default = true },
+                [53480]   = { label = "Roar of Sacrifice",          enabled = true, default = true },
+
+                -- Raid-wide cooldowns. The game flags none of these as an external
+                -- defensive, so Blizzard Flagged switches every one of them off.
+                [145629]  = { label = "Anti-Magic Zone",            enabled = true, default = true },
+                [51052]   = { label = "Anti-Magic Zone",            enabled = true, default = true },
+                [209426]  = { label = "Darkness",                   enabled = true, default = true },
+                [196718]  = { label = "Darkness",                   enabled = true, default = true },
+                [740]     = { label = "Tranquility",                enabled = true, default = true },
+                [157982]  = { label = "Tranquility",                enabled = true, default = true },
+                [1264623] = { label = "Tranquility",                enabled = true, default = true },
+                [359816]  = { label = "Dream Flight",               enabled = true, default = true },
+                [362361]  = { label = "Dream Flight",               enabled = true, default = true },
+                [363534]  = { label = "Rewind",                     enabled = true, default = true },
+                [374227]  = { label = "Zephyr",                     enabled = true, default = true },
+                [31821]   = { label = "Aura Mastery",               enabled = true, default = true },
+                [317929]  = { label = "Aura Mastery",               enabled = true, default = true },
+                [64843]   = { label = "Divine Hymn",                enabled = true, default = true },
+                [64844]   = { label = "Divine Hymn",                enabled = true, default = true },
+                [81782]   = { label = "Power Word: Barrier",        enabled = true, default = true },
+                [62618]   = { label = "Power Word: Barrier",        enabled = true, default = true },
+                [325174]  = { label = "Spirit Link Totem",          enabled = true, default = true },
+                [98008]   = { label = "Spirit Link Totem",          enabled = true, default = true },
+                [97463]   = { label = "Rallying Cry",               enabled = true, default = true },
+                [97462]   = { label = "Rallying Cry",               enabled = true, default = true },
+
+                -- Support buffs someone else casts on you rather than
+                -- defensives, so the game flags none of them.
+                [29166]   = { label = "Innervate",                  enabled = true, default = true },
+                [10060]   = { label = "Power Infusion",             enabled = true, default = true },
+                [406732]  = { label = "Spatial Paradox",            enabled = true, default = true },
+            },
             GrowHorizontal    = "LEFT",
             GrowVertical      = "UP",
             GlowEnabled       = true,
             GlowType          = "pixel",
             GlowColor         = { 0, 1, 0, 1 },
-            -- Six of the keys below are retained but unread -- GlowLines,
-            -- GlowLength, GlowThickness, GlowBorder, GlowScale and
-            -- GlowStartAnim -- so a profile saved by an older version still
-            -- loads cleanly. GlowFrequency and GlowDuration in the same run
-            -- are NOT dead and are still read.
+            -- Four of the keys below are retained but unread -- GlowLength,
+            -- GlowBorder, GlowScale and GlowStartAnim -- so a profile saved by
+            -- an older version still loads cleanly. GlowLines and GlowThickness
+            -- became live again with the pixel style; GlowFrequency and
+            -- GlowDuration were never dead.
             GlowLines         = 8,
             GlowFrequency     = 0.25,
             GlowLength        = 10,

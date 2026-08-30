@@ -9,6 +9,7 @@ local KE = select(2, ...)
 
 local table_concat = table.concat
 local table_insert = table.insert
+local table_sort = table.sort
 
 local Rules = {}
 KE.AuraRules = Rules
@@ -111,6 +112,62 @@ function Rules.BuildExcludeSpellIDs(saved)
     return set
 end
 
+-- Saved allowlist entries are RECORDS with an enabled flag, matching the
+-- blocklist's shape, so a disabled row must not admit its spell.
+--
+-- ALWAYS A TABLE, never nil. A nil includeSpellIDs means "no whitelist", and a
+-- group filtering plain HELPFUL with no whitelist shows every buff on the
+-- player. That failure is silent and reads as a flood rather than an error.
+--
+-- A FRESH table every call, unlike the exclude builder: there is no shared
+-- constant set to alias here, so there is nothing to protect from mutation and
+-- nothing to be gained by returning one.
+function Rules.BuildIncludeSpellIDs(saved)
+    local set = {}
+
+    if saved then
+        for spellID, record in pairs(saved) do
+            if type(record) == "table" and record.enabled ~= false then
+                set[spellID] = true
+            end
+        end
+    end
+
+    return set
+end
+
+-- Three-valued on purpose, and the middle value is the trap. `false` drops the
+-- auras you and your pet applied, absent filters nothing, and `true` would show
+-- ONLY your own -- the exact opposite of what the setting reads as. So the
+-- stored boolean is never passed through.
+function Rules.SelfCastFilterValue(hideSelfCast)
+    if hideSelfCast then return false end
+    return nil
+end
+
+-- The sound registry takes one spell id per registration, so it needs the
+-- allowlist as an ordered array rather than the set the container filter
+-- wants. Sorted because the array also serves as the registry's change
+-- signature: an unsorted `pairs` walk would reorder after a rehash and force
+-- a retire-and-rebuild that changed nothing.
+function Rules.BuildSoundSpellIDs(saved)
+    local ids = {}
+
+    for spellID in pairs(Rules.BuildIncludeSpellIDs(saved)) do
+        -- The Add New Entry button reserves a NEGATIVE id until the user types
+        -- a real one, and it reserves it enabled. The container simply matches
+        -- no aura on such an id, but the sound API is asked to register it, and
+        -- one nil return there rolls the whole registry back to silence -- so
+        -- pressing Add would mute every external until the id was filled in.
+        if type(spellID) == "number" and spellID > 0 then
+            ids[#ids + 1] = spellID
+        end
+    end
+    table_sort(ids)
+
+    return ids
+end
+
 -- maxFrameCount is per group and unused capacity cannot cross a group
 -- boundary, so the limit is divided rather than shared. The remainder goes to
 -- externals: they are the reason the module exists, and a single slot showing
@@ -207,4 +264,24 @@ local GROWTH_CONVERSION = {
 function Rules.ConvertGrowthDirection(value)
     local out = GROWTH_CONVERSION[value] or GROWTH_CONVERSION.LEFT_DOWN
     return out[1], out[2], out[3]
+end
+
+-- Decides whether an allowlist row may be re-keyed onto another spell ID.
+--
+-- Two refusals, and neither is reachable through the Delete button, so this is
+-- the only place they can live. Re-keying a shipped row would carry its
+-- `default` flag onto an ID that was never shipped, and the delete guard refuses
+-- exactly that flag -- the row becomes permanently undeletable. Re-keying onto an
+-- occupied ID deletes whatever was there, which is a shipped-row deletion by
+-- another route.
+function Rules.CanRekeyAllowlistEntry(saved, fromID, toID)
+    if type(saved) ~= "table" then return false end
+    if type(fromID) ~= "number" or type(toID) ~= "number" then return false end
+    if fromID == toID then return false end
+
+    local entry = saved[fromID]
+    if type(entry) ~= "table" then return false end
+    if entry.default then return false end
+
+    return saved[toID] == nil
 end

@@ -291,3 +291,176 @@ describe("ConvertGrowthDirection", function()
         assert.are.equal("HORIZONTAL", axis)
     end)
 end)
+
+describe("include spell id set", function()
+    it("returns an empty table rather than nil when nothing is saved", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs(nil)
+        assert.is_table(set)
+        assert.is_nil(next(set))
+    end)
+
+    it("returns an empty table rather than nil when every row is disabled", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({
+            [33206] = { label = "Pain Suppression", enabled = false },
+            [47788] = { label = "Guardian Spirit",  enabled = false },
+        })
+        assert.is_table(set)
+        assert.is_nil(next(set))
+    end)
+
+    it("includes an enabled row", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({
+            [33206] = { label = "Pain Suppression", enabled = true },
+        })
+        assert.is_true(set[33206])
+    end)
+
+    it("treats a row with no enabled flag as enabled", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({
+            [33206] = { label = "Pain Suppression" },
+        })
+        assert.is_true(set[33206])
+    end)
+
+    it("omits a disabled row while keeping its enabled neighbours", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({
+            [33206] = { label = "Pain Suppression", enabled = false },
+            [47788] = { label = "Guardian Spirit",  enabled = true },
+        })
+        assert.is_nil(set[33206])
+        assert.is_true(set[47788])
+    end)
+
+    it("ignores a non-table row", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({ [33206] = true })
+        assert.is_nil(set[33206])
+    end)
+
+    it("returns a fresh table each call", function()
+        local R = L.loadAuraRules()
+        local a = R.BuildIncludeSpellIDs(nil)
+        local b = R.BuildIncludeSpellIDs(nil)
+        assert.is_not.equal(a, b)
+    end)
+end)
+
+describe("CanRekeyAllowlistEntry", function()
+    -- `R` is loaded per case in this file, not once at the top. Follow that:
+    -- a describe-level local would diverge from every other block here.
+    local function saved()
+        return {
+            [111] = { label = "Shipped", enabled = true, default = true },
+            [222] = { label = "Custom",  enabled = true },
+            [333] = { label = "Other",   enabled = true },
+        }
+    end
+
+    it("allows moving a custom row to a free id", function()
+        local R = L.loadAuraRules()
+        assert.is_true(R.CanRekeyAllowlistEntry(saved(), 222, 444))
+    end)
+
+    it("refuses to move a shipped row", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), 111, 444))
+    end)
+
+    it("refuses a destination that is already taken", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), 222, 333))
+    end)
+
+    it("refuses a destination taken by a shipped row", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), 222, 111))
+    end)
+
+    it("refuses a row that is not there", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), 999, 444))
+    end)
+
+    it("refuses a move onto itself", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), 222, 222))
+    end)
+
+    it("refuses non-numeric ids and a missing table", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.CanRekeyAllowlistEntry(saved(), "222", 444))
+        assert.is_false(R.CanRekeyAllowlistEntry(nil, 222, 444))
+    end)
+end)
+
+describe("sound spell id array", function()
+    it("returns an empty table rather than nil when nothing is saved", function()
+        local R = L.loadAuraRules()
+        local ids = R.BuildSoundSpellIDs(nil)
+        assert.is_table(ids)
+        assert.equals(0, #ids)
+    end)
+
+    it("carries only the enabled rows", function()
+        local R = L.loadAuraRules()
+        local ids = R.BuildSoundSpellIDs({
+            [33206] = { label = "Pain Suppression", enabled = true },
+            [47788] = { label = "Guardian Spirit",  enabled = false },
+            [1022]  = { label = "Blessing of Protection" },
+        })
+        assert.same({ 1022, 33206 }, ids)
+    end)
+
+    it("sorts ascending, so the array is a stable change signature", function()
+        local R = L.loadAuraRules()
+        local ids = R.BuildSoundSpellIDs({
+            [357170] = { enabled = true },
+            [6940]   = { enabled = true },
+            [102342] = { enabled = true },
+        })
+        assert.same({ 6940, 102342, 357170 }, ids)
+    end)
+end)
+
+describe("self-cast candidate filter value", function()
+    it("returns false when the setting is on, which is what drops your own casts", function()
+        local R = L.loadAuraRules()
+        assert.is_false(R.SelfCastFilterValue(true))
+    end)
+
+    it("returns nil when the setting is off, so the container filters nothing", function()
+        local R = L.loadAuraRules()
+        assert.is_nil(R.SelfCastFilterValue(false))
+    end)
+
+    it("returns nil for an absent setting rather than passing it through", function()
+        local R = L.loadAuraRules()
+        assert.is_nil(R.SelfCastFilterValue(nil))
+    end)
+end)
+
+describe("sound spell id array placeholder handling", function()
+    it("drops the negative id the Add New Entry button reserves", function()
+        local R = L.loadAuraRules()
+        local ids = R.BuildSoundSpellIDs({
+            [-1]    = { label = "Entry 1", enabled = true },
+            [-2]    = { label = "Entry 2", enabled = true },
+            [33206] = { label = "Pain Suppression", enabled = true },
+        })
+        assert.same({ 33206 }, ids)
+    end)
+
+    it("drops a non-numeric key from a hand-edited profile", function()
+        local R = L.loadAuraRules()
+        local ids = R.BuildSoundSpellIDs({
+            ["33206"] = { enabled = true },
+            [47788]   = { enabled = true },
+        })
+        assert.same({ 47788 }, ids)
+    end)
+end)

@@ -7,6 +7,8 @@
 ---@class KE
 local KE = select(2, ...)
 
+local table_concat = table.concat
+
 local Sound = {}
 KE.AuraSound = Sound
 
@@ -22,6 +24,7 @@ function Sound.New(opts)
         onDiagnostic = opts.onDiagnostic,
         ids          = {},
         currentPath  = nil,
+        currentIDs   = nil,
         pending      = false,
     }, Registry)
 end
@@ -49,6 +52,17 @@ end
 -- path hold. Vehicle suspension is deliberately NOT one of the inputs — the
 -- sound announces an external landing on you and is worth hearing while the
 -- icons are off screen.
+-- A declaration either names a fixed list or builds one from the settings.
+-- The built form is what lets the sound follow a user-editable allowlist
+-- instead of a list frozen at file scope.
+local function desiredSpellIDs(declaration, settings)
+    if not declaration then return {} end
+    if declaration.buildSpellIDs then
+        return declaration.buildSpellIDs(settings) or {}
+    end
+    return declaration.spellIDs or {}
+end
+
 local function desiredPath(declaration, settings, moduleEnabled, resolveMedia)
     if not declaration then return nil end
     if not moduleEnabled then return nil end
@@ -66,6 +80,13 @@ function Registry:Sync(declaration, settings, moduleEnabled)
     settings = settings or {}
 
     local path = desiredPath(declaration, settings, moduleEnabled, self.resolveMedia)
+    local spellIDs = desiredSpellIDs(declaration, settings)
+
+    -- The SET of ids is half the desired state, not just the sound file. A
+    -- user switching an allowlist row on changes nothing about the path, so
+    -- comparing the path alone would leave the old registrations standing and
+    -- the new row silent.
+    local idKey = table_concat(spellIDs, ",")
 
     -- NOTHING TO DO. Every settings change routes through here — icon size,
     -- fonts, growth direction — and almost none of them touch the sound. An
@@ -74,13 +95,15 @@ function Registry:Sync(declaration, settings, moduleEnabled)
     -- allowed: the user would lose their sound for the rest of the key by
     -- nudging a font slider. Registrations exist whenever the four inputs
     -- hold, and only registrations which no longer MATCH are retired.
-    if path and path == self.currentPath and not self.pending and #self.ids > 0 then
+    if path and path == self.currentPath and idKey == self.currentIDs
+        and not self.pending and #self.ids > 0 then
         return
     end
 
     -- Past this point the desired state genuinely differs.
     self:RetireAll()
     self.currentPath = nil
+    self.currentIDs  = nil
 
     if not path then
         -- The desired state IS silence, so it is already reached. Nothing to
@@ -96,10 +119,10 @@ function Registry:Sync(declaration, settings, moduleEnabled)
     end
 
     local created = {}
-    for i = 1, #declaration.spellIDs do
+    for i = 1, #spellIDs do
         local id = self.api.Add(Enum.UnitAuraSoundTrigger.Added, {
             unitToken     = declaration.unit,
-            spellID       = declaration.spellIDs[i],
+            spellID       = spellIDs[i],
             soundFileName = path,
             outputChannel = "Master",
         })
@@ -124,5 +147,6 @@ function Registry:Sync(declaration, settings, moduleEnabled)
 
     self.ids         = created
     self.currentPath = path
+    self.currentIDs  = idKey
     self.pending     = false
 end

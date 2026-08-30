@@ -64,8 +64,12 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     }
 
     local widgets = {}
+    -- `pixelExtras` holds the two controls only a Lua-driven pixel glow can
+    -- honour -- Length and Border. A consumer whose glow is animation-driven
+    -- overrides this table to omit that group.
     local typeOnlyRows = {
         pixel = {},
+        pixelExtras = {},
         autocast = {},
         proc = {},
     }
@@ -91,6 +95,7 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
 
     local typeDropdown = GUIFrame:CreateDropdown(row1, "Type", {
         options = types,
+        tooltip = config.typeTooltip,
         value = resolveType(db[keys.type]),
         callback = function(val)
             -- The adapter's setType (when present) settles a legacy value
@@ -154,28 +159,28 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     rowPixel1:AddWidget(linesSlider, 0.5)
     table_insert(widgets, linesSlider)
 
-    local lengthSlider = GUIFrame:CreateSlider(rowPixel1, "Length", {
-        min = 1,
-        max = 20,
-        step = 1,
-        value = db[keys.length],
-        callback = function(val) setValue(keys.length, val) end
-    })
-    rowPixel1:AddWidget(lengthSlider, 0.5)
-    table_insert(widgets, lengthSlider)
-    card:AddRow(rowPixel1, Theme.rowHeight)
-    table_insert(typeOnlyRows.pixel, rowPixel1)
-
-    local rowPixel2 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local thicknessSlider = GUIFrame:CreateSlider(rowPixel2, "Thickness", {
+    local thicknessSlider = GUIFrame:CreateSlider(rowPixel1, "Thickness", {
         min = 1,
         max = 8,
         step = 1,
         value = db[keys.thickness],
         callback = function(val) setValue(keys.thickness, val) end
     })
-    rowPixel2:AddWidget(thicknessSlider, 0.5)
+    rowPixel1:AddWidget(thicknessSlider, 0.5)
     table_insert(widgets, thicknessSlider)
+    card:AddRow(rowPixel1, Theme.rowHeight)
+    table_insert(typeOnlyRows.pixel, rowPixel1)
+
+    local rowPixel2 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    local lengthSlider = GUIFrame:CreateSlider(rowPixel2, "Length", {
+        min = 1,
+        max = 20,
+        step = 1,
+        value = db[keys.length],
+        callback = function(val) setValue(keys.length, val) end
+    })
+    rowPixel2:AddWidget(lengthSlider, 0.5)
+    table_insert(widgets, lengthSlider)
 
     local borderCheck = GUIFrame:CreateCheckbox(rowPixel2, "Border", {
         value = db[keys.border],
@@ -184,7 +189,7 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     rowPixel2:AddWidget(borderCheck, 0.5)
     table_insert(widgets, borderCheck)
     card:AddRow(rowPixel2, Theme.rowHeight)
-    table_insert(typeOnlyRows.pixel, rowPixel2)
+    table_insert(typeOnlyRows.pixelExtras, rowPixel2)
 
     local rowAutocast = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local particlesSlider = GUIFrame:CreateSlider(rowAutocast, "Particles", {
@@ -250,7 +255,33 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
         end
         if freqSlider and freqSlider.SetShown then freqSlider:SetShown(showFrequency) end
 
-        for typeName, rows in pairs(typeRowsOverride or typeOnlyRows) do
+        -- A function override is resolved at call time against the card's own
+        -- groups, which is the only way a caller can re-point rows it could
+        -- not name when it built its config table. A plain table still works.
+        local rowGroups = typeOnlyRows
+        if type(typeRowsOverride) == "function" then
+            rowGroups = typeRowsOverride(typeOnlyRows)
+        elseif typeRowsOverride then
+            rowGroups = typeRowsOverride
+        end
+
+        -- DEFAULT grouping only, and it must produce ONE key, not two.
+        -- `pairs` order is undefined, and the loop below POSITIONS each row it
+        -- shows, so two matching keys would let the two Pixel rows swap places
+        -- between sessions. Concatenating them into a single ordered array
+        -- keeps placement under the inner ipairs, where it is deterministic.
+        if rowGroups == typeOnlyRows then
+            local merged = {}
+            for _, row in ipairs(typeOnlyRows.pixel) do merged[#merged + 1] = row end
+            for _, row in ipairs(typeOnlyRows.pixelExtras) do merged[#merged + 1] = row end
+            rowGroups = {
+                pixel    = merged,
+                autocast = typeOnlyRows.autocast,
+                proc     = typeOnlyRows.proc,
+            }
+        end
+
+        for typeName, rows in pairs(rowGroups) do
             local show = (typeName == glowType)
             for _, row in ipairs(rows) do
                 row:SetShown(show)

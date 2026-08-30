@@ -306,3 +306,65 @@ describe("sound registry currentPath discipline", function()
         assert.equals(7, #rec.removed)
     end)
 end)
+
+-- The declaration may BUILD its list from the settings rather than name one.
+-- The registry's no-op guard compares the sound path; without a second
+-- comparison on the id list, editing the allowlist would leave the previous
+-- registrations standing and the newly enabled spell silent.
+describe("declarations that build their spell list", function()
+    local function builtDecl()
+        return {
+            buildSpellIDs = function(settings) return settings.ids or {} end,
+            unit          = "player",
+            settingKeys   = { enabled = "SoundEnabled", name = "SoundName" },
+        }
+    end
+
+    it("registers the built list rather than a declared one", function()
+        local rec = apiRecording()
+        local reg = registryWith(rec, false)
+        reg:Sync(builtDecl(), { SoundEnabled = true, SoundName = "Bell", ids = { 111, 222 } }, true)
+        assert.equals(2, #rec.added)
+        assert.equals(111, rec.added[1].spellID)
+        assert.equals(222, rec.added[2].spellID)
+    end)
+
+    it("still no-ops when neither the sound nor the list changed", function()
+        local rec = apiRecording()
+        local reg = registryWith(rec, false)
+        local settings = { SoundEnabled = true, SoundName = "Bell", ids = { 111, 222 } }
+        reg:Sync(builtDecl(), settings, true)
+        reg:Sync(builtDecl(), settings, true)
+        assert.equals(2, #rec.added)
+        assert.equals(0, #rec.removed)
+    end)
+
+    it("rebuilds when the list changes under an unchanged sound", function()
+        local rec = apiRecording()
+        local reg = registryWith(rec, false)
+        reg:Sync(builtDecl(), { SoundEnabled = true, SoundName = "Bell", ids = { 111 } }, true)
+        reg:Sync(builtDecl(), { SoundEnabled = true, SoundName = "Bell", ids = { 111, 222 } }, true)
+        assert.equals(3, #rec.added)
+        assert.equals(1, #rec.removed)
+        assert.equals(222, rec.added[3].spellID)
+    end)
+
+    it("registers nothing when the built list is empty", function()
+        local rec = apiRecording()
+        local reg = registryWith(rec, false)
+        reg:Sync(builtDecl(), { SoundEnabled = true, SoundName = "Bell", ids = {} }, true)
+        assert.equals(0, #rec.added)
+    end)
+
+    -- The Add New Entry button leaves the list holding only a placeholder the
+    -- id builder drops, so the registry is empty until a real id is typed. It
+    -- has to register on that later sync rather than treat empty as settled.
+    it("registers once an empty list gains an id", function()
+        local rec = apiRecording()
+        local reg = registryWith(rec, false)
+        reg:Sync(builtDecl(), { SoundEnabled = true, SoundName = "Bell", ids = {} }, true)
+        reg:Sync(builtDecl(), { SoundEnabled = true, SoundName = "Bell", ids = { 33206 } }, true)
+        assert.equals(1, #rec.added)
+        assert.equals(33206, rec.added[1].spellID)
+    end)
+end)
