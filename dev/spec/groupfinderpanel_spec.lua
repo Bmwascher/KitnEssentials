@@ -173,9 +173,20 @@ end)
 -- expose and check they survive.
 local function loadWithFilter(opts)
     opts = opts or {}
-    local state = { saved = nil, searches = 0, panelShown = opts.panelShown ~= false }
+    local state = { saved = nil, searches = 0, categories = {}, cancels = 0,
+                    panelShown = opts.panelShown ~= false }
     state.adv = opts.adv or {}
-    local GFP, KE = loader.loadGroupFinderPanel({
+    local GFP, KE, seams = loader.loadGroupFinderPanel({
+        -- Captures the timer the slider arms instead of running it, so a
+        -- test decides when -- and whether -- the callback fires.
+        C_Timer = {
+            After = function() end,
+            NewTicker = function() return { Cancel = function() end } end,
+            NewTimer = function(_, fn)
+                state.timerFn = fn
+                return { Cancel = function() state.cancels = state.cancels + 1 end }
+            end,
+        },
         C_LFGList = {
             GetAvailableActivityGroups = function() return {} end,
             GetActivityGroupInfo = function() return nil end,
@@ -205,6 +216,9 @@ local function loadWithFilter(opts)
             IsShown = function() return state.panelShown end,
         },
     }
+    _G.LFGListSearchPanel_SetCategory = function(_, categoryID)
+        state.categories[#state.categories + 1] = categoryID
+    end
     -- AceEvent/AceAddon lifecycle methods are deliberately unstubbed by the
     -- loader, and OnDisable/OnEnable call into them.
     GFP.UnregisterAllEvents = function() end
@@ -212,7 +226,7 @@ local function loadWithFilter(opts)
     GFP.SetEnabledState = function() end
     GFP.IsEnabled = function() return GFP.db.Enabled == true end
     GFP.db.Enabled = opts.pgf and false or true
-    return GFP, KE, state
+    return GFP, KE, state, seams
 end
 
 describe("GroupFinderPanel advanced filter mapping", function()
@@ -334,12 +348,14 @@ describe("GroupFinderPanel search rules", function()
         assert.equals(1, state.searches)
     end)
 
-    it("the Search button escapes the window", function()
-        -- The button calls the writer and RunSearch directly rather than
-        -- going through the gated path.
+    it("RunSearch carries NO window of its own -- that is the button's escape", function()
+        -- The Search button's OnClick is a GUI closure this suite cannot
+        -- reach; that the button calls this is smoke's job. What is testable
+        -- is the property the escape rests on: adding a window check inside
+        -- RunSearch would break it here.
         local GFP, _, state = loadWithFilter()
         GFP:ApplyAndRefresh()
-        GFP:ApplyAdvancedFilters()
+        assert.equals(1, state.searches)
         GFP:RunSearch()
         assert.equals(2, state.searches)
     end)
@@ -416,6 +432,72 @@ describe("GroupFinderPanel filter ownership", function()
         _G.C_AddOns.IsAddOnLoaded = function(n) return n == "PremadeGroupsFilter" end
         GFP:OnEnable()
         assertPermissive(state.saved)
+        assert.is_false(KE.db.global.GroupFinderPanelOwnsFilter)
+    end)
+end)
+
+describe("GroupFinderPanel shortcut buttons", function()
+    it("searches even INSIDE the window", function()
+        -- A shortcut changes the category, so suppressing its search would
+        -- leave the previous category's results under a new heading.
+        local GFP, _, state, seams = loadWithFilter()
+        GFP:ApplyAndRefresh()
+        assert.equals(1, state.searches)
+        seams.runQuickSearch(3, 1)
+        assert.equals(2, state.searches)
+        assert.equals(3, state.categories[#state.categories])
+    end)
+
+    it("saves and STOPS when the search panel is not shown", function()
+        -- Navigating there ourselves would build Blizzard's provider inside
+        -- our execution. The player clicks Premade Groups instead.
+        local GFP, _, state, seams = loadWithFilter({ panelShown = false })
+        GFP.db.MinScore = 2500
+        seams.runQuickSearch(3, 1)
+        assert.equals(2500, state.saved.minimumRating)
+        assert.equals(0, state.searches)
+        assert.equals(0, #state.categories)
+    end)
+
+    it("writes nothing at all while the module is inactive", function()
+        local GFP, _, state, seams = loadWithFilter()
+        GFP.db.Enabled = false
+        seams.runQuickSearch(3, 1)
+        assert.is_nil(state.saved)
+        assert.equals(0, state.searches)
+    end)
+end)
+
+describe("GroupFinderPanel minimum-score slider", function()
+    it("SAVES but never searches -- a timer callback carries no click", function()
+        local GFP, _, state, seams = loadWithFilter()
+        GFP.db.MinScore = 2500
+        seams.armMinScoreSave()
+        assert.is_nil(state.saved)      -- arming alone writes nothing
+        state.timerFn()
+        assert.equals(2500, state.saved.minimumRating)
+        assert.equals(0, state.searches)
+    end)
+
+    it("the newest interaction owns the one pending save", function()
+        local _, _, state, seams = loadWithFilter()
+        seams.armMinScoreSave()
+        seams.armMinScoreSave()
+        assert.equals(1, state.cancels)
+    end)
+
+    it("a save armed just before a disable cannot land after the restore", function()
+        -- Otherwise it would rewrite the restrictive filter AND re-claim
+        -- ownership on a module that is now off, stranding the residue.
+        local GFP, KE, state, seams = loadWithFilter()
+        GFP:ApplyAdvancedFilters()
+        seams.armMinScoreSave()
+        GFP.db.Enabled = false
+        GFP:OnDisable()
+        assert.equals(1, state.cancels)
+        state.saved = nil
+        state.timerFn()                 -- fires anyway: the gate must hold
+        assert.is_nil(state.saved)
         assert.is_false(KE.db.global.GroupFinderPanelOwnsFilter)
     end)
 end)

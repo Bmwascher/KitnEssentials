@@ -194,9 +194,9 @@ GFP._Abbreviate          = Abbreviate
 ------------------------------------------------------------------------
 local friendResultSet = {}
 local friendSetStamp = -1
-local function RefreshFriendResultSet(force)
+local function RefreshFriendResultSet()
     local now = GetTime()
-    if not force and now == friendSetStamp then return end
+    if now == friendSetStamp then return end
     friendSetStamp = now
     wipe(friendResultSet)
     if not (C_SocialQueue and C_SocialQueue.GetAllGroups) then return end
@@ -482,6 +482,8 @@ local function RunQuickSearch(categoryID, filters)
     GFP:RunSearch()
 end
 
+GFP._RunQuickSearch = RunQuickSearch
+
 ------------------------------------------------------------------------
 -- Panel construction (lazy, once)
 ------------------------------------------------------------------------
@@ -621,6 +623,8 @@ local function CancelMinScoreSave()
         minScoreTimer = nil
     end
 end
+
+GFP._ArmMinScoreSave = ArmMinScoreSave
 
 -- The one place the module writes Blizzard's filter, and the one place
 -- ownership is claimed. Every caller reaches SaveAdvancedFilter through
@@ -1215,9 +1219,8 @@ local function InstallEntryHook()
             if entry._keFriendBG then entry._keFriendBG:Hide() end
             return
         end
-        -- The set used to be rebuilt by the deleted result pass. Rebuilt
-        -- here instead, throttled on the frame stamp so one full list
-        -- repaint costs one rebuild rather than one per row.
+        -- Throttled on the frame stamp, so one full list repaint costs one
+        -- rebuild rather than one per row.
         RefreshFriendResultSet()
         local id = entry.resultID
         local isFriend = id and friendResultSet[id] or false
