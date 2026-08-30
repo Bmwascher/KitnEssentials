@@ -122,9 +122,12 @@ local function shippedEmbeddableLibraries()
     for dir in pairs(dirs) do
         for _, path in ipairs(luaFilesUnder("Libs/" .. dir)) do
             for _, line in ipairs(readLines(path)) do
-                if not isCommentLine(line)
-                    and (line:match("function%s+[%w_]+[:%.]Embed%s*%(")
-                        or line:match("[%w_]+%.Embed%s*=%s*function")) then
+                -- Anchored to the line start so prose can never manufacture the
+                -- capability: isCommentLine is deliberately conservative about
+                -- what it calls a comment, and that judgement must not be what
+                -- decides whether a vendored library is embeddable.
+                if line:match("^%s*function%s+[%w_]+[:%.]Embed%s*%(")
+                    or line:match("^%s*[%w_]+%.Embed%s*=%s*function") then
                     embeddable[dir] = true
                 end
             end
