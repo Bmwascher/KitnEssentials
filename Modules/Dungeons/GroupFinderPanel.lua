@@ -365,6 +365,23 @@ end
 -- nor an in-game anchor:IsProtected() probe has been consulted, and
 -- ClearAllPoints/SetPoint below are themselves protected functions. The
 -- probe is a BLOCKING smoke step -- if it returns true, stop and replan.
+-- Re-apply the anchor's point so a changed panel state lands immediately.
+-- Prefers the stored request over GetPoint, because GetPoint returns the
+-- offset this module already adjusted and feeding that back compounds it.
+local function ReassertRaiderIOPoint(anchor)
+    local req = anchor.__keGFPReq
+    if req then
+        anchor:ClearAllPoints()
+        anchor:SetPoint(req.p, req.rel, req.rp, req.x, req.y)
+        return
+    end
+    local p1, p2, p3, p4, p5 = anchor:GetPoint(1)
+    if p1 then
+        anchor:ClearAllPoints()
+        anchor:SetPoint(p1, p2, p3, p4, p5)
+    end
+end
+
 local function RepositionRaiderIO()
     -- While inactive, do nothing except the one forced re-anchor the
     -- teardown helper performs.
@@ -380,14 +397,17 @@ local function RepositionRaiderIO()
             -- without substituting `rel` or nudging `x`. It stays
             -- installed; it stops changing behaviour.
             if IsActive() and rel and (rel == _G.PVEFrame or rel == panel) then
-                local usePanel = panel and panel:IsShown()
-                rel = usePanel and panel or _G.PVEFrame
-                -- RIO's stock x is -16, a tuck sized for PVEFrame's thick
-                -- border art -- flush against our flat panel. Nudge by +1
-                -- for a 1px gap ONLY when anchored to us; the native
-                -- PVEFrame tuck stays theirs.
-                if usePanel and type(x) == "number" then
-                    x = x + 1
+                -- Keep RIO's request exactly as RIO made it. Every re-anchor
+                -- replays THIS, never the offset computed below: reading our
+                -- own output back through this wrapper nudges it a second
+                -- time, and the gap then grows by a pixel per profile render.
+                anchor.__keGFPReq = { p = p, rel = rel, rp = rp, x = x, y = y }
+                rel = (panel and panel:IsShown()) and panel or _G.PVEFrame
+                -- RIO's stock x tucks the profile flush against the frame it
+                -- anchors to. One screen pixel of daylight instead, against
+                -- whichever frame currently owns the right edge.
+                if type(x) == "number" then
+                    x = x + KE:GetPixelSize()
                 end
             end
             if rp == nil and x == nil and y == nil then
@@ -406,11 +426,7 @@ local function RepositionRaiderIO()
         tip:HookScript("OnShow", function() RepositionRaiderIO() end)
     end
 
-    local p1, p2, p3, p4, p5 = anchor:GetPoint(1)
-    if p1 then
-        anchor:ClearAllPoints()
-        anchor:SetPoint(p1, p2, p3, p4, p5)
-    end
+    ReassertRaiderIOPoint(anchor)
 end
 
 -- RIO creates RaiderIO_ProfileTooltipAnchor lazily when a profile first
@@ -452,11 +468,9 @@ local function TeardownRaiderIO()
     end
     local anchor = _G.RaiderIO_ProfileTooltipAnchor
     if anchor and anchor.__keGFPWrapped then
-        local p1, p2, p3, p4, p5 = anchor:GetPoint(1)
-        if p1 then
-            anchor:ClearAllPoints()
-            anchor:SetPoint(p1, p2, p3, p4, p5)
-        end
+        -- Replaying the stored request while inactive hands RIO its own
+        -- geometry back, offset included.
+        ReassertRaiderIOPoint(anchor)
     end
 end
 
