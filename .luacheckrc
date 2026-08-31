@@ -9,6 +9,9 @@ exclude_files = {
     ".claude/**",           -- Claude Code worktrees/tooling: a parallel session's
                             -- registered worktree is a full repo copy — sweeping it
                             -- blocked a main push (2026-07-24, 233 foreign warnings)
+    ".superpowers/**",      -- same shape, different tool: a worktree here carries
+                            -- its own .wow-api-reference clone, which the top-level
+                            -- exclusion above cannot reach
 }
 
 -- Headless test harness (busted, not in-game). These files run under a desktop
