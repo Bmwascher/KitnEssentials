@@ -8,16 +8,22 @@ set -uo pipefail
 
 ng_lib="$(dirname "$0")/lib/name-guards.sh"
 if [ ! -f "$ng_lib" ]; then
-    echo "[pre-commit] BLOCKED: missing $ng_lib — the guards cannot run." >&2
+    echo "[pre-commit] BLOCKED: missing $ng_lib - the guards cannot run." >&2
     exit 1
 fi
 # shellcheck source=/dev/null
 . "$ng_lib"
 
-comments="$(ng_added_comments --cached)"
+# Loaded before the empty-diff exit, so a missing word list is caught on every
+# commit rather than only on the ones that happen to touch a comment.
+ng_load pre-commit stems compat provenance namesCI namesCS || exit 1
+
+if ! comments="$(ng_staged_comments)"; then
+    echo "[pre-commit] BLOCKED: could not read the staged diff." >&2
+    exit 1
+fi
 [ -n "$comments" ] || exit 0
 
-ng_load pre-commit stems compat provenance namesCI namesCS || exit 1
 if ! ng_scan_comments pre-commit "staged addon-source comments" "$comments"; then
     echo "[pre-commit] Fix the lines, or override a deliberate exception with: git commit --no-verify" >&2
     exit 1

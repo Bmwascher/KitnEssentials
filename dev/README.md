@@ -127,13 +127,28 @@ edit, and beats living on `--no-verify`.
 uses all of those except `shorts`, plus `namesCI` and `namesCS`. A guard blocks
 when any set it needs is missing or empty.
 
-`pre-push` then re-runs both scans, blocking, over the whole range being
-pushed: every comment added and every commit message in it. The commit-time
-hooks are skippable with `--no-verify` and other tools commit without them at
-all, so this is the last gate before anything is published. A branch the
-remote already has is scanned from its remote head; a first push is scanned
-from where it left `main`. All three hooks share one matcher,
-`dev/githooks/lib/name-guards.sh`, and refuse to run without it.
+`pre-push` then re-runs both scans, blocking, over everything the push would
+publish, one commit at a time: each commit's own added comments and its own
+message. The commit-time hooks are skippable with `--no-verify` and other
+tools commit without them at all, so this is the last gate before anything
+reaches the remote. Per commit rather than end to end, because a comment
+added in one commit and removed in a later one never shows up in a range diff
+yet still publishes. Tag pushes are scanned too, since a tag carries commits
+of its own.
+
+The commit set is whatever the remote does not have: bounded by the sha git
+advertises when this clone holds that object, and otherwise by every
+remote-tracking ref, which over-scans rather than under-scans. Any git
+failure blocks the push instead of reading as a clean scan. All three hooks
+share one matcher, `dev/githooks/lib/name-guards.sh`, and refuse to run
+without it or without a valid word list. `Libs/` is exempt: it is embedded
+third-party code whose upstream headers carry the dates and version stamps
+these rules ban.
+
+Date forms the comment ban catches: `2026-08-04`, `August 2026` in any case
+and with or without a comma, `08/31/26` and `31/08/26`, and the four-digit
+year forms. Slash dates require a component that can be a month, so spell
+range and rank lists such as `30/33/36` stay clean.
 
 ## Updating the API reference
 
