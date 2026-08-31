@@ -228,7 +228,6 @@ function GUIFrame:CreateAuraAllowlistCard(scrollChild, yOffset, config)
         end
     end
 
-    -- Info header
     -- CreateText reserves ~23px for the title line (16pt + 2px spacer)
     -- before the body starts. This note runs ~200 characters at 12pt --
     -- three wrapped lines needing ~47px of body space. 23 + 47 = 70, plus
