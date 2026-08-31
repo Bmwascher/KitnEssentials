@@ -288,7 +288,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 7: Font Settings
     ----------------------------------------------------------------
-    local fontCard, _, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         title = "Font Settings",
         db = db,
         dbKeys = {
@@ -299,6 +299,12 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
             { label = "Timer Size",  dbKey = "TimerFontSize", default = 18 },
         },
         fontSizeRange = { 8, 48 },
+        extraSlider = {
+            label = "Show Decimals Below (sec)",
+            dbKey = "DecimalThreshold",
+            min = 0, max = 10, step = 1,
+            value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
+        },
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")
@@ -306,21 +312,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
         manager:RegisterGroup(fontWidgets, "all")
     end
 
-    -- The card's own last row is added with no trailing gap, so re-open the
-    -- spacing before appending to it.
-    fontCard:AddSpacing(Theme.paddingSmall)
-
-    local decimalRow = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
-    local decimalSlider = GUIFrame:CreateSlider(decimalRow, "Show Decimals Below (sec)", {
-        min = 0, max = 10, step = 1,
-        value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
-        callback = function(val) db.DecimalThreshold = val; ApplySettings() end,
-    })
-    decimalRow:AddWidget(decimalSlider, 0.5)
-    manager:Register(decimalSlider, "all")
-    fontCard:AddRow(decimalRow, Theme.rowHeightLast, 0)
-
-    yOffset = fontCard:GetNextOffset()
+    yOffset = fontOffset
 
     RefreshStates()
     return yOffset

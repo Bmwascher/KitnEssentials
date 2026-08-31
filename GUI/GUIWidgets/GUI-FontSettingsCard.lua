@@ -231,6 +231,13 @@ end
 -- Build-fresh path matches the pre-refactor behavior bit for bit.
 ---------------------------------------------------------------------------------
 
+-- A caller that normalizes its own stored value passes `value`; everyone else
+-- gets the raw stored value with the config's default behind it.
+local function ExtraSliderValue(extraSlider, getValue)
+    if extraSlider.value ~= nil then return extraSlider.value end
+    return getValue(extraSlider.dbKey, extraSlider.default or 0)
+end
+
 local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     local title = config.title or "Font Settings"
     local db = config.db
@@ -294,28 +301,53 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
     card:AddRow(row1, Theme.rowHeight)
 
     if fontSizes and #fontSizes > 0 then
+        -- An extraSlider alongside fontSizes is laid out as one more entry, so
+        -- it shares a row with an odd-count size slider instead of stranding a
+        -- half-empty row above it.
+        local entries = {}
+        for i = 1, #fontSizes do
+            entries[i] = { size = fontSizes[i] }
+        end
+        if config.extraSlider then
+            entries[#entries + 1] = { extra = config.extraSlider }
+        end
+
         local maxPerRow = 2
-        local lastBatchStart = math.floor((#fontSizes - 1) / maxPerRow) * maxPerRow + 1
-        for i = 1, #fontSizes, maxPerRow do
+        local lastBatchStart = math.floor((#entries - 1) / maxPerRow) * maxPerRow + 1
+        for i = 1, #entries, maxPerRow do
             local isLast = i == lastBatchStart
             local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
             local row = GUIFrame:CreateRow(card.content, rowHeight)
-            local countInRow = math.min(maxPerRow, #fontSizes - i + 1)
+            local countInRow = math.min(maxPerRow, #entries - i + 1)
             local widthPct = 1 / countInRow
-            for j = i, math.min(i + maxPerRow - 1, #fontSizes) do
-                local sizeConfig = fontSizes[j]
-                local sizeSlider = GUIFrame:CreateSlider(row, sizeConfig.label or "Size", {
-                    min = fontSizeRange[1],
-                    max = fontSizeRange[2],
-                    step = 1,
-                    value = getValue(sizeConfig.dbKey, 18),
-                    callback = function(val) setValue(sizeConfig.dbKey, val) end,
-                })
-                row:AddWidget(sizeSlider, widthPct)
-                if manager and sizeConfig.elvuiGated then
-                    manager:Register(sizeSlider, "elvuiOk")
+            for j = i, math.min(i + maxPerRow - 1, #entries) do
+                local sizeConfig = entries[j].size
+                if sizeConfig then
+                    local sizeSlider = GUIFrame:CreateSlider(row, sizeConfig.label or "Size", {
+                        min = fontSizeRange[1],
+                        max = fontSizeRange[2],
+                        step = 1,
+                        value = getValue(sizeConfig.dbKey, 18),
+                        callback = function(val) setValue(sizeConfig.dbKey, val) end,
+                    })
+                    row:AddWidget(sizeSlider, widthPct)
+                    if manager and sizeConfig.elvuiGated then
+                        manager:Register(sizeSlider, "elvuiOk")
+                    else
+                        table_insert(widgets, sizeSlider)
+                    end
                 else
-                    table_insert(widgets, sizeSlider)
+                    local extraConfig = entries[j].extra
+                    local extra = GUIFrame:CreateSlider(row, extraConfig.label or "Slider", {
+                        min = extraConfig.min or 0,
+                        max = extraConfig.max or 100,
+                        step = extraConfig.step or 1,
+                        value = ExtraSliderValue(extraConfig, getValue),
+                        labelWidth = extraConfig.labelWidth,
+                        callback = function(val) setValue(extraConfig.dbKey, val) end,
+                    })
+                    row:AddWidget(extra, widthPct)
+                    table_insert(widgets, extra)
                 end
             end
             if isLast then
@@ -343,7 +375,7 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
                 min = extraSlider.min or 0,
                 max = extraSlider.max or 100,
                 step = extraSlider.step or 1,
-                value = getValue(extraSlider.dbKey, extraSlider.default or 0),
+                value = ExtraSliderValue(extraSlider, getValue),
                 labelWidth = extraSlider.labelWidth,
                 callback = function(val) setValue(extraSlider.dbKey, val) end,
             })
