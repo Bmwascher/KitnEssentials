@@ -175,6 +175,11 @@ function DN:CreateContainer()
     container:SetSize(100, 20)
     container:SetFrameLevel(100)
     self.container = container
+
+    KE:RegisterAnchorRepair(container,
+        function() return self.db and self.db.anchorFrameType == "PLAYERFRAME" end,
+        function() self:ApplyContainerPosition() end)
+
     self:ApplyContainerPosition()
 end
 

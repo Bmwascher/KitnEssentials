@@ -155,6 +155,13 @@ function DC:CreateAnchorFrame()
         local anchor = CreateFrame("Frame", "KE_DungeonCastsAnchor", UIParent)
         anchor:SetFrameStrata("HIGH")
         self.anchorFrame = anchor
+
+        KE:RegisterAnchorRepair(anchor,
+            function()
+                return self.db and self.db.Frame
+                    and self.db.Frame.anchorFrameType == "PLAYERFRAME"
+            end,
+            function() self:ApplyAnchorPosition() end)
     end
     self:ApplyAnchorPosition()
 end

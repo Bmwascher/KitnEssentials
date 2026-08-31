@@ -113,7 +113,9 @@ end
 
 function FC:ApplyPosition()
     if not self.frame then return end
-    KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
+    -- Reparents: H.CreateFrame gives this frame the resolved anchor as its
+    -- parent, so moving only the point would strand it on the old parent.
+    KE:ApplyFramePosition(self.frame, self.db.Position, self.db, true)
 end
 
 function FC:RegWithEditMode()

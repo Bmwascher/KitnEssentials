@@ -350,6 +350,17 @@ function KE:ResolveAnchorFrame(anchorFrameType, parentFrame) end
 --- TEMPORARY, removed with the PLAYERFRAME anchor-race probe in Core/Globals.lua.
 function KE:DumpAnchorProbe() end
 
+---@param frame Frame
+---@return boolean
+function KE:CanReanchorNow(frame) end
+
+--- For modules that resolve the anchor and place the frame themselves; `fn` is
+--- that module's own reposition function (Core/Globals.lua anchor repair).
+---@param frame Frame
+---@param isPlayerFrame fun(): boolean # is this frame's CURRENT anchor type PLAYERFRAME
+---@param fn fun() # replays the module's own placement
+function KE:RegisterAnchorRepair(frame, isPlayerFrame, fn) end
+
 ---@param anchorFrom string
 ---@return string
 function KE:GetTextPointFromAnchor(anchorFrom) end

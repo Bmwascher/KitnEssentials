@@ -156,6 +156,10 @@ function TT:CreateContainer()
     containerFrame:SetSize(200, 50)
     containerFrame:SetClampedToScreen(true)
 
+    KE:RegisterAnchorRepair(containerFrame,
+        function() return self.db and self.db.anchorFrameType == "PLAYERFRAME" end,
+        function() self:UpdateContainerPosition() end)
+
     for slot = 1, GetTotemSlotCount() do
         totemButtons[slot] = self:CreateTotemButton(slot)
     end
