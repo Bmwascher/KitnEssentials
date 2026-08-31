@@ -25,7 +25,7 @@ msg="$(sed '/^# -\{8,\} >8 -\{8,\}/q' "$msg_file")"
 # head exits early reads as "no match" and waves the commit through.
 names_file="$(dirname "$0")/upstream-names.local.sh"
 if [ ! -f "$names_file" ]; then
-    echo "[commit-msg] BLOCKED: missing local word list $names_file (restore it from the local backup, or write two lines: stems='a|b|c' and shorts='x|y'). Override with: git commit --no-verify" >&2
+    echo "[commit-msg] BLOCKED: missing local word list $names_file (restore it from the local backup; format is in dev/README.md). Override with: git commit --no-verify" >&2
     exit 1
 fi
 # shellcheck source=/dev/null

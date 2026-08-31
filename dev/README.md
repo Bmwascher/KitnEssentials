@@ -107,9 +107,14 @@ re-clone, alongside `.claude/` and `AGENTS.md`. Both guards block outright
 when the file is absent rather than waving everything through. Format:
 
 ```sh
-stems='a|b|c'    # matched anywhere in a token, case-insensitive
-shorts='x|y'     # matched at word boundaries only
+stems='a|b|c'      # upstream addon names, matched anywhere in a token
+shorts='x|y'       # short shorthand forms, matched at word boundaries only
+namesCI='D|E'      # people/agents, word-bounded, case-insensitive
+namesCS='F|G'      # people/agents that double as plausible WoW words, capitalised only
 ```
+
+`commit-msg` uses `stems` and `shorts`; `pre-commit` uses `stems`, `namesCI`,
+and `namesCS`. A guard blocks when any set it needs is missing or empty.
 
 ## Updating the API reference
 
