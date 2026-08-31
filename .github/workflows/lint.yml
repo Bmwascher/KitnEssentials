@@ -36,7 +36,7 @@ jobs:
   # not block. References/ is gitignored, so this run makes the local-only
   # half of the check and says so; the full source cross-check needs a
   # developer checkout.
-  catalog:
+  aura-movement-catalog:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
