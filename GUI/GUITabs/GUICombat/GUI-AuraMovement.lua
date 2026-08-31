@@ -208,7 +208,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
         infoTitle = "Allowlist Info",
         infoText = "This list decides which movement buffs the display shows. Personal and externally applied helpful buffs share this one list. A spell that is not on it, or whose row is switched off, will not appear.",
         restoreActions = {
-            { label = "Movement Defaults" },
+            { label = "Kitn Defaults" },
         },
         onChangeCallback = ApplySettings,
     })

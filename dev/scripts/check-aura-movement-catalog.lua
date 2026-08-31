@@ -1,3 +1,26 @@
+-- The reference preset is the authority on WHICH spells exist. Which of them
+-- ship switched on is a KitnEssentials product decision, so the shipped-off
+-- set lives here and is asserted exactly. A source row marked disabled must
+-- still be disabled locally; the reverse is allowed.
+local SHIPPED_DISABLED = {
+    [1784] = true,    -- Stealth
+    [31230] = true,   -- Cheat Death
+    [55342] = true,   -- Mirror Image
+    [79206] = true,   -- Spiritwalker's Grace
+    [101545] = true,  -- Flying Serpent Kick
+    [110960] = true,  -- Greater Invisibility
+    [333889] = true,  -- Fel Domination
+    [358267] = true,  -- Hover
+    [358733] = true,  -- Glide
+    [406732] = true,  -- Spatial Paradox
+    [432180] = true,  -- Dance of the Wind
+    -- Time Spiral lands under a different spell id per recipient class.
+    [375226] = true, [375229] = true, [375230] = true, [375234] = true,
+    [375238] = true, [375240] = true, [375252] = true, [375253] = true,
+    [375254] = true, [375255] = true, [375256] = true, [375257] = true,
+    [375258] = true,
+}
+
 local function ReadFile(path)
     local file, err = io.open(path, "rb")
     assert(file, err)
@@ -98,25 +121,40 @@ end
 
 local enabledCount = 0
 local disabled = {}
-for spellID, enabled in pairs(sourceState) do
+for spellID, sourceEnabled in pairs(sourceState) do
     assert(localState[spellID] ~= nil, "missing local spell " .. spellID)
-    assert(localState[spellID] == enabled, "enabled-state mismatch for " .. spellID)
-    if enabled then
+    if not sourceEnabled then
+        assert(SHIPPED_DISABLED[spellID],
+            "source disables " .. spellID .. " but it is not in SHIPPED_DISABLED")
+    end
+    if localState[spellID] then
+        assert(not SHIPPED_DISABLED[spellID],
+            "spell " .. spellID .. " is in SHIPPED_DISABLED but ships enabled")
         enabledCount = enabledCount + 1
     else
+        assert(SHIPPED_DISABLED[spellID],
+            "spell " .. spellID .. " ships disabled but is not in SHIPPED_DISABLED")
         disabled[#disabled + 1] = spellID
     end
 end
 for spellID in pairs(localState) do
     assert(sourceState[spellID] ~= nil, "extra local spell " .. spellID)
 end
+for spellID in pairs(SHIPPED_DISABLED) do
+    assert(localState[spellID] ~= nil,
+        "SHIPPED_DISABLED lists " .. spellID .. ", which is not in the catalog")
+end
 
-table.sort(disabled)
+local disabledCount = Count(SHIPPED_DISABLED)
 assert(#rows == 52, "expected 52 primaries, got " .. #rows)
 assert(alternateCount == 33, "expected 33 alternates, got " .. alternateCount)
 assert(Count(sourceState) == 85, "expected 85 unique source ids")
 assert(Count(localState) == 85, "expected 85 unique local ids")
-assert(enabledCount == 84, "expected 84 enabled ids")
-assert(#disabled == 1 and disabled[1] == 101545, "expected only 101545 disabled")
+assert(#disabled == disabledCount,
+    "expected " .. disabledCount .. " disabled ids, got " .. #disabled)
+assert(enabledCount == 85 - disabledCount,
+    "expected " .. (85 - disabledCount) .. " enabled ids, got " .. enabledCount)
 
-print("Movement catalog OK: 52 primaries, 33 alternates, 85 unique IDs, 84 enabled, 101545 disabled")
+print(string.format(
+    "Movement catalog OK: 52 primaries, 33 alternates, 85 unique IDs, %d enabled, %d disabled",
+    enabledCount, disabledCount))
