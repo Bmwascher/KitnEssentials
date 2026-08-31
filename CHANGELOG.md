@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.20
+
+### Aura timers
+- All five aura displays can now count the last few seconds with one decimal.
+  Look for Show Decimals Below (sec) in Font Settings, or in the Appearance card
+  on the Player Buffs and Player Debuffs pages
+- The slider sets how many seconds from the end the decimal appears. Set it to 0
+  to switch decimals off
+- The Debuff Tracker, External Cooldowns and Movement Buffs start at 1 second.
+  Player Buffs and Player Debuffs start switched off
+- Weapon enchant timers on the Player Buffs display follow the same setting
+- The preview in the settings panel now counts down the same way the real
+  display does. It used to round up, so it read a second ahead
+
+---
+
 ## v4.4.19
 
 ### Movement Buffs (new)
