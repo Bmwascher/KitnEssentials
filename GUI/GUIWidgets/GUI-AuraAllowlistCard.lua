@@ -392,7 +392,7 @@ function GUIFrame:CreateAuraAllowlistCard(scrollChild, yOffset, config)
     detailRow:AddWidget(spellIdInput, 0.25)
     innerManager:Register(spellIdInput, "editableId")
 
-    labelInput = GUIFrame:CreateEditBox(detailRow, "Label", {
+    labelInput = GUIFrame:CreateEditBox(detailRow, "Custom Name", {
         value = "",
         callback = function(text)
             if selectedSpellId and GetEntry(selectedSpellId) then
