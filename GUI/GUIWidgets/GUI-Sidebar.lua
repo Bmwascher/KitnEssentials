@@ -35,6 +35,10 @@ local headerHeight = 32
 local itemHeight = 28
 
 local PROFILER_FOOTER_HEIGHT = 58
+-- Without the mode line the block reclaims its reserved row and the scroll
+-- region above grows by the same amount. Safe to size on that state because it
+-- is latched at profiler load and cannot change without a reload.
+local PROFILER_FOOTER_HEIGHT_COMPACT = 43
 local PROFILER_REFRESH_SECONDS = 5
 
 local PROFILER_TOOLTIP_COMMON = "Blizzard's always-on rolling 60-tick KitnEssentials CPU average. The percentage is an estimate of the current frame budget at your present FPS, not the profiler reset window."
@@ -437,11 +441,15 @@ function GUIFrame:RefreshProfilerFooter()
         self.profilerFooterText:SetText(cpuText)
     end
 
-    self.profilerFooterDetailedEnabled = detailedEnabled
-    if detailedEnabled then
-        self.profilerFooterModeText:Show()
-    else
-        self.profilerFooterModeText:Hide()
+    if self.profilerFooterDetailedEnabled ~= detailedEnabled then
+        self.profilerFooterDetailedEnabled = detailedEnabled
+        if detailedEnabled then
+            self.profilerFooterModeText:Show()
+            self.profilerFooter:SetHeight(PROFILER_FOOTER_HEIGHT)
+        else
+            self.profilerFooterModeText:Hide()
+            self.profilerFooter:SetHeight(PROFILER_FOOTER_HEIGHT_COMPACT)
+        end
     end
 end
 
