@@ -1015,10 +1015,14 @@ local function BuildReport()
         return WriteMandatory(writer, chunk)
     end
 
-    if not mandatory("KitnEssentials Taint Report\n") then return nil end
+    if not mandatory("KitnEssentials Taint Report\n==========================\n\n") then return nil end
+    if not mandatory("Report metadata\n---------------\n") then return nil end
     if not mandatory("Addon version: " .. environment.addonVersion .. "\n") then return nil end
     if not mandatory("Client build: " .. environment.clientBuild .. "\n") then return nil end
     if not mandatory("Report time: " .. environment.reportDate .. "\n") then return nil end
+    if not mandatory("\nImportant attribution and copy guidance\n---------------------------------------\n") then
+        return nil
+    end
     if not mandatory("Warning: Blizzard attribution is not proof that KitnEssentials caused the taint.\n") then
         return nil
     end
@@ -1052,18 +1056,21 @@ local function BuildReport()
         return nil
     end
 
+    WriteDetail(writer, "\nCaptured protected actions\n--------------------------\n")
     if totalGroups == 0 then
-        WriteDetail(writer, "\nNo KE-attributed protected actions were captured.\n")
+        WriteDetail(writer, "No KE-attributed protected actions were captured.\n")
     else
         WriteGroupDetails(writer, currentGroups)
         WriteGroupDetails(writer, restoredGroups)
     end
 
-    WriteDetail(writer, "\nReport-time addon state\n")
+    WriteDetail(writer, "\nReport-time addon state\n-----------------------\n")
     WriteDetail(writer, "BugSack: " .. ToolStateText(environment.bugSack) .. "\n")
     WriteDetail(writer, "BugGrabber: " .. ToolStateText(environment.bugGrabber) .. "\n")
+    WriteDetail(writer, "\nLoaded addon inventory\n----------------------\n")
+    WriteDetail(writer, "Name | Title | Version\n")
     for _, row in ipairs(environment.rows) do
-        WriteDetail(writer, string_format("Loaded addon: %s | %s | %s\n",
+        WriteDetail(writer, string_format("%s | %s | %s\n",
             row.name, row.title, row.version))
     end
     return FinalizeWriter(writer)
@@ -1087,7 +1094,6 @@ local function BuildDialog()
     local headerBackground = ThemeColor("bgMedium", { 0.055, 0.055, 0.055, 0.95 })
     local border = ThemeColor("border", { 0, 0, 0, 1 })
     local accent = ThemeColor("accent", { 1, 0, 0.549, 1 })
-    local primary = ThemeColor("textPrimary", { 1, 1, 1, 1 })
     local secondary = ThemeColor("textSecondary", { 0.8, 0.8, 0.8, 1 })
     local fontPath
     if KE.GetFontPath then fontPath = KE:GetFontPath() end
@@ -1159,7 +1165,7 @@ local function BuildDialog()
     title:SetJustifyH("CENTER")
     title:SetFont(fontPath, 14, "OUTLINE")
     title:SetText("Taint Report")
-    title:SetTextColor(primary[1], primary[2], primary[3], primary[4] or 1)
+    title:SetTextColor(accent[1], accent[2], accent[3], accent[4] or 1)
     title:SetShadowColor(0, 0, 0, 0)
 
     local closeButton = CreateFrame("Button", nil, header)
@@ -1183,7 +1189,11 @@ local function BuildDialog()
     local hint = header:CreateFontString(nil, "OVERLAY")
     hint:SetPoint("RIGHT", closeButton, "LEFT", -12, 0)
     hint:SetFont(fontPath, 13, "OUTLINE")
-    hint:SetText("Click the report, then use Ctrl+A and Ctrl+C")
+    do
+        local hex = string_format("%02x%02x%02x", (accent[1] or 1) * 255,
+            (accent[2] or 1) * 255, (accent[3] or 1) * 255)
+        hint:SetFormattedText("Click the report, then use |cff%sCtrl+A|r and |cff%sCtrl+C|r", hex, hex)
+    end
     hint:SetTextColor(secondary[1], secondary[2], secondary[3], secondary[4] or 0.8)
 
     local content = CreateFrame("Frame", nil, frame)
@@ -1220,10 +1230,10 @@ local function BuildDialog()
     editBox:SetMaxLetters(MAX_REPORT_LENGTH)
     editBox:EnableMouse(true)
     editBox:SetAutoFocus(false)
-    editBox:SetFont(fontPath, 15, "OUTLINE")
+    editBox:SetFont(fontPath, 14)
     editBox:SetShadowColor(0, 0, 0, 0)
     editBox:SetShadowOffset(0, 0)
-    editBox:SetTextColor(primary[1], primary[2], primary[3], primary[4] or 1)
+    editBox:SetTextColor(secondary[1], secondary[2], secondary[3], secondary[4] or 1)
     editBox:SetWidth(scrollFrame:GetWidth())
     editBox:SetHeight(560 - headerHeight - contentPadding * 2)
     scrollFrame:SetScrollChild(editBox)

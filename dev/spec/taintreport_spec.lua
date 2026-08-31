@@ -198,7 +198,7 @@ local function loadTaintReport(options)
             "SetHeight", "SetPoint", "ClearAllPoints", "SetAllPoints",
             "SetColorTexture", "SetTexture", "SetRotation", "SetVertexColor",
             "SetTexelSnappingBias", "SetSnapToPixelGrid", "SetJustifyH",
-            "SetFont", "SetTextColor", "SetShadowColor", "SetShadowOffset",
+            "SetFont", "SetTextColor", "SetShadowColor", "SetShadowOffset", "SetFormattedText",
             "SetMovable", "EnableMouse", "SetFrameStrata", "SetClampedToScreen",
             "RegisterForDrag", "StartMoving", "StopMovingOrSizing",
             "SetOrientation", "SetThumbTexture", "SetMultiLine", "SetMaxLetters",
@@ -1595,6 +1595,34 @@ describe("TaintReport report and lazy dialog", function()
         assert.is_truthy(report:find("No KE-attributed protected actions were captured.", 1, true))
     end)
 
+    it("keeps the copied report color-free and sectioned for issue sharing", function()
+        local state = loadTaintReport({
+            addons = {{
+                name = "TaintReport", title = "Taint Report", version = "1.0.0", loaded = true,
+            }},
+        })
+        state.initialize()
+        local report = assert(state.run(""))
+        local sections = {
+            "KitnEssentials Taint Report\n==========================\n",
+            "Report metadata\n---------------\n",
+            "Important attribution and copy guidance\n---------------------------------------\n",
+            "Captured protected actions\n--------------------------\n",
+            "Report-time addon state\n-----------------------\n",
+            "Loaded addon inventory\n----------------------\nName | Title | Version\n",
+        }
+        local previous = 0
+        for _, section in ipairs(sections) do
+            local position = assert(report:find(section, 1, true), section)
+            assert.is_true(position > previous, section)
+            previous = position
+        end
+        assert.is_truthy(report:find("No KE-attributed protected actions were captured.", 1, true))
+        assert.is_truthy(report:find("TaintReport | Taint Report | 1.0.0", 1, true))
+        assert.is_nil(report:find("|c", 1, true))
+        assert.is_nil(report:find("|r", 1, true))
+    end)
+
     it("renders current groups before restored groups with explicit scopes", function()
         local db = { global = { TaintLog = storedLog({ storedGroup("restored") }) } }
         local state = loadTaintReport()
@@ -1697,7 +1725,7 @@ describe("TaintReport report and lazy dialog", function()
         assert.is_truthy(report:find("[truncated]", 1, true))
         assert.is_nil(report:find("INJECTED_ADDON_LINE", 1, true))
         for line in report:gmatch("[^\n]+") do
-            if line:find("Loaded addon:", 1, true) then
+            if line:find(" | ", 1, true) then
                 assert.is_true(#line <= 1024)
             end
         end
@@ -1712,7 +1740,7 @@ describe("TaintReport report and lazy dialog", function()
         })
         loading.initialize()
         local loadingReport = assert(loading.run(""))
-        assert.is_nil(loadingReport:find("Loaded addon: LoadingOnly", 1, true))
+        assert.is_nil(loadingReport:find("LoadingOnly | Loading Only | 1", 1, true))
 
         local inaccessible = loadTaintReport({
             addonCount = 1,
@@ -1791,10 +1819,10 @@ describe("TaintReport report and lazy dialog", function()
         local state = loadTaintReport({ addons = addons })
         state.initialize()
         local report = assert(state.run(""))
-        assert.equals(300, select(2, report:gsub("Loaded addon:", "")))
+        assert.equals(300, select(2, report:gsub("\nAddon%d", "")))
         assert.is_truthy(report:find("Loaded addons omitted: 5", 1, true))
-        local first = assert(report:find("Loaded addon: Addon006", 1, true))
-        local later = assert(report:find("Loaded addon: Addon007", 1, true))
+        local first = assert(report:find("Addon006 | Title300 | 1", 1, true))
+        local later = assert(report:find("Addon007 | Title299 | 1", 1, true))
         assert.is_true(first < later)
     end)
 
