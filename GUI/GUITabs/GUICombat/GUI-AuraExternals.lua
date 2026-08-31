@@ -9,8 +9,6 @@
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme    = KE.Theme
-local LSM      = KE.LSM or LibStub("LibSharedMedia-3.0", true)
-local PlaySoundFile = PlaySoundFile
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("AuraExternals", true) end
 
@@ -320,78 +318,18 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     manager:Register(allowlistCard, "all")
     yOffset = allowlistOffset
 
-    ----------------------------------------------------------------
-    -- Card 5: Sound
-    --
-    -- Plays the configured sound when any enabled allowlist row lands on
-    -- you. Blizzard's sound-trigger API takes a spell ID rather than a
-    -- filter, so the registry is one registration per enabled row. Big
-    -- defensives are not on the allowlist and stay silent.
-    ----------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Sound", yOffset)
-    -- Says "including your own" because the sound CANNOT honour
-    -- HideSelfCast. Blizzard's UnitAuraSoundInfo carries a unit and a spell
-    -- id and no caster field, so a registration fires for the spell however
-    -- it was applied. The display filters on the caster; the sound cannot.
-    card5:AddNote("Plays for any enabled spell on the Allowlist above, including ones you cast on yourself.")
-    -- Not a caution about the GUI but about the sound registry: removing a
-    -- registration is always allowed, adding one is not while aura identities
-    -- are hidden, so an Allowlist edit made in there retires the old set and
-    -- cannot build the new one until the restriction lifts.
-    card5:AddNote("Allowlist changes made inside a dungeon or raid take effect when you leave. The sound stays silent until then.")
-    manager:Register(card5, "all")
-
-    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-    local soundEnabledCheck = GUIFrame:CreateCheckbox(row5a, "Enable Sound", {
-        value = db.SoundEnabled ~= false,
-        callback = function(checked) db.SoundEnabled = checked; ApplySettings() end,
+    local soundCard, soundOffset = GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, {
+        title = "Sound",
+        db = db,
+        dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
+        notes = {
+            "Plays for any enabled spell on the Allowlist above, including ones you cast on yourself.",
+            "Allowlist changes made inside a dungeon or raid take effect when you leave. The sound stays silent until then.",
+        },
+        onChangeCallback = ApplySettings,
     })
-    row5a:AddWidget(soundEnabledCheck, 1)
-    manager:Register(soundEnabledCheck, "all")
-    card5:AddRow(row5a, Theme.rowHeight)
-
-    -- Separator between Enable toggle and the sound dropdown/test row
-    local row5sep = GUIFrame:CreateRow(card5.content, Theme.rowHeightSeparator)
-    local sep5 = GUIFrame:CreateSeparator(row5sep)
-    row5sep:AddWidget(sep5, 1)
-    manager:Register(sep5, "all")
-    card5:AddRow(row5sep, Theme.rowHeightSeparator)
-
-    local soundList = {}
-    if LSM then
-        for name in pairs(LSM:HashTable("sound")) do
-            soundList[name] = name
-        end
-    end
-    soundList["None"] = "None"
-
-    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
-    local soundDropdown = GUIFrame:CreateDropdown(row5b, "On Application Sound", {
-        options = soundList,
-        value = db.SoundName or "None",
-        searchable = true,
-        callback = function(key) db.SoundName = key; ApplySettings() end,
-    })
-    row5b:AddWidget(soundDropdown, 0.5)
-    manager:Register(soundDropdown, "all")
-
-    -- Test button: plays whatever sound is currently selected. y=-12 places
-    -- the 28px button center on the dropdown bar center (matches the pattern
-    -- used in DungeonTimers detail panel).
-    local soundTestBtn = GUIFrame:CreateButton(row5b, "Test", {
-        height = 28,
-        callback = function()
-            local name = db.SoundName
-            if not name or name == "None" or not LSM then return end
-            local soundPath = LSM:Fetch("sound", name)
-            if soundPath then PlaySoundFile(soundPath) end
-        end,
-    })
-    row5b:AddWidget(soundTestBtn, 0.5, nil, 0, -12)
-    manager:Register(soundTestBtn, "all")
-    card5:AddRow(row5b, Theme.rowHeightLast, 0)
-
-    yOffset = card5:GetNextOffset()
+    manager:Register(soundCard, "all")
+    yOffset = soundOffset
 
     ----------------------------------------------------------------
     -- Card 6: Font Settings
