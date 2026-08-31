@@ -72,43 +72,49 @@ ng_load() {
 
 # The comment text of every added line in a diff. Code may legitimately carry
 # addon names (conflict registry detection strings) and step-like UI text;
-# comments may not. Block comments are followed through their added body
-# lines, which carry no delimiter of their own: Lua long comments in every
-# bracket level, and XML comments. The state resets at each hunk header.
+# comments may not, so each line is consumed left to right and only its
+# comment spans are emitted: Lua line comments, Lua long comments at their own
+# bracket level (a --[=[ block ends at ]=], not at a bare ]]), and XML
+# comments. Resuming at the remaining text is what handles several blocks on
+# one line, and code following a block that closes.
 # Known limit: a line added INSIDE a block whose opener the hunk does not
 # contain reads as ordinary code, because a diff carries no state from above
 # the hunk.
 ng_comment_tails() {
     printf '%s\n' "$1" | awk '
-        /^@@/ { blk = ""; next }
+        function emit(s) { if (s != "") print s }
+        /^@@/ { blk = ""; lvl = ""; next }
         /^\+[^+]/ {
             line = substr($0, 2)
-            if (blk == "lua") {
-                print line
-                if (line ~ /\]=*\]/) blk = ""
-                next
+            while (line != "") {
+                if (blk == "lua" || blk == "xml") {
+                    cl = (blk == "lua") ? "]" lvl "]" : "-->"
+                    p = index(line, cl)
+                    if (p == 0) { emit(line); break }
+                    emit(substr(line, 1, p - 1))
+                    line = substr(line, p + length(cl))
+                    blk = ""
+                    continue
+                }
+                luaPos = 0
+                if (match(line, /--\[=*\[/)) { luaPos = RSTART; luaLen = RLENGTH }
+                xmlPos = index(line, "<!--")
+                dashPos = index(line, "--")
+                if (luaPos > 0 && (xmlPos == 0 || luaPos <= xmlPos) && (dashPos == 0 || luaPos <= dashPos)) {
+                    lvl = ""
+                    for (k = 4; k < luaLen; k++) lvl = lvl "="
+                    line = substr(line, luaPos + luaLen)
+                    blk = "lua"
+                    continue
+                }
+                if (xmlPos > 0 && (dashPos == 0 || xmlPos <= dashPos)) {
+                    line = substr(line, xmlPos + 4)
+                    blk = "xml"
+                    continue
+                }
+                if (dashPos > 0) emit(substr(line, dashPos))
+                break
             }
-            if (blk == "xml") {
-                print line
-                if (line ~ /-->/) blk = ""
-                next
-            }
-            if (match(line, /--\[=*\[/)) {
-                blk = "lua"
-                rest = substr(line, RSTART + RLENGTH)
-                print rest
-                if (rest ~ /\]=*\]/) blk = ""
-                next
-            }
-            if (match(line, /<!--/)) {
-                blk = "xml"
-                rest = substr(line, RSTART + RLENGTH)
-                print rest
-                if (rest ~ /-->/) blk = ""
-                next
-            }
-            i = index(line, "--")
-            if (i > 0) print substr(line, i)
         }
     '
 }
