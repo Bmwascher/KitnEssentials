@@ -1,5 +1,30 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.19
+
+### Movement Buffs (new)
+- A new display for movement speed buffs on yourself, anchored beside the player
+  frame. Find it in the settings panel under Aura Tracking
+- It ships switched off. Turn it on and seven cards appear: position, size and
+  growth, the spell list, glow, sound, and fonts
+- The list holds 85 spells. Sixty are on to start with. The rest, including
+  Stealth, Greater Invisibility, Hover and Time Spiral, are listed but switched
+  off so you can enable only the ones you want to see
+- Both the buffs you cast on yourself and the ones other players give you show
+  in the same display
+- Add your own spell IDs, or switch off any of the shipped ones. Kitn Defaults
+  restores the shipped list without deleting rows you added
+
+### External Tracker
+- The spell list and the application sound are now the same controls the
+  Movement Buffs page uses, so both pages behave identically
+- The Label box is now called Custom Name, and shipped rows no longer come with
+  one filled in. The list shows the game's own name for each spell, so it stays
+  correct in your language and after a spell is renamed. Typing a Custom Name
+  still overrides it
+
+---
+
 ## v4.4.18
 
 ### Profiler
