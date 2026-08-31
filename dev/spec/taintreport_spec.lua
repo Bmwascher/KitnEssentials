@@ -1681,6 +1681,53 @@ describe("TaintReport report and lazy dialog", function()
         assertNoColorTokens(restoredReport)
     end)
 
+    it("refuses whitespace exposed by restored color tokens and normalizes live retained text", function()
+        local validSite = "Interface/AddOns/KitnEssentials/Core/Valid.lua:1"
+        local cases = {
+            {
+                name = "action leading whitespace",
+                group = storedGroup("|cFFFFFFFF restored action|r"),
+            },
+            {
+                name = "site trailing whitespace",
+                group = storedGroup("valid action", {
+                    sources = { storedSource("|cFFFFFFFFrestored site |r", {
+                        keLines = { validSite },
+                    }) },
+                }),
+            },
+            {
+                name = "KE line all whitespace",
+                group = storedGroup("valid action", {
+                    sources = { storedSource(validSite, {
+                        keLines = { "|cFFFFFFFF |r" },
+                    }) },
+                }),
+            },
+        }
+
+        for _, case in ipairs(cases) do
+            local state = loadTaintReport()
+            local db = { global = { TaintLog = storedLog({ case.group }) } }
+            state.initialize(db)
+            assert.is_nil(db.global.TaintLog, case.name)
+        end
+
+        local liveSite = "Interface/AddOns/KitnEssentials/Core/LiveBoundary.lua:1"
+        local state = loadTaintReport({
+            stack = "|cFFFFFFFF " .. liveSite .. " |r",
+        })
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "|cFFFFFFFF live action|r")
+        state.initialize()
+        local report = assert(state.run(""))
+        assert.is_truthy(report:find("Action: live action\n", 1, true))
+        assert.is_truthy(report:find("Sampled source 1 (1 observations): " .. liveSite .. "\n", 1, true))
+        assert.is_truthy(report:find("  KE line: " .. liveSite .. "\n", 1, true))
+        assert.is_nil(report:find("Action:  live action", 1, true))
+        assert.is_nil(report:find(":  " .. liveSite, 1, true))
+        assertNoColorTokens(report)
+    end)
+
     it("renders current groups before restored groups with explicit scopes", function()
         local db = { global = { TaintLog = storedLog({ storedGroup("restored") }) } }
         local state = loadTaintReport()

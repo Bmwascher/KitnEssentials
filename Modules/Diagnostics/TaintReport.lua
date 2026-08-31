@@ -181,6 +181,8 @@ local function NormalizeRetained(value, maximum, forceMarker)
     normalized = SanitizeReportString(normalized, maximum)
     if not SafeCanAccess(normalized) then return nil end
     if normalized == nil then return nil end
+    normalized = string_match(normalized, "^%s*(.-)%s*$")
+    if not SafeCanAccess(normalized) then return nil end
     return normalized, truncated
 end
 
@@ -197,7 +199,8 @@ local function CanonicalString(value, maximum)
     if string_match(value, "^%s") or string_match(value, "%s$") then return nil end
     local canonical = SanitizeReportString(value, maximum)
     if not SafeCanAccess(canonical) then return nil end
-    if canonical == nil or canonical == "" then return nil end
+    if canonical == nil or canonical == "" or string_match(canonical, "^%s")
+        or string_match(canonical, "%s$") then return nil end
     return canonical
 end
 
