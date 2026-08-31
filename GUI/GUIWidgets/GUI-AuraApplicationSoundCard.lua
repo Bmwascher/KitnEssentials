@@ -6,12 +6,11 @@ local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 local PlaySoundFile = PlaySoundFile
 
 ----------------------------------------------------------------
--- Card 5: Sound
+-- Application sound card
 --
 -- Plays the configured sound when any enabled allowlist row lands on
 -- you. Blizzard's sound-trigger API takes a spell ID rather than a
--- filter, so the registry is one registration per enabled row. Big
--- defensives are not on the allowlist and stay silent.
+-- filter, so the registry is one registration per enabled row.
 ----------------------------------------------------------------
 function GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, config)
     config = config or {}
