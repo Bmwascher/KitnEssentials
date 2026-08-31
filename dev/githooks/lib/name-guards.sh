@@ -73,23 +73,39 @@ ng_load() {
 # The comment text of every added line in a diff. Code may legitimately carry
 # addon names (conflict registry detection strings) and step-like UI text;
 # comments may not. Block comments are followed through their added body
-# lines, which carry no leading dashes of their own; the state resets at each
-# hunk header, since a block opened outside the hunk is not visible here.
+# lines, which carry no delimiter of their own: Lua long comments in every
+# bracket level, and XML comments. The state resets at each hunk header.
+# Known limit: a line added INSIDE a block whose opener the hunk does not
+# contain reads as ordinary code, because a diff carries no state from above
+# the hunk.
 ng_comment_tails() {
-    printf '%s\n' "$1" | awk '
-        /^@@/ { inblk = 0; next }
+    printf '%s
+' "$1" | awk '
+        /^@@/ { blk = ""; next }
         /^\+[^+]/ {
             line = substr($0, 2)
-            if (inblk) {
+            if (blk == "lua") {
                 print line
-                if (line ~ /\]\]/) inblk = 0
+                if (line ~ /\]=*\]/) blk = ""
                 next
             }
-            if (line ~ /--\[\[/) {
-                inblk = 1
-                sub(/.*--\[\[/, "", line)
+            if (blk == "xml") {
                 print line
-                if (line ~ /\]\]/) inblk = 0
+                if (line ~ /-->/) blk = ""
+                next
+            }
+            if (match(line, /--\[=*\[/)) {
+                blk = "lua"
+                rest = substr(line, RSTART + RLENGTH)
+                print rest
+                if (rest ~ /\]=*\]/) blk = ""
+                next
+            }
+            if (match(line, /<!--/)) {
+                blk = "xml"
+                rest = substr(line, RSTART + RLENGTH)
+                print rest
+                if (rest ~ /-->/) blk = ""
                 next
             }
             i = index(line, "--")
