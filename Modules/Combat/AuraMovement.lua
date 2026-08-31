@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  AuraMovement.lua                                        ║
 -- ║  Module: Aura Movement                                   ║
--- ║  Purpose: Displays movement-speed buffs on the player     ║
--- ║           (Sprint, Dash, etc.) via the allowlist.         ║
+-- ║  Purpose: Displays movement-speed buffs on the player    ║
+-- ║           (Sprint, Dash, etc.) via the allowlist.        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
