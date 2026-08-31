@@ -273,6 +273,10 @@ function GUIFrame:ApplyThemeColors()
         self.searchEditBox:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
     end
 
+    if self.RefreshProfilerFooter then
+        self:RefreshProfilerFooter()
+    end
+
     -- Update title and version text with new accent color
     if self.titleText then
         self.titleText:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials")

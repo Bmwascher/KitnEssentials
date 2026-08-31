@@ -11,12 +11,14 @@ local Theme = KE.Theme
 
 local math = math
 local ipairs = ipairs
+local type = type
 local CreateFrame = CreateFrame
 local CreateColor = CreateColor
 local wipe = wipe
 local C_Timer = C_Timer
 local table_insert = table.insert
 local strtrim = strtrim
+local GameTooltip = GameTooltip
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -31,6 +33,13 @@ GUIFrame.sidebarRefreshPending = false
 
 local headerHeight = 32
 local itemHeight = 28
+
+local PROFILER_FOOTER_HEIGHT = 58
+local PROFILER_REFRESH_SECONDS = 5
+
+local PROFILER_TOOLTIP_COMMON = "Blizzard's always-on rolling 60-tick KitnEssentials CPU average. The percentage is an estimate of the current frame budget at your present FPS, not the profiler reset window."
+local PROFILER_TOOLTIP_ACTIVE = "Detailed profiling is active. It unlocks reset-window and named-frame diagnostics but adds overhead; disable it when testing is finished."
+local PROFILER_TOOLTIP_INACTIVE = "Detailed profiling is inactive for this UI load. Use /kes profiler on, then /reload, to enable reset-window and named-frame diagnostics."
 
 ---------------------------------------------------------------------------------
 -- Section Rendering
@@ -406,6 +415,37 @@ function GUIFrame:SelectSidebarItem(itemId)
 end
 
 ---------------------------------------------------------------------------------
+-- Profiler Footer
+---------------------------------------------------------------------------------
+function GUIFrame:RefreshProfilerFooter()
+    if not self.profilerFooter then return end
+
+    local cpuText = "CPU: unavailable"
+    local detailedEnabled = false
+    local profiler = KE.Profiler
+    if profiler and type(profiler.GetFooterDisplay) == "function" then
+        cpuText, detailedEnabled = profiler.GetFooterDisplay()
+    end
+
+    local T = Theme
+    self.profilerFooterHeader:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 0.6)
+    self.profilerFooterText:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 0.6)
+    self.profilerFooterModeText:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
+
+    if self._profilerFooterCpuText ~= cpuText then
+        self._profilerFooterCpuText = cpuText
+        self.profilerFooterText:SetText(cpuText)
+    end
+
+    self.profilerFooterDetailedEnabled = detailedEnabled
+    if detailedEnabled then
+        self.profilerFooterModeText:Show()
+    else
+        self.profilerFooterModeText:Hide()
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Sidebar Creation
 ---------------------------------------------------------------------------------
 function GUIFrame:CreateSidebar(parent)
@@ -519,11 +559,69 @@ function GUIFrame:CreateSidebar(parent)
     GUIFrame.searchEditBox = searchEditBox
     GUIFrame.searchContainer = searchContainer
 
+    -- Profiler footer (fixed height, above the version/resize bottom bar)
+    local profilerFooter = CreateFrame("Frame", nil, sidebar)
+    profilerFooter:SetHeight(PROFILER_FOOTER_HEIGHT)
+    profilerFooter:SetPoint("BOTTOMLEFT", sidebar, "BOTTOMLEFT", 0, 0)
+    profilerFooter:SetPoint("BOTTOMRIGHT", sidebar, "BOTTOMRIGHT", -T.borderSize, 0)
+    profilerFooter:EnableMouse(true)
+
+    local profilerFooterHeader = profilerFooter:CreateFontString(nil, "OVERLAY")
+    KE:ApplyThemeFont(profilerFooterHeader, "small")
+    profilerFooterHeader:SetPoint("TOPLEFT", profilerFooter, "TOPLEFT", T.paddingSmall, -T.paddingSmall)
+    profilerFooterHeader:SetPoint("TOPRIGHT", profilerFooter, "TOPRIGHT", -T.paddingSmall, -T.paddingSmall)
+    profilerFooterHeader:SetJustifyH("RIGHT")
+    profilerFooterHeader:SetWordWrap(false)
+    profilerFooterHeader:SetText("All KitnEssentials")
+
+    local separatorHolder = CreateFrame("Frame", nil, profilerFooter)
+    separatorHolder:SetHeight(6)
+    separatorHolder:SetPoint("TOPLEFT", profilerFooterHeader, "BOTTOMLEFT", 0, -1)
+    separatorHolder:SetPoint("TOPRIGHT", profilerFooterHeader, "BOTTOMRIGHT", 0, -1)
+    local profilerFooterSeparator = GUIFrame:CreateSeparator(separatorHolder)
+
+    local profilerFooterModeText = profilerFooter:CreateFontString(nil, "OVERLAY")
+    KE:ApplyThemeFont(profilerFooterModeText, "small")
+    profilerFooterModeText:SetPoint("BOTTOMLEFT", profilerFooter, "BOTTOMLEFT", T.paddingSmall, T.paddingSmall)
+    profilerFooterModeText:SetPoint("BOTTOMRIGHT", profilerFooter, "BOTTOMRIGHT", -T.paddingSmall, T.paddingSmall)
+    profilerFooterModeText:SetJustifyH("RIGHT")
+    profilerFooterModeText:SetWordWrap(false)
+    profilerFooterModeText:SetText("Detailed profiler: ON")
+
+    local profilerFooterText = profilerFooter:CreateFontString(nil, "OVERLAY")
+    KE:ApplyThemeFont(profilerFooterText, "small")
+    profilerFooterText:SetPoint("BOTTOMLEFT", profilerFooterModeText, "TOPLEFT", 0, 1)
+    profilerFooterText:SetPoint("BOTTOMRIGHT", profilerFooterModeText, "TOPRIGHT", 0, 1)
+    profilerFooterText:SetJustifyH("RIGHT")
+    profilerFooterText:SetWordWrap(false)
+
+    GUIFrame.profilerFooter = profilerFooter
+    GUIFrame.profilerFooterHeader = profilerFooterHeader
+    GUIFrame.profilerFooterSeparator = profilerFooterSeparator
+    GUIFrame.profilerFooterText = profilerFooterText
+    GUIFrame.profilerFooterModeText = profilerFooterModeText
+
+    profilerFooter:SetScript("OnEnter", function(self)
+        local L = Theme
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("All KitnEssentials", L.accent[1], L.accent[2], L.accent[3], 1)
+        GameTooltip:AddLine(PROFILER_TOOLTIP_COMMON, 1, 1, 1, true)
+        if GUIFrame.profilerFooterDetailedEnabled then
+            GameTooltip:AddLine(PROFILER_TOOLTIP_ACTIVE, 1, 1, 1, true)
+        else
+            GameTooltip:AddLine(PROFILER_TOOLTIP_INACTIVE, 1, 1, 1, true)
+        end
+        GameTooltip:Show()
+    end)
+    profilerFooter:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+
     -- Scroll frame
     local scrollFrame = CreateFrame("ScrollFrame", nil, sidebar, "UIPanelScrollFrameTemplate")
     scrollFrame:SetFrameLevel(sidebar:GetFrameLevel() + 5)
     scrollFrame:SetPoint("TOPLEFT", searchContainer, "BOTTOMLEFT", -T.paddingSmall, -T.paddingSmall)
-    scrollFrame:SetPoint("BOTTOMRIGHT", sidebar, "BOTTOMRIGHT", -T.borderSize, T.paddingSmall)
+    scrollFrame:SetPoint("BOTTOMRIGHT", profilerFooter, "TOPRIGHT", 0, 0)
     scrollFrame:SetClipsChildren(true)
 
     -- Hide default scrollbar
@@ -595,6 +693,25 @@ function GUIFrame:CreateSidebar(parent)
     sidebar.scrollChild = scrollChild
     parent.sidebar = sidebar
     self.sidebar = sidebar
+
+    local function StopProfilerFooterTicker()
+        if GUIFrame.profilerFooterTicker then
+            GUIFrame.profilerFooterTicker:Cancel()
+            GUIFrame.profilerFooterTicker = nil
+        end
+    end
+
+    sidebar:HookScript("OnShow", function()
+        StopProfilerFooterTicker()
+        GUIFrame:RefreshProfilerFooter()
+        GUIFrame.profilerFooterTicker = C_Timer.NewTicker(PROFILER_REFRESH_SECONDS, function()
+            GUIFrame:RefreshProfilerFooter()
+        end)
+    end)
+    sidebar:HookScript("OnHide", StopProfilerFooterTicker)
+
+    GUIFrame:RefreshProfilerFooter()
+
     return sidebar
 end
 
