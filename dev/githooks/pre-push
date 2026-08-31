@@ -60,8 +60,10 @@ fi
 . "$ng_lib"
 ng_load pre-push stems shorts compat provenance namesCI namesCS || exit 1
 
-# git names the push destination in $1.
-_dest="${1:-}"
+# git names the push destination in $1 and its location in $2. Query the
+# location: a remote whose pushurl differs from its fetch url is answered by
+# the wrong host otherwise.
+_dest="${2:-${1:-}}"
 _fallback=()
 _fallback_ready=0
 
@@ -69,22 +71,22 @@ _fallback_ready=0
 # Local tracking refs go stale when a branch is deleted or rewritten remotely,
 # and a stale ref subtracts commits the remote never had, so ask the remote
 # what it carries now. Only shas held locally can be subtracted, so the answer
-# over-scans at worst. Computed once, and only when a ref needs it: it is a
-# network round trip to the host this push is about to contact anyway.
+# over-scans at worst, and a remote that cannot be reached subtracts nothing
+# at all rather than falling back to the stale refs this exists to avoid.
+# Computed once, and only when a ref needs it: it is a network round trip to
+# the host this push is about to contact anyway.
 ng_fallback_excl() {
     [ "$_fallback_ready" -eq 0 ] || return 0
     _fallback_ready=1
     local refs sha rest
-    if refs="$(git ls-remote --heads --tags "$_dest" 2>/dev/null)"; then
-        while read -r sha rest; do
-            [ -n "$sha" ] || continue
-            git cat-file -e "$sha^{commit}" 2>/dev/null && _fallback+=("$sha")
-        done <<< "$refs"
+    if ! refs="$(git ls-remote --heads --tags "$_dest" 2>/dev/null)"; then
+        echo "[pre-push] $_dest did not answer — scanning the full history reachable from each ref." >&2
         return 0
     fi
-    # Unreachable remote: that destination's tracking refs are the only answer
-    # left, and they are wrong only in the stale case above.
-    _fallback=(--remotes="$_dest")
+    while read -r sha rest; do
+        [ -n "$sha" ] || continue
+        git cat-file -e "$sha^{commit}" 2>/dev/null && _fallback+=("$sha")
+    done <<< "$refs"
 }
 
 for _line in "${pushed_refs[@]}"; do

@@ -18,17 +18,42 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 . dev/githooks/lib/name-guards.sh
 ng_load check-comment-guards stems compat provenance namesCI namesCS || exit 1
 
-comments="$(git grep -hoI -- '--.*' -- "${ng_paths[@]}")" || true
-located="$(git grep -nI -- '--.*' -- "${ng_paths[@]}")" || true
-total="$(printf '%s\n' "$comments" | grep -c '' || true)"
-echo "[check-comment-guards] $total shipped comment lines"
+# Read the committed tree, never the working tree: an uncommitted edit must
+# not let the audit pass while HEAD still breaks the invariant. Each file is
+# then fed to the hooks' own extractor as a synthetic single-hunk diff, so
+# block comment bodies are read by the one parser rather than by a second
+# approximation of it.
+if ! files="$(git grep -lI --fixed-strings -e '' HEAD -- "${ng_paths[@]}")"; then
+    echo "[check-comment-guards] BLOCKED: could not list the source files at HEAD." >&2
+    exit 1
+fi
+if [ -z "$files" ]; then
+    echo "[check-comment-guards] BLOCKED: HEAD carries no addon source to scan." >&2
+    exit 1
+fi
+
+synth="$(mktemp)"
+trap 'rm -f "$synth"' EXIT
+count=0
+while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    path="${entry#HEAD:}"
+    printf 'diff --git a/%s b/%s\n@@\n' "$path" "$path" >> "$synth"
+    if ! git show "HEAD:$path" | sed 's/^/+/' >> "$synth"; then
+        echo "[check-comment-guards] BLOCKED: could not read HEAD:$path" >&2
+        exit 1
+    fi
+    count=$((count + 1))
+done <<< "$files"
+
+comments="$(ng_comment_tails "$(cat "$synth")")"
+echo "[check-comment-guards] $count files, $(printf '%s\n' "$comments" | grep -c '' || true) comment lines at HEAD"
 
 fail=0
-
 hits="$( { printf '%s\n' "$comments" | grep -ioE "$stems"; printf '%s\n' "$comments" | grep -iwoE "$namesCI"; printf '%s\n' "$comments" | grep -woE "$namesCS"; } | sort -uf | tr '\n' ' ' || true)"
 if [ -n "$hits" ]; then
     echo "[check-comment-guards] FAIL: shipped comments name: $hits" >&2
-    printf '%s\n' "$located" | grep -inE "$stems" | sed -n '1,5p' >&2
+    git grep -inE "$stems" HEAD -- "${ng_paths[@]}" 2>/dev/null | sed -n '1,5p' >&2 || true
     echo "[check-comment-guards] Move those to compat, or rename what the code calls itself." >&2
     fail=1
 fi

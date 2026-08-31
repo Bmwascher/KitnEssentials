@@ -141,9 +141,10 @@ the sha git advertises when this clone holds that object, and otherwise by
 what `git ls-remote` says that remote carries right now, since local tracking
 refs go stale when a branch is deleted or rewritten and a stale ref would
 subtract commits the remote never had. Only shas this clone holds can be
-subtracted, so the answer over-scans at worst, and an unreachable remote falls
-back to its tracking refs. Any git failure blocks the push instead of reading
-as a clean scan. Merges are diffed against their first
+subtracted, so the answer over-scans at worst, and a remote that cannot be
+answered subtracts nothing at all rather than falling back to the stale refs
+this exists to avoid. Any git failure blocks the push instead of reading as a
+clean scan. Merges are diffed against their first
 parent, so a comment invented while resolving a conflict is caught. Block
 comments are followed through their body lines, which carry no delimiter of
 their own, in Lua at any bracket level and in XML. All three hooks share one
@@ -167,9 +168,13 @@ bash dev/scripts/check-comment-guards.sh
 ```
 
 is what does: it loads the list and fails if any name in `stems`, `namesCI` or
-`namesCS` appears in a shipped comment at HEAD. Run it after every list edit.
-It also reports pre-existing provenance and history references, which nothing
-enforces, since the hooks only ever read added lines.
+`namesCS` appears in a shipped comment at HEAD. It reads the committed tree,
+so an uncommitted edit cannot talk it into passing, and it feeds each file to
+the hooks' own extractor as a synthetic diff, so block comment bodies are read
+by the one parser rather than a second approximation of it. Run it after every
+list edit; it takes about half a minute. It also reports pre-existing
+provenance and history references, which nothing enforces, since the hooks
+only ever read added lines.
 
 `Libs/` is out of scope: the comment rules govern what this project writes,
 not the third-party code it embeds, and upstream library headers carry dates
