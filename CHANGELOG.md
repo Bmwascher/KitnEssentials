@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.22
+
+### Anchoring to your player frame
+- Fixed anything set to anchor to Player Frame attaching to Blizzard's player
+  frame instead of your unit frame addon's. It happened on every login, and
+  usually corrected itself a moment later, so most of the time you never saw it
+- Inside a Mythic+ key, a raid boss fight or combat, the correction was blocked
+  and the wrong position stuck for the rest of the run. The three aura trackers
+  were where you noticed it: External Cooldowns, the Debuff Tracker and Movement
+  Buffs would sit next to Blizzard's frame after a reload
+- The fix checks again during login and moves anything that landed on the wrong
+  frame. It covers every display with the Player Frame anchor, not only the aura
+  ones, and it stops running once the login is over
+
+---
+
 ## v4.4.21
 
 ### Aura displays
