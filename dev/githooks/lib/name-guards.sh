@@ -16,6 +16,13 @@ ng_paths=('*.lua' '*.xml' ':(exclude)dev/*' ':(exclude).claude/*' ':(exclude)Lib
 
 # Plan-step references, review/session history, file:line citations.
 ng_history='[Ss]tep [A-Z][0-9]+|[Tt]ask [0-9]+|round of review|review round|per the plan|References/|\bv[0-9]+\.[0-9]+|\.(lua|xml):[0-9]+'
+# Bare build numbers, the form the dotted rule above cannot see. A stamp is
+# always its own token in prose, so both bounds reject an adjacent letter or
+# digit: "pre-v828" and "backup_v828" block, "savev828" does not, because a
+# letter running into the v means this is an identifier and not a stamp. At
+# least two digits, so a v1 style major stays out. Nothing a reader can open
+# records what these numbers meant, which is the whole objection to them.
+ng_history="$ng_history"'|(^|[^A-Za-z0-9])v[0-9]{2,4}([^A-Za-z0-9]|$)'
 
 # Dates, scanned case-insensitively. Month names are whole words, or the game
 # vocabulary trips them: "augmentation 2026" is not a date. Numeric forms come

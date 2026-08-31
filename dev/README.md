@@ -180,6 +180,16 @@ only ever read added lines.
 not the third-party code it embeds, and upstream library headers carry dates
 and version stamps by right.
 
+Version forms the history ban catches: a dotted release such as `v1.20.0`,
+and a bare internal build number of two to four digits such as `v828`. The
+bare form is token-bounded rather than digit-bounded as the dates below are:
+a stamp is always its own word in prose, so `pre-v828` and `backup_v828`
+block while `savev828` does not, a letter running into the `v` being the tell
+that it is an identifier. It needs two digits, so a `v1` major stays clear.
+Neither form records anything a reader can open, which is the objection to
+both. Measured over the whole codebase when the rule was added: 34 hits, no
+false positives.
+
 Date forms the comment ban catches: a numeric triple in either order, with
 `/`, `-` or `.` as the separator, the same one twice; and a whole month word
 in any case, separated from its year by spaces, tabs or a comma. So
