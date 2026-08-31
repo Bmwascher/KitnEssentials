@@ -41,10 +41,11 @@ count=0
 while IFS= read -r entry; do
     [ -n "$entry" ] || continue
     path="${entry#HEAD:}"
-    printf 'diff --git a/%s b/%s\n@@\n' "$path" "$path" >> "$synth"
     # The trailing newline matters: a blob that ends without one would run
     # into the next file's header and be read as part of its own last line.
-    if ! { git show "HEAD:$path" | sed 's/^/+/' >> "$synth"; } || ! printf '\n' >> "$synth"; then
+    if ! printf 'diff --git a/%s b/%s\n@@\n' "$path" "$path" >> "$synth" \
+        || ! { git show "HEAD:$path" | sed 's/^/+/' >> "$synth"; } \
+        || ! printf '\n' >> "$synth"; then
         echo "[check-comment-guards] BLOCKED: could not read HEAD:$path" >&2
         exit 1
     fi
@@ -64,9 +65,25 @@ if ! comments="$(ng_comment_tails "$synth_text")"; then
 fi
 echo "[check-comment-guards] $count files, $(printf '%s\n' "$comments" | grep -c '' || true) comment lines at HEAD"
 
+# The enforcing pass. grep exits 1 for no match; anything higher is a real
+# failure, and swallowing it would turn a broken run into a clean audit.
+ng_collect() {
+    local out st
+    out="$(printf '%s\n' "$comments" | grep "$1" -E "$2")"
+    st=$?
+    [ "$st" -le 1 ] || return 1
+    printf '%s' "$out"
+}
+
 fail=0
-hits="$( { printf '%s\n' "$comments" | grep -ioE "$stems"; printf '%s\n' "$comments" | grep -iwoE "$namesCI"; printf '%s\n' "$comments" | grep -woE "$namesCS"; } | sort -uf | tr '\n' ' ' || true)"
-if [ -n "$hits" ]; then
+if ! h_stems="$(ng_collect -io "$stems")" \
+    || ! h_ci="$(ng_collect -iwo "$namesCI")" \
+    || ! h_cs="$(ng_collect -wo "$namesCS")"; then
+    echo "[check-comment-guards] BLOCKED: a match pass failed to run." >&2
+    exit 1
+fi
+if [ -n "$h_stems$h_ci$h_cs" ]; then
+    hits="$(printf '%s %s %s' "$h_stems" "$h_ci" "$h_cs" | tr '\n' ' ')"
     echo "[check-comment-guards] FAIL: shipped comments name: $hits" >&2
     git grep -inE "$stems" HEAD -- "${ng_paths[@]}" 2>/dev/null | sed -n '1,5p' >&2 || true
     echo "[check-comment-guards] Move those to compat, or rename what the code calls itself." >&2

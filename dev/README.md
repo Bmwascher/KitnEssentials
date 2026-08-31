@@ -184,7 +184,9 @@ Date forms the comment ban catches: a numeric triple in either order, with
 `/`, `-` or `.` as the separator, the same one twice; and a whole month word
 in any case, separated from its year by spaces, tabs or a comma. So
 `2026-05-10`, `2026/05/10`, `2026.05.10`, `05/10/2026`, `05-10-2026`,
-`05.10.2026`, `05/10/26`, `10-05-26` and `August 2026` all block.
+`05.10.2026`, `05/10/26`, `10-05-26` and `August 2026` all block, and so do
+the same forms embedded in a timestamp or a filename, such as
+`2026-05-10T14:30` and `backup_2026-05-10`.
 
 Three deliberate exclusions keep it off this codebase's own vocabulary. The
 month must be a word of its own, or "augmentation 2026" reads as a date. A

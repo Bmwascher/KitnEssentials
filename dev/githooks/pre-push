@@ -66,6 +66,9 @@ ng_load pre-push stems shorts compat provenance namesCI namesCS || exit 1
 # carry credentials.
 _dest="${2:-${1:-}}"
 _dest_label="${1:-$_dest}"
+# Pushing to a bare URL makes both arguments that URL, so there is no safe
+# name to print.
+case "$_dest_label" in *://*|*@*) _dest_label="the destination" ;; esac
 _fallback=()
 _fallback_ready=0
 
