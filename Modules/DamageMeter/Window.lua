@@ -418,13 +418,14 @@ function DM:CreateWindow(winIdx)
     -- callbacks resolve DM methods at click time (Core.lua defines them), matching
     -- the runtime-resolve pattern used by the OnClick -> DM:OpenDetail hook above.
     local function MakeHeaderBtn(tex, tooltip, onClick, xStep, size)
-        size = size or 12
+        size = size or 15
         local b = CreateFrame("Button", nil, W.frame)
         b:SetSize(size, size)
-        -- Right edges stay on the 18px step grid. An icon larger than the 12px
-        -- baseline grows LEFT into its own empty slot and rises by half the size
-        -- delta (top -4) so every icon shares one vertical center line.
-        b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -4 - ((12 - size) / 2))
+        -- Right edges stay on the 18px step grid, so a 15px icon leaves a 3px
+        -- gap. An icon larger than that baseline grows LEFT into its own empty
+        -- slot and rises by half the size delta (top -2) so every icon shares one
+        -- vertical center line. Top -2 centres 15px inside the 18px header band.
+        b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -2 - ((15 - size) / 2))
         b:SetFrameLevel(W.frame:GetFrameLevel() + 5)
         b.icon = b:CreateTexture(nil, "OVERLAY")
         b.icon:SetAllPoints(b)
@@ -453,11 +454,11 @@ function DM:CreateWindow(winIdx)
         "Reset", function() DM:HeaderReset(W) end, 18)
     W.headerBtns.segment = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_segment.tga",
         "Segment", function() DM:ToggleSegmentMenu(W) end, 36)
-    -- Report sits just left of segment (xStep 50, ~2px gap). Clicking it opens a
-    -- channel picker (DM:OpenReportMenu) that reports THIS window's view to the
-    -- chosen chat channel.
+    -- Report sits just left of segment, on the same 18px step as the rest.
+    -- Clicking it opens a channel picker (DM:OpenReportMenu) that reports THIS
+    -- window's view to the chosen chat channel.
     W.headerBtns.report = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_report.tga",
-        "Report", function() DM:OpenReportMenu(W) end, 50)
+        "Report", function() DM:OpenReportMenu(W) end, 54)
 
     -- The ⌚ segment button opens its picker on HOVER (quick adjust) rather than only on
     -- click -- the custom dropdown (SegmentMenu.lua) IS the content, so it replaces the
