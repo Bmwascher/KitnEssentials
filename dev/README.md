@@ -180,13 +180,19 @@ only ever read added lines.
 not the third-party code it embeds, and upstream library headers carry dates
 and version stamps by right.
 
-Date forms the comment ban catches: `2026-08-04`; a whole month word in any
-case, separated from its year by any run of spaces, tabs or a comma; and
-`08/31/26` or `31/08/26` along with their four-digit year forms. The month has
-to be a word of its own, or "augmentation 2026" would read as a date. Slash
-dates need one component that can be a month and another that can be a day,
-so spell range and rank lists such as `30/33/36` stay clean; a rank triple in
-date shape, `5/10/15`, is the one false positive left.
+Date forms the comment ban catches: a numeric triple in either order, with
+`/`, `-` or `.` as the separator, the same one twice; and a whole month word
+in any case, separated from its year by spaces, tabs or a comma. So
+`2026-05-10`, `2026/05/10`, `2026.05.10`, `05/10/2026`, `05-10-2026`,
+`05.10.2026`, `05/10/26`, `10-05-26` and `August 2026` all block.
+
+Three deliberate exclusions keep it off this codebase's own vocabulary. The
+month must be a word of its own, or "augmentation 2026" reads as a date. A
+two-digit year needs one component that can be a month and another that can be
+a day, so spell range and rank lists such as `30/33/36` stay clean. And a
+two-digit year does not take the dot, because `8.6.10` is a version string;
+`05.10.26` therefore passes. What is left is a rank triple in date shape,
+`5/10/15`, which blocks.
 
 ## Updating the API reference
 
