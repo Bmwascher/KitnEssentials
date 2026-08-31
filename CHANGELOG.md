@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.24
+
+### A clearer copy button on chat
+- Redrew the copy icon so it reads as two sheets of paper. At the size it is
+  actually drawn the old one blurred into a single shape
+
+---
+
 ## v4.4.23
 
 ### See what KitnEssentials costs you
