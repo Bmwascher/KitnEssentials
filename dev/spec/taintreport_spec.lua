@@ -107,6 +107,7 @@ local function loadTaintReport(options)
     end
     local eventFrame
     local editBox
+    local reportFrame
 
     local function makeObject(kind, name)
         local object = {
@@ -118,6 +119,7 @@ local function loadTaintReport(options)
             _min = 0,
             _max = 0,
             _width = 720,
+            _hasFocus = false,
         }
 
         function object:RegisterEvent(event)
@@ -148,6 +150,15 @@ local function loadTaintReport(options)
         end
         function object:IsShown()
             return self._shown
+        end
+        function object:SetFocus()
+            self._hasFocus = true
+        end
+        function object:ClearFocus()
+            self._hasFocus = false
+        end
+        function object:HasFocus()
+            return self._hasFocus
         end
         function object:SetText(text)
             if self._kind == "EditBox" then
@@ -217,6 +228,7 @@ local function loadTaintReport(options)
         if kind == "EditBox" then editBox = object end
         if name == "KE_TaintReportFrame" then
             frameCreateCount = frameCreateCount + 1
+            reportFrame = object
         end
         return object
     end
@@ -393,6 +405,18 @@ local function loadTaintReport(options)
         editBox._text = text
         lastEditText = text
         return editBox:GetScript("OnTextChanged")(editBox, true)
+    end
+    function state.escapeFocusedEditBox()
+        assert.is_true(editBox:HasFocus())
+        local callback = editBox:GetScript("OnEscapePressed")
+        assert.is_function(callback)
+        return callback(editBox)
+    end
+    function state.focusEditBox()
+        editBox:SetFocus()
+    end
+    function state.reportFrameIsShown()
+        return reportFrame:IsShown()
     end
     return state
 end
@@ -2005,6 +2029,16 @@ describe("TaintReport report and lazy dialog", function()
         assert.equals(1, state.frameCreateCount())
         assert.is_true(state.frameHideCount() > hidesBefore)
         assert.equals("", state.lastEditText())
+    end)
+
+    it("hides the report on one Escape from its focused edit box", function()
+        local state = loadTaintReport()
+        state.initialize()
+        state.run("")
+        state.focusEditBox()
+        assert.is_true(state.reportFrameIsShown())
+        state.escapeFocusedEditBox()
+        assert.is_false(state.reportFrameIsShown())
     end)
 
     it("contains none of the forbidden background or input-control paths", function()
