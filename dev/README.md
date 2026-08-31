@@ -107,14 +107,24 @@ re-clone, alongside `.claude/` and `AGENTS.md`. Both guards block outright
 when the file is absent rather than waving everything through. Format:
 
 ```sh
-stems='a|b|c'      # upstream addon names, matched anywhere in a token
-shorts='x|y'       # short shorthand forms, matched at word boundaries only
-namesCI='D|E'      # people/agents, word-bounded, case-insensitive
-namesCS='F|G'      # people/agents that double as plausible WoW words, capitalised only
+stems='a|b|c'      # reference sources, matched anywhere in a token
+shorts='x|y'       # their short forms, matched at word boundaries only
+compat='d|e'       # addons the project legitimately names, see below
+provenance='...'   # the vocabulary that turns a compat name into a leak
+namesCI='F|G'      # people/agents, word-bounded, case-insensitive
+namesCS='H|I'      # people/agents that double as plausible WoW words, capitalised only
 ```
 
-`commit-msg` uses `stems` and `shorts`; `pre-commit` uses `stems`, `namesCI`,
-and `namesCS`. A guard blocks when any set it needs is missing or empty.
+`stems` and `shorts` block on sight. `compat` holds addons KE detects, skins,
+or stands modules down under, so their names belong in ordinary entries and
+comments; those block only where `provenance` matches the same message or
+comment line — "stand down when ElvUI handles skinning" passes, "port the
+ElvUI skin path" does not. Moving a name between the two sets is a one-line
+edit, and beats living on `--no-verify`.
+
+`commit-msg` uses `stems`, `shorts`, `compat`, and `provenance`; `pre-commit`
+uses all of those except `shorts`, plus `namesCI` and `namesCS`. A guard blocks
+when any set it needs is missing or empty.
 
 ## Updating the API reference
 

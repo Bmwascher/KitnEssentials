@@ -35,16 +35,29 @@ if [ ! -f "$names_file" ]; then
 fi
 # shellcheck source=/dev/null
 . "$names_file"
-if [ -z "${stems:-}" ] || [ -z "${namesCI:-}" ] || [ -z "${namesCS:-}" ]; then
-    echo "[pre-commit] BLOCKED: $names_file defines no stems/namesCI/namesCS patterns." >&2
-    exit 1
-fi
+for set in stems namesCI namesCS compat provenance; do
+    eval "val=\${$set:-}"
+    if [ -z "$val" ]; then
+        echo "[pre-commit] BLOCKED: $names_file defines no $set patterns." >&2
+        exit 1
+    fi
+done
 # namesCI holds names that are not English or WoW words, so they scan
 # case-insensitively; namesCS holds names that double as plausible WoW words
 # and only match capitalised.
 hits="$( { printf '%s\n' "$comments" | grep -ioE "$stems"; printf '%s\n' "$comments" | grep -iwoE "$namesCI"; printf '%s\n' "$comments" | grep -woE "$namesCS"; } | sort -u | tr '\n' ' ' || true)"
 if [ -n "$hits" ]; then
     echo "[pre-commit] BLOCKED: staged addon-source comments contain personal/agent/upstream names: $hits" >&2
+    fail=1
+fi
+
+# Compat names are addons the project legitimately talks about in its own
+# comments — it detects them, skins them, or stands modules down under them —
+# so naming one is a leak only on a line that also carries porting vocabulary.
+provlines="$(printf '%s\n' "$comments" | grep -iE "$provenance" || true)"
+chits="$(printf '%s\n' "$provlines" | grep -ioE "$compat" | sort -u | tr '\n' ' ' || true)"
+if [ -n "$chits" ]; then
+    echo "[pre-commit] BLOCKED: staged addon-source comments name addon(s) next to porting vocabulary: $chits" >&2
     fail=1
 fi
 

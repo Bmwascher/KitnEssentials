@@ -30,16 +30,32 @@ if [ ! -f "$names_file" ]; then
 fi
 # shellcheck source=/dev/null
 . "$names_file"
-if [ -z "${stems:-}" ] || [ -z "${shorts:-}" ]; then
-    echo "[commit-msg] BLOCKED: $names_file defines no stems/shorts patterns." >&2
-    exit 1
-fi
+for set in stems shorts compat provenance; do
+    eval "val=\${$set:-}"
+    if [ -z "$val" ]; then
+        echo "[commit-msg] BLOCKED: $names_file defines no $set patterns." >&2
+        exit 1
+    fi
+done
 hit="$(printf '%s\n' "$msg" | grep -ioE "$stems" | sort -u | tr '\n' ' ' || true)"
 hit2="$(printf '%s\n' "$msg" | grep -iwoE "$shorts" | sort -u | tr '\n' ' ' || true)"
 if [ -n "$hit$hit2" ]; then
     echo "[commit-msg] BLOCKED: commit message contains upstream addon name(s): $hit$hit2" >&2
     echo "[commit-msg] Reference provenance belongs in local docs, never in published history. Reword the message, or override a deliberate exception with: git commit --no-verify" >&2
     exit 1
+fi
+
+# Compat names are addons the project legitimately talks about — it detects
+# them, skins them, or stands modules down under them — so naming one is a
+# leak only next to porting vocabulary. The whole message is one scan: a
+# subject and body read as a single statement.
+if printf '%s\n' "$msg" | grep -qiE "$provenance"; then
+    chit="$(printf '%s\n' "$msg" | grep -ioE "$compat" | sort -u | tr '\n' ' ' || true)"
+    if [ -n "$chit" ]; then
+        echo "[commit-msg] BLOCKED: commit message names addon(s) next to porting vocabulary: $chit" >&2
+        echo "[commit-msg] Say what the change does, not where it came from, or override a deliberate exception with: git commit --no-verify" >&2
+        exit 1
+    fi
 fi
 
 if printf '%s\n' "$msg" | grep -qiE '^(co-authored-by:|claude-session)'; then
