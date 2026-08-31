@@ -8,7 +8,7 @@
 -- ║           live aura pipeline. This module owns the       ║
 -- ║           dispel colour palette, since it is the only    ║
 -- ║           display with dispel settings.                  ║
--- ║  Subsumes: BossDebuffs (migrated then deleted).           ║
+-- ║  Subsumes: BossDebuffs (migrated then deleted).          ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
