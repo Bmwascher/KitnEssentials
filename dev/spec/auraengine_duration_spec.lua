@@ -11,6 +11,26 @@ local function findUpvalue(fn, name)
     end
 end
 
+local function installFormatterStubs()
+    local captured = {}
+    _G.C_StringUtil = {
+        CreateNumericRuleFormatter = function()
+            local formatter = {}
+            formatter.SetBreakpoints = function(_, value)
+                captured.breakpoints = value
+            end
+            return formatter
+        end,
+    }
+    _G.Enum = {
+        NumericRuleFormatRounding = {
+            Down = "down",
+            Up = "up",
+        },
+    }
+    return captured
+end
+
 describe("AuraEngine duration formatting", function()
     it("configures the live formatter to show whole hours at one hour", function()
         local breakpoints
@@ -68,6 +88,88 @@ describe("AuraEngine duration formatting", function()
         assert.equals(0, breakpoints[3].threshold)
         assert.equals("%d", breakpoints[3].format)
         assert.equals("down", breakpoints[3].rounding)
+    end)
+
+    it("leaves the whole-second rule alone when decimals are off", function()
+        local captured = installFormatterStubs()
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
+        getDurationFormatter({ ShowDecimalSeconds = false, DecimalThreshold = 5 })
+
+        assert.equals(3, #captured.breakpoints)
+        assert.equals(0, captured.breakpoints[3].threshold)
+        assert.equals(1, captured.breakpoints[3].step)
+        assert.equals("%d", captured.breakpoints[3].format)
+        assert.equals("down", captured.breakpoints[3].rounding)
+    end)
+
+    it("adds a tenths rule under the threshold when decimals are on", function()
+        local captured = installFormatterStubs()
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
+        getDurationFormatter({ ShowDecimalSeconds = true, DecimalThreshold = 5 })
+
+        assert.equals(4, #captured.breakpoints)
+        assert.equals(5, captured.breakpoints[3].threshold)
+        assert.equals(1, captured.breakpoints[3].step)
+        assert.equals("%d", captured.breakpoints[3].format)
+        assert.equals(0, captured.breakpoints[4].threshold)
+        assert.equals(0.1, captured.breakpoints[4].step)
+        assert.equals("%.1f", captured.breakpoints[4].format)
+    end)
+
+    it("rounds both sub-minute rules DOWN when decimals are on", function()
+        local captured = installFormatterStubs()
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
+        getDurationFormatter({ ShowDecimalSeconds = true, DecimalThreshold = 3 })
+
+        assert.equals("down", captured.breakpoints[3].rounding)
+        assert.equals("down", captured.breakpoints[4].rounding)
+    end)
+
+    -- A threshold that is not a whole second between 1 and 10 has no meaning on
+    -- a one-decimal display, so every such value falls back rather than being
+    -- clamped to an edge.
+    it("falls back to three for any threshold that is not a whole 1-10", function()
+        local captured = installFormatterStubs()
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
+
+        for _, value in ipairs({ "abc", 0, 11, 3.5, 0 / 0, true }) do
+            getDurationFormatter({ ShowDecimalSeconds = true, DecimalThreshold = value })
+            assert.equals(3, captured.breakpoints[3].threshold)
+        end
+
+        getDurationFormatter({ ShowDecimalSeconds = true })
+        assert.equals(3, captured.breakpoints[3].threshold)
+
+        for _, value in ipairs({ 1, 10, "4" }) do
+            getDurationFormatter({ ShowDecimalSeconds = true, DecimalThreshold = value })
+            assert.equals(tonumber(value), captured.breakpoints[3].threshold)
+        end
+    end)
+
+    it("rebuilds the cached formatter only when the resolved decimals change", function()
+        installFormatterStubs()
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
+
+        local settings = { ShowDecimalSeconds = false, DecimalThreshold = 3 }
+        local first = getDurationFormatter(settings)
+        assert.is_true(first == getDurationFormatter(settings))
+
+        -- Off, so the threshold is not part of the resolved settings at all.
+        settings.DecimalThreshold = 7
+        assert.is_true(first == getDurationFormatter(settings))
+
+        settings.ShowDecimalSeconds = true
+        local decimal = getDurationFormatter(settings)
+        assert.is_false(first == decimal)
+        assert.is_true(decimal == getDurationFormatter(settings))
+
+        settings.DecimalThreshold = 2
+        assert.is_false(decimal == getDurationFormatter(settings))
     end)
 
     it("formats preview durations in hours from the one-hour boundary", function()
