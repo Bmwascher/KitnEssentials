@@ -112,6 +112,10 @@ function Rules.BuildExcludeSpellIDs(saved)
     return set
 end
 
+local function IsPositiveInteger(value)
+    return type(value) == "number" and value > 0 and value == math_floor(value)
+end
+
 -- Saved allowlist entries are RECORDS with an enabled flag, matching the
 -- blocklist's shape, so a disabled row must not admit its spell.
 --
@@ -122,10 +126,6 @@ end
 -- A FRESH table every call, unlike the exclude builder: there is no shared
 -- constant set to alias here, so there is nothing to protect from mutation and
 -- nothing to be gained by returning one.
-local function IsPositiveInteger(value)
-    return type(value) == "number" and value > 0 and value == math_floor(value)
-end
-
 function Rules.BuildIncludeSpellIDs(saved)
     local set = {}
 
@@ -141,10 +141,8 @@ function Rules.BuildIncludeSpellIDs(saved)
     return set
 end
 
--- Restores shipped rows to their seed shape while leaving custom rows alone.
--- resolveEnabled overrides only the enabled state a caller computes from
--- other context (e.g. an in-progress bulk edit); it never gets to touch label
--- or the default flag, so a restore action cannot smuggle in row-shape drift.
+-- resolveEnabled overrides the enabled state only: label and the default flag
+-- stay seed-owned, so a restore action cannot drift a shipped row's shape.
 function Rules.RestoreAllowlistDefaults(saved, defaults, resolveEnabled)
     if type(saved) ~= "table" or type(defaults) ~= "table" then return false end
 
