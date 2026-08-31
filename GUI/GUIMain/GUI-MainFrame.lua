@@ -679,7 +679,7 @@ function GUIFrame:CreateMainFrame()
     local versionText = bottomBar:CreateFontString(nil, "OVERLAY")
     versionText:SetPoint("LEFT", bottomBar, "LEFT", T.paddingSmall, 0)
     KE:ApplyThemeFont(versionText, "small")
-    versionText:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials |cff888888v" .. (KE.Version or "?") .. "|r")
+    versionText:SetText("|cff888888v" .. (KE.Version or "?") .. "|r")
     GUIFrame.versionText = versionText
 
     -- Resize grip (right side, custom texture)

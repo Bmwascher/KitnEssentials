@@ -282,7 +282,7 @@ function GUIFrame:ApplyThemeColors()
         self.titleText:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials")
     end
     if self.versionText then
-        self.versionText:SetText(KE:ColorTextByTheme("Kitn") .. "Essentials |cff888888v" .. (KE.Version or "?") .. "|r")
+        self.versionText:SetText("|cff888888v" .. (KE.Version or "?") .. "|r")
     end
 
     -- Rebuild current content to pick up new accent colors
