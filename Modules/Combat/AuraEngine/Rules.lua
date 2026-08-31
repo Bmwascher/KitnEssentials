@@ -168,6 +168,11 @@ end
 -- auras you and your pet applied, absent filters nothing, and `true` would show
 -- ONLY your own -- the exact opposite of what the setting reads as. So the
 -- stored boolean is never passed through.
+function Rules.SelfCastFilterValue(hideSelfCast)
+    if hideSelfCast then return false end
+    return nil
+end
+
 -- Whole seconds, 0 to 10, where 0 means no decimals. A fractional threshold on
 -- a one-decimal display has no meaning, so anything else -- nil, unconvertible,
 -- NaN, infinite, fractional, out of range -- resolves to 0 rather than to a
@@ -184,11 +189,6 @@ function Rules.NormalizeDecimalThreshold(value)
     end
 
     return threshold
-end
-
-function Rules.SelfCastFilterValue(hideSelfCast)
-    if hideSelfCast then return false end
-    return nil
 end
 
 -- The sound registry takes one spell id per registration, so it needs the

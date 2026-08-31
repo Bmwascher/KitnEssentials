@@ -142,9 +142,9 @@ describe("AuraEngine duration formatting", function()
         assert.equals("down", captured.breakpoints[4].rounding)
     end)
 
-    -- The four sliders present this value and the two displays act on it, so a
-    -- disagreement here shows a stored 11 as a slider reading 10 while the
-    -- timer is actually off.
+    -- The four GUI builders present this value and both rendering paths act on
+    -- it, so a disagreement here shows a stored 11 as a slider reading 10 while
+    -- the timer is actually off.
     it("normalizes a stored threshold to what the displays will act on", function()
         local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
         local normalize = KE.AuraRules.NormalizeDecimalThreshold
