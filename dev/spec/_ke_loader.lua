@@ -147,6 +147,11 @@ function L.loadGlobals(overrides, opts)
     local KE = {
         Theme = { accent = { 1, 0, 0.549, 1 } },
         ColorTextByTheme = function(_, text) return text end,
+        -- Core/Secret.lua loads before Globals in-game, so its members belong
+        -- to the seed too. KE:CanReanchorNow reads this one.
+        IsSecretValue = function(_, value)
+            return issecretvalue and issecretvalue(value)
+        end,
     }
     return helpers.loadModule("Core/Globals.lua", KE), caughtErrors
 end

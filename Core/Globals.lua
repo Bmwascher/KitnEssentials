@@ -1831,6 +1831,7 @@ end
 -- of them deliberately do not reparent. `isPlayerFrame` is supplied by the
 -- module too: the anchor type sits at a different db path in every one of them.
 function KE:RegisterAnchorRepair(frame, isPlayerFrame, fn)
+    if not anchorWindowOpen then return end
     if not (frame and isPlayerFrame and fn) then return end
     anchorRepairs[frame] = { isPlayerFrame = isPlayerFrame, fn = fn }
 end
