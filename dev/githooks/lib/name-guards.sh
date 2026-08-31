@@ -79,8 +79,7 @@ ng_load() {
 # contain reads as ordinary code, because a diff carries no state from above
 # the hunk.
 ng_comment_tails() {
-    printf '%s
-' "$1" | awk '
+    printf '%s\n' "$1" | awk '
         /^@@/ { blk = ""; next }
         /^\+[^+]/ {
             line = substr($0, 2)
