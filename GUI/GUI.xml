@@ -22,6 +22,7 @@
     <Script file="GUIWidgets\GUI-PositionCard.lua" />
     <Script file="GUIWidgets\GUI-FontSettingsCard.lua" />
     <Script file="GUIWidgets\GUI-GlowSettingsCard.lua" />
+    <Script file="GUIWidgets\GUI-AuraAllowlistCard.lua" />
     <Script file="GUIWidgets\GUI-SoundSettingsCard.lua" />
     <Script file="GUIWidgets\GUI-SpellBrowserCard.lua" />
     <Script file="GUIWidgets\GUI-TextFormatCard.lua" />
