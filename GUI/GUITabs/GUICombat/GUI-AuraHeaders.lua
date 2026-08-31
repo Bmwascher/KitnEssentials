@@ -26,6 +26,7 @@ local function BuildPage(opts)
 
         local allWidgets = {}
         local subCards = {}
+        local decimalBelow
 
         local function ApplySettings()
             local mod = KitnEssentials and KitnEssentials:GetModule(opts.moduleName, true)
@@ -163,6 +164,27 @@ local function BuildPage(opts)
         table_insert(allWidgets, timer)
         card3:AddRow(rowD, 40)
 
+        local rowD2 = GUIFrame:CreateRow(card3.content, 40)
+        local decimalCheck = GUIFrame:CreateCheckbox(rowD2, "Decimal Timer", {
+            value = db.ShowDecimalSeconds == true,
+            callback = function(c)
+                db.ShowDecimalSeconds = c
+                ApplySettings()
+                decimalBelow:SetEnabled(c)
+            end,
+        })
+        rowD2:AddWidget(decimalCheck, 0.5)
+        decimalBelow = GUIFrame:CreateSlider(rowD2, "Decimal Below", {
+            min = 1, max = 10, step = 1,
+            value = db.DecimalThreshold or 3,
+            callback = function(v) db.DecimalThreshold = v; ApplySettings() end,
+        })
+        rowD2:AddWidget(decimalBelow, 0.5)
+        -- The threshold stays out of allWidgets: UpdateAllWidgetStates sets
+        -- every entry from db.Enabled alone and would undo the toggle below.
+        table_insert(allWidgets, decimalCheck)
+        card3:AddRow(rowD2, 40)
+
         local rowE = GUIFrame:CreateRow(card3.content, 40)
         local tips = GUIFrame:CreateCheckbox(rowE, "Show Tooltips", {
             value = db.ShowTooltips ~= false,
@@ -280,6 +302,7 @@ local function BuildPage(opts)
         yOffset = posOffset
 
         UpdateAllWidgetStates()
+        decimalBelow:SetEnabled(db.ShowDecimalSeconds == true)
         return yOffset
     end)
 end
