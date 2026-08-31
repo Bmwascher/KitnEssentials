@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.25
+
+### New damage meter icons
+- Redrew all twelve damage meter icons so they hold their shape at the size
+  they are actually drawn. The old ones blurred into grey smudges
+- The four buttons at the top right of a meter window are a quarter larger and
+  now match each other in size
+- The report button is a new picture and no longer looks dimmer than its
+  neighbours
+- The icon files are about a seventh of their old size, with no change to how
+  they look
+
+---
+
 ## v4.4.24
 
 ### A clearer copy button on chat
