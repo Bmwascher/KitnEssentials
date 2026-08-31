@@ -18,6 +18,10 @@ describe("EditMode:NudgeSelectedElement return value", function()
     before_each(function()
         KE = L.loadGlobals()
         EditMode = L.loadEditMode(KE)
+        -- The no-selection refusal tells the player what to do, which lands in
+        -- the busted output as a stray chat line. Silenced here, not in the
+        -- module: the message is correct in game.
+        KE.Print = function() end
         saved = nil
         -- Everything past the setter is frame and GUI work this rule does not
         -- depend on, so it is stubbed rather than simulated.
