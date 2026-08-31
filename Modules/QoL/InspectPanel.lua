@@ -60,10 +60,9 @@ local INSPECT_SLOT_FRAMES = {
     [16] = "InspectMainHandSlot",  [17] = "InspectSecondaryHandSlot",
 }
 
--- Average-item-level computation, ported from ElvUI (Game/Shared/General/
--- ItemLevel.lua CalculateAverageItemLevel). C_PaperDollInfo.GetInspectItemLevel
+-- Average-item-level computation. C_PaperDollInfo.GetInspectItemLevel
 -- only returns a rounded integer, so to show real decimals we sum the equipped
--- slots and divide by 16 ourselves — the same arithmetic ElvUI displays.
+-- slots and divide by 16 ourselves.
 local AVG_ARMOR_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }
 local AVG_X2_INVTYPES = {
     INVTYPE_2HWEAPON = true,
@@ -167,7 +166,7 @@ local function ResolveInspectSlot(button)
     if not button then return end
     local unit = InspectFrame and InspectFrame.unit
     if not unit then return end
-    -- No same-map guard: ElvUI and Blizzard render whatever the inspect packet
+    -- No same-map guard: Blizzard renders whatever the inspect packet
     -- provides regardless of zone. A confirmed cross-map mismatch still happens
     -- for legitimately-inspectable targets across sub-zone / micro-map
     -- boundaries (buildings, caves), and blanking the whole overlay set there is

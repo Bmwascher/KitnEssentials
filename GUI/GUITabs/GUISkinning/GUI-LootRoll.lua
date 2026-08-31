@@ -140,7 +140,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesLootRoll", function(scrollChild, yOf
     manager:Register(skinCheck, "legacy")
     card3:AddRow(rowS, Theme.rowHeight)
 
-    -- Slim-bar geometry (replacement mode; the ElvUI values as defaults).
+    -- Slim-bar geometry (replacement mode).
     local rowG1 = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local widthSlider = GUIFrame:CreateSlider(rowG1, "Bar Width", {
         min = 150, max = 600, step = 5, value = db.Width or 340,

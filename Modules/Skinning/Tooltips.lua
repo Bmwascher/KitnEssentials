@@ -114,7 +114,7 @@ local function ResolveFont(db)
 end
 
 -- The tooltips that get the visual style. Existence-guarded at wire
--- time; embedded tooltips are excluded like ElvUI's SetStyle does.
+-- time; embedded tooltips are excluded.
 local STYLE_LIST = {
     "GameTooltip",
     "ItemRefTooltip",
@@ -224,7 +224,7 @@ function TT:StyleTooltip(tt)
         return
     end
 
-    -- ElvUI: secrets crash the comparison/money paths; a secret width is
+    -- Secrets crash the comparison/money paths; a secret width is
     -- the tell that this tooltip is in that state -- leave it native.
     if KE:IsSecretValue(tt:GetWidth()) then return end
 
@@ -373,8 +373,8 @@ local function UnitColor(unit, guid)
     end
     if not unit then return end
 
-    -- Midnight secret units. UnitName returning a secret is the tell (ElvUI's
-    -- IsSecretUnit); on that branch UnitIsPlayer and UnitReaction give secret
+    -- Midnight secret units. UnitName returning a secret is the tell;
+    -- on that branch UnitIsPlayer and UnitReaction give secret
     -- booleans and branching on them is the crash class.
     --
     -- Class-colour ONLY when the GUID says this is a player. Without that this
@@ -440,8 +440,8 @@ local function LevelMatchers()
         levelMatchA = plain and strlower(plain:gsub("%s?%%s%s?%-?", "")) or false
         -- The second chain strips the reordered "%2$s ... %1$s" form some
         -- locales use, then the leading Russian ordinal, then the remaining
-        -- specifiers. Transcribed from ElvUI rather than re-derived --
-        -- getting it wrong only shows up in one locale.
+        -- specifiers. Transcribed rather than re-derived -- getting it
+        -- wrong only shows up in one locale.
         levelMatchB = raced
             and strlower(raced:gsub("^%%2$s%s?(.-)%s?%%1$s", "%1")
                               :gsub("^%-?г?о?%s?", "")
@@ -489,12 +489,12 @@ end
 -- whether the token is a secret value. The two are NOT interchangeable, and
 -- only this one licenses concatenating a name.
 --
--- Deliberately NOT copied from oUF, whose NotSecretUnit calls the BARE global
--- `ShouldUnitIdentityBeSecret` (ElvUI_Libraries/.../oUF/init.lua). That
--- global does not exist: the system declares Namespace = "C_Secrets", so it
--- only ever exports under C_Secrets. oUF's `ShouldUnitIdentityBeSecret and`
--- short-circuit therefore always yields nil, making NotSecretUnit constantly
--- true and ElvUI's name rebuild effectively unguarded. Caught by KE's
+-- Deliberately NOT the widespread pattern of calling the BARE global
+-- `ShouldUnitIdentityBeSecret`. That global does not exist: the system
+-- declares Namespace = "C_Secrets", so it only ever exports under
+-- C_Secrets. A `ShouldUnitIdentityBeSecret and` short-circuit therefore
+-- always yields nil, leaving such a guard constantly true and the name
+-- rebuild behind it effectively unguarded. Caught by KE's
 -- luacheckrc drift check. Fail CLOSED here: no predicate, no
 -- rebuild.
 local function CanReadIdentity(unit)
@@ -508,18 +508,15 @@ end
 -- The " [AFK]" / " [DND]" suffix.
 --
 -- These two strings are OURS, not Blizzard's. There is no AFK_LABEL or
--- DND_LABEL global -- ElvUI builds its own file-locals at Tooltip.lua
--- and this reads as though they were globals until you look. Colours and
--- bracket form are copied from there; the words are literals, per the port
--- convention against locale tables.
+-- DND_LABEL global, and this reads as though there were until you look.
+-- The words are literals, per the convention against locale tables.
 local AFK_LABEL = " |cffFFFFFF[|r|cffFF9900AFK|r|cffFFFFFF]|r"
 local DND_LABEL = " |cffFFFFFF[|r|cffFF3333DND|r|cffFFFFFF]|r"
 
 -- UnitIsAFK and UnitIsDND are SecretInChatMessagingLockdown -- a DIFFERENT
 -- condition from identity restriction, so CanReadIdentity does not cover
 -- them and they need their own check. The secret test has to come first: a
--- truth test on a secret boolean throws. Same shape as ElvUI's E:UnitIsAFK
--- wrapper (ElvUI/Game/Shared/General/API.lua).
+-- truth test on a secret boolean throws.
 local function AwayLabel(unit)
     local afk = UnitIsAFK(unit)
     if not KE:IsSecretValue(afk) and afk then return AFK_LABEL end
@@ -635,9 +632,8 @@ function TT:OnTooltipSetUnit(tt, data)
     end
 
     -- Name row rebuild: player title, realm suffix and the Away/Busy label,
-    -- none of which Blizzard's own row carries. Ports ElvUI SetUnitText
-    -- (Tooltip.lua) minus its ElvUI-version lookup and its gender
-    -- prefix.
+    -- none of which Blizzard's own row carries. No addon-version lookup
+    -- and no gender prefix.
     --
     -- Colour is deliberately NOT set here. SetText does not clear a
     -- SetTextColor, so the ClassColorNames block above stays the single
@@ -715,8 +711,8 @@ function TT:OnTooltipSetUnit(tt, data)
             -- Officer". Realm is trimmed first so the rank attaches to the
             -- guild name itself. Plain string ops, not patterns -- realm
             -- names carry apostrophes and hyphens.
-            -- "Instant Dollars [Officer]". Same form EllesmereUI and ElvUI
-            -- use, and it survives guild names that contain a dash --
+            -- "Instant Dollars [Officer]". The same form EllesmereUI uses, and
+            -- it survives guild names that contain a dash --
             -- "Knights - of - Ni - Officer" is ambiguous, the bracketed form
             -- is not. Because EUI writes the identical form, this one check
             -- both defers to EUI and stops us re-appending on refresh ticks.
@@ -749,8 +745,8 @@ function TT:OnTooltipSetUnit(tt, data)
 
                     -- Angle brackets around the guild name itself, before
                     -- the rank is appended: "<Instant Dollars> [Officer]".
-                    -- Same form ElvUI writes (Tooltip.lua). Guarded on
-                    -- the first character so refresh ticks cannot nest them.
+                    -- Guarded on the first character so refresh ticks
+                    -- cannot nest them.
                     if out:sub(1, 1) ~= "<" then
                         out = "<" .. out .. ">"
                     end
@@ -770,8 +766,7 @@ function TT:OnTooltipSetUnit(tt, data)
 
     -- Level row rebuild: "90 Dark Iron Dwarf" in place of Blizzard's
     -- "Level 90 Dark Iron Dwarf (Player)", with the number tinted by how
-    -- dangerous the unit is. Ports ElvUI's SetUnitText/GetLevelLine pair
-    -- (Tooltip.lua).
+    -- dangerous the unit is.
     --
     -- The name row above is rebuilt separately, behind CanReadIdentity.
     -- The same gate is needed here: 12.1 puts UnitRace (and GetGuildInfo's
@@ -783,8 +778,8 @@ function TT:OnTooltipSetUnit(tt, data)
 
         if levelLine then
             -- Effective level is what the unit fights at (scaled content);
-            -- real level is what it actually is. ElvUI shows both when they
-            -- differ, so a scaled-down 80 reads "80 (90) Night Elf".
+            -- real level is what it actually is. Show both when they differ,
+            -- so a scaled-down 80 reads "80 (90) Night Elf".
             local level = UnitEffectiveLevel(unit)
             local realLevel = UnitLevel(unit)
             local race = UnitRace(unit)
@@ -806,7 +801,7 @@ function TT:OnTooltipSetUnit(tt, data)
         end
 
         -- The row after the level row is the spec/class row ("Protection
-        -- Paladin"). ElvUI rewrites it wrapped in a colour code; a plain
+        -- Paladin"). Rewriting it wrapped in a colour code is one way; a plain
         -- SetTextColor gets the same look without reading the text, so no
         -- secret check is needed here.
         if specLine and db.ClassColorNames and unitColor then
@@ -856,11 +851,11 @@ function TT:OnTooltipSetUnit(tt, data)
         end
     end
 
-    -- Target line (ElvUI AddTargetInfo, retail branch).
+    -- Target line.
     if db.TargetLine then
         local unitTarget = unit .. "target"
         if unit ~= "player" and UnitExists(unitTarget) then
-            -- the v891 IsSecretValue skip suppressed the line
+            -- an IsSecretValue skip here used to suppress the line
             -- for every secret target (most of Midnight group content).
             -- AddDoubleLine is a DISPLAY SINK -- secret text is allowed
             -- through it; what is forbidden is format/concat on the
@@ -904,9 +899,9 @@ end
 -- (field: no Spell ID on macro tooltips despite #showtooltip):
 -- a macro's tooltip is TooltipDataType.MACRO, not SPELL, so the Spell
 -- post-call never fired -- the same disease as the buff frame
--- and talent tooltips. ElvUI routes MACRO into this very
--- handler and reads the id off the first tooltip LINE (Tooltip.lua
--- ~1000): data.id on a macro is the macro slot, not the spell.
+-- and talent tooltips. MACRO is routed into this very handler, which
+-- reads the id off the first tooltip LINE: data.id on a macro is the
+-- macro slot, not the spell.
 function TT:OnTooltipSetSpell(tt, data)
     local db = self.db
     if IsEmbeddedTip(tt) then return end
@@ -1137,8 +1132,7 @@ function TT:OnEnable()
             _G.TooltipDataProcessor.AddTooltipPostCall(T.Spell, function(tt, data)
                 if TT:IsEnabled() then TT:OnTooltipSetSpell(tt, data) end
             end)
-            -- macros are their own data type; ElvUI feeds them
-            -- through the same handler (Tooltip.lua ~1217).
+            -- macros are their own data type, fed through the same handler.
             if T.Macro then
                 _G.TooltipDataProcessor.AddTooltipPostCall(T.Macro, function(tt, data)
                     if TT:IsEnabled() then TT:OnTooltipSetSpell(tt, data) end
@@ -1170,8 +1164,8 @@ function TT:OnEnable()
     self:SecureHook("GameTooltip_SetDefaultAnchor", "SetDefaultAnchor")
 
     -- (holding a modifier after the tooltip was already
-    -- up never added the ID lines): ElvUI's mechanism -- on modifier
-    -- change, RefreshData() re-fires the tooltip data processors, so the
+    -- up never added the ID lines): on modifier change, RefreshData()
+    -- re-fires the tooltip data processors, so the
     -- Unit/Spell/Item post-calls re-run with the new modifier state.
     self:RegisterEvent("MODIFIER_STATE_CHANGED")
     -- Not PLAYER_LOGIN: the client settles its session CVars after login and
@@ -1224,8 +1218,8 @@ function TT:MODIFIER_STATE_CHANGED()
         -- title is added by the owning frame rather than the spell data
         -- -- hit this on macro buttons, talents are the same
         -- disease (TalentDisplay mixins add the name line themselves).
-        -- ElvUI's actual handler never force-refreshes these: it
-        -- re-fires the owner's own tooltip builder. Generalized here:
+        -- Never force-refresh these; re-fire the owner's own tooltip
+        -- builder instead. Generalized here:
         -- when the owner has an OnEnter, re-run it -- the frame rebuilds
         -- its tooltip through the CORRECT path, nothing is lost, and our
         -- data processor re-fires with the new modifier state. Raw

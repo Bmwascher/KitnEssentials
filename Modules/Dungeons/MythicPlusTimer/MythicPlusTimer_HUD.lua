@@ -45,7 +45,7 @@ local function _FmtShort(sec)
     return (MPT.FormatTime(sec, false):gsub("^0", "", 1))
 end
 
--- Objective-row frame pool (Step 1 of Task 3.2).
+-- Objective-row frame pool.
 -- Each kit = { row, name, time } where row is the root Frame and
 -- name/time are the left/right FontStrings. Scripts and font structure
 -- are wired once inside the factory; per-render state is set in
@@ -161,7 +161,7 @@ function MPT:BuildHUD()
 
     local root = CreateFrame("Frame", "KE_MythicPlusTimer", UIParent, "BackdropTemplate")
     root:SetSize(300, 200)
-    -- Build-time default only — ApplySettings (Task 2.5) must re-apply Strata
+    -- Build-time default only — ApplySettings must re-apply Strata
     -- (and bar textures) so GUI changes take effect without a /reload.
     root:SetFrameStrata(self.db and self.db.Strata or "MEDIUM")
     root:SetClampedToScreen(true)
@@ -211,7 +211,7 @@ function MPT:BuildHUD()
     root.timerPBText   = FS()              -- PB beside timer (countdown)
     root.keyText       = FS()              -- "+30" key bracket
     root.affixText     = FS()              -- affix names (TEXT mode)
-    root.affixIcons    = {}                -- ICON-mode textures (lazy, Task 2.4)
+    root.affixIcons    = {}                -- ICON-mode textures (lazy)
     root.thresh3Text   = FS(nil, textOverlay)  -- remaining label at +3 tick
     root.thresh2Text   = FS(nil, textOverlay)  -- remaining label at +2 tick
     root.thresh1Text   = FS(nil, textOverlay)  -- remaining label at +1 (bar end)
@@ -270,7 +270,7 @@ function MPT:BuildHUD()
     -- Pull-preview hook: DEAD on 12.0 — per-unit forces progress is secret
     -- (memory: project_warpdeplete_forces_preview_blocked; aggregate criteria
     -- are kill-credited only). Created hidden, never fed data, gated by
-    -- db.ShowPullOverlay (defaults false, Task 0.2); GUI exposes nothing in
+    -- db.ShowPullOverlay (defaults false); GUI exposes nothing in
     -- Phase 1. If a future 12.x de-secrets per-unit forces, implement the
     -- engaged-but-unkilled feed here.
     bars.forcesPullOverlay = forcesBar:CreateTexture(nil, "ARTWORK")
@@ -420,7 +420,7 @@ end
 -- static total stay on the 1 Hz path). GetWorldElapsedTime only carries
 -- whole seconds, so the fraction comes from MPT.LiveMsElapsed's precise
 -- clock, re-glued at every whole-second flip by OnTimerTick. Display is
--- throttled to 10 Hz (WarpDeplete's cadence) and shows ONE decisecond
+-- throttled to 10 Hz and shows ONE decisecond
 -- digit — a 60 Hz three-digit readout churned unreadably and its
 -- proportional-font width danced at frame rate (user feedback);
 -- the frozen completion time keeps the full .mmm via RenderTimer. The
@@ -576,7 +576,7 @@ function MPT:RenderTimer()
     end
 
     -- Overall PB / delta beside the timer (f.timerPBText: created + anchored
-    -- in Task 2.1; fonted by ApplyLayout's applyFont(f.timerPBText, "PB")).
+    -- at build time; fonted by ApplyLayout's applyFont(f.timerPBText, "PB")).
     if MPT.run.completed and MPT.run.bestOverall then
         -- Completion: signed overall delta vs the pre-run PB.
         local diff = (MPT.run.elapsed or 0) - MPT.run.bestOverall
@@ -789,7 +789,7 @@ end
 -- of a run. A signature cache on bars skips all ClearAllPoints/SetPoint/SetSize/
 -- SetColorTexture calls when geometry is unchanged. Label TEXT (countdown
 -- strings) still updates every tick outside the cache block.
--- NOTE: ApplySettings (Task 2.5) must set bars._keThreshSig = nil to bust this
+-- NOTE: ApplySettings must set bars._keThreshSig = nil to bust this
 -- cache when BarHeight or TickColor changes via the GUI.
 ---------------------------------------------------------------------------------
 
@@ -943,7 +943,6 @@ end
 
 ---------------------------------------------------------------------------------
 -- RenderKey — key level bracket + affix line (TEXT or ICON mode).
--- Steps 1-3 of Task 2.4.
 --
 -- Row layout (round-3 feedback: "+3 Lindormi's Guidance" — key LEFT of the
 -- affixes): affixText is the row anchor at the frame's right edge, owned by
@@ -1053,7 +1052,7 @@ function MPT:RenderKey()
 end
 
 ---------------------------------------------------------------------------------
--- RenderDeaths — headline "N Deaths (+m:ss)" + hover tooltip (Task 3.5).
+-- RenderDeaths — headline "N Deaths (+m:ss)" + hover tooltip.
 -- Replaces the Phase-2 headline-only stub wholesale.
 --
 -- Blank at 0 deaths (spec §7.1). Format: "N Deaths (+m:ss)" — penalty ADDS
@@ -1080,7 +1079,7 @@ function MPT:RenderDeaths()
     MPT.SetTextGated(fs, str)
     fs:Show()
     -- Hit frame sized to the actual text so the hover region matches.
-    -- (fs's anchor + font are owned by ApplyLayout, Task 2.5.)
+    -- (fs's anchor + font are owned by ApplyLayout.)
     -- Geometry gated on the headline string — only re-measure when it changed.
     if hit._keForString ~= str then
         hit._keForString = str
@@ -1095,7 +1094,6 @@ end
 
 ---------------------------------------------------------------------------------
 -- RenderForces — forces StatusBar fill + percent/count/custom text.
--- Step 5 of Task 2.4.
 --
 -- run.forces = { total, current, percent, completed } (plain math — no
 -- issecretvalue guard per spec §8 "aggregate GetCriteriaInfo").
@@ -1115,7 +1113,7 @@ end
 -- Lua 5.1 gsub replacement caveat: bare "%" is invalid; build the
 -- formatted number then append "%%".
 --
--- forcesText anchor: owned by ApplyLayout (Task 2.5, db.ForcesPlacement).
+-- forcesText anchor: owned by ApplyLayout (db.ForcesPlacement).
 -- This function only sets text / color / visibility.
 ---------------------------------------------------------------------------------
 
@@ -1376,7 +1374,7 @@ end
 -- Step 2: bar sizes, HUD anchor, scale, backdrop, straggler anchors.
 -- Step 3: length-gated vertical relayout + objectives handoff.
 -- Publishes: MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP, MPT._objRowStartY.
--- Reads back: MPT._objRowEndY (written by RenderObjectives, Task 3.2).
+-- Reads back: MPT._objRowEndY (written by RenderObjectives).
 ---------------------------------------------------------------------------------
 
 function MPT:ApplyLayout()
@@ -1574,7 +1572,7 @@ function MPT:ApplyLayout()
     if f._keLayoutSig == sig then return end
     f._keLayoutSig = sig
 
-    -- Publish the layout-cursor constants consumed by RenderObjectives (Task 3.2).
+    -- Publish the layout-cursor constants consumed by RenderObjectives.
     MPT._PAD, MPT._ROW_GAP, MPT._OBJ_GAP = PAD, ROW, ROW
     local y = -PAD
     local function row(fs, gap)
@@ -1686,9 +1684,9 @@ function MPT:ApplyLayout()
             end
         end
     end
-    -- Hand the cursor to the objectives pass: Task 3.2's RenderObjectives
+    -- Hand the cursor to the objectives pass: RenderObjectives
     -- reads _objRowStartY/_PAD/_OBJ_GAP and writes _objRowEndY (its only
-    -- return channel). Guarded until Task 3.2 defines it.
+    -- return channel). Guarded until RenderObjectives is defined.
     MPT._objRowStartY = y
     MPT._objRowEndY   = nil
     if self.RenderObjectives then self:RenderObjectives() end
@@ -1700,7 +1698,7 @@ end
 -- Called by NotifyRefresh's debounced callback (_NotifyRefreshFire). Hides the
 -- HUD when there is no run or preview, else calls each Render* in order and
 -- requests a deferred (length-gated) layout pass.
--- RenderObjectives (Task 3.2) is called from INSIDE ApplyLayout — it consumes
+-- RenderObjectives is called from INSIDE ApplyLayout — it consumes
 -- the layout cursor published here. Do NOT call it here: the first render
 -- after a text-length change is one deferred-layout pass stale and converges
 -- on the next tick (accepted behavior per spec §11).
@@ -1725,7 +1723,7 @@ function MPT:Render()
     self:RenderThresholds()
     self:RenderBar()
     self:RenderForces()
-    -- RenderObjectives (Task 3.2) is called from INSIDE ApplyLayout — see note above.
+    -- RenderObjectives is called from INSIDE ApplyLayout — see note above.
     self:RequestLayout()
     self:UpdateMsDriver()
 end
@@ -1771,7 +1769,7 @@ function MPT:ApplySettings()
 end
 
 ---------------------------------------------------------------------------------
--- Preview fake-run (Task 2.6) — Rookery +12 demo visible when the GUI opens.
+-- Preview fake-run — Rookery +12 demo visible when the GUI opens.
 -- BuildPreviewRun() returns a FRESH table per call (never a shared static) so
 -- stray mutations from render/lifecycle code cannot poison a subsequent preview.
 -- Thresholds are peril-correct: affix 152 (Challenger's Peril) is in the list,

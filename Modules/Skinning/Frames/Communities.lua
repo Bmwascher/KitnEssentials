@@ -305,9 +305,8 @@ local function Skin()
     end
     if frame.GuildLogButton then S.Button(frame.GuildLogButton) end
 
-    -- Guild Message of the Day editor (ElvUI's
-    -- Communities.lua -- same shape as the Guild Log below,
-    -- which we already had; this frame was simply never ported).
+    -- Guild Message of the Day editor -- same shape as the Guild Log
+    -- below; this frame was simply never skinned.
     local motd = _G.CommunitiesGuildTextEditFrame
     if motd and not S.data(motd).aeMotd then
         S.data(motd).aeMotd = true
@@ -323,8 +322,8 @@ local function Skin()
         if _G.CommunitiesGuildTextEditFrameAcceptButton then
             S.Button(_G.CommunitiesGuildTextEditFrameAcceptButton)
         end
-        -- ElvUI: closeButton = select(4, frame:GetChildren()) -- the
-        -- Cancel button along the bottom, which has no global name.
+        -- select(4, frame:GetChildren()) is the Cancel button along the
+        -- bottom, which has no global name.
         local cancel = select(4, motd:GetChildren())
         if cancel and cancel.IsObjectType and cancel:IsObjectType("Button") then
             S.Button(cancel)

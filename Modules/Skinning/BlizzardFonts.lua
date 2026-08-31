@@ -83,8 +83,8 @@ local FONT_LIST = {
 
     { "MailTextFontNormal", 15 },
     -- (cooldown numbers lost their outline):
-    -- this object IS the native cooldown-count font (ElvUI's font map
-    -- confirms: cooldown = SystemFont_Shadow_Large_Outline). It was
+    -- this object IS the native cooldown-count font
+    -- (SystemFont_Shadow_Large_Outline). It was
     -- mapped "S", stripping OUTLINE from item cooldowns, private aura
     -- cooldowns, and every other native countdown. Stock-outlined
     -- objects must stay outlined.

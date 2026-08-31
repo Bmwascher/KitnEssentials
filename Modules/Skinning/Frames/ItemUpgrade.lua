@@ -1,6 +1,5 @@
 ---@class KE
--- ElvUI Mainline/Skins/ItemUpgrade.lua transcription:
--- window mostly unskinned -- only the S.Frame stub existed.
+-- The window was mostly unskinned -- only the S.Frame stub existed.
 local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G
@@ -10,7 +9,7 @@ local function Skin()
     if not frame then return end
     S.Frame(frame)
 
-    -- Chrome ElvUI hides beyond the standard frame treatment
+    -- Chrome to hide beyond the standard frame treatment
     if _G.ItemUpgradeFramePlayerCurrenciesBorder then
         S.StripTextures(_G.ItemUpgradeFramePlayerCurrenciesBorder)
     end
@@ -19,7 +18,7 @@ local function Skin()
     end
     if frame.TopTileStreaks then frame.TopTileStreaks:Hide() end
 
-    -- Parchment-class art (ElvUI parchmentRemover branch = our default)
+    -- Parchment-class art (removed by default)
     if frame.BottomBGShadow then frame.BottomBGShadow:Hide() end
     if frame.BottomBG then frame.BottomBG:Hide() end
     if frame.TopBG then frame.TopBG:Hide() end
@@ -35,7 +34,7 @@ local function Skin()
         S.KillAllTextures(button, button.icon)
         S.Backdrop(button)
         if button.icon then
-            -- (slot box mis-sized): ElvUI's recipe is
+            -- (slot box mis-sized): the recipe is
             -- icon:SetInside(button) -- the icon fills the slot minus
             -- 1px, so the button backdrop is the ONE visible box.
             -- Skipping it left Blizzard's inset icon floating inside a

@@ -156,7 +156,7 @@ local PB_FALLBACK_OPTIONS = {
 }
 
 -- When the PB target is visible (db.SplitsShowMode, gated by
--- MPT:ShouldShowRecords — WarpDeplete showSplitRecords parity).
+-- MPT:ShouldShowRecords).
 local SPLITS_SHOW_OPTIONS = {
     { key = "ALWAYS",    text = "Always" },
     { key = "COUNTDOWN", text = "During Countdown" },
@@ -164,7 +164,7 @@ local SPLITS_SHOW_OPTIONS = {
 }
 
 -- Which side of a boss row the clear time / PB target sits on
--- (db.ObjectiveTimePosition, WarpDeplete alignBossClear parity).
+-- (db.ObjectiveTimePosition).
 local BOSS_TIME_POSITION_OPTIONS = {
     { key = "END",   text = "Right Edge" },
     { key = "START", text = "Left Edge" },

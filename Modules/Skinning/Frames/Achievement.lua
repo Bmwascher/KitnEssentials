@@ -183,7 +183,7 @@ local function SkinComparisonRow(child)
     SkinCompareRow(child.Player)
     -- AUDIT: was SetTextColor = NOOP -- method surgery on a
     -- Blizzard object, the exact class that tainted the flyout for 13
-    -- versions (v828). Hook and re-assert instead, ElvUI's idiom.
+    -- versions. Hook and re-assert instead.
     S.LockTextColor(child.Player.Description, 0.9, 0.9, 0.9)
     SkinCompareRow(child.Friend)
 end

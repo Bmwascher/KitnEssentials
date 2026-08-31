@@ -687,7 +687,7 @@ function MF:OnEnable()
     end
 
     -- Blizzard container anchoring fights the mover; clear on layout
-    -- (ported verbatim; inert while Baganator replaces the bags).
+    -- (inert while Baganator replaces the bags).
     if _G.ContainerFrameSettingsManager then
         local GetBagsShown = _G.ContainerFrameSettingsManager.GetBagsShown
         self:SecureHook(_G.ContainerFrameSettingsManager, "GetBagsShown", function()

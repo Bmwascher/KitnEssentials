@@ -19,12 +19,12 @@ local function UpdateCollapse(texture, atlas)
 end
 
 -- state-only button contact for everything living inside the
--- currency-transfer protected flow. ElvUI HandleButtons these same
--- buttons with StripTextures + template and no Kill; our S.Button runs
--- S.KillAllTextures (Show->Hide slot writes) which is banned surgery
--- anywhere Blizzard's secure code may read the slot back. This is the
--- parity contact: strip (state), ClearButtonArt (ClearTexture + hooked
--- setter re-clear, ElvUI's own permanence idiom), backdrop, hover.
+-- currency-transfer protected flow. These buttons take StripTextures +
+-- template and no Kill; S.Button runs S.KillAllTextures (Show->Hide
+-- slot writes) which is banned surgery anywhere Blizzard's secure code
+-- may read the slot back. The safe contact is: strip (state),
+-- ClearButtonArt (ClearTexture + hooked setter re-clear, the permanence
+-- idiom), backdrop, hover.
 local function StyleButtonClean(button)
     if not button or S.data(button).skinned then return end
     S.StripTextures(button)
@@ -39,16 +39,14 @@ local function StyleButtonClean(button)
     S.data(button).skinned = true
 end
 
--- ElvUI-exact port of their UpdateTokenSkinsChild
--- (Character.lua). Two deltas removed, both ours alone:
---   * the row hover -- ours calls EnableMouse(true) on rows Blizzard
---     deliberately left mouse-disabled. ElvUI never touches input
---     state here: backdrop and stop. It is also against our own hover
---     standard (never manufacture hover on mouse-disabled rows).
---   * our skinned flag as a field on the Blizzard row -> S.data.
--- ElvUI flags this frame explicitly: "updates to this can taint
--- transferring currencies" (their Character.lua). They still skin
--- it, they just refuse to keep touching it. Same policy here.
+-- Token-row skin. Two things this deliberately does NOT do:
+--   * manufacture a row hover -- calling EnableMouse(true) on rows
+--     Blizzard left mouse-disabled changes input state inside the
+--     transfer flow, and it breaks our own hover standard (never
+--     manufacture hover on mouse-disabled rows). Backdrop and stop.
+--   * store the skinned flag as a field on the Blizzard row -> S.data.
+-- Updates to this frame can taint transferring currencies, so it gets
+-- skinned once and then left alone.
 local function StyleEntry(child)
     if not child or S.data(child).skinned then return end
 
@@ -68,7 +66,7 @@ local function StyleEntry(child)
     S.data(child).skinned = true
 end
 
--- Transfer Log rows (ElvUI Character.lua).
+-- Transfer Log rows.
 local function StyleLogLine(line)
     if not line or S.data(line).skinned then return end
     local icon = line.CurrencyIcon
@@ -79,8 +77,8 @@ local function StyleLogLine(line)
     S.data(line).skinned = true
 end
 
--- WHEN we skin turned out to be the whole story. The v861
--- staged bisect applied every one of these contacts individually, live,
+-- WHEN we skin turned out to be the whole story. A staged bisect
+-- applied every one of these contacts individually, live,
 -- AFTER the frame's first OnShow -- every stage stayed SECURE down the
 -- entire ladder and transfers succeeded with all of them applied. The
 -- auto pass, by contrast, ran from ADDON_LOADED("Blizzard_TokenUI"),
@@ -96,17 +94,15 @@ local function ApplySkin()
     local frame = _G.TokenFrame
     if not frame then return end
 
-    -- S.StripTextures(TokenFrame) dropped. ElvUI never
-    -- touches the TokenFrame frame itself (their Character skin strips
-    -- the CharacterFrame insets that host it); every contact we make
-    -- with this frame family beyond ElvUI's own is a taint suspect until
-    -- proven, and this one bought us nothing visible.
+    -- S.StripTextures(TokenFrame) dropped. Never touch the TokenFrame
+    -- frame itself -- the CharacterFrame insets that host it are the
+    -- right target. Every extra contact with this frame family is a
+    -- taint suspect until proven, and this one bought nothing visible.
 
     if frame.filterDropdown then S.DropDown(frame.filterDropdown) end
 
-    -- `true` (ignoreUpdates) stays -- ElvUI's own warning on
-    -- this exact scrollbar: "updates to this can taint transferring
-    -- currencies" (Character.lua). The stepper contact inside
+    -- `true` (ignoreUpdates) stays -- updates to this scrollbar can
+    -- taint transferring currencies. The stepper contact inside
     -- TrimScrollBar is now state-only (see skinScrollArrows), which was
     -- the convicted root of the transfer FORBIDDEN.
     if frame.ScrollBar then S.ScrollBar(frame.ScrollBar, true) end
@@ -130,15 +126,13 @@ local function ApplySkin()
         if close then S.CloseButton(close) end
     end
 
-    -- Transfer Log window (ElvUI Character.lua).
-    -- NOTE their warning -- they deliberately DON'T skin
-    -- TokenFrame.CurrencyTransferLogToggleButton ("No no no, this
-    -- taints"), they only swap its textures. We honour that: the
-    -- toggle button on TokenFrame stays untouched entirely.
+    -- Transfer Log window.
+    -- TokenFrame.CurrencyTransferLogToggleButton taints when skinned,
+    -- so it stays untouched entirely.
     -- the old guard set S.data(log).skinned = true and THEN
     -- called S.Frame(log) -- which gates on the very same key and
-    -- bailed immediately. That is why the Log shipped unskinned in
-    -- v856-v859. Own key now; S.Frame's internal guard handles dedupe.
+    -- bailed immediately. That is why the Log once shipped unskinned.
+    -- Own key now; S.Frame's internal guard handles dedupe.
     local log = _G.CurrencyTransferLog
     if log and not S.data(log).logSkinned then
         S.data(log).logSkinned = true
@@ -147,11 +141,8 @@ local function ApplySkin()
         if log.ScrollBox then S.HookScrollBox(log.ScrollBox, StyleLogLine) end
     end
 
-    -- Currency Transfer menu, first port (ElvUI
-    -- Character.lua). Everything here is the state-only
-    -- toolkit; the ONE piece of ElvUI's recipe we intentionally skip is
-    -- nothing -- contact surface is theirs 1:1. The transfer input box
-    -- backdrop re-anchors are their exact offsets.
+    -- Currency Transfer menu. Everything here is the state-only
+    -- toolkit, and nothing in the contact surface is skipped.
     local menu = _G.CurrencyTransferMenu
     if menu and not S.data(menu).menuSkinned then
         S.data(menu).menuSkinned = true

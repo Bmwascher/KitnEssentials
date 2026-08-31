@@ -133,11 +133,10 @@ local function SkinStatsPane()
         end
     end
 
-    -- CharacterFrameInset added -- ElvUI's charframe list
-    -- (their Character.lua) has it and ours didn't, so
+    -- CharacterFrameInset added -- it was missing from this list, so
     -- Blizzard's inset art was never stripped. It only stayed hidden
     -- while our old KillTexture NOOP'd the setters addon-wide; once
-    -- that went (v828/v838), the art came back on tab switches.
+    -- that went, the art came back on tab switches.
     for _, name in ipairs({ "CharacterStatsPane", "CharacterModelScene", "CharacterFrameInset",
                             "CharacterFrameInsetRight", "PaperDollSidebarTabs" }) do
         if _G[name] then S.StripTextures(_G[name]) end
@@ -155,8 +154,8 @@ local function SkinSidebarTabs()
         local tab = _G["PaperDollSidebarTab" .. i]
         if tab and not tab.aeTabSkinned then
             -- (art flashed on open): SetAlpha(0) is
-            -- state -- Blizzard re-dresses it every show. ElvUI Kills
-            -- this exact region (Character.lua tab.TabBg:Kill()).
+            -- state -- Blizzard re-dresses it every show, so TabBg has
+            -- to be Killed rather than faded.
             if tab.TabBg then S.Kill(tab.TabBg) end
             S.Backdrop(tab)
             if tab.Icon and tab.Icon.SetAllPoints then tab.Icon:SetAllPoints() end
@@ -247,11 +246,10 @@ local function SkinEquipmentManagerPane()
     ShrinkSetButtons()
 end
 
--- ElvUI's exact flyout treatment (their Character.lua
--- EquipmentDisplayButton): clear state art by passing E.ClearTexture
+-- Flyout treatment: clear state art by passing S.ClearTexture
 -- (fileID 0) to the BUTTON's setters. No contact with the texture
 -- objects at all -- which is what tainted this display loop for
--- thirteen versions. S.ClearButtonArt also installs their
+-- thirteen versions. S.ClearButtonArt also installs the
 -- re-clear-on-set hooks, so Blizzard re-dressing can't bring the art
 -- back (no flash) and nothing gets NOOP'd (no taint).
 local function KillFlyoutStates(button)
@@ -266,7 +264,7 @@ local function SkinFlyoutButton(button)
     -- the per-button method hooks (SetNormalTexture etc.,
     -- IconBorder Show-suppressor) fired INSIDE DisplayButton -- before
     -- the location write -- and were the remaining taint injectors
-    -- (v824 post-hoc audit: even button1 tainted). No hooks at all
+    -- (a post-hoc audit found even button1 tainted). No hooks at all
     -- now: state/border kills re-run in every deferred pass instead;
     -- worst case is a sub-0.1s art flash when Blizzard re-dresses.
     if button.IconBorder then
@@ -341,11 +339,9 @@ end
 local function EquipmentFlyoutSkin()
     local flyout = _G.EquipmentFlyoutFrame
     if not flyout then return end
-    -- ElvUI's exact three lines for the flyout chrome
-    -- (their Character.lua): StripTextures the highlight,
-    -- alpha-0 bg1, DisableDrawLayer the rest. They never Kill these,
-    -- so neither do we now that the kill primitive carries their
-    -- Kill semantics.
+    -- Three lines for the flyout chrome: StripTextures the highlight,
+    -- alpha-0 bg1, DisableDrawLayer the rest. None of these get Killed
+    -- now that the kill primitive carries redirect semantics.
     if flyout.Highlight then S.StripTextures(flyout.Highlight) end
 
     local ghl = _G.EquipmentFlyoutFrameHighlight
@@ -369,11 +365,10 @@ local function EquipmentFlyoutSkin()
             SkinFlyoutButton(button)
             KillFlyoutStates(button) -- re-kill per pass (no hooks)
             if button.IconBorder then button.IconBorder:SetAlpha(0) end
-            -- flyout ilvl RETIRED (ElvUI parity -- their skin
-            -- is art-only on the flyout, zero item-data reads; the ilvl
-            -- feature is WindTools', same mid-flow architecture as our
-            -- old code, presumably same Midnight bug). All flyout item-data
-            -- reads are gone now.
+            -- flyout ilvl RETIRED -- the flyout skin is art-only, with
+            -- zero item-data reads. Reading item data mid-flow here is
+            -- what broke on Midnight. All flyout item-data reads are
+            -- gone now.
             if S.data(button).flyoutILvl then S.data(button).flyoutILvl:Hide() end
         end
     end
@@ -388,8 +383,7 @@ local function EquipmentFlyoutNav()
     S.data(navi).skinned = true
 end
 
--- ElvUI's per-tab inset backdrop (their showInsetBackdrop +
--- UpdateCharacterInset, hooked on CharacterFrameMixin.ShowSubFrame).
+-- Per-tab inset backdrop, hooked on CharacterFrameMixin.ShowSubFrame.
 -- The list tabs want a dark inset behind their rows; the paperdoll
 -- does not -- that is the backdrop  saw sticking around after
 -- tab switching.
@@ -472,8 +466,6 @@ local function Skin()
     local frame = _G.CharacterFrame
     if not frame then return end
     S.Frame(frame)
-    -- ElvUI Kills the portrait here too
-    -- (their Character.lua CharacterFramePortrait:Kill()).
     if _G.CharacterFramePortrait then S.Kill(_G.CharacterFramePortrait) end
 
     -- hook Blizzard's paperdoll background applier.
@@ -483,7 +475,7 @@ local function Skin()
         hooksecurefunc("SetPaperDollBackground", KillPaperDollBackground)
     end
 
-    -- inset backdrop, driven per tab exactly as ElvUI does.
+    -- inset backdrop, driven per tab.
     local inset = _G.CharacterFrameInset
     if inset and not S.GetBackdrop(inset) then
         S.Backdrop(inset)
@@ -541,13 +533,12 @@ local function Skin()
     end
 end
 
--- ElvUI's exact registrations (their Character.lua).
 -- Every piece of machinery that used to sit here -- the event-driven
--- deferred driver (v824), the 0.1s panel ticker (v825), the post-hoc
+-- deferred driver, the 0.1s panel ticker, the post-hoc
 -- issecurevariable audit -- was built on the wrong theory that hooking
--- a function inside a secure flow taints it. It does not: ElvUI hooks
--- these very two functions and has no flyout taint. The real cause was
--- our KillTexture NOOP surgery, now gone (v838). Hooks restored, so
+-- a function inside a secure flow taints it. It does not: these very
+-- two functions hook cleanly with no flyout taint. The real cause was
+-- our KillTexture NOOP surgery, now gone. Hooks restored, so
 -- the flyout skins in the same frame Blizzard builds it -- no more
 -- half-second unskinned flash.
 if _G.EquipmentFlyout_SetBackgroundTexture then

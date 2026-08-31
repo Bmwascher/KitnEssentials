@@ -133,7 +133,7 @@ local MODULE_ALWAYS_ON_EVENTS = {
 }
 
 -- Forward declaration; SUBSYSTEMS table is defined further down in the file
--- after the new handler methods exist (Task 4).
+-- after the new handler methods exist.
 local SUBSYSTEMS
 
 ---------------------------------------------------------------------------------

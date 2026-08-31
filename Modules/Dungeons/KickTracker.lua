@@ -54,7 +54,7 @@ local LibSpec = LibStub("LibSpecialization", true)
 ---------------------------------------------------------------------------------
 -- Interrupt Database
 ---------------------------------------------------------------------------------
--- From ExwindDB, verified values. Specs without a kick have id = 0.
+-- Verified values. Specs without a kick have id = 0.
 local INTERRUPT_DATA = {
     -- Death Knight: Mind Freeze 12s
     [250]  = { id = 47528,  cd = 12, role = "TANK" },
@@ -1444,7 +1444,7 @@ function KT:OnUpdateBars(elapsed)
         end
     end
 
-    -- Periodic re-sort every 1s while cooling (matches ExWind)
+    -- Periodic re-sort every 1s while cooling
     if anyCooling then
         self._lastSortUpdate = self._lastSortUpdate or 0
         if now - self._lastSortUpdate >= 1.0 then

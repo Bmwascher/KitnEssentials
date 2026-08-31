@@ -536,7 +536,7 @@ KE.EncounterData[3332] = {
         -- player damage for everyone standing in it. Synthesized bar (no separate BigWigs Timer fires
         -- for the channel) — spawns at cast-phase end, doesn't fire on cast interrupts. Bundled into
         -- Flare's entry rather than split as a `phantomFollowupOf` row because the beam channel has
-        -- no clean spellID — both LittleWigs and ExBoss detect it by watching for a level-92 mob's
+        -- no clean spellID — detected by watching for a level-92 mob's
         -- UNIT_SPELLCAST_CHANNEL_START, not a curated ID we could surface in the GUI list.
         [1264439] = { name = "Lightscar Flare",       castType = "cast",      castDuration = 10,                        role = "other",                     displayText = "AMP",      sound = "Dmg Amp",
             postCastBar = { duration = 17, display = "bar", displayText = "BEAM", iconOverride = 612098 } },

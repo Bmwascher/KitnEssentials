@@ -766,14 +766,14 @@ end
 S.SkinPulloutFrame = SkinPulloutFrame
 
 -- BigWigs 419 "stock yellow config" regression. BigWigs_Options
--- (LoD) embeds its own AceGUI-3.0. Post-ElvUI it is often the FIRST -- or a
+-- (LoD) embeds its own AceGUI-3.0. It is often the FIRST -- or a
 -- NEWER -- AceGUI-3.0 in the session: LibStub:NewLibrary succeeds and the
 -- incoming lib file body reassigns RegisterAsWidget/RegisterAsContainer/
 -- Create, wiping our wraps; then BigWigs builds the entire config window in
 -- the SAME execution as LoadAddOn. The old C_Timer.After(0) rehook landed
 -- one frame late, and AceGUI pools widgets so nothing ever re-registers.
--- Fix = ElvUI's exact idiom (Skins/Ace3.lua HookAce3/Ace3_MetaIndex): our
--- hooksecurefunc on LibStub.NewLibrary runs INSIDE NewLibrary, i.e. BEFORE
+-- Fix: our hooksecurefunc on LibStub.NewLibrary runs INSIDE NewLibrary,
+-- i.e. BEFORE
 -- the incoming file assigns any methods -- so on a true minor upgrade we
 -- nil the three fields and arm a metatable __newindex trap that re-wraps
 -- each one synchronously AT ASSIGNMENT. Zero-frame gap, works whether an
@@ -851,8 +851,8 @@ local function HookAceGUI(AceGUI, minor, upgrading)
         -- Called from inside LibStub:NewLibrary on a real minor upgrade,
         -- BEFORE the incoming AceGUI-3.0.lua body runs. Clear the fields so
         -- its assignments fall through to __newindex and get wrapped in
-        -- place. (Every AceGUI-3.0 defines all three at file scope -- same
-        -- guarantee ElvUI's trap has relied on for years.)
+        -- place. (Every AceGUI-3.0 defines all three at file scope, which is
+        -- the guarantee this trap relies on.)
         for k in pairs(TRAP) do rawset(AceGUI, k, nil) end
         ArmTrap(AceGUI)
         return

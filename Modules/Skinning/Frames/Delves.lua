@@ -12,9 +12,9 @@ local function HandleOptionButton(button)
     d.delveSkinned = true
 end
 
--- flyout stays at Blizzard's stock anchor (ElvUI parity --
--- they never reposition; the opaque backdrop is the whole fix). The
--- v807 right-side experiment is retired.
+-- flyout stays at Blizzard's stock anchor -- never reposition it; the
+-- opaque backdrop is the whole fix. The right-side experiment is
+-- retired.
 local function HandleOptionSlot(slotFrame, skipHook)
     if not slotFrame or not slotFrame.OptionsList then return end
     local option = slotFrame.OptionsList
@@ -30,7 +30,7 @@ local function HandleOptionSlot(slotFrame, skipHook)
         -- (still see-through): the standard window
         -- fill is 80% alpha -- fine for panels over the world, wrong
         -- for a dropdown sitting directly on other UI text. Opaque
-        -- fill for this flyout (matches ElvUI's near-opaque template).
+        -- fill for this flyout, near-opaque.
         local bd = S.Backdrop(option.ScrollBox)
         if bd then bd:SetBackdropColor(0.063, 0.063, 0.063, 1) end
         if not skipHook then

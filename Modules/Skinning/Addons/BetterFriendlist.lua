@@ -176,7 +176,7 @@ end
 --     `Show = Hide` slot surgery, which never stopped this anyway: BFL
 --     re-dresses through SetNormalTexture/SetAtlas, and a button's state
 --     art is drawn by the button, not by a :Show() we can intercept.
---     ClearButtonArt is ElvUI's permanence idiom (ClearTexture + hooked
+--     ClearButtonArt is the permanence idiom (ClearTexture + hooked
 --     setters that re-clear, self-terminating) and it survives re-dress
 --     on its own -- the per-update re-assert covers plain regions too.
 local function FlattenInviteButton(tp)

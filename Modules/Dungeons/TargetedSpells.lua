@@ -967,7 +967,7 @@ function TS:OnCastEvent(event, unit, ...)
     elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
         -- Payload: castGUID, spellID, interruptedBy, castBarID (plain, NeverSecret).
         local castBarID = select(4, ...)
-        self:OnInterrupted(unit, castBarID)               -- Task 9
+        self:OnInterrupted(unit, castBarID)
     else -- STOP / CHANNEL_STOP / EMPOWER_STOP
         local castBarID
         if event == "UNIT_SPELLCAST_STOP" then
@@ -1219,7 +1219,7 @@ function TS:HidePreview()
 end
 
 ---------------------------------------------------------------------------------
--- CVar Prompt (Task 11)
+-- CVar Prompt
 ---------------------------------------------------------------------------------
 
 -- Field write only — never reassign the StaticPopupDialogs global itself:
