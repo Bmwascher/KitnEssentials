@@ -323,7 +323,17 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
         db = db,
         dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
         notes = {
+            -- Says "including your own" because the sound CANNOT honour
+            -- HideSelfCast. Blizzard's UnitAuraSoundInfo carries a unit and a
+            -- spell id and no caster field, so a registration fires for the
+            -- spell however it was applied. The display filters on the caster;
+            -- the sound cannot.
             "Plays for any enabled spell on the Allowlist above, including ones you cast on yourself.",
+            -- Not a caution about the GUI but about the sound registry:
+            -- removing a registration is always allowed, adding one is not
+            -- while aura identities are hidden, so an Allowlist edit made in
+            -- there retires the old set and cannot build the new one until the
+            -- restriction lifts.
             "Allowlist changes made inside a dungeon or raid take effect when you leave. The sound stays silent until then.",
         },
         onChangeCallback = ApplySettings,
