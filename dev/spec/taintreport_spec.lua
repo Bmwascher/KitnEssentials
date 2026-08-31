@@ -504,6 +504,28 @@ describe("TaintReport capture and access guards", function()
         assert.is_nil(source:find("pcall(canaccessvalue", 1, true))
         assert.is_nil(source:find("pcall(canaccesstable", 1, true))
     end)
+
+    it("guards persisted values before copying or comparing them", function()
+        local handle = assert(io.open("Modules/Diagnostics/TaintReport.lua", "rb"))
+        local source = handle:read("*a")
+        handle:close()
+
+        -- Ordinary Lua cannot model secret-value operations, so source order is the static proof.
+        local denseStart = assert(source:find("local function ValidateDenseArray", 1, true))
+        local denseEnd = assert(source:find("local function SafeFinishedString", denseStart, true))
+        local denseSource = source:sub(denseStart, denseEnd - 1)
+        local valueGuard = assert(denseSource:find(
+            "if not SafeCanAccess(nextValue) then return nil end", 1, true))
+        local valueStore = assert(denseSource:find("result[nextKey] = nextValue", 1, true))
+        assert.is_true(valueGuard < valueStore)
+
+        local initializeStart = assert(source:find("function TaintReport.Initialize", 1, true))
+        local initializeEnd = assert(source:find("function TaintReport.RunCommand", initializeStart, true))
+        local initializeSource = source:sub(initializeStart, initializeEnd - 1)
+        assert.is_truthy(initializeSource:find(
+            "global.TaintLog = RestoreStore(global.TaintLog)", 1, true))
+        assert.is_nil(initializeSource:find("rawStore ~= nil", 1, true))
+    end)
 end)
 
 describe("TaintReport real slash router", function()
@@ -898,6 +920,29 @@ describe("TaintReport persistence", function()
         assert.equals(canonical, db.global.TaintLog)
     end)
 
+    it("prints the deferred startup notice exactly once on the first valid initialization", function()
+        local startupMessage = "Protected actions attributed to KitnEssentials were captured "
+            .. "during startup. Use /kes taint."
+        local state = loadTaintReport()
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "startup-action")
+        assert.same({}, state.printed)
+
+        state.taintReport.Initialize(false)
+        assert.same({}, state.printed)
+
+        local db = { global = {} }
+        state.taintReport.Initialize(db)
+        assert.same({ startupMessage }, state.printed)
+        local firstReport = assert(state.run(""))
+        assert.is_truthy(firstReport:find("startup-action", 1, true))
+
+        local ignoredStore = storedLog({ storedGroup("ignored-restore") })
+        state.taintReport.Initialize({ global = { TaintLog = ignoredStore } })
+        assert.same({ startupMessage }, state.printed)
+        assert.equals(firstReport, state.run(""))
+        assert.is_nil(firstReport:find("ignored-restore", 1, true))
+    end)
+
     it("persists dirty current evidence as bounded schema copies", function()
         local state = loadTaintReport()
         local db = state.initialize()
@@ -1094,6 +1139,32 @@ describe("TaintReport persistence", function()
                     end
                     assert.is_false(tableCalled)
                 end
+            end
+        end
+    end)
+
+    it("rejects an inaccessible first array value before continuing traversal", function()
+        for _, mode in ipairs({ "false", "throw" }) do
+            local inaccessible = setmetatable({}, {
+                __index = function() error("inaccessible element was indexed") end,
+            })
+            local second = storedGroup("must-not-be-visited")
+            local groups = { inaccessible, second }
+            local state = loadTaintReport({
+                valueAccess = function(value)
+                    if value ~= inaccessible then return true end
+                    if mode == "throw" then error("value guard") end
+                    return false
+                end,
+            })
+            local db = { global = { TaintLog = storedLog(groups) } }
+
+            assert.has_no.errors(function() state.initialize(db) end)
+            assert.is_nil(db.global.TaintLog, mode)
+            assert.equals(1, state.nextVisits[groups], mode)
+            for _, guarded in ipairs(state.tableGuardCalls) do
+                assert.not_equals(inaccessible, guarded, mode)
+                assert.not_equals(second, guarded, mode)
             end
         end
     end)

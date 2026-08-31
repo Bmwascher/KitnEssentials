@@ -209,6 +209,7 @@ local function ValidateDenseArray(value, maximum)
             or nextKey % 1 ~= 0 or nextKey < 1 or nextKey > maximum then
             return nil
         end
+        if not SafeCanAccess(nextValue) then return nil end
         count = count + 1
         result[nextKey] = nextValue
         key = nextKey
@@ -1300,11 +1301,7 @@ function TaintReport.Initialize(db)
     attachedGlobal = global
     initialized = true
     local wasDirty = dirty
-    local rawStore = global.TaintLog
-    if rawStore ~= nil then
-        local canonical = RestoreStore(rawStore)
-        global.TaintLog = canonical
-    end
+    global.TaintLog = RestoreStore(global.TaintLog)
     dirty = wasDirty
 
     if pendingNotifications > 0 and KE.Print then
