@@ -1369,7 +1369,7 @@ local Defaults = {
                 [375257] = { enabled = false, default = true },
                 [375258] = { enabled = false, default = true },
                 [382294] = { enabled = true, default = true },
-                [387626] = { enabled = true, default = true },
+                [387626] = { enabled = false, default = true },
                 [387633] = { enabled = true, default = true },
                 [394112] = { enabled = true, default = true },
                 [400126] = { enabled = true, default = true },

@@ -12,6 +12,7 @@ local SHIPPED_DISABLED = {
     [333889] = true,  -- Fel Domination
     [358267] = true,  -- Hover
     [358733] = true,  -- Glide
+    [387626] = true,  -- Soulburn
     [406732] = true,  -- Spatial Paradox
     [432180] = true,  -- Dance of the Wind
     -- Time Spiral lands under a different spell id per recipient class.
