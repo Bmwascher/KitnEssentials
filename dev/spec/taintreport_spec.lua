@@ -499,17 +499,35 @@ describe("TaintReport capture and access guards", function()
 end)
 
 describe("TaintReport real slash router", function()
-    local originalSlashCmdList
-    local originalKitnEssentials
+    local routerGlobalsSnapshot
+    local routerGlobalNames = {
+        "SlashCmdList",
+        "KitnEssentials",
+        "SLASH_KITNESSENTIALS1",
+        "SLASH_KITNESSENTIALS2",
+        "SLASH_KITNESSENTIALS3",
+    }
+
+    local function snapshotRouterGlobals()
+        local snapshot = {}
+        for _, name in ipairs(routerGlobalNames) do
+            snapshot[name] = _G[name]
+        end
+        return snapshot
+    end
+
+    local function restoreRouterGlobals(snapshot)
+        for _, name in ipairs(routerGlobalNames) do
+            _G[name] = snapshot[name]
+        end
+    end
 
     before_each(function()
-        originalSlashCmdList = _G.SlashCmdList
-        originalKitnEssentials = _G.KitnEssentials
+        routerGlobalsSnapshot = snapshotRouterGlobals()
     end)
 
     after_each(function()
-        _G.SlashCmdList = originalSlashCmdList
-        _G.KitnEssentials = originalKitnEssentials
+        restoreRouterGlobals(routerGlobalsSnapshot)
     end)
 
     local function loadRouter()
@@ -526,6 +544,24 @@ describe("TaintReport real slash router", function()
         end
         return KE, commands, printed
     end
+
+    it("requires the router fixture to restore all loadGlobals globals", function()
+        local original = snapshotRouterGlobals()
+        local sentinels = {}
+        for _, name in ipairs(routerGlobalNames) do
+            sentinels[name] = {}
+            _G[name] = sentinels[name]
+        end
+
+        loader.loadGlobals()
+        restoreRouterGlobals(sentinels)
+        local observed = snapshotRouterGlobals()
+        restoreRouterGlobals(original)
+
+        for _, name in ipairs(routerGlobalNames) do
+            assert.equals(sentinels[name], observed[name], name)
+        end
+    end)
 
     it("routes taint with empty remainders after trimming and normalization", function()
         local _, commands = loadRouter()
