@@ -315,7 +315,7 @@ local function ShowProfilerWarningPopup()
     end
     if not StaticPopupDialogs[PROFILER_POPUP_KEY] then
         StaticPopupDialogs[PROFILER_POPUP_KEY] = {
-            text = "KitnEssentials CPU profiling is enabled. It adds measurable overhead and should stay on only while testing. Disable it and reload now?",
+            text = "|cffFF008CKitn|r|cffffffffEssentials|r CPU profiling is enabled. It adds measurable overhead and should stay on only while testing. Disable it and reload now?",
             button1 = "Disable & Reload",
             button2 = "Keep Enabled",
             OnAccept = function()
