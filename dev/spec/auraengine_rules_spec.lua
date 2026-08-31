@@ -348,6 +348,19 @@ describe("include spell id set", function()
         local b = R.BuildIncludeSpellIDs(nil)
         assert.is_not.equal(a, b)
     end)
+
+    it("omits draft and malformed keys from the candidate set", function()
+        local R = L.loadAuraRules()
+        local set = R.BuildIncludeSpellIDs({
+            [-1] = { enabled = true },
+            [0] = { enabled = true },
+            [44.5] = { enabled = true },
+            [444] = { enabled = true },
+            ["555"] = { enabled = true },
+        })
+
+        assert.same({ [444] = true }, set)
+    end)
 end)
 
 describe("CanRekeyAllowlistEntry", function()
@@ -395,6 +408,70 @@ describe("CanRekeyAllowlistEntry", function()
         local R = L.loadAuraRules()
         assert.is_false(R.CanRekeyAllowlistEntry(saved(), "222", 444))
         assert.is_false(R.CanRekeyAllowlistEntry(nil, 222, 444))
+    end)
+
+    it("refuses zero, negative, fractional, and non-numeric destinations", function()
+        local R = L.loadAuraRules()
+        local entries = saved()
+        local original = entries[222]
+
+        assert.is_false(R.CanRekeyAllowlistEntry(entries, 222, 0))
+        assert.is_false(R.CanRekeyAllowlistEntry(entries, 222, -444))
+        assert.is_false(R.CanRekeyAllowlistEntry(entries, 222, 444.5))
+        assert.is_false(R.CanRekeyAllowlistEntry(entries, 222, "444"))
+        assert.is_true(entries[222] == original)
+        assert.is_nil(entries[0])
+        assert.is_nil(entries[-444])
+        assert.is_nil(entries[444.5])
+    end)
+end)
+
+describe("allowlist default restoration", function()
+    local defaults = {
+        [111] = { label = "On", enabled = true, default = true },
+        [222] = { enabled = false, default = true },
+        [333] = { label = "Implicit On", default = true },
+    }
+
+    it("restores shipped rows exactly, repairs missing rows, and preserves custom rows", function()
+        local R = L.loadAuraRules()
+        local custom = { label = "Custom", enabled = false }
+        local entries = {
+            [111] = { label = "Changed", enabled = false, default = true },
+            [333] = { label = "Changed", enabled = false, default = true },
+            [999] = custom,
+        }
+
+        assert.is_true(R.RestoreAllowlistDefaults(entries, defaults))
+        assert.same({ label = "On", enabled = true, default = true }, entries[111])
+        assert.same({ enabled = false, default = true }, entries[222])
+        assert.same({ label = "Implicit On", enabled = true, default = true }, entries[333])
+        assert.is_true(entries[999] == custom)
+    end)
+
+    it("lets a restore action override enabled state without owning row shape", function()
+        local R = L.loadAuraRules()
+        local entries = { [999] = { label = "Custom", enabled = true } }
+        local seen = {}
+
+        R.RestoreAllowlistDefaults(entries, defaults, function(spellID, seed)
+            seen[spellID] = seed
+            return spellID == 222
+        end)
+
+        assert.is_false(entries[111].enabled)
+        assert.is_true(entries[222].enabled)
+        assert.is_false(entries[333].enabled)
+        assert.is_true(seen[111] == defaults[111])
+        assert.same({ label = "Custom", enabled = true }, entries[999])
+    end)
+
+    it("refuses malformed caller tables without partial mutation", function()
+        local R = L.loadAuraRules()
+        local entries = { [999] = { enabled = true } }
+        assert.is_false(R.RestoreAllowlistDefaults(entries, nil))
+        assert.same({ [999] = { enabled = true } }, entries)
+        assert.is_false(R.RestoreAllowlistDefaults(nil, defaults))
     end)
 end)
 

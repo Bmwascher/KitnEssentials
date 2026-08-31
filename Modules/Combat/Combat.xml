@@ -11,6 +11,7 @@
     <Script file="RangeChecker.lua" />
     <Include file="AuraEngine\AuraEngine.xml" />
     <Script file="AuraExternals.lua" />
+    <Script file="AuraMovement.lua" />
     <Script file="AuraDebuffs.lua" />
     <Script file="AuraHeaders.lua" />
 </Ui>

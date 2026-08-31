@@ -112,6 +112,10 @@ function Rules.BuildExcludeSpellIDs(saved)
     return set
 end
 
+local function IsPositiveInteger(value)
+    return type(value) == "number" and value > 0 and value == math_floor(value)
+end
+
 -- Saved allowlist entries are RECORDS with an enabled flag, matching the
 -- blocklist's shape, so a disabled row must not admit its spell.
 --
@@ -127,13 +131,37 @@ function Rules.BuildIncludeSpellIDs(saved)
 
     if saved then
         for spellID, record in pairs(saved) do
-            if type(record) == "table" and record.enabled ~= false then
+            if IsPositiveInteger(spellID)
+                and type(record) == "table" and record.enabled ~= false then
                 set[spellID] = true
             end
         end
     end
 
     return set
+end
+
+-- resolveEnabled overrides the enabled state only: label and the default flag
+-- stay seed-owned, so a restore action cannot drift a shipped row's shape.
+function Rules.RestoreAllowlistDefaults(saved, defaults, resolveEnabled)
+    if type(saved) ~= "table" or type(defaults) ~= "table" then return false end
+
+    for spellID, seed in pairs(defaults) do
+        if IsPositiveInteger(spellID) and type(seed) == "table" then
+            local enabled = seed.enabled ~= false
+            if resolveEnabled then
+                enabled = resolveEnabled(spellID, seed) and true or false
+            end
+
+            saved[spellID] = {
+                label = seed.label,
+                enabled = enabled,
+                default = true,
+            }
+        end
+    end
+
+    return true
 end
 
 -- Three-valued on purpose, and the middle value is the trap. `false` drops the
@@ -276,7 +304,7 @@ end
 -- another route.
 function Rules.CanRekeyAllowlistEntry(saved, fromID, toID)
     if type(saved) ~= "table" then return false end
-    if type(fromID) ~= "number" or type(toID) ~= "number" then return false end
+    if type(fromID) ~= "number" or not IsPositiveInteger(toID) then return false end
     if fromID == toID then return false end
 
     local entry = saved[fromID]

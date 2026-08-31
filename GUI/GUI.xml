@@ -22,6 +22,8 @@
     <Script file="GUIWidgets\GUI-PositionCard.lua" />
     <Script file="GUIWidgets\GUI-FontSettingsCard.lua" />
     <Script file="GUIWidgets\GUI-GlowSettingsCard.lua" />
+    <Script file="GUIWidgets\GUI-AuraAllowlistCard.lua" />
+    <Script file="GUIWidgets\GUI-AuraApplicationSoundCard.lua" />
     <Script file="GUIWidgets\GUI-SoundSettingsCard.lua" />
     <Script file="GUIWidgets\GUI-SpellBrowserCard.lua" />
     <Script file="GUIWidgets\GUI-TextFormatCard.lua" />
@@ -53,6 +55,7 @@
     <Script file="GUITabs\GUICombat\GUI-AuraDebuffs.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraHeaders.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraExternals.lua" />
+    <Script file="GUITabs\GUICombat\GUI-AuraMovement.lua" />
     <Script file="GUITabs\GUICombat\GUI-DamageMeter.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-KickTracker.lua" />
 
