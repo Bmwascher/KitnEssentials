@@ -110,7 +110,7 @@ when the file is absent rather than waving everything through. Format:
 stems='a|b|c'      # reference sources, matched anywhere in a token
 shorts='x|y'       # their short forms, matched at word boundaries only
 compat='d|e'       # addons the project legitimately names, see below
-provenance='...'   # the vocabulary that turns a compat name into a leak
+provenance='...'   # the vocabulary, dates included, that makes a compat name a leak
 namesCI='F|G'      # people/agents, word-bounded, case-insensitive
 namesCS='H|I'      # people/agents that double as plausible WoW words, capitalised only
 ```
