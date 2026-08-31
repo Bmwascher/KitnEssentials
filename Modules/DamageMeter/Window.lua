@@ -421,9 +421,9 @@ function DM:CreateWindow(winIdx)
         size = size or 12
         local b = CreateFrame("Button", nil, W.frame)
         b:SetSize(size, size)
-        -- Right edges stay on the 18px step grid; a larger icon (report) grows LEFT into
-        -- its own empty slot and rises by half the size delta from the 12px baseline
-        -- (top -4) so every icon shares one vertical center line.
+        -- Right edges stay on the 18px step grid. An icon larger than the 12px
+        -- baseline grows LEFT into its own empty slot and rises by half the size
+        -- delta (top -4) so every icon shares one vertical center line.
         b:SetPoint("TOPRIGHT", W.frame, "TOPRIGHT", -2 - xStep, -4 - ((12 - size) / 2))
         b:SetFrameLevel(W.frame:GetFrameLevel() + 5)
         b.icon = b:CreateTexture(nil, "OVERLAY")
@@ -453,11 +453,11 @@ function DM:CreateWindow(winIdx)
         "Reset", function() DM:HeaderReset(W) end, 18)
     W.headerBtns.segment = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_segment.tga",
         "Segment", function() DM:ToggleSegmentMenu(W) end, 36)
-    -- Report sits just left of segment (xStep 50, ~2px gap) and is larger (18px) than the
-    -- 12px action icons. Clicking it opens a channel picker (DM:OpenReportMenu) that reports
-    -- THIS window's view to the chosen chat channel.
-    W.headerBtns.report = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_report.blp",
-        "Report", function() DM:OpenReportMenu(W) end, 50, 18)
+    -- Report sits just left of segment (xStep 50, ~2px gap). Clicking it opens a
+    -- channel picker (DM:OpenReportMenu) that reports THIS window's view to the
+    -- chosen chat channel.
+    W.headerBtns.report = MakeHeaderBtn("Interface\\AddOns\\KitnEssentials\\Media\\Icon\\dm_report.tga",
+        "Report", function() DM:OpenReportMenu(W) end, 50)
 
     -- The ⌚ segment button opens its picker on HOVER (quick adjust) rather than only on
     -- click -- the custom dropdown (SegmentMenu.lua) IS the content, so it replaces the
