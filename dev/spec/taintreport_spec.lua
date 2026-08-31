@@ -550,6 +550,33 @@ describe("TaintReport capture and access guards", function()
             "global.TaintLog = RestoreStore(global.TaintLog)", 1, true))
         assert.is_nil(initializeSource:find("rawStore ~= nil", 1, true))
     end)
+
+    it("uses static source order to screen sanitizer results before reuse", function()
+        local handle = assert(io.open("Modules/Diagnostics/TaintReport.lua", "rb"))
+        local source = handle:read("*a")
+        handle:close()
+
+        -- Ordinary Lua mocks cannot model live secret propagation, so this proves source order only.
+        local sanitizerStart = assert(source:find("local function SanitizeReportString", 1, true))
+        local sanitizerEnd = assert(source:find("local function NormalizeRetained", sanitizerStart, true))
+        local sanitizerSource = source:sub(sanitizerStart, sanitizerEnd - 1)
+        local firstTransform = assert(sanitizerSource:find(
+            "local strippedStarts = string_gsub", 1, true))
+        local firstGuard = assert(sanitizerSource:find(
+            "if not SafeCanAccess(strippedStarts) then return nil end", firstTransform, true))
+        local secondTransform = assert(sanitizerSource:find(
+            "local stripped = string_gsub", firstGuard, true))
+        local secondGuard = assert(sanitizerSource:find(
+            "if not SafeCanAccess(stripped) then return nil end", secondTransform, true))
+        local comparison = assert(sanitizerSource:find("if stripped == value then", secondGuard, true))
+        local result = assert(sanitizerSource:find("return stripped", comparison, true))
+
+        assert.is_true(firstTransform < firstGuard)
+        assert.is_true(firstGuard < secondTransform)
+        assert.is_true(secondTransform < secondGuard)
+        assert.is_true(secondGuard < comparison)
+        assert.is_true(comparison < result)
+    end)
 end)
 
 describe("TaintReport real slash router", function()
@@ -1583,6 +1610,11 @@ describe("TaintReport report and lazy dialog", function()
         return count
     end
 
+    local function assertNoColorTokens(report)
+        assert.is_nil(report:find("|[cC]%x%x%x%x%x%x%x%x"))
+        assert.is_nil(report:find("|[rR]"))
+    end
+
     it("reports an explicit empty state and bounded header metadata", function()
         local state = loadTaintReport()
         state.initialize()
@@ -1595,7 +1627,9 @@ describe("TaintReport report and lazy dialog", function()
         assert.is_truthy(report:find("No KE-attributed protected actions were captured.", 1, true))
     end)
 
-    it("keeps the copied report color-free and sectioned for issue sharing", function()
+    it("keeps every retained dynamic report field color-token-free", function()
+        local currentSite = "Interface/AddOns/KitnEssentials/Core/|CFFA1B2C3LiveSite|R.lua:1"
+        local currentLine = "Interface/AddOns/KitnEssentials/Core/|cFFEEDDCCLiveLine|r.lua:2"
         local state = loadTaintReport({
             addons = {{
                 name = "|cffa1b2c3Taint Report|r",
@@ -1603,7 +1637,11 @@ describe("TaintReport report and lazy dialog", function()
                 version = "|cFF1122331.0.0|r",
                 loaded = true,
             }},
+            stack = currentSite .. "\n" .. currentLine,
         })
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "|CFFABCDEFLive action|R")
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "||rcffa1b2c3Visible")
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "Taint | Title |category")
         state.initialize()
         local report = assert(state.run(""))
         local sections = {
@@ -1620,11 +1658,27 @@ describe("TaintReport report and lazy dialog", function()
             assert.is_true(position > previous, section)
             previous = position
         end
-        assert.is_truthy(report:find("No KE-attributed protected actions were captured.", 1, true))
         assert.is_truthy(report:find("Taint Report | Taint | Title | 1.0.0", 1, true))
-        for _, token in ipairs({ "|c", "|C", "|r", "|R" }) do
-            assert.is_nil(report:find(token, 1, true), token)
-        end
+        assert.is_truthy(report:find("Action: Live action", 1, true))
+        assert.is_truthy(report:find("Action: Visible", 1, true))
+        assert.is_truthy(report:find("Action: Taint | Title |category", 1, true))
+        assert.is_truthy(report:find("Interface/AddOns/KitnEssentials/Core/LiveSite.lua:1", 1, true))
+        assert.is_truthy(report:find("Interface/AddOns/KitnEssentials/Core/LiveLine.lua:2", 1, true))
+        assertNoColorTokens(report)
+
+        local restored = loadTaintReport()
+        local restoredSite = "|CFF112233Restored site|r"
+        local restoredLine = "|cFFEEDDCCRestored line|R"
+        restored.initialize({ global = { TaintLog = storedLog({
+            storedGroup("|cFFA1B2C3Restored action|R", {
+                sources = { storedSource(restoredSite, { keLines = { restoredLine } }) },
+            }),
+        }) } })
+        local restoredReport = assert(restored.run(""))
+        assert.is_truthy(restoredReport:find("Action: Restored action", 1, true))
+        assert.is_truthy(restoredReport:find("Restored site", 1, true))
+        assert.is_truthy(restoredReport:find("Restored line", 1, true))
+        assertNoColorTokens(restoredReport)
     end)
 
     it("renders current groups before restored groups with explicit scopes", function()

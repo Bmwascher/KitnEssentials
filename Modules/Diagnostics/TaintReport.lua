@@ -148,6 +148,22 @@ local function GuardedPrefix(value, maximum)
     return prefix, truncated
 end
 
+local function SanitizeReportString(value, maximum)
+    if not SafeCanAccess(value) or type(value) ~= "string" then return nil end
+    if string_len(value) > maximum then return nil end
+
+    local maximumPasses = string_len(value) + 1
+    for _ = 1, maximumPasses do
+        local strippedStarts = string_gsub(value, "|[cC]%x%x%x%x%x%x%x%x", "")
+        if not SafeCanAccess(strippedStarts) then return nil end
+        local stripped = string_gsub(strippedStarts, "|[rR]", "")
+        if not SafeCanAccess(stripped) then return nil end
+        if stripped == value then return stripped end
+        value = stripped
+    end
+    return nil
+end
+
 local function NormalizeRetained(value, maximum, forceMarker)
     if not SafeCanAccess(value) or type(value) ~= "string" then return nil end
     local normalized = string_gsub(value, "[%z\1-\31\127]", " ")
@@ -162,6 +178,9 @@ local function NormalizeRetained(value, maximum, forceMarker)
         if not SafeCanAccess(normalized) then return nil end
     end
     if string_len(normalized) > maximum then return nil end
+    normalized = SanitizeReportString(normalized, maximum)
+    if not SafeCanAccess(normalized) then return nil end
+    if normalized == nil then return nil end
     return normalized, truncated
 end
 
@@ -176,7 +195,10 @@ local function CanonicalString(value, maximum)
     if string_len(value) == 0 or string_len(value) > maximum then return nil end
     if string_find(value, "[%z\1-\31\127]") then return nil end
     if string_match(value, "^%s") or string_match(value, "%s$") then return nil end
-    return value
+    local canonical = SanitizeReportString(value, maximum)
+    if not SafeCanAccess(canonical) then return nil end
+    if canonical == nil or canonical == "" then return nil end
+    return canonical
 end
 
 local function ReadInteger(value, minimum, maximum)
@@ -793,9 +815,6 @@ end
 local function SafeEnvironmentString(value)
     local result = BoundedString(value, MAX_RAW_ENV_STRING_LENGTH, MAX_ENV_STRING_LENGTH)
     if not result or result == "" then return "unavailable" end
-    result = string_gsub(result, "|[cC]%x%x%x%x%x%x%x%x", "")
-    result = string_gsub(result, "|[rR]", "")
-    if not SafeCanAccess(result) or result == "" then return "unavailable" end
     return result
 end
 
