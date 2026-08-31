@@ -264,11 +264,7 @@ end
 local function BuildFrames(state, handle, display, settings)
     TeardownFrames(state)
 
-    state.decimalThreshold = tonumber(settings.DecimalThreshold) or 0
-    if state.decimalThreshold ~= math_floor(state.decimalThreshold)
-        or state.decimalThreshold < 0 or state.decimalThreshold > 10 then
-        state.decimalThreshold = 0
-    end
+    state.decimalThreshold = KE.AuraRules.NormalizeDecimalThreshold(settings.DecimalThreshold)
 
     local groupsByKey = GroupsByKey(display)
     local total   = KE.AuraContainer.TotalLimit(display, settings)

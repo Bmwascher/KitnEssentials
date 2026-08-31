@@ -166,7 +166,7 @@ local function BuildPage(opts)
         local rowD2 = GUIFrame:CreateRow(card3.content, 40)
         local decimalSlider = GUIFrame:CreateSlider(rowD2, "Show Decimals Below (sec)", {
             min = 0, max = 10, step = 1,
-            value = db.DecimalThreshold or 0,
+            value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
             callback = function(v) db.DecimalThreshold = v; ApplySettings() end,
         })
         rowD2:AddWidget(decimalSlider, 0.5)

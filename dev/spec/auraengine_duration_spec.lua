@@ -59,7 +59,8 @@ describe("AuraEngine duration formatting", function()
             },
         }
 
-        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
+        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
         getDurationFormatter({})
 
@@ -90,7 +91,8 @@ describe("AuraEngine duration formatting", function()
             },
         }
 
-        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
+        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
         getDurationFormatter({})
 
@@ -101,7 +103,8 @@ describe("AuraEngine duration formatting", function()
 
     it("leaves the whole-second rule alone at a threshold of zero", function()
         local captured = installFormatterStubs()
-        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
+        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
         getDurationFormatter({ DecimalThreshold = 0 })
 
@@ -114,7 +117,8 @@ describe("AuraEngine duration formatting", function()
 
     it("adds a tenths rule under a non-zero threshold", function()
         local captured = installFormatterStubs()
-        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
+        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
         getDurationFormatter({ DecimalThreshold = 5 })
 
@@ -129,7 +133,8 @@ describe("AuraEngine duration formatting", function()
 
     it("rounds both sub-minute rules DOWN when a threshold is set", function()
         local captured = installFormatterStubs()
-        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
+        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
         getDurationFormatter({ DecimalThreshold = 3 })
 
@@ -137,12 +142,31 @@ describe("AuraEngine duration formatting", function()
         assert.equals("down", captured.breakpoints[4].rounding)
     end)
 
+    -- The four sliders present this value and the two displays act on it, so a
+    -- disagreement here shows a stored 11 as a slider reading 10 while the
+    -- timer is actually off.
+    it("normalizes a stored threshold to what the displays will act on", function()
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
+        local normalize = KE.AuraRules.NormalizeDecimalThreshold
+
+        for _, value in ipairs({ "abc", -1, 11, 3.5, 0 / 0, 1 / 0, -1 / 0, true, {} }) do
+            assert.equals(0, normalize(value))
+        end
+        assert.equals(0, normalize(nil))
+
+        assert.equals(0, normalize(0))
+        assert.equals(1, normalize(1))
+        assert.equals(10, normalize(10))
+        assert.equals(4, normalize("4"))
+    end)
+
     -- A threshold that is not a whole second between 0 and 10 has no meaning on
     -- a one-decimal display, so every such value resolves to off rather than
     -- being clamped to an edge.
     it("resolves any threshold that is not a whole 0-10 to off", function()
         local captured = installFormatterStubs()
-        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
+        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
 
         for _, value in ipairs({ "abc", -1, 11, 3.5, 0 / 0, true }) do
@@ -162,7 +186,8 @@ describe("AuraEngine duration formatting", function()
 
     it("rebuilds the cached formatter only when the resolved threshold changes", function()
         installFormatterStubs()
-        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
+        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
 
         local settings = { DecimalThreshold = 0 }

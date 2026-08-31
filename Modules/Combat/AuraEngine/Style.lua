@@ -28,25 +28,8 @@ Style.DISPEL_ICON_FRACTION = 0.40
 
 local DurationFormatterCache = setmetatable({}, { __mode = "k" })
 
--- Whole seconds, 0 to 10, where 0 means no decimals at all. A fractional
--- threshold on a one-decimal display has no meaning, so anything else -- nil,
--- unconvertible, NaN, infinite, fractional, out of range -- resolves to 0
--- rather than to a clamp: the safe answer is the feature switched off.
-local function ResolveDecimalThreshold(settings)
-    local threshold = tonumber(settings.DecimalThreshold)
-    if not threshold
-        or threshold ~= threshold
-        or threshold ~= math_floor(threshold)
-        or threshold < 0
-        or threshold > 10 then
-        return 0
-    end
-
-    return threshold
-end
-
 local function GetDurationFormatter(settings)
-    local decimalThreshold = ResolveDecimalThreshold(settings)
+    local decimalThreshold = KE.AuraRules.NormalizeDecimalThreshold(settings.DecimalThreshold)
 
     local cached = DurationFormatterCache[settings]
     if cached and cached.decimalThreshold == decimalThreshold then
