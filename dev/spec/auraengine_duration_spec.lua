@@ -99,11 +99,11 @@ describe("AuraEngine duration formatting", function()
         assert.equals("down", breakpoints[3].rounding)
     end)
 
-    it("leaves the whole-second rule alone when decimals are off", function()
+    it("leaves the whole-second rule alone at a threshold of zero", function()
         local captured = installFormatterStubs()
         local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
-        getDurationFormatter({ ShowDecimalSeconds = false, DecimalThreshold = 5 })
+        getDurationFormatter({ DecimalThreshold = 0 })
 
         assert.equals(3, #captured.breakpoints)
         assert.equals(0, captured.breakpoints[3].threshold)
@@ -112,11 +112,11 @@ describe("AuraEngine duration formatting", function()
         assert.equals("down", captured.breakpoints[3].rounding)
     end)
 
-    it("adds a tenths rule under the threshold when decimals are on", function()
+    it("adds a tenths rule under a non-zero threshold", function()
         local captured = installFormatterStubs()
         local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
-        getDurationFormatter({ ShowDecimalSeconds = true, DecimalThreshold = 5 })
+        getDurationFormatter({ DecimalThreshold = 5 })
 
         assert.equals(4, #captured.breakpoints)
         assert.equals(5, captured.breakpoints[3].threshold)
@@ -127,52 +127,53 @@ describe("AuraEngine duration formatting", function()
         assert.equals("%.1f", captured.breakpoints[4].format)
     end)
 
-    it("rounds both sub-minute rules DOWN when decimals are on", function()
+    it("rounds both sub-minute rules DOWN when a threshold is set", function()
         local captured = installFormatterStubs()
         local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
-        getDurationFormatter({ ShowDecimalSeconds = true, DecimalThreshold = 3 })
+        getDurationFormatter({ DecimalThreshold = 3 })
 
         assert.equals("down", captured.breakpoints[3].rounding)
         assert.equals("down", captured.breakpoints[4].rounding)
     end)
 
-    -- A threshold that is not a whole second between 1 and 10 has no meaning on
-    -- a one-decimal display, so every such value falls back rather than being
-    -- clamped to an edge.
-    it("falls back to three for any threshold that is not a whole 1-10", function()
+    -- A threshold that is not a whole second between 0 and 10 has no meaning on
+    -- a one-decimal display, so every such value resolves to off rather than
+    -- being clamped to an edge.
+    it("resolves any threshold that is not a whole 0-10 to off", function()
         local captured = installFormatterStubs()
         local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
 
-        for _, value in ipairs({ "abc", 0, 11, 3.5, 0 / 0, true }) do
-            getDurationFormatter({ ShowDecimalSeconds = true, DecimalThreshold = value })
-            assert.equals(3, captured.breakpoints[3].threshold)
+        for _, value in ipairs({ "abc", -1, 11, 3.5, 0 / 0, true }) do
+            getDurationFormatter({ DecimalThreshold = value })
+            assert.equals(3, #captured.breakpoints)
         end
 
-        getDurationFormatter({ ShowDecimalSeconds = true })
-        assert.equals(3, captured.breakpoints[3].threshold)
+        getDurationFormatter({})
+        assert.equals(3, #captured.breakpoints)
 
         for _, value in ipairs({ 1, 10, "4" }) do
-            getDurationFormatter({ ShowDecimalSeconds = true, DecimalThreshold = value })
+            getDurationFormatter({ DecimalThreshold = value })
+            assert.equals(4, #captured.breakpoints)
             assert.equals(tonumber(value), captured.breakpoints[3].threshold)
         end
     end)
 
-    it("rebuilds the cached formatter only when the resolved decimals change", function()
+    it("rebuilds the cached formatter only when the resolved threshold changes", function()
         installFormatterStubs()
         local KE = helpers.loadModule("Modules/Combat/AuraEngine/Style.lua")
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
 
-        local settings = { ShowDecimalSeconds = false, DecimalThreshold = 3 }
+        local settings = { DecimalThreshold = 0 }
         local first = getDurationFormatter(settings)
         assert.is_true(first == getDurationFormatter(settings))
 
-        -- Off, so the threshold is not part of the resolved settings at all.
-        settings.DecimalThreshold = 7
+        -- Both resolve to off, so the cached formatter still stands.
+        settings.DecimalThreshold = 99
         assert.is_true(first == getDurationFormatter(settings))
 
-        settings.ShowDecimalSeconds = true
+        settings.DecimalThreshold = 3
         local decimal = getDurationFormatter(settings)
         assert.is_false(first == decimal)
         assert.is_true(decimal == getDurationFormatter(settings))
@@ -195,7 +196,7 @@ describe("AuraEngine duration formatting", function()
 
     -- Floors, like the live formatter: rounding up reads a second ahead of the
     -- same buff on a live icon.
-    it("floors the preview seconds when decimals are off", function()
+    it("floors the preview seconds when no threshold is set", function()
         local formatRemaining = loadPreviewLocal("FormatRemaining")
 
         assert.equals("4", formatRemaining(4.9))
@@ -206,19 +207,20 @@ describe("AuraEngine duration formatting", function()
     it("shows tenths under the threshold and whole seconds at or above it", function()
         local formatRemaining = loadPreviewLocal("FormatRemaining")
 
-        assert.equals("2.9", formatRemaining(2.99, true, 3))
-        assert.equals("0.4", formatRemaining(0.45, true, 3))
-        assert.equals("3", formatRemaining(3, true, 3))
-        assert.equals("9", formatRemaining(9.7, true, 3))
+        assert.equals("2.9", formatRemaining(2.99, 3))
+        assert.equals("0.4", formatRemaining(0.45, 3))
+        assert.equals("3", formatRemaining(3, 3))
+        assert.equals("9", formatRemaining(9.7, 3))
+        assert.equals("4", formatRemaining(4.9, 0))
     end)
 
-    it("ticks ten times faster only while decimals are on", function()
+    it("ticks ten times faster only while a threshold is set", function()
         local Preview = L.loadAuraPreview()
         local buildFrames = findUpvalue(Preview.Enter, "BuildFrames")
         local getTickInterval = findUpvalue(buildFrames, "GetTickInterval")
 
-        assert.equals(0.5, getTickInterval(false))
-        assert.equals(0.05, getTickInterval(true))
+        assert.equals(0.5, getTickInterval(0))
+        assert.equals(0.05, getTickInterval(3))
     end)
 
     it("repaints the preview timer only when its string changes", function()

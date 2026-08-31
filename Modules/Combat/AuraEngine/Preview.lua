@@ -16,9 +16,9 @@ KE.AuraPreview = Preview
 -- How often the ticker recomputes the timer text and checks for an expired
 -- icon. Whole seconds change once a second; tenths change ten times as often,
 -- so a half-second tick would show them in jumps. The faster rate is paid only
--- while the decimal display is on.
-local function GetTickInterval(decimalEnabled)
-    if decimalEnabled then return 0.05 end
+-- while a decimal threshold is set.
+local function GetTickInterval(decimalThreshold)
+    if decimalThreshold > 0 then return 0.05 end
     return 0.5
 end
 
@@ -136,7 +136,7 @@ end
 -- SetDurationText, a registration call plain preview frames cannot accept.
 -- Floors throughout, tenths included -- string.format rounds, which would show
 -- a value the live display never shows.
-local function FormatRemaining(seconds, decimalEnabled, decimalThreshold)
+local function FormatRemaining(seconds, decimalThreshold)
     if seconds <= 0 then return "" end
     if seconds >= 3600 then
         return math_floor(seconds / 3600) .. "h"
@@ -144,15 +144,17 @@ local function FormatRemaining(seconds, decimalEnabled, decimalThreshold)
     if seconds >= 60 then
         return math_floor(seconds / 60) .. "m"
     end
-    if decimalEnabled and seconds < decimalThreshold then
+    -- A threshold of 0 needs no separate test: seconds is positive by here, so
+    -- nothing is ever below it.
+    if decimalThreshold and seconds < decimalThreshold then
         return string_format("%.1f", math_floor(seconds * 10) / 10)
     end
     return tostring(math_floor(seconds))
 end
 
-local function UpdateEntryTimer(frame, entry, now, decimalEnabled, decimalThreshold)
+local function UpdateEntryTimer(frame, entry, now, decimalThreshold)
     if not frame.keTimer then return end
-    local text = FormatRemaining(entry.expirationTime - now, decimalEnabled, decimalThreshold)
+    local text = FormatRemaining(entry.expirationTime - now, decimalThreshold)
     -- Safe here and ONLY here: preview durations are fabricated, so the string
     -- is not secret-derived. Never do this on a live aura's text.
     if frame.keTimerLast == text then return end
@@ -202,7 +204,7 @@ local function PopulateDispelBadge(frame, dispelType)
     end
 end
 
-local function PopulateEntryContent(frame, entry, now, decimalEnabled, decimalThreshold)
+local function PopulateEntryContent(frame, entry, now, decimalThreshold)
     if frame.keIcon then
         frame.keIcon:SetTexture(entry.icon)
     end
@@ -212,7 +214,7 @@ local function PopulateEntryContent(frame, entry, now, decimalEnabled, decimalTh
     if frame.keCooldown then
         frame.keCooldown:SetCooldown(entry.expirationTime - entry.duration, entry.duration)
     end
-    UpdateEntryTimer(frame, entry, now, decimalEnabled, decimalThreshold)
+    UpdateEntryTimer(frame, entry, now, decimalThreshold)
 end
 
 local function TeardownFrames(state)
@@ -251,7 +253,7 @@ local function TickPreview(state)
                 frame.keCooldown:SetCooldown(now, entry.duration)
             end
         end
-        UpdateEntryTimer(frame, entry, now, state.decimalEnabled, state.decimalThreshold)
+        UpdateEntryTimer(frame, entry, now, state.decimalThreshold)
     end
 end
 
@@ -262,11 +264,10 @@ end
 local function BuildFrames(state, handle, display, settings)
     TeardownFrames(state)
 
-    state.decimalEnabled   = settings.ShowDecimalSeconds == true
-    state.decimalThreshold = tonumber(settings.DecimalThreshold) or 3
+    state.decimalThreshold = tonumber(settings.DecimalThreshold) or 0
     if state.decimalThreshold ~= math_floor(state.decimalThreshold)
-        or state.decimalThreshold < 1 or state.decimalThreshold > 10 then
-        state.decimalThreshold = 3
+        or state.decimalThreshold < 0 or state.decimalThreshold > 10 then
+        state.decimalThreshold = 0
     end
 
     local groupsByKey = GroupsByKey(display)
@@ -297,13 +298,13 @@ local function BuildFrames(state, handle, display, settings)
             PopulateDispelBadge(frame, entry.dispelType)
 
             PositionEntryFrame(frame, i, display, settings)
-            PopulateEntryContent(frame, entry, now, state.decimalEnabled, state.decimalThreshold)
+            PopulateEntryContent(frame, entry, now, state.decimalThreshold)
 
             state.entries[#state.entries + 1] = { entry = entry, frame = frame }
         end
     end
 
-    state.ticker = C_Timer.NewTicker(GetTickInterval(state.decimalEnabled),
+    state.ticker = C_Timer.NewTicker(GetTickInterval(state.decimalThreshold),
         function() TickPreview(state) end)
 end
 

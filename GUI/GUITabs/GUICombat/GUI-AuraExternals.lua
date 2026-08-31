@@ -48,9 +48,6 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     -- greyed out when Swipe is unchecked.
     manager:SetCondition("swipeOn", function() return db.Swipe ~= false end)
 
-    -- The threshold only matters when the decimal timer is on.
-    manager:SetCondition("decimalOn", function() return db.ShowDecimalSeconds == true end)
-
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
@@ -366,25 +363,18 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
         manager:RegisterGroup(fontWidgets, "all")
     end
 
-    local decimalRow = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
-    local decimalCheck = GUIFrame:CreateCheckbox(decimalRow, "Decimal Timer", {
-        value = db.ShowDecimalSeconds == true,
-        callback = function(checked)
-            db.ShowDecimalSeconds = checked
-            ApplySettings()
-            RefreshStates()
-        end,
-    })
-    decimalRow:AddWidget(decimalCheck, 0.5)
-    manager:Register(decimalCheck, "all")
+    -- The card's own last row is added with no trailing gap, so re-open the
+    -- spacing before appending to it.
+    fontCard.currentY = fontCard.currentY + Theme.paddingSmall
 
-    local decimalBelow = GUIFrame:CreateSlider(decimalRow, "Decimal Below", {
-        min = 1, max = 10, step = 1,
-        value = db.DecimalThreshold or 3,
+    local decimalRow = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
+    local decimalSlider = GUIFrame:CreateSlider(decimalRow, "Show Decimals Below (sec)", {
+        min = 0, max = 10, step = 1,
+        value = db.DecimalThreshold or 0,
         callback = function(val) db.DecimalThreshold = val; ApplySettings() end,
     })
-    decimalRow:AddWidget(decimalBelow, 0.5)
-    manager:Register(decimalBelow, "decimalOn")
+    decimalRow:AddWidget(decimalSlider, 0.5)
+    manager:Register(decimalSlider, "all")
     fontCard:AddRow(decimalRow, Theme.rowHeightLast, 0)
 
     yOffset = fontCard:GetNextOffset()

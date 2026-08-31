@@ -19,7 +19,7 @@ Style.DISPEL_ICON_FRACTION = 0.40
 
 ---------------------------------------------------------------------------------
 -- Duration formatter -- declarative data, not a callback. The breakpoint set is
--- chosen from the display's decimal settings; no display supports a
+-- chosen from the display's decimal threshold; no display supports a
 -- ColorDurationUnderThreshold setting, so textColor is never populated.
 -- Weak-keyed on the settings table: the same settings table
 -- is reused for every reconfiguration of a display, so this rebuilds a
@@ -28,33 +28,28 @@ Style.DISPEL_ICON_FRACTION = 0.40
 
 local DurationFormatterCache = setmetatable({}, { __mode = "k" })
 
--- Whole seconds only, 1 to 10; a fractional threshold on a one-decimal display
--- has no meaning, so anything else takes the default rather than a clamp.
--- Resolves to 0 when the feature is off, so a threshold edit made while it is
--- off cannot invalidate the cached formatter.
-local function ResolveDecimalSettings(settings)
-    local enabled = settings.ShowDecimalSeconds == true
-    if not enabled then return false, 0 end
-
+-- Whole seconds, 0 to 10, where 0 means no decimals at all. A fractional
+-- threshold on a one-decimal display has no meaning, so anything else -- nil,
+-- unconvertible, NaN, infinite, fractional, out of range -- resolves to 0
+-- rather than to a clamp: the safe answer is the feature switched off.
+local function ResolveDecimalThreshold(settings)
     local threshold = tonumber(settings.DecimalThreshold)
     if not threshold
         or threshold ~= threshold
         or threshold ~= math_floor(threshold)
-        or threshold < 1
+        or threshold < 0
         or threshold > 10 then
-        threshold = 3
+        return 0
     end
 
-    return true, threshold
+    return threshold
 end
 
 local function GetDurationFormatter(settings)
-    local decimalEnabled, decimalThreshold = ResolveDecimalSettings(settings)
+    local decimalThreshold = ResolveDecimalThreshold(settings)
 
     local cached = DurationFormatterCache[settings]
-    if cached
-        and cached.decimalEnabled == decimalEnabled
-        and cached.decimalThreshold == decimalThreshold then
+    if cached and cached.decimalThreshold == decimalThreshold then
         return cached.formatter
     end
 
@@ -79,7 +74,7 @@ local function GetDurationFormatter(settings)
     -- countdown numbers while these displays draw their own text, and rounding
     -- up read a second higher than the same buff shown there. The tenths rule
     -- rounds the same way, for the same reason.
-    if decimalEnabled then
+    if decimalThreshold > 0 then
         breakpoints[#breakpoints + 1] = {
             threshold = decimalThreshold,
             step      = 1,
@@ -105,7 +100,6 @@ local function GetDurationFormatter(settings)
     formatter:SetBreakpoints(breakpoints)
 
     DurationFormatterCache[settings] = {
-        decimalEnabled   = decimalEnabled,
         decimalThreshold = decimalThreshold,
         formatter        = formatter,
     }
