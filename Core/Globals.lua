@@ -1897,20 +1897,28 @@ anchorWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 anchorWatcher:SetScript("OnEvent", function(_, event)
     if not anchorWindowOpen then return end
 
-    -- Synchronous, inside the dispatch: a reload taken in combat locks the UI
-    -- down moments later, and a provider that builds its frames in this same
-    -- dispatch is already there by the time this runs.
-    if event == "PLAYER_LOGIN" then AnchorPass() end
-
+    -- Exactly four passes, so each queue sits inside the branch that owns it:
+    -- world entry fires again on every loading screen, and an unguarded queue
+    -- out here would add one more pass per screen inside the window.
+    --
     -- The queued passes check the flag rather than cancelling: C_Timer.After
     -- returns no handle, so a callback outliving the window is the only case
     -- that has to be handled.
-    C_Timer.After(0, function()
-        if anchorWindowOpen then AnchorPass() end
-    end)
+    local function QueuePass()
+        C_Timer.After(0, function()
+            if anchorWindowOpen then AnchorPass() end
+        end)
+    end
 
-    if event == "PLAYER_ENTERING_WORLD" and not anchorFinalQueued then
+    if event == "PLAYER_LOGIN" then
+        -- Synchronous, inside the dispatch: a reload taken in combat locks the
+        -- UI down moments later, and a provider that builds its frames in this
+        -- same dispatch is already there by the time this runs.
+        AnchorPass()
+        QueuePass()
+    elseif not anchorFinalQueued then
         anchorFinalQueued = true
+        QueuePass()
         -- One last look, then the window closes whatever the winner is. A
         -- provider slower than this cannot be waited for: nothing announces
         -- that a third-party addon has finished building its frames.
