@@ -1,4 +1,5 @@
 -- luacheck: std lua51+busted
+-- Mocks prove bounded branches, not live secret/taint semantics, event timing, or layout.
 local helpers = require("dev.spec._helpers")
 
 local originalGlobals = {}
@@ -774,27 +775,56 @@ describe("TaintReport persistence", function()
         }, shallowKeys(store.groups[1]))
     end)
 
-    it("selects current groups first and then newest restored groups deterministically", function()
+    it("selects current groups first and sorts the newest ten deterministically", function()
         local restored = {}
         for index = 1, 10 do
             restored[index] = storedGroup("restored-" .. index, {
-                lastSeen = 1799999900 + index,
-                firstSeen = 1799999800 + index,
+                lastSeen = 1800000200 + index,
+                firstSeen = 1800000100 + index,
             })
         end
         local db = { global = { TaintLog = storedLog(restored) } }
         local state = loadTaintReport()
         state.initialize(db)
-        state.fire("ADDON_ACTION_FORBIDDEN", "KitnEssentials", "current-b")
-        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "current-a")
+
+        local current = {
+            { 1799999800, "ADDON_ACTION_BLOCKED", "drop-oldest" },
+            { 1799999801, "ADDON_ACTION_BLOCKED", "drop-next" },
+        }
+        for index = 1, 7 do
+            current[#current + 1] = {
+                1799999900 + index, "ADDON_ACTION_BLOCKED", "keep-" .. index,
+            }
+        end
+        current[#current + 1] = { 1800000000, "ADDON_ACTION_BLOCKED", "zeta" }
+        current[#current + 1] = { 1800000000, "ADDON_ACTION_FORBIDDEN", "alpha" }
+        current[#current + 1] = { 1800000000, "ADDON_ACTION_BLOCKED", "alpha" }
+        for _, row in ipairs(current) do
+            state.setNow(row[1])
+            state.fire(row[2], "KitnEssentials", row[3])
+        end
+        state.setNow(1800000000)
         state.logout()
+
         local groups = db.global.TaintLog.groups
         assert.equals(10, #groups)
-        assert.equals("current-a", groups[1].action)
-        assert.equals("current-b", groups[2].action)
-        assert.equals("restored-10", groups[3].action)
-        assert.equals("restored-3", groups[10].action)
-        assert.equals(2, db.global.TaintLog.omitted)
+        local ordered = {}
+        for _, group in ipairs(groups) do
+            ordered[#ordered + 1] = group.event .. ":" .. group.action
+        end
+        assert.same({
+            "ADDON_ACTION_BLOCKED:alpha",
+            "ADDON_ACTION_BLOCKED:zeta",
+            "ADDON_ACTION_FORBIDDEN:alpha",
+            "ADDON_ACTION_BLOCKED:keep-7",
+            "ADDON_ACTION_BLOCKED:keep-6",
+            "ADDON_ACTION_BLOCKED:keep-5",
+            "ADDON_ACTION_BLOCKED:keep-4",
+            "ADDON_ACTION_BLOCKED:keep-3",
+            "ADDON_ACTION_BLOCKED:keep-2",
+            "ADDON_ACTION_BLOCKED:keep-1",
+        }, ordered)
+        assert.equals(12, db.global.TaintLog.omitted)
     end)
 
     it("persists a current/restored collision once and carries supersession through reload", function()
@@ -845,6 +875,41 @@ describe("TaintReport persistence", function()
         assert.equals(16, secondDB.global.TaintLog.omitted)
     end)
 
+    it("classifies a matching post-init restored eviction as superseded exactly once", function()
+        local state = loadTaintReport()
+        for index = 1, 15 do
+            state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "preinit-" .. index)
+        end
+
+        local restored = {
+            storedGroup("matching-eviction", {
+                firstSeen = 1799999700, lastSeen = 1799999800,
+            }),
+        }
+        for index = 2, 10 do
+            restored[index] = storedGroup("restored-" .. index, {
+                firstSeen = 1799999800 + index,
+                lastSeen = 1799999900 + index,
+            })
+        end
+        local db = { global = { TaintLog = storedLog(restored) } }
+        state.initialize(db)
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "matching-eviction")
+        state.logout()
+
+        local store = assert(db.global.TaintLog)
+        assert.equals(1, store.supersededRestored)
+        local secondDB = { global = { TaintLog = store } }
+        local second = loadTaintReport()
+        second.initialize(secondDB)
+        local canonical = secondDB.global.TaintLog
+        local report = assert(second.run(""))
+        assert.is_truthy(report:find("Restored groups superseded: 1", 1, true))
+        second.logout()
+        assert.equals(canonical, secondDB.global.TaintLog)
+        assert.equals(1, secondDB.global.TaintLog.supersededRestored)
+    end)
+
     it("fails closed at every persisted table boundary before traversal", function()
         local function boundaryStore(targetName, target)
             local source = storedSource("Interface/AddOns/KitnEssentials/Core/S.lua:1")
@@ -891,30 +956,60 @@ describe("TaintReport persistence", function()
         end
     end)
 
-    it("rejects inaccessible scalars at representative schema depths", function()
-        for _, fieldPath in ipairs({ "savedAt", "omitted", "supersededRestored",
-            "action", "count", "site", "observedSamples", "keLine" }) do
-            local sentinel = {}
-            local source = storedSource("Interface/AddOns/KitnEssentials/Core/S.lua:1")
-            local group = storedGroup("scalar", { sources = { source } })
-            local store = storedLog({ group })
-            if fieldPath == "savedAt" then store.savedAt = sentinel
-            elseif fieldPath == "omitted" then store.omitted = sentinel
-            elseif fieldPath == "supersededRestored" then store.supersededRestored = sentinel
-            elseif fieldPath == "action" then group.action = sentinel
-            elseif fieldPath == "count" then group.count = sentinel
-            elseif fieldPath == "site" then source.site = sentinel
-            elseif fieldPath == "observedSamples" then source.observedSamples = sentinel
-            else source.keLines[1] = sentinel end
-            local state = loadTaintReport({
-                valueAccess = function(value)
-                    if value == sentinel then error("scalar guard") end
-                    return true
-                end,
-            })
-            local db = { global = { TaintLog = store } }
-            assert.has_no.errors(function() state.initialize(db) end)
-            assert.is_nil(db.global.TaintLog)
+    it("fails inaccessible scalars at the whole-store or containing-row boundary", function()
+        local cases = {
+            { field = "savedAt", wholeStore = true },
+            { field = "omitted", wholeStore = true },
+            { field = "supersededRestored", wholeStore = true },
+            { field = "action" },
+            { field = "count" },
+            { field = "site" },
+            { field = "observedSamples" },
+            { field = "keLine" },
+        }
+        for _, case in ipairs(cases) do
+            for _, mode in ipairs({ "false", "throw" }) do
+                local sentinel = setmetatable({}, {
+                    __index = function() error("scalar was indexed") end,
+                })
+                local source = storedSource("Interface/AddOns/KitnEssentials/Core/S.lua:1")
+                local rejected = storedGroup("scalar", { sources = { source } })
+                local store = storedLog({ rejected, storedGroup("valid-sibling") })
+                if case.field == "savedAt" then store.savedAt = sentinel
+                elseif case.field == "omitted" then store.omitted = sentinel
+                elseif case.field == "supersededRestored" then
+                    store.supersededRestored = sentinel
+                elseif case.field == "action" then rejected.action = sentinel
+                elseif case.field == "count" then rejected.count = sentinel
+                elseif case.field == "site" then source.site = sentinel
+                elseif case.field == "observedSamples" then
+                    source.observedSamples = sentinel
+                else
+                    source.keLines[1] = sentinel
+                end
+
+                local state = loadTaintReport({
+                    valueAccess = function(value)
+                        if value ~= sentinel then return true end
+                        if mode == "throw" then error("scalar guard") end
+                        return false
+                    end,
+                })
+                local db = { global = { TaintLog = store } }
+                assert.has_no.errors(function() state.initialize(db) end)
+                if case.wholeStore then
+                    assert.is_nil(db.global.TaintLog, case.field .. ":" .. mode)
+                else
+                    local canonical = assert(db.global.TaintLog,
+                        case.field .. ":" .. mode)
+                    assert.equals(1, #canonical.groups)
+                    assert.equals("valid-sibling", canonical.groups[1].action)
+                    assert.equals(1, canonical.omitted)
+                end
+                for _, guarded in ipairs(state.tableGuardCalls) do
+                    assert.not_equals(sentinel, guarded)
+                end
+            end
         end
     end)
 
@@ -940,29 +1035,112 @@ describe("TaintReport persistence", function()
         end
     end)
 
-    it("rejects over-cap nested arrays within four and seven raw next visits", function()
-        local sources = {}
-        for index = 1, 4 do
-            sources[index] = storedSource("Interface/AddOns/KitnEssentials/Core/S" .. index .. ".lua:1")
+    it("bounds every malformed nested-array shape and accepts dense maxima", function()
+        local function source(index)
+            return storedSource("Interface/AddOns/KitnEssentials/Core/S"
+                .. index .. ".lua:1")
         end
-        local sourceGroup = storedGroup("too-many-sources", { sources = sources, walks = 4 })
-        local sourceState = loadTaintReport()
-        local sourceDB = { global = { TaintLog = storedLog({ sourceGroup }) } }
-        sourceState.initialize(sourceDB)
-        assert.is_nil(sourceDB.global.TaintLog)
-        assert.is_true((sourceState.nextVisits[sources] or 0) <= 4)
+        local function line(index)
+            return "Interface/AddOns/KitnEssentials/Core/L" .. index .. ".lua:1"
+        end
+        local sourceCases = {
+            {
+                name = "over-cap",
+                make = function()
+                    local values = {}
+                    for index = 1, 4 do values[index] = source(index) end
+                    return values
+                end,
+                visits = 4,
+            },
+            {
+                name = "huge",
+                make = function()
+                    local values = {}
+                    for index = 1, 10000 do values[index] = source(index) end
+                    return values
+                end,
+                visits = 4,
+            },
+            { name = "sparse", make = function() return { [1] = source(1), [3] = source(3) } end },
+            { name = "non-integer", make = function() return { [1.5] = source(1) } end },
+            { name = "out-of-range", make = function() return { [0] = source(1) } end },
+        }
+        for _, case in ipairs(sourceCases) do
+            local sources = case.make()
+            local group = storedGroup("bad-sources-" .. case.name)
+            group.sources = sources
+            local state = loadTaintReport()
+            local db = { global = { TaintLog = storedLog({ group }) } }
+            state.initialize(db)
+            assert.is_nil(db.global.TaintLog, case.name)
+            local visits = state.nextVisits[sources] or 0
+            assert.is_true(visits > 0, case.name)
+            assert.is_true(visits <= 4, case.name)
+            if case.visits then assert.equals(case.visits, visits, case.name) end
+        end
 
-        local lines = {}
-        for index = 1, 7 do
-            lines[index] = "Interface/AddOns/KitnEssentials/Core/L" .. index .. ".lua:1"
+        local lineCases = {
+            {
+                name = "over-cap",
+                make = function()
+                    local values = {}
+                    for index = 1, 7 do values[index] = line(index) end
+                    return values
+                end,
+                visits = 7,
+            },
+            {
+                name = "huge",
+                make = function()
+                    local values = {}
+                    for index = 1, 10000 do values[index] = line(index) end
+                    return values
+                end,
+                visits = 7,
+            },
+            { name = "sparse", make = function() return { [1] = line(1), [3] = line(3) } end },
+            { name = "non-integer", make = function() return { [1.5] = line(1) } end },
+            { name = "out-of-range", make = function() return { [0] = line(1) } end },
+        }
+        for _, case in ipairs(lineCases) do
+            local lines = case.make()
+            local nestedSource = storedSource(line(1))
+            nestedSource.keLines = lines
+            local group = storedGroup("bad-lines-" .. case.name, {
+                sources = { nestedSource },
+            })
+            local state = loadTaintReport()
+            local db = { global = { TaintLog = storedLog({ group }) } }
+            state.initialize(db)
+            assert.is_nil(db.global.TaintLog, case.name)
+            local visits = state.nextVisits[lines] or 0
+            assert.is_true(visits > 0, case.name)
+            assert.is_true(visits <= 7, case.name)
+            if case.visits then assert.equals(case.visits, visits, case.name) end
         end
-        local lineSource = storedSource(lines[1], { keLines = lines })
-        local lineGroup = storedGroup("too-many-lines", { sources = { lineSource } })
-        local lineState = loadTaintReport()
-        local lineDB = { global = { TaintLog = storedLog({ lineGroup }) } }
-        lineState.initialize(lineDB)
-        assert.is_nil(lineDB.global.TaintLog)
-        assert.is_true((lineState.nextVisits[lines] or 0) <= 7)
+
+        local denseSources = {}
+        for sourceIndex = 1, 3 do
+            local denseLines = {}
+            for lineIndex = 1, 6 do
+                denseLines[lineIndex] = line(sourceIndex * 10 + lineIndex)
+            end
+            denseSources[sourceIndex] = storedSource(denseLines[1], {
+                keLines = denseLines,
+            })
+        end
+        local denseGroup = storedGroup("dense-maxima", {
+            sources = denseSources, walks = 3,
+        })
+        local denseDB = { global = { TaintLog = storedLog({ denseGroup }) } }
+        local denseState = loadTaintReport()
+        denseState.initialize(denseDB)
+        local canonical = assert(denseDB.global.TaintLog)
+        assert.equals(3, #canonical.groups[1].sources)
+        for _, retained in ipairs(canonical.groups[1].sources) do
+            assert.equals(6, #retained.keLines)
+        end
     end)
 
     it("drops unknown fields while keeping valid dense schema data", function()
@@ -1021,22 +1199,88 @@ describe("TaintReport persistence", function()
         assert.equals(identity, db.global.TaintLog)
     end)
 
-    it("rejects malformed store counters and preserves saturated carry values", function()
-        for _, bad in ipairs({ -1, 1.5, 2147483648 }) do
-            local db = { global = { TaintLog = storedLog({ storedGroup("bad-counter") }, {
-                omitted = bad,
-            }) } }
+    it("rejects every future timestamp and ancient-savedAt freshness evasion", function()
+        local rejected = {
+            {
+                name = "future savedAt",
+                store = storedLog({ storedGroup("future-store") }, {
+                    savedAt = 1800000301,
+                }),
+            },
+            {
+                name = "future firstSeen",
+                store = storedLog({ storedGroup("future-first", {
+                    firstSeen = 1800000301, lastSeen = 1800000301,
+                }) }),
+            },
+            {
+                name = "future lastSeen",
+                store = storedLog({ storedGroup("future-last", {
+                    firstSeen = 1800000000, lastSeen = 1800000301,
+                }) }),
+            },
+            {
+                name = "beyond savedAt skew",
+                store = storedLog({ storedGroup("beyond-saved", {
+                    firstSeen = 1799999900, lastSeen = 1800000000,
+                }) }, { savedAt = 1799999699 }),
+            },
+            {
+                name = "ancient savedAt fresh lastSeen",
+                store = storedLog({ storedGroup("fresh-evasion", {
+                    firstSeen = 1799999900, lastSeen = 1799999950,
+                }) }, { savedAt = 1 }),
+            },
+        }
+        for _, case in ipairs(rejected) do
+            local db = { global = { TaintLog = case.store } }
             local state = loadTaintReport()
             state.initialize(db)
-            assert.is_nil(db.global.TaintLog)
+            assert.is_nil(db.global.TaintLog, case.name)
         end
 
-        local db = { global = { TaintLog = storedLog({ storedGroup("carry") }, {
-            omitted = 7, supersededRestored = 7,
+        local boundary = storedGroup("exact-boundary", {
+            firstSeen = 1800000300, lastSeen = 1800000300,
+        })
+        local boundaryDB = { global = { TaintLog = storedLog({ boundary }) } }
+        local boundaryState = loadTaintReport()
+        boundaryState.initialize(boundaryDB)
+        assert.equals("exact-boundary", boundaryDB.global.TaintLog.groups[1].action)
+    end)
+
+    it("rejects either malformed carry and saturates both when new loss is added", function()
+        for _, field in ipairs({ "omitted", "supersededRestored" }) do
+            for _, bad in ipairs({ -1, 1.5, 2147483648 }) do
+                local options = {}
+                options[field] = bad
+                local db = { global = { TaintLog = storedLog({
+                    storedGroup("bad-counter"),
+                }, options) } }
+                local state = loadTaintReport()
+                state.initialize(db)
+                assert.is_nil(db.global.TaintLog, field .. ":" .. tostring(bad))
+            end
+        end
+
+        local malformed = storedGroup("malformed")
+        malformed.action = "bad\naction"
+        local db = { global = { TaintLog = storedLog({
+            storedGroup("collision"), malformed,
+        }, {
+            omitted = 6, supersededRestored = 6,
         }) } }
         local state = loadTaintReport({ reducedCounter = true })
         state.initialize(db)
-        local report = assert(state.run(""))
+        assert.equals(7, db.global.TaintLog.omitted)
+        assert.equals(6, db.global.TaintLog.supersededRestored)
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "collision")
+        state.logout()
+        assert.equals(7, db.global.TaintLog.omitted)
+        assert.equals(7, db.global.TaintLog.supersededRestored)
+
+        local second = loadTaintReport({ reducedCounter = true })
+        second.initialize({ global = { TaintLog = db.global.TaintLog } })
+        local report = assert(second.run(""))
         assert.is_truthy(report:find("Persisted groups omitted: at least 7", 1, true))
         assert.is_truthy(report:find("Restored groups superseded: at least 7", 1, true))
     end)
@@ -1318,69 +1562,156 @@ describe("TaintReport report and lazy dialog", function()
     end)
 
     it("keeps the complete mandatory prefix when maximum-density detail truncates", function()
-        local function denseLine(label, index)
-            local prefix = "Interface/AddOns/KitnEssentials/Core/" .. label .. index .. ".lua:1 "
-            return prefix .. string.rep("X", 300 - #prefix)
+        local inaccessibleAttribution = "DENSE_UNREADABLE_ATTRIBUTION"
+        local unreadableAction = {}
+        local unavailableLoadState = {}
+        local tailToken = "FINAL_LOSS_TAIL_TOKEN"
+
+        local function pad300(prefix, fill)
+            assert.is_true(#prefix <= 300)
+            return prefix .. string.rep(fill, 300 - #prefix)
         end
-        local restored = {}
-        for groupIndex = 1, 10 do
-            local sources = {}
-            for sourceIndex = 1, 3 do
-                local lines = {}
-                for lineIndex = 1, 6 do
-                    lines[lineIndex] = denseLine("R" .. groupIndex .. "S" .. sourceIndex, lineIndex)
-                end
-                sources[sourceIndex] = storedSource(lines[1], {
-                    keLines = lines,
-                    observedSamples = sourceIndex == 3 and 3 or 1,
-                })
+        local function denseLine(groupLabel, sourceIndex, lineIndex, token)
+            local prefix = string.format(
+                "Interface/AddOns/KitnEssentials/Core/%s/S%d/L%d.lua:1 ",
+                groupLabel, sourceIndex, lineIndex)
+            if token then prefix = prefix .. token .. " " end
+            return pad300(prefix, "X")
+        end
+        local function denseStack(groupLabel, sourceIndex, lineCount, tokenAtTail,
+            overlongFirst)
+            local lines = {}
+            for lineIndex = 1, lineCount do
+                local token = tokenAtTail and lineIndex == lineCount and tailToken or nil
+                lines[lineIndex] = denseLine(groupLabel, sourceIndex, lineIndex, token)
             end
-            local options = { sources = sources, walks = 5, count = 5,
-                firstSeen = 1799999700 + groupIndex,
-                lastSeen = 1799999800 + groupIndex }
-            if groupIndex == 1 then
-                options.count = 7
-                options.notWalked = 2
-                options.stackUnavailable = 1
-                options.stackInputTruncated = 1
-                options.sourceUnavailable = 1
-                options.sourceSamplesOmitted = 1
-                sources[3] = nil
-                sources[1].keLinesOmitted = 1
-            end
-            restored[groupIndex] = storedGroup("dense-restored-" .. groupIndex, options)
+            if overlongFirst then lines[1] = lines[1] .. string.rep("Q", 800) end
+            return table.concat(lines, "\n")
         end
 
         local addons = {}
-        for index = 1, 300 do
+        for index = 1, 302 do
             local suffix = string.format("%03d", index)
             addons[index] = {
-                name = suffix .. string.rep("N", 297),
-                title = suffix .. string.rep("T", 297),
-                version = suffix .. string.rep("V", 297),
+                name = pad300("Addon" .. suffix, "N"),
+                title = pad300("Title" .. suffix, "T"),
+                version = pad300("Version" .. suffix, "V"),
                 loaded = true,
             }
+            assert.equals(300, #addons[index].name)
+            assert.equals(300, #addons[index].title)
+            assert.equals(300, #addons[index].version)
         end
-        local state = loadTaintReport({ addons = addons })
-        state.initialize({ global = { TaintLog = storedLog(restored, {
+
+        local state = loadTaintReport({
+            addons = addons,
+            addonCount = 1025,
+            loadedResult = function(index, addon)
+                if index == 1 then return true, unavailableLoadState end
+                if type(index) == "number" then
+                    local loaded = addon and addon.loaded or false
+                    return loaded, loaded
+                end
+                return false, false
+            end,
+            valueAccess = function(value)
+                return value ~= inaccessibleAttribution
+                    and value ~= unreadableAction
+                    and value ~= unavailableLoadState
+            end,
+        })
+
+        for groupIndex = 1, 24 do
+            local groupLabel = string.format("Dense%02d", groupIndex)
+            local observations = groupIndex == 1 and { 1, 2, 3, 4, 3 }
+                or { 1, 2, 3, 3, 3 }
+            for _, sourceIndex in ipairs(observations) do
+                state.setStack(denseStack(groupLabel, sourceIndex, 6))
+                state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials",
+                    "dense-current-" .. groupLabel)
+            end
+        end
+
+        local db = state.initialize({ global = { TaintLog = storedLog({
+            storedGroup("restore-seed"),
+        }, {
             omitted = 1, supersededRestored = 1,
         }) } })
-        for groupIndex = 1, 15 do
-            state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "dense-current-" .. groupIndex)
+
+        state.setStack(denseStack("FinalLoss", 1, 7, false, true))
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "aa-final-loss")
+        local fullFinalSite = denseLine("FinalLoss", 1, 1)
+            .. string.rep("Q", 800)
+        local retainedFinalSite = fullFinalSite:sub(1, 300 - #" [truncated]")
+            .. " [truncated]"
+        state.setStack(retainedFinalSite)
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "aa-final-loss")
+        state.setStack(denseStack("FinalLoss", 2, 6, true))
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "aa-final-loss")
+        state.setStack(nil, "forced stack failure")
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "aa-final-loss")
+        state.setStack("Interface/AddOns/OtherAddon/Only.lua:1")
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "aa-final-loss")
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "aa-final-loss")
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "aa-final-loss")
+
+        state.fire("ADDON_ACTION_BLOCKED", inaccessibleAttribution, "ignored")
+        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", unreadableAction)
+        assert.equals(125, state.stackCalls())
+
+        state.logout()
+        assert.equals(10, #db.global.TaintLog.groups)
+        local foundFinal = false
+        for _, group in ipairs(db.global.TaintLog.groups) do
+            if group.action == "aa-final-loss" then
+                foundFinal = true
+                assert.equals(2, #group.sources)
+                assert.is_truthy(group.sources[2].keLines[6]:find(tailToken, 1, true))
+            else
+                assert.equals(3, #group.sources)
+            end
+            for _, source in ipairs(group.sources) do
+                assert.equals(300, #source.site)
+                assert.equals(6, #source.keLines)
+                for _, line in ipairs(source.keLines) do assert.equals(300, #line) end
+            end
         end
+        assert.is_true(foundFinal)
+
         local report = assert(state.run(""))
         local detailStart = assert(report:find("\n[current]", 1, true))
         assert.is_true(detailStart - 1 <= 8192)
         for _, expected in ipairs({
+            "KitnEssentials Taint Report\n",
+            "Addon version: 4.5.0\n",
+            "Client build: 69497\n",
+            "Report time: 2027-01-15 08:00:00\n",
+            "Warning: Blizzard attribution is not proof that KitnEssentials caused the taint.\n",
+            "Inaccessible attribution events: 1\n",
+            "Unavailable action payloads: 1\n",
+            "Refused action groups: 1\n",
+            "Refused occurrences: 1\n",
+            "Persisted groups omitted: 2\n",
+            "Restored groups superseded: 1\n",
+            "Addon indices unscanned: 1\n",
+            "Loaded addons omitted: 1\n",
+            "Addon load states unavailable: 1\n",
             "Unsampled occurrences: 2",
             "Stack unavailable samples: 1",
             "Stack input truncated samples: 1",
             "Source unavailable samples: 1",
             "Source samples omitted: 1",
             "KE lines omitted: 1",
+            "Copy the full report and include the exact reproduction steps.\n",
+            "Sampled source frames are evidence samples, not proof of causation.\n",
         }) do
-            assert.is_truthy(report:find(expected, 1, true), expected)
+            local position = assert(report:find(expected, 1, true), expected)
+            assert.is_true(position < detailStart, expected)
         end
+        assert.equals(1024, countAddonCalls(state.addonCalls, "info", true))
+        assert.equals(1024, countAddonCalls(state.addonCalls, "loaded", true))
+        assert.equals(301, countAddonCalls(state.addonCalls, "metadata", true))
+        assert.is_nil(report:find(tailToken, 1, true))
         assert.is_true(#report <= 90000)
         assert.is_truthy(report:find("[report truncated]", -40, true))
         assert.equals("[report truncated]\n", report:sub(-19))
