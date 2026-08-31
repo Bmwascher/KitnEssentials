@@ -138,34 +138,50 @@ of its own.
 
 The commit set is whatever the destination remote does not have: bounded by
 the sha git advertises when this clone holds that object, and otherwise by
-that remote's own tracking refs. A push straight to a URL matches no tracking
-refs at all and so reads the whole history. Any git failure blocks the push
-instead of reading as a clean scan. Merges are diffed against their first
+what `git ls-remote` says that remote carries right now, since local tracking
+refs go stale when a branch is deleted or rewritten and a stale ref would
+subtract commits the remote never had. Only shas this clone holds can be
+subtracted, so the answer over-scans at worst, and an unreachable remote falls
+back to its tracking refs. Any git failure blocks the push instead of reading
+as a clean scan. Merges are diffed against their first
 parent, so a comment invented while resolving a conflict is caught. Block
 comments are followed through their body lines, which carry no delimiter of
 their own, in Lua at any bracket level and in XML. All three hooks share one
 matcher, `dev/githooks/lib/name-guards.sh`, and refuse to run without it or
 without a valid word list.
 
-Two gaps are known and left open, both narrow, both cheaper to accept than to
-close. Tracking refs are local: if a remote branch is deleted or rewritten
-and the stale ref is never pruned, a new ref pointing into it is subtracted
-from the scan. Scanning with no exclusions at all would close that, at the
-cost of reading the entire history on every first push of a branch. And a
-line added INSIDE a block comment whose opener the hunk does not contain
-reads as ordinary code, because a diff carries no state from above the hunk;
-closing that means scanning the postimage of each changed file instead of the
-diff.
+One gap is known and left open. A line added INSIDE a block comment whose
+opener the hunk does not contain reads as ordinary code, because a diff
+carries no state from above the hunk. Closing it means scanning the postimage
+of each changed file rather than the diff, which would also promote Lua long
+strings from an accepted false positive to a correctness requirement.
+
+Which tier a name belongs in is not a judgment call: anything this project
+names in its own comments goes in `compat`, including a module that kept the
+title it was ported under and an addon the conflict registry documents.
+`stems` is for names that never legitimately appear. The list is gitignored,
+so no diff review can check that, and
+
+```sh
+bash dev/scripts/check-comment-guards.sh
+```
+
+is what does: it loads the list and fails if any name in `stems`, `namesCI` or
+`namesCS` appears in a shipped comment at HEAD. Run it after every list edit.
+It also reports pre-existing provenance and history references, which nothing
+enforces, since the hooks only ever read added lines.
 
 `Libs/` is out of scope: the comment rules govern what this project writes,
 not the third-party code it embeds, and upstream library headers carry dates
 and version stamps by right.
 
-Date forms the comment ban catches: `2026-08-04`; a month name in any case,
-separated from its year by any run of spaces, tabs or a comma; and `08/31/26`
-or `31/08/26` along with their four-digit year forms. Slash dates need one
-component that can be a month and another that can be a day, so spell range
-and rank lists such as `30/33/36` stay clean.
+Date forms the comment ban catches: `2026-08-04`; a whole month word in any
+case, separated from its year by any run of spaces, tabs or a comma; and
+`08/31/26` or `31/08/26` along with their four-digit year forms. The month has
+to be a word of its own, or "augmentation 2026" would read as a date. Slash
+dates need one component that can be a month and another that can be a day,
+so spell range and rank lists such as `30/33/36` stay clean; a rank triple in
+date shape, `5/10/15`, is the one false positive left.
 
 ## Updating the API reference
 

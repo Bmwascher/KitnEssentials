@@ -60,24 +60,49 @@ fi
 . "$ng_lib"
 ng_load pre-push stems shorts compat provenance namesCI namesCS || exit 1
 
-# git names the push destination in $1. Exclusions must come from THAT
-# remote's tracking refs: a bare --remotes would also subtract commits that
-# only some other remote has, and skip them on the way to this one.
+# git names the push destination in $1.
 _dest="${1:-}"
+_fallback=()
+_fallback_ready=0
+
+# What to subtract for a ref whose advertised sha this clone does not hold.
+# Local tracking refs go stale when a branch is deleted or rewritten remotely,
+# and a stale ref subtracts commits the remote never had, so ask the remote
+# what it carries now. Only shas held locally can be subtracted, so the answer
+# over-scans at worst. Computed once, and only when a ref needs it: it is a
+# network round trip to the host this push is about to contact anyway.
+ng_fallback_excl() {
+    [ "$_fallback_ready" -eq 0 ] || return 0
+    _fallback_ready=1
+    local refs sha rest
+    if refs="$(git ls-remote --heads --tags "$_dest" 2>/dev/null)"; then
+        while read -r sha rest; do
+            [ -n "$sha" ] || continue
+            git cat-file -e "$sha^{commit}" 2>/dev/null && _fallback+=("$sha")
+        done <<< "$refs"
+        return 0
+    fi
+    # Unreachable remote: that destination's tracking refs are the only answer
+    # left, and they are wrong only in the stale case above.
+    _fallback=(--remotes="$_dest")
+}
+
 for _line in "${pushed_refs[@]}"; do
     read -r _lref _lsha _rref _rsha <<< "$_line"
     # skip deletions (local sha is all zeros)
     case "$_lsha" in *[!0]*) ;; *) continue ;; esac
     # The advertised remote sha bounds the scan only when this clone holds
     # that object: force-pushing over an unfetched tip would otherwise make
-    # every git call fail and read as a clean scan. Both fallbacks over-scan
-    # rather than under-scan — an unmatched remote pattern excludes nothing,
-    # so a push to a bare URL reads the whole history.
-    _excl=(--remotes="$_dest")
+    # every git call fail and read as a clean scan.
+    _excl=()
     case "$_rsha" in
         *[!0]*) git cat-file -e "$_rsha^{commit}" 2>/dev/null && _excl=("$_rsha") ;;
     esac
-    if ! _new="$(git rev-list "$_lsha" --not "${_excl[@]}")"; then
+    if [ "${#_excl[@]}" -eq 0 ]; then
+        ng_fallback_excl
+        _excl=(${_fallback[@]+"${_fallback[@]}"})
+    fi
+    if ! _new="$(git rev-list "$_lsha" --not ${_excl[@]+"${_excl[@]}"})"; then
         echo "[pre-push] BLOCKED: could not list the commits $_lref would publish." >&2
         exit 1
     fi

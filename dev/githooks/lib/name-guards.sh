@@ -17,11 +17,15 @@ ng_paths=('*.lua' '*.xml' ':(exclude)dev/*' ':(exclude).claude/*' ':(exclude)Lib
 # Plan-step references, review/session history, file:line citations.
 ng_history='[Ss]tep [A-Z][0-9]+|[Tt]ask [0-9]+|round of review|review round|per the plan|References/|\bv[0-9]+\.[0-9]+|\.(lua|xml):[0-9]+'
 
-# Dates, scanned case-insensitively. Numeric forms constrain the day and
-# month so spell range and rank lists do not read as dates: 30/33/36 and
-# 24/30/24 have no component that can be a month, and no four-digit year.
+# Dates, scanned case-insensitively. Month names are whole words, or the game
+# vocabulary trips them: "augmentation 2026" is not a date. Numeric forms
+# constrain the day and month so spell range and rank lists do not read as
+# dates: 30/33/36 and 24/30/24 have no component that can be a month, and no
+# four-digit year. A rank triple in date shape, such as 5/10/15, is the one
+# false positive left, and --no-verify covers it.
 ng_dates='20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
-ng_dates="$ng_dates|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[,[:space:]]+(19|20)[0-9][0-9]"
+ng_dates="$ng_dates|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b[,[:space:]]+(19|20)[0-9][0-9]"
+ng_dates="$ng_dates|\b(january|february|march|april|june|july|august|september|october|november|december)\b[,[:space:]]+(19|20)[0-9][0-9]"
 ng_dates="$ng_dates|\b[0-9]{1,2}/[0-9]{1,2}/(19|20)[0-9][0-9]\b"
 ng_dates="$ng_dates|\b(0?[1-9]|1[0-2])/(0?[1-9]|[12][0-9]|3[01])/[0-9]{2}\b"
 ng_dates="$ng_dates|\b(0?[1-9]|[12][0-9]|3[01])/(0?[1-9]|1[0-2])/[0-9]{2}\b"
