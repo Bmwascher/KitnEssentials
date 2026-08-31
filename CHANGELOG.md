@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.21
+
+### Aura displays
+- Fixed your buffs and debuffs disappearing when you opened the settings panel
+  on an aura page inside a Mythic+ key, a raid boss fight or combat. They stayed
+  gone until you reloaded. They now come back as soon as you close the page
+- This affected all five aura displays: Player Buffs, Player Debuffs, the Debuff
+  Tracker, External Cooldowns and Movement Buffs
+
+---
+
 ## v4.4.20
 
 ### Aura timers
