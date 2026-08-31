@@ -32,21 +32,36 @@ if [ -z "$files" ]; then
     exit 1
 fi
 
-synth="$(mktemp)"
+if ! synth="$(mktemp)"; then
+    echo "[check-comment-guards] BLOCKED: could not create a scratch file." >&2
+    exit 1
+fi
 trap 'rm -f "$synth"' EXIT
 count=0
 while IFS= read -r entry; do
     [ -n "$entry" ] || continue
     path="${entry#HEAD:}"
     printf 'diff --git a/%s b/%s\n@@\n' "$path" "$path" >> "$synth"
-    if ! git show "HEAD:$path" | sed 's/^/+/' >> "$synth"; then
+    # The trailing newline matters: a blob that ends without one would run
+    # into the next file's header and be read as part of its own last line.
+    if ! { git show "HEAD:$path" | sed 's/^/+/' >> "$synth"; } || ! printf '\n' >> "$synth"; then
         echo "[check-comment-guards] BLOCKED: could not read HEAD:$path" >&2
         exit 1
     fi
     count=$((count + 1))
 done <<< "$files"
 
-comments="$(ng_comment_tails "$(cat "$synth")")"
+# Each step checked on its own: a nested substitution hides its own failure
+# inside the outer assignment's status, and the audit would then report OK
+# on no input at all.
+if ! synth_text="$(cat "$synth")"; then
+    echo "[check-comment-guards] BLOCKED: could not read back the scratch file." >&2
+    exit 1
+fi
+if ! comments="$(ng_comment_tails "$synth_text")"; then
+    echo "[check-comment-guards] BLOCKED: the comment extractor failed." >&2
+    exit 1
+fi
 echo "[check-comment-guards] $count files, $(printf '%s\n' "$comments" | grep -c '' || true) comment lines at HEAD"
 
 fail=0

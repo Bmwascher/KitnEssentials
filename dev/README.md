@@ -143,8 +143,8 @@ refs go stale when a branch is deleted or rewritten and a stale ref would
 subtract commits the remote never had. Only shas this clone holds can be
 subtracted, so the answer over-scans at worst, and a remote that cannot be
 answered subtracts nothing at all rather than falling back to the stale refs
-this exists to avoid. Any git failure blocks the push instead of reading as a
-clean scan. Merges are diffed against their first
+this exists to avoid, and says so. Any failure to READ a commit or list a
+range blocks the push instead of reading as a clean scan. Merges are diffed against their first
 parent, so a comment invented while resolving a conflict is caught. Block
 comments are followed through their body lines, which carry no delimiter of
 their own, in Lua at any bracket level and in XML. All three hooks share one

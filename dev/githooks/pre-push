@@ -61,9 +61,11 @@ fi
 ng_load pre-push stems shorts compat provenance namesCI namesCS || exit 1
 
 # git names the push destination in $1 and its location in $2. Query the
-# location: a remote whose pushurl differs from its fetch url is answered by
-# the wrong host otherwise.
+# location, since a remote whose pushurl differs from its fetch url would be
+# answered by the wrong host; print the name, since an https location can
+# carry credentials.
 _dest="${2:-${1:-}}"
+_dest_label="${1:-$_dest}"
 _fallback=()
 _fallback_ready=0
 
@@ -80,7 +82,7 @@ ng_fallback_excl() {
     _fallback_ready=1
     local refs sha rest
     if ! refs="$(git ls-remote --heads --tags "$_dest" 2>/dev/null)"; then
-        echo "[pre-push] $_dest did not answer — scanning the full history reachable from each ref." >&2
+        echo "[pre-push] $_dest_label did not answer — scanning the full history reachable from each ref." >&2
         return 0
     fi
     while read -r sha rest; do
