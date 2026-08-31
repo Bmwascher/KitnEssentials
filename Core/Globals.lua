@@ -418,13 +418,26 @@ end
 -- Frame Positioning
 ---------------------------------------------------------------------------------
 
+-- State for the PLAYERFRAME anchor repair further down, declared here because
+-- the resolver seeds the winner and ApplyFramePosition writes the records.
+-- lastPlayerFrame holds the winner the login placements actually used; a later
+-- change of winner is the signal to re-place. Weak keys so a discarded frame
+-- drops its entry with no teardown call.
+local lastPlayerFrame
+local anchorWindowOpen = true
+local anchorRecords = setmetatable({}, { __mode = "k" })
+local anchorRepairs = setmetatable({}, { __mode = "k" })
+local anchorPending = setmetatable({}, { __mode = "k" })
+
 function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName)
     if anchorFrameType == "SCREEN" or anchorFrameType == "UIPARENT" then
         return UIParent
     elseif anchorFrameType == "PLAYERFRAME" then
         -- Auto-detect the active unit-frame addon's player frame.
-        return _G.ElvUF_Player or _G.UUF_Player
+        local frame = _G.ElvUF_Player or _G.UUF_Player
             or _G.EllesmereUIUnitFrames_Player or _G.PlayerFrame or UIParent
+        if lastPlayerFrame == nil then lastPlayerFrame = frame end
+        return frame
     elseif anchorFrameType == "SELECTFRAME" and parentFrameName then
         local frame = _G[parentFrameName]
         return frame or UIParent
@@ -1691,4 +1704,156 @@ function KE:ApplyFramePosition(frame, posConfig, Config, SetParent)
     )
     frame:SetFrameStrata(Config.Strata or "MEDIUM")
     self:SnapFrameToPixels(frame)
+
+    if anchorWindowOpen then
+        if Config.anchorFrameType == "PLAYERFRAME" then
+            anchorRecords[frame] = {
+                posConfig = posConfig, config = Config, setParent = SetParent,
+            }
+        else
+            -- A frame moved off PLAYERFRAME must lose its record, or the
+            -- repair pass keeps dragging it back to a player frame the user
+            -- no longer wants.
+            anchorRecords[frame] = nil
+        end
+    end
 end
+
+---------------------------------------------------------------------------------
+-- PLAYERFRAME anchor repair
+---------------------------------------------------------------------------------
+--
+-- Unit-frame addons build their player frame inside their own PLAYER_LOGIN
+-- handler, so the first PLAYERFRAME resolve of a session can run before the
+-- frame the user actually wants exists, and falls through to Blizzard's. The
+-- reconfiguration that would otherwise re-place everything is refused while
+-- aura identities are hidden, so inside a key or an encounter nothing corrects
+-- it and the wrong anchor lasts the whole run.
+--
+-- These passes re-resolve during the login window and re-place only what the
+-- change affects, then shut the window for the session. Everything here dies
+-- at CloseAnchorWindow: no event stays registered, no timer stays pending.
+
+-- May this frame be re-anchored right now? Out of combat, always. In combat,
+-- both gates decide, and both answer with a secret-capable boolean, so neither
+-- may be truth-tested: fail closed on either being true or secret. IsProtected
+-- alone is not enough — an unprotected mover that a secure header anchors to is
+-- still restricted. A gate that cannot be asked is not a gate that said yes.
+function KE:CanReanchorNow(frame)
+    if not InCombatLockdown() then return true end
+
+    local protected = frame:IsProtected()
+    if self:IsSecretValue(protected) or protected == true then return false end
+
+    if not frame.IsAnchoringRestricted then return false end
+
+    local restricted = frame:IsAnchoringRestricted()
+    if self:IsSecretValue(restricted) or restricted == true then return false end
+
+    return true
+end
+
+-- For the modules that resolve the anchor and place the frame themselves
+-- instead of calling ApplyFramePosition. `fn` is that module's OWN reposition
+-- function, because each places differently — growth-derived corners, and two
+-- of them deliberately do not reparent. `isPlayerFrame` is supplied by the
+-- module too: the anchor type sits at a different db path in every one of them.
+function KE:RegisterAnchorRepair(frame, isPlayerFrame, fn)
+    if not anchorWindowOpen then return end
+    if not (frame and isPlayerFrame and fn) then return end
+    anchorRepairs[frame] = { isPlayerFrame = isPlayerFrame, fn = fn }
+end
+
+local function RepairAnchor(frame)
+    if not KE:CanReanchorNow(frame) then return false end
+
+    local record = anchorRecords[frame]
+    if record then
+        KE:ApplyFramePosition(frame, record.posConfig, record.config, record.setParent)
+    end
+
+    local repair = anchorRepairs[frame]
+    if repair then repair.fn() end
+
+    return true
+end
+
+-- PLAYERFRAME resolution takes no per-caller argument, so the winner is one
+-- process-wide value: a pass resolves ONCE and does nothing unless it moved.
+-- The pending set is what makes a refused frame get another try — without it,
+-- an unchanged winner returns early and the frame is never reconsidered.
+local function AnchorPass()
+    local winner = KE:ResolveAnchorFrame("PLAYERFRAME")
+
+    if winner ~= lastPlayerFrame then
+        lastPlayerFrame = winner
+        for frame in pairs(anchorRecords) do
+            anchorPending[frame] = true
+        end
+        for frame, repair in pairs(anchorRepairs) do
+            if repair.isPlayerFrame() then anchorPending[frame] = true end
+        end
+    end
+
+    for frame in pairs(anchorPending) do
+        local repair = anchorRepairs[frame]
+        if repair and not repair.isPlayerFrame() then
+            anchorPending[frame] = nil
+        elseif not repair and not anchorRecords[frame] then
+            anchorPending[frame] = nil
+        elseif RepairAnchor(frame) then
+            anchorPending[frame] = nil
+        end
+    end
+end
+
+local anchorWatcher = CreateFrame("Frame")
+local anchorFinalQueued = false
+
+local function CloseAnchorWindow()
+    if not anchorWindowOpen then return end
+    anchorWindowOpen = false
+    anchorWatcher:UnregisterAllEvents()
+    anchorWatcher:SetScript("OnEvent", nil)
+    wipe(anchorPending)
+    wipe(anchorRecords)
+    wipe(anchorRepairs)
+end
+
+anchorWatcher:RegisterEvent("PLAYER_LOGIN")
+anchorWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+anchorWatcher:SetScript("OnEvent", function(_, event)
+    if not anchorWindowOpen then return end
+
+    -- Exactly four passes, so each queue sits inside the branch that owns it:
+    -- world entry fires again on every loading screen, and an unguarded queue
+    -- out here would add one more pass per screen inside the window.
+    --
+    -- The queued passes check the flag rather than cancelling: C_Timer.After
+    -- returns no handle, so a callback outliving the window is the only case
+    -- that has to be handled.
+    local function QueuePass()
+        C_Timer.After(0, function()
+            if anchorWindowOpen then AnchorPass() end
+        end)
+    end
+
+    if event == "PLAYER_LOGIN" then
+        -- Synchronous, inside the dispatch: a reload taken in combat locks the
+        -- UI down moments later, and a provider that builds its frames in this
+        -- same dispatch is already there by the time this runs.
+        AnchorPass()
+        QueuePass()
+    elseif not anchorFinalQueued then
+        anchorFinalQueued = true
+        QueuePass()
+        -- One last look, then the window closes whatever the winner is. A
+        -- provider slower than this cannot be waited for: nothing announces
+        -- that a third-party addon has finished building its frames.
+        C_Timer.After(1, function()
+            if not anchorWindowOpen then return end
+            AnchorPass()
+            CloseAnchorWindow()
+        end)
+    end
+end)

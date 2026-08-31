@@ -981,25 +981,6 @@ function EditMode:SetupDragHandlers(overlay)
     end)
 end
 
--- Both gates answer with a secret-capable boolean, so neither may be
--- truth-tested. Fail closed on either one being true or secret. IsProtected
--- alone is not enough: an unprotected mover that a secure header anchors to is
--- still restricted.
-local function CanReanchor(frame)
-    local protected = frame:IsProtected()
-    if issecretvalue(protected) or protected == true then return false end
-
-    -- Fail closed if the method is missing too. Every current target is a Frame
-    -- or a Button and both carry it, so this is unreachable today, but a gate
-    -- that cannot be asked is not a gate that said yes.
-    if not frame.IsAnchoringRestricted then return false end
-
-    local restricted = frame:IsAnchoringRestricted()
-    if issecretvalue(restricted) or restricted == true then return false end
-
-    return true
-end
-
 -- One question with two ways in. The arrow keys and the d-pad inherit it
 -- through the nudge; the wheel and the right-button chords ask it themselves,
 -- and the wheel asks BEFORE it selects, which is the whole reason it is one
@@ -1079,7 +1060,7 @@ function EditMode:CancelDrag(overlay)
         -- the frame sitting in the screen corner for the rest of the fight.
         -- Anything restricted has to wait for the queue.
         local targetFrame = self:GetElementFrame(element)
-        if targetFrame and CanReanchor(targetFrame) then
+        if targetFrame and KE:CanReanchorNow(targetFrame) then
             Reanchor()
         else
             KE:RunAfterCombat(Reanchor)

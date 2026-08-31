@@ -1471,6 +1471,15 @@ function KT:CreateFrames()
     frame:SetFrameStrata(self.db.Strata or "HIGH")
     frame:SetClampedToScreen(true)
     self.containerFrame = frame
+
+    -- Through ResolvePositionConfig, not the raw db key: the healer override
+    -- can put a different anchor type on each context.
+    KE:RegisterAnchorRepair(frame,
+        function()
+            local _, aft = self:ResolvePositionConfig()
+            return aft == "PLAYERFRAME"
+        end,
+        function() self:ApplyContainerPosition() end)
 end
 
 ---------------------------------------------------------------------------------

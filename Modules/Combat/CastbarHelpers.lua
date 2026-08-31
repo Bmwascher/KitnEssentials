@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  CastbarHelpers.lua                                      ║
--- ║  Purpose: Shared logic for FocusCastbar — plain functions ║
+-- ║  Purpose: Shared logic for FocusCastbar — plain functions║
 -- ║           taking (self, ...) where self is the calling   ║
 -- ║           AceModule.                                     ║
 -- ║  Not inheritance. Not a base class. Just helpers.        ║

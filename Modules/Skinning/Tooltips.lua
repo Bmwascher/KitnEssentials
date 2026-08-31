@@ -1015,6 +1015,14 @@ function TT:EnsureAnchor()
         local f = CreateFrame("Frame", "KE_TooltipAnchor", UIParent)
         f:SetSize(130, 20)
         self.anchorFrame = f
+
+        KE:RegisterAnchorRepair(f,
+            function()
+                local p = self.db and self.db.Position
+                return p ~= nil and p.AnchorFrameType == "PLAYERFRAME"
+            end,
+            function() self:ApplyPosition() end)
+
         self:ApplyPosition()
     end
     -- Registration is deliberately outside the frame guard. The frame is

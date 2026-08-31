@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  AuraHeaders.lua                                         ║
 -- ║  Module: Player Buffs / Player Debuffs                   ║
--- ║  Purpose: Declares two aura-engine displays for the       ║
--- ║           player's own buffs and debuffs, and hides       ║
--- ║           Blizzard's equivalents while they are shown.    ║
+-- ║  Purpose: Declares two aura-engine displays for the      ║
+-- ║           player's own buffs and debuffs, and hides      ║
+-- ║           Blizzard's equivalents while they are shown.   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
