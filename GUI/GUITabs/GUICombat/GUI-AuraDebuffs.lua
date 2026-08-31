@@ -728,7 +728,7 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 9: Font Settings
     ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+    local fontCard, _, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         title = "Font Settings",
         db    = db,
         dbKeys = {
@@ -746,7 +746,22 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     if fontWidgets then
         manager:RegisterGroup(fontWidgets, "all")
     end
-    yOffset = fontOffset
+
+    -- The card's own last row is added with no trailing gap, so re-open the
+    -- spacing before appending to it.
+    fontCard:AddSpacing(Theme.paddingSmall)
+
+    local decimalRow = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
+    local decimalSlider = GUIFrame:CreateSlider(decimalRow, "Show Decimals Below (sec)", {
+        min = 0, max = 10, step = 1,
+        value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
+        callback = function(val) db.DecimalThreshold = val; ApplySettings() end,
+    })
+    decimalRow:AddWidget(decimalSlider, 0.5)
+    manager:Register(decimalSlider, "all")
+    fontCard:AddRow(decimalRow, Theme.rowHeightLast, 0)
+
+    yOffset = fontCard:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 10: Element Positions

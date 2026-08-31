@@ -299,12 +299,19 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
             { label = "Timer Size",  dbKey = "TimerFontSize", default = 18 },
         },
         fontSizeRange = { 8, 48 },
+        extraSlider = {
+            label = "Show Decimals Below (sec)",
+            dbKey = "DecimalThreshold",
+            min = 0, max = 10, step = 1,
+            value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
+        },
         onChangeCallback = ApplySettings,
     })
     manager:Register(fontCard, "all")
     if fontWidgets then
         manager:RegisterGroup(fontWidgets, "all")
     end
+
     yOffset = fontOffset
 
     RefreshStates()

@@ -163,6 +163,16 @@ local function BuildPage(opts)
         table_insert(allWidgets, timer)
         card3:AddRow(rowD, 40)
 
+        local rowD2 = GUIFrame:CreateRow(card3.content, 40)
+        local decimalSlider = GUIFrame:CreateSlider(rowD2, "Show Decimals Below (sec)", {
+            min = 0, max = 10, step = 1,
+            value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
+            callback = function(v) db.DecimalThreshold = v; ApplySettings() end,
+        })
+        rowD2:AddWidget(decimalSlider, 0.5)
+        table_insert(allWidgets, decimalSlider)
+        card3:AddRow(rowD2, 40)
+
         local rowE = GUIFrame:CreateRow(card3.content, 40)
         local tips = GUIFrame:CreateCheckbox(rowE, "Show Tooltips", {
             value = db.ShowTooltips ~= false,

@@ -7,16 +7,20 @@
 ---@class KE
 local KE = select(2, ...)
 
-local math_floor = math.floor
-local math_ceil  = math.ceil
+local math_floor    = math.floor
+local string_format = string.format
 
 local Preview = {}
 KE.AuraPreview = Preview
 
 -- How often the ticker recomputes the timer text and checks for an expired
--- icon. The text only changes once per whole second (FormatRemaining below),
--- so anything finer would burn cycles for no visible difference.
-local TICK_INTERVAL = 0.5
+-- icon. Whole seconds change once a second; tenths change ten times as often,
+-- so a half-second tick would show them in jumps. The faster rate is paid only
+-- while a decimal threshold is set.
+local function GetTickInterval(decimalThreshold)
+    if decimalThreshold > 0 then return 0.05 end
+    return 0.5
+end
 
 ---------------------------------------------------------------------------------
 -- Plan functions -- pure decisions. The swap is expressed as a PLAN, a table
@@ -130,7 +134,9 @@ end
 -- Mirrors the live formatter's breakpoints (Style.lua's GetDurationFormatter)
 -- without going through C_StringUtil: that formatter only drives text via
 -- SetDurationText, a registration call plain preview frames cannot accept.
-local function FormatRemaining(seconds)
+-- Floors throughout, tenths included -- string.format rounds, which would show
+-- a value the live display never shows.
+local function FormatRemaining(seconds, decimalThreshold)
     if seconds <= 0 then return "" end
     if seconds >= 3600 then
         return math_floor(seconds / 3600) .. "h"
@@ -138,12 +144,22 @@ local function FormatRemaining(seconds)
     if seconds >= 60 then
         return math_floor(seconds / 60) .. "m"
     end
-    return tostring(math_ceil(seconds))
+    -- A threshold of 0 needs no separate test: seconds is positive by here, so
+    -- nothing is ever below it.
+    if decimalThreshold and seconds < decimalThreshold then
+        return string_format("%.1f", math_floor(seconds * 10) / 10)
+    end
+    return tostring(math_floor(seconds))
 end
 
-local function UpdateEntryTimer(frame, entry, now)
+local function UpdateEntryTimer(frame, entry, now, decimalThreshold)
     if not frame.keTimer then return end
-    frame.keTimer:SetText(FormatRemaining(entry.expirationTime - now))
+    local text = FormatRemaining(entry.expirationTime - now, decimalThreshold)
+    -- Safe here and ONLY here: preview durations are fabricated, so the string
+    -- is not secret-derived. Never do this on a live aura's text.
+    if frame.keTimerLast == text then return end
+    frame.keTimerLast = text
+    frame.keTimer:SetText(text)
 end
 
 -- On a live button the game repaints the ring per aura through the
@@ -188,7 +204,7 @@ local function PopulateDispelBadge(frame, dispelType)
     end
 end
 
-local function PopulateEntryContent(frame, entry, now)
+local function PopulateEntryContent(frame, entry, now, decimalThreshold)
     if frame.keIcon then
         frame.keIcon:SetTexture(entry.icon)
     end
@@ -198,7 +214,7 @@ local function PopulateEntryContent(frame, entry, now)
     if frame.keCooldown then
         frame.keCooldown:SetCooldown(entry.expirationTime - entry.duration, entry.duration)
     end
-    UpdateEntryTimer(frame, entry, now)
+    UpdateEntryTimer(frame, entry, now, decimalThreshold)
 end
 
 local function TeardownFrames(state)
@@ -237,7 +253,7 @@ local function TickPreview(state)
                 frame.keCooldown:SetCooldown(now, entry.duration)
             end
         end
-        UpdateEntryTimer(frame, entry, now)
+        UpdateEntryTimer(frame, entry, now, state.decimalThreshold)
     end
 end
 
@@ -247,6 +263,8 @@ end
 -- expirationTime) is assembled here from Rules.PreviewTiming(index).
 local function BuildFrames(state, handle, display, settings)
     TeardownFrames(state)
+
+    state.decimalThreshold = KE.AuraRules.NormalizeDecimalThreshold(settings.DecimalThreshold)
 
     local groupsByKey = GroupsByKey(display)
     local total   = KE.AuraContainer.TotalLimit(display, settings)
@@ -276,13 +294,14 @@ local function BuildFrames(state, handle, display, settings)
             PopulateDispelBadge(frame, entry.dispelType)
 
             PositionEntryFrame(frame, i, display, settings)
-            PopulateEntryContent(frame, entry, now)
+            PopulateEntryContent(frame, entry, now, state.decimalThreshold)
 
             state.entries[#state.entries + 1] = { entry = entry, frame = frame }
         end
     end
 
-    state.ticker = C_Timer.NewTicker(TICK_INTERVAL, function() TickPreview(state) end)
+    state.ticker = C_Timer.NewTicker(GetTickInterval(state.decimalThreshold),
+        function() TickPreview(state) end)
 end
 
 ---------------------------------------------------------------------------------

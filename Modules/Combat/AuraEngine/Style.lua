@@ -18,10 +18,10 @@ KE.AuraStyle = Style
 Style.DISPEL_ICON_FRACTION = 0.40
 
 ---------------------------------------------------------------------------------
--- Duration formatter -- declarative data, not a callback. Neither display
--- supports a ShowDecimalSeconds or a ColorDurationUnderThreshold setting,
--- so only the non-decimal breakpoint set is built and textColor is
--- never populated. Weak-keyed on the settings table: the same settings table
+-- Duration formatter -- declarative data, not a callback. The breakpoint set is
+-- chosen from the display's decimal threshold; no display supports a
+-- ColorDurationUnderThreshold setting, so textColor is never populated.
+-- Weak-keyed on the settings table: the same settings table
 -- is reused for every reconfiguration of a display, so this rebuilds a
 -- formatter once per settings table rather than once per button.
 ---------------------------------------------------------------------------------
@@ -29,11 +29,14 @@ Style.DISPEL_ICON_FRACTION = 0.40
 local DurationFormatterCache = setmetatable({}, { __mode = "k" })
 
 local function GetDurationFormatter(settings)
-    local cached = DurationFormatterCache[settings]
-    if cached then return cached end
+    local decimalThreshold = KE.AuraRules.NormalizeDecimalThreshold(settings.DecimalThreshold)
 
-    local formatter = C_StringUtil.CreateNumericRuleFormatter()
-    formatter:SetBreakpoints({
+    local cached = DurationFormatterCache[settings]
+    if cached and cached.decimalThreshold == decimalThreshold then
+        return cached.formatter
+    end
+
+    local breakpoints = {
         {
             threshold = 3600,
             format    = "%dh",
@@ -48,19 +51,41 @@ local function GetDurationFormatter(settings)
                 { div = 60, step = 1, rounding = Enum.NumericRuleFormatRounding.Down },
             },
         },
-        {
-            threshold = 0,
+    }
+
+    -- Down, to agree with the Cooldown Manager. Its icons keep the game's own
+    -- countdown numbers while these displays draw their own text, and rounding
+    -- up read a second higher than the same buff shown there. The tenths rule
+    -- rounds the same way, for the same reason.
+    if decimalThreshold > 0 then
+        breakpoints[#breakpoints + 1] = {
+            threshold = decimalThreshold,
             step      = 1,
-            -- Down, to agree with the Cooldown Manager. Its icons keep the
-            -- game's own countdown numbers while these displays draw their
-            -- own text, and rounding up read a second higher than the same
-            -- buff shown there.
             rounding  = Enum.NumericRuleFormatRounding.Down,
             format    = "%d",
-        },
-    })
+        }
+        breakpoints[#breakpoints + 1] = {
+            threshold = 0,
+            step      = 0.1,
+            rounding  = Enum.NumericRuleFormatRounding.Down,
+            format    = "%.1f",
+        }
+    else
+        breakpoints[#breakpoints + 1] = {
+            threshold = 0,
+            step      = 1,
+            rounding  = Enum.NumericRuleFormatRounding.Down,
+            format    = "%d",
+        }
+    end
 
-    DurationFormatterCache[settings] = formatter
+    local formatter = C_StringUtil.CreateNumericRuleFormatter()
+    formatter:SetBreakpoints(breakpoints)
+
+    DurationFormatterCache[settings] = {
+        decimalThreshold = decimalThreshold,
+        formatter        = formatter,
+    }
     return formatter
 end
 

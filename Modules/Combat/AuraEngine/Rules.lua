@@ -173,6 +173,24 @@ function Rules.SelfCastFilterValue(hideSelfCast)
     return nil
 end
 
+-- Whole seconds, 0 to 10, where 0 means no decimals. A fractional threshold on
+-- a one-decimal display has no meaning, so anything else -- nil, unconvertible,
+-- NaN, infinite, fractional, out of range -- resolves to 0 rather than to a
+-- clamp: the safe answer is the feature switched off. Shared so the formatter,
+-- the preview and the sliders cannot disagree about what a stored value means.
+function Rules.NormalizeDecimalThreshold(value)
+    local threshold = tonumber(value)
+    if not threshold
+        or threshold ~= threshold
+        or threshold ~= math_floor(threshold)
+        or threshold < 0
+        or threshold > 10 then
+        return 0
+    end
+
+    return threshold
+end
+
 -- The sound registry takes one spell id per registration, so it needs the
 -- allowlist as an ordered array rather than the set the container filter
 -- wants. Sorted because the array also serves as the registry's change
