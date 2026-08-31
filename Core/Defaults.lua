@@ -1279,6 +1279,8 @@ local Defaults = {
             FontSize          = 14,
             FontOutline       = "OUTLINE",
             TimerFontSize     = 18,
+            ShowDecimalSeconds = false,
+            DecimalThreshold  = 3,
             TimerPosition     = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
             StackPosition     = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = -1, YOffset = 2 },
         },
@@ -1400,6 +1402,8 @@ local Defaults = {
             FontSize = 14,
             FontOutline = "OUTLINE",
             TimerFontSize = 18,
+            ShowDecimalSeconds = false,
+            DecimalThreshold = 3,
             TimerPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
             StackPosition = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = -1, YOffset = 2 },
         },
@@ -1452,6 +1456,8 @@ local Defaults = {
             FontSize      = 14,
             FontOutline   = "OUTLINE",
             TimerFontSize = 16,
+            ShowDecimalSeconds = false,
+            DecimalThreshold = 3,
             TimerPosition  = { AnchorFrom = "CENTER",      AnchorTo = "CENTER",      XOffset = 0, YOffset = 0 },
             StackPosition  = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = 0, YOffset = 2 },
             DispelPosition = { AnchorFrom = "TOPRIGHT",    AnchorTo = "TOPRIGHT",    XOffset = 0, YOffset = 0 },
@@ -1484,6 +1490,8 @@ local Defaults = {
 
             FontOutline = "OUTLINE",
             TimerFontSize = 12,
+            ShowDecimalSeconds = false,
+            DecimalThreshold = 3,
             FontSize = 12,
 
             Strata = "MEDIUM",
@@ -1523,6 +1531,8 @@ local Defaults = {
 
             FontOutline = "OUTLINE",
             TimerFontSize = 12,
+            ShowDecimalSeconds = false,
+            DecimalThreshold = 3,
             FontSize = 12,
 
             Strata = "MEDIUM",
