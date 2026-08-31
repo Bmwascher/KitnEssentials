@@ -1,5 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.23
+
+### See what KitnEssentials costs you
+- The settings window now shows a live CPU readout at the bottom of the sidebar.
+  It updates every few seconds and tells you what share of your current frame
+  KitnEssentials is using
+- Hover it for an explanation of where the number comes from
+
+### A reminder when CPU profiling is left on
+- Detailed CPU profiling makes the game slower, and it is easy to switch on for
+  a test and forget about it. If it is still on after a reload, you now get a
+  chat warning and a popup offering to switch it off and reload for you
+- The popup waits until you are out of combat
+- The sidebar also shows a Detailed profiler: ON line while it is active
+
+### Smaller things
+- The version number in the settings window no longer repeats the addon name
+
+---
+
 ## v4.4.22
 
 ### Anchoring to your player frame
