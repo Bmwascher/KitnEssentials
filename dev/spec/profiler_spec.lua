@@ -953,7 +953,7 @@ describe("Profiler footer display", function()
         local enabledText, enabledDetailed = enabled.profiler.GetFooterDisplay()
         local disabledText, disabledDetailed = disabled.profiler.GetFooterDisplay()
 
-        assert.are.equal("CPU: 0.0011 ms (~0.01%)", enabledText)
+        assert.are.equal("CPU: 0.0011 MS (~0.01%)", enabledText)
         assert.are.equal(enabledText, disabledText)
         assert.is_true(enabledDetailed)
         assert.is_false(disabledDetailed)
@@ -981,9 +981,9 @@ describe("Profiler footer display", function()
 
     it("formats four decimals and every adaptive percentage branch", function()
         local cases = {
-            { recentMs = 0.0001, fps = 60, expected = "CPU: 0.0001 ms (<0.01%)" },
-            { recentMs = 0.0011, fps = 120, expected = "CPU: 0.0011 ms (~0.01%)" },
-            { recentMs = 0.0110, fps = 120, expected = "CPU: 0.0110 ms (~0.1%)" },
+            { recentMs = 0.0001, fps = 60, expected = "CPU: 0.0001 MS (<0.01%)" },
+            { recentMs = 0.0011, fps = 120, expected = "CPU: 0.0011 MS (~0.01%)" },
+            { recentMs = 0.0110, fps = 120, expected = "CPU: 0.0110 MS (~0.1%)" },
         }
 
         for _, case in ipairs(cases) do
@@ -1010,9 +1010,9 @@ describe("Profiler footer display", function()
         local zero = loadProfiler({ recentMs = 0.0011, fps = 0 })
         local negative = loadProfiler({ recentMs = 0.0011, fps = -1 })
 
-        assert.are.equal("CPU: 0.0011 ms", missing.profiler.GetFooterDisplay())
-        assert.are.equal("CPU: 0.0011 ms", zero.profiler.GetFooterDisplay())
-        assert.are.equal("CPU: 0.0011 ms", negative.profiler.GetFooterDisplay())
+        assert.are.equal("CPU: 0.0011 MS", missing.profiler.GetFooterDisplay())
+        assert.are.equal("CPU: 0.0011 MS", zero.profiler.GetFooterDisplay())
+        assert.are.equal("CPU: 0.0011 MS", negative.profiler.GetFooterDisplay())
     end)
 end)
 

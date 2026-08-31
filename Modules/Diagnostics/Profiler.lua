@@ -138,7 +138,7 @@ local function GetFooterDisplay()
         return "CPU: unavailable", detailedProfilingActive
     end
 
-    local cpuText = format("CPU: %.4f ms", recentMs)
+    local cpuText = format("CPU: %.4f MS", recentMs)
     local fps = GetFramerate and GetFramerate()
     if type(fps) == "number" and fps > 0 then
         local framePercent = recentMs / (1000 / fps) * 100
