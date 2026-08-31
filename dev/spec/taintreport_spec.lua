@@ -106,6 +106,7 @@ local function loadTaintReport(options)
         return true
     end
     local eventFrame
+    local editBox
 
     local function makeObject(kind, name)
         local object = {
@@ -213,6 +214,7 @@ local function loadTaintReport(options)
         if not eventFrame then
             eventFrame = object
         end
+        if kind == "EditBox" then editBox = object end
         if name == "KE_TaintReportFrame" then
             frameCreateCount = frameCreateCount + 1
         end
@@ -385,6 +387,12 @@ local function loadTaintReport(options)
     end
     function state.lastEditText()
         return lastEditText
+    end
+    function state.userEdit(text)
+        assert.is_table(editBox)
+        editBox._text = text
+        lastEditText = text
+        return editBox:GetScript("OnTextChanged")(editBox, true)
     end
     return state
 end
@@ -1857,6 +1865,60 @@ describe("TaintReport report and lazy dialog", function()
         assert.is_nil(state.run("wat"))
         assert.same({ "Usage: /kes taint [clear]" }, state.printed)
         assert.equals(0, state.frameCreateCount())
+    end)
+
+    it("restores the displayed snapshot after later protected-action activity", function()
+        local inaccessible = "INACCESSIBLE_AFTER_OPEN"
+        local cases = {
+            {
+                name = "accepted capture",
+                prepare = function(state) state.initialize() end,
+                fire = function(state)
+                    state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "accepted-after-open")
+                end,
+                replacement = "accepted-after-open",
+            },
+            {
+                name = "inaccessible attribution",
+                prepare = function(state)
+                    state.initialize()
+                    state.setValueAccess(function(value) return value ~= inaccessible end)
+                end,
+                fire = function(state)
+                    state.fire("ADDON_ACTION_FORBIDDEN", inaccessible, "ignored")
+                end,
+                replacement = "Inaccessible attribution events: 1",
+            },
+            {
+                name = "refused new group",
+                prepare = function(state)
+                    state.initialize()
+                    for index = 1, 25 do
+                        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials",
+                            "before-open-" .. index)
+                    end
+                end,
+                fire = function(state)
+                    state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "refused-after-open")
+                end,
+                replacement = "Refused action groups: 1",
+            },
+        }
+
+        for _, case in ipairs(cases) do
+            local state = loadTaintReport()
+            case.prepare(state)
+            local snapshot = assert(state.run(""), case.name)
+            assert.is_true(#snapshot > 0, case.name)
+
+            case.fire(state)
+            state.userEdit("USER_MUTATION")
+            assert.equals(snapshot, state.lastEditText(), case.name)
+
+            local replacement = assert(state.run(""), case.name)
+            assert.not_equals(snapshot, replacement, case.name)
+            assert.is_truthy(replacement:find(case.replacement, 1, true), case.name)
+        end
     end)
 
     it("creates the singleton dialog lazily, reuses it, and clears its text", function()

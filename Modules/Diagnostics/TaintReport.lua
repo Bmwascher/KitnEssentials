@@ -464,7 +464,6 @@ local function AdvanceGroup(group, sampled, sample)
     group.count = newCount
     group.lastSeen = time()
     dirty = true
-    canonicalText = nil
 
     if sampled then
         group.walks = group.walks + 1
@@ -477,7 +476,6 @@ end
 local function OnBlocked(event, attribution, actionValue)
     if not SafeCanAccess(attribution) then
         inaccessibleAttribution = AdvanceCounter(inaccessibleAttribution)
-        canonicalText = nil
         return
     end
     if type(attribution) ~= "string" or string_len(attribution) ~= string_len(ADDON_LABEL) then
@@ -508,7 +506,6 @@ local function OnBlocked(event, attribution, actionValue)
             dirty = true
         else
             RecordRefusal(event, action)
-            canonicalText = nil
             return
         end
     end
