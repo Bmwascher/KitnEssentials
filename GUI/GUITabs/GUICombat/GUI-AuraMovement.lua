@@ -48,6 +48,9 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     -- greyed out when Swipe is unchecked.
     manager:SetCondition("swipeOn", function() return db.Swipe ~= false end)
 
+    -- The threshold only matters when the decimal timer is on.
+    manager:SetCondition("decimalOn", function() return db.ShowDecimalSeconds == true end)
+
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
@@ -288,7 +291,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 7: Font Settings
     ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+    local fontCard, _, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
         title = "Font Settings",
         db = db,
         dbKeys = {
@@ -305,7 +308,29 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     if fontWidgets then
         manager:RegisterGroup(fontWidgets, "all")
     end
-    yOffset = fontOffset
+
+    local decimalRow = GUIFrame:CreateRow(fontCard.content, Theme.rowHeightLast)
+    local decimalCheck = GUIFrame:CreateCheckbox(decimalRow, "Decimal Timer", {
+        value = db.ShowDecimalSeconds == true,
+        callback = function(checked)
+            db.ShowDecimalSeconds = checked
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    decimalRow:AddWidget(decimalCheck, 0.5)
+    manager:Register(decimalCheck, "all")
+
+    local decimalBelow = GUIFrame:CreateSlider(decimalRow, "Decimal Below", {
+        min = 1, max = 10, step = 1,
+        value = db.DecimalThreshold or 3,
+        callback = function(val) db.DecimalThreshold = val; ApplySettings() end,
+    })
+    decimalRow:AddWidget(decimalBelow, 0.5)
+    manager:Register(decimalBelow, "decimalOn")
+    fontCard:AddRow(decimalRow, Theme.rowHeightLast, 0)
+
+    yOffset = fontCard:GetNextOffset()
 
     RefreshStates()
     return yOffset
