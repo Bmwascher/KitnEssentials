@@ -193,8 +193,8 @@ describe("AuraEngine duration formatting", function()
         assert.equals("23h", formatRemaining(84360))
     end)
 
-    -- Floors, like the live formatter. The preview rounded UP before decimals
-    -- existed, so it read a second ahead of the same buff on a live icon.
+    -- Floors, like the live formatter: rounding up reads a second ahead of the
+    -- same buff on a live icon.
     it("floors the preview seconds when decimals are off", function()
         local formatRemaining = loadPreviewLocal("FormatRemaining")
 

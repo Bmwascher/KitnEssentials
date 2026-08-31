@@ -28,11 +28,10 @@ Style.DISPEL_ICON_FRACTION = 0.40
 
 local DurationFormatterCache = setmetatable({}, { __mode = "k" })
 
--- Whole seconds only, 1 to 10. Anything else -- nil, unconvertible, out of
--- range, fractional, NaN, infinite -- is the default, because a fractional
--- threshold on a one-decimal display has no meaning. Resolves to 0 when the
--- feature is off, so a threshold edit made while it is off cannot invalidate
--- the cached formatter.
+-- Whole seconds only, 1 to 10; a fractional threshold on a one-decimal display
+-- has no meaning, so anything else takes the default rather than a clamp.
+-- Resolves to 0 when the feature is off, so a threshold edit made while it is
+-- off cannot invalidate the cached formatter.
 local function ResolveDecimalSettings(settings)
     local enabled = settings.ShowDecimalSeconds == true
     if not enabled then return false, 0 end
