@@ -1598,7 +1598,10 @@ describe("TaintReport report and lazy dialog", function()
     it("keeps the copied report color-free and sectioned for issue sharing", function()
         local state = loadTaintReport({
             addons = {{
-                name = "TaintReport", title = "Taint Report", version = "1.0.0", loaded = true,
+                name = "|cffa1b2c3Taint Report|r",
+                title = "|CFFEEDDCCTaint | Title|R",
+                version = "|cFF1122331.0.0|r",
+                loaded = true,
             }},
         })
         state.initialize()
@@ -1618,9 +1621,10 @@ describe("TaintReport report and lazy dialog", function()
             previous = position
         end
         assert.is_truthy(report:find("No KE-attributed protected actions were captured.", 1, true))
-        assert.is_truthy(report:find("TaintReport | Taint Report | 1.0.0", 1, true))
-        assert.is_nil(report:find("|c", 1, true))
-        assert.is_nil(report:find("|r", 1, true))
+        assert.is_truthy(report:find("Taint Report | Taint | Title | 1.0.0", 1, true))
+        for _, token in ipairs({ "|c", "|C", "|r", "|R" }) do
+            assert.is_nil(report:find(token, 1, true), token)
+        end
     end)
 
     it("renders current groups before restored groups with explicit scopes", function()

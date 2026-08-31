@@ -793,6 +793,9 @@ end
 local function SafeEnvironmentString(value)
     local result = BoundedString(value, MAX_RAW_ENV_STRING_LENGTH, MAX_ENV_STRING_LENGTH)
     if not result or result == "" then return "unavailable" end
+    result = string_gsub(result, "|[cC]%x%x%x%x%x%x%x%x", "")
+    result = string_gsub(result, "|[rR]", "")
+    if not SafeCanAccess(result) or result == "" then return "unavailable" end
     return result
 end
 
