@@ -99,6 +99,9 @@ function KitnEssentials:OnInitialize()
     -- font validator can see all expected keys.
     KE:FillProfileDefaults()
     KE:ValidateProfileFonts()
+    if KE.TaintReport then
+        KE.TaintReport.Initialize(KE.db)
+    end
 
     -- Profile change callbacks
     KE.db.RegisterCallback(KE, "OnProfileChanged", function()

@@ -133,10 +133,15 @@ Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast du
 | `/kes` or `/kes gui` | Toggle settings GUI. In combat it queues, and the panel opens when combat ends |
 | `/kes edit` or `/kes unlock` | Toggle edit mode |
 | `/kes profiler` or `/kes prof` | Performance profiler (`/kes profiler help` lists its subcommands) |
+| `/kes taint` | Open a copyable protected-action diagnostic report (`/kes taint clear` clears it) |
 | `/kes mt` | Open the Mythic+ Timer settings page (`/kes mt clearsplits` clears stored personal bests with confirmation) |
 | `/kes dm` | Toggle the Damage Meter dock (`/kes dm reset` clears segment history, `/kes dm report [count] [channel]` posts the view to chat) |
 | `/kes resetgui` | Reset GUI position and size |
 | `/kes help` or any unrecognized command | List all commands in chat |
+
+## Troubleshooting
+
+If WoW reports that KitnEssentials tried to use a protected function, run `/kes taint` before or after `/reload` and paste the complete report with the steps that triggered it. The addon name in the report is Blizzard attribution, not proof of which addon originally caused the taint.
 
 ## Credits
 

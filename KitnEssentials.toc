@@ -13,6 +13,7 @@
 
 Libs\Init.xml
 
+Modules\Diagnostics\TaintReport.lua
 Core\Core.xml
 Modules\Utilities\Utilities.xml
 Modules\Diagnostics\Diagnostics.xml

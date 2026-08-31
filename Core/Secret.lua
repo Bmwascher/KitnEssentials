@@ -396,17 +396,3 @@ restrictionFrame:SetScript("OnEvent", function(_, event, ...)
         UpdateRestrictionType(COMBAT_KEY, false)
     end
 end)
-
----------------------------------------------------------------------------------
--- Protected Error Listener
----------------------------------------------------------------------------------
-
-local protectedErrorFrame = CreateFrame("Frame")
-protectedErrorFrame:RegisterEvent("ADDON_ACTION_BLOCKED")
-protectedErrorFrame:RegisterEvent("ADDON_ACTION_FORBIDDEN")
-
-protectedErrorFrame:SetScript("OnEvent", function(_, event, addonName, funcName)
-    if addonName == "KitnEssentials" then
-        KE:Print(("Protected function violation: %s (%s)"):format(funcName or "unknown", event))
-    end
-end)

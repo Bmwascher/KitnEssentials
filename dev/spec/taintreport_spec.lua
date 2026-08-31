@@ -1,6 +1,7 @@
 -- luacheck: std lua51+busted
 -- Mocks prove bounded branches, not live secret/taint semantics, event timing, or layout.
 local helpers = require("dev.spec._helpers")
+local loader = require("dev.spec._ke_loader")
 
 local originalGlobals = {}
 local globalsToRestore = {
@@ -494,6 +495,82 @@ describe("TaintReport capture and access guards", function()
         assert.is_truthy(source:find("local function DirectCanAccessTable(value)", 1, true))
         assert.is_nil(source:find("pcall(canaccessvalue", 1, true))
         assert.is_nil(source:find("pcall(canaccesstable", 1, true))
+    end)
+end)
+
+describe("TaintReport real slash router", function()
+    local originalSlashCmdList
+    local originalKitnEssentials
+
+    before_each(function()
+        originalSlashCmdList = _G.SlashCmdList
+        originalKitnEssentials = _G.KitnEssentials
+    end)
+
+    after_each(function()
+        _G.SlashCmdList = originalSlashCmdList
+        _G.KitnEssentials = originalKitnEssentials
+    end)
+
+    local function loadRouter()
+        local KE = loader.loadGlobals()
+        local commands = {}
+        local printed = {}
+        KE.TaintReport = {
+            RunCommand = function(rest)
+                commands[#commands + 1] = rest
+            end,
+        }
+        KE.Print = function(_, message)
+            printed[#printed + 1] = message
+        end
+        return KE, commands, printed
+    end
+
+    it("routes taint with empty remainders after trimming and normalization", function()
+        local _, commands = loadRouter()
+        local handler = SlashCmdList["KITNESSENTIALS"]
+
+        for _, input in ipairs({ "taint", "  TaInT  ", "\tTAINT\t" }) do
+            handler(input)
+        end
+
+        assert.same({ "", "", "" }, commands)
+    end)
+
+    it("routes clear and unknown taint remainders after lowercase normalization", function()
+        local _, commands = loadRouter()
+        local handler = SlashCmdList["KITNESSENTIALS"]
+
+        handler("taint clear")
+        handler("TAINT Not A Command")
+
+        assert.same({ "clear", "not a command" }, commands)
+    end)
+
+    it("does not route a tainted prefix collision", function()
+        local _, commands = loadRouter()
+
+        SlashCmdList["KITNESSENTIALS"]("tainted")
+
+        assert.same({}, commands)
+    end)
+
+    it("prints the exact unavailable message when the report is absent", function()
+        local KE, _, printed = loadRouter()
+        KE.TaintReport = nil
+
+        SlashCmdList["KITNESSENTIALS"]("taint")
+
+        assert.same({ "taint report is unavailable." }, printed)
+    end)
+
+    it("lists the taint command in real-router help", function()
+        local _, _, printed = loadRouter()
+
+        SlashCmdList["KITNESSENTIALS"]("help")
+
+        assert.is_truthy(printed[1]:find("taint [clear]", 1, true))
     end)
 end)
 

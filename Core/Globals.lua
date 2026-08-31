@@ -356,6 +356,21 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
     end
 
     msg = msg:lower()
+    local taintRest
+    if msg == "taint" then
+        taintRest = ""
+    else
+        taintRest = msg:match("^taint%s+(.+)$")
+    end
+    if taintRest ~= nil then
+        if KE.TaintReport then
+            KE.TaintReport.RunCommand(taintRest)
+        else
+            KE:Print("taint report is unavailable.")
+        end
+        return
+    end
+
     if msg == "" or msg == "gui" then
         if KE.GUIFrame then
             KE.GUIFrame:Toggle()
@@ -395,7 +410,7 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         end
     else
         -- "help" and anything unrecognized: list every subcommand.
-        KE:Print("Commands: /kes or gui (settings) | edit or unlock | wa [on|off] | profiler or prof | dm [reset | report [count] [channel]] | mt [clearsplits] | skins [verify | rerun <key>] | trash | conflicts | resetgui")
+        KE:Print("Commands: /kes or gui (settings) | edit or unlock | wa [on|off] | profiler or prof | taint [clear] | dm [reset | report [count] [channel]] | mt [clearsplits] | skins [verify | rerun <key>] | trash | conflicts | resetgui")
     end
 end
 
