@@ -443,11 +443,19 @@ function GUIFrame:RefreshProfilerFooter()
 
     if self.profilerFooterDetailedEnabled ~= detailedEnabled then
         self.profilerFooterDetailedEnabled = detailedEnabled
+        -- The CPU line normally stacks on the mode line, so shrinking the block
+        -- alone would drag it up into the header. Re-anchor it to the bottom
+        -- edge whenever the mode line is not there to sit on.
+        self.profilerFooterText:ClearAllPoints()
         if detailedEnabled then
             self.profilerFooterModeText:Show()
+            self.profilerFooterText:SetPoint("BOTTOMLEFT", self.profilerFooterModeText, "TOPLEFT", 0, 1)
+            self.profilerFooterText:SetPoint("BOTTOMRIGHT", self.profilerFooterModeText, "TOPRIGHT", 0, 1)
             self.profilerFooter:SetHeight(PROFILER_FOOTER_HEIGHT)
         else
             self.profilerFooterModeText:Hide()
+            self.profilerFooterText:SetPoint("BOTTOMLEFT", self.profilerFooter, "BOTTOMLEFT", T.paddingSmall, T.paddingSmall)
+            self.profilerFooterText:SetPoint("BOTTOMRIGHT", self.profilerFooter, "BOTTOMRIGHT", -T.paddingSmall, T.paddingSmall)
             self.profilerFooter:SetHeight(PROFILER_FOOTER_HEIGHT_COMPACT)
         end
     end
