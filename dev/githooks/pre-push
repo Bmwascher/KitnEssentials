@@ -60,20 +60,24 @@ fi
 . "$ng_lib"
 ng_load pre-push stems shorts compat provenance namesCI namesCS || exit 1
 
+# git names the push destination in $1. Exclusions must come from THAT
+# remote's tracking refs: a bare --remotes would also subtract commits that
+# only some other remote has, and skip them on the way to this one.
+_dest="${1:-}"
 for _line in "${pushed_refs[@]}"; do
     read -r _lref _lsha _rref _rsha <<< "$_line"
     # skip deletions (local sha is all zeros)
     case "$_lsha" in *[!0]*) ;; *) continue ;; esac
     # The advertised remote sha bounds the scan only when this clone holds
     # that object: force-pushing over an unfetched tip would otherwise make
-    # every git call fail and read as a clean scan. The fallback asks what no
-    # remote-tracking ref carries yet, which over-scans rather than
-    # under-scans when those refs are stale, and needs no named branch.
-    _excl="--remotes"
+    # every git call fail and read as a clean scan. Both fallbacks over-scan
+    # rather than under-scan — an unmatched remote pattern excludes nothing,
+    # so a push to a bare URL reads the whole history.
+    _excl=(--remotes="$_dest")
     case "$_rsha" in
-        *[!0]*) git cat-file -e "$_rsha^{commit}" 2>/dev/null && _excl="$_rsha" ;;
+        *[!0]*) git cat-file -e "$_rsha^{commit}" 2>/dev/null && _excl=("$_rsha") ;;
     esac
-    if ! _new="$(git rev-list "$_lsha" --not $_excl)"; then
+    if ! _new="$(git rev-list "$_lsha" --not "${_excl[@]}")"; then
         echo "[pre-push] BLOCKED: could not list the commits $_lref would publish." >&2
         exit 1
     fi
@@ -83,16 +87,17 @@ for _line in "${pushed_refs[@]}"; do
         echo "[pre-push] scanning $_count commits for $_lref — this takes a moment." >&2
     fi
     for _c in $_new; do
-        _short="$(git rev-parse --short "$_c")"
-        if ! _comments="$(ng_commit_comments "$_c")"; then
-            echo "[pre-push] BLOCKED: could not read commit $_short." >&2
+        if ! _short="$(git rev-parse --short "$_c")" \
+            || ! _comments="$(ng_commit_comments "$_c")" \
+            || ! _msg="$(git log -1 --format='%s%n%b' "$_c")"; then
+            echo "[pre-push] BLOCKED: could not read commit $_c." >&2
             exit 1
         fi
         if ! ng_scan_comments pre-push "comments added in commit $_short" "$_comments"; then
             echo "[pre-push] Fix the comments and amend or rebase, or override a deliberate exception with: git push --no-verify" >&2
             exit 1
         fi
-        if ! ng_scan_text pre-push "commit $_short" "$(git log -1 --format='%s%n%b' "$_c")"; then
+        if ! ng_scan_text pre-push "commit $_short" "$_msg"; then
             echo "[pre-push] Reword it with an interactive rebase, or override a deliberate exception with: git push --no-verify" >&2
             exit 1
         fi

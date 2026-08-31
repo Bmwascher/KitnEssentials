@@ -9,8 +9,9 @@
 # definition.
 
 ng_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Libs/ is embedded third-party code, not ours to write comments in, and its
-# upstream headers carry dates and version stamps that the rules ban here.
+# Libs/ is vendored third-party code. Its upstream headers carry dates and
+# version stamps by right, and the comment rules govern what this project
+# writes, not what it embeds.
 ng_paths=('*.lua' '*.xml' ':(exclude)dev/*' ':(exclude).claude/*' ':(exclude)Libs/*')
 
 # Plan-step references, review/session history, file:line citations.
@@ -20,10 +21,24 @@ ng_history='[Ss]tep [A-Z][0-9]+|[Tt]ask [0-9]+|round of review|review round|per 
 # month so spell range and rank lists do not read as dates: 30/33/36 and
 # 24/30/24 have no component that can be a month, and no four-digit year.
 ng_dates='20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
-ng_dates="$ng_dates|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*,? +(19|20)[0-9][0-9]"
+ng_dates="$ng_dates|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[,[:space:]]+(19|20)[0-9][0-9]"
 ng_dates="$ng_dates|\b[0-9]{1,2}/[0-9]{1,2}/(19|20)[0-9][0-9]\b"
 ng_dates="$ng_dates|\b(0?[1-9]|1[0-2])/(0?[1-9]|[12][0-9]|3[01])/[0-9]{2}\b"
 ng_dates="$ng_dates|\b(0?[1-9]|[12][0-9]|3[01])/(0?[1-9]|1[0-2])/[0-9]{2}\b"
+
+# ng_valid_pattern <tag> <name> <pattern> — grep exits 1 for no match and 2
+# for a bad pattern. Unchecked, an unparsable set errors into the scanners'
+# fallbacks and reads as a clean scan.
+ng_valid_pattern() {
+    local st
+    printf '' | grep -qE "$3" 2>/dev/null
+    st=$?
+    if [ "$st" -gt 1 ]; then
+        echo "[$1] BLOCKED: $2 is not a valid pattern." >&2
+        return 1
+    fi
+    return 0
+}
 
 # ng_load <tag> <required set>...
 # Clears the sets before sourcing: an exported variable of the same name in
@@ -41,37 +56,49 @@ ng_load() {
         echo "[$tag] BLOCKED: $ng_names_file failed to load." >&2
         return 1
     fi
-    local set val st
+    ng_valid_pattern "$tag" "ng_history" "$ng_history" || return 1
+    ng_valid_pattern "$tag" "ng_dates" "$ng_dates" || return 1
+    local set val
     for set in "$@"; do
         eval "val=\${$set:-}"
         if [ -z "$val" ]; then
             echo "[$tag] BLOCKED: $ng_names_file defines no $set patterns." >&2
             return 1
         fi
-        # grep exits 1 for no match and 2 for a bad pattern. Unchecked, an
-        # unparsable set errors into the scanners' fallbacks and reads as a
-        # clean scan.
-        printf '' | grep -qE "$val" 2>/dev/null
-        st=$?
-        if [ "$st" -gt 1 ]; then
-            echo "[$tag] BLOCKED: $ng_names_file defines $set as an invalid pattern." >&2
-            return 1
-        fi
+        ng_valid_pattern "$tag" "$ng_names_file's $set" "$val" || return 1
     done
     return 0
 }
 
-# The comment tail of every added line in a diff. Code may legitimately carry
+# The comment text of every added line in a diff. Code may legitimately carry
 # addon names (conflict registry detection strings) and step-like UI text;
-# comments may not.
-# Known limit: body lines of block comments carry no leading dashes and are
-# not scanned - diff hunks are partial, so block-comment state cannot be
-# tracked.
+# comments may not. Block comments are followed through their added body
+# lines, which carry no leading dashes of their own; the state resets at each
+# hunk header, since a block opened outside the hunk is not visible here.
 ng_comment_tails() {
-    printf '%s\n' "$1" | grep -E '^\+[^+]' | grep -oE -- '--.*' || true
+    printf '%s\n' "$1" | awk '
+        /^@@/ { inblk = 0; next }
+        /^\+[^+]/ {
+            line = substr($0, 2)
+            if (inblk) {
+                print line
+                if (line ~ /\]\]/) inblk = 0
+                next
+            }
+            if (line ~ /--\[\[/) {
+                inblk = 1
+                sub(/.*--\[\[/, "", line)
+                print line
+                if (line ~ /\]\]/) inblk = 0
+                next
+            }
+            i = index(line, "--")
+            if (i > 0) print substr(line, i)
+        }
+    '
 }
 
-# ng_staged_comments - added comment lines in the index. Returns 1 when git
+# ng_staged_comments — added comment lines in the index. Returns 1 when git
 # itself failed, so a broken call can never read as a clean scan.
 ng_staged_comments() {
     local out
@@ -79,18 +106,22 @@ ng_staged_comments() {
     ng_comment_tails "$out"
 }
 
-# ng_commit_comments <sha> - added comment lines in ONE commit. Per-commit,
+# ng_commit_comments <sha> — added comment lines in ONE commit. Per-commit,
 # not endpoint to endpoint: a comment added in one commit and removed in a
-# later one is invisible to a range diff yet still published.
-# Known limit: a merge commit shows no diff here, so text invented while
-# resolving a conflict is not scanned; the merged commits themselves are.
+# later one is invisible to a range diff yet still published. A merge is
+# diffed against its first parent, so text invented while resolving a
+# conflict is caught too.
 ng_commit_comments() {
     local out
-    out="$(git show --format= -U0 --no-color "$1" -- "${ng_paths[@]}")" || return 1
+    if git rev-parse -q --verify "$1^" >/dev/null 2>&1; then
+        out="$(git diff -U0 --no-color "$1^" "$1" -- "${ng_paths[@]}")" || return 1
+    else
+        out="$(git show --format= -U0 --no-color "$1" -- "${ng_paths[@]}")" || return 1
+    fi
     ng_comment_tails "$out"
 }
 
-# ng_scan_text <tag> <noun> <text> - names anywhere in a message.
+# ng_scan_text <tag> <noun> <text> — names anywhere in a message.
 # No head inside the pipelines: under pipefail, grep dying on SIGPIPE reads
 # as "no match" and waves the push through.
 ng_scan_text() {
@@ -102,13 +133,13 @@ ng_scan_text() {
         echo "[$tag] Reference provenance belongs in local docs, never in published history." >&2
         return 1
     fi
-    # Compat names are addons the project legitimately talks about - it
-    # detects them, skins them, or stands modules down under them - so naming
+    # Compat names are addons the project legitimately talks about — it
+    # detects them, skins them, or stands modules down under them — so naming
     # one is a leak only next to provenance vocabulary or a date.
     if printf '%s\n' "$text" | grep -qiE "$provenance|$ng_dates"; then
         chit="$(printf '%s\n' "$text" | grep -ioE "$compat" | sort -u | tr '\n' ' ' || true)"
         if [ -n "$chit" ]; then
-            echo "[$tag] BLOCKED: $noun - addon(s) named next to provenance vocabulary: $chit" >&2
+            echo "[$tag] BLOCKED: $noun — addon(s) named next to provenance vocabulary: $chit" >&2
             echo "[$tag] Say what the change does, not where it came from." >&2
             return 1
         fi
@@ -116,7 +147,7 @@ ng_scan_text() {
     return 0
 }
 
-# ng_scan_comments <tag> <noun> <comment lines> - the full comment rule set.
+# ng_scan_comments <tag> <noun> <comment lines> — the full comment rule set.
 ng_scan_comments() {
     local tag="$1" noun="$2" comments="$3" fail=0 hits chits hhits provlines
     [ -n "$comments" ] || return 0
@@ -125,23 +156,23 @@ ng_scan_comments() {
     # words and only match capitalised.
     hits="$( { printf '%s\n' "$comments" | grep -ioE "$stems"; printf '%s\n' "$comments" | grep -iwoE "$namesCI"; printf '%s\n' "$comments" | grep -woE "$namesCS"; } | sort -u | tr '\n' ' ' || true)"
     if [ -n "$hits" ]; then
-        echo "[$tag] BLOCKED: $noun - personal/agent/upstream names: $hits" >&2
+        echo "[$tag] BLOCKED: $noun — personal/agent/upstream names: $hits" >&2
         fail=1
     fi
     provlines="$(printf '%s\n' "$comments" | grep -iE "$provenance|$ng_dates" || true)"
     chits="$(printf '%s\n' "$provlines" | grep -ioE "$compat" | sort -u | tr '\n' ' ' || true)"
     if [ -n "$chits" ]; then
-        echo "[$tag] BLOCKED: $noun - addon(s) named next to provenance vocabulary: $chits" >&2
+        echo "[$tag] BLOCKED: $noun — addon(s) named next to provenance vocabulary: $chits" >&2
         fail=1
     fi
     hhits="$( { printf '%s\n' "$comments" | grep -nE "$ng_history"; printf '%s\n' "$comments" | grep -niE "$ng_dates"; } | sort -u || true)"
     if [ -n "$hhits" ]; then
-        echo "[$tag] BLOCKED: $noun - plan-step/date/history references:" >&2
+        echo "[$tag] BLOCKED: $noun — plan-step/date/history references:" >&2
         printf '%s\n' "$hhits" | sed -n '1,5p' >&2
         fail=1
     fi
     if [ "$fail" -eq 1 ]; then
-        echo "[$tag] Comment rules: decisions stand on their own - no names, no plan steps, no dates, no session history in shipped comments." >&2
+        echo "[$tag] Comment rules: decisions stand on their own — no names, no plan steps, no dates, no session history in shipped comments." >&2
         return 1
     fi
     return 0

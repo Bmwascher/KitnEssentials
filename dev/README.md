@@ -136,19 +136,26 @@ added in one commit and removed in a later one never shows up in a range diff
 yet still publishes. Tag pushes are scanned too, since a tag carries commits
 of its own.
 
-The commit set is whatever the remote does not have: bounded by the sha git
-advertises when this clone holds that object, and otherwise by every
-remote-tracking ref, which over-scans rather than under-scans. Any git
-failure blocks the push instead of reading as a clean scan. All three hooks
-share one matcher, `dev/githooks/lib/name-guards.sh`, and refuse to run
-without it or without a valid word list. `Libs/` is exempt: it is embedded
-third-party code whose upstream headers carry the dates and version stamps
-these rules ban.
+The commit set is whatever the destination remote does not have: bounded by
+the sha git advertises when this clone holds that object, and otherwise by
+that remote's own tracking refs. Both fallbacks over-scan rather than
+under-scan, and a push straight to a URL matches no tracking refs at all, so
+it reads the whole history. Any git failure blocks the push instead of
+reading as a clean scan. Merges are diffed against their first parent, so a
+comment invented while resolving a conflict is caught. Block comments are
+followed through their body lines, which carry no dashes of their own. All
+three hooks share one matcher, `dev/githooks/lib/name-guards.sh`, and refuse
+to run without it or without a valid word list.
 
-Date forms the comment ban catches: `2026-08-04`, `August 2026` in any case
-and with or without a comma, `08/31/26` and `31/08/26`, and the four-digit
-year forms. Slash dates require a component that can be a month, so spell
-range and rank lists such as `30/33/36` stay clean.
+`Libs/` is out of scope: the comment rules govern what this project writes,
+not the third-party code it embeds, and upstream library headers carry dates
+and version stamps by right.
+
+Date forms the comment ban catches: `2026-08-04`; a month name in any case,
+separated from its year by any run of spaces, tabs or a comma; and `08/31/26`
+or `31/08/26` along with their four-digit year forms. Slash dates need one
+component that can be a month and another that can be a day, so spell range
+and rank lists such as `30/33/36` stay clean.
 
 ## Updating the API reference
 
