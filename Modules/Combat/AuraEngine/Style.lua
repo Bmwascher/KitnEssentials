@@ -18,22 +18,48 @@ KE.AuraStyle = Style
 Style.DISPEL_ICON_FRACTION = 0.40
 
 ---------------------------------------------------------------------------------
--- Duration formatter -- declarative data, not a callback. Neither display
--- supports a ShowDecimalSeconds or a ColorDurationUnderThreshold setting,
--- so only the non-decimal breakpoint set is built and textColor is
--- never populated. Weak-keyed on the settings table: the same settings table
+-- Duration formatter -- declarative data, not a callback. The breakpoint set is
+-- chosen from the display's decimal settings; no display supports a
+-- ColorDurationUnderThreshold setting, so textColor is never populated.
+-- Weak-keyed on the settings table: the same settings table
 -- is reused for every reconfiguration of a display, so this rebuilds a
 -- formatter once per settings table rather than once per button.
 ---------------------------------------------------------------------------------
 
 local DurationFormatterCache = setmetatable({}, { __mode = "k" })
 
-local function GetDurationFormatter(settings)
-    local cached = DurationFormatterCache[settings]
-    if cached then return cached end
+-- Whole seconds only, 1 to 10. Anything else -- nil, unconvertible, out of
+-- range, fractional, NaN, infinite -- is the default, because a fractional
+-- threshold on a one-decimal display has no meaning. Resolves to 0 when the
+-- feature is off, so a threshold edit made while it is off cannot invalidate
+-- the cached formatter.
+local function ResolveDecimalSettings(settings)
+    local enabled = settings.ShowDecimalSeconds == true
+    if not enabled then return false, 0 end
 
-    local formatter = C_StringUtil.CreateNumericRuleFormatter()
-    formatter:SetBreakpoints({
+    local threshold = tonumber(settings.DecimalThreshold)
+    if not threshold
+        or threshold ~= threshold
+        or threshold ~= math_floor(threshold)
+        or threshold < 1
+        or threshold > 10 then
+        threshold = 3
+    end
+
+    return true, threshold
+end
+
+local function GetDurationFormatter(settings)
+    local decimalEnabled, decimalThreshold = ResolveDecimalSettings(settings)
+
+    local cached = DurationFormatterCache[settings]
+    if cached
+        and cached.decimalEnabled == decimalEnabled
+        and cached.decimalThreshold == decimalThreshold then
+        return cached.formatter
+    end
+
+    local breakpoints = {
         {
             threshold = 3600,
             format    = "%dh",
@@ -48,19 +74,42 @@ local function GetDurationFormatter(settings)
                 { div = 60, step = 1, rounding = Enum.NumericRuleFormatRounding.Down },
             },
         },
-        {
-            threshold = 0,
+    }
+
+    -- Down, to agree with the Cooldown Manager. Its icons keep the game's own
+    -- countdown numbers while these displays draw their own text, and rounding
+    -- up read a second higher than the same buff shown there. The tenths rule
+    -- rounds the same way, for the same reason.
+    if decimalEnabled then
+        breakpoints[#breakpoints + 1] = {
+            threshold = decimalThreshold,
             step      = 1,
-            -- Down, to agree with the Cooldown Manager. Its icons keep the
-            -- game's own countdown numbers while these displays draw their
-            -- own text, and rounding up read a second higher than the same
-            -- buff shown there.
             rounding  = Enum.NumericRuleFormatRounding.Down,
             format    = "%d",
-        },
-    })
+        }
+        breakpoints[#breakpoints + 1] = {
+            threshold = 0,
+            step      = 0.1,
+            rounding  = Enum.NumericRuleFormatRounding.Down,
+            format    = "%.1f",
+        }
+    else
+        breakpoints[#breakpoints + 1] = {
+            threshold = 0,
+            step      = 1,
+            rounding  = Enum.NumericRuleFormatRounding.Down,
+            format    = "%d",
+        }
+    end
 
-    DurationFormatterCache[settings] = formatter
+    local formatter = C_StringUtil.CreateNumericRuleFormatter()
+    formatter:SetBreakpoints(breakpoints)
+
+    DurationFormatterCache[settings] = {
+        decimalEnabled   = decimalEnabled,
+        decimalThreshold = decimalThreshold,
+        formatter        = formatter,
+    }
     return formatter
 end
 
