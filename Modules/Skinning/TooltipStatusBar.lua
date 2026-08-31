@@ -32,11 +32,10 @@ local installed = false
 
 function S.InstallTooltipStatusBarHook()
     if installed then return end
-    -- ElvUI's approach restored -- they SecureHook
-    -- GameTooltip_ShowStatusBar to skin status bars. My v831 event
-    -- driver came from the "hooks in a flow taint it" theory, which
-    -- ElvUI disproves at scale. The real LootHistory seed was
-    -- KillTexture surgery (fixed v838).
+    -- SecureHook GameTooltip_ShowStatusBar to skin status bars. The old
+    -- event driver came from the "hooks in a flow taint it" theory, which
+    -- hooking at scale disproves. The real LootHistory seed was
+    -- KillTexture surgery, since fixed.
     if not _G.GameTooltip_ShowStatusBar then return end
     installed = true
     hooksecurefunc("GameTooltip_ShowStatusBar", function(tooltip)

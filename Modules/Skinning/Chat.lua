@@ -200,7 +200,7 @@ end
 
 local communityAbbrevCache = {}
 
--- BNet whisper class colors (ElvUI-exact resolution): BN whisper events
+-- BNet whisper class colors: BN whisper events
 -- carry no senderGUID, so Blizzard's secure class-color path never fires
 -- for them. Resolve via the C_BattleNet friend APIs instead and color the
 -- display text ourselves.
@@ -317,7 +317,7 @@ function CHAT:OnInitialize()
 end
 
 ------------------------------------------------------------------------
--- Whisper features (Task 4)
+-- Whisper features
 ------------------------------------------------------------------------
 
 function CHAT:PlayWhisperSound(soundName)
@@ -667,7 +667,7 @@ function CHAT:IsFloating(chat, docker)
 end
 
 ------------------------------------------------------------------------
--- Chat setup, tab styling and docking (Task 3)
+-- Chat setup, tab styling and docking
 ------------------------------------------------------------------------
 
 local ChatEditSetLastActiveWindow = (_G.ChatFrameUtil and _G.ChatFrameUtil.SetLastActiveWindow) or
@@ -2417,7 +2417,7 @@ function CHAT:ChatFrame_SetScript(frame, scriptType)
 end
 
 ------------------------------------------------------------------------
--- Teardown (Task 4)
+-- Teardown
 ------------------------------------------------------------------------
 
 function CHAT:RestoreAllChats()
@@ -2597,7 +2597,7 @@ function CHAT:UpdatePanel()
 end
 
 ------------------------------------------------------------------------
--- Social status and role icons (Task 4 Step 3b)
+-- Social status and role icons
 ------------------------------------------------------------------------
 -- Guild member login/logout messages -- rewrites the system lines with
 -- class-colored names, green (online) / red (offline), via the official
@@ -2820,7 +2820,7 @@ function CHAT:TeardownSocialEvents()
     self.socialEventsRegistered = false
 end
 
--- Task 5's GUI callbacks call this to push config changes onto live
+-- The GUI callbacks call this to push config changes onto live
 -- frames.
 function CHAT:ApplySettings()
     if KE:ShouldNotLoadModule() then return end
@@ -2849,7 +2849,7 @@ function CHAT:ApplySettings()
 end
 
 ------------------------------------------------------------------------
--- Blizzard Edit Mode lock (Task 4)
+-- Blizzard Edit Mode lock
 ------------------------------------------------------------------------
 -- Prevents dragging/resizing chat in Blizzard's own Edit Mode and shows
 -- helper text redirecting to KE's edit mode instead.

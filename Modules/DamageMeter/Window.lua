@@ -273,7 +273,7 @@ local function MakeBar(parent, db)
         end
     end)
 
-    -- Hover quick-peek (Phase 4b / Task 9). Forward-resolved like OnClick above
+    -- Hover quick-peek. Forward-resolved like OnClick above
     -- (Detail.lua defines ShowHoverTip / HideHoverTip and loads after Window.lua).
     -- bar.win is assigned where the pool is built in CreateWindow; the methods
     -- guard against a missing window themselves. The populate path is OOC-gated
@@ -412,9 +412,9 @@ function DM:CreateWindow(winIdx)
 
     -- Phase 4 header icons: settings / reset / segment / report, right-aligned,
     -- stepping left from the frame's TOPRIGHT (report furthest left). Built once here
-    -- (the pool-build below never re-runs); visibility is driven by db.ShowHeaderIcons
-    -- (Task 7). The frame level
-    -- is bumped above the bars so the icons stay clickable over the body rows. The
+    -- (the pool-build below never re-runs); visibility is driven by db.ShowHeaderIcons.
+    -- The frame level is bumped above the bars so the icons stay clickable over
+    -- the body rows. The
     -- callbacks resolve DM methods at click time (Core.lua defines them), matching
     -- the runtime-resolve pattern used by the OnClick -> DM:OpenDetail hook above.
     local function MakeHeaderBtn(tex, tooltip, onClick, xStep, size)
@@ -479,7 +479,7 @@ function DM:CreateWindow(winIdx)
     end
 
     -- Apply the initial header-icon visibility / mouseover state from the DB
-    -- (Task 7). ApplyHeaderIcons is idempotent and is also re-run from
+    -- ApplyHeaderIcons is idempotent and is also re-run from
     -- ReapplyBarVisuals so a live GUI toggle takes effect without a /reload.
     self:ApplyHeaderIcons(W)
 
@@ -898,7 +898,7 @@ function DM:ReapplyBarVisuals(W)
 end
 
 ---------------------------------------------------------------------------------
--- Header-icon visibility (Phase 4 / Task 7)
+-- Header-icon visibility
 --
 -- ShowHeaderIcons=false hides all three header buttons outright. When shown,
 -- HeaderIconsMouseover=true keeps them at alpha 0 until the window frame is

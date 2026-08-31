@@ -29,8 +29,8 @@ local function Skin()
         if emblem and model then
             emblem:SetParent(model)
             -- "emblem.Show = nil" removed -- it only existed
-            -- to undo KillTexture's old NOOP method surgery, gone as
-            -- of v828. The re-Show alone is enough.
+            -- to undo KillTexture's old NOOP method surgery, which is
+            -- gone. The re-Show alone is enough.
             emblem:Show()
         end
     end

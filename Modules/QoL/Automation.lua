@@ -1349,8 +1349,8 @@ end
 ---------------------------------------------------------------------------------
 -- Auto Accept Resurrection (out-of-combat only)
 --
--- Mirrors the ElvUI_WindTools/Misc/Automation.lua pattern: explicit
--- battle-res detection via boss1-in-combat + inviter-in-combat, rather than
+-- Explicit battle-res detection via boss1-in-combat + inviter-in-combat,
+-- rather than
 -- relying solely on IsEncounterInProgress (which has corner cases on
 -- multi-phase encounters). Auto-accept fires ONLY for peaceful, fully
 -- out-of-combat resurrections.

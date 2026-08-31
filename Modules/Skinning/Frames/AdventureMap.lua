@@ -15,12 +15,11 @@ local function DressAdventureRewards()
             -- tile. Default S.ItemButton fills the icon to the button rect
             -- -- stretched art, Name/plate pushed off-frame (the
             -- screenshot; Midnight reuses this dialog for world-map Prey
-            -- hunt offers). ElvUI's HandleItemButton never fills by
-            -- default (backdrop:SetOutside(icon)) so their skin doesn't
-            -- stretch -- our fill default is the parity gap, kept for the
-            -- square-button skins that rely on it; keepAnchors is the
-            -- row-shaped escape. Icon at the house 30px list-row size to
-            -- match the delve reward rows (v900).
+            -- hunt offers). An item button that never fills by default
+            -- (backdrop:SetOutside(icon)) does not stretch -- our fill
+            -- default is the gap, kept for the square-button skins that
+            -- rely on it; keepAnchors is the row-shaped escape. Icon at
+            -- the house 30px list-row size to match the delve reward rows.
             S.ItemButton(reward, "keepAnchors")
             if reward.Icon then
                 reward.Icon:ClearAllPoints()

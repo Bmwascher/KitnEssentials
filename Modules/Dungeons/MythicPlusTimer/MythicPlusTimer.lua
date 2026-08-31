@@ -344,7 +344,7 @@ local MPT_DEFAULTS = {
         Full = {0.804, 1, 0.655}, -- 100%
     },
     -- Hidden/disabled pull-preview overlay (dead on 12.0 — per-unit forces are
-    -- secret; see memory project_warpdeplete_forces_preview_blocked). No data
+    -- secret). No data
     -- feed; GUI exposes nothing.
     ShowPullOverlay = false,
 
@@ -434,7 +434,7 @@ local function DeepCopy(src)
 end
 
 -- Aggregate enemy forces from the weighted criterion. Plain math: GetCriteriaInfo
--- quantity/quantityString/totalQuantity are proven non-secret (Task 1.1 dry-run);
+-- quantity/quantityString/totalQuantity are proven non-secret (dry-run);
 -- per the contract's "DO NOT GUARD" set, no issecretvalue here.
 function MPT:UpdateForces()
     local run = self.run
@@ -526,7 +526,7 @@ end
 -- cache provenance bound must never mix clocks.
 -- Reload-safe: clearTime is back-stamped via the in-flight split cache
 -- (KE.db.global.MPTActiveRunSplits) so a /reload mid-run restores prior
--- kill times without re-triggering chat output (Task 5.3).
+-- kill times without re-triggering chat output.
 function MPT:UpdateObjectives()
     local run = MPT.run
     local numCriteria = select(3, C_Scenario.GetStepInfo()) or 0  -- non-secret loop bound
@@ -693,7 +693,7 @@ function MPT:UpdateObjectives()
                     -- only near-real-time completions: a reload-recovery pass can
                     -- re-walk old kills through this arm when the persisted cache
                     -- was discarded (identity mismatch on a level-0 API race) —
-                    -- their back-dated clearTime keeps chat silent (Task 5.3).
+                    -- their back-dated clearTime keeps chat silent.
                     -- The chat line is a boss-kill announcement; count objectives
                     -- (which now stamp elapsed, so delta is always 0) are excluded.
                     if not isCountObjective and (elapsed - obj.clearTime) <= 5 then
@@ -715,7 +715,7 @@ function MPT:UpdateObjectives()
         end
     end
 
-    -- Resolve PB targets/deltas for each objective (Splits, Task 3.6).
+    -- Resolve PB targets/deltas for each objective (Splits).
     MPT:UpdateSplits()
 end
 
@@ -836,7 +836,7 @@ function MPT:OnEnable()
     -- file in Dungeons.xml — guaranteed to exist at runtime (same guarantee as
     -- MigrateLegacyOverlayDB which is called from UpdateDB without a guard).
     self:InitOverlay()
-    -- Build the HUD if its file is loaded (Task 2.1 defines BuildHUD). Guard is
+    -- Build the HUD if its file is loaded (BuildHUD lives there). Guard is
     -- MANDATORY in Phase 1 — the HUD file does not exist yet; mirrors the
     -- PurgeStaleSplits guard idiom below.
     if self.BuildHUD then self:BuildHUD() end
@@ -912,7 +912,7 @@ function MPT:OnDisable()
 end
 
 ---------------------------------------------------------------------------------
--- Tick driver: debounced refresh (Task 1.6)
+-- Tick driver: debounced refresh
 ---------------------------------------------------------------------------------
 
 -- Hidden frame that hosts the 1 Hz fallback OnUpdate (attached only during a run).
@@ -1003,7 +1003,7 @@ local function ScanPartyAlive()
 end
 
 -- Diffs the new death count against the prior snapshot to find who newly died.
--- Calls MPT:RecordDeath (Task 3.4 stub for now) for each newly-dead member.
+-- Calls MPT:RecordDeath (a stub for now) for each newly-dead member.
 local function CheckForNewDeaths(newDeathCount)
     if newDeathCount <= _prevDeathCount then
         _prevDeathCount = newDeathCount
@@ -1186,7 +1186,7 @@ local function _CompleteSalvageFire()
 end
 
 ---------------------------------------------------------------------------------
--- Two-tier event registration (Task 1.8)
+-- Two-tier event registration
 ---------------------------------------------------------------------------------
 
 -- Registered only during an active run (high-frequency; would wake on every
@@ -1294,7 +1294,7 @@ function MPT:WORLD_STATE_TIMER_STOP()
     if not self.run.active and not self.run.completed then self:ResetRun(true) end
 end
 
--- Auto-insert keystone when the font of power receptacle opens (Task 5.1).
+-- Auto-insert keystone when the font of power receptacle opens.
 -- Scans bags for the first keystone item and uses it automatically.
 -- Gated on difficulty 8 (Mythic) or 23 (Mythic 5-man) so it never fires in
 -- non-keystone instances. C_Item.IsItemKeystoneByID is the modern check;
@@ -1325,7 +1325,7 @@ function MPT:CHALLENGE_MODE_KEYSTONE_RECEPTABLE_OPEN()
 end
 
 ---------------------------------------------------------------------------------
--- Run lifecycle (Task 1.7)
+-- Run lifecycle
 ---------------------------------------------------------------------------------
 
 -- Returns true if the affixIDs list contains Challenger's Peril (ID 152).
@@ -1418,7 +1418,7 @@ function MPT:RepairRunInfo()
 end
 
 function MPT:StartRun()
-    -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
+    -- preview teardown (ShowPreview/HidePreview); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
     local run = self.run
     if run.active then
@@ -1481,7 +1481,7 @@ function MPT:StartRun()
 end
 
 function MPT:CompleteRun()
-    -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
+    -- preview teardown (ShowPreview/HidePreview); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
     local run = self.run
     if run.completed then
@@ -1555,7 +1555,7 @@ function MPT:CompleteRun()
 end
 
 function MPT:ResetRun(keepCaches)
-    -- preview teardown (ShowPreview/HidePreview: Task 2.6); isPreview is nil until then, so this is inert in Phase 1
+    -- preview teardown (ShowPreview/HidePreview); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
     -- Recovery-cache lifecycle: the default (keepCaches falsy — the
     -- CHALLENGE_MODE_RESET path) wipes both persisted caches BEFORE the
@@ -1652,12 +1652,12 @@ function MPT:CheckForActiveRun()
     -- Re-apply tracker visibility after any reload recovery: StartRun/ResetRun
     -- each call ApplyTrackerVisibility, but their early-return guards can skip it
     -- when run state is already consistent. This direct call guarantees a
-    -- /reload mid-key re-hides the tracker (Task 5.2 wiring).
+    -- /reload mid-key re-hides the tracker.
     self:ApplyTrackerVisibility()
 end
 
 ---------------------------------------------------------------------------------
--- Tracker suppression system (Task 1.7 Step 5 / Task 5.2 Steps 1-2 early)
+-- Tracker suppression system
 ---------------------------------------------------------------------------------
 
 local _trackerHookInstalled = false
@@ -1782,10 +1782,10 @@ function MPT:HandleSlash(input)
 end
 
 ---------------------------------------------------------------------------------
--- EditMode registration (Task 5.11)
+-- EditMode registration
 -- Registers frames.root with KE's standalone overlay system so /kes edit
 -- shows a draggable overlay over the HUD and persists position writes to
--- SelfPoint/AnchorPoint/XOffset/YOffset (flat DB keys, Task 0.2 canonical).
+-- SelfPoint/AnchorPoint/XOffset/YOffset (flat DB keys).
 -- Idempotent: self.editModeRegistered guard prevents double-registration.
 -- Mirrors KickTracker:RegWithEditMode() (KickTracker.lua).
 ---------------------------------------------------------------------------------

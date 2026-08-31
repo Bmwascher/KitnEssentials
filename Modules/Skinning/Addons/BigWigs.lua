@@ -128,10 +128,10 @@ local function BrandCastFilter(tex)
     end
 end
 
--- the v832 re-assert ticker is gone. It only existed
--- because v828 left KillTexture state-only, so BigWigs' re-dressed
--- tiles came back. S.KillTexture now carries ElvUI's Kill semantics
--- (permanent), so one pass holds -- no ticker, no per-frame cost.
+-- the re-assert ticker is gone. It only existed while KillTexture was
+-- state-only, which let BigWigs' re-dressed
+-- tiles came back. S.KillTexture now carries permanent Kill semantics,
+-- so one pass holds -- no ticker, no per-frame cost.
 local function SkinKeystoneTeleports(frame)
     BrandCastFilter(frame.teleportBar)
     for _, child in next, { frame:GetChildren() } do

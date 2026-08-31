@@ -11,6 +11,10 @@ CLAUDE.md
 AGENTS.md
 /References/
 
+# Guard word list for the commit-msg/pre-commit hooks: the repo is public,
+# and publishing the list leaks the provenance the guards keep out of history.
+dev/githooks/upstream-names.local.sh
+
 # Personal dev notes, audits, Superpowers artifacts (local-only by choice)
 dev/docs/
 .superpowers/

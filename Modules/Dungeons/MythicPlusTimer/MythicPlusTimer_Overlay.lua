@@ -73,14 +73,14 @@ local function SetupTooltip()
 end
 
 ---------------------------------------------------------------------------------
--- Legacy DB Migration (Task 4.2 — carried forward from Phase-0 stub)
+-- Legacy DB Migration
 ---------------------------------------------------------------------------------
 
 -- One-time migration: carry the retired forces-overlay settings into
 -- this module's flat Overlay* keys. Guarded by a persistent OverlayMigrated
 -- flag — NOT by the old table being nil, because AceDB/FillProfileDefaults
 -- resurrect profile.Dungeons.WarpDepleteForces (with default values) on
--- every login until Task 4.8 removes the Core/Defaults.lua block.
+-- every login until the Core/Defaults.lua block is removed.
 -- Maps the old forces-overlay key -> new Overlay* key. Death-log persistence is dropped
 -- (the new module keeps deaths transient in MPT.run.deathLog).
 function MPT:MigrateLegacyOverlayDB()
@@ -304,7 +304,7 @@ function MPT:SetOverlayActive(active)
     end
 end
 
--- Called from the GUI (Task 5.9) when overlay toggles/style change. Re-wires
+-- Called from the GUI when overlay toggles/style change. Re-wires
 -- the nameplate subsystem to match the current DB + live-refreshes style/position.
 function MPT:ApplyOverlaySettings()
     if self.db and self.db.OverlayNameplateEnabled then
@@ -324,7 +324,6 @@ function MPT:ApplyOverlaySettings()
     RefreshAllNameplatePositions()
 end
 
--- Event handlers wired by Task 4.6.
 function MPT:NAME_PLATE_UNIT_ADDED(_, unit)
     UpdateNameplateTextFor(unit)
 end
@@ -333,7 +332,7 @@ function MPT:NAME_PLATE_UNIT_REMOVED(_, unit)
     ReleaseNameplateText(unit)
 end
 
--- GUI live-refresh entry point (Task 5.9 calls this on every style/position change).
+-- GUI live-refresh entry point; the GUI calls this on every style/position change.
 function MPT:RefreshOverlayStyle()
     RefreshAllNameplateStyle()
     RefreshAllNameplatePositions()

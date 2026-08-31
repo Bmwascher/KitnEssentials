@@ -45,10 +45,9 @@ function CM:UpdateDB()
     self.db = KE.db.profile.Skinning.ContextMenus
 end
 
--- ElvUI-EXACT port of their menu skin
--- (ElvUI/Game/Mainline/Skins/Menu.lua). Theirs is four operations on
--- the menu frame ITSELF: StripTextures, CreateBackdrop + SetInside,
--- HandleTrimScrollBar, OffsetFrameLevel. Nothing else.
+-- The menu skin is four operations on the menu frame ITSELF:
+-- StripTextures, CreateBackdrop + SetInside, HandleTrimScrollBar,
+-- OffsetFrameLevel. Nothing else.
 --
 -- What we had on top, and why it's gone: WalkGlyphs recursed into the
 -- menu's CHILD ENTRIES to re-brand radio ticks, running from inside
@@ -56,8 +55,8 @@ end
 -- dropdown's selection -- and taint.log convicted exactly that value:
 -- CurrencyTransferMenu.sourceCharacterData came back addon-owned, read at
 -- CurrencyTransfer.lua, blocking
--- RequestCurrencyFromAccountCharacter. ElvUI never touches
--- menu entries. Parity beats our brand-colored radial marks.
+-- RequestCurrencyFromAccountCharacter. Never touch menu entries; a
+-- working transfer beats brand-colored radial marks.
 local function SkinFrame(frame)
     if not frame then return end
     local S = GetS()
@@ -227,11 +226,11 @@ function CM:Setup()
     -- A REVERTED experiment. The poller was built on a WRONG
     -- theory ("hooks inside a secure flow taint it"). They don't:
     -- hooksecurefunc is designed to be taint-safe -- the hook body
-    -- runs with our taint, then execution returns to secure. ElvUI
-    -- hooks thousands of Blizzard functions, this manager included,
+    -- runs with our taint, then execution returns to secure. Blizzard
+    -- functions, this manager included, take thousands of such hooks
     -- with none of these errors. What taints is what a hook body
-    -- WRITES, or replacing methods Blizzard calls (the real v828
-    -- root). This skin only reads and sets visual state, so hooking
+    -- WRITES, or replacing methods Blizzard calls (the real root).
+    -- This skin only reads and sets visual state, so hooking
     -- is correct here -- and menus skin instantly again.
     hooksecurefunc(manager, "OpenMenu", OnMenuOpen)
     hooksecurefunc(manager, "OpenContextMenu", OnMenuOpen)

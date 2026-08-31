@@ -521,7 +521,7 @@ function H.StartKickReadyTimer(self)
     H.CancelKickReadyTimer(self, "StartKickReadyTimer prior")
 
     -- Hide tick if kick tracking is disabled or no interruptId is resolved.
-    -- Reachable when called from CacheInterruptId mid-cast (Task 7) after a
+    -- Reachable when called from CacheInterruptId mid-cast after a
     -- spell-set change leaves no candidate interrupt for the new spec/state.
     if not (self.interruptId and self.db.KickIndicator and self.db.KickIndicator.Enabled) then
         H.UpdateKickIndicator(self, nil)

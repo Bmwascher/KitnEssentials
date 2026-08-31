@@ -116,7 +116,7 @@ local function ChatDebugLine(event, arg1, arg2, arg12, chatType)
         class, concatOk, formatOk, wrapTwoOk))
 end
 
--- (WindTools ChatText port): role icons before names in group
+-- Role icons before names in group
 -- chat. CMH.lfgRoles is keyed by sender name (short AND name-realm keys,
 -- both written at cache-build time in Modules/Skinning/Chat.lua on
 -- GROUP_ROSTER_UPDATE); values are ready-made |T|t texture strings.
@@ -994,7 +994,7 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
 
     local pflag = self:GetPFlag(arg6, arg7, arg12) or ''
 
-    -- WindTools lfgRoles injection point (pflag..icon..sender).
+    -- lfgRoles injection point (pflag..icon..sender).
     -- playerName (arg2) can be a SECRET value in group content on
     -- Midnight; plain tables cannot be indexed with secret keys (26x
     -- party-chat error in dungeons). Guard with the canonical helper --

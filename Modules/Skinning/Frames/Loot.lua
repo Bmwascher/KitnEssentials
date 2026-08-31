@@ -73,7 +73,7 @@ local function SkinLootRow(button)
         if item.IconBorder then item.IconBorder:SetAlpha(0) end
 
         -- (slim bars had no outline): the Blizzard bar
-        -- art is alpha-zeroed (atlas card, correct per ElvUI) but
+        -- art is alpha-zeroed (atlas card, which is correct) but
         -- nothing replaced it -- the name bar was invisible. Backdrop
         -- + 1px border on the NameFrame rect, quality-tinted together
         -- with the icon border below.
@@ -98,10 +98,9 @@ local function SkinLootRow(button)
     -- (user report, "attempt to call a nil value"): on
     -- Midnight NameFrame/BorderFrame/etc. are TEXTURES (atlas item
     -- cards), not frames -- the old StripTextures/Backdrop/
-    -- GetFrameLevel block was ElvUI's MasterLooter (frame-based)
-    -- recipe applied to the wrong context. ElvUI Mainline Loot.lua
-    -- just alpha-zeros the card texture; the Item backdrop carries the
-    -- look.
+    -- GetFrameLevel block was the frame-based MasterLooter recipe
+    -- applied to the wrong context. Alpha-zero the card texture instead;
+    -- the Item backdrop carries the look.
     S.Vanish(button, ROW_CARD_ART)
 end
 
@@ -207,7 +206,7 @@ local function SizeEncounterDropdown(dropdown, width)
 end
 
 -- THE TIMING, not the contact.
--- The v869 staged bisect applied all eight loot-history contacts live, one at
+-- A staged bisect applied all eight loot-history contacts live, one at
 -- a time (frame/bg/drop/timer/close/bar/box/resize), and ScrollBox,
 -- ScrollBox.view, ScrollBar and row1 stayed 100% secure through every single
 -- one. The identical calls made from the load pass poison
@@ -226,7 +225,7 @@ end
 -- touching this frame's geometry before/while Blizzard's ScrollBox did its
 -- own first layout, and that first Update was born ours.
 --
--- Same disease and same cure as the currency FORBIDDEN (v862): the contacts
+-- Same disease and same cure as the currency FORBIDDEN: the contacts
 -- were never wrong, the moment was.
 --
 -- DOCTRINE: a skin must never be the thing that triggers a Blizzard frame's
@@ -305,7 +304,7 @@ end
 
 -- Skin on the frame's own first OnShow. If it is somehow already shown when
 -- we arm (it should not be at login), skin immediately -- that is the same
--- post-hoc moment the v869 bisect proved clean.
+-- post-hoc moment the bisect proved clean.
 local function DeferToFirstShow(frame, fn)
     if not frame then return end
     frame:HookScript("OnShow", fn)

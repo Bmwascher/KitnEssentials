@@ -1019,9 +1019,9 @@ function C:_TauntFindSpell()
     end
 end
 
--- Declared here, not in Task 3, because luacheck warning 211 (unused variable)
--- is not suppressed by .luacheckrc:33-49 and Task 3's lint gate is 0 warnings.
--- Its first reader is Step 3 of this task.
+-- Declared up here rather than beside its reader below, because luacheck
+-- warning 211 (unused variable) is not suppressed by .luacheckrc and the
+-- lint gate is 0 warnings.
 local _tauntFollowCursor = nil
 
 -- Taint note: identical handling to the Dispel satellite. We never test the

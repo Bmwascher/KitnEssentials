@@ -295,7 +295,7 @@ local HEALTHSTONES = {
 --
 -- Detection: spell cooldown on 20707. If the spell is on CD, the Warlock cast it
 -- recently → someone in the raid has a Soulstone. Not as accurate as a raid-wide
--- aura scan (which would require the BuffReminders-style inspection logic), but
+-- aura scan (which would require full inspection logic), but
 -- simple and sufficient — a Warlock isn't expected to recast Soulstone during its
 -- CD window, so "spell on CD" ≈ "someone is stoned".
 --
@@ -750,7 +750,7 @@ end
 --- _GetFirstLivingHealer
 --- Returns the name of the first living group member assigned the HEALER role
 --- ("Name-Realm" format), or nil if no living healer exists. Iteration order
---- matches raid/party slot order — same as BuffReminders.
+--- matches raid/party slot order.
 function RCC:_GetFirstLivingHealer()
     local function check(unit)
         if not UnitExists(unit) then return nil end
@@ -926,7 +926,7 @@ end
 --- returns the highest-rank item in bags matching its stat):
 ---   1. db.LastFlaskStat — refreshed every time a flask buff is detected, so
 ---      the click keeps offering the stat line the player actually uses.
----      Mirrors BuffReminders' ConsumableMemory aura-path Remember pattern
+---      The ConsumableMemory aura-path Remember pattern
 ---      (Core/ConsumableMemory.lua), simplified to one global preference.
 ---   2. SPEC_FLASK_PRIORITY[spec][1] — meta-default primary stat for the
 ---      player's current spec. Only used on a fresh session before any
@@ -1243,7 +1243,7 @@ end
 --- Counts Standard + Demonic (warlock-only) HS in bags. Display-only for
 --- non-Warlocks. For Warlocks, clicking the slot casts Create Soulwell (29893)
 --- to drop a fresh well — the source healthstones come from. Mirrors
---- BuffReminders' Healthstone reminder click (Data/Buffs.lua castSpellID).
+--- Healthstone reminder click (castSpellID).
 function RCC:UpdateHealthstone()
     local btn = self.buttons.hs
     if not btn then return end

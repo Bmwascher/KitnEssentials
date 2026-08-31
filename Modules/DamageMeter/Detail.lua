@@ -265,7 +265,7 @@ function DM:EnsureDetail(W)
     d.view:SetScrollChild(d.content)
     d.view:SetScript("OnSizeChanged", function(_, w) if w and w > 0 then d.content:SetWidth(w) end end)
 
-    -- Mouse-wheel scroll for long breakdowns / recaps (Task 6). Step two rows per
+    -- Mouse-wheel scroll for long breakdowns / recaps. Step two rows per
     -- notch, clamped to [0, contentH - viewportH] so the wheel can't overscroll past
     -- the last row or above the top. All plain numbers (heights/stride are never
     -- secret); no-op when the list fits (maxScroll <= 0).
@@ -659,7 +659,7 @@ function DM:RenderBreakdown(W)
         end
     end
 
-    -- Size the scroll child so the wheel can scroll long lists (Task 6 wires the wheel).
+    -- Size the scroll child so the wheel can scroll long lists.
     d.content:SetHeight(math_max(10, count * stride))
 end
 
@@ -952,7 +952,7 @@ function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Damage-Done targets (Phase 4c / Task 12)               ║
+-- ║  Damage-Done targets                                    ║
 -- ║  Cross-references the EnemyDamageTaken session to build  ║
 -- ║  a map of ALL players' damage per enemy in ONE pass --   ║
 -- ║  the first hover triggers the build, every subsequent    ║
@@ -1100,7 +1100,7 @@ local function BuildPlayerTargets(playerName, session, sessionID, maxTargets)
 end
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Hover quick-peek tooltip (Phase 4b / Task 9)            ║
+-- ║  Hover quick-peek tooltip                                ║
 -- ║  A single module-level tip (shared by every window)       ║
 -- ║  shown on bar OnEnter: the top few breakdown spells       ║
 -- ║  (or recap events for a Deaths window). Built lazily,     ║
@@ -1974,7 +1974,7 @@ end
 -- to avoid spurious layout invalidation for the whole hover duration.
 function DM:ShowHoverTip(W, bar, isInitial)
     if not W or not bar then return end
-    if self.db and self.db.HoverTooltip == false then return end       -- DB toggle (Task 10)
+    if self.db and self.db.HoverTooltip == false then return end       -- DB toggle
     if W._detailOpen then return end                                    -- click-inline open: suppress
     if not (bar._sourceGUID or bar._sourceCreatureID or bar._deathRecapID) then return end  -- empty/placeholder row
 

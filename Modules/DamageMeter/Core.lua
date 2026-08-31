@@ -99,9 +99,9 @@ end
 -- deep-copied in; when BOTH sides are tables, recurse. This mirrors what
 -- AceDB's copyDefaults did at every login while these defaults were still
 -- registered in Core/Defaults.lua -- which is LOAD-BEARING for migration: the
--- v3.0.x releases shipped registered defaults, and AceDB's logout-time
+-- those releases shipped registered defaults, and AceDB's logout-time
 -- removeDefaults stripped default-equal leaves and DELETED nested tables that
--- became empty. Real v3.0.x SavedVariables therefore carry holes like
+-- became empty. SavedVariables written then therefore carry holes like
 -- Dock.Columns[1] = nil (the shipped layout's column 1 equals the default)
 -- and Position tables with offsets but no anchors (EditMode drags preserve
 -- anchors, so they matched the default and were stripped). A top-level-only

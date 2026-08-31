@@ -770,7 +770,7 @@ function QC:OnDisable()
     for k in pairs(partyKeys) do partyKeys[k] = nil end
     if updateTicker then updateTicker:Cancel(); updateTicker = nil end
     if container then container:Hide() end
-    -- Deviation, paired with Task 5's: the secure overlay must not survive a
+    -- Deviation, paired with the one in OnEnable: the secure overlay must not survive a
     -- disable still armed over a category tile. Routed through the same
     -- combat-safe helper, which queues on KE's own frame -- Ace has already
     -- unregistered this module's events by the time OnDisable runs, so the

@@ -181,9 +181,8 @@ S.borderColor = S.palette.border
 S.DEFAULT_BG = { S.palette.window[1], S.palette.window[2], S.palette.window[3], S.palette.window[4] }
 S.DEFAULT_BORDER = { S.palette.border[1], S.palette.border[2], S.palette.border[3], S.palette.border[4] }
 
--- ElvUI's E.ClearTexture (their Core.lua). Their
--- StripRegion clears art with SetTexture(ClearTexture) + SetAtlas("")
--- -- we were passing nil to both, which does NOT clear an atlas the
+-- Art is cleared with SetTexture(ClearTexture) + SetAtlas("").
+-- We were passing nil to both, which does NOT clear an atlas the
 -- way "" does: the texture kept rendering (green missing-art box on
 -- close buttons, and character inset art surviving our strip).
 S.ClearTexture = 0
@@ -201,27 +200,26 @@ local BLIZZARD_REGIONS = {
     "BottomLeftTex", "BottomRightTex", "RightTex", "MiddleTex", "Center",
     "ArtOverlayFrame", "FilligreeOverlay", "PortraitOverlay",
     "ScrollFrameBorder", "ScrollUpBorder", "ScrollDownBorder",
-    -- NineSlice added (ElvUI Toolkit.lua). The region dump
+    -- NineSlice added. The region dump
     -- proved the surviving character-frame art IS the NineSlice pieces
     -- (UI-Frame-Metal-* on CharacterFrame, UI-Frame-Inner* on
     -- CharacterFrameInsetRight). We only alpha-faded the container --
     -- and Blizzard's NineSliceUtil re-applies the layout on tab switch,
-    -- which undoes that. ElvUI strips the PIECES, which no re-apply can
+    -- which undoes that. Stripping the PIECES is what no re-apply can
     -- restore. KillRegions now reaches them.
     "NineSlice",
 }
 
--- ElvUI's Kill(), ported exactly (their Toolkit.lua).
--- This is how ElvUI makes art stay dead through Blizzard re-dressing:
+-- How art stays dead through Blizzard re-dressing:
 -- frames get unregistered + reparented to a hidden frame; regions get
 -- ONE narrow redirect (Show -> the object's own Hide). Note what it is
 -- NOT: our old global KillTexture NOOP'd SetTexture/SetAlpha/SetAtlas
 -- on every stripped texture, which is what tainted the flyout display
--- loop (v828). ElvUI uses this narrowly -- two sites in their whole
--- Character skin -- and StripTextures (state-only) everywhere else.
--- S.KillTexture now routes through S.Kill (ElvUI's Kill).
--- The flyout no longer uses it -- that path moved to ElvUI's
--- ClearTexture idiom via S.ClearButtonArt, which is surgery-free.
+-- loop. Use this narrowly -- two sites in the whole Character
+-- skin -- and StripTextures (state-only) everywhere else.
+-- S.KillTexture now routes through S.Kill.
+-- The flyout no longer uses it -- that path moved to the ClearTexture
+-- idiom via S.ClearButtonArt, which is surgery-free.
 S.HiddenFrame = S.HiddenFrame or CreateFrame("Frame", nil, _G.UIParent)
 S.HiddenFrame:Hide()
 
@@ -242,11 +240,10 @@ function S.KillRegions(frame, name)
     -- so S.StripTextures(CharacterFrameInset) resolved
     -- _G["CharacterFrameInset".."Right"] = CharacterFrameInsetRight
     -- and HID the pane that hosts the Equipment Manager and its
-    -- buttons. ElvUI never hides these: their StripType looks up the
-    -- same kind of name list and calls StripTextures on it, and their
-    -- StripRegion clears a texture (SetTexture(ClearTexture) +
-    -- SetAtlas('')) -- it only Kills when explicitly asked.
-    -- Ported: textures get cleared, child FRAMES get their own
+    -- buttons. Never hide these by name: look the name list up, call
+    -- StripTextures on what it finds, and clear a texture
+    -- (SetTexture(ClearTexture) + SetAtlas('')) rather than Killing it
+    -- unless asked. Textures get cleared, child FRAMES get their own
     -- textures stripped, nothing gets hidden by name-guess.
     if not frame then return end
     name = name or (frame.GetName and frame:GetName())
@@ -639,7 +636,7 @@ local function armHover(button, anchor, l, t, r, b)
 end
 
 -- hold a fontstring's colour without owning its setter.
--- ElvUI's pattern (hook + re-assert); never `SetTextColor = NOOP`.
+-- Hook + re-assert; never `SetTextColor = NOOP`.
 -- the texture analogue of S.LockTextColor, for plain art regions
 -- that Blizzard re-dresses BY ATLAS on a state change.
 --
@@ -652,7 +649,7 @@ end
 -- SelectableButtons in a RadioButtonGroup, and the derived state handler
 -- re-atlases them on hover/click/selection.
 --
--- Self-terminating exactly like ElvUI's ClearNormalTexture: re-clearing
+-- Self-terminating, exactly like the ClearNormalTexture path: re-clearing
 -- fires the hook again with atlas == "", which fails the guard and stops.
 -- This is the same permanence idiom S.IconBorder already uses on SetAtlas.
 local function keepStripped(region, atlas)
@@ -706,11 +703,11 @@ function S.RowHover(row)
         tex:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 1)
         -- AUDIT: never enable input on a row Blizzard left
         -- mouse-disabled. This is our own hover standard, and it is the
-        -- exact call that put AES in the currency-transfer FORBIDDEN
-        -- (v841): changing input state on Blizzard's rows drags us into
+        -- exact call that put AES in the currency-transfer FORBIDDEN:
+        -- changing input state on Blizzard's rows drags us into
         -- flows we have no business being in. If a row cannot take the
-        -- mouse, it does not get a manufactured hover -- ElvUI does the
-        -- same (backdrop only, no input changes).
+        -- mouse, it does not get a manufactured hover: backdrop only,
+        -- no input changes.
         if row.IsMouseEnabled and not row:IsMouseEnabled() then
             return
         end
@@ -811,11 +808,10 @@ function S.KillTexture(t)
     -- re-assertion stay cheap.
     if not t then return end
     if protectedTextures[t] then return end
-    -- aligned with ElvUI's Kill (Toolkit.lua) -- their
-    -- one tool for "stay dead" regions: a single Show->Hide redirect,
-    -- not our old four-method NOOP. State-only (v828-v837) was the
+    -- One tool for "stay dead" regions: a single Show->Hide redirect,
+    -- not our old four-method NOOP. State-only was the
     -- other extreme and let Blizzard re-dress everything (BigWigs
-    -- tiles, character art). This is their middle ground.
+    -- tiles, character art). This is the middle ground.
     S.Kill(t)
     killedTextures[t] = true
 end
@@ -884,16 +880,14 @@ local function reKillArrowStates(button)
     killAllButOurArrow(button)
 end
 
--- ElvUI's texture-clearing idiom, ported exactly
--- (E.ClearTexture = 0 in their Core.lua; S:ClearNormalTexture and
--- friends in Skins.lua). Two ideas we never copied:
+-- The texture-clearing idiom. Two ideas the old code missed:
 --   1. Clear state art by passing fileID 0 to the BUTTON's own setter.
 --      Never touch the texture object, never NOOP a method.
 --   2. Get permanence by HOOKING the setter and re-clearing through
 --      the official API. Self-terminating: re-setting to ClearTexture
 --      fails the ~= check, so no recursion.
--- This is what our KillTexture was badly reinventing: pre-v828 with
--- NOOP surgery (tainted the flyout display loop), post-v828 state-only
+-- This is what our KillTexture was badly reinventing: first with NOOP
+-- surgery (tainted the flyout display loop), then state-only
 -- (Blizzard re-dressed it -> the flash regressions). Every skin that
 -- calls S.ClearButtonArt inherits the correct behaviour from here.
 
@@ -1237,10 +1231,9 @@ function S.CheckRefresh(check)
     if not check or not S.data(check).skinned then return end
     S.ClearButtonArt(check)
     local aeBD = S.GetBackdrop(check)
-    -- NOOP surgery removed here too (ElvUI parity -- see
-    -- S.CheckBox). CheckRefresh IS the re-assert path; it re-runs from
-    -- the SetCheckedTexture hook, which is how ElvUI keeps its check
-    -- art through Blizzard's repaints.
+    -- NOOP surgery removed here too (see S.CheckBox). CheckRefresh IS
+    -- the re-assert path; it re-runs from the SetCheckedTexture hook,
+    -- which is what keeps check art alive through Blizzard's repaints.
     local function flat(region)
         if not region then return end
         S.data(region).flat = true
@@ -1290,13 +1283,11 @@ function S.CheckBox(check)
     local aeBD = S.Backdrop(check, 4)
     if aeBD then aeBD:SetBackdropColor(CONTROL_BG[1], CONTROL_BG[2], CONTROL_BG[3], CONTROL_BG[4]) end
 
-    -- ElvUI parity. Their HandleCheckBox replaces the check
-    -- ASSET via the official setters and re-asserts through
-    -- hooksecurefunc(frame, "SetCheckedTexture", ...) -- it never owns
-    -- methods on the texture. Ours did both: asset swap AND
+    -- Replace the check ASSET via the official setters and re-assert
+    -- through hooksecurefunc(frame, "SetCheckedTexture", ...) -- never
+    -- own methods on the texture. Ours did both: asset swap AND
     -- SetAlpha/SetAtlas/SetVertexColor = NOOP. The NOOPs are gone; the
-    -- methodArmor hooks below (which we already had) are the ElvUI
-    -- mechanism and are enough.
+    -- methodArmor hooks below are the whole mechanism and are enough.
     local function flatCheck(region)
         S.data(region).flat = true
 
@@ -1333,9 +1324,9 @@ function S.CheckBox(check)
                 end
             end)
         end
-        -- our bespoke re-kill hooks replaced by the ported
-        -- ElvUI idiom -- ClearButtonArt (called at the top of
-        -- S.CheckBox) already installs their re-clear-on-set hooks.
+        -- our bespoke re-kill hooks are gone -- ClearButtonArt (called
+        -- at the top of S.CheckBox) already installs the
+        -- re-clear-on-set hooks.
 
     end
 
@@ -1880,8 +1871,8 @@ end
 
 -- dedupe flag moved OFF the Blizzard texture and into S.data.
 -- `icon.aeIcon = true` was an AES-named field write on a Blizzard object
--- -- banned by our own doctrine three functions down (S.ItemButton,
--- v827: "NO AES-named fields on Blizzard frames, ever -- S.data only").
+-- -- banned by our own doctrine three functions down (S.ItemButton:
+-- "NO AES-named fields on Blizzard frames, ever -- S.data only").
 -- S.Icon is the highest-traffic primitive we have and it was the one
 -- place still doing it; it runs on the LootHistory row icons, which is
 -- inside the Midnight secret-value path that is currently throwing on
@@ -1996,7 +1987,7 @@ function S.ItemButton(button, opts)
     -- secure table -- contaminating iteration/field-fallback reads
     -- Blizzard's item-button code performs mid-display-loop, which
     -- tainted every subsequent button's location/id writes (the
-    -- combat flyout-equip ADDON_ACTION_BLOCKED). Same disease v814
+    -- combat flyout-equip ADDON_ACTION_BLOCKED). Same disease already
     -- cured for ScrollBoxes; flag lives in S.data now. DOCTRINE:
     -- NO AES-named fields on Blizzard frames, ever -- S.data only.
     if not button or S.data(button).itemSkinned then return end
@@ -2039,13 +2030,13 @@ end
 
 
 function S.HookScrollBox(scrollBox, styleRow)
-    -- back to ElvUI's pattern -- hooksecurefunc(ScrollBox,
-    -- 'Update', fn) with fn doing box:ForEachFrame(styleRow). My v814
-    -- rewrite onto the ScrollUtil per-element callback (and the
-    -- "never ForEachFrame a Blizzard ScrollBox" doctrine) came from
-    -- the pool-taint theory, which was wrong: ElvUI ForEachFrames
-    -- Blizzard ScrollBoxes throughout and never uses that callback.
-    -- The LootHistory crash was KillTexture surgery, fixed in v838.
+    -- hooksecurefunc(ScrollBox, 'Update', fn) with fn doing
+    -- box:ForEachFrame(styleRow). The earlier rewrite onto the ScrollUtil
+    -- per-element callback (and the "never ForEachFrame a Blizzard
+    -- ScrollBox" doctrine) came from the pool-taint theory, which was
+    -- wrong: ForEachFrame on a Blizzard ScrollBox is safe and that
+    -- callback is not needed.
+    -- The LootHistory crash was KillTexture surgery, since fixed.
     if not scrollBox or not scrollBox.ForEachFrame then return end
     local function apply(box)
         box:ForEachFrame(styleRow)
@@ -2068,7 +2059,7 @@ function S.HookScrollBoxIcons(scrollBox, getIcon, withBackdrop)
     end
     apply()
     -- same doctrine fix -- this planted an AES key directly on
-    -- a Blizzard ScrollBox, the exact object class v814 cleaned up.
+    -- a Blizzard ScrollBox, the exact object class cleaned up earlier.
     if scrollBox.Update and not S.data(scrollBox).aeIconHook then
         hooksecurefunc(scrollBox, "Update", apply)
         S.data(scrollBox).aeIconHook = true
@@ -2592,10 +2583,10 @@ local function skinScrollArrows(frame)
     -- poisoned every row's elementData/currencyIndex, and the row
     -- click carried the taint all the way to
     -- RequestCurrencyFromAccountCharacter (convicted by config bisect
-    -- + issecurevariable ladder, v859 session).
-    -- ElvUI's stepper contact (ReskinScrollBarArrow) is STATE-ONLY:
-    -- StripTextures + Texture/Overlay alpha 0 + their own arrow art.
-    -- Ported exactly; our overlay glyph replaces their SetNormalTexture.
+    -- + issecurevariable ladder).
+    -- The stepper contact is STATE-ONLY: StripTextures + Texture/Overlay
+    -- alpha 0 + our own arrow art, drawn as an overlay glyph rather than
+    -- through SetNormalTexture.
     for _, side in ipairs({ { frame.Back, "up" }, { frame.Forward, "down" } }) do
         local b = side[1]
         if b then
@@ -2669,36 +2660,35 @@ function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpd
     -- geometry at Layout. Intermittent because only updates that actually
     -- move the scrollbar route through ScrollBar:Update.
     --
-    -- ElvUI's HandleTrimScrollBar has NO Update hook -- it reskins the
-    -- steppers once and they stay. That is why ElvUI is clean on this and
-    -- we were not. Ours is now theirs: skin once, no hook.
+    -- A trim scroll bar needs NO Update hook -- reskin the steppers once
+    -- and they stay. That is the rule here now: skin once, no hook.
     --
     -- `ignoreUpdates` is kept only so the ~40 call sites keep working; it
-    -- is now inert. It was a misport in the first place: ElvUI's second arg
-    -- goes to thumb:CreateBackdrop('Transparent', nil, ignoreUpdates) and
-    -- is a backdrop-registration flag, not a gate on an Update hook they
-    -- never had. Currency passing `true` was accidentally the only skin
-    -- immune to this.
+    -- is now inert. It was a misport in the first place: the second arg
+    -- belongs on thumb:CreateBackdrop('Transparent', nil, ignoreUpdates)
+    -- as a backdrop-registration flag, not as a gate on an Update hook
+    -- that should never have existed. Currency passing `true` was
+    -- accidentally the only skin immune to this.
     --
-    -- CORRECTION: v868 claimed this hook was the root of the
+    -- CORRECTION: an earlier note claimed this hook was the root of the
     -- LootHistory taint and attached a doctrine to it -- "never
     -- hooksecurefunc a method Blizzard calls from the middle of another
     -- Blizzard function". Both were wrong. Removing this hook changed
-    -- nothing, and the v869 staged bisect then installed
+    -- nothing, and the staged bisect then installed
     -- hooksecurefunc(scrollBox, "Update", apply) -- a method Blizzard calls
     -- mid-function, the exact shape the doctrine forbade -- and every
     -- object stayed 100% secure. The real root was load-time: the skin ran
     -- from RegisterEarly and triggered the ScrollBox's FIRST layout, which
     -- stamped ScrollBox.updateLock ours, and updateLock is read on Update's
-    -- first line so it self-perpetuated (fixed v870 by deferring to first
+    -- first line so it self-perpetuated (fixed by deferring to first
     -- OnShow). hooksecurefunc on a Blizzard method is fine and stays fine:
-    -- ElvUI does it thousands of times, S.IconBorder and S.LockStripped
-    -- both hook SetAtlas on Blizzard regions.
+    -- S.IconBorder and S.LockStripped both hook SetAtlas on Blizzard
+    -- regions.
     --
-    -- The removal itself stands anyway, on ElvUI parity: their
-    -- HandleTrimScrollBar has no Update hook, it reskins the steppers once
-    -- and they stay (our v860 state-only rewrite is what makes that true
-    -- for us too). One less per-update closure, no behaviour change.
+    -- The removal itself stands anyway: the trim scroll bar needs no
+    -- Update hook, it reskins the steppers once and they stay (the
+    -- state-only rewrite is what makes that true). One less per-update
+    -- closure, no behaviour change.
 end
 
 function S.ScrollBar(scrollbar, ignoreUpdates)
