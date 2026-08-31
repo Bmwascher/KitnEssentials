@@ -77,14 +77,18 @@ ng_load() {
 # bracket level (a --[=[ block ends at ]=], not at a bare ]]), and XML
 # comments. Resuming at the remaining text is what handles several blocks on
 # one line, and code following a block that closes.
+# Added lines are recognised by position inside a hunk, not by their second
+# character: a source line that itself starts with + renders as ++ in the
+# diff, and a filter on that shape skips it.
 # Known limit: a line added INSIDE a block whose opener the hunk does not
 # contain reads as ordinary code, because a diff carries no state from above
 # the hunk.
 ng_comment_tails() {
     printf '%s\n' "$1" | awk '
         function emit(s) { if (s != "") print s }
-        /^@@/ { blk = ""; lvl = ""; next }
-        /^\+[^+]/ {
+        /^diff --git / { inhunk = 0; blk = ""; lvl = ""; next }
+        /^@@/ { inhunk = 1; blk = ""; lvl = ""; next }
+        inhunk && /^\+/ {
             line = substr($0, 2)
             while (line != "") {
                 if (blk == "lua" || blk == "xml") {
