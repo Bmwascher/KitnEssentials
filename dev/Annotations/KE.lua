@@ -347,6 +347,9 @@ function KE:AddBorders(frame, color, borderParent) end
 ---@return Frame?
 function KE:ResolveAnchorFrame(anchorFrameType, parentFrame) end
 
+--- TEMPORARY, removed with the PLAYERFRAME anchor-race probe in Core/Globals.lua.
+function KE:DumpAnchorProbe() end
+
 ---@param anchorFrom string
 ---@return string
 function KE:GetTextPointFromAnchor(anchorFrom) end

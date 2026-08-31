@@ -418,18 +418,91 @@ end
 -- Frame Positioning
 ---------------------------------------------------------------------------------
 
+-- TEMPORARY instrumentation for the PLAYERFRAME anchor race: which unit-frame
+-- globals exist at each PLAYERFRAME resolve, and at the login checkpoints
+-- around them. Delete this block, the call in ResolveAnchorFrame, and
+-- KE:DumpAnchorProbe once the race is fixed.
+local DEBUG_ANCHOR = true
+local anchorProbe = {}
+
+local function ProbeCandidates()
+    return string.format("Elv=%s UUF=%s EUI=%s Blz=%s",
+        _G.ElvUF_Player and "y" or "n",
+        _G.UUF_Player and "y" or "n",
+        _G.EllesmereUIUnitFrames_Player and "y" or "n",
+        _G.PlayerFrame and "y" or "n")
+end
+
+local function ProbeRecord(tag)
+    anchorProbe[#anchorProbe + 1] = string.format("%7dms  %-34s %s",
+        math_floor(debugprofilestop()), tag, ProbeCandidates())
+end
+
+-- Level 3: this helper, then ResolveAnchorFrame, then the module that asked.
+local function ProbeCaller()
+    local stack = debugstack(3, 1, 0) or ""
+    return stack:match("([%w_%-]+%.lua:%d+)") or "?"
+end
+
 function KE:ResolveAnchorFrame(anchorFrameType, parentFrameName)
     if anchorFrameType == "SCREEN" or anchorFrameType == "UIPARENT" then
         return UIParent
     elseif anchorFrameType == "PLAYERFRAME" then
         -- Auto-detect the active unit-frame addon's player frame.
-        return _G.ElvUF_Player or _G.UUF_Player
+        local frame = _G.ElvUF_Player or _G.UUF_Player
             or _G.EllesmereUIUnitFrames_Player or _G.PlayerFrame or UIParent
+        if DEBUG_ANCHOR then
+            ProbeRecord(string.format("resolve=%s from %s",
+                frame:GetName() or "?", ProbeCaller()))
+        end
+        return frame
     elseif anchorFrameType == "SELECTFRAME" and parentFrameName then
         local frame = _G[parentFrameName]
         return frame or UIParent
     end
     return UIParent
+end
+
+-- TEMPORARY, part of the anchor-race probe above.
+local PROBE_ANCHORS = {
+    "KE_AuraExternalsAnchor",
+    "KE_AuraDebuffsAnchor",
+    "KE_AuraMovementAnchor",
+}
+
+function KE:DumpAnchorProbe()
+    print("|cffFF008CKitn|r|cffffffffEssentials:|r anchor probe")
+    for i = 1, #anchorProbe do
+        print(anchorProbe[i])
+    end
+    for i = 1, #PROBE_ANCHORS do
+        local name = PROBE_ANCHORS[i]
+        local frame = _G[name]
+        if not frame then
+            print(string.format("   %-24s NOT CREATED", name))
+        else
+            local _, relativeTo = frame:GetPoint()
+            print(string.format("   %-24s anchored to %s", name,
+                relativeTo and (relativeTo:GetName() or "unnamed") or "nothing"))
+        end
+    end
+end
+
+if DEBUG_ANCHOR then
+    local dumpScheduled = false
+    local probeWatcher = CreateFrame("Frame")
+    probeWatcher:RegisterEvent("PLAYER_LOGIN")
+    probeWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+    probeWatcher:SetScript("OnEvent", function(_, event)
+        ProbeRecord(event)
+        -- Same-event snapshot vs one frame later separates "KE ran before the
+        -- unit-frame addon's handler" from "the frame was built later still".
+        C_Timer.After(0, function() ProbeRecord(event .. " +1 frame") end)
+        if not dumpScheduled then
+            dumpScheduled = true
+            C_Timer.After(5, function() KE:DumpAnchorProbe() end)
+        end
+    end)
 end
 
 ---------------------------------------------------------------------------------
