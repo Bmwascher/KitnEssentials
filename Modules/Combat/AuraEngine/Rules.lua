@@ -122,18 +122,48 @@ end
 -- A FRESH table every call, unlike the exclude builder: there is no shared
 -- constant set to alias here, so there is nothing to protect from mutation and
 -- nothing to be gained by returning one.
+local function IsPositiveInteger(value)
+    return type(value) == "number" and value > 0 and value == math_floor(value)
+end
+
 function Rules.BuildIncludeSpellIDs(saved)
     local set = {}
 
     if saved then
         for spellID, record in pairs(saved) do
-            if type(record) == "table" and record.enabled ~= false then
+            if IsPositiveInteger(spellID)
+                and type(record) == "table" and record.enabled ~= false then
                 set[spellID] = true
             end
         end
     end
 
     return set
+end
+
+-- Restores shipped rows to their seed shape while leaving custom rows alone.
+-- resolveEnabled overrides only the enabled state a caller computes from
+-- other context (e.g. an in-progress bulk edit); it never gets to touch label
+-- or the default flag, so a restore action cannot smuggle in row-shape drift.
+function Rules.RestoreAllowlistDefaults(saved, defaults, resolveEnabled)
+    if type(saved) ~= "table" or type(defaults) ~= "table" then return false end
+
+    for spellID, seed in pairs(defaults) do
+        if IsPositiveInteger(spellID) and type(seed) == "table" then
+            local enabled = seed.enabled ~= false
+            if resolveEnabled then
+                enabled = resolveEnabled(spellID, seed) and true or false
+            end
+
+            saved[spellID] = {
+                label = seed.label,
+                enabled = enabled,
+                default = true,
+            }
+        end
+    end
+
+    return true
 end
 
 -- Three-valued on purpose, and the middle value is the trap. `false` drops the
@@ -276,7 +306,7 @@ end
 -- another route.
 function Rules.CanRekeyAllowlistEntry(saved, fromID, toID)
     if type(saved) ~= "table" then return false end
-    if type(fromID) ~= "number" or type(toID) ~= "number" then return false end
+    if type(fromID) ~= "number" or not IsPositiveInteger(toID) then return false end
     if fromID == toID then return false end
 
     local entry = saved[fromID]
