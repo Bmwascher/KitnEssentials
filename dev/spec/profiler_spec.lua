@@ -19,16 +19,97 @@ local function loadProfiler(options)
     local frameCPU = options.frameCPU or {}
     local modules = options.modules or {}
 
+    local lifecycle = {}
+    local eventFrames = {}
+    local popupShows = {}
+    local scriptProfile = tostring(options.scriptProfile == nil and 1 or options.scriptProfile)
+    local inCombat = options.inCombat == true
+    local fps = options.fps
+
     _G.print = function(message)
         printed[#printed + 1] = message
     end
     _G.C_CVar = {
-        GetCVar = function()
-            return "1"
+        -- Reads are recorded, not just writes. The regen handler must unregister
+        -- and clear its latch BEFORE it reads the CVar; without a read entry in
+        -- lifecycle that ordering is unobservable, and a handler that reads first
+        -- and tears down afterwards passes every other assertion here.
+        GetCVar = function(name)
+            lifecycle[#lifecycle + 1] = "cvar-read:" .. name
+            if name == "scriptProfile" then return scriptProfile end
         end,
-        SetCVar = function()
+        SetCVar = function(name, value)
+            lifecycle[#lifecycle + 1] = "cvar:" .. name .. "=" .. tostring(value)
+            if name == "scriptProfile" then scriptProfile = tostring(value) end
         end,
     }
+
+    if options.fpsAPIAvailable == false then
+        _G.GetFramerate = nil
+    else
+        _G.GetFramerate = function()
+            if options.failOnFramerateRead then error("unexpected framerate read") end
+            return fps
+        end
+    end
+
+    _G.InCombatLockdown = function()
+        return inCombat
+    end
+    _G.ReloadUI = function()
+        lifecycle[#lifecycle + 1] = "reload"
+    end
+
+    _G.CreateFrame = function()
+        local scripts = {}
+        local registered = {}
+        local subject = {}
+
+        function subject:SetScript(scriptName, callback)
+            scripts[scriptName] = callback
+        end
+        function subject:RegisterEvent(event)
+            registered[event] = true
+            lifecycle[#lifecycle + 1] = "register:" .. event
+        end
+        function subject:UnregisterEvent(event)
+            registered[event] = nil
+            lifecycle[#lifecycle + 1] = "unregister:" .. event
+        end
+        function subject:IsEventRegistered(event)
+            return registered[event] == true
+        end
+        function subject:Fire(event)
+            local callback = scripts.OnEvent
+            if registered[event] and callback then callback(subject, event) end
+        end
+        -- Delivers to OnEvent regardless of registration. Without this the
+        -- pending-popup latch is unobservable: once the handler unregisters, Fire
+        -- suppresses every later delivery, so a build that never clears the latch
+        -- is indistinguishable from one that does.
+        function subject:FireRaw(event)
+            local callback = scripts.OnEvent
+            if callback then callback(subject, event) end
+        end
+
+        eventFrames[#eventFrames + 1] = subject
+        return subject
+    end
+
+    local popupDialogs
+    if options.popupAPIsAvailable ~= false then
+        popupDialogs = {}
+    end
+    _G.StaticPopupDialogs = popupDialogs
+    if popupDialogs then
+        _G.StaticPopup_Show = function(key)
+            popupShows[#popupShows + 1] = key
+            lifecycle[#lifecycle + 1] = "popup:" .. key
+        end
+    else
+        _G.StaticPopup_Show = nil
+    end
+
     _G.GetTime = function()
         return now
     end
@@ -80,7 +161,9 @@ local function loadProfiler(options)
         end,
         GetAddOnMetric = function(_, metric)
             if metric == _G.Enum.AddOnProfilerMetric.RecentAverageTime then
-                return options.recentMs or 0
+                if options.recentMetricUnavailable then return nil end
+                if options.recentMs ~= nil then return options.recentMs end
+                return 0
             end
             if metric == _G.Enum.AddOnProfilerMetric.PeakTime then
                 return options.peakMs or 0
@@ -118,6 +201,8 @@ local function loadProfiler(options)
         profiler = KE.Profiler,
         printed = printed,
         calls = calls,
+        lifecycle = lifecycle,
+        popupShows = popupShows,
         setNow = function(value)
             now = value
         end,
@@ -130,6 +215,36 @@ local function loadProfiler(options)
         clearCalls = function()
             for index = #calls, 1, -1 do
                 calls[index] = nil
+            end
+        end,
+        fireEvent = function(event)
+            for _, eventFrame in ipairs(eventFrames) do
+                eventFrame:Fire(event)
+            end
+        end,
+        fireEventRaw = function(event)
+            for _, eventFrame in ipairs(eventFrames) do
+                eventFrame:FireRaw(event)
+            end
+        end,
+        isEventRegistered = function(event)
+            for _, eventFrame in ipairs(eventFrames) do
+                if eventFrame:IsEventRegistered(event) then return true end
+            end
+            return false
+        end,
+        setCombat = function(value)
+            inCombat = value
+        end,
+        setScriptProfile = function(value)
+            scriptProfile = tostring(value)
+        end,
+        getPopup = function(key)
+            return popupDialogs and popupDialogs[key]
+        end,
+        clearLifecycle = function()
+            for index = #lifecycle, 1, -1 do
+                lifecycle[index] = nil
             end
         end,
     }
@@ -827,5 +942,208 @@ describe("Profiler snapshots", function()
         local output = table.concat(state.printed, "\n")
         assert.is_truthy(output:find("+10.00 ms over 10.0 sec", 1, true))
         assert.is_truthy(output:find("Frame deltas unavailable", 1, true))
+    end)
+end)
+
+describe("Profiler footer display", function()
+    it("keeps the same always-on metric while latching detailed mode per load", function()
+        local enabled = loadProfiler({ scriptProfile = 1, recentMs = 0.0011, fps = 120 })
+        local disabled = loadProfiler({ scriptProfile = 0, recentMs = 0.0011, fps = 120 })
+
+        local enabledText, enabledDetailed = enabled.profiler.GetFooterDisplay()
+        local disabledText, disabledDetailed = disabled.profiler.GetFooterDisplay()
+
+        assert.are.equal("CPU: 0.0011 MS (~0.01%)", enabledText)
+        assert.are.equal(enabledText, disabledText)
+        assert.is_true(enabledDetailed)
+        assert.is_false(disabledDetailed)
+    end)
+
+    it("does not change the detailed-state latch until a fresh module load", function()
+        local enabled = loadProfiler({ scriptProfile = 1, recentMs = 0, fps = 60 })
+        enabled.profiler.RunCommand("off")
+        local _, stillEnabled = enabled.profiler.GetFooterDisplay()
+
+        local disabled = loadProfiler({ scriptProfile = 0, recentMs = 0, fps = 60 })
+        disabled.profiler.RunCommand("on")
+        local _, stillDisabled = disabled.profiler.GetFooterDisplay()
+
+        local reloadedOff = loadProfiler({ scriptProfile = 0, recentMs = 0, fps = 60 })
+        local reloadedOn = loadProfiler({ scriptProfile = 1, recentMs = 0, fps = 60 })
+        local _, offDetailed = reloadedOff.profiler.GetFooterDisplay()
+        local _, onDetailed = reloadedOn.profiler.GetFooterDisplay()
+
+        assert.is_true(stillEnabled)
+        assert.is_false(stillDisabled)
+        assert.is_false(offDetailed)
+        assert.is_true(onDetailed)
+    end)
+
+    it("formats four decimals and every adaptive percentage branch", function()
+        local cases = {
+            { recentMs = 0.0001, fps = 60, expected = "CPU: 0.0001 MS (<0.01%)" },
+            { recentMs = 0.0011, fps = 120, expected = "CPU: 0.0011 MS (~0.01%)" },
+            { recentMs = 0.0110, fps = 120, expected = "CPU: 0.0110 MS (~0.1%)" },
+        }
+
+        for _, case in ipairs(cases) do
+            local state = loadProfiler(case)
+            local cpuText = state.profiler.GetFooterDisplay()
+            assert.are.equal(case.expected, cpuText)
+        end
+    end)
+
+    it("returns unavailable without reading framerate when the metric is absent", function()
+        local state = loadProfiler({
+            scriptProfile = 1,
+            recentMetricUnavailable = true,
+            failOnFramerateRead = true,
+        })
+
+        local cpuText, detailed = state.profiler.GetFooterDisplay()
+        assert.are.equal("CPU: unavailable", cpuText)
+        assert.is_true(detailed)
+    end)
+
+    it("retains milliseconds and omits only percentage for missing or nonpositive fps", function()
+        local missing = loadProfiler({ recentMs = 0.0011, fpsAPIAvailable = false })
+        local zero = loadProfiler({ recentMs = 0.0011, fps = 0 })
+        local negative = loadProfiler({ recentMs = 0.0011, fps = -1 })
+
+        assert.are.equal("CPU: 0.0011 MS", missing.profiler.GetFooterDisplay())
+        assert.are.equal("CPU: 0.0011 MS", zero.profiler.GetFooterDisplay())
+        assert.are.equal("CPU: 0.0011 MS", negative.profiler.GetFooterDisplay())
+    end)
+end)
+
+local function countContaining(values, needle)
+    local count = 0
+    for _, value in ipairs(values) do
+        if value:find(needle, 1, true) then count = count + 1 end
+    end
+    return count
+end
+
+local function indexOf(values, expected)
+    for index, value in ipairs(values) do
+        if value == expected then return index end
+    end
+end
+
+describe("Profiler reload warning", function()
+    it("does nothing on PLAYER_LOGIN when detailed profiling was inactive at load", function()
+        local state = loadProfiler({ scriptProfile = 0 })
+        state.clearLifecycle()
+        state.fireEvent("PLAYER_LOGIN")
+
+        assert.are.equal(0, #state.printed)
+        assert.are.equal(0, #state.popupShows)
+        assert.is_false(state.isEventRegistered("PLAYER_LOGIN"))
+    end)
+
+    it("prints and shows exactly one warning when detailed profiling is active", function()
+        local state = loadProfiler({ scriptProfile = 1 })
+        state.clearLifecycle()
+        state.fireEvent("PLAYER_LOGIN")
+        state.fireEvent("PLAYER_LOGIN")
+
+        assert.are.equal(1, countContaining(state.printed, "CPU profiling is enabled and reduces FPS."))
+        assert.same({ "KE_PROFILER_ENABLED" }, state.popupShows)
+        assert.is_false(state.isEventRegistered("PLAYER_LOGIN"))
+    end)
+
+    it("keeps the chat warning as the fallback when popup APIs are unavailable", function()
+        local state = loadProfiler({ scriptProfile = 1, popupAPIsAvailable = false })
+        state.clearLifecycle()
+        state.fireEvent("PLAYER_LOGIN")
+
+        assert.are.equal(1, countContaining(state.printed, "CPU profiling is enabled and reduces FPS."))
+        assert.are.equal(0, #state.popupShows)
+    end)
+
+    it("sets scriptProfile to zero before reloading from Disable and Reload", function()
+        local state = loadProfiler({ scriptProfile = 1 })
+        state.fireEvent("PLAYER_LOGIN")
+        local popup = state.getPopup("KE_PROFILER_ENABLED")
+        assert.is_table(popup)
+        assert.are.equal("Disable & Reload", popup.button1)
+        assert.are.equal("Keep Enabled", popup.button2)
+
+        state.clearLifecycle()
+        popup.OnAccept()
+
+        local cvarIndex = indexOf(state.lifecycle, "cvar:scriptProfile=0")
+        local reloadIndex = indexOf(state.lifecycle, "reload")
+        assert.is_number(cvarIndex)
+        assert.is_number(reloadIndex)
+        assert.is_true(cvarIndex < reloadIndex)
+    end)
+
+    it("wires no state-changing hook to Keep Enabled or to dismissal", function()
+        local state = loadProfiler({ scriptProfile = 1 })
+        state.fireEvent("PLAYER_LOGIN")
+        local popup = state.getPopup("KE_PROFILER_ENABLED")
+
+        -- Blizzard dispatches button 2 through OnCancel or OnButton2, and
+        -- fires OnHide on dismissal. Keep Enabled is a one-load no-op, so all
+        -- three must be absent; asserting only OnCancel would pass against an
+        -- implementation that moved the work to either of the others.
+        assert.is_nil(popup.OnCancel)
+        assert.is_nil(popup.OnButton2)
+        assert.is_nil(popup.OnHide)
+        assert.is_function(popup.OnAccept)
+    end)
+
+    it("prints immediately in combat and tears down before one deferred popup", function()
+        local state = loadProfiler({ scriptProfile = 1, inCombat = true })
+        state.clearLifecycle()
+        state.fireEvent("PLAYER_LOGIN")
+
+        assert.are.equal(1, countContaining(state.printed, "CPU profiling is enabled and reduces FPS."))
+        assert.are.equal(0, #state.popupShows)
+        assert.is_true(state.isEventRegistered("PLAYER_REGEN_ENABLED"))
+
+        state.setCombat(false)
+        state.clearLifecycle()
+        state.fireEvent("PLAYER_REGEN_ENABLED")
+
+        local unregisterIndex = indexOf(state.lifecycle, "unregister:PLAYER_REGEN_ENABLED")
+        local cvarReadIndex = indexOf(state.lifecycle, "cvar-read:scriptProfile")
+        local popupIndex = indexOf(state.lifecycle, "popup:KE_PROFILER_ENABLED")
+        assert.is_number(unregisterIndex)
+        assert.is_number(cvarReadIndex)
+        assert.is_number(popupIndex)
+        assert.is_true(unregisterIndex < cvarReadIndex)
+        assert.is_true(cvarReadIndex < popupIndex)
+        assert.is_false(state.isEventRegistered("PLAYER_REGEN_ENABLED"))
+        assert.are.equal(1, #state.popupShows)
+        assert.are.equal(1, countContaining(state.printed, "CPU profiling is enabled and reduces FPS."))
+
+        state.fireEvent("PLAYER_REGEN_ENABLED")
+        assert.are.equal(1, #state.popupShows)
+
+        -- Raw delivery bypasses the unregister, so this is the only assertion
+        -- that can fail when the handler forgets to clear its pending latch:
+        -- a still-true latch re-enters the regen path and shows a second popup.
+        state.fireEventRaw("PLAYER_REGEN_ENABLED")
+        assert.are.equal(1, #state.popupShows)
+    end)
+
+    it("tears down and suppresses a deferred popup when the CVar was turned off", function()
+        local state = loadProfiler({ scriptProfile = 1, inCombat = true })
+        state.fireEvent("PLAYER_LOGIN")
+        state.setScriptProfile(0)
+        state.setCombat(false)
+        state.clearLifecycle()
+        state.fireEvent("PLAYER_REGEN_ENABLED")
+
+        -- Exact sequence, not a membership check: the unregister must precede
+        -- the CVar read, and nothing else may run on this path.
+        assert.same({ "unregister:PLAYER_REGEN_ENABLED", "cvar-read:scriptProfile" }, state.lifecycle)
+        assert.is_false(state.isEventRegistered("PLAYER_REGEN_ENABLED"))
+        assert.are.equal(0, #state.popupShows)
+
+        state.fireEvent("PLAYER_REGEN_ENABLED")
+        assert.are.equal(0, #state.popupShows)
     end)
 end)

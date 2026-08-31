@@ -445,7 +445,7 @@ read_globals = {
     "KitnEssentials",
 
     -- Time
-    "GetTime", "GetWorldElapsedTime",
+    "GetFramerate", "GetTime", "GetWorldElapsedTime",
 
     -- -------------------------------------------------------
     -- Blizzard UI Frames (read for skinning / anchoring)

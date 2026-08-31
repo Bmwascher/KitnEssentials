@@ -18,6 +18,7 @@ local UpdateAddOnCPUUsage = UpdateAddOnCPUUsage
 local UpdateAddOnMemoryUsage = UpdateAddOnMemoryUsage
 local ResetCPUUsage      = ResetCPUUsage
 local GetTime            = GetTime
+local GetFramerate       = GetFramerate
 
 local print     = print
 local format    = string.format
@@ -79,6 +80,8 @@ local function ProfilingEnabled()
     return tonumber(C_CVar_GetCVar("scriptProfile")) == 1
 end
 
+local detailedProfilingActive = ProfilingEnabled()
+
 local cpuWindowSequence = 0
 local cpuWindow
 local frameIds = {}
@@ -121,6 +124,27 @@ local function GetMetricValue(metricName)
     local metric = GetMetricEnum(metricName)
     if not metric then return nil end
     return C_AddOnProfiler.GetAddOnMetric("KitnEssentials", metric)
+end
+
+local function FormatFooterPercent(percent)
+    if percent < 0.01 then return "<0.01%" end
+    if percent < 0.1 then return format("~%.2f%%", percent) end
+    return format("~%.1f%%", percent)
+end
+
+local function GetFooterDisplay()
+    local recentMs = GetMetricValue("RecentAverageTime")
+    if type(recentMs) ~= "number" then
+        return "CPU: unavailable", detailedProfilingActive
+    end
+
+    local cpuText = format("CPU: %.4f MS", recentMs)
+    local fps = GetFramerate and GetFramerate()
+    if type(fps) == "number" and fps > 0 then
+        local framePercent = recentMs / (1000 / fps) * 100
+        cpuText = format("%s (%s)", cpuText, FormatFooterPercent(framePercent))
+    end
+    return cpuText, detailedProfilingActive
 end
 
 local function CaptureCpuSummary()
@@ -279,6 +303,62 @@ local function ToggleProfile(state)
         end
     end
 end
+
+local PROFILER_POPUP_KEY = "KE_PROFILER_ENABLED"
+local PROFILER_WARNING_TEXT = "CPU profiling is enabled and reduces FPS. Disable it when testing is finished with /kes profiler off, then /reload."
+local profilerWarningFrame = CreateFrame("Frame")
+local profilerPopupPending = false
+
+local function ShowProfilerWarningPopup()
+    if type(StaticPopupDialogs) ~= "table" or type(StaticPopup_Show) ~= "function" then
+        return
+    end
+    if not StaticPopupDialogs[PROFILER_POPUP_KEY] then
+        StaticPopupDialogs[PROFILER_POPUP_KEY] = {
+            text = "|cffFF008CKitn|r|cffffffffEssentials|r CPU profiling is enabled. It adds measurable overhead and should stay on only while testing. Disable it and reload now?",
+            button1 = "Disable & Reload",
+            button2 = "Keep Enabled",
+            OnAccept = function()
+                C_CVar_SetCVar("scriptProfile", "0")
+                ReloadUI()
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = false,
+            preferredIndex = 3,
+        }
+    end
+    StaticPopup_Show(PROFILER_POPUP_KEY)
+end
+
+local function HandleProfilerLogin()
+    profilerWarningFrame:UnregisterEvent("PLAYER_LOGIN")
+    if not detailedProfilingActive then return end
+
+    p("|cffff3333" .. PROFILER_WARNING_TEXT .. "|r")
+    if InCombatLockdown() then
+        profilerPopupPending = true
+        profilerWarningFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+        return
+    end
+    ShowProfilerWarningPopup()
+end
+
+local function HandleProfilerRegen()
+    profilerWarningFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    profilerPopupPending = false
+    if not ProfilingEnabled() then return end
+    ShowProfilerWarningPopup()
+end
+
+profilerWarningFrame:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LOGIN" then
+        HandleProfilerLogin()
+    elseif event == "PLAYER_REGEN_ENABLED" and profilerPopupPending then
+        HandleProfilerRegen()
+    end
+end)
+profilerWarningFrame:RegisterEvent("PLAYER_LOGIN")
 
 local function PrintCpuTop(arg)
     if not ProfilingEnabled() then
@@ -696,5 +776,6 @@ Profiler.ListSnapshots  = ListSnapshots
 Profiler.ClearSnapshots = ClearSnapshots
 Profiler.ResetCpu       = ResetCpu
 Profiler.GatherCpuRows  = GatherCpuRows
+Profiler.GetFooterDisplay = GetFooterDisplay
 
 KE.Profiler = Profiler
