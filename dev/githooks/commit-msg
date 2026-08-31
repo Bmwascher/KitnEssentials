@@ -16,14 +16,24 @@ msg_file="$1"
 # legitimately contains addon names (conflict-registry code).
 msg="$(sed '/^# -\{8,\} >8 -\{8,\}/q' "$msg_file")"
 
-# Two passes: distinctive stems match anywhere in a token (catches
-# "atrocityUI"-style embeddings); short shorthand tokens need word boundaries
-# to avoid mangling ordinary words. ElvUI is NOT listed: it is a public
-# compatibility target and legitimately appears in user-facing entries.
+# Two passes: distinctive stems match anywhere in a token (catches embedded
+# forms); short shorthand tokens need word boundaries to avoid mangling
+# ordinary words. The patterns themselves live in a local-only file — this
+# repo is public, and publishing the list leaks the provenance the guard
+# exists to keep out of history.
 # No `head` inside the pipelines: under pipefail, grep dying on SIGPIPE when
 # head exits early reads as "no match" and waves the commit through.
-stems='atrocity|norsken|ellesmere|exwind|exboss|windtools|highonhaste|augbuff'
-shorts='aes|eui|nui'
+names_file="$(dirname "$0")/upstream-names.local.sh"
+if [ ! -f "$names_file" ]; then
+    echo "[commit-msg] BLOCKED: missing local word list $names_file (restore it from the local backup, or write two lines: stems='a|b|c' and shorts='x|y'). Override with: git commit --no-verify" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "$names_file"
+if [ -z "${stems:-}" ] || [ -z "${shorts:-}" ]; then
+    echo "[commit-msg] BLOCKED: $names_file defines no stems/shorts patterns." >&2
+    exit 1
+fi
 hit="$(printf '%s\n' "$msg" | grep -ioE "$stems" | sort -u | tr '\n' ' ' || true)"
 hit2="$(printf '%s\n' "$msg" | grep -iwoE "$shorts" | sort -u | tr '\n' ' ' || true)"
 if [ -n "$hit$hit2" ]; then

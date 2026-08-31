@@ -99,6 +99,18 @@ reference (see `dev/scripts/check-luacheckrc-drift.lua`). Override a single
 push with `git push --no-verify`. If a tool isn't on PATH the hook skips it
 with a notice rather than blocking (CI still runs everything).
 
+The `commit-msg` and `pre-commit` guards match against a word list kept in
+`dev/githooks/upstream-names.local.sh`, which is gitignored: this repo is
+public, and publishing the list leaks the provenance the guards exist to keep
+out of history and shipped comments. Restore it from the local backup after a
+re-clone, alongside `.claude/` and `AGENTS.md`. Both guards block outright
+when the file is absent rather than waving everything through. Format:
+
+```sh
+stems='a|b|c'    # matched anywhere in a token, case-insensitive
+shorts='x|y'     # matched at word boundaries only
+```
+
 ## Updating the API reference
 
 ```sh

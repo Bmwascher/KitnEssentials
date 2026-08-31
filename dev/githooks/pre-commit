@@ -23,10 +23,22 @@ comments="$(git diff --cached -U0 --no-color -- '*.lua' '*.xml' ':(exclude)dev/*
 fail=0
 
 # Upstream addon names: distinctive stems anywhere (case-insensitive), and
-# personal/agent names word-bounded case-sensitive.
+# personal/agent names word-bounded case-sensitive. The stem patterns live in
+# a local-only file — this repo is public, and publishing the list leaks the
+# provenance the guard exists to keep out of shipped comments.
 # No `head` inside these pipelines: under pipefail, grep dying on SIGPIPE
 # reads as "no match" and waves the commit through — truncate afterward.
-stems='atrocity|norsken|ellesmere|exwind|exboss|windtools|highonhaste|augbuff'
+names_file="$(dirname "$0")/upstream-names.local.sh"
+if [ ! -f "$names_file" ]; then
+    echo "[pre-commit] BLOCKED: missing local word list $names_file (restore it from the local backup, or write one line: stems='a|b|c'). Override with: git commit --no-verify" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "$names_file"
+if [ -z "${stems:-}" ]; then
+    echo "[pre-commit] BLOCKED: $names_file defines no stems patterns." >&2
+    exit 1
+fi
 # Names that are not English/WoW words scan case-insensitively; Codex/Sol/
 # Fable stay case-sensitive ("codex" is a plausible WoW item word).
 namesCI='Brandon|Claude|Kimi'
