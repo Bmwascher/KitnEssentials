@@ -1279,7 +1279,7 @@ local Defaults = {
             FontSize          = 14,
             FontOutline       = "OUTLINE",
             TimerFontSize     = 18,
-            DecimalThreshold  = 0, -- seconds; below this the timer shows one decimal (0 = off)
+            DecimalThreshold  = 1, -- seconds; below this the timer shows one decimal (0 = off)
             TimerPosition     = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
             StackPosition     = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = -1, YOffset = 2 },
         },
@@ -1401,7 +1401,7 @@ local Defaults = {
             FontSize = 14,
             FontOutline = "OUTLINE",
             TimerFontSize = 18,
-            DecimalThreshold = 0, -- seconds; below this the timer shows one decimal (0 = off)
+            DecimalThreshold = 1, -- seconds; below this the timer shows one decimal (0 = off)
             TimerPosition = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
             StackPosition = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = -1, YOffset = 2 },
         },
@@ -1454,7 +1454,7 @@ local Defaults = {
             FontSize      = 14,
             FontOutline   = "OUTLINE",
             TimerFontSize = 16,
-            DecimalThreshold = 0, -- seconds; below this the timer shows one decimal (0 = off)
+            DecimalThreshold = 1, -- seconds; below this the timer shows one decimal (0 = off)
             TimerPosition  = { AnchorFrom = "CENTER",      AnchorTo = "CENTER",      XOffset = 0, YOffset = 0 },
             StackPosition  = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = 0, YOffset = 2 },
             DispelPosition = { AnchorFrom = "TOPRIGHT",    AnchorTo = "TOPRIGHT",    XOffset = 0, YOffset = 0 },
