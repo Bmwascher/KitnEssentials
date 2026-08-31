@@ -3,76 +3,23 @@
 # impersonal") ban personal/agent names, upstream addon names, plan-step
 # references, dates, and review/session history from shipped source comments.
 # Broken 8+ times before this hook; every instance was greppable.
-# Scans only the COMMENT portion (from `--` onward) of ADDED lines in staged
-# .lua/.xml addon source — code may legitimately carry addon names (conflict
-# registry detection strings) and step-like UI text, comments may not.
-# dev/ and .claude/ are exempt — they never ship.
-# Known limit: body lines of --[[ ]] block comments carry no `--` and are not
-# scanned — diff hunks are partial, so block-comment state cannot be tracked;
-# KE style is line comments, so the gap is accepted.
 # Deliberate exception: git commit --no-verify
 set -uo pipefail
 
-# Added lines only, staged, addon source only; then the comment tail of each.
-# (`--` inside a Lua string on an added line is a rare acceptable false
-# positive with the --no-verify escape.)
-comments="$(git diff --cached -U0 --no-color -- '*.lua' '*.xml' ':(exclude)dev/*' ':(exclude).claude/*' \
-    | grep -E '^\+[^+]' | grep -oE -- '--.*' || true)"
-[ -n "$comments" ] || exit 0
-
-fail=0
-
-# Upstream addon names: distinctive stems anywhere (case-insensitive), and
-# personal/agent names word-bounded. All three pattern sets live in a
-# local-only file — this repo is public, and publishing the lists leaks the
-# very names the guard exists to keep out of shipped comments.
-# No `head` inside these pipelines: under pipefail, grep dying on SIGPIPE
-# reads as "no match" and waves the commit through — truncate afterward.
-names_file="$(dirname "$0")/upstream-names.local.sh"
-if [ ! -f "$names_file" ]; then
-    echo "[pre-commit] BLOCKED: missing local word list $names_file (restore it from the local backup; format is in dev/README.md). Override with: git commit --no-verify" >&2
+ng_lib="$(dirname "$0")/lib/name-guards.sh"
+if [ ! -f "$ng_lib" ]; then
+    echo "[pre-commit] BLOCKED: missing $ng_lib — the guards cannot run." >&2
     exit 1
 fi
 # shellcheck source=/dev/null
-. "$names_file"
-for set in stems namesCI namesCS compat provenance; do
-    eval "val=\${$set:-}"
-    if [ -z "$val" ]; then
-        echo "[pre-commit] BLOCKED: $names_file defines no $set patterns." >&2
-        exit 1
-    fi
-done
-# namesCI holds names that are not English or WoW words, so they scan
-# case-insensitively; namesCS holds names that double as plausible WoW words
-# and only match capitalised.
-hits="$( { printf '%s\n' "$comments" | grep -ioE "$stems"; printf '%s\n' "$comments" | grep -iwoE "$namesCI"; printf '%s\n' "$comments" | grep -woE "$namesCS"; } | sort -u | tr '\n' ' ' || true)"
-if [ -n "$hits" ]; then
-    echo "[pre-commit] BLOCKED: staged addon-source comments contain personal/agent/upstream names: $hits" >&2
-    fail=1
-fi
+. "$ng_lib"
 
-# Compat names are addons the project legitimately talks about in its own
-# comments — it detects them, skins them, or stands modules down under them —
-# so naming one is a leak only on a line that also carries porting vocabulary.
-provlines="$(printf '%s\n' "$comments" | grep -iE "$provenance" || true)"
-chits="$(printf '%s\n' "$provlines" | grep -ioE "$compat" | sort -u | tr '\n' ' ' || true)"
-if [ -n "$chits" ]; then
-    echo "[pre-commit] BLOCKED: staged addon-source comments name addon(s) next to porting vocabulary: $chits" >&2
-    fail=1
-fi
+comments="$(ng_added_comments --cached)"
+[ -n "$comments" ] || exit 0
 
-# Plan-step references, review/session history, dates, file:line citations.
-# Month names need a year beside them: bare "March" is WoW content, not a date.
-history='[Ss]tep [A-Z][0-9]+|[Tt]ask [0-9]+|round of review|review round|per the plan|References/|20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]|([Jj]an|[Ff]eb|[Mm]ar|[Aa]pr|[Mm]ay|[Jj]un|[Jj]ul|[Aa]ug|[Ss]ep|[Oo]ct|[Nn]ov|[Dd]ec)[a-z]* 20[0-9][0-9]|\bv[0-9]+\.[0-9]+|\.(lua|xml):[0-9]+'
-hhits="$(printf '%s\n' "$comments" | grep -nE "$history" || true)"
-if [ -n "$hhits" ]; then
-    echo "[pre-commit] BLOCKED: staged addon-source comments carry plan-step/date/history references:" >&2
-    printf '%s\n' "$hhits" | sed -n '1,5p' >&2
-    fail=1
-fi
-
-if [ "$fail" -eq 1 ]; then
-    echo "[pre-commit] Comment rules (KE AGENTS.md): decisions stand on their own — no names, no plan steps, no dates, no session history in shipped comments. Fix the lines, or override a deliberate exception with: git commit --no-verify" >&2
+ng_load pre-commit stems compat provenance namesCI namesCS || exit 1
+if ! ng_scan_comments pre-commit "staged addon-source comments" "$comments"; then
+    echo "[pre-commit] Fix the lines, or override a deliberate exception with: git commit --no-verify" >&2
     exit 1
 fi
 exit 0

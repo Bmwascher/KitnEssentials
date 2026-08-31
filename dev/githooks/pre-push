@@ -46,6 +46,43 @@ for _line in "${pushed_refs[@]}"; do
     fi
 done
 
+# Comment and message guards over the whole pushed range (blocking): the
+# commit-time hooks are skippable with --no-verify and other tools commit
+# without them at all, so the last gate before anything is published re-reads
+# every added comment and every message in the range.
+ng_lib="$repo_root/dev/githooks/lib/name-guards.sh"
+if [ ! -f "$ng_lib" ]; then
+    echo "[pre-push] BLOCKED: missing $ng_lib — the guards cannot run." >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "$ng_lib"
+for _line in "${pushed_refs[@]}"; do
+    read -r _lref _lsha _rref _rsha <<< "$_line"
+    case "$_rref" in refs/heads/*) ;; *) continue ;; esac
+    # skip branch deletions (local sha is all zeros)
+    case "$_lsha" in *[!0]*) ;; *) continue ;; esac
+    # A branch the remote already has gives its own base; a first push falls
+    # back to where it left main, so the scan covers the branch and no more.
+    case "$_rsha" in
+        *[!0]*) _base="$_rsha" ;;
+        *) _base="$(git merge-base "$_lsha" origin/main 2>/dev/null || true)" ;;
+    esac
+    [ -n "$_base" ] || continue
+    ng_load pre-push stems shorts compat provenance namesCI namesCS || exit 1
+    _range="$(git rev-parse --short "$_base")..$(git rev-parse --short "$_lsha")"
+    if ! ng_scan_comments pre-push "comments added in $_range" "$(ng_added_comments "$_base" "$_lsha")"; then
+        echo "[pre-push] Fix the comments and amend or rebase, or override a deliberate exception with: git push --no-verify" >&2
+        exit 1
+    fi
+    for _c in $(git rev-list "$_base..$_lsha"); do
+        if ! ng_scan_text pre-push "commit $(git rev-parse --short "$_c")" "$(git log -1 --format='%s%n%b' "$_c")"; then
+            echo "[pre-push] Reword it with an interactive rebase, or override a deliberate exception with: git push --no-verify" >&2
+            exit 1
+        fi
+    done
+done
+
 # Attestation check (non-blocking, parallax 0.6.0): a main push whose range
 # touches .lua/.xml should carry a multi-model-verify attestation for the
 # pushed head — the SHA-bound review record written at final adjudication

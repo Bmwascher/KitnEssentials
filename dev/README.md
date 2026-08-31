@@ -92,7 +92,8 @@ busted on this box" message stops.
 git config core.hooksPath dev/githooks
 ```
 
-Runs `luacheck` + `busted`, both blocking, before every push — each tool
+Runs the comment and commit-message guards over the pushed range, then
+`luacheck` + `busted`, all blocking, before every push — each tool
 gates independently, so a machine missing one still runs the other. Also
 prints a non-blocking note when `.luacheckrc` drifts from the local WoW API
 reference (see `dev/scripts/check-luacheckrc-drift.lua`). Override a single
@@ -125,6 +126,14 @@ edit, and beats living on `--no-verify`.
 `commit-msg` uses `stems`, `shorts`, `compat`, and `provenance`; `pre-commit`
 uses all of those except `shorts`, plus `namesCI` and `namesCS`. A guard blocks
 when any set it needs is missing or empty.
+
+`pre-push` then re-runs both scans, blocking, over the whole range being
+pushed: every comment added and every commit message in it. The commit-time
+hooks are skippable with `--no-verify` and other tools commit without them at
+all, so this is the last gate before anything is published. A branch the
+remote already has is scanned from its remote head; a first push is scanned
+from where it left `main`. All three hooks share one matcher,
+`dev/githooks/lib/name-guards.sh`, and refuse to run without it.
 
 ## Updating the API reference
 
