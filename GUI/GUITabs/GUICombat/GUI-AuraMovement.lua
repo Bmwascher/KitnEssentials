@@ -96,7 +96,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local iconSizeSlider = GUIFrame:CreateSlider(row3a, "Icon Size", {
         min = 16, max = 64, step = 1,
-        value = db.IconSize or 52,
+        value = db.IconSize or 45,
         callback = function(val) db.IconSize = val; ApplySettings() end,
     })
     row3a:AddWidget(iconSizeSlider, 0.5)
@@ -296,7 +296,6 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
             fontOutline = "FontOutline",
         },
         fontSizes = {
-            { label = "Count Size",  dbKey = "FontSize",      default = 14 },
             { label = "Timer Size",  dbKey = "TimerFontSize", default = 18 },
         },
         fontSizeRange = { 8, 48 },

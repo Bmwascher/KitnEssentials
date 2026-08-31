@@ -26,7 +26,7 @@ local function BuildMovementPreview(_, total)
         entries[i] = {
             icon = PREVIEW_ICONS[((i - 1) % #PREVIEW_ICONS) + 1],
             groupKey = "movement",
-            count = (i % 4 == 1 and 2) or (i % 4 == 2 and 5) or 0,
+            count = 0,
         }
     end
     return entries

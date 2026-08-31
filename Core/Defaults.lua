@@ -1294,7 +1294,7 @@ local Defaults = {
             anchorFrameType = "PLAYERFRAME",
             ParentFrame = "UIParent",
             Position = { AnchorFrom = "RIGHT", AnchorTo = "LEFT", XOffset = -1, YOffset = 0 },
-            IconSize = 52,
+            IconSize = 45,
             IconSpacing = 1,
             IconsPerRow = 3,
             MaxRows = 1,
