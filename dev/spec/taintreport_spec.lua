@@ -499,36 +499,42 @@ describe("TaintReport capture and access guards", function()
 end)
 
 describe("TaintReport real slash router", function()
-    local routerGlobalsSnapshot
-    local routerGlobalNames = {
-        "SlashCmdList",
-        "KitnEssentials",
-        "SLASH_KITNESSENTIALS1",
-        "SLASH_KITNESSENTIALS2",
-        "SLASH_KITNESSENTIALS3",
-    }
+    local globalNext = next
+    local globalMap = _G
 
-    local function snapshotRouterGlobals()
+    local function snapshotGlobalMap()
         local snapshot = {}
-        for _, name in ipairs(routerGlobalNames) do
-            snapshot[name] = _G[name]
+        for key, value in globalNext, globalMap do
+            snapshot[key] = value
         end
         return snapshot
     end
 
-    local function restoreRouterGlobals(snapshot)
-        for _, name in ipairs(routerGlobalNames) do
-            _G[name] = snapshot[name]
+    local function assertGlobalMapsEqual(expected, actual)
+        for key, value in globalNext, expected do
+            assert.equals(value, actual[key], "changed or removed global: " .. tostring(key))
+        end
+        for key in globalNext, actual do
+            assert.is_not_nil(expected[key], "added global: " .. tostring(key))
         end
     end
 
-    before_each(function()
-        routerGlobalsSnapshot = snapshotRouterGlobals()
-    end)
+    local function restoreGlobalMap(snapshot)
+        for key in globalNext, globalMap do
+            if snapshot[key] == nil then globalMap[key] = nil end
+        end
+        for key, value in globalNext, snapshot do
+            globalMap[key] = value
+        end
+    end
 
-    after_each(function()
-        restoreRouterGlobals(routerGlobalsSnapshot)
-    end)
+    local function withRouterGlobals(callback)
+        local original = snapshotGlobalMap()
+        local ok, failure = pcall(callback)
+        restoreGlobalMap(original)
+        assertGlobalMapsEqual(original, snapshotGlobalMap())
+        if not ok then error(failure, 0) end
+    end
 
     local function loadRouter()
         local KE = loader.loadGlobals()
@@ -545,68 +551,83 @@ describe("TaintReport real slash router", function()
         return KE, commands, printed
     end
 
-    it("requires the router fixture to restore all loadGlobals globals", function()
-        local original = snapshotRouterGlobals()
-        local sentinels = {}
-        for _, name in ipairs(routerGlobalNames) do
-            sentinels[name] = {}
-            _G[name] = sentinels[name]
-        end
-
-        loader.loadGlobals()
-        restoreRouterGlobals(sentinels)
-        local observed = snapshotRouterGlobals()
-        restoreRouterGlobals(original)
-
-        for _, name in ipairs(routerGlobalNames) do
-            assert.equals(sentinels[name], observed[name], name)
-        end
+    it("requires the router fixture to restore the complete global map", function()
+        withRouterGlobals(function()
+            loader.loadGlobals()
+        end)
     end)
 
     it("routes taint with empty remainders after trimming and normalization", function()
-        local _, commands = loadRouter()
-        local handler = SlashCmdList["KITNESSENTIALS"]
+        withRouterGlobals(function()
+            local _, commands = loadRouter()
+            local handler = SlashCmdList["KITNESSENTIALS"]
 
-        for _, input in ipairs({ "taint", "  TaInT  ", "\tTAINT\t" }) do
-            handler(input)
-        end
+            for _, input in ipairs({ "taint", "  TaInT  ", "\tTAINT\t" }) do
+                handler(input)
+            end
 
-        assert.same({ "", "", "" }, commands)
+            assert.same({ "", "", "" }, commands)
+        end)
     end)
 
     it("routes clear and unknown taint remainders after lowercase normalization", function()
-        local _, commands = loadRouter()
-        local handler = SlashCmdList["KITNESSENTIALS"]
+        withRouterGlobals(function()
+            local _, commands = loadRouter()
+            local handler = SlashCmdList["KITNESSENTIALS"]
 
-        handler("taint clear")
-        handler("TAINT Not A Command")
+            handler("taint clear")
+            handler("TAINT Not A Command")
 
-        assert.same({ "clear", "not a command" }, commands)
+            assert.same({ "clear", "not a command" }, commands)
+        end)
     end)
 
     it("does not route a tainted prefix collision", function()
-        local _, commands = loadRouter()
+        withRouterGlobals(function()
+            local _, commands = loadRouter()
 
-        SlashCmdList["KITNESSENTIALS"]("tainted")
+            SlashCmdList["KITNESSENTIALS"]("tainted")
 
-        assert.same({}, commands)
+            assert.same({}, commands)
+        end)
     end)
 
     it("prints the exact unavailable message when the report is absent", function()
-        local KE, _, printed = loadRouter()
-        KE.TaintReport = nil
+        withRouterGlobals(function()
+            local KE, _, printed = loadRouter()
+            KE.TaintReport = nil
 
-        SlashCmdList["KITNESSENTIALS"]("taint")
+            SlashCmdList["KITNESSENTIALS"]("taint")
 
-        assert.same({ "taint report is unavailable." }, printed)
+            assert.same({ "taint report is unavailable." }, printed)
+        end)
     end)
 
     it("lists the taint command in real-router help", function()
-        local _, _, printed = loadRouter()
+        withRouterGlobals(function()
+            local _, _, printed = loadRouter()
 
-        SlashCmdList["KITNESSENTIALS"]("help")
+            SlashCmdList["KITNESSENTIALS"]("help")
 
-        assert.is_truthy(printed[1]:find("taint [clear]", 1, true))
+            assert.is_truthy(printed[1]:find("taint [clear]", 1, true))
+        end)
+    end)
+
+    it("restores globals when a real-router callback fails", function()
+        local original = snapshotGlobalMap()
+
+        local ok, failure = pcall(function()
+            withRouterGlobals(function()
+                local _, commands = loadRouter()
+                SlashCmdList["KITNESSENTIALS"]("taint")
+                assert.same({ "" }, commands)
+                error("router fixture failure")
+            end)
+        end)
+
+        assert.is_false(ok)
+        assert.is_truthy(failure:find("router fixture failure", 1, true))
+        assertGlobalMapsEqual(original, snapshotGlobalMap())
     end)
 end)
 
