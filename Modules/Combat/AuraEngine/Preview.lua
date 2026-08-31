@@ -34,18 +34,17 @@ function Preview.PlanEnter()
     return { containerShown = false, containerEnabled = false, anchorShown = true }
 end
 
+-- The restriction gates RECONFIGURATION, never the swap itself: entering
+-- preview hides and disables the container while restricted and the first
+-- build shows and enables one, so the pair is legal both ways. Deferring the
+-- show instead left the display blank for the rest of a keystone. Only the
+-- DEBT is conditional -- a settings change made during the preview is owed.
 function Preview.PlanExit(ctx)
-    if ctx.isHidden then
-        -- A reconfiguration like any other: it waits for release. The anchor
-        -- is restored regardless so the user is never left with nothing where
-        -- they were positioning something.
-        return { containerShown = false, containerEnabled = false, anchorShown = true, pendGeneral = true }
-    end
     return {
         containerShown   = ctx.state,
         containerEnabled = ctx.state,
         anchorShown      = ctx.state,
-        pendGeneral      = false,
+        pendGeneral      = ctx.isHidden == true,
     }
 end
 

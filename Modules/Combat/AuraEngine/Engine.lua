@@ -328,8 +328,9 @@ function Engine.HidePreview(display)
     -- the gate. isHidden() is still true in this window when the plan says
     -- pendGeneral, so Request's restricted branch is the one that fires: it
     -- SETS the flag and returns false, rather than its unrestricted branch,
-    -- which would clear one. Without this the debt is never recorded and the
-    -- display stays blank until the next unrelated settings change.
+    -- which would clear one. ApplySettings records the same flag at change
+    -- time, so this is a deliberate second record for any mutation path that
+    -- skips it; the flag is idempotent.
     if plan and plan.pendGeneral then
         display.gate:Request("general")
     end
