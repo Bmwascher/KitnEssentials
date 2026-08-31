@@ -7,6 +7,14 @@
 # Deliberate exception: git commit --no-verify
 set -uo pipefail
 
+ng_lib="$(dirname "$0")/lib/name-guards.sh"
+if [ ! -f "$ng_lib" ]; then
+    echo "[commit-msg] BLOCKED: missing $ng_lib — the guards cannot run." >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+. "$ng_lib"
+
 msg_file="$1"
 # Scan the whole file, comment lines included: -m messages keep '#' lines
 # under git's default cleanup, so stripping them would open a false-negative
@@ -16,19 +24,9 @@ msg_file="$1"
 # legitimately contains addon names (conflict-registry code).
 msg="$(sed '/^# -\{8,\} >8 -\{8,\}/q' "$msg_file")"
 
-# Two passes: distinctive stems match anywhere in a token (catches
-# "atrocityUI"-style embeddings); short shorthand tokens need word boundaries
-# to avoid mangling ordinary words. ElvUI is NOT listed: it is a public
-# compatibility target and legitimately appears in user-facing entries.
-# No `head` inside the pipelines: under pipefail, grep dying on SIGPIPE when
-# head exits early reads as "no match" and waves the commit through.
-stems='atrocity|norsken|ellesmere|exwind|exboss|windtools|highonhaste|augbuff'
-shorts='aes|eui|nui'
-hit="$(printf '%s\n' "$msg" | grep -ioE "$stems" | sort -u | tr '\n' ' ' || true)"
-hit2="$(printf '%s\n' "$msg" | grep -iwoE "$shorts" | sort -u | tr '\n' ' ' || true)"
-if [ -n "$hit$hit2" ]; then
-    echo "[commit-msg] BLOCKED: commit message contains upstream addon name(s): $hit$hit2" >&2
-    echo "[commit-msg] Reference provenance belongs in local docs, never in published history. Reword the message, or override a deliberate exception with: git commit --no-verify" >&2
+ng_load commit-msg stems shorts compat provenance || exit 1
+if ! ng_scan_text commit-msg "commit message" "$msg"; then
+    echo "[commit-msg] Reword the message, or override a deliberate exception with: git commit --no-verify" >&2
     exit 1
 fi
 

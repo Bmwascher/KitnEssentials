@@ -92,12 +92,119 @@ busted on this box" message stops.
 git config core.hooksPath dev/githooks
 ```
 
-Runs `luacheck` + `busted`, both blocking, before every push — each tool
+Runs the comment and commit-message guards over the pushed range, then
+`luacheck` + `busted`, all blocking, before every push — each tool
 gates independently, so a machine missing one still runs the other. Also
 prints a non-blocking note when `.luacheckrc` drifts from the local WoW API
 reference (see `dev/scripts/check-luacheckrc-drift.lua`). Override a single
 push with `git push --no-verify`. If a tool isn't on PATH the hook skips it
 with a notice rather than blocking (CI still runs everything).
+
+The `commit-msg` and `pre-commit` guards match against a word list kept in
+`dev/githooks/upstream-names.local.sh`, which is gitignored: this repo is
+public, and publishing the list leaks the provenance the guards exist to keep
+out of history and shipped comments. Restore it from the local backup after a
+re-clone, alongside `.claude/` and `AGENTS.md`. Both guards block outright
+when the file is absent rather than waving everything through. Format:
+
+```sh
+stems='a|b|c'      # reference sources, matched anywhere in a token
+shorts='x|y'       # their short forms, matched at word boundaries only
+compat='d|e'       # addons the project legitimately names, see below
+provenance='...'   # the vocabulary, dates included, that makes a compat name a leak
+namesCI='F|G'      # people/agents, word-bounded, case-insensitive
+namesCS='H|I'      # people/agents that double as plausible WoW words, capitalised only
+```
+
+`stems` and `shorts` block on sight. `compat` holds addons KE detects, skins,
+or stands modules down under, so their names belong in ordinary entries and
+comments; those block only where `provenance` matches the same message or
+comment line — "stand down when ElvUI handles skinning" passes, "port the
+ElvUI skin path" does not. Moving a name between the two sets is a one-line
+edit, and beats living on `--no-verify`.
+
+`commit-msg` uses `stems`, `shorts`, `compat`, and `provenance`; `pre-commit`
+uses all of those except `shorts`, plus `namesCI` and `namesCS`. A guard blocks
+when any set it needs is missing or empty.
+
+`pre-push` then re-runs both scans, blocking, over everything the push would
+publish, one commit at a time: each commit's own added comments and its own
+message. The commit-time hooks are skippable with `--no-verify` and other
+tools commit without them at all, so this is the last gate before anything
+reaches the remote. Per commit rather than end to end, because a comment
+added in one commit and removed in a later one never shows up in a range diff
+yet still publishes. Tag pushes are scanned too, since a tag carries commits
+of its own.
+
+The commit set is whatever the destination remote does not have: bounded by
+the sha git advertises when this clone holds that object, and otherwise by
+what `git ls-remote` says that remote carries right now, since local tracking
+refs go stale when a branch is deleted or rewritten and a stale ref would
+subtract commits the remote never had. Only shas this clone holds can be
+subtracted, so the answer over-scans at worst, and a remote that cannot be
+answered subtracts nothing at all rather than falling back to the stale refs
+this exists to avoid, and says so. Any failure to READ a commit or list a
+range blocks the push instead of reading as a clean scan. Merges are diffed against their first
+parent, so a comment invented while resolving a conflict is caught. Block
+comments are followed through their body lines, which carry no delimiter of
+their own, in Lua at any bracket level and in XML. All three hooks share one
+matcher, `dev/githooks/lib/name-guards.sh`, and refuse to run without it or
+without a valid word list.
+
+One gap is known and left open. A line added INSIDE a block comment whose
+opener the hunk does not contain reads as ordinary code, because a diff
+carries no state from above the hunk. Closing it means scanning the postimage
+of each changed file rather than the diff, which would also promote Lua long
+strings from an accepted false positive to a correctness requirement.
+
+Which tier a name belongs in is not a judgment call: anything this project
+names in its own comments goes in `compat`, including a module that kept the
+title it was ported under and an addon the conflict registry documents.
+`stems` is for names that never legitimately appear. The list is gitignored,
+so no diff review can check that, and
+
+```sh
+bash dev/scripts/check-comment-guards.sh
+```
+
+is what does: it loads the list and fails if any name in `stems`, `namesCI` or
+`namesCS` appears in a shipped comment at HEAD. It reads the committed tree,
+so an uncommitted edit cannot talk it into passing, and it feeds each file to
+the hooks' own extractor as a synthetic diff, so block comment bodies are read
+by the one parser rather than a second approximation of it. Run it after every
+list edit; it takes about half a minute. It also reports pre-existing
+provenance and history references, which nothing enforces, since the hooks
+only ever read added lines.
+
+`Libs/` is out of scope: the comment rules govern what this project writes,
+not the third-party code it embeds, and upstream library headers carry dates
+and version stamps by right.
+
+Version forms the history ban catches: a dotted release such as `v1.20.0`,
+and a bare internal build number of two to four digits such as `v828`. The
+bare form is token-bounded rather than digit-bounded as the dates below are:
+a stamp is always its own word in prose, so `pre-v828` and `backup_v828`
+block while `savev828` does not, a letter running into the `v` being the tell
+that it is an identifier. It needs two digits, so a `v1` major stays clear.
+Neither form records anything a reader can open, which is the objection to
+both. Measured over the whole codebase when the rule was added: 34 hits, no
+false positives.
+
+Date forms the comment ban catches: a numeric triple in either order, with
+`/`, `-` or `.` as the separator, the same one twice; and a whole month word
+in any case, separated from its year by spaces, tabs or a comma. So
+`2026-05-10`, `2026/05/10`, `2026.05.10`, `05/10/2026`, `05-10-2026`,
+`05.10.2026`, `05/10/26`, `10-05-26` and `August 2026` all block, and so do
+the same forms embedded in a timestamp or a filename, such as
+`2026-05-10T14:30` and `backup_2026-05-10`.
+
+Three deliberate exclusions keep it off this codebase's own vocabulary. The
+month must be a word of its own, or "augmentation 2026" reads as a date. A
+two-digit year needs one component that can be a month and another that can be
+a day, so spell range and rank lists such as `30/33/36` stay clean. And a
+two-digit year does not take the dot, because `8.6.10` is a version string;
+`05.10.26` therefore passes. What is left is a rank triple in date shape,
+`5/10/15`, which blocks.
 
 ## Updating the API reference
 
