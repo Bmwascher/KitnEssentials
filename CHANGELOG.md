@@ -42,6 +42,8 @@
   previously always paid their own gold, whatever the setting said
 - With junk in your bags and a guild-funded repair, the junk may sell a fraction
   of a second later than before
+- Closing the merchant window immediately after a repair no longer loses the
+  message. The report waits a moment for the bill to settle
 
 ---
 
