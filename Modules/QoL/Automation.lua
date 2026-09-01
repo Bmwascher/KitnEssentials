@@ -670,10 +670,10 @@ local repairPendingGen = 0
 -- otherwise fire in turn, the earliest of them consuming a ledger that is still
 -- filling.
 local repairAnnounceEpoch = 0
--- FORWARD DECLARATION, and it is load-bearing. ArmRepairWatch's expiry (Step 9,
--- above SetupAutoSellRepair) calls AnnounceRepair, but that function is defined
--- further down beside the report frame. Without this line the call would resolve
--- as a global, read nil, and error the first time a watch expired.
+-- FORWARD DECLARATION, and it is load-bearing. ArmRepairWatch's expiry calls
+-- AnnounceRepair, but that function is defined further down beside the report
+-- frame. Without this line the call would resolve as a global, read nil, and
+-- error the first time a watch expired.
 local AnnounceRepair
 
 local function ReadGold()
