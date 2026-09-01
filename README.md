@@ -34,16 +34,15 @@ The home page also carries the general settings: minimap button, login message, 
 
 | Module | Description |
 |---|---|
+| Class Tools | Class-gated tools on one tabbed page: Disintegrate tick marks, Preservation Stasis tracker, Hunter's Mark alert, Warlock Havoc warning, and Missing Forms (stance, form, aura, and Evoker attunement alerts) |
 | Combat Res | Combat res charge tracker with timer |
 | Combat Texts | Combat enter/exit, no target warning, interrupt announce with spell icon, and low durability warnings |
 | Combat Timer | Configurable in-combat duration display |
 | Cursor Effects | Cursor-following ring with GCD overlay and multiple textures, plus optional dispel and taunt cooldown countdowns at the cursor — tabbed page |
 | Focus Castbar | Repositionable cast bar with kick indicators, target names, focus raid marker, important-spell glow, out-of-range dimming, color settings, and cast sound alert |
-| Healer Mana | Healer mana readout with a name and spec icon per healer. Dungeon Mode shows the single party or M+ healer; Raid Mode, when enabled in raid instances, shows every raid healer stacked. The two modes can carry separate position, font, icon and layout settings. Shows OFFLINE when a healer disconnects |
-| No Movement Alert | Remaining-cooldown alert when your movement ability is unavailable — auto-detects your highest-priority movement spell (all classes) |
-| Player Absorbs | On-screen readout of your active damage-absorb shield and heal-absorb, with optional icons, flexible layout (stacked, side-by-side, or split), and player-frame anchoring |
 | Player Crosshair | Static crosshair overlay with range warning (melee, ranged, healer), cross or circle shape, optional always-on display, and an option to show it only while out of range |
 | Range Display | Target range text with out-of-range color warning |
+| Status Texts | On-screen status readouts on one tabbed page: Combat Potion reminder, Healer Mana, No Movement Alert, Pet Status, and Player Absorbs |
 
 ## Aura Tracking
 
@@ -53,19 +52,7 @@ The home page also carries the general settings: minimap button, login message, 
 | Player Debuffs | Replacement player debuff header with dispel-type coloring and full layout control |
 | Advanced Debuffs | Bar-based harmful-debuff display with cooldown swipe, native countdown text, dispel-type border color and atlas overlay, automatic player/pet-source exclusion, optional extra exclusion filters, a nameplate-only toggle, and a blocklist covering the spells the game lets addons identify by name (subsumes the older Boss Debuffs module) |
 | External Tracker | External defensive cooldowns cast onto you (Pain Suppression, Ironbark, Blessing of Sacrifice, and similar) with cooldown swipe, native countdown text, configurable glow per cast, BigWigs glow integration on incoming raid hits, and a sound test |
-| Missing Forms | Icon alert when you are not in the stance, form, aura, or attunement your specialization expects. Covers Warrior stances, Druid forms, Paladin auras, Priest Shadowform, and Evoker attunements, with a per-spec required choice, combat-only option, and a "show current form" mode that names what you are in instead |
-
-## Class Utilities
-
-| Module | Description |
-|---|---|
-| Evoker Suite | Disintegrate tick marks, Preservation Stasis tracker, Ebon Might crit/dupe tracker with pandemic refresh glow and ally extension warning, and Prescience Tracker (Prescience and Shifting Sands on allies) — tabbed page |
-| Hunter: Mark Missing | Alert when Hunter's Mark is not applied |
-| Pet Status Texts | On-screen pet status alerts for pet classes (Hunter, Warlock, Death Knight, Mage) |
-| Priest: PI Macro | Dynamically builds a Power Infusion macro with trinkets, racials, and potions |
 | Totem Tracker | Bar tracker for active totems with destroy buttons, configurable layout, and edit-mode integration. Tracks **all four Augmentation Evoker dupes** with independent timers — the default UI shows only two |
-| Warlock: Burning Rush | Glowing icon reminder while Burning Rush is active |
-| Warlock: Havoc Tracker | On-screen warning when your own Havoc is on the target you are already hitting. Destruction only |
 
 ## QoL
 
@@ -76,7 +63,7 @@ The home page also carries the general settings: minimap button, login message, 
 | CVars | One-click console variable panel that reads its values live from your client, including separate scale sliders for the windowed and maximized world map |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault, with class color and sound |
 | Quality of Life | Four tools on one page: Spell Alert Opacity (per-spec opt-in grid for Blizzard's proc overlay flashes, plus an opacity slider), Move Frames (drag Blizzard windows anywhere), Copy Anything (pull spell, item, NPC, and aura IDs to the clipboard from tooltips), and Slash Commands (shorthand commands such as `/rl`, `/cd`, `/fs`, `/leave`, `/reset`, `/mute`, `/music`) |
-| Utilities | Six tools on one page: Combat Potion (a "Potion Ready" cue when a combat potion is in bags and off cooldown), Raid Notifications (gateway usability, reset and loot boss reminders, Mythic bench alert, seasonal bonus rolls), Ready Check (clickable consumable icons on ready check, including Warlock Soulstone with auto-target healer), Recuperate (one-click self-heal with health-based visibility), Time Spiral (movement proc tracker with glow and countdown, all classes), and World Markers (cycle markers at the cursor with drag-to-reorder priority) |
+| Utilities | Seven tools on one page: Priest: PI Macro (builds a Power Infusion macro with trinkets, racials, and potions), Raid Notifications (gateway usability, reset and loot boss reminders, Mythic bench alert, seasonal bonus rolls), Ready Check (clickable consumable icons on ready check, including Warlock Soulstone with auto-target healer), Recuperate (one-click self-heal with health-based visibility), Time Spiral (movement proc tracker with glow and countdown, all classes), and World Markers (cycle markers at the cursor with drag-to-reorder priority) |
 
 ## Dungeon Tools
 

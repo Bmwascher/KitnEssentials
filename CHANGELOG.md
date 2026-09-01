@@ -1,5 +1,50 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.26
+
+### Four modules removed
+- Ebon Might Tracker, Ebon Might Extension Helper, Prescience Tracker and
+  Burning Rush have been removed, along with their settings pages
+- Patch 12.1 hides aura identity while you are in combat, so the tracking these
+  modules were built on is no longer possible. They were removed rather than
+  left to fail quietly
+
+### A new Class Tools page
+- **NEW:** The class-gated modules now share one Class Tools page under Combat:
+  Disintegrate ticks, Havoc Tracker, Hunter's Mark, Missing Forms and the
+  Stasis tracker
+
+### The settings sidebar is reorganised
+- Sections are now in alphabetical order
+- Class Utilities is gone as a section. Totem Tracker moved to Aura Tracking and
+  Priest: PI Macro to QoL Utilities
+- Combat Potion, Healer Mana, No Movement Alert, Pet Status and Player Absorbs
+  are together on one Status Texts page
+
+### Focus Marker
+- The macro is now named `!FocusMarker`, so it sorts to the top of your macro
+  list
+- If you already had one named FocusMarker, delete it and drag the new one to
+  your bar. The addon will not adopt the old one
+
+### Character sheet
+- **NEW:** Your Mythic+ rating now appears where the race line used to be,
+  coloured by rating. Nothing shows if you are unrated this season
+- Your name and level sit centred over your character rather than over the
+  window
+
+### The repair message says who paid
+- **NEW:** After an auto repair the message names the payer: guild funds, your
+  own gold, or a split of the two with the guild's share shown
+- A repair you clicked yourself, or one another addon made, still reports the
+  cost without naming a payer
+- A guild rank with unlimited withdrawal can now use guild funds. Those ranks
+  previously always paid their own gold, whatever the setting said
+- With junk in your bags and a guild-funded repair, the junk may sell a fraction
+  of a second later than before
+
+---
+
 ## v4.4.25
 
 ### New damage meter icons
