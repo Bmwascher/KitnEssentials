@@ -1002,6 +1002,17 @@ function AnnounceRepair(force)
     -- release its held junk sale early. Its own expiry cleans it up.
     if not stale then DisarmRepairWatch() end
 
+    -- The preference can go off INSIDE the settle window -- a profile switch
+    -- as easily as a click. Everything above still has to run: skipping the
+    -- consumption wedges repairPending and silences every later repair in the
+    -- session. Only the printing stops here.
+    --
+    -- Returning also drops a payer that stopped being measurable at the
+    -- moment the gate closed: the money branch shares this gate, so debits
+    -- landing after the flip never reached repairMoneySpent, and a part-paid
+    -- repair would read as fully guild-funded.
+    if not (AU.db and AU.db.Enabled and AU.db.RepairReport) then return end
+
     if spent <= 0 then return end
 
     local money = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString
