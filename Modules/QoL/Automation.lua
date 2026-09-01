@@ -696,8 +696,10 @@ local merchantFrame
 -- the guild branch: the player branch is unambiguous, and a repair KE did not
 -- start has no trustworthy window to measure.
 --
--- repairWatchGen is the cancellation. Bumping it orphans any expiry still
--- pending from an earlier repair, so a stale timer cannot clear live state.
+-- repairWatchGen identifies the REPAIR. It is not the cancellation -- the timer
+-- handles below are -- and it survives only because the pending announcement is
+-- stamped with it, which is how AnnounceRepair tells whether the payer sitting
+-- in these globals still describes the repair it is about to announce.
 local repairOwnBranch, repairGuildFunds, repairExpected
 local repairMoneyLast, repairMoneySpent
 local repairWatchGen, repairHeldSweep = 0, nil
@@ -707,20 +709,20 @@ local repairPending, repairPendingTotal = false, 0
 -- while an OLDER announcement is still in flight; without this the older
 -- announcement would read the newer payer straight out of the globals.
 local repairPendingGen = 0
--- Which SCHEDULED announcement is still allowed to run. repairWatchGen tracks
--- the repair; this tracks the callback. They are different things: one repair
--- can schedule several announcements -- the first bill drop arms one, and every
--- debit re-arms it -- and every one of those callbacks stays live and would
--- otherwise fire in turn, the earliest of them consuming a ledger that is still
--- filling.
-local repairAnnounceEpoch = 0
--- Which MERCHANT VISIT the stored bill belongs to. repairWatchGen tracks the
--- REPAIR; this tracks the visit, and they move independently -- a visit can
--- open without arming a watch, and a watch can outlive the visit that armed it.
--- Keying the bill's cleanup on the watch generation gets both cases wrong: a
--- watch that expires first strands the bill, and a reopen that arms no watch
--- lets a stale timer wipe the new visit's baseline.
-local repairMerchantGen = 0
+-- The live timer for each of the three timed jobs. Every one of them can be
+-- superseded before it fires, and each callback decides whether it still speaks
+-- for its job by comparing the handle it captured against the one stored here.
+--
+-- Handle identity, NOT a counter. Counters were the previous design and it grew
+-- one per timer, because a counter says only "something moved" -- so each timer
+-- needed its own to avoid answering for another timer's supersede. A handle is
+-- unique to the callback that captured it, so one field per job replaces one
+-- counter per job and cannot be bumped by anything else.
+--
+-- The compare is what makes this correct, not the Cancel. Cancel is called on
+-- supersede, but nothing here relies on it preventing a callback already queued
+-- for this frame: such a callback finds a different handle stored and returns.
+local announceTimer, watchTimer, graceTimer
 -- FORWARD DECLARATION, and it is load-bearing. ArmRepairWatch's expiry calls
 -- AnnounceRepair, but that function is defined further down beside the report
 -- frame. Without this line the call would resolve as a global, read nil, and
@@ -780,19 +782,32 @@ end
 -- before it, so a debit RESETS the settle window instead of adding a second
 -- callback to it, and a callback left over from a window that has been flushed
 -- cannot fire into the window that replaced it.
+--
+-- Retiring is a Cancel AND a handle swap. The swap is what enforces the rule: a
+-- superseded callback that runs anyway finds a different handle and returns.
 local function ScheduleAnnounce()
-    repairAnnounceEpoch = repairAnnounceEpoch + 1
-    local epoch = repairAnnounceEpoch
-    C_Timer.After(0.5, function()
-        if epoch ~= repairAnnounceEpoch then return end
+    if announceTimer then announceTimer:Cancel() end
+    local mine
+    mine = C_Timer.NewTimer(0.5, function()
+        if announceTimer ~= mine then return end
+        announceTimer = nil
         AnnounceRepair()
     end)
+    announceTimer = mine
 end
 
+-- repairWatchGen survives the move to handles because it is not a timer token:
+-- it identifies the REPAIR. The pending announcement is stamped with it, and
+-- AnnounceRepair reads that stamp to decide whether the payer in the globals
+-- still describes the repair being announced.
 local function DisarmRepairWatch()
     repairWatchGen = repairWatchGen + 1
     repairOwnBranch, repairGuildFunds, repairExpected = nil, nil, nil
     repairMoneyLast, repairMoneySpent = nil, nil
+    if watchTimer then
+        watchTimer:Cancel()
+        watchTimer = nil
+    end
     ReleaseHeldSweep()
 end
 
@@ -833,8 +848,12 @@ local function ArmRepairWatch(branch, expected, guildFunds, gold, sweep)
     repairMoneySpent = gold and 0 or nil
     repairHeldSweep = sweep
 
-    C_Timer.After(WATCH_EXPIRY, function()
-        if gen ~= repairWatchGen then return end
+    if watchTimer then watchTimer:Cancel() end
+    local mine
+    mine = C_Timer.NewTimer(WATCH_EXPIRY, function()
+        -- Superseded by a later arm, or already cancelled by a disarm.
+        if watchTimer ~= mine then return end
+        watchTimer = nil
 
         -- A debit has landed and THIS watch's own settle window is still
         -- counting down. That window exists to stop a partial bill being split,
@@ -867,9 +886,12 @@ local function ArmRepairWatch(branch, expected, guildFunds, gold, sweep)
 
         -- A non-stale announcement already disarmed and bumped the generation,
         -- so this is skipped. A stale one did not, and this watch still needs
-        -- its own cleanup.
+        -- its own cleanup. This stays a GENERATION test, not a handle test: it
+        -- asks whether the repair moved on, which is what AnnounceRepair may
+        -- have done while this callback was running.
         if gen == repairWatchGen then DisarmRepairWatch() end
     end)
+    watchTimer = mine
 end
 
 local function SetupAutoSellRepair()
@@ -1193,18 +1215,28 @@ local function SetupRepairReport()
             -- attempted a beat later has no merchant left to sell to.
             if repairOwnBranch and not repairPending then
                 ReleaseHeldSweep()
-                -- TWO generations, because the two halves below answer to
-                -- different owners. The bill belongs to the merchant VISIT, so
-                -- a reopen inside the grace window must keep its own fresh
-                -- baseline; the watch belongs to the REPAIR, and its expiry may
-                -- have retired it before this even runs.
-                local wgen, mgen = repairWatchGen, repairMerchantGen
-                C_Timer.After(CLOSE_GRACE, function()
-                    if mgen == repairMerchantGen then repairBill = nil end
+                -- The bill belongs to the merchant VISIT and the watch to the
+                -- REPAIR, so the two halves below still answer to different
+                -- owners -- but only one of them needs a token now. A new visit
+                -- CANCELS this timer outright, so reaching the body at all
+                -- means no visit replaced the baseline and the clear is
+                -- unconditional.
+                --
+                -- The disarm half keeps the generation test because the watch
+                -- can be retired without touching this timer: its own expiry
+                -- may have run first.
+                local wgen = repairWatchGen
+                if graceTimer then graceTimer:Cancel() end
+                local mine
+                mine = C_Timer.NewTimer(CLOSE_GRACE, function()
+                    if graceTimer ~= mine then return end
+                    graceTimer = nil
+                    repairBill = nil
                     if wgen == repairWatchGen and not repairPending then
                         DisarmRepairWatch()
                     end
                 end)
+                graceTimer = mine
                 return
             end
 
@@ -1221,7 +1253,13 @@ local function SetupRepairReport()
         end
 
         if event == "MERCHANT_SHOW" then
-            repairMerchantGen = repairMerchantGen + 1
+            -- A new visit owns the baseline from here. Retire any close-grace
+            -- timer still counting down from the previous one, or it would
+            -- clear the bill this line is about to read.
+            if graceTimer then
+                graceTimer:Cancel()
+                graceTimer = nil
+            end
             repairBill = ReadRepairBill()
             return
         end
