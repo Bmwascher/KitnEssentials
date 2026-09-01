@@ -28,3 +28,60 @@ describe("DungeonCasts Combat Only gate", function()
         assert.is_true(DC:IsValidUnit("nameplate1"))
     end)
 end)
+
+-- The rescan exists to collect mobs Combat Only refused mid-cast. With the
+-- flag off nothing was ever refused, so running it anyway is not a no-op: it
+-- surfaces units MaxBars turned away on an earlier pull.
+describe("DungeonCasts combat-start rescan", function()
+    local function loadWithSpy(combatOnly)
+        local DC = load()
+        DC.db = { Frame = { CombatOnly = combatOnly } }
+        DC.instanceActive = true
+        DC.isPreview = false
+        local scanned = false
+        DC.ScanExistingNameplates = function() scanned = true end
+        return DC, function() return scanned end
+    end
+
+    it("rescans on a pull while the flag is on", function()
+        local DC, wasScanned = loadWithSpy(true)
+        DC:OnCombatStart()
+        assert.is_true(wasScanned())
+    end)
+
+    it("does not rescan while the flag is off", function()
+        local DC, wasScanned = loadWithSpy(false)
+        DC:OnCombatStart()
+        assert.is_false(wasScanned())
+    end)
+end)
+
+-- A held bar carries the interrupt colour under "Interrupted by X". An
+-- interruptible event arriving after a refused cast start would repaint it to
+-- a live cast colour and contradict its own text.
+describe("DungeonCasts interrupt hold vs interruptible repaint", function()
+    local function loadWithBar(holdUntil)
+        local DC = L.loadDungeonCasts({
+            C_CastingInfo = {
+                GetCastInfo = function() return { notInterruptible = false } end,
+                GetChannelInfo = function() return nil end,
+            },
+        })
+        local repainted = false
+        DC.UpdateBarColor = function() repainted = true end
+        DC.activeFrames = { nameplate1 = { holdUntil = holdUntil } }
+        return DC, function() return repainted end
+    end
+
+    it("repaints a bar that is not holding", function()
+        local DC, wasRepainted = loadWithBar(nil)
+        DC:UpdateInterruptible("nameplate1")
+        assert.is_true(wasRepainted())
+    end)
+
+    it("leaves a held bar alone", function()
+        local DC, wasRepainted = loadWithBar(999)
+        DC:UpdateInterruptible("nameplate1")
+        assert.is_false(wasRepainted())
+    end)
+end)

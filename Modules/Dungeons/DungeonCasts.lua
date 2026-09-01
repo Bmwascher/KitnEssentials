@@ -834,6 +834,9 @@ end
 function DC:UpdateInterruptible(unit)
     local bar = self.activeFrames[unit]
     if not bar then return end
+    -- A held bar shows the interrupt colour under "Interrupted by X". Recolouring
+    -- it to a live cast colour would contradict its own text.
+    if bar.holdUntil then return end
 
     local castInfo = C_CastingInfo and
         (C_CastingInfo.GetCastInfo(unit) or C_CastingInfo.GetChannelInfo(unit))
@@ -864,6 +867,10 @@ function DC:OnCombatStart()
     -- A real rescan while preview is up would inject live nameplate bars
     -- into the preview stack.
     if not self.instanceActive then return end
+    -- Same gate as the release side. With Combat Only off nothing was ever
+    -- refused for being out of combat, so there is no backlog to collect and
+    -- a rescan would only surface units MaxBars turned away earlier.
+    if not (self.db.Frame and self.db.Frame.CombatOnly) then return end
     self:ScanExistingNameplates()
 end
 
