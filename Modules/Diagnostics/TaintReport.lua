@@ -174,7 +174,9 @@ local function NormalizeRetained(value, maximum, forceMarker)
     local truncated = forceMarker or string_len(normalized) > maximum
     if truncated then
         local payload = math_min(string_len(normalized), maximum - string_len(TRUNCATION_MARKER))
-        normalized = string_sub(normalized, 1, payload) .. TRUNCATION_MARKER
+        local shortened = string_sub(normalized, 1, payload)
+        if not SafeCanAccess(shortened) then return nil end
+        normalized = shortened .. TRUNCATION_MARKER
         if not SafeCanAccess(normalized) then return nil end
     end
     if string_len(normalized) > maximum then return nil end
@@ -479,8 +481,8 @@ local function NotifyNewGroup(action)
         return
     end
     if not KE.Print then return end
-    local message = "A protected action attributed to KitnEssentials was captured: "
-        .. action .. ". Use /kes taint."
+    local message = string_format(
+        "A protected action attributed to KitnEssentials was captured: %s. Use /kes taint.", action)
     if SafeFinishedString(message) then KE:Print(message) end
 end
 
@@ -972,8 +974,11 @@ end
 
 local function FinalizeWriter(writer)
     local report = table_concat(writer.parts)
-    if writer.truncated then report = report .. REPORT_TRUNCATION_MARKER end
     if not SafeFinishedString(report) then return nil end
+    if writer.truncated then
+        report = report .. REPORT_TRUNCATION_MARKER
+        if not SafeFinishedString(report) then return nil end
+    end
     return report
 end
 
@@ -985,7 +990,7 @@ end
 local function WriteGroupDetails(writer, groups)
     for _, group in ipairs(groups) do
         WriteDetail(writer, string_format("\n[%s] %s\n", group.scope, group.event))
-        WriteDetail(writer, "Action: " .. group.action .. "\n")
+        WriteDetail(writer, string_format("Action: %s\n", group.action))
         WriteDetail(writer, "Occurrences: " .. LowerBoundText(group.count) .. "\n")
         WriteDetail(writer, string_format("First seen: %d | Last seen: %d | Stack samples: %d\n",
             group.firstSeen, group.lastSeen, group.walks))
@@ -1016,7 +1021,7 @@ local function WriteGroupDetails(writer, groups)
             WriteDetail(writer, string_format("Sampled source %d (%s observations): %s\n",
                 sourceIndex, LowerBoundText(source.observedSamples), source.site))
             for _, line in ipairs(source.keLines) do
-                WriteDetail(writer, "  KE line: " .. line .. "\n")
+                WriteDetail(writer, string_format("  KE line: %s\n", line))
             end
             if source.keLinesOmitted > 0 then
                 WriteDetail(writer, "  KE lines omitted: "
@@ -1042,9 +1047,9 @@ local function BuildReport()
 
     if not mandatory("KitnEssentials Taint Report\n==========================\n\n") then return nil end
     if not mandatory("Report metadata\n---------------\n") then return nil end
-    if not mandatory("Addon version: " .. environment.addonVersion .. "\n") then return nil end
-    if not mandatory("Client build: " .. environment.clientBuild .. "\n") then return nil end
-    if not mandatory("Report time: " .. environment.reportDate .. "\n") then return nil end
+    if not mandatory(string_format("Addon version: %s\n", environment.addonVersion)) then return nil end
+    if not mandatory(string_format("Client build: %s\n", environment.clientBuild)) then return nil end
+    if not mandatory(string_format("Report time: %s\n", environment.reportDate)) then return nil end
     if not mandatory("\nImportant attribution and copy guidance\n---------------------------------------\n") then
         return nil
     end

@@ -577,6 +577,73 @@ describe("TaintReport capture and access guards", function()
         assert.is_true(secondGuard < comparison)
         assert.is_true(comparison < result)
     end)
+
+    it("uses static source order to guard every derived composition before reuse", function()
+        local handle = assert(io.open("Modules/Diagnostics/TaintReport.lua", "rb"))
+        local source = handle:read("*a")
+        handle:close()
+
+        -- Ordinary Lua mocks cannot model live secret propagation, so this proves required source order only.
+        local normalizeStart = assert(source:find("local function NormalizeRetained", 1, true))
+        local normalizeEnd = assert(source:find("local function BoundedString", normalizeStart, true))
+        local normalizeSource = source:sub(normalizeStart, normalizeEnd - 1)
+        local substring = assert(normalizeSource:find(
+            "local shortened = string_sub(normalized, 1, payload)", 1, true))
+        local substringGuard = assert(normalizeSource:find(
+            "if not SafeCanAccess(shortened) then return nil end", substring, true))
+        local markerAppend = assert(normalizeSource:find(
+            "normalized = shortened .. TRUNCATION_MARKER", substringGuard, true))
+        local completedGuard = assert(normalizeSource:find(
+            "if not SafeCanAccess(normalized) then return nil end", markerAppend, true))
+        assert.is_true(substring < substringGuard)
+        assert.is_true(substringGuard < markerAppend)
+        assert.is_true(markerAppend < completedGuard)
+
+        local notifyStart = assert(source:find("local function NotifyNewGroup", 1, true))
+        local notifyEnd = assert(source:find("local function AdvanceGroup", notifyStart, true))
+        local notifySource = source:sub(notifyStart, notifyEnd - 1)
+        local notificationTransform = assert(notifySource:find("local message = string_format(", 1, true))
+        local notificationGuard = assert(notifySource:find(
+            "if SafeFinishedString(message) then", notificationTransform, true))
+        local notificationPrint = assert(notifySource:find("KE:Print(message)", notificationGuard, true))
+        assert.is_true(notificationTransform < notificationGuard)
+        assert.is_true(notificationGuard < notificationPrint)
+
+        local finalizeStart = assert(source:find("local function FinalizeWriter", 1, true))
+        local finalizeEnd = assert(source:find("local function DisclosureLine", finalizeStart, true))
+        local finalizeSource = source:sub(finalizeStart, finalizeEnd - 1)
+        local joined = assert(finalizeSource:find("local report = table_concat(writer.parts)", 1, true))
+        local joinedGuard = assert(finalizeSource:find(
+            "if not SafeFinishedString(report) then return nil end", joined, true))
+        local truncation = assert(finalizeSource:find("if writer.truncated then", joinedGuard, true))
+        local reportAppend = assert(finalizeSource:find(
+            "report = report .. REPORT_TRUNCATION_MARKER", truncation, true))
+        local appendedGuard = assert(finalizeSource:find(
+            "if not SafeFinishedString(report) then return nil end", reportAppend, true))
+        assert.is_true(joined < joinedGuard)
+        assert.is_true(joinedGuard < truncation)
+        assert.is_true(truncation < reportAppend)
+        assert.is_true(reportAppend < appendedGuard)
+
+        local detailsStart = assert(source:find("local function WriteGroupDetails", 1, true))
+        local detailsEnd = assert(source:find("local function ToolStateText", detailsStart, true))
+        local detailsSource = source:sub(detailsStart, detailsEnd - 1)
+        assert.is_truthy(detailsSource:find(
+            "WriteDetail(writer, string_format(\"Action: %s\\n\", group.action))", 1, true))
+        assert.is_truthy(detailsSource:find(
+            "WriteDetail(writer, string_format(\"  KE line: %s\\n\", line))", 1, true))
+
+        local reportStart = assert(source:find("local function BuildReport", 1, true))
+        local reportEnd = assert(source:find("local function ThemeColor", reportStart, true))
+        local reportSource = source:sub(reportStart, reportEnd - 1)
+        for _, composition in ipairs({
+            "if not mandatory(string_format(\"Addon version: %s\\n\", environment.addonVersion)) then return nil end",
+            "if not mandatory(string_format(\"Client build: %s\\n\", environment.clientBuild)) then return nil end",
+            "if not mandatory(string_format(\"Report time: %s\\n\", environment.reportDate)) then return nil end",
+        }) do
+            assert.is_truthy(reportSource:find(composition, 1, true), composition)
+        end
+    end)
 end)
 
 describe("TaintReport real slash router", function()
