@@ -10,9 +10,9 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 
 GUIFrame:RegisterTabbedContent("StatusTexts", {
-    { id = "PetStatusText", label = "Pet Status" },
-    { id = "StanceText",    label = "Missing Forms" },
-    { id = "HuntersMark",   label = "Hunter's Mark" },
-    { id = "HealerMana",    label = "Healer Mana" },
-    { id = "HavocTracker",  label = "Havoc Tracker" },
+    { id = "PotionReady",     label = "Combat Potion" },
+    { id = "HealerMana",      label = "Healer Mana" },
+    { id = "NoMovementAlert", label = "No Movement Alert" },
+    { id = "PetStatusText",   label = "Pet Status" },
+    { id = "PlayerAbsorbs",   label = "Player Absorbs" },
 })
