@@ -17,6 +17,7 @@ local UnitCastingInfo, UnitChannelInfo = UnitCastingInfo, UnitChannelInfo
 local UnitCastingDuration, UnitChannelDuration = UnitCastingDuration, UnitChannelDuration
 local UnitExists = UnitExists
 local UnitCanAttack = UnitCanAttack
+local UnitAffectingCombat = UnitAffectingCombat
 local UnitName = UnitName
 local UnitClass = UnitClass
 local UnitSpellTargetName = UnitSpellTargetName
@@ -32,6 +33,7 @@ local C_ClassColor = C_ClassColor
 local Enum = Enum
 local CreateColor = CreateColor
 local pairs, ipairs = pairs, ipairs
+local select = select
 local wipe = wipe
 local tinsert, tremove, tsort = table.insert, table.remove, table.sort
 local strmatch = string.match
@@ -411,6 +413,7 @@ function DC:ReleaseBar(bar)
     bar.unit = nil
     bar.casting = nil
     bar.channeling = nil
+    bar.holdUntil = nil
     bar.notInterruptible = nil
     bar.cachedDuration = nil
     bar.spellName = nil
@@ -445,6 +448,11 @@ function DC:IsValidUnit(unit)
     if not strmatch(unit, NAMEPLATE_PATTERN) then return false end
     if not UnitExists(unit) then return false end
     if not UnitCanAttack("player", unit) then return false end
+    -- UnitAffectingCombat carries the same SecretArguments annotation as the
+    -- two calls above, which already run unguarded on this same unit, so no
+    -- secret token can reach this call either. Its return is non-nilable, so
+    -- this refuses only on an explicit false.
+    if self.db.Frame.CombatOnly and not UnitAffectingCombat(unit) then return false end
     return true
 end
 
@@ -629,6 +637,9 @@ end
 -- Populates a bar with cast data and refreshes its visuals
 function DC:PopulateBar(bar, unit, data)
     bar.unit = unit
+    -- A reused nameplate token would otherwise inherit a held bar from
+    -- whatever the pool last showed on this frame.
+    bar.holdUntil = nil
     bar.casting = data.isCasting
     bar.channeling = data.isChanneling
     bar.notInterruptible = data.notInterruptible
@@ -679,6 +690,10 @@ end
 function DC:StopCast(unit)
     local bar = self.activeFrames[unit]
     if not bar then return end
+    -- A held bar is showing who kicked it and stays until the hold expires.
+    -- UNIT_SPELLCAST_STOP follows an interrupt for the same cast, so without
+    -- this the hold would be torn down in the same frame it was set.
+    if bar.holdUntil then return end
     self.activeFrames[unit] = nil
     self.activeCount = self.activeCount - 1
     self:ReleaseBar(bar)
@@ -739,9 +754,9 @@ local CAST_EVENT_HANDLERS = {
     UNIT_SPELLCAST_START = "StartCast",
     UNIT_SPELLCAST_CHANNEL_START = "StartCast",
     UNIT_SPELLCAST_STOP = "StopCast",
-    UNIT_SPELLCAST_CHANNEL_STOP = "StopCast",
+    UNIT_SPELLCAST_CHANNEL_STOP = "OnCastInterrupted",
     UNIT_SPELLCAST_FAILED = "StopCast",
-    UNIT_SPELLCAST_INTERRUPTED = "StopCast",
+    UNIT_SPELLCAST_INTERRUPTED = "OnCastInterrupted",
     UNIT_SPELLCAST_INTERRUPTIBLE = "UpdateInterruptible",
     UNIT_SPELLCAST_NOT_INTERRUPTIBLE = "UpdateInterruptible",
 }
@@ -756,13 +771,62 @@ function DC:OnNameplateRemoved(_, unit)
     self:StopCast(unit)
 end
 
-function DC:OnCastEvent(event, unit)
+function DC:OnCastEvent(event, unit, ...)
     if not self.instanceActive then return end
     if not unit or not strmatch(unit, NAMEPLATE_PATTERN) then return end
 
     local handler = CAST_EVENT_HANDLERS[event]
-    if handler then
+    if handler == "OnCastInterrupted" then
+        self:OnCastInterrupted(event, unit, ...)
+    elseif handler then
         self[handler](self, unit)
+    end
+end
+
+-- UNIT_SPELLCAST_INTERRUPTED and UNIT_SPELLCAST_CHANNEL_STOP both carry the
+-- interrupter GUID at vararg 3. INTERRUPTED always means an interrupt, even
+-- with a nil GUID -- Blizzard omits it for Avenger's Shield and some warlock
+-- kicks. CHANNEL_STOP also fires on a natural channel end, so it only counts
+-- as an interrupt when the GUID is non-nil.
+function DC:OnCastInterrupted(event, unit, ...)
+    local interruptedBy = select(3, ...)
+    local wasInterrupted = (event == "UNIT_SPELLCAST_INTERRUPTED") or interruptedBy ~= nil
+    if not wasInterrupted then
+        self:StopCast(unit)
+        return
+    end
+
+    local bar = self.activeFrames[unit]
+    local interruptDb = self.db.Interrupt
+    if not bar or not interruptDb or not interruptDb.Enabled or (interruptDb.HoldDuration or 0) <= 0 then
+        self:StopCast(unit)
+        return
+    end
+
+    bar.holdUntil = GetTime() + interruptDb.HoldDuration
+    -- Stops the OnUpdate time-text branch, which is gated on these.
+    bar.casting, bar.channeling = nil, nil
+
+    -- Stop the C-side engine drive so the fill doesn't keep animating under
+    -- the interrupt text. C_DurationUtil is 12.x-only, hence the guard.
+    if C_DurationUtil and C_DurationUtil.CreateDuration then
+        bar.castBar:SetTimerDuration(C_DurationUtil.CreateDuration(),
+            Enum.StatusBarInterpolation.Immediate, Enum.StatusBarTimerDirection.ElapsedTime)
+    end
+    bar.castBar:SetMinMaxValues(0, 1)
+    bar.castBar:SetValue(1)
+    if bar.timeText then bar.timeText:SetText("") end
+    if bar.spark then bar.spark:Hide() end
+
+    local r, g, b, a = KE:ResolveColor(interruptDb.Color, { 0.35, 1, 0.35, 1 })
+    bar.castBar:GetStatusBarTexture():SetVertexColor(r, g, b, a)
+
+    local interrupterName = interruptDb.ShowInterrupter and interruptedBy
+        and KE.CastbarHelpers.GetColoredNameFromGUID(interruptedBy)
+    if interrupterName then
+        bar.nameText:SetFormattedText("Interrupted by %s", interrupterName)
+    else
+        bar.nameText:SetFormattedText("Interrupted")
     end
 end
 
@@ -782,8 +846,46 @@ end
 function DC:ScanExistingNameplates()
     for i = 1, MAX_NAMEPLATES do
         local unit = "nameplate" .. i
-        if UnitExists(unit) and self:IsValidUnit(unit) then
+        -- Skipping units already holding a bar keeps a rescan from resetting
+        -- their startTime, which SortUnits orders on -- a blind rescan would
+        -- reshuffle the whole stack at every pull start.
+        if UnitExists(unit) and not self.activeFrames[unit] and self:IsValidUnit(unit) then
             self:StartCast(unit)
+        end
+    end
+end
+
+-- Combat-Only gates unit validity on UnitAffectingCombat, but IsValidUnit
+-- only runs on the three acquire paths (StartCast, OnNameplateAdded,
+-- ScanExistingNameplates), so a mob already mid-cast when the pull starts
+-- would otherwise get no bar until its next cast.
+function DC:OnCombatStart()
+    if self.isPreview then return end
+    -- A real rescan while preview is up would inject live nameplate bars
+    -- into the preview stack.
+    if not self.instanceActive then return end
+    self:ScanExistingNameplates()
+end
+
+-- Mirrors the acquire-side gate above: a mob that drops combat otherwise
+-- lingers until some spell-stop event happens to arrive for it.
+function DC:OnCombatEnd()
+    if self.isPreview then return end
+    if not (self.db.Frame and self.db.Frame.CombatOnly) then return end
+
+    local toStop
+    for unit in pairs(self.activeFrames) do
+        if not self:IsValidUnit(unit) then
+            toStop = toStop or {}
+            tinsert(toStop, unit)
+        end
+    end
+    if toStop then
+        for i = 1, #toStop do
+            -- Goes through StopCast, not ReleaseBar, so a bar holding an
+            -- interrupt attribution survives to its expiry instead of being
+            -- torn out from under the player.
+            self:StopCast(toStop[i])
         end
     end
 end
@@ -816,8 +918,18 @@ function DC:SetUpdateFrameRunning(running)
 end
 
 function DC:OnUpdate()
+    local now = GetTime()
     local decimalsCurve = KE.curves and KE.curves.DurationDecimals
-    for _, bar in pairs(self.activeFrames) do
+    for unit, bar in pairs(self.activeFrames) do
+        -- Interrupt holds expire here rather than on a per-bar timer: one
+        -- tick already runs while bars are up, and a timer would have to be
+        -- cancelled on every teardown path. Clears holdUntil BEFORE calling
+        -- StopCast -- StopCast refuses to release a bar while it is set.
+        if bar.holdUntil and now >= bar.holdUntil then
+            bar.holdUntil = nil
+            self:StopCast(unit)
+        end
+
         if bar:IsShown() and (bar.casting or bar.channeling) and bar.timeText then
             local duration = bar.cachedDuration or bar.castBar:GetTimerDuration()
             if duration then
@@ -879,7 +991,11 @@ function DC:UpdateFrameVisuals()
 
     for _, bar in pairs(self.activeFrames) do
         self:ConfigureBar(bar)
-        self:UpdateBarColor(bar)
+        -- A held bar shows the interrupt tint; repainting it here would
+        -- overwrite that colour with the cast colour mid-hold.
+        if not bar.holdUntil then
+            self:UpdateBarColor(bar)
+        end
         -- Raid icon visibility reacts to the Show Raid Target Icon toggle —
         -- without this the preview ignored the flip (report).
         -- Preview branch reads bar.previewRaidIcon, real branch bar.unit.
@@ -1042,6 +1158,8 @@ function DC:OnEnable()
 
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "CheckInstanceType")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CheckInstanceType")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatStart")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
 
     self:CheckInstanceType()
     self:SetUpdateFrameRunning(self.instanceActive)

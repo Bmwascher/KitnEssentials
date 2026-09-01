@@ -1244,6 +1244,25 @@ function L.loadCombatCross(overrides)
     return CC, KE
 end
 
+-- Modules/Dungeons/DungeonCasts.lua. UnitAffectingCombat and UnitCanAttack are
+-- UNMANAGED (dev/spec/_wow_mock.lua), so they are assigned to _G directly --
+-- handing them to installMock would drop them silently. Nothing creates a
+-- frame at load time. Defaults to OUT of combat and ABLE to attack; a test
+-- that needs the combat gate to pass must say so explicitly.
+-- Returns DC, KE.
+function L.loadDungeonCasts(overrides)
+    overrides = overrides or {}
+    installMock(managedSubset(overrides), { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.LibStub = function() return nil end
+    _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
+    _G.UnitCanAttack = overrides.UnitCanAttack or function() return true end
+    local KE = { Print = function() end, curves = {} }
+    helpers.loadModule("Modules/Dungeons/DungeonCasts.lua", KE)
+    return modules["DungeonCasts"], KE
+end
+
 -- Modules/QoL/SlashCommands.lua. The file guards on a truthy KitnEssentials at
 -- load, which installAddonShim supplies, and it indexes C_CVar at file scope
 -- (SlashCommands.lua), so C_CVar must exist before load. Nothing registers

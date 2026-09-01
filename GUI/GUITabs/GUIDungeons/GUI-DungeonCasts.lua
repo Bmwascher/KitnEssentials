@@ -19,6 +19,9 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     local DC = KitnEssentials and KitnEssentials:GetModule("DungeonCasts", true) or nil
 
     local manager = GUIFrame:CreateWidgetStateManager()
+    manager:SetCondition("interrupt", function()
+        return db.Interrupt and db.Interrupt.Enabled ~= false
+    end)
 
     local statusbarList = {}
     if LSM then
@@ -154,7 +157,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     manager:Register(spacingSlider, "all")
     card3:AddRow(row3b, Theme.rowHeight)
 
-    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local growthDropdown = GUIFrame:CreateDropdown(row3c, "Growth Direction", {
         options = { { key = "DOWN", text = "Down" }, { key = "UP", text = "Up" } },
         value = db.Frame.GrowthDirection or "DOWN",
@@ -162,7 +165,16 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     })
     row3c:AddWidget(growthDropdown, 1)
     manager:Register(growthDropdown, "all")
-    card3:AddRow(row3c, Theme.rowHeightLast, 0)
+    card3:AddRow(row3c, Theme.rowHeight)
+
+    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
+    local combatOnlyCheck = GUIFrame:CreateCheckbox(row3d, "Combat Only", {
+        value = db.Frame.CombatOnly ~= false,
+        callback = function(checked) db.Frame.CombatOnly = checked end,
+    })
+    row3d:AddWidget(combatOnlyCheck, 1)
+    manager:Register(combatOnlyCheck, "all")
+    card3:AddRow(row3d, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
 
@@ -379,6 +391,50 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     card7:AddLabel("|cff888888Show the target of enemy casts on the cast bar.|r")
 
     yOffset = card7:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 8: Interrupted By
+    ----------------------------------------------------------------
+    local card8 = GUIFrame:CreateCard(scrollChild, "Interrupted By", yOffset)
+    manager:Register(card8, "all")
+
+    local row8a = GUIFrame:CreateRow(card8.content, Theme.rowHeight)
+    local interruptEnableCheck = GUIFrame:CreateCheckbox(row8a, "Hold on Interrupt", {
+        value = db.Interrupt and db.Interrupt.Enabled ~= false,
+        callback = function(checked)
+            db.Interrupt.Enabled = checked
+            RefreshStates()
+        end,
+    })
+    row8a:AddWidget(interruptEnableCheck, 0.5)
+    manager:Register(interruptEnableCheck, "all")
+
+    local showInterrupterCheck = GUIFrame:CreateCheckbox(row8a, "Show Interrupter", {
+        value = db.Interrupt and db.Interrupt.ShowInterrupter ~= false,
+        callback = function(checked) db.Interrupt.ShowInterrupter = checked end,
+    })
+    row8a:AddWidget(showInterrupterCheck, 0.5)
+    manager:Register(showInterrupterCheck, "interrupt")
+    card8:AddRow(row8a, Theme.rowHeight)
+
+    local row8b = GUIFrame:CreateRow(card8.content, Theme.rowHeightLast)
+    local holdDurationSlider = GUIFrame:CreateSlider(row8b, "Hold Duration", {
+        min = 0, max = 5, step = 0.1,
+        value = db.Interrupt and db.Interrupt.HoldDuration or 1.5,
+        callback = function(value) db.Interrupt.HoldDuration = value end,
+    })
+    row8b:AddWidget(holdDurationSlider, 0.5)
+    manager:Register(holdDurationSlider, "interrupt")
+
+    local interruptColorPicker = GUIFrame:CreateColorPicker(row8b, "Color", {
+        color = db.Interrupt and db.Interrupt.Color,
+        callback = function(r, g, b, a) db.Interrupt.Color = { r, g, b, a } end,
+    })
+    row8b:AddWidget(interruptColorPicker, 0.5)
+    manager:Register(interruptColorPicker, "interrupt")
+    card8:AddRow(row8b, Theme.rowHeightLast, 0)
+
+    yOffset = card8:GetNextOffset()
 
     RefreshStates()
     return yOffset
