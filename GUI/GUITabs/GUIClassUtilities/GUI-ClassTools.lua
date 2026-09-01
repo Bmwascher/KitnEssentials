@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-ClassTools.lua                                      ║
--- ║  GUI: Class Tools — six class-gated modules on one page. ║
+-- ║  GUI: Class Tools — the class-gated modules on one page. ║
 -- ║  The per-module builders stay registered under their own ║
 -- ║  ids and are dispatched here as tabs.                    ║
 -- ╚══════════════════════════════════════════════════════════╝
