@@ -878,18 +878,39 @@ CP._WidenAmount = WidenAmount
 -- both header strings on the whole frame, so the stat pane drags them right of
 -- the model.
 --
--- The width this module adds is deliberately NOT corrected for: the widen moves
--- the model by half the added width, which is exactly how far the frame centre
--- moves, so the two already track. Measured in game -- the correction is the
--- same -103.5 at 580 wide and at 540 wide.
-local function HeaderOffsetX(cfWidth, statPaneLeft)
-    if type(cfWidth) ~= "number" then return 0 end
-    if type(statPaneLeft) ~= "number" then return 0 end
-    local pane = cfWidth - statPaneLeft
-    if pane <= 0 then return 0 end
-    return -pane / 2
+-- Blizzard's own anchor points, captured before anything is moved.
+-- ClearAllPoints is destructive and leaves nothing behind that knows where a
+-- string belongs, so without this a disabled module strands the header wherever
+-- we last put it.
+local origHeaderAnchors = {}
+
+local function CaptureAnchors(region)
+    if not region or origHeaderAnchors[region] then return end
+    local points, count = {}, region:GetNumPoints()
+    if count < 1 then return end
+    for i = 1, count do
+        local point, relativeTo, relativePoint, x, y = region:GetPoint(i)
+        points[i] = { point, relativeTo, relativePoint, x, y }
+    end
+    origHeaderAnchors[region] = points
 end
-CP._HeaderOffsetX = HeaderOffsetX
+
+local function RestoreAnchors(region)
+    local points = region and origHeaderAnchors[region]
+    if not points then return end
+    region:ClearAllPoints()
+    for _, a in ipairs(points) do
+        region:SetPoint(a[1], a[2], a[3], a[4], a[5])
+    end
+end
+
+local function HeaderRegions()
+    local cf = _G.CharacterFrame
+    local titleText = _G.CharacterFrameTitleText
+        or (cf and cf.TitleContainer and cf.TitleContainer.TitleText)
+    return cf, titleText, _G.CharacterLevelText
+end
+CP._RestoreHeaderAnchors = RestoreAnchors
 
 -- ABSOLUTE anchors, never deltas. Every value is set to a computed absolute, so
 -- running this ten times produces the same layout as running it once. Four
@@ -945,87 +966,54 @@ end
 -- whether or not this module widens anything, and ApplyWiden bails whenever
 -- there is no width to write.
 --
--- The stat pane's left edge is READ, not derived. Deriving it from
--- PANEL_DEFAULT_WIDTH plus the added width lands 6px right of where the pane
--- actually sits, which is a 3px error in a half-width.
+-- ANCHORS, not offsets. The name hangs off the model scene and the level line
+-- hangs off the name, so the whole stack tracks the model for free. An x offset
+-- derived from the frame's centre is only correct at the width it was measured
+-- at, and CharacterFrame swaps widths on Expand/Collapse -- which puts the name
+-- right on the first open and drifting on the next.
 function CP:ApplyHeaderCentering()
-    local cf = _G.CharacterFrame
-    local insetR = _G.CharacterFrameInsetRight
-    if not (cf and insetR) then return end
+    local cf, titleText, levelText = HeaderRegions()
+    if not (cf and titleText and levelText) then return end
 
-    -- Same reading ApplyWiden feeds WidenAmount, and needed here for the same
-    -- reason: see the one-shot delta measurement below.
-    local pdf = _G.PaperDollFrame
-    local pdfShown = pdf and pdf:IsShown() and true or false
+    CaptureAnchors(titleText)
+    CaptureAnchors(levelText)
 
-    -- Drive the offsets to ZERO rather than returning: returning would strand
-    -- whatever was last applied, which is how a disabled module keeps moving
-    -- Blizzard's title.
+    -- Restore rather than return. An early return strands the last anchors we
+    -- wrote, which is how a disabled module keeps holding Blizzard's header.
     --
     -- BOTH enable tests. IsEnabled() is the Ace lifecycle state, db.Enabled is
     -- the profile key, and the two genuinely disagree -- a profile switch
     -- re-applies settings without re-enabling.
-    --
-    -- titleOffset stays 0 until _titleDelta has been measured, so the title is
-    -- left where Blizzard put it rather than guessed at.
-    local levelOffset, titleOffset = 0, 0
-    local titleContainer = cf.TitleContainer
+    local pdf = _G.PaperDollFrame
+    local model = _G.CharacterModelScene
+    local own = self:IsEnabled() and self.db and self.db.Enabled
+        and not ElvUILoaded()
+        and not KE:EUIDrawsSlotElement("player", "headerText")
 
-    if self:IsEnabled() and self.db and self.db.Enabled and not ElvUILoaded()
-        and not KE:EUIDrawsSlotElement("player", "headerText") then
-        -- Width comes from the RECT, not from GetWidth(). This runs in the
-        -- same hook pass that just called cf:SetWidth, and GetWidth returns
-        -- that new value immediately while GetLeft/GetRight can still describe
-        -- the old layout. Mixing the two produces a delta of -3 instead of 17,
-        -- and _titleDelta is cached forever. Reading every figure from the same
-        -- rect source is self-consistent at any staleness, and the delta is
-        -- width-invariant, so a stale-but-consistent snapshot still gives 17.
-        local cfLeft, cfRight = cf:GetLeft(), cf:GetRight()
-        local paneLeft = insetR:IsShown() and insetR:GetLeft()
-        if cfLeft and cfRight and paneLeft then
-            local cfW = cfRight - cfLeft
-            levelOffset = HeaderOffsetX(cfW, paneLeft - cfLeft)
-
-            -- The title sits 17px right of the level string, because its
-            -- container is inset asymmetrically for the portrait. Measured
-            -- ONCE, before anything is offset, and cached -- it is a property
-            -- of the template, not of the width. Reading it live on every pass
-            -- would read back our own offset and drift.
-            -- pdfShown gates the measurement, and tW must clear 1 rather than
-            -- 0. A frame that has not laid out yet measures 1x1: readable, so a
-            -- bare tW > 0 passes, and wrong. This value is cached for the
-            -- session, so latching it once from a 1x1 read mis-offsets the
-            -- title until the next reload with nothing left to re-measure it.
-            -- The enable path reaches here at login with the sheet CLOSED,
-            -- which is that state exactly, and is not a state the geometry
-            -- readings covered -- those were all taken with the sheet open.
-            if titleContainer and pdfShown and self._titleDelta == nil then
-                local tLeft, tW = titleContainer:GetLeft(), titleContainer:GetWidth()
-                if tLeft and tW and tW > 1 then
-                    self._titleDelta = ((tLeft - cfLeft) + tW / 2) - cfW / 2
-                end
-            end
-
-            -- Offsetting on a FAILED measurement is what drifts: the next
-            -- pass would measure a container this one had already moved, and
-            -- cache that shift into the delta.
-            if self._titleDelta then
-                titleOffset = levelOffset - self._titleDelta
-            end
-        end
+    -- Paperdoll tab only. Reputation and Currency reuse this same title string
+    -- for their own headers, where a name centred over the model column reads
+    -- wrong above a list.
+    if not (own and pdf and pdf:IsShown() and model) then
+        RestoreAnchors(titleText)
+        RestoreAnchors(levelText)
+        return
     end
 
-    self._headerOffsetX = levelOffset
-
-    -- The title string carries THREE anchors (TOP/LEFT/RIGHT) inside
-    -- TitleContainer, so it stretches rather than sitting on a point and cannot
-    -- be moved directly. Sliding the whole container slides the centred string
-    -- inside it, and leaves Blizzard's own anchors untouched.
-    if titleContainer and titleContainer.SetPointsOffset then
-        titleContainer:SetPointsOffset(titleOffset, 0)
+    -- Captured ONCE, while the title is still on Blizzard's anchor: after the
+    -- move this reads our own placement back and the name walks up the frame on
+    -- every pass.
+    if self._titleModelTopOff == nil then
+        local titleTop, modelTop = titleText:GetTop(), model:GetTop()
+        if not (titleTop and modelTop) then return end
+        self._titleModelTopOff = titleTop - modelTop
     end
 
-    self:UpdateHeaderOffset()
+    -- +10: the model is posed slightly right of the scene frame's own centre.
+    titleText:ClearAllPoints()
+    titleText:SetPoint("TOP", model, "TOP", 10, self._titleModelTopOff)
+
+    levelText:ClearAllPoints()
+    levelText:SetPoint("TOP", titleText, "BOTTOM", 0, -1)
 end
 
 -- FOUR hooks, not one. These are the methods that set the width back, and
@@ -1476,52 +1464,26 @@ function CP:CreateRaceText()
     if self._raceText then return self._raceText end
 
     local text = PaperDollFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall2")
-    text:SetPoint("TOP", CharacterLevelText, "BOTTOM", 0, 5)
+    text:SetPoint("TOP", CharacterLevelText, "BOTTOM", 0, 1)
     text:Hide()
 
     self._raceText = text
     return text
 end
 
--- SetPointsOffset carries BOTH corrections at once: x re-centres the string
--- over the character, y makes room for the score line below it. One call keeps
--- them from overwriting each other, and it stays absolute.
---
--- The gates drive the offset to zero rather than returning: an early return
--- would strand the last value written.
-function CP:UpdateHeaderOffset()
-    if not CharacterLevelText then return end
-
-    -- Same DOUBLE enable test as ApplyHeaderCentering, and for the same reason:
-    -- this is the function that actually writes CharacterLevelText, so a gate
-    -- that disagrees with its sibling's strands y while x is restored.
-    local x, y = 0, 0
-    if self:IsEnabled() and self.db and self.db.Enabled and not ElvUILoaded()
-        and not KE:EUIDrawsSlotElement("player", "headerText") then
-        x = self._headerOffsetX or 0
-        -- Visibility, NOT self.db.ShowRaceText. The preference says the line is
-        -- wanted; only IsShown says it is actually there. An unscored character
-        -- has the toggle on and nothing to display.
-        if self._raceText and self._raceText:IsShown() then
-            y = -37
-        end
-    end
-
-    CharacterLevelText:SetPointsOffset(x, y)
-end
-
+-- The score line hangs off the level string, which hangs off the name, so
+-- showing or hiding it moves nothing above it. Re-anchoring is all this needs.
 function CP:UpdateRaceTextPosition()
-    self:UpdateHeaderOffset()
+    self:ApplyHeaderCentering()
 end
 
 function CP:ShowRaceText()
     if not self:IsEnabled() then return end
     if ElvUILoaded() then return end
     if not self.db.ShowRaceText then return end
-    -- Our score line sits under the level string, and getting it there means
-    -- displacing that string by 37px. EUI has already re-anchored it into its
-    -- own header, so the offset drags EUI's text out of place and ours lands on
-    -- top of it. Stand down entirely rather than fight over the anchor.
+    -- EUI has already re-anchored the level string into its own header, so our
+    -- line would land on top of its text. Stand down rather than fight over the
+    -- anchor.
     if KE:EUIDrawsSlotElement("player", "headerText") then
         self:HideRaceText()
         return
@@ -1532,7 +1494,6 @@ function CP:ShowRaceText()
     local scoreText = DungeonScoreText()
     if not scoreText then
         text:Hide()
-        self:UpdateHeaderOffset()
         return
     end
     text:SetText(scoreText)
@@ -1542,17 +1503,6 @@ end
 
 function CP:HideRaceText()
     if self._raceText then self._raceText:Hide() end
-    CP:UpdateHeaderOffset()
-    -- The offset UpdateHeaderOffset writes is transient and doesn't always
-    -- snap the level text back to Blizzard's baseline on its own (it stays
-    -- displaced until the panel is reopened). Re-running Blizzard's level
-    -- layout — what a reopen does — restores it immediately. Our
-    -- PaperDollFrame_SetLevel hook is safe here: UpdateRaceTextPosition now
-    -- delegates straight to UpdateHeaderOffset, which reapplies the same
-    -- deterministic offset rather than drifting.
-    if PaperDollFrame and PaperDollFrame:IsShown() and PaperDollFrame_SetLevel then
-        PaperDollFrame_SetLevel()
-    end
 end
 
 ---------------------------------------------------------------------------------
