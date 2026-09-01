@@ -1065,6 +1065,11 @@ do
 end
 
 local repairReportFrame, repairBill
+-- Whether the merchant window is open right now. The close-grace timer below
+-- has to tell "the window shut and stayed shut" from "it shut and reopened
+-- inside the grace period", and those two want opposite things done with the
+-- stored bill.
+local merchantOpen = false
 
 -- One repair action can surface as several durability events with the bill
 -- falling in stages, and announcing each drop turns one repair into a
@@ -1201,6 +1206,14 @@ local function SetupRepairReport()
     repairReportFrame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
     repairReportFrame:RegisterEvent("PLAYER_MONEY")
     repairReportFrame:SetScript("OnEvent", function(_, event)
+        -- Ahead of every gate below. A preference toggled mid-visit must not
+        -- leave this stuck on the wrong answer for the next close.
+        if event == "MERCHANT_SHOW" then
+            merchantOpen = true
+        elseif event == "MERCHANT_CLOSED" then
+            merchantOpen = false
+        end
+
         if event == "MERCHANT_CLOSED" then
             -- A repair KE started can have its bill drop land AFTER the window
             -- shuts. Tearing the window down here loses the report for a repair
@@ -1216,13 +1229,18 @@ local function SetupRepairReport()
             if repairOwnBranch and not repairPending then
                 ReleaseHeldSweep()
                 -- The bill belongs to the merchant VISIT and the watch to the
-                -- REPAIR, so the two halves below still answer to different
-                -- owners -- but only one of them needs a token now. A new visit
-                -- CANCELS this timer outright, so reaching the body at all
-                -- means no visit replaced the baseline and the clear is
-                -- unconditional.
+                -- REPAIR, so the two halves below answer to different owners
+                -- and are tested separately. Collapsing them under one test is
+                -- a real defect: a reopen must keep the bill alive, but it is
+                -- NOT a reason to hold the payer open, and holding it lets a
+                -- hand repair moments later inherit the wrong one.
                 --
-                -- The disarm half keeps the generation test because the watch
+                -- The bill half asks whether a reopen took ownership. That
+                -- reopen keeps the PREVIOUS baseline on purpose -- the repair
+                -- has already lowered the real cost, so a fresh read would
+                -- measure the drop still in flight as no drop at all.
+                --
+                -- The disarm half asks whether the watch moved on, because it
                 -- can be retired without touching this timer: its own expiry
                 -- may have run first.
                 local wgen = repairWatchGen
@@ -1231,7 +1249,7 @@ local function SetupRepairReport()
                 mine = C_Timer.NewTimer(CLOSE_GRACE, function()
                     if graceTimer ~= mine then return end
                     graceTimer = nil
-                    repairBill = nil
+                    if not merchantOpen then repairBill = nil end
                     if wgen == repairWatchGen and not repairPending then
                         DisarmRepairWatch()
                     end
@@ -1254,21 +1272,18 @@ local function SetupRepairReport()
 
         if event == "MERCHANT_SHOW" then
             -- A live close-grace timer means the PREVIOUS visit's repair is
-            -- still waiting for its bill to drop. Retire the timer -- it would
-            -- clear the baseline out from under that drop -- but keep the
-            -- baseline itself: the repair has already lowered the real cost, so
-            -- re-reading it here would sample the post-repair figure and the
-            -- drop would then measure as no drop at all, printing nothing for a
-            -- repair that did happen.
+            -- still waiting for its bill to drop. Keep that baseline: the
+            -- repair has already lowered the real cost, so re-reading here
+            -- would sample the post-repair figure and the drop would then
+            -- measure as no drop at all, printing nothing for a repair that
+            -- did happen.
             --
-            -- Only this window skips the re-read. Any other visit owns the
-            -- baseline and takes a fresh one.
-            if graceTimer then
-                graceTimer:Cancel()
-                graceTimer = nil
-                return
-            end
-            repairBill = ReadRepairBill()
+            -- The timer is deliberately NOT cancelled. Its other half retires
+            -- the previous repair's payer on schedule, and a reopen is no
+            -- reason to keep that payer alive for the rest of the watch: a
+            -- hand repair in that stretch would inherit it and name the wrong
+            -- one.
+            if not graceTimer then repairBill = ReadRepairBill() end
             return
         end
 
