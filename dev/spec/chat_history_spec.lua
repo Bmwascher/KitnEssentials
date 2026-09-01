@@ -610,3 +610,164 @@ describe("ChatHistory typed-line store", function()
         assert.equals("line 55", saved[50])
     end)
 end)
+
+describe("ChatHistory Battle.net sender token", function()
+    local function fakeHandler()
+        local calls = {}
+        return {
+            replaying = false,
+            calls = calls,
+            ChatFrame_MessageEventHandler = function(self, frame, event, ...)
+                calls[#calls + 1] = { frame = frame, event = event, args = { ... } }
+            end,
+        }
+    end
+
+    local function withFrame(messageTypes)
+        _G.ChatFrame1 = { messageTypeList = messageTypes }
+        return _G.ChatFrame1
+    end
+
+    -- CHAT_MSG_BN_WHISPER's payload: text(1), the token(2), ..., lineID(11),
+    -- guid(12), bnSenderID(13).
+    local function saveBNWhisper(CH, token, senderID)
+        CH:SaveChatHistory("CHAT_MSG_BN_WHISPER", "hello", token,
+            nil, nil, nil, nil, nil, nil, nil, nil, 11, nil, senderID)
+    end
+
+    describe("store", function()
+        it("resolves a tokenized sender to the full BattleTag, overwriting row[2] entirely", function()
+            -- accountName is deliberately a different, token-shaped value: if
+            -- the code stored it instead of battleTag, this assertion catches
+            -- it rather than passing by coincidence.
+            local CH, KE = L.loadChatHistory({
+                C_BattleNet = {
+                    GetAccountInfoByID = function(id)
+                        if id == 5 then return { battleTag = "SoTilted#1527", accountName = "|Kf9|k" } end
+                    end,
+                },
+            })
+            saveBNWhisper(CH, "|Kf1|k", 5)
+            local row = KE.db.char.ChatHistory[1]
+            assert.equals("SoTilted#1527", row.bnTag)
+            assert.equals("SoTilted#1527", row[2])
+        end)
+
+        it("refuses the row when the lookup does not resolve", function()
+            local CH, KE = L.loadChatHistory()
+            saveBNWhisper(CH, "|Kf1|k", 5)
+            assert.equals(0, #KE.db.char.ChatHistory)
+        end)
+
+        it("refuses the row when the resolved BattleTag is empty", function()
+            local CH, KE = L.loadChatHistory({
+                C_BattleNet = { GetAccountInfoByID = function() return { battleTag = "" } end },
+            })
+            saveBNWhisper(CH, "|Kf1|k", 5)
+            assert.equals(0, #KE.db.char.ChatHistory)
+        end)
+
+        it("refuses the row when argument 13 is not a positive number", function()
+            local CH, KE = L.loadChatHistory()
+            saveBNWhisper(CH, "|Kf1|k", 0)
+            assert.equals(0, #KE.db.char.ChatHistory)
+        end)
+
+        it("leaves an ordinary sender name alone", function()
+            local CH, KE = L.loadChatHistory()
+            CH:SaveChatHistory("CHAT_MSG_GUILD", "hello", "Bob")
+            assert.is_nil(KE.db.char.ChatHistory[1].bnTag)
+            assert.equals("Bob", KE.db.char.ChatHistory[1][2])
+        end)
+    end)
+
+    describe("RowIsReplayable", function()
+        it("refuses a legacy row that still carries the token in row[2]", function()
+            local CH, KE = L.loadChatHistory()
+            KE.db.char.ChatHistory[1] = { "hello", "|Kf1|k", event = "CHAT_MSG_BN_WHISPER", time = 5 }
+            assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+        end)
+
+        it("refuses a row whose stored BattleTag reads secret", function()
+            local tag = {}
+            local CH, KE = L.loadChatHistory({ issecretvalue = secretIs(tag) })
+            KE.db.char.ChatHistory[1] =
+                { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = tag }
+            assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+        end)
+
+        it("accepts a resolved Battle.net row", function()
+            local CH, KE = L.loadChatHistory()
+            KE.db.char.ChatHistory[1] =
+                { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = "SoTilted#1527" }
+            assert.is_true(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+        end)
+
+        it("still accepts an ordinary guild row", function()
+            local CH, KE = L.loadChatHistory()
+            KE.db.char.ChatHistory[1] = { "hello", "Bob", event = "CHAT_MSG_GUILD", time = 5 }
+            assert.is_true(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+        end)
+    end)
+
+    describe("replay resolve", function()
+        it("substitutes the matching friend's current name and id", function()
+            local CH, KE = L.loadChatHistory({
+                BNGetNumFriends = function() return 1 end,
+                C_BattleNet = {
+                    GetFriendAccountInfo = function(i)
+                        if i == 1 then
+                            return { battleTag = "SoTilted#1527", accountName = "Brandon Burnside", bnetAccountID = 10 }
+                        end
+                    end,
+                },
+            })
+            KE.ChatMessageHandler = fakeHandler()
+            withFrame({ "BN_WHISPER" })
+            KE.db.char.ChatHistory[1] =
+                { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = "SoTilted#1527" }
+            CH:DisplayChatHistory()
+
+            assert.equals(1, #KE.ChatMessageHandler.calls)
+            local args = KE.ChatMessageHandler.calls[1].args
+            assert.equals("Brandon Burnside", args[2])
+            assert.equals(10, args[13])
+        end)
+
+        it("falls back to the truncated tag and no id when no friend matches", function()
+            local CH, KE = L.loadChatHistory({ BNGetNumFriends = function() return 0 end })
+            KE.ChatMessageHandler = fakeHandler()
+            withFrame({ "BN_WHISPER" })
+            KE.db.char.ChatHistory[1] =
+                { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = "SoTilted#1527" }
+            CH:DisplayChatHistory()
+
+            assert.equals(1, #KE.ChatMessageHandler.calls)
+            local args = KE.ChatMessageHandler.calls[1].args
+            assert.equals("SoTilted", args[2])
+            assert.is_nil(args[13])
+        end)
+
+        it("passes a plain row's arguments through unresolved", function()
+            local CH, KE = L.loadChatHistory()
+            KE.ChatMessageHandler = fakeHandler()
+            withFrame({ "GUILD" })
+            CH:SaveChatHistory("CHAT_MSG_GUILD", "hello", "Bob")
+            CH:DisplayChatHistory()
+
+            assert.equals(1, #KE.ChatMessageHandler.calls)
+            assert.equals("Bob", KE.ChatMessageHandler.calls[1].args[2])
+        end)
+
+        it("never dispatches a legacy row still carrying the token, and never throws", function()
+            local CH, KE, _, caught = L.loadChatHistory()
+            KE.ChatMessageHandler = fakeHandler()
+            withFrame({ "BN_WHISPER" })
+            KE.db.char.ChatHistory[1] = { "hello", "|Kf1|k", event = "CHAT_MSG_BN_WHISPER", time = 5 }
+            CH:DisplayChatHistory()
+
+            assert.equals(0, #KE.ChatMessageHandler.calls)
+            assert.equals(0, #caught)
+        end)
+    end)
+end)
