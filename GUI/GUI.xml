@@ -60,19 +60,15 @@
     <Script file="GUITabs\GUIDungeons\GUI-KickTracker.lua" />
 
     <!-- Class Utilities tabs -->
-    <Script file="GUITabs\GUIClassUtilities\GUI-EvokerSuite.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-DisintegrateTicks.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-StasisTracker.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-EbonMightHelper.lua" />
-    <Script file="GUITabs\GUIClassUtilities\GUI-EbonMightTracker.lua" />
-    <Script file="GUITabs\GUIClassUtilities\GUI-PrescienceTracker.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-TotemTracker.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-PetStatusText.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-StanceText.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-HuntersMark.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-HavocTracker.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-SpellAlerts.lua" />
-    <Script file="GUITabs\GUIClassUtilities\GUI-BurningRush.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-PIMacroBuilder.lua" />
 
     <!-- Utilities tabs -->
