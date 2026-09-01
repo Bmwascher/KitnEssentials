@@ -373,7 +373,7 @@ read_globals = {
 
     -- Guild Bank
     "GetGuildBankItemLink", "GetGuildBankTabInfo",
-    "GetGuildBankWithdrawMoney", "GetNumGuildBankTabs",
+    "GetGuildBankWithdrawMoney", "GetGuildBankMoney", "GetNumGuildBankTabs",
     "CanGuildBankRepair", "SplitGuildBankItem",
     "GetGuildInfo",
 

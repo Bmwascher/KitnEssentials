@@ -24,6 +24,7 @@ local GetRepairAllCost = GetRepairAllCost
 local CanGuildBankRepair = CanGuildBankRepair
 local GetMoney = GetMoney
 local GetGuildBankWithdrawMoney = GetGuildBankWithdrawMoney
+local GetGuildBankMoney = GetGuildBankMoney
 local CinematicFrame_CancelCinematic = CinematicFrame_CancelCinematic
 local GameMovieFinished = GameMovieFinished
 local C_Container = C_Container
@@ -641,6 +642,164 @@ end
 -- Auto Sell Junk + Auto Repair --
 
 local merchantFrame
+-- ALL of the repair report's shared state, in one block above both consumers.
+-- The auto-repair handler writes these before the report frame's own locals
+-- would exist, so declaring them lower turns those writes into globals -- and
+-- the arm helper below needs repairPending, which used to be declared lower
+-- still.
+--
+-- repairOwnBranch is "guild", "player" or nil. The gold fields are armed ONLY on
+-- the guild branch: the player branch is unambiguous, and a repair KE did not
+-- start has no trustworthy window to measure.
+--
+-- repairWatchGen is the cancellation. Bumping it orphans any expiry still
+-- pending from an earlier repair, so a stale timer cannot clear live state.
+local repairOwnBranch, repairGuildFunds, repairExpected
+local repairMoneyLast, repairMoneySpent
+local repairWatchGen, repairHeldSweep = 0, nil
+local repairPending, repairPendingTotal = false, 0
+-- The generation the pending announcement belongs to. MERCHANT_CLOSED keeps a
+-- pending total alive on purpose, so a close-and-reopen can arm a NEW watch
+-- while an OLDER announcement is still in flight; without this the older
+-- announcement would read the newer payer straight out of the globals.
+local repairPendingGen = 0
+-- Which SCHEDULED announcement is still allowed to run. repairWatchGen tracks
+-- the repair; this tracks the callback. They are different things: one repair
+-- can schedule several announcements -- the first bill drop arms one, and every
+-- debit re-arms it -- and every one of those callbacks stays live and would
+-- otherwise fire in turn, the earliest of them consuming a ledger that is still
+-- filling.
+local repairAnnounceEpoch = 0
+-- FORWARD DECLARATION, and it is load-bearing. ArmRepairWatch's expiry (Step 9,
+-- above SetupAutoSellRepair) calls AnnounceRepair, but that function is defined
+-- further down beside the report frame. Without this line the call would resolve
+-- as a global, read nil, and error the first time a watch expired.
+local AnnounceRepair
+
+local function ReadGold()
+    local gold = GetMoney()
+    if KE:IsSecretValue(gold) then return nil end
+    if type(gold) ~= "number" then return nil end
+    return gold
+end
+
+-- Today's remaining guild allowance, bounded by what the bank actually holds.
+-- GetGuildBankWithdrawMoney returns the DAILY ALLOWANCE, not the balance, and
+-- returns -1 for a rank with unlimited withdrawal -- so it is a ceiling only,
+-- and an unbounded one at that.
+local function ReadGuildRepairFunds()
+    local allowance = GetGuildBankWithdrawMoney()
+    local balance = GetGuildBankMoney()
+    if KE:IsSecretValue(allowance) or KE:IsSecretValue(balance) then return nil end
+    if type(allowance) ~= "number" or type(balance) ~= "number" then return nil end
+    if allowance < 0 or allowance > balance then return balance end
+    return allowance
+end
+
+-- Idempotent. The held junk sale runs on the first debit, or at expiry,
+-- whichever arrives first.
+local function ReleaseHeldSweep()
+    local sweep = repairHeldSweep
+    repairHeldSweep = nil
+    if sweep then sweep() end
+end
+
+-- Only the LATEST schedule may consume the ledger. Each call retires the one
+-- before it, so a debit RESETS the settle window instead of adding a second
+-- callback to it, and a callback left over from a window that has been flushed
+-- cannot fire into the window that replaced it.
+local function ScheduleAnnounce()
+    repairAnnounceEpoch = repairAnnounceEpoch + 1
+    local epoch = repairAnnounceEpoch
+    C_Timer.After(0.5, function()
+        if epoch ~= repairAnnounceEpoch then return end
+        AnnounceRepair()
+    end)
+end
+
+local function DisarmRepairWatch()
+    repairWatchGen = repairWatchGen + 1
+    repairOwnBranch, repairGuildFunds, repairExpected = nil, nil, nil
+    repairMoneyLast, repairMoneySpent = nil, nil
+    ReleaseHeldSweep()
+end
+
+-- Every armed watch gets its own expiry. Without it, a repair whose bill never
+-- falls -- at a merchant left open -- leaves the watch armed for a later
+-- hand-click to inherit, because the announce timer only arms on a positive
+-- durability delta and MERCHANT_CLOSED has not fired yet.
+--
+-- The window is deliberately LONGER than the announce path, and the expiry
+-- stands down while an announcement is pending. Both are needed: this timer is
+-- set BEFORE RepairAllItems, while the announce timer is set after the bill
+-- falls, so a matching 0.5s would have the expiry clear the payer before
+-- AnnounceRepair ever reads it -- destroying the exact state it exists to
+-- protect.
+local WATCH_EXPIRY = 2
+
+-- Every branch arms, including the player branch. It carries no gold fields --
+-- there is nothing to measure -- but it must still bump the generation, or a
+-- guild expiry still pending from earlier in the same merchant visit would
+-- clear it; and it must still expire, or a player repair whose bill never falls
+-- stays armed.
+local function ArmRepairWatch(branch, expected, guildFunds, gold, sweep)
+    repairWatchGen = repairWatchGen + 1
+    local gen = repairWatchGen
+
+    repairOwnBranch = branch
+    -- What KE's own call was going to pay. The reporter coalesces EVERY bill
+    -- drop in the window into one total, so a hand repair landing before the
+    -- announcement would otherwise be added to KE's figure and inherit KE's
+    -- payer. A total above this means more than KE's repair contributed, and
+    -- the label is refused.
+    repairExpected = expected
+    repairGuildFunds = guildFunds
+    repairMoneyLast = gold
+    -- nil, NOT zero, when the wallet is unreadable. Zero would read as "no gold
+    -- left the wallet", which is the guild-paid-everything signal -- the most
+    -- confident label available, drawn from no evidence at all.
+    repairMoneySpent = gold and 0 or nil
+    repairHeldSweep = sweep
+
+    C_Timer.After(WATCH_EXPIRY, function()
+        if gen ~= repairWatchGen then return end
+
+        -- A debit has landed and THIS watch's own settle window is still
+        -- counting down. That window exists to stop a partial bill being split,
+        -- so forcing here would do the exact thing it prevents.
+        --
+        -- Standing down leaks nothing, and both halves of the test are needed
+        -- for that. A positive spend with an announcement pending means a
+        -- schedule is live -- every debit arriving while pending re-arms one,
+        -- and a schedule is retired only by its successor. The generation match
+        -- means that schedule is NOT stale, so it will disarm this watch on its
+        -- way out. A stale one would not, and standing down for it would leave
+        -- this watch armed with nothing left to clean it up.
+        if repairPending and repairPendingGen == repairWatchGen
+            and (repairMoneySpent or 0) > 0 then
+            return
+        end
+
+        -- Resolve ANY pending announcement, including one stamped with an
+        -- OLDER generation. That one has no owner left: its own expiry
+        -- self-cancelled the moment this watch armed, and nothing else ever
+        -- clears repairPending. Left standing it wedges repairPending true
+        -- forever, and the durability branch only schedules an announcement
+        -- when repairPending is false -- so EVERY later repair in the session
+        -- would go unreported until a reload.
+        --
+        -- Forcing a stale one through is safe: AnnounceRepair sees the
+        -- generation mismatch, drops the payer, prints the plain line, and
+        -- deliberately does not disarm the newer watch.
+        if repairPending then AnnounceRepair(true) end
+
+        -- A non-stale announcement already disarmed and bumped the generation,
+        -- so this is skipped. A stale one did not, and this watch still needs
+        -- its own cleanup.
+        if gen == repairWatchGen then DisarmRepairWatch() end
+    end)
+end
+
 local function SetupAutoSellRepair()
     if merchantFrame then return end
     merchantFrame = CreateFrame("Frame")
@@ -648,40 +807,66 @@ local function SetupAutoSellRepair()
     merchantFrame:SetScript("OnEvent", function()
         if not AU.db or not AU.db.Enabled then return end
         if KE:IsFullyRestricted() then return end
-        if AU.db.AutoSellJunk and not IsShiftKeyDown() and C_MerchantFrame.GetNumJunkItems() > 0 then
-            C_MerchantFrame.SellAllJunkItems()
+
+        -- Held rather than called, so the guild branch below can delay it. Nil
+        -- when there is nothing to sell or the feature is off.
+        local sweep
+        if AU.db.AutoSellJunk and not IsShiftKeyDown()
+            and C_MerchantFrame.GetNumJunkItems() > 0 then
+            sweep = function() C_MerchantFrame.SellAllJunkItems() end
         end
+
         if AU.db.AutoRepair and CanMerchantRepair() then
-            -- Every line below reads the cost: the truth test, the comparison,
-            -- and both affordability checks. issecretvalue comes first for the
-            -- same reason it does in ReadRepairBill, and the wallet gets the
-            -- same treatment -- a reference addon's report names both values.
-            -- Unreadable means do nothing: refusing to auto-repair is a
-            -- non-event, throwing here kills every later feature in this
-            -- handler.
-            --
-            -- The second return is deliberately NOT read. Truth-testing it is a
-            -- read like any other and would throw on a secret, which is the very
-            -- thing this guard exists for; and it says nothing the cost does not
-            -- already say, since a cost above zero is itself the damage. The
-            -- merchant question is CanMerchantRepair, asked above.
             local repairCost = GetRepairAllCost()
             if not KE:IsSecretValue(repairCost)
                 and repairCost and repairCost > 0 then
+                -- The report preference gates the WATCH, never the branch.
+                -- Gating the branch would make a reporting checkbox decide who
+                -- pays for the repair: with the report off, this guild-eligible
+                -- case would fall through and spend the player's own gold.
                 if AU.db.UseGuildFunds and CanGuildBankRepair() then
                     local guildBankMoney = GetGuildBankWithdrawMoney()
                     if not KE:IsSecretValue(guildBankMoney)
+                        and type(guildBankMoney) == "number"
                         and guildBankMoney >= repairCost then
+                        if AU.db.RepairReport then
+                            -- Both readings must predate the repair, and the
+                            -- sale must not land in the same money event as the
+                            -- debit.
+                            ArmRepairWatch("guild", repairCost,
+                                ReadGuildRepairFunds(), ReadGold(), sweep)
+                        elseif sweep then
+                            -- Nothing to label, so nothing to hold for. Selling
+                            -- now avoids stranding it: with the report off, the
+                            -- frame's feature gate returns before its
+                            -- PLAYER_MONEY branch, so no debit could release it.
+                            sweep()
+                        end
                         RepairAllItems(true)
                         return
                     end
                 end
+
+                -- Player branch: sell first, exactly as before, because the
+                -- affordability check below has to see post-sale gold.
+                if sweep then sweep() sweep = nil end
+
                 local wallet = GetMoney()
-                if not KE:IsSecretValue(wallet) and wallet >= repairCost then
+                if not KE:IsSecretValue(wallet) and type(wallet) == "number"
+                    and wallet >= repairCost then
+                    -- No gold fields: own gold, nothing to work out. It still
+                    -- arms, so it owns the generation and gets an expiry. Gated
+                    -- on the report for the same reason as above -- but the
+                    -- REPAIR is outside the gate either way.
+                    if AU.db.RepairReport then
+                        ArmRepairWatch("player", repairCost, nil, nil, nil)
+                    end
                     RepairAllItems(false)
                 end
             end
         end
+
+        if sweep then sweep() end
     end)
 end
 
@@ -691,10 +876,9 @@ end
 -- item dragged onto the merchant, and another addon's auto-repair all report.
 
 -- The bill is the best witness available, not proof. It falls by what a repair
--- paid, it does not move when a repair is refused for lack of funds, and it is
--- blind to who paid -- so a guild-funded repair reports its figure without
--- claiming a payer that cannot be verified from here. A RISE means gear was
--- equipped, not repaired.
+-- paid, it does not move when a repair is refused for lack of funds, and it
+-- still only proves a repair happened -- the payer is established separately,
+-- for repairs KE started. A RISE means gear was equipped, not repaired.
 --
 -- Residual, and the reason "witness" is the right word rather than "proof":
 -- anything that removes damaged gear at a merchant lowers the bill the same
@@ -709,8 +893,48 @@ function AU:RepairSpend(before, after)
     return spent
 end
 
+-- Pressing the guild button does not mean the guild paid. The server pays what
+-- the allowance covers and charges the player the difference, with no error and
+-- no return value, so the only witness is how much gold actually left.
+--
+-- More gold out than the bill fell by is a refusal, not a clamp: it means
+-- something else spent gold in the window, and nothing here can say how much.
+--
+-- The one remaining clamp decides nothing on its own -- the guild's share cannot
+-- exceed the allowance, which catches income landing in the same money event as
+-- the debit, netting off and understating what the player paid.
+--
+-- A zero allowance is NOT a cap. GetGuildBankMoney reads zero until a guild bank
+-- has been opened this session, which is the same reading as a genuinely empty
+-- bank, so tightening on it would credit every repair to the player.
+--
+-- ownSpent nil means the wallet was never readable. Refusing is the whole point:
+-- treating it as zero would print the most confident possible label from the
+-- least evidence.
+function AU:RepairSplit(paid, ownSpent, guildFunds)
+    if type(paid) ~= "number" or type(ownSpent) ~= "number" then return nil end
+    if paid <= 0 then return nil end
+
+    local own = ownSpent
+    if own < 0 then own = 0 end
+
+    -- REFUSE rather than clamp. Clamping to the bill was hiding the worst
+    -- failure this function has: unrelated spending larger than the bill would
+    -- clamp down to exactly the bill and print "using your own gold" for a
+    -- repair the guild paid in full. More gold left than the bill fell by means
+    -- something else spent it, and nothing here can say how much.
+    if own > paid then return nil end
+
+    local guildPart = paid - own
+    if type(guildFunds) == "number" and guildFunds > 0 and guildPart > guildFunds then
+        guildPart = guildFunds
+        own = paid - guildPart
+    end
+
+    return guildPart, own
+end
+
 local repairReportFrame, repairBill
-local repairPending, repairPendingTotal = false, 0
 
 -- One repair action can surface as several durability events with the bill
 -- falling in stages, and announcing each drop turns one repair into a
@@ -718,17 +942,98 @@ local repairPending, repairPendingTotal = false, 0
 -- The sum is what was paid either way, so coalescing loses nothing, and the
 -- timer is deliberately left to fire after the merchant closes: the money was
 -- still spent.
-local function AnnounceRepair()
+--
+-- force is passed only by the watch expiry, which is the backstop for a repair
+-- whose debit never arrives at all -- a guild bank that covered the whole bill.
+--
+-- NOT `local function` -- the name is forward-declared in the shared state block
+-- so the expiry above can reach it. `local function` here would create a second,
+-- shadowing local and leave that caller pointing at nil.
+function AnnounceRepair(force)
+    -- WAIT rather than guess. Measured: the debit for KE's own repair landed
+    -- 60ms inside this timer, and a different wallet event in the same merchant
+    -- window landed 50ms outside it. Announcing on schedule would therefore read
+    -- a debit that has not landed yet, and call a part-player-funded repair
+    -- fully guild-funded -- the one failure this whole task exists to prevent,
+    -- and one that cannot be told apart afterwards.
+    --
+    -- Only KE's own guild branch waits. The player branch is unambiguous, and a
+    -- repair KE did not start carries no payer to be wrong about.
+    --
+    -- repairPending and repairPendingTotal are deliberately NOT cleared here:
+    -- this announcement has not happened yet. The first PLAYER_MONEY decrease
+    -- re-enters this function, and the expiry forces it through.
+    if not force and repairOwnBranch == "guild" and repairMoneySpent == 0
+        and repairPendingGen == repairWatchGen then
+        return
+    end
+
     repairPending = false
     local spent = repairPendingTotal
     repairPendingTotal = 0
+
+    local branch, ownSpent = repairOwnBranch, repairMoneySpent
+    local guildFunds, expected = repairGuildFunds, repairExpected
+
+    -- The watch moved on since this announcement was armed -- a close and
+    -- reopen, or a second repair -- so whatever sits in the globals now
+    -- describes a different repair than the one being announced.
+    local stale = repairPendingGen ~= repairWatchGen
+    if stale then branch = nil end
+
+    -- More fell off the bill than KE's own call was paying, so a repair KE did
+    -- not start is inside this total. The figure is still right; the payer is
+    -- no longer knowable, and the scope is KE's own repairs only.
+    --
+    -- This catches the growing total, not every overlap: if KE's own repair only
+    -- partly succeeded, a foreign repair can fill the gap and leave the total at
+    -- or under the expected figure. Documented as accepted -- it needs a partial
+    -- failure AND a hand click inside the same coalescing window.
+    if branch and (type(expected) ~= "number" or spent > expected) then
+        branch = nil
+    end
+
+    -- Consume everything that described THIS repair action rather than the
+    -- merchant session, and orphan the pending expiry so it cannot clear state
+    -- a later repair has already armed.
+    --
+    -- A STALE announcement disarms nothing. The globals belong to a newer watch
+    -- that has not announced yet; clearing them here would strip its payer and
+    -- release its held junk sale early. Its own expiry cleans it up.
+    if not stale then DisarmRepairWatch() end
+
     if spent <= 0 then return end
 
     local money = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString
         and C_CurrencyInfo.GetCoinTextureString(spent)
-    if money then
-        KE:Print(string_format("Repaired for %s.", money))
+    if not money then return end
+
+    if branch == "player" then
+        KE:Print(string_format("Repaired for %s using your own gold.", money))
+        return
     end
+
+    if branch == "guild" then
+        local guildPart, ownPart = AU:RepairSplit(spent, ownSpent, guildFunds)
+        if guildPart and guildPart > 0 and ownPart > 0 then
+            local guildMoney = C_CurrencyInfo.GetCoinTextureString(guildPart)
+            if guildMoney then
+                KE:Print(string_format(
+                    "Repaired for %s using guild funds (%s) and your own gold.",
+                    money, guildMoney))
+                return
+            end
+        elseif guildPart and guildPart > 0 then
+            KE:Print(string_format("Repaired for %s using guild funds.", money))
+            return
+        elseif guildPart then
+            KE:Print(string_format("Repaired for %s using your own gold.", money))
+            return
+        end
+    end
+
+    -- Not ours, or the split could not be worked out. Say what is certain.
+    KE:Print(string_format("Repaired for %s.", money))
 end
 
 -- Only the cost is read. GetRepairAllCost's second return is NOT the merchant
@@ -756,19 +1061,67 @@ local function SetupRepairReport()
     repairReportFrame:RegisterEvent("MERCHANT_SHOW")
     repairReportFrame:RegisterEvent("MERCHANT_CLOSED")
     repairReportFrame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
+    repairReportFrame:RegisterEvent("PLAYER_MONEY")
     repairReportFrame:SetScript("OnEvent", function(_, event)
-        if not AU.db or not AU.db.Enabled or not AU.db.RepairReport then
+        if event == "MERCHANT_CLOSED" then
             repairBill = nil
+            -- Only a repair that never armed an announcement is cleared here.
+            -- AnnounceRepair consumes the rest itself.
+            if not repairPending then DisarmRepairWatch() end
             return
         end
 
-        if event == "MERCHANT_CLOSED" then
+        if not AU.db or not AU.db.Enabled or not AU.db.RepairReport then
             repairBill = nil
             return
         end
 
         if event == "MERCHANT_SHOW" then
             repairBill = ReadRepairBill()
+            return
+        end
+
+        if event == "PLAYER_MONEY" then
+            -- Armed only while a guild repair KE started is settling. Only
+            -- DECREASES count: the held junk sale still raises gold when it
+            -- lands, and counting any change would read a sale as a payment.
+            if repairMoneyLast then
+                local now = ReadGold()
+                if not now then
+                    -- The wallet went unreadable mid-window. A skipped debit
+                    -- understates the player's share exactly like an unreadable
+                    -- arm, so poison the measurement rather than carry on with
+                    -- a total known to be short.
+                    repairMoneyLast, repairMoneySpent = nil, nil
+                    return
+                end
+                if now < repairMoneyLast then
+                    repairMoneySpent = (repairMoneySpent or 0)
+                        + (repairMoneyLast - now)
+                    -- The debit is booked, so nothing can net against it now.
+                    ReleaseHeldSweep()
+                    -- The announcement that was waiting for exactly this can
+                    -- now settle -- but not this instant. This debit is charged
+                    -- against the WHOLE repair, while repairPendingTotal holds
+                    -- only the bill drops seen so far. Announcing here would
+                    -- divide the entire player payment across a partial repair
+                    -- and print a confident split for it, then print whatever
+                    -- arrived afterwards as a second, unattributed line.
+                    --
+                    -- Re-arm the settle window instead and let the remaining
+                    -- drops land first. ScheduleAnnounce RETIRES the schedule
+                    -- already outstanding rather than joining it, which matters
+                    -- in the measured ordering: the drops come first, so that
+                    -- earlier callback is still counting down and would fire
+                    -- before this one and announce the partial bill. Repeated
+                    -- debits reset the window for the same reason.
+                    --
+                    -- The wait cannot hold the new schedule: it tests
+                    -- repairMoneySpent == 0 and the value is now positive.
+                    if repairPending then ScheduleAnnounce() end
+                end
+                repairMoneyLast = now
+            end
             return
         end
 
@@ -788,10 +1141,30 @@ local function SetupRepairReport()
         repairBill = bill
         if not spent then return end
 
+        -- A pending announcement stamped with a DIFFERENT watch belongs to a
+        -- repair that is already finished. It must be flushed BEFORE this drop
+        -- is added, because the accumulator below is shared: merged, the two
+        -- amounts print as one line under the older repair's stamp, and the
+        -- newer repair is left with an empty ledger and no announcement of its
+        -- own. Flushing first prints the old figure alone and frees the slot,
+        -- so the lines below then open a fresh window for this drop.
+        --
+        -- The forced call is stale by construction, so it drops the payer,
+        -- prints the plain line, and leaves the live watch armed.
+        if repairPending and repairPendingGen ~= repairWatchGen then
+            AnnounceRepair(true)
+        end
+
         repairPendingTotal = repairPendingTotal + spent
         if not repairPending then
             repairPending = true
-            C_Timer.After(0.5, AnnounceRepair)
+            -- Stamp the watch this announcement belongs to. MERCHANT_CLOSED
+            -- keeps a pending total alive on purpose, so a close-and-reopen can
+            -- arm a NEW watch while this announcement is still in flight;
+            -- without the stamp it would read the new payer out of the globals
+            -- and pin it to an older, unrelated repair.
+            repairPendingGen = repairWatchGen
+            ScheduleAnnounce()
         end
     end)
 end

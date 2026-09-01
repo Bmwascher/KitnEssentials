@@ -13,6 +13,8 @@
 --   * Per-spell secrecy on the fishing outfit cancel.
 --   * The repair-cost report's spend rule, which refuses to announce anything
 --     it cannot prove was paid.
+--   * The repair split, which refuses rather than guesses when the wallet
+--     reading cannot be reconciled with the bill.
 --   * Character-window button placement arithmetic.
 --   * The Great Vault button's gates, including the lifecycle predicate in the
 --     one state a preference key cannot reach.
@@ -1144,6 +1146,75 @@ describe("Automation repair spend rule", function()
     it("says nothing about a reading that is not a number", function()
         assert.is_nil(AU:RepairSpend("1000", 0))
         assert.is_nil(AU:RepairSpend(1000, false))
+    end)
+end)
+
+describe("repair split", function()
+    it("credits the guild when no gold left the wallet", function()
+        local AU = newFixture().AU
+        local guildPart, ownPart = AU:RepairSplit(500, 0, 5000)
+        assert.equals(500, guildPart)
+        assert.equals(0, ownPart)
+    end)
+
+    it("credits the player when the wallet covered the whole bill", function()
+        local AU = newFixture().AU
+        local guildPart, ownPart = AU:RepairSplit(500, 500, 5000)
+        assert.equals(0, guildPart)
+        assert.equals(500, ownPart)
+    end)
+
+    it("splits a bill the allowance only partly covered", function()
+        local AU = newFixture().AU
+        -- The server paid 300 from the guild and silently charged the rest.
+        local guildPart, ownPart = AU:RepairSplit(500, 200, 5000)
+        assert.equals(300, guildPart)
+        assert.equals(200, ownPart)
+    end)
+
+    it("caps the guild share at the allowance", function()
+        local AU = newFixture().AU
+        local guildPart, ownPart = AU:RepairSplit(500, 0, 120)
+        assert.equals(120, guildPart)
+        assert.equals(380, ownPart)
+    end)
+
+    it("ignores an unreadable allowance rather than capping on zero", function()
+        local AU = newFixture().AU
+        -- GetGuildBankMoney reads 0 until a guild bank is opened this session,
+        -- which is also the genuinely-broke reading. Zero must never tighten.
+        local guildPart, ownPart = AU:RepairSplit(500, 0, 0)
+        assert.equals(500, guildPart)
+        assert.equals(0, ownPart)
+    end)
+
+    it("floors a wallet that somehow grew", function()
+        local AU = newFixture().AU
+        -- A negative reading is not evidence the guild paid MORE than the bill.
+        local guildPart, ownPart = AU:RepairSplit(500, -100, 5000)
+        assert.equals(500, guildPart)
+        assert.equals(0, ownPart)
+    end)
+
+    it("refuses when more gold left than the bill fell by", function()
+        local AU = newFixture().AU
+        -- Something else spent gold inside the window. Clamping to the bill
+        -- here would print a confident "your own gold" for a repair the guild
+        -- may have paid in full.
+        assert.is_nil(AU:RepairSplit(500, 900, 5000))
+    end)
+
+    it("refuses when the wallet was never readable", function()
+        local AU = newFixture().AU
+        -- This is the case the wiring must be able to produce. An earlier
+        -- draft armed the counter at 0 on an unreadable wallet, which made
+        -- this refusal unreachable and printed a full guild credit instead.
+        assert.is_nil(AU:RepairSplit(500, nil, 5000))
+    end)
+
+    it("refuses when nothing was paid", function()
+        local AU = newFixture().AU
+        assert.is_nil(AU:RepairSplit(0, 0, 5000))
     end)
 end)
 
