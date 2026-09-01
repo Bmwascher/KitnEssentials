@@ -1206,9 +1206,12 @@ function L.loadCombatCross(overrides)
         IsSpellInRange = function() return nil end,
     }
     -- Defaults to OUT of combat. A visibility test that expects the cross up
-    -- must say so, either through this override or through AlwaysShow -- it
+    -- must say so, either through this override or through Visibility -- it
     -- cannot pass by inheriting a permissive default.
     _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
+    -- Solo is the only mode that asks, and the module localises this at load,
+    -- so a nil here is a throw rather than a wrong answer.
+    _G.IsInGroup = overrides.IsInGroup or function() return false end
     _G.GetSpecialization = overrides.GetSpecialization or function() return 1 end
     _G.GetSpecializationInfo = overrides.GetSpecializationInfo or function() return 73 end
 
@@ -1222,7 +1225,7 @@ function L.loadCombatCross(overrides)
             ColorMode = "custom",
             Color = { 0, 1, 0.169, 1 },
             Shape = "cross",
-            AlwaysShow = false,
+            Visibility = "in_combat",
             Thickness = 22,
             Outline = true,
             RangeColorMeleeEnabled = false,

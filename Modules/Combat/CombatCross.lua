@@ -20,6 +20,7 @@ local CreateFrame = CreateFrame
 local InCombatLockdown = InCombatLockdown
 local UnitAffectingCombat = UnitAffectingCombat
 local UIParent = UIParent
+local IsInGroup = IsInGroup
 local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local C_Spell = C_Spell
@@ -35,6 +36,43 @@ local SHAPE_GLYPH = {
     cross  = "+",
     circle = "\226\128\162",
 }
+
+-- The same list Cursor offers, minus mouseDown: a crosshair that appears only
+-- while a mouse button is held is not something anyone reaches for. Both lists
+-- dropped in_party and in_raid, because in_instance answers the question those
+-- two were being used to ask.
+CC.VISIBILITY_MODES = {
+    { key = "always",        text = "Always Visible" },
+    { key = "in_combat",     text = "In Combat" },
+    { key = "out_of_combat", text = "Out of Combat" },
+    { key = "in_instance",   text = "In Instance (Dungeon/Raid)" },
+    { key = "solo",          text = "Solo" },
+    { key = "never",         text = "Hidden" },
+}
+
+-- Combat state is PASSED IN, never read here: PLAYER_REGEN_DISABLED knows the
+-- transition before UnitAffectingCombat agrees with it, and the caller is what
+-- resolves that.
+--
+-- The instance test is Cursor's, resolved per call rather than cached, because
+-- module enable order is pairs() order and Cursor can load after this one. It
+-- is a plain GetInstanceInfo read, so it answers whether or not that module is
+-- switched on.
+local function ShouldShowByMode(mode, inCombat)
+    if mode == "always"        then return true end
+    if mode == "never"         then return false end
+    if mode == "in_combat"     then return inCombat end
+    if mode == "out_of_combat" then return not inCombat end
+    if mode == "solo"          then return not IsInGroup() end
+    if mode == "in_instance"   then
+        local cursor = KitnEssentials:GetModule("Cursor", true)
+        return (cursor and cursor:InRealInstancedContent()) or false
+    end
+    -- An unknown mode shows the cross. A crosshair nobody asked for is a
+    -- smaller failure than one that silently will not appear.
+    return true
+end
+CC.ShouldShowByMode = ShouldShowByMode
 
 local RANGE_UPDATE_THROTTLE = 0.1
 local rangeUpdateElapsed = 0
@@ -426,16 +464,25 @@ function CC:UpdateVisibility(inCombat)
     if inCombat == nil then
         inCombat = UnitAffectingCombat("player") and true or false
     end
-    if self.db.AlwaysShow or inCombat then
+    if ShouldShowByMode(self.db.Visibility or "in_combat", inCombat) then
         self:Show(false)
     else
         self:Hide(false)
     end
     -- The range loop is gated on gameplayActive, which the two calls above are
     -- what set. Anything that changes visibility therefore has to re-decide the
-    -- loop in the same breath, or an Always Show cross can sit on screen with
-    -- range colouring configured and never start recolouring.
+    -- loop in the same breath, or a cross left up by a non-combat mode can sit
+    -- on screen with range colouring configured and never start recolouring.
     self:UpdateOnUpdateState()
+end
+
+-- Its own handler rather than registering UpdateVisibility directly: AceEvent
+-- passes the event name as the first argument, which UpdateVisibility would
+-- read as `inCombat` -- a non-nil string, so it would skip deriving the real
+-- state and treat every one of these events as "in combat".
+function CC:OnContextChanged()
+    if not self.db or not self.db.Enabled then return end
+    self:UpdateVisibility()
 end
 
 function CC:OnEnterCombat()
@@ -466,8 +513,16 @@ function CC:OnEnable()
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnExitCombat")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
 
+    -- The group and instance modes change with none of the events above.
+    -- ZONE_CHANGED_NEW_AREA is here for the garrison test inside
+    -- InRealInstancedContent, which a zone boundary can move without
+    -- PLAYER_ENTERING_WORLD firing.
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnContextChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnContextChanged")
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnContextChanged")
+
     -- Nothing else would put the cross up until the next combat, so a login or
-    -- reload that lands mid-fight, and any enable with Always Show on, both
+    -- reload that lands mid-fight, and any enable under a non-combat mode, both
     -- depend on this.
     self:UpdateVisibility()
 end
