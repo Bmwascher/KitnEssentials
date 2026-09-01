@@ -163,8 +163,8 @@ function PR:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            -- No sidebar row of its own -- this lives on the Utilities
-            -- page now, so guiTab picks its tab there.
+            -- No sidebar row of its own -- this lives on the Status Texts
+            -- page, so guiTab picks its tab there.
             guiPath = "StatusTexts",
             guiTab = "PotionReady",
         })
