@@ -997,8 +997,8 @@ function CP:ApplyHeaderCentering()
             -- session, so latching it once from a 1x1 read mis-offsets the
             -- title until the next reload with nothing left to re-measure it.
             -- The enable path reaches here at login with the sheet CLOSED,
-            -- which is that state exactly, and is not a state Task C.1
-            -- measured -- its readings were all taken with the sheet open.
+            -- which is that state exactly, and is not a state the geometry
+            -- readings covered -- those were all taken with the sheet open.
             if titleContainer and pdfShown and self._titleDelta == nil then
                 local tLeft, tW = titleContainer:GetLeft(), titleContainer:GetWidth()
                 if tLeft and tW and tW > 1 then

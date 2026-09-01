@@ -213,7 +213,7 @@ describe("Widen character window: the guard runs before any write", function()
 end)
 
 describe("header offset", function()
-    -- Both pairs are MEASURED in game (Task C.1), not derived.
+    -- Both pairs are MEASURED in game, not derived.
     it("centres over the model column with the wider panel on", function()
         local CP = loadCP()
         assert.equals(-103.5, CP._HeaderOffsetX(580, 373))
