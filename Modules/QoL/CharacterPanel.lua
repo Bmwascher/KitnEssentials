@@ -910,7 +910,6 @@ local function HeaderRegions()
         or (cf and cf.TitleContainer and cf.TitleContainer.TitleText)
     return cf, titleText, _G.CharacterLevelText
 end
-CP._RestoreHeaderAnchors = RestoreAnchors
 
 -- ABSOLUTE anchors, never deltas. Every value is set to a computed absolute, so
 -- running this ten times produces the same layout as running it once. Four
