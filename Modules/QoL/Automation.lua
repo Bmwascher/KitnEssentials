@@ -696,6 +696,22 @@ local function ReadGuildRepairFunds()
     return allowance
 end
 
+-- Whether the guild rank's withdrawal allowance covers a bill.
+--
+-- -1 is the sentinel for UNLIMITED withdrawal. Compared as a plain number it is
+-- smaller than every bill, so the ranks with the most access were the ones sent
+-- down the player branch -- the exact opposite of the setting they ticked.
+--
+-- Only the ALLOWANCE is tested, never the balance. A bank holding less than the
+-- bill still pays what it has and the server settles the shortfall against the
+-- player, so bounding this on the balance would give up partial guild coverage
+-- the player already gets.
+function AU:CanGuildCover(allowance, cost)
+    if type(allowance) ~= "number" or type(cost) ~= "number" then return false end
+    if allowance < 0 then return true end
+    return allowance >= cost
+end
+
 -- Idempotent. The held junk sale runs on the first debit, or at expiry,
 -- whichever arrives first.
 local function ReleaseHeldSweep()
@@ -827,8 +843,7 @@ local function SetupAutoSellRepair()
                 if AU.db.UseGuildFunds and CanGuildBankRepair() then
                     local guildBankMoney = GetGuildBankWithdrawMoney()
                     if not KE:IsSecretValue(guildBankMoney)
-                        and type(guildBankMoney) == "number"
-                        and guildBankMoney >= repairCost then
+                        and AU:CanGuildCover(guildBankMoney, repairCost) then
                         if AU.db.RepairReport then
                             -- Both readings must predate the repair, and the
                             -- sale must not land in the same money event as the

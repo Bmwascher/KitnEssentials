@@ -15,6 +15,8 @@
 --     it cannot prove was paid.
 --   * The repair split, which refuses rather than guesses when the wallet
 --     reading cannot be reconciled with the bill.
+--   * Guild withdrawal coverage, whose sentinel for an unlimited rank reads as
+--     smaller than every bill if it is compared naively.
 --   * Character-window button placement arithmetic.
 --   * The Great Vault button's gates, including the lifecycle predicate in the
 --     one state a preference key cannot reach.
@@ -1215,6 +1217,33 @@ describe("repair split", function()
     it("refuses when nothing was paid", function()
         local AU = newFixture().AU
         assert.is_nil(AU:RepairSplit(0, 0, 5000))
+    end)
+end)
+
+describe("guild withdrawal coverage", function()
+    it("treats the unlimited sentinel as covering any bill", function()
+        local AU = newFixture().AU
+        assert.is_true(AU:CanGuildCover(-1, 500))
+        assert.is_true(AU:CanGuildCover(-1, 99999999))
+    end)
+
+    it("covers a bill the allowance meets or exceeds", function()
+        local AU = newFixture().AU
+        assert.is_true(AU:CanGuildCover(500, 500))
+        assert.is_true(AU:CanGuildCover(5000, 500))
+    end)
+
+    it("refuses a bill above the allowance", function()
+        local AU = newFixture().AU
+        assert.is_false(AU:CanGuildCover(499, 500))
+        assert.is_false(AU:CanGuildCover(0, 500))
+    end)
+
+    it("refuses a reading that is not a number on either side", function()
+        local AU = newFixture().AU
+        assert.is_false(AU:CanGuildCover(nil, 500))
+        assert.is_false(AU:CanGuildCover(500, nil))
+        assert.is_false(AU:CanGuildCover("500", 500))
     end)
 end)
 
