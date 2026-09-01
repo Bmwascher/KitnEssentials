@@ -1465,7 +1465,8 @@ local function DungeonScoreText()
     local color = C_ChallengeMode.GetDungeonScoreRarityColor
         and C_ChallengeMode.GetDungeonScoreRarityColor(score)
     if color and color.GenerateHexColor then
-        return "|c" .. color:GenerateHexColor() .. "Mythic+ Score: " .. score .. "|r"
+        -- The label stays uncoloured; only the number carries the rating colour.
+        return "Mythic+ Score: |c" .. color:GenerateHexColor() .. score .. "|r"
     end
     return "Mythic+ Score: " .. score
 end

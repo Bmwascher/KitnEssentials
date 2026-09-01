@@ -259,7 +259,7 @@ describe("mythic plus score text", function()
     it("colours the line when a rarity colour is available", function()
         local CP = loadCP()
         withScore(2415, { GenerateHexColor = function() return "ffff8000" end })
-        assert.equals("|cffff8000Mythic+ Score: 2415|r", CP._DungeonScoreText())
+        assert.equals("Mythic+ Score: |cffff80002415|r", CP._DungeonScoreText())
     end)
 
     it("falls back to plain text when the colour cannot make a hex string", function()
