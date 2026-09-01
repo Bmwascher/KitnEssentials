@@ -165,7 +165,7 @@ function PR:RegWithEditMode()
             end,
             -- No sidebar row of its own -- this lives on the Utilities
             -- page now, so guiTab picks its tab there.
-            guiPath = "Utilities",
+            guiPath = "StatusTexts",
             guiTab = "PotionReady",
         })
         self.editModeRegistered = true

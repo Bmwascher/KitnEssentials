@@ -351,7 +351,7 @@ function ST:OnEnable()
             KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
         end,
         getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-        guiPath = "StatusTexts",
+        guiPath = "ClassTools",
         guiTab = "StanceText",
     })
 end

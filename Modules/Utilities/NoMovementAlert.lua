@@ -1048,7 +1048,8 @@ end
 local EDIT_MODE_ELEMENT = {
     key = "NoMovementAlert",
     displayName = "No Movement Alert",
-    guiPath = "NoMovementAlert",
+    guiPath = "StatusTexts",
+    guiTab = "NoMovementAlert",
 }
 
 -- Every unregister goes through here. The cache below is what makes a repeat

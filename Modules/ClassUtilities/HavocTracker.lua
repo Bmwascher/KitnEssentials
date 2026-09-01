@@ -266,7 +266,7 @@ function HT:RegWithEditMode()
                 KE:ApplyFramePosition(self.anchor, self.db.WarningPosition, self.db)
             end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-            guiPath = "StatusTexts",
+            guiPath = "ClassTools",
             guiTab = "HavocTracker",
         })
         self.editModeRegistered = true

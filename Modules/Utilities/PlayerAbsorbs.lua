@@ -493,7 +493,8 @@ function PA:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "PlayerAbsorbs",
+            guiPath = "StatusTexts",
+            guiTab = "PlayerAbsorbs",
         })
         self.editModeRegistered = true
     end
