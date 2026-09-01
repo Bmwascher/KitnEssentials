@@ -1020,7 +1020,7 @@ function AnnounceRepair(force)
     if not money then return end
 
     if branch == "player" then
-        KE:Print(string_format("Repaired for %s using your own gold.", money))
+        KE:Print(string_format("Repaired for %s (your gold).", money))
         return
     end
 
@@ -1030,15 +1030,15 @@ function AnnounceRepair(force)
             local guildMoney = C_CurrencyInfo.GetCoinTextureString(guildPart)
             if guildMoney then
                 KE:Print(string_format(
-                    "Repaired for %s using guild funds (%s) and your own gold.",
+                    "Repaired for %s (guild %s, rest yours).",
                     money, guildMoney))
                 return
             end
         elseif guildPart and guildPart > 0 then
-            KE:Print(string_format("Repaired for %s using guild funds.", money))
+            KE:Print(string_format("Repaired for %s (guild funds).", money))
             return
         elseif guildPart then
-            KE:Print(string_format("Repaired for %s using your own gold.", money))
+            KE:Print(string_format("Repaired for %s (your gold).", money))
             return
         end
     end
