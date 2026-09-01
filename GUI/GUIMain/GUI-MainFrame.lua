@@ -73,10 +73,8 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Class Utilities",
         defaultExpanded = false,
         items = {
-            { id = "EvokerSuite",   text = "Evoker Suite", keywords = { "evoker", "dragon", "empower", "ebon might", "prescience", "disintegrate", "augmentation", "devastation", "preservation" } },
             { id = "PIMacroBuilder", text = "Priest: PI Macro", keywords = { "priest", "power infusion", "pi", "macro", "builder", "trinket", "racial", "potion" } },
             { id = "TotemTracker",  text = "Totem Tracker", keywords = { "totem", "totems", "shaman", "evoker" } },
-            { id = "BurningRush",   text = "Warlock: Burning Rush", keywords = { "warlock", "burning rush", "movement", "speed" } },
         },
     },
     {

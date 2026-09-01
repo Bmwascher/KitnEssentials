@@ -493,30 +493,6 @@ local Defaults = {
             HealAbsorbColor = { 1, 0.48, 0.48, 1 }, -- red
         },
 
-        BurningRush = {
-            Enabled = false,
-            IconSize = 45,
-            -- Glow (consumed by GUI-GlowSettingsCard — these are its default key names)
-            GlowEnabled = true,
-            GlowType = "pixel",
-            GlowColor = { 1, 0.5, 0, 1 },
-            GlowXOffset = 0,
-            GlowYOffset = 0,
-            GlowLines = 5,
-            GlowFrequency = 0.25,
-            GlowLength = 10,
-            GlowThickness = 2,
-            GlowBorder = true,
-            GlowScale = 1,
-            GlowDuration = 1,
-            GlowStartAnim = false,
-            -- Position (anchorFrameType/ParentFrame/Strata are ROOT keys; AnchorFrom/To + offsets live in Position)
-            Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 125),
-        },
-
         TotemTracker = {
             Enabled = false,
             IconSize = 44,
@@ -576,32 +552,6 @@ local Defaults = {
             Enabled = false,
             SoundFile = "None",
             SoundChannel = "Master",
-        },
-
-        EbonMightTracker = {
-            Enabled = false,
-            Mode = "icon",          -- "icon" = icon + border + countdown, "text" = border + state label only
-            Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -150),
-            IconSize = 48,
-            FontSize = 22,
-            FontOutline = "OUTLINE",
-            BaseColor = { 1, 1, 1, 1 },
-            CritColor = { 1, 0, 1, 1 },
-            DupeColor = { 1, 0.5, 0, 1 },
-            OnlyShowCrit = false,
-            CombatOnly = false,
-            PandemicHighlight = false,
-            PandemicGlowType = "pixel",        -- pixel / autocast / button / proc (LibCustomGlow)
-            PandemicColor = { 1, 1, 0, 1 },    -- yellow
-            -- 12.0.5 made UnitStat secret during encounters. EMTracker
-            -- workaround: player saves their mainstat manually (out of combat)
-            -- and the crit-detection math uses that cached value. Refreshed via
-            -- the "Update from Current Stat" button in the GUI card. 0 = not set
-            -- (crit detection is disabled until the user sets it).
-            MainStat = 0,
         },
 
         -----------------------------------------------------------------
@@ -730,33 +680,6 @@ local Defaults = {
                 VigorThrill = { 0.2, 0.8, 0.2, 1 },
                 SecondWind = { 0.565, 0.953, 0.953, 1 },
             },
-        },
-
-        PrescienceTracker = {
-            Enabled = false,
-            Strata = "MEDIUM",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, -100),
-            ShowPrescience = true,
-            ShowShiftingSands = false,
-            StackDirection = "VERTICAL",
-            GrowthDirection = "DOWN",
-            MaxEntries = 6,
-            IconSize = 32,
-            Spacing = 4,
-            ShowRoleIcon = true,
-            RoleIconScale = 1.0,
-            ShowNames = true,
-            ClassColorNames = false,
-            NameMaxLength = 0,
-            NameFontSize = 12,
-            NameFontOutline = "OUTLINE",
-            TimerFontSize = 14,
-            TimerFontOutline = "OUTLINE",
-            NameColor = { 1, 1, 1, 1 },
-            TimerColor = { 1, 1, 1, 1 },
-            CritColor = { 1, 0, 1, 1 },
         },
 
         KickTracker = {
@@ -2260,7 +2183,6 @@ local FLIPPED_TO_OFF = {
     { "AuctionHouseFilter", "Enabled" },
     { "AuraDebuffs", "Enabled" },
     { "AuraExternals", "Enabled" },
-    { "BurningRush", "Enabled" },
     { "CharacterPanel", "Enabled" },
     { "CombatLogger", "Enabled" },
     { "CombatTexts", "Enabled" },
