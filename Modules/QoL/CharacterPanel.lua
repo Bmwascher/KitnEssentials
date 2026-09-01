@@ -874,6 +874,23 @@ local function WidenAmount(extra, pdfShown, applied)
 end
 CP._WidenAmount = WidenAmount
 
+-- The header belongs over the character, not over the panel. Blizzard centres
+-- both header strings on the whole frame, so the stat pane drags them right of
+-- the model.
+--
+-- The width this module adds is deliberately NOT corrected for: the widen moves
+-- the model by half the added width, which is exactly how far the frame centre
+-- moves, so the two already track. Measured in game -- the correction is the
+-- same -103.5 at 580 wide and at 540 wide.
+local function HeaderOffsetX(cfWidth, statPaneLeft)
+    if type(cfWidth) ~= "number" then return 0 end
+    if type(statPaneLeft) ~= "number" then return 0 end
+    local pane = cfWidth - statPaneLeft
+    if pane <= 0 then return 0 end
+    return -pane / 2
+end
+CP._HeaderOffsetX = HeaderOffsetX
+
 -- ABSOLUTE anchors, never deltas. Every value is set to a computed absolute, so
 -- running this ten times produces the same layout as running it once. Four
 -- hooks call it and they do not agree on whether Blizzard has just rewritten
@@ -924,6 +941,93 @@ local function ApplyWiden()
     mh:SetPoint("BOTTOMLEFT", items, "BOTTOMLEFT", 130 + add / 2, 16)
 end
 
+-- Independent of ApplyWiden's early return: the header correction is needed
+-- whether or not this module widens anything, and ApplyWiden bails whenever
+-- there is no width to write.
+--
+-- The stat pane's left edge is READ, not derived. Deriving it from
+-- PANEL_DEFAULT_WIDTH plus the added width lands 6px right of where the pane
+-- actually sits, which is a 3px error in a half-width.
+function CP:ApplyHeaderCentering()
+    local cf = _G.CharacterFrame
+    local insetR = _G.CharacterFrameInsetRight
+    if not (cf and insetR) then return end
+
+    -- Same reading ApplyWiden feeds WidenAmount, and needed here for the same
+    -- reason: see the one-shot delta measurement below.
+    local pdf = _G.PaperDollFrame
+    local pdfShown = pdf and pdf:IsShown() and true or false
+
+    -- Drive the offsets to ZERO rather than returning: returning would strand
+    -- whatever was last applied, which is how a disabled module keeps moving
+    -- Blizzard's title.
+    --
+    -- BOTH enable tests. IsEnabled() is the Ace lifecycle state, db.Enabled is
+    -- the profile key, and the two genuinely disagree -- a profile switch
+    -- re-applies settings without re-enabling.
+    --
+    -- titleOffset stays 0 until _titleDelta has been measured, so the title is
+    -- left where Blizzard put it rather than guessed at.
+    local levelOffset, titleOffset = 0, 0
+    local titleContainer = cf.TitleContainer
+
+    if self:IsEnabled() and self.db and self.db.Enabled and not ElvUILoaded()
+        and not KE:EUIDrawsSlotElement("player", "headerText") then
+        -- Width comes from the RECT, not from GetWidth(). This runs in the
+        -- same hook pass that just called cf:SetWidth, and GetWidth returns
+        -- that new value immediately while GetLeft/GetRight can still describe
+        -- the old layout. Mixing the two produces a delta of -3 instead of 17,
+        -- and _titleDelta is cached forever. Reading every figure from the same
+        -- rect source is self-consistent at any staleness, and the delta is
+        -- width-invariant, so a stale-but-consistent snapshot still gives 17.
+        local cfLeft, cfRight = cf:GetLeft(), cf:GetRight()
+        local paneLeft = insetR:IsShown() and insetR:GetLeft()
+        if cfLeft and cfRight and paneLeft then
+            local cfW = cfRight - cfLeft
+            levelOffset = HeaderOffsetX(cfW, paneLeft - cfLeft)
+
+            -- The title sits 17px right of the level string, because its
+            -- container is inset asymmetrically for the portrait. Measured
+            -- ONCE, before anything is offset, and cached -- it is a property
+            -- of the template, not of the width. Reading it live on every pass
+            -- would read back our own offset and drift.
+            -- pdfShown gates the measurement, and tW must clear 1 rather than
+            -- 0. A frame that has not laid out yet measures 1x1: readable, so a
+            -- bare tW > 0 passes, and wrong. This value is cached for the
+            -- session, so latching it once from a 1x1 read mis-offsets the
+            -- title until the next reload with nothing left to re-measure it.
+            -- The enable path reaches here at login with the sheet CLOSED,
+            -- which is that state exactly, and is not a state Task C.1
+            -- measured -- its readings were all taken with the sheet open.
+            if titleContainer and pdfShown and self._titleDelta == nil then
+                local tLeft, tW = titleContainer:GetLeft(), titleContainer:GetWidth()
+                if tLeft and tW and tW > 1 then
+                    self._titleDelta = ((tLeft - cfLeft) + tW / 2) - cfW / 2
+                end
+            end
+
+            -- Offsetting on a FAILED measurement is what drifts: the next
+            -- pass would measure a container this one had already moved, and
+            -- cache that shift into the delta.
+            if self._titleDelta then
+                titleOffset = levelOffset - self._titleDelta
+            end
+        end
+    end
+
+    self._headerOffsetX = levelOffset
+
+    -- The title string carries THREE anchors (TOP/LEFT/RIGHT) inside
+    -- TitleContainer, so it stretches rather than sitting on a point and cannot
+    -- be moved directly. Sliding the whole container slides the centred string
+    -- inside it, and leaves Blizzard's own anchors untouched.
+    if titleContainer and titleContainer.SetPointsOffset then
+        titleContainer:SetPointsOffset(titleOffset, 0)
+    end
+
+    self:UpdateHeaderOffset()
+end
+
 -- FOUR hooks, not one. These are the methods that set the width back, and
 -- missing any one is what makes a widened frame snap back at random. All four
 -- do the same thing because ApplyWiden is absolute -- it does not matter which
@@ -944,12 +1048,16 @@ function CP:SetupWiderFrame()
         for _, method in ipairs({ "Expand", "Collapse", "UpdateSize", "ShowSubFrame" }) do
             local methodFunc = cf[method]
             if type(methodFunc) == "function" then
-                hooksecurefunc(cf, method, function() ApplyWiden() end)
+                hooksecurefunc(cf, method, function()
+                    ApplyWiden()
+                    CP:ApplyHeaderCentering()
+                end)
             end
         end
     end
 
     ApplyWiden()
+    CP:ApplyHeaderCentering()
 end
 
 -- Exported so a spec can prove the nil guard runs BEFORE the first geometry
@@ -1084,6 +1192,10 @@ end
 
 function CP:ApplySettings()
     wipe(_lastSlotState)
+
+    -- Above the master-key return: switching to a profile with the panel off
+    -- must still hand Blizzard's header back.
+    self:ApplyHeaderCentering()
 
     if not self.db.Enabled then return end
 
@@ -1355,15 +1467,35 @@ function CP:CreateRaceText()
     return text
 end
 
-function CP:UpdateRaceTextPosition()
-    if not self._raceText then return end
-    if not self.db.ShowRaceText then return end
-    -- Also gated: HideRaceText re-runs Blizzard's level layout, which fires our
-    -- own PaperDollFrame_SetLevel hook straight back into here. Without this the
-    -- stand-down would re-apply the very offset it just cleared.
-    if KE:EUIDrawsSlotElement("player", "headerText") then return end
+-- SetPointsOffset carries BOTH corrections at once: x re-centres the string
+-- over the character, y makes room for the score line below it. One call keeps
+-- them from overwriting each other, and it stays absolute.
+--
+-- The gates drive the offset to zero rather than returning: an early return
+-- would strand the last value written.
+function CP:UpdateHeaderOffset()
     if not CharacterLevelText then return end
-    CharacterLevelText:SetPointsOffset(0, -37)
+
+    -- Same DOUBLE enable test as ApplyHeaderCentering, and for the same reason:
+    -- this is the function that actually writes CharacterLevelText, so a gate
+    -- that disagrees with its sibling's strands y while x is restored.
+    local x, y = 0, 0
+    if self:IsEnabled() and self.db and self.db.Enabled and not ElvUILoaded()
+        and not KE:EUIDrawsSlotElement("player", "headerText") then
+        x = self._headerOffsetX or 0
+        -- Visibility, NOT self.db.ShowRaceText. The preference says the line is
+        -- wanted; only IsShown says it is actually there. An unscored character
+        -- has the toggle on and nothing to display.
+        if self._raceText and self._raceText:IsShown() then
+            y = -37
+        end
+    end
+
+    CharacterLevelText:SetPointsOffset(x, y)
+end
+
+function CP:UpdateRaceTextPosition()
+    self:UpdateHeaderOffset()
 end
 
 function CP:ShowRaceText()
@@ -1388,15 +1520,14 @@ end
 
 function CP:HideRaceText()
     if self._raceText then self._raceText:Hide() end
-    if CharacterLevelText then
-        CharacterLevelText:SetPointsOffset(0, 0)
-    end
-    -- SetPointsOffset(0,0) is a transient offset and doesn't always snap the
-    -- level text back to Blizzard's baseline on its own (it stays displaced
-    -- until the panel is reopened). Re-running Blizzard's level layout — what a
-    -- reopen does — restores it immediately. Our PaperDollFrame_SetLevel hook is
-    -- safe here: UpdateRaceTextPosition early-returns now that ShowRaceText is
-    -- off, it only re-applies the faction suffix.
+    CP:UpdateHeaderOffset()
+    -- The offset UpdateHeaderOffset writes is transient and doesn't always
+    -- snap the level text back to Blizzard's baseline on its own (it stays
+    -- displaced until the panel is reopened). Re-running Blizzard's level
+    -- layout — what a reopen does — restores it immediately. Our
+    -- PaperDollFrame_SetLevel hook is safe here: UpdateRaceTextPosition now
+    -- delegates straight to UpdateHeaderOffset, which reapplies the same
+    -- deterministic offset rather than drifting.
     if PaperDollFrame and PaperDollFrame:IsShown() and PaperDollFrame_SetLevel then
         PaperDollFrame_SetLevel()
     end
@@ -3853,6 +3984,7 @@ function CP:OnDisable()
     -- Same shape as the line above: undo a geometry change this module made.
     -- A no-op unless the frame is up and we actually widened it.
     ApplyWiden()
+    self:ApplyHeaderCentering()
     updatePending = false
 
     -- Cascade to InspectPanel; it owns its own state (queue, inspectUpdatePending,

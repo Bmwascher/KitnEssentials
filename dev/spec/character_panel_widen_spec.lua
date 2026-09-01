@@ -211,3 +211,28 @@ describe("Widen character window: the guard runs before any write", function()
         assert.is_true(writes() > 0)
     end)
 end)
+
+describe("header offset", function()
+    -- Both pairs are MEASURED in game (Task C.1), not derived.
+    it("centres over the model column with the wider panel on", function()
+        local CP = loadCP()
+        assert.equals(-103.5, CP._HeaderOffsetX(580, 373))
+    end)
+
+    it("produces the same correction with the wider panel off", function()
+        local CP = loadCP()
+        -- The added width moves the model and the frame centre equally, so the
+        -- correction does not change. This equality IS the property.
+        assert.equals(-103.5, CP._HeaderOffsetX(540, 333))
+    end)
+
+    it("returns zero when the stat pane edge is unreadable", function()
+        local CP = loadCP()
+        assert.equals(0, CP._HeaderOffsetX(580, nil))
+    end)
+
+    it("refuses a stat pane wider than the frame", function()
+        local CP = loadCP()
+        assert.equals(0, CP._HeaderOffsetX(338, 400))
+    end)
+end)
