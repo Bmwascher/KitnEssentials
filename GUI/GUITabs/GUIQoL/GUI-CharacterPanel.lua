@@ -62,7 +62,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
     local noteText = GUIFrame:CreateText(noteRow,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Adds optional decimal item level, race text, faction indicator, item track letters, missing enchant/gem warnings, and a gem socket helper.",
+        KE:ColorTextByTheme("-") .. " Adds optional decimal item level, Mythic+ score, faction indicator, item track letters, missing enchant/gem warnings, and a gem socket helper.",
         50, "hide")
     noteRow:AddWidget(noteText, 1)
 

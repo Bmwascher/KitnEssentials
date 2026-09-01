@@ -2,8 +2,8 @@
 -- ║  CharacterPanel.lua                                      ║
 -- ║  Module: Character Panel                                 ║
 -- ║  Purpose: Missing enchant/gem warnings, decimal ilvl,    ║
--- ║           character text styling, race text, item track  ║
--- ║           indicators, gem socket helper.                 ║
+-- ║           character text styling, Mythic+ score, item    ║
+-- ║           track indicators, gem socket helper.           ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -1414,7 +1414,7 @@ function CP:SetupStatTextHook()
 end
 
 ---------------------------------------------------------------------------------
--- Level Text Faction Indicator + Race Text
+-- Level Text Faction Indicator + Mythic+ Score Line
 ---------------------------------------------------------------------------------
 function CP:UpdateLevelTextWithFaction()
     if not self:IsEnabled() then return end
@@ -1517,7 +1517,7 @@ function CP:ShowRaceText()
     if not self:IsEnabled() then return end
     if ElvUILoaded() then return end
     if not self.db.ShowRaceText then return end
-    -- Our race line sits under the level string, and getting it there means
+    -- Our score line sits under the level string, and getting it there means
     -- displacing that string by 37px. EUI has already re-anchored it into its
     -- own header, so the offset drags EUI's text out of place and ours lands on
     -- top of it. Stand down entirely rather than fight over the anchor.
@@ -3971,8 +3971,8 @@ function CP:OnEnable()
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "PrimeGemCache")
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "ShowRaceText")
 
-    -- Race: if the character pane is already shown when the module enables
-    -- (e.g. user toggled the module on with the pane open), the PaperDollFrame
+    -- Score line: if the character pane is already shown when the module
+    -- enables (e.g. toggled on with the pane open), the PaperDollFrame
     -- OnShow hook installed above won't fire on this path. Register events +
     -- force one refresh inline.
     if PaperDollFrame and PaperDollFrame:IsShown() then
