@@ -170,12 +170,15 @@ function CH:PackRow(event, ...)
     -- stops meaning the same person once the session ends. Resolving it while
     -- this session can still read it is the only way to store something that
     -- survives. The type check is load-bearing -- the loop above coerces a
-    -- non-scalar to false, and strsub(false, 1, 2) throws.
+    -- non-scalar to false, and strsub(false, 1, 2) throws -- and this sits
+    -- after that loop so the secrecy check reaches row[2] before type does.
     if type(row[2]) == "string" and strsub(row[2], 1, 2) == "|K" then
         local senderID = row[13]
         if type(senderID) ~= "number" or senderID <= 0 then return nil end
 
-        local accountInfo = _G.C_BattleNet.GetAccountInfoByID(senderID)
+        local BN = _G.C_BattleNet
+        if not BN then return nil end
+        local accountInfo = BN.GetAccountInfoByID(senderID)
         local tag = accountInfo and accountInfo.battleTag
         if KE:IsSecretValue(tag) then return nil end
         -- battleTag is non-nilable but can be "", which would break the
