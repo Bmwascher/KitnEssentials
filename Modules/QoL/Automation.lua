@@ -709,9 +709,14 @@ local repairPending, repairPendingTotal = false, 0
 -- while an OLDER announcement is still in flight; without this the older
 -- announcement would read the newer payer straight out of the globals.
 local repairPendingGen = 0
--- The live timer for each of the three timed jobs. Every one of them can be
--- superseded before it fires, and each callback decides whether it still speaks
--- for its job by comparing the handle it captured against the one stored here.
+-- The live timer for each timed job that can be SUPERSEDED before it fires.
+-- Each callback decides whether it still speaks for its job by comparing the
+-- handle it captured against the one stored here.
+--
+-- Not every timer belongs here. A job whose deadline is fixed by the thing that
+-- armed it is not superseded by a later arm -- it is answered by identity, and
+-- the close-grace payer retirement is one of those: it holds no handle and
+-- guards on repairWatchGen instead.
 --
 -- Handle identity, NOT a counter. Counters were the previous design and it grew
 -- one per timer, because a counter says only "something moved" -- so each timer
@@ -1065,6 +1070,13 @@ do
 end
 
 local repairReportFrame, repairBill
+
+local function ClearGraceTimer()
+    if graceTimer then
+        graceTimer:Cancel()
+        graceTimer = nil
+    end
+end
 -- Whether the merchant window is open right now. The close-grace timer below
 -- has to tell "the window shut and stayed shut" from "it shut and reopened
 -- inside the grace period", and those two want opposite things done with the
@@ -1228,37 +1240,46 @@ local function SetupRepairReport()
             -- attempted a beat later has no merchant left to sell to.
             if repairOwnBranch and not repairPending then
                 ReleaseHeldSweep()
-                -- The bill belongs to the merchant VISIT and the watch to the
-                -- REPAIR, so the two halves below answer to different owners
-                -- and are tested separately. Collapsing them under one test is
-                -- a real defect: a reopen must keep the bill alive, but it is
-                -- NOT a reason to hold the payer open, and holding it lets a
-                -- hand repair moments later inherit the wrong one.
+                -- TWO timers, because the two jobs answer to different
+                -- owners. Sharing one is a real defect: a reopen or a second
+                -- close would then postpone the payer's retirement along with
+                -- the bill's, and a hand repair in the extra stretch inherits
+                -- a payer that should already be gone.
                 --
-                -- The bill half asks whether a reopen took ownership. That
-                -- reopen keeps the PREVIOUS baseline on purpose -- the repair
+                -- The payer belongs to the REPAIR. Its deadline is fixed by the
+                -- repair that armed it, so a later close is not a reason to
+                -- move it and it holds no handle -- the generation it captured
+                -- already says whether the repair it speaks for is still the
+                -- live one.
+                local wgen = repairWatchGen
+                C_Timer.After(CLOSE_GRACE, function()
+                    if wgen == repairWatchGen and not repairPending then
+                        DisarmRepairWatch()
+                    end
+                end)
+
+                -- The bill belongs to the merchant VISIT, which a later close
+                -- does replace, so this half holds the handle. A reopen inside
+                -- the window keeps the PREVIOUS baseline on purpose: the repair
                 -- has already lowered the real cost, so a fresh read would
                 -- measure the drop still in flight as no drop at all.
-                --
-                -- The disarm half asks whether the watch moved on, because it
-                -- can be retired without touching this timer: its own expiry
-                -- may have run first.
-                local wgen = repairWatchGen
-                if graceTimer then graceTimer:Cancel() end
+                ClearGraceTimer()
                 local mine
                 mine = C_Timer.NewTimer(CLOSE_GRACE, function()
                     if graceTimer ~= mine then return end
                     graceTimer = nil
                     if not merchantOpen then repairBill = nil end
-                    if wgen == repairWatchGen and not repairPending then
-                        DisarmRepairWatch()
-                    end
                 end)
                 graceTimer = mine
                 return
             end
 
+            -- This close owns the baseline outright, so any grace timer still
+            -- holding one open is retired with it. Left running it would keep
+            -- the next visit from taking a baseline of its own, and that visit
+            -- would report nothing at all.
             repairBill = nil
+            ClearGraceTimer()
             -- Only a repair that never armed an announcement is cleared here.
             -- AnnounceRepair consumes the rest itself.
             if not repairPending then DisarmRepairWatch() end
@@ -1267,6 +1288,7 @@ local function SetupRepairReport()
 
         if not AU.db or not AU.db.Enabled or not AU.db.RepairReport then
             repairBill = nil
+            ClearGraceTimer()
             return
         end
 
@@ -1278,11 +1300,9 @@ local function SetupRepairReport()
             -- measure as no drop at all, printing nothing for a repair that
             -- did happen.
             --
-            -- The timer is deliberately NOT cancelled. Its other half retires
-            -- the previous repair's payer on schedule, and a reopen is no
-            -- reason to keep that payer alive for the rest of the watch: a
-            -- hand repair in that stretch would inherit it and name the wrong
-            -- one.
+            -- The timer is deliberately NOT cancelled: it is what marks the
+            -- baseline as still spoken for, and the previous repair's payer is
+            -- retired by its own timer regardless.
             if not graceTimer then repairBill = ReadRepairBill() end
             return
         end
