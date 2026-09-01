@@ -548,12 +548,6 @@ local Defaults = {
             FontOutline = "OUTLINE",
         },
 
-        EbonMightHelper = {
-            Enabled = false,
-            SoundFile = "None",
-            SoundChannel = "Master",
-        },
-
         -----------------------------------------------------------------
         -- QoL Modules
         -----------------------------------------------------------------

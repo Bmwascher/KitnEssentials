@@ -11,7 +11,6 @@ local GUIFrame = KE.GUIFrame
 
 GUIFrame:RegisterTabbedContent("ClassTools", {
     { id = "DisintegrateTicks", label = "Disintegrate" },
-    { id = "EbonMightHelper",   label = "Ebon Might" },
     { id = "HavocTracker",      label = "Havoc Tracker" },
     { id = "HuntersMark",       label = "Hunter's Mark" },
     { id = "StanceText",        label = "Missing Forms" },

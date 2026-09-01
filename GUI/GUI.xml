@@ -63,7 +63,6 @@
     <Script file="GUITabs\GUIClassUtilities\GUI-ClassTools.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-DisintegrateTicks.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-StasisTracker.lua" />
-    <Script file="GUITabs\GUIClassUtilities\GUI-EbonMightHelper.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-TotemTracker.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-PetStatusText.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-StanceText.lua" />

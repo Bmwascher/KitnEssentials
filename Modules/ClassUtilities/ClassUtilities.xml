@@ -6,7 +6,6 @@
     <Script file="TotemTracker.lua" />
     <Script file="DisintegrateTicks.lua" />
     <Script file="StasisTracker.lua" />
-    <Script file="EbonMightHelper.lua" />
     <Script file="HuntersMark.lua" />
     <Script file="HavocTracker.lua" />
     <Script file="SpellAlerts.lua" />
