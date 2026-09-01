@@ -1253,12 +1253,20 @@ local function SetupRepairReport()
         end
 
         if event == "MERCHANT_SHOW" then
-            -- A new visit owns the baseline from here. Retire any close-grace
-            -- timer still counting down from the previous one, or it would
-            -- clear the bill this line is about to read.
+            -- A live close-grace timer means the PREVIOUS visit's repair is
+            -- still waiting for its bill to drop. Retire the timer -- it would
+            -- clear the baseline out from under that drop -- but keep the
+            -- baseline itself: the repair has already lowered the real cost, so
+            -- re-reading it here would sample the post-repair figure and the
+            -- drop would then measure as no drop at all, printing nothing for a
+            -- repair that did happen.
+            --
+            -- Only this window skips the re-read. Any other visit owns the
+            -- baseline and takes a fresh one.
             if graceTimer then
                 graceTimer:Cancel()
                 graceTimer = nil
+                return
             end
             repairBill = ReadRepairBill()
             return
