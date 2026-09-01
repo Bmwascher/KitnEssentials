@@ -131,3 +131,90 @@ describe("combat logger key renames", function()
         assert.is_nil(out.ModuleDefaultsOptIn[SCENARIO_ID])
     end)
 end)
+
+-- The same helper now carries two more shapes. A visibility mode is converted
+-- IN PLACE, where the old and new key are the same string, and the retired
+-- cursor satellite modes sit one level deeper than a block can reach.
+describe("visibility mode retirement", function()
+    local CROSS_ID = "CombatCross.AlwaysShow->Visibility"
+    local CURSOR_ID = "Cursor.Visibility.RetireGroupModes"
+    local GCD_ID = "Cursor.GCD.VisibilityOverride.RetireGroupModes"
+
+    after_each(function()
+        _G.KitnEssentialsDB = nil
+    end)
+
+    local function migrate(profile)
+        _G.KitnEssentialsDB = { profiles = { Default = profile } }
+        local KE = helpers.loadModule("Core/Defaults.lua")
+        KE:MigrateCombatLoggerKeys()
+        return _G.KitnEssentialsDB.profiles.Default
+    end
+
+    it("ships Visibility and no AlwaysShow", function()
+        local KE = helpers.loadModule("Core/Defaults.lua")
+        local block = KE:GetDefaultDB().profile.CombatCross
+        assert.are.equal("in_combat", block.Visibility)
+        assert.is_nil(block.AlwaysShow)
+    end)
+
+    it("turns an Always Show crosshair into the always mode", function()
+        local out = migrate({ CombatCross = { AlwaysShow = true } })
+        assert.are.equal("always", out.CombatCross.Visibility)
+        assert.is_nil(out.CombatCross.AlwaysShow)
+    end)
+
+    it("turns a combat-only crosshair into the in_combat mode", function()
+        local out = migrate({ CombatCross = { AlwaysShow = false } })
+        assert.are.equal("in_combat", out.CombatCross.Visibility)
+    end)
+
+    -- The defect this shape exists to prevent: writing the converted value and
+    -- then deleting the key it was written to, because old and new match.
+    it("keeps an in-place conversion instead of deleting it", function()
+        local out = migrate({ Cursor = { Visibility = "in_raid" } })
+        assert.are.equal("in_instance", out.Cursor.Visibility)
+    end)
+
+    it("leaves a mode that was not retired alone", function()
+        local out = migrate({ Cursor = { Visibility = "mouseDown" } })
+        assert.are.equal("mouseDown", out.Cursor.Visibility)
+    end)
+
+    it("converts the retired modes on every cursor satellite", function()
+        local out = migrate({
+            Cursor = {
+                GCD    = { VisibilityOverride = "in_party" },
+                Cast   = { VisibilityOverride = "in_raid" },
+                Trail  = { VisibilityOverride = "solo" },
+                Dispel = { VisibilityOverride = "in_party" },
+                Taunt  = { VisibilityOverride = "in_raid" },
+            },
+        })
+        assert.are.equal("in_instance", out.Cursor.GCD.VisibilityOverride)
+        assert.are.equal("in_instance", out.Cursor.Cast.VisibilityOverride)
+        assert.are.equal("solo", out.Cursor.Trail.VisibilityOverride)
+        assert.are.equal("in_instance", out.Cursor.Dispel.VisibilityOverride)
+        assert.are.equal("in_instance", out.Cursor.Taunt.VisibilityOverride)
+    end)
+
+    -- ResolveParentTable builds the chain it walks, so a profile that never
+    -- touched the cursor comes out holding empty satellite tables. AceDB strips
+    -- default-equal leaves at logout, so this is inert -- asserted so a later
+    -- reader meets it here rather than in a diff.
+    it("creates the empty parents it walks through", function()
+        local out = migrate({ CombatCross = { AlwaysShow = false } })
+        assert.is_table(out.Cursor)
+        assert.is_table(out.Cursor.GCD)
+        assert.is_nil(out.Cursor.GCD.VisibilityOverride)
+    end)
+
+    it("runs once and leaves a later hand edit alone", function()
+        local sv = { profiles = { Default = { Cursor = { Visibility = "in_raid" } } } }
+        sv[RECORD] = { [CROSS_ID] = true, [CURSOR_ID] = true, [GCD_ID] = true }
+        _G.KitnEssentialsDB = sv
+        local KE = helpers.loadModule("Core/Defaults.lua")
+        KE:MigrateCombatLoggerKeys()
+        assert.are.equal("in_raid", _G.KitnEssentialsDB.profiles.Default.Cursor.Visibility)
+    end)
+end)
