@@ -60,6 +60,7 @@
     <Script file="GUITabs\GUIDungeons\GUI-KickTracker.lua" />
 
     <!-- Class Utilities tabs -->
+    <Script file="GUITabs\GUIClassUtilities\GUI-ClassTools.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-DisintegrateTicks.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-StasisTracker.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-EbonMightHelper.lua" />

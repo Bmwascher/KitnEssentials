@@ -1023,7 +1023,7 @@ function DT:RegWithEditMode()
             getPosition = function() return self.db.Position end,
             setPosition = function(pos) self.db.Position = pos; self:UpdateWarningPosition() end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-            guiPath = "EvokerSuite",
+            guiPath = "ClassTools",
             guiTab = "DisintegrateTicks",
         })
         self.editModeRegistered = true

@@ -73,6 +73,7 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Class Utilities",
         defaultExpanded = false,
         items = {
+            { id = "ClassTools",    text = "Class Tools", keywords = { "class", "class tools", "tools", "evoker", "disintegrate", "stasis", "ebon might", "havoc tracker", "hunters mark", "hunter's mark", "missing forms" } },
             { id = "PIMacroBuilder", text = "Priest: PI Macro", keywords = { "priest", "power infusion", "pi", "macro", "builder", "trinket", "racial", "potion" } },
             { id = "TotemTracker",  text = "Totem Tracker", keywords = { "totem", "totems", "shaman", "evoker" } },
         },

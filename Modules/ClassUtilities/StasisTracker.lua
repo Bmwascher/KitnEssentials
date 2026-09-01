@@ -385,7 +385,7 @@ function ST:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "EvokerSuite",
+            guiPath = "ClassTools",
             guiTab = "StasisTracker",
         })
         self.editModeRegistered = true
