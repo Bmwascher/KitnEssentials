@@ -163,7 +163,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     row3:AddWidget(decimalCheck, 1 / 3)
     manager:Register(decimalCheck, "elvuiOk")
 
-    local raceCheck = GUIFrame:CreateCheckbox(row3, "Show Race Text", {
+    local raceCheck = GUIFrame:CreateCheckbox(row3, "Show M+ Score", {
         value = db.ShowRaceText,
         callback = function(checked)
             db.ShowRaceText = checked
@@ -172,7 +172,7 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
                 if checked then CP:ShowRaceText() else CP:HideRaceText() end
             end
         end,
-        tooltip = "Shows your character's race below the level text.",
+        tooltip = "Shows your overall Mythic+ score below the level text.",
     })
     row3:AddWidget(raceCheck, 1 / 3)
     manager:Register(raceCheck, "elvuiOk")

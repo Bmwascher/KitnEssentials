@@ -1455,12 +1455,27 @@ function CP:SetupLevelTextHook()
     end)
 end
 
+-- Returns nil rather than "0" for an unscored character: an empty line reads
+-- better than a zero, and the caller hides the string on nil.
+local function DungeonScoreText()
+    if not (C_ChallengeMode and C_ChallengeMode.GetOverallDungeonScore) then return nil end
+    local score = C_ChallengeMode.GetOverallDungeonScore()
+    if type(score) ~= "number" or score <= 0 then return nil end
+
+    local color = C_ChallengeMode.GetDungeonScoreRarityColor
+        and C_ChallengeMode.GetDungeonScoreRarityColor(score)
+    if color and color.GenerateHexColor then
+        return "|c" .. color:GenerateHexColor() .. "Mythic+ Score: " .. score .. "|r"
+    end
+    return "Mythic+ Score: " .. score
+end
+CP._DungeonScoreText = DungeonScoreText
+
 function CP:CreateRaceText()
     if self._raceText then return self._raceText end
 
     local text = PaperDollFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall2")
     text:SetPoint("TOP", CharacterLevelText, "BOTTOM", 0, 5)
-    text:SetText(UnitRace("player"))
     text:Hide()
 
     self._raceText = text
@@ -1513,7 +1528,13 @@ function CP:ShowRaceText()
 
     local text = self:CreateRaceText()
     self:ApplyFont(text, self.db.LevelTextSize or 12)
-    text:SetText(UnitRace("player"))
+    local scoreText = DungeonScoreText()
+    if not scoreText then
+        text:Hide()
+        self:UpdateHeaderOffset()
+        return
+    end
+    text:SetText(scoreText)
     text:Show()
     self:UpdateRaceTextPosition()
 end
@@ -3948,6 +3969,7 @@ function CP:OnEnable()
     -- Warm the gem cache during the login loading screen (see PrimeGemCache).
     -- AceEvent unregisters automatically on module disable.
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "PrimeGemCache")
+    self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "ShowRaceText")
 
     -- Race: if the character pane is already shown when the module enables
     -- (e.g. user toggled the module on with the pane open), the PaperDollFrame
