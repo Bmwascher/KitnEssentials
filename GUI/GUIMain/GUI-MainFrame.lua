@@ -38,20 +38,19 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Combat",
         defaultExpanded = false,
         items = {
+            -- Search matches the whole query as ONE literal substring of the
+            -- title or of a single keyword, so a tab label has to appear here
+            -- as a phrase. Both merged pages spell out every tab label they
+            -- absorbed, apostrophe variants included.
+            { id = "ClassTools",    text = "Class Tools", keywords = { "class", "class tools", "tools", "evoker", "dragon", "empower", "disintegrate", "disintegrate ticks", "ticks", "augmentation", "devastation", "preservation", "ebon might", "ebon", "might", "stasis", "havoc", "havoc tracker", "havoc warning", "havoc target", "target has havoc", "demon hunter", "destruction", "destro", "destruction warlock", "warlock havoc", "hunter", "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "paladin", "priest", "presence", "aura" } },
             { id = "CombatRes",     text = "Combat Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "CombatTexts",   text = "Combat Texts", keywords = { "combat text", "scrolling", "no target", "interrupt", "durability" } },
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },
             { id = "Cursor",        text = "Cursor Effects", keywords = { "cursor", "mouse", "pointer", "trail", "circle", "dispel", "cleanse", "purge", "magic", "curse", "poison", "disease", "debuff", "taunt", "flame shock", "garrote", "provoke", "growl", "torment", "dark command", "hand of reckoning" } },
             { id = "FocusCastbar",  text = "Focus Castbar", keywords = { "castbar", "cast", "focus", "casting", "interrupt" } },
-            { id = "NoMovementAlert", text = "No Movement Alert", keywords = { "movement", "alert", "cooldown" } },
-            { id = "PlayerAbsorbs", text = "Player Absorbs", keywords = { "absorb", "shield", "heal absorb", "necrotic", "pw:s", "power word shield", "damage absorb", "overlay" } },
             { id = "CombatCross",   text = "Player Crosshair", keywords = { "crosshair", "cross", "aim", "reticle", "player", "always show", "out of combat", "shape", "circle", "hide in range" } },
             { id = "RangeChecker",  text = "Range Display", keywords = { "range", "distance", "yards", "melee", "ranged" } },
-            -- Search matches the whole query as ONE literal substring of the
-            -- title or of a single keyword, so a tab label has to appear here
-            -- as a phrase. The five tab labels and the two row titles this
-            -- page absorbed are all spelled out, apostrophe variants included.
-            { id = "StatusTexts",   text = "Status Texts", keywords = { "status", "status texts", "texts", "pet", "pet status texts", "hunter", "warlock", "demon", "summon", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "evoker", "presence", "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival", "healer", "healer mana", "mana", "oom", "raid", "dungeon", "party", "havoc", "havoc tracker", "havoc warning", "havoc target", "target has havoc", "destruction", "destro", "destruction warlock", "warlock havoc" } },
+            { id = "StatusTexts",   text = "Status Texts", keywords = { "status", "status texts", "texts", "combat potion", "potion", "pot", "consumable", "healer", "healer mana", "mana", "oom", "raid", "dungeon", "party", "movement", "no movement alert", "movement alert", "alert", "cooldown", "pet", "pet status", "pet status texts", "hunter", "warlock", "demon", "summon", "absorb", "player absorbs", "shield", "heal absorb", "necrotic", "pw:s", "power word shield", "damage absorb", "overlay" } },
         },
     },
     {
@@ -65,16 +64,6 @@ GUIFrame.sidebarConfig = {
             { id = "AuraDebuffs",   text = "Advanced Debuffs", keywords = { "debuff", "debuffs", "aura", "boss", "dot", "magic", "curse", "poison", "disease" } },
             { id = "AuraExternals", text = "External Tracker", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
             { id = "AuraMovement", text = "Movement Buffs", keywords = { "movement", "speed", "sprint", "buff", "mobility" } },
-        },
-    },
-    {
-        id = "class_section",
-        type = "header",
-        text = "\226\128\162 Class Utilities",
-        defaultExpanded = false,
-        items = {
-            { id = "ClassTools",    text = "Class Tools", keywords = { "class", "class tools", "tools", "evoker", "disintegrate", "stasis", "ebon might", "havoc tracker", "hunters mark", "hunter's mark", "missing forms" } },
-            { id = "PIMacroBuilder", text = "Priest: PI Macro", keywords = { "priest", "power infusion", "pi", "macro", "builder", "trinket", "racial", "potion" } },
             { id = "TotemTracker",  text = "Totem Tracker", keywords = { "totem", "totems", "shaman", "evoker" } },
         },
     },
@@ -89,7 +78,7 @@ GUIFrame.sidebarConfig = {
             { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "world map scale", "map", "map scale", "scale", "maximized", "maximised", "fullscreen", "maximized map" } },
             { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
             { id = "QualityOfLife",     text = "Quality of Life", keywords = { "quality of life", "qol", "spell alert opacity", "spell alert", "opacity", "proc", "alert", "glow", "overlay", "copy anything", "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip", "move frames", "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock", "slash", "slash command", "command", "commands", "shortcut", "reload" } },
-            { id = "Utilities",         text = "Utilities", keywords = { "utilities", "general", "potion", "pot", "combat", "consumable", "raid", "notification", "notifications", "alert", "gateway", "soulwell", "feast", "repair", "portal", "ready check", "consumables", "flask", "food", "rune", "missing", "recuperate", "heal", "button", "time spiral", "tracker", "evoker", "world marker", "marker", "raid marker", "cycle", "cycler" } },
+            { id = "Utilities",         text = "Utilities", keywords = { "utilities", "general", "priest", "priest: pi macro", "pi macro", "power infusion", "pi", "macro", "builder", "trinket", "racial", "raid", "raid notifications", "notification", "notifications", "alert", "gateway", "soulwell", "feast", "repair", "portal", "ready check", "consumables", "flask", "food", "rune", "missing", "recuperate", "heal", "button", "time spiral", "tracker", "evoker", "world marker", "world markers", "marker", "raid marker", "cycle", "cycler" } },
         },
     },
     {
