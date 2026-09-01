@@ -696,6 +696,17 @@ describe("ChatHistory Battle.net sender token", function()
             assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
         end)
 
+        -- The prepass runs outside every pcall, so a row that reaches
+        -- strmatch with a non-string tag takes the whole replay down.
+        it("refuses a row whose stored BattleTag is not a string", function()
+            local CH, KE = L.loadChatHistory()
+            for _, bad in ipairs({ true, 5, {} }) do
+                KE.db.char.ChatHistory[1] =
+                    { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = bad }
+                assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+            end
+        end)
+
         it("accepts a resolved Battle.net row", function()
             local CH, KE = L.loadChatHistory()
             KE.db.char.ChatHistory[1] =

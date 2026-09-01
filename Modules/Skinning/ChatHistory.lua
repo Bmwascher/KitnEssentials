@@ -166,34 +166,25 @@ function CH:PackRow(event, ...)
     end
 
     -- A Battle.net whisper's argument 2 is a session-scoped |K token, not a
-    -- name: the client resolves the embedded id to a name at DRAW time, and
-    -- that id stops resolving to the right person once the session ends.
-    -- Resolving it now, against the id the session that received it can still
-    -- read, is the only way to store something that means the same thing
-    -- later. The type check is not optional -- the loop above coerces
-    -- anything that is not a string, number or boolean to false, and
-    -- strsub(false, 1, 2) throws -- and it runs after that loop on purpose, so
-    -- the value it tests has already passed the secrecy check every other
-    -- argument gets.
+    -- name: the client resolves its embedded id at DRAW time, and that id
+    -- stops meaning the same person once the session ends. Resolving it while
+    -- this session can still read it is the only way to store something that
+    -- survives. The type check is load-bearing -- the loop above coerces a
+    -- non-scalar to false, and strsub(false, 1, 2) throws.
     if type(row[2]) == "string" and strsub(row[2], 1, 2) == "|K" then
         local senderID = row[13]
-        -- First contact with argument 13 in this branch is the secrecy check,
-        -- not the `> 0` comparison two lines down; comparing a secret throws.
-        if KE:IsSecretValue(senderID) then return nil end
         if type(senderID) ~= "number" or senderID <= 0 then return nil end
 
         local accountInfo = _G.C_BattleNet.GetAccountInfoByID(senderID)
         local tag = accountInfo and accountInfo.battleTag
         if KE:IsSecretValue(tag) then return nil end
-        -- battleTag is non-nilable but can be "". An empty tag is refused like
-        -- any other failed lookup rather than stored and left to break the
-        -- replay fallback.
+        -- battleTag is non-nilable but can be "", which would break the
+        -- replay fallback if it were stored.
         if type(tag) ~= "string" or tag == "" then return nil end
 
-        -- One field, one name. Nothing derived from accountName is ever
-        -- stored: it carries the same kind of token this branch exists to
-        -- keep off disk. row[2] is OVERWRITTEN, not supplemented, so nothing
-        -- beginning with |K survives into the row this function returns.
+        -- Overwritten, not supplemented: nothing beginning with |K may
+        -- survive into the returned row. accountName is never stored -- it
+        -- carries the same kind of token this branch exists to keep off disk.
         row.bnTag = tag
         row[2] = tag
     end
@@ -421,34 +412,33 @@ function CH:RowIsReplayable(row)
     -- replay exists to avoid, and a table would reach BetterDate and throw.
     if KE:IsSecretValue(row.time) then return false end
     if type(row.time) ~= "number" then return false end
+    -- Typed as well as secrecy-checked, because ResolveBNSender runs it
+    -- through strmatch in the prepass, outside every pcall: a corrupted
+    -- boolean or table here would abort the replay for every chat frame.
     if KE:IsSecretValue(row.bnTag) then return false end
+    if row.bnTag ~= nil and type(row.bnTag) ~= "string" then return false end
     for i = 2, MAX_ARGS do
         if KE:IsSecretValue(row[i]) then return false end
     end
 
-    -- Rows written before this change stored the |K token itself in row[2].
-    -- Its embedded id is dead -- the session that could resolve it is gone --
-    -- so the name is genuinely unrecoverable, and the row is refused rather
-    -- than replayed with a stranger's name. The type check is not optional:
-    -- row[2] can be false, a number, or nil, and strsub(false, 1, 2) throws.
-    -- Placed after the loop above so first contact with row[2] is the
-    -- secrecy check, matching the ordering PackRow's own version requires.
+    -- Rows stored before this change hold the |K token itself. Its embedded
+    -- id is dead, so the name is unrecoverable and the row is refused rather
+    -- than replayed with a stranger's name. Typed for the same reason
+    -- PackRow's copy of this test is.
     if type(row[2]) == "string" and strsub(row[2], 1, 2) == "|K" then return false end
 
     return true
 end
 
--- Matches a stored BattleTag against today's friend list, so a replayed
--- Battle.net line reads exactly as the live line did instead of carrying a
--- dead session-scoped token. On a match, returns that friend's current
--- display name and id. On no match -- the friend list is not yet populated,
--- or the sender was removed -- returns the truncated tag and a nil id, which
--- the message handler reads as "emit no link" rather than one pointing at the
--- wrong friend.
+-- Matches a stored BattleTag against today's friend list. On a match, that
+-- friend's current name and id. On no match -- list not yet populated, or the
+-- sender removed -- the truncated tag and a nil id, which the message handler
+-- reads as "emit no link" rather than one pointing at the wrong friend.
 local function ResolveBNSender(bnTag)
-    local numFriends = _G.BNGetNumFriends and _G.BNGetNumFriends() or 0
+    local BN = _G.C_BattleNet
+    local numFriends = (BN and _G.BNGetNumFriends and _G.BNGetNumFriends()) or 0
     for i = 1, numFriends do
-        local info = _G.C_BattleNet.GetFriendAccountInfo(i)
+        local info = BN.GetFriendAccountInfo(i)
         if info and info.battleTag == bnTag then
             return info.accountName, info.bnetAccountID
         end
@@ -480,11 +470,10 @@ function CH:DisplayChatHistory()
     -- One prepass, so the per-row work happens once instead of once per chat
     -- frame. The per-frame loop below then does comparisons only.
     --
-    -- The BattleTag resolve runs here too, and ONLY when row.bnTag is present
-    -- -- gated on that and nothing else. Gating on the event type instead
-    -- looks equivalent and is not: a legacy Battle.net row refused above has
-    -- no row.bnTag either, and the event-type gate would still send it into
-    -- this resolve, which has nothing to match against a token.
+    -- The BattleTag resolve is gated on row.bnTag and nothing else. Gating on
+    -- the event type looks equivalent and is not: a legacy row has no bnTag,
+    -- and that gate would still hand its token to a resolve with nothing to
+    -- match it against.
     local rows, types, bnArg2, bnArg13, n = {}, {}, {}, {}, 0
     for i = 1, #data do
         local row = data[i]
