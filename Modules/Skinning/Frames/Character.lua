@@ -360,6 +360,7 @@ local function EquipmentFlyoutSkin()
         S.Backdrop(holder)
         S.data(holder).skinned = true
     end
+    local qualityBorders = S._QualityBordersOn(KE.db and KE.db.profile and KE.db.profile.CharacterPanel)
     if flyout.buttons then
         for _, button in ipairs(flyout.buttons) do
             SkinFlyoutButton(button)
@@ -370,6 +371,36 @@ local function EquipmentFlyoutSkin()
             -- what broke on Midnight. All flyout item-data reads are
             -- gone now.
             if S.data(button).flyoutILvl then S.data(button).flyoutILvl:Hide() end
+
+            -- Blizzard already colours IconBorder by quality; read that
+            -- colour rather than item data. Buttons are reused across
+            -- slots, so every path below writes -- a bail would leave the
+            -- previous item's rarity on the backdrop.
+            local bd = S.GetBackdrop(button)
+            if bd then
+                if not qualityBorders then
+                    bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2], S.borderColor[3], S.borderColor[4])
+                else
+                    -- IsShown carries SecretReturnsForAspect; a secret bool
+                    -- throws on comparison, so check secrecy before ==true.
+                    local shown = button.IconBorder and button.IconBorder:IsShown()
+                    if KE:IsSecretValue(shown) or shown ~= true then
+                        bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2], S.borderColor[3], S.borderColor[4])
+                    else
+                        -- GetVertexColor is MayReturnNothing and its returns
+                        -- are secret-annotated -- nil is not secret, so both
+                        -- are checked, or a nil reaches SetBackdropBorderColor.
+                        local r, g, b = button.IconBorder:GetVertexColor()
+                        if KE:IsSecretValue(r) or r == nil
+                            or KE:IsSecretValue(g) or g == nil
+                            or KE:IsSecretValue(b) or b == nil then
+                            bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2], S.borderColor[3], S.borderColor[4])
+                        else
+                            bd:SetBackdropBorderColor(r, g, b, 1)
+                        end
+                    end
+                end
+            end
         end
     end
 
