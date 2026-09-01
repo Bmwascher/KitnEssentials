@@ -64,7 +64,6 @@ local CATEGORIES = {
     { label = "All" },
     { id = "combat_section",   label = "Combat" },
     { id = "aura_section",     label = "Auras" },
-    { id = "class_section",    label = "Class" },
     { id = "qol_section",      label = "QoL" },
     { id = "dungeons_section", label = "Dungeons" },
     { id = "skinning_section", label = "Skinning" },

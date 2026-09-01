@@ -776,20 +776,18 @@ local SECTION_PREVIEW_MODULES = {
         "FocusCastbar", "CombatCross", "RangeChecker",
         "Cursor",
         "HealerMana",
-        "NoMovementAlert", "PlayerAbsorbs",
+        "NoMovementAlert", "PlayerAbsorbs", "PotionReady",
         "PetStatusText", "StanceText", "HuntersMark", "HavocTracker",
+        "DisintegrateTicks", "StasisTracker",
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",
         "AuraDebuffs", "AuraExternals", "AuraMovement",
-    },
-    class_section = {
         "TotemTracker",
-        "DisintegrateTicks", "StasisTracker",
     },
     qol_section = {
         "GreatVaultAlert",
-        "PotionReady", "RaidNotifications", "Recuperate",
+        "RaidNotifications", "Recuperate",
         "TimeSpiral", "ReadyCheckConsumables",
     },
     -- Skyriding UI moved here from Quality of Life. Without this entry the
