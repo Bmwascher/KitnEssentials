@@ -2322,8 +2322,7 @@ local KEY_RENAMES = {
         convert = function(value) return value == true and "always" or "in_combat" end,
     },
     -- in_party and in_raid retired in favour of in_instance, which answers the
-    -- question both were reached for. Converted in place, so old and new are the
-    -- same key and the apply loop must not delete it afterwards.
+    -- question both were reached for.
     --
     -- The master mode is not the only place a retired value hides: every cursor
     -- satellite carries its own VisibilityOverride through the same predicate,

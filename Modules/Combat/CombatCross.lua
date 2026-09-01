@@ -54,10 +54,10 @@ CC.VISIBILITY_MODES = {
 -- transition before UnitAffectingCombat agrees with it, and the caller is what
 -- resolves that.
 --
--- The instance test is Cursor's, resolved per call rather than cached, because
--- module enable order is pairs() order and Cursor can load after this one. It
--- is a plain GetInstanceInfo read, so it answers whether or not that module is
--- switched on.
+-- The instance test is Cursor's, resolved per call rather than cached: this
+-- file parses before Cursor.lua, so the module does not exist yet at file
+-- scope. It is a plain GetInstanceInfo read, so it answers whether or not that
+-- module is switched on.
 local function ShouldShowByMode(mode, inCombat)
     if mode == "always"        then return true end
     if mode == "never"         then return false end
@@ -131,8 +131,8 @@ local HEALER_RANGE_ABILITIES = {
 CC.frame = nil
 CC.text = nil
 CC.previewActive = false
--- Not "in combat": with Always Show on this is true out of combat too. It is
--- what carries the frame, whatever put it there.
+-- Not "in combat": any non-combat visibility mode makes this true out of
+-- combat too. It is what carries the frame, whatever put it there.
 CC.gameplayActive = false
 CC.rangeAbility = nil
 CC.specType = nil

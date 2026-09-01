@@ -199,8 +199,8 @@ describe("visibility mode retirement", function()
     end)
 
     -- ResolveParentTable builds the chain it walks, so a profile that never
-    -- touched the cursor comes out holding empty satellite tables. AceDB strips
-    -- default-equal leaves at logout, so this is inert -- asserted so a later
+    -- touched the cursor comes out holding empty satellite tables. Inert --
+    -- AceDB serves defaults through the metatable -- and asserted so a later
     -- reader meets it here rather than in a diff.
     it("creates the empty parents it walks through", function()
         local out = migrate({ CombatCross = { AlwaysShow = false } })

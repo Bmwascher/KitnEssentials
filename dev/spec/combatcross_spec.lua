@@ -123,10 +123,10 @@ describe("CombatCross visibility", function()
         assert.is_true(CC.onUpdateActive)
     end)
 
-    it("starts the range loop when Always Show puts the cross up", function()
-        -- Turning Always Show on out of combat must not leave a visible cross
-        -- with range colouring configured and no loop running. gameplayActive
-        -- is what gates the loop, and only UpdateVisibility sets it.
+    it("starts the range loop when an always-on mode puts the cross up", function()
+        -- A mode that shows out of combat must not leave a visible cross with
+        -- range colouring configured and no loop running. gameplayActive is
+        -- what gates the loop, and only UpdateVisibility sets it.
         local CC = loader.loadCombatCross({
             GetSpecializationInfo = function() return 73 end,
             C_Spell = { IsSpellInRange = function() return 1 end },
@@ -312,6 +312,29 @@ describe("CombatCross visibility modes", function()
         local CC = loader.loadCombatCross()
         assert.is_true(CC.ShouldShowByMode("in_raid", false))
         assert.is_true(CC.ShouldShowByMode(nil, false))
+    end)
+
+    -- The only mode that leaves the module to answer. Cursor owns the test
+    -- because it owns the instance definition; a nil module hides rather than
+    -- throws, which is why the false case is asserted separately.
+    it("asks the cursor module whether this is instanced content", function()
+        local CC = loader.loadCombatCross()
+        local cursor = _G.KitnEssentials:GetModule("Cursor")
+        cursor.InRealInstancedContent = function() return true end
+        assert.is_true(CC.ShouldShowByMode("in_instance", false))
+        cursor.InRealInstancedContent = function() return false end
+        assert.is_false(CC.ShouldShowByMode("in_instance", true))
+    end)
+
+    -- AceEvent hands the handler its event name first. Forwarding these events
+    -- straight to UpdateVisibility would deliver that string as `inCombat`,
+    -- and a non-nil string reads as "in combat" every time.
+    it("drops the event name instead of reading it as combat state", function()
+        local CC = loader.loadCombatCross()
+        local isShown = withFrame(CC)
+        CC.frame:Show()
+        CC:OnContextChanged("GROUP_ROSTER_UPDATE")
+        assert.is_false(isShown())
     end)
 
     it("routes the stored mode through UpdateVisibility", function()
