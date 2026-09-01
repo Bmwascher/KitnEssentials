@@ -670,6 +670,13 @@ local repairPendingGen = 0
 -- otherwise fire in turn, the earliest of them consuming a ledger that is still
 -- filling.
 local repairAnnounceEpoch = 0
+-- Which MERCHANT VISIT the stored bill belongs to. repairWatchGen tracks the
+-- REPAIR; this tracks the visit, and they move independently -- a visit can
+-- open without arming a watch, and a watch can outlive the visit that armed it.
+-- Keying the bill's cleanup on the watch generation gets both cases wrong: a
+-- watch that expires first strands the bill, and a reopen that arms no watch
+-- lets a stale timer wipe the new visit's baseline.
+local repairMerchantGen = 0
 -- FORWARD DECLARATION, and it is load-bearing. ArmRepairWatch's expiry calls
 -- AnnounceRepair, but that function is defined further down beside the report
 -- frame. Without this line the call would resolve as a global, read nil, and
@@ -712,13 +719,13 @@ function AU:CanGuildCover(allowance, cost)
     return allowance >= cost
 end
 
--- Idempotent. The held junk sale runs on the first debit, or at expiry,
--- whichever arrives first.
 -- How long the report window outlives the merchant. Long enough for a bill drop
 -- that lands just after the frame shuts, short enough that the watch expiry
 -- still owns the real cleanup.
 local CLOSE_GRACE = 0.5
 
+-- Idempotent. The held junk sale runs on the first debit, or at expiry,
+-- whichever arrives first.
 local function ReleaseHeldSweep()
     local sweep = repairHeldSweep
     repairHeldSweep = nil
@@ -1108,11 +1115,17 @@ local function SetupRepairReport()
             -- attempted a beat later has no merchant left to sell to.
             if repairOwnBranch and not repairPending then
                 ReleaseHeldSweep()
-                local gen = repairWatchGen
+                -- TWO generations, because the two halves below answer to
+                -- different owners. The bill belongs to the merchant VISIT, so
+                -- a reopen inside the grace window must keep its own fresh
+                -- baseline; the watch belongs to the REPAIR, and its expiry may
+                -- have retired it before this even runs.
+                local wgen, mgen = repairWatchGen, repairMerchantGen
                 C_Timer.After(CLOSE_GRACE, function()
-                    if gen ~= repairWatchGen then return end
-                    repairBill = nil
-                    if not repairPending then DisarmRepairWatch() end
+                    if mgen == repairMerchantGen then repairBill = nil end
+                    if wgen == repairWatchGen and not repairPending then
+                        DisarmRepairWatch()
+                    end
                 end)
                 return
             end
@@ -1130,6 +1143,7 @@ local function SetupRepairReport()
         end
 
         if event == "MERCHANT_SHOW" then
+            repairMerchantGen = repairMerchantGen + 1
             repairBill = ReadRepairBill()
             return
         end
