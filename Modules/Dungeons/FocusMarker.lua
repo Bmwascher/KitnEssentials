@@ -113,7 +113,7 @@ function FM:ApplyMacro()
     end
 
     local db = self.db
-    local name = db.MacroName or "FocusMarker"
+    local name = db.MacroName or "!FocusMarker"
     local icon = db.MacroIcon or 1033497
     local body = self:BuildMacroBody()
 

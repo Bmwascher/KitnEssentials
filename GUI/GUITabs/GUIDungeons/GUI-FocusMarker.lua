@@ -199,12 +199,12 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
 
     local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
     local nameEditBox = GUIFrame:CreateEditBox(row4a, "Macro Name", {
-        value = db.MacroName or "FocusMarker",
+        value = db.MacroName or "!FocusMarker",
         callback = function(val)
             if val and val ~= "" then
                 db.MacroName = val
             else
-                db.MacroName = "FocusMarker"
+                db.MacroName = "!FocusMarker"
             end
             ApplySettings()
         end,
