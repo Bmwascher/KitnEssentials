@@ -714,6 +714,11 @@ end
 
 -- Idempotent. The held junk sale runs on the first debit, or at expiry,
 -- whichever arrives first.
+-- How long the report window outlives the merchant. Long enough for a bill drop
+-- that lands just after the frame shuts, short enough that the watch expiry
+-- still owns the real cleanup.
+local CLOSE_GRACE = 0.5
+
 local function ReleaseHeldSweep()
     local sweep = repairHeldSweep
     repairHeldSweep = nil
@@ -1090,6 +1095,28 @@ local function SetupRepairReport()
     repairReportFrame:RegisterEvent("PLAYER_MONEY")
     repairReportFrame:SetScript("OnEvent", function(_, event)
         if event == "MERCHANT_CLOSED" then
+            -- A repair KE started can have its bill drop land AFTER the window
+            -- shuts. Tearing the window down here loses the report for a repair
+            -- that did happen, so an armed watch with nothing pending yet gets
+            -- one short beat to let the drop arrive.
+            --
+            -- Damage taken in that beat cannot be misread as a repair: it
+            -- RAISES the bill, and only a fall is ever reported.
+            --
+            -- The held junk sale is deliberately NOT deferred with it. It is
+            -- released now, while the merchant is still closing, because a sale
+            -- attempted a beat later has no merchant left to sell to.
+            if repairOwnBranch and not repairPending then
+                ReleaseHeldSweep()
+                local gen = repairWatchGen
+                C_Timer.After(CLOSE_GRACE, function()
+                    if gen ~= repairWatchGen then return end
+                    repairBill = nil
+                    if not repairPending then DisarmRepairWatch() end
+                end)
+                return
+            end
+
             repairBill = nil
             -- Only a repair that never armed an announcement is cleared here.
             -- AnnounceRepair consumes the rest itself.
