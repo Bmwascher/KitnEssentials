@@ -713,17 +713,6 @@ local repairPendingGen = 0
 -- Each callback decides whether it still speaks for its job by comparing the
 -- handle it captured against the one stored here.
 --
--- Not every timer belongs here. A job whose deadline is fixed by the thing that
--- armed it is not superseded by a later arm -- it is answered by identity, and
--- the close-grace payer retirement is one of those: it holds no handle and
--- guards on repairWatchGen instead.
---
--- Handle identity, NOT a counter. Counters were the previous design and it grew
--- one per timer, because a counter says only "something moved" -- so each timer
--- needed its own to avoid answering for another timer's supersede. A handle is
--- unique to the callback that captured it, so one field per job replaces one
--- counter per job and cannot be bumped by anything else.
---
 -- The compare is what makes this correct, not the Cancel. Cancel is called on
 -- supersede, but nothing here relies on it preventing a callback already queued
 -- for this frame: such a callback finds a different handle stored and returns.
@@ -787,9 +776,6 @@ end
 -- before it, so a debit RESETS the settle window instead of adding a second
 -- callback to it, and a callback left over from a window that has been flushed
 -- cannot fire into the window that replaced it.
---
--- Retiring is a Cancel AND a handle swap. The swap is what enforces the rule: a
--- superseded callback that runs anyway finds a different handle and returns.
 local function ScheduleAnnounce()
     if announceTimer then announceTimer:Cancel() end
     local mine
@@ -801,10 +787,6 @@ local function ScheduleAnnounce()
     announceTimer = mine
 end
 
--- repairWatchGen survives the move to handles because it is not a timer token:
--- it identifies the REPAIR. The pending announcement is stamped with it, and
--- AnnounceRepair reads that stamp to decide whether the payer in the globals
--- still describes the repair being announced.
 local function DisarmRepairWatch()
     repairWatchGen = repairWatchGen + 1
     repairOwnBranch, repairGuildFunds, repairExpected = nil, nil, nil
@@ -856,7 +838,6 @@ local function ArmRepairWatch(branch, expected, guildFunds, gold, sweep)
     if watchTimer then watchTimer:Cancel() end
     local mine
     mine = C_Timer.NewTimer(WATCH_EXPIRY, function()
-        -- Superseded by a later arm, or already cancelled by a disarm.
         if watchTimer ~= mine then return end
         watchTimer = nil
 
@@ -1278,11 +1259,8 @@ local function SetupRepairReport()
                     end
                 end)
 
-                -- The bill belongs to the merchant VISIT, which a later close
-                -- does replace, so this half holds the handle. A reopen inside
-                -- the window keeps the PREVIOUS baseline on purpose: the repair
-                -- has already lowered the real cost, so a fresh read would
-                -- measure the drop still in flight as no drop at all.
+                -- The bill belongs to the merchant VISIT, so a later close or
+                -- reopen retires this half.
                 ClearGraceTimer()
                 local mine
                 mine = C_Timer.NewTimer(CLOSE_GRACE, function()
@@ -1294,10 +1272,7 @@ local function SetupRepairReport()
                 return
             end
 
-            -- This close owns the baseline outright, so any grace timer still
-            -- holding one open is retired with it. Left running it would keep
-            -- the next visit from taking a baseline of its own, and that visit
-            -- would report nothing at all.
+            -- The baseline is gone, so the grace timer holding it goes too.
             repairBill = nil
             ClearGraceTimer()
             -- Only a repair that never armed an announcement is cleared here.
@@ -1320,19 +1295,17 @@ local function SetupRepairReport()
             -- the result of that repair, so the fall from the held baseline IS
             -- the repair and is booked here rather than left for the event.
             --
-            -- Holding the old baseline instead and letting the event find it
-            -- reports the wrong AMOUNT: any damage taken after this point nets
-            -- against the repair, and the figure printed is short by whatever
-            -- was chipped off. Booking now and re-reading below keeps the two
-            -- apart, because a rise is never reported.
+            -- Holding that baseline for the event to find instead reports the
+            -- wrong AMOUNT: damage taken after this point nets against the
+            -- repair. Re-reading below keeps the two apart, because a rise is
+            -- never reported.
             if graceTimer and repairBill ~= nil and fresh ~= nil then
                 local spent = AU:RepairSpend(repairBill, fresh)
                 if spent then RecordRepairDrop(spent) end
             end
 
-            -- This visit owns the baseline from here, so the grace timer has
-            -- nothing left to hold open. The previous repair's payer is retired
-            -- by a separate timer and is not touched.
+            -- The previous repair's payer is retired by a separate timer and
+            -- is not touched here.
             ClearGraceTimer()
             repairBill = fresh
             return
