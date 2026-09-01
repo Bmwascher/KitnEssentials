@@ -192,13 +192,23 @@ local function loadTaintReport(options)
         function object:SetSize(width)
             self._width = width
         end
+        function object:SetFont(...)
+            local argumentCount = select("#", ...)
+            if self._kind == "EditBox" and options.enforceEditBoxFontContract
+                and argumentCount ~= 3 then
+                error("bad argument #3 to 'SetFont' "
+                    .. "(Usage: local success = self:SetFont(fontFile, height, flags))", 2)
+            end
+            self._font = { ... }
+            self._fontArgumentCount = argumentCount
+        end
 
         local noOps = {
             "SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor",
             "SetHeight", "SetPoint", "ClearAllPoints", "SetAllPoints",
             "SetColorTexture", "SetTexture", "SetRotation", "SetVertexColor",
             "SetTexelSnappingBias", "SetSnapToPixelGrid", "SetJustifyH",
-            "SetFont", "SetTextColor", "SetShadowColor", "SetShadowOffset", "SetFormattedText",
+            "SetTextColor", "SetShadowColor", "SetShadowOffset", "SetFormattedText",
             "SetMovable", "EnableMouse", "SetFrameStrata", "SetClampedToScreen",
             "RegisterForDrag", "StartMoving", "StopMovingOrSizing",
             "SetOrientation", "SetThumbTexture", "SetMultiLine", "SetMaxLetters",
@@ -417,6 +427,10 @@ local function loadTaintReport(options)
     end
     function state.reportFrameIsShown()
         return reportFrame:IsShown()
+    end
+    function state.editBoxFont()
+        assert.is_table(editBox)
+        return editBox._font, editBox._fontArgumentCount
     end
     return state
 end
@@ -2214,6 +2228,16 @@ describe("TaintReport report and lazy dialog", function()
             assert.not_equals(snapshot, replacement, case.name)
             assert.is_truthy(replacement:find(case.replacement, 1, true), case.name)
         end
+    end)
+
+    it("sets the report body font to 14px with explicit no-outline flags", function()
+        local state = loadTaintReport({ enforceEditBoxFontContract = true })
+        state.initialize()
+
+        assert.has_no.errors(function() state.run("") end)
+        local font, argumentCount = state.editBoxFont()
+        assert.equals(3, argumentCount)
+        assert.same({ "Fonts\\FRIZQT__.TTF", 14, "" }, font)
     end)
 
     it("creates the singleton dialog lazily, reuses it, and clears its text", function()
