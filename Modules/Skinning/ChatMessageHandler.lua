@@ -982,7 +982,14 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
 
     local playerName = arg2 or UNKNOWN
     if chatType == 'BN_WHISPER' or chatType == 'BN_WHISPER_INFORM' then
-        playerLink = self:GetBNPlayerLink(playerName, playerLinkDisplayText, arg13, arg11, chatGroup, chatTarget)
+        -- A nil id means no current friend matches this row's stored
+        -- BattleTag (replay only, never a live message). GetBNPlayerLink
+        -- concatenates whatever it is handed, so a nil id yields a malformed
+        -- link rather than none; skipping the call is the only way to omit
+        -- one.
+        if arg13 then
+            playerLink = self:GetBNPlayerLink(playerName, playerLinkDisplayText, arg13, arg11, chatGroup, chatTarget)
+        end
     elseif not bossMonster then
         playerLink = self:GetPlayerLink(playerName, playerLinkDisplayText, arg11, chatGroup, chatTarget)
     end

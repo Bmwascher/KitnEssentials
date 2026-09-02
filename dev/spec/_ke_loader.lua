@@ -2565,12 +2565,15 @@ end
 -- addon shim's global is only the NewModule/GetModule registry, and its tables
 -- do not exist until NewModule or GetModule creates them. The shim runs no Ace
 -- lifecycle, so UpdateDB, IsEnabled and ChatSkinActive are supplied here.
--- IsInInstance, GetServerTime, time, tinsert, tremove, strfind, CHAT_FRAMES
--- and geterrorhandler are not in the common mock and are set here. `wipe` IS
--- in the mock; it is set again anyway so this loader reads as a complete list
--- of what the module needs rather than a diff against another file.
+-- IsInInstance, GetServerTime, time, tinsert, tremove, strfind, strmatch,
+-- CHAT_FRAMES, C_BattleNet, BNGetNumFriends and geterrorhandler are not in
+-- the common mock and are set here. `wipe` IS in the mock; it is set again
+-- anyway so this loader reads as a complete list of what the module needs
+-- rather than a diff against another file.
 -- IsInInstance honours overrides so an instance can be simulated, and both
--- clocks accept `false` to remove the global entirely.
+-- clocks accept `false` to remove the global entirely. C_BattleNet and
+-- BNGetNumFriends default to an empty friend list; a spec wanting a match
+-- reassigns them after the loader returns.
 function L.loadChatHistory(overrides)
     overrides = overrides or {}
     installMock(overrides, { C_Timer = inertTimer() })
@@ -2578,9 +2581,15 @@ function L.loadChatHistory(overrides)
     _G.gsub = string.gsub
     _G.strsub = string.sub
     _G.strfind = string.find
+    _G.strmatch = string.match
     _G.tinsert = table.insert
     _G.tremove = table.remove
     _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
+    _G.C_BattleNet = overrides.C_BattleNet or {
+        GetAccountInfoByID = function() return nil end,
+        GetFriendAccountInfo = function() return nil end,
+    }
+    _G.BNGetNumFriends = overrides.BNGetNumFriends or function() return 0 end
     -- Both clocks are overridable AND removable. PackRow falls back from
     -- GetServerTime to time, and it also guards each function's EXISTENCE, so
     -- `false` has to mean "this global is not there" rather than "use the

@@ -26,7 +26,7 @@ local IsInInstance = IsInInstance
 local GetServerTime = GetServerTime
 local time = time
 local ipairs = ipairs
-local gsub, strsub = _G.gsub, strsub
+local gsub, strsub, strmatch = _G.gsub, strsub, strmatch
 local C_Timer = C_Timer
 
 -- Event to chat type. The type is what the user's per-type toggle keys off; an
@@ -163,6 +163,33 @@ function CH:PackRow(event, ...)
         else
             row[i] = false
         end
+    end
+
+    -- A Battle.net whisper's argument 2 is a session-scoped |K token, not a
+    -- name: the client resolves its embedded id at DRAW time, and that id
+    -- stops meaning the same person once the session ends. Resolving it while
+    -- this session can still read it is the only way to store something that
+    -- survives. The type check is load-bearing -- the loop above coerces a
+    -- non-scalar to false, and strsub(false, 1, 2) throws -- and this sits
+    -- after that loop so the secrecy check reaches row[2] before type does.
+    if type(row[2]) == "string" and strsub(row[2], 1, 2) == "|K" then
+        local senderID = row[13]
+        if type(senderID) ~= "number" or senderID <= 0 then return nil end
+
+        local BN = _G.C_BattleNet
+        if not BN then return nil end
+        local accountInfo = BN.GetAccountInfoByID(senderID)
+        local tag = accountInfo and accountInfo.battleTag
+        if KE:IsSecretValue(tag) then return nil end
+        -- battleTag is non-nilable but can be "", which would break the
+        -- replay fallback if it were stored.
+        if type(tag) ~= "string" or tag == "" then return nil end
+
+        -- Overwritten, not supplemented: nothing beginning with |K may
+        -- survive into the returned row. accountName is never stored -- it
+        -- carries the same kind of token this branch exists to keep off disk.
+        row.bnTag = tag
+        row[2] = tag
     end
 
     -- Trailing dead arguments are dropped. How much that saves is not known
@@ -379,21 +406,49 @@ function CH:RowIsReplayable(row)
 
     if BodyIsUnsafe(row[1]) then return false end
 
-    -- The whole row, not just the body, and that includes the two named fields.
-    -- The premise above is that a stored value can read secret in a later
-    -- session; if that holds it holds for the timestamp and the event name too.
-    -- Login-only cost.
+    -- The whole row, not just the body, and that includes the three named
+    -- fields. The premise above is that a stored value can read secret in a
+    -- later session; if that holds it holds for the timestamp, the event name
+    -- and the stored BattleTag too. Login-only cost.
     -- The timestamp must be a readable number. A missing one makes
     -- CHAT:AddMessageEdits fall back to the login clock, which is the one thing
     -- replay exists to avoid, and a table would reach BetterDate and throw.
     if KE:IsSecretValue(row.time) then return false end
     if type(row.time) ~= "number" then return false end
+    -- Typed as well as secrecy-checked, because ResolveBNSender runs it
+    -- through strmatch in the prepass, outside every pcall: a corrupted
+    -- boolean or table here would abort the replay for every chat frame.
+    if KE:IsSecretValue(row.bnTag) then return false end
+    if row.bnTag ~= nil and type(row.bnTag) ~= "string" then return false end
     for i = 2, MAX_ARGS do
         if KE:IsSecretValue(row[i]) then return false end
     end
 
+    -- Rows stored before this change hold the |K token itself. Its embedded
+    -- id is dead, so the name is unrecoverable and the row is refused rather
+    -- than replayed with a stranger's name. Typed for the same reason
+    -- PackRow's copy of this test is.
+    if type(row[2]) == "string" and strsub(row[2], 1, 2) == "|K" then return false end
+
     return true
 end
+
+-- Matches a stored BattleTag against today's friend list. On a match, that
+-- friend's current name and id. On no match -- list not yet populated, or the
+-- sender removed -- the truncated tag and a nil id, which the message handler
+-- reads as "emit no link" rather than one pointing at the wrong friend.
+local function ResolveBNSender(bnTag)
+    local BN = _G.C_BattleNet
+    local numFriends = (BN and _G.BNGetNumFriends and _G.BNGetNumFriends()) or 0
+    for i = 1, numFriends do
+        local info = BN.GetFriendAccountInfo(i)
+        if info and info.battleTag == bnTag then
+            return info.accountName, info.bnetAccountID
+        end
+    end
+    return strmatch(bnTag, "([^#]+)"), nil
+end
+CH.ResolveBNSender = ResolveBNSender
 
 -- Pushes each stored row back through the handler with the marker
 -- CHAT:AddMessageEdits looks for, so a replayed line carries the timestamp it
@@ -417,7 +472,12 @@ function CH:DisplayChatHistory()
 
     -- One prepass, so the per-row work happens once instead of once per chat
     -- frame. The per-frame loop below then does comparisons only.
-    local rows, types, n = {}, {}, 0
+    --
+    -- The BattleTag resolve is gated on row.bnTag and nothing else. Gating on
+    -- the event type looks equivalent and is not: a legacy row has no bnTag,
+    -- and that gate would still hand its token to a resolve with nothing to
+    -- match it against.
+    local rows, types, bnArg2, bnArg13, n = {}, {}, {}, {}, 0
     for i = 1, #data do
         local row = data[i]
         if self:RowIsReplayable(row) then
@@ -426,6 +486,9 @@ function CH:DisplayChatHistory()
             -- row.event is a plain string this module wrote, so this match is
             -- never run against secret text.
             types[n] = gsub(strsub(row.event, 10), "_INFORM", "")
+            if row.bnTag ~= nil then
+                bnArg2[n], bnArg13[n] = ResolveBNSender(row.bnTag)
+            end
         end
     end
     if n == 0 then return end
@@ -507,11 +570,18 @@ function CH:DisplayChatHistory()
                 local chatType = types[i]
                 for k = 1, #messageTypes do
                     if messageTypes[k] == chatType then
+                        -- Resolved values stand in for row[2]/row[13] only on
+                        -- a Battle.net row; every other row passes its stored
+                        -- fields through unchanged.
+                        local arg2, arg13 = row[2], row[13]
+                        if row.bnTag ~= nil then
+                            arg2, arg13 = bnArg2[i], bnArg13[i]
+                        end
                         local ok, err = pcall(CMH.ChatFrame_MessageEventHandler,
                             CMH, chat, row.event,
-                            row[1], row[2], row[3], row[4], row[5], row[6],
+                            row[1], arg2, row[3], row[4], row[5], row[6],
                             row[7], row[8], row[9], row[10], row[11], row[12],
-                            row[13], row[14], row[15], row[16], row[17], false,
+                            arg13, row[14], row[15], row[16], row[17], false,
                             "KE_ChatHistory", row.time)
                         -- pcall on the HANDLER too: geterrorhandler returns
                         -- whatever an error-grabber addon installed, and a

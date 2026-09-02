@@ -144,6 +144,44 @@ describe("ChatMessageHandler achievement merging", function()
     end)
 end)
 
+describe("ChatMessageHandler Battle.net player link", function()
+    local KE, CMH, frame, info
+
+    before_each(function()
+        KE = L.loadChatMessageHandler()
+        CMH = KE.ChatMessageHandler
+        frame = { defaultLanguage = "Common" }
+        info = {}
+        _G.CHAT_BN_WHISPER_GET = "%s tells you: "
+    end)
+
+    after_each(function()
+        _G.CHAT_BN_WHISPER_GET = nil
+    end)
+
+    -- arg13 is the id GetBNPlayerLink needs. A live message always carries
+    -- one; replay carries one only when the stored BattleTag matched a
+    -- current friend.
+    local function formatBody(arg13)
+        return CMH:MessageFormatter(frame, info, "BN_WHISPER", "BN_WHISPER", "target", 0, "Godling",
+            "hello", "Godling", nil, nil, nil, nil, nil, nil, nil, nil, 11, nil, arg13, nil, nil, nil, nil)
+    end
+
+    it("links the sender when an id is present", function()
+        local body = formatBody(42)
+        assert.is_truthy(body:find("|HBNplayer:", 1, true))
+    end)
+
+    -- This is the mechanism the no-match replay branch depends on: GetLink
+    -- concatenates whatever it is handed, so a nil id yields a malformed link
+    -- rather than none, and skipping the call is the only way to omit one.
+    it("omits the link and falls back to the plain name when the id is nil", function()
+        local body = formatBody(nil)
+        assert.is_falsy(body:find("|HBNplayer:", 1, true))
+        assert.is_truthy(body:find("Godling", 1, true))
+    end)
+end)
+
 describe("ChatMessageHandler body highlight", function()
     local KE, CMH, played
 
