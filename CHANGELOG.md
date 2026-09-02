@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.28
+
+### Enemy Casts
+- An interrupted cast no longer keeps the old target name beside the
+  "Interrupted by" text
+- Target names no longer disappear from live cast bars when you change an
+  Enemy Casts display setting. They stayed hidden until each mob's next cast
+
+---
+
 ## v4.4.27
 
 ### Combat Cross
