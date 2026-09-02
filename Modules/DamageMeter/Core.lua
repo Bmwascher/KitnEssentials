@@ -47,7 +47,6 @@ local math_min = math.min
 local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
 local IsInGuild = IsInGuild
-local GetTime = GetTime
 local GetNumGroupMembers = GetNumGroupMembers
 local UnitGUID = UnitGUID
 local Ambiguate = Ambiguate
@@ -608,26 +607,19 @@ function DM:OnEnable()
 
     self.enabled = true
 
-    -- Combat-state events drive the shared ticker (see Combat-only ticker
-    -- section). NEVER use RegisterUnitEvent (Ace3 doesn't expose it and 12.0
-    -- discourages it for KE); UNIT_FLAGS is registered broad and filtered
-    -- inside the handler (ticker state, party/raid unit token, group-combat).
+    -- Liveness and the combat clock are KE.CombatState's job (Core/CombatState.lua);
+    -- BindCombatState registers this module as a listener below. The events kept
+    -- here still do DM-specific bar/segment/history work of their own -- only the
+    -- state decisions moved out.
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnRegenDisabled")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
     self:RegisterEvent("ENCOUNTER_START", "OnEncounterStart")
     self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatForceStop")
-    self:RegisterEvent("UNIT_FLAGS", "OnUnitFlags")
     -- Feign-death filtering. Registered broad; the handler's first two lines
     -- reject every other cast in the game.
     self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
     self:RegisterEvent("PLAYER_DEAD", "OnPlayerDead")
-    -- PvP match end: arenas / battlegrounds can leave the player combat-tagged inside the
-    -- closed instance with no live fighting, so UnitAffectingCombat stays true and the
-    -- shared ticker would poll C_DamageMeter forever. Force it down on match completion and
-    -- suppress the UNIT_FLAGS auto-restart until the player zones out. See
-    -- OnPvPMatchComplete + the _pvpMatchOver guard in OnUnitFlags.
-    self:RegisterEvent("PVP_MATCH_COMPLETE", "OnPvPMatchComplete")
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnSessionUpdated")
     -- CURRENT_SESSION_UPDATED fires for the live segment during the post-combat
     -- finalization burst; route it through the same combat-gated, debounced
@@ -637,8 +629,8 @@ function DM:OnEnable()
     self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
 
     -- Content-context auto-swap (Phase 3): re-resolve each window's per-context config
-    -- when the player changes content. PLAYER_ENTERING_WORLD (registered above for the
-    -- ticker) + ZONE_CHANGED_NEW_AREA go through the DEBOUNCED settle path (IsInInstance
+    -- when the player changes content. PLAYER_ENTERING_WORLD (registered above for
+    -- OnCombatForceStop) + ZONE_CHANGED_NEW_AREA go through the DEBOUNCED settle path (IsInInstance
     -- isn't reliable until the world loads). The CHALLENGE_MODE_* events catch the
     -- Dungeon<->Mythic+ keystone transitions -- IsInInstance stays "party" across a
     -- keystone start (only the challenge flag flips), so PEW alone wouldn't see it --
@@ -732,9 +724,13 @@ function DM:OnEnable()
 
     -- Feign filtering starts OFF and only a meter reset turns it on. Disabling
     -- the module does not reset the game's meter data, so a disable-and-enable
-    -- must not be a way around the rule -- which is why this is unconditional
-    -- and why it is the last statement here.
+    -- must not be a way around the rule -- which is why this is unconditional.
+    -- Nothing below raises it again: ClearFeignTags deliberately leaves it alone.
     self._feignArmable = false
+
+    -- Register with the shared combat-state service and seed a mid-fight enable
+    -- (a module enabled while a fight is already running gets no OnStart otherwise).
+    self:BindCombatState()
 
     if DEBUG_DM then
         KE:Print("[DM] OnEnable: module active")
@@ -751,16 +747,13 @@ function DM:OnDisable()
     if self.ReleaseChatSize then self:ReleaseChatSize() end
 
     self:UnregisterAllEvents()
+    KE.CombatState:UnregisterListener("DamageMeter")
     if LibSpec then LibSpec.UnregisterGroup(self) end
     wipe(self.specIconByGUID)
     self:StopTicker()
     self._sessionPending = false
-    self._inEncounter = false
-    self._pvpMatchOver = false
     self._activeContext = nil
     self._ctxCheckPending = false
-    self._combatStartT = nil
-    self._combatEndT = nil
     self:ClearFeignTags("module disable")
     self._feignArmable = false
     -- The runtime windows survive a disable, so their cached clock text would
@@ -795,107 +788,97 @@ function DM:OnDisable()
 end
 
 ---------------------------------------------------------------------------------
--- Combat-only ticker (shared across all windows)
+-- Shared combat-state listener (Core/CombatState.lua)
 --
--- A single shared ticker drives every window. The ticker only runs while the
--- player or group is in combat,
--- so idle CPU is zero. DM:Tick (implemented in the render chunk) repaints every
--- window from the current sessions; it is resolved at runtime here (called as a
--- method) so this lifecycle layer doesn't depend on the render layer load order.
+-- KE.CombatState is the single source of truth for liveness and the combat
+-- clock; this module only reacts to it. Registered in OnEnable, dropped in
+-- OnDisable.
 ---------------------------------------------------------------------------------
 
--- Single shared-ticker body. Runs on every tick and is responsible for self-cancelling
--- when the group leaves combat, so the lifecycle never depends on a one-shot
--- C_Timer.After firing at exactly the right moment.
---
--- _needsFinalRefresh is set by OnRegenEnabled when the player left combat but
--- the group is still fighting (e.g. died mid-pull): the ticker keeps polling
--- GroupInCombat each tick and only stops once everyone is out of combat,
--- painting one final frame at that point. The re-check must be continuous; a
--- single deferred one misses the tail of the fight.
---
--- DM:Tick is implemented in the render chunk and resolved at runtime; it is
--- guarded so this lifecycle layer never throws "attempt to call a nil value"
--- if combat starts before that chunk loads (mirrors the DM.OpenDetail guard in
--- Window.lua:MakeBar).
-function DM:_RunTick()
-    if self._needsFinalRefresh and not self:GroupInCombat() then
-        -- Group combat ended: route through StopTicker (idempotent -- null-checks the
-        -- ticker, clears _needsFinalRefresh, paints) so this self-cancel path runs the SAME
-        -- combat-end funnel as the normal path, including RefreshVisibility. Without that,
-        -- a HideOutOfCombat dock would stay visible after a died-mid-pull fight ended until
-        -- the next unrelated transition happened to refresh it. Cancelling from inside the
-        -- ticker's own callback is safe (the prior inline Cancel did the same).
-        if DEBUG_DM then KE:Print("[DM] _RunTick: group left combat -> StopTicker (final paint + visibility)") end
-        self:StopTicker()
-        return
-    end
-
-    -- Normal tick (player in combat, or group still fighting after player left).
-    if DM.Tick then DM:Tick() end
+-- The "a fight just started, or was already running at enable" body. Written
+-- once and called from both OnStart and BindCombatState's mid-fight seed below,
+-- so the two paths cannot drift: a module enabled mid-fight that ran StartTicker
+-- alone would leave a previously-raised _clockCleared in place, and
+-- UpdateCombatClock would keep skipping the shared branch for the rest of that
+-- fight.
+function DM:_CombatStartBody()
+    self._clockCleared = nil
+    self:ClearFeignTags("combat start")
+    self:StartTicker()
 end
 
--- Stamp the combat clock's start, BACKDATED to however long the game's own
--- session says it has already been running. A bare GetTime() starts our clock
--- when we noticed the fight, which is not when the session started -- the group
--- can pull before us, and our own combat flag can beat the session's first
--- recorded event. Every per-second figure on a bar is the session's, so an
--- unanchored clock disagrees with the numbers beside it.
---
--- isArm is true ONLY from the arm-from-idle branch, where there is no stamp yet
--- and one must be produced. From the retry it is false and an unusable read
--- leaves the existing stamp ALONE: the return is nilable and the call can reject
--- while execution is tainted, so a fallback there would replace a good backdate
--- with a worse one.
---
--- The secrecy test comes BEFORE type(), which does not filter secrets: a secret
--- number reaching the > 0 comparison throws, and so would the subtraction.
-function DM:AnchorCombatStart(isArm)
-    local anchor
-    if C_DamageMeter and C_DamageMeter.GetSessionDurationSeconds then
-        -- pcall'd like the module's other session reads: SecretArguments is
-        -- AllowedWhenUntainted, so the call itself can reject.
-        local ok, dur = pcall(C_DamageMeter.GetSessionDurationSeconds, Enum.DamageMeterSessionType.Current)
-        if ok then
-            if not dur then                             -- truthiness: safe on a secret
-                anchor = nil
-            elseif issecretvalue(dur) then
-                anchor = nil
-            elseif type(dur) ~= "number" then
-                anchor = nil
-            elseif dur > 0 then
-                anchor = dur
+-- Registers this module's combat-state listener and applies the mid-fight seed.
+-- Nothing else -- OnEnable's own DM-specific setup stays in OnEnable.
+function DM:BindCombatState()
+    KE.CombatState:RegisterListener("DamageMeter", {
+        OnStart = function() DM:_CombatStartBody() end,
+        OnStop = function(reason)
+            -- A kill authorises a 0.5s delay on the PAINT only (Blizzard needs it to
+            -- finalize the session totals); the clock itself already froze. Every
+            -- other reason, "encounterEndDelayed" included, already spent that delay
+            -- inside the machine, so the ticker stops at once. The generation guard
+            -- keeps a boss pulled inside the delay from having its ticker cancelled
+            -- out from under it.
+            if reason == "encounterEnd" then
+                local gen = KE.CombatState:Generation()
+                C_Timer.After(0.5, function()
+                    if KE.CombatState:Generation() ~= gen then return end
+                    if KE.CombatState:IsLive() then return end
+                    DM:StopTicker()
+                end)
+                return
             end
-        end
+            -- A hard reset with nothing live is a clean slate for the clock: the
+            -- flag skips the shared branch so the last fight's frozen time does not
+            -- survive a load screen (mirrors OnMeterReset / HeaderReset).
+            if reason == "reset" then
+                DM._clockCleared = true
+            end
+            DM:StopTicker()
+        end,
+        OnGroupClear = function()
+            if DM.RefreshVisibility then DM:RefreshVisibility() end
+        end,
+        -- Repaints the clock ONLY -- never DM:Tick, which would repaint every bar
+        -- and total at up to 10 Hz while a tenths cadence is running.
+        OnClockTick = function()
+            if DM.RepaintCombatClock then DM:RepaintCombatClock() end
+        end,
+    })
+    -- A module enabled mid-fight gets no OnStart from the service (it already
+    -- fired before this module registered), so run the same body directly.
+    if KE.CombatState:IsLive() then
+        self:_CombatStartBody()
     end
-    if anchor then
-        self._combatStartT = GetTime() - anchor
-    elseif isArm then
-        self._combatStartT = GetTime()
-    end
+end
+
+---------------------------------------------------------------------------------
+-- Combat-only ticker (shared across all windows)
+--
+-- A single shared ticker drives every window, started and stopped by the
+-- combat-state listener above rather than by this module's own event handlers.
+-- DM:Tick (implemented in the render chunk) repaints every window from the
+-- current sessions; it is resolved at runtime here (called as a method) so this
+-- lifecycle layer doesn't depend on the render layer load order.
+---------------------------------------------------------------------------------
+
+-- Single shared-ticker body. DM:Tick is implemented in the render chunk and
+-- resolved at runtime; it is guarded so this lifecycle layer never throws
+-- "attempt to call a nil value" if combat starts before that chunk loads
+-- (mirrors the DM.OpenDetail guard in Window.lua:MakeBar).
+function DM:_RunTick()
+    if DM.Tick then DM:Tick() end
 end
 
 -- Starts (or restarts) the shared refresh ticker. Cancel-before-start so a
 -- stale ticker is never left orphaned if combat is re-entered without a clean
--- stop. RefreshRate defaults to 0.5s when the DB value is missing.
+-- stop, and so the GUI's Combat Refresh slider can re-call this while a fight
+-- is running without doubling the ticker. RefreshRate defaults to 0.5s when
+-- the DB value is missing.
 function DM:StartTicker()
     if self._ticker then
         self._ticker:Cancel()
         self._ticker = nil
-    else
-        -- Combat clock: arming from IDLE marks a new fight's start. Gated on the
-        -- ticker being down so a mid-combat restart (the GUI's Combat Refresh
-        -- slider re-calls StartTicker while running) never resets the clock.
-        -- Plain GetTime numbers -- never secret. Rendered by Window.lua's
-        -- UpdateCombatClock; _combatEndT (StopTicker) freezes it post-fight.
-        -- isArm true: there is no stamp to protect, so an unusable read falls
-        -- back to a bare GetTime() here and only here.
-        self:AnchorCombatStart(true)
-        self._combatEndT = nil
-        -- Tags describe one fight. This branch is also the mid-fight restart
-        -- funnel, which is why it wipes but does NOT re-enable filtering: an
-        -- absent ticker is not proof that a new fight started.
-        self:ClearFeignTags("combat start")
     end
 
     local rate = (self.db and self.db.RefreshRate) or 0.5
@@ -924,16 +907,7 @@ function DM:StopTicker()
     if self._ticker then
         self._ticker:Cancel()
         self._ticker = nil
-        -- Combat clock: freeze at the fight's end BEFORE the final paint below,
-        -- so that paint (and any later out-of-combat repaint -- scroll, GUI
-        -- change, session settle) shows the frozen final duration instead of a
-        -- still-growing one. Only stamped when a fight was actually running.
-        if self._combatStartT and not self._combatEndT then
-            self._combatEndT = GetTime()
-        end
     end
-
-    self._needsFinalRefresh = false
 
     if DM.Tick then DM:Tick() end
 
@@ -947,41 +921,20 @@ function DM:StopTicker()
     end
 end
 
--- True when the player is in combat, or any group member is. UnitAffectingCombat
--- is safe to read here (not a secret return). The player fast-path uses
--- UnitAffectingCombat("player") rather than InCombatLockdown():
--- InCombatLockdown() returns false the moment the player
--- dies or feign-deaths mid-pull, but UnitAffectingCombat stays true while the
--- player is still tagged into the fight, so the ticker keeps painting. Group
--- units are read from the pre-built _raidUnits / _partyUnits tables.
+-- Forwards to the shared combat-state service. Dock.lua's ShouldShow, the feign
+-- watch, and Window.lua all call this -- kept as a method so none of the three
+-- need to know the machine moved out of this file.
 function DM:GroupInCombat()
-    if UnitAffectingCombat("player") then return true end
-
-    if IsInRaid() then
-        local n = GetNumGroupMembers()
-        for i = 1, n do
-            if UnitAffectingCombat(_raidUnits[i]) then return true end
-        end
-    elseif IsInGroup() then
-        -- Party units exclude the player, so iterate one fewer than the count.
-        local n = GetNumGroupMembers() - 1
-        for i = 1, n do
-            if UnitAffectingCombat(_partyUnits[i]) then return true end
-        end
-    end
-
-    return false
+    return KE.CombatState:GroupInCombat()
 end
 
 ---------------------------------------------------------------------------------
 -- Combat-state event handlers
 --
--- The ticker is combat-gated: started on entering combat, stopped once the whole
--- group has left combat. PLAYER_ENTERING_WORLD forces it down unconditionally
--- (zoning is a hard segment boundary). ENCOUNTER_END stops it too, but only
--- after a 0.5s delay so Blizzard can finalize the session totals first, and only
--- when an encounter is actually active (a mid-encounter REGEN_ENABLED from a boss
--- transition must not be treated as a real stop -- _inEncounter guards that).
+-- Liveness, the ticker, and the encounter/PvP state that used to gate it here
+-- are KE.CombatState's job (Core/CombatState.lua) -- see the shared listener
+-- above. What remains below is DM-specific bar/segment/history bookkeeping
+-- that still needs to run on these events.
 ---------------------------------------------------------------------------------
 
 -- Feign-death filtering (Deaths view)
@@ -1167,11 +1120,9 @@ function DM:OnPlayerDead()
     self:ClearFeignTags("player death")
 end
 
--- Player entered combat: spin up the shared ticker.
+-- Player entered combat. Liveness and the ticker are KE.CombatState's decision
+-- now; this handler keeps only the DM-specific UI teardown a fresh fight needs.
 function DM:OnRegenDisabled()
-    -- Genuine new combat overrides a prior PvP match-end suppression (lets the ticker
-    -- re-arm if real fighting somehow resumes in the same instance).
-    self._pvpMatchOver = false
     -- A hover tip that persists into combat must flip to the "secret while in combat"
     -- message on the next poll: mark it dirty (the throttled poll only re-populates on
     -- a dirty signal). Resolved-at-runtime field on DM read by the Detail.lua poll.
@@ -1218,25 +1169,12 @@ function DM:OnRegenDisabled()
     -- W.body) -- close it so the live bars render. Mirrors the detail-close above.
     if self.CloseAllSelectors then self:CloseAllSelectors() end
     if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
-    if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED -> StartTicker") end
-    -- Combat clock RETRY, and the gate is load-bearing in both directions. With
-    -- the ticker DOWN, StartTicker is about to anchor anyway and a call here
-    -- would read the API twice for one combat entry. With the ticker already UP
-    -- -- UNIT_FLAGS armed because the group pulled first -- StartTicker skips its
-    -- stamp entirely, so this is the only chance to correct an anchor the game
-    -- had no duration to give yet. isArm false, so a failed read leaves the
-    -- existing stamp alone.
-    if self._ticker then self:AnchorCombatStart(false) end
-    self:StartTicker()
+    if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED") end
 end
 
--- Player left combat. If the group is still fighting (player died mid-pull),
--- raise _needsFinalRefresh and make sure the shared ticker is running: the
--- ticker polls GroupInCombat every tick and self-cancels once everyone is out
--- of combat (continuous re-check). Only stop outright
--- when the whole group is already out of combat. While an encounter is active
--- (between ENCOUNTER_START and ENCOUNTER_END) a transient REGEN_ENABLED from a
--- boss transition is ignored -- the ENCOUNTER_END path owns the encounter stop.
+-- Player left combat. Liveness and the ticker are KE.CombatState's decision now
+-- (the listener's OnStart/OnStop react to it); this handler keeps only the
+-- DM-specific cache invalidation that combat end also boundaries.
 function DM:OnRegenEnabled()
     -- Combat ended for the player: a hover tip showing the in-combat "secret" message
     -- should re-populate with real (now-readable) data on the next poll -- mark dirty.
@@ -1245,32 +1183,12 @@ function DM:OnRegenEnabled()
     -- drop it so the post-fight hover rebuilds against THIS fight's enemies, not the stale
     -- constant-keyed map (wiped on both REGEN_DISABLED + ENABLED).
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
-
-    if self._inEncounter then
-        if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> ignored (encounter active)") end
-        return
-    end
-
-    if not self:GroupInCombat() then
-        if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> StopTicker") end
-        self:StopTicker()
-    else
-        if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_ENABLED -> group still in combat, poll until clear") end
-        self._needsFinalRefresh = true
-        -- Ensure the ticker is alive so its self-poll can fire the final stop;
-        -- StartTicker is cancel-before-start so this never doubles the ticker.
-        if not self._ticker then
-            self:StartTicker()
-        end
-    end
 end
 
--- Encounter started: mark the encounter active so a mid-encounter
--- PLAYER_REGEN_ENABLED (boss transition that briefly drops the combat lock)
--- doesn't get mistaken for a real combat-end.
+-- Encounter started: a hard segment boundary. Liveness (KE.CombatState) is a
+-- separate concern; this handler keeps only the segment/history bookkeeping.
 function DM:OnEncounterStart()
-    if DEBUG_DM then KE:Print("[DM] ENCOUNTER_START -> encounter active") end
-    self._inEncounter = true
+    if DEBUG_DM then KE:Print("[DM] ENCOUNTER_START") end
     -- Segment boundary: a boss pull starts a new segment, so a view override from the
     -- previous boss/trash clears ("until another raid boss starts").
     self:BumpSegment()
@@ -1313,10 +1231,9 @@ function DM:OnEncounterStart()
     end
 end
 
--- Boss kill/wipe: a hard segment boundary, but the session totals are not yet
--- finalized at the instant ENCOUNTER_END fires. Delay the stop by 0.5s so the
--- final paint reads settled totals rather than a stale/empty segment. Clears
--- the encounter-active flag immediately.
+-- Boss kill/wipe: a hard segment boundary for the outcome-tagging walk below.
+-- The ticker's own stop (kill vs. wipe timing) is KE.CombatState's decision now;
+-- this handler keeps only the tagging work.
 --
 -- The payload's `success` (1 = kill, 0 = wipe; plain event payload, never secret)
 -- feeds the segment-menu kill/wipe tint: shortly AFTER the finalize delay, every
@@ -1333,11 +1250,7 @@ end
 -- Runtime-only on purpose: stored sessions don't survive a /reload, so neither
 -- must the map (wiped on every session reset).
 function DM:OnEncounterEnd(_, _, _, _, _, success)
-    if DEBUG_DM then KE:Print("[DM] ENCOUNTER_END -> delayed StopTicker (0.5s)") end
-    self._inEncounter = false
-    C_Timer.After(0.5, function()
-        DM:StopTicker()
-    end)
+    if DEBUG_DM then KE:Print("[DM] ENCOUNTER_END") end
     local won = (success == 1)
     -- Captured now (schedule time), not re-read inside the closure: a chained
     -- ENCOUNTER_START firing before this 0.75s delay expires re-fills
@@ -1384,61 +1297,28 @@ function DM:OnEncounterEnd(_, _, _, _, _, success)
     end)
 end
 
--- Zoning: hard segment boundary, force the ticker down immediately. Also clears
--- the encounter-active flag (zoning ends any encounter).
+-- Zoning: a hard segment boundary. Liveness and the ticker's own stop are
+-- KE.CombatState's decision (OnCombatForceStop only reacts to it below); this
+-- handler keeps the DM-specific feign teardown and the content-context recheck.
+-- UNIT_FLAGS and PVP_MATCH_COMPLETE no longer have a DM-side handler at all --
+-- both existed purely to drive the ticker, which the service now owns outright.
 function DM:OnCombatForceStop()
-    if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD -> force StopTicker") end
-    self._inEncounter = false
-    -- Zoning clears any PvP match-end suppression: a new instance/world is a clean slate
-    -- for the UNIT_FLAGS auto-restart (the just-left arena no longer applies).
-    self._pvpMatchOver = false
-    -- A new zone is a clean slate for the combat clock too: drop the stamps BEFORE
-    -- StopTicker so its built-in final paint HIDES the clock. Nil'ing after would
-    -- leave the frozen last-fight time painted with no guaranteed later repaint --
-    -- a same-context zoning (hearth across the world) never re-Ticks on its own
-    -- (ApplyActiveContext early-returns when the context is unchanged).
-    self._combatStartT = nil
-    self._combatEndT = nil
+    if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD") end
     self:ClearFeignTags("zone change")
-    self:StopTicker()
+    -- A settled fight is never live, so the ordinary post-fight case (zoning
+    -- after combat already ended) reaches here too, not just a hard interrupt.
+    -- Only then does this clear the clock: an in-combat reload must leave the
+    -- live clock alone, and the service's own re-derivation already restarted
+    -- the ticker in that case (BindCombatState's mid-fight seed, or the
+    -- listener's OnStart, depending on load order) -- stopping unconditionally
+    -- would cancel a ticker that just started.
+    if not KE.CombatState:IsLive() then
+        self._clockCleared = true
+        self:StopTicker()
+    end
     -- Zoning may change the content context (entered/left an instance) -- schedule a
     -- settled re-check (debounced; IsInInstance isn't reliable until the world loads).
     self:_ScheduleContextCheck()
-end
-
--- A group member's flags changed (often: they entered combat before us). Start
--- the ticker if the group is fighting and we're not already ticking, so bars
--- populate before the player is tagged.
-function DM:OnUnitFlags(_, unit)
-    -- After a PvP match completes the player stays combat-tagged in the closed instance,
-    -- so UNIT_FLAGS would keep re-arming the ticker against GroupInCombat. Suppress the
-    -- auto-restart until a genuine new combat (OnRegenDisabled) or a zone-out
-    -- (OnCombatForceStop) clears the flag -- otherwise OnPvPMatchComplete's stop is undone.
-    if self._pvpMatchOver then return end
-    -- Cheap bails before the <=40-unit GroupInCombat scan: UNIT_FLAGS fires dozens of
-    -- times per second during a pull, and once the ticker is up this handler has nothing
-    -- left to do. Only a party/raid member's flag change can mean "group entered combat
-    -- before us" -- the player's own combat entry is owned by PLAYER_REGEN_DISABLED, so
-    -- player/target/nameplate tokens are skipped too.
-    if self._ticker then return end
-    if not unit or not (unit:match("^raid%d") or unit:match("^party%d")) then return end
-    if self:GroupInCombat() then
-        if DEBUG_DM then KE:Print("[DM] UNIT_FLAGS -> group in combat, StartTicker") end
-        self:StartTicker()
-    end
-end
-
--- A PvP match (arena / battleground) completed. The player can stay combat-tagged in the
--- closed instance with no live fighting, so UnitAffectingCombat stays true and the shared
--- ticker would poll C_DamageMeter every RefreshRate forever. Force the ticker down (the
--- final paint settles the post-match totals) and raise _pvpMatchOver so the UNIT_FLAGS
--- auto-restart stays suppressed until a real new combat or a zone-out clears it. Plain
--- event with no payload read -- never a secret.
-function DM:OnPvPMatchComplete()
-    if DEBUG_DM then KE:Print("[DM] PVP_MATCH_COMPLETE -> force StopTicker + suppress restart") end
-    self._inEncounter = false
-    self._pvpMatchOver = true
-    self:StopTicker()
 end
 
 -- The damage-meter session changed. In combat the ticker already covers
@@ -1508,9 +1388,8 @@ function DM:OnMeterReset()
     if self._sessionOutcomes then wipe(self._sessionOutcomes) end
     -- The frozen combat clock referenced the wiped data -- hide it (out of combat;
     -- an in-combat reset keeps the live clock since the fight itself continues).
-    if not self._ticker then
-        self._combatStartT = nil
-        self._combatEndT = nil
+    if not KE.CombatState:IsLive() then
+        self._clockCleared = true
     end
     -- Closing an overlay re-gates the header, and the Tick that would recompute the
     -- clock comes after it, so the cache goes first or a stale duration can be
@@ -2162,9 +2041,8 @@ function DM:HeaderReset(_)
     if self.HistoryDropPending then self:HistoryDropPending() else self._pendingBundle = nil end
     -- Frozen combat clock referenced the wiped data too (mirrors OnMeterReset;
     -- in-combat resets keep the live clock -- the fight itself continues).
-    if not self._ticker then
-        self._combatStartT = nil
-        self._combatEndT = nil
+    if not KE.CombatState:IsLive() then
+        self._clockCleared = true
     end
     -- Same ordering as the reset handler: closing an overlay re-gates the header
     -- and the Tick comes after, so drop the clock cache first.

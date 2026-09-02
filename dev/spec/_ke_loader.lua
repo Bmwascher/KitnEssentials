@@ -69,6 +69,25 @@ local function trackablePointFrame()
     return setmetatable(f, { __index = function() return function() end end })
 end
 
+-- Fake KE.CombatState (Core/CombatState.lua's public surface only) for
+-- Modules/DamageMeter/Core.lua and Window.lua, which read it as a dependency
+-- rather than build it. A plain mutable table, not the real machine: a spec
+-- drives DM's own glue code (BindCombatState, OnCombatForceStop, the reset
+-- sites, UpdateCombatClock) by setting these fields directly and invoking a
+-- captured listener callback, never by driving real transitions -- those are
+-- combatstate_spec.lua's job.
+local function newFakeCombatState()
+    local cs = { live = false, frozen = false, duration = nil, generation = 0, listeners = {} }
+    function cs:IsLive() return self.live end
+    function cs:IsFrozen() return self.frozen end
+    function cs:GetDuration() return self.duration end
+    function cs:GroupInCombat() return self.groupInCombat == true end
+    function cs:Generation() return self.generation end
+    function cs:RegisterListener(key, callbacks) self.listeners[key] = callbacks end
+    function cs:UnregisterListener(key) self.listeners[key] = nil end
+    return cs
+end
+
 -- mock.install with loader defaults; caller overrides win. Only keys
 -- _wow_mock manages belong in defaults — everything else goes on _G.
 local function installMock(overrides, defaults)
@@ -194,7 +213,7 @@ function L.loadDMCore(overrides)
             return t[member]
         end })
     end })
-    local KE = { Print = function() end }
+    local KE = { Print = function() end, CombatState = newFakeCombatState() }
     helpers.loadModule("Modules/DamageMeter/Core.lua", KE)
     return KE.DamageMeter, KE
 end
@@ -224,6 +243,20 @@ function L.loadDMDock(overrides)
     _G.GetCursorPosition = _G.GetCursorPosition or function() return 0, 0 end
     _G.IsInInstance = _G.IsInInstance or function() return false, "none" end
     helpers.loadModule("Modules/DamageMeter/Dock.lua", KE)
+    return DM, KE
+end
+
+-- Modules/DamageMeter/Window.lua on top of a loaded DM Core, exposing
+-- DM:UpdateCombatClock and DM:RepaintCombatClock. ApplyClockTint is file-local
+-- and cannot be exposed; no case needs it directly -- UpdateCombatClock's
+-- branch selection is observable through the clock fake's recorded text.
+-- Window.lua's other file-scope upvalues (RAID_CLASS_COLORS, Ambiguate,
+-- UnitGroupRolesAssigned, UnitFullName, GetNormalizedRealmName) are read only
+-- by the bar-render path this loader never exercises, so they are left unset.
+-- Same honesty boundary as loadDMCore. Returns DM, KE.
+function L.loadDMClock(overrides)
+    local DM, KE = L.loadDMCore(overrides)
+    helpers.loadModule("Modules/DamageMeter/Window.lua", KE)
     return DM, KE
 end
 

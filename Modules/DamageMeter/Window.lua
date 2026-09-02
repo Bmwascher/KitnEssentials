@@ -29,7 +29,6 @@ local Ambiguate = Ambiguate
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitFullName = UnitFullName
 local GetNormalizedRealmName = GetNormalizedRealmName
-local GetTime = GetTime
 local wipe = wipe
 local math_min = math.min
 local math_max = math.max
@@ -1077,20 +1076,20 @@ end
 -- Combat clock (header)
 --
 -- Fight length "[M:SS]" at the right end of the display-position-1 window's
--- header band (db.ShowCombatClock, default off). Driven by the same combat ticker
--- as the bars -- zero idle cost.
+-- header band (db.ShowCombatClock, default off). Painted from KE.CombatState's
+-- OnClockTick, the same dedicated clock ticker the Combat Timer reads -- the two
+-- surfaces render the same sampled pin and cannot disagree.
 --
 -- TWO SOURCES, chosen by what the window is showing. A window on a STORED
 -- session -- pinned from the segment menu, or fallen back to the newest stored
 -- session out of combat -- reads that session's own durationSeconds, off the
 -- same object the bars render from, so the two cannot describe different fights.
--- A window on a LIVE session type reads the stopwatch, which Core.lua anchors to
--- the game's session at every arm (DM:AnchorCombatStart).
+-- A window on a LIVE or FROZEN machine reads KE.CombatState:GetDuration(), a
+-- pure accessor that takes no reading of its own.
 --
--- The stopwatch is a difference of two GetTime numbers and is always plain. A
--- stored session's duration MAY BE SECRET, and DM.ClockText is what handles it:
--- a secret renders as whole seconds and skips the dirty check, because comparing
--- a secret throws.
+-- A stored session's duration MAY BE SECRET, and DM.ClockText is what handles
+-- it: a secret renders as whole seconds and skips the dirty check, because
+-- comparing a secret throws.
 --
 -- The frozen time renders DIMMED so a settled fight reads at a glance as over;
 -- the live tick is bright. _clockSuppressed (SetHeaderIconAlpha) yields the
@@ -1100,14 +1099,13 @@ end
 -- May the clock be on screen at all? Shared so the two entry points below cannot
 -- disagree.
 --
--- It does NOT test _combatStartT, and that is deliberate. The old function used
--- the stamp as its "has a fight happened" proof, but two paths now produce a
--- valid duration without one: a window on a stored session (a zone change nils
--- both stamps without clearing a pin), and the reload fallback (which only runs
--- BECAUSE the stamp is nil). Having TEXT is the proof, and both callers
--- establish that before they get here -- the render path by computing it, the
--- visibility path via _clockHasText. Re-testing the stamp here would compute the
--- reload fallback and then hide it on the same paint.
+-- It does NOT test liveness, and that is deliberate. A window on a stored
+-- session, or the reload fallback (reached only when the machine has no fight
+-- at all), can both produce a valid duration with the machine idle. Having TEXT
+-- is the proof, and both callers establish that before they get here -- the
+-- render path by computing it, the visibility path via _clockHasText.
+-- Re-testing liveness here would compute the reload fallback and then hide it
+-- on the same paint.
 local function ClockGateOpen(self, W)
     local db = self.db
     if not (db and db.ShowCombatClock) then return false end
@@ -1119,7 +1117,7 @@ end
 -- Frozen = dimmed, live = bright. ReapplyBarVisuals nils _clockFrozen after a
 -- font re-apply (which resets the FontString color) so this re-tints then too.
 local function ApplyClockTint(self, W, clock)
-    local frozen = self._combatEndT ~= nil
+    local frozen = KE.CombatState:IsFrozen()
     if W._clockFrozen ~= frozen then
         W._clockFrozen = frozen
         if frozen then
@@ -1181,17 +1179,21 @@ function DM:UpdateCombatClock(W, session)
     -- window is showing a stored session" and covers BOTH the pin and the
     -- out-of-combat fallback -- splitting on the pin alone would miss the case
     -- where a key-completing kill makes the bars fall back to a run-level
-    -- session the stopwatch never timed. Both fields are plain.
+    -- session the live clock never timed. Both fields are plain.
     local storedID = self.EffectiveSessionID and self:EffectiveSessionID(W)
     local duration
     if storedID then
         duration = session and session.durationSeconds
-    elseif self._combatStartT then
-        -- Plain arithmetic on two GetTime values; _combatEndT freezes it.
-        duration = (self._combatEndT or GetTime()) - self._combatStartT
-        if duration < 0 then duration = 0 end
+    elseif not self._clockCleared and (KE.CombatState:IsLive() or KE.CombatState:IsFrozen()) then
+        -- The branch condition is LIVENESS, not a non-nil duration: splitting on
+        -- the duration would drop into the reload fallback below before the pin
+        -- is warm, and that fallback accepts a secret string the Combat Timer
+        -- cannot -- the exact disagreement this design exists to remove.
+        -- _clockCleared skips this branch only (a reset or a zone change with
+        -- nothing live); it is cleared on the next OnStart.
+        duration = KE.CombatState:GetDuration()
     else
-        -- No stopwatch at all, which after a /reload mid-session is the normal
+        -- No live or frozen fight at all, which after a /reload mid-session is the normal
         -- state. Ask for the WINDOW'S OWN session type rather than assuming
         -- Current. The raw result goes to ClockText: unlike the anchor, which
         -- feeds a subtraction, this feeds a formatter that accepts secrets, so
@@ -1240,6 +1242,30 @@ function DM:UpdateCombatClock(W, session)
     end
     ApplyClockTint(self, W, clock)
     ShowClock(W, clock)
+end
+
+-- Repaints ONLY the display-position-1 window's clock -- KE.CombatState's
+-- OnClockTick listener call, per the paint contract. Never calls Tick, which
+-- would repaint every bar and total at up to 10 Hz while a tenths cadence is
+-- running; the clock/totals split is what lets the clock track the Combat
+-- Timer while the totals keep the delay a kill authorizes for them.
+-- _winDisplayPos holds at most db.MaxWindows entries, so the scan is cheap.
+function DM:RepaintCombatClock()
+    -- The same gate ClockGateOpen tests first, hoisted ahead of the resolve
+    -- chain: the clock is off by default, and this runs at up to 10 Hz.
+    if not (self.db and self.db.ShowCombatClock) then return end
+    if not (self.windows_rt and self._winDisplayPos) then return end
+    for idx, W in pairs(self.windows_rt) do
+        if self._winDisplayPos[idx] == 1 then
+            local cfg = self:ResolveWindowConfig(idx)
+            if cfg and cfg.Enabled then
+                local meterType = self:EffectiveMeterType(idx, cfg)
+                local session = self:ResolveRenderSession(W, cfg, meterType)
+                self:UpdateCombatClock(W, session)
+            end
+            return
+        end
+    end
 end
 
 ---------------------------------------------------------------------------------
