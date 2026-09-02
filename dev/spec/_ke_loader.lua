@@ -2718,4 +2718,24 @@ function L.loadHealerMana(overrides)
     return HM, KE
 end
 
+-- Core/CombatState.lua. The live adapter tail runs unconditionally at load: it
+-- builds the live KE.CombatState instance and its private event frame, and the
+-- adapter functions capture UnitAffectingCombat, IsInInstance, IsInRaid,
+-- IsInGroup and GetNumGroupMembers as file-scope upvalues. All five are
+-- UNMANAGED (dev/spec/_wow_mock.lua), so they are assigned to _G directly
+-- rather than routed through installMock, which would silently drop them.
+-- Specs never drive the live singleton -- they build their own instances via
+-- `KE.CombatState.New(deps)` with fake deps for all seven, which resolves
+-- through the class metatable New sits on. Returns KE.
+function L.loadCombatState(overrides)
+    overrides = overrides or {}
+    installMock(managedSubset(overrides), {})
+    _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
+    _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
+    _G.IsInRaid = overrides.IsInRaid or function() return false end
+    _G.IsInGroup = overrides.IsInGroup or function() return false end
+    _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
+    return helpers.loadModule("Core/CombatState.lua", {})
+end
+
 return L
