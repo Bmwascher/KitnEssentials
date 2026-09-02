@@ -186,14 +186,14 @@ describe("visibility mode retirement", function()
             Cursor = {
                 GCD    = { VisibilityOverride = "in_party" },
                 Cast   = { VisibilityOverride = "in_raid" },
-                Trail  = { VisibilityOverride = "solo" },
+                Trail  = { VisibilityOverride = "in_raid" },
                 Dispel = { VisibilityOverride = "in_party" },
                 Taunt  = { VisibilityOverride = "in_raid" },
             },
         })
         assert.are.equal("in_instance", out.Cursor.GCD.VisibilityOverride)
         assert.are.equal("in_instance", out.Cursor.Cast.VisibilityOverride)
-        assert.are.equal("solo", out.Cursor.Trail.VisibilityOverride)
+        assert.are.equal("in_instance", out.Cursor.Trail.VisibilityOverride)
         assert.are.equal("in_instance", out.Cursor.Dispel.VisibilityOverride)
         assert.are.equal("in_instance", out.Cursor.Taunt.VisibilityOverride)
     end)

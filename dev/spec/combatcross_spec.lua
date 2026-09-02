@@ -314,15 +314,24 @@ describe("CombatCross visibility modes", function()
         assert.is_true(CC.ShouldShowByMode(nil, false))
     end)
 
-    -- The only mode that leaves the module to answer. Cursor owns the test
-    -- because it owns the instance definition; a nil module hides rather than
-    -- throws, which is why the false case is asserted separately.
+    -- The only mode that leaves the module to answer. Both directions are
+    -- asserted with the combat flag set opposite to the expected result, so a
+    -- predicate that returned `inCombat` or a constant fails one of them.
     it("asks the cursor module whether this is instanced content", function()
         local CC = loader.loadCombatCross()
         local cursor = _G.KitnEssentials:GetModule("Cursor")
         cursor.InRealInstancedContent = function() return true end
         assert.is_true(CC.ShouldShowByMode("in_instance", false))
         cursor.InRealInstancedContent = function() return false end
+        assert.is_false(CC.ShouldShowByMode("in_instance", true))
+    end)
+
+    -- The lookup is silent, so an unresolvable module returns nil rather than
+    -- throwing. Hiding is the safe direction: a crosshair stuck on is a bug
+    -- report, a Lua error on every visibility change is a broken session.
+    it("hides rather than throws when the cursor module cannot be resolved", function()
+        local CC = loader.loadCombatCross()
+        _G.KitnEssentials.GetModule = function() return nil end
         assert.is_false(CC.ShouldShowByMode("in_instance", true))
     end)
 

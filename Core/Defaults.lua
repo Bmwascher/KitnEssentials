@@ -2278,15 +2278,19 @@ function KE:MigrateModuleEnableDefaults()
     end
 end
 
--- Straight key renames inside a block AceDB already registers. Same once-only,
--- per-entry marker as the enable-default migration above, but its own record
--- table: an id here names a rename, an id there is a dotted profile path, and
--- one table would leave a later reader unable to tell them apart.
+-- Saved-value migrations inside blocks AceDB already registers. Two entry
+-- shapes: a `block`/`old`/`new` rename, and a `path` array whose last element
+-- is converted in place. Same once-only, per-entry marker as the
+-- enable-default migration above, but its own record table: an id here names a
+-- migration, an id there is a dotted profile path, and one table would leave a
+-- later reader unable to tell them apart.
 local KEY_RENAME_RECORD = "KeyRenames"
 
 -- `convert` turns the old saved value into the new one and is called with nil
 -- for an absent key, because absent means the key sat at its OLD default and
--- AceDB stripped it at logout.
+-- AceDB stripped it at logout. What nil produces is the converter's decision,
+-- not the loop's: a rename maps it to the new default, an in-place retirement
+-- passes it through untouched.
 
 -- Everything except the two retired modes passes straight through, nil
 -- included: absent means the key sat at its default, and the default was never
@@ -2403,9 +2407,11 @@ function KE:MigrateCombatLoggerKeys()
                             newKey = entry.new
                         end
                         if type(block) == "table" then
-                            -- A block with neither old key gets its new key at
-                            -- the new default, which AceDB strips again at
-                            -- logout. Harmless, and cheaper than a second test.
+                            -- Written unconditionally. Where the converter
+                            -- maps an absent key to a default, AceDB strips it
+                            -- again at logout; where it passes nil through,
+                            -- this assigns nil and nothing changes. Either way
+                            -- cheaper than a second test.
                             block[newKey] = entry.convert(block[oldKey])
                             -- Only when they differ. An in-place conversion
                             -- writes and then deletes the same key, throwing

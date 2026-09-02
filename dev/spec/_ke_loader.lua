@@ -1142,7 +1142,6 @@ function L.loadCursor(overrides)
     _G.UnitCastingInfo = overrides.UnitCastingInfo or function() return nil end
     _G.UnitChannelInfo = overrides.UnitChannelInfo or function() return nil end
     _G.IsMouseButtonDown = overrides.IsMouseButtonDown or function() return false end
-    _G.IsInRaid = overrides.IsInRaid or function() return false end
     _G.IsInGroup = overrides.IsInGroup or function() return false end
     _G.GetInstanceInfo = overrides.GetInstanceInfo or function() return "none", "none" end
 
