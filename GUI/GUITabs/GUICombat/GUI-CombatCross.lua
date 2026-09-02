@@ -92,16 +92,16 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
     card2:AddRow(row2, Theme.rowHeight)
 
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local alwaysShowCheck = GUIFrame:CreateCheckbox(row2b, "Always Show", {
-        value = db.AlwaysShow == true,
-        tooltip = "Keep the crosshair on screen out of combat, not only during a fight.",
-        callback = function(checked)
-            db.AlwaysShow = checked
+    local visDropdown = GUIFrame:CreateDropdown(row2b, "Visibility State", {
+        options = (CC and CC.VISIBILITY_MODES) or {},
+        value = db.Visibility or "in_combat",
+        callback = function(key)
+            db.Visibility = key
             ApplySettings()
         end,
     })
-    row2b:AddWidget(alwaysShowCheck, 0.5)
-    manager:Register(alwaysShowCheck, "all")
+    row2b:AddWidget(visDropdown, 0.5)
+    manager:Register(visDropdown, "all")
 
     local shapeDropdown = GUIFrame:CreateDropdown(row2b, "Shape", {
         options = {

@@ -22,7 +22,6 @@ local GetSpellCooldown = C_Spell.GetSpellCooldown
 local UnitCastingInfo  = UnitCastingInfo
 local UnitChannelInfo  = UnitChannelInfo
 local IsMouseButtonDown = IsMouseButtonDown
-local IsInRaid         = IsInRaid
 local IsInGroup        = IsInGroup
 local GetInstanceInfo  = GetInstanceInfo
 local InCombatLockdown = InCombatLockdown
@@ -124,8 +123,6 @@ C.VISIBILITY_MODES = {
     { key = "in_combat",      text = "In Combat" },
     { key = "out_of_combat",  text = "Out of Combat" },
     { key = "in_instance",    text = "In Instance (Dungeon/Raid)" },
-    { key = "in_raid",        text = "In Raid" },
-    { key = "in_party",       text = "In Party" },
     { key = "solo",           text = "Solo" },
     { key = "never",          text = "Hidden" },
 }
@@ -1267,8 +1264,6 @@ local function _shouldShowByMode(mode)
     if mode == "in_combat"     then return _inCombat end
     if mode == "out_of_combat" then return not _inCombat end
     if mode == "in_instance"   then return C:InRealInstancedContent() end
-    if mode == "in_raid"       then return IsInRaid() end
-    if mode == "in_party"      then return IsInGroup() and not IsInRaid() end
     if mode == "solo"          then return not IsInGroup() end
     if mode == "mouseDown"     then
         -- mouseDown handled separately in cursor OnUpdate (alpha-gated)

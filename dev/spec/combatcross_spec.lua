@@ -41,15 +41,15 @@ describe("CombatCross visibility", function()
         assert.is_true(isShown())
     end)
 
-    it("shows out of combat when Always Show is on", function()
+    it("shows out of combat under the always mode", function()
         local CC = loader.loadCombatCross()
-        CC.db.AlwaysShow = true
+        CC.db.Visibility = "always"
         local isShown = withFrame(CC)
         CC:UpdateVisibility(false)
         assert.is_true(isShown())
     end)
 
-    it("hides on leaving combat when Always Show is off", function()
+    it("hides on leaving combat under the in_combat mode", function()
         local CC = loader.loadCombatCross()
         local isShown = withFrame(CC)
         CC:UpdateVisibility(true)
@@ -58,9 +58,9 @@ describe("CombatCross visibility", function()
         assert.is_false(isShown())
     end)
 
-    it("stays up on leaving combat when Always Show is on", function()
+    it("stays up on leaving combat under the always mode", function()
         local CC = loader.loadCombatCross()
-        CC.db.AlwaysShow = true
+        CC.db.Visibility = "always"
         local isShown = withFrame(CC)
         CC:UpdateVisibility(true)
         CC:UpdateVisibility(false)
@@ -123,10 +123,10 @@ describe("CombatCross visibility", function()
         assert.is_true(CC.onUpdateActive)
     end)
 
-    it("starts the range loop when Always Show puts the cross up", function()
-        -- Turning Always Show on out of combat must not leave a visible cross
-        -- with range colouring configured and no loop running. gameplayActive
-        -- is what gates the loop, and only UpdateVisibility sets it.
+    it("starts the range loop when an always-on mode puts the cross up", function()
+        -- A mode that shows out of combat must not leave a visible cross with
+        -- range colouring configured and no loop running. gameplayActive is
+        -- what gates the loop, and only UpdateVisibility sets it.
         local CC = loader.loadCombatCross({
             GetSpecializationInfo = function() return 73 end,
             C_Spell = { IsSpellInRange = function() return 1 end },
@@ -137,7 +137,7 @@ describe("CombatCross visibility", function()
         CC:UpdateVisibility(false)
         assert.is_false(CC.onUpdateActive)
 
-        CC.db.AlwaysShow = true
+        CC.db.Visibility = "always"
         CC:UpdateVisibility(false)
         assert.is_true(CC.onUpdateActive)
     end)
@@ -262,5 +262,96 @@ describe("CombatCross hide when in range", function()
         assert.equals(0, CC.frame._alpha)
         CC:Show(true)
         assert.equals(1, CC.frame._alpha)
+    end)
+end)
+
+-- The mode predicate on its own. UpdateVisibility is covered above through the
+-- frame; this covers the branching that decides what it is told.
+describe("CombatCross visibility modes", function()
+    it("offers the cursor's list without mouseDown, in_party or in_raid", function()
+        local CC = loader.loadCombatCross()
+        local keys = {}
+        for _, entry in ipairs(CC.VISIBILITY_MODES) do keys[entry.key] = true end
+        assert.is_true(keys.always)
+        assert.is_true(keys.in_combat)
+        assert.is_true(keys.out_of_combat)
+        assert.is_true(keys.in_instance)
+        assert.is_true(keys.solo)
+        assert.is_true(keys.never)
+        assert.is_nil(keys.mouseDown)
+        assert.is_nil(keys.in_party)
+        assert.is_nil(keys.in_raid)
+    end)
+
+    it("ignores combat under always and never", function()
+        local CC = loader.loadCombatCross()
+        assert.is_true(CC.ShouldShowByMode("always", false))
+        assert.is_true(CC.ShouldShowByMode("always", true))
+        assert.is_false(CC.ShouldShowByMode("never", false))
+        assert.is_false(CC.ShouldShowByMode("never", true))
+    end)
+
+    it("follows combat under the two combat modes", function()
+        local CC = loader.loadCombatCross()
+        assert.is_true(CC.ShouldShowByMode("in_combat", true))
+        assert.is_false(CC.ShouldShowByMode("in_combat", false))
+        assert.is_true(CC.ShouldShowByMode("out_of_combat", false))
+        assert.is_false(CC.ShouldShowByMode("out_of_combat", true))
+    end)
+
+    it("shows under solo only when ungrouped", function()
+        local CC = loader.loadCombatCross({ IsInGroup = function() return false end })
+        assert.is_true(CC.ShouldShowByMode("solo", false))
+        local grouped = loader.loadCombatCross({ IsInGroup = function() return true end })
+        assert.is_false(grouped.ShouldShowByMode("solo", false))
+    end)
+
+    -- An unknown mode shows rather than hides: a crosshair nobody asked for is
+    -- easier to notice and complain about than one that silently never appears.
+    it("shows on a mode it does not know", function()
+        local CC = loader.loadCombatCross()
+        assert.is_true(CC.ShouldShowByMode("in_raid", false))
+        assert.is_true(CC.ShouldShowByMode(nil, false))
+    end)
+
+    -- The only mode that leaves the module to answer. Both directions are
+    -- asserted with the combat flag set opposite to the expected result, so a
+    -- predicate that returned `inCombat` or a constant fails one of them.
+    it("asks the cursor module whether this is instanced content", function()
+        local CC = loader.loadCombatCross()
+        local cursor = _G.KitnEssentials:GetModule("Cursor")
+        cursor.InRealInstancedContent = function() return true end
+        assert.is_true(CC.ShouldShowByMode("in_instance", false))
+        cursor.InRealInstancedContent = function() return false end
+        assert.is_false(CC.ShouldShowByMode("in_instance", true))
+    end)
+
+    -- The lookup is silent, so an unresolvable module returns nil rather than
+    -- throwing. Hiding is the safe direction: a crosshair stuck on is a bug
+    -- report, a Lua error on every visibility change is a broken session.
+    it("hides rather than throws when the cursor module cannot be resolved", function()
+        local CC = loader.loadCombatCross()
+        _G.KitnEssentials.GetModule = function() return nil end
+        assert.is_false(CC.ShouldShowByMode("in_instance", true))
+    end)
+
+    -- AceEvent hands the handler its event name first. Forwarding these events
+    -- straight to UpdateVisibility would deliver that string as `inCombat`,
+    -- and a non-nil string reads as "in combat" every time.
+    it("drops the event name instead of reading it as combat state", function()
+        local CC = loader.loadCombatCross()
+        local isShown = withFrame(CC)
+        CC.frame:Show()
+        CC:OnContextChanged("GROUP_ROSTER_UPDATE")
+        assert.is_false(isShown())
+    end)
+
+    it("routes the stored mode through UpdateVisibility", function()
+        local CC = loader.loadCombatCross()
+        CC.db.Visibility = "never"
+        local isShown = withFrame(CC)
+        CC.frame:Show()
+        CC:UpdateVisibility(true)
+        assert.is_false(isShown())
     end)
 end)

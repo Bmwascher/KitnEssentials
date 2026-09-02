@@ -143,7 +143,7 @@ local Defaults = {
             ColorMode = "custom",
             Color = { 0, 1, 0.169, 1 },
             Shape = "cross",                  -- "cross" or "circle"
-            AlwaysShow = false,               -- Show out of combat too, not only in combat
+            Visibility = "in_combat",         -- key from CC.VISIBILITY_MODES
             Thickness = 22,
             Outline = true,
             RangeColorMeleeEnabled = false,
@@ -2278,15 +2278,28 @@ function KE:MigrateModuleEnableDefaults()
     end
 end
 
--- Straight key renames inside a block AceDB already registers. Same once-only,
--- per-entry marker as the enable-default migration above, but its own record
--- table: an id here names a rename, an id there is a dotted profile path, and
--- one table would leave a later reader unable to tell them apart.
+-- Saved-value migrations inside blocks AceDB already registers. Two entry
+-- shapes: a `block`/`old`/`new` rename, and a `path` array whose last element
+-- is converted in place. Same once-only, per-entry marker as the
+-- enable-default migration above, but its own record table: an id here names a
+-- migration, an id there is a dotted profile path, and one table would leave a
+-- later reader unable to tell them apart.
 local KEY_RENAME_RECORD = "KeyRenames"
 
 -- `convert` turns the old saved value into the new one and is called with nil
 -- for an absent key, because absent means the key sat at its OLD default and
--- AceDB stripped it at logout.
+-- AceDB stripped it at logout. What nil produces is the converter's decision,
+-- not the loop's: a rename maps it to the new default, an in-place retirement
+-- passes it through untouched.
+
+-- Everything except the two retired modes passes straight through, nil
+-- included: absent means the key sat at its default, and the default was never
+-- one of these two.
+local function RetireGroupModes(value)
+    if value == "in_party" or value == "in_raid" then return "in_instance" end
+    return value
+end
+
 local KEY_RENAMES = {
     {
         id = "CombatLogger.ScenarioTorghast->Scenario",
@@ -2302,6 +2315,54 @@ local KEY_RENAMES = {
         new = "PromptAdvanced",
         -- The polarity flips: the old key stored "do not ask".
         convert = function(value) return value ~= true end,
+    },
+    {
+        id = "CombatCross.AlwaysShow->Visibility",
+        block = "CombatCross",
+        old = "AlwaysShow",
+        new = "Visibility",
+        -- The boolean asked "show out of combat too", so its two states are
+        -- exactly the two modes that replaced it.
+        convert = function(value) return value == true and "always" or "in_combat" end,
+    },
+    -- in_party and in_raid retired in favour of in_instance, which answers the
+    -- question both were reached for.
+    --
+    -- The master mode is not the only place a retired value hides: every cursor
+    -- satellite carries its own VisibilityOverride through the same predicate,
+    -- and one left unconverted falls through to the predicate's `return true`
+    -- and shows always.
+    {
+        id = "Cursor.Visibility.RetireGroupModes",
+        block = "Cursor",
+        old = "Visibility",
+        new = "Visibility",
+        convert = RetireGroupModes,
+    },
+    {
+        id = "Cursor.GCD.VisibilityOverride.RetireGroupModes",
+        path = { "Cursor", "GCD", "VisibilityOverride" },
+        convert = RetireGroupModes,
+    },
+    {
+        id = "Cursor.Cast.VisibilityOverride.RetireGroupModes",
+        path = { "Cursor", "Cast", "VisibilityOverride" },
+        convert = RetireGroupModes,
+    },
+    {
+        id = "Cursor.Trail.VisibilityOverride.RetireGroupModes",
+        path = { "Cursor", "Trail", "VisibilityOverride" },
+        convert = RetireGroupModes,
+    },
+    {
+        id = "Cursor.Dispel.VisibilityOverride.RetireGroupModes",
+        path = { "Cursor", "Dispel", "VisibilityOverride" },
+        convert = RetireGroupModes,
+    },
+    {
+        id = "Cursor.Taunt.VisibilityOverride.RetireGroupModes",
+        path = { "Cursor", "Taunt", "VisibilityOverride" },
+        convert = RetireGroupModes,
     },
 }
 
@@ -2329,13 +2390,33 @@ function KE:MigrateCombatLoggerKeys()
             if type(profiles) == "table" then
                 for _, profile in pairs(profiles) do
                     if type(profile) == "table" then
-                        local block = profile[entry.block]
+                        -- Two entry shapes. `block` names a top-level table and
+                        -- renames a key inside it. `path` is the full path to a
+                        -- nested key and converts it where it sits, which is the
+                        -- only way to reach something like
+                        -- Cursor.GCD.VisibilityOverride -- `block` resolves one
+                        -- level and cannot see it.
+                        local block, oldKey, newKey
+                        if entry.path then
+                            block = ResolveParentTable(profile, entry.path)
+                            oldKey = entry.path[#entry.path]
+                            newKey = oldKey
+                        else
+                            block = profile[entry.block]
+                            oldKey = entry.old
+                            newKey = entry.new
+                        end
                         if type(block) == "table" then
-                            -- A block with neither old key gets its new key at
-                            -- the new default, which AceDB strips again at
-                            -- logout. Harmless, and cheaper than a second test.
-                            block[entry.new] = entry.convert(block[entry.old])
-                            block[entry.old] = nil
+                            -- Written unconditionally. Where the converter
+                            -- maps an absent key to a default, AceDB strips it
+                            -- again at logout; where it passes nil through,
+                            -- this assigns nil and nothing changes. Either way
+                            -- cheaper than a second test.
+                            block[newKey] = entry.convert(block[oldKey])
+                            -- Only when they differ. An in-place conversion
+                            -- writes and then deletes the same key, throwing
+                            -- away the value it just computed.
+                            if oldKey ~= newKey then block[oldKey] = nil end
                         end
                     end
                 end
