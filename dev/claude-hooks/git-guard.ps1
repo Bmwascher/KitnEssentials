@@ -45,7 +45,8 @@ if (-not $cmd) { exit 0 }
 # `git`, then any global options: ones that take a separate value (-C, -c,
 # --git-dir, --work-tree, ...), long flags with or without =value, and the
 # short pager flags.
-$gopt = '(-[cC]\s+("[^"]+"|\S+)|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env|attr-source)(=\S+|\s+("[^"]+"|\S+))|--[a-z-]+(=\S+)?|-[pP])'
+$gval = '("[^"]*"|''[^'']*''|\S+)'
+$gopt = "(-[cC]\s+$gval|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env|attr-source)(=\S+|\s+$gval)|--[a-z-]+(=\S+)?|-[pP])"
 $git = "git(\.exe)?(\s+$gopt)*"
 $reason = $null
 
@@ -80,7 +81,9 @@ foreach ($seg in $segments) {
         $reason = "This git command discards uncommitted or stashed work (standing rule: never discard without an explicit instruction). Copy the work aside first, or ask."
         break
     }
-    if ($seg -match "$git\s+commit\b" -and $seg -cmatch '\s(--all|-[a-zA-Z]*a[a-zA-Z]*)(\s|$)') {
+    # A cluster whose first letter takes an argument (-m, -C, -c, -F, -t, -u)
+    # carries that argument attached, so an `a` inside it is not the flag.
+    if ($seg -match "$git\s+commit\b" -and $seg -cmatch '\s(--all|-(?![mCcFtu])[a-zA-Z]*a[a-zA-Z]*)(\s|$)') {
         $reason = "git commit -a stages every modified file (family AGENTS.md git rules: stage by explicit path - the index may carry someone else's in-flight edits). git add the files you mean, then commit."
         break
     }
@@ -90,7 +93,9 @@ foreach ($seg in $segments) {
         foreach ($t in $args_) {
             $bare = $t.Trim('"', "'")
             # -cmatch catches clustered short options too (`-uv`, `-Av`).
-            if ($bare -match '^(\.|\./|\*+|\./\*+|:/\**|:\(top\)\**|--all|--update)$' -or $t -cmatch '^-[a-zA-Z]*[uA]') {
+            # Dots, bare wildcards, and any magic pathspec (:/ or :(...)) that
+            # names no path are whole-tree.
+            if ($bare -match '^(\.|\./|\*+|\./\*+|:(\([^)]*\))?/?\**|--all|--update)$' -or $t -cmatch '^-[a-zA-Z]*[uA]') {
                 $reason = "Blanket staging is banned (family AGENTS.md git rules: stage by explicit path - git add -A once swept a user's in-flight file into an unrelated commit). List the files you mean to stage."
                 break
             }
@@ -132,14 +137,36 @@ if (-not $reason) {
         "\btee(\.exe)?\s+(-a\s+)?$target",
         "\b(Set-Content|Out-File|Add-Content|Tee-Object)\b[^|;&]*?(-(Literal|File)?Path\s+|\s)$target"
     )
+    # Directory tracking across segments: cd/pushd move, popd restores, and a
+    # target the hook cannot resolve (a variable, `cd -`, a missing operand)
+    # marks the directory unknown, after which relative writes are denied
+    # rather than resolved against the wrong place.
+    $stack = New-Object System.Collections.Stack
+    $cwdUnknown = $false
     foreach ($seg in $segments) {
-        if ($seg -match '^\s*(cd|chdir|pushd|sl|Set-Location|Push-Location)\s+(-(Literal)?Path\s+)?["'']?(?<d>[^\s"'']+)') {
-            try { $cwd = [System.IO.Path]::GetFullPath(($Matches['d'] -replace '/', '\'), $cwd) } catch { }
+        if ($seg -match '^\s*(popd|Pop-Location)\b') {
+            if ($stack.Count -gt 0) { $cwd = $stack.Pop() } else { $cwdUnknown = $true }
+            continue
+        }
+        if ($seg -match '^\s*(?<verb>cd|chdir|pushd|sl|Set-Location|Push-Location)\b(?<rest>.*)$') {
+            $verb = $Matches['verb']; $rest = $Matches['rest'].Trim()
+            if ($verb -in @('pushd', 'Push-Location')) { $stack.Push($cwd) }
+            if ($rest -match '^(-(Literal)?Path\s+)?["'']?(?<d>[^\s"''$`]+)["'']?\s*$' -and $Matches['d'] -ne '-') {
+                try { $cwd = [System.IO.Path]::GetFullPath(($Matches['d'] -replace '/', '\'), $cwd) } catch { $cwdUnknown = $true }
+            } elseif ($rest -eq '' -and $verb -notin @('pushd', 'Push-Location')) {
+                $cwd = $env:USERPROFILE
+            } else {
+                $cwdUnknown = $true
+            }
             continue
         }
         foreach ($w in $writes) {
             if ($seg -notmatch $w) { continue }
             $t = ($Matches['t'] -replace '/', '\')
+            if ($cwdUnknown -and -not [System.IO.Path]::IsPathRooted($t)) {
+                $reason = "An earlier directory change in this command cannot be resolved, so the branch of '$t' cannot be checked before a shell write to addon code. Use an absolute path or the Edit tool."
+                break
+            }
             try { $full = [System.IO.Path]::GetFullPath($t, $cwd) } catch { continue }
             if (-not $gitOk) {
                 $reason = "git is not on PATH, so the branch of '$t' cannot be checked before a shell write to addon code. Use the Edit tool, or fix PATH."

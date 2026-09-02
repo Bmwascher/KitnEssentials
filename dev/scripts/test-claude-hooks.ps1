@@ -101,7 +101,11 @@ try {
         'cat > Core/Globals.lua', 'echo x > "Core/Globals.lua"', 'echo x >> GUI/GUIMain/GUI-Main.lua',
         'tee Core/Globals.lua', 'tee "Core/Globals.lua"', "sed -i s/a/b/ $wt\Core\Globals.lua",
         "sed -i s/a/b/ $link\Core\Globals.lua", 'cd dev && sed -i s/a/b/ ..\Core\Globals.lua',
-        'cd Modules; echo x > QoL/QoL.xml', 'sed -i s/a/b/ Modules/NewFeature/New.lua'
+        'cd Modules; echo x > QoL/QoL.xml', 'sed -i s/a/b/ Modules/NewFeature/New.lua',
+        "git -c 'core.editor=code --wait' reset --hard HEAD", 'git -c "core.editor=code --wait" reset --hard HEAD',
+        "git add -- ':(top,glob)**'", 'git add -- ":(glob)**"', 'git add ":(top)"',
+        'pushd dev; popd; sed -i s/a/b/ Core/Globals.lua', 'cd $SOMEWHERE && sed -i s/a/b/ Core/Globals.lua',
+        'cd - && echo x > Core/Globals.lua', 'popd; sed -i s/a/b/ Core/Globals.lua'
     )
     foreach ($c in $deny) { Expect-Deny $gg $c (& $sh $c $wt) }
     Expect-Deny $gg 'relative write, cwd = junction' (& $sh 'sed -i s/a/b/ Core/Globals.lua' $link)
@@ -118,7 +122,10 @@ try {
         'git clean -n', 'git clean -fdn', 'git commit -m "add a thing"', 'git commit --amend -m x', 'git commit -m "-a"',
         'git add Modules/', 'sed -i s/a/b/ dev/spec/x_spec.lua', 'cd dev && sed -i s/a/b/ spec/x_spec.lua',
         'echo x > CHANGELOG.md', 'sed -n 1,5p Core/Globals.lua', 'grep -n foo Core/Globals.lua > out.txt',
-        "sed -i s/a/b/ $outside\probe.lua", 'luacheck Core/Globals.lua > /dev/null 2>&1', 'git status', 'git log -3', 'ls Core'
+        "sed -i s/a/b/ $outside\probe.lua", 'luacheck Core/Globals.lua > /dev/null 2>&1', 'git status', 'git log -3', 'ls Core',
+        'git commit -mupdate', 'git commit -Cmain', 'git commit -F msg.txt', 'git add ":(glob)Core/*.lua"',
+        'pushd dev; sed -i s/a/b/ spec/x_spec.lua; popd', 'pushd Modules; popd; sed -i s/a/b/ dev/spec/x_spec.lua',
+        "cd `$SOMEWHERE && sed -i s/a/b/ $outside\probe.lua"
     )
     foreach ($c in $allow) { Expect-Allow $gg $c (& $sh $c $wt) }
     # Shell writes are only denied while the target's checkout is on main.
@@ -170,16 +177,27 @@ try {
         Write-Host 'commit-msg cases skipped: bash not on PATH'
     }
 } finally {
+    # Each step runs regardless of the others; native git exits are checked
+    # because they do not throw, and any leftover fails the run.
     $ErrorActionPreference = 'Continue'
-    try { if (Test-Path $link) { (Get-Item $link).Delete() } } catch { Write-Host "cleanup: junction $link left behind: $_" }
+    $leftover = @()
+    try { if (Test-Path $link) { (Get-Item $link).Delete() } } catch { $leftover += "junction $link ($_)" }
     foreach ($w in @($wt, $feature)) {
-        try { if (Test-Path $w) { git -C $root worktree remove --force $w 2>&1 | Out-Null } } catch { Write-Host "cleanup: worktree $w left behind: $_" }
+        if (Test-Path $w) {
+            git -C $root worktree remove --force $w 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0 -or (Test-Path $w)) { $leftover += "worktree $w" }
+        }
     }
-    try { git -C $root worktree prune 2>&1 | Out-Null } catch { }
-    try { if (git -C $root branch --list $featureBranch) { git -C $root branch -D $featureBranch 2>&1 | Out-Null } } catch { Write-Host "cleanup: branch $featureBranch left behind: $_" }
-    try { if (Test-Path $outside) { Remove-Item $outside -Recurse -Force } } catch { }
+    git -C $root worktree prune 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { $leftover += 'worktree prune failed' }
+    if (git -C $root branch --list $featureBranch) {
+        git -C $root branch -D $featureBranch 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { $leftover += "branch $featureBranch" }
+    }
+    try { if (Test-Path $outside) { Remove-Item $outside -Recurse -Force -ErrorAction Stop } } catch { $leftover += "folder $outside ($_)" }
+    foreach ($l in $leftover) { Write-Host "cleanup left behind: $l" }
 }
 
 Write-Host ("{0} passed, {1} failed, {2} skipped" -f $pass, $fail, $skip)
-if ($fail -gt 0) { exit 1 }
+if ($fail -gt 0 -or $leftover.Count -gt 0) { exit 1 }
 exit 0
