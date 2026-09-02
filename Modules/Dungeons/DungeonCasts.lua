@@ -637,8 +637,9 @@ end
 -- Populates a bar with cast data and refreshes its visuals
 function DC:PopulateBar(bar, unit, data)
     bar.unit = unit
-    -- A reused nameplate token would otherwise inherit a held bar from
-    -- whatever the pool last showed on this frame.
+    -- Not for pooled bars, which ReleaseBar already cleared. This is the
+    -- token whose own bar is still active: a new cast on it arrives here with
+    -- the previous cast's interrupt hold still set.
     bar.holdUntil = nil
     bar.casting = data.isCasting
     bar.channeling = data.isChanneling
