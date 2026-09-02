@@ -842,7 +842,9 @@ function DM:BindCombatState()
         -- Repaints the clock ONLY -- never DM:Tick, which would repaint every bar
         -- and total at up to 10 Hz while a tenths cadence is running.
         OnClockTick = function()
-            if DM.RepaintCombatClock then DM:RepaintCombatClock() end
+            -- Authoritative: this paint carries the service's own reading, so it
+            -- overrides the warm-up hold and may blank the clock.
+            if DM.RepaintCombatClock then DM:RepaintCombatClock(true) end
         end,
     })
     -- A module enabled mid-fight gets no OnStart from the service (it already

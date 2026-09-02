@@ -565,6 +565,17 @@ describe("CombatState machine", function()
             assert.equals(4, cs:GetDuration())
         end)
 
+        it("a cadence call that changes nothing neither replaces the ticker nor samples", function()
+            local cs = newCS()
+            cs:OnRegenDisabled()
+            local before = lastClock(sched)
+            deps.sessionDuration = function() return true, 9 end
+            cs:SetFineCadence("A", false)
+            assert.is_false(before.cancelled)
+            assert.equals(before, lastClock(sched))
+            assert.is_nil(cs:GetDuration())
+        end)
+
         it("UnregisterListener drops that key's cadence request", function()
             local cs = newCS()
             cs:OnRegenDisabled()

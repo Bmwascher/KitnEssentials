@@ -1171,7 +1171,10 @@ end
 -- nothing, leave the new session's duration unwritten, and put the previous
 -- pin's number back on screen the moment the menu closed. Computing first is
 -- also what lets SelectSegment stay out of ClearClockCache's call sites.
-function DM:UpdateCombatClock(W, session)
+-- authoritative is true only for the service's own clock broadcast. Ordinary
+-- bar repaints pass nothing, and they may not blank a live clock during the
+-- warm-up gap; the broadcast may, because it carries the reading itself.
+function DM:UpdateCombatClock(W, session, authoritative)
     local clock = W and W.clock
     if not clock then return end
 
@@ -1192,7 +1195,7 @@ function DM:UpdateCombatClock(W, session)
         -- trash blanks this clock while the Combat Timer still shows the old
         -- value. A genuine start clears the text first (BlankCombatClock), so
         -- the hold can never carry a finished fight's time into a new one.
-        if KE.CombatState:GetDuration() == nil and W._clockHasText then return end
+        if not authoritative and KE.CombatState:GetDuration() == nil and W._clockHasText then return end
         -- The branch condition is LIVENESS, not a non-nil duration: splitting on
         -- the duration would drop into the reload fallback below before the pin
         -- is warm, and that fallback accepts a secret string the Combat Timer
@@ -1269,7 +1272,7 @@ end
 -- total at up to 10 Hz while a tenths cadence runs; the split is what lets the
 -- clock track the Combat Timer while the totals keep a kill's finalize delay.
 -- _winDisplayPos holds at most db.MaxWindows entries, so the scan is cheap.
-function DM:RepaintCombatClock()
+function DM:RepaintCombatClock(authoritative)
     -- The same gate ClockGateOpen tests first, hoisted ahead of the resolve
     -- chain: the clock is off by default, and this runs at up to 10 Hz.
     if not (self.db and self.db.ShowCombatClock) then return end
@@ -1280,7 +1283,7 @@ function DM:RepaintCombatClock()
             if cfg and cfg.Enabled then
                 local meterType = self:EffectiveMeterType(idx, cfg)
                 local session = self:ResolveRenderSession(W, cfg, meterType)
-                self:UpdateCombatClock(W, session)
+                self:UpdateCombatClock(W, session, authoritative)
             end
             return
         end

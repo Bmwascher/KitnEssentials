@@ -124,7 +124,9 @@ end
 -- Cancel-before-start, per the paint contract: neither ticker can be doubled.
 function CombatState:_StartClock()
     self:_CancelClock()
-    self.clockHandle = self.deps.ticker(self:_ClockCadence(), function()
+    local cadence = self:_ClockCadence()
+    self.clockCadence = cadence
+    self.clockHandle = self.deps.ticker(cadence, function()
         self:ClockTick()
     end)
 end
@@ -435,6 +437,10 @@ end
 -- cannot leave both surfaces stale for the length of the old interval.
 function CombatState:_RestartClock()
     if not self.clockHandle then return end
+    -- Idempotent: registering and dropping cadence keys happens in pairs around
+    -- a module's enable and disable, and a restart that changes nothing would
+    -- spend a session read and a repaint for each one.
+    if self:_ClockCadence() == self.clockCadence then return end
     self:_StartClock()
     self:ClockTick()
 end

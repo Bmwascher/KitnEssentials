@@ -154,6 +154,35 @@ describe("UpdateCombatClock's branch selection", function()
     end)
 end)
 
+describe("the warm-up hold", function()
+    it("survives an ordinary bar repaint but yields to the service's own paint", function()
+        -- HideClock hides the FontString rather than blanking its text, and
+        -- whether it is on screen also depends on the visibility gate, so the
+        -- cached pair is what discriminates the two paths.
+        local cases = {
+            { name = "bar repaint holds", authoritative = nil, hasText = true, cached = "[0:42]" },
+            { name = "service paint blanks", authoritative = true, hasText = false, cached = nil },
+        }
+        for _, case in ipairs(cases) do
+            local DM, KE = L.loadDMClock()
+            local clock = fakeClock()
+            local W = { idx = 1, clock = clock }
+            DM.windows_rt = { [1] = W }
+
+            -- A fight in progress with its previous reading still on screen, and
+            -- the pin not yet warm after a chain pull.
+            KE.CombatState.live = true
+            KE.CombatState.duration = 42
+            DM:UpdateCombatClock(W, nil)
+            KE.CombatState.duration = nil
+
+            DM:UpdateCombatClock(W, nil, case.authoritative)
+            assert.equals(case.hasText, W._clockHasText or false, case.name)
+            assert.equals(case.cached, W._clockText, case.name)
+        end
+    end)
+end)
+
 describe("the two reset paths", function()
     it("raise _clockCleared only when the machine is not live", function()
         local cases = {
