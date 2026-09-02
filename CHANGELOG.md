@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.29
+
+### Enemy Casts
+- Turning Show Cast Target off and back on now brings the target names straight
+  back, instead of leaving live bars blank until each mob's next cast
+
+---
+
 ## v4.4.28
 
 ### Enemy Casts
