@@ -70,6 +70,54 @@ function KE_FramePool:ReleaseAll() end
 ---@field instanceID number
 ---@field season number
 
+--- Shared combat clock/liveness machine (Core/CombatState.lua). KE.CombatState
+--- is the live singleton, built at file load; New(deps) is exposed for specs.
+---@class KE.CombatState
+local KE_CombatState = {}
+
+---@param deps table
+---@return KE.CombatState
+function KE_CombatState.New(deps) end
+
+---@return boolean
+function KE_CombatState:IsLive() end
+
+---@return boolean
+function KE_CombatState:IsFrozen() end
+
+---@return number? seconds
+function KE_CombatState:GetDuration() end
+
+---@return boolean
+function KE_CombatState:PlayerJoined() end
+
+---@return boolean
+function KE_CombatState:GroupInCombat() end
+
+---@return number
+function KE_CombatState:Generation() end
+
+---@param key string
+---@param wanted boolean
+function KE_CombatState:SetFineCadence(key, wanted) end
+
+---@param key string
+---@param callbacks { OnStart: fun()?, OnStop: fun(reason: string)?, OnGroupClear: fun()?, OnClockTick: fun(seconds: number?, frac: number)? }
+function KE_CombatState:RegisterListener(key, callbacks) end
+
+---@param key string
+function KE_CombatState:UnregisterListener(key) end
+
+function KE_CombatState:OnRegenDisabled() end
+function KE_CombatState:OnRegenEnabled() end
+function KE_CombatState:OnEncounterStart() end
+---@param success any
+function KE_CombatState:OnEncounterEnd(success) end
+---@param unit string?
+function KE_CombatState:OnUnitFlags(unit) end
+function KE_CombatState:OnPvPMatchComplete() end
+function KE_CombatState:OnEnteringWorld() end
+
 ---@class KE
 ---@field db AceDB
 ---@field FONT string
@@ -80,6 +128,7 @@ function KE_FramePool:ReleaseAll() end
 ---@field ProfileManager table
 ---@field GUI table
 ---@field FramePool KE.FramePool
+---@field CombatState KE.CombatState
 ---@field curves KE.Curves
 ---@field Skins table # Modules/Skinning/*.lua shared namespace (KE.Skins)
 ---@field msgContainer Frame? # message-popup singleton (Core/Widgets.lua)
