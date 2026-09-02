@@ -679,6 +679,50 @@ describe("ChatHistory Battle.net sender token", function()
             assert.is_nil(KE.db.char.ChatHistory[1].bnTag)
             assert.equals("Bob", KE.db.char.ChatHistory[1][2])
         end)
+
+        -- The sender id is refused by the coercion loop's secrecy check, which
+        -- runs over every argument, rather than by a test of its own. Asserted
+        -- here because the branch below compares it, and a comparison against a
+        -- secret throws.
+        it("refuses the row when argument 13 reads secret", function()
+            -- A secret NUMBER, not a table. A table would be refused by the
+            -- type check further down and the case would pass without the
+            -- secrecy check ever mattering.
+            local CH, KE = L.loadChatHistory({
+                issecretvalue = secretIs(7),
+                C_BattleNet = {
+                    GetAccountInfoByID = function() return { battleTag = "SoTilted#1527" } end,
+                },
+            })
+            saveBNWhisper(CH, "|Kf1|k", 7)
+            assert.equals(0, #KE.db.char.ChatHistory)
+        end)
+
+        -- The lookup's own return is checked separately from its arguments: a
+        -- clean id can still hand back a secret tag, and storing that would put
+        -- a value on disk that throws on every later read.
+        it("refuses the row when the looked-up BattleTag reads secret", function()
+            -- A secret STRING, for the same reason: a table would be caught by
+            -- the type check and prove nothing about the secrecy check.
+            local CH, KE = L.loadChatHistory({
+                issecretvalue = secretIs("SoTilted#1527"),
+                C_BattleNet = {
+                    GetAccountInfoByID = function() return { battleTag = "SoTilted#1527" } end,
+                },
+            })
+            saveBNWhisper(CH, "|Kf1|k", 5)
+            assert.equals(0, #KE.db.char.ChatHistory)
+        end)
+
+        it("refuses the row when the looked-up BattleTag is not a string", function()
+            for _, bad in ipairs({ false, true, 5, {} }) do
+                local CH, KE = L.loadChatHistory({
+                    C_BattleNet = { GetAccountInfoByID = function() return { battleTag = bad } end },
+                })
+                saveBNWhisper(CH, "|Kf1|k", 5)
+                assert.equals(0, #KE.db.char.ChatHistory)
+            end
+        end)
     end)
 
     describe("RowIsReplayable", function()
