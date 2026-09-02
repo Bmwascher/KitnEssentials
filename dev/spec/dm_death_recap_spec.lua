@@ -193,34 +193,22 @@ describe("GetDeathRecap maximum health", function()
     -- Both returns, every time. Asserting only the plain one would let a zero
     -- reach the bar, which draws an empty red row -- a claim that the player
     -- died at full health.
-    it("leaves BOTH returns nil for a zero maximum", function()
-        load({ events = { { id = 1 } }, maxHealth = 0 })
-        local _, sinkMax, plainMax = DM:GetDeathRecap(1)
-        assert.is_nil(sinkMax); assert.is_nil(plainMax)
+    it("leaves BOTH returns nil for a zero, negative, or non-numeric maximum", function()
+        for _, maxHealth in ipairs({ 0, -1, "lots" }) do
+            load({ events = { { id = 1 } }, maxHealth = maxHealth })
+            local _, sinkMax, plainMax = DM:GetDeathRecap(1)
+            assert.is_nil(sinkMax); assert.is_nil(plainMax)
+        end
     end)
 
-    it("leaves BOTH returns nil for a negative maximum", function()
-        load({ events = { { id = 1 } }, maxHealth = -1 })
-        local _, sinkMax, plainMax = DM:GetDeathRecap(1)
-        assert.is_nil(sinkMax); assert.is_nil(plainMax)
-    end)
-
-    it("leaves BOTH returns nil for a non-numeric maximum", function()
-        load({ events = { { id = 1 } }, maxHealth = "lots" })
-        local _, sinkMax, plainMax = DM:GetDeathRecap(1)
-        assert.is_nil(sinkMax); assert.is_nil(plainMax)
-    end)
-
-    it("leaves BOTH returns nil for a FAILED maximum call", function()
+    it("leaves BOTH returns nil when the maximum call fails or the accessor does not exist", function()
         load({ events = { { id = 1 } }, maxHealth = function() error("blocked") end })
         local ev, sinkMax, plainMax = DM:GetDeathRecap(1)
         assert.is_table(ev)
         assert.is_nil(sinkMax); assert.is_nil(plainMax)
-    end)
 
-    it("leaves BOTH returns nil when the maximum accessor does not exist", function()
         load({ events = { { id = 1 } } })
-        local ev, sinkMax, plainMax = DM:GetDeathRecap(1)
+        ev, sinkMax, plainMax = DM:GetDeathRecap(1)
         assert.is_table(ev)
         assert.is_nil(sinkMax); assert.is_nil(plainMax)
     end)

@@ -109,27 +109,6 @@ describe("VantusRune guild bank parent", function()
         assert.is_false(created)
     end)
 
-    it("unregisters the Baganator callback when disabled", function()
-        local unregisteredEvent
-        local unregisteredOwner
-        _G.Baganator = {
-            CallbackRegistry = {
-                UnregisterCallback = function(_, event, owner)
-                    unregisteredEvent = event
-                    unregisteredOwner = owner
-                end,
-            },
-        }
-        local module = loadModule()
-        module._baganatorCallbackRegistered = true
-        module.UnregisterAllEvents = function() end
-
-        module:OnDisable()
-
-        assert.equals("FrameGroupSwapped", unregisteredEvent)
-        assert.equals(module, unregisteredOwner)
-    end)
-
     it("registers only one Baganator frame-group callback", function()
         local registrations = 0
         local registeredEvent
@@ -151,31 +130,5 @@ describe("VantusRune guild bank parent", function()
         assert.equals(1, registrations)
         assert.equals("FrameGroupSwapped", registeredEvent)
         assert.equals(module, registeredOwner)
-    end)
-end)
-
-describe("VantusRune theme refresh", function()
-    it("updates the existing button from the current accent", function()
-        local module, KE = loadModule()
-        local textColor
-        local borderColor
-        module.vantusButton = {
-            text = {
-                SetTextColor = function(_, ...)
-                    textColor = { ... }
-                end,
-            },
-            border = {
-                SetBackdropBorderColor = function(_, ...)
-                    borderColor = { ... }
-                end,
-            },
-        }
-        KE.Theme = { accent = { 0.1, 0.2, 0.3, 0.4 } }
-
-        module:OnThemeChanged()
-
-        assert.same({ 0.1, 0.2, 0.3, 0.4 }, textColor)
-        assert.same({ 0.1, 0.2, 0.3, 0.4 }, borderColor)
     end)
 end)

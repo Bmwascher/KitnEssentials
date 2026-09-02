@@ -342,41 +342,32 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             assert.equal("Skins right-click and dropdown menus.", row.tooltip)
         end)
 
-        it("the bulk toggle reaches it", function()
-            -- ContextMenus carries onToggle, so SetEntry never writes db.Skins
-            -- for it -- the observable is the module flag its onToggle writes.
+        -- The other half of membership, and the half rendering alone cannot
+        -- see: the bulk toggle and the header's any-on READ. A Context Menus
+        -- dropped from FRAME_SKINS would still render, but the master switch
+        -- would silently skip it and the header would stop noticing it was on.
+        it("is reached by the bulk toggle and the any-on read, not just db.Skins", function()
+            local offBoard = setmetatable({}, { __index = function() return false end })
+
             KE.db.profile.Skinning.ContextMenus = { Enabled = true }
+            KE.db.profile.Skinning.BlizzardFrames = freshDB(offBoard)
             buildFrames()
             headerToggle.callback(false)
             assert.is_false(KE.db.profile.Skinning.ContextMenus.Enabled)
-        end)
 
-        it("positive control: bulk-on turns it back on", function()
             KE.db.profile.Skinning.ContextMenus = { Enabled = false }
             buildFrames()
             headerToggle.callback(true)
             assert.is_true(KE.db.profile.Skinning.ContextMenus.Enabled)
-        end)
 
-        -- The other half of membership, and the half the two above cannot see:
-        -- the header's any-on READ. A Context Menus dropped from FRAME_SKINS
-        -- would still pass the bulk-toggle examples if it were toggled by some
-        -- other path, but the header would stop noticing it was on.
-        it("the any-on read reaches it: on alone, the header reads on", function()
-            KE.db.profile.Skinning.ContextMenus = { Enabled = true }
             -- Every ordinary row off. ContextMenus ignores db.Skins entirely --
             -- it answers through isOn -- so it is the only member left that can
             -- make anyOn true.
-            KE.db.profile.Skinning.BlizzardFrames =
-                freshDB(setmetatable({}, { __index = function() return false end }))
+            KE.db.profile.Skinning.ContextMenus = { Enabled = true }
             buildFrames()
             assert.is_true(headerToggle.anyOn)
-        end)
 
-        it("positive control: with it off too, the header reads off", function()
             KE.db.profile.Skinning.ContextMenus = { Enabled = false }
-            KE.db.profile.Skinning.BlizzardFrames =
-                freshDB(setmetatable({}, { __index = function() return false end }))
             buildFrames()
             assert.is_false(headerToggle.anyOn)
         end)
@@ -399,16 +390,12 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             assert.is_false(containsLabel(NOTE))
         end)
 
-        it("appears when a row is fully suppressed", function()
-            seedFull("Achievement")
-            buildFrames()
-            assert.is_true(containsLabel(NOTE))
-        end)
-
-        it("appears when a row is only partly suppressed", function()
-            seedPartial("Achievement")
-            buildFrames()
-            assert.is_true(containsLabel(NOTE))
+        it("appears when a row is suppressed, fully or partially", function()
+            for _, seed in ipairs({ seedFull, seedPartial }) do
+                seed("Achievement")
+                buildFrames()
+                assert.is_true(containsLabel(NOTE))
+            end
         end)
     end)
     -- Ace3 is the Addon Skins solo row: it renders above the grid via
@@ -436,28 +423,23 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             assert.equal(1, seen)
         end)
 
-        it("the any-on read reaches it: on alone, the header reads on", function()
+        it("is reached by the any-on read and the bulk toggle", function()
             -- Every other addon row off. Ace3 needs a REAL stored value, not an
             -- absent key: the metatable default answers false for anything
             -- missing, and EntryIsOn reads `skins[key] ~= false`, so leaving it
-            -- unset would read off like the rest. With it on it is the only
-            -- member that can make anyOn true.
+            -- unset would read off like the rest.
             KE.db.profile.Skinning.BlizzardFrames = freshDB(setmetatable(
                 { Ace3 = true },
                 { __index = function() return false end }))
             buildAddons()
             assert.is_true(headerToggle.anyOn)
-        end)
 
-        it("positive control: with Ace3 off too, the header reads off", function()
             KE.db.profile.Skinning.BlizzardFrames = freshDB(setmetatable(
                 { Ace3 = false },
                 { __index = function() return false end }))
             buildAddons()
             assert.is_false(headerToggle.anyOn)
-        end)
 
-        it("the bulk toggle writes it", function()
             KE.db.profile.Skinning.BlizzardFrames = freshDB({})
             buildAddons()
             headerToggle.callback(false)

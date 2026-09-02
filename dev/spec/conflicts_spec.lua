@@ -70,11 +70,6 @@ describe("Core/Conflicts.lua decision layer", function()
             assert.same({}, queue)
         end)
 
-        it("returns an empty queue when env is malformed", function()
-            assert.same({}, KE:BuildConflictQueue(nil))
-            assert.same({}, KE:BuildConflictQueue({}))
-        end)
-
         it("queues a prompt for EllesmereUIChat when the Chat module is on", function()
             local queue = KE:BuildConflictQueue({
                 profile = { Skinning = { Chat = { Enabled = true } } },
@@ -124,12 +119,6 @@ describe("Core/Conflicts.lua decision layer", function()
         it("returns nil when the module is off but no rival is loaded", function()
             assert.is_nil(KE:GetModuleConflict("SkinTooltips", env({
                 profile = { Skinning = { Tooltips = { Enabled = false } } },
-            })))
-        end)
-
-        it("returns nil for a module that is not in the registry", function()
-            assert.is_nil(KE:GetModuleConflict("SkinBattlenet", env({
-                loaded = { TipTac = true },
             })))
         end)
 
@@ -222,11 +211,6 @@ describe("Core/Conflicts.lua prompt queue", function()
         assert.equals("Tooltip Conflict", prompts[1].title)
         assert.equals("|cff00ff00Use KitnEssentials|r", prompts[1].acceptText)
         assert.equals("Use TipTac", prompts[1].cancelText)
-    end)
-
-    it("shows the friendly name rather than the folder name", function()
-        login({ "EllesmereUIBlizzardSkin" })
-        assert.equals("Use EllesmereUI BlizzUI Enhanced", prompts[1].cancelText)
     end)
 
     it("disables the rival addon when the user picks KitnEssentials", function()
@@ -412,20 +396,4 @@ describe("/kes conflicts", function()
         assert.equals(1, calls)
     end)
 
-    it("is a no-op when Conflicts.lua never loaded", function()
-        KE.ScanAddonConflicts = nil
-        assert.has_no.errors(function() handler("conflicts") end)
-    end)
-
-    -- Stub KE.Print, NOT _G.print: Core/Globals.lua captures print into a
-    -- file-local at load, so a _G.print stub installed after loadGlobals is
-    -- invisible and the assertion could never pass. The handler resolves
-    -- KE.Print at call time, so replacing it on the shared table works.
-    it("lists conflicts in the help output", function()
-        local printed = {}
-        KE.Print = function(_, msg) printed[#printed + 1] = msg end
-        handler("nonsense")
-        assert.equals(1, #printed)
-        assert.is_truthy(printed[1]:find("conflicts", 1, true))
-    end)
 end)

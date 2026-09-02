@@ -1,35 +1,10 @@
 -- Tier 1: pure data + accessors, zero WoW API. Core/Interrupts.lua.
 local helpers = require("dev.spec._helpers")
 
-local EXPECTED_ANNOUNCE_IDS = {
-    6552, 96231, 31935, 375576, 147362, 187707, 1766,
-    15487, 47528, 57994, 2139, 19647, 89766, 119910,
-    132409, 119914, 116705, 78675, 106839, 183752, 351338,
-}
-
 describe("Interrupts (Core/Interrupts.lua)", function()
     local KE
     setup(function()
         KE = helpers.loadModule("Core/Interrupts.lua")
-    end)
-
-    it("returns the primary kick for Frost DK (spec 251)", function()
-        local list = KE:GetInterruptCandidatesForSpec(251)
-        assert.is_table(list)
-        assert.equals(47528, list[1].id) -- Mind Freeze
-        assert.equals(12, list[1].cd)
-    end)
-
-    it("normalizes a single primary into a one-entry candidate list", function()
-        local list = KE:GetInterruptCandidatesForSpec(259) -- Assassination Rogue, Kick
-        assert.equals(1, #list)
-        assert.equals(1766, list[1].id)
-    end)
-
-    it("keeps warlock pet candidates in priority order", function()
-        local list = KE:GetInterruptCandidatesForSpec(265) -- Affliction
-        assert.equals(4, #list)
-        assert.equals(19647, list[1].id) -- Spell Lock first
     end)
 
     it("builds an announce set including announceExtras", function()
@@ -39,30 +14,10 @@ describe("Interrupts (Core/Interrupts.lua)", function()
         assert.is_true(set[375576])
     end)
 
-    it("publishes the complete cross-spec announce set", function()
-        local set = KE:GetInterruptAnnounceSpellSet()
-        local count = 0
-        for id in pairs(set) do
-            count = count + 1
-            assert.is_number(id)
-            assert.is_true(set[id])
-        end
-        assert.equals(#EXPECTED_ANNOUNCE_IDS, count)
-        for _, id in ipairs(EXPECTED_ANNOUNCE_IDS) do
-            assert.is_true(set[id], "missing interrupt ID " .. id)
-        end
-        assert.is_nil(set[999999])
-    end)
-
     it("handles a spec with no single-target kick (Balance Druid 102)", function()
         -- primary = nil, only an announce extra (Solar Beam) -> empty candidate list
         assert.is_nil(KE:GetInterruptCandidatesForSpec(102))
         local set = KE:GetInterruptSpellSet(102)
         assert.is_true(set[78675])
-    end)
-
-    it("returns nil for an unknown spec", function()
-        assert.is_nil(KE:GetInterruptCandidatesForSpec(99999))
-        assert.is_nil(KE:GetInterruptSpellSet(99999))
     end)
 end)

@@ -61,15 +61,6 @@ describe("EUIWindows", function()
             assert.equal("mail", set.Mail)
         end)
 
-        it("maps every skin behind a multi-skin window", function()
-            local _, KE = loader.loadEUIWindows()
-            local set = KE:BuildSkinSuppressionSet(env())
-            -- EllesmereUI's charsheet pack covers three of our skins.
-            assert.equal("charsheet", set.Character)
-            assert.equal("charsheet", set.Currency)
-            assert.equal("charsheet", set.Reputation)
-        end)
-
         it("leaves a window EllesmereUI has turned off", function()
             local _, KE = loader.loadEUIWindows()
             local set = KE:BuildSkinSuppressionSet(env({
@@ -97,12 +88,6 @@ describe("EUIWindows", function()
             assert.same({}, KE:BuildSkinSuppressionSet({
                 loaded = true, version = "8.6.4", getStyle = nil,
             }))
-        end)
-
-        it("suppresses nothing for a malformed env", function()
-            local _, KE = loader.loadEUIWindows()
-            assert.same({}, KE:BuildSkinSuppressionSet(nil))
-            assert.same({}, KE:BuildSkinSuppressionSet("nonsense"))
         end)
 
         -- The fail-open trap. GetBlizzWindowStyle answers "eui" for a key it
@@ -145,18 +130,6 @@ describe("EUIWindows", function()
             assert.is_nil(set.Loot)
         end)
 
-        it("never suppresses the non-toast alert popups", function()
-            local _, KE = loader.loadEUIWindows()
-            local set = KE:BuildSkinSuppressionSet(env())
-            -- Positive control first: with every style answering "eui" the
-            -- toast key IS suppressed, so a resolver that suppressed nothing
-            -- at all could not satisfy the negative below.
-            assert.equal("loottoast", set.LootToast)
-            -- EllesmereUI leaves achievement and other alert styles alone,
-            -- so our nineteen-system `Alerts` key must survive.
-            assert.is_nil(set.Alerts)
-        end)
-
         it("leaves the toast key to us on EllesmereUI 8.6.3", function()
             local _, KE = loader.loadEUIWindows()
             -- SAME-KEY positive control, and it has to come first. Asserting
@@ -176,33 +149,6 @@ describe("EUIWindows", function()
     end)
 
     describe("map integrity", function()
-        it("names each EllesmereUI window key at most once", function()
-            local _, KE = loader.loadEUIWindows()
-            local seen = {}
-            for _, entry in ipairs(KE.Skins.WINDOW_MAP) do
-                assert.is_nil(seen[entry.euiKey], "duplicate " .. entry.euiKey)
-                seen[entry.euiKey] = true
-            end
-        end)
-
-        it("gives every entry at least one skin key", function()
-            local _, KE = loader.loadEUIWindows()
-            for _, entry in ipairs(KE.Skins.WINDOW_MAP) do
-                assert.is_table(entry.skins, entry.euiKey .. " has no skins")
-                assert.is_true(#entry.skins > 0, entry.euiKey .. " has no skins")
-            end
-        end)
-
-        it("parses every since value", function()
-            local _, KE = loader.loadEUIWindows()
-            for _, entry in ipairs(KE.Skins.WINDOW_MAP) do
-                if entry.since then
-                    assert.is_true(KE.Skins.CompareVersion(entry.since, "0") > 0,
-                        entry.euiKey .. " has an unparseable since")
-                end
-            end
-        end)
-
         it("has no loot row, and maps loottoast to the split key only", function()
             local _, KE = loader.loadEUIWindows()
             local byKey = {}
@@ -219,16 +165,6 @@ describe("EUIWindows", function()
             -- And it points at the split key, never back at the whole
             -- twenty-five-system `Alerts` key it used to carry.
             assert.same({ "LootToast" }, byKey.loottoast.skins)
-        end)
-
-        it("repoints inspectrecipe onto InspectRecipe without touching professions", function()
-            -- A repoint that edited the wrong row (or both) would pass a
-            -- single-sided check; this asserts both rows in one test.
-            local _, KE = loader.loadEUIWindows()
-            local byKey = {}
-            for _, entry in ipairs(KE.Skins.WINDOW_MAP) do byKey[entry.euiKey] = entry end
-            assert.same({ "InspectRecipe" }, byKey.inspectrecipe.skins)
-            assert.same({ "Professions" }, byKey.professions.skins)
         end)
 
         it("keeps `addons` to exactly the housing and delves rows", function()

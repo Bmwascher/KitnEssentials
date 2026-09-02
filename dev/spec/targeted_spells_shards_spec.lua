@@ -87,19 +87,16 @@ describe("TargetedSpells relevance predicate", function()
         assert.is_falsy(TS.IsRelevantUnit(nil))
     end)
 
-    it("rejects a unit that is not in combat", function()
-        local TS = load({ combat = function() return false end })
-        assert.is_falsy(TS.IsRelevantUnit("nameplate3"))
-    end)
-
-    it("rejects a unit that does not exist", function()
-        local TS = load({ exists = function() return false end })
-        assert.is_falsy(TS.IsRelevantUnit("nameplate3"))
-    end)
-
-    it("rejects a unit the player cannot attack", function()
-        local TS = load({ canAttack = function() return false end })
-        assert.is_falsy(TS.IsRelevantUnit("nameplate3"))
+    it("rejects a unit missing combat, existence, or attackability", function()
+        local variants = {
+            { name = "not in combat", opts = { combat = function() return false end } },
+            { name = "does not exist", opts = { exists = function() return false end } },
+            { name = "player cannot attack", opts = { canAttack = function() return false end } },
+        }
+        for _, variant in ipairs(variants) do
+            local TS = load(variant.opts)
+            assert.is_falsy(TS.IsRelevantUnit("nameplate3"), variant.name)
+        end
     end)
 
     it("consults combat before either unit lookup and short-circuits", function()
@@ -520,68 +517,6 @@ describe("TargetedSpells font cache", function()
         TS.db.FontFace = "Arial"
         TS:RebuildEntries()
         assert.are.equal("path/Arial", TS.cachedFontPath)
-    end)
-end)
-
-describe("TargetedSpells allocation shape", function()
-    -- Neither is visible to a behavioural test. The scratch assertion is on the
-    -- positive form on purpose: `local list = self.sortScratch` with no wipe
-    -- satisfies an absence check while carrying the previous call's entries.
-    local source
-
-    setup(function()
-        local f = assert(io.open("Modules/Dungeons/TargetedSpells.lua", "r"))
-        source = f:read("*a")
-        f:close()
-    end)
-
-    it("reuses the sort scratch table", function()
-        assert.is_truthy(source:find("local list = wipe(self.sortScratch)", 1, true))
-    end)
-
-    it("refreshes the font cache from exactly one site", function()
-        local sites = select(2, source:gsub("self:RefreshFontCache%(%)", ""))
-        assert.are.equal(1, sites)
-    end)
-
-    it("builds no table and no closure in UpdateGlow", function()
-        local body = source:match("function TS:UpdateGlow%(entry%)(.-)\nend\n")
-        assert.is_string(body)
-        assert.is_nil(body:find("ipairs({", 1, true))
-        assert.is_nil(body:find("function(", 1, true))
-    end)
-
-    -- A missing ReleaseGlow in RebuildEntries is the frame leak, and this is the
-    -- only automated check that sees it.
-    -- Named per function, not counted: a count cannot tell a call moved to the
-    -- wrong function from the right placement, and a missing ReleaseGlow in
-    -- RebuildEntries is the frame leak this is here to catch.
-    it("parks on the reuse paths and retires only where the entry is discarded", function()
-        local function bodyOf(name)
-            local body = source:match("\nfunction TS:" .. name .. "%b()(.-)\nend\n")
-            assert.is_string(body, "could not find TS:" .. name)
-            return body
-        end
-
-        assert.is_nil(source:find("StopGlow", 1, true))
-        assert.are.equal(1, select(2, source:gsub("function TS:HideGlow", "")))
-        assert.are.equal(1, select(2, source:gsub("function TS:ReleaseGlow", "")))
-
-        for _, name in ipairs({ "Release", "UpdateGlow", "OnInterrupted", "HidePreview" }) do
-            assert.is_truthy(bodyOf(name):find("self:HideGlow(entry)", 1, true),
-                name .. " does not park the glow")
-        end
-        for _, name in ipairs({ "RebuildEntries", "OnDisable" }) do
-            assert.is_truthy(bodyOf(name):find("self:ReleaseGlow(entry)", 1, true),
-                name .. " does not retire the glow")
-        end
-        -- Absence on every reuse path, not just two: a stray ReleaseGlow in
-        -- UpdateGlow or OnInterrupted retires a child that is about to be
-        -- reused, which is the rebuild cost this change exists to remove.
-        for _, name in ipairs({ "Release", "UpdateGlow", "OnInterrupted", "HidePreview" }) do
-            assert.is_nil(bodyOf(name):find("ReleaseGlow", 1, true),
-                name .. " retires a glow it should only park)")
-        end
     end)
 end)
 

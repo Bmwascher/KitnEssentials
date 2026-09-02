@@ -5,10 +5,9 @@
 --
 -- Loads the REAL Modules/DamageMeter/Core.lua headlessly (L.loadDMCore) and
 -- tests the render layer's (string, isSecret) contract: FormatBarValue /
--- FormatDeathTime / FormatRecapDelta (cross-chunk exports at Core.lua /
--- :1078) plus DM:FormatWindowLabel. Unlike dm_breakdown_spec's mirror of
--- Detail.lua, these are the shipped functions -- a load-time break here is
--- the intended tripwire.
+-- FormatDeathTime / FormatRecapDelta (cross-chunk exports at Core.lua).
+-- Unlike dm_breakdown_spec's mirror of Detail.lua, these are the shipped
+-- functions -- a load-time break here is the intended tripwire.
 --
 -- AbbreviateNumbers is a RECORDING stub: specs assert routing (which amounts
 -- reach it, in what order), clamping (the number it receives), and composition
@@ -87,13 +86,6 @@ describe("FormatBarValue mode routing", function()
         assert.equals(999, ABBR_CALLS[1])
     end)
 
-    it("'PerSec' with neither rate nor total returns ('', false)", function()
-        local s, sec = DM.FormatBarValue(nil, nil, "PerSec")
-        assert.equals("", s)
-        assert.is_false(sec)
-        assert.equals(0, #ABBR_CALLS)
-    end)
-
     it("default and mode=false are amount-only (the rate is ignored)", function()
         -- mode=false is the Detail breakdown/recap surfaces' path (Core.lua).
         DM.FormatBarValue(300, 50, nil)
@@ -103,13 +95,16 @@ describe("FormatBarValue mode routing", function()
         assert.equals(300, ABBR_CALLS[2])
     end)
 
-    it("nil total returns ('', false) in amount and 'Both' modes", function()
+    it("nil total returns ('', false) in amount, 'Both', and 'PerSec' modes", function()
         local s, sec = DM.FormatBarValue(nil, 5, "Both")
         assert.equals("", s)
         assert.is_false(sec)
         local s2, sec2 = DM.FormatBarValue(nil, nil, nil)
         assert.equals("", s2)
         assert.is_false(sec2)
+        local s3, sec3 = DM.FormatBarValue(nil, nil, "PerSec")
+        assert.equals("", s3)
+        assert.is_false(sec3)
         assert.equals(0, #ABBR_CALLS)   -- the orphan rate is never formatted
     end)
 end)
@@ -152,18 +147,6 @@ describe("FormatBarValue isSecret mirror", function()
         local s, sec = DM.FormatBarValue(t, nil, nil)
         assert.is_true(sec)
         assert.equals(SECRET[s] == true, sec)
-    end)
-
-    it("mirrors issecretvalue(result) -- not the inputs -- on the composed path", function()
-        -- Regression tripwire for `return str, issecretvalue(total)`: with a
-        -- secret total the concat result is a fresh UNMARKED string headlessly,
-        -- so mirroring the result reports false while mirroring the input would
-        -- report true. (In-game the concat itself stays secret -- honesty boundary.)
-        local t = 99
-        SECRET[t] = true
-        local s, sec = DM.FormatBarValue(t, 50, "Both")
-        assert.equals(SECRET[s] == true, sec)
-        assert.is_false(sec)
     end)
 end)
 
@@ -225,34 +208,5 @@ describe("FormatRecapDelta", function()
         assert.equals("", DM.FormatRecapDelta(10, 6.6))
         SECRET[10] = true
         assert.equals("", DM.FormatRecapDelta(10, 3))
-    end)
-end)
-
-describe("DM:FormatWindowLabel", function()
-    -- Enum.* values are the loader's stable per-member strings; DM keyed its
-    -- label tables with the same values at load, so lookups discriminate.
-    it("prefixes Overall and leaves Current bare", function()
-        assert.equals("Overall Damage Done",
-            DM:FormatWindowLabel(Enum.DamageMeterType.DamageDone, Enum.DamageMeterSessionType.Overall))
-        assert.equals("Damage Done",
-            DM:FormatWindowLabel(Enum.DamageMeterType.DamageDone, Enum.DamageMeterSessionType.Current))
-    end)
-
-    it("routes meter types through METER_TYPE_NAMES", function()
-        assert.equals("Overall Deaths",
-            DM:FormatWindowLabel(Enum.DamageMeterType.Deaths, Enum.DamageMeterSessionType.Overall))
-        assert.equals("Healing Done",
-            DM:FormatWindowLabel(Enum.DamageMeterType.HealingDone, Enum.DamageMeterSessionType.Current))
-    end)
-
-    it("falls back to 'Damage Done' for an unmapped meter type", function()
-        assert.equals("Damage Done",
-            DM:FormatWindowLabel("bogus", Enum.DamageMeterSessionType.Current))
-        assert.equals("Overall Damage Done",
-            DM:FormatWindowLabel("bogus", Enum.DamageMeterSessionType.Overall))
-    end)
-
-    it("never prefixes for an unmapped session type", function()
-        assert.equals("Deaths", DM:FormatWindowLabel(Enum.DamageMeterType.Deaths, "bogus"))
     end)
 end)

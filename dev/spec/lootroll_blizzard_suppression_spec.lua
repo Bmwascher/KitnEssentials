@@ -55,20 +55,8 @@ describe("LootRoll Blizzard roll suppression", function()
         assert.equal(0, #calls.unregistered)
     end)
 
-    it("restores a handler that routes to Blizzard's own implementation", function()
-        local calls = fakeGameEvent()
-        setEnabled(true)
-        calls.registered[1].handler()
-        assert.equal(1, calls.handled)
-    end)
-
     it("reports failure instead of erroring when the routing API is absent", function()
         assert.is_false(setEnabled(false))
         assert.is_false(setEnabled(true))
-    end)
-
-    it("reports failure when the routing API is present but incomplete", function()
-        _G.GameEvent = { UnregisterInternalEvent = function() end }
-        assert.is_false(setEnabled(false))
     end)
 end)

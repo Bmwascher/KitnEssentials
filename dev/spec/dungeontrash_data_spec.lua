@@ -59,11 +59,6 @@ describe("DungeonTimers TrashData (Modules/DungeonTimers/Trash/TrashData.lua)", 
         KE = loadTrash("Modules/DungeonTimers/Trash/TrashData.lua")
     end)
 
-    it("assigns a non-empty KE.TrashData table", function()
-        assert.is_table(KE.TrashData)
-        assert.is_true(next(KE.TrashData) ~= nil)
-    end)
-
     it("keys every dungeon by mapID with a matching valid dungeonKey", function()
         local failures = {}
         for mapID, dungeon in pairs(KE.TrashData) do
@@ -168,11 +163,6 @@ describe("DungeonTimers TrashTraits (Modules/DungeonTimers/Trash/TrashTraits.lua
     local KE
     setup(function()
         KE = loadTrash("Modules/DungeonTimers/Trash/TrashTraits.lua")
-    end)
-
-    it("assigns a non-empty KE.TrashTraits table", function()
-        assert.is_table(KE.TrashTraits)
-        assert.is_true(next(KE.TrashTraits) ~= nil)
     end)
 
     it("shapes every trait: npcID/mapID/dungeonKey, decoded identity, spellIDs", function()

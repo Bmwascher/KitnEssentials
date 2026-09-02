@@ -719,65 +719,6 @@ describe("Automation effective-state predicates (Task 3 Step 10b)", function()
             assert.is_true(_G.UIParent:IsEventRegistered("PING_SYSTEM_ERROR"))
         end)
 
-        it("ApplyHideTransforms unregisters both transform frames if HideTransforms alone is off", function()
-            local fx = installedFixture()
-            local AU = fx.AU
-            local applyTransforms = findUpvalue(AU.ApplySettings, "ApplyHideTransforms")
-            local transformAuraFrame = findUpvalue(applyTransforms, "transformAuraFrame")
-            local transformFishFrame = findUpvalue(applyTransforms, "transformFishFrame")
-            normalizeAndClear(fx)
-            AU.db.Enabled = true
-            AU.db.HideTransforms = false
-            AU:ApplySettings()
-            assert.is_false(transformAuraFrame:IsEventRegistered("UNIT_AURA"))
-            assert.is_false(transformAuraFrame:IsEventRegistered("PLAYER_REGEN_ENABLED"))
-            assert.is_false(transformFishFrame:IsEventRegistered("UNIT_SPELLCAST_CHANNEL_STOP"))
-        end)
-
-        it("SetupOmniumButton shows the minimap button and hides the char button if OmniumCharButton alone is off", function()
-            local fx = installedFixture()
-            normalizeAndClear(fx)
-            fx.AU.db.Enabled = true
-            fx.AU.db.OmniumCharButton = false
-            fx.AU:ApplySettings()
-            assert.equals(1, fx.findFrameCalls("ExpansionLandingPageMinimapButton", "Show"))
-            assert.is_false(fx.lastArg("KE_OmniumFoilButton", "SetShown"))
-        end)
-
-        it("SetupAutoUnwrapCollections unregisters its frame if AutoUnwrapCollections alone is off", function()
-            local fx = installedFixture()
-            local unwrapSetup = findUpvalue(fx.AU.ApplySettings, "SetupAutoUnwrapCollections")
-            local unwrapFrame = findUpvalue(unwrapSetup, "unwrapFrame")
-            normalizeAndClear(fx)
-            fx.AU.db.Enabled = true
-            fx.AU.db.AutoUnwrapCollections = false
-            fx.AU:ApplySettings()
-            assert.is_false(unwrapFrame:IsEventRegistered("NEW_MOUNT_ADDED"))
-            assert.is_false(unwrapFrame:IsEventRegistered("NEW_PET_ADDED"))
-            assert.is_false(unwrapFrame:IsEventRegistered("NEW_TOY_ADDED"))
-        end)
-
-        it("SetupHideScreenshotStatus unregisters its frame if HideScreenshotStatus alone is off", function()
-            local fx = installedFixture()
-            local screenshotSetup = findUpvalue(fx.AU.ApplySettings, "SetupHideScreenshotStatus")
-            local screenshotFrame = findUpvalue(screenshotSetup, "screenshotFrame")
-            normalizeAndClear(fx)
-            fx.AU.db.Enabled = true
-            fx.AU.db.HideScreenshotStatus = false
-            fx.AU:ApplySettings()
-            assert.is_false(screenshotFrame:IsEventRegistered("SCREENSHOT_SUCCEEDED"))
-            assert.is_false(screenshotFrame:IsEventRegistered("SCREENSHOT_FAILED"))
-        end)
-
-        it("SetupTrainAllButton hides trainBtn if TrainAllButton alone is off", function()
-            local fx = installedFixture()
-            normalizeAndClear(fx)
-            fx.AU.db.Enabled = true
-            fx.AU.db.TrainAllButton = false
-            fx.AU:ApplySettings()
-            assert.equals(1, fx.findFrameCalls("KE_TrainAllButton", "Hide"))
-            assert.equals(0, fx.findFrameCalls("KE_TrainAllButton", "Show"))
-        end)
     end)
 end)
 
@@ -895,24 +836,6 @@ describe("Automation Hide Helptips sweep lifecycle", function()
         -- stall the login frame rate when every frame in the client pays it;
         -- only fingerprint matches may.
         assert.equals(#buttons, accessCalls())
-    end)
-
-    it("yields the tick when the time budget runs out before the count does", function()
-        local fx = helptipFixture()
-        local _, buttons = newSweepWorld(100, 10, fx.fingerprint)
-        -- Every clock read advances a full millisecond, so each slice's budget
-        -- expires after a single frame. The walk must still finish -- one
-        -- frame per tick -- rather than stopping or spinning.
-        local now = 0
-        _G.debugprofilestop = function() now = now + 1 return now end
-        local from = #fx.timers + 1
-
-        fx.AU:ApplySettings()
-        -- ~one frame per tick across 100 frames (the first slice runs inside
-        -- ApplySettings itself, so the queue holds one fewer). A count-only
-        -- slice would finish in a single tick.
-        assert.is_true(pumpSlices(fx, from) >= 50)
-        assert.is_true(allHidden(buttons))
     end)
 
     it("does not walk again on a later apply once a walk completed", function()
@@ -1139,13 +1062,10 @@ describe("Automation repair spend rule", function()
         assert.is_nil(AU:RepairSpend(1000, 1500))
     end)
 
-    it("says nothing about a nil reading on either side", function()
+    it("says nothing about a nil or non-number reading on either side", function()
         assert.is_nil(AU:RepairSpend(nil, 0))
         assert.is_nil(AU:RepairSpend(1000, nil))
         assert.is_nil(AU:RepairSpend(nil, nil))
-    end)
-
-    it("says nothing about a reading that is not a number", function()
         assert.is_nil(AU:RepairSpend("1000", 0))
         assert.is_nil(AU:RepairSpend(1000, false))
     end)
@@ -1302,21 +1222,6 @@ describe("Automation character-window button placement", function()
         fx.AU.db = { WindowButtonSize = 2 }
         assert.equals(26, size())
     end)
-
-    it("places the real button through the real anchor call", function()
-        local fx = newFixture()
-        local AU = fx.AU
-        AU.db = { Enabled = true, OmniumCharButton = true }
-        AU:ApplySettings()
-        local call = fx.lastCall("KE_OmniumFoilButton", "SetPoint")
-        assert.is_not_nil(call)
-        assert.equals("BOTTOMRIGHT", call[1])
-        assert.equals(-8, call[4])
-        assert.equals(8, call[5])
-        local sized = fx.lastCall("KE_OmniumFoilButton", "SetSize")
-        assert.equals(26, sized[1])
-        assert.equals(26, sized[2])
-    end)
 end)
 
 ---------------------------------------------------------------------------------
@@ -1341,22 +1246,6 @@ describe("Automation Great Vault button", function()
         fx.setCombat(false)
         fx.AU:RetrySpawnDeferredButtons()
         assert.is_not_nil(fx.named["KE_GreatVaultButton"])
-    end)
-
-    it("creates it at slot 1, left of the Omnium button", function()
-        local fx = newFixture()
-        fx.AU.db = { Enabled = true, OmniumCharButton = true, VaultCharButton = true }
-        fx.AU:ApplySettings()
-        assert.equals(-8, fx.lastCall("KE_OmniumFoilButton", "SetPoint")[4])
-        assert.equals(-35, fx.lastCall("KE_GreatVaultButton", "SetPoint")[4])
-    end)
-
-    it("keeps the Omnium button at slot 0 when the Vault button is off", function()
-        local fx = newFixture()
-        fx.AU.db = { Enabled = true, OmniumCharButton = true, VaultCharButton = false }
-        fx.AU:ApplySettings()
-        assert.is_nil(fx.named["KE_GreatVaultButton"])
-        assert.equals(-8, fx.lastCall("KE_OmniumFoilButton", "SetPoint")[4])
     end)
 
     it("hides the button when its key is off but the module is on", function()

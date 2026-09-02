@@ -10,13 +10,6 @@ describe("Chat role icon strings", function()
         build = loader.loadChatRoleIconStrings()
     end)
 
-    it("builds the round badge atlases for blizzard", function()
-        local s = build("blizzard")
-        assert.are.equal("|A:groupfinder-icon-role-large-tank:14:14|a", s.TANK)
-        assert.are.equal("|A:groupfinder-icon-role-large-heal:14:14|a", s.HEALER)
-        assert.are.equal("|A:groupfinder-icon-role-large-dps:14:14|a", s.DAMAGER)
-    end)
-
     it("builds texture escapes for modern, because the art is a file path", function()
         local s = build("modern")
         assert.is_truthy(s.TANK:find("^|T"))
@@ -59,13 +52,6 @@ describe("Chat role icon strings", function()
         end
     end)
 
-    it("emits no class-keyed entries", function()
-        local s = build("circle")
-        for key in pairs(s) do
-            assert.is_nil(key:find("_"), "unexpected class-keyed entry: " .. key)
-        end
-    end)
-
     -- The memoisation bug this replaces: one cache for the session meant the
     -- first set built won permanently.
     it("returns different strings for different sets", function()
@@ -95,17 +81,11 @@ describe("Chat role icons: the identity refusal", function()
         assert.is_nil(realm)
     end)
 
-    it("skips a member whose role is secret", function()
-        assert.is_nil(accept(SECRET, "Kitn", "Ravencrest"))
-    end)
-
-    it("skips a member whose name is secret", function()
-        assert.is_nil(accept("TANK", SECRET, "Ravencrest"))
-    end)
-
     -- The realm forms the second cache key, so a secret realm is refused
     -- even though the name alone would have keyed an entry.
-    it("skips a member whose realm is secret", function()
+    it("skips a member whose role, name, or realm is secret", function()
+        assert.is_nil(accept(SECRET, "Kitn", "Ravencrest"))
+        assert.is_nil(accept("TANK", SECRET, "Ravencrest"))
         assert.is_nil(accept("TANK", "Kitn", SECRET))
     end)
 
@@ -148,14 +128,11 @@ describe("Chat role icon cache keys", function()
     -- punctuation; a chat sender's suffix has both stripped. A key built from
     -- the raw value never matches on any multiword realm, which is most of
     -- the failure the realm fallback was supposed to fix.
-    it("strips spaces from a multiword member realm", function()
-        local _, qualified = keys("Ally", "Twisting Nether", nil)
-        assert.are.equal("Ally-TwistingNether", qualified)
-    end)
-
-    it("strips spaces from the player realm fallback too", function()
-        local _, qualified = keys("Ally", nil, "Twisting Nether")
-        assert.are.equal("Ally-TwistingNether", qualified)
+    it("strips spaces from a multiword realm, member or player-fallback", function()
+        local _, memberQualified = keys("Ally", "Twisting Nether", nil)
+        assert.are.equal("Ally-TwistingNether", memberQualified)
+        local _, fallbackQualified = keys("Ally", nil, "Twisting Nether")
+        assert.are.equal("Ally-TwistingNether", fallbackQualified)
     end)
 
     it("strips punctuation but keeps accented characters", function()

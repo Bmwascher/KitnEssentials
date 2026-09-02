@@ -30,6 +30,9 @@ secret values say so in comments; keep that distinction when adding specs.
 - **Tier 1 — pure data/logic** (e.g. `Core/Interrupts.lua`): load and assert directly, no mock.
 - **Tier 2 — logic around the WoW API** (e.g. `Core/Secret.lua`): drive via `dev/spec/_wow_mock.lua`; deterministically fire events through recorded frame handlers.
 - **Tier 3 — frame layout / visual / EditMode / GUI**: in-game only. Out of scope here.
+- **Lint specs** (`dev/spec/lint/`): schema and cross-table walks over curated
+  data. They run with the suite but pin data shape, not behaviour; a behaviour
+  spec never lives there and a data pin never lives outside it.
 
 ## Running
 

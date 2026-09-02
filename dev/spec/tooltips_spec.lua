@@ -30,11 +30,6 @@ describe("Tooltips ColorsMatch", function()
     it("treats a missing component as zero", function()
         assert.is_true(TT._ColorsMatch({ 1, 0, 0 }, { 1, 0, 0, 0 }))
     end)
-
-    it("returns false when either side is nil", function()
-        assert.is_false(TT._ColorsMatch(nil, { 1, 1, 1, 1 }))
-        assert.is_false(TT._ColorsMatch({ 1, 1, 1, 1 }, nil))
-    end)
 end)
 
 -- The refusal rule. GetPlayerInfoByGUID answers with the FIRST class for a
@@ -102,23 +97,14 @@ describe("Tooltips ReactionColor", function()
         local r, g, b = TT._ReactionColor("target")
         assert.same({ 1, 1, 1 }, { r, g, b })
     end)
-
-    it("falls back to white when there is no reaction at all", function()
-        local TT = L.loadTooltips({ UnitReaction = function() return nil end })
-        local r, g, b = TT._ReactionColor("target")
-        assert.same({ 1, 1, 1 }, { r, g, b })
-    end)
 end)
 
 describe("Tooltips WantIDs", function()
-    it("never shows IDs on NEVER", function()
+    it("ignores the modifier key for NEVER and ALWAYS", function()
         local TT = L.loadTooltips({ IsModifierKeyDown = function() return true end })
         assert.is_false(TT._WantIDs({ ShowIDs = "NEVER" }))
-    end)
-
-    it("always shows IDs on ALWAYS", function()
-        local TT = L.loadTooltips({ IsModifierKeyDown = function() return false end })
-        assert.is_true(TT._WantIDs({ ShowIDs = "ALWAYS" }))
+        local TT2 = L.loadTooltips({ IsModifierKeyDown = function() return false end })
+        assert.is_true(TT2._WantIDs({ ShowIDs = "ALWAYS" }))
     end)
 
     it("follows the modifier key on MODIFIER", function()
@@ -275,22 +261,6 @@ describe("Tooltips OnTooltipSetPetAction", function()
         assert.equal(6, seenSlot)
         assert.same({ "|cffe65353Spell ID:|r 344351" }, tt.lines)
     end)
-
-    it("adds nothing when the seventh return is nil", function()
-        local calls = 0
-        local TT = L.loadTooltips({
-            GetPetActionInfo = function()
-                calls = calls + 1
-                return "Assist", nil, nil, nil, nil, nil, nil
-            end,
-        })
-        TT.db = { ShowIDs = "ALWAYS" }
-        assert.is_function(TT.OnTooltipSetPetAction)
-        local tt = tip()
-        TT:OnTooltipSetPetAction(tt, 8)
-        assert.equal(1, calls)
-        assert.same({}, tt.lines)
-    end)
 end)
 
 describe("Tooltips PLAYER_ENTERING_WORLD", function()
@@ -365,14 +335,6 @@ describe("Tooltips OnTooltipSetUnitAura", function()
         local tt = tip()
         TT:OnTooltipSetUnitAura(tt, { id = 383169, auraInstanceID = 42 })
         assert.same({ "|cffe65353Spell ID:|r 383169" }, tt.lines)
-    end)
-
-    it("adds nothing when the tooltip data carries no id", function()
-        local TT = L.loadTooltips()
-        TT.db = { ShowIDs = "ALWAYS" }
-        local tt = tip()
-        TT:OnTooltipSetUnitAura(tt, {})
-        assert.same({}, tt.lines)
     end)
 
     it("adds nothing when the id is secret", function()

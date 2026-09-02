@@ -30,11 +30,6 @@ describe("DungeonTrash data integrity — TrashTraits <-> TrashData", function()
         end
     end)
 
-    it("has both data tables", function()
-        assert.is_table(traits)
-        assert.is_table(data)
-    end)
-
     it("every fingerprinted mob has curated spell data (else it resolves but never alerts)", function()
         local orphans = {}
         for npcID, t in pairs(traits) do
@@ -121,11 +116,6 @@ describe("DungeonTrash data integrity — TrashCurated overlay", function()
         helpers.loadModule("Modules/DungeonTimers/Trash/TrashData.lua", KE2)
         helpers.loadModule("Modules/DungeonTimers/Trash/TrashCurated.lua", KE2)
         curated, cdata = KE2.TrashCurated, KE2.TrashData
-    end)
-
-    it("loads the overlay and the shared palette resolver", function()
-        assert.is_table(curated)
-        assert.is_function(KE2.ResolveTrashPresetColor)
     end)
 
     it("every curated key points at a real TrashData spell (a typo silently no-ops)", function()

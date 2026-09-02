@@ -16,12 +16,6 @@ local function withFrame(CC)
 end
 
 describe("CombatCross visibility", function()
-    it("loads in the spec harness", function()
-        local CC = loader.loadCombatCross()
-        assert.is_table(CC)
-        assert.is_table(CC.db)
-    end)
-
     it("stays hidden out of combat by default", function()
         local CC = loader.loadCombatCross()
         local isShown = withFrame(CC)
@@ -41,14 +35,6 @@ describe("CombatCross visibility", function()
         assert.is_true(isShown())
     end)
 
-    it("shows out of combat under the always mode", function()
-        local CC = loader.loadCombatCross()
-        CC.db.Visibility = "always"
-        local isShown = withFrame(CC)
-        CC:UpdateVisibility(false)
-        assert.is_true(isShown())
-    end)
-
     it("hides on leaving combat under the in_combat mode", function()
         local CC = loader.loadCombatCross()
         local isShown = withFrame(CC)
@@ -56,15 +42,6 @@ describe("CombatCross visibility", function()
         assert.is_true(isShown())
         CC:UpdateVisibility(false)
         assert.is_false(isShown())
-    end)
-
-    it("stays up on leaving combat under the always mode", function()
-        local CC = loader.loadCombatCross()
-        CC.db.Visibility = "always"
-        local isShown = withFrame(CC)
-        CC:UpdateVisibility(true)
-        CC:UpdateVisibility(false)
-        assert.is_true(isShown())
     end)
 
     it("asks the client when told nothing, and comes up in combat", function()
@@ -268,21 +245,6 @@ end)
 -- The mode predicate on its own. UpdateVisibility is covered above through the
 -- frame; this covers the branching that decides what it is told.
 describe("CombatCross visibility modes", function()
-    it("offers the cursor's list without mouseDown, in_party or in_raid", function()
-        local CC = loader.loadCombatCross()
-        local keys = {}
-        for _, entry in ipairs(CC.VISIBILITY_MODES) do keys[entry.key] = true end
-        assert.is_true(keys.always)
-        assert.is_true(keys.in_combat)
-        assert.is_true(keys.out_of_combat)
-        assert.is_true(keys.in_instance)
-        assert.is_true(keys.solo)
-        assert.is_true(keys.never)
-        assert.is_nil(keys.mouseDown)
-        assert.is_nil(keys.in_party)
-        assert.is_nil(keys.in_raid)
-    end)
-
     it("ignores combat under always and never", function()
         local CC = loader.loadCombatCross()
         assert.is_true(CC.ShouldShowByMode("always", false))

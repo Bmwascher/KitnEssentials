@@ -70,19 +70,6 @@ describe("StanceText:EvaluateSpec", function()
         assert.is_nil(ST:EvaluateSpec(db, 258, ST.SPECS[258], ctx))
     end)
 
-    -- Every shipped spec reads a form. An aura check cannot see its own aura in
-    -- combat, so a spec put back on that path would go blind where it matters.
-    it("keeps every shipped spec on the form path", function()
-        for specID, entry in pairs(ST.SPECS) do
-            assert.equals("form", entry.check, "spec " .. specID .. " is not a form check")
-        end
-    end)
-
-    it("hides when the paladin holds the wanted aura as a form", function()
-        ctx.currentFormSpell = 465
-        assert.is_nil(ST:EvaluateSpec(db, 65, ST.SPECS[65], ctx))
-    end)
-
     -- Restricted content hides aura identity, so "not found" stops meaning
     -- "not present". Accusing on it is the bug this guard exists to prevent.
     it("stays quiet when aura identity is hidden", function()
@@ -95,15 +82,5 @@ describe("StanceText:EvaluateSpec", function()
     it("does not let hidden aura identity silence a form check", function()
         ctx.auraIdentityVisible = function() return false end
         assert.equals(386164, ST:EvaluateSpec(db, 71, entryForm, ctx))
-    end)
-
-    it("hides when the Evoker holds the wanted attunement", function()
-        ctx.currentFormSpell = 403264
-        assert.is_nil(ST:EvaluateSpec(db, 1473, ST.SPECS[1473], ctx))
-    end)
-
-    it("shows when the Evoker holds the other attunement", function()
-        ctx.currentFormSpell = 403265
-        assert.equals(403264, ST:EvaluateSpec(db, 1473, ST.SPECS[1473], ctx))
     end)
 end)

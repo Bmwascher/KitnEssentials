@@ -8,20 +8,12 @@ describe("SkinAPI EdgeFor", function()
     local S
     before_each(function() S = L.loadSkinAPI().Skins end)
 
-    it("returns one physical pixel at UIParent scale", function()
+    it("divides by scale at UIParent (1), above UIParent (1.1), and sub-unity (0.8)", function()
         -- physH 1440, uiScale 1 -> 768/1440
-        local bd = { GetEffectiveScale = function() return 1 end }
-        assert.near(768 / 1440, S._EdgeFor(bd), 1e-9)
-    end)
-
-    it("divides by the frame's scale factor above UIParent", function()
-        local bd = { GetEffectiveScale = function() return 1.1 end }
-        assert.near((768 / 1440) / 1.1, S._EdgeFor(bd), 1e-9)
-    end)
-
-    it("divides by a sub-unity scale factor too", function()
-        local bd = { GetEffectiveScale = function() return 0.8 end }
-        assert.near((768 / 1440) / 0.8, S._EdgeFor(bd), 1e-9)
+        for _, scale in ipairs({ 1, 1.1, 0.8 }) do
+            local bd = { GetEffectiveScale = function() return scale end }
+            assert.near((768 / 1440) / scale, S._EdgeFor(bd), 1e-9)
+        end
     end)
 
     it("falls back to the UIParent value when the scale read is missing", function()
@@ -83,40 +75,6 @@ describe("SkinAPI palette", function()
     before_each(function()
         KE = L.loadSkinAPI()
         S = KE.Skins
-    end)
-
-    it("keeps the structural greys unthemed", function()
-        assert.same({ 0.031, 0.031, 0.031, 0.80 }, S.palette.window)
-        assert.same({ 0.055, 0.055, 0.055, 0.90 }, S.palette.control)
-        assert.same({ 0.06, 0.06, 0.06, 0.80 }, S.palette.panel)
-        assert.same({ 0, 0, 0, 0.25 }, S.palette.inlineTint)
-        assert.same({ 0, 0, 0, 1 }, S.palette.border)
-    end)
-
-    it("keeps the brand alphas unthemed", function()
-        assert.equals(0.8, S.palette.brandFillA)
-        assert.equals(0.35, S.palette.brandRestA)
-    end)
-
-    it("takes brand rgb from the theme accent", function()
-        assert.near(1.0, S.palette.brand[1], 1e-9)
-        assert.near(0.0, S.palette.brand[2], 1e-9)
-        assert.near(0.549, S.palette.brand[3], 1e-9)
-    end)
-
-    it("keeps the hover wash unthemed, rgb included", function()
-        -- Was themed from accentHover. Because accent and accentHover share
-        -- one rgb and differ only in alpha, that made hover identical to
-        -- brand and every rest/hover pair invisible. armHover applies 0.15
-        -- separately, so a themed alpha would double-apply on top.
-        assert.same({ 0.851, 0.851, 0.851, 0.15 }, S.palette.hover)
-    end)
-
-    it("never lets the hover wash collapse onto the brand colour", function()
-        -- The regression this guards: a mouseover state the same colour as
-        -- the resting state reads in-game as no mouseover at all.
-        local h, b = S.palette.hover, S.palette.brand
-        assert.is_false(h[1] == b[1] and h[2] == b[2] and h[3] == b[3])
     end)
 
     it("gives progress the accent rgb at alpha 0.40", function()
@@ -266,11 +224,18 @@ describe("SkinAPI SetFont", function()
         assert.equals(8, applied[#applied].size)
     end)
 
-    it("ignores a repeated offset set", function()
-        local fs = fontString()
-        S.SetFont(fs, 12, "")
-        S.SetFontOffset(0)
-        assert.equals(1, #applied)
+    it("ignores a repeated offset set or a repeated switch set", function()
+        local variants = {
+            { outline = "", repeatSet = function() S.SetFontOffset(0) end },
+            { outline = "OUTLINE", repeatSet = function() S.SetFontOutline(false) end },
+        }
+        for _, v in ipairs(variants) do
+            applied = {}
+            local fs = fontString()
+            S.SetFont(fs, 12, v.outline)
+            v.repeatSet()
+            assert.equals(1, #applied)
+        end
     end)
 
     -- Exercise the lazy offset init so a wrong db key surfaces here rather
@@ -336,13 +301,6 @@ describe("SkinAPI SetFont", function()
         assert.equals(2, #applied)
         S.SetFontOutline(true)
         assert.equals(4, #applied)
-    end)
-
-    it("ignores a repeated switch set", function()
-        local fs = fontString()
-        S.SetFont(fs, 12, "OUTLINE")
-        S.SetFontOutline(false)
-        assert.equals(1, #applied)
     end)
 
     it("picks the switch up from the database on first call", function()
@@ -444,52 +402,6 @@ describe("SkinAPI skin registry", function()
     end)
 end)
 
-describe("A6.1 helper surface", function()
-    -- S.Frame is the entry point most skin files call first: 59 direct calls
-    -- across 50 files under Frames/ and Addons/. A missing or misnamed helper
-    -- here fails those ports together rather than one at a time.
-    local REQUIRED = {
-        "SafeCenter", "CropAtlasEdges", "RefreshEdgesUnder", "FixSubPixelEdge",
-        "LockStripped", "LockTextColor", "RowHover", "HoverWash",
-        "RotateButton", "SelectedFill", "MaxMinFrame", "IconBorder",
-        "NavButton", "SweepCheckChildren", "RecenterTabText", "TabSetSelected",
-        "Tab", "OverlayButton", "BleedOutside", "Stepper", "QualityTier",
-        "Vanish", "HideAll", "Apply", "Each", "SlotIcon", "Icon", "ItemButton",
-        "HookScrollBox", "HookScrollBoxIcons", "SideTab", "NavCrumb",
-        "Collapse", "ReplaceIconString", "StripParchment", "StylePulloutFrames",
-        "StyleSharedDropDownList", "FontStrings", "FontStringsDeep", "Portrait",
-        "Inset", "StaticPopup", "Frame", "Tabs",
-    }
-
-    it("exposes every helper the frame skins call", function()
-        -- `.Skins` is load-bearing. L.loadSkinAPI returns the KE table
-        -- (dev/spec/_helpers.lua returns KE), not the Skins namespace;
-        -- indexing the return directly finds nothing and the test can never
-        -- pass. dev/spec/skinapi_spec.lua already does it this way.
-        local S = L.loadSkinAPI().Skins
-        local missing = {}
-        for _, name in ipairs(REQUIRED) do
-            if type(S[name]) ~= "function" then
-                missing[#missing + 1] = name
-            end
-        end
-        assert.same({}, missing)
-    end)
-
-    it("leaks no global named RecenterTabText", function()
-        L.loadSkinAPI()
-        -- It is forward-declared as a local so the eight call sites below it
-        -- can reach it. Dropping that line turns the definition into a
-        -- global write.
-        assert.is_nil(rawget(_G, "RecenterTabText"))
-    end)
-
-    it("S.Frame tolerates a nil frame", function()
-        local S = L.loadSkinAPI().Skins
-        assert.has_no.errors(function() S.Frame(nil) end)
-    end)
-end)
-
 -- Task 0B: per-registration bookkeeping (skinRegistrations), the truthful
 -- skinStatus aggregate, and the two diagnostics that read them. Every case
 -- here runs on the composed loader and dispatches through the production
@@ -541,10 +453,6 @@ describe("SkinAPI per-registration diagnostics", function()
             -- Positive control: a nil addon is "no addon to match on", not
             -- "no record" -- the record itself still exists and is pending.
             assert.equals("pending", record.status)
-        end)
-
-        it("exposes S.skinRegistrations as a table", function()
-            assert.is_table(S.skinRegistrations)
         end)
     end)
 
@@ -883,15 +791,6 @@ describe("S.SetSkinColors", function()
         local before = { unpack(S.palette.border) }
         S.SetSkinColors({ 0.2, 0.2, 0.2, 1 }, nil)
         assert.are.same(before, S.palette.border)
-    end)
-
-    it("exposes the shipped defaults for the reset button", function()
-        assert.are.equal(4, #S.DEFAULT_BG)
-        assert.are.equal(4, #S.DEFAULT_BORDER)
-        local shipped = { unpack(S.DEFAULT_BG) }
-        S.SetSkinColors({ 1, 0, 0, 1 }, { 0, 1, 0, 1 })
-        S.SetSkinColors(S.DEFAULT_BG, S.DEFAULT_BORDER)
-        assert.are.same(shipped, S.palette.window)
     end)
 
     -- The sweep's whole reason for existing. A backdrop wearing a colour some

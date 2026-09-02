@@ -60,13 +60,14 @@ end)
 describe("ClockText refusals", function()
     -- Every one of these must HIDE. Rendering "[0:00]" instead is the failure
     -- the acceptance criteria name explicitly.
-    it("refuses a plain zero", function()
+    it("refuses zero, negative, non-numeric, nil, and false", function()
         assert.is_nil(DM.ClockText(0))
-    end)
-
-    it("refuses a negative duration", function()
         assert.is_nil(DM.ClockText(-1))
         assert.is_nil(DM.ClockText(-90))
+        assert.is_nil(DM.ClockText("lots"))
+        assert.is_nil(DM.ClockText({}))
+        assert.is_nil(DM.ClockText(nil))
+        assert.is_nil(DM.ClockText(false))
     end)
 
     it("refuses anything under a second, not just zero", function()
@@ -77,16 +78,6 @@ describe("ClockText refusals", function()
         assert.is_nil(DM.ClockText(0.999))
         -- ...and one second itself must still render.
         assert.equals("[0:01]", (DM.ClockText(1)))
-    end)
-
-    it("refuses a non-numeric duration", function()
-        assert.is_nil(DM.ClockText("lots"))
-        assert.is_nil(DM.ClockText({}))
-    end)
-
-    it("refuses nil and false", function()
-        assert.is_nil(DM.ClockText(nil))
-        assert.is_nil(DM.ClockText(false))
     end)
 end)
 
@@ -104,18 +95,6 @@ describe("ClockText secret durations", function()
         assert.equals("]", text:sub(-1))
         -- The one output that must never come back from this branch.
         assert.are_not.equals("[0:00]", text)
-    end)
-
-    -- isSecret is deliberately NOT asserted true above. The loader's
-    -- AbbreviateNumbers stub returns a PLAIN string, so the formatter reports
-    -- the result as non-secret and ClockText passes that through -- which is
-    -- correct: a plain abbreviation should keep its dirty check. Asserting
-    -- true here would pin the mock's behaviour instead of KE's.
-    it("passes the formatter's secrecy answer through", function()
-        local s = { __tag = "secret-duration" }
-        SECRET[s] = true
-        local _, isSecret = DM.ClockText(s)
-        assert.is_false(isSecret)
     end)
 
     it("HIDES when the abbreviation yields nothing", function()

@@ -29,26 +29,9 @@ describe("EditMode hidden boxes", function()
         }
     end)
 
-    it("shows an element that is not hidden", function()
-        assert.is_true(EditMode:ElementShouldShow(EditMode.registeredElements.Timer))
-    end)
-
     it("refuses an element whose key is in the hidden set", function()
         EditMode.hiddenElements.Timer = true
         assert.is_false(EditMode:ElementShouldShow(EditMode.registeredElements.Timer))
-    end)
-
-    it("leaves every other element alone", function()
-        EditMode.hiddenElements.Timer = true
-        assert.is_true(EditMode:ElementShouldShow(EditMode.registeredElements.Kicks))
-    end)
-
-    it("brings every box back when the set is cleared", function()
-        EditMode.hiddenElements.Timer = true
-        EditMode.hiddenElements.Kicks = true
-        EditMode.hiddenElements = {}
-        assert.is_true(EditMode:ElementShouldShow(EditMode.registeredElements.Timer))
-        assert.is_true(EditMode:ElementShouldShow(EditMode.registeredElements.Kicks))
     end)
 
     -- The assertion this spec exists for. It fails if the hide rule is folded

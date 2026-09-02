@@ -25,28 +25,18 @@ describe("ChatHistory storage guards", function()
         assert.equals(0, #KE.db.char.ChatHistory)
     end)
 
-    it("refuses when the instance check throws", function()
-        local CH, KE = L.loadChatHistory({
-            IsInInstance = function() error("boom") end,
-        })
-        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
-    end)
-
-    it("refuses when the instance check returns nil", function()
-        local CH, KE = L.loadChatHistory({ IsInInstance = function() return nil end })
-        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
-    end)
-
-    it("refuses when the instance check returns a secret", function()
+    it("refuses when the instance check throws, returns nil, or returns a secret", function()
         local flag = {}
-        local CH, KE = L.loadChatHistory({
-            IsInInstance = function() return flag, "none" end,
-            issecretvalue = secretIs(flag),
-        })
-        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        local variants = {
+            { IsInInstance = function() error("boom") end },
+            { IsInInstance = function() return nil end },
+            { IsInInstance = function() return flag, "none" end, issecretvalue = secretIs(flag) },
+        }
+        for _, overrides in ipairs(variants) do
+            local CH, KE = L.loadChatHistory(overrides)
+            CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+            assert.equals(0, #KE.db.char.ChatHistory)
+        end
     end)
 
     it("refuses a secret body", function()
@@ -61,57 +51,45 @@ describe("ChatHistory storage guards", function()
         assert.equals(0, #KE.db.char.ChatHistory)
     end)
 
-    it("refuses a row whose timestamp reads secret at capture time", function()
+    it("refuses a row whose timestamp reads secret at capture time, or when neither clock is installed", function()
         -- The timestamp goes to disk like any other field, so it is refused at
         -- CAPTURE. RowIsReplayable checks it again on the way back out, but a
         -- check on read cannot unwrite a value that was already persisted.
         local stamp = {}
-        local CH, KE = L.loadChatHistory({
-            GetServerTime = function() return stamp end,
-            issecretvalue = secretIs(stamp),
-        })
-        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        local variants = {
+            { GetServerTime = function() return stamp end, issecretvalue = secretIs(stamp) },
+            { GetServerTime = false, time = false },
+        }
+        for _, overrides in ipairs(variants) do
+            local CH, KE = L.loadChatHistory(overrides)
+            CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+            assert.equals(0, #KE.db.char.ChatHistory)
+        end
     end)
 
-    it("falls back to time() when the server clock returns no number", function()
-        local CH, KE = L.loadChatHistory({
-            GetServerTime = function() return nil end,
-        })
-        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(1000, KE.db.char.ChatHistory[1].time)
+    it("falls back to time() when the server clock returns no number or is not installed", function()
+        local variants = {
+            { GetServerTime = function() return nil end },
+            { GetServerTime = false },
+        }
+        for _, overrides in ipairs(variants) do
+            local CH, KE = L.loadChatHistory(overrides)
+            CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+            assert.equals(1000, KE.db.char.ChatHistory[1].time)
+        end
     end)
 
-    it("refuses when the fallback clock reads secret", function()
+    it("refuses when the fallback clock reads secret or returns no usable number", function()
         local stamp = {}
-        local CH, KE = L.loadChatHistory({
-            GetServerTime = function() return nil end,
-            time = function() return stamp end,
-            issecretvalue = secretIs(stamp),
-        })
-        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
-    end)
-
-    it("refuses when neither clock returns a number", function()
-        local CH, KE = L.loadChatHistory({
-            GetServerTime = function() return nil end,
-            time = function() return "nownow" end,
-        })
-        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
-    end)
-
-    it("falls back when the server clock is not installed at all", function()
-        local CH, KE = L.loadChatHistory({ GetServerTime = false })
-        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(1000, KE.db.char.ChatHistory[1].time)
-    end)
-
-    it("refuses when neither clock is installed", function()
-        local CH, KE = L.loadChatHistory({ GetServerTime = false, time = false })
-        CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        local variants = {
+            { GetServerTime = function() return nil end, time = function() return stamp end, issecretvalue = secretIs(stamp) },
+            { GetServerTime = function() return nil end, time = function() return "nownow" end },
+        }
+        for _, overrides in ipairs(variants) do
+            local CH, KE = L.loadChatHistory(overrides)
+            CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
+            assert.equals(0, #KE.db.char.ChatHistory)
+        end
     end)
 
     it("refuses a protected body", function()
@@ -165,21 +143,20 @@ describe("ChatHistory storage guards", function()
         assert.equals(0, #KE.db.char.ChatHistory)
     end)
 
-    it("trims to the cap, dropping the oldest", function()
-        local CH, KE = L.loadChatHistory()
-        KE.db.profile.Skinning.ChatHistory.Size = 3
-        for i = 1, 5 do CH:SaveChatHistory("CHAT_MSG_SAY", "m" .. i, "Bob") end
-        local data = KE.db.char.ChatHistory
-        assert.equals(3, #data)
-        assert.equals("m3", data[1][1])
-        assert.equals("m5", data[3][1])
-    end)
-
-    it("keeps exactly the number of rows the cap advertises", function()
-        local CH, KE = L.loadChatHistory()
-        KE.db.profile.Skinning.ChatHistory.Size = 4
-        for i = 1, 4 do CH:SaveChatHistory("CHAT_MSG_SAY", "m" .. i, "Bob") end
-        assert.equals(4, #KE.db.char.ChatHistory)
+    it("trims to the cap, dropping the oldest, and keeps exactly the number the cap advertises", function()
+        local variants = {
+            { size = 3, count = 5, first = "m3", last = "m5" },
+            { size = 4, count = 4, first = "m1", last = "m4" },
+        }
+        for _, v in ipairs(variants) do
+            local CH, KE = L.loadChatHistory()
+            KE.db.profile.Skinning.ChatHistory.Size = v.size
+            for i = 1, v.count do CH:SaveChatHistory("CHAT_MSG_SAY", "m" .. i, "Bob") end
+            local data = KE.db.char.ChatHistory
+            assert.equals(v.size, #data)
+            assert.equals(v.first, data[1][1])
+            assert.equals(v.last, data[v.size][1])
+        end
     end)
 
     it("packs nil holes as false so the row stays dense", function()
@@ -271,23 +248,18 @@ describe("ChatHistory replay", function()
         return _G.ChatFrame1
     end
 
-    it("refuses a row whose stored body reads secret at replay time", function()
-        local CH, KE = L.loadChatHistory({ issecretvalue = secretIs("hello") })
-        KE.db.char.ChatHistory[1] = { "hello", "Bob", event = "CHAT_MSG_SAY", time = 5 }
-        assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
-    end)
-
-    it("refuses a row whose stored sender reads secret at replay time", function()
-        local CH, KE = L.loadChatHistory({ issecretvalue = secretIs("Bob") })
-        KE.db.char.ChatHistory[1] = { "hello", "Bob", event = "CHAT_MSG_SAY", time = 5 }
-        assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
-    end)
-
-    it("refuses a row whose stored timestamp reads secret at replay time", function()
+    it("refuses a row whose stored body, sender, or timestamp reads secret at replay time", function()
         local stamp = {}
-        local CH, KE = L.loadChatHistory({ issecretvalue = secretIs(stamp) })
-        KE.db.char.ChatHistory[1] = { "hello", "Bob", event = "CHAT_MSG_SAY", time = stamp }
-        assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+        local variants = {
+            { issecretvalue = secretIs("hello"), row = { "hello", "Bob", event = "CHAT_MSG_SAY", time = 5 } },
+            { issecretvalue = secretIs("Bob"), row = { "hello", "Bob", event = "CHAT_MSG_SAY", time = 5 } },
+            { issecretvalue = secretIs(stamp), row = { "hello", "Bob", event = "CHAT_MSG_SAY", time = stamp } },
+        }
+        for _, v in ipairs(variants) do
+            local CH, KE = L.loadChatHistory({ issecretvalue = v.issecretvalue })
+            KE.db.char.ChatHistory[1] = v.row
+            assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+        end
     end)
 
     it("does nothing while the chat skin is off", function()

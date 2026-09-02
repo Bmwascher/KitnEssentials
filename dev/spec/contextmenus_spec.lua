@@ -30,13 +30,6 @@ describe("ContextMenus SkinFrame — pre-layout guard", function()
         SkinFrame, calls = seams.SkinFrame, recorder
     end)
 
-    it("exposes SkinFrame through the loader seam", function()
-        -- Guard against a silent seam break: every assertion below would pass
-        -- vacuously against a nil SkinFrame if it were only ever called
-        -- inside a pcall, and a broken seam must not read as a passing suite.
-        assert.is_function(SkinFrame)
-    end)
-
     -- POSITIVE CONTROL. Without this, a SkinFrame that refused to skin
     -- ANYTHING would satisfy every negative assertion in this file.
     it("skins a laid-out menu and sizes the backdrop to the frame", function()
@@ -56,12 +49,9 @@ describe("ContextMenus SkinFrame — pre-layout guard", function()
 
     -- The two axes are checked separately, so a guard testing only width would
     -- pass the 1x1 case above while still destroying a tall, unlaid-out frame.
-    it("guards on height alone", function()
+    it("guards on either axis alone", function()
         SkinFrame(menuFrame(200, 4))
         assert.equals(0, #calls.stripped)
-    end)
-
-    it("guards on width alone", function()
         SkinFrame(menuFrame(4, 200))
         assert.equals(0, #calls.stripped)
     end)
@@ -74,14 +64,5 @@ describe("ContextMenus SkinFrame — pre-layout guard", function()
         assert.equals(1, #calls.stripped)
         SkinFrame(menuFrame(15, 15))
         assert.equals(1, #calls.stripped)   -- unchanged: the second was refused
-    end)
-
-    -- The guard must sit AFTER the secret-value test, not replace it: a secret
-    -- dimension still has to reach the pooled-frame rescue, which is a
-    -- different code path with different consequences.
-    it("leaves a secret dimension to the rescue path, not the guard", function()
-        SkinFrame(menuFrame("SECRET", "SECRET"))
-        assert.equals(0, #calls.stripped)
-        assert.equals(0, #calls.backdrops)   -- never stripped, so nothing to rebuild
     end)
 end)

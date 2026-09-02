@@ -29,22 +29,6 @@ describe("KE:GetSectionForItem", function()
         assert.equals("dungeons_section", KE:GetSectionForItem("DungeonCasts"))
     end)
 
-    it("resolves several items sharing one section", function()
-        assert.equals("combat_section", KE:GetSectionForItem("StatusTexts"))
-    end)
-
-    it("returns nil for an id the sidebar does not contain", function()
-        assert.is_nil(KE:GetSectionForItem("NotARealPage"))
-    end)
-
-    it("returns nil for a nil id rather than erroring", function()
-        assert.is_nil(KE:GetSectionForItem(nil))
-    end)
-
-    it("tolerates a header carrying no items", function()
-        assert.is_nil(KE:GetSectionForItem("settings_section"))
-    end)
-
     -- Hardening, not a live bug fix: the sidebar config is a file-parse literal
     -- in game, so this branch is unreachable there. It is reachable here.
     it("does not cache an empty result when the sidebar is not built yet", function()

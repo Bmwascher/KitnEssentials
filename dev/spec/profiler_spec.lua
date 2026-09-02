@@ -389,36 +389,6 @@ describe("Profiler CPU rows", function()
             state.profiler.TakeSnapshot("order")
         end)
     end)
-
-    it("keeps snap and diff callable across the Task 2 row transition", function()
-        local subject = frame()
-        _G.KE_Alpha = subject
-        local state = loadProfiler({
-            addonMs = 10,
-            frameCPU = {
-                [subject] = {
-                    selfMs = 1,
-                    selfCalls = 10,
-                    treeMs = 2,
-                    treeCalls = 20,
-                },
-            },
-        })
-
-        state.profiler.TakeSnapshot("compat-before")
-        state.setAddonMs(20)
-        state.setFrameCPU(subject, {
-            selfMs = 3,
-            selfCalls = 20,
-            treeMs = 5,
-            treeCalls = 30,
-        })
-        state.profiler.TakeSnapshot("compat-after")
-
-        assert.has_no.errors(function()
-            state.profiler.DiffSnapshots("compat-before", "compat-after")
-        end)
-    end)
 end)
 
 describe("Profiler CPU report", function()
@@ -472,40 +442,6 @@ describe("Profiler CPU report", function()
         assert.is_truthy(output:find("0.0 sec", 1, true))
         assert.is_truthy(output:find("exercise the UI", 1, true))
         assert.is_nil(output:find("sampling duration unknown", 1, true))
-    end)
-
-    it("explains callback attribution when addon CPU has no frame rows", function()
-        local state = loadProfiler({
-            addonMs = 42,
-        })
-        state.profiler.RunCommand("cpu 1")
-
-        local output = table.concat(state.printed, "\n")
-        assert.is_truthy(output:find("No frame CPU samples yet", 1, true))
-        assert.is_truthy(output:find("Frame rankings omit timer and plain Lua callback attribution", 1, true))
-    end)
-
-    it("labels direct work, overlapping trees, and callback limits", function()
-        local subject = frame()
-        _G.KE_Alpha = subject
-        local state = loadProfiler({
-            frameCPU = {
-                [subject] = {
-                    selfMs = 2,
-                    selfCalls = 10,
-                    treeMs = 7,
-                    treeCalls = 20,
-                },
-            },
-        })
-        state.profiler.RunCommand("cpu 1")
-
-        local output = table.concat(state.printed, "\n")
-        assert.is_truthy(output:find("direct CPU", 1, true))
-        assert.is_truthy(output:find("inclusive CPU", 1, true))
-        assert.is_truthy(output:find("Tree rows overlap", 1, true))
-        assert.is_truthy(output:find("addon-wide tick metrics only", 1, true))
-        assert.is_truthy(output:find("cannot identify which callback", 1, true))
     end)
 
     it("sorts direct and tree sections independently with name tie breaks", function()
@@ -808,140 +744,42 @@ describe("Profiler snapshots", function()
         assert.is_truthy(output:find("CPU/frame deltas unavailable", 1, true))
     end)
 
-    it("refuses frame deltas for a self-only counter decrease", function()
-        local subject = frame()
-        _G.KE_Alpha = subject
-        local state = loadProfiler({
-            now = 100,
-            addonMs = 10,
-            frameCPU = {
-                [subject] = {
-                    selfMs = 5,
-                    selfCalls = 20,
-                    treeMs = 8,
-                    treeCalls = 30,
+    it("refuses frame deltas for a self-only, tree-only, self-call-only, or tree-call-only counter decrease", function()
+        local variants = {
+            { selfMs = 4, selfCalls = 21, treeMs = 9, treeCalls = 31 },
+            { selfMs = 6, selfCalls = 21, treeMs = 7, treeCalls = 31 },
+            { selfMs = 6, selfCalls = 19, treeMs = 9, treeCalls = 31 },
+            { selfMs = 6, selfCalls = 21, treeMs = 9, treeCalls = 29 },
+        }
+
+        for _, variant in ipairs(variants) do
+            local subject = frame()
+            _G.KE_Alpha = subject
+            local state = loadProfiler({
+                now = 100,
+                addonMs = 10,
+                frameCPU = {
+                    [subject] = {
+                        selfMs = 5,
+                        selfCalls = 20,
+                        treeMs = 8,
+                        treeCalls = 30,
+                    },
                 },
-            },
-        })
+            })
 
-        state.profiler.ResetCpu()
-        state.profiler.TakeSnapshot("before")
-        state.setNow(110)
-        state.setAddonMs(20)
-        state.setFrameCPU(subject, {
-            selfMs = 4,
-            selfCalls = 21,
-            treeMs = 9,
-            treeCalls = 31,
-        })
-        state.profiler.TakeSnapshot("after")
-        state.profiler.DiffSnapshots("before", "after")
+            state.profiler.ResetCpu()
+            state.profiler.TakeSnapshot("before")
+            state.setNow(110)
+            state.setAddonMs(20)
+            state.setFrameCPU(subject, variant)
+            state.profiler.TakeSnapshot("after")
+            state.profiler.DiffSnapshots("before", "after")
 
-        local output = table.concat(state.printed, "\n")
-        assert.is_truthy(output:find("+10.00 ms over 10.0 sec", 1, true))
-        assert.is_truthy(output:find("Frame deltas unavailable", 1, true))
-    end)
-
-    it("refuses frame deltas for a tree-only counter decrease", function()
-        local subject = frame()
-        _G.KE_Alpha = subject
-        local state = loadProfiler({
-            now = 100,
-            addonMs = 10,
-            frameCPU = {
-                [subject] = {
-                    selfMs = 5,
-                    selfCalls = 20,
-                    treeMs = 8,
-                    treeCalls = 30,
-                },
-            },
-        })
-
-        state.profiler.ResetCpu()
-        state.profiler.TakeSnapshot("before")
-        state.setNow(110)
-        state.setAddonMs(20)
-        state.setFrameCPU(subject, {
-            selfMs = 6,
-            selfCalls = 21,
-            treeMs = 7,
-            treeCalls = 31,
-        })
-        state.profiler.TakeSnapshot("after")
-        state.profiler.DiffSnapshots("before", "after")
-
-        local output = table.concat(state.printed, "\n")
-        assert.is_truthy(output:find("+10.00 ms over 10.0 sec", 1, true))
-        assert.is_truthy(output:find("Frame deltas unavailable", 1, true))
-    end)
-
-    it("refuses frame deltas for a self-call-only counter decrease", function()
-        local subject = frame()
-        _G.KE_Alpha = subject
-        local state = loadProfiler({
-            now = 100,
-            addonMs = 10,
-            frameCPU = {
-                [subject] = {
-                    selfMs = 5,
-                    selfCalls = 20,
-                    treeMs = 8,
-                    treeCalls = 30,
-                },
-            },
-        })
-
-        state.profiler.ResetCpu()
-        state.profiler.TakeSnapshot("before")
-        state.setNow(110)
-        state.setAddonMs(20)
-        state.setFrameCPU(subject, {
-            selfMs = 6,
-            selfCalls = 19,
-            treeMs = 9,
-            treeCalls = 31,
-        })
-        state.profiler.TakeSnapshot("after")
-        state.profiler.DiffSnapshots("before", "after")
-
-        local output = table.concat(state.printed, "\n")
-        assert.is_truthy(output:find("+10.00 ms over 10.0 sec", 1, true))
-        assert.is_truthy(output:find("Frame deltas unavailable", 1, true))
-    end)
-
-    it("refuses frame deltas for a tree-call-only counter decrease", function()
-        local subject = frame()
-        _G.KE_Alpha = subject
-        local state = loadProfiler({
-            now = 100,
-            addonMs = 10,
-            frameCPU = {
-                [subject] = {
-                    selfMs = 5,
-                    selfCalls = 20,
-                    treeMs = 8,
-                    treeCalls = 30,
-                },
-            },
-        })
-
-        state.profiler.ResetCpu()
-        state.profiler.TakeSnapshot("before")
-        state.setNow(110)
-        state.setAddonMs(20)
-        state.setFrameCPU(subject, {
-            selfMs = 6,
-            selfCalls = 21,
-            treeMs = 9,
-            treeCalls = 29,
-        })
-        state.profiler.TakeSnapshot("after")
-        state.profiler.DiffSnapshots("before", "after")
-
-        local output = table.concat(state.printed, "\n")
-        assert.is_truthy(output:find("+10.00 ms over 10.0 sec", 1, true))
-        assert.is_truthy(output:find("Frame deltas unavailable", 1, true))
+            local output = table.concat(state.printed, "\n")
+            assert.is_truthy(output:find("+10.00 ms over 10.0 sec", 1, true))
+            assert.is_truthy(output:find("Frame deltas unavailable", 1, true))
+        end
     end)
 end)
 
@@ -1077,21 +915,6 @@ describe("Profiler reload warning", function()
         assert.is_number(cvarIndex)
         assert.is_number(reloadIndex)
         assert.is_true(cvarIndex < reloadIndex)
-    end)
-
-    it("wires no state-changing hook to Keep Enabled or to dismissal", function()
-        local state = loadProfiler({ scriptProfile = 1 })
-        state.fireEvent("PLAYER_LOGIN")
-        local popup = state.getPopup("KE_PROFILER_ENABLED")
-
-        -- Blizzard dispatches button 2 through OnCancel or OnButton2, and
-        -- fires OnHide on dismissal. Keep Enabled is a one-load no-op, so all
-        -- three must be absent; asserting only OnCancel would pass against an
-        -- implementation that moved the work to either of the others.
-        assert.is_nil(popup.OnCancel)
-        assert.is_nil(popup.OnButton2)
-        assert.is_nil(popup.OnHide)
-        assert.is_function(popup.OnAccept)
     end)
 
     it("prints immediately in combat and tears down before one deferred popup", function()

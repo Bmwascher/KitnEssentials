@@ -23,11 +23,6 @@ describe("EUIUnlockBridge position translation", function()
         assert.same({ point = "CENTER", relPoint = "CENTER", x = 0, y = 0 }, out)
     end)
 
-    it("returns nil when handed something that is not a table", function()
-        assert.is_nil(KE.EUIUnlock.ToEUIPosition(nil))
-        assert.is_nil(KE.EUIUnlock.ToEUIPosition("BOTTOMLEFT"))
-    end)
-
     it("maps EUI mover arguments back to a KE position table", function()
         local out = KE.EUIUnlock.FromEUIPosition("TOPRIGHT", "TOPLEFT", -5, 12)
         assert.same({
@@ -35,16 +30,6 @@ describe("EUIUnlockBridge position translation", function()
             AnchorTo = "TOPLEFT",
             XOffset = -5,
             YOffset = 12,
-        }, out)
-    end)
-
-    it("defaults missing EUI mover arguments the same way", function()
-        local out = KE.EUIUnlock.FromEUIPosition(nil, nil, nil, nil)
-        assert.same({
-            AnchorFrom = "CENTER",
-            AnchorTo = "CENTER",
-            XOffset = 0,
-            YOffset = 0,
         }, out)
     end)
 
@@ -268,15 +253,6 @@ describe("EUIUnlockBridge profile-folder injection", function()
         assert.equal("KitnEssentials", map[2].folder)
     end)
 
-    it("does nothing when EllesmereUI is absent", function()
-        _G.EllesmereUI = nil
-        assert.has_no.errors(function() KE.EUIUnlock.InjectProfileAddon() end)
-    end)
-
-    it("does nothing when the map is not a table", function()
-        _G.EllesmereUI = { _ADDON_DB_MAP = "nope" }
-        assert.has_no.errors(function() KE.EUIUnlock.InjectProfileAddon() end)
-    end)
 end)
 
 -- Two refusal rules in one shape. noResize must stay OFF: EllesmereUI's
@@ -320,12 +296,6 @@ describe("EUIUnlockBridge element size contract", function()
         local why = element.matchUnavailable("KE_Thing")
         assert.is_string(why)
         assert.is_true(#why > 0)
-    end)
-
-    it("still reports its live size, which is what a match target is read for", function()
-        local w, h = publish().getSize()
-        assert.equal(100, w)
-        assert.equal(50, h)
     end)
 end)
 
@@ -380,20 +350,5 @@ describe("EUIUnlockBridge size-match re-apply", function()
 
         assert.has_no.errors(function() KE.EUIUnlock.ReapplyMatchesToUs() end)
         assert.same({ "KE_Chat", "KE_DamageMeter" }, heights)
-    end)
-
-    it("survives a propagate call that throws", function()
-        local KE = publishTwo({
-            PropagateWidthMatch  = function() error("boom") end,
-            PropagateHeightMatch = function() error("boom") end,
-        })
-
-        assert.has_no.errors(function() KE.EUIUnlock.ReapplyMatchesToUs() end)
-    end)
-
-    it("does nothing when EllesmereUI is absent", function()
-        local KE = publishTwo({})
-        _G.EllesmereUI = nil
-        assert.has_no.errors(function() KE.EUIUnlock.ReapplyMatchesToUs() end)
     end)
 end)

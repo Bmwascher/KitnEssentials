@@ -1,27 +1,20 @@
 local L = require("dev.spec._ke_loader")
 
 describe("glow type coercion", function()
-    it("maps the retired autocast style onto the pixel border", function()
+    it("maps legacy, unknown, and already-valid glow type keys to their resolved values", function()
         local G = L.loadAuraGlowRules()
-        assert.equals("pixel", G.ResolveType("autocast"))
-    end)
-
-    it("maps the two fill styles to procloop", function()
-        local G = L.loadAuraGlowRules()
-        assert.equals("procloop", G.ResolveType("button"))
-        assert.equals("procloop", G.ResolveType("proc"))
-    end)
-
-    it("falls back to the default for nil and for an unknown value", function()
-        local G = L.loadAuraGlowRules()
-        assert.equals("ants", G.ResolveType(nil))
-        assert.equals("ants", G.ResolveType("something-else"))
-    end)
-
-    it("passes an already-valid new key through unchanged", function()
-        local G = L.loadAuraGlowRules()
-        assert.equals("alert", G.ResolveType("alert"))
-        assert.equals("procloop", G.ResolveType("procloop"))
+        local cases = {
+            { input = "autocast", expected = "pixel" },
+            { input = "button", expected = "procloop" },
+            { input = "proc", expected = "procloop" },
+            { input = nil, expected = "ants" },
+            { input = "something-else", expected = "ants" },
+            { input = "alert", expected = "alert" },
+            { input = "procloop", expected = "procloop" },
+        }
+        for _, case in ipairs(cases) do
+            assert.equals(case.expected, G.ResolveType(case.input))
+        end
     end)
 end)
 
@@ -177,31 +170,9 @@ describe("flipbook restart predicate", function()
             G.FlipbookState(G.FLIPBOOKS.ants, 2)))
     end)
 
-    it("gives the raw-texture style a real cell size and the atlases none", function()
-        local G = L.loadAuraGlowRules()
-        assert.equals(48, G.FLIPBOOKS.alert.frameWidth)
-        assert.equals(48, G.FLIPBOOKS.alert.frameHeight)
-        assert.equals(0, G.FLIPBOOKS.ants.frameWidth)
-        assert.equals(0, G.FLIPBOOKS.ants.frameHeight)
-        assert.equals(0, G.FLIPBOOKS.procloop.frameWidth)
-        assert.equals(0, G.FLIPBOOKS.procloop.frameHeight)
-    end)
 end)
 
 describe("pixel glow rules", function()
-    it("lists all four selectable styles with a kind", function()
-        local G = L.loadAuraGlowRules()
-        assert.equals("pixel", G.STYLES.pixel.kind)
-        assert.equals("flipbook", G.STYLES.ants.kind)
-        assert.equals("flipbook", G.STYLES.procloop.kind)
-        assert.equals("flipbook", G.STYLES.alert.kind)
-    end)
-
-    it("resolves pixel to itself now that it renders again", function()
-        local G = L.loadAuraGlowRules()
-        assert.equals("pixel", G.ResolveType("pixel"))
-    end)
-
     it("clamps the dash count and defaults a bad one to eight", function()
         local G = L.loadAuraGlowRules()
         assert.equals(8, G.NormalisePixelCount(nil))

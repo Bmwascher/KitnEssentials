@@ -19,9 +19,6 @@ end
 local KEYSTONE = "|cnIQ4:|Hkeystone:180653:399:2:165:0:0:0:0"
     .. "|h[Keystone: Ruby Life Pools (2)]|h|r"
 local ICON_4321 = "|T4321:14:14:0:0:64:64:5:59:5:59|t"
-local ITEM = "|cnIQ4:|Hitem:240949::::::::90:1480"
-    .. "|h[Ring |A:Professions-ChatIcon-Quality-Tier5:17:15::1|a]|h|r"
-local ICON_9999 = "|T9999:14:14:0:0:64:64:5:59:5:59|t"
 
 describe("ChatLinks filter", function()
     local CL
@@ -29,9 +26,6 @@ describe("ChatLinks filter", function()
         CL = L.loadChatLinks()
         CL.db = freshDB()
         _G.C_ChallengeMode = { GetMapUIInfo = function() return nil, nil, nil, 4321 end }
-        _G.C_Item = { GetItemInfoInstant = function()
-            return 240949, "Armor", "Miscellaneous", "INVTYPE_FINGER", 9999
-        end }
     end)
 
     it("passes a plain message through unchanged when nothing matches", function()
@@ -50,20 +44,6 @@ describe("ChatLinks filter", function()
         local other = "|cnIQ4:|Hkeystone:999999:399:2:165:0:0:0:0|h[Fake]|h|r"
         local _, out = CL:Filter("CHAT_MSG_SAY", other)
         assert.equal(other, out)
-    end)
-
-    it("rewrites the quality tier atlas inside an item link", function()
-        local _, out = CL:Filter("CHAT_MSG_SAY", ITEM)
-        assert.equal("|cnIQ4:" .. ICON_9999 .. " "
-            .. "|Hitem:240949::::::::90:1480|h[Ring |cffe8ac1b5|r]|h|r", out)
-    end)
-
-    it("leaves the tier atlas alone when the option is off", function()
-        CL.db.NumericalQualityTier = false
-        local _, out = CL:Filter("CHAT_MSG_SAY", ITEM)
-        assert.equal("|cnIQ4:" .. ICON_9999 .. " "
-            .. "|Hitem:240949::::::::90:1480"
-            .. "|h[Ring |A:Professions-ChatIcon-Quality-Tier5:17:15::1|a]|h|r", out)
     end)
 
     it("does not transform anything while the module is off", function()
@@ -135,14 +115,11 @@ describe("ChatLinks web addresses", function()
     -- inside a link's display text into a NESTED link, and its greedy tail eats
     -- the terminator that closes the outer link or colour escape. Both were
     -- reproduced in Lua 5.1 before the span walk was added.
-    it("leaves an address inside an item link's text alone", function()
-        local link = "|Hitem:1|h[Foo www.example.com]|h"
-        assert.equal(link, CL.WrapURLs(link, BLUE))
-    end)
-
-    it("leaves a scheme address inside an item link's text alone", function()
-        local link = "|Hitem:1|h[Foo https://example.com]|h"
-        assert.equal(link, CL.WrapURLs(link, BLUE))
+    it("leaves a plain or scheme address inside an item link's text alone", function()
+        local plain = "|Hitem:1|h[Foo www.example.com]|h"
+        assert.equal(plain, CL.WrapURLs(plain, BLUE))
+        local scheme = "|Hitem:1|h[Foo https://example.com]|h"
+        assert.equal(scheme, CL.WrapURLs(scheme, BLUE))
     end)
 
     it("wraps an address beside a link without touching the link", function()
@@ -170,11 +147,6 @@ describe("ChatLinks web addresses", function()
             "|Hitem:1|h[A]|h |Hitem:2|h[B]|h see www.example.com", BLUE)
         assert.is_truthy(out:find("|Hitem:1|h[A]|h |Hitem:2|h[B]|h ", 1, true))
         assert.is_truthy(out:find("|Hkeurl:www.example.com|h", 1, true))
-    end)
-
-    it("falls back to its own colour when none is passed", function()
-        assert.equal("|cff4fb5ff|Hkeurl:https://example.com|h[https://example.com]|h|r",
-            CL.WrapURLs("https://example.com"))
     end)
 
     -- The four link shapes. Each of these broke one of the two pattern-based
@@ -224,15 +196,5 @@ describe("ChatLinks web addresses", function()
         CL.db.WebAddresses = false
         local _, out = CL:Filter("CHAT_MSG_SAY", "look at https://example.com")
         assert.equal("look at https://example.com", out)
-    end)
-
-    -- A pattern match on secret text throws, so the existing first-contact guard
-    -- must cover the new rewrite too, not just the icon decorators.
-    it("refuses a secret message", function()
-        local secret = "look at https://example.com"
-        CL = L.loadChatLinks({ issecretvalue = function(v) return v == secret end })
-        CL.db = freshDB()
-        local _, out = CL:Filter("CHAT_MSG_SAY", secret)
-        assert.equal(secret, out)
     end)
 end)

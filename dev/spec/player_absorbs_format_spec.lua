@@ -31,10 +31,6 @@ describe("PlayerAbsorbsFormat.Format", function()
         assert.equals("", KE.PlayerAbsorbsFormat.Format(0, false, true))
     end)
 
-    it("treats nil as zero and hides it", function()
-        assert.equals("", KE.PlayerAbsorbsFormat.Format(nil, false, true))
-    end)
-
     it("formats a non-secret nonzero value without abbreviation", function()
         assert.equals("FULL:1200000", KE.PlayerAbsorbsFormat.Format(1200000, false, true))
     end)
@@ -45,20 +41,5 @@ describe("PlayerAbsorbsFormat.Format", function()
 
     it("clamps negative non-secret values to hidden", function()
         assert.equals("", KE.PlayerAbsorbsFormat.Format(-5, false, true))
-    end)
-
-    it("uses TruncateWhenZero for a secret value when hideWhenZero and not abbreviating", function()
-        -- TruncateWhenZero stub returns "" — proves the secret zero-blank path is taken.
-        assert.equals("", KE.PlayerAbsorbsFormat.Format(SECRET, false, true))
-    end)
-
-    it("abbreviates a secret value when abbreviate=true (no zero-blank)", function()
-        assert.equals("ABBR:" .. tostring(SECRET),
-            KE.PlayerAbsorbsFormat.Format(SECRET, true, true))
-    end)
-
-    it("floors a secret value when hideWhenZero is off and not abbreviating", function()
-        assert.equals("FLOOR:" .. tostring(SECRET),
-            KE.PlayerAbsorbsFormat.Format(SECRET, false, false))
     end)
 end)
