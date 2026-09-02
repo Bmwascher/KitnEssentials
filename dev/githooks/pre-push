@@ -165,6 +165,24 @@ if [ -f "$parallax_verifier" ]; then
     done
 fi
 
+# Per-merge bump check (non-blocking): a main push whose range touches addon
+# .lua/.xml with no .toc or CHANGELOG.md change is usually a merge that
+# skipped the version bump and changelog entry (family AGENTS.md, Git).
+# Internal Only merges legitimately skip both, so this only notes.
+for _line in "${pushed_refs[@]}"; do
+    read -r _lref _lsha _rref _rsha <<< "$_line"
+    [ "$_rref" = "refs/heads/main" ] || continue
+    case "$_lsha" in *[!0]*) ;; *) continue ;; esac
+    case "$_rsha" in *[!0]*) ;; *) continue ;; esac
+    git cat-file -e "$_rsha^{commit}" 2>/dev/null || continue
+    _src="$(git diff --name-only "$_rsha".."$_lsha" -- '*.lua' '*.xml' ':(exclude)dev/' 2>/dev/null | head -1)"
+    [ -n "$_src" ] || continue
+    _bump="$(git diff --name-only "$_rsha".."$_lsha" -- KitnEssentials.toc CHANGELOG.md 2>/dev/null | head -1)"
+    if [ -z "$_bump" ]; then
+        echo "[pre-push] note (non-blocking): main push touches addon .lua/.xml with no KitnEssentials.toc or CHANGELOG.md change - add the per-merge bump and changelog entry unless the change is Internal Only." >&2
+    fi
+done
+
 # AGENTS.md drift check (non-blocking): warn when Modules/ on disk and the
 # AGENTS.md Structure block disagree, in either direction. AGENTS.md is
 # gitignored, so read it from the working tree. Runs before the busted

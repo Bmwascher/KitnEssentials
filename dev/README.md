@@ -247,19 +247,25 @@ a re-clone, restore it from the local backup/export, not from this repo.
 
 Idempotent; merges missing hook entries per event (keyed on the hook script
 filename) and never overwrites existing entries or personal permissions in
-`.claude/settings.json`. When changing a live hook under `.claude/hooks/`,
-mirror the change into `dev/claude-hooks/` so the template stays current.
+either settings file. Live hooks are installed copies: change the template
+under `dev/claude-hooks/` and re-run the installer.
 
-Repo-scope hooks: `branch-guard.ps1` (PreToolUse Edit|Write, blocks .lua/.xml
-edits on main), `git-guard.ps1` (PreToolUse Bash|PowerShell, blocks git shapes
-that discard or blanket-stage work, and shell writes to addon code on main)
-`luacheck-postedit.ps1` (PostToolUse, lints every .lua edit) and
+User-scope hooks (`~/.claude/hooks/`, wired in `~/.claude/settings.json` from
+`user-settings.template.json`, so every project on the machine gets them):
+`branch-guard.ps1` (PreToolUse Edit|Write, blocks .lua/.xml edits on main),
+`git-guard.ps1` (PreToolUse Bash|PowerShell, blocks git shapes that discard
+or blanket-stage work, and shell writes to addon code on main) and
+`luacheck-postedit.ps1` (PostToolUse, lints every .lua edit). They find the
+repo from the edited path, not from the project setting.
+
+Project-scope hook (`.claude/hooks/`, from `settings.template.json`):
 `agents-mirror-sync.ps1` (PostToolUse, rebuilds the `.agents/skills` mirror
 through `dev/scripts/sync-agents-mirror.ps1` after any skill or command
-edit; `-Check` reports drift). Run
-`pwsh dev/scripts/test-claude-hooks.ps1` after editing any of them; it
+edit; `-Check` reports drift).
+
+Run `pwsh dev/scripts/test-claude-hooks.ps1` after editing any of them; it
 exercises every documented deny and allow case against a throwaway main
-worktree.
+worktree and fails when a live copy differs from its template.
 
 ## Multi-model verification (parallax plugin)
 

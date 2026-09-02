@@ -4,7 +4,7 @@
 #
 #   pwsh dev/scripts/test-claude-hooks.ps1
 #
-# Exit 1 on any failed case or when a live hook under .claude/hooks/ differs
+# Exit 1 on any failed case or when a live hook (user or project scope) differs
 # from its template. Read-only against the repo: the worktrees, junction,
 # branch and scratch folders it creates under $env:TEMP are removed on exit,
 # each cleanup step independently of the others.
@@ -42,8 +42,12 @@ function Get-TextHash([string]$path) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
     return [System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text)))
 }
+$liveDir = @{ user = (Join-Path $env:USERPROFILE '.claude\hooks'); project = (Join-Path $root '.claude\hooks') }
 foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1')) {
-    $live = Join-Path $root ".claude\hooks\$n"
+    $scope = if ($n -eq 'agents-mirror-sync.ps1') { 'project' } else { 'user' }
+    $other = if ($scope -eq 'user') { 'project' } else { 'user' }
+    $live = Join-Path $liveDir[$scope] $n
+    Check "$n has no stale copy in $other scope" (-not (Test-Path (Join-Path $liveDir[$other] $n))) 'run pwsh dev/scripts/install-claude-hooks.ps1'
     if (Test-Path $live) {
         $same = (Get-TextHash $live) -eq (Get-TextHash (Join-Path $templates $n))
         Check "live == template: $n" $same 'run pwsh dev/scripts/install-claude-hooks.ps1'
