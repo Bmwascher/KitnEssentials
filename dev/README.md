@@ -130,6 +130,13 @@ edit, and beats living on `--no-verify`.
 uses all of those except `shorts`, plus `namesCI` and `namesCS`. A guard blocks
 when any set it needs is missing or empty.
 
+`pre-commit` also reads the added code lines of the staged diff (comments
+stripped) and blocks `COMBAT_LOG_EVENT_UNFILTERED`,
+`CombatLogGetCurrentEventInfo(` and `self:RegisterUnitEvent(`, and blocks a
+new `function KE:Name` whose name has no stub in the staged
+`dev/Annotations/KE.lua`. `pwsh dev/scripts/test-claude-hooks.ps1` covers
+these cases too.
+
 `pre-push` then re-runs both scans, blocking, over everything the push would
 publish, one commit at a time: each commit's own added comments and its own
 message. The commit-time hooks are skippable with `--no-verify` and other

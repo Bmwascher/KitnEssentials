@@ -3,6 +3,9 @@
 # impersonal") ban personal/agent names, upstream addon names, plan-step
 # references, dates, and review/session history from shipped source comments.
 # Broken 8+ times before this hook; every instance was greppable.
+# Also on added code lines: restricted combat-log identifiers, the AceEvent
+# RegisterUnitEvent misuse, and a new public KE: method with no stub in
+# dev/Annotations/KE.lua.
 # Deliberate exception: git commit --no-verify
 set -uo pipefail
 
@@ -18,10 +21,46 @@ fi
 # commit rather than only on the ones that happen to touch a comment.
 ng_load pre-commit stems compat provenance namesCI namesCS || exit 1
 
-if ! comments="$(ng_staged_comments)"; then
+if ! staged="$(git diff -U0 --no-color --cached -- "${ng_paths[@]}")"; then
     echo "[pre-commit] BLOCKED: could not read the staged diff." >&2
     exit 1
 fi
+[ -n "$staged" ] || exit 0
+
+# Added code lines only (the + side of each hunk), with line comments and
+# the "+++" header dropped, so a banned name inside a comment does not trip.
+added_code="$(printf '%s\n' "$staged" | grep -E '^\+' | grep -vE '^\+\+\+' | sed 's/^+//; s/--.*$//')"
+
+# Restricted or misused identifiers (canonical rules: family AGENTS.md, 12.0
+# API compliance; the AceEvent note in the module-port skill). Checked on
+# added lines only, so existing occurrences stay where they are.
+banned='COMBAT_LOG_EVENT_UNFILTERED|CombatLogGetCurrentEventInfo\s*\(|self:RegisterUnitEvent\s*\('
+if hits="$(printf '%s\n' "$added_code" | grep -nE "$banned")" && [ -n "$hits" ]; then
+    echo "[pre-commit] BLOCKED: staged code adds a restricted identifier:" >&2
+    printf '%s\n' "$hits" | sed -n '1,5p' >&2
+    echo "[pre-commit] COMBAT_LOG_EVENT_UNFILTERED and CombatLogGetCurrentEventInfo are restricted under the 12.0 combat-log model; AceEvent modules have no RegisterUnitEvent (use RegisterEvent and filter). Override a deliberate exception with: git commit --no-verify" >&2
+    exit 1
+fi
+
+# Every new public KE: method needs a stub in dev/Annotations/KE.lua, read
+# from the index so the stub can land in the same commit.
+new_methods="$(printf '%s\n' "$added_code" | grep -oE '^\s*function KE:[A-Za-z0-9_]+' | sed 's/.*KE://' | sort -u)"
+if [ -n "$new_methods" ]; then
+    stubs="$(git show :dev/Annotations/KE.lua 2>/dev/null || cat dev/Annotations/KE.lua 2>/dev/null)"
+    unstubbed=""
+    for m in $new_methods; do
+        if ! printf '%s\n' "$stubs" | grep -qE "function KE[:.]$m\s*\(|@field\s+$m\b"; then
+            unstubbed="$unstubbed $m"
+        fi
+    done
+    if [ -n "$unstubbed" ]; then
+        echo "[pre-commit] BLOCKED: new public KE: method(s) without a stub in dev/Annotations/KE.lua:$unstubbed" >&2
+        echo "[pre-commit] Add the ---@param/---@return stub and stage KE.lua in the same commit (KE AGENTS.md, Verification). Override a deliberate exception with: git commit --no-verify" >&2
+        exit 1
+    fi
+fi
+
+comments="$(ng_comment_tails "$staged")"
 [ -n "$comments" ] || exit 0
 
 if ! ng_scan_comments pre-commit "staged addon-source comments" "$comments"; then

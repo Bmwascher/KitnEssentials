@@ -35,11 +35,17 @@ function Expect-Allow([string]$hook, [string]$name, [hashtable]$payload) {
     Check "$hook allow: $name" ($r.out.Trim() -eq '' -and $r.code -eq 0) $r.out.Trim()
 }
 
-# Live copies must match the templates (the installer refreshes them).
+# Live copies must match the templates (the installer refreshes them). Line
+# endings are ignored: git renormalizes the tracked templates to CRLF.
+function Get-TextHash([string]$path) {
+    $text = [System.IO.File]::ReadAllText($path) -replace "`r", ''
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    return [System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text)))
+}
 foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1')) {
     $live = Join-Path $root ".claude\hooks\$n"
     if (Test-Path $live) {
-        $same = (Get-FileHash $live).Hash -eq (Get-FileHash (Join-Path $templates $n)).Hash
+        $same = (Get-TextHash $live) -eq (Get-TextHash (Join-Path $templates $n))
         Check "live == template: $n" $same 'run pwsh dev/scripts/install-claude-hooks.ps1'
     }
 }
@@ -180,8 +186,36 @@ try {
         & $cm 'blank lines before subject'  "`n`nfix a thing`n"                                       'pass'
         & $cm 'compat name alone'           "skin the elvui bags`n"                                   'pass'
         Remove-Item $msgFile -Force -ErrorAction SilentlyContinue
+
+        # --- pre-commit (bash), staged in the feature worktree -----------------
+        $pc = (Join-Path $root 'dev\githooks\pre-commit') -replace '\\', '/'
+        $probeRel = 'Modules/QoL/_hooktest_probe.lua'
+        $probeAbs = Join-Path $feature ($probeRel -replace '/', '\')
+        $stubAbs = Join-Path $feature 'dev\Annotations\KE.lua'
+        $stage = { param($name, $code, $expect, $stubLine = $null)
+            [System.IO.File]::WriteAllText($probeAbs, $code)
+            git -C $feature add -- $probeRel 2>&1 | Out-Null
+            if ($stubLine) {
+                [System.IO.File]::AppendAllText($stubAbs, "`n$stubLine`n")
+                git -C $feature add -- dev/Annotations/KE.lua 2>&1 | Out-Null
+            }
+            Push-Location $feature
+            try { & $bash $pc 2>&1 | Out-Null; $code_ = $LASTEXITCODE } finally { Pop-Location }
+            Check "pre-commit $expect`: $name" ($code_ -eq $(if ($expect -eq 'block') { 1 } else { 0 }))
+            git -C $feature reset -q -- $probeRel dev/Annotations/KE.lua 2>&1 | Out-Null
+            git -C $feature checkout -q -- dev/Annotations/KE.lua 2>&1 | Out-Null
+            Remove-Item $probeAbs -Force -ErrorAction SilentlyContinue
+        }
+        & $stage 'restricted combat log event'      "local f = CreateFrame('Frame')`nf:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED')`n" 'block'
+        & $stage 'restricted combat log accessor'   "local a = CombatLogGetCurrentEventInfo()`n" 'block'
+        & $stage 'AceEvent RegisterUnitEvent'       "local M = {}`nfunction M:OnEnable() self:RegisterUnitEvent('UNIT_AURA', 'player') end`n" 'block'
+        & $stage 'restricted name in a comment'     "-- CLEU-free: COMBAT_LOG_EVENT_UNFILTERED is restricted`nlocal x = 1`n" 'pass'
+        & $stage 'frame RegisterUnitEvent'          "local f = CreateFrame('Frame')`nf:RegisterUnitEvent('UNIT_AURA', 'player')`n" 'pass'
+        & $stage 'new KE: method without a stub'    "function KE:HookTestProbe(a) return a end`n" 'block'
+        & $stage 'new KE: method with a staged stub' "function KE:HookTestProbe(a) return a end`n" 'pass' "---@param a any`n---@return any`nfunction KE:HookTestProbe(a) end"
+        & $stage 'plain code'                       "local x = 1`nreturn x`n" 'pass'
     } else {
-        Write-Host 'commit-msg cases skipped: bash not on PATH'
+        Write-Host 'commit-msg and pre-commit cases skipped: bash not on PATH'
     }
 } finally {
     # Each step runs regardless of the others; native git exits are checked

@@ -705,3 +705,402 @@ function Automation.GetHideTransformItem(key) end
 ---@param key string
 ---@param enabled boolean
 function Automation:SetHideTransformItem(key, enabled) end
+
+-- ---------------------------------------------------------------------------
+-- Backfilled public KE: methods, grouped by source file. The pre-commit hook
+-- refuses a new `function KE:Name` whose name is absent from this file.
+-- ---------------------------------------------------------------------------
+
+-- Core/AddonTheme.lua
+---@param key string
+---@return any color # number[] for a color key, or the raw scalar/boolean ThemeDefaults value
+function KE:GetThemeColor(key) end
+
+function KE:RefreshTheme() end
+
+---@param mode string
+function KE:SetThemeMode(mode) end
+
+---@param presetName string
+function KE:SetThemePreset(presetName) end
+
+---@param key string
+---@param r number
+---@param g number
+---@param b number
+---@param a number?
+function KE:SetCustomColor(key, r, g, b, a) end
+
+function KE:CopyPresetToCustom() end
+
+function KE:ResetTheme() end
+
+function KE:NotifyThemeChange() end
+
+-- Core/Colors.lua
+---@return number[]
+function KE:GetPlayerClassColor() end
+
+---@param classToken string?
+---@return number[]
+function KE:GetClassColor(classToken) end
+
+---@param classToken string?
+---@return string
+function KE:GetClassColorHex(classToken) end
+
+---@param text string
+---@param classToken string?
+---@return string
+function KE:ColorTextByClass(text, classToken) end
+
+---@param r number?
+---@param g number?
+---@param b number?
+---@return string
+function KE:RGBAToHex(r, g, b) end
+
+---@return string
+function KE:GetThemeColorHex() end
+
+--- Accepts an {r,g,b,a} table, a hex string ("#RRGGBB"/"#RRGGBBAA"), or
+--- 0-1 or 0-255 numeric components.
+---@param r number|string|table
+---@param g number?
+---@param b number?
+---@param a number?
+---@return any color # CreateColor(...) ColorMixin
+function KE:CreateColor(r, g, b, a) end
+
+---@param Min number
+---@param Max number
+---@param ... any
+---@return number r
+---@return number g
+---@return number b
+function KE:ColorGradient(Min, Max, ...) end
+
+---@param text string
+---@param color number[]
+---@return string
+function KE:ColorText(text, color) end
+
+-- Core/Conflicts.lua
+--- Builds the ordered list of conflict prompts to raise.
+---@param env table # { profile: table, isLoaded: fun(addonName: string, resolver: table?): boolean, shouldNotLoad: boolean? }
+---@return table queue array of { module, label, dbPath, source, resolver }; never nil
+function KE:BuildConflictQueue(env) end
+
+---@param moduleName string
+---@param env table?
+---@return string|nil rival the rival addon's folder name
+function KE:GetModuleConflict(moduleName, env) end
+
+--- Rescans and raises any outstanding conflict prompts.
+function KE:ScanAddonConflicts() end
+
+-- Core/Defaults.lua
+---@return table Defaults
+function KE:GetDefaultDB() end
+
+-- Core/Globals.lua
+--- Returns the LSM font NAME a module is configured with, never a file path.
+---@param moduleDB table?
+---@return string? fontName
+function KE:GetEffectiveFont(moduleDB) end
+
+---@return boolean?
+function KE:IsEditModeActive() end
+
+function KE:Init() end
+
+---@param anchor string?
+---@return string
+function KE:GetPointFromAnchor(anchor) end
+
+---@param itemId string?
+---@return string? sectionId
+function KE:GetSectionForItem(itemId) end
+
+---@param value any
+---@return number
+function KE:RoundOffset(value) end
+
+---@param point string?
+---@return number x, number y
+function KE:GetAnchorFractions(point) end
+
+---@param hostPoint string?
+---@param elementPoint string?
+---@param xOffset number?
+---@param yOffset number?
+---@param elementW number?
+---@param elementH number?
+---@param hostW number?
+---@param hostH number?
+---@return number left, number right, number top, number bottom
+function KE:GetTextOverlayInset(hostPoint, elementPoint, xOffset, yOffset,
+                                elementW, elementH, hostW, hostH) end
+
+---@param grid number[] four numbers, left/right/top/bottom
+---@param elements number[][] zero or more of the same shape
+---@return number left, number right, number top, number bottom
+function KE:CombineOverlayInsets(grid, elements) end
+
+---@param fontString FontString?
+---@return string?
+function KE:FontKey(fontString) end
+
+---@param cache table?
+---@param role string?
+---@param fontKey string?
+---@param width number?
+---@param height number?
+function KE:CommitTextExtent(cache, role, fontKey, width, height) end
+
+---@param fs FontString?
+---@return number?, number?
+function KE:MeasureFontString(fs) end
+
+---@param unit string? "player" selects the character sheet; anything else, inspect
+---@return boolean
+function KE:EUISheetActive(unit) end
+
+---@param unit string? "player" selects the character sheet; anything else, inspect
+---@param element string # "ilvl" | "enchant" | "gems" | "track" | "missingEnchant" | "headerText" | "avgIlvl" | "socketPanel"
+---@return boolean
+function KE:EUIDrawsSlotElement(unit, element) end
+
+---@return boolean
+function KE:IsPlayerHealerSpec() end
+
+--- forceContext (optional): "HEALER" / "DEFAULT" overrides the live spec-driven
+--- resolution; nil resolves live (UseHealerPosition + current spec).
+---@param db table
+---@param forceContext string?
+---@return table posConfig
+---@return string? anchorFrameType
+---@return string? parentFrame
+---@return string? strata
+function KE:GetActivePositionConfig(db, forceContext) end
+
+---@param frame Frame
+---@param db table
+---@param setParent boolean?
+function KE:ApplyActivePosition(frame, db, setParent) end
+
+-- Core/Interrupts.lua
+--- Ordered list of { id, cd } entries to try in priority order, or nil when
+--- the spec is unknown or has no kick.
+---@param specID number
+---@return { id: number, cd: number }[]?
+function KE:GetInterruptCandidatesForSpec(specID) end
+
+--- Union of all candidate IDs + announce extras for one spec, or nil when unknown.
+---@param specID number
+---@return table<number, true>?
+function KE:GetInterruptSpellSet(specID) end
+
+-- Core/Main.lua
+function KE:SetupMinimapIcon() end
+
+-- Core/Nicknames.lua
+---@param unit string Unit token (e.g., "player", "party2")
+---@return string name Nickname if set, else raw UnitName
+function KE:GetNicknameOrName(unit) end
+
+---@return string|nil encoded
+---@return string|nil error
+---@return number|nil count
+function KE:ExportNicknames() end
+
+---@param importString string
+---@param replaceAll boolean|nil wipe local entries before applying the import
+---@return boolean success
+---@return string message
+function KE:ImportNicknames(importString, replaceAll) end
+
+---@return number cleared
+function KE:ClearAllNicknames() end
+
+function KE:RefreshNicknameTags() end
+
+-- Core/PixelPerfect.lua
+function KE:UpdatePixelCache() end
+
+--- Ideal UI scale (768 / physH). Used for scrollbar step clamping.
+---@return number
+function KE:GetPixelScale() end
+
+--- Snaps to the nearest even pixel multiple.
+---@param value number?
+---@return number
+function KE:PixelSnapEven(value) end
+
+--- Floors to a half-pixel boundary.
+---@param value number?
+---@return number
+function KE:PixelHalfFloor(value) end
+
+---@param value number
+---@param dim number?
+---@return number
+function KE:PixelSnapCenter(value, dim) end
+
+---@param obj Frame
+---@param anchor string
+---@param p1 Frame|number?
+---@param p2 string|number?
+---@param p3 number?
+---@param p4 number?
+function KE:PixelPoint(obj, anchor, p1, p2, p3, p4) end
+
+---@param frame Frame
+---@param w number
+---@param h number?
+function KE:PixelSize(frame, w, h) end
+
+---@param frame Frame
+---@param w number
+function KE:PixelWidth(frame, w) end
+
+---@param frame Frame
+---@param h number
+function KE:PixelHeight(frame, h) end
+
+---@param obj Frame
+---@param anchor Frame?
+---@param xOff number?
+---@param yOff number?
+function KE:PixelInside(obj, anchor, xOff, yOff) end
+
+---@param obj Frame
+---@param anchor Frame?
+---@param xOff number?
+---@param yOff number?
+function KE:PixelOutside(obj, anchor, xOff, yOff) end
+
+--- Backwards-compat alias for PixelSnap.
+---@param value number?
+---@return number
+function KE:PixelRound(value) end
+
+---@return number
+function KE:PixelBestSize() end
+
+---@param tex Texture
+function KE:DisableTextureSnap(tex) end
+
+function KE:ResnapAllBorders() end
+
+-- Core/Secret.lua
+---@param value any
+---@return boolean
+function KE:IsSecretValue(value) end
+
+---@param value any
+---@return boolean
+function KE:NotSecretValue(value) end
+
+---@param value any
+---@return boolean
+function KE:IsSafeValue(value) end
+
+---@param object any
+---@return boolean
+function KE:IsSecretTable(object) end
+
+---@param object any
+---@return boolean
+function KE:NotSecretTable(object) end
+
+---@param value any
+---@return boolean
+function KE:CanAccessValue(value) end
+
+---@param value any
+---@return boolean
+function KE:CanNotAccessValue(value) end
+
+---@param object any
+---@return boolean
+function KE:HasSecretValues(object) end
+
+---@param object any
+---@return boolean
+function KE:NoSecretValues(object) end
+
+---@param body any text to wrap, secret or not
+---@param prefix string|nil
+---@param suffix string|nil
+---@return any|nil joined
+function KE:WrapSecretText(body, prefix, suffix) end
+
+---@return boolean
+function KE:AreAuraIdentitiesHidden() end
+
+--- The identifier is whatever the guarded query passes: id, name, name with
+--- subtext, or link.
+---@param spellIdentifier any
+---@return boolean
+function KE:IsAuraHiddenForSpell(spellIdentifier) end
+
+---@param unit any
+---@param updateInfo table?
+---@return boolean
+function KE:IsUnreadableAuraPayload(unit, updateInfo) end
+
+---@param unit string
+---@return string?
+function KE:GetSafeUnitName(unit) end
+
+---@param unit string
+---@return string?
+function KE:GetSafeUnitGUID(unit) end
+
+---@param fontString FontString
+---@return string?
+function KE:GetSafeText(fontString) end
+
+--- 0 = none, 1 = partial, 2 = full.
+---@return number
+function KE:GetRestrictionState() end
+
+---@return boolean
+function KE:IsFullyRestricted() end
+
+---@return boolean
+function KE:IsRestricted() end
+
+---@return boolean
+function KE:CanMakeProtectedCalls() end
+
+--- targetState: 0 = run when fully clear, 1 = run when partial or clear.
+---@param targetState number
+---@param callback fun()?
+function KE:DeferUntilUnrestricted(targetState, callback) end
+
+-- Core/TextureSnap.lua
+---@param obj Frame|Texture?
+function KE:DisablePixelSnap(obj) end
+
+-- Core/Widgets.lua
+---@param timer number
+---@param text string
+---@param fontSize number
+---@param parentFrame Frame?
+---@param xOffset number?
+---@param yOffset number?
+---@return Frame?
+function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOffset) end
+
+---@param frame Frame
+---@param targetAlpha number
+---@param duration number
+function KE:CombatSafeFade(frame, targetAlpha, duration) end
+
+-- Modules/QoL/SlashCommands.lua
+---@return boolean
+function KE:HasAuraAddon() end
+
+function KE:ApplySlashCommands() end
