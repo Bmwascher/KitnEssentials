@@ -340,6 +340,10 @@ describe("CombatState machine", function()
             assert.is_false(cs:IsFrozen())
             assert.is_true(cs:IsLive())
             assert.is_false(cs.finalizePending)
+            -- A player rezzed inside the window keeps playerCombat; demoting
+            -- them to groupOnly would arm a poll for a fight they are in.
+            assert.is_true(cs.playerCombat)
+            assert.is_false(cs.groupOnly)
         end)
 
         it("a deferred non-kill evaluation whose generation has moved does nothing", function()
@@ -546,19 +550,18 @@ describe("CombatState machine", function()
             assert.equals(0.5, lastClock(sched).sec)
         end)
 
-        -- A cadence change replaces the ticker; it takes no sample of its own,
-        -- so the assertion is on the replacement's first fire.
-        it("a cadence change replaces the ticker rather than doubling it", function()
+        it("a cadence change replaces the ticker and samples at once", function()
             local cs = newCS()
             cs:OnRegenDisabled()
             local before = lastClock(sched)
+            deps.sessionDuration = function() return true, 4 end
             cs:SetFineCadence("A", true)
             assert.is_true(before.cancelled)
             local after = lastClock(sched)
             assert.are_not.equal(before, after)
             assert.is_false(after.cancelled)
-            deps.sessionDuration = function() return true, 4 end
-            after.fn()
+            -- Sampled by the change itself, without firing the new ticker:
+            -- waiting out its first interval leaves both surfaces stale.
             assert.equals(4, cs:GetDuration())
         end)
 

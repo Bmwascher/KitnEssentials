@@ -69,6 +69,8 @@ describe("the deferred stop after an ENCOUNTER_END kill", function()
         })
         stopCalls = 0
         DM.StopTicker = function() stopCalls = stopCalls + 1 end
+        -- OnEnable raises this; the deferred stop refuses to run without it.
+        DM.enabled = true
         KE.CombatState.live = false
         DM:BindCombatState()
         onStop = KE.CombatState.listeners["DamageMeter"].OnStop
@@ -95,6 +97,32 @@ describe("the deferred stop after an ENCOUNTER_END kill", function()
         onStop("encounterEnd")
         capturedAfter()
         assert.equals(1, stopCalls)
+    end)
+
+    it("stops at once for every other reason, scheduling nothing", function()
+        -- encounterEndDelayed already spent its delay inside the machine.
+        -- Deferring it again would add a second half-second to the totals.
+        for _, reason in ipairs({ "encounterEndDelayed", "combat", "pvp", "wedgeGuard", "reset" }) do
+            setup()
+            onStop(reason)
+            assert.equals(1, stopCalls, reason)
+            assert.is_nil(capturedAfter, reason)
+        end
+    end)
+end)
+
+describe("the OnClockTick listener", function()
+    it("repaints the clock only, never the bars", function()
+        local DM, KE = L.loadDMCore()
+        local tickCalls, repaintCalls = 0, 0
+        DM.Tick = function() tickCalls = tickCalls + 1 end
+        DM.RepaintCombatClock = function() repaintCalls = repaintCalls + 1 end
+
+        DM:BindCombatState()
+        KE.CombatState.listeners["DamageMeter"].OnClockTick(12, 0)
+
+        assert.equals(1, repaintCalls)
+        assert.equals(0, tickCalls)
     end)
 end)
 

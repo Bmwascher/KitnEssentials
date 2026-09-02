@@ -1185,6 +1185,14 @@ function DM:UpdateCombatClock(W, session)
     if storedID then
         duration = session and session.durationSeconds
     elseif not self._clockCleared and (KE.CombatState:IsLive() or KE.CombatState:IsFrozen()) then
+        -- Warm-up hold. A new fight resets the pin, so there is a gap before the
+        -- first reading lands. The service suppresses its own blank broadcast on
+        -- a live-to-live start, and this is the same rule for the bar repaint,
+        -- which runs on its own schedule: without it a boss chain-pulled out of
+        -- trash blanks this clock while the Combat Timer still shows the old
+        -- value. A genuine start clears the text first (BlankCombatClock), so
+        -- the hold can never carry a finished fight's time into a new one.
+        if KE.CombatState:GetDuration() == nil and W._clockHasText then return end
         -- The branch condition is LIVENESS, not a non-nil duration: splitting on
         -- the duration would drop into the reload fallback below before the pin
         -- is warm, and that fallback accepts a secret string the Combat Timer
@@ -1242,6 +1250,19 @@ function DM:UpdateCombatClock(W, session)
     end
     ApplyClockTint(self, W, clock)
     ShowClock(W, clock)
+end
+
+-- Drops the clock's text and hides it. Called at a genuine combat start so the
+-- warm-up hold in UpdateCombatClock has nothing stale to hold on to.
+function DM:BlankCombatClock()
+    if not self.windows_rt then return end
+    for _, W in pairs(self.windows_rt) do
+        if W.clock then
+            W._clockText = nil
+            W._clockHasText = false
+            HideClock(W, W.clock)
+        end
+    end
 end
 
 -- The clock, and nothing else. Calling Tick here would repaint every bar and

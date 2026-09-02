@@ -431,6 +431,14 @@ function CombatState:Generation()
     return self.generation
 end
 
+-- Replaces a running clock ticker and samples at once, so a cadence change
+-- cannot leave both surfaces stale for the length of the old interval.
+function CombatState:_RestartClock()
+    if not self.clockHandle then return end
+    self:_StartClock()
+    self:ClockTick()
+end
+
 -- Recording a preference must never start a ticker on an idle machine, or a
 -- 10 Hz sampler runs forever between fights.
 function CombatState:SetFineCadence(key, wanted)
@@ -439,7 +447,7 @@ function CombatState:SetFineCadence(key, wanted)
     else
         self.fineKeys[key] = nil
     end
-    if self.clockHandle then self:_StartClock() end    -- only if one is running
+    self:_RestartClock()
 end
 
 -- Keyed, so a module enabling and disabling repeatedly cannot stack
@@ -451,7 +459,7 @@ end
 function CombatState:UnregisterListener(key)
     self.listeners[key] = nil
     self.fineKeys[key] = nil
-    if self.clockHandle then self:_StartClock() end
+    self:_RestartClock()
 end
 
 ---------------------------------------------------------------------------------

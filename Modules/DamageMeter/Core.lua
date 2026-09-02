@@ -800,6 +800,10 @@ end
 -- in place, and the clock would stay hidden for the rest of that fight.
 function DM:_CombatStartBody()
     self._clockCleared = nil
+    -- A genuine start blanks the clock so the warm-up hold in UpdateCombatClock
+    -- cannot keep the PREVIOUS fight's time on screen. A chain pull gets no
+    -- OnStart, which is exactly when the hold is wanted.
+    if self.BlankCombatClock then self:BlankCombatClock() end
     self:ClearFeignTags("combat start")
     self:StartTicker()
 end
@@ -817,6 +821,7 @@ function DM:BindCombatState()
             if reason == "encounterEnd" then
                 local gen = KE.CombatState:Generation()
                 C_Timer.After(0.5, function()
+                    if not DM.enabled then return end
                     if KE.CombatState:Generation() ~= gen then return end
                     if KE.CombatState:IsLive() then return end
                     DM:StopTicker()
