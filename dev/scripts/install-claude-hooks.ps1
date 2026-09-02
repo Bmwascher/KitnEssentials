@@ -98,10 +98,11 @@ if (Test-Path $familySkills) {
 # 4. Pre-push gate (per-clone config; dies on re-clone without this).
 $current = git -C $root config core.hooksPath 2>$null
 # Compare resolved paths: the value may be stored absolute or relative.
-$want = (Join-Path $root 'dev\githooks')
+$want = (Resolve-Path (Join-Path $root 'dev\githooks')).Path
 $have = ''
 if ($current) {
-    try { $have = (Resolve-Path (Join-Path $root $current) -ErrorAction Stop).Path } catch { $have = $current }
+    $candidate = if ([System.IO.Path]::IsPathRooted($current)) { $current } else { Join-Path $root $current }
+    try { $have = (Resolve-Path $candidate -ErrorAction Stop).Path } catch { $have = $current }
 }
 if ($have -eq $want) {
     Write-Host "[install] core.hooksPath already dev/githooks"

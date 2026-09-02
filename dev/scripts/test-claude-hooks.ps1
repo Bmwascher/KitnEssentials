@@ -5,14 +5,16 @@
 #   pwsh dev/scripts/test-claude-hooks.ps1
 #
 # Exit 1 on any failed case or when a live hook under .claude/hooks/ differs
-# from its template. Read-only against the repo: the worktree and junction it
-# creates under $env:TEMP are removed on exit.
+# from its template. Read-only against the repo: the worktrees, junction,
+# branch and scratch folders it creates under $env:TEMP are removed on exit,
+# each cleanup step independently of the others.
 
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $templates = Join-Path $root 'dev\claude-hooks'
 $fail = 0
 $pass = 0
+$skip = 0
 
 function Invoke-Hook([string]$script, [hashtable]$payload) {
     $json = $payload | ConvertTo-Json -Compress -Depth 5
@@ -42,12 +44,20 @@ foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1')) 
     }
 }
 
-$wt = Join-Path $env:TEMP ("ke-hooktest-" + [System.IO.Path]::GetRandomFileName().Replace('.', ''))
+$tag = [System.IO.Path]::GetRandomFileName().Replace('.', '')
+$wt = Join-Path $env:TEMP "ke-hooktest-$tag"
 $link = "$wt-link"
+$feature = "$wt-feature"
+$featureBranch = "hooktest/$tag"
+$outside = "$wt-outside"
 try {
     git -C $root worktree add -q $wt main 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "could not add a worktree on main (is main checked out elsewhere?)" }
     New-Item -ItemType Junction -Path $link -Target $wt | Out-Null
+    New-Item -ItemType Directory -Path $outside | Out-Null
+    git -C $root worktree add -q -b $featureBranch $feature main 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "could not add the feature worktree" }
+    if ((git -C $feature branch --show-current).Trim() -ne $featureBranch) { throw "feature worktree is not on $featureBranch" }
     $short = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($wt).ShortPath
     $fwd = ($wt -replace '\\', '/')
     $fwd = $fwd.Substring(0, 1).ToLower() + $fwd.Substring(1)
@@ -58,13 +68,18 @@ try {
     Expect-Deny  $bg 'absolute path'            (& $edit "$wt\Core\Globals.lua" $wt)
     Expect-Deny  $bg 'forward slashes'          (& $edit "$fwd/Modules/QoL/QoL.xml" $wt)
     Expect-Deny  $bg 'relative path'            (& $edit 'Core/Globals.lua' $wt)
-    Expect-Deny  $bg '8.3 short path'           (& $edit "$short\Core\Globals.lua" $wt)
+    if ($short -ne $wt) { Expect-Deny $bg '8.3 short path' (& $edit "$short\Core\Globals.lua" $wt) } else { $skip++ }
     Expect-Deny  $bg 'junction path'            (& $edit "$link\Core\Globals.lua" $wt)
     Expect-Deny  $bg 'relative under junction'  (& $edit 'Core/Globals.lua' $link)
+    Expect-Deny  $bg 'new file in a new folder' (& $edit "$wt\Modules\NewFeature\New.lua" $wt)
+    Expect-Deny  $bg 'new folder under junction' (& $edit "$link\Modules\NewFeature\New.lua" $wt)
     Expect-Allow $bg 'dev/ exempt'              (& $edit "$wt\dev\spec\x_spec.lua" $wt)
+    Expect-Allow $bg 'new file under dev/'      (& $edit "$wt\dev\newdir\x.lua" $wt)
     Expect-Allow $bg '.claude/ exempt'          (& $edit "$wt\.claude\x.lua" $wt)
     Expect-Allow $bg '.toc exempt'              (& $edit "$wt\KitnEssentials.toc" $wt)
-    Expect-Allow $bg 'outside any repo'         (& $edit "$env:TEMP\nope\x.lua" $wt)
+    Expect-Allow $bg 'feature branch checkout'  (& $edit "$feature\Core\Globals.lua" $feature)
+    Expect-Allow $bg 'outside any repo (existing dir)' (& $edit "$outside\x.lua" $wt)
+    Expect-Allow $bg 'outside any repo (missing dir)'  (& $edit "$outside\nope\x.lua" $wt)
     Expect-Allow $bg 'no file_path'             @{ tool_name = 'Edit'; cwd = $wt; tool_input = @{} }
 
     # --- git-guard ------------------------------------------------------------
@@ -72,40 +87,51 @@ try {
     $sh = { param($c, $cwd, $tool = 'Bash') @{ tool_name = $tool; cwd = $cwd; tool_input = @{ command = $c } } }
     $deny = @(
         'git checkout -- Core/Globals.lua', 'git checkout .', 'git checkout main -- Core/Globals.lua',
-        'git checkout -f main', 'git restore Core/Globals.lua', 'git restore --worktree --staged Core/Globals.lua',
+        'git checkout -f main', 'git checkout -fq main', 'git checkout --pathspec-from-file=paths.txt',
+        'git restore Core/Globals.lua', 'git restore --worktree --staged Core/Globals.lua',
         'git add -A', 'git add --all', 'git add .', 'git add -u', 'git add -- .', 'git add -Av',
+        'git add *', 'git add "."', 'git add :/', 'git add -- :/*', 'git add -- ./*', 'git add -- **', 'git add -- :(top)**',
         'git restore --staged X && git add -A', 'git -C C:/x add -A', 'git -C "C:/some dir" add -A',
-        'git --no-pager add -A', 'git -c core.autocrlf=false add -A',
+        'git --no-pager add -A', 'git -c core.autocrlf=false add -A', 'git --work-tree . reset --hard HEAD',
+        'git --git-dir .git reset --hard', 'git -P reset --hard HEAD',
         'git commit -a -m x', 'git commit -am x', 'git commit --all -m x',
-        'git switch -f main', 'git switch --discard-changes main',
+        'git switch -f main', 'git switch -fq main', 'git switch --discard-changes main',
         'git reset --hard HEAD~1', 'git clean -fd', 'git stash drop', 'git stash clear',
-        'git add *', 'git add "."', 'git add :/',
-        'sed -i s/a/b/ Core/Globals.lua', "sed -i 's/a/b/' Modules/QoL/QoL.xml", 'cat > Core/Globals.lua',
-        'echo x >> GUI/GUIMain/GUI-Main.lua', 'tee Core/Globals.lua', "sed -i s/a/b/ $wt\Core\Globals.lua"
+        'sed -i s/a/b/ Core/Globals.lua', "sed -i 's/a/b/' Modules/QoL/QoL.xml", 'sed -i s/a/b/ "Core/Globals.lua"',
+        'cat > Core/Globals.lua', 'echo x > "Core/Globals.lua"', 'echo x >> GUI/GUIMain/GUI-Main.lua',
+        'tee Core/Globals.lua', 'tee "Core/Globals.lua"', "sed -i s/a/b/ $wt\Core\Globals.lua",
+        "sed -i s/a/b/ $link\Core\Globals.lua", 'cd dev && sed -i s/a/b/ ..\Core\Globals.lua',
+        'cd Modules; echo x > QoL/QoL.xml', 'sed -i s/a/b/ Modules/NewFeature/New.lua'
     )
     foreach ($c in $deny) { Expect-Deny $gg $c (& $sh $c $wt) }
+    Expect-Deny $gg 'relative write, cwd = junction' (& $sh 'sed -i s/a/b/ Core/Globals.lua' $link)
     Expect-Deny $gg 'Set-Content (PowerShell)'  (& $sh 'Set-Content Core/Globals.lua x' $wt 'PowerShell')
+    Expect-Deny $gg 'Set-Content -Path quoted'  (& $sh 'Set-Content -Path "Core/Globals.lua" -Value x' $wt 'PowerShell')
     Expect-Deny $gg 'Out-File (PowerShell)'     (& $sh "'x' | Out-File -Path Core/Globals.lua" $wt 'PowerShell')
     Expect-Deny $gg 'Add-Content (PowerShell)'  (& $sh 'Add-Content -LiteralPath Core/Globals.lua y' $wt 'PowerShell')
+    Expect-Deny $gg 'Tee-Object (PowerShell)'   (& $sh "'x' | Tee-Object -FilePath Core/Globals.lua" $wt 'PowerShell')
+    Expect-Deny $gg 'Set-Location then write'   (& $sh 'Set-Location Modules; Set-Content QoL/QoL.xml x' $wt 'PowerShell')
     $allow = @(
-        'git add Core/Globals.lua CHANGELOG.md', 'git restore --staged Core/Globals.lua', 'git checkout feature/x',
-        'git switch -c feature/x', 'git switch main', 'git stash', 'git stash pop', 'git reset --soft HEAD~1',
-        'git reset Core/Globals.lua', 'git clean -n', 'git clean -fdn', 'git commit -m "add a thing"',
-        'git commit --amend -m x', 'git add Modules/', 'sed -i s/a/b/ dev/spec/x_spec.lua', 'echo x > CHANGELOG.md',
-        'sed -n 1,5p Core/Globals.lua', 'grep -n foo Core/Globals.lua > out.txt', "sed -i s/a/b/ $env:TEMP\probe.lua",
-        'luacheck Core/Globals.lua > /dev/null 2>&1', 'git status', 'ls Core'
+        'git add Core/Globals.lua CHANGELOG.md', 'git add :/Core/Globals.lua', 'git restore --staged Core/Globals.lua',
+        'git checkout feature/x', 'git checkout -b feature/x', 'git switch -c feature/x', 'git switch --force-create feature/x',
+        'git switch main', 'git stash', 'git stash pop', 'git reset --soft HEAD~1', 'git reset Core/Globals.lua',
+        'git clean -n', 'git clean -fdn', 'git commit -m "add a thing"', 'git commit --amend -m x', 'git commit -m "-a"',
+        'git add Modules/', 'sed -i s/a/b/ dev/spec/x_spec.lua', 'cd dev && sed -i s/a/b/ spec/x_spec.lua',
+        'echo x > CHANGELOG.md', 'sed -n 1,5p Core/Globals.lua', 'grep -n foo Core/Globals.lua > out.txt',
+        "sed -i s/a/b/ $outside\probe.lua", 'luacheck Core/Globals.lua > /dev/null 2>&1', 'git status', 'git log -3', 'ls Core'
     )
     foreach ($c in $allow) { Expect-Allow $gg $c (& $sh $c $wt) }
-    # Shell writes are only denied while the cwd's checkout is on main.
-    $feature = "$wt-feature"
-    git -C $root worktree add -q -b "hooktest/$([System.IO.Path]::GetRandomFileName().Replace('.', ''))" $feature main 2>&1 | Out-Null
+    # Shell writes are only denied while the target's checkout is on main.
     Expect-Allow $gg 'sed -i on a feature branch' (& $sh 'sed -i s/a/b/ Core/Globals.lua' $feature)
+    Expect-Allow $gg 'absolute write into a feature checkout, cwd on main' (& $sh "sed -i s/a/b/ $feature\Core\Globals.lua" $wt)
 
     # --- luacheck-postedit ----------------------------------------------------
     $lc = 'luacheck-postedit.ps1'
     $probe = Join-Path $wt 'dev\_hooktest_probe.lua'
     Set-Content -Path $probe -Value 'local unused = 1' -NoNewline
-    foreach ($case in @(@("$wt\dev\_hooktest_probe.lua", $wt), @('dev/_hooktest_probe.lua', $wt), @("$short\dev\_hooktest_probe.lua", $wt), @("$link\dev\_hooktest_probe.lua", $wt))) {
+    $cases = @(@("$wt\dev\_hooktest_probe.lua", $wt), @('dev/_hooktest_probe.lua', $wt), @("$link\dev\_hooktest_probe.lua", $wt))
+    if ($short -ne $wt) { $cases += , @("$short\dev\_hooktest_probe.lua", $wt) } else { $skip++ }
+    foreach ($case in $cases) {
         $r = Invoke-Hook (Join-Path $templates $lc) (& $edit $case[0] $case[1])
         Check "$lc warns: $($case[0])" ($r.code -eq 2 -and $r.out -match "unused variable 'unused'") $r.out.Trim()
     }
@@ -119,7 +145,7 @@ try {
     # --- commit-msg (bash) ----------------------------------------------------
     $bash = (Get-Command bash -ErrorAction SilentlyContinue).Source
     if ($bash) {
-        $msgFile = Join-Path $env:TEMP 'ke-hooktest-msg.txt'
+        $msgFile = Join-Path $env:TEMP "ke-hooktest-$tag-msg.txt"
         $hook = (Join-Path $root 'dev\githooks\commit-msg') -replace '\\', '/'
         $cm = { param($name, $msg, $expect)
             [System.IO.File]::WriteAllText($msgFile, $msg)
@@ -137,20 +163,23 @@ try {
         & $cm 'release commit'              "v4.4.9: fix a thing`n"                                   'pass'
         & $cm 'human sign-off'              "fix`n`nSigned-off-by: Brandon Wascher <x>`n"             'pass'
         & $cm 'comment lines before subject' "# editor comment`nfix a thing`n"                        'pass'
+        & $cm 'blank lines before subject'  "`n`nfix a thing`n"                                       'pass'
         & $cm 'compat name alone'           "skin the elvui bags`n"                                   'pass'
         Remove-Item $msgFile -Force -ErrorAction SilentlyContinue
     } else {
         Write-Host 'commit-msg cases skipped: bash not on PATH'
     }
 } finally {
-    if (Test-Path $link) { (Get-Item $link).Delete() }
-    foreach ($w in @($wt, "$wt-feature")) {
-        if (Test-Path $w) { git -C $root worktree remove --force $w 2>&1 | Out-Null }
+    $ErrorActionPreference = 'Continue'
+    try { if (Test-Path $link) { (Get-Item $link).Delete() } } catch { Write-Host "cleanup: junction $link left behind: $_" }
+    foreach ($w in @($wt, $feature)) {
+        try { if (Test-Path $w) { git -C $root worktree remove --force $w 2>&1 | Out-Null } } catch { Write-Host "cleanup: worktree $w left behind: $_" }
     }
-    git -C $root worktree prune 2>&1 | Out-Null
-    git -C $root branch --list 'hooktest/*' | ForEach-Object { git -C $root branch -D $_.Trim() 2>&1 | Out-Null }
+    try { git -C $root worktree prune 2>&1 | Out-Null } catch { }
+    try { if (git -C $root branch --list $featureBranch) { git -C $root branch -D $featureBranch 2>&1 | Out-Null } } catch { Write-Host "cleanup: branch $featureBranch left behind: $_" }
+    try { if (Test-Path $outside) { Remove-Item $outside -Recurse -Force } } catch { }
 }
 
-Write-Host ("{0} passed, {1} failed" -f $pass, $fail)
+Write-Host ("{0} passed, {1} failed, {2} skipped" -f $pass, $fail, $skip)
 if ($fail -gt 0) { exit 1 }
 exit 0

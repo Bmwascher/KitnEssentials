@@ -5,6 +5,8 @@
 # The file's repo comes from git, asked from the file's own directory, so
 # relative paths, 8.3 spellings and the symlinked AddOns folder are linted
 # against the repo's own .luacheckrc instead of escaping a string-prefix check.
+# Fail-open by design: with git, luacheck or .luacheckrc missing the edit is
+# not blocked; the pre-push gate and CI still lint everything.
 
 try {
     $payload = [Console]::In.ReadToEnd() | ConvertFrom-Json
@@ -24,6 +26,7 @@ try {
     exit 0
 }
 if (-not (Test-Path -LiteralPath $full)) { exit 0 }
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) { exit 0 }
 
 $dir = Split-Path -Parent $full
 $leaf = Split-Path -Leaf $full
