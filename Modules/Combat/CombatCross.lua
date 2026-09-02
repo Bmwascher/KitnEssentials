@@ -344,9 +344,9 @@ function CC:ApplySettings()
     -- Ends in a visibility decision because this is where a PROFILE SWITCH
     -- lands for a module that was already enabled and stays enabled:
     -- ProfileManager:RefreshAllModules calls ApplySettings on exactly those,
-    -- and never touches visibility. Without this, a profile that turns Always
-    -- Show on would not show the cross until the next fight. A module the new
-    -- profile ENABLES arrives through OnEnable instead, which ends in the same
+    -- and never touches visibility. Without this, a profile whose mode shows
+    -- the cross out of combat would not show it until the next fight. A module
+    -- the new profile ENABLES arrives through OnEnable instead, which ends in the same
     -- call. UpdateVisibility runs UpdateOnUpdateState itself, so the call that
     -- used to be here is not lost.
     -- Hide When In Range is the only thing that ever lowers alpha, so turning
