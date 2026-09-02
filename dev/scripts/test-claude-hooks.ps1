@@ -213,6 +213,8 @@ try {
         & $stage 'frame RegisterUnitEvent'          "local f = CreateFrame('Frame')`nf:RegisterUnitEvent('UNIT_AURA', 'player')`n" 'pass'
         & $stage 'restricted name inside a string'  "local s = `"CombatLogGetCurrentEventInfo()`"`n" 'pass'
         & $stage 'string holding -- then a restricted call' "local m = `"--`"; local a = CombatLogGetCurrentEventInfo()`n" 'block'
+        & $stage 'leveled long string holding -- then a restricted call' "local m = [=[--]=]; local a = CombatLogGetCurrentEventInfo()`n" 'block'
+        & $stage 'restricted name inside a leveled long string' "local s = [==[CombatLogGetCurrentEventInfo()]==]`n" 'pass'
         & $stage 'new KE: method without a stub'    "function KE:HookTestProbe(a) return a end`n" 'block'
         & $stage 'new KE. function without a stub'  "function KE.HookTestProbe(a) return a end`n" 'block'
         & $stage 'new KE. assignment without a stub' "KE.HookTestProbe = function(a) return a end`n" 'block'

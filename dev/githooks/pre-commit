@@ -41,10 +41,14 @@ ng_code_lines() {
             if (q == "") {
                 if (c == "-" && substr(line, i, 2) == "--") break
                 if (c == "\"" || c == "\047") { q = c; out = out c; i++; continue }
-                if (c == "[" && substr(line, i, 2) == "[[") { q = "]]"; out = out "[["; i += 2; continue }
+                if (c == "[" && match(substr(line, i), /^\[=*\[/)) {
+                    # Long string at any level: [[ ]], [=[ ]=], [==[ ]==] ...
+                    opener = substr(line, i, RLENGTH); q = opener; gsub(/\[/, "]", q)
+                    out = out opener; i += RLENGTH; continue
+                }
                 out = out c; i++
-            } else if (q == "]]") {
-                if (substr(line, i, 2) == "]]") { out = out "]]"; q = ""; i += 2; continue }
+            } else if (substr(q, 1, 1) == "]") {
+                if (substr(line, i, length(q)) == q) { out = out q; q = ""; i += length(q); continue }
                 if (mode == "keep") out = out c
                 i++
             } else {
