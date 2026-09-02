@@ -526,18 +526,19 @@ local TARGET_SEPARATORS = {
 function DC:UpdateTargetText(bar, targetName, targetClass)
     if not bar.targetText or not bar.targetSeparator then return end
 
+    -- Remembered so a settings change can put it back: ConfigureBar hides both
+    -- regions and nothing else re-shows them. Recorded BEFORE the Enabled test,
+    -- because a bar whose name was only hidden by that setting still has one to
+    -- restore when it comes back on. The name may be a secret string, so it is
+    -- only ever handed back to SetText, never compared.
+    bar.targetName, bar.targetClass = targetName, targetClass
+
     local targetDb = self.db.Target
     if not targetDb or not targetDb.Enabled or not targetName then
-        bar.targetName, bar.targetClass = nil, nil
         bar.targetText:Hide()
         bar.targetSeparator:Hide()
         return
     end
-
-    -- Remembered so a settings change can put it back: ConfigureBar hides both
-    -- regions and nothing else re-shows them. The name may be a secret string,
-    -- so it is only ever handed back to SetText, never compared.
-    bar.targetName, bar.targetClass = targetName, targetClass
 
     -- SetText + SetTextColor on separate FontStrings — no concatenation with
     -- targetName, which may be a secret string from UnitSpellTargetName.
@@ -1018,10 +1019,8 @@ function DC:UpdateFrameVisuals()
         -- without this the preview ignored the flip (report).
         -- Preview branch reads bar.previewRaidIcon, real branch bar.unit.
         self:UpdateRaidIcon(bar, bar.unit)
-        -- ConfigureBar above hid both target regions, and nothing else shows
-        -- them again until the unit's next cast, so restore what the bar was
-        -- displaying. Preview bars keep their target on previewTarget; live
-        -- bars on targetName.
+        -- ConfigureBar above hid both target regions, so restore what the bar
+        -- was displaying.
         if self.isPreview then
             if bar.previewTarget ~= nil then
                 self:UpdateTargetText(bar, bar.previewTarget, bar.previewTargetClass)
