@@ -668,7 +668,15 @@ describe("ChatHistory Battle.net sender token", function()
         end)
 
         it("refuses the row when argument 13 is not a positive number", function()
-            local CH, KE = L.loadChatHistory()
+            -- The lookup resolves for any id, so the range test is the only
+            -- thing that can refuse this row. With the loader default, which
+            -- returns nil, the empty-tag guard would refuse it instead and the
+            -- case would pass without the range test mattering.
+            local CH, KE = L.loadChatHistory({
+                C_BattleNet = {
+                    GetAccountInfoByID = function() return { battleTag = "SoTilted#1527" } end,
+                },
+            })
             saveBNWhisper(CH, "|Kf1|k", 0)
             assert.equals(0, #KE.db.char.ChatHistory)
         end)
@@ -733,10 +741,12 @@ describe("ChatHistory Battle.net sender token", function()
         end)
 
         it("refuses a row whose stored BattleTag reads secret", function()
-            local tag = {}
-            local CH, KE = L.loadChatHistory({ issecretvalue = secretIs(tag) })
+            -- A secret STRING, and not the one in row[2]. A table would be
+            -- refused by the type check one line below the secrecy check, and
+            -- a value shared with row[2] by the argument loop.
+            local CH, KE = L.loadChatHistory({ issecretvalue = secretIs("Other#1") })
             KE.db.char.ChatHistory[1] =
-                { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = tag }
+                { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = "Other#1" }
             assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
         end)
 

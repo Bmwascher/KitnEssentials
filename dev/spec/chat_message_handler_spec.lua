@@ -172,9 +172,9 @@ describe("ChatMessageHandler Battle.net player link", function()
         assert.is_truthy(body:find("|HBNplayer:", 1, true))
     end)
 
-    -- This is the mechanism the no-match replay branch depends on: without
-    -- it, handing GetBNPlayerLink a nil id does not quietly omit a link, it
-    -- corrupts the ones GetLink builds for every OTHER call in the same pass.
+    -- This is the mechanism the no-match replay branch depends on: GetLink
+    -- concatenates whatever it is handed, so a nil id yields a malformed link
+    -- rather than none, and skipping the call is the only way to omit one.
     it("omits the link and falls back to the plain name when the id is nil", function()
         local body = formatBody(nil)
         assert.is_falsy(body:find("|HBNplayer:", 1, true))
