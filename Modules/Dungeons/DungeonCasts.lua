@@ -818,6 +818,10 @@ function DC:OnCastInterrupted(event, unit, ...)
     bar.castBar:SetValue(1)
     if bar.timeText then bar.timeText:SetText("") end
     if bar.spark then bar.spark:Hide() end
+    -- Nothing on the hold path hides these, so left alone the dead cast's
+    -- target sits beside the interrupt text for the whole hold.
+    if bar.targetText then bar.targetText:Hide() end
+    if bar.targetSeparator then bar.targetSeparator:Hide() end
 
     local r, g, b, a = KE:ResolveColor(interruptDb.Color, { 0.35, 1, 0.35, 1 })
     bar.castBar:GetStatusBarTexture():SetVertexColor(r, g, b, a)
