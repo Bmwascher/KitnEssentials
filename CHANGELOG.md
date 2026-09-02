@@ -1,5 +1,34 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.27
+
+### Combat Cross
+- The visibility setting is now a dropdown with six choices, matching the
+  Cursor module: Always Visible, In Combat, Out of Combat, In Instance
+  (Dungeon/Raid), Solo and Hidden
+- **NEW:** In Instance shows the cross in any dungeon or raid, in and out of
+  combat
+- The old In Party and In Raid choices are gone. If you used either, your
+  setting becomes In Instance automatically
+
+### Character sheet
+- **NEW:** The alt-click comparison flyout now tints each item's border to its
+  rarity, the same as the equipped slots
+- Turning Item Rarity Borders off turns these off too
+
+### Enemy Casts
+- **NEW:** An interrupted cast now names who kicked it, in their class colour,
+  and holds the bar for a moment so you can read it
+- With Combat Only on, pulling a mob that is already casting now shows its bar
+  straight away instead of waiting for its next cast
+
+### Chat
+- Battle.net whispers in your replayed chat history now show the right sender.
+  They could previously show a different friend's name after a relog, because
+  the stored name tag is only valid for the session that stored it
+
+---
+
 ## v4.4.26
 
 ### Four modules removed
