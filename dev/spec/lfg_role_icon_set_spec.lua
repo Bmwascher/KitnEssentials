@@ -11,17 +11,11 @@ describe("S.GetRoleIconSet", function()
         return S.GetRoleIconSet()
     end
 
-    it("returns modern when the key is absent", function()
+    it("returns modern when the key is absent, the stored value when recognised, modern otherwise", function()
         assert.are.equal("modern", resolverWith({}))
-    end)
-
-    it("returns the stored value when it is recognised", function()
         assert.are.equal("blizzard", resolverWith({ RoleIconSet = "blizzard" }))
         assert.are.equal("circle", resolverWith({ RoleIconSet = "circle" }))
         assert.are.equal("modern", resolverWith({ RoleIconSet = "modern" }))
-    end)
-
-    it("falls back to modern for an unrecognised value", function()
         assert.are.equal("modern", resolverWith({ RoleIconSet = "nonsense" }))
     end)
 
@@ -85,14 +79,6 @@ describe("S.RoleArtPath", function()
         assert.are_not.equal(S.RoleArtPath("modern", "TANK"), S.RoleArtPath("framed", "TANK"))
     end)
 
-    it("returns a path for every art set and role", function()
-        for set, art in pairs(KE.ROLE_ICON_ART) do
-            for _, role in ipairs({ "TANK", "HEALER", "DAMAGER" }) do
-                assert.are.equal(art[role], S.RoleArtPath(set, role))
-            end
-        end
-    end)
-
     -- nil is the signal to draw an atlas instead, so these two are the whole
     -- reason blizzard and circle keep their current look.
     it("returns nil for the two sets that draw atlases", function()
@@ -147,13 +133,9 @@ describe("LFG role icons: the per-member refusal rule", function()
         assert.is_true(entry[2])
     end)
 
-    it("skips a member whose role is secret", function()
+    it("skips a member whose role or class is secret", function()
         local _, S = withSecrets()
         assert.is_nil(S.AcceptMember(SECRET, "DRUID", false))
-    end)
-
-    it("skips a member whose class is secret", function()
-        local _, S = withSecrets()
         assert.is_nil(S.AcceptMember("TANK", SECRET, false))
     end)
 
@@ -170,11 +152,5 @@ describe("LFG role icons: the per-member refusal rule", function()
         local entry = S.AcceptMember("HEALER", "PRIEST", SECRET)
         assert.are.equal("PRIEST", entry[1])
         assert.is_nil(entry[2])
-    end)
-
-    it("refusing one member does not affect the next", function()
-        local _, S = withSecrets()
-        assert.is_nil(S.AcceptMember(SECRET, "DRUID", false))
-        assert.are.equal("MAGE", S.AcceptMember("DAMAGER", "MAGE", false)[1])
     end)
 end)

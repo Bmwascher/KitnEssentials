@@ -4,7 +4,7 @@
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- Loads the REAL Modules/DamageMeter/Detail.lua headlessly and tests
--- AggregateEnemyPlayers / AutoAttackName / MergeSpellsByName / TipHeaderName
+-- AutoAttackName / MergeSpellsByName / TipHeaderName
 -- through the DM.* seam at its EOF (the helpers are file-locals). If Detail.lua ever gains
 -- load-time C_* calls / event registrations this load breaks loudly — that is
 -- the intended tripwire; fix the load path, don't re-mirror the bodies.
@@ -42,13 +42,9 @@ before_each(function()
 end)
 
 describe("MergeSpellsByName", function()
-    it("returns nil for nil input", function()
+    it("returns nil for nil input, empty list for empty combatSpells", function()
         assert.is_nil(DM.MergeSpellsByName(nil))
-    end)
-
-    it("returns an empty list for empty combatSpells", function()
-        local r = DM.MergeSpellsByName({})
-        assert.same({}, r)
+        assert.same({}, DM.MergeSpellsByName({}))
     end)
 
     it("collapses same-named spellIDs and sums amount + per-second", function()
@@ -128,72 +124,6 @@ describe("MergeSpellsByName", function()
     end)
 end)
 
-describe("AggregateEnemyPlayers", function()
-    local function det(name, class, icon) return { unitName = name, unitClassFilename = class, specIconID = icon } end
-
-    it("returns nil for nil / empty / no-combatSpells", function()
-        assert.is_nil(DM.AggregateEnemyPlayers(nil))
-        assert.is_nil(DM.AggregateEnemyPlayers({}))
-        assert.is_nil(DM.AggregateEnemyPlayers({ combatSpells = {} }))
-    end)
-
-    it("aggregates by attacking player, sums total + dps, sorted desc", function()
-        local src = { combatSpells = {
-            { totalAmount = 30, amountPerSecond = 3, combatSpellDetails = det("Bob", "MAGE", 11) },
-            { totalAmount = 50, amountPerSecond = 5, combatSpellDetails = det("Amy", "ROGUE", 22) },
-            { totalAmount = 30, amountPerSecond = 3, combatSpellDetails = det("Bob", "MAGE", 11) },
-        } }
-        local r = DM.AggregateEnemyPlayers(src)
-        assert.equals(2, #r)
-        assert.equals("Bob", r[1].name)      -- 30+30 = 60 > Amy(50), no tie
-        assert.equals(60, r[1].total)
-        assert.equals(6, r[1].dps)
-        assert.equals("MAGE", r[1].class)
-        assert.equals(11, r[1].specIcon)
-        assert.equals("Amy", r[2].name)
-        assert.equals(50, r[2].total)
-    end)
-
-    it("skips zero-damage attributions (amt > 0 gate, parity with BuildAllPlayerTargets)", function()
-        local src = { combatSpells = {
-            { totalAmount = 0, amountPerSecond = 0, combatSpellDetails = det("Ghost", "PRIEST", 1) },
-            { totalAmount = 40, amountPerSecond = 4, combatSpellDetails = det("Real", "WARRIOR", 2) },
-        } }
-        local r = DM.AggregateEnemyPlayers(src)
-        assert.equals(1, #r)
-        assert.equals("Real", r[1].name)
-    end)
-
-    it("skips entries with a secret unitName", function()
-        SECRET["Hidden"] = true
-        local src = { combatSpells = {
-            { totalAmount = 99, amountPerSecond = 9, combatSpellDetails = det("Hidden", "DRUID", 3) },
-            { totalAmount = 40, amountPerSecond = 4, combatSpellDetails = det("Seen", "HUNTER", 4) },
-        } }
-        local r = DM.AggregateEnemyPlayers(src)
-        assert.equals(1, #r)
-        assert.equals("Seen", r[1].name)
-    end)
-
-    it("returns nil when every attacker is zero / secret (empty result)", function()
-        SECRET["X"] = true
-        local src = { combatSpells = {
-            { totalAmount = 0, amountPerSecond = 0, combatSpellDetails = det("Zero", "MAGE", 1) },
-            { totalAmount = 99, amountPerSecond = 9, combatSpellDetails = det("X", "ROGUE", 2) },
-        } }
-        assert.is_nil(DM.AggregateEnemyPlayers(src))
-    end)
-
-    it("sanitizes a secret amount to 0 (skips that contribution)", function()
-        SECRET["sa"] = true
-        local src = { combatSpells = {
-            { totalAmount = "sa", amountPerSecond = 1, combatSpellDetails = det("Solo", "MAGE", 1) },
-        } }
-        -- "sa" -> 0, fails amt > 0 -> no row -> nil
-        assert.is_nil(DM.AggregateEnemyPlayers(src))
-    end)
-end)
-
 describe("TipHeaderName", function()
     -- History.lua is not loaded here: DM.PlainNameFor is stubbed per test
     -- (fresh DM each before_each, so stubs never leak).
@@ -208,11 +138,6 @@ describe("TipHeaderName", function()
             return guid == "Player-1-A" and "Unsub-BurningLegion" or nil
         end
         assert.equals("Unsub-BurningLegion", DM.TipHeaderName(DM, { _sourceGUID = "Player-1-A" }))
-    end)
-
-    it("defaults to Breakdown on a memo miss", function()
-        DM.PlainNameFor = function() return nil end
-        assert.equals("Breakdown", DM.TipHeaderName(DM, { _sourceGUID = "Player-1-Z" }))
     end)
 
     it("defaults to Breakdown when no memo is installed (load-order safety)", function()

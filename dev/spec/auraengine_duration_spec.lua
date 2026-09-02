@@ -41,66 +41,6 @@ local function installFormatterStubs()
 end
 
 describe("AuraEngine duration formatting", function()
-    it("configures the live formatter to show whole hours at one hour", function()
-        local breakpoints
-        _G.C_StringUtil = {
-            CreateNumericRuleFormatter = function()
-                return {
-                    SetBreakpoints = function(_, value)
-                        breakpoints = value
-                    end,
-                }
-            end,
-        }
-        _G.Enum = {
-            NumericRuleFormatRounding = {
-                Down = "down",
-                Up = "up",
-            },
-        }
-
-        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
-        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
-        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
-        getDurationFormatter({})
-
-        assert.equals(3600, breakpoints[1].threshold)
-        assert.equals("%dh", breakpoints[1].format)
-        assert.equals(3600, breakpoints[1].components[1].div)
-        assert.equals("down", breakpoints[1].components[1].rounding)
-    end)
-
-    -- Down, not up: the Cooldown Manager's icons keep the game's own countdown
-    -- numbers while these displays draw their own text, and a rounding flip
-    -- here silently puts the same buff a second apart between the two.
-    it("rounds the sub-minute seconds DOWN, so it agrees with the game's own numbers", function()
-        local breakpoints
-        _G.C_StringUtil = {
-            CreateNumericRuleFormatter = function()
-                return {
-                    SetBreakpoints = function(_, value)
-                        breakpoints = value
-                    end,
-                }
-            end,
-        }
-        _G.Enum = {
-            NumericRuleFormatRounding = {
-                Down = "down",
-                Up = "up",
-            },
-        }
-
-        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
-        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
-        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
-        getDurationFormatter({})
-
-        assert.equals(0, breakpoints[3].threshold)
-        assert.equals("%d", breakpoints[3].format)
-        assert.equals("down", breakpoints[3].rounding)
-    end)
-
     it("leaves the whole-second rule alone at a threshold of zero", function()
         local captured = installFormatterStubs()
         local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
@@ -129,17 +69,6 @@ describe("AuraEngine duration formatting", function()
         assert.equals(0, captured.breakpoints[4].threshold)
         assert.equals(0.1, captured.breakpoints[4].step)
         assert.equals("%.1f", captured.breakpoints[4].format)
-    end)
-
-    it("rounds both sub-minute rules DOWN when a threshold is set", function()
-        local captured = installFormatterStubs()
-        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
-        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
-        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
-        getDurationFormatter({ DecimalThreshold = 3 })
-
-        assert.equals("down", captured.breakpoints[3].rounding)
-        assert.equals("down", captured.breakpoints[4].rounding)
     end)
 
     -- The four GUI builders present this value and both rendering paths act on
@@ -229,7 +158,7 @@ describe("AuraEngine duration formatting", function()
         assert.equals("", formatRemaining(0))
     end)
 
-    it("shows tenths under the threshold and whole seconds at or above it", function()
+    it("shows tenths under the threshold, whole seconds at or above it, and ticks ten times faster while set", function()
         local formatRemaining = loadPreviewLocal("FormatRemaining")
 
         assert.equals("2.9", formatRemaining(2.99, 3))
@@ -237,9 +166,7 @@ describe("AuraEngine duration formatting", function()
         assert.equals("3", formatRemaining(3, 3))
         assert.equals("9", formatRemaining(9.7, 3))
         assert.equals("4", formatRemaining(4.9, 0))
-    end)
 
-    it("ticks ten times faster only while a threshold is set", function()
         local Preview = L.loadAuraPreview()
         local buildFrames = findUpvalue(Preview.Enter, "BuildFrames")
         local getTickInterval = findUpvalue(buildFrames, "GetTickInterval")

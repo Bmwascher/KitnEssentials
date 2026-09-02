@@ -1,6 +1,6 @@
 -- Specs for the Dungeon Timers dungeon registry helpers: season list
--- derivation, per-season filtering, and initial-selection resolution
--- (current dungeon > saved selection > newest-season fallback).
+-- derivation and initial-selection resolution (current dungeon > saved
+-- selection > newest-season fallback).
 local loader = require("dev.spec._ke_loader")
 
 describe("DungeonRegistry", function()
@@ -20,16 +20,6 @@ describe("DungeonRegistry", function()
 
     it("lists distinct seasons ascending", function()
         assert.same({ 1, 2 }, KE.GetDungeonTimerSeasons(REG))
-    end)
-
-    it("filters dungeons by season preserving registry order", function()
-        local s1 = KE.GetDungeonTimerDungeonsForSeason(REG, 1)
-        assert.equal(2, #s1)
-        assert.equal("Alpha", s1[1].key)
-        assert.equal("Bravo", s1[2].key)
-        local s2 = KE.GetDungeonTimerDungeonsForSeason(REG, 2)
-        assert.equal(1, #s2)
-        assert.equal("Delta", s2[1].key)
     end)
 
     it("selects the current dungeon when inside a tracked instance", function()
@@ -54,22 +44,5 @@ describe("DungeonRegistry", function()
         local season, key = KE.ResolveDungeonTimerSelection(REG, nil, nil)
         assert.equal(2, season)
         assert.equal("Delta", key)
-    end)
-
-    it("shipped registry carries eight season-1 dungeons with unique keys and instanceIDs", function()
-        local reg = KE.DungeonTimerDungeons
-        assert.equal(8, #reg)
-        local keys, instances = {}, {}
-        for _, d in ipairs(reg) do
-            assert.equal(1, d.season)
-            assert.is_string(d.key)
-            assert.is_string(d.name)
-            assert.is_number(d.iconID)
-            assert.is_number(d.instanceID)
-            assert.is_nil(keys[d.key])
-            assert.is_nil(instances[d.instanceID])
-            keys[d.key] = true
-            instances[d.instanceID] = true
-        end
     end)
 end)

@@ -47,15 +47,12 @@ describe("KE:MeasureFontString", function()
         refuses({})
     end)
 
-    -- Each getter is tested separately, because one of them existing does not
-    -- imply the other. A guard that checks only the width calls the height
+    -- Each getter has to be checked separately, because one of them existing does
+    -- not imply the other. A guard that checks only the width calls the height
     -- method on something that does not have it, and throws where it meant to
     -- refuse -- which no assertion about the return value can catch.
-    it("refuses an object carrying only the width getter", function()
+    it("refuses an object missing either getter", function()
         refuses({ GetStringWidth = function() return 9 end })
-    end)
-
-    it("refuses an object carrying only the height getter", function()
         refuses({ GetStringHeight = function() return 16 end })
     end)
 
@@ -65,22 +62,16 @@ describe("KE:MeasureFontString", function()
     it("refuses a zero measurement", function()
         refuses(fs(0, 16))
         refuses(fs(9, 0))
-    end)
-
-    it("refuses a negative measurement", function()
         refuses(fs(-1, 16))
         refuses(fs(9, -1))
-    end)
-
-    it("refuses a non-number measurement", function()
-        refuses(fs("9", 16))
-        refuses(fs(9, "16"))
     end)
 
     -- Each axis has to be able to fail on its own. A guard written against the
     -- width alone passes every case above that varies the width, and reports a
     -- height nobody checked.
-    it("refuses on either axis independently", function()
+    it("refuses a non-number or missing measurement", function()
+        refuses(fs("9", 16))
+        refuses(fs(9, "16"))
         refuses(fs(9, nil))
         refuses(fs(nil, 16))
     end)

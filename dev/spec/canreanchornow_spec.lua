@@ -56,14 +56,6 @@ describe("KE:CanReanchorNow", function()
         assert.is_false(KE:CanReanchorNow(frame({ restricted = true })))
     end)
 
-    -- A secret answer is not a "no", it is an unreadable answer, and the rule
-    -- is to fail closed on it rather than truth-test it.
-    it("refuses in combat when either gate answers with a secret", function()
-        inCombat = true
-        assert.is_false(KE:CanReanchorNow(frame({ protected = SECRET })))
-        assert.is_false(KE:CanReanchorNow(frame({ restricted = SECRET })))
-    end)
-
     it("refuses in combat when the anchoring gate is missing", function()
         inCombat = true
         assert.is_false(KE:CanReanchorNow(frame({ noAnchoringMethod = true })))

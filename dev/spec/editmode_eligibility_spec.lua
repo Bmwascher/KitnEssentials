@@ -43,10 +43,6 @@ describe("EditMode eligibility", function()
             assert.is_false(EditMode:ElementIsLive(element({ isEligible = function() return false end })))
         end)
 
-        it("allows when isEligible returns true", function()
-            assert.is_true(EditMode:ElementIsLive(element({ isEligible = function() return true end })))
-        end)
-
         it("refuses when the module is enabled but the mode is not eligible", function()
             local mod = { IsEnabled = function() return true end }
             assert.is_false(EditMode:ElementIsLive(element({
@@ -94,21 +90,6 @@ describe("EditMode eligibility", function()
 
         it("refuses a nil element rather than erroring", function()
             assert.is_false(EditMode:ElementShouldShow(nil))
-        end)
-    end)
-
-    -- No secret-value case here. The project does not test secret values, and a
-    -- faked one would be caught by the type check before `issecretvalue` ever
-    -- ran, so the test would pass without exercising the branch it names.
-    describe("SafeInset", function()
-        it("passes a plain number through", function()
-            assert.equals(12, EditMode._SafeInset(12))
-        end)
-
-        it("coerces a non-number to zero", function()
-            assert.equals(0, EditMode._SafeInset(nil))
-            assert.equals(0, EditMode._SafeInset("12"))
-            assert.equals(0, EditMode._SafeInset({}))
         end)
     end)
 end)

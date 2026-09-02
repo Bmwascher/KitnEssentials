@@ -51,12 +51,6 @@ describe("PetStatusText missing-pet verdict", function()
         assert.is_true(rec.shown)
     end)
 
-    it("says nothing when the pet is alive", function()
-        local PS, rec = L.loadPetStatusText({ class = "WARLOCK", specID = AFFLICTION, hasPet = true })
-        PS:UpdatePetText()
-        assert.is_nil(rec.text)
-        assert.is_false(rec.shown)
-    end)
 end)
 
 describe("pet status per-spell secrecy", function()

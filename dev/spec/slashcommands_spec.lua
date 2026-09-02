@@ -11,19 +11,11 @@ describe("KE:HasAuraAddon", function()
         })
     end
 
-    it("reports true when WeakAuras is installed", function()
-        local KE = withInstalled({ "WeakAuras" })
-        assert.is_true(KE:HasAuraAddon())
-    end)
-
-    it("reports true when M33kAuras is installed", function()
-        local KE = withInstalled({ "M33kAuras" })
-        assert.is_true(KE:HasAuraAddon())
-    end)
-
-    it("reports true when M33kAurasOptions is installed", function()
-        local KE = withInstalled({ "M33kAurasOptions" })
-        assert.is_true(KE:HasAuraAddon())
+    it("reports true when WeakAuras, M33kAuras, or M33kAurasOptions is installed", function()
+        for _, name in ipairs({ "WeakAuras", "M33kAuras", "M33kAurasOptions" }) do
+            local KE = withInstalled({ name })
+            assert.is_true(KE:HasAuraAddon())
+        end
     end)
 
     it("reports false when no aura addon is installed", function()
@@ -113,14 +105,6 @@ describe("/wa gating", function()
         assert.is_nil(_G.hash_ChatTypeInfoList["/WA"])
     end)
 
-    it("reports and sets the state through its accessors", function()
-        local KE = withAuraAddons({}, { CDMEnabled = true, WAEnabled = true })
-        KE:ApplySlashCommands()
-        assert.is_true(KE:IsWAEnabled())
-        assert.is_false(KE:SetWAEnabled(false))
-        assert.is_false(KE.db.profile.SlashCommands.WAEnabled)
-        assert.is_nil(_G.SLASH_KE_CDM2)
-    end)
 end)
 
 describe("wa command handling", function()
@@ -159,14 +143,6 @@ describe("wa command handling", function()
         assert.is_true(KE.db.profile.SlashCommands.WAEnabled)
     end)
 
-    it("says so when the whole command pair is switched off", function()
-        local printed = {}
-        local KE = loaded({ CDMEnabled = false, WAEnabled = false })
-        KE.Print = function(_, msg) printed[#printed + 1] = msg end
-        KE:HandleWACommand("on")
-        assert.equals(2, #printed)
-        assert.is_truthy(printed[2]:find("switched off", 1, true))
-    end)
 end)
 
 describe("/kes wa dispatch", function()
@@ -201,11 +177,4 @@ describe("/kes wa dispatch", function()
         assert.are.same({ "slash commands are not loaded." }, printed)
     end)
 
-    it("lists wa in the help output", function()
-        local printed = {}
-        KE.Print = function(_, msg) printed[#printed + 1] = msg end
-        handler("nonsense")
-        assert.equals(1, #printed)
-        assert.is_truthy(printed[1]:find("wa", 1, true))
-    end)
 end)

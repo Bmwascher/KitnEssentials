@@ -99,28 +99,21 @@ describe("GUI-SpellAlerts", function()
         return KE.db.profile.SpellAlerts.EnabledSpecs
     end
 
-    it("stores nil, not false, when a spec is ticked on", function()
-        -- The regression. Storing false here reads back as opted out, so the
-        -- box the player just ticked comes back unticked and the overlay
-        -- stays off for that spec forever.
+    it("stores nil when ticked on, false when ticked off, and nil again turning back on", function()
+        -- The regression: storing false on the tick-on path reads back as
+        -- opted out, so the box the player just ticked comes back unticked
+        -- and the overlay stays off for that spec forever. An explicit false
+        -- is the opt-out marker; storing nil there would read back as the
+        -- default, which is ON. Off then on, through the same callback, is
+        -- the sequence a player actually performs and the one that was
+        -- impossible.
         build()
         checkboxes[1].callback(true)
         assert.is_nil(specs()[62])
-    end)
 
-    it("stores false when a spec is ticked off", function()
-        -- The other half: an explicit false is the opt-out marker. Storing nil
-        -- here would read back as the default, which is ON.
-        build()
         checkboxes[1].callback(false)
         assert.is_false(specs()[62])
-    end)
 
-    it("turns a spec back on after it was turned off", function()
-        -- Off then on, through the same callback, is the sequence a player
-        -- actually performs and the one that was impossible.
-        build()
-        checkboxes[1].callback(false)
         checkboxes[1].callback(true)
         assert.is_nil(specs()[62])
     end)

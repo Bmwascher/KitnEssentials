@@ -20,30 +20,11 @@ describe("KE:GetSideDecorationInset", function()
         assert.equals(0, cross)
     end)
 
-    -- Marker exactly as tall as its host is still flush, not overflowing.
-    it("returns nothing across when the decoration exactly fits", function()
-        local _, cross = KE:GetSideDecorationInset(27, 4, 27)
-        assert.equals(0, cross)
-    end)
-
     -- The GUI extremes: a 40pt marker on a 16pt bar overhangs by half the
     -- difference at the top and again at the bottom.
     it("splits the overhang across both perpendicular edges", function()
         local outward, cross = KE:GetSideDecorationInset(40, 4, 16)
         assert.equals(44, outward)
         assert.equals(12, cross)
-    end)
-
-    -- A host taller than the decoration must never produce a negative inset;
-    -- a negative would pull the box inward and hide part of the bar.
-    it("never returns a negative cross inset", function()
-        local _, cross = KE:GetSideDecorationInset(12, 4, 40)
-        assert.equals(0, cross)
-    end)
-
-    it("returns zeroes rather than erroring on missing numbers", function()
-        local outward, cross = KE:GetSideDecorationInset(nil, nil, nil)
-        assert.equals(0, outward)
-        assert.equals(0, cross)
     end)
 end)

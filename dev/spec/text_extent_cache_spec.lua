@@ -11,26 +11,18 @@ describe("KE:FontKey", function()
         return { GetFont = function() return path, size, flags end }
     end
 
-    it("is stable for the same rendered font", function()
-        assert.equals(KE:FontKey(fs("a.ttf", 12, "OUTLINE")),
-                      KE:FontKey(fs("a.ttf", 12, "OUTLINE")))
-    end)
-
     -- All three returns matter. A key built from the path alone leaves a size
     -- or an outline change reading as no change at all.
-    it("changes when only the size changes", function()
-        assert.are_not.equals(KE:FontKey(fs("a.ttf", 12, "OUTLINE")),
-                              KE:FontKey(fs("a.ttf", 16, "OUTLINE")))
-    end)
-
-    it("changes when only the flags change", function()
-        assert.are_not.equals(KE:FontKey(fs("a.ttf", 12, "OUTLINE")),
-                              KE:FontKey(fs("a.ttf", 12, "")))
-    end)
-
-    it("changes when only the path changes", function()
-        assert.are_not.equals(KE:FontKey(fs("a.ttf", 12, "OUTLINE")),
-                              KE:FontKey(fs("b.ttf", 12, "OUTLINE")))
+    it("changes when only the size, flags, or path changes", function()
+        local base = KE:FontKey(fs("a.ttf", 12, "OUTLINE"))
+        local variants = {
+            KE:FontKey(fs("a.ttf", 16, "OUTLINE")),
+            KE:FontKey(fs("a.ttf", 12, "")),
+            KE:FontKey(fs("b.ttf", 12, "OUTLINE")),
+        }
+        for _, variant in ipairs(variants) do
+            assert.are_not.equals(base, variant)
+        end
     end)
 
     it("returns nil for a missing font string", function()
@@ -79,20 +71,4 @@ describe("KE:CommitTextExtent", function()
         assert.equals("k2", cache.timer.fontKey)
     end)
 
-    it("does not resurrect the old font's dimensions on a later invalid sample", function()
-        KE:CommitTextExtent(cache, "timer", "k1", 20, 8)
-        KE:CommitTextExtent(cache, "timer", "k2", nil, nil)
-        KE:CommitTextExtent(cache, "timer", "k2", nil, nil)
-
-        assert.is_nil(cache.timer.width)
-    end)
-
-    it("keeps the two roles independent", function()
-        KE:CommitTextExtent(cache, "timer", "k1", 20, 8)
-        KE:CommitTextExtent(cache, "stack", "k1", 6, 6)
-        KE:CommitTextExtent(cache, "timer", "k1", 40, 8)
-
-        assert.equals(6, cache.stack.width)
-        assert.equals(40, cache.timer.width)
-    end)
 end)

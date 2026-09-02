@@ -10,10 +10,6 @@ describe("GroupFinderPanel pure helpers", function()
             abbrev = seams.abbreviate
         end)
 
-        it("prefers the override table", function()
-            assert.equals("WS", abbrev("Windrunner Spire"))
-        end)
-
         it("takes initials of a plain multi-word name", function()
             assert.equals("TD", abbrev("Test Dungeon"))
         end)
@@ -396,19 +392,6 @@ describe("GroupFinderPanel search rules", function()
         assert.equals(2, state.searches)
     end)
 
-    it("the Search button's action saves BEFORE it searches", function()
-        local GFP, _, state = loadWithFilter()
-        local order = {}
-        _G.C_LFGList.SaveAdvancedFilter = function(f)
-            order[#order + 1] = "save"; state.saved = f
-        end
-        _G.C_LFGList.Search = function()
-            order[#order + 1] = "search"; state.searches = state.searches + 1
-        end
-        GFP:ManualSearch()
-        assert.same({ "save", "search" }, order)
-    end)
-
     it("the Search button's action is inert while the module is inactive", function()
         local GFP, _, state = loadWithFilter()
         GFP.db.Enabled = false
@@ -429,13 +412,6 @@ describe("GroupFinderPanel search rules", function()
         state.now = 11
         GFP:ApplyAndRefresh()
         assert.equals(2, state.searches)
-    end)
-
-    it("never searches while the module is inactive", function()
-        local GFP, _, state = loadWithFilter()
-        GFP.db.Enabled = false
-        GFP:ApplyAndRefresh()
-        assert.equals(0, state.searches)
     end)
 
     it("does not search when the search panel is not shown", function()

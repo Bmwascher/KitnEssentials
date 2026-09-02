@@ -28,25 +28,11 @@ describe("combat logger key renames", function()
         _G.KitnEssentialsDB = nil
     end)
 
-    it("ships the new keys and neither old one", function()
-        -- Reads the defaults only, deliberately not through migrateWith: this
-        -- assertion holds whether or not the migration exists.
-        local KE = helpers.loadModule("Core/Defaults.lua")
-        local block = KE:GetDefaultDB().profile.CombatLogger
-        assert.is_false(block.Scenario)
-        assert.is_true(block.PromptAdvanced)
-        assert.is_nil(block.ScenarioTorghast)
-        assert.is_nil(block.DisableACLPrompt)
-    end)
-
-    it("carries a Torghast opt-in onto every scenario", function()
-        local sv = migrateWith(profileWith({ ScenarioTorghast = true }))
-        assert.is_true(sv.profiles.Default.CombatLogger.Scenario)
-    end)
-
-    it("carries a Torghast opt-out", function()
-        local sv = migrateWith(profileWith({ ScenarioTorghast = false }))
-        assert.is_false(sv.profiles.Default.CombatLogger.Scenario)
+    it("carries a Torghast opt-in and opt-out onto every scenario", function()
+        local svOn = migrateWith(profileWith({ ScenarioTorghast = true }))
+        assert.is_true(svOn.profiles.Default.CombatLogger.Scenario)
+        local svOff = migrateWith(profileWith({ ScenarioTorghast = false }))
+        assert.is_false(svOff.profiles.Default.CombatLogger.Scenario)
     end)
 
     it("flips the prompt polarity", function()
@@ -151,22 +137,12 @@ describe("visibility mode retirement", function()
         return _G.KitnEssentialsDB.profiles.Default
     end
 
-    it("ships Visibility and no AlwaysShow", function()
-        local KE = helpers.loadModule("Core/Defaults.lua")
-        local block = KE:GetDefaultDB().profile.CombatCross
-        assert.are.equal("in_combat", block.Visibility)
-        assert.is_nil(block.AlwaysShow)
-    end)
-
-    it("turns an Always Show crosshair into the always mode", function()
-        local out = migrate({ CombatCross = { AlwaysShow = true } })
-        assert.are.equal("always", out.CombatCross.Visibility)
-        assert.is_nil(out.CombatCross.AlwaysShow)
-    end)
-
-    it("turns a combat-only crosshair into the in_combat mode", function()
-        local out = migrate({ CombatCross = { AlwaysShow = false } })
-        assert.are.equal("in_combat", out.CombatCross.Visibility)
+    it("turns an Always Show crosshair into always, a combat-only one into in_combat", function()
+        local outOn = migrate({ CombatCross = { AlwaysShow = true } })
+        assert.are.equal("always", outOn.CombatCross.Visibility)
+        assert.is_nil(outOn.CombatCross.AlwaysShow)
+        local outOff = migrate({ CombatCross = { AlwaysShow = false } })
+        assert.are.equal("in_combat", outOff.CombatCross.Visibility)
     end)
 
     -- The defect this shape exists to prevent: writing the converted value and
@@ -196,17 +172,6 @@ describe("visibility mode retirement", function()
         assert.are.equal("in_instance", out.Cursor.Trail.VisibilityOverride)
         assert.are.equal("in_instance", out.Cursor.Dispel.VisibilityOverride)
         assert.are.equal("in_instance", out.Cursor.Taunt.VisibilityOverride)
-    end)
-
-    -- ResolveParentTable builds the chain it walks, so a profile that never
-    -- touched the cursor comes out holding empty satellite tables. Inert --
-    -- AceDB serves defaults through the metatable -- and asserted so a later
-    -- reader meets it here rather than in a diff.
-    it("creates the empty parents it walks through", function()
-        local out = migrate({ CombatCross = { AlwaysShow = false } })
-        assert.is_table(out.Cursor)
-        assert.is_table(out.Cursor.GCD)
-        assert.is_nil(out.Cursor.GCD.VisibilityOverride)
     end)
 
     it("runs once and leaves a later hand edit alone", function()

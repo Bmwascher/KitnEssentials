@@ -65,14 +65,12 @@ describe("live CVar reads", function()
         assert.is_nil(AU:GetLiveCVar(BOOL))
     end)
 
-    it("reads a boolean CVar that is on as true", function()
-        local AU = newFixture(function() return "1" end)
-        assert.is_true(AU:GetLiveCVar(BOOL))
-    end)
+    it("reads a boolean CVar that is on as true, and off as false, not nil", function()
+        local onAU = newFixture(function() return "1" end)
+        assert.is_true(onAU:GetLiveCVar(BOOL))
 
-    it("reads a boolean CVar that is off as false, not nil", function()
-        local AU = newFixture(function() return "0" end)
-        assert.is_false(AU:GetLiveCVar(BOOL))
+        local offAU = newFixture(function() return "0" end)
+        assert.is_false(offAU:GetLiveCVar(BOOL))
     end)
 
     it("reads a number CVar as a number", function()
@@ -189,23 +187,10 @@ describe("filtering defs by what the client has", function()
     local B = { key = "bravo", type = "boolean" }
     local C = { key = "charlie", type = "boolean" }
 
-    it("drops a def whose CVar this client does not have", function()
-        local AU = newFixture(only({ alpha = "1", charlie = "0" }))
-        local kept = AU:FilterLiveDefs({ A, B, C })
-        assert.equals(2, #kept)
-        assert.equals("alpha", kept[1].key)
-        assert.equals("charlie", kept[2].key)
-    end)
-
     it("keeps a def whose CVar reads false", function()
         local AU = newFixture(only({ alpha = "0" }))
         local kept = AU:FilterLiveDefs({ A })
         assert.equals(1, #kept)
-    end)
-
-    it("returns an empty list when the client has none of them", function()
-        local AU = newFixture(only({}))
-        assert.equals(0, #AU:FilterLiveDefs({ A, B, C }))
     end)
 
     it("applies the match predicate as well as the live read", function()
@@ -221,10 +206,19 @@ describe("filtering defs by what the client has", function()
     -- rejects it; `bravo` is allowed but the client lacks it; `charlie` passes
     -- both. A filter that ignored the predicate keeps alpha too; one that
     -- ignored the live read keeps bravo too.
-    it("keeps only a def that passes the predicate AND the live read", function()
+    it("drops defs the client lacks, empties when it has none, and keeps only what passes the predicate AND the live read", function()
+        local dropsAU = newFixture(only({ alpha = "1", charlie = "0" }))
+        local kept = dropsAU:FilterLiveDefs({ A, B, C })
+        assert.equals(2, #kept)
+        assert.equals("alpha", kept[1].key)
+        assert.equals("charlie", kept[2].key)
+
+        local emptyAU = newFixture(only({}))
+        assert.equals(0, #emptyAU:FilterLiveDefs({ A, B, C }))
+
         local AU = newFixture(only({ alpha = "1", charlie = "1" }))
-        local kept = AU:FilterLiveDefs({ A, B, C }, function(def) return def.key ~= "alpha" end)
-        assert.equals(1, #kept)
-        assert.equals("charlie", kept[1].key)
+        local combined = AU:FilterLiveDefs({ A, B, C }, function(def) return def.key ~= "alpha" end)
+        assert.equals(1, #combined)
+        assert.equals("charlie", combined[1].key)
     end)
 end)

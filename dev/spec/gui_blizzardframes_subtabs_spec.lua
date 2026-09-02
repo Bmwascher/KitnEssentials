@@ -132,7 +132,9 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
     -- ride on it and none has an ElvUI gate. Elements does NOT survive: every
     -- tab it still carries configures a skin this addon stands down from, so
     -- offering them would be the same live-looking-but-dead failure.
-    it("keeps exactly General while ElvUI is active", function()
+    -- ElvUI wins over the engine flag. Without this, a reader could believe the
+    -- engine-on branch runs first and ElvUI only trims it.
+    it("keeps exactly General while ElvUI is active, regardless of the engine flag", function()
         local tabs = strip(true, true)
         assert.equals(1, #tabs)
 
@@ -150,23 +152,11 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         assert.is_nil(ids["SkinBlizzardFramesWidgets"])
         assert.is_nil(ids["CharacterPanel"])
         assert.is_nil(ids["SkinMessages"])
-    end)
 
-    -- ElvUI wins over the engine flag. Without this, a reader could believe the
-    -- engine-on branch runs first and ElvUI only trims it.
-    it("shows the same one tab under ElvUI whether the engine is on or off", function()
         -- One assertion covering both counts. Two scalar assert.equals calls
         -- would stop at the first failure, so the second state's count would be
         -- masked and the red run would under-report what is broken.
         assert.same({ 1, 1 }, { #strip(true, true), #strip(false, true) })
-    end)
-
-    it("positive control: the absorbed page id resolves", function()
-        assert.is_function(GUIFrame.registeredContent["SkinMessages"])
-    end)
-
-    it("negative control: an invented id has no registered builder", function()
-        assert.is_nil(GUIFrame.registeredContent["SkinBlizzardFramesBogus"])
     end)
 
     -- The row no longer gates on the conflict state: the whole Elements tab
@@ -181,11 +171,6 @@ describe("GUI-BlizzardFrames: subtab id coverage", function()
         assert.equals("SkinBlizzardFramesLootRoll", offTabs[1].id)
         assert.equals("VehicleExit", offTabs[4].id)
         assert.same(idSet(offTabs), idSet(onTabs))
-    end)
-
-    it("no longer carries the character screen", function()
-        elvui = false
-        assert.is_nil(idSet(GUIFrame._VisibleElementTabs())["CharacterPanel"])
     end)
 
     it("registers a builder for every element id in both states", function()

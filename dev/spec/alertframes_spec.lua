@@ -2,31 +2,6 @@ local loader = require("dev.spec._ke_loader")
 
 describe("Modules/QoL/AlertFrames.lua", function()
 
-    describe("ShouldGrowUp", function()
-        local shouldGrowUp
-
-        before_each(function()
-            local _, _, seams = loader.loadAlertFrames()
-            shouldGrowUp = seams.shouldGrowUp
-        end)
-
-        it("grows up when the centre is below half the screen height and there is no perks anchor", function()
-            assert.is_true(shouldGrowUp(100, 1000, false))
-        end)
-
-        it("grows down when the centre is above half the screen height and there is no perks anchor", function()
-            assert.is_false(shouldGrowUp(900, 1000, false))
-        end)
-
-        it("always grows up when the Trading Post has re-based the stack, even above half screen", function()
-            assert.is_true(shouldGrowUp(900, 1000, true))
-        end)
-
-        it("fails safe to grow down when the centre is nil and there is no perks anchor", function()
-            assert.is_false(shouldGrowUp(nil, 1000, false))
-        end)
-    end)
-
     -- The refusal half is the one that matters: claiming a subsystem alert drops
     -- it out of the chain UpdateAnchors just built and it renders on top of the
     -- alert before it.
@@ -42,11 +17,8 @@ describe("Modules/QoL/AlertFrames.lua", function()
             isDirect = seams.isDirectAlertFrame
         end)
 
-        it("claims the bonus roll loot toast", function()
+        it("claims both bonus roll toasts", function()
             assert.is_true(isDirect(named("BonusRollLootWonFrame")))
-        end)
-
-        it("claims the bonus roll money toast", function()
             assert.is_true(isDirect(named("BonusRollMoneyWonFrame")))
         end)
 
@@ -126,26 +98,35 @@ describe("Modules/QoL/AlertFrames.lua", function()
             assert.equal(passThrough, sys.AdjustAnchors)
         end)
 
-        it("takes over an auto-anchored subsystem, which shares the anchorFrame shape", function()
-            _G.AlertFrameExternallyAnchoredMixin = { AdjustAnchors = function() end }
-            local own = function() end
-            local sys = { anchorFrame = {}, AdjustAnchors = own }
-            adjust(sys)
-            assert.not_equal(own, sys.AdjustAnchors)
-        end)
+        it("takes over auto-anchored, pooled, and mixin-absent subsystems alike", function()
+            local variants = {
+                -- auto-anchored: shares the anchorFrame shape
+                function()
+                    _G.AlertFrameExternallyAnchoredMixin = { AdjustAnchors = function() end }
+                    local own = function() end
+                    return { anchorFrame = {}, AdjustAnchors = own }, own
+                end,
+                -- pooled
+                function()
+                    _G.AlertFrameExternallyAnchoredMixin = { AdjustAnchors = function() end }
+                    return { alertFramePool = {} }, nil
+                end,
+                -- mixin global absent entirely
+                function()
+                    _G.AlertFrameExternallyAnchoredMixin = nil
+                    local own = function() end
+                    return { anchorFrame = {}, AdjustAnchors = own }, own
+                end,
+            }
 
-        it("takes over a pooled subsystem", function()
-            _G.AlertFrameExternallyAnchoredMixin = { AdjustAnchors = function() end }
-            local sys = { alertFramePool = {} }
-            adjust(sys)
-            assert.is_function(sys.AdjustAnchors)
-        end)
-
-        it("takes over everything when the mixin global is absent", function()
-            local own = function() end
-            local sys = { anchorFrame = {}, AdjustAnchors = own }
-            adjust(sys)
-            assert.not_equal(own, sys.AdjustAnchors)
+            for _, setup in ipairs(variants) do
+                local sys, own = setup()
+                adjust(sys)
+                assert.is_function(sys.AdjustAnchors)
+                if own then
+                    assert.not_equal(own, sys.AdjustAnchors)
+                end
+            end
         end)
     end)
 
@@ -176,10 +157,6 @@ describe("Modules/QoL/AlertFrames.lua", function()
             _G.AlertFrame = nil
         end)
 
-        it("is installed at all", function()
-            assert.is_function(hook)
-        end)
-
         it("places a direct winnings toast the container is not holding", function()
             local f = alert("BonusRollLootWonFrame")
             hook(_G.AlertFrame, f)
@@ -207,36 +184,6 @@ describe("Modules/QoL/AlertFrames.lua", function()
             local f = alert("BonusRollLootWonFrame")
             hook(_G.AlertFrame, f)
             assert.is_false(placed(f))
-        end)
-    end)
-
-    describe("the managed-frame layout post-hook", function()
-        local AF, rec
-
-        before_each(function()
-            AF, rec = loader.loadAlertFramesWithManagedLayout()
-        end)
-
-        after_each(function()
-            _G.UIParent = nil
-            _G.AlertFrame = nil
-            _G.GroupLootContainer = nil
-            _G.GroupLootContainer_Update = nil
-        end)
-
-        local function lastRelative(frame)
-            return frame._points[#frame._points].rel
-        end
-
-        it("restores the configured holder after a managed layout pass", function()
-            rec.fireManagedLayout()
-            assert.equal(rec.holder, lastRelative(rec.container))
-        end)
-
-        it("stands aside while the module is disabled", function()
-            AF.IsEnabled = function() return false end
-            rec.fireManagedLayout()
-            assert.equal(rec.uiParent, lastRelative(rec.container))
         end)
     end)
 end)

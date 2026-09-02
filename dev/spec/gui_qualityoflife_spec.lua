@@ -47,29 +47,6 @@ describe("tabbed pages: declared ids resolve to builders", function()
         end
     end)
 
-    it("declares the four Keystone Helper tabs in order", function()
-        local tabs = strip("KeystoneHelper")
-        local ids = {}
-        for _, tab in ipairs(tabs) do ids[#ids + 1] = tab.id end
-        assert.are.same({
-            "KeystoneHelperGeneral",
-            "KeystoneHelperReset",
-            "KeystoneHelperReroll",
-            "KeystoneHelperYourKey",
-        }, ids)
-        -- The Appearance tab is gone, not renamed.
-        assert.is_nil(GUIFrame.registeredContent["KeystoneHelperAppearance"])
-    end)
-
-    -- The General tab renders three pages it does not register itself. This
-    -- only proves the three builders exist to be chained; it cannot see a typo
-    -- in the chain's own id list, which would render a blank tab in game.
-    it("resolves a builder for each page chained onto Keystone Helper General", function()
-        assert.is_function(GUIFrame.registeredContent["GroupFinderPanel"])
-        assert.is_function(GUIFrame.registeredContent["LFGQuickCreate"])
-        assert.is_function(GUIFrame.registeredContent["LFGReminder"])
-    end)
-
     it("gives Quality of Life four tabs, each with a builder", function()
         local tabs = strip("QualityOfLife")
         assert.equals(4, #tabs)

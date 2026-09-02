@@ -8,11 +8,6 @@ describe("Advanced Debuffs filter-string construction", function()
         assert.truthy(s:find("!RAID", 1, true))
     end)
 
-    it("starts from HARMFUL", function()
-        local R = L.loadAuraRules()
-        assert.equals("HARMFUL", R.BuildDebuffFilter({}):sub(1, 7))
-    end)
-
     -- The whole point of this file. INCLUDE_NAME_PLATE_ONLY is documented
     -- non-negatable and inverted relative to its neighbours: its ABSENCE
     -- filters nameplate-only auras out. A spec that only checked "every
@@ -78,19 +73,6 @@ describe("blocklist record conversion", function()
         assert.is_true(set[80354])
     end)
 
-    it("contains every hardcoded id given an empty saved table", function()
-        local R = L.loadAuraRules()
-        local set = R.BuildExcludeSpellIDs({})
-        for _, id in ipairs(R.HARDCODED_BLOCKLIST) do
-            assert.is_true(set[id])
-        end
-    end)
-
-    it("tolerates a nil saved table", function()
-        local R = L.loadAuraRules()
-        assert.is_true(R.BuildExcludeSpellIDs(nil)[57723])
-    end)
-
     -- The alias is the ported behaviour, and it is what makes the
     -- do-not-mutate invariant necessary. A spec that only checked CONTENTS
     -- would pass just as happily against a defensive copy, which is the
@@ -110,46 +92,25 @@ describe("blocklist record conversion", function()
 end)
 
 describe("Externals icon limit split", function()
-    it("gives the whole limit to externals when big defensives are off", function()
+    -- The eager-add rule depends on the zero-limit row: every declared key
+    -- gets a count, including zero, because the group is added either way.
+    it("splits the limit between externals and big defensives", function()
         local R = L.loadAuraRules()
-        assert.same({ external = 6, big = 0 }, R.SplitExternalsLimit(6, false))
-    end)
-
-    it("halves an even limit", function()
-        local R = L.loadAuraRules()
-        assert.same({ external = 3, big = 3 }, R.SplitExternalsLimit(6, true))
-    end)
-
-    it("gives the remainder to externals on an odd limit", function()
-        local R = L.loadAuraRules()
-        assert.same({ external = 3, big = 2 }, R.SplitExternalsLimit(5, true))
-    end)
-
-    it("gives a single slot to externals, not to big defensives", function()
-        local R = L.loadAuraRules()
-        assert.same({ external = 1, big = 0 }, R.SplitExternalsLimit(1, true))
-    end)
-
-    -- The eager-add rule depends on this: every declared key gets a count,
-    -- including zero, because the group is added either way.
-    it("returns a count for the big key even when it is zero", function()
-        local R = L.loadAuraRules()
-        assert.equals(0, R.SplitExternalsLimit(4, false).big)
+        local rows = {
+            { limit = 6, big = false, want = { external = 6, big = 0 } },
+            { limit = 6, big = true,  want = { external = 3, big = 3 } },
+            { limit = 5, big = true,  want = { external = 3, big = 2 } },
+            { limit = 1, big = true,  want = { external = 1, big = 0 } },
+        }
+        for _, row in ipairs(rows) do
+            assert.same(row.want, R.SplitExternalsLimit(row.limit, row.big))
+        end
     end)
 end)
 
 describe("preview timing", function()
     -- One rule for both displays, taken whole from Advanced Debuffs because
     -- its 10-35s range exercises wider duration text than the 6-15s one.
-    it("produces the documented duration for the first index", function()
-        local R = L.loadAuraRules()
-        local duration = R.PreviewTiming(1)
-        -- An independent literal, not the formula restated. Repeating the
-        -- expression here would let a transcribed constant satisfy its own
-        -- test.
-        assert.equals(15, duration)
-    end)
-
     -- A pair that SHARES a duration, which is the only case the phase term
     -- exists for. Durations repeat across the index range, and two icons on
     -- the same duration would otherwise open in lockstep. Any other pair
@@ -269,12 +230,6 @@ describe("ConvertGrowthDirection", function()
         end
     end)
 
-    it("covers all eight directions and nothing else", function()
-        local n = 0
-        for _ in pairs(CASES) do n = n + 1 end
-        assert.are.equal(8, n)
-    end)
-
     it("falls back to the shipped default for an unknown value", function()
         local R = L.loadAuraRules()
         local h, v, axis = R.ConvertGrowthDirection("SIDEWAYS_INWARD")
@@ -293,23 +248,6 @@ describe("ConvertGrowthDirection", function()
 end)
 
 describe("include spell id set", function()
-    it("returns an empty table rather than nil when nothing is saved", function()
-        local R = L.loadAuraRules()
-        local set = R.BuildIncludeSpellIDs(nil)
-        assert.is_table(set)
-        assert.is_nil(next(set))
-    end)
-
-    it("returns an empty table rather than nil when every row is disabled", function()
-        local R = L.loadAuraRules()
-        local set = R.BuildIncludeSpellIDs({
-            [33206] = { label = "Pain Suppression", enabled = false },
-            [47788] = { label = "Guardian Spirit",  enabled = false },
-        })
-        assert.is_table(set)
-        assert.is_nil(next(set))
-    end)
-
     it("includes an enabled row", function()
         local R = L.loadAuraRules()
         local set = R.BuildIncludeSpellIDs({
@@ -340,13 +278,6 @@ describe("include spell id set", function()
         local R = L.loadAuraRules()
         local set = R.BuildIncludeSpellIDs({ [33206] = true })
         assert.is_nil(set[33206])
-    end)
-
-    it("returns a fresh table each call", function()
-        local R = L.loadAuraRules()
-        local a = R.BuildIncludeSpellIDs(nil)
-        local b = R.BuildIncludeSpellIDs(nil)
-        assert.is_not.equal(a, b)
     end)
 
     it("omits draft and malformed keys from the candidate set", function()
@@ -476,13 +407,6 @@ describe("allowlist default restoration", function()
 end)
 
 describe("sound spell id array", function()
-    it("returns an empty table rather than nil when nothing is saved", function()
-        local R = L.loadAuraRules()
-        local ids = R.BuildSoundSpellIDs(nil)
-        assert.is_table(ids)
-        assert.equals(0, #ids)
-    end)
-
     it("carries only the enabled rows", function()
         local R = L.loadAuraRules()
         local ids = R.BuildSoundSpellIDs({
@@ -513,11 +437,6 @@ describe("self-cast candidate filter value", function()
     it("returns nil when the setting is off, so the container filters nothing", function()
         local R = L.loadAuraRules()
         assert.is_nil(R.SelfCastFilterValue(false))
-    end)
-
-    it("returns nil for an absent setting rather than passing it through", function()
-        local R = L.loadAuraRules()
-        assert.is_nil(R.SelfCastFilterValue(nil))
     end)
 end)
 

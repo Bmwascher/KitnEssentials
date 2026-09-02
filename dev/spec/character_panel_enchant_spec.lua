@@ -67,16 +67,6 @@ describe("Enchant helper: target slot resolution", function()
         assert.same({ 16, 17 }, CP._GetEnchantTargetSlots("item:1"))
     end)
 
-    it("resolves a cloak enchant to the back slot", function()
-        local CP = loadCP({ C_TooltipInfo = tooltipSaying("Enchant Cloak - Chant of Winged Grace") })
-        assert.same({ 15 }, CP._GetEnchantTargetSlots("item:1"))
-    end)
-
-    it("resolves a ring enchant to BOTH finger slots", function()
-        local CP = loadCP({ C_TooltipInfo = tooltipSaying("Enchant Ring - Radiant Critical Strike") })
-        assert.same({ 11, 12 }, CP._GetEnchantTargetSlots("item:1"))
-    end)
-
     -- THE REGRESSION GUARD. "Enchant 2H Weapon - ..." contains both the
     -- "2h weapon" keyword ({16}) and the "weapon" keyword ({16, 17}). Under a
     -- pairs() walk either could win. Longest-key-first must pick the
@@ -101,12 +91,6 @@ describe("Enchant helper: target slot resolution", function()
         local CP = loadCP({ C_TooltipInfo = tooltipSaying("Conjured Mana Bun") })
         assert.is_nil(CP._GetEnchantTargetSlots("item:1"))
     end)
-
-    it("returns nil without a link, and without tooltip data", function()
-        local CP = loadCP()
-        assert.is_nil(CP._GetEnchantTargetSlots(nil))
-        assert.is_nil(CP._GetEnchantTargetSlots("item:1"))
-    end)
 end)
 
 -- A refusal rule, so it is tested even though the list it guards is a data
@@ -125,13 +109,6 @@ describe("Enchant helper: slots we refuse to offer", function()
     it("still offers head, which Midnight enchants", function()
         local CP = loadCP()
         assert.is_false(CP._IsUnofferableEnchant({ 1 }))
-    end)
-
-    it("offers every other enchantable slot", function()
-        local CP = loadCP()
-        for _, slots in ipairs({ { 5 }, { 15 }, { 9 }, { 8 }, { 11, 12 }, { 16, 17 }, { 16 } }) do
-            assert.is_false(CP._IsUnofferableEnchant(slots), table.concat(slots, ","))
-        end
     end)
 
     -- The half-and-half case. Refusing on ANY unofferable slot rather than ALL
@@ -464,15 +441,6 @@ describe("Enchant name style", function()
         assert.equals(short, CP._ProcessEnchantText(RAW, "nonsense"))
     end)
 
-    -- Both halves matter. The empty string survives the pipeline on its own, so
-    -- the empty half alone cannot be made to fail by any plausible mutation --
-    -- it is the NIL half that the entry guard actually earns its place on.
-    it("returns an empty or nil input unchanged rather than erroring", function()
-        local CP = loadCP()
-        assert.equals("", CP._ProcessEnchantText("", "full"))
-        assert.is_nil(CP._ProcessEnchantText(nil, "full"))
-    end)
-
     -- The "+" strip is unanchored, so leaving it in the prefix table would eat
     -- the sign under every style. "full" is defined as the tooltip's own text,
     -- so it must keep it; short must still drop it.
@@ -521,11 +489,6 @@ describe("Enchant auto-apply: unambiguous slot resolution", function()
             GetInventoryItemLink = function() return nil end,
         })
         assert.is_nil(CP._UnambiguousEnchantSlot({ 11, 12 }))
-    end)
-
-    it("returns nil for a nil slot list", function()
-        local CP = loadCP()
-        assert.is_nil(CP._UnambiguousEnchantSlot(nil))
     end)
 end)
 

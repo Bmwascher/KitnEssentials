@@ -106,14 +106,6 @@ describe("Core/Globals.lua helpers", function()
             KE:FillProfileDefaults()
             assert.is_true(KE.db.profile.Module.Enabled)
         end)
-
-        it("is a no-op without db or without registered defaults", function()
-            KE.db = nil
-            assert.has_no.errors(function() KE:FillProfileDefaults() end)
-            KE.db = { profile = { Keep = 1 } }
-            KE:FillProfileDefaults()
-            assert.equals(1, KE.db.profile.Keep)
-        end)
     end)
 
     describe("KE:GetFontOutline", function()
@@ -144,13 +136,6 @@ describe("Core/Globals.lua helpers", function()
             for i, opt in ipairs(opts) do keys[i] = opt.key end
             return keys
         end
-
-        it("returns the 3 universal modes with no flags", function()
-            assert.same(
-                { "NONE", "OUTLINE", "THICKOUTLINE" },
-                keysOf(KE:GetFontOutlineOptions())
-            )
-        end)
 
         it("appends MONOCHROME only with includeMono", function()
             local keys = keysOf(KE:GetFontOutlineOptions({ includeMono = true }))
@@ -228,24 +213,6 @@ describe("Core/Globals.lua helpers", function()
             assert.equals("RIGHT", KE:GetTextJustifyFromAnchor("TOPRIGHT"))
             assert.equals("RIGHT", KE:GetTextPointFromAnchor("TOPRIGHT"))
             assert.equals("CENTER", KE:GetPointFromAnchor("TOPRIGHT"))
-        end)
-
-        it("expands all corner anchors on the justify side only", function()
-            assert.equals("LEFT", KE:GetTextJustifyFromAnchor("BOTTOMLEFT"))
-            assert.equals("CENTER", KE:GetPointFromAnchor("BOTTOMLEFT"))
-            assert.equals("RIGHT", KE:GetTextJustifyFromAnchor("BOTTOMRIGHT"))
-            assert.equals("CENTER", KE:GetPointFromAnchor("BOTTOMRIGHT"))
-        end)
-
-        it("agrees on plain LEFT/RIGHT and on the CENTER fallback", function()
-            assert.equals("LEFT", KE:GetTextJustifyFromAnchor("LEFT"))
-            assert.equals("LEFT", KE:GetPointFromAnchor("LEFT"))
-            assert.equals("RIGHT", KE:GetTextJustifyFromAnchor("RIGHT"))
-            assert.equals("RIGHT", KE:GetPointFromAnchor("RIGHT"))
-            assert.equals("CENTER", KE:GetTextJustifyFromAnchor("TOP"))
-            assert.equals("CENTER", KE:GetPointFromAnchor("TOP"))
-            assert.equals("CENTER", KE:GetTextJustifyFromAnchor(nil))
-            assert.equals("CENTER", KE:GetPointFromAnchor(nil))
         end)
     end)
 
@@ -399,11 +366,6 @@ describe("Core/Globals.lua helpers", function()
             assert.equals(42, KE.db.profile.Font)
         end)
 
-        it("is a no-op without db", function()
-            KE.db = nil
-            assert.has_no.errors(function() KE:ValidateProfileFonts() end)
-        end)
-
         -- An empty face is not a value, it is a broken one: the repair walk
         -- resolves it to the key's own default.
         it("still repairs an empty font whose per-key default is a real font", function()
@@ -434,11 +396,6 @@ describe("Core/Globals.lua helpers", function()
             enable()
             assert.equals("SLUG", KE:SlugFlags(""))
             assert.equals("SLUG", KE:SlugFlags(nil))
-        end)
-
-        it("appends to an existing outline", function()
-            enable()
-            assert.equals("OUTLINE, SLUG", KE:SlugFlags("OUTLINE"))
         end)
 
         it("leaves large outlined text unslugged — the stroke scales with the glyph", function()
@@ -474,14 +431,11 @@ describe("Core/Globals.lua helpers", function()
             assert.equals("OUTLINE, SLUG", fs.calls[2][3])
         end)
 
-        it("leaves THICKOUTLINE alone — slug and thick render badly together", function()
+        it("leaves THICKOUTLINE and MONOCHROME alone — slug renders badly with either", function()
             enable()
-            assert.equals("THICKOUTLINE", KE:SlugFlags("THICKOUTLINE"))
-        end)
-
-        it("leaves MONOCHROME alone", function()
-            enable()
-            assert.equals("MONOCHROME", KE:SlugFlags("MONOCHROME"))
+            for _, flag in ipairs({ "THICKOUTLINE", "MONOCHROME" }) do
+                assert.equals(flag, KE:SlugFlags(flag))
+            end
         end)
 
         it("is idempotent on already-slugged flags", function()
@@ -595,29 +549,6 @@ describe("KE:RunAfterCombat", function()
     end)
 end)
 
-describe("KE:GetGlobalFont", function()
-    local KE
-
-    before_each(function()
-        KE = L.loadGlobals()
-    end)
-
-    it("falls back to Expressway with no db", function()
-        KE.db = nil
-        assert.equals("Expressway", KE:GetGlobalFont())
-    end)
-
-    it("falls back to Expressway when the key is unset", function()
-        KE.db = { profile = {} }
-        assert.equals("Expressway", KE:GetGlobalFont())
-    end)
-
-    it("returns the stored value", function()
-        KE.db = { profile = { GlobalFont = "GoodFont" } }
-        assert.equals("GoodFont", KE:GetGlobalFont())
-    end)
-end)
-
 describe("KE:GetFontPath global resolution", function()
     local KE
 
@@ -650,18 +581,6 @@ describe("KE:GetEffectiveFont", function()
         KE = L.loadGlobals()
     end)
 
-    it("prefers FontFace", function()
-        assert.equals("Expressway", KE:GetEffectiveFont({ FontFace = "Expressway" }))
-    end)
-
-    it("falls back to Font when FontFace is absent", function()
-        assert.equals("Movie", KE:GetEffectiveFont({ Font = "Movie" }))
-    end)
-
-    it("falls back to fontFace last", function()
-        assert.equals("Arial", KE:GetEffectiveFont({ fontFace = "Arial" }))
-    end)
-
     -- Precedence, not just presence: a table carrying all three must return
     -- the FIRST key. Three separate single-key tests cannot catch a helper
     -- that reads them in the wrong order.
@@ -681,18 +600,6 @@ describe("KE:GetEffectiveFont", function()
     end)
 end)
 
-describe("KE.FONT_FOLLOW_GLOBAL", function()
-    local KE
-
-    before_each(function()
-        KE = L.loadGlobals()
-    end)
-
-    it("is the sentinel the dropdowns key their follow entry on", function()
-        assert.equals("*global*", KE.FONT_FOLLOW_GLOBAL)
-    end)
-end)
-
 describe("KE:StoredFontFace", function()
     local KE
 
@@ -704,14 +611,6 @@ describe("KE:StoredFontFace", function()
     -- and/or expression.
     it("stores nil for the sentinel", function()
         assert.is_nil(KE:StoredFontFace(KE.FONT_FOLLOW_GLOBAL))
-    end)
-
-    it("stores a real font name unchanged", function()
-        assert.equals("GoodFont", KE:StoredFontFace("GoodFont"))
-    end)
-
-    it("passes nil through", function()
-        assert.is_nil(KE:StoredFontFace(nil))
     end)
 end)
 

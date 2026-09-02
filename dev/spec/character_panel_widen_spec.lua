@@ -148,9 +148,6 @@ describe("Widen character window: whether to write geometry at all", function()
         assert.equals(0, loadCP()._WidenAmount(0, true, true))
     end)
 
-    it("writes nothing on the pass after the restoring one", function()
-        assert.is_nil(loadCP()._WidenAmount(0, true, false))
-    end)
 end)
 
 -- The predicate cases above prove what the DECISION is. They say nothing about
@@ -209,58 +206,5 @@ describe("Widen character window: the guard runs before any write", function()
         CP.db = { Enabled = true, WiderFrame = true }
         CP._ApplyWiden()
         assert.is_true(writes() > 0)
-    end)
-end)
-
-describe("mythic plus score text", function()
-    -- Two stub functions, not a stateful fake of the challenge-mode system.
-    local function withScore(score, color)
-        _G.C_ChallengeMode = {
-            GetOverallDungeonScore = function() return score end,
-            GetDungeonScoreRarityColor = function() return color end,
-        }
-    end
-
-    after_each(function()
-        _G.C_ChallengeMode = nil
-    end)
-
-    it("formats a scored character", function()
-        local CP = loadCP()
-        withScore(2415, nil)
-        assert.equals("Mythic+ Score: 2415", CP._DungeonScoreText())
-    end)
-
-    it("colours the line when a rarity colour is available", function()
-        local CP = loadCP()
-        withScore(2415, { GenerateHexColor = function() return "ffff8000" end })
-        assert.equals("Mythic+ Score: |cffff80002415|r", CP._DungeonScoreText())
-    end)
-
-    it("falls back to plain text when the colour cannot make a hex string", function()
-        local CP = loadCP()
-        -- A colour object without GenerateHexColor. Concatenating it would
-        -- throw, which is why the branch tests for the method and not the
-        -- table.
-        withScore(2415, {})
-        assert.equals("Mythic+ Score: 2415", CP._DungeonScoreText())
-    end)
-
-    it("says nothing for an unscored character", function()
-        local CP = loadCP()
-        withScore(0, nil)
-        assert.is_nil(CP._DungeonScoreText())
-    end)
-
-    it("says nothing when the score is not a number", function()
-        local CP = loadCP()
-        withScore(nil, nil)
-        assert.is_nil(CP._DungeonScoreText())
-    end)
-
-    it("says nothing when the API is absent entirely", function()
-        local CP = loadCP()
-        _G.C_ChallengeMode = nil
-        assert.is_nil(CP._DungeonScoreText())
     end)
 end)

@@ -78,16 +78,14 @@ describe("companion CVars", function()
         assert.equals(0, #f.writes)
     end)
 
-    it("turns the master on when the mode goes on", function()
-        local f = newFixture()
-        f.AU:ApplyCompanion(OUTLINE, true)
-        assert.same({ "1" }, f.writesTo("findYourselfAnywhere"))
-    end)
+    it("turns the master on when the mode goes on, even with a sibling already on", function()
+        local plain = newFixture()
+        plain.AU:ApplyCompanion(OUTLINE, true)
+        assert.same({ "1" }, plain.writesTo("findYourselfAnywhere"))
 
-    it("turns the master on even when a sibling mode is already on", function()
-        local f = newFixture({ findYourselfModeCircle = "1" })
-        f.AU:ApplyCompanion(OUTLINE, true)
-        assert.same({ "1" }, f.writesTo("findYourselfAnywhere"))
+        local sibling = newFixture({ findYourselfModeCircle = "1" })
+        sibling.AU:ApplyCompanion(OUTLINE, true)
+        assert.same({ "1" }, sibling.writesTo("findYourselfAnywhere"))
     end)
 
     it("turns the master off when the mode goes off and no sibling wants it", function()
@@ -102,22 +100,16 @@ describe("companion CVars", function()
         assert.same({ "0" }, f.writesTo("findYourselfAnywhere"))
     end)
 
-    it("leaves the master alone when the circle mode is on", function()
-        local f = newFixture({ findYourselfModeCircle = "1", findYourselfModeIcon = "0" })
-        f.AU:ApplyCompanion(OUTLINE, false)
-        assert.same({}, f.writesTo("findYourselfAnywhere"))
-    end)
-
-    it("leaves the master alone when the icon mode is on", function()
-        local f = newFixture({ findYourselfModeCircle = "0", findYourselfModeIcon = "1" })
-        f.AU:ApplyCompanion(OUTLINE, false)
-        assert.same({}, f.writesTo("findYourselfAnywhere"))
-    end)
-
-    it("leaves the master alone when both sibling modes are on", function()
-        local f = newFixture({ findYourselfModeCircle = "1", findYourselfModeIcon = "1" })
-        f.AU:ApplyCompanion(OUTLINE, false)
-        assert.same({}, f.writesTo("findYourselfAnywhere"))
+    it("leaves the master alone when the circle mode, the icon mode, or both are on", function()
+        for _, siblings in ipairs({
+            { findYourselfModeCircle = "1", findYourselfModeIcon = "0" },
+            { findYourselfModeCircle = "0", findYourselfModeIcon = "1" },
+            { findYourselfModeCircle = "1", findYourselfModeIcon = "1" },
+        }) do
+            local f = newFixture(siblings)
+            f.AU:ApplyCompanion(OUTLINE, false)
+            assert.same({}, f.writesTo("findYourselfAnywhere"))
+        end
     end)
 
     it("turns the master off for a def with no keep-alive list", function()
@@ -151,17 +143,15 @@ describe("companion CVars", function()
     -- The guard on the primary does not cover this: the mode flag can be
     -- present while the master it needs is gone, and every path into
     -- ApplyCompanion ends in a SetCVar on that absent name.
-    it("writes nothing when the companion itself is absent and the mode is on", function()
-        local f = newFixture({ someFlag = "0" })
-        f.AU:ApplyCompanion({ key = "someFlag", companion = "someMaster" }, true)
-        assert.same({}, f.writesTo("someMaster"))
-    end)
+    it("writes nothing when the companion itself is absent, mode on or off", function()
+        local on = newFixture({ someFlag = "0" })
+        on.AU:ApplyCompanion({ key = "someFlag", companion = "someMaster" }, true)
+        assert.same({}, on.writesTo("someMaster"))
 
-    it("writes nothing when the companion itself is absent and the mode is off", function()
-        local f = newFixture({ someFlag = "0" })
-        f.AU:ApplyCompanion({ key = "someFlag", companion = "someMaster",
+        local off = newFixture({ someFlag = "0" })
+        off.AU:ApplyCompanion({ key = "someFlag", companion = "someMaster",
             companionKeepAlive = { "sibling" } }, false)
-        assert.same({}, f.writesTo("someMaster"))
+        assert.same({}, off.writesTo("someMaster"))
     end)
 
     -- The control for both. A build that refuses every companion write passes

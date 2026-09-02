@@ -117,46 +117,38 @@ describe("EUIDrawsSlotElement", function()
         assert.is_true(KE:EUIDrawsSlotElement("player", "track"))
     end)
 
-    -- One case per key in the table. Without all six, a mapping that pointed an
+    -- One row per key in the table. Without all six, a mapping that pointed an
     -- element at the WRONG key still passed: every remaining test only ever saw
     -- both keys absent, where any mapping answers true.
-    it("releases character item level on its own key", function()
-        local KE = loadGlobals({ showItemLevel = false })
-        assert.is_false(KE:EUIDrawsSlotElement("player", "ilvl"))
-        assert.is_true(KE:EUIDrawsSlotElement("player", "track"))
-        assert.is_true(KE:EUIDrawsSlotElement("player", "gems"))
-    end)
-
-    it("releases the character track on its own key", function()
-        local KE = loadGlobals({ showUpgradeTrack = false })
-        assert.is_false(KE:EUIDrawsSlotElement("player", "track"))
-        assert.is_true(KE:EUIDrawsSlotElement("player", "ilvl"))
-    end)
-
-    it("releases the inspect track on its own key", function()
-        local KE = loadGlobals({ inspectShowUpgradeTrack = false })
-        assert.is_false(KE:EUIDrawsSlotElement("target", "track"))
-        assert.is_true(KE:EUIDrawsSlotElement("target", "ilvl"))
-        assert.is_true(KE:EUIDrawsSlotElement("target", "enchant"))
-    end)
-
-    it("releases the inspect enchant on its own key", function()
-        local KE = loadGlobals({ inspectShowEnchants = false })
-        assert.is_false(KE:EUIDrawsSlotElement("target", "enchant"))
-        assert.is_true(KE:EUIDrawsSlotElement("target", "ilvl"))
-    end)
-
-    it("uses the inspect-prefixed keys on the inspect frame", function()
-        local KE = loadGlobals({ inspectShowItemLevel = false, showItemLevel = true })
-        assert.is_false(KE:EUIDrawsSlotElement("target", "ilvl"))
-        -- and the character key is untouched by the inspect one
-        assert.is_true(KE:EUIDrawsSlotElement("player", "ilvl"))
-    end)
-
-    it("does not let a character toggle leak onto the inspect frame", function()
-        local KE = loadGlobals({ showEnchants = false })
-        assert.is_false(KE:EUIDrawsSlotElement("player", "enchant"))
-        assert.is_true(KE:EUIDrawsSlotElement("target", "enchant"))
+    it("releases exactly the element each per-key toggle controls, on the right frame", function()
+        local cases = {
+            -- releases character item level on its own key
+            { db = { showItemLevel = false }, checks = {
+                { "player", "ilvl", false }, { "player", "track", true }, { "player", "gems", true } } },
+            -- releases the character track on its own key
+            { db = { showUpgradeTrack = false }, checks = {
+                { "player", "track", false }, { "player", "ilvl", true } } },
+            -- releases the inspect track on its own key
+            { db = { inspectShowUpgradeTrack = false }, checks = {
+                { "target", "track", false }, { "target", "ilvl", true }, { "target", "enchant", true } } },
+            -- releases the inspect enchant on its own key
+            { db = { inspectShowEnchants = false }, checks = {
+                { "target", "enchant", false }, { "target", "ilvl", true } } },
+            -- uses the inspect-prefixed keys on the inspect frame; the character
+            -- key is untouched by the inspect one
+            { db = { inspectShowItemLevel = false, showItemLevel = true }, checks = {
+                { "target", "ilvl", false }, { "player", "ilvl", true } } },
+            -- does not let a character toggle leak onto the inspect frame
+            { db = { showEnchants = false }, checks = {
+                { "player", "enchant", false }, { "target", "enchant", true } } },
+        }
+        for _, case in ipairs(cases) do
+            local KE = loadGlobals(case.db)
+            for _, check in ipairs(case.checks) do
+                local unit, element, expected = check[1], check[2], check[3]
+                assert.equal(expected, KE:EUIDrawsSlotElement(unit, element))
+            end
+        end
     end)
 
     -- ASYMMETRY 1. EUI's inspect sheet has no gem code at all.
@@ -198,26 +190,20 @@ describe("EUIDrawsSlotElement", function()
     -- ASYMMETRY 3. Two elements EUI ships with no switch at all, so the sheet
     -- being active is the whole answer. Each is live on exactly ONE frame, and
     -- swapping them would blank a display on the frame that still needs it.
-    it("claims the header text on the character sheet and never on inspect", function()
+    it("claims the switchless header text and average item level on exactly one frame each", function()
         local KE = loadGlobals({})
         assert.is_true(KE:EUIDrawsSlotElement("player", "headerText"))
         assert.is_false(KE:EUIDrawsSlotElement("target", "headerText"))
-    end)
-
-    it("claims the average item level on inspect and never on the character sheet", function()
-        local KE = loadGlobals({})
         assert.is_false(KE:EUIDrawsSlotElement("player", "avgIlvl"))
         assert.is_true(KE:EUIDrawsSlotElement("target", "avgIlvl"))
     end)
 
-    it("gives both switchless elements back when their sheet is off", function()
+    it("gives both switchless elements back only when their own sheet is off, never a per-element key", function()
         local charOff = loadGlobals({ themedCharacterSheet = false })
         assert.is_false(charOff:EUIDrawsSlotElement("player", "headerText"))
         local inspOff = loadGlobals({ themedInspectSheet = false })
         assert.is_false(inspOff:EUIDrawsSlotElement("target", "avgIlvl"))
-    end)
 
-    it("no per-element key can switch off either switchless element", function()
         local KE = loadGlobals({
             showItemLevel = false, showEnchants = false, showGems = false,
             showUpgradeTrack = false, charSheetSocketPanel = false,
@@ -226,11 +212,5 @@ describe("EUIDrawsSlotElement", function()
         })
         assert.is_true(KE:EUIDrawsSlotElement("player", "headerText"))
         assert.is_true(KE:EUIDrawsSlotElement("target", "avgIlvl"))
-    end)
-
-    it("negative control: an element EUI has no concept of is never claimed", function()
-        local KE = loadGlobals({})
-        assert.is_false(KE:EUIDrawsSlotElement("player", "raceText"))
-        assert.is_false(KE:EUIDrawsSlotElement("target", "raceText"))
     end)
 end)

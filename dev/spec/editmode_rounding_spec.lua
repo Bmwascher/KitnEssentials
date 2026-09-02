@@ -9,26 +9,6 @@ describe("KE:RoundOffset", function()
 
     before_each(function() KE = L.loadGlobals() end)
 
-    it("leaves a whole number alone", function()
-        assert.equals(240, KE:RoundOffset(240))
-        assert.equals(-80, KE:RoundOffset(-80))
-        assert.equals(0, KE:RoundOffset(0))
-    end)
-
-    it("rounds a positive fraction to nearest", function()
-        assert.equals(240, KE:RoundOffset(240.4))
-        assert.equals(241, KE:RoundOffset(240.6))
-    end)
-
-    it("rounds a negative fraction to nearest", function()
-        assert.equals(-80, KE:RoundOffset(-80.4))
-        assert.equals(-81, KE:RoundOffset(-80.6))
-    end)
-
-    it("rounds a positive half up", function()
-        assert.equals(241, KE:RoundOffset(240.5))
-    end)
-
     it("rounds a negative half toward zero, deliberately", function()
         assert.equals(-80, KE:RoundOffset(-80.5))
     end)

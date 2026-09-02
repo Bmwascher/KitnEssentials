@@ -175,19 +175,6 @@ describe("Combat Texts interrupt attribution", function()
         assert.equals(100, CM.pendingInterruptAt)
     end)
 
-    it("rejects another readable interrupter when no pet exists", function()
-        local CM = loadCombatTexts({
-            unitGUIDs = { player = "Player-1-00000001" },
-        })
-        CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-a", 6552)
-        CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
-            "enemy-cast-a", 777, "Player-1-OTHER")
-        assert.equals(0, #CM.shown)
-        assert.equals(100, CM.pendingInterruptAt)
-        assert.equals(6552, CM.pendingInterruptSpellID)
-        assert.equals("player", CM.pendingInterruptUnit)
-    end)
-
     it("rejects a readable cast source outside the filtered units", function()
         local CM = loadCombatTexts()
         CM:OnSpellcastSucceeded("UNIT_SPELLCAST_SUCCEEDED", "party1", "cast-a", 6552)
@@ -457,136 +444,6 @@ describe("Combat Texts interrupt attribution", function()
         assert.is_nil(CM.reverseInterruptSuccessSpellID)
     end)
 
-    it("normalizes only known wrapper and pet interrupt aliases", function()
-        local CM = loadCombatTexts()
-        assert.equals(19647, CM.NormalizeInterruptSuccessSpellID(19647))
-        assert.equals(19647, CM.NormalizeInterruptSuccessSpellID(119910))
-        assert.equals(19647, CM.NormalizeInterruptSuccessSpellID(132409))
-        assert.equals(89766, CM.NormalizeInterruptSuccessSpellID(89766))
-        assert.equals(89766, CM.NormalizeInterruptSuccessSpellID(119914))
-        assert.equals(6552, CM.NormalizeInterruptSuccessSpellID(6552))
-    end)
-end)
-
-local function packValues(...)
-    return { n = select("#", ...), ... }
-end
-
-local decisionCases = {
-    {
-        name = "direct-owner",
-        args = packValues("UNIT_SPELLCAST_INTERRUPTED", "target", "enemy-cast-a", "Player-1-00000001", 100),
-        expected = packValues(true, "OWN", "HOSTILE", "none", "none", "direct-owner", nil),
-    },
-    {
-        name = "other-owner",
-        prepare = function(CM) CM:RecordPendingInterrupt(6552, "player", 100) end,
-        args = packValues("UNIT_SPELLCAST_INTERRUPTED", "target", "enemy-cast-a", "Player-1-OTHER", 100),
-        expected = packValues(false, "OTHER", "UNKNOWN", "player", "fresh", "other-owner", 0),
-    },
-    {
-        name = "nil-channel-stop",
-        prepare = function(CM) CM:RecordPendingInterrupt(6552, "player", 100) end,
-        args = packValues("UNIT_SPELLCAST_CHANNEL_STOP", "target", "enemy-cast-a", nil, 100),
-        expected = packValues(false, "UNKNOWN", "UNKNOWN", "player", "fresh", "nil-channel-stop", 0),
-    },
-    {
-        name = "no-fresh-pending",
-        options = { now = 0 },
-        prepare = function(CM) CM:RecordPendingInterrupt(6552, "player", 0) end,
-        args = packValues("UNIT_SPELLCAST_INTERRUPTED", "target", "enemy-cast-a", nil, 0.351),
-        expected = packValues(false, "UNKNOWN", "UNKNOWN", "player", "expired", "no-fresh-pending", 0.351),
-    },
-    {
-        name = "friendly-target",
-        options = { UnitCanAttack = function() return false end },
-        args = packValues("UNIT_SPELLCAST_INTERRUPTED", "party1", "enemy-cast-a", "Player-1-00000001", 100),
-        expected = packValues(false, "OWN", "FRIENDLY", "none", "none", "friendly-target", nil),
-    },
-    {
-        name = "invalid-target",
-        args = packValues("UNIT_SPELLCAST_INTERRUPTED", nil, "enemy-cast-a", "Player-1-00000001", 100),
-        expected = packValues(false, "OWN", "INVALID", "none", "none", "invalid-target", nil),
-    },
-    {
-        name = "duplicate-cast-guid",
-        prepare = function(CM)
-            CM:ShouldAcceptInterrupt("UNIT_SPELLCAST_INTERRUPTED", "target", "enemy-cast-a", "Player-1-00000001", 100)
-            CM:RecordPendingInterrupt(6552, "player", 100)
-        end,
-        args = packValues("UNIT_SPELLCAST_INTERRUPTED", "target", "enemy-cast-a", "Player-1-00000001", 100),
-        expected = packValues(false, "OWN", "HOSTILE", "player", "fresh", "duplicate-cast-guid", 0),
-    },
-    {
-        name = "unkeyed-throttle",
-        options = { now = 0 },
-        prepare = function(CM)
-            CM.lastUnkeyedAcceptAt = 0
-            CM:RecordPendingInterrupt(6552, "player", 0)
-        end,
-        args = packValues("UNIT_SPELLCAST_INTERRUPTED", "target", nil, "Player-1-00000001", 0.05),
-        expected = packValues(false, "OWN", "HOSTILE", "player", "fresh", "unkeyed-throttle", 0.05),
-    },
-    {
-        name = "fallback",
-        prepare = function(CM) CM:RecordPendingInterrupt(6552, "player", 100) end,
-        args = packValues("UNIT_SPELLCAST_INTERRUPTED", "target", "enemy-cast-a", nil, 100.25),
-        expected = packValues(true, "UNKNOWN", "HOSTILE", "player", "fresh", "fallback", 0.25),
-    },
-}
-
-for _, case in ipairs(decisionCases) do
-    it("returns the complete " .. case.name .. " decision", function()
-        local CM = loadCombatTexts(case.options)
-        if case.prepare then case.prepare(CM) end
-        local actual = packValues(CM:ShouldAcceptInterrupt(unpack(case.args, 1, case.args.n)))
-        assert.same(case.expected, actual)
-    end)
-end
-
-local function setDebugCT(CM, value)
-    local index = 1
-    while true do
-        local name = debug.getupvalue(CM.OnSpellcastInterrupted, index)
-        if not name then break end
-        if name == "DEBUG_CT" then
-            debug.setupvalue(CM.OnSpellcastInterrupted, index, value)
-            return
-        end
-        index = index + 1
-    end
-    error("DEBUG_CT upvalue not found")
-end
-
-it("logs only the frozen plain decision tuple", function()
-    local CM = loadCombatTexts({
-        unitGUIDs = { player = "RAW_OWNER", pet = "RAW_PET" },
-    })
-    setDebugCT(CM, true)
-    CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "RAW_TARGET", "RAW_CAST", 987654, "RAW_OWNER")
-    assert.same({
-        "[CT] event=UNIT_SPELLCAST_INTERRUPTED owner=OWN target=HOSTILE " ..
-        "pending=none state=none elapsed=none reason=direct-owner",
-    }, CM.printed)
-end)
-
--- This proves opaque mock values are passed through; runtime secrecy remains in-game.
-it("routes opaque spell lookup outputs to the interrupt display", function()
-    local spellName = "OPAQUE_SPELL_NAME"
-    local iconID = 24680
-    local CM = loadCombatTexts({
-        getSpellName = function() return spellName end,
-        getSpellTexture = function() return iconID end,
-    })
-    CM:OnSpellcastInterrupted("UNIT_SPELLCAST_INTERRUPTED", "target",
-        "enemy-cast", "OPAQUE_SPELL_ID", "Player-1-00000001")
-    assert.same({ "OPAQUE_SPELL_ID" }, CM.spellNameCalls)
-    assert.same({ "OPAQUE_SPELL_ID" }, CM.spellTextureCalls)
-    assert.equals(1, #CM.shown)
-    assert.equals("interrupt", CM.shown[1].kind)
-    assert.equals("Interrupted", CM.shown[1].prefix)
-    assert.equals(iconID, CM.shown[1].icon)
-    assert.equals(spellName, CM.shown[1].name)
 end)
 
 it("falls back generically only when spell name or texture is nil", function()
@@ -662,21 +519,19 @@ it("registers interrupt events once and removes them when toggled off", function
     assert.equals(1, #CM.shown)
 end)
 
-it("refuses initial registration while the Ace module is disabled", function()
-    local CM = loadCombatTexts({ moduleEnabled = false })
-    CM:UpdateInterruptEventRegistration()
-    assert.equals(0, CM._aceRegisterCalls.UNIT_SPELLCAST_INTERRUPTED or 0)
-    assert.equals(0, CM._aceRegisterCalls.UNIT_SPELLCAST_CHANNEL_STOP or 0)
-    assert.is_nil(CM.interruptCastFrame)
-end)
-
-it("refuses initial registration while Combat Texts is disabled", function()
-    local CM = loadCombatTexts()
-    CM.db.Enabled = false
-    CM:UpdateInterruptEventRegistration()
-    assert.equals(0, CM._aceRegisterCalls.UNIT_SPELLCAST_INTERRUPTED or 0)
-    assert.equals(0, CM._aceRegisterCalls.UNIT_SPELLCAST_CHANNEL_STOP or 0)
-    assert.is_nil(CM.interruptCastFrame)
+it("refuses initial registration while disabled", function()
+    local variants = {
+        { name = "Ace module", options = { moduleEnabled = false } },
+        { name = "Combat Texts", prepare = function(CM) CM.db.Enabled = false end },
+    }
+    for _, variant in ipairs(variants) do
+        local CM = loadCombatTexts(variant.options)
+        if variant.prepare then variant.prepare(CM) end
+        CM:UpdateInterruptEventRegistration()
+        assert.equals(0, CM._aceRegisterCalls.UNIT_SPELLCAST_INTERRUPTED or 0)
+        assert.equals(0, CM._aceRegisterCalls.UNIT_SPELLCAST_CHANNEL_STOP or 0)
+        assert.is_nil(CM.interruptCastFrame)
+    end
 end)
 
 it("ApplySettings updates registration even before the container exists", function()

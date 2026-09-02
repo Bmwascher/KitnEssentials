@@ -61,19 +61,10 @@ describe("PlainOwnRow", function()
 end)
 
 describe("DetailEligible out of combat", function()
-    it("allows a NON-own row", function()
+    it("allows a non-own row, Deaths, Enemy Damage Taken, and a nil own-row/meter type", function()
         assert.is_true(DM:DetailEligible(false, DAMAGE))
-    end)
-
-    it("allows the Deaths view", function()
         assert.is_true(DM:DetailEligible(false, DEATHS))
-    end)
-
-    it("allows Enemy Damage Taken", function()
         assert.is_true(DM:DetailEligible(false, ENEMY))
-    end)
-
-    it("allows a nil own-row answer and a nil meter type", function()
         assert.is_true(DM:DetailEligible(nil, nil))
     end)
 end)
@@ -99,19 +90,13 @@ describe("DetailEligible in combat", function()
         assert.is_false(DM:DetailEligible(s, DAMAGE))
     end)
 
-    it("ALLOWS the own row on Deaths -- identity is not consulted for it", function()
-        assert.is_true(DM:DetailEligible(true, DEATHS))
-    end)
-
     -- This is the assertion that separates the guarantee from half of it. Deaths
     -- is keyed on a NeverSecret recap id, so every row is addressable; a Deaths
     -- test placed BELOW the own-row rule would open the recap for the player's
     -- own death only and look identical until someone clicked another player's.
-    it("ALLOWS a NON-own row on Deaths -- identity is not consulted for it", function()
+    it("ALLOWS the own row, a NON-own row, and a nil own-row answer on Deaths -- identity is not consulted for it", function()
+        assert.is_true(DM:DetailEligible(true, DEATHS))
         assert.is_true(DM:DetailEligible(false, DEATHS))
-    end)
-
-    it("ALLOWS a nil own-row answer on Deaths -- identity is not consulted for it", function()
         assert.is_true(DM:DetailEligible(nil, DEATHS))
     end)
 

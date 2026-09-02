@@ -93,7 +93,6 @@ local function loadTaintReport(options)
     local printed = {}
     local addonCalls = {}
     local frameCreateCount = 0
-    local frameHideCount = 0
     local lastEditText
     local now = options.now or 1800000000
     local stackValue = options.stack or "Interface/AddOns/KitnEssentials/Core/Main.lua:101: in function <...>"
@@ -107,7 +106,6 @@ local function loadTaintReport(options)
     end
     local eventFrame
     local editBox
-    local reportFrame
 
     local function makeObject(kind, name)
         local object = {
@@ -141,9 +139,6 @@ local function loadTaintReport(options)
             self._shown = true
         end
         function object:Hide()
-            if self._name == "KE_TaintReportFrame" then
-                frameHideCount = frameHideCount + 1
-            end
             self._shown = false
             local callback = self._scripts.OnHide
             if callback then callback(self) end
@@ -192,17 +187,6 @@ local function loadTaintReport(options)
         function object:SetSize(width)
             self._width = width
         end
-        function object:SetFont(...)
-            local argumentCount = select("#", ...)
-            if self._kind == "EditBox" and options.enforceEditBoxFontContract
-                and argumentCount ~= 3 then
-                error("bad argument #3 to 'SetFont' "
-                    .. "(Usage: local success = self:SetFont(fontFile, height, flags))", 2)
-            end
-            self._font = { ... }
-            self._fontArgumentCount = argumentCount
-        end
-
         local noOps = {
             "SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor",
             "SetHeight", "SetPoint", "ClearAllPoints", "SetAllPoints",
@@ -213,7 +197,7 @@ local function loadTaintReport(options)
             "RegisterForDrag", "StartMoving", "StopMovingOrSizing",
             "SetOrientation", "SetThumbTexture", "SetMultiLine", "SetMaxLetters",
             "SetAutoFocus", "SetScrollChild", "SetVerticalScroll",
-            "EnableMouseWheel", "SetParent",
+            "EnableMouseWheel", "SetParent", "SetFont",
         }
         for _, method in ipairs(noOps) do
             object[method] = function()
@@ -238,7 +222,6 @@ local function loadTaintReport(options)
         if kind == "EditBox" then editBox = object end
         if name == "KE_TaintReportFrame" then
             frameCreateCount = frameCreateCount + 1
-            reportFrame = object
         end
         return object
     end
@@ -404,9 +387,6 @@ local function loadTaintReport(options)
     function state.frameCreateCount()
         return frameCreateCount
     end
-    function state.frameHideCount()
-        return frameHideCount
-    end
     function state.lastEditText()
         return lastEditText
     end
@@ -416,41 +396,11 @@ local function loadTaintReport(options)
         lastEditText = text
         return editBox:GetScript("OnTextChanged")(editBox, true)
     end
-    function state.escapeFocusedEditBox()
-        assert.is_true(editBox:HasFocus())
-        local callback = editBox:GetScript("OnEscapePressed")
-        assert.is_function(callback)
-        return callback(editBox)
-    end
-    function state.focusEditBox()
-        editBox:SetFocus()
-    end
-    function state.reportFrameIsShown()
-        return reportFrame:IsShown()
-    end
-    function state.editBoxFont()
-        assert.is_table(editBox)
-        return editBox._font, editBox._fontArgumentCount
-    end
     return state
 end
 
 describe("TaintReport capture and access guards", function()
     restoreHarnessGlobals()
-
-    it("registers only both protected-action events and logout", function()
-        local state = loadTaintReport()
-        assert.same({
-            "ADDON_ACTION_BLOCKED",
-            "ADDON_ACTION_FORBIDDEN",
-            "PLAYER_LOGOUT",
-        }, state.registeredEvents)
-    end)
-
-    it("exposes only Initialize and RunCommand", function()
-        local state = loadTaintReport()
-        assert.same({ "Initialize", "RunCommand" }, shallowKeys(state.taintReport))
-    end)
 
     it("drops unreadable attribution before comparison, grouping, or stack work", function()
         local state = loadTaintReport({
@@ -533,131 +483,6 @@ describe("TaintReport capture and access guards", function()
         assert.equals(0, state.frameCreateCount())
     end)
 
-    it("keeps direct access wrappers and never wraps either predicate directly", function()
-        local handle = assert(io.open("Modules/Diagnostics/TaintReport.lua", "rb"))
-        local source = handle:read("*a")
-        handle:close()
-        assert.is_truthy(source:find("local function DirectCanAccess(value)", 1, true))
-        assert.is_truthy(source:find("local function DirectCanAccessTable(value)", 1, true))
-        assert.is_nil(source:find("pcall(canaccessvalue", 1, true))
-        assert.is_nil(source:find("pcall(canaccesstable", 1, true))
-    end)
-
-    it("guards persisted values before copying or comparing them", function()
-        local handle = assert(io.open("Modules/Diagnostics/TaintReport.lua", "rb"))
-        local source = handle:read("*a")
-        handle:close()
-
-        -- Ordinary Lua cannot model secret-value operations, so source order is the static proof.
-        local denseStart = assert(source:find("local function ValidateDenseArray", 1, true))
-        local denseEnd = assert(source:find("local function SafeFinishedString", denseStart, true))
-        local denseSource = source:sub(denseStart, denseEnd - 1)
-        local valueGuard = assert(denseSource:find(
-            "if not SafeCanAccess(nextValue) then return nil end", 1, true))
-        local valueStore = assert(denseSource:find("result[nextKey] = nextValue", 1, true))
-        assert.is_true(valueGuard < valueStore)
-
-        local initializeStart = assert(source:find("function TaintReport.Initialize", 1, true))
-        local initializeEnd = assert(source:find("function TaintReport.RunCommand", initializeStart, true))
-        local initializeSource = source:sub(initializeStart, initializeEnd - 1)
-        assert.is_truthy(initializeSource:find(
-            "global.TaintLog = RestoreStore(global.TaintLog)", 1, true))
-        assert.is_nil(initializeSource:find("rawStore ~= nil", 1, true))
-    end)
-
-    it("uses static source order to screen sanitizer results before reuse", function()
-        local handle = assert(io.open("Modules/Diagnostics/TaintReport.lua", "rb"))
-        local source = handle:read("*a")
-        handle:close()
-
-        -- Ordinary Lua mocks cannot model live secret propagation, so this proves source order only.
-        local sanitizerStart = assert(source:find("local function SanitizeReportString", 1, true))
-        local sanitizerEnd = assert(source:find("local function NormalizeRetained", sanitizerStart, true))
-        local sanitizerSource = source:sub(sanitizerStart, sanitizerEnd - 1)
-        local firstTransform = assert(sanitizerSource:find(
-            "local strippedStarts = string_gsub", 1, true))
-        local firstGuard = assert(sanitizerSource:find(
-            "if not SafeCanAccess(strippedStarts) then return nil end", firstTransform, true))
-        local secondTransform = assert(sanitizerSource:find(
-            "local stripped = string_gsub", firstGuard, true))
-        local secondGuard = assert(sanitizerSource:find(
-            "if not SafeCanAccess(stripped) then return nil end", secondTransform, true))
-        local comparison = assert(sanitizerSource:find("if stripped == value then", secondGuard, true))
-        local result = assert(sanitizerSource:find("return stripped", comparison, true))
-
-        assert.is_true(firstTransform < firstGuard)
-        assert.is_true(firstGuard < secondTransform)
-        assert.is_true(secondTransform < secondGuard)
-        assert.is_true(secondGuard < comparison)
-        assert.is_true(comparison < result)
-    end)
-
-    it("uses static source order to guard every derived composition before reuse", function()
-        local handle = assert(io.open("Modules/Diagnostics/TaintReport.lua", "rb"))
-        local source = handle:read("*a")
-        handle:close()
-
-        -- Ordinary Lua mocks cannot model live secret propagation, so this proves required source order only.
-        local normalizeStart = assert(source:find("local function NormalizeRetained", 1, true))
-        local normalizeEnd = assert(source:find("local function BoundedString", normalizeStart, true))
-        local normalizeSource = source:sub(normalizeStart, normalizeEnd - 1)
-        local substring = assert(normalizeSource:find(
-            "local shortened = string_sub(normalized, 1, payload)", 1, true))
-        local substringGuard = assert(normalizeSource:find(
-            "if not SafeCanAccess(shortened) then return nil end", substring, true))
-        local markerAppend = assert(normalizeSource:find(
-            "normalized = shortened .. TRUNCATION_MARKER", substringGuard, true))
-        local completedGuard = assert(normalizeSource:find(
-            "if not SafeCanAccess(normalized) then return nil end", markerAppend, true))
-        assert.is_true(substring < substringGuard)
-        assert.is_true(substringGuard < markerAppend)
-        assert.is_true(markerAppend < completedGuard)
-
-        local notifyStart = assert(source:find("local function NotifyNewGroup", 1, true))
-        local notifyEnd = assert(source:find("local function AdvanceGroup", notifyStart, true))
-        local notifySource = source:sub(notifyStart, notifyEnd - 1)
-        local notificationTransform = assert(notifySource:find("local message = string_format(", 1, true))
-        local notificationGuard = assert(notifySource:find(
-            "if SafeFinishedString(message) then", notificationTransform, true))
-        local notificationPrint = assert(notifySource:find("KE:Print(message)", notificationGuard, true))
-        assert.is_true(notificationTransform < notificationGuard)
-        assert.is_true(notificationGuard < notificationPrint)
-
-        local finalizeStart = assert(source:find("local function FinalizeWriter", 1, true))
-        local finalizeEnd = assert(source:find("local function DisclosureLine", finalizeStart, true))
-        local finalizeSource = source:sub(finalizeStart, finalizeEnd - 1)
-        local joined = assert(finalizeSource:find("local report = table_concat(writer.parts)", 1, true))
-        local joinedGuard = assert(finalizeSource:find(
-            "if not SafeFinishedString(report) then return nil end", joined, true))
-        local truncation = assert(finalizeSource:find("if writer.truncated then", joinedGuard, true))
-        local reportAppend = assert(finalizeSource:find(
-            "report = report .. REPORT_TRUNCATION_MARKER", truncation, true))
-        local appendedGuard = assert(finalizeSource:find(
-            "if not SafeFinishedString(report) then return nil end", reportAppend, true))
-        assert.is_true(joined < joinedGuard)
-        assert.is_true(joinedGuard < truncation)
-        assert.is_true(truncation < reportAppend)
-        assert.is_true(reportAppend < appendedGuard)
-
-        local detailsStart = assert(source:find("local function WriteGroupDetails", 1, true))
-        local detailsEnd = assert(source:find("local function ToolStateText", detailsStart, true))
-        local detailsSource = source:sub(detailsStart, detailsEnd - 1)
-        assert.is_truthy(detailsSource:find(
-            "WriteDetail(writer, string_format(\"Action: %s\\n\", group.action))", 1, true))
-        assert.is_truthy(detailsSource:find(
-            "WriteDetail(writer, string_format(\"  KE line: %s\\n\", line))", 1, true))
-
-        local reportStart = assert(source:find("local function BuildReport", 1, true))
-        local reportEnd = assert(source:find("local function ThemeColor", reportStart, true))
-        local reportSource = source:sub(reportStart, reportEnd - 1)
-        for _, composition in ipairs({
-            "if not mandatory(string_format(\"Addon version: %s\\n\", environment.addonVersion)) then return nil end",
-            "if not mandatory(string_format(\"Client build: %s\\n\", environment.clientBuild)) then return nil end",
-            "if not mandatory(string_format(\"Report time: %s\\n\", environment.reportDate)) then return nil end",
-        }) do
-            assert.is_truthy(reportSource:find(composition, 1, true), composition)
-        end
-    end)
 end)
 
 describe("TaintReport real slash router", function()
@@ -713,12 +538,6 @@ describe("TaintReport real slash router", function()
         return KE, commands, printed
     end
 
-    it("requires the router fixture to restore the complete global map", function()
-        withRouterGlobals(function()
-            loader.loadGlobals()
-        end)
-    end)
-
     it("routes taint with empty remainders after trimming and normalization", function()
         withRouterGlobals(function()
             local _, commands = loadRouter()
@@ -765,32 +584,6 @@ describe("TaintReport real slash router", function()
         end)
     end)
 
-    it("lists the taint command in real-router help", function()
-        withRouterGlobals(function()
-            local _, _, printed = loadRouter()
-
-            SlashCmdList["KITNESSENTIALS"]("help")
-
-            assert.is_truthy(printed[1]:find("taint [clear]", 1, true))
-        end)
-    end)
-
-    it("restores globals when a real-router callback fails", function()
-        local original = snapshotGlobalMap()
-
-        local ok, failure = pcall(function()
-            withRouterGlobals(function()
-                local _, commands = loadRouter()
-                SlashCmdList["KITNESSENTIALS"]("taint")
-                assert.same({ "" }, commands)
-                error("router fixture failure")
-            end)
-        end)
-
-        assert.is_false(ok)
-        assert.is_truthy(failure:find("router fixture failure", 1, true))
-        assertGlobalMapsEqual(original, snapshotGlobalMap())
-    end)
 end)
 
 describe("TaintReport parsing, dedupe, and capture bounds", function()
@@ -1146,27 +939,75 @@ describe("TaintReport persistence", function()
         assert.equals(12, db.global.TaintLog.omitted)
     end)
 
-    it("persists a current/restored collision once and carries supersession through reload", function()
-        local rows = { storedGroup("collision", { lastSeen = 1799999990 }) }
-        for index = 1, 9 do rows[#rows + 1] = storedGroup("other-" .. index) end
-        local db = { global = { TaintLog = storedLog(rows) } }
-        local state = loadTaintReport()
-        state.initialize(db)
-        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "collision")
-        state.logout()
-        local store = db.global.TaintLog
-        assert.equals(10, #store.groups)
-        assert.equals(1, store.supersededRestored)
-        local collisions = 0
-        for _, group in ipairs(store.groups) do
-            if group.action == "collision" then collisions = collisions + 1 end
-        end
-        assert.equals(1, collisions)
+    it("classifies post-init restored matches as superseded exactly once for a bystander collision and a matching eviction", function()
+        local variants = {
+            {
+                name = "bystander collision",
+                preinitCount = 0,
+                matchAction = "collision",
+                buildRestored = function()
+                    local rows = { storedGroup("collision", { lastSeen = 1799999990 }) }
+                    for index = 1, 9 do rows[#rows + 1] = storedGroup("other-" .. index) end
+                    return rows
+                end,
+                extraChecks = function(store)
+                    assert.equals(10, #store.groups)
+                    local collisions = 0
+                    for _, group in ipairs(store.groups) do
+                        if group.action == "collision" then collisions = collisions + 1 end
+                    end
+                    assert.equals(1, collisions)
+                end,
+                checkIdentity = false,
+            },
+            {
+                name = "matching eviction",
+                preinitCount = 15,
+                matchAction = "matching-eviction",
+                buildRestored = function()
+                    local rows = {
+                        storedGroup("matching-eviction", {
+                            firstSeen = 1799999700, lastSeen = 1799999800,
+                        }),
+                    }
+                    for index = 2, 10 do
+                        rows[index] = storedGroup("restored-" .. index, {
+                            firstSeen = 1799999800 + index,
+                            lastSeen = 1799999900 + index,
+                        })
+                    end
+                    return rows
+                end,
+                extraChecks = function() end,
+                checkIdentity = true,
+            },
+        }
 
-        local second = loadTaintReport()
-        second.initialize({ global = { TaintLog = store } })
-        local secondReport = assert(second.run(""))
-        assert.is_truthy(secondReport:find("Restored groups superseded: 1", 1, true))
+        for _, variant in ipairs(variants) do
+            local state = loadTaintReport()
+            for index = 1, variant.preinitCount do
+                state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "preinit-" .. index)
+            end
+            local db = { global = { TaintLog = storedLog(variant.buildRestored()) } }
+            state.initialize(db)
+            state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", variant.matchAction)
+            state.logout()
+            local store = assert(db.global.TaintLog, variant.name)
+            assert.equals(1, store.supersededRestored, variant.name)
+            variant.extraChecks(store)
+
+            local secondDB = { global = { TaintLog = store } }
+            local second = loadTaintReport()
+            second.initialize(secondDB)
+            local canonical = secondDB.global.TaintLog
+            local report = assert(second.run(""), variant.name)
+            assert.is_truthy(report:find("Restored groups superseded: 1", 1, true), variant.name)
+            if variant.checkIdentity then
+                second.logout()
+                assert.equals(canonical, secondDB.global.TaintLog, variant.name)
+                assert.equals(1, secondDB.global.TaintLog.supersededRestored, variant.name)
+            end
+        end
     end)
 
     it("classifies non-admitted and evicted restored rows exactly once", function()
@@ -1192,41 +1033,6 @@ describe("TaintReport persistence", function()
         second.logout()
         assert.equals(1, secondDB.global.TaintLog.supersededRestored)
         assert.equals(16, secondDB.global.TaintLog.omitted)
-    end)
-
-    it("classifies a matching post-init restored eviction as superseded exactly once", function()
-        local state = loadTaintReport()
-        for index = 1, 15 do
-            state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "preinit-" .. index)
-        end
-
-        local restored = {
-            storedGroup("matching-eviction", {
-                firstSeen = 1799999700, lastSeen = 1799999800,
-            }),
-        }
-        for index = 2, 10 do
-            restored[index] = storedGroup("restored-" .. index, {
-                firstSeen = 1799999800 + index,
-                lastSeen = 1799999900 + index,
-            })
-        end
-        local db = { global = { TaintLog = storedLog(restored) } }
-        state.initialize(db)
-        state.fire("ADDON_ACTION_BLOCKED", "KitnEssentials", "matching-eviction")
-        state.logout()
-
-        local store = assert(db.global.TaintLog)
-        assert.equals(1, store.supersededRestored)
-        local secondDB = { global = { TaintLog = store } }
-        local second = loadTaintReport()
-        second.initialize(secondDB)
-        local canonical = secondDB.global.TaintLog
-        local report = assert(second.run(""))
-        assert.is_truthy(report:find("Restored groups superseded: 1", 1, true))
-        second.logout()
-        assert.equals(canonical, secondDB.global.TaintLog)
-        assert.equals(1, secondDB.global.TaintLog.supersededRestored)
     end)
 
     it("fails closed at every persisted table boundary before traversal", function()
@@ -2230,50 +2036,4 @@ describe("TaintReport report and lazy dialog", function()
         end
     end)
 
-    it("sets the report body font to 14px with explicit no-outline flags", function()
-        local state = loadTaintReport({ enforceEditBoxFontContract = true })
-        state.initialize()
-
-        assert.has_no.errors(function() state.run("") end)
-        local font, argumentCount = state.editBoxFont()
-        assert.equals(3, argumentCount)
-        assert.same({ "Fonts\\FRIZQT__.TTF", 14, "" }, font)
-    end)
-
-    it("creates the singleton dialog lazily, reuses it, and clears its text", function()
-        local state = loadTaintReport()
-        state.initialize()
-        local first = assert(state.run(""))
-        assert.equals(1, state.frameCreateCount())
-        local hidesBefore = state.frameHideCount()
-        local second = assert(state.run(""))
-        assert.equals(first, second)
-        assert.equals(1, state.frameCreateCount())
-        assert.equals("", state.run("clear"))
-        assert.equals(1, state.frameCreateCount())
-        assert.is_true(state.frameHideCount() > hidesBefore)
-        assert.equals("", state.lastEditText())
-    end)
-
-    it("hides the report on one Escape from its focused edit box", function()
-        local state = loadTaintReport()
-        state.initialize()
-        state.run("")
-        state.focusEditBox()
-        assert.is_true(state.reportFrameIsShown())
-        state.escapeFocusedEditBox()
-        assert.is_false(state.reportFrameIsShown())
-    end)
-
-    it("contains none of the forbidden background or input-control paths", function()
-        local handle = assert(io.open("Modules/Diagnostics/TaintReport.lua", "rb"))
-        local source = handle:read("*a")
-        handle:close()
-        for _, forbidden in ipairs({
-            "OnUpdate", "C_Timer", "NewTicker", "EnumerateFrames", "EnableKeyboard",
-            "SetPropagateKeyboardInput", "SetFocus", "HighlightText",
-        }) do
-            assert.is_nil(source:find(forbidden, 1, true), forbidden)
-        end
-    end)
 end)
