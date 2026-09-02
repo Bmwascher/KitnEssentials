@@ -16,21 +16,17 @@ local CT = KitnEssentials:NewModule("CombatTimer", "AceEvent-3.0")
 -- Constants
 ---------------------------------------------------------------------------------
 local CreateFrame = CreateFrame
-local GetTime = GetTime
-local InCombatLockdown = InCombatLockdown
-local C_InstanceEncounter = C_InstanceEncounter
 local math_floor = math.floor
 local string_format = string.format
 
+-- KE.CombatState listener/cadence key. Registered in OnEnable, dropped in
+-- OnDisable, so a re-enable cannot stack a duplicate.
+local LISTENER_KEY = "CombatTimer"
+
 CT.frame = nil
 CT.text = nil
-CT.startTime = 0
-CT.running = false
 CT.lastDisplayedText = ""
 CT.isPreview = false
-CT.isEncounter = false
-
-KE.lastCombatDuration = 0
 
 -- Brackets live in the timer string itself, as the reference renders them.
 -- They were previously two extra FontStrings pinned to the frame edges, which
@@ -41,23 +37,6 @@ local cachedOpenBracket, cachedCloseBracket = "[", "]"
 
 local function GetRefreshRate(format)
     return (format == "MM:SS:MS") and 0.1 or 0.25
-end
-
--- Whether a stop event should actually stop the clock. Pure so the rule can be
--- tested without frames: a plain-combat timer stops on a combat end, an
--- encounter timer stops on an encounter end, and an encounter timer also stops
--- on a combat end once the encounter is genuinely over (the wipe or release
--- case, where ENCOUNTER_END may never arrive for us).
-local function ShouldStopTimer(isEncounterTimer, isEncounterEvent, encounterInProgress)
-    if isEncounterTimer == isEncounterEvent then return true end
-    return isEncounterTimer and not encounterInProgress
-end
-
-local function EncounterInProgress()
-    local fn = C_InstanceEncounter and C_InstanceEncounter.IsEncounterInProgress
-    if not fn then return false end
-    local ok, inProgress = pcall(fn)
-    return ok and inProgress == true
 end
 
 ---------------------------------------------------------------------------------
@@ -148,20 +127,22 @@ function CT:UpdateFrameSize()
     if current ~= nil then self.text:SetText(current) end
 end
 
-function CT:UpdateText()
-    if not self.text then return end
-    local total_time
-    if self.running then
-        total_time = self.startTime > 0 and (GetTime() - self.startTime) or 0
-    else
-        total_time = KE.lastCombatDuration or 0
-    end
-    local status = FormatTime(total_time, self.db.Format)
+-- Paints total_seconds through the current format, skipping the redraw when
+-- the rendered string hasn't changed.
+function CT:_PaintTime(total_seconds)
+    local status = FormatTime(total_seconds, self.db.Format)
     if status ~= self.lastDisplayedText then
         self.text:SetText(status)
         self.lastDisplayedText = status
         self:UpdateFrameSize()
     end
+end
+
+-- The settled-case renderer: reads the pin back through the service and takes
+-- no reading of its own. Used out of combat and by the preview OnUpdate.
+function CT:UpdateText()
+    if not self.text then return end
+    self:_PaintTime(KE.CombatState:GetDuration() or 0)
 end
 
 -- Colour is the only thing a combat transition changes, so it is split out of
@@ -170,7 +151,7 @@ end
 -- nothing.
 function CT:UpdateCombatColor()
     if not self.text then return end
-    local textColor = self.running and self.db.ColorInCombat or self.db.ColorOutOfCombat
+    local textColor = KE.CombatState:IsLive() and self.db.ColorInCombat or self.db.ColorOutOfCombat
     local r, g, b, a = 1, 1, 1, 1
     if textColor then
         r = textColor[1] or 1
@@ -187,6 +168,7 @@ end
 function CT:ApplySettings()
     if not self.text then return end
     self.refreshRate = GetRefreshRate(self.db.Format)
+    KE.CombatState:SetFineCadence(LISTENER_KEY, self.db.Format == "MM:SS:MS")
 
     cachedOpenBracket, cachedCloseBracket = GetBrackets(self.db.BracketStyle)
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
@@ -222,11 +204,10 @@ end
 ---------------------------------------------------------------------------------
 -- Core Logic
 ---------------------------------------------------------------------------------
+-- Attached only for preview: live paint runs entirely off OnClockTick, per the
+-- paint contract.
 function CT:OnUpdate(elapsed)
-    -- Caller is responsible for attaching/detaching this script — we should
-    -- only ever fire when running or previewing. Defensive guard preserved
-    -- in case of a missed detach.
-    if not self.running and not self.isPreview then return end
+    if not self.isPreview then return end
     self.elapsed = (self.elapsed or 0) + elapsed
     local refresh = self.refreshRate or GetRefreshRate(self.db.Format)
     if self.elapsed < refresh then return end
@@ -250,61 +231,36 @@ function CT:_SetOnUpdateActive(active)
     end
 end
 
--- A timer remembers whether it began as an encounter, because the two clocks
--- end differently: plain combat ends when combat does, but a boss fight drops
--- and regains combat freely, and restarting the clock on every one of those
--- makes the readout useless. So an encounter timer ignores combat ending and
--- waits for ENCOUNTER_END, or for the encounter to genuinely be over. Combat
--- already running when a boss pulls is promoted rather than restarted.
-function CT:StartTimer(isEncounterEvent)
-    if not self.db.Enabled then return end
-    if self.running then
-        if isEncounterEvent then self.isEncounter = true end
-        return
-    end
-    self.startTime = GetTime()
-    self.running = true
-    self.isEncounter = isEncounterEvent
-    KE.lastCombatDuration = 0
-    self.lastDisplayedText = ""
+---------------------------------------------------------------------------------
+-- KE.CombatState listener
+---------------------------------------------------------------------------------
+-- Shows the frame and the in-combat colour. Attaches nothing: the service's
+-- clock tick drives the paint, and it already broadcast a blank OnClockTick
+-- immediately before this.
+function CT:OnStart()
     if self.frame then self.frame:Show() end
-    self:_SetOnUpdateActive(true)
+    self.lastDisplayedText = ""
     self:UpdateCombatColor()
-    self:UpdateText()
 end
 
-function CT:StopTimer(isEncounterEvent)
-    if not self.running then return end
-    if not ShouldStopTimer(self.isEncounter, isEncounterEvent, EncounterInProgress()) then
-        return
-    end
-
-    KE.lastCombatDuration = GetTime() - self.startTime
-    self.running = false
-    self.isEncounter = false
-    self.startTime = 0
-    -- Final UpdateText below paints the closing duration; after that, drop
-    -- the OnUpdate so we don't tick at idle. Preview can keep us awake.
-    if not self.isPreview then self:_SetOnUpdateActive(false) end
-    if self.db.ShowChatMessage ~= false then
-        local duration = FormatTime(KE.lastCombatDuration, self.db.Format)
+-- Applies the out-of-combat colour and repaints from the pin, already the
+-- final value on screen since a freeze broadcasts a last OnClockTick first.
+-- Zoning is not a fight ending, and a fight the player never entered is not
+-- theirs to report.
+function CT:OnStop(reason)
+    self:UpdateCombatColor()
+    self:UpdateText()
+    if self.db.ShowChatMessage ~= false and reason ~= "reset" and KE.CombatState:PlayerJoined() then
+        local duration = FormatTime(KE.CombatState:GetDuration() or 0, self.db.Format)
         KE:Print("Combat lasted " .. duration)
     end
-    self:UpdateCombatColor()
-    self:UpdateText()
 end
 
--- Named handlers rather than closures so the event registration stays in the
--- string-handler form the rest of the addon uses.
-function CT:OnCombatStart()    self:StartTimer(false) end
-function CT:OnCombatEnd()      self:StopTimer(false) end
-function CT:OnEncounterStart() self:StartTimer(true) end
-function CT:OnEncounterEnd()   self:StopTimer(true) end
-
--- Thin accessor so the stop rule can be exercised without the frames and the
--- event wiring around it.
-function CT:ShouldStopTimer(isEncounterTimer, isEncounterEvent, encounterInProgress)
-    return ShouldStopTimer(isEncounterTimer, isEncounterEvent, encounterInProgress)
+-- The only live paint path. fraction supplies the MM:SS:MS format's final
+-- digit; it stays under 1, so it never shifts the mins/secs it is added to.
+function CT:OnClockTick(seconds, fraction)
+    if not self.text then return end
+    self:_PaintTime((seconds or 0) + (fraction or 0))
 end
 
 ---------------------------------------------------------------------------------
@@ -338,10 +294,10 @@ end
 
 function CT:HidePreview()
     self.isPreview = false
-    if self.frame and not self.running and not self.db.Enabled then
+    if self.frame and not KE.CombatState:IsLive() and not self.db.Enabled then
         self.frame:Hide()
     end
-    if not self.running then self:_SetOnUpdateActive(false) end
+    self:_SetOnUpdateActive(false)
 end
 
 function CT:ApplyPosition()
@@ -359,15 +315,13 @@ function CT:OnEnable()
     self:RegWithEditMode()
     self:ApplySettings()
     C_Timer.After(0.5, function() self:ApplyPosition() end)
-    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatStart")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
-    self:RegisterEvent("ENCOUNTER_START", "OnEncounterStart")
-    self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
-    -- Don't attach OnUpdate here. OnEnterCombat / ShowPreview will attach it
-    -- when work is actually needed; OnExitCombat / HidePreview detach it.
-    -- Module enabled mid-combat: re-arm from the running combat lockdown.
+    KE.CombatState:RegisterListener(LISTENER_KEY, {
+        OnStart = function() self:OnStart() end,
+        OnStop = function(reason) self:OnStop(reason) end,
+        OnClockTick = function(seconds, fraction) self:OnClockTick(seconds, fraction) end,
+    })
+    KE.CombatState:SetFineCadence(LISTENER_KEY, self.db.Format == "MM:SS:MS")
     if self.db.Enabled then self.frame:Show() end
-    if InCombatLockdown() then self:StartTimer(false) end
 end
 
 function CT:OnDisable()
@@ -375,8 +329,8 @@ function CT:OnDisable()
         self:_SetOnUpdateActive(false)
         self.frame:Hide()
     end
-    self.running = false
-    self.isEncounter = false
     self.isPreview = false
+    KE.CombatState:SetFineCadence(LISTENER_KEY, false)
+    KE.CombatState:UnregisterListener(LISTENER_KEY)
     self:UnregisterAllEvents()
 end

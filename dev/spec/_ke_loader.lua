@@ -2191,22 +2191,26 @@ function L.loadOptimize(overrides)
     return OPT, rec, KE
 end
 
--- Modules/Combat/CombatTimer.lua. Only the pure stop rule is reachable
--- headlessly: everything else in that module is frames, an OnUpdate ticker and
--- event timing, which this project verifies in game.
+-- Modules/Combat/CombatTimer.lua. Only the chat-line refusal rule (CT:OnStop)
+-- is reachable headlessly: everything else in that module is frames, the
+-- KE.CombatState listener wiring and event timing, which this project
+-- verifies in game. KE.CombatState is a bare fake carrying only what OnStop
+-- reads; overrides.CombatState replaces it wholesale. Callers set CT.db
+-- directly, the same way a real OnInitialize would via KE.db.profile.CombatTimer.
 function L.loadCombatTimer(overrides)
     overrides = overrides or {}
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
 
     _G.UIParent = noopFrame()
-    _G.GetTime = overrides.GetTime or function() return 1000 end
-    _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
-    _G.C_InstanceEncounter = overrides.C_InstanceEncounter or {
-        IsEncounterInProgress = function() return false end,
-    }
 
-    local KE = { Print = function() end }
+    local KE = {
+        Print = function() end,
+        CombatState = overrides.CombatState or {
+            PlayerJoined = function() return true end,
+            GetDuration = function() return 12 end,
+        },
+    }
     helpers.loadModule("Modules/Combat/CombatTimer.lua", KE)
     return modules["CombatTimer"], KE
 end
