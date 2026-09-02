@@ -1188,20 +1188,16 @@ function DM:UpdateCombatClock(W, session, authoritative)
     if storedID then
         duration = session and session.durationSeconds
     elseif not self._clockCleared and (KE.CombatState:IsLive() or KE.CombatState:IsFrozen()) then
-        -- Warm-up hold. A new fight resets the pin, so there is a gap before the
-        -- first reading lands. The service suppresses its own blank broadcast on
-        -- a live-to-live start, and this is the same rule for the bar repaint,
-        -- which runs on its own schedule: without it a boss chain-pulled out of
-        -- trash blanks this clock while the Combat Timer still shows the old
-        -- value. A genuine start clears the text first (BlankCombatClock), so
-        -- the hold can never carry a finished fight's time into a new one.
+        -- Warm-up hold: a new fight resets the pin, so an ordinary bar repaint
+        -- landing in the gap before the first reading would blank this clock
+        -- while the Combat Timer still shows the old value. BlankCombatClock
+        -- clears the text at a genuine start, so the hold cannot carry a
+        -- finished fight into a new one.
         if not authoritative and KE.CombatState:GetDuration() == nil and W._clockHasText then return end
         -- The branch condition is LIVENESS, not a non-nil duration: splitting on
-        -- the duration would drop into the reload fallback below before the pin
-        -- is warm, and that fallback accepts a secret string the Combat Timer
+        -- the duration would drop into the fallback below before the pin is
+        -- warm, and that fallback accepts a secret string the Combat Timer
         -- cannot -- the exact disagreement this design exists to remove.
-        -- _clockCleared skips this branch only (a reset or a zone change with
-        -- nothing live); it is cleared on the next OnStart.
         duration = KE.CombatState:GetDuration()
     else
         -- No live or frozen fight at all, which after a /reload mid-session is the normal

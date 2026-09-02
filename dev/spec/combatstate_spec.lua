@@ -416,6 +416,18 @@ describe("CombatState machine", function()
             assert.is_false(cs.watching)
         end)
 
+        it("a poll armed for a player promoted by the non-kill continuation cancels itself", function()
+            local cs = newCS()
+            cs:OnRegenDisabled()
+            cs:OnEncounterEnd(nil)
+            deps.groupInCombat = function() return true end
+            deps.playerInCombat = function() return true end
+            lastAfter(sched).fn()
+            local poll = lastPoll(sched)
+            poll.fn()
+            assert.is_true(poll.cancelled)
+        end)
+
         it("a start arriving during a watch clears watching and produces a live poll", function()
             local cs = newCS()
             deps.groupInCombat = function() return true end
@@ -581,9 +593,9 @@ describe("CombatState machine", function()
             cs:OnRegenDisabled()
             cs:RegisterListener("mod", {})
             cs:SetFineCadence("mod", true)
-            assert.equals(0.1, cs:_ClockCadence())
+            assert.equals(0.1, lastClock(sched).sec)
             cs:UnregisterListener("mod")
-            assert.equals(0.5, cs:_ClockCadence())
+            assert.equals(0.5, lastClock(sched).sec)
         end)
 
         it("a freeze and a hard reset each cancel the clock ticker", function()

@@ -6,11 +6,6 @@
 -- machine, which is combatstate_spec.lua's job.
 local L = require("dev.spec._ke_loader")
 
--- OnMeterReset/HeaderReset both end in a guarded DM:Tick() call, and Tick's
--- per-frame budget reads this. loadDMCore does not set it (only loadDMHistory
--- does); the reset-path cases below reach Tick without History.lua loaded.
-_G.debugprofilestop = _G.debugprofilestop or function() return 0 end
-
 -- A trackable stand-in for the clock FontString: records what UpdateCombatClock
 -- would have painted, without a stateful frame fake.
 local function fakeClock()

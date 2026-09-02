@@ -97,8 +97,8 @@ end
 function CombatState:Sample()
     local ok, raw = self.deps.sessionDuration()
     if not ok then return nil end
-    if raw == nil then return nil end
     if issecretvalue(raw) then return nil end
+    if raw == nil then return nil end
     if type(raw) ~= "number" then return nil end
     if raw <= 0 then return nil end
     return raw
@@ -201,9 +201,12 @@ function CombatState:StartFight(which)
     self:_StartClock()
     -- Fired only on a fresh start (not a live-to-live chain pull): otherwise a
     -- boss chain-pulled out of trash blanks both surfaces for up to 0.5s.
+    -- OnStart first: it is where a consumer clears whatever it was holding, and
+    -- a blank paint arriving before that can be routed by stale consumer state.
+    -- Both still land in this one dispatch, so nothing is drawn in between.
     if not wasLive then
-        self:_Broadcast("OnClockTick", nil, 0)
         self:_Broadcast("OnStart")
+        self:_Broadcast("OnClockTick", nil, 0)
     end
 end
 
@@ -250,8 +253,9 @@ function CombatState:OnUnitFlags(unit)
 end
 
 function CombatState:OnRegenEnabled()
-    -- TEST BEFORE CLEARING. Clearing playerCombat first makes an ordinary
-    -- solo fight look already-stopped, and it then never freezes at all.
+    -- Captured before anything clears a flag, and never cleared before Freeze:
+    -- Freeze is inert on a machine that is not live and clears both flags
+    -- itself, so clearing here makes an ordinary solo fight never stop.
     local wasLive = self:IsLive()
     if not wasLive then
         -- pvpBlocked, or the 4 Hz scan restarts after a match on combat flags
@@ -273,9 +277,6 @@ function CombatState:OnRegenEnabled()
         return
     end
     if not self.deps.groupInCombat() and not self.inEncounter then
-        -- DO NOT clear playerCombat first. Freeze is inert on a non-live
-        -- machine and clears both flags itself, so clearing here makes an
-        -- ordinary solo fight never stop.
         self:Freeze("combat")
         return
     end

@@ -315,7 +315,7 @@ function CT:OnEnable()
         OnStop = function(reason) self:OnStop(reason) end,
         OnClockTick = function(seconds, fraction) self:OnClockTick(seconds, fraction) end,
     })
-    KE.CombatState:SetFineCadence(LISTENER_KEY, self.db.Format == "MM:SS:MS")
+    -- ApplySettings above already registered the cadence for this format.
     if self.db.Enabled then self.frame:Show() end
 end
 

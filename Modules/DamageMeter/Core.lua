@@ -1171,7 +1171,7 @@ function DM:OnRegenDisabled()
     if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED") end
 end
 
--- Only the cache invalidation that a combat end boundaries.
+-- Only the cache invalidation that a combat end marks the boundary of.
 function DM:OnRegenEnabled()
     -- Combat ended for the player: a hover tip showing the in-combat "secret" message
     -- should re-populate with real (now-readable) data on the next poll -- mark dirty.

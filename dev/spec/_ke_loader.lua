@@ -213,6 +213,9 @@ function L.loadDMCore(overrides)
             return t[member]
         end })
     end })
+    -- DM:Tick's per-frame budget reads this, and the reset paths reach Tick
+    -- without History.lua loaded, which is what otherwise supplies it.
+    _G.debugprofilestop = _G.debugprofilestop or function() return 0 end
     local KE = { Print = function() end, CombatState = newFakeCombatState() }
     helpers.loadModule("Modules/DamageMeter/Core.lua", KE)
     return KE.DamageMeter, KE
