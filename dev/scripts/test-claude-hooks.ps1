@@ -35,7 +35,7 @@ function Expect-Allow([string]$hook, [string]$name, [hashtable]$payload) {
     Check "$hook allow: $name" ($r.out.Trim() -eq '' -and $r.code -eq 0) $r.out.Trim()
 }
 
-# Live copies must match the templates (the installer refreshes them). Line
+# Live copies must exist and match the templates (the installer refreshes them). Line
 # endings are ignored: git renormalizes the tracked templates to CRLF.
 function Get-TextHash([string]$path) {
     $text = [System.IO.File]::ReadAllText($path) -replace "`r", ''
@@ -48,10 +48,8 @@ foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', '
     $other = if ($scope -eq 'user') { 'project' } else { 'user' }
     $live = Join-Path $liveDir[$scope] $n
     Check "$n has no stale copy in $other scope" (-not (Test-Path (Join-Path $liveDir[$other] $n))) 'run pwsh dev/scripts/install-claude-hooks.ps1'
-    if (Test-Path $live) {
-        $same = (Get-TextHash $live) -eq (Get-TextHash (Join-Path $templates $n))
-        Check "live == template: $n" $same 'run pwsh dev/scripts/install-claude-hooks.ps1'
-    }
+    $same = (Test-Path $live) -and ((Get-TextHash $live) -eq (Get-TextHash (Join-Path $templates $n)))
+    Check "live == template: $n" $same 'run pwsh dev/scripts/install-claude-hooks.ps1'
 }
 
 # The live .agents mirror must match its sources (both trees are gitignored,

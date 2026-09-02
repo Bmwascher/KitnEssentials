@@ -27,16 +27,18 @@ $scopes = @(
        dir = Join-Path $root '.claude'; template = Join-Path $templates 'settings.template.json' }
 )
 
-function Get-EntryScript($entry) {
-    foreach ($h in @($entry.hooks)) {
-        if (($h.args -join ' ') -match '([\w-]+\.ps1)') { return $Matches[1] }
-    }
+function Get-HookScript($hook) {
+    if (($hook.args -join ' ') -match '([\w-]+\.ps1)') { return $Matches[1] }
     return ''
+}
+function Get-EntryScripts($entry) {
+    return @(@($entry.hooks) | ForEach-Object { Get-HookScript $_ } | Where-Object { $_ })
 }
 
 # Merge the template's entries into a settings file: add what is missing per
-# event, keyed on the script filename; drop entries for scripts that now
-# live in the other scope; leave everything else untouched.
+# event, keyed on the script filename; drop hooks for scripts that now live
+# in the other scope (an entry bundling one with a personal hook keeps the
+# personal hook); leave everything else untouched.
 function Merge-HookSettings([string]$templatePath, [string]$settingsPath, [string]$label, [string[]]$retire) {
     $template = Get-Content $templatePath -Raw | ConvertFrom-Json
     if (-not (Test-Path $settingsPath)) {
@@ -61,9 +63,9 @@ function Merge-HookSettings([string]$templatePath, [string]$settingsPath, [strin
             }
             $existing = @($settings.hooks.$event)
             foreach ($entry in @($eventProp.Value)) {
-                $script = Get-EntryScript $entry
+                $script = @(Get-EntryScripts $entry)[0]
                 if (-not $script) { continue }
-                $present = @($existing | Where-Object { (Get-EntryScript $_) -eq $script }).Count -gt 0
+                $present = @($existing | Where-Object { @(Get-EntryScripts $_) -contains $script }).Count -gt 0
                 if (-not $present) {
                     $existing += $entry
                     $changed = $true
@@ -75,19 +77,25 @@ function Merge-HookSettings([string]$templatePath, [string]$settingsPath, [strin
         foreach ($eventProp in @($settings.hooks.PSObject.Properties)) {
             $kept = @()
             foreach ($e in @($eventProp.Value)) {
-                $script = Get-EntryScript $e
-                if ($script -and $retire -contains $script) {
-                    $changed = $true
-                    Write-Host "[install] $label hooks.$($eventProp.Name) entry for $script removed (now in the other scope)"
-                } else { $kept += $e }
+                $keptHooks = @()
+                foreach ($h in @($e.hooks)) {
+                    $script = Get-HookScript $h
+                    if ($script -and $retire -contains $script) {
+                        $changed = $true
+                        Write-Host "[install] $label hooks.$($eventProp.Name) hook $script removed (now in the other scope)"
+                    } else { $keptHooks += $h }
+                }
+                if ($keptHooks.Count -eq 0) { continue }
+                $e.hooks = $keptHooks
+                $kept += $e
             }
             if ($kept.Count -eq 0) { $settings.hooks.PSObject.Properties.Remove($eventProp.Name) }
             else { $settings.hooks.($eventProp.Name) = $kept }
         }
     }
     if ($changed) {
-        $backup = "$settingsPath.bak-$(Get-Date -Format yyyyMMdd)"
-        if (-not (Test-Path $backup)) { Copy-Item $settingsPath $backup }
+        $backup = "$settingsPath.bak-$(Get-Date -Format yyyyMMdd-HHmmss)"
+        Copy-Item $settingsPath $backup
         $settings | ConvertTo-Json -Depth 20 | Set-Content $settingsPath -Encoding UTF8
         Write-Host "[install] $label settings.json updated (backup: $(Split-Path $backup -Leaf))"
     } else {
