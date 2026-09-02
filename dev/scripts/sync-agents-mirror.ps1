@@ -64,9 +64,11 @@ foreach ($name in $expected.Keys) {
         $want = Get-CommandWrapper ($name -replace '^source-command-', '') $e.src
         $file = Join-Path $dest 'SKILL.md'
         $have = if (Test-Path $file) { [System.IO.File]::ReadAllText($file) } else { '' }
-        if ($have -ne $want) {
+        $extra = if (Test-Path $dest) { @(Get-ChildItem -LiteralPath $dest -Recurse | Where-Object { $_.FullName -ne $file }).Count } else { 0 }
+        if ($have -ne $want -or $extra -gt 0) {
             $drift += $name
             if (-not $Check) {
+                if (Test-Path $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
                 New-Item -ItemType Directory -Force $dest | Out-Null
                 [System.IO.File]::WriteAllText($file, $want, (New-Object System.Text.UTF8Encoding($false)))
                 Write-Host "[mirror] command $name rewritten"
@@ -74,11 +76,10 @@ foreach ($name in $expected.Keys) {
         }
     }
 }
-foreach ($d in Get-ChildItem -LiteralPath $mirror -Directory) {
-    if (-not $expected.ContainsKey($d.Name)) {
-        $drift += "$($d.Name) (orphan)"
-        if (-not $Check) { Remove-Item -LiteralPath $d.FullName -Recurse -Force; Write-Host "[mirror] orphan $($d.Name) removed" }
-    }
+foreach ($d in Get-ChildItem -LiteralPath $mirror) {
+    if ($d.PSIsContainer -and $expected.ContainsKey($d.Name)) { continue }
+    $drift += "$($d.Name) (orphan)"
+    if (-not $Check) { Remove-Item -LiteralPath $d.FullName -Recurse -Force; Write-Host "[mirror] orphan $($d.Name) removed" }
 }
 
 if ($Check) {

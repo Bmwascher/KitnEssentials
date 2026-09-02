@@ -15,7 +15,8 @@ if (-not $file) { exit 0 }
 $root = $env:CLAUDE_PROJECT_DIR
 if (-not $root) { exit 0 }
 $rootNorm = ($root -replace '/', '\').TrimEnd('\')
-$full = ($file -replace '/', '\')
+$base = if ($payload.cwd) { $payload.cwd } else { $rootNorm }
+try { $full = [System.IO.Path]::GetFullPath(($file -replace '/', '\'), $base) } catch { exit 0 }
 
 $sources = @(
     (Join-Path $rootNorm '.claude\skills\'),

@@ -50,18 +50,10 @@ foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', '
     }
 }
 
-# The .agents mirror must match its sources, and the sync hook must only
-# react to edits under the skill and command folders.
-if (Test-Path (Join-Path $root '.agents\skills')) {
-    & pwsh -NoProfile -File (Join-Path $root 'dev\scripts\sync-agents-mirror.ps1') -Check *> $null
-    Check 'agents mirror in sync' ($LASTEXITCODE -eq 0) 'run pwsh dev/scripts/sync-agents-mirror.ps1'
-}
-$ms = 'agents-mirror-sync.ps1'
-$msPayload = { param($f) @{ tool_name = 'Edit'; cwd = $root; tool_input = @{ file_path = $f } } }
-$r = Invoke-Hook (Join-Path $templates $ms) (& $msPayload (Join-Path $root 'Core\Globals.lua'))
-Check "$ms ignores a non-skill edit" ($r.code -eq 0 -and $r.out.Trim() -eq '') $r.out.Trim()
-$r = Invoke-Hook (Join-Path $templates $ms) (& $msPayload (Join-Path $root '.claude\commands\release.md'))
-Check "$ms runs silently on a command edit" ($r.code -eq 0 -and $r.out.Trim() -eq '') $r.out.Trim()
+# The live .agents mirror must match its sources (both trees are gitignored,
+# so a fresh checkout fails here until the sync script has run once).
+& pwsh -NoProfile -File (Join-Path $root 'dev\scripts\sync-agents-mirror.ps1') -Check *> $null
+Check 'agents mirror in sync' ($LASTEXITCODE -eq 0) 'run pwsh dev/scripts/sync-agents-mirror.ps1'
 
 $tag = [System.IO.Path]::GetRandomFileName().Replace('.', '')
 $wt = Join-Path $env:TEMP "ke-hooktest-$tag"
@@ -244,6 +236,34 @@ try {
         Remove-Item $probeAbs -Force -ErrorAction SilentlyContinue
     } else {
         Write-Host 'commit-msg and pre-commit cases skipped: bash not on PATH'
+    }
+
+    # The sync hook, against a throwaway project: it must rebuild the mirror
+    # only after an edit under the skill or command folders. The effect is
+    # observed on disk, since the hook is silent either way.
+    $ms = 'agents-mirror-sync.ps1'
+    $proj = Join-Path $outside 'proj'
+    foreach ($d in @('.claude\skills\demo', '.claude\commands', 'dev\scripts')) { New-Item -ItemType Directory -Path (Join-Path $proj $d) -Force | Out-Null }
+    [System.IO.File]::WriteAllText((Join-Path $proj '.claude\skills\demo\SKILL.md'), "---`nname: demo`n---`nbody`n")
+    [System.IO.File]::WriteAllText((Join-Path $proj '.claude\commands\demo.md'), "---`ndescription: demo command`n---`nrun it`n")
+    Copy-Item (Join-Path $root 'dev\scripts\sync-agents-mirror.ps1') (Join-Path $proj 'dev\scripts\')
+    $mirror = Join-Path $proj '.agents\skills'
+    $msPayload = { param($f, $cwd) @{ tool_name = 'Edit'; cwd = $cwd; tool_input = @{ file_path = $f } } }
+    $savedProjectDir = $env:CLAUDE_PROJECT_DIR
+    $env:CLAUDE_PROJECT_DIR = $proj
+    try {
+        $r = Invoke-Hook (Join-Path $templates $ms) (& $msPayload (Join-Path $proj 'Core\Globals.lua') $proj)
+        Check "$ms ignores a non-skill edit" ($r.code -eq 0 -and $r.out.Trim() -eq '' -and -not (Test-Path $mirror)) $r.out.Trim()
+        $r = Invoke-Hook (Join-Path $templates $ms) (& $msPayload (Join-Path $proj '.claude\commands\demo.md') $proj)
+        Check "$ms mirrors a command edit" ($r.code -eq 0 -and $r.out.Trim() -eq '' -and (Test-Path (Join-Path $mirror 'source-command-demo\SKILL.md'))) $r.out.Trim()
+        Remove-Item $mirror -Recurse -Force
+        $r = Invoke-Hook (Join-Path $templates $ms) (& $msPayload '.claude\skills\demo\SKILL.md' $proj)
+        Check "$ms resolves a relative skill path against cwd" ($r.code -eq 0 -and (Test-Path (Join-Path $mirror 'demo\SKILL.md'))) $r.out.Trim()
+        [System.IO.File]::WriteAllText((Join-Path $mirror 'stray.txt'), 'x')
+        & pwsh -NoProfile -File (Join-Path $proj 'dev\scripts\sync-agents-mirror.ps1') -Check *> $null
+        Check 'sync -Check reports a stray mirror file' ($LASTEXITCODE -eq 1)
+    } finally {
+        $env:CLAUDE_PROJECT_DIR = $savedProjectDir
     }
 } finally {
     # Each step runs regardless of the others; native git exits are checked
