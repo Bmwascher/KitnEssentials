@@ -46,7 +46,8 @@ if (-not $cmd) { exit 0 }
 # --git-dir, --work-tree, ...), long flags with or without =value, and the
 # short pager flags.
 $gval = '("[^"]*"|''[^'']*''|\S+)'
-$gopt = "(-[cC]\s+$gval|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env|attr-source)(=$gval|\s+$gval)|--[a-z-]+(=$gval)?|-[pP])"
+# A whole option token may itself be quoted ('--work-tree=C:/a b').
+$gopt = "(-[cC]\s+$gval|--(git-dir|work-tree|namespace|exec-path|super-prefix|config-env|attr-source)(=$gval|\s+$gval)|--[a-z-]+(=$gval)?|-[pP]|'-[^']*'|`"-[^`"]*`")"
 $git = "git(\.exe)?(\s+$gopt)*"
 $reason = $null
 

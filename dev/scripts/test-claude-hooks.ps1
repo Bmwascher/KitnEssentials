@@ -108,8 +108,10 @@ try {
         'cd - && echo x > Core/Globals.lua', 'popd; sed -i s/a/b/ Core/Globals.lua',
         'git --work-tree="C:/path with spaces" reset --hard HEAD', "git --git-dir='C:/p q/.git' reset --hard",
         'git commit -aSmain', "git add -- ':(glob)**/*'", "git add -- '**/*'", 'git add -- */',
-        "cd `$X; cd $wt; sed -i s/a/b/ Core/Globals.lua"
+        "cd `$X; cd $wt; sed -i s/a/b/ Core/Globals.lua",
+        "git '--work-tree=C:/path with spaces' reset --hard HEAD", 'git "--work-tree=C:/path with spaces" reset --hard HEAD'
     )
+    Expect-Deny $gg 'whole-quoted option (PowerShell)' (& $sh "git '--work-tree=C:/path with spaces' reset --hard HEAD" $wt 'PowerShell')
     foreach ($c in $deny) { Expect-Deny $gg $c (& $sh $c $wt) }
     Expect-Deny $gg 'relative write, cwd = junction' (& $sh 'sed -i s/a/b/ Core/Globals.lua' $link)
     Expect-Deny $gg 'Set-Content (PowerShell)'  (& $sh 'Set-Content Core/Globals.lua x' $wt 'PowerShell')
