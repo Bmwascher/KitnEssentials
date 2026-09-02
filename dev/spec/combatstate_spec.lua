@@ -78,10 +78,10 @@ local function newRecorder()
 end
 
 describe("CombatState machine", function()
-    local KE, sched, deps
+    local KE, sched, deps, declaredSecret
 
     before_each(function()
-        KE = L.loadCombatState()
+        KE, declaredSecret = L.loadCombatState()
         sched = newScheduler()
         deps = {
             now = function() return 0 end,
@@ -108,11 +108,26 @@ describe("CombatState machine", function()
             assert.equals(12, cs:GetDuration())
         end)
 
+        -- Split from the table above because it needs a different sample shape.
+        -- A secret NUMBER passes type() and the > 0 comparison, so the secrecy
+        -- guard is the only thing that can reject it: delete that guard and the
+        -- pin moves to 7 and this fails.
+        it("a secret number is rejected by the secrecy guard, not the type guard", function()
+            local cs = newCS()
+            deps.sessionDuration = function() return true, 5 end
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            assert.equals(5, cs:GetDuration())
+            declaredSecret[7] = true
+            deps.sessionDuration = function() return true, 7 end
+            lastClock(sched).fn()
+            assert.equals(5, cs:GetDuration())
+        end)
+
         it("an unusable sample leaves the pin alone", function()
             local cases = {
                 { name = "a failed call", raw = function() return false, 99 end },
                 { name = "nil", raw = function() return true, nil end },
-                { name = "a secret value", raw = function() return true, { __secret = true } end },
                 { name = "a non-number", raw = function() return true, "oops" end },
                 { name = "zero", raw = function() return true, 0 end },
             }
@@ -799,6 +814,10 @@ describe("CombatState machine", function()
             assert.is_nil(d)
             assert.equals(0, frac)
             assert.is_false(sampled)
+            -- OnStart first: a consumer clears its held state there, and a blank
+            -- paint arriving before that can be routed by the stale state.
+            assert.same({ "OnStart", "OnClockTick" },
+                rec.order({ OnStart = true, OnClockTick = true }))
         end)
 
         it("GetDuration() performs zero session reads", function()

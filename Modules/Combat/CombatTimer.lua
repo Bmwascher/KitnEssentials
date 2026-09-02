@@ -232,8 +232,8 @@ end
 ---------------------------------------------------------------------------------
 -- KE.CombatState listener
 ---------------------------------------------------------------------------------
--- Attaches nothing: the service's clock ticker drives the paint, and it
--- broadcast a blank OnClockTick immediately before this.
+-- Attaches nothing: the service's clock ticker drives the paint, and it sends
+-- a blank OnClockTick immediately after this.
 function CT:OnStart()
     if self.frame then self.frame:Show() end
     self.lastDisplayedText = ""

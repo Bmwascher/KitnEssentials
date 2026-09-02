@@ -2769,13 +2769,24 @@ end
 -- through the class metatable New sits on. Returns KE.
 function L.loadCombatState(overrides)
     overrides = overrides or {}
+    local declaredSecret = {}
     installMock(managedSubset(overrides), {})
+    -- CombatState captures issecretvalue as a file-scope upvalue at load, and
+    -- the mock's default answers false to everything, which would let a spec's
+    -- "secret" sample be rejected by the type guard instead of the secrecy
+    -- guard it means to exercise. Tables use the declared-secret convention;
+    -- keys added to the returned table let a spec declare a plain number
+    -- secret, which is the only shape that reaches the secrecy guard first.
+    _G.issecretvalue = function(v)
+        if type(v) == "table" then return v.__secret == true end
+        return declaredSecret[v] == true
+    end
     _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
     _G.IsInInstance = overrides.IsInInstance or function() return false, "none" end
     _G.IsInRaid = overrides.IsInRaid or function() return false end
     _G.IsInGroup = overrides.IsInGroup or function() return false end
     _G.GetNumGroupMembers = overrides.GetNumGroupMembers or function() return 0 end
-    return helpers.loadModule("Core/CombatState.lua", {})
+    return helpers.loadModule("Core/CombatState.lua", {}), declaredSecret
 end
 
 return L
