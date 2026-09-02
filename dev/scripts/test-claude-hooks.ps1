@@ -211,9 +211,22 @@ try {
         & $stage 'AceEvent RegisterUnitEvent'       "local M = {}`nfunction M:OnEnable() self:RegisterUnitEvent('UNIT_AURA', 'player') end`n" 'block'
         & $stage 'restricted name in a comment'     "-- CLEU-free: COMBAT_LOG_EVENT_UNFILTERED is restricted`nlocal x = 1`n" 'pass'
         & $stage 'frame RegisterUnitEvent'          "local f = CreateFrame('Frame')`nf:RegisterUnitEvent('UNIT_AURA', 'player')`n" 'pass'
+        & $stage 'restricted name inside a string'  "local s = `"CombatLogGetCurrentEventInfo()`"`n" 'pass'
+        & $stage 'string holding -- then a restricted call' "local m = `"--`"; local a = CombatLogGetCurrentEventInfo()`n" 'block'
         & $stage 'new KE: method without a stub'    "function KE:HookTestProbe(a) return a end`n" 'block'
+        & $stage 'new KE. function without a stub'  "function KE.HookTestProbe(a) return a end`n" 'block'
+        & $stage 'new KE. assignment without a stub' "KE.HookTestProbe = function(a) return a end`n" 'block'
         & $stage 'new KE: method with a staged stub' "function KE:HookTestProbe(a) return a end`n" 'pass' "---@param a any`n---@return any`nfunction KE:HookTestProbe(a) end"
         & $stage 'plain code'                       "local x = 1`nreturn x`n" 'pass'
+        # A staged deletion of the stub file must block a new method outright.
+        git -C $feature rm -q --cached dev/Annotations/KE.lua 2>&1 | Out-Null
+        [System.IO.File]::WriteAllText($probeAbs, "function KE:HookTestProbe(a) return a end`n")
+        git -C $feature add -- $probeRel 2>&1 | Out-Null
+        Push-Location $feature
+        try { & $bash $pc 2>&1 | Out-Null; $code_ = $LASTEXITCODE } finally { Pop-Location }
+        Check 'pre-commit block: new method with the stub file deleted from the index' ($code_ -eq 1)
+        git -C $feature reset -q -- dev/Annotations/KE.lua $probeRel 2>&1 | Out-Null
+        Remove-Item $probeAbs -Force -ErrorAction SilentlyContinue
     } else {
         Write-Host 'commit-msg and pre-commit cases skipped: bash not on PATH'
     }

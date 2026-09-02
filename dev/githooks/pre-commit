@@ -27,26 +27,63 @@ if ! staged="$(git diff -U0 --no-color --cached -- "${ng_paths[@]}")"; then
 fi
 [ -n "$staged" ] || exit 0
 
-# Added code lines only (the + side of each hunk), with line comments and
-# the "+++" header dropped, so a banned name inside a comment does not trip.
-added_code="$(printf '%s\n' "$staged" | grep -E '^\+' | grep -vE '^\+\+\+' | sed 's/^+//; s/--.*$//')"
+# Added code lines only (the + side of each hunk), with the "+++" header
+# dropped. A line comment is cut only where it starts outside a string, so
+# a `--` inside a string cannot hide the code after it. Mode `keep` leaves
+# string contents in place (event names are strings); mode `strip` blanks
+# them, for identifiers that only matter as code.
+# Known limit: a body line of a multi-line block comment reads as code.
+ng_code_lines() {
+    awk -v mode="$1" '{
+        line = $0; out = ""; q = ""; i = 1; n = length(line)
+        while (i <= n) {
+            c = substr(line, i, 1)
+            if (q == "") {
+                if (c == "-" && substr(line, i, 2) == "--") break
+                if (c == "\"" || c == "\047") { q = c; out = out c; i++; continue }
+                if (c == "[" && substr(line, i, 2) == "[[") { q = "]]"; out = out "[["; i += 2; continue }
+                out = out c; i++
+            } else if (q == "]]") {
+                if (substr(line, i, 2) == "]]") { out = out "]]"; q = ""; i += 2; continue }
+                if (mode == "keep") out = out c
+                i++
+            } else {
+                if (c == "\\") { if (mode == "keep") out = out substr(line, i, 2); i += 2; continue }
+                if (c == q) { out = out c; q = ""; i++; continue }
+                if (mode == "keep") out = out c
+                i++
+            }
+        }
+        print out
+    }'
+}
+added="$(printf '%s\n' "$staged" | grep -E '^\+' | grep -vE '^\+\+\+' | sed 's/^+//')"
+added_keep="$(printf '%s\n' "$added" | ng_code_lines keep)"
+added_code="$(printf '%s\n' "$added" | ng_code_lines strip)"
 
 # Restricted or misused identifiers (canonical rules: family AGENTS.md, 12.0
 # API compliance; the AceEvent note in the module-port skill). Checked on
 # added lines only, so existing occurrences stay where they are.
-banned='COMBAT_LOG_EVENT_UNFILTERED|CombatLogGetCurrentEventInfo\s*\(|self:RegisterUnitEvent\s*\('
-if hits="$(printf '%s\n' "$added_code" | grep -nE "$banned")" && [ -n "$hits" ]; then
+hits="$( { printf '%s\n' "$added_keep" | grep -nE 'COMBAT_LOG_EVENT_UNFILTERED'; printf '%s\n' "$added_code" | grep -nE 'CombatLogGetCurrentEventInfo\s*\(|self:RegisterUnitEvent\s*\('; } | sort -u || true)"
+if [ -n "$hits" ]; then
     echo "[pre-commit] BLOCKED: staged code adds a restricted identifier:" >&2
     printf '%s\n' "$hits" | sed -n '1,5p' >&2
     echo "[pre-commit] COMBAT_LOG_EVENT_UNFILTERED and CombatLogGetCurrentEventInfo are restricted under the 12.0 combat-log model; AceEvent modules have no RegisterUnitEvent (use RegisterEvent and filter). Override a deliberate exception with: git commit --no-verify" >&2
     exit 1
 fi
 
-# Every new public KE: method needs a stub in dev/Annotations/KE.lua, read
-# from the index so the stub can land in the same commit.
-new_methods="$(printf '%s\n' "$added_code" | grep -oE '^\s*function KE:[A-Za-z0-9_]+' | sed 's/.*KE://' | sort -u)"
+# Every new public KE method (function KE:X, function KE.X, KE.X = function)
+# needs a stub in dev/Annotations/KE.lua, read from the index so the stub
+# lands in the same commit. An unreadable index entry blocks: a staged
+# deletion of the stub file must not pass on the worktree copy.
+new_methods="$(printf '%s\n' "$added_code" \
+    | grep -oE '^\s*(function KE[:.][A-Za-z0-9_]+|KE\.[A-Za-z0-9_]+\s*=\s*function)' \
+    | sed -E 's/.*KE[:.]//; s/\s*=\s*function//' | sort -u)"
 if [ -n "$new_methods" ]; then
-    stubs="$(git show :dev/Annotations/KE.lua 2>/dev/null || cat dev/Annotations/KE.lua 2>/dev/null)"
+    if ! stubs="$(git show :dev/Annotations/KE.lua 2>/dev/null)"; then
+        echo "[pre-commit] BLOCKED: dev/Annotations/KE.lua is not in the index, so new public KE methods cannot be checked against it. Restore or stage the stub file." >&2
+        exit 1
+    fi
     unstubbed=""
     for m in $new_methods; do
         if ! printf '%s\n' "$stubs" | grep -qE "function KE[:.]$m\s*\(|@field\s+$m\b"; then

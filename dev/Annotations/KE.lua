@@ -942,9 +942,9 @@ function KE:PixelSnapEven(value) end
 ---@return number
 function KE:PixelHalfFloor(value) end
 
----@param value number
+---@param value number?
 ---@param dim number?
----@return number
+---@return number?
 function KE:PixelSnapCenter(value, dim) end
 
 ---@param obj Frame
@@ -1023,7 +1023,7 @@ function KE:CanAccessValue(value) end
 function KE:CanNotAccessValue(value) end
 
 ---@param object any
----@return boolean
+---@return boolean?
 function KE:HasSecretValues(object) end
 
 ---@param object any
