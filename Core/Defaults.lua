@@ -1636,6 +1636,7 @@ local Defaults = {
                         XOffset = -316,
                         YOffset = 190,
                     },
+                    CombatOnly = true,
                 },
 
                 -- Bar appearance
@@ -1644,6 +1645,14 @@ local Defaults = {
                     FontSize = 14,
                     FontOutline = "OUTLINE",
                     SparkEnabled = true,
+                },
+
+                -- Interrupt attribution / hold
+                Interrupt = {
+                    Enabled = true,
+                    ShowInterrupter = true,
+                    HoldDuration = 1.5,
+                    Color = { 0.35, 1, 0.35, 1 },
                 },
 
                 -- Icon settings
