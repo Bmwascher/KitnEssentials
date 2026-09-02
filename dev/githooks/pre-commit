@@ -48,7 +48,7 @@ ng_code_lines() {
                 }
                 out = out c; i++
             } else if (substr(q, 1, 1) == "]") {
-                if (substr(line, i, length(q)) == q) { out = out q; q = ""; i += length(q); continue }
+                if (substr(line, i, length(q)) == q) { i += length(q); out = out q; q = ""; continue }
                 if (mode == "keep") out = out c
                 i++
             } else {
