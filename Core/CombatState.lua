@@ -451,6 +451,7 @@ end
 function CombatState:UnregisterListener(key)
     self.listeners[key] = nil
     self.fineKeys[key] = nil
+    if self.clockHandle then self:_StartClock() end
 end
 
 ---------------------------------------------------------------------------------
@@ -496,11 +497,16 @@ end
 -- pcall'd: SecretArguments is AllowedWhenUntainted, so the call itself can
 -- reject. Returns the RAW result; every secrecy, type and range check lives
 -- in the machine's Sample().
+local SESSION_CURRENT = Enum and Enum.DamageMeterSessionType and Enum.DamageMeterSessionType.Current
+
 local function LiveSessionDuration()
-    if not (C_DamageMeter and C_DamageMeter.GetSessionDurationSeconds) then
+    -- The enum is part of the availability guard, not an argument built inside
+    -- the pcall: indexing an absent Enum table is a hard error the pcall around
+    -- the call itself would not catch, and this runs on every clock tick.
+    if not (SESSION_CURRENT and C_DamageMeter and C_DamageMeter.GetSessionDurationSeconds) then
         return false, nil
     end
-    local ok, dur = pcall(C_DamageMeter.GetSessionDurationSeconds, Enum.DamageMeterSessionType.Current)
+    local ok, dur = pcall(C_DamageMeter.GetSessionDurationSeconds, SESSION_CURRENT)
     return ok, dur
 end
 

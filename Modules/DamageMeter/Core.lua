@@ -1164,7 +1164,7 @@ function DM:OnRegenDisabled()
     if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED") end
 end
 
--- Only the cache invalidation a combat end boundaries.
+-- Only the cache invalidation that a combat end boundaries.
 function DM:OnRegenEnabled()
     -- Combat ended for the player: a hover tip showing the in-combat "secret" message
     -- should re-populate with real (now-readable) data on the next poll -- mark dirty.
@@ -1288,9 +1288,11 @@ end
 function DM:OnCombatForceStop()
     if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD") end
     self:ClearFeignTags("zone change")
-    -- An in-combat reload must leave the live clock alone: the service
-    -- re-derives the fight on the same event, so stopping unconditionally would
-    -- cancel a ticker that had just started.
+    -- An in-combat reload must leave the live clock alone. Two frames handle
+    -- this event and the game promises no order between them, so the gate is
+    -- written to be correct either way: reached first, the machine's own
+    -- re-derivation restarts the ticker afterwards; reached second, it is
+    -- already live and this is skipped.
     if not KE.CombatState:IsLive() then
         self._clockCleared = true
         self:StopTicker()

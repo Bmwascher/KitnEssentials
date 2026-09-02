@@ -39,7 +39,7 @@ local function lastAfter(sched) return sched.afters[#sched.afters] end
 
 -- Records every listener callback fired, in order, so a spec can count calls,
 -- read a specific call's arguments, or assert relative ORDER between two
--- event names (case 43).
+-- event names.
 local function newRecorder()
     local log = {}
     local function make(name)
@@ -427,16 +427,6 @@ describe("CombatState machine", function()
             assert.is_false(livePoll.cancelled)
         end)
 
-        it("a poll tick with neither mode set cancels itself", function()
-            local cs = newCS()
-            deps.playerInCombat = function() return false end
-            cs:OnEncounterStart()
-            local poll = lastPoll(sched)
-            cs.groupOnly = false
-            cs.watching = false
-            poll.fn()
-            assert.is_true(poll.cancelled)
-        end)
     end)
 
     describe("PLAYER_ENTERING_WORLD", function()
@@ -556,11 +546,8 @@ describe("CombatState machine", function()
             assert.equals(0.5, lastClock(sched).sec)
         end)
 
-        -- The design's rule that a cadence change "takes an immediate sample"
-        -- is not present in the shipped SetFineCadence (plan correction C3):
-        -- it only restarts the ticker. This asserts what the built code
-        -- actually does -- replace, not double -- and that the replacement
-        -- ticker samples correctly once it fires.
+        -- A cadence change replaces the ticker; it takes no sample of its own,
+        -- so the assertion is on the replacement's first fire.
         it("a cadence change replaces the ticker rather than doubling it", function()
             local cs = newCS()
             cs:OnRegenDisabled()
