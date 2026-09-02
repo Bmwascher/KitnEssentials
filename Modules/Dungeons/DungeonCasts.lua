@@ -859,9 +859,8 @@ function DC:ScanExistingNameplates()
     end
 end
 
--- Combat Only refuses a nameplate that is already casting while out of
--- combat, so without a rescan at the pull that cast gets no bar until the
--- mob casts again.
+-- Combat Only may have refused an in-progress cast while its unit was out
+-- of combat; rescan at the pull to acquire any such cast now valid.
 function DC:OnCombatStart()
     if self.isPreview then return end
     -- A real rescan while preview is up would inject live nameplate bars
