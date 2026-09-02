@@ -246,6 +246,17 @@ local function SkinEquipmentManagerPane()
     ShrinkSetButtons()
 end
 
+-- Rarity borders are ON unless the key says otherwise, and ON when the profile
+-- section is missing entirely, so a fresh profile gets the default look rather
+-- than a silently different one. Deliberately NOT gated on the CharacterPanel
+-- module's Enabled flag: this is skinning, it paints whether or not that module
+-- runs, which is why its control sits outside that module's gate.
+local function QualityBordersOn(cpDB)
+    if not cpDB then return true end
+    return cpDB.SlotQualityBorders ~= false
+end
+S._QualityBordersOn = QualityBordersOn
+
 -- Flyout treatment: clear state art by passing S.ClearTexture
 -- (fileID 0) to the BUTTON's setters. No contact with the texture
 -- objects at all -- which is what tainted this display loop for
@@ -360,6 +371,7 @@ local function EquipmentFlyoutSkin()
         S.Backdrop(holder)
         S.data(holder).skinned = true
     end
+    local qualityBorders = QualityBordersOn(KE.db and KE.db.profile and KE.db.profile.CharacterPanel)
     if flyout.buttons then
         for _, button in ipairs(flyout.buttons) do
             SkinFlyoutButton(button)
@@ -370,6 +382,36 @@ local function EquipmentFlyoutSkin()
             -- what broke on Midnight. All flyout item-data reads are
             -- gone now.
             if S.data(button).flyoutILvl then S.data(button).flyoutILvl:Hide() end
+
+            -- Blizzard already colours IconBorder by quality, so read that
+            -- colour rather than item data. Buttons are reused across slots,
+            -- so every path here writes: a bail would leave the previous
+            -- item's rarity sitting on the backdrop.
+            local bd = S.GetBackdrop(button)
+            if bd then
+                local r, g, b
+                if qualityBorders then
+                    -- IsShown carries SecretReturnsForAspect, and comparing a
+                    -- secret boolean throws, so secrecy is asked first.
+                    local shown = button.IconBorder and button.IconBorder:IsShown()
+                    if KE:NotSecretValue(shown) and shown == true then
+                        -- GetVertexColor is MayReturnNothing as well as
+                        -- secret-annotated. A nil is not secret, so it needs
+                        -- its own test or it reaches SetBackdropBorderColor.
+                        r, g, b = button.IconBorder:GetVertexColor()
+                        if KE:IsSecretValue(r) or KE:IsSecretValue(g) or KE:IsSecretValue(b)
+                            or r == nil or g == nil or b == nil then
+                            r, g, b = nil, nil, nil
+                        end
+                    end
+                end
+                if r then
+                    bd:SetBackdropBorderColor(r, g, b, 1)
+                else
+                    bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2],
+                        S.borderColor[3], S.borderColor[4])
+                end
+            end
         end
     end
 
@@ -450,17 +492,6 @@ local function KillPaperDollBackground(model)
         overlay:SetAlpha(0)
     end
 end
-
--- Rarity borders are ON unless the key says otherwise, and ON when the profile
--- section is missing entirely, so a fresh profile gets the default look rather
--- than a silently different one. Deliberately NOT gated on the CharacterPanel
--- module's Enabled flag: this is skinning, it paints whether or not that module
--- runs, which is why its control sits outside that module's gate.
-local function QualityBordersOn(cpDB)
-    if not cpDB then return true end
-    return cpDB.SlotQualityBorders ~= false
-end
-S._QualityBordersOn = QualityBordersOn
 
 local function Skin()
     local frame = _G.CharacterFrame
