@@ -105,7 +105,10 @@ try {
         "git -c 'core.editor=code --wait' reset --hard HEAD", 'git -c "core.editor=code --wait" reset --hard HEAD',
         "git add -- ':(top,glob)**'", 'git add -- ":(glob)**"', 'git add ":(top)"',
         'pushd dev; popd; sed -i s/a/b/ Core/Globals.lua', 'cd $SOMEWHERE && sed -i s/a/b/ Core/Globals.lua',
-        'cd - && echo x > Core/Globals.lua', 'popd; sed -i s/a/b/ Core/Globals.lua'
+        'cd - && echo x > Core/Globals.lua', 'popd; sed -i s/a/b/ Core/Globals.lua',
+        'git --work-tree="C:/path with spaces" reset --hard HEAD', "git --git-dir='C:/p q/.git' reset --hard",
+        'git commit -aSmain', "git add -- ':(glob)**/*'", "git add -- '**/*'", 'git add -- */',
+        "cd `$X; cd $wt; sed -i s/a/b/ Core/Globals.lua"
     )
     foreach ($c in $deny) { Expect-Deny $gg $c (& $sh $c $wt) }
     Expect-Deny $gg 'relative write, cwd = junction' (& $sh 'sed -i s/a/b/ Core/Globals.lua' $link)
@@ -125,7 +128,9 @@ try {
         "sed -i s/a/b/ $outside\probe.lua", 'luacheck Core/Globals.lua > /dev/null 2>&1', 'git status', 'git log -3', 'ls Core',
         'git commit -mupdate', 'git commit -Cmain', 'git commit -F msg.txt', 'git add ":(glob)Core/*.lua"',
         'pushd dev; sed -i s/a/b/ spec/x_spec.lua; popd', 'pushd Modules; popd; sed -i s/a/b/ dev/spec/x_spec.lua',
-        "cd `$SOMEWHERE && sed -i s/a/b/ $outside\probe.lua"
+        "cd `$SOMEWHERE && sed -i s/a/b/ $outside\probe.lua",
+        'git commit -Smain', 'git commit -S -m x', "pushd `$SOMEWHERE; popd; sed -i s/a/b/ dev/spec/x_spec.lua",
+        "cd `$X; cd $wt\dev; sed -i s/a/b/ spec/x_spec.lua", 'git add -- ":(glob)Core/**/*.lua"'
     )
     foreach ($c in $allow) { Expect-Allow $gg $c (& $sh $c $wt) }
     # Shell writes are only denied while the target's checkout is on main.
