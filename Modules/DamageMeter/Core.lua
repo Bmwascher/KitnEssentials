@@ -795,20 +795,15 @@ end
 -- OnDisable.
 ---------------------------------------------------------------------------------
 
--- The "a fight just started, or was already running at enable" body. Written
--- once and called from both OnStart and BindCombatState's mid-fight seed below,
--- so the two paths cannot drift: a module enabled mid-fight that ran StartTicker
--- alone would leave a previously-raised _clockCleared in place, and
--- UpdateCombatClock would keep skipping the shared branch for the rest of that
--- fight.
+-- Shared by OnStart and BindCombatState's mid-fight seed so the two cannot
+-- drift: a seed that ran StartTicker alone would leave a raised _clockCleared
+-- in place, and the clock would stay hidden for the rest of that fight.
 function DM:_CombatStartBody()
     self._clockCleared = nil
     self:ClearFeignTags("combat start")
     self:StartTicker()
 end
 
--- Registers this module's combat-state listener and applies the mid-fight seed.
--- Nothing else -- OnEnable's own DM-specific setup stays in OnEnable.
 function DM:BindCombatState()
     KE.CombatState:RegisterListener("DamageMeter", {
         OnStart = function() DM:_CombatStartBody() end,
@@ -862,10 +857,9 @@ end
 -- lifecycle layer doesn't depend on the render layer load order.
 ---------------------------------------------------------------------------------
 
--- Single shared-ticker body. DM:Tick is implemented in the render chunk and
--- resolved at runtime; it is guarded so this lifecycle layer never throws
--- "attempt to call a nil value" if combat starts before that chunk loads
--- (mirrors the DM.OpenDetail guard in Window.lua:MakeBar).
+-- DM:Tick lives in the render chunk and is resolved at runtime, so the guard
+-- keeps this lifecycle layer from throwing if combat starts before that chunk
+-- loads (mirrors the DM.OpenDetail guard in Window.lua:MakeBar).
 function DM:_RunTick()
     if DM.Tick then DM:Tick() end
 end
@@ -921,9 +915,8 @@ function DM:StopTicker()
     end
 end
 
--- Forwards to the shared combat-state service. Dock.lua's ShouldShow, the feign
--- watch, and Window.lua all call this -- kept as a method so none of the three
--- need to know the machine moved out of this file.
+-- Kept as a method: Dock.lua's ShouldShow, the feign watch and Window.lua all
+-- call it, and none of the three need to know where the scan now lives.
 function DM:GroupInCombat()
     return KE.CombatState:GroupInCombat()
 end
@@ -1120,8 +1113,7 @@ function DM:OnPlayerDead()
     self:ClearFeignTags("player death")
 end
 
--- Player entered combat. Liveness and the ticker are KE.CombatState's decision
--- now; this handler keeps only the DM-specific UI teardown a fresh fight needs.
+-- Only the UI teardown a fresh fight needs; liveness is the service's call.
 function DM:OnRegenDisabled()
     -- A hover tip that persists into combat must flip to the "secret while in combat"
     -- message on the next poll: mark it dirty (the throttled poll only re-populates on
@@ -1172,9 +1164,7 @@ function DM:OnRegenDisabled()
     if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED") end
 end
 
--- Player left combat. Liveness and the ticker are KE.CombatState's decision now
--- (the listener's OnStart/OnStop react to it); this handler keeps only the
--- DM-specific cache invalidation that combat end also boundaries.
+-- Only the cache invalidation a combat end boundaries.
 function DM:OnRegenEnabled()
     -- Combat ended for the player: a hover tip showing the in-combat "secret" message
     -- should re-populate with real (now-readable) data on the next poll -- mark dirty.
@@ -1185,8 +1175,7 @@ function DM:OnRegenEnabled()
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
 end
 
--- Encounter started: a hard segment boundary. Liveness (KE.CombatState) is a
--- separate concern; this handler keeps only the segment/history bookkeeping.
+-- A hard segment boundary: segment and history bookkeeping only.
 function DM:OnEncounterStart()
     if DEBUG_DM then KE:Print("[DM] ENCOUNTER_START") end
     -- Segment boundary: a boss pull starts a new segment, so a view override from the
@@ -1232,8 +1221,6 @@ function DM:OnEncounterStart()
 end
 
 -- Boss kill/wipe: a hard segment boundary for the outcome-tagging walk below.
--- The ticker's own stop (kill vs. wipe timing) is KE.CombatState's decision now;
--- this handler keeps only the tagging work.
 --
 -- The payload's `success` (1 = kill, 0 = wipe; plain event payload, never secret)
 -- feeds the segment-menu kill/wipe tint: shortly AFTER the finalize delay, every
@@ -1297,21 +1284,13 @@ function DM:OnEncounterEnd(_, _, _, _, _, success)
     end)
 end
 
--- Zoning: a hard segment boundary. Liveness and the ticker's own stop are
--- KE.CombatState's decision (OnCombatForceStop only reacts to it below); this
--- handler keeps the DM-specific feign teardown and the content-context recheck.
--- UNIT_FLAGS and PVP_MATCH_COMPLETE no longer have a DM-side handler at all --
--- both existed purely to drive the ticker, which the service now owns outright.
+-- Zoning: feign teardown and the content-context recheck.
 function DM:OnCombatForceStop()
     if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD") end
     self:ClearFeignTags("zone change")
-    -- A settled fight is never live, so the ordinary post-fight case (zoning
-    -- after combat already ended) reaches here too, not just a hard interrupt.
-    -- Only then does this clear the clock: an in-combat reload must leave the
-    -- live clock alone, and the service's own re-derivation already restarted
-    -- the ticker in that case (BindCombatState's mid-fight seed, or the
-    -- listener's OnStart, depending on load order) -- stopping unconditionally
-    -- would cancel a ticker that just started.
+    -- An in-combat reload must leave the live clock alone: the service
+    -- re-derives the fight on the same event, so stopping unconditionally would
+    -- cancel a ticker that had just started.
     if not KE.CombatState:IsLive() then
         self._clockCleared = true
         self:StopTicker()

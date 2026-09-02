@@ -1244,11 +1244,9 @@ function DM:UpdateCombatClock(W, session)
     ShowClock(W, clock)
 end
 
--- Repaints ONLY the display-position-1 window's clock -- KE.CombatState's
--- OnClockTick listener call, per the paint contract. Never calls Tick, which
--- would repaint every bar and total at up to 10 Hz while a tenths cadence is
--- running; the clock/totals split is what lets the clock track the Combat
--- Timer while the totals keep the delay a kill authorizes for them.
+-- The clock, and nothing else. Calling Tick here would repaint every bar and
+-- total at up to 10 Hz while a tenths cadence runs; the split is what lets the
+-- clock track the Combat Timer while the totals keep a kill's finalize delay.
 -- _winDisplayPos holds at most db.MaxWindows entries, so the scan is cheap.
 function DM:RepaintCombatClock()
     -- The same gate ClockGateOpen tests first, hoisted ahead of the resolve

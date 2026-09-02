@@ -127,8 +127,6 @@ function CT:UpdateFrameSize()
     if current ~= nil then self.text:SetText(current) end
 end
 
--- Paints total_seconds through the current format, skipping the redraw when
--- the rendered string hasn't changed.
 function CT:_PaintTime(total_seconds)
     local status = FormatTime(total_seconds, self.db.Format)
     if status ~= self.lastDisplayedText then
@@ -234,17 +232,14 @@ end
 ---------------------------------------------------------------------------------
 -- KE.CombatState listener
 ---------------------------------------------------------------------------------
--- Shows the frame and the in-combat colour. Attaches nothing: the service's
--- clock tick drives the paint, and it already broadcast a blank OnClockTick
--- immediately before this.
+-- Attaches nothing: the service's clock ticker drives the paint, and it
+-- broadcast a blank OnClockTick immediately before this.
 function CT:OnStart()
     if self.frame then self.frame:Show() end
     self.lastDisplayedText = ""
     self:UpdateCombatColor()
 end
 
--- Applies the out-of-combat colour and repaints from the pin, already the
--- final value on screen since a freeze broadcasts a last OnClockTick first.
 -- Zoning is not a fight ending, and a fight the player never entered is not
 -- theirs to report.
 function CT:OnStop(reason)
