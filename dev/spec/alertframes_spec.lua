@@ -186,4 +186,34 @@ describe("Modules/QoL/AlertFrames.lua", function()
             assert.is_false(placed(f))
         end)
     end)
+
+    describe("the managed-frame layout post-hook", function()
+        local AF, rec
+
+        before_each(function()
+            AF, rec = loader.loadAlertFramesWithManagedLayout()
+        end)
+
+        after_each(function()
+            _G.UIParent = nil
+            _G.AlertFrame = nil
+            _G.GroupLootContainer = nil
+            _G.GroupLootContainer_Update = nil
+        end)
+
+        local function lastRelative(frame)
+            return frame._points[#frame._points].rel
+        end
+
+        it("restores the configured holder after a managed layout pass", function()
+            rec.fireManagedLayout()
+            assert.equal(rec.holder, lastRelative(rec.container))
+        end)
+
+        it("stands aside while the module is disabled", function()
+            AF.IsEnabled = function() return false end
+            rec.fireManagedLayout()
+            assert.equal(rec.uiParent, lastRelative(rec.container))
+        end)
+    end)
 end)

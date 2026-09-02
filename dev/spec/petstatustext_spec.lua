@@ -27,6 +27,13 @@ describe("PetStatusText missing-pet verdict", function()
         assert.is_false(rec.shown)
     end)
 
+    it("says nothing when the pet is alive", function()
+        local PS, rec = L.loadPetStatusText({ class = "WARLOCK", specID = AFFLICTION, hasPet = true })
+        PS:UpdatePetText()
+        assert.is_nil(rec.text)
+        assert.is_false(rec.shown)
+    end)
+
     it("REFUSES to accuse a Warlock while aura identities are hidden", function()
         -- The defect. The Grimoire search cannot succeed here, so the old code
         -- read its own blindness as proof the pet was missing and said so for
