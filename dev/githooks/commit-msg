@@ -30,8 +30,21 @@ if ! ng_scan_text commit-msg "commit message" "$msg"; then
     exit 1
 fi
 
-if printf '%s\n' "$msg" | grep -qiE '^(co-authored-by:|claude-session)'; then
+# Trailers may be indented; footers such as "Generated with Claude Code" and a
+# Signed-off-by naming an agent are attribution too. The robot emoji is given
+# as bytes so the script stays ASCII.
+robot=$'\xF0\x9F\xA4\x96'
+if printf '%s\n' "$msg" | grep -qiE "^[[:space:]]*(co-authored-by:|claude-session|generated with claude|signed-off-by:.*\b(claude|codex)\b)|$robot"; then
     echo "[commit-msg] BLOCKED: AI-attribution trailer in commit message (family rule: never append them). Remove it, or override with: git commit --no-verify" >&2
+    exit 1
+fi
+
+# Subjects are lowercase imperative (family AGENTS.md git rules). Release
+# commits start with a lowercase v and pass; git's default "Merge branch" and
+# "Revert" subjects do not, so merges and reverts take -m with a real subject.
+subject="$(printf '%s\n' "$msg" | grep -v '^#' | grep -m1 .)"
+if printf '%s' "$subject" | grep -qE '^[A-Z]'; then
+    echo "[commit-msg] BLOCKED: subject starts uppercase ('$subject'). Family rule: lowercase, imperative mood. Reword (git commit --amend -m ...), or override a deliberate exception with: git commit --no-verify" >&2
     exit 1
 fi
 

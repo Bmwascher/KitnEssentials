@@ -243,17 +243,22 @@ filename) and never overwrites existing entries or personal permissions in
 `.claude/settings.json`. When changing a live hook under `.claude/hooks/`,
 mirror the change into `dev/claude-hooks/` so the template stays current.
 
-Repo-scope hooks: `branch-guard.ps1` (PreToolUse, blocks .lua/.xml edits on
-main) and `luacheck-postedit.ps1` (PostToolUse, lints every .lua edit).
+Repo-scope hooks: `branch-guard.ps1` (PreToolUse Edit|Write, blocks .lua/.xml
+edits on main), `git-guard.ps1` (PreToolUse Bash|PowerShell, blocks git shapes
+that discard or blanket-stage work, and shell writes to addon code on main)
+and `luacheck-postedit.ps1` (PostToolUse, lints every .lua edit). Run
+`pwsh dev/scripts/test-claude-hooks.ps1` after editing any of them; it
+exercises every documented deny and allow case against a throwaway main
+worktree.
 
-## Multi-model verification (crosscheck plugin)
+## Multi-model verification (parallax plugin)
 
 The multi-model-verify skill (Fable 5 / GPT-5.6 Sol debate gates at plan
 time and diff time), the superpowers review-companion hook, the swappable
-implementer agent, and their eval harness live in the private **crosscheck**
-plugin — repo `Bmwascher/crosscheck`, local working copy at
-`Documents/crosscheck`. It installs user-scope through Claude Code's plugin
-system (`claude plugin install crosscheck@crosscheck`), so it works in
+implementer agent, and their eval harness live in the private **parallax**
+plugin — repo `Bmwascher/parallax`, local working copy at
+`Documents/parallax`. It installs user-scope through Claude Code's plugin
+system (`claude plugin install parallax@parallax`), so it works in
 every project with zero per-repo wiring. Evals and CI for the skill run in
 that repo, not here.
 
