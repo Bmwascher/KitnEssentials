@@ -42,13 +42,26 @@ function Get-TextHash([string]$path) {
     $sha = [System.Security.Cryptography.SHA256]::Create()
     return [System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text)))
 }
-foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1')) {
+foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1')) {
     $live = Join-Path $root ".claude\hooks\$n"
     if (Test-Path $live) {
         $same = (Get-TextHash $live) -eq (Get-TextHash (Join-Path $templates $n))
         Check "live == template: $n" $same 'run pwsh dev/scripts/install-claude-hooks.ps1'
     }
 }
+
+# The .agents mirror must match its sources, and the sync hook must only
+# react to edits under the skill and command folders.
+if (Test-Path (Join-Path $root '.agents\skills')) {
+    & pwsh -NoProfile -File (Join-Path $root 'dev\scripts\sync-agents-mirror.ps1') -Check *> $null
+    Check 'agents mirror in sync' ($LASTEXITCODE -eq 0) 'run pwsh dev/scripts/sync-agents-mirror.ps1'
+}
+$ms = 'agents-mirror-sync.ps1'
+$msPayload = { param($f) @{ tool_name = 'Edit'; cwd = $root; tool_input = @{ file_path = $f } } }
+$r = Invoke-Hook (Join-Path $templates $ms) (& $msPayload (Join-Path $root 'Core\Globals.lua'))
+Check "$ms ignores a non-skill edit" ($r.code -eq 0 -and $r.out.Trim() -eq '') $r.out.Trim()
+$r = Invoke-Hook (Join-Path $templates $ms) (& $msPayload (Join-Path $root '.claude\commands\release.md'))
+Check "$ms runs silently on a command edit" ($r.code -eq 0 -and $r.out.Trim() -eq '') $r.out.Trim()
 
 $tag = [System.IO.Path]::GetRandomFileName().Replace('.', '')
 $wt = Join-Path $env:TEMP "ke-hooktest-$tag"

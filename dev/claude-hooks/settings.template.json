@@ -53,6 +53,23 @@
             "statusMessage": "luacheck"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh",
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/agents-mirror-sync.ps1\"; exit $LASTEXITCODE"
+            ],
+            "timeout": 30,
+            "statusMessage": "agents mirror sync"
+          }
+        ]
       }
     ]
   }

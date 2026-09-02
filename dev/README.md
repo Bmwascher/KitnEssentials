@@ -253,7 +253,10 @@ mirror the change into `dev/claude-hooks/` so the template stays current.
 Repo-scope hooks: `branch-guard.ps1` (PreToolUse Edit|Write, blocks .lua/.xml
 edits on main), `git-guard.ps1` (PreToolUse Bash|PowerShell, blocks git shapes
 that discard or blanket-stage work, and shell writes to addon code on main)
-and `luacheck-postedit.ps1` (PostToolUse, lints every .lua edit). Run
+`luacheck-postedit.ps1` (PostToolUse, lints every .lua edit) and
+`agents-mirror-sync.ps1` (PostToolUse, rebuilds the `.agents/skills` mirror
+through `dev/scripts/sync-agents-mirror.ps1` after any skill or command
+edit; `-Check` reports drift). Run
 `pwsh dev/scripts/test-claude-hooks.ps1` after editing any of them; it
 exercises every documented deny and allow case against a throwaway main
 worktree.

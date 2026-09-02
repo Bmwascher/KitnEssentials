@@ -20,7 +20,7 @@ $settingsPath = Join-Path $root '.claude\settings.json'
 New-Item -ItemType Directory -Force $hooksDir | Out-Null
 # (the superpowers review-companion hook ships in the crosscheck plugin,
 # user-scope - not here, or it would double-fire.)
-foreach ($name in @('branch-guard.ps1', 'luacheck-postedit.ps1', 'git-guard.ps1')) {
+foreach ($name in @('branch-guard.ps1', 'luacheck-postedit.ps1', 'git-guard.ps1', 'agents-mirror-sync.ps1')) {
     Copy-Item (Join-Path $templates $name) (Join-Path $hooksDir $name) -Force
     Write-Host "[install] .claude/hooks/$name refreshed from dev/claude-hooks/"
 }
