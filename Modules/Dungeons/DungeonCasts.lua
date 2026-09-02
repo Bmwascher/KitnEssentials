@@ -422,6 +422,8 @@ function DC:ReleaseBar(bar)
     bar.previewIcon = nil
     bar.previewTarget = nil
     bar.previewTargetClass = nil
+    bar.targetName = nil
+    bar.targetClass = nil
     bar.raidIcon:Hide()
     bar.targetText:Hide()
     bar.targetSeparator:Hide()
@@ -526,10 +528,16 @@ function DC:UpdateTargetText(bar, targetName, targetClass)
 
     local targetDb = self.db.Target
     if not targetDb or not targetDb.Enabled or not targetName then
+        bar.targetName, bar.targetClass = nil, nil
         bar.targetText:Hide()
         bar.targetSeparator:Hide()
         return
     end
+
+    -- Remembered so a settings change can put it back: ConfigureBar hides both
+    -- regions and nothing else re-shows them. The name may be a secret string,
+    -- so it is only ever handed back to SetText, never compared.
+    bar.targetName, bar.targetClass = targetName, targetClass
 
     -- SetText + SetTextColor on separate FontStrings — no concatenation with
     -- targetName, which may be a secret string from UnitSpellTargetName.
@@ -1006,12 +1014,17 @@ function DC:UpdateFrameVisuals()
         -- without this the preview ignored the flip (report).
         -- Preview branch reads bar.previewRaidIcon, real branch bar.unit.
         self:UpdateRaidIcon(bar, bar.unit)
-        -- Target visibility/styling reacts to GUI Target.* changes. Real-mode
-        -- bars refresh target text every OnUpdate tick from live cast data,
-        -- so we only need to re-run it for preview-mode bars (which cache
-        -- previewTarget at creation time).
-        if self.isPreview and bar.previewTarget ~= nil then
-            self:UpdateTargetText(bar, bar.previewTarget, bar.previewTargetClass)
+        -- ConfigureBar above hid both target regions, and nothing else shows
+        -- them again until the unit's next cast, so restore what the bar was
+        -- displaying. Preview bars keep their target on previewTarget; live
+        -- bars on targetName.
+        if self.isPreview then
+            if bar.previewTarget ~= nil then
+                self:UpdateTargetText(bar, bar.previewTarget, bar.previewTargetClass)
+            end
+        elseif not bar.holdUntil then
+            -- A held bar's target belonged to the cast the interrupt ended.
+            self:UpdateTargetText(bar, bar.targetName, bar.targetClass)
         end
     end
 
