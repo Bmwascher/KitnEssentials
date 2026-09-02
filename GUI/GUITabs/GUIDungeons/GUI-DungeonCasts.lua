@@ -157,24 +157,22 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     manager:Register(spacingSlider, "all")
     card3:AddRow(row3b, Theme.rowHeight)
 
-    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
+    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
     local growthDropdown = GUIFrame:CreateDropdown(row3c, "Growth Direction", {
         options = { { key = "DOWN", text = "Down" }, { key = "UP", text = "Up" } },
         value = db.Frame.GrowthDirection or "DOWN",
         callback = function(key) db.Frame.GrowthDirection = key; ApplyVisuals() end,
     })
-    row3c:AddWidget(growthDropdown, 1)
+    row3c:AddWidget(growthDropdown, 0.5)
     manager:Register(growthDropdown, "all")
-    card3:AddRow(row3c, Theme.rowHeight)
 
-    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local combatOnlyCheck = GUIFrame:CreateCheckbox(row3d, "Combat Only", {
+    local combatOnlyCheck = GUIFrame:CreateCheckbox(row3c, "Combat Only", {
         value = db.Frame.CombatOnly ~= false,
         callback = function(checked) db.Frame.CombatOnly = checked end,
     })
-    row3d:AddWidget(combatOnlyCheck, 1)
+    row3c:AddWidget(combatOnlyCheck, 0.5)
     manager:Register(combatOnlyCheck, "all")
-    card3:AddRow(row3d, Theme.rowHeightLast, 0)
+    card3:AddRow(row3c, Theme.rowHeightLast, 0)
 
     yOffset = card3:GetNextOffset()
 
