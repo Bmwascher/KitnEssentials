@@ -330,7 +330,19 @@ function DM:OpenDetail(bar, button)
     end
 
     local ownRow = DM.PlainOwnRow(bar._isLocalPlayer)
-    if not self:DetailEligible(bar._isLocalPlayer, openType) then
+    -- Ally row: join the row's NeverSecret class and spec against the LIVE
+    -- roster. Gated on both conditions so nothing that works today pays for it --
+    -- the own row keeps its own substitution, and out of combat the gate below
+    -- short-circuits to true before any of this matters. The memo is dropped
+    -- first: a click must answer from the roster as it is now, not as the last
+    -- tick found it.
+    local resolvedGUID
+    if not ownRow and DM.DetailCombatActive() then
+        self:InvalidateRosterIndex()
+        resolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,
+            W._classRowCounts and W._classRowCounts[bar._classFilename])
+    end
+    if not self:DetailEligible(bar._isLocalPlayer, openType, resolvedGUID) then
         self:ShowDetailMessage(W, REFUSAL_MSG)
         return
     end
@@ -373,6 +385,11 @@ function DM:OpenDetail(bar, button)
     -- something it cannot compare) and the EFFECTIVE meter type, so a later tick can
     -- tell that the view has changed underneath the panel.
     W._detailOwnRow = ownRow
+    -- The join's inputs and its answer, both stored for the tick re-judge, which
+    -- does not receive the bar. The answer is re-derived there rather than
+    -- trusted: this pair detects drift, it never authorizes.
+    W._detailResolvedGUID = resolvedGUID
+    W._detailSpecIconID = bar._specIconID
     W._detailMeterType = openType
     -- Data panel, as opposed to the refusal message ShowDetailMessage puts up. The
     -- refresh path must not treat one as the other.
@@ -430,7 +447,19 @@ function DM:RenderWindowAndDetail(W)
     -- Eligibility against the CURRENT view and the snapshotted plain own-row answer.
     -- The snapshot detects drift; it never authorizes. Out of combat the predicate
     -- short-circuits to true, so nothing here restricts what already worked.
-    if not self:DetailEligible(W._detailOwnRow, nowType) then
+    -- Re-resolve and COMPARE. The stored answer detects drift; it never
+    -- authorizes -- so an answer that DIFFERS closes the panel instead of
+    -- replacing the subject underneath it. Overwriting here would silently
+    -- repoint an open panel at a replacement player (a leaver swapped for a
+    -- same-class joiner between ticks) and render their damage under the row
+    -- that was clicked, with no name on the panel to reveal it. Both values are
+    -- plain strings read from group unit tokens, so the comparison is legal.
+    if W._detailResolvedGUID then
+        local fresh = self:ResolveAllyGUID(W._detailClass, W._detailSpecIconID,
+            W._classRowCounts and W._classRowCounts[W._detailClass])
+        if fresh ~= W._detailResolvedGUID then W._detailResolvedGUID = nil end
+    end
+    if not self:DetailEligible(W._detailOwnRow, nowType, W._detailResolvedGUID) then
         self:CloseDetail(W)
         return
     end
@@ -467,6 +496,8 @@ function DM:CloseDetail(W)
     -- nothing, and leaving these set would let the next thing that opens here --
     -- including a refusal message -- inherit the last panel's permission.
     W._detailOwnRow = nil
+    W._detailResolvedGUID = nil
+    W._detailSpecIconID = nil
     W._detailMeterType = nil
     W._detailKind = nil
     W._detailPaintedRecapID = nil
@@ -488,6 +519,8 @@ function DM:ShowDetailMessage(W, msg)
     -- old snapshot in place and let the next refresh overwrite the refusal with the
     -- previous breakdown.
     W._detailOwnRow = nil
+    W._detailResolvedGUID = nil
+    W._detailSpecIconID = nil
     W._detailMeterType = nil
     W._detailPaintedRecapID = nil
     W._detailKind = "message"
@@ -530,7 +563,7 @@ function DM:RenderBreakdown(W)
     -- identity was secret and could not legally be substituted -- distinct from an
     -- ordinary empty result, which is why it is a second return rather than a marker
     -- in the first.
-    local src, refused = self:GetSource(cfg.SessionType, meterType, W._detailSourceGUID, W._detailSourceCID, sessionID, W._detailOwnRow)
+    local src, refused = self:GetSource(cfg.SessionType, meterType, W._detailSourceGUID, W._detailSourceCID, sessionID, W._detailOwnRow, W._detailResolvedGUID)
     if refused then
         self:ShowDetailMessage(W, REFUSAL_MSG)
         return
@@ -552,7 +585,23 @@ function DM:RenderBreakdown(W)
     -- the row loop below is unchanged. See SelectSpellList.
     local spells, maxAmount = SelectSpellList(src)
     local d = W.detail
-    if not spells then
+    -- Length as well as nil: the API declares combatSpells non-nilable, so a
+    -- source that exists with nothing recorded against it yet arrives as an EMPTY
+    -- table, which `not spells` alone would wave through. # on the list is plain
+    -- in combat.
+    if not spells or #spells == 0 then
+        -- A resolved ally row with no spell list is the one case the roster join
+        -- cannot discriminate on its own: a player who left mid-pull, whose row is
+        -- still on screen, matched against a same-class same-spec player who is
+        -- still here but has no row this pull. An empty fetch is that signature,
+        -- so refuse rather than render a blank panel under the leaver's name. If
+        -- the survivor DOES have a row, two rows share the key and the join
+        -- already refused as surplus, so both directions are covered.
+        -- # and ipairs on the list are plain in combat; this reads no secret.
+        if W._detailResolvedGUID then
+            self:ShowDetailMessage(W, REFUSAL_MSG)
+            return
+        end
         for i = 1, DETAIL_POOL_SIZE do d.rows[i].row:Hide() end
         return
     end

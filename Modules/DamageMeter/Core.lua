@@ -1151,7 +1151,15 @@ function DM:OnRegenDisabled()
                     local cfg = self.ResolveWindowConfig and self:ResolveWindowConfig(W.idx)
                     local nowType = cfg and self:EffectiveMeterType(W.idx, cfg)
                     if nowType ~= nil and nowType == W._detailMeterType then
-                        keep = self:DetailEligible(W._detailOwnRow, nowType)
+                        -- A panel open at combat START was opened OUT of combat, so
+                        -- any resolved guid on it belongs to a PREVIOUS fight and
+                        -- authorizes nothing now. Clear it rather than re-resolving:
+                        -- an ally panel then fails the gate and closes, which is
+                        -- exactly what shipped before ally rows were resolvable.
+                        -- Re-resolving here would mint a fresh authorization the
+                        -- user never asked for, at the moment the data goes secret.
+                        W._detailResolvedGUID = nil
+                        keep = self:DetailEligible(W._detailOwnRow, nowType, nil)
                     end
                 end
                 if not keep then self:CloseDetail(W) end
