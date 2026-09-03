@@ -58,7 +58,7 @@ local bindingsFrame = CreateFrame("Frame", "KE_WorldMarkerCyclerBindings")
 
 -- Wrapped against cycleBtn to share its secure environment. The reset has to
 -- happen inside the protected click: ordinary code cannot reach this state in
--- combat, which is what left the cycle stranded mid-list.
+-- combat, so a reset that lives outside strands the cycle mid-list.
 SecureHandlerWrapScript(clearBtn, "PreClick", cycleBtn, [=[
     if not down or not order then return end
     for n = 1, #order do avail[n] = true end

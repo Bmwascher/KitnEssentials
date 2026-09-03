@@ -2803,18 +2803,22 @@ end
 -- spec reassigns afterwards, for the same reason (see loadDMCore's group
 -- predicates). The secure-handler stubs only RECORD what the module emitted:
 -- nothing here models the raid-marker system, and the snippet bodies are never
--- executed as secure code. Returns WMC, KE, and the executed-body list, whose
--- entries are { frame = <frame>, body = <string> } in call order.
+-- executed as secure code. Returns WMC, KE, the executed-body list and the
+-- wrapped-body list, both { frame = <frame>, body = <string> } in call order;
+-- the wrapped list additionally carries script and header.
 function L.loadWorldMarkerCycler(overrides)
     overrides = overrides or {}
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
 
-    local executed = {}
+    local executed, wrapped = {}, {}
     _G.SecureHandlerExecute = function(frame, body)
         executed[#executed + 1] = { frame = frame, body = body }
     end
-    _G.SecureHandlerWrapScript = function() end
+    _G.SecureHandlerWrapScript = function(frame, script, header, body)
+        wrapped[#wrapped + 1] =
+            { frame = frame, script = script, header = header, body = body }
+    end
     _G.SetOverrideBindingClick = function() end
     _G.ClearOverrideBindings = function() end
     _G.UIParent = noopFrame()
@@ -2823,7 +2827,7 @@ function L.loadWorldMarkerCycler(overrides)
 
     local KE = { Print = function() end, RunAfterCombat = function(fn) fn() end }
     helpers.loadModule("Modules/Utilities/WorldMarkerCycler.lua", KE)
-    return modules["WorldMarkerCycler"], KE, executed
+    return modules["WorldMarkerCycler"], KE, executed, wrapped
 end
 
 return L
