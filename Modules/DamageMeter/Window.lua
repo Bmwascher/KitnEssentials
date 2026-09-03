@@ -1354,7 +1354,10 @@ end
 -- Tick is safe from an arbitrary context, see the wheel handler.
 function DM:OnNicknamesChanged()
     wipe(nickLookup)
-    wipe(nickByGUID)
+    -- nickByGUID is the only nickname source while names are secret, and it
+    -- relearns on a plain tick, which does not come until combat ends. Wiping
+    -- it mid-pull blanks every nickname on the meter for the rest of the fight.
+    if not InCombatLockdown() then wipe(nickByGUID) end
     self._selfNick = nil
     if self.enabled and self.Tick then self:Tick() end
 end
