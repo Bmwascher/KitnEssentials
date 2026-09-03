@@ -564,6 +564,14 @@ local function ResolveGroupGUID(playerName)
                 -- The player also appears in the raid token list, so the same guid
                 -- arriving twice is not a collision.
                 if hit and hit ~= guid then
+                    -- Purge, do not merely decline to store. An entry cached while
+                    -- the name was still unique would otherwise freeze: the report
+                    -- that would correct it is now the refused one, so a respec
+                    -- leaves a stale spec standing and the tie-break reads it as
+                    -- current. Purging every colliding guid keeps a collided
+                    -- player unknown for exactly as long as the collision lasts.
+                    DM.specIconByGUID[hit] = nil
+                    DM.specIconByGUID[guid] = nil
                     ambiguous = true
                 else
                     hit = guid
@@ -596,7 +604,8 @@ end
 -- spec icon by GUID so a bar whose API specIconID is nil upgrades from the class
 -- fallback to the real spec icon on the next tick. Keyed by GUID (not name) because
 -- the render path only has the secret-in-combat src.name but a NeverSecret GUID.
--- A respec re-fires the callback and overwrites the same GUID. role/position unused.
+-- A respec re-fires the callback and overwrites the same GUID, except for a name
+-- two group members share, which is purged rather than updated. role/position unused.
 function DM:OnLibSpecGroupUpdate(specID, _, _, playerName)
     local icon = GetSpecIcon(specID)
     if not icon then return end

@@ -1630,7 +1630,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     -- No InvalidateRosterIndex here: a hover opens nothing, so answering from
     -- this tick's walk is enough.
     local tipResolvedGUID
-    if not ownRow and DM.DetailCombatActive() then
+    if not ownRow and meterType ~= Enum.DamageMeterType.Deaths and DM.DetailCombatActive() then
         tipResolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,
             W._classRowCounts and W._classRowCounts[bar._classFilename])
     end
