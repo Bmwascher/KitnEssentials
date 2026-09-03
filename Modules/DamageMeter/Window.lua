@@ -55,9 +55,9 @@ local realmNames = {}
 -- miss are both remembered. nickByGUID keeps the last plain-tick nickname per
 -- (plain) player GUID so it keeps rendering while the name field is secret in
 -- combat (raids / active keystones) -- positive entries only, learned
--- exclusively from plain ticks. Both wiped by DM:OnNicknamesChanged so a
--- change repaints; bounded like realmNames (distinct names/players seen;
--- wiped on /reload).
+-- exclusively from plain ticks. DM:OnNicknamesChanged wipes them so a change
+-- repaints, nickByGUID only out of combat; bounded like realmNames
+-- (distinct names/players seen; wiped on /reload).
 local nickLookup = {}
 local nickByGUID = {}
 
