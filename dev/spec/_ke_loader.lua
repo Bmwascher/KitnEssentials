@@ -2797,4 +2797,33 @@ function L.loadCombatState(overrides)
     return helpers.loadModule("Core/CombatState.lua", {}), declaredSecret
 end
 
+-- Modules/Utilities/WorldMarkerCycler.lua. The module captures its secure-handler
+-- and binding functions as file-scope upvalues, so every stub below must exist
+-- BEFORE loadModule; IsRaidMarkerActive is an override rather than a global a
+-- spec reassigns afterwards, for the same reason (see loadDMCore's group
+-- predicates). The secure-handler stubs only RECORD what the module emitted:
+-- nothing here models the raid-marker system, and the snippet bodies are never
+-- executed as secure code. Returns WMC, KE, and the executed-body list, whose
+-- entries are { frame = <frame>, body = <string> } in call order.
+function L.loadWorldMarkerCycler(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+
+    local executed = {}
+    _G.SecureHandlerExecute = function(frame, body)
+        executed[#executed + 1] = { frame = frame, body = body }
+    end
+    _G.SecureHandlerWrapScript = function() end
+    _G.SetOverrideBindingClick = function() end
+    _G.ClearOverrideBindings = function() end
+    _G.UIParent = noopFrame()
+    -- Default board: nothing placed, so every position primes free.
+    _G.IsRaidMarkerActive = overrides.IsRaidMarkerActive or function() return false end
+
+    local KE = { Print = function() end, RunAfterCombat = function(fn) fn() end }
+    helpers.loadModule("Modules/Utilities/WorldMarkerCycler.lua", KE)
+    return modules["WorldMarkerCycler"], KE, executed
+end
+
 return L

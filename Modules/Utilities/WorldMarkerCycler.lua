@@ -12,6 +12,7 @@ if not KitnEssentials then return end
 local WMC = KitnEssentials:NewModule("WorldMarkerCycler", "AceEvent-3.0")
 
 local InCombatLockdown = InCombatLockdown
+local IsRaidMarkerActive = IsRaidMarkerActive
 local SecureHandlerExecute = SecureHandlerExecute
 local SecureHandlerWrapScript = SecureHandlerWrapScript
 local SetOverrideBindingClick = SetOverrideBindingClick
@@ -32,10 +33,20 @@ local cycleBtn = CreateFrame("Button", "KE_WorldMarkerCycleBtn", nil, "SecureAct
 cycleBtn:SetAttribute("type", "macro")
 cycleBtn:RegisterForClicks("AnyUp", "AnyDown")
 SecureHandlerWrapScript(cycleBtn, "PreClick", cycleBtn, [=[
-    if not down or not next(order) then return end
-    i = (i % #order) + 1
-    local marker = order[i] or 1
-    self:SetAttribute("macrotext", "/worldmarker [@cursor] " .. marker)
+    if not down or not order or not next(order) then return end
+    local pos
+    for n = 1, #order do
+        if avail[n] then pos = n break end
+    end
+    -- Nothing free: step past the last placement instead of restarting at the
+    -- top, which would re-place one marker forever while priming is running.
+    if not pos then
+        for n = 1, #order do avail[n] = true end
+        pos = (last % #order) + 1
+    end
+    avail[pos] = false
+    last = pos
+    self:SetAttribute("macrotext", "/worldmarker [@cursor] " .. order[pos])
 ]=])
 
 local clearBtn = CreateFrame("Button", "KE_WorldMarkerClearBtn", UIParent, "SecureActionButtonTemplate")
@@ -45,12 +56,13 @@ clearBtn:RegisterForClicks("AnyUp", "AnyDown")
 
 local bindingsFrame = CreateFrame("Frame", "KE_WorldMarkerCyclerBindings")
 
--- PostClick on clear resets cycle index
-clearBtn:SetScript("PostClick", function()
-    if not InCombatLockdown() then
-        SecureHandlerExecute(cycleBtn, "i=0")
-    end
-end)
+-- Wrapped against cycleBtn to share its secure environment. The reset has to
+-- happen inside the protected click: ordinary code cannot reach this state in
+-- combat, which is what left the cycle stranded mid-list.
+SecureHandlerWrapScript(clearBtn, "PreClick", cycleBtn, [=[
+    if not down or not order then return end
+    for n = 1, #order do avail[n] = true end
+]=])
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -74,7 +86,7 @@ function WMC:BuildOrderTable()
     end
 
     local db = self.db
-    local body = "i=0;order=newtable() "
+    local body = "last=0;order=newtable() "
     if db and db.OrderList then
         for _, id in ipairs(db.OrderList) do
             body = body .. string_format("tinsert(order,%d) ", id)
@@ -82,6 +94,24 @@ function WMC:BuildOrderTable()
     end
     SecureHandlerExecute(cycleBtn, body)
     self.pendingOrderBuild = false
+    self:PrimeAvailability()
+end
+
+-- Rebuilds the believed-free list from the board, so a marker anyone placed or
+-- cleared is eventually accounted for. Always sized to the list BuildOrderTable
+-- used, which is why the snippets index avail unguarded. Refused in combat:
+-- running a snippet from ordinary code errors there.
+function WMC:PrimeAvailability()
+    if InCombatLockdown() then return end
+
+    local db = self.db
+    local list = (db and db.OrderList) or {}
+    local body = "avail=newtable() "
+    for pos, id in ipairs(list) do
+        local free = not IsRaidMarkerActive or not IsRaidMarkerActive(id)
+        body = body .. string_format("avail[%d]=%s ", pos, free and "true" or "false")
+    end
+    SecureHandlerExecute(cycleBtn, body)
 end
 
 function WMC:UpdateBindings()
@@ -125,12 +155,19 @@ function WMC:OnEnable()
 
     -- Listen for combat end to apply pending changes
     self:RegisterEvent("PLAYER_REGEN_ENABLED", function()
+        -- BuildOrderTable primes as its last step, hence the else.
         if self.pendingOrderBuild then
             self:BuildOrderTable()
+        else
+            self:PrimeAvailability()
         end
         if self.pendingBindings then
             self:UpdateBindings()
         end
+    end)
+
+    self:RegisterEvent("RAID_TARGET_UPDATE", function()
+        self:PrimeAvailability()
     end)
 end
 
@@ -145,7 +182,6 @@ function WMC:OnDisable()
     KE:RunAfterCombat(function()
         if self:IsEnabled() then return end
         ClearOverrideBindings(bindingsFrame)
-        SecureHandlerExecute(cycleBtn, "i=0")
     end)
     self:UnregisterAllEvents()
 end
