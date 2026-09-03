@@ -598,7 +598,6 @@ function DM:RenderBreakdown(W)
         -- so refuse rather than render a blank panel under the leaver's name. If
         -- the survivor DOES have a row, two rows share the key and the join
         -- already refused as surplus, so both directions are covered.
-        -- # and ipairs on the list are plain in combat; this reads no secret.
         if W._detailResolvedGUID then
             self:ShowDetailMessage(W, REFUSAL_MSG)
             return
