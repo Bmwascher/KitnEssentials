@@ -1087,17 +1087,6 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     manager:Register(realmChk, "all")
     card2:AddRow(row2b, Theme.rowHeight)
 
-    -- Row 2b: nickname substitution (the Custom Nicknames feature's store).
-    local row2bn = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local nickChk = GUIFrame:CreateCheckbox(row2bn, "Use Nicknames", {
-        value = db.UseNicknames ~= false,
-        tooltip = "Shows your saved nicknames in place of player names on the bars. Display only - chat reports keep real names. In raids and keystones a nickname kicks in once that player has been seen out of combat.",
-        callback = function(checked) db.UseNicknames = checked; ApplySettings() end,
-    })
-    row2bn:AddWidget(nickChk, 0.5)
-    manager:Register(nickChk, "all")
-    card2:AddRow(row2bn, Theme.rowHeight)
-
     -- Separator: splits the name/icon element toggles above from the number/value row below.
     local row2sep = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
     local sep2 = GUIFrame:CreateSeparator(row2sep)

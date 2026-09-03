@@ -407,15 +407,64 @@ describe("Nicknames.lua ClearAllNicknames + tag refresh", function()
         assert.equals(0, KE:ClearAllNicknames())
     end)
 
-    -- The Damage Meter is the only reader left, so it is the only dispatch
-    -- worth asserting. Counting the call rather than flagging it: a second
-    -- fan-out arm creeping back in is as wrong as none at all.
-    it("notifies the Damage Meter, and no-ops when it is absent", function()
+    -- Two readers now: the Damage Meter and Healer Mana. Counting both,
+    -- because an arm silently dropped by a later edit would otherwise fail
+    -- nothing. Healer Mana also needs a container: it is refreshed only when
+    -- one exists, since its finder faults on a nil frame.
+    it("notifies both readers, and no-ops when they are absent", function()
         assert.has_no.errors(function() KE:RefreshNicknameTags() end)
-        local calls = 0
+        local dmCalls, hmCalls = 0, 0
         local DM = _G.KitnEssentials:GetModule("DamageMeter", true)
-        DM.OnNicknamesChanged = function() calls = calls + 1 end
+        DM.OnNicknamesChanged = function() dmCalls = dmCalls + 1 end
+        local HM = _G.KitnEssentials:GetModule("HealerMana", true)
+        HM.FindHealers = function() hmCalls = hmCalls + 1 end
         KE:RefreshNicknameTags()
-        assert.equals(1, calls)
+        assert.equals(1, dmCalls)
+        assert.equals(0, hmCalls)
+        HM.containerFrame = {}
+        KE:RefreshNicknameTags()
+        assert.equals(2, dmCalls)
+        assert.equals(1, hmCalls)
+    end)
+end)
+
+-- The precedence rule is the one piece of invented branching logic here, and
+-- it fails silently when a later edit breaks it: a wrong answer renders a
+-- plausible name rather than an error. Driven directly as a pure function, so
+-- no fake of the external provider exists anywhere in the suite.
+describe("Nicknames.lua ResolveNicknamePrecedence", function()
+    local KE
+    before_each(function() KE = L.loadNicknames() end)
+
+    it("prefers KE's own nickname when both sources have one", function()
+        assert.equals("Own", KE:ResolveNicknamePrecedence("Own", "Foreign", "Bob"))
+    end)
+
+    it("uses whichever single source has a nickname", function()
+        assert.equals("Own", KE:ResolveNicknamePrecedence("Own", nil, "Bob"))
+        assert.equals("Foreign", KE:ResolveNicknamePrecedence(nil, "Foreign", "Bob"))
+    end)
+
+    it("resolves nothing when neither source offers a usable string", function()
+        local unusable = { nil, "", 42, false }
+        for i = 1, 4 do
+            local v = unusable[i]
+            assert.is_nil(KE:ResolveNicknamePrecedence(v, v, "Bob"))
+        end
+        -- An unusable own value must not suppress a good foreign one.
+        assert.equals("Foreign", KE:ResolveNicknamePrecedence("", "Foreign", "Bob"))
+    end)
+
+    -- The provider signals "no nickname" by echoing the name back, in two
+    -- shapes: the whole string when it could not resolve the input as a unit,
+    -- and the bare pre-hyphen name when it could. Both must be refused, or an
+    -- un-nicknamed cross-realm player reads as nicknamed and the Damage Meter
+    -- renders that in place of its realm-bearing name.
+    it("refuses a foreign value that only echoes the name it was asked about", function()
+        assert.is_nil(KE:ResolveNicknamePrecedence(nil, "Bob", "Bob"))
+        assert.is_nil(KE:ResolveNicknamePrecedence(nil, "Bob-Realm", "Bob-Realm"))
+        assert.is_nil(KE:ResolveNicknamePrecedence(nil, "Bob", "Bob-Realm"))
+        -- A real nickname alongside a realm-bearing name still resolves.
+        assert.equals("Bobby", KE:ResolveNicknamePrecedence(nil, "Bobby", "Bob-Realm"))
     end)
 end)
