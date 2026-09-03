@@ -77,9 +77,8 @@ function KE:GetNicknameOrName(unit)
             own = nicks[name .. "-" .. realm]
         end
     end
-    -- The foreign source is asked only on this plain path. A restricted
-    -- identity returns above: it hands a secret straight back, which cannot
-    -- resolve to a nickname and must not then be compared.
+    -- Asked only on this plain path: a restricted identity returned above, and
+    -- NSAPI would hand that secret straight back to be compared.
     local nick = self:ResolveNicknamePrecedence(own, self:GetNSRTNickname(unit), name)
     if nick then return nick end
     return UnitName(unit) or ""
@@ -114,27 +113,15 @@ end
 ---------------------------------------------------------------------------------
 -- Foreign nickname source
 ---------------------------------------------------------------------------------
--- NSAPI gates GetName on the addon key it is handed: an unknown key makes it
--- return the plain name and nothing else, and it ships a fixed list of keys
--- with no way to register a new one. "GlobalNickNames" is the key its own
--- modules pass, and it resolves to its single Enable Nicknames switch, so KE
--- follows that one switch and adds none of its own.
+-- NSAPI refuses any key absent from its own settings, and there is no way to
+-- register one. This is the key its own modules pass; it resolves to its
+-- single Enable Nicknames switch.
 local NSRT_ADDON_KEY = "GlobalNickNames"
 
--- Nickname from the foreign source, or nil. Takes a unit token or a plain
--- "Name" / "Name-Realm" string; the API decides which by its own UnitExists.
---
--- skiptranslit is load-bearing. Without it the API transliterates the name it
--- returns -- including on the path taken when nicknames are switched OFF --
--- and a rewritten real name no longer matches the name asked about, so the
--- precedence rule below would take it for a nickname and the Damage Meter
--- would cache it per GUID.
---
--- Test order is load-bearing too: pcall failure first so an error string never
--- reaches issecretvalue, then secrecy before type(), because the API hands a
--- secret straight back for a restricted identity and type() on a secret is its
--- own illegal operation. Anything that is not a plain non-empty string becomes
--- nil, so no caller can receive a secret out of a third-party API.
+-- skiptranslit stops NSAPI transliterating the name it returns; a rewritten
+-- real name no longer matches what was asked, and reads as a nickname below.
+-- issecretvalue precedes type() because NSAPI passes a secret straight back
+-- for a restricted identity, and type() on a secret is illegal in itself.
 ---@param subject string unit token, "Name" or "Name-Realm"
 ---@return string|nil nickname
 function KE:GetNSRTNickname(subject)
@@ -147,24 +134,14 @@ function KE:GetNSRTNickname(subject)
     return nick
 end
 
--- Decides which source wins. KE's own store outranks the foreign one: a name
--- typed into this client for that specific player is a stronger signal than a
--- name broadcast to the group.
+-- KE's own store wins: a locally typed name beats a broadcast one.
 --
--- The two refusals exist because the foreign source has TWO ways of saying "no
--- nickname", not one. Asked about a string it cannot resolve as a unit it
--- returns that string unchanged; asked about one it CAN, it re-derives the
--- identity and returns the BARE character name with no realm. The Damage Meter
--- asks with the realm-bearing form on purpose, so without the second test a
--- cross-realm player with no nickname would come back as "Bob" against
--- "Bob-Realm", read as a nickname, and render in place of the ShowRealm
--- branch -- silently disabling Show Realm Names for everyone cross-realm.
---
--- A genuine nickname equal to the player's own bare name is refused with it.
--- The echo and that nickname are identical bytes from the same call, so the
--- ambiguity is forced; refusing is the side that never invents a nickname.
---
--- Pure: every argument is a plain string or nil, and the callers guarantee it.
+-- Two refusals because NSAPI says "no nickname" two ways -- it echoes the
+-- string it was given, or returns the BARE name when it resolved that string
+-- as a unit. The Damage Meter asks with the realm-bearing form, so without the
+-- second test every cross-realm player reads as nicknamed and ShowRealm stops
+-- working. A real nickname equal to the bare name is refused with it; the two
+-- are indistinguishable, and this is the side that never invents a nickname.
 ---@param own string|nil nickname from KE's own store
 ---@param foreign string|nil nickname from the foreign source
 ---@param realName string|nil the plain name the foreign source was asked about
@@ -330,13 +307,10 @@ function KE:RefreshNicknameTags()
     -- repaints the bars instead of serving stale (or missing) nicknames.
     local DM = KEAddon:GetModule("DamageMeter", true)
     if DM and DM.OnNicknamesChanged then DM:OnNicknamesChanged() end
-    -- Healer Mana carries display names on its snapshots, so it re-finds.
-    -- containerFrame is required, not decorative: FindHealers checks only
-    -- db.Enabled, and on a profile change that is true before OnEnable has
-    -- built the container, where the call would fault on a nil frame. The
-    -- roster callers are safe because their events register inside OnEnable;
-    -- a foreign callback is tied to nickname traffic, not to KE's lifecycle,
-    -- so it can arrive inside exactly that window.
+    -- containerFrame guard: FindHealers checks only db.Enabled, which is true
+    -- on a profile change before OnEnable builds the container, and it faults
+    -- on a nil frame there. Roster callers register inside OnEnable and so
+    -- never hit that window; a nickname callback can.
     local HM = KEAddon:GetModule("HealerMana", true)
     if HM and HM.FindHealers and HM.containerFrame then HM:FindHealers() end
 end
@@ -344,19 +318,18 @@ end
 ---------------------------------------------------------------------------------
 -- Foreign-source change subscription
 ---------------------------------------------------------------------------------
--- The provider may load after KE, so registration retries until it takes.
--- One subscription covers both a nickname edit and the provider's global
--- toggle: flipping that switch runs the same update funnel that fires this
--- event, so no second subscription is needed.
+-- NSAPI may load after KE, so registration retries until it takes. One
+-- subscription is enough: its global toggle runs the same update funnel that
+-- fires this event.
 
 local nsrtHooked = false
 local function RegisterNSRTCallback()
     if nsrtHooked then return end
     local api = _G.NSAPI
     if not api or not api.RegisterCallback then return end
-    -- Dot call, not colon. CallbackHandler keys registrations by the first
-    -- argument, so a colon call would pass the API table itself as the key and
-    -- collide with every other addon that did the same.
+    -- Dot call, not colon: CallbackHandler keys on the first argument, and a
+    -- colon call would pass the API table itself and collide with every other
+    -- addon doing the same.
     api.RegisterCallback("KitnEssentials", "NSRT_NICKNAME_UPDATED", function()
         if KE.RefreshNicknameTags then KE:RefreshNicknameTags() end
     end)

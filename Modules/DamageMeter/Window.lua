@@ -51,14 +51,13 @@ local realmNames = {}
 -- Nickname memos (see the Nickname support section below).
 -- nickLookup memoizes the resolved nickname per raw display name ("Bob" /
 -- "Bob-Realm" -> nickname string, or false for a confirmed miss) so the
--- steady-state render does no per-tick key building or provider call -- hit
--- AND miss are both remembered. nickByGUID keeps the last plain-tick nickname
--- per (plain) player GUID so it keeps rendering while the name field is secret
--- in combat (raids / active keystones) -- positive entries only, learned
--- exclusively from plain ticks. Both wiped by DM:OnNicknamesChanged, which any
--- nickname change reaches -- a store edit or a provider update -- so changes
--- repaint; bounded like realmNames (distinct names/players seen; wiped on
--- /reload).
+-- steady-state render does no per-tick key building or NSAPI call -- hit AND
+-- miss are both remembered. nickByGUID keeps the last plain-tick nickname per
+-- (plain) player GUID so it keeps rendering while the name field is secret in
+-- combat (raids / active keystones) -- positive entries only, learned
+-- exclusively from plain ticks. Both wiped by DM:OnNicknamesChanged so a
+-- change repaints; bounded like realmNames (distinct names/players seen;
+-- wiped on /reload).
 local nickLookup = {}
 local nickByGUID = {}
 
@@ -1293,9 +1292,8 @@ end
 --
 -- Substitutes nicknames for player names on the bars at DISPLAY time only:
 -- chat reports and the Detail targets keying (bar._rawName) keep real names.
--- Two sources feed it, KE's own store and the external provider, ordered by
--- KE:ResolveNicknamePrecedence (Core/Nicknames.lua). Always on: there is no
--- KE-side switch, only the provider's own.
+-- Two sources, ordered by KE:ResolveNicknamePrecedence (Core/Nicknames.lua).
+-- Always on; the only switch is NSAPI's own.
 -- Resolution never touches a secret name -- the self row keys off isLocalPlayer
 -- (NeverSecret), plain names build a store key via KE:BuildNicknameKey
 -- (memoized in nickLookup), and a secret-in-combat name falls back to the
@@ -1330,17 +1328,16 @@ end
 -- breakdowns in Detail.lua): plain raw name in ("Name" or "Name-Realm" -- the
 -- CALLER guarantees it is non-secret), nickname string or nil out. One
 -- nickLookup memo index in the steady state; a miss builds the store key once
--- (KE:BuildNicknameKey), asks both sources, and remembers hit AND miss, so the
--- provider is never called per tick. Memoizes only a REAL resolution: key is
--- nil while the realm is still unresolved (login-time first paint), and
--- caching that false would kill nicknames for the whole session.
+-- (KE:BuildNicknameKey), asks both sources, and remembers hit AND miss.
+-- Memoizes only a REAL resolution: key is nil while the realm is still
+-- unresolved (login-time first paint), and caching that false would kill
+-- nicknames for the whole session.
 function DM:LookupNickname(rawName)
     if not rawName or rawName == "" then return nil end
     local c = nickLookup[rawName]
     if c == nil then
-        -- Key first, independent of the store, so the memo still arms when the
-        -- store is missing; otherwise the foreign call below would repeat on
-        -- every bar on every tick.
+        -- Key independent of the store, so the memo arms even when the store
+        -- is missing; otherwise the NSAPI call repeats per bar per tick.
         local key = KE:BuildNicknameKey(rawName, GetNormalizedRealmName())
         local nicks = KE.db and KE.db.global and KE.db.global.Nicknames
         local own = (key and nicks) and nicks[key] or nil
@@ -1350,11 +1347,10 @@ function DM:LookupNickname(rawName)
     return c or nil
 end
 
--- Nickname-change hook, called from KE:RefreshNicknameTags (the canonical
--- notification, reaching store imports, store clears, and the external
--- provider's own change callback). Drops every memo so the next paint
--- re-resolves; the trailing Tick repaints immediately, because a change
--- usually lands out of combat where no ticker runs to pick it up otherwise --
+-- Nickname-change hook, called from KE:RefreshNicknameTags (store imports,
+-- store clears, and NSAPI's own change callback). Drops every memo so the
+-- next paint re-resolves; the trailing Tick repaints immediately, because a
+-- change usually lands out of combat where no ticker runs to pick it up --
 -- Tick is safe from an arbitrary context, see the wheel handler.
 function DM:OnNicknamesChanged()
     wipe(nickLookup)

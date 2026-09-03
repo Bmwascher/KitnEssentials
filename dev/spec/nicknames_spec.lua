@@ -407,10 +407,9 @@ describe("Nicknames.lua ClearAllNicknames + tag refresh", function()
         assert.equals(0, KE:ClearAllNicknames())
     end)
 
-    -- Two readers now: the Damage Meter and Healer Mana. Counting both,
-    -- because an arm silently dropped by a later edit would otherwise fail
-    -- nothing. Healer Mana also needs a container: it is refreshed only when
-    -- one exists, since its finder faults on a nil frame.
+    -- Both arms counted: one dropped by a later edit would otherwise fail
+    -- nothing. Healer Mana refreshes only with a container, since its finder
+    -- faults on a nil frame.
     it("notifies both readers, and no-ops when they are absent", function()
         assert.has_no.errors(function() KE:RefreshNicknameTags() end)
         local dmCalls, hmCalls = 0, 0
@@ -428,10 +427,9 @@ describe("Nicknames.lua ClearAllNicknames + tag refresh", function()
     end)
 end)
 
--- The precedence rule is the one piece of invented branching logic here, and
--- it fails silently when a later edit breaks it: a wrong answer renders a
--- plausible name rather than an error. Driven directly as a pure function, so
--- no fake of the external provider exists anywhere in the suite.
+-- The precedence rule fails silently when broken: a wrong answer renders a
+-- plausible name, not an error. Driven as a pure function, so the suite needs
+-- no fake of NSAPI.
 describe("Nicknames.lua ResolveNicknamePrecedence", function()
     local KE
     before_each(function() KE = L.loadNicknames() end)
@@ -455,11 +453,10 @@ describe("Nicknames.lua ResolveNicknamePrecedence", function()
         assert.equals("Foreign", KE:ResolveNicknamePrecedence("", "Foreign", "Bob"))
     end)
 
-    -- The provider signals "no nickname" by echoing the name back, in two
-    -- shapes: the whole string when it could not resolve the input as a unit,
-    -- and the bare pre-hyphen name when it could. Both must be refused, or an
-    -- un-nicknamed cross-realm player reads as nicknamed and the Damage Meter
-    -- renders that in place of its realm-bearing name.
+    -- NSAPI signals "no nickname" by echoing the name back, in two shapes:
+    -- the whole string, or the bare name when it resolved the input as a unit.
+    -- Both must be refused, or an un-nicknamed cross-realm player reads as
+    -- nicknamed and ShowRealm stops working.
     it("refuses a foreign value that only echoes the name it was asked about", function()
         assert.is_nil(KE:ResolveNicknamePrecedence(nil, "Bob", "Bob"))
         assert.is_nil(KE:ResolveNicknamePrecedence(nil, "Bob-Realm", "Bob-Realm"))
