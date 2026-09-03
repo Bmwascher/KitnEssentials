@@ -12,7 +12,8 @@
 -- is right. It cannot prove the restricted environment would accept the body.
 -- Every construct used is identical in both, but a future edit that reached for
 -- something the restricted environment forbids would pass here and fail in
--- game. Legality is a /reload check, not this file's job.
+-- game. Legality is proved by an in-game CLICK, not by /reload alone: the body
+-- is only stored at registration and is compiled the first time it runs.
 
 local L = require("dev.spec._ke_loader")
 
@@ -27,21 +28,36 @@ local function runAvailBody(body)
 end
 
 -- Runs a wrapped click body against a mutable environment standing in for the
--- secure one. Returns the macrotext the body asked for, or nil if it placed
--- nothing. The leading local declaration reproduces the wrap's own
--- "self,button,down" signature.
+-- secure one. Returns the macrotext the body asked for (nil if it placed
+-- nothing) and every attribute write it made, so a case can assert that a
+-- refusal wrote nothing at all. The leading local declaration reproduces the
+-- wrap's own "self,button,down" signature.
 local function runClickBody(body, env, down)
     local chunk = assert(loadstring("local self, button, down = ...\n" .. body))
     env.next = next
     setfenv(chunk, env)
     local placed
+    local writes = {}
     local selfStub = {
         SetAttribute = function(_, key, value)
+            writes[#writes + 1] = { key = key, value = value }
             if key == "macrotext" then placed = value end
         end,
     }
     chunk(selfStub, "LeftButton", down)
-    return placed
+    return placed, writes
+end
+
+-- Deep copy of everything a body is allowed to touch, so a refusal case can
+-- compare the WHOLE environment rather than sampling one position.
+local function snapshot(env)
+    local copy = { last = env.last, avail = {} }
+    for k, v in pairs(env.avail) do copy.avail[k] = v end
+    if env.order then
+        copy.order = {}
+        for k, v in pairs(env.order) do copy.order[k] = v end
+    end
+    return copy
 end
 
 -- The module wraps the cycle button first and the clear button second.
@@ -104,12 +120,13 @@ describe("WorldMarkerCycler marker selection", function()
         }
         for _, case in ipairs(cases) do
             local env = { order = case.order, avail = availOf({}), last = 4 }
+            local before = snapshot(env)
 
-            local placed = runClickBody(cycle, env, case.down)
+            local placed, writes = runClickBody(cycle, env, case.down)
 
             assert.is_nil(placed, case.name)
-            assert.equals(4, env.last, case.name)
-            assert.is_true(env.avail[1], case.name)
+            assert.equals(0, #writes, case.name)
+            assert.same(before, snapshot(env), case.name)
         end
     end)
 end)
@@ -123,19 +140,28 @@ describe("WorldMarkerCycler clear reset", function()
             [5] = true, [6] = true, [7] = true, [8] = true,
         }), last = 6 }
 
-        runClickBody(clear, env, true)
+        local _, writes = runClickBody(clear, env, true)
 
         for n = 1, 8 do assert.is_true(env.avail[n], "position " .. n) end
         assert.same({ 5, 3, 8, 1, 7, 2, 6, 4 }, env.order)
+        assert.equals(6, env.last)
+        assert.equals(0, #writes)
     end)
 
-    it("does nothing on key-up", function()
+    it("does nothing at all on key-up", function()
         local _, clear = bodies()
-        local env = { order = { 1, 2, 3 }, avail = availOf({ [1] = true }), last = 1 }
+        local env = {
+            order = { 5, 3, 8, 1, 7, 2, 6, 4 },
+            avail = availOf({ [1] = true, [4] = true, [7] = true }),
+            last = 1,
+        }
+        local before = snapshot(env)
 
-        runClickBody(clear, env, false)
+        local placed, writes = runClickBody(clear, env, false)
 
-        assert.is_false(env.avail[1])
+        assert.is_nil(placed)
+        assert.equals(0, #writes)
+        assert.same(before, snapshot(env))
     end)
 end)
 
