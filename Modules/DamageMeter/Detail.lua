@@ -1,11 +1,12 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  DamageMeter/Detail.lua                                  ║
 -- ║  Module: Damage Meter                                    ║
--- ║  Purpose: Out-of-combat in-window detail panel — per-    ║
--- ║           source spell breakdown + C_DeathRecap timeline.║
--- ║           Swaps in over the bar viewport on bar click;   ║
--- ║           gated to out of combat (spellID is secret in   ║
--- ║           combat, so C_Spell.* on it would taint).       ║
+-- ║  Purpose: In-window detail panel -- per-source spell     ║
+-- ║           breakdown + C_DeathRecap timeline.             ║
+-- ║           Swaps in over the bar viewport on bar click.   ║
+-- ║           spellID IS secret in combat, but C_Spell.*     ║
+-- ║           accepts it and the sinks render the result,    ║
+-- ║           so in-combat rows keep real names and icons.   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -1029,8 +1030,9 @@ end
 
 -- One full pass over the EnemyDamageTaken session: for every enemy combatSource
 -- walk its combatSpells and accumulate spell.totalAmount per (player, enemy),
--- keyed by the enemy's sourceCreatureID (NeverSecret numeric; falls back to the
--- loop index if it is somehow secret) so a secret value never becomes a table key.
+-- keyed by the enemy's sourceCreatureID (carries no secrecy annotation and CAN
+-- be secret in combat; falls back to the loop index when it is, so a secret
+-- value never becomes a table key).
 -- Builds, per player, a sorted descending {name=enemyName, total=amount} list.
 -- Cached by session|sessionID -- the cache key self-invalidates whenever the
 -- pinned/live session changes.
@@ -1622,12 +1624,21 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
     local isEnemyTaken = (meterType == Enum.DamageMeterType.EnemyDamageTaken)
     local ownRow = DM.PlainOwnRow(bar._isLocalPlayer)
+    -- The tip widens with the click because they share one gate. Admitting a
+    -- click while refusing a hover on the same bar is a defect, not a choice.
+    -- No InvalidateRosterIndex here: a hover is not a commitment and can answer
+    -- from this tick's walk.
+    local tipResolvedGUID
+    if not ownRow and DM.DetailCombatActive() then
+        tipResolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,
+            W._classRowCounts and W._classRowCounts[bar._classFilename])
+    end
 
     -- REFUSED: another player's row in combat, or a view whose renderer cannot
     -- survive secret values. bar._cachedName is the last PLAIN (non-secret) name
     -- RenderBar set (nil while the name was secret) -- safe to display, never a
     -- secret string.
-    if not self:DetailEligible(bar._isLocalPlayer, meterType) then
+    if not self:DetailEligible(bar._isLocalPlayer, meterType, tipResolvedGUID) then
         return ShowTipRefusal(self, bar, headerH, size)
     end
     _tip.msg:Hide()
@@ -1834,7 +1845,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
         -- Top breakdown spells for this source (honor a pinned historical session and
         -- the Current-empty fallback -- the same segment the bars are rendering).
         local tipSessionID = self:EffectiveSessionID(W)
-        local src, refused = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, tipSessionID, ownRow)
+        local src, refused = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, tipSessionID, ownRow, tipResolvedGUID)
         -- A refused fetch is not an empty one: show the refusal rather than an
         -- empty tip, matching the click path.
         if refused then
