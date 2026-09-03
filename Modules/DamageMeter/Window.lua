@@ -1348,16 +1348,19 @@ function DM:LookupNickname(rawName)
 end
 
 -- Nickname-change hook, called from KE:RefreshNicknameTags (store imports,
--- store clears, and NSAPI's own change callback). Drops every memo so the
--- next paint re-resolves; the trailing Tick repaints immediately, because a
--- change usually lands out of combat where no ticker runs to pick it up --
+-- store clears, and NSAPI's own change callback). Drops the memos so the next
+-- paint re-resolves, with the in-combat exception below; the trailing Tick
+-- repaints immediately, because a change usually lands out of combat where
+-- no ticker runs to pick it up --
 -- Tick is safe from an arbitrary context, see the wheel handler.
 function DM:OnNicknamesChanged()
     wipe(nickLookup)
     -- nickByGUID is the only nickname source while names are secret, and it
     -- relearns on a plain tick, which does not come until combat ends. Wiping
     -- it mid-pull blanks every nickname on the meter for the rest of the fight.
-    if not InCombatLockdown() then wipe(nickByGUID) end
+    -- DetailCombatActive rather than InCombatLockdown: that flag drops when the
+    -- viewer dies, while the names stay secret.
+    if not DM.DetailCombatActive() then wipe(nickByGUID) end
     self._selfNick = nil
     if self.enabled and self.Tick then self:Tick() end
 end
