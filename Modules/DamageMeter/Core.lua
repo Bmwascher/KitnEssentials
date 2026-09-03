@@ -559,7 +559,7 @@ local function ResolveGroupGUID(playerName)
         local nm = UnitName(unit)
         if nm and not issecretvalue(nm) and nm == target then
             local guid = UnitGUID(unit)
-            if guid then
+            if guid and not issecretvalue(guid) then
                 -- The player also appears in the raid token list, so the same guid
                 -- arriving twice is not a collision.
                 if hit and hit ~= guid then
