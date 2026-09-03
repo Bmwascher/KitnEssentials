@@ -543,35 +543,52 @@ local function ResolveGroupGUID(playerName)
     local target = Ambiguate(playerName, "short")
     if not target or issecretvalue(target) then return nil end
 
+    -- EVERY match, not the first. Two group members can carry the same bare name
+    -- across realms, and the report only ever names the bare one, so a first-match
+    -- answer files one player's spec under the other's guid. That was cosmetic
+    -- while this cache only chose an icon; the ally-row tie-break now reads it as
+    -- authorization, where a wrong entry resolves a row to the wrong player and
+    -- the row counts still agree. An ambiguous name therefore stores nothing, and
+    -- the tie-break refuses on the missing spec instead.
+    local hit, ambiguous
+
     local function matchUnit(unit)
         -- UnitName's FIRST return is always the bare name (realm split into the
         -- second return) — GetUnitName(unit, false) appends FOREIGN_SERVER_LABEL
         -- ("(*)") for coalesced members and would never match the Ambiguate'd target.
         local nm = UnitName(unit)
         if nm and not issecretvalue(nm) and nm == target then
-            return UnitGUID(unit)
+            local guid = UnitGUID(unit)
+            if guid then
+                -- The player also appears in the raid token list, so the same guid
+                -- arriving twice is not a collision.
+                if hit and hit ~= guid then
+                    ambiguous = true
+                else
+                    hit = guid
+                end
+            end
         end
     end
 
     -- Self first: covers the lib's own-spec path (it reports the player's bare name).
-    local guid = matchUnit("player")
-    if guid then return guid end
+    matchUnit("player")
 
     if IsInRaid() then
         local n = GetNumGroupMembers()
         for i = 1, n do
-            guid = matchUnit(_raidUnits[i])
-            if guid then return guid end
+            matchUnit(_raidUnits[i])
         end
     elseif IsInGroup() then
         -- Party units exclude the player (already checked above).
         local n = GetNumGroupMembers() - 1
         for i = 1, n do
-            guid = matchUnit(_partyUnits[i])
-            if guid then return guid end
+            matchUnit(_partyUnits[i])
         end
     end
-    return nil
+
+    if ambiguous then return nil end
+    return hit
 end
 
 -- LibSpec group callback: a member's spec/role was reported over comms. Cache the

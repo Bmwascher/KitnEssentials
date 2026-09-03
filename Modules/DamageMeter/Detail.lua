@@ -337,8 +337,10 @@ function DM:OpenDetail(bar, button)
     -- short-circuits to true before any of this matters. The memo is dropped
     -- first: a click must answer from the roster as it is now, not as the last
     -- tick found it.
+    -- Deaths is admitted on its own and never consults the resolved guid, so
+    -- resolving for it would buy a roster walk per tick and spend it on nothing.
     local resolvedGUID
-    if not ownRow and DM.DetailCombatActive() then
+    if not ownRow and openType ~= Enum.DamageMeterType.Deaths and DM.DetailCombatActive() then
         self:InvalidateRosterIndex()
         resolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,
             W._classRowCounts and W._classRowCounts[bar._classFilename])
