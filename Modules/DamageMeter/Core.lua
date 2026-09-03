@@ -1579,6 +1579,35 @@ function DM.MatchRowToRoster(members, classFilename, specIconID, rowsOfClass)
     return hit.guid
 end
 
+-- Per-BATCH memo over the roster walk. Several docked windows with ally panels
+-- open in one render batch therefore cost ONE walk between them, not one each.
+-- Cleared at every tick, again at the deferred render batch, and again before a
+-- click resolves, so an answer is never older than the render that consumes it --
+-- this is a within-batch saving, never a cache that can go stale. A tick that
+-- spills its frame budget pays two walks, one per batch; an ordinary tick pays
+-- one. A poisoned walk memoizes as false so a failing roster is not re-walked
+-- once per panel.
+function DM:RosterIndex()
+    local idx = self._rosterIndex
+    if idx == nil then
+        idx = DM.BuildRosterIndex() or false
+        self._rosterIndex = idx
+    end
+    if idx == false then return nil end
+    return idx
+end
+
+function DM:InvalidateRosterIndex()
+    self._rosterIndex = nil
+end
+
+-- Resolve an ally row to a plain GUID. Reached ONLY for an ally row in combat:
+-- the own row keeps its own substitution and the Deaths view never consults
+-- identity, so no path that works today pays for any of this.
+function DM:ResolveAllyGUID(classFilename, specIconID, rowsOfClass)
+    return DM.MatchRowToRoster(self:RosterIndex(), classFilename, specIconID, rowsOfClass)
+end
+
 -- May a detail panel open, and stay open? The single gate every detail path
 -- consults -- click, hover, combat-start, and the tick refresh.
 --
@@ -2729,6 +2758,13 @@ function DM:Tick()
     self._sessionCache = self._sessionCache or {}
     wipe(self._sessionCache)
 
+    -- One roster walk per render batch at most, and never one held across ticks.
+    -- This belongs beside the session-cache wipe on the PUBLIC entry point: a dozen
+    -- call sites reach DM:Tick directly and never pass through DM:_RunTick, and
+    -- at least one of them fires in combat, which would leave an open panel
+    -- re-judging itself against a roster walk from an earlier tick.
+    self._rosterIndex = nil
+
     local frameStart = debugprofilestop()
     local budget = (self.db and self.db.UIBudgetMs) or 1.2
 
@@ -2753,6 +2789,14 @@ function DM:Tick()
 
     if deferred then
         C_Timer.After(0, function()
+            -- This batch runs a frame LATER than the clear above, so its windows
+            -- would otherwise re-judge an open panel against a walk taken before
+            -- this frame. A group change landing in that gap leaves a departed
+            -- player still resolvable, and a panel open on them survives one
+            -- render it should have closed on. One extra walk, and only on a tick
+            -- that already spilled its budget -- the walk itself lands on the
+            -- next frame, not on the one that ran long.
+            DM._rosterIndex = nil
             for _, W in ipairs(deferred) do
                 DM:RenderWindowAndDetail(W)
             end
