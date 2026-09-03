@@ -122,6 +122,7 @@ local NSRT_ADDON_KEY = "GlobalNickNames"
 -- real name no longer matches what was asked, and reads as a nickname below.
 -- issecretvalue precedes type() because NSAPI passes a secret straight back
 -- for a restricted identity, and type() on a secret is illegal in itself.
+-- pcall because a third-party fault must not stop names drawing.
 ---@param subject string unit token, "Name" or "Name-Realm"
 ---@return string|nil nickname
 function KE:GetNSRTNickname(subject)
