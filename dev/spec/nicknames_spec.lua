@@ -465,3 +465,29 @@ describe("Nicknames.lua ResolveNicknamePrecedence", function()
         assert.equals("Bobby", KE:ResolveNicknamePrecedence(nil, "Bobby", "Bob-Realm"))
     end)
 end)
+
+-- The predicate above proves the decision; this proves GetNicknameOrName
+-- reaches the foreign source at all and survives it failing. A one-call stub,
+-- not a stateful fake: it holds no state and answers from its argument.
+-- Loader unit identity is "Bob" on "Realm".
+describe("Nicknames.lua GetNicknameOrName with a foreign source", function()
+    local KE
+    before_each(function() KE = L.loadNicknames() end)
+    after_each(function() _G.NSAPI = nil end)
+
+    it("returns a foreign nickname when KE's store has none", function()
+        _G.NSAPI = { GetName = function() return "Foreign" end }
+        assert.equals("Foreign", KE:GetNicknameOrName("player"))
+    end)
+
+    it("keeps KE's own nickname ahead of the foreign one", function()
+        KE.db.global.Nicknames["Bob-Realm"] = "Bobby"
+        _G.NSAPI = { GetName = function() return "Foreign" end }
+        assert.equals("Bobby", KE:GetNicknameOrName("player"))
+    end)
+
+    it("survives a foreign source that throws", function()
+        _G.NSAPI = { GetName = function() error("provider exploded") end }
+        assert.equals("Bob", KE:GetNicknameOrName("player"))
+    end)
+end)
