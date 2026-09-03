@@ -468,7 +468,7 @@ end)
 
 -- The predicate above proves the decision; this proves GetNicknameOrName
 -- reaches the foreign source at all and survives it failing. A one-call stub,
--- not a stateful fake: it holds no state and answers from its argument.
+-- not a stateful fake: it holds no state.
 -- Loader unit identity is "Bob" on "Realm".
 describe("Nicknames.lua GetNicknameOrName with a foreign source", function()
     local KE
