@@ -34,7 +34,6 @@ end
 -- wrap's own "self,button,down" signature.
 local function runClickBody(body, env, down)
     local chunk = assert(loadstring("local self, button, down = ...\n" .. body))
-    env.next = next
     setfenv(chunk, env)
     local placed
     local writes = {}
@@ -48,14 +47,28 @@ local function runClickBody(body, env, down)
     return placed, writes
 end
 
--- Deep copy of everything a body is allowed to touch, so a refusal case can
--- compare the WHOLE environment rather than sampling one position.
+-- The environment a click body sees. `next` belongs to it rather than being
+-- injected at call time, so a caller's snapshot covers everything the body can
+-- reach and the runner never mutates what it is measuring.
+local function newClickEnv(fields)
+    local env = { next = next }
+    for k, v in pairs(fields) do env[k] = v end
+    return env
+end
+
+-- Deep copy of EVERY environment key, so a refusal case fails on a stray global
+-- as well as on a changed one. A snippet's global write persists in the real
+-- managed environment, so an unexpected new key is a real defect, not noise.
 local function snapshot(env)
-    local copy = { last = env.last, avail = {} }
-    for k, v in pairs(env.avail) do copy.avail[k] = v end
-    if env.order then
-        copy.order = {}
-        for k, v in pairs(env.order) do copy.order[k] = v end
+    local copy = {}
+    for k, v in pairs(env) do
+        if type(v) == "table" then
+            local t = {}
+            for tk, tv in pairs(v) do t[tk] = tv end
+            copy[k] = t
+        else
+            copy[k] = v
+        end
     end
     return copy
 end
@@ -76,7 +89,7 @@ describe("WorldMarkerCycler marker selection", function()
     it("places the first free position and records it as the last placement", function()
         local cycle = bodies()
         local order = { 5, 3, 8, 1, 7, 2, 6, 4 }
-        local env = { order = order, avail = availOf({ [1] = true, [2] = true }), last = 2 }
+        local env = newClickEnv({ order = order, avail = availOf({ [1] = true, [2] = true }), last = 2 })
 
         local placed = runClickBody(cycle, env, true)
 
@@ -97,10 +110,10 @@ describe("WorldMarkerCycler marker selection", function()
         }
         for _, case in ipairs(cases) do
             local order = { 1, 2, 3, 4, 5, 6, 7, 8 }
-            local env = { order = order, avail = availOf({
+            local env = newClickEnv({ order = order, avail = availOf({
                 [1] = true, [2] = true, [3] = true, [4] = true,
                 [5] = true, [6] = true, [7] = true, [8] = true,
-            }), last = case.last }
+            }), last = case.last })
 
             local placed = runClickBody(cycle, env, true)
 
@@ -119,7 +132,7 @@ describe("WorldMarkerCycler marker selection", function()
             { name = "empty order", order = {}, down = true },
         }
         for _, case in ipairs(cases) do
-            local env = { order = case.order, avail = availOf({}), last = 4 }
+            local env = newClickEnv({ order = case.order, avail = availOf({}), last = 4 })
             local before = snapshot(env)
 
             local placed, writes = runClickBody(cycle, env, case.down)
@@ -135,10 +148,10 @@ describe("WorldMarkerCycler clear reset", function()
     it("frees every position on key-down and leaves the order alone", function()
         local _, clear = bodies()
         local order = { 5, 3, 8, 1, 7, 2, 6, 4 }
-        local env = { order = order, avail = availOf({
+        local env = newClickEnv({ order = order, avail = availOf({
             [1] = true, [2] = true, [3] = true, [4] = true,
             [5] = true, [6] = true, [7] = true, [8] = true,
-        }), last = 6 }
+        }), last = 6 })
 
         local _, writes = runClickBody(clear, env, true)
 
@@ -150,11 +163,11 @@ describe("WorldMarkerCycler clear reset", function()
 
     it("does nothing at all on key-up", function()
         local _, clear = bodies()
-        local env = {
+        local env = newClickEnv({
             order = { 5, 3, 8, 1, 7, 2, 6, 4 },
             avail = availOf({ [1] = true, [4] = true, [7] = true }),
             last = 1,
-        }
+        })
         local before = snapshot(env)
 
         local placed, writes = runClickBody(clear, env, false)
