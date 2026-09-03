@@ -1705,8 +1705,8 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     bar._classFilename = src.classFilename
     -- specIconID is NeverSecret and is the tie-break for the in-combat ally-row
     -- join. bar._cachedIconID cannot serve: it is a repaint SIGNATURE that holds
-    -- the class token whenever the spec is unresolved, so it is a string exactly
-    -- when the spec is the thing we needed.
+    -- the class token whenever the spec is unresolved, so it is a string in the
+    -- one case the tie-break needs a spec.
     bar._specIconID = src.specIconID
     -- isLocalPlayer drives the in-combat detail gate: it is the only identity
     -- the API guarantees readable mid-fight, so it is what decides whether a

@@ -390,7 +390,8 @@ function DM:OpenDetail(bar, button)
     W._detailOwnRow = ownRow
     -- The join's inputs and its answer, both stored for the tick re-judge, which
     -- does not receive the bar. The answer is re-derived there rather than
-    -- trusted: this pair detects drift, it never authorizes.
+    -- trusted: the stored pair is compared against a fresh result, and is never
+    -- used on its own to admit anything.
     W._detailResolvedGUID = resolvedGUID
     W._detailSpecIconID = bar._specIconID
     W._detailMeterType = openType
@@ -450,13 +451,12 @@ function DM:RenderWindowAndDetail(W)
     -- Eligibility against the CURRENT view and the snapshotted plain own-row answer.
     -- The snapshot detects drift; it never authorizes. Out of combat the predicate
     -- short-circuits to true, so nothing here restricts what already worked.
-    -- Re-resolve and COMPARE. The stored answer detects drift; it never
-    -- authorizes -- so an answer that DIFFERS closes the panel instead of
-    -- replacing the subject underneath it. Overwriting here would silently
-    -- repoint an open panel at a replacement player (a leaver swapped for a
-    -- same-class joiner between ticks) and render their damage under the row
-    -- that was clicked, with no name on the panel to reveal it. Both values are
-    -- plain strings read from group unit tokens, so the comparison is legal.
+    -- Re-resolve and COMPARE. A fresh answer that DIFFERS closes the panel
+    -- rather than replacing its subject. Overwriting instead would repoint an
+    -- open panel at a replacement player (a leaver swapped for a same-class
+    -- joiner between ticks) and render their damage under the clicked row, with
+    -- no name on the panel to show it had changed. Both values are plain strings
+    -- read from group unit tokens, so the comparison is legal.
     if W._detailResolvedGUID then
         local fresh = self:ResolveAllyGUID(W._detailClass, W._detailSpecIconID,
             W._classRowCounts and W._classRowCounts[W._detailClass])
@@ -1625,10 +1625,10 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
     local isEnemyTaken = (meterType == Enum.DamageMeterType.EnemyDamageTaken)
     local ownRow = DM.PlainOwnRow(bar._isLocalPlayer)
-    -- The tip widens with the click because they share one gate. Admitting a
-    -- click while refusing a hover on the same bar is a defect, not a choice.
-    -- No InvalidateRosterIndex here: a hover is not a commitment and can answer
-    -- from this tick's walk.
+    -- The tip widens with the click because they share one gate; admitting a
+    -- click while refusing a hover on the same bar would be inconsistent.
+    -- No InvalidateRosterIndex here: a hover opens nothing, so answering from
+    -- this tick's walk is enough.
     local tipResolvedGUID
     if not ownRow and DM.DetailCombatActive() then
         tipResolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,

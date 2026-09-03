@@ -3,11 +3,11 @@
 -- ║  Roster join decision table for an in-combat ally row.   ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- WHY THIS EARNS A SPEC: it is a refusal rule whose wrong answers are silent.
--- A bad match does not throw -- it fetches another player's damage and renders
--- it under the clicked row's name. Every row below that refuses is a row no
--- other check defends, and the same-class-same-spec case cannot currently be
--- smoked at all (no twin pair is available), so this file is its only evidence.
+-- WHY THIS EARNS A SPEC: it is a refusal rule whose wrong answers produce no
+-- error. A bad match fetches another player's damage and renders it under the
+-- clicked row's name. Each refusing case below is one no other check covers, and
+-- the same-class-same-spec case cannot be smoked at all right now (no twin pair
+-- is available), so this file is its only evidence.
 --
 -- MatchRowToRoster is PURE over a plain table, so there is no fake of
 -- C_DamageMeter here and none is needed. Membership tables are written inline.
@@ -107,8 +107,9 @@ describe("MatchRowToRoster refuses rather than guessing", function()
 
     it("lets a player and a same-class ally resolve -- the tally excludes the own row", function()
         -- Both sides must describe the same population. The roster excludes the
-        -- player, so the row tally must too; counting the own row on one side only
-        -- made a player and an ally of one class refuse each other as a surplus.
+        -- player, so the row tally must too. Counting the own row on one side
+        -- only made a player and an ally of one class refuse each other as a
+        -- surplus.
         local members = { member("guid-ally-war", "WARRIOR", 11) }
         assert.equals("guid-ally-war", DM.MatchRowToRoster(members, "WARRIOR", 11, 1))
     end)
@@ -157,8 +158,8 @@ describe("BuildRosterIndex fails closed on an unreadable member", function()
 
     it("returns nil -- NOT the readable remainder -- when one member is secret", function()
         -- The failure this defends: dropping the unreadable warrior leaves ONE
-        -- warrior in the index, so a warrior row resolves to whichever one
-        -- happened to be readable. Silently, and to the wrong player.
+        -- warrior in the index, so a warrior row resolves to whichever one was
+        -- readable, with no error and to the wrong player.
         local dm = loadWithRoster(
             { party1 = "WARRIOR", party2 = "WARRIOR" },
             { party1 = "guid-1",  party2 = SECRET })

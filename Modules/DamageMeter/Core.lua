@@ -544,12 +544,13 @@ local function ResolveGroupGUID(playerName)
     if not target or issecretvalue(target) then return nil end
 
     -- EVERY match, not the first. Two group members can carry the same bare name
-    -- across realms, and the report only ever names the bare one, so a first-match
-    -- answer files one player's spec under the other's guid. That was cosmetic
-    -- while this cache only chose an icon; the ally-row tie-break now reads it as
-    -- authorization, where a wrong entry resolves a row to the wrong player and
-    -- the row counts still agree. An ambiguous name therefore stores nothing, and
-    -- the tie-break refuses on the missing spec instead.
+    -- across realms, and the report only names the bare one, so a first-match
+    -- answer stores one player's spec under the other's guid. That was a wrong
+    -- icon while this cache only chose an icon. The ally-row tie-break now reads
+    -- it to decide identity, and a wrong entry there resolves a row to the wrong
+    -- player while the row counts still agree, so nothing downstream catches it.
+    -- An ambiguous name stores nothing and the tie-break refuses on the missing
+    -- spec.
     local hit, ambiguous
 
     local function matchUnit(unit)
@@ -1173,7 +1174,7 @@ function DM:OnRegenDisabled()
                         -- authorizes nothing now. Clear it rather than re-resolving:
                         -- an ally panel then fails the gate and closes, which is
                         -- exactly what shipped before ally rows were resolvable.
-                        -- Re-resolving here would mint a fresh authorization the
+                        -- Re-resolving here would create a new authorization the
                         -- user never asked for, at the moment the data goes secret.
                         W._detailResolvedGUID = nil
                         keep = self:DetailEligible(W._detailOwnRow, nowType, nil)
@@ -1480,15 +1481,16 @@ DM.DetailCombatActive = DetailCombatActive
 --
 -- This is legal mid-fight because identity secrecy exempts party and raid
 -- members, while the SAME player's identity arriving through the meter API does
--- not. That asymmetry is the entire bridge: the row cannot say who it is, the
--- roster can, and both carry a NeverSecret class to join on.
+-- not. The row's GUID is secret and the roster's is not, and both sides carry a
+-- NeverSecret class, which is what the join uses.
 --
 -- Returns nil -- never a partial list -- when a unit that EXISTS cannot be read.
 -- Dropping an unreadable member would collapse two same-class members into one
--- apparent match and resolve a row to the wrong player, silently. An ABSENT unit
--- is not a member and is simply skipped, or every group under 40 would refuse.
+-- apparent match, which resolves a row to the wrong player with no error. An
+-- ABSENT unit is not a member and is skipped, or every group under 40 would
+-- refuse.
 --
--- The player is excluded on purpose. An own row never reaches this path, so
+-- The player is excluded deliberately. An own row never reaches this path, so
 -- leaving the player out lets a player-plus-ally same-spec pair resolve instead
 -- of refusing.
 function DM.BuildRosterIndex()
@@ -1535,12 +1537,12 @@ function DM.BuildRosterIndex()
 end
 
 -- Scratch reused across calls: the match runs on the tick path while an ally
--- panel is open, and a fresh table per call would churn garbage there.
+-- panel is open, and a fresh table per call would allocate on every tick.
 local matchScratch = {}
 
--- A spec icon we can actually discriminate on. The client leaves specIconID nil
--- for a player it has not resolved -- in a pug commonly everyone -- and reports 0
--- for a mob. Both mean "unknown", and neither may narrow anything.
+-- A spec icon that can discriminate. The client leaves specIconID nil for a
+-- player it has not resolved, which in a pug is commonly everyone, and reports 0
+-- for a mob. Both mean "unknown" and neither narrows anything.
 local function KnownSpec(v)
     return type(v) == "number" and v ~= 0
 end
@@ -1549,13 +1551,13 @@ end
 -- row's two NeverSecret fields, so the whole decision is testable without the
 -- meter. Returns a plain GUID, or nil and a reason.
 --
--- Spec is a TIE-BREAK, never a requirement. Class is plainly readable on both
--- sides always; spec often is not. Demanding a spec would refuse most pug rows
--- for no safety gain, because a lone member of a class is unambiguous whatever
--- their spec is.
+-- Spec is a TIE-BREAK, never a requirement. Class is always plainly readable on
+-- both sides; spec often is not. Requiring a spec would refuse most pug rows for
+-- no safety gain, because a lone member of a class is unambiguous whatever their
+-- spec is.
 --
--- Every uncertain case refuses. Showing one player's damage under another
--- player's name is silent and unrecoverable, so nothing here guesses.
+-- Every uncertain case refuses, because a wrong match shows one player's damage
+-- under another player's name with no error and no way for the user to notice.
 -- rowsOfClass is how many sources of this class the session holds, excluding the
 -- player's own. The roster answers "who could this row be"; only the source list
 -- answers "is this row one of them". More sources than members means a
@@ -1579,8 +1581,8 @@ function DM.MatchRowToRoster(members, classFilename, specIconID, rowsOfClass)
     if n == 0 then return nil, "nomatch" end
 
     -- Surplus rows: an entity the roster cannot account for. Tested BEFORE the
-    -- lone-member fast path, because that path is exactly the one a stale leaver
-    -- row would otherwise sail through.
+    -- lone-member fast path, because that path is the one a stale leaver row
+    -- would otherwise pass.
     if type(rowsOfClass) ~= "number" then return nil, "rowcount" end
     if rowsOfClass > n then return nil, "surplus" end
 
@@ -1591,9 +1593,9 @@ function DM.MatchRowToRoster(members, classFilename, specIconID, rowsOfClass)
     local hit
     for i = 1, n do
         local m = matchScratch[i]
-        -- A candidate whose spec is unknown could BE this row. Refusing on it is
-        -- what stops a half-resolved roster from narrowing to the one member it
-        -- happens to know about.
+        -- A candidate whose spec is unknown could BE this row. Refusing on it
+        -- stops a half-resolved roster from narrowing to the one member whose
+        -- spec happens to be known.
         if not KnownSpec(m.spec) then return nil, "specunknown" end
         if m.spec == specIconID then
             if hit then return nil, "ambiguous" end
@@ -1607,11 +1609,11 @@ end
 -- Per-BATCH memo over the roster walk. Several docked windows with ally panels
 -- open in one render batch therefore cost ONE walk between them, not one each.
 -- Cleared at every tick, again at the deferred render batch, and again before a
--- click resolves, so an answer is never older than the render that consumes it --
--- this is a within-batch saving, never a cache that can go stale. A tick that
--- spills its frame budget pays two walks, one per batch; an ordinary tick pays
--- one. A poisoned walk memoizes as false so a failing roster is not re-walked
--- once per panel.
+-- click resolves, so an answer is never older than the render that consumes it.
+-- It saves work within one batch and is not a cache that outlives one. A tick
+-- that spills its frame budget does two walks, one per batch; an ordinary tick
+-- does one. A poisoned walk memoizes as false so a failing roster is not
+-- re-walked once per panel.
 function DM:RosterIndex()
     local idx = self._rosterIndex
     if idx == nil then
@@ -1626,9 +1628,9 @@ function DM:InvalidateRosterIndex()
     self._rosterIndex = nil
 end
 
--- Resolve an ally row to a plain GUID. Reached ONLY for an ally row in combat:
--- the own row keeps its own substitution and the Deaths view never consults
--- identity, so no path that works today pays for any of this.
+-- Resolve an ally row to a plain GUID. Reached ONLY for an ally row in combat.
+-- The own row keeps its own substitution and the Deaths view never consults
+-- identity, so neither runs any of this.
 function DM:ResolveAllyGUID(classFilename, specIconID, rowsOfClass)
     return DM.MatchRowToRoster(self:RosterIndex(), classFilename, specIconID, rowsOfClass)
 end
@@ -1647,9 +1649,9 @@ end
 --   * isLocalPlayer is the only identity the SOURCE STRUCT guarantees readable
 --     mid-fight (NeverSecret). issecretvalue is tested BEFORE the comparison so
 --     a wrong annotation costs the feature instead of throwing. It is NOT the
---     only readable identity in the game: a group unit token's GUID and class
---     stay plain in combat, which is what the resolved-row arm below joins
---     against. The struct is secret; the roster is not.
+--     only readable identity available: a group unit token's GUID and class stay
+--     plain in combat, and the resolved-row arm below joins against those. The
+--     source struct is secret, the roster read is not.
 --   * A resolved ally row is admitted on that join. The row's own secret
 --     identity is never read, and an unmatched or ambiguous row refuses.
 --   * Deaths is ADMITTED, for every row and without consulting the identity at
@@ -2844,9 +2846,9 @@ function DM:Tick()
             -- would otherwise re-judge an open panel against a walk taken before
             -- this frame. A group change landing in that gap leaves a departed
             -- player still resolvable, and a panel open on them survives one
-            -- render it should have closed on. One extra walk, and only on a tick
-            -- that already spilled its budget -- the walk itself lands on the
-            -- next frame, not on the one that ran long.
+            -- render it should have closed on. This costs one extra walk, only
+            -- on a tick that already spilled its budget, and the walk runs on the
+            -- next frame rather than on the one that ran long.
             DM._rosterIndex = nil
             for _, W in ipairs(deferred) do
                 DM:RenderWindowAndDetail(W)
