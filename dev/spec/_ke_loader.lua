@@ -216,6 +216,14 @@ function L.loadDMCore(overrides)
     -- DM:Tick's per-frame budget reads this, and the reset paths reach Tick
     -- without History.lua loaded, which is what otherwise supplies it.
     _G.debugprofilestop = _G.debugprofilestop or function() return 0 end
+    -- Core.lua captures the three group predicates as file-scope upvalues, so an
+    -- override applied after this loader returns never reaches the roster walk.
+    -- UnitClass is read at call time and is set here for symmetry.
+    local ov = overrides or {}
+    _G.IsInRaid = ov.IsInRaid or function() return false end
+    _G.IsInGroup = ov.IsInGroup or function() return false end
+    _G.GetNumGroupMembers = ov.GetNumGroupMembers or function() return 0 end
+    _G.UnitClass = ov.UnitClass or function() return "Warrior", "WARRIOR", 1 end
     local KE = { Print = function() end, CombatState = newFakeCombatState() }
     helpers.loadModule("Modules/DamageMeter/Core.lua", KE)
     return KE.DamageMeter, KE

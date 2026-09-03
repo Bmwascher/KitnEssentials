@@ -1450,6 +1450,65 @@ end
 -- same way, or the gate and the renderers will disagree about which data is secret.
 DM.DetailCombatActive = DetailCombatActive
 
+-- The roster half of the in-combat ally-row join: every group member EXCEPT the
+-- player, as plain { guid, class, spec } entries.
+--
+-- This is legal mid-fight because identity secrecy exempts party and raid
+-- members, while the SAME player's identity arriving through the meter API does
+-- not. That asymmetry is the entire bridge: the row cannot say who it is, the
+-- roster can, and both carry a NeverSecret class to join on.
+--
+-- Returns nil -- never a partial list -- when a unit that EXISTS cannot be read.
+-- Dropping an unreadable member would collapse two same-class members into one
+-- apparent match and resolve a row to the wrong player, silently. An ABSENT unit
+-- is not a member and is simply skipped, or every group under 40 would refuse.
+--
+-- The player is excluded on purpose. An own row never reaches this path, so
+-- leaving the player out lets a player-plus-ally same-spec pair resolve instead
+-- of refusing.
+function DM.BuildRosterIndex()
+    local members = {}
+
+    local units, n
+    if IsInRaid() then
+        units, n = _raidUnits, GetNumGroupMembers()
+    elseif IsInGroup() then
+        -- Party tokens exclude the player, so the count does too.
+        units, n = _partyUnits, (GetNumGroupMembers() or 0) - 1
+    else
+        return members
+    end
+    if type(n) ~= "number" then return nil end
+    if n > #units then n = #units end
+
+    -- issecretvalue FIRST, before the type test -- the guard is
+    -- AllowedWhenUntainted and a comparison ahead of it can taint the path.
+    local playerGUID = UnitGUID("player")
+    if issecretvalue(playerGUID) or type(playerGUID) ~= "string" then return nil end
+
+    for i = 1, n do
+        local unit = units[i]
+        if UnitExists(unit) then
+            local guid = UnitGUID(unit)
+            if issecretvalue(guid) then return nil end
+            local _, class = UnitClass(unit)
+            if issecretvalue(class) then return nil end
+            if type(guid) ~= "string" or guid == "" then return nil end
+            if type(class) ~= "string" or class == "" then return nil end
+            if guid ~= playerGUID then
+                members[#members + 1] = {
+                    guid = guid,
+                    class = class,
+                    -- nil when the comms have not landed; the matcher treats
+                    -- that as unknown and refuses to narrow on it.
+                    spec = DM.specIconByGUID[guid],
+                }
+            end
+        end
+    end
+    return members
+end
+
 -- Scratch reused across calls: the match runs on the tick path while an ally
 -- panel is open, and a fresh table per call would churn garbage there.
 local matchScratch = {}

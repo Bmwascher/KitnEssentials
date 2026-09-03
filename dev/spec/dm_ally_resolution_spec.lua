@@ -127,3 +127,74 @@ describe("MatchRowToRoster refuses rather than guessing", function()
         assert.equals("nomatch", why)
     end)
 end)
+
+describe("BuildRosterIndex fails closed on an unreadable member", function()
+    local SECRET = { __secret = true }
+
+    local function loadWithRoster(classOf, guidOf)
+        return L.loadDMCore({
+            IsInRaid = function() return false end,
+            IsInGroup = function() return true end,
+            GetNumGroupMembers = function() return 4 end,
+            UnitExists = function(u) return classOf[u] ~= nil end,
+            UnitGUID = function(u)
+                if u == "player" then return "guid-player" end
+                return guidOf[u]
+            end,
+            UnitClass = function(u) return "Localized", classOf[u] end,
+        })
+    end
+
+    it("returns every readable member when the whole roster reads plain", function()
+        local dm = loadWithRoster(
+            { party1 = "WARRIOR", party2 = "MAGE" },
+            { party1 = "guid-1",  party2 = "guid-2" })
+        local members = dm.BuildRosterIndex()
+        assert.equals(2, #members)
+        assert.equals("WARRIOR", members[1].class)
+        assert.equals("guid-1", members[1].guid)
+    end)
+
+    it("returns nil -- NOT the readable remainder -- when one member is secret", function()
+        -- The failure this defends: dropping the unreadable warrior leaves ONE
+        -- warrior in the index, so a warrior row resolves to whichever one
+        -- happened to be readable. Silently, and to the wrong player.
+        local dm = loadWithRoster(
+            { party1 = "WARRIOR", party2 = "WARRIOR" },
+            { party1 = "guid-1",  party2 = SECRET })
+        assert.is_nil(dm.BuildRosterIndex())
+    end)
+
+    it("returns nil when a member's CLASS is secret", function()
+        local dm = L.loadDMCore({
+            IsInRaid = function() return false end,
+            IsInGroup = function() return true end,
+            GetNumGroupMembers = function() return 4 end,
+            UnitExists = function(u) return u == "party1" end,
+            UnitGUID = function() return "guid-1" end,
+            UnitClass = function() return "Localized", SECRET end,
+        })
+        assert.is_nil(dm.BuildRosterIndex())
+    end)
+
+    it("skips an ABSENT unit rather than poisoning -- an empty slot is not a member", function()
+        local dm = loadWithRoster({ party1 = "WARRIOR" }, { party1 = "guid-1" })
+        local members = dm.BuildRosterIndex()
+        assert.equals(1, #members)
+    end)
+
+    it("excludes the local player, so a player+ally same-spec pair still resolves", function()
+        local dm = loadWithRoster(
+            { party1 = "WARRIOR" },
+            { party1 = "guid-player" })
+        assert.equals(0, #dm.BuildRosterIndex())
+    end)
+
+    it("returns an empty index when solo", function()
+        local dm = L.loadDMCore({
+            IsInRaid = function() return false end,
+            IsInGroup = function() return false end,
+        })
+        assert.equals(0, #dm.BuildRosterIndex())
+    end)
+end)

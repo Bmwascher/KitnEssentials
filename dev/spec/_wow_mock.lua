@@ -141,7 +141,7 @@ function M.reset()
         "C_Secrets", "C_UnitAuras", "C_Spell", "UnitCastingInfo", "UnitChannelInfo",
         "UnitClass", "PlaySoundFile", "StopSound", "PlayerUtil", "RunNextFrame",
         "GetUnitEmpowerMinHoldTime", "LibStub",
-        "GetNumGroupMembers", "IsInRaid", "UnitGroupRolesAssigned",
+        "GetNumGroupMembers", "IsInRaid", "IsInGroup", "UnitGroupRolesAssigned",
         "GetSpecialization", "GetSpecializationInfo", "C_SpecializationInfo", "UIParent",
         "C_SpellActivationOverlay", "UnitAffectingCombat",
         "IsMounted", "UnitOnTaxi", "UnitInVehicle", "UnitHasVehicleUI",
