@@ -1450,6 +1450,76 @@ end
 -- same way, or the gate and the renderers will disagree about which data is secret.
 DM.DetailCombatActive = DetailCombatActive
 
+-- Scratch reused across calls: the match runs on the tick path while an ally
+-- panel is open, and a fresh table per call would churn garbage there.
+local matchScratch = {}
+
+-- A spec icon we can actually discriminate on. The client leaves specIconID nil
+-- for a player it has not resolved -- in a pug commonly everyone -- and reports 0
+-- for a mob. Both mean "unknown", and neither may narrow anything.
+local function KnownSpec(v)
+    return type(v) == "number" and v ~= 0
+end
+
+-- Which group member does this row belong to? PURE over the roster index plus the
+-- row's two NeverSecret fields, so the whole decision is testable without the
+-- meter. Returns a plain GUID, or nil and a reason.
+--
+-- Spec is a TIE-BREAK, never a requirement. Class is plainly readable on both
+-- sides always; spec often is not. Demanding a spec would refuse most pug rows
+-- for no safety gain, because a lone member of a class is unambiguous whatever
+-- their spec is.
+--
+-- Every uncertain case refuses. Showing one player's damage under another
+-- player's name is silent and unrecoverable, so nothing here guesses.
+-- rowsOfClass is how many sources of this class the session holds, excluding the
+-- player's own. The roster answers "who could this row be"; only the source list
+-- answers "is this row one of them". More sources than members means a
+-- class-bearing entity is present that the roster cannot account for -- a
+-- departed player's row that outlived their group membership -- and there is no
+-- way to tell which row is which. Equal counts are the ordinary case, including
+-- a legitimate two-members-two-rows tie-break, so this refuses only the surplus.
+function DM.MatchRowToRoster(members, classFilename, specIconID, rowsOfClass)
+    if type(members) ~= "table" then return nil, "roster" end
+    if type(classFilename) ~= "string" or classFilename == "" then return nil, "noclass" end
+
+    wipe(matchScratch)
+    for i = 1, #members do
+        local m = members[i]
+        if m and m.class == classFilename then
+            matchScratch[#matchScratch + 1] = m
+        end
+    end
+
+    local n = #matchScratch
+    if n == 0 then return nil, "nomatch" end
+
+    -- Surplus rows: an entity the roster cannot account for. Tested BEFORE the
+    -- lone-member fast path, because that path is exactly the one a stale leaver
+    -- row would otherwise sail through.
+    if type(rowsOfClass) ~= "number" then return nil, "rowcount" end
+    if rowsOfClass > n then return nil, "surplus" end
+
+    if n == 1 then return matchScratch[1].guid end
+
+    if not KnownSpec(specIconID) then return nil, "specunknown" end
+
+    local hit
+    for i = 1, n do
+        local m = matchScratch[i]
+        -- A candidate whose spec is unknown could BE this row. Refusing on it is
+        -- what stops a half-resolved roster from narrowing to the one member it
+        -- happens to know about.
+        if not KnownSpec(m.spec) then return nil, "specunknown" end
+        if m.spec == specIconID then
+            if hit then return nil, "ambiguous" end
+            hit = m
+        end
+    end
+    if not hit then return nil, "nomatch" end
+    return hit.guid
+end
+
 -- May a detail panel open, and stay open? The single gate every detail path
 -- consults -- click, hover, combat-start, and the tick refresh.
 --
