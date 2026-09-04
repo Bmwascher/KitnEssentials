@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.34
+
+### Secondary Stats Display
+- **NEW:** A movable readout for Crit, Haste, Mastery and Versatility, with
+  optional Leech, Avoidance and Speed. Each stat can show a percentage, a
+  rating, or both, with decimal places, separator and label style settings, and
+  full Edit Mode placement
+
+---
+
 ## v4.4.33
 
 ### World Markers
