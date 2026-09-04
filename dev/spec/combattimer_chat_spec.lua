@@ -24,6 +24,7 @@ describe("combat timer chat line", function()
             newCT({
                 PlayerJoined = function() return case.playerJoined end,
                 GetDuration = function() return 12 end,
+                GetEngagementDuration = function() return 12 end,
             })
             CT.db.ShowChatMessage = case.showChatMessage
             CT:OnStop(case.reason)
@@ -35,6 +36,7 @@ describe("combat timer chat line", function()
         newCT({
             PlayerJoined = function() return true end,
             GetDuration = function() return 12 end,
+            GetEngagementDuration = function() return 12 end,
         })
         CT:OnStop("combat")
         assert.equals(1, printed)
