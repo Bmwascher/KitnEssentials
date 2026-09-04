@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-PresetSwatches.lua                                  ║
--- ║  Purpose: Theme preset selector — labelled grid or        ║
--- ║  compact chip strip.                                     ║
+-- ║  Purpose: Theme preset selector — a strip of colour      ║
+-- ║  chips with the preset name on hover.                    ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -11,21 +11,17 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local table_insert = table.insert
 local ipairs = ipairs
-local math_floor = math.floor
 local type = type
 
 ---------------------------------------------------------------------------------
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- Preset swatch selector — config-table API: { compact, value, callback }.
--- `compact` renders a fixed-spacing chip strip with tooltips instead of
--- labels; the default is a labelled 4-column grid.
+-- Preset swatch selector — config-table API: { value, callback }.
 function GUIFrame:CreatePresetSwatches(parent, config)
     if type(config) ~= "table" then
         config = {}
     end
-    local compact = config.compact
     local currentPreset = config.value
     local onSelect = config.callback
     local presets = KE.ThemePresets
@@ -34,189 +30,79 @@ function GUIFrame:CreatePresetSwatches(parent, config)
     local container = CreateFrame("Frame", nil, parent)
     local buttons = {}
 
-    if compact then
-        -- Matches the dropdown control box in GUI-KEDropdown.lua, so a strip
-        -- placed beside one lines up with it.
-        local CHIP = 24
-        local GAP = 6
+    -- Matches the dropdown control box in GUI-KEDropdown.lua, so a strip
+    -- placed beside one lines up with it.
+    local CHIP = 24
+    local GAP = 6
 
-        for i, presetName in ipairs(presetOrder) do
-            local preset = presets[presetName]
-            if not preset then break end
+    for i, presetName in ipairs(presetOrder) do
+        local preset = presets[presetName]
+        if not preset then break end
 
-            local btn = CreateFrame("Button", nil, container, "BackdropTemplate")
-            btn:SetSize(CHIP, CHIP)
-            btn:SetBackdrop({
-                bgFile = "Interface\\BUTTONS\\WHITE8X8",
-                edgeFile = "Interface\\BUTTONS\\WHITE8X8",
-                edgeSize = 1,
-            })
-            btn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-            btn.presetName = presetName
+        local btn = CreateFrame("Button", nil, container, "BackdropTemplate")
+        btn:SetSize(CHIP, CHIP)
+        btn:SetBackdrop({
+            bgFile = "Interface\\BUTTONS\\WHITE8X8",
+            edgeFile = "Interface\\BUTTONS\\WHITE8X8",
+            edgeSize = 1,
+        })
+        btn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+        btn.presetName = presetName
 
-            local swatch = btn:CreateTexture(nil, "ARTWORK")
-            swatch:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
-            swatch:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
-            swatch:SetTexture("Interface\\BUTTONS\\WHITE8X8")
-            local ac = preset.accent
-            swatch:SetVertexColor(ac[1], ac[2], ac[3], ac[4])
-            btn.swatch = swatch
+        local swatch = btn:CreateTexture(nil, "ARTWORK")
+        swatch:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+        swatch:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+        swatch:SetTexture("Interface\\BUTTONS\\WHITE8X8")
+        local ac = preset.accent
+        swatch:SetVertexColor(ac[1], ac[2], ac[3], ac[4])
+        btn.swatch = swatch
 
-            local function UpdateVisuals()
-                local isSelected = currentPreset == btn.presetName
-                if btn.disabled then
-                    btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 0.6)
-                elseif isSelected then
-                    btn:SetBackdropBorderColor(1, 1, 1, 1)
-                elseif btn.hover then
-                    btn:SetBackdropBorderColor(Theme.accentDim[1], Theme.accentDim[2], Theme.accentDim[3], 1)
-                else
-                    btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
-                end
+        local function UpdateVisuals()
+            local isSelected = currentPreset == btn.presetName
+            if btn.disabled then
+                btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 0.6)
+            elseif isSelected then
+                btn:SetBackdropBorderColor(1, 1, 1, 1)
+            elseif btn.hover then
+                btn:SetBackdropBorderColor(Theme.accentDim[1], Theme.accentDim[2], Theme.accentDim[3], 1)
+            else
+                btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
             end
-            btn.UpdateVisuals = UpdateVisuals
+        end
+        btn.UpdateVisuals = UpdateVisuals
 
-            btn:SetScript("OnEnter", function(self)
-                self.hover = true
-                UpdateVisuals()
-                GameTooltip:SetOwner(self, "ANCHOR_TOP")
-                GameTooltip:SetText(presetName, ac[1], ac[2], ac[3])
-                GameTooltip:Show()
-            end)
-
-            btn:SetScript("OnLeave", function(self)
-                self.hover = false
-                UpdateVisuals()
-                GameTooltip:Hide()
-            end)
-
-            btn:SetScript("OnClick", function(self)
-                if self.disabled then return end
-                currentPreset = self.presetName
-                for _, b in ipairs(buttons) do b.UpdateVisuals() end
-                if onSelect then onSelect(self.presetName) end
-            end)
-
-            btn:SetPoint("TOPLEFT", container, "TOPLEFT", (i - 1) * (CHIP + GAP), 0)
-
+        btn:SetScript("OnEnter", function(self)
+            self.hover = true
             UpdateVisuals()
-            table_insert(buttons, btn)
-        end
-
-        local numButtons = #buttons
-        container:SetSize(numButtons * CHIP + math.max(numButtons - 1, 0) * GAP, CHIP)
-        -- Tells row:AddWidget to leave the height alone; without it the strip
-        -- stretches to the row height and the chips park at the top of it.
-        container.explicitHeight = CHIP
-    else
-        local buttonWidth = 110
-        local buttonHeight = 36
-        local maxColumns = 4
-        local rowSpacing = 4
-        local colSpacing = 6
-
-        for _, presetName in ipairs(presetOrder) do
-            local preset = presets[presetName]
-            if not preset then break end
-
-            local btn = CreateFrame("Button", nil, container, "BackdropTemplate")
-            btn:SetSize(buttonWidth, buttonHeight)
-            btn:SetBackdrop({
-                bgFile = "Interface\\BUTTONS\\WHITE8X8",
-                edgeFile = "Interface\\BUTTONS\\WHITE8X8",
-                edgeSize = 1,
-            })
-            btn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-            btn.presetName = presetName
-
-            local swatch = btn:CreateTexture(nil, "ARTWORK")
-            swatch:SetSize(14, 14)
-            swatch:SetPoint("LEFT", btn, "LEFT", 8, 0)
-            swatch:SetTexture("Interface\\BUTTONS\\WHITE8X8")
-            local ac = preset.accent
-            swatch:SetVertexColor(ac[1], ac[2], ac[3], ac[4])
-            btn.swatch = swatch
-
-            local label = btn:CreateFontString(nil, "OVERLAY")
-            label:SetPoint("LEFT", swatch, "RIGHT", 6, 0)
-            label:SetPoint("RIGHT", btn, "RIGHT", -6, 0)
-            label:SetJustifyH("LEFT")
-            KE:ApplyThemeFont(label, "small")
-            label:SetText(presetName)
-            btn.label = label
-
-            local function UpdateVisuals()
-                local isSelected = currentPreset == btn.presetName
-                if btn.disabled then
-                    btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 0.6)
-                    label:SetTextColor(0.4, 0.4, 0.4, 1)
-                elseif isSelected then
-                    local a = preset.accent
-                    btn:SetBackdropBorderColor(a[1], a[2], a[3], 1)
-                    label:SetTextColor(1, 1, 1, 1)
-                elseif btn.hover then
-                    btn:SetBackdropBorderColor(Theme.accentDim[1], Theme.accentDim[2], Theme.accentDim[3], 1)
-                    label:SetTextColor(0.9, 0.9, 0.9, 1)
-                else
-                    btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
-                    label:SetTextColor(0.7, 0.7, 0.7, 1)
-                end
-            end
-            btn.UpdateVisuals = UpdateVisuals
-
-            btn:SetScript("OnEnter", function(self)
-                self.hover = true
-                UpdateVisuals()
-                GameTooltip:SetOwner(self, "ANCHOR_TOP")
-                GameTooltip:SetText(presetName, ac[1], ac[2], ac[3])
-                GameTooltip:Show()
-            end)
-
-            btn:SetScript("OnLeave", function(self)
-                self.hover = false
-                UpdateVisuals()
-                GameTooltip:Hide()
-            end)
-
-            btn:SetScript("OnClick", function(self)
-                if self.disabled then return end
-                currentPreset = self.presetName
-                for _, b in ipairs(buttons) do b.UpdateVisuals() end
-                if onSelect then onSelect(self.presetName) end
-            end)
-
-            UpdateVisuals()
-            table_insert(buttons, btn)
-        end
-
-        local numButtons = #buttons
-        local numRows = math.ceil(numButtons / maxColumns)
-        container:SetHeight(numRows * buttonHeight + (numRows - 1) * rowSpacing)
-
-        local function LayoutButtons(spacing)
-            for i, btn in ipairs(buttons) do
-                btn:ClearAllPoints()
-                local col = (i - 1) % maxColumns
-                local row = math_floor((i - 1) / maxColumns)
-                btn:SetPoint("TOPLEFT", container, "TOPLEFT",
-                    col * (buttonWidth + spacing),
-                    -(row * (buttonHeight + rowSpacing)))
-            end
-        end
-
-        -- Anchored now at the minimum spacing rather than left to OnSizeChanged.
-        -- An unanchored frame does not draw, and a container built inside a
-        -- hidden parent gets no size event until that parent is first shown.
-        LayoutButtons(colSpacing)
-
-        container:SetScript("OnSizeChanged", function(_, width)
-            if not width or width <= 0 then return end
-            local cols = math.min(maxColumns, numButtons)
-            local availSpacing = width - cols * buttonWidth
-            LayoutButtons(math.max(colSpacing, math_floor(availSpacing / math.max(cols - 1, 1))))
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(presetName, ac[1], ac[2], ac[3])
+            GameTooltip:Show()
         end)
+
+        btn:SetScript("OnLeave", function(self)
+            self.hover = false
+            UpdateVisuals()
+            GameTooltip:Hide()
+        end)
+
+        btn:SetScript("OnClick", function(self)
+            if self.disabled then return end
+            currentPreset = self.presetName
+            for _, b in ipairs(buttons) do b.UpdateVisuals() end
+            if onSelect then onSelect(self.presetName) end
+        end)
+
+        btn:SetPoint("TOPLEFT", container, "TOPLEFT", (i - 1) * (CHIP + GAP), 0)
+
+        UpdateVisuals()
+        table_insert(buttons, btn)
     end
 
+    local numButtons = #buttons
+    container:SetSize(numButtons * CHIP + math.max(numButtons - 1, 0) * GAP, CHIP)
+    -- Tells row:AddWidget to leave the height alone; without it the strip
+    -- stretches to the row height and the chips park at the top of it.
+    container.explicitHeight = CHIP
     function container:SetEnabled(enabled)
         for _, btn in ipairs(buttons) do
             btn.disabled = not enabled

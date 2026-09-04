@@ -187,7 +187,6 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     row4:AddWidget(themeDropdown, 0.30)
 
     local presetSwatches = GUIFrame:CreatePresetSwatches(row4, {
-        compact = true,
         value = (themeDb and themeDb.Preset) or "KitnUI",
         callback = function(presetName) KE:SetThemePreset(presetName) end,
     })
