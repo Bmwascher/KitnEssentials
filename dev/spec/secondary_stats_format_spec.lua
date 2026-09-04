@@ -68,6 +68,22 @@ describe("SecondaryStatsFormat", function()
         assert.equals("|cffffd100Crit:|r |cffffffff%.0f%%|r", template)
     end)
 
+    describe("separator spacing", function()
+        local cases = {
+            { separator = ":", expected = "|cffffd100Crit:|r |cffffffff%.2f%%|r" },
+            { separator = "-", expected = "|cffffd100Crit -|r |cffffffff%.2f%%|r" },
+            { separator = "/", expected = "|cffffd100Crit /|r |cffffffff%.2f%%|r" },
+            { separator = "|", expected = "|cffffd100Crit |||r |cffffffff%.2f%%|r" },
+            { separator = "", expected = "|cffffd100Crit|r |cffffffff%.2f%%|r" },
+        }
+        for _, case in ipairs(cases) do
+            it("spaces the " .. (case.separator == "" and "absent" or case.separator) .. " separator", function()
+                local template = F.BuildRows({ entry() }, opts({ separator = case.separator }))
+                assert.equals(case.expected, template)
+            end)
+        end
+    end)
+
     describe("EscapeText", function()
         local cases = {
             { input = "50% Crit", expected = "50%% Crit" },

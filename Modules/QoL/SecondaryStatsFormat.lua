@@ -82,6 +82,11 @@ local function BuildRows(entries, opts)
     -- "%.1.5f" -- which errors on every repaint until the setting changes.
     local decimals = math_floor((opts.decimals or 2) + 0.5)
     if decimals < 0 then decimals = 0 elseif decimals > 3 then decimals = 3 end
+    -- A colon is the only separator that reads correctly against the label.
+    -- Every other mark needs its own space, and no separator at all already
+    -- has the gap that follows.
+    local separator = opts.separator or ""
+    if separator ~= "" and separator ~= ":" then separator = " " .. separator end
     for index = 1, #entries do
         local item = entries[index]
         local mode = BODY[item.valueMode] and item.valueMode or "percent"
@@ -101,7 +106,7 @@ local function BuildRows(entries, opts)
         local valueHex = opts.coloredValues and item.hex or "ffffff"
         if opts.showLabel then
             rows[#rows + 1] = string_format("|cff%s%s%s|r%s|cff%s%s|r",
-                item.hex, EscapeText(item.label), EscapeText(opts.separator),
+                item.hex, EscapeText(item.label), EscapeText(separator),
                 LABEL_GAP, valueHex, body)
         else
             rows[#rows + 1] = string_format("|cff%s%s|r", valueHex, body)
