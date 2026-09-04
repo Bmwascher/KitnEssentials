@@ -27,7 +27,7 @@ local HEADER_HEIGHT = 32
 GUIFrame.themePopupOpeners = GUIFrame.themePopupOpeners or {}
 GUIFrame.themePopupShown = false
 
-local popup, titleText
+local popup, titleText, scrim
 local manager, currentMode
 local presetSelector
 local accentPicker, accentDimPicker, selectedBgPicker, selectedTextPicker
@@ -88,6 +88,18 @@ local function BuildThemePopup()
     local mainFrame = GUIFrame.mainFrame
     local db = KE.db and KE.db.global and KE.db.global.Theme
 
+    -- Dims the page behind so the dialog reads as its own layer. Purely
+    -- visual: it takes no mouse input, so a click that lands on it still
+    -- reaches whatever is underneath and still closes the popup.
+    scrim = CreateFrame("Frame", nil, mainFrame)
+    scrim:SetAllPoints(mainFrame)
+    scrim:SetFrameStrata("DIALOG")
+    scrim:SetFrameLevel(mainFrame:GetFrameLevel() + 199)
+    local scrimTex = scrim:CreateTexture(nil, "BACKGROUND")
+    scrimTex:SetAllPoints()
+    scrimTex:SetColorTexture(0, 0, 0, 0.55)
+    scrim:Hide()
+
     popup = CreateFrame("Frame", "KE_ThemePopup", mainFrame, "BackdropTemplate")
     popup:SetSize(490, 368)
     popup:SetPoint("CENTER", mainFrame, "CENTER", 0, 0)
@@ -102,7 +114,9 @@ local function BuildThemePopup()
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = T.borderSize,
     })
-    popup:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], T.bgDark[4])
+    -- Opaque, unlike the shared window colour: this sits over a busy page
+    -- rather than over the game world.
+    popup:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
     popup:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], T.border[4])
     popup:Hide()
 
@@ -125,7 +139,7 @@ local function BuildThemePopup()
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = T.borderSize,
     })
-    header:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4])
+    header:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
     header:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], T.border[4])
 
     titleText = header:CreateFontString(nil, "OVERLAY")
@@ -305,6 +319,7 @@ function GUIFrame:ShowThemePopup()
     if not popup then
         BuildThemePopup()
     end
+    scrim:Show()
     popup:Show()
     self.themePopupShown = true
     checker.wasMouseDown = false
@@ -315,6 +330,7 @@ end
 function GUIFrame:HideThemePopup()
     if not popup then return end
     popup:Hide()
+    if scrim then scrim:Hide() end
     self.themePopupShown = false
     checker:Hide()
 end
