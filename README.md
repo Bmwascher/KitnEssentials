@@ -25,7 +25,7 @@ The sections below mirror the settings panel, so anything listed here is where y
 |---|---|
 | Home Page | Welcome page and the general settings below |
 | Profile Manager | Import, export, copy, and reset profiles, with per-character and global support |
-| Addon Theme | 8 WoW-themed color presets, class color mode, and fully custom colors |
+| Addon Theme | 8 WoW-themed color presets, class color mode, fully custom colors, and an optional tint for skinned Blizzard frames — opens as a popup from the title bar |
 | System Optimization | One-click performance pass covering frame rate, memory, latency, and related console variables |
 
 The home page also carries the general settings: minimap button, login message, Global Font, and Slug font rendering. Slug is Blizzard's GPU glyph renderer — it gives sharper text but is unavailable in some locales, so it can be turned off for everything at once.

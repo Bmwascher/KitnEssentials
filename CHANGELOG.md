@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.35
+
+### Addon Theme
+- The Addon Theme page has left the sidebar. It now opens as a Customize Theme
+  popup from the title bar, with the eight presets as a chip strip
+- **NEW:** Also Tint Skinned Frames. On by default, so nothing changes unless
+  you want it to. Turn it off to hold skinned Blizzard frames at a fixed
+  neutral colour while the settings window still follows your accent. Takes
+  effect on the next reload
+
+---
+
 ## v4.4.34
 
 ### Secondary Stats Display
