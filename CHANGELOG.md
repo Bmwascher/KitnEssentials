@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.38
+
+### Redrawn settings window icons
+- Redrew the home, menu and minimize icons in the title bar, the collapse
+  arrow used across the window, and the tick and cross on every checkbox.
+  Each one is now drawn for the smallest size it actually appears at
+- The three title bar icons are larger and now match the close button beside
+  them instead of sitting under it
+- The collapse arrow is a different shape. It gets turned sideways for slider
+  steppers, dropdowns and the sidebar sections, and the old one became a thin
+  spike whenever it turned
+- The checkbox tick and cross are now close to the same size as each other.
+  The old tick was nearly twice the cross
+- The icon files are about a sixteenth of their old size
+
+---
+
 ## v4.4.37
 
 ### Combat Timer
