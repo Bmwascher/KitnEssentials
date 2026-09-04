@@ -644,6 +644,15 @@ function KE.BuildChatRoleIconStrings(set) end
 ---@return string|nil qualifiedKey
 function KE.ChatRoleIconKeys(name, realm, playerRealm) end
 
+---@param text string|nil
+---@return boolean
+function KE.ChatRecallStores(text) end
+
+---@param text string|nil
+---@param restricted boolean
+---@return boolean
+function KE.ChatRecallRefused(text, restricted) end
+
 --- Accepts or refuses one chat member by identity readability.
 ---@param role any
 ---@param name any

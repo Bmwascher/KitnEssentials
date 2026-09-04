@@ -1135,6 +1135,16 @@ function L.loadChatRoleIconKeys()
     return KE.ChatRoleIconKeys
 end
 
+-- Modules/Skinning/ChatRecall.lua: two pure rules, loaded without Chat.lua.
+-- IsSecureCmd is Blizzard's registry lookup; the spec passes its own.
+function L.loadChatRecall(isSecureCmd)
+    local helpersLocal = require("dev.spec._helpers")
+    _G.IsSecureCmd = isSecureCmd
+    local KE = {}
+    helpersLocal.loadModule("Modules/Skinning/ChatRecall.lua", KE)
+    return KE.ChatRecallStores, KE.ChatRecallRefused
+end
+
 -- Modules/Skinning/RoleIconSamples.lua. Same reason as the chat builder above:
 -- the file holds one pure function and needs no KE.Skins and no frames, so it
 -- loads against a bare KE carrying only the art table.
