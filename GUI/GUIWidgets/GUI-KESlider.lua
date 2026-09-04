@@ -33,7 +33,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     local tooltip = config.tooltip
     local isPercent = config.isPercent
     local customHeight = nil
-    local stepperTexture = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
+    local stepperTexture = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 
     -- Row
     local rowHeight = customHeight or 36

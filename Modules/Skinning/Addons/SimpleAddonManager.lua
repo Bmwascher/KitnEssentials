@@ -17,7 +17,7 @@ local function ReskinItems(frame, template)
     end
 end
 
-local ARROW = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
+local ARROW = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 local function IconButton(btn)
     if not btn or S.data(btn).skinned then return end
     S.data(btn).skinned = true

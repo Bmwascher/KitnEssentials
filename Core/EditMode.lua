@@ -1520,7 +1520,7 @@ end
 
 function EditMode:CreateNudgeFrame()
     if self.nudgeFrame then return self.nudgeFrame end
-    local arrowTexture = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
+    local arrowTexture = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 
     -- Main frame
     local frame = CreateFrame("Frame", "KE_EditModeNudge", UIParent, "BackdropTemplate")

@@ -34,7 +34,7 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
     local KNOB_CROSS = 22
     local KNOB_PADDING = 1
     local ANIMATION_DURATION = 0.18
-    local checkText = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\ok-iconBlack.tga"
+    local checkText = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\ok-iconBlack.png"
     local crossText = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\cross-small.png"
 
     local OFF_POSITION = KNOB_PADDING

@@ -4,7 +4,7 @@ local _G = _G
 local pairs = pairs
 local hooksecurefunc = hooksecurefunc
 local WHITE = "Interface\\Buttons\\WHITE8x8"
-local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
+local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 -- Never hardcode the accent here: read the palette table (mutated in
 -- place by S.RefreshPalette) so it tracks the live theme.
 local BRAND = S.palette.brand

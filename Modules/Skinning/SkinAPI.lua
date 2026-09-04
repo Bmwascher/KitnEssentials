@@ -959,7 +959,7 @@ function S.Button(button, keepRegion)
 end
 
 local CLOSE_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomCrossv3.png"
-local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
+local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 local ARROW_ROT = { down = 0, up = 3.14159, right = 1.5708, left = -1.5708 }
 -- KitnCustomCrossv3 is a PLUS glyph -- KE's own GUI close button draws it as
 -- an X by rotating 45 degrees (GUI/GUIMain/GUI-MainFrame.lua). Without the

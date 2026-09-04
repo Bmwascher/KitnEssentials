@@ -34,7 +34,7 @@ local ANIMATION_DURATION = 0.12
 local ARROW_SIZE = 16
 local SEARCH_BOX_HEIGHT = 24
 local SEARCH_PADDING = 4
-local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.tga"
+local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
 local ENABLE_ANIMATIONS = true
 
 -- Cached backdrop tables
