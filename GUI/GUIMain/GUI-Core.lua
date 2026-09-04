@@ -289,6 +289,12 @@ function GUIFrame:ApplyThemeColors()
     if self.selectedSidebarItem then
         self:RefreshContent()
     end
+
+    -- The theme popup sits outside the content tree and is never rebuilt by
+    -- RefreshContent above, so it needs its own resync here.
+    if self.RefreshThemePopup then
+        self:RefreshThemePopup()
+    end
 end
 
 ---------------------------------------------------------------------------------

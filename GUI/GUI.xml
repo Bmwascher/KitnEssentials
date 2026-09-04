@@ -40,8 +40,8 @@
     <Script file="GUIMain\GUI-MainFrame.lua" />
     <Script file="GUIMain\GUI-HomePage.lua" />
 
-    <!-- Theme tab -->
-    <Script file="GUITabs\GUI-Theme.lua" />
+    <!-- Theme popup -->
+    <Script file="GUIHelpers\GUI-ThemePopup.lua" />
 
     <!-- Combat tabs -->
     <Script file="GUITabs\GUICombat\GUI-CombatTimer.lua" />

@@ -596,11 +596,13 @@ function GUIFrame:CreateMainFrame()
     headerBorder:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
     headerBorder:SetColorTexture(T.border[1], T.border[2], T.border[3], T.border[4])
 
-    -- Close on ESC (clear search first if focused)
+    -- Close on ESC (popup first, then clear search if focused, then the window)
     frame:SetScript("OnKeyDown", function(self, key)
         if key == "ESCAPE" then
             self:SetPropagateKeyboardInput(false)
-            if GUIFrame.searchEditBox and GUIFrame.searchEditBox:HasFocus() then
+            if GUIFrame.themePopupShown then
+                GUIFrame:HideThemePopup()
+            elseif GUIFrame.searchEditBox and GUIFrame.searchEditBox:HasFocus() then
                 GUIFrame.searchEditBox:SetText("")
                 GUIFrame.searchEditBox:ClearFocus()
             else
