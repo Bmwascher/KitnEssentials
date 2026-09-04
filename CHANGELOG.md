@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.37
+
+### Combat Timer
+- Across a chain pull the Combat Timer now measures the whole engagement
+  instead of restarting when the boss engages
+
+### Damage Meter
+- The meter's clock still restarts at the boss, in step with the bars below it.
+  The two clocks differ on purpose during a chain pull
+
+---
+
 ## v4.4.36
 
 ### Secondary Stats Display
