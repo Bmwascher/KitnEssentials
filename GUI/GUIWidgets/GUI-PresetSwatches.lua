@@ -104,6 +104,9 @@ function GUIFrame:CreatePresetSwatches(parent, config)
     -- stretches to the row height and the chips park at the top of it.
     container.explicitHeight = CHIP
     function container:SetEnabled(enabled)
+        -- The swatch fills the chip, so a border colour alone barely reads as
+        -- disabled. Fading the strip is what makes the state visible.
+        self:SetAlpha(enabled and 1 or 0.4)
         for _, btn in ipairs(buttons) do
             btn.disabled = not enabled
             btn:EnableMouse(enabled)
