@@ -191,11 +191,9 @@ function CombatState:StartFight(which, span)
     self:_CancelPoll()
     self:_CancelClock()
     self.frozen = false
-    -- Only a start that begins a NEW session folds the outgoing fight into the
-    -- engagement. A live start that re-asserts the fight already running would
-    -- double-count, because the pin is about to be re-sampled from the same
-    -- session it was just read from; every other start opens a fresh
-    -- engagement.
+    -- Only a start that begins a NEW session folds the outgoing fight in. A
+    -- live start that re-asserts the fight already running would double-count:
+    -- the pin is about to be re-sampled from the same session it was read from.
     if wasLive and span == SPAN_CARRY then
         self.engagementBase = self.engagementBase + (self.pin or 0)
     else
@@ -435,9 +433,9 @@ function CombatState:GetDuration()
     return self:Duration()
 end
 
--- The engagement, not the fight. Returns a number where Duration() returns nil
--- once anything has accumulated: the warm-up gap after a carrying start would
--- otherwise blank a clock that has a known span behind it.
+-- The engagement, not the fight. Non-nil where Duration() is nil once anything
+-- has accumulated: the warm-up gap after a carry would otherwise blank a clock
+-- that has a known span behind it.
 function CombatState:GetEngagementDuration()
     if self.engagementBase > 0 then
         return self.engagementBase + (self:Duration() or 0)

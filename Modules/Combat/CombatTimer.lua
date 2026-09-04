@@ -137,8 +137,7 @@ function CT:_PaintTime(total_seconds)
 end
 
 -- The settled-case renderer: reads the engagement span back through the service
--- and takes no reading of its own. Used out of combat and by the preview
--- OnUpdate.
+-- and takes no reading of its own. Used out of combat and by the preview OnUpdate.
 function CT:UpdateText()
     if not self.text then return end
     self:_PaintTime(KE.CombatState:GetEngagementDuration() or 0)
@@ -253,10 +252,9 @@ function CT:OnStop(reason)
 end
 
 -- The only live paint path. The broadcast's seconds are the FIGHT's duration,
--- which the Damage Meter's clock also reads; this timer shows the whole
--- engagement, so it re-reads rather than painting what it was handed. fraction
--- supplies the MM:SS:MS format's final digit; it stays under 1, so it never
--- shifts the mins/secs it is added to.
+-- which the meter's clock wants and this one does not, so it re-reads instead
+-- of painting what it was handed. fraction supplies the MM:SS:MS format's final
+-- digit; it stays under 1, so it never shifts the mins/secs it is added to.
 function CT:OnClockTick(_, fraction)
     if not self.text then return end
     self:_PaintTime((KE.CombatState:GetEngagementDuration() or 0) + (fraction or 0))

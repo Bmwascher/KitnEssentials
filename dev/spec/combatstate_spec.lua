@@ -834,9 +834,7 @@ describe("CombatState machine", function()
 
     describe("the engagement span", function()
         -- The span the Combat Timer renders: the whole engagement, where the pin
-        -- is only the current fight. A boss pull rolls the underlying session,
-        -- so the outgoing fight is folded into an accumulator and the pin
-        -- restarts; every other start opens a fresh engagement.
+        -- is only the current fight.
         local function sampling(value)
             deps.sessionDuration = function() return true, value end
         end
@@ -935,15 +933,13 @@ describe("CombatState machine", function()
             end
         end)
 
-        -- With nothing accumulated every mode gives the same answer, so the case
-        -- above cannot tell them apart. Here the accumulator is 60 before the
-        -- row's event, which is what makes the two outcomes differ.
+        -- The case above cannot tell the modes apart: with nothing accumulated
+        -- they all give the same answer. Here the accumulator is 60 first.
         --
-        -- playerInCombat MUST stay true throughout: with it false
-        -- OnEncounterStart asserts groupOnly, the second OnRegenDisabled then
-        -- returns from Promote before reaching StartFight, and the
-        -- OnEnteringWorld row misses its branch entirely -- the case would pass
-        -- whatever the modes were.
+        -- playerInCombat MUST stay true throughout. With it false
+        -- OnEncounterStart asserts groupOnly, the second OnRegenDisabled returns
+        -- from Promote before reaching StartFight, the OnEnteringWorld row
+        -- misses its branch, and the case passes whatever the modes are.
         it("ends the accumulated engagement on a live start that is not an encounter", function()
             local cases = {
                 {
