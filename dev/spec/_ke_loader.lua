@@ -2825,7 +2825,10 @@ function L.loadWorldMarkerCycler(overrides)
     -- Default board: nothing placed, so every position primes free.
     _G.IsRaidMarkerActive = overrides.IsRaidMarkerActive or function() return false end
 
-    local KE = { Print = function() end, RunAfterCombat = function(fn) fn() end }
+    -- Colon-called by the module, so the stub takes self first; a one-argument
+    -- shape would receive KE as the closure and error the moment a case reached
+    -- OnDisable.
+    local KE = { Print = function() end, RunAfterCombat = function(_, fn) fn() end }
     helpers.loadModule("Modules/Utilities/WorldMarkerCycler.lua", KE)
     return modules["WorldMarkerCycler"], KE, executed, wrapped
 end
