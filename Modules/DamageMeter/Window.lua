@@ -260,6 +260,7 @@ local function MakeBar(parent, db)
     bar._sourceCreatureID = nil
     bar._deathRecapID = nil
     bar._classFilename = nil
+    bar._specIconID = nil
 
     -- Wire OnClick ONCE. Left-click opens the per-source detail panel; right-click
     -- routes to the window dispatcher (close detail / toggle the view selector,
@@ -1476,6 +1477,11 @@ function DM:RenderWindow(W)
     self:UpdateCombatClock(W, session)
 
     local sources = session and session.combatSources
+    -- Sources per class in the session, excluding the player's own. The roster
+    -- side excludes the player too; counting one population against the other is
+    -- what made a player and an ally of the same class refuse each other.
+    W._classRowCounts = W._classRowCounts or {}
+    wipe(W._classRowCounts)
     if not sources then
         -- No session/data this segment: hide every pooled row so stale bars from
         -- a prior segment don't linger. Gate on IsShown so already-hidden rows
@@ -1532,6 +1538,20 @@ function DM:RenderWindow(W)
     -- scroll range and the rest of the raid unreachable. #sources is a plain length
     -- (combatSources is a normal array; only the amount FIELDS are secret).
     local count = math_min(#sources, self.BAR_POOL_SIZE)
+
+    -- The FULL source list: not the viewport, and not the bar pool either.
+    -- isLocalPlayer and classFilename are both NeverSecret, so this reads nothing
+    -- secret. The question this count answers is whether the group can account
+    -- for every class-bearing entity in the session, which is not a question
+    -- about which rows happen to be drawable -- a member ranked past the pool
+    -- still exists, still deals damage, and still has to be accounted for.
+    for i = 1, #sources do
+        local s = sources[i]
+        local cf = s and s.classFilename
+        if type(cf) == "string" and cf ~= "" and not DM.PlainOwnRow(s.isLocalPlayer) then
+            W._classRowCounts[cf] = (W._classRowCounts[cf] or 0) + 1
+        end
+    end
 
     -- Scroll model. All `count` rows are rendered onto the content child at their
     -- fixed slots; the body ScrollFrame clips to the viewport and the wheel scrolls
@@ -1683,6 +1703,11 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     bar._sourceCreatureID = src.sourceCreatureID
     bar._deathRecapID = src.deathRecapID
     bar._classFilename = src.classFilename
+    -- specIconID is NeverSecret and is the tie-break for the in-combat ally-row
+    -- join. bar._cachedIconID cannot serve: it is a repaint SIGNATURE that holds
+    -- the class token whenever the spec is unresolved, so it is a string in the
+    -- one case the tie-break needs a spec.
+    bar._specIconID = src.specIconID
     -- isLocalPlayer drives the in-combat detail gate: it is the only identity
     -- the API guarantees readable mid-fight, so it is what decides whether a
     -- breakdown may open at all. Stored raw; the eligibility predicate resolves

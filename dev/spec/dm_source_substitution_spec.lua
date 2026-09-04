@@ -191,3 +191,75 @@ describe("GetSource refusal shape", function()
         assert.is_nil(why)
     end)
 end)
+
+describe("GetSource with a RESOLVED ally guid -- the roster-join substitute", function()
+    local RESOLVED = "Player-1234-ALLYGUID"
+
+    it("substitutes the resolved guid for a secret ally identity", function()
+        local src = DM:GetSource(TYPE, DMTYPE, SECRET_GUID, SECRET_CID, nil, false, RESOLVED)
+        assert.is_table(src)
+        local c = lastCall()
+        assert.equals(RESOLVED, c.guid)
+        -- The creature id must be dropped with the identity it belonged to;
+        -- sending the old one alongside a new guid resolves something else.
+        assert.is_nil(c.cid)
+    end)
+
+    it("still refuses a resolved guid against a stored history session", function()
+        -- A negative id is a persisted snapshot, not the live API. A live guid
+        -- against it can resolve a different row entirely.
+        local src, why = DM:GetSource(TYPE, DMTYPE, SECRET_GUID, SECRET_CID, -3, false, RESOLVED)
+        assert.is_nil(src)
+        assert.equals("refused", why)
+    end)
+
+    it("refuses an empty or non-string resolved guid", function()
+        for _, bad in ipairs({ "", 7, SECRET_GUID }) do
+            local src, why = DM:GetSource(TYPE, DMTYPE, SECRET_GUID, SECRET_CID, nil, false, bad)
+            assert.is_nil(src)
+            assert.equals("refused", why)
+        end
+    end)
+
+    it("prefers the own-row substitution when both are offered", function()
+        local src = DM:GetSource(TYPE, DMTYPE, SECRET_GUID, SECRET_CID, nil, true, RESOLVED)
+        assert.is_table(src)
+        assert.equals(PLAYER_GUID, lastCall().guid)
+    end)
+end)
+
+describe("DetailEligible admits a resolved ally row in combat", function()
+    local DEATHS = "DamageMeterType.Deaths"
+    local ENEMY = "DamageMeterType.EnemyDamageTaken"
+    local DAMAGE = "DamageMeterType.DamageDone"
+
+    before_each(function()
+        -- DetailCombatActive is the module's own union of the two combat signals.
+        _G.InCombatLockdown = function() return true end
+        _G.UnitAffectingCombat = function() return true end
+    end)
+
+    after_each(function()
+        _G.InCombatLockdown = nil
+        _G.UnitAffectingCombat = nil
+    end)
+
+    it("refuses an ally row with no resolved guid -- today's behaviour, unchanged", function()
+        assert.is_false(DM:DetailEligible(false, DAMAGE))
+        assert.is_false(DM:DetailEligible(false, DAMAGE, nil))
+    end)
+
+    it("admits an ally row that resolved", function()
+        assert.is_true(DM:DetailEligible(false, DAMAGE, "Player-1234-ALLYGUID"))
+    end)
+
+    it("refuses EnemyDamageTaken even for a resolved row", function()
+        -- Its drill-down aggregates and compares amounts across sources, which
+        -- secret values cannot survive. Whose row it is does not change that.
+        assert.is_false(DM:DetailEligible(false, ENEMY, "Player-1234-ALLYGUID"))
+    end)
+
+    it("keeps admitting Deaths for every row, resolved or not", function()
+        assert.is_true(DM:DetailEligible(false, DEATHS))
+    end)
+end)

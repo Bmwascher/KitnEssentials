@@ -1,11 +1,12 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  DamageMeter/Detail.lua                                  ║
 -- ║  Module: Damage Meter                                    ║
--- ║  Purpose: Out-of-combat in-window detail panel — per-    ║
--- ║           source spell breakdown + C_DeathRecap timeline.║
--- ║           Swaps in over the bar viewport on bar click;   ║
--- ║           gated to out of combat (spellID is secret in   ║
--- ║           combat, so C_Spell.* on it would taint).       ║
+-- ║  Purpose: In-window detail panel -- per-source spell     ║
+-- ║           breakdown + C_DeathRecap timeline.             ║
+-- ║           Swaps in over the bar viewport on bar click.   ║
+-- ║           spellID IS secret in combat, but C_Spell.*     ║
+-- ║           accepts it and the sinks render the result,    ║
+-- ║           so in-combat rows keep real names and icons.   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -330,7 +331,21 @@ function DM:OpenDetail(bar, button)
     end
 
     local ownRow = DM.PlainOwnRow(bar._isLocalPlayer)
-    if not self:DetailEligible(bar._isLocalPlayer, openType) then
+    -- Ally row: join the row's NeverSecret class and spec against the LIVE
+    -- roster. Gated on both conditions so nothing that works today pays for it --
+    -- the own row keeps its own substitution, and out of combat the gate below
+    -- short-circuits to true before any of this matters. The memo is dropped
+    -- first: a click must answer from the roster as it is now, not as the last
+    -- tick found it.
+    -- Deaths is admitted on its own and never consults the resolved guid, so
+    -- resolving for it would buy a roster walk per tick and spend it on nothing.
+    local resolvedGUID
+    if not ownRow and openType ~= Enum.DamageMeterType.Deaths and DM.DetailCombatActive() then
+        self:InvalidateRosterIndex()
+        resolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,
+            W._classRowCounts and W._classRowCounts[bar._classFilename])
+    end
+    if not self:DetailEligible(bar._isLocalPlayer, openType, resolvedGUID) then
         self:ShowDetailMessage(W, REFUSAL_MSG)
         return
     end
@@ -373,6 +388,12 @@ function DM:OpenDetail(bar, button)
     -- something it cannot compare) and the EFFECTIVE meter type, so a later tick can
     -- tell that the view has changed underneath the panel.
     W._detailOwnRow = ownRow
+    -- The join's inputs and its answer, both stored for the tick re-judge, which
+    -- does not receive the bar. The answer is re-derived there rather than
+    -- trusted: the stored pair is compared against a fresh result, and is never
+    -- used on its own to admit anything.
+    W._detailResolvedGUID = resolvedGUID
+    W._detailSpecIconID = bar._specIconID
     W._detailMeterType = openType
     -- Data panel, as opposed to the refusal message ShowDetailMessage puts up. The
     -- refresh path must not treat one as the other.
@@ -430,7 +451,18 @@ function DM:RenderWindowAndDetail(W)
     -- Eligibility against the CURRENT view and the snapshotted plain own-row answer.
     -- The snapshot detects drift; it never authorizes. Out of combat the predicate
     -- short-circuits to true, so nothing here restricts what already worked.
-    if not self:DetailEligible(W._detailOwnRow, nowType) then
+    -- Re-resolve and COMPARE. A fresh answer that DIFFERS closes the panel
+    -- rather than replacing its subject. Overwriting instead would repoint an
+    -- open panel at a replacement player (a leaver swapped for a same-class
+    -- joiner between ticks) and render their damage under the clicked row, with
+    -- no name on the panel to show it had changed. Both values are plain strings
+    -- read from group unit tokens, so the comparison is legal.
+    if W._detailResolvedGUID then
+        local fresh = self:ResolveAllyGUID(W._detailClass, W._detailSpecIconID,
+            W._classRowCounts and W._classRowCounts[W._detailClass])
+        if fresh ~= W._detailResolvedGUID then W._detailResolvedGUID = nil end
+    end
+    if not self:DetailEligible(W._detailOwnRow, nowType, W._detailResolvedGUID) then
         self:CloseDetail(W)
         return
     end
@@ -467,6 +499,8 @@ function DM:CloseDetail(W)
     -- nothing, and leaving these set would let the next thing that opens here --
     -- including a refusal message -- inherit the last panel's permission.
     W._detailOwnRow = nil
+    W._detailResolvedGUID = nil
+    W._detailSpecIconID = nil
     W._detailMeterType = nil
     W._detailKind = nil
     W._detailPaintedRecapID = nil
@@ -488,6 +522,8 @@ function DM:ShowDetailMessage(W, msg)
     -- old snapshot in place and let the next refresh overwrite the refusal with the
     -- previous breakdown.
     W._detailOwnRow = nil
+    W._detailResolvedGUID = nil
+    W._detailSpecIconID = nil
     W._detailMeterType = nil
     W._detailPaintedRecapID = nil
     W._detailKind = "message"
@@ -530,7 +566,7 @@ function DM:RenderBreakdown(W)
     -- identity was secret and could not legally be substituted -- distinct from an
     -- ordinary empty result, which is why it is a second return rather than a marker
     -- in the first.
-    local src, refused = self:GetSource(cfg.SessionType, meterType, W._detailSourceGUID, W._detailSourceCID, sessionID, W._detailOwnRow)
+    local src, refused = self:GetSource(cfg.SessionType, meterType, W._detailSourceGUID, W._detailSourceCID, sessionID, W._detailOwnRow, W._detailResolvedGUID)
     if refused then
         self:ShowDetailMessage(W, REFUSAL_MSG)
         return
@@ -552,7 +588,22 @@ function DM:RenderBreakdown(W)
     -- the row loop below is unchanged. See SelectSpellList.
     local spells, maxAmount = SelectSpellList(src)
     local d = W.detail
-    if not spells then
+    -- Length as well as nil: the API declares combatSpells non-nilable, so a
+    -- source that exists with nothing recorded against it yet arrives as an EMPTY
+    -- table, which `not spells` alone would wave through. # on the list is plain
+    -- in combat.
+    if not spells or #spells == 0 then
+        -- A resolved ally row with no spell list is the one case the roster join
+        -- cannot discriminate on its own: a player who left mid-pull, whose row is
+        -- still on screen, matched against a same-class same-spec player who is
+        -- still here but has no row this pull. An empty fetch is that signature,
+        -- so refuse rather than render a blank panel under the leaver's name. If
+        -- the survivor DOES have a row, two rows share the key and the join
+        -- already refused as surplus, so both directions are covered.
+        if W._detailResolvedGUID then
+            self:ShowDetailMessage(W, REFUSAL_MSG)
+            return
+        end
         for i = 1, DETAIL_POOL_SIZE do d.rows[i].row:Hide() end
         return
     end
@@ -980,8 +1031,9 @@ end
 
 -- One full pass over the EnemyDamageTaken session: for every enemy combatSource
 -- walk its combatSpells and accumulate spell.totalAmount per (player, enemy),
--- keyed by the enemy's sourceCreatureID (NeverSecret numeric; falls back to the
--- loop index if it is somehow secret) so a secret value never becomes a table key.
+-- keyed by the enemy's sourceCreatureID (carries no secrecy annotation and CAN
+-- be secret in combat; falls back to the loop index when it is, so a secret
+-- value never becomes a table key).
 -- Builds, per player, a sorted descending {name=enemyName, total=amount} list.
 -- Cached by session|sessionID -- the cache key self-invalidates whenever the
 -- pinned/live session changes.
@@ -1573,12 +1625,21 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     local isDeaths = (meterType == Enum.DamageMeterType.Deaths)
     local isEnemyTaken = (meterType == Enum.DamageMeterType.EnemyDamageTaken)
     local ownRow = DM.PlainOwnRow(bar._isLocalPlayer)
+    -- The tip widens with the click because they share one gate; admitting a
+    -- click while refusing a hover on the same bar would be inconsistent.
+    -- No InvalidateRosterIndex here: a hover opens nothing, so answering from
+    -- this tick's walk is enough.
+    local tipResolvedGUID
+    if not ownRow and meterType ~= Enum.DamageMeterType.Deaths and DM.DetailCombatActive() then
+        tipResolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,
+            W._classRowCounts and W._classRowCounts[bar._classFilename])
+    end
 
     -- REFUSED: another player's row in combat, or a view whose renderer cannot
     -- survive secret values. bar._cachedName is the last PLAIN (non-secret) name
     -- RenderBar set (nil while the name was secret) -- safe to display, never a
     -- secret string.
-    if not self:DetailEligible(bar._isLocalPlayer, meterType) then
+    if not self:DetailEligible(bar._isLocalPlayer, meterType, tipResolvedGUID) then
         return ShowTipRefusal(self, bar, headerH, size)
     end
     _tip.msg:Hide()
@@ -1785,7 +1846,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
         -- Top breakdown spells for this source (honor a pinned historical session and
         -- the Current-empty fallback -- the same segment the bars are rendering).
         local tipSessionID = self:EffectiveSessionID(W)
-        local src, refused = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, tipSessionID, ownRow)
+        local src, refused = self:GetSource(cfg.SessionType, meterType, bar._sourceGUID, bar._sourceCreatureID, tipSessionID, ownRow, tipResolvedGUID)
         -- A refused fetch is not an empty one: show the refusal rather than an
         -- empty tip, matching the click path.
         if refused then
