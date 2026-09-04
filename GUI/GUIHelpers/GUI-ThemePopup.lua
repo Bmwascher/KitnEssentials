@@ -1,8 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-ThemePopup.lua                                      ║
 -- ║  GUI: Customize Theme popup                              ║
--- ║  Purpose: Preset grid, custom colors and the tint         ║
--- ║  switch, in a persistent dialog over the settings window. ║
+-- ║  Purpose: Custom theme colours, the skin tint switch and  ║
+-- ║  the theme actions, in a dialog over the settings window. ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -292,7 +292,6 @@ function GUIFrame:HideThemePopup()
 end
 
 function GUIFrame:ToggleThemePopup()
-    if self.minimized then return end
     if popup and popup:IsShown() then
         self:HideThemePopup()
     else
