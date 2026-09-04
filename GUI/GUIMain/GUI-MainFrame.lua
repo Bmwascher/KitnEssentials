@@ -26,9 +26,8 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Core",
         defaultExpanded = true,
         items = {
-            { id = "HomePage", text = "Home Page", keywords = { "home", "home page", "start", "welcome", "overview", "about", "changelog" } },
+            { id = "HomePage", text = "Home Page", keywords = { "home", "home page", "start", "welcome", "overview", "about", "changelog", "theme", "color", "accent", "appearance", "skin", "preset", "tint" } },
             { id = "Profiles", text = "Profile Manager", keywords = { "profile", "profiles", "import", "export", "copy", "reset" } },
-            { id = "Theme",    text = "Addon Theme", keywords = { "theme", "color", "accent", "appearance", "skin" } },
             { id = "Optimize", text = "System Optimization", keywords = { "optimize", "performance", "fps", "cpu", "memory", "latency", "cvar" } },
         },
     },
@@ -550,31 +549,10 @@ function GUIFrame:CreateMainFrame()
         end)
     end)
 
-    -- Theme button (paint icon)
-    local themeBtn = CreateFrame("Button", nil, header)
-    themeBtn:SetSize(18, 18)
-    themeBtn:SetPoint("RIGHT", menuBtn, "LEFT", -8, 0)
-    local themeIcon = themeBtn:CreateTexture(nil, "ARTWORK")
-    themeIcon:SetAllPoints()
-    themeIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\fill.png")
-    themeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-    themeBtn:SetNormalTexture(themeIcon)
-    themeIcon:SetTexelSnappingBias(0)
-    themeIcon:SetSnapToPixelGrid(true)
-    themeBtn:SetScript("OnEnter", function()
-        themeIcon:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
-    end)
-    themeBtn:SetScript("OnLeave", function()
-        themeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-    end)
-    themeBtn:SetScript("OnClick", function()
-        GUIFrame:SelectSidebarItem("Theme")
-    end)
-
     -- Home button (custom texture)
     local homeBtn = CreateFrame("Button", nil, header)
     homeBtn:SetSize(18, 18)
-    homeBtn:SetPoint("RIGHT", themeBtn, "LEFT", -8, 0)
+    homeBtn:SetPoint("RIGHT", menuBtn, "LEFT", -8, 0)
     local homeIcon = homeBtn:CreateTexture(nil, "ARTWORK")
     homeIcon:SetAllPoints()
     homeIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\HomeButtonv2.png")
@@ -596,11 +574,13 @@ function GUIFrame:CreateMainFrame()
     headerBorder:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", 0, 0)
     headerBorder:SetColorTexture(T.border[1], T.border[2], T.border[3], T.border[4])
 
-    -- Close on ESC (clear search first if focused)
+    -- Close on ESC (popup first, then clear search if focused, then the window)
     frame:SetScript("OnKeyDown", function(self, key)
         if key == "ESCAPE" then
             self:SetPropagateKeyboardInput(false)
-            if GUIFrame.searchEditBox and GUIFrame.searchEditBox:HasFocus() then
+            if GUIFrame.themePopupShown then
+                GUIFrame:HideThemePopup()
+            elseif GUIFrame.searchEditBox and GUIFrame.searchEditBox:HasFocus() then
                 GUIFrame.searchEditBox:SetText("")
                 GUIFrame.searchEditBox:ClearFocus()
             else

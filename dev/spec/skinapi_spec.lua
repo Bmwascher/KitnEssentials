@@ -88,10 +88,7 @@ describe("SkinAPI palette", function()
         -- or those captures hold an orphan.
         local capturedBrand = S.palette.brand
         local capturedHover = S.palette.hover
-        KE.GetThemeColor = function(_, key)
-            if key == "accent" then return { 0.0, 1.0, 0.5, 1 } end
-            return { 0.2, 0.4, 0.6, 0.25 }
-        end
+        KE.GetSkinBrandColor = function() return { 0.0, 1.0, 0.5, 1 } end
         S.RefreshPalette()
         assert.are.equal(capturedBrand, S.palette.brand)
         assert.are.equal(capturedHover, S.palette.hover)

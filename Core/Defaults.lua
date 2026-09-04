@@ -86,6 +86,7 @@ local Defaults = {
             Mode = "preset",
             Preset = "KitnUI",
             Custom = {},
+            TintSkins = true,
         },
 
         -- Map of "Fullname-NormalizedRealm" -> "Nickname".

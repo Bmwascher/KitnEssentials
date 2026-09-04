@@ -105,7 +105,7 @@ local function ApplyColor(target, value)
 end
 
 function S.RefreshPalette()
-    local accent = KE.GetThemeColor and KE:GetThemeColor("accent")
+    local accent = KE.GetSkinBrandColor and KE:GetSkinBrandColor()
     if accent then
         S.palette.brand[1], S.palette.brand[2], S.palette.brand[3] = accent[1], accent[2], accent[3]
         S.palette.progress[1], S.palette.progress[2], S.palette.progress[3] = accent[1], accent[2], accent[3]

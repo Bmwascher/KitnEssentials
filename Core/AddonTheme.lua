@@ -96,6 +96,11 @@ local THEME_PRESETS = {
 
 KE.ThemePresets = THEME_PRESETS
 KE.ThemePresetOrder = { "KitnUI", "Nighthold", "Firelands", "Icecrown", "Dreamsurge", "Twilight", "Sunwell", "Torghast" }
+
+-- The colour skinned Blizzard frames take when the accent is not allowed to
+-- reach them: visible against the near-black windows, not a brand colour.
+local SKIN_NEUTRAL = { 0.651, 0.651, 0.651, 1 }
+KE.SkinNeutralColor = SKIN_NEUTRAL
 KE.ThemeModeOptions = {
     { key = "preset", text = "Preset Theme" },
     { key = "class",  text = "Class Color" },
@@ -121,6 +126,15 @@ local function GetPlayerClassRGB()
     end
     return 1, 1, 1
 end
+
+local function ColorsMatch(a, b)
+    if not a or not b then return a == b end
+    for i = 1, 3 do
+        if a[i] ~= b[i] then return false end
+    end
+    return true
+end
+KE.ColorsMatch = ColorsMatch
 
 ---------------------------------------------------------------------------------
 -- Theme Color Resolution
@@ -158,6 +172,18 @@ function KE:GetThemeColor(key)
     end
 
     return ThemeDefaults[key] and CopyColor(ThemeDefaults[key]) or nil
+end
+
+-- The colour the skinning palette receives. The settings window always follows
+-- the accent; skinned Blizzard frames follow it only while TintSkins is on.
+-- Absent or nil TintSkins means on, so a profile written before the switch
+-- existed keeps behaving exactly as it did.
+function KE:GetSkinBrandColor()
+    local db = self.db and self.db.global and self.db.global.Theme
+    if db and db.TintSkins == false then
+        return CopyColor(SKIN_NEUTRAL)
+    end
+    return self:GetThemeColor("accent")
 end
 
 ---------------------------------------------------------------------------------
@@ -269,14 +295,35 @@ function KE:CopyPresetToCustom()
     end
 end
 
+-- Skinned regions take their colour once, at frame-build time, so flipping this
+-- switch only reaches frames built after it. The palette is updated immediately
+-- regardless, so anything built later is already correct.
+function KE:SetTintSkins(enabled)
+    if not self.db or not self.db.global or not self.db.global.Theme then return end
+    local before = self:GetSkinBrandColor()
+    self.db.global.Theme.TintSkins = enabled and true or false
+    local after = self:GetSkinBrandColor()
+    self:RefreshTheme()
+    if not KE.ColorsMatch(before, after) then
+        self:FlagReloadNeeded()
+    end
+end
+
 function KE:ResetTheme()
     if not self.db or not self.db.global then return end
+    local wasTintOff = (self.db.global.Theme.TintSkins == false)
+    local before = self:GetSkinBrandColor()
     self.db.global.Theme = {
         Mode = "preset",
         Preset = "KitnUI",
         Custom = {},
+        TintSkins = true,
     }
     self:RefreshTheme()
+    local after = self:GetSkinBrandColor()
+    if wasTintOff and not KE.ColorsMatch(before, after) then
+        self:FlagReloadNeeded()
+    end
 end
 
 ---------------------------------------------------------------------------------

@@ -26,6 +26,7 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
     local msgOn = config.msgOn
     local msgOff = config.msgOff
     local tooltip = config.tooltip
+    local immediateCallback = config.immediateCallback
     local customHeight = nil
     local TOGGLE_WIDTH = 48
     local TOGGLE_HEIGHT = 24
@@ -225,7 +226,7 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
         local newState = not state
         AnimateToState(newState, false)
         if row._callback then
-            C_Timer.After(ANIMATION_DURATION, function()
+            local function Fire()
                 if row._callback then
                     row._callback(newState, function(revert)
                         if revert then
@@ -233,7 +234,18 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
                         end
                     end)
                 end
-            end)
+            end
+            -- The callback normally waits for the knob so an expensive one does
+            -- not stutter the animation. A caller whose callback must be
+            -- committed before the settings window can close cannot afford that
+            -- wait: the window's OnHide runs first and its work is lost.
+            -- An immediate callback cannot use its revert argument: the click's
+            -- own slide is still playing, so AnimateToState refuses it.
+            if immediateCallback then
+                Fire()
+            else
+                C_Timer.After(ANIMATION_DURATION, Fire)
+            end
         end
         if msgPopup then
             local toggleOnOrOff

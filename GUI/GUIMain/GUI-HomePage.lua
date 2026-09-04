@@ -70,9 +70,12 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     yOffset = card1:GetNextOffset()
 
     ---------------------------------------------------------------------------------
-    -- Card 2: Quick Actions
+    -- Card 2: General
     ---------------------------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Quick Actions", yOffset)
+    local db = KE.db and KE.db.profile
+    local themeDb = KE.db and KE.db.global and KE.db.global.Theme
+    local themeMode = (themeDb and themeDb.Mode) or "preset"
+    local card2 = GUIFrame:CreateCard(scrollChild, "General", yOffset)
 
     local row1 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
 
@@ -98,7 +101,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     })
     row1:AddWidget(reloadBtn, 0.5)
 
-    card2:AddRow(row1, Theme.rowHeightLast, 0)
+    card2:AddRow(row1, Theme.rowHeightLast)
 
     card2:AddSpacing(4)
     local tipLabel = card2:AddLabel(
@@ -107,15 +110,12 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         KE:ColorTextByTheme("/rl") .. " to reload.")
     tipLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
-    yOffset = card2:GetNextOffset()
+    local sepRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep = GUIFrame:CreateSeparator(sepRow)
+    sepRow:AddWidget(sep, 1)
+    card2:AddRow(sepRow, Theme.rowHeightSeparator)
 
-    ---------------------------------------------------------------------------------
-    -- Card 3: General Settings
-    ---------------------------------------------------------------------------------
-    local db = KE.db and KE.db.profile
-    local cardSettings = GUIFrame:CreateCard(scrollChild, "General Settings", yOffset)
-
-    local row3a = GUIFrame:CreateRow(cardSettings.content, Theme.rowHeight)
+    local row3a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local minimapCheck = GUIFrame:CreateCheckbox(row3a, "Show Minimap Button", {
         value = not (db and db.Minimap and db.Minimap.hide),
         callback = function(checked)
@@ -142,9 +142,9 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         end,
     })
     row3a:AddWidget(chatCheck, 0.5)
-    cardSettings:AddRow(row3a, Theme.rowHeight)
+    card2:AddRow(row3a, Theme.rowHeight)
 
-    local row3b = GUIFrame:CreateRow(cardSettings.content, Theme.rowHeightLast)
+    local row3b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local slugCheck = GUIFrame:CreateCheckbox(row3b, "Use Slug Font Rendering", {
         value = not (db and db.UseSlugFonts == false),
         tooltip = "Renders text with the GPU glyph renderer for crisper edges.",
@@ -168,9 +168,43 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         end,
     })
     row3b:AddWidget(fontDropdown, 0.5)
-    cardSettings:AddRow(row3b, Theme.rowHeightLast, 0)
+    card2:AddRow(row3b, Theme.rowHeight)
 
-    yOffset = cardSettings:GetNextOffset()
+    local sepRow2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep2 = GUIFrame:CreateSeparator(sepRow2)
+    sepRow2:AddWidget(sep2, 1)
+    card2:AddRow(sepRow2, Theme.rowHeightSeparator)
+
+    local themeManager = GUIFrame:CreateWidgetStateManager()
+    themeManager:SetCondition("preset", function() return themeMode == "preset" end)
+
+    local row4 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local themeDropdown = GUIFrame:CreateDropdown(row4, "Theme Mode", {
+        options = KE.ThemeModeOptions,
+        value = themeMode,
+        callback = function(mode) KE:SetThemeMode(mode) end,
+    })
+    row4:AddWidget(themeDropdown, 0.30)
+
+    local presetSwatches = GUIFrame:CreatePresetSwatches(row4, {
+        value = (themeDb and themeDb.Preset) or "KitnUI",
+        callback = function(presetName) KE:SetThemePreset(presetName) end,
+    })
+    -- Aligned with the dropdown's control box rather than centred in the row:
+    -- GUI-KEDropdown.lua drops its button 14 below the row top to clear the
+    -- label, and the chips are the same height as that button.
+    row4:AddWidget(presetSwatches, 0.42, nil, 0, -14)
+    themeManager:Register(presetSwatches, "preset")
+
+    local customizeBtn = GUIFrame:CreateButton(row4, "Customize...", {
+        callback = function() GUIFrame:ToggleThemePopup() end,
+    })
+    row4:AddWidget(customizeBtn, 0.28)
+    GUIFrame:RegisterThemePopupOpener("home", customizeBtn)
+
+    card2:AddRow(row4, Theme.rowHeightLast, 0)
+
+    yOffset = card2:GetNextOffset()
 
     ---------------------------------------------------------------------------------
     -- Card 4: Getting Started
@@ -218,6 +252,8 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     discordLabel:SetTextColor(T.textMuted[1], T.textMuted[2], T.textMuted[3], 1)
 
     yOffset = card6:GetNextOffset()
+
+    themeManager:UpdateAll(true)
 
     yOffset = yOffset - (T.paddingSmall * 3)
     return yOffset

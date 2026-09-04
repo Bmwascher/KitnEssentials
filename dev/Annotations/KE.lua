@@ -767,6 +767,14 @@ function KE:GetThemeColor(key) end
 
 function KE:RefreshTheme() end
 
+--- The colour the skinning palette receives: the accent, or the neutral
+--- when TintSkins is off.
+---@return number[] color
+function KE:GetSkinBrandColor() end
+
+---@param enabled boolean
+function KE:SetTintSkins(enabled) end
+
 ---@param mode string
 function KE:SetThemeMode(mode) end
 

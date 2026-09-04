@@ -147,8 +147,9 @@ local function SkinClubFinder(cf)
             if cb then
                 S.ClearButtonArt(cb)
                 local checked = cb.GetCheckedTexture and cb:GetCheckedTexture()
-                if checked and KE.Theme and KE.Theme.accent then
-                    checked:SetVertexColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
+                local accent = KE.GetSkinBrandColor and KE:GetSkinBrandColor()
+                if checked and accent then
+                    checked:SetVertexColor(accent[1], accent[2], accent[3])
                 end
             end
         end
