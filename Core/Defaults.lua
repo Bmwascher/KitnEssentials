@@ -961,6 +961,47 @@ local Defaults = {
             Position = DefaultPosition(0, 200),
         },
 
+        -- Edge anchor, deliberately NOT DefaultPosition(): this frame is sized
+        -- from its own text, and a centre anchor walks it sideways by half of
+        -- every width change -- a figure gaining a digit, a row switched on.
+        SecondaryStats = {
+            Enabled = false,
+            Stats = {
+                crit      = { Shown = true,  ValueMode = "percent" },
+                haste     = { Shown = true,  ValueMode = "percent" },
+                mastery   = { Shown = true,  ValueMode = "percent" },
+                vers      = { Shown = true,  ValueMode = "percent" },
+                leech     = { Shown = false, ValueMode = "percent" },
+                avoidance = { Shown = false, ValueMode = "percent" },
+                speed     = { Shown = false, ValueMode = "percent" },
+            },
+            Order = { "crit", "haste", "mastery", "vers", "leech", "avoidance", "speed" },
+            Decimals = 2,
+            Separator = ":",
+            LabelStyle = "full",
+            CustomLabels = {},
+            ColorMode = "palette",
+            CustomColor = { 1, 1, 1 },
+            TertiaryColorMode = "class",
+            TertiaryColor = { 1, 1, 1 },
+            ColoredValues = false,
+            Scale = 1.0,
+            RowGap = 3,
+            FontFace = KE.FONT,
+            FontSize = 12,
+            FontOutline = "OUTLINE",
+            FontShadow = DefaultFontShadow(),
+            Strata = "LOW",
+            anchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = {
+                AnchorFrom = "TOPLEFT",
+                AnchorTo = "TOPLEFT",
+                XOffset = 16,
+                YOffset = -16,
+            },
+        },
+
         -- OFF by default: with it off the vehicle exit button's position is
         -- never touched, and whichever owner claims it keeps it.
         VehicleExit = {
