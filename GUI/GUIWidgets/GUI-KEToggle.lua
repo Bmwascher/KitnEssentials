@@ -239,6 +239,8 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
             -- not stutter the animation. A caller whose callback must be
             -- committed before the settings window can close cannot afford that
             -- wait: the window's OnHide runs first and its work is lost.
+            -- An immediate callback cannot use its revert argument: the click's
+            -- own slide is still playing, so AnimateToState refuses it.
             if immediateCallback then
                 Fire()
             else
