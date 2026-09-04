@@ -832,6 +832,147 @@ describe("CombatState machine", function()
         end)
     end)
 
+    describe("the engagement span", function()
+        -- The span the Combat Timer renders: the whole engagement, where the pin
+        -- is only the current fight. A boss pull rolls the underlying session,
+        -- so the outgoing fight is folded into an accumulator and the pin
+        -- restarts; every other start opens a fresh engagement.
+        local function sampling(value)
+            deps.sessionDuration = function() return true, value end
+        end
+
+        it("reports the fight itself while nothing has accumulated", function()
+            local cs = newCS()
+            sampling(12)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            assert.equals(12, cs:GetDuration())
+            assert.equals(12, cs:GetEngagementDuration())
+        end)
+
+        it("keeps the trash time when an encounter starts mid-engagement", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            cs:OnEncounterStart()
+            sampling(5)
+            lastClock(sched).fn()
+            assert.equals(5, cs:GetDuration())
+            assert.equals(65, cs:GetEngagementDuration())
+        end)
+
+        -- The warm-up gap: an encounter start zeroes the pin, so Duration() is
+        -- nil until the next usable sample. The span must still be a number, or
+        -- the clock blanks at the exact moment the boss engages.
+        it("reports the accumulated span while the new fight has no reading yet", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            cs:OnEncounterStart()
+            assert.is_nil(cs:GetDuration())
+            assert.equals(60, cs:GetEngagementDuration())
+        end)
+
+        -- OnEncounterEnd(1) is the freeze route, NOT a combat drop: the
+        -- encounter start above leaves inEncounter raised, and
+        -- PLAYER_REGEN_ENABLED then demotes to groupOnly and arms the poll
+        -- instead of freezing.
+        it("opens a fresh engagement on the next fight after a freeze", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            cs:OnEncounterStart()
+            sampling(5)
+            lastClock(sched).fn()
+            assert.equals(65, cs:GetEngagementDuration())
+
+            cs:OnEncounterEnd(1)
+            assert.is_false(cs:IsLive())
+
+            sampling(3)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            assert.equals(3, cs:GetEngagementDuration())
+        end)
+
+        -- A live start that is not a boss pull re-asserts the fight already
+        -- running. The session it is about to re-sample is the SAME one, so
+        -- folding the pin in would count those seconds twice.
+        it("does not fold the pin in twice on a live start that is not an encounter", function()
+            local cases = {
+                {
+                    name = "a second PLAYER_REGEN_DISABLED while playerCombat",
+                    fire = function(cs) cs:OnRegenDisabled() end,
+                },
+                {
+                    name = "PLAYER_ENTERING_WORLD with the player in combat",
+                    fire = function(cs)
+                        deps.playerInCombat = function() return true end
+                        cs:OnEnteringWorld()
+                    end,
+                },
+                {
+                    name = "PLAYER_ENTERING_WORLD with the group in combat in an instance",
+                    fire = function(cs)
+                        deps.groupInCombat = function() return true end
+                        deps.inInstance = function() return true end
+                        cs:OnEnteringWorld()
+                    end,
+                },
+            }
+            for _, case in ipairs(cases) do
+                local cs = newCS()
+                sampling(9)
+                cs:OnRegenDisabled()
+                lastClock(sched).fn()
+                assert.equals(9, cs:GetEngagementDuration(), case.name)
+                case.fire(cs)
+                lastClock(sched).fn()
+                assert.equals(9, cs:GetEngagementDuration(), case.name)
+            end
+        end)
+
+        -- With nothing accumulated every mode gives the same answer, so the case
+        -- above cannot tell them apart. Here the accumulator is 60 before the
+        -- row's event, which is what makes the two outcomes differ.
+        --
+        -- playerInCombat MUST stay true throughout: with it false
+        -- OnEncounterStart asserts groupOnly, the second OnRegenDisabled then
+        -- returns from Promote before reaching StartFight, and the
+        -- OnEnteringWorld row misses its branch entirely -- the case would pass
+        -- whatever the modes were.
+        it("ends the accumulated engagement on a live start that is not an encounter", function()
+            local cases = {
+                {
+                    name = "a second PLAYER_REGEN_DISABLED while playerCombat",
+                    fire = function(cs) cs:OnRegenDisabled() end,
+                },
+                {
+                    name = "PLAYER_ENTERING_WORLD with the player in combat",
+                    fire = function(cs) cs:OnEnteringWorld() end,
+                },
+            }
+            for _, case in ipairs(cases) do
+                deps.playerInCombat = function() return true end
+                local cs = newCS()
+                sampling(60)
+                cs:OnRegenDisabled()
+                lastClock(sched).fn()
+                cs:OnEncounterStart()
+                sampling(5)
+                lastClock(sched).fn()
+                assert.equals(65, cs:GetEngagementDuration(), case.name)
+
+                case.fire(cs)
+                lastClock(sched).fn()
+                assert.equals(5, cs:GetEngagementDuration(), case.name)
+            end
+        end)
+    end)
+
     describe("cases the design's budget lacks", function()
         it("SetFineCadence on an idle machine starts no ticker", function()
             local cs = newCS()
