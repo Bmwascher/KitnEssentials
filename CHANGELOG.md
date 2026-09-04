@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.30
+
+### Combat Timer
+- The Combat Timer and the Damage Meter's clock now read one shared combat
+  clock, so they no longer drift apart on the same fight
+- The timer no longer keeps counting after a wipe. It stops when the group
+  leaves combat, and zoning out mid-fight clears it
+
+### Damage Meter
+- In the open world the meter now waits until you enter combat yourself before
+  it starts. Dungeons are unchanged
+
+---
+
 ## v4.4.29
 
 ### Enemy Casts
