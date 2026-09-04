@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.33
+
+### World Markers
+- Clearing markers during combat no longer leaves the cycle stranded partway
+  through the list. The next marker you place starts from the top again
+
+---
+
 ## v4.4.32
 
 ### Damage Meter
