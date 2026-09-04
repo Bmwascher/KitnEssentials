@@ -245,8 +245,6 @@ function SS:CreateDisplayFrame()
     frame:SetFrameStrata(self.db.Strata or "LOW")
 
     local text = frame:CreateFontString(nil, "OVERLAY")
-    text:SetPoint("TOPLEFT")
-    text:SetJustifyH("LEFT")
     frame.text = text
 
     frame:Hide()
