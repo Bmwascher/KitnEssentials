@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  Modules/Combat/AuraEngine/Glow.lua                       ║
--- ║  Purpose: the flipbook glow host -- animation-driven, so   ║
--- ║  it keeps animating while auras are secret.                ║
+-- ║  Modules/Combat/AuraEngine/Glow.lua                      ║
+-- ║  Purpose: the flipbook glow host -- animation-driven, so ║
+-- ║  it keeps animating while auras are secret.              ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

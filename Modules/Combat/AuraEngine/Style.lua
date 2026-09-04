@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Modules/Combat/AuraEngine/Style.lua                     ║
--- ║  Purpose: button dressing -- hosts, region registration,  ║
--- ║  and the duration formatter. Shared by live and preview.  ║
+-- ║  Purpose: button dressing -- hosts, region registration, ║
+-- ║  and the duration formatter. Shared by live and preview. ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

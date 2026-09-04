@@ -43,8 +43,8 @@ function Get-TextHash([string]$path) {
     return [System.BitConverter]::ToString($sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text)))
 }
 $liveDir = @{ user = (Join-Path $env:USERPROFILE '.claude\hooks'); project = (Join-Path $root '.claude\hooks') }
-foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1')) {
-    $scope = if ($n -eq 'agents-mirror-sync.ps1') { 'project' } else { 'user' }
+foreach ($n in @('branch-guard.ps1', 'git-guard.ps1', 'luacheck-postedit.ps1', 'agents-mirror-sync.ps1', 'references-check.ps1')) {
+    $scope = if ($n -in @('agents-mirror-sync.ps1', 'references-check.ps1')) { 'project' } else { 'user' }
     $other = if ($scope -eq 'user') { 'project' } else { 'user' }
     $live = Join-Path $liveDir[$scope] $n
     Check "$n has no stale copy in $other scope" (-not (Test-Path (Join-Path $liveDir[$other] $n))) 'run pwsh dev/scripts/install-claude-hooks.ps1'

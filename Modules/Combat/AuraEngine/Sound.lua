@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Modules/Combat/AuraEngine/Sound.lua                     ║
--- ║  Purpose: the aura-sound registry as a desired-state      ║
--- ║  condition rather than a procedure.                       ║
+-- ║  Purpose: the aura-sound registry as a desired-state     ║
+-- ║  condition rather than a procedure.                      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

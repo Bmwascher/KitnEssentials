@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Modules/Combat/AuraEngine/Preview.lua                   ║
--- ║  Purpose: the config-panel preview -- plain frames, never ║
--- ║  an AuraContainer, and the swap with the live container.  ║
+-- ║  Purpose: the config-panel preview -- plain frames, never║
+-- ║  an AuraContainer, and the swap with the live container. ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
