@@ -156,6 +156,10 @@ local function BuildThemePopup()
     local content = CreateFrame("Frame", nil, popup)
     content:SetPoint("TOPLEFT", popup, "TOPLEFT", T.paddingMedium, -HEADER_HEIGHT - T.paddingMedium)
     content:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -T.paddingMedium, -HEADER_HEIGHT - T.paddingMedium)
+    -- Two top anchors leave the rect unresolvable, and a frame with no rect
+    -- reports 0x0 and draws none of its children. The bottom anchor is what
+    -- gives every row below a width to inherit.
+    content:SetPoint("BOTTOMRIGHT", popup, "BOTTOMRIGHT", -T.paddingMedium, T.paddingMedium)
 
     manager = GUIFrame:CreateWidgetStateManager()
     currentMode = (db and db.Mode) or "preset"
