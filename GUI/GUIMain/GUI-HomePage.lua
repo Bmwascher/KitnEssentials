@@ -170,6 +170,11 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
     row3b:AddWidget(fontDropdown, 0.5)
     card2:AddRow(row3b, Theme.rowHeight)
 
+    local sepRow2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep2 = GUIFrame:CreateSeparator(sepRow2)
+    sepRow2:AddWidget(sep2, 1)
+    card2:AddRow(sepRow2, Theme.rowHeightSeparator)
+
     local themeManager = GUIFrame:CreateWidgetStateManager()
     themeManager:SetCondition("preset", function() return themeMode == "preset" end)
 
