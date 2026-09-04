@@ -903,10 +903,12 @@ describe("CombatState machine", function()
             local cases = {
                 {
                     name = "a second PLAYER_REGEN_DISABLED while playerCombat",
+                    groupOnly = false,
                     fire = function(cs) cs:OnRegenDisabled() end,
                 },
                 {
                     name = "PLAYER_ENTERING_WORLD with the player in combat",
+                    groupOnly = false,
                     fire = function(cs)
                         deps.playerInCombat = function() return true end
                         cs:OnEnteringWorld()
@@ -914,6 +916,7 @@ describe("CombatState machine", function()
                 },
                 {
                     name = "PLAYER_ENTERING_WORLD with the group in combat in an instance",
+                    groupOnly = true,
                     fire = function(cs)
                         deps.groupInCombat = function() return true end
                         deps.inInstance = function() return true end
@@ -922,12 +925,21 @@ describe("CombatState machine", function()
                 },
             }
             for _, case in ipairs(cases) do
+                -- deps is shared across rows: reset what a row's fire may set,
+                -- or row 2's playerInCombat leaks into row 3 and sends it down
+                -- the PLAYER branch instead of the GROUP one it exists for.
+                deps.playerInCombat = function() return false end
+                deps.groupInCombat = function() return false end
+                deps.inInstance = function() return false end
                 local cs = newCS()
                 sampling(9)
                 cs:OnRegenDisabled()
                 lastClock(sched).fn()
                 assert.equals(9, cs:GetEngagementDuration(), case.name)
                 case.fire(cs)
+                -- The row reached the branch it names, rather than some other
+                -- one that happens to give the same span.
+                assert.equals(case.groupOnly, cs.groupOnly, case.name)
                 lastClock(sched).fn()
                 assert.equals(9, cs:GetEngagementDuration(), case.name)
             end
