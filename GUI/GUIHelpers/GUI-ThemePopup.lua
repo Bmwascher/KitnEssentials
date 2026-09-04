@@ -89,7 +89,7 @@ local function BuildThemePopup()
     local db = KE.db and KE.db.global and KE.db.global.Theme
 
     popup = CreateFrame("Frame", nil, mainFrame, "BackdropTemplate")
-    popup:SetSize(490, 352)
+    popup:SetSize(490, 368)
     popup:SetPoint("CENTER", mainFrame, "CENTER", 0, 0)
     popup:SetFrameStrata("DIALOG")
     -- Above the content tree, following the card mouse blocker's +100 idiom
@@ -110,7 +110,7 @@ local function BuildThemePopup()
     -- the popup springs back on the next GUIFrame:Show(), including the
     -- automatic reopen after combat.
     mainFrame:HookScript("OnHide", function()
-        popup:Hide()
+        GUIFrame:HideThemePopup()
     end)
 
     ----------------------------------------------------------------
@@ -183,7 +183,7 @@ local function BuildThemePopup()
     manager:Register(presetSelector, "preset")
     AdvanceY(selectorHeight)
 
-    -- Shown only in class mode
+    -- Dimmed outside class mode, and always occupies its row
     local classRow = GUIFrame:CreateRow(content, T.rowHeightLast)
     classRow:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -currentY)
     classRow:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -currentY)

@@ -186,7 +186,10 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         value = (themeDb and themeDb.Preset) or "KitnUI",
         callback = function(presetName) KE:SetThemePreset(presetName) end,
     })
-    row4:AddWidget(presetSwatches, 0.42)
+    -- The strip keeps its own height, so AddWidget's top anchor would park it
+    -- above the dropdown and button beside it.
+    row4:AddWidget(presetSwatches, 0.42, nil, 0,
+        -(Theme.rowHeightLast - presetSwatches:GetHeight()) / 2)
     themeManager:Register(presetSwatches, "preset")
 
     local customizeBtn = GUIFrame:CreateButton(row4, "Customize...", {
