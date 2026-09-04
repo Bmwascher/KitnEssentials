@@ -47,14 +47,14 @@ function GUIFrame:CreatePresetSwatches(parent, config)
             btn:SetBackdrop({
                 bgFile = "Interface\\BUTTONS\\WHITE8X8",
                 edgeFile = "Interface\\BUTTONS\\WHITE8X8",
-                edgeSize = 2,
+                edgeSize = 1,
             })
             btn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
             btn.presetName = presetName
 
             local swatch = btn:CreateTexture(nil, "ARTWORK")
-            swatch:SetPoint("TOPLEFT", btn, "TOPLEFT", 3, -3)
-            swatch:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -3, 3)
+            swatch:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+            swatch:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
             swatch:SetTexture("Interface\\BUTTONS\\WHITE8X8")
             local ac = preset.accent
             swatch:SetVertexColor(ac[1], ac[2], ac[3], ac[4])
@@ -191,21 +191,27 @@ function GUIFrame:CreatePresetSwatches(parent, config)
         local numRows = math.ceil(numButtons / maxColumns)
         container:SetHeight(numRows * buttonHeight + (numRows - 1) * rowSpacing)
 
-        container:SetScript("OnSizeChanged", function(self, width)
-            if not width or width <= 0 then return end
-            local cols = math.min(maxColumns, numButtons)
-            local totalBtnWidth = cols * buttonWidth
-            local availSpacing = width - totalBtnWidth
-            local spacing = math.max(colSpacing, math_floor(availSpacing / math.max(cols - 1, 1)))
-
+        local function LayoutButtons(spacing)
             for i, btn in ipairs(buttons) do
                 btn:ClearAllPoints()
                 local col = (i - 1) % maxColumns
                 local row = math_floor((i - 1) / maxColumns)
-                local x = col * (buttonWidth + spacing)
-                local y = -(row * (buttonHeight + rowSpacing))
-                btn:SetPoint("TOPLEFT", self, "TOPLEFT", x, y)
+                btn:SetPoint("TOPLEFT", container, "TOPLEFT",
+                    col * (buttonWidth + spacing),
+                    -(row * (buttonHeight + rowSpacing)))
             end
+        end
+
+        -- Anchored now at the minimum spacing rather than left to OnSizeChanged.
+        -- An unanchored frame does not draw, and a container built inside a
+        -- hidden parent gets no size event until that parent is first shown.
+        LayoutButtons(colSpacing)
+
+        container:SetScript("OnSizeChanged", function(_, width)
+            if not width or width <= 0 then return end
+            local cols = math.min(maxColumns, numButtons)
+            local availSpacing = width - cols * buttonWidth
+            LayoutButtons(math.max(colSpacing, math_floor(availSpacing / math.max(cols - 1, 1))))
         end)
     end
 
