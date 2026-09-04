@@ -258,6 +258,9 @@ local function BuildThemePopup()
     tintRow:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -currentY)
     tintCheckbox = GUIFrame:CreateCheckbox(tintRow, "Also Tint Skinned Frames", {
         value = not db or db.TintSkins ~= false,
+        -- Raises the deferred reload flag, which the settings window flushes on
+        -- hide. A deferred callback would land after that flush.
+        immediateCallback = true,
         callback = function(value) KE:SetTintSkins(value) end,
     })
     tintRow:AddWidget(tintCheckbox, 1)
