@@ -88,6 +88,9 @@ function KE_CombatState:IsFrozen() end
 ---@return number? seconds
 function KE_CombatState:GetDuration() end
 
+---@return number? seconds
+function KE_CombatState:GetEngagementDuration() end
+
 ---@return boolean
 function KE_CombatState:PlayerJoined() end
 

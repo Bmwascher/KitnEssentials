@@ -832,6 +832,217 @@ describe("CombatState machine", function()
         end)
     end)
 
+    describe("the engagement span", function()
+        -- The span the Combat Timer renders: the whole engagement, where the pin
+        -- is only the current fight.
+        local function sampling(value)
+            deps.sessionDuration = function() return true, value end
+        end
+
+        it("reports the fight itself while nothing has accumulated", function()
+            local cs = newCS()
+            sampling(12)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            assert.equals(12, cs:GetDuration())
+            assert.equals(12, cs:GetEngagementDuration())
+        end)
+
+        it("keeps the trash time when an encounter starts mid-engagement", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            cs:OnEncounterStart()
+            sampling(5)
+            lastClock(sched).fn()
+            assert.equals(5, cs:GetDuration())
+            assert.equals(65, cs:GetEngagementDuration())
+        end)
+
+        -- The warm-up gap: an encounter start zeroes the pin, so Duration() is
+        -- nil until the next usable sample. The span must still be a number, or
+        -- the clock blanks at the exact moment the boss engages.
+        it("reports the accumulated span while the new fight has no reading yet", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            cs:OnEncounterStart()
+            assert.is_nil(cs:GetDuration())
+            assert.equals(60, cs:GetEngagementDuration())
+        end)
+
+        -- OnEncounterEnd(1) is the freeze route, NOT a combat drop: the
+        -- encounter start above leaves inEncounter raised, and
+        -- PLAYER_REGEN_ENABLED then demotes to groupOnly and arms the poll
+        -- instead of freezing.
+        it("opens a fresh engagement on the next fight after a freeze", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            cs:OnEncounterStart()
+            sampling(5)
+            lastClock(sched).fn()
+            assert.equals(65, cs:GetEngagementDuration())
+
+            cs:OnEncounterEnd(1)
+            assert.is_false(cs:IsLive())
+
+            sampling(3)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            assert.equals(3, cs:GetEngagementDuration())
+        end)
+
+        -- A live start that is not a boss pull re-asserts the fight already
+        -- running. The session it is about to re-sample is the SAME one, so
+        -- folding the pin in would count those seconds twice.
+        it("does not fold the pin in twice on a live start that is not an encounter", function()
+            local cases = {
+                {
+                    name = "a second PLAYER_REGEN_DISABLED while playerCombat",
+                    groupOnly = false,
+                    fire = function(cs) cs:OnRegenDisabled() end,
+                },
+                {
+                    name = "PLAYER_ENTERING_WORLD with the player in combat",
+                    groupOnly = false,
+                    fire = function(cs)
+                        deps.playerInCombat = function() return true end
+                        cs:OnEnteringWorld()
+                    end,
+                },
+                {
+                    name = "PLAYER_ENTERING_WORLD with the group in combat in an instance",
+                    groupOnly = true,
+                    fire = function(cs)
+                        deps.groupInCombat = function() return true end
+                        deps.inInstance = function() return true end
+                        cs:OnEnteringWorld()
+                    end,
+                },
+            }
+            for _, case in ipairs(cases) do
+                -- deps is shared across rows: reset what a row's fire may set,
+                -- or row 2's playerInCombat leaks into row 3 and sends it down
+                -- the PLAYER branch instead of the GROUP one it exists for.
+                deps.playerInCombat = function() return false end
+                deps.groupInCombat = function() return false end
+                deps.inInstance = function() return false end
+                local cs = newCS()
+                sampling(9)
+                cs:OnRegenDisabled()
+                lastClock(sched).fn()
+                assert.equals(9, cs:GetEngagementDuration(), case.name)
+                case.fire(cs)
+                -- The row reached the branch it names, rather than some other
+                -- one that happens to give the same span.
+                assert.equals(case.groupOnly, cs.groupOnly, case.name)
+                lastClock(sched).fn()
+                assert.equals(9, cs:GetEngagementDuration(), case.name)
+            end
+        end)
+
+        -- The case above cannot tell the modes apart: with nothing accumulated
+        -- they all give the same answer. Here the accumulator is 60 first.
+        --
+        -- playerInCombat MUST stay true throughout. With it false
+        -- OnEncounterStart asserts groupOnly, the second OnRegenDisabled returns
+        -- from Promote before reaching StartFight, the OnEnteringWorld row
+        -- misses its branch, and the case passes whatever the modes are.
+        it("ends the accumulated engagement on a live start that is not an encounter", function()
+            local cases = {
+                {
+                    name = "a second PLAYER_REGEN_DISABLED while playerCombat",
+                    fire = function(cs) cs:OnRegenDisabled() end,
+                },
+                {
+                    name = "PLAYER_ENTERING_WORLD with the player in combat",
+                    fire = function(cs) cs:OnEnteringWorld() end,
+                },
+            }
+            for _, case in ipairs(cases) do
+                deps.playerInCombat = function() return true end
+                local cs = newCS()
+                sampling(60)
+                cs:OnRegenDisabled()
+                lastClock(sched).fn()
+                cs:OnEncounterStart()
+                sampling(5)
+                lastClock(sched).fn()
+                assert.equals(65, cs:GetEngagementDuration(), case.name)
+
+                case.fire(cs)
+                lastClock(sched).fn()
+                assert.equals(5, cs:GetEngagementDuration(), case.name)
+            end
+        end)
+
+        -- Both arrival branches end the engagement. The one that starts a fight
+        -- is covered by the live-start case above; this is the other one, where
+        -- the fight survives the loading screen and only the span before it goes.
+        it("ends the engagement on a combat-flagged arrival that promotes", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            deps.playerInCombat = function() return false end
+            cs:OnEncounterStart()
+            sampling(5)
+            lastClock(sched).fn()
+            assert.is_true(cs.groupOnly)
+            assert.equals(65, cs:GetEngagementDuration())
+
+            deps.playerInCombat = function() return true end
+            cs:OnEnteringWorld()
+            assert.is_true(cs.playerCombat)
+            -- The pin survives the promote, so the fight's own 5 stands alone.
+            assert.equals(5, cs:GetEngagementDuration())
+        end)
+
+        -- A carry needs a fight to carry FROM. Starting an encounter on a frozen
+        -- machine must not fold the last fight's pin into the new engagement.
+        it("does not carry into an encounter started from a frozen machine", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            cs:Freeze("combat")
+            assert.equals(60, cs:GetEngagementDuration())
+
+            sampling(7)
+            cs:OnEncounterStart()
+            lastClock(sched).fn()
+            assert.equals(7, cs:GetEngagementDuration())
+        end)
+
+        -- The chat line reports the engagement, so the gate that suppresses it
+        -- has to span the engagement too. A player who fought the trash and was
+        -- unflagged at the boss pull still fought this engagement.
+        it("carries participation across a carrying start and drops it otherwise", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            assert.is_true(cs:PlayerJoined())
+
+            deps.playerInCombat = function() return false end
+            cs:OnEncounterStart()
+            assert.is_true(cs.groupOnly)
+            assert.is_true(cs:PlayerJoined())
+
+            -- A fresh engagement re-derives it: this start carries nothing.
+            cs:Freeze("combat")
+            deps.groupInCombat = function() return true end
+            deps.inInstance = function() return true end
+            cs:OnUnitFlags("party1")
+            assert.is_true(cs.groupOnly)
+            assert.is_false(cs:PlayerJoined())
+        end)
+    end)
+
     describe("cases the design's budget lacks", function()
         it("SetFineCadence on an idle machine starts no ticker", function()
             local cs = newCS()

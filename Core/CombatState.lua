@@ -44,6 +44,10 @@ for i = 1, 4 do PARTY_UNITS[i] = "party" .. i end
 -- StartFight sentinels. Internal only; never exposed on the public surface.
 local PLAYER, GROUP = "PLAYER", "GROUP"
 
+-- StartFight span mode. Internal only; the one caller that begins a new
+-- underlying session passes it.
+local SPAN_CARRY = "SPAN_CARRY"
+
 ---@class KE.CombatState
 local CombatState = {}
 CombatState.__index = CombatState
@@ -66,6 +70,7 @@ function CombatState.New(deps)
     self.groupOnly = false
     self.inEncounter = false
     self.pin = 0
+    self.engagementBase = 0
     self.frozen = false
     self.generation = 0
     self.watching = false
@@ -181,11 +186,20 @@ end
 -- Start and promote
 ---------------------------------------------------------------------------------
 
-function CombatState:StartFight(which)
+function CombatState:StartFight(which, span)
     local wasLive = self:IsLive()
     self:_CancelPoll()
     self:_CancelClock()
     self.frozen = false
+    -- Only a start that begins a NEW session folds the outgoing fight in. A
+    -- live start that re-asserts the fight already running would double-count:
+    -- the pin is about to be re-sampled from the same session it was read from.
+    local carried = wasLive and span == SPAN_CARRY
+    if carried then
+        self.engagementBase = self.engagementBase + (self.pin or 0)
+    else
+        self.engagementBase = 0
+    end
     self.pin = 0
     self.fineBase = nil
     self.fineAnchor = nil
@@ -196,7 +210,10 @@ function CombatState:StartFight(which)
     self.generation = self.generation + 1
     self.playerCombat = (which == PLAYER)      -- both assigned, never one
     self.groupOnly = (which == GROUP)
-    self.playerJoined = (which == PLAYER)
+    -- Participation follows the span. A carried start continues one engagement,
+    -- and the chat line it will report covers the seconds before this start, so
+    -- a player who fought them has joined it even if the boss opened as GROUP.
+    self.playerJoined = (which == PLAYER) or (carried and self.playerJoined) or false
     if self.groupOnly then self:_ArmPoll() end
     self:_StartClock()
     -- Fired only on a fresh start (not a live-to-live chain pull): otherwise a
@@ -239,7 +256,7 @@ end
 -- Always a segment boundary.
 function CombatState:OnEncounterStart()
     self.inEncounter = true
-    self:StartFight(self.deps.playerInCombat() and PLAYER or GROUP)
+    self:StartFight(self.deps.playerInCombat() and PLAYER or GROUP, SPAN_CARRY)
 end
 
 -- Cheap bails first; this fires constantly.
@@ -339,6 +356,11 @@ function CombatState:OnEnteringWorld()
     self.pendingGen = nil                      -- invalidate any pending callback
     if self.deps.playerInCombat() then
         if self:IsLive() and self.groupOnly then
+            -- A world entry ends the engagement on BOTH arrival branches, not
+            -- just the one that starts a fight. The fight itself survives here,
+            -- so the pin stands and the clock does not rewind past it; what the
+            -- screen ends is everything before it.
+            self.engagementBase = 0
             self:Promote()
         else
             self:StartFight(PLAYER)
@@ -420,8 +442,18 @@ function CombatState:GetDuration()
     return self:Duration()
 end
 
--- True once playerCombat has been set at any point in the current fight;
--- cleared at each start.
+-- The engagement, not the fight. Non-nil where Duration() is nil once anything
+-- has accumulated: the warm-up gap after a carry would otherwise blank a clock
+-- that has a known span behind it.
+function CombatState:GetEngagementDuration()
+    if self.engagementBase > 0 then
+        return self.engagementBase + (self:Duration() or 0)
+    end
+    return self:Duration()
+end
+
+-- True once playerCombat has been set at any point in the current engagement;
+-- cleared at each start that opens a new one.
 function CombatState:PlayerJoined()
     return self.playerJoined
 end
