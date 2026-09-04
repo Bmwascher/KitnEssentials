@@ -21,9 +21,11 @@ local HEADER_HEIGHT = 32
 ---------------------------------------------------------------------------------
 
 -- Frames a click on must not close the popup, in addition to the popup
--- itself and an open ColorPickerFrame. Each opener registers itself by
--- reference; without that, the release of a click on an opener reads as
--- "outside" and fights the toggle the same click fired.
+-- itself and an open ColorPickerFrame. Without this, the release of a click
+-- on an opener reads as "outside" and fights the toggle the same click fired.
+-- Keyed by slot rather than by frame: the Home row is rebuilt on every theme
+-- change with a fresh button, and a set keyed by frame would grow an orphan
+-- per rebuild inside the every-frame check below.
 GUIFrame.themePopupOpeners = GUIFrame.themePopupOpeners or {}
 GUIFrame.themePopupShown = false
 
@@ -36,8 +38,8 @@ local copyBtn, resetBtn
 
 local function IsMouseOverThemePopup()
     if popup:IsMouseOver() then return true end
-    for opener in pairs(GUIFrame.themePopupOpeners) do
-        if opener and opener:IsMouseOver() then return true end
+    for _, opener in pairs(GUIFrame.themePopupOpeners) do
+        if opener:IsMouseOver() then return true end
     end
     if ColorPickerFrame:IsShown() and ColorPickerFrame:IsMouseOver() then return true end
     return false
@@ -293,10 +295,8 @@ end
 -- Public API
 ---------------------------------------------------------------------------------
 
-function GUIFrame:RegisterThemePopupOpener(frame)
-    if frame then
-        GUIFrame.themePopupOpeners[frame] = true
-    end
+function GUIFrame:RegisterThemePopupOpener(slot, frame)
+    GUIFrame.themePopupOpeners[slot] = frame
 end
 
 function GUIFrame:ShowThemePopup()

@@ -193,7 +193,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         callback = function() GUIFrame:ToggleThemePopup() end,
     })
     row4:AddWidget(customizeBtn, 0.28)
-    GUIFrame:RegisterThemePopupOpener(customizeBtn)
+    GUIFrame:RegisterThemePopupOpener("home", customizeBtn)
 
     card2:AddRow(row4, Theme.rowHeightLast, 0)
 
