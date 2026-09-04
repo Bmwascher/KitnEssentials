@@ -105,9 +105,18 @@ local function BuildRows(entries, opts)
         end
         local valueHex = opts.coloredValues and item.hex or "ffffff"
         if opts.showLabel then
+            -- The separator belongs to whichever token comes first, so the row
+            -- mirrors whole: "Crit: 800" becomes "800: Crit".
+            local leadHex, lead, trailHex, trail
+            if opts.direction == "RIGHT" then
+                leadHex, lead = valueHex, body
+                trailHex, trail = item.hex, EscapeText(item.label)
+            else
+                leadHex, lead = item.hex, EscapeText(item.label)
+                trailHex, trail = valueHex, body
+            end
             rows[#rows + 1] = string_format("|cff%s%s%s|r%s|cff%s%s|r",
-                item.hex, EscapeText(item.label), EscapeText(separator),
-                LABEL_GAP, valueHex, body)
+                leadHex, lead, EscapeText(separator), LABEL_GAP, trailHex, trail)
         else
             rows[#rows + 1] = string_format("|cff%s%s|r", valueHex, body)
         end

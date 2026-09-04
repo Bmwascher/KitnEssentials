@@ -84,6 +84,21 @@ describe("SecondaryStatsFormat", function()
         end
     end)
 
+    describe("text direction", function()
+        it("mirrors the row and keeps the values in placeholder order", function()
+            local template, vals = F.BuildRows({ entry({ valueMode = "both" }) },
+                opts({ direction = "RIGHT" }))
+            assert.equals("|cffffffff%.0f (%.2f%%):|r |cffffd100Crit|r", template)
+            assert.same({ 1234, 24.39 }, vals)
+        end)
+
+        it("still emits the value alone when the label is hidden", function()
+            local template = F.BuildRows({ entry() },
+                opts({ direction = "RIGHT", showLabel = false }))
+            assert.equals("|cffffffff%.2f%%|r", template)
+        end)
+    end)
+
     describe("EscapeText", function()
         local cases = {
             { input = "50% Crit", expected = "50%% Crit" },

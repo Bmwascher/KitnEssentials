@@ -211,6 +211,7 @@ function SS:UpdateDisplay()
     local template, vals = Format.BuildRows(entries, {
         decimals = db.Decimals or 2,
         separator = db.Separator or ":",
+        direction = db.TextDirection or "LEFT",
         showLabel = db.LabelStyle ~= "hidden",
         coloredValues = db.ColoredValues == true,
     })
@@ -244,8 +245,6 @@ function SS:CreateDisplayFrame()
     frame:SetFrameStrata(self.db.Strata or "LOW")
 
     local text = frame:CreateFontString(nil, "OVERLAY")
-    text:SetPoint("TOPLEFT")
-    text:SetJustifyH("LEFT")
     frame.text = text
 
     frame:Hide()
@@ -267,6 +266,13 @@ function SS:ApplySettings()
     KE:ApplyFontToText(self.frame.text, db.FontFace,
         math_floor((db.FontSize or 12) * scale + 0.5), db.FontOutline, db.FontShadow)
     self.frame.text:SetSpacing(math_floor((db.RowGap or 3) * scale + 0.5))
+
+    -- Right-ordered rows need the block to line up on its right edge too,
+    -- otherwise the labels sit ragged against the screen edge they face.
+    local right = db.TextDirection == "RIGHT"
+    self.frame.text:ClearAllPoints()
+    self.frame.text:SetPoint(right and "TOPRIGHT" or "TOPLEFT")
+    self.frame.text:SetJustifyH(right and "RIGHT" or "LEFT")
 
     self:UpdateDisplay()
 end
@@ -303,7 +309,7 @@ function SS:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "SecondaryStats",
             module = self,
-            displayName = "Secondary Stats",
+            displayName = "Secondary Stats Display",
             frame = self.frame,
             getPosition = function() return self.db.Position end,
             setPosition = function(pos)

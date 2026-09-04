@@ -962,9 +962,8 @@ local Defaults = {
             Position = DefaultPosition(0, 200),
         },
 
-        -- Edge anchor, deliberately NOT DefaultPosition(): this frame is sized
-        -- from its own text, and a centre anchor walks it sideways by half of
-        -- every width change -- a figure gaining a digit, a row switched on.
+        -- Sized from its own text, so this centre anchor moves both edges by
+        -- half of every width change. Accepted in exchange for the placement.
         SecondaryStats = {
             Enabled = false,
             Stats = {
@@ -979,6 +978,7 @@ local Defaults = {
             Order = { "crit", "haste", "mastery", "vers", "leech", "avoidance", "speed" },
             Decimals = 2,
             Separator = ":",
+            TextDirection = "LEFT",
             LabelStyle = "full",
             CustomLabels = {},
             ColorMode = "palette",
@@ -989,17 +989,17 @@ local Defaults = {
             Scale = 1.0,
             RowGap = 3,
             FontFace = KE.FONT,
-            FontSize = 12,
+            FontSize = 18,
             FontOutline = "OUTLINE",
             FontShadow = DefaultFontShadow(),
             Strata = "LOW",
             anchorFrameType = "UIPARENT",
             ParentFrame = "UIParent",
             Position = {
-                AnchorFrom = "TOPLEFT",
-                AnchorTo = "TOPLEFT",
-                XOffset = 16,
-                YOffset = -16,
+                AnchorFrom = "CENTER",
+                AnchorTo = "BOTTOM",
+                XOffset = -608,
+                YOffset = 45,
             },
         },
 

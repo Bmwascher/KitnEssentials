@@ -48,11 +48,11 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Secondary Stats", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Secondary Stats Display", yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         ApplyState(checked)
-        KE:Print("Secondary Stats: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+        KE:Print("Secondary Stats Display: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
@@ -135,6 +135,11 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
         { key = "/", text = "Slash" },
         { key = "|", text = "Pipe" },
         { key = "", text = "None" },
+    }
+
+    local directionList = {
+        { key = "LEFT", text = "Left (Crit: 800)" },
+        { key = "RIGHT", text = "Right (800: Crit)" },
     }
 
     local colorModeList = {
@@ -243,8 +248,19 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row5c:AddWidget(gapSlider, 1)
+    row5c:AddWidget(gapSlider, 0.5)
     manager:Register(gapSlider, "all")
+
+    local directionDropdown = GUIFrame:CreateDropdown(row5c, "Direction", {
+        options = directionList,
+        value = db.TextDirection or "LEFT",
+        callback = function(selected)
+            db.TextDirection = selected
+            ApplySettings()
+        end,
+    })
+    row5c:AddWidget(directionDropdown, 0.5)
+    manager:Register(directionDropdown, "all")
     card5:AddRow(row5c, Theme.rowHeightLast, 0)
 
     yOffset = card5:GetNextOffset()
