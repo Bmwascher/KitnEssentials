@@ -29,7 +29,6 @@ GUIFrame.themePopupShown = false
 
 local popup, titleText, scrim
 local manager, currentMode
-local presetSelector
 local accentPicker, accentDimPicker, selectedBgPicker, selectedTextPicker
 local tintCheckbox
 local copyBtn, resetBtn
@@ -101,7 +100,7 @@ local function BuildThemePopup()
     scrim:Hide()
 
     popup = CreateFrame("Frame", "KE_ThemePopup", mainFrame, "BackdropTemplate")
-    popup:SetSize(490, 368)
+    popup:SetSize(490, 236)
     popup:SetPoint("CENTER", mainFrame, "CENTER", 0, 0)
     popup:SetFrameStrata("DIALOG")
     -- Above the content tree, following the card mouse blocker's +100 idiom
@@ -177,55 +176,12 @@ local function BuildThemePopup()
 
     manager = GUIFrame:CreateWidgetStateManager()
     currentMode = (db and db.Mode) or "preset"
-    manager:SetCondition("preset", function() return currentMode == "preset" end)
-    manager:SetCondition("class", function() return currentMode == "class" end)
     manager:SetCondition("custom", function() return currentMode == "custom" end)
 
     local currentY = 0
     local function AdvanceY(height, spacing)
         currentY = currentY + height + (spacing or T.paddingSmall)
     end
-
-    presetSelector = GUIFrame:CreatePresetSwatches(content, {
-        value = (db and db.Preset) or "KitnUI",
-        callback = function(presetName) KE:SetThemePreset(presetName) end,
-    })
-    local selectorHeight = presetSelector:GetHeight() + 4
-    local presetRow = CreateFrame("Frame", nil, content)
-    presetRow:SetHeight(selectorHeight)
-    presetRow:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -currentY)
-    presetRow:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -currentY)
-    presetSelector:SetParent(presetRow)
-    presetSelector:SetPoint("TOPLEFT", presetRow, "TOPLEFT", 0, 0)
-    presetSelector:SetPoint("TOPRIGHT", presetRow, "TOPRIGHT", 0, 0)
-    manager:Register(presetSelector, "preset")
-    AdvanceY(selectorHeight)
-
-    -- Dimmed outside class mode, and always occupies its row
-    local classRow = GUIFrame:CreateRow(content, T.rowHeightLast)
-    classRow:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -currentY)
-    classRow:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -currentY)
-    local classColor = KE:GetPlayerClassColor()
-    local classSwatchFrame = CreateFrame("Frame", nil, classRow, "BackdropTemplate")
-    classSwatchFrame:SetSize(24, 24)
-    classSwatchFrame:SetBackdrop({
-        bgFile = "Interface\\BUTTONS\\WHITE8X8",
-        edgeFile = "Interface\\BUTTONS\\WHITE8X8",
-        edgeSize = 1,
-    })
-    classSwatchFrame:SetBackdropColor(classColor[1], classColor[2], classColor[3], 1)
-    classSwatchFrame:SetBackdropBorderColor(0, 0, 0, 1)
-    classRow:AddWidget(classSwatchFrame, 0.1)
-    local classLabel = GUIFrame:CreateText(classRow,
-        "Your class color will be used as the theme accent.",
-        "Background colors remain dark.",
-        T.rowHeightLast, "hide")
-    classRow:AddWidget(classLabel, 0.9)
-    function classRow:SetEnabled(enabled)
-        self:SetAlpha(enabled and 1 or 0.4)
-    end
-    manager:Register(classRow, "class")
-    AdvanceY(T.rowHeightLast)
 
     local pickerRow1 = GUIFrame:CreateRow(content, T.rowHeight)
     pickerRow1:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -currentY)
@@ -355,10 +311,6 @@ function GUIFrame:RefreshThemePopup()
     if not db then return end
 
     currentMode = db.Mode or "preset"
-
-    if presetSelector then
-        presetSelector:SetValue(db.Preset or "KitnUI")
-    end
 
     SilentSetColor(accentPicker, db.Custom and db.Custom.accent, KE.ThemeDefaults.accent)
     SilentSetColor(accentDimPicker, db.Custom and db.Custom.accentDim, KE.ThemeDefaults.accentDim)
