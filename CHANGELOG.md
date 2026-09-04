@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.32
+
+### Damage Meter
+- **NEW:** Click any group member's bar during combat to open their spell
+  breakdown live. Two players of the same class and spec cannot be told apart
+  mid-fight, so those open once combat ends
+- Percentages are hidden in a live ally breakdown and return when the fight ends
+
+---
+
 ## v4.4.31
 
 ### Damage Meter
