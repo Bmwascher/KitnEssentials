@@ -85,14 +85,11 @@ describe("SecondaryStatsFormat", function()
     end)
 
     describe("text direction", function()
-        it("puts the label first and the value last by default", function()
-            local template = F.BuildRows({ entry() }, opts())
-            assert.equals("|cffffd100Crit:|r |cffffffff%.2f%%|r", template)
-        end)
-
-        it("mirrors the row, carrying the separator with the leading token", function()
-            local template = F.BuildRows({ entry() }, opts({ direction = "RIGHT" }))
-            assert.equals("|cffffffff%.2f%%:|r |cffffd100Crit|r", template)
+        it("mirrors the row and keeps the values in placeholder order", function()
+            local template, vals = F.BuildRows({ entry({ valueMode = "both" }) },
+                opts({ direction = "RIGHT" }))
+            assert.equals("|cffffffff%.0f (%.2f%%):|r |cffffd100Crit|r", template)
+            assert.same({ 1234, 24.39 }, vals)
         end)
 
         it("still emits the value alone when the label is hidden", function()
