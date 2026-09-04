@@ -319,6 +319,7 @@ function GUIFrame:HideThemePopup()
 end
 
 function GUIFrame:ToggleThemePopup()
+    if self.minimized then return end
     if popup and popup:IsShown() then
         self:HideThemePopup()
     else

@@ -26,9 +26,8 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Core",
         defaultExpanded = true,
         items = {
-            { id = "HomePage", text = "Home Page", keywords = { "home", "home page", "start", "welcome", "overview", "about", "changelog" } },
+            { id = "HomePage", text = "Home Page", keywords = { "home", "home page", "start", "welcome", "overview", "about", "changelog", "theme", "color", "accent", "appearance", "skin", "preset", "tint" } },
             { id = "Profiles", text = "Profile Manager", keywords = { "profile", "profiles", "import", "export", "copy", "reset" } },
-            { id = "Theme",    text = "Addon Theme", keywords = { "theme", "color", "accent", "appearance", "skin" } },
             { id = "Optimize", text = "System Optimization", keywords = { "optimize", "performance", "fps", "cpu", "memory", "latency", "cvar" } },
         },
     },
@@ -568,8 +567,9 @@ function GUIFrame:CreateMainFrame()
         themeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
     end)
     themeBtn:SetScript("OnClick", function()
-        GUIFrame:SelectSidebarItem("Theme")
+        GUIFrame:ToggleThemePopup()
     end)
+    GUIFrame:RegisterThemePopupOpener("titlebar", themeBtn)
 
     -- Home button (custom texture)
     local homeBtn = CreateFrame("Button", nil, header)
