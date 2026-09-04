@@ -12,8 +12,6 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local IsMouseButtonDown = IsMouseButtonDown
 local ColorPickerFrame = ColorPickerFrame
-local GetMouseFocus = GetMouseFocus
-local GetMouseFoci = GetMouseFoci
 local pairs = pairs
 
 local HEADER_HEIGHT = 32
@@ -23,9 +21,9 @@ local HEADER_HEIGHT = 32
 ---------------------------------------------------------------------------------
 
 -- Frames a click on must not close the popup, in addition to the popup
--- itself and an open ColorPickerFrame. Populated automatically below rather
--- than by name: whatever frame the mouse is over when Show/Hide/Toggle runs
--- gets exempted, so any future opener button works without editing this file.
+-- itself and an open ColorPickerFrame. Each opener registers itself by
+-- reference; without that, the release of a click on an opener reads as
+-- "outside" and fights the toggle the same click fired.
 GUIFrame.themePopupOpeners = GUIFrame.themePopupOpeners or {}
 GUIFrame.themePopupShown = false
 
@@ -35,26 +33,6 @@ local presetSelector
 local accentPicker, accentDimPicker, selectedBgPicker, selectedTextPicker
 local tintCheckbox
 local copyBtn, resetBtn
-
-local function CurrentMouseFocus()
-    if GetMouseFocus then
-        return GetMouseFocus()
-    elseif GetMouseFoci then
-        local foci = GetMouseFoci()
-        return foci and foci[1] or nil
-    end
-    return nil
-end
-
--- Exempts whatever the mouse is over right now. Called from every public
--- entry point below so the click that opens, re-toggles or closes the popup
--- never also reads as "outside" to the checker below.
-local function ExemptCurrentOpener()
-    local focus = CurrentMouseFocus()
-    if focus then
-        GUIFrame.themePopupOpeners[focus] = true
-    end
-end
 
 local function IsMouseOverThemePopup()
     if popup:IsMouseOver() then return true end
@@ -315,9 +293,14 @@ end
 -- Public API
 ---------------------------------------------------------------------------------
 
+function GUIFrame:RegisterThemePopupOpener(frame)
+    if frame then
+        GUIFrame.themePopupOpeners[frame] = true
+    end
+end
+
 function GUIFrame:ShowThemePopup()
     if not self.mainFrame then return end
-    ExemptCurrentOpener()
     if not popup then
         BuildThemePopup()
     end
@@ -330,7 +313,6 @@ end
 
 function GUIFrame:HideThemePopup()
     if not popup then return end
-    ExemptCurrentOpener()
     popup:Hide()
     self.themePopupShown = false
     checker:Hide()
