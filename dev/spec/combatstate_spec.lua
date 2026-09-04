@@ -980,6 +980,44 @@ describe("CombatState machine", function()
             end
         end)
 
+        -- Both arrival branches end the engagement. The one that starts a fight
+        -- is covered by the live-start case above; this is the other one, where
+        -- the fight survives the loading screen and only the span before it goes.
+        it("ends the engagement on a combat-flagged arrival that promotes", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            deps.playerInCombat = function() return false end
+            cs:OnEncounterStart()
+            sampling(5)
+            lastClock(sched).fn()
+            assert.is_true(cs.groupOnly)
+            assert.equals(65, cs:GetEngagementDuration())
+
+            deps.playerInCombat = function() return true end
+            cs:OnEnteringWorld()
+            assert.is_true(cs.playerCombat)
+            -- The pin survives the promote, so the fight's own 5 stands alone.
+            assert.equals(5, cs:GetEngagementDuration())
+        end)
+
+        -- A carry needs a fight to carry FROM. Starting an encounter on a frozen
+        -- machine must not fold the last fight's pin into the new engagement.
+        it("does not carry into an encounter started from a frozen machine", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            cs:Freeze("combat")
+            assert.equals(60, cs:GetEngagementDuration())
+
+            sampling(7)
+            cs:OnEncounterStart()
+            lastClock(sched).fn()
+            assert.equals(7, cs:GetEngagementDuration())
+        end)
+
         -- The chat line reports the engagement, so the gate that suppresses it
         -- has to span the engagement too. A player who fought the trash and was
         -- unflagged at the boss pull still fought this engagement.

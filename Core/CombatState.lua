@@ -356,6 +356,11 @@ function CombatState:OnEnteringWorld()
     self.pendingGen = nil                      -- invalidate any pending callback
     if self.deps.playerInCombat() then
         if self:IsLive() and self.groupOnly then
+            -- A world entry ends the engagement on BOTH arrival branches, not
+            -- just the one that starts a fight. The fight itself survives here,
+            -- so the pin stands and the clock does not rewind past it; what the
+            -- screen ends is everything before it.
+            self.engagementBase = 0
             self:Promote()
         else
             self:StartFight(PLAYER)
