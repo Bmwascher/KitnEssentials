@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.31
+
+### Damage Meter
+- **NEW:** Northern Sky Raid Tools nicknames now appear on meter bars and in
+  the dungeon death message. A nickname you have saved yourself still wins
+- The meter's own nickname toggle is gone. NSRT's Enable Nicknames is the only
+  switch now
+
+### Healer Mana
+- Northern Sky Raid Tools nicknames now appear on healer bars
+
+---
+
 ## v4.4.30
 
 ### Combat Timer
