@@ -52,7 +52,7 @@ end
 local function familyKey(name)
     local n = name:gsub("_old$", "")
     if n:match("^v?%d[%w%.%-]*$") then return "" end
-    n = n:gsub("%s*[%-_ ]v?%d[%w%.]*$", "")
+    n = n:gsub("%s*[%-_ ]v?%d[%w%.%-]*$", "")
     return n
 end
 

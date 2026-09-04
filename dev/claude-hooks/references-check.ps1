@@ -11,13 +11,12 @@ if (-not (Test-Path -LiteralPath $script)) { exit 0 }
 if (-not (Test-Path -LiteralPath (Join-Path $root 'References'))) { exit 0 }
 if (-not (Get-Command lua -ErrorAction SilentlyContinue)) { exit 0 }
 
+# The script resolves the repo root from its own absolute path, so no
+# working-directory change is needed.
 try {
-    Push-Location $root
     $out = & lua $script --soft 2>&1 | Out-String
 } catch {
     $out = ''
-} finally {
-    Pop-Location
 }
 if ($out -match '\[references\] (FAIL|note)') {
     Write-Output ($out.Trim() + "`nRun: lua dev/scripts/check-references-folders.lua — the folder rule is in the reference-tracker skill.")
