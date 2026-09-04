@@ -955,8 +955,18 @@ function KE:SetupMinimapIcon() end
 
 -- Core/Nicknames.lua
 ---@param unit string Unit token (e.g., "player", "party2")
----@return string name Nickname if set, else raw UnitName
+---@return string name Nickname from either source, else raw UnitName
 function KE:GetNicknameOrName(unit) end
+
+---@param subject string Unit token, "Name" or "Name-Realm"
+---@return string|nil nickname Plain nickname from the external provider, or nil
+function KE:GetNSRTNickname(subject) end
+
+---@param own string|nil Nickname from KE's own store
+---@param foreign string|nil Nickname from the external provider
+---@param realName string|nil Plain name the provider was asked about
+---@return string|nil nickname Resolved nickname, or nil when neither applies
+function KE:ResolveNicknamePrecedence(own, foreign, realName) end
 
 ---@return string|nil encoded
 ---@return string|nil error

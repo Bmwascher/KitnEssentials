@@ -152,7 +152,6 @@ local DM_DEFAULTS = {
     ShowIcon = true,
     ShowName = true,
     ShowRealm = false,          -- false: strip the "-Realm" suffix from cross-realm names
-    UseNicknames = true,        -- show saved nicknames (Custom Nicknames) in place of bar names
     ClassColorName = false,
     -- Number Format (replaces the old ShowPerSec boolean): "Both" = amount | dps,
     -- "Amount" = amount only, "PerSec" = rate only.

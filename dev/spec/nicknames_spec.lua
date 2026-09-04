@@ -407,15 +407,87 @@ describe("Nicknames.lua ClearAllNicknames + tag refresh", function()
         assert.equals(0, KE:ClearAllNicknames())
     end)
 
-    -- The Damage Meter is the only reader left, so it is the only dispatch
-    -- worth asserting. Counting the call rather than flagging it: a second
-    -- fan-out arm creeping back in is as wrong as none at all.
-    it("notifies the Damage Meter, and no-ops when it is absent", function()
+    -- Both arms counted: one dropped by a later edit would otherwise fail
+    -- nothing. Healer Mana refreshes only with a container, since its finder
+    -- faults on a nil frame.
+    it("notifies both readers, and no-ops when they are absent", function()
         assert.has_no.errors(function() KE:RefreshNicknameTags() end)
-        local calls = 0
+        local dmCalls, hmCalls = 0, 0
         local DM = _G.KitnEssentials:GetModule("DamageMeter", true)
-        DM.OnNicknamesChanged = function() calls = calls + 1 end
+        DM.OnNicknamesChanged = function() dmCalls = dmCalls + 1 end
+        local HM = _G.KitnEssentials:GetModule("HealerMana", true)
+        HM.FindHealers = function() hmCalls = hmCalls + 1 end
         KE:RefreshNicknameTags()
-        assert.equals(1, calls)
+        assert.equals(1, dmCalls)
+        assert.equals(0, hmCalls)
+        HM.containerFrame = {}
+        KE:RefreshNicknameTags()
+        assert.equals(2, dmCalls)
+        assert.equals(1, hmCalls)
+    end)
+end)
+
+-- The precedence rule fails silently when broken: a wrong answer renders a
+-- plausible name, not an error. Driven as a pure function, so the suite needs
+-- no fake of NSAPI.
+describe("Nicknames.lua ResolveNicknamePrecedence", function()
+    local KE
+    before_each(function() KE = L.loadNicknames() end)
+
+    it("prefers KE's own nickname when both sources have one", function()
+        assert.equals("Own", KE:ResolveNicknamePrecedence("Own", "Foreign", "Bob"))
+    end)
+
+    it("uses whichever single source has a nickname", function()
+        assert.equals("Own", KE:ResolveNicknamePrecedence("Own", nil, "Bob"))
+        assert.equals("Foreign", KE:ResolveNicknamePrecedence(nil, "Foreign", "Bob"))
+    end)
+
+    it("resolves nothing when neither source offers a usable string", function()
+        local unusable = { nil, "", 42, false }
+        for i = 1, 4 do
+            local v = unusable[i]
+            assert.is_nil(KE:ResolveNicknamePrecedence(v, v, "Bob"))
+        end
+        -- An unusable own value must not suppress a good foreign one.
+        assert.equals("Foreign", KE:ResolveNicknamePrecedence("", "Foreign", "Bob"))
+    end)
+
+    -- NSAPI signals "no nickname" by echoing the name back, in two shapes:
+    -- the whole string, or the bare name when it resolved the input as a unit.
+    -- Both must be refused, or an un-nicknamed cross-realm player reads as
+    -- nicknamed and ShowRealm stops working.
+    it("refuses a foreign value that only echoes the name it was asked about", function()
+        assert.is_nil(KE:ResolveNicknamePrecedence(nil, "Bob", "Bob"))
+        assert.is_nil(KE:ResolveNicknamePrecedence(nil, "Bob-Realm", "Bob-Realm"))
+        assert.is_nil(KE:ResolveNicknamePrecedence(nil, "Bob", "Bob-Realm"))
+        -- A real nickname alongside a realm-bearing name still resolves.
+        assert.equals("Bobby", KE:ResolveNicknamePrecedence(nil, "Bobby", "Bob-Realm"))
+    end)
+end)
+
+-- The predicate above proves the decision; this proves GetNicknameOrName
+-- reaches the foreign source at all and survives it failing. A one-call stub,
+-- not a stateful fake: it holds no state.
+-- Loader unit identity is "Bob" on "Realm".
+describe("Nicknames.lua GetNicknameOrName with a foreign source", function()
+    local KE
+    before_each(function() KE = L.loadNicknames() end)
+    after_each(function() _G.NSAPI = nil end)
+
+    it("returns a foreign nickname when KE's store has none", function()
+        _G.NSAPI = { GetName = function() return "Foreign" end }
+        assert.equals("Foreign", KE:GetNicknameOrName("player"))
+    end)
+
+    it("keeps KE's own nickname ahead of the foreign one", function()
+        KE.db.global.Nicknames["Bob-Realm"] = "Bobby"
+        _G.NSAPI = { GetName = function() return "Foreign" end }
+        assert.equals("Bobby", KE:GetNicknameOrName("player"))
+    end)
+
+    it("survives a foreign source that throws", function()
+        _G.NSAPI = { GetName = function() error("provider exploded") end }
+        assert.equals("Bob", KE:GetNicknameOrName("player"))
     end)
 end)
