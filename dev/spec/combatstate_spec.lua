@@ -979,6 +979,30 @@ describe("CombatState machine", function()
                 assert.equals(5, cs:GetEngagementDuration(), case.name)
             end
         end)
+
+        -- The chat line reports the engagement, so the gate that suppresses it
+        -- has to span the engagement too. A player who fought the trash and was
+        -- unflagged at the boss pull still fought this engagement.
+        it("carries participation across a carrying start and drops it otherwise", function()
+            local cs = newCS()
+            sampling(60)
+            cs:OnRegenDisabled()
+            lastClock(sched).fn()
+            assert.is_true(cs:PlayerJoined())
+
+            deps.playerInCombat = function() return false end
+            cs:OnEncounterStart()
+            assert.is_true(cs.groupOnly)
+            assert.is_true(cs:PlayerJoined())
+
+            -- A fresh engagement re-derives it: this start carries nothing.
+            cs:Freeze("combat")
+            deps.groupInCombat = function() return true end
+            deps.inInstance = function() return true end
+            cs:OnUnitFlags("party1")
+            assert.is_true(cs.groupOnly)
+            assert.is_false(cs:PlayerJoined())
+        end)
     end)
 
     describe("cases the design's budget lacks", function()

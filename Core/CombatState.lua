@@ -194,7 +194,8 @@ function CombatState:StartFight(which, span)
     -- Only a start that begins a NEW session folds the outgoing fight in. A
     -- live start that re-asserts the fight already running would double-count:
     -- the pin is about to be re-sampled from the same session it was read from.
-    if wasLive and span == SPAN_CARRY then
+    local carried = wasLive and span == SPAN_CARRY
+    if carried then
         self.engagementBase = self.engagementBase + (self.pin or 0)
     else
         self.engagementBase = 0
@@ -209,7 +210,10 @@ function CombatState:StartFight(which, span)
     self.generation = self.generation + 1
     self.playerCombat = (which == PLAYER)      -- both assigned, never one
     self.groupOnly = (which == GROUP)
-    self.playerJoined = (which == PLAYER)
+    -- Participation follows the span. A carried start continues one engagement,
+    -- and the chat line it will report covers the seconds before this start, so
+    -- a player who fought them has joined it even if the boss opened as GROUP.
+    self.playerJoined = (which == PLAYER) or (carried and self.playerJoined) or false
     if self.groupOnly then self:_ArmPoll() end
     self:_StartClock()
     -- Fired only on a fresh start (not a live-to-live chain pull): otherwise a
@@ -443,8 +447,8 @@ function CombatState:GetEngagementDuration()
     return self:Duration()
 end
 
--- True once playerCombat has been set at any point in the current fight;
--- cleared at each start.
+-- True once playerCombat has been set at any point in the current engagement;
+-- cleared at each start that opens a new one.
 function CombatState:PlayerJoined()
     return self.playerJoined
 end
