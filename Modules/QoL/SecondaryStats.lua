@@ -303,7 +303,7 @@ function SS:RegWithEditMode()
         KE.EditMode:RegisterElement({
             key = "SecondaryStats",
             module = self,
-            displayName = "Secondary Stats",
+            displayName = "Secondary Stats Display",
             frame = self.frame,
             getPosition = function() return self.db.Position end,
             setPosition = function(pos)

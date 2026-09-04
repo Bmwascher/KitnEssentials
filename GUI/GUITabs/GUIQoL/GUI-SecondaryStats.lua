@@ -48,7 +48,7 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 1: Enable
     ----------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Secondary Stats", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Secondary Stats Display", yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         ApplyState(checked)
