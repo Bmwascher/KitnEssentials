@@ -21,4 +21,6 @@
     <Script file="GroupSort.lua" />
     <Script file="RaidControl.lua" />
     <Script file="VehicleExit.lua" />
+    <Script file="SecondaryStatsFormat.lua" />
+    <Script file="SecondaryStats.lua" />
 </Ui>

@@ -115,6 +115,7 @@
     <Script file="GUITabs\GUIQoL\GUI-MoveFrames.lua" />
     <Script file="GUITabs\GUIQoL\GUI-RaidControl.lua" />
     <Script file="GUITabs\GUIQoL\GUI-QualityOfLife.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-SecondaryStats.lua" />
 
     <!-- Skinning tabs -->
     <Script file="GUITabs\GUISkinning\GUI-Tooltips.lua" />

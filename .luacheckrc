@@ -162,6 +162,15 @@ read_globals = {
     "UnitAffectingCombat", "UnitCanAssist", "UnitCanAttack",
     "UnitInParty", "UnitInRaid", "UnitIsVisible",
     "UnitFactionGroup", "UnitSpellHaste", "UnitStat",
+
+    -- Secondary stat getters and the combat-rating ids they take. All are
+    -- declared in the generated API documentation; the CR_* constants are
+    -- defined in Blizzard's own PaperDollFrame.
+    "GetCritChance", "GetMasteryEffect", "GetVersatilityBonus",
+    "GetCombatRating", "GetCombatRatingBonus", "GetLifesteal",
+    "GetAvoidance", "GetSpeed",
+    "CR_CRIT_MELEE", "CR_HASTE_MELEE", "CR_MASTERY", "CR_LIFESTEAL",
+    "CR_AVOIDANCE", "CR_SPEED", "CR_VERSATILITY_DAMAGE_DONE",
     "UnitClassification", "UnitSex", "UnitPowerType",
     "UnitPosition",
     "InCombatLockdown",
