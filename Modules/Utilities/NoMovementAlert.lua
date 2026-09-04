@@ -1,9 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  NoMovementAlert.lua                                     ║
 -- ║  Module: No Movement Alert                               ║
--- ║  Purpose: Shows the current spec's mobility spells        ║
--- ║           counting down, so the gap-closer or escape      ║
--- ║           state is always on screen.                      ║
+-- ║  Purpose: Shows the current spec's mobility spells       ║
+-- ║           counting down, so the gap-closer or escape     ║
+-- ║           state is always on screen.                     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
