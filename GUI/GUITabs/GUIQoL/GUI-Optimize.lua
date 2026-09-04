@@ -253,7 +253,7 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
         local optimalLabel = container:CreateFontString(nil, "OVERLAY")
         optimalLabel:SetPoint("LEFT", currentLabel, "RIGHT", 30, 0)
 
-        local arrowTex = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse"
+        local arrowTex = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
         local arrowRot = math.pi / 2
         local arrowR, arrowG, arrowB = Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3]
 

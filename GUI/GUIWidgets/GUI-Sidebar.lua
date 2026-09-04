@@ -103,7 +103,7 @@ function GUIFrame:CreateSectionHeader()
     header.label = label
 
     -- Arrow icon (texture with rotation animation)
-    local arrowTex = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse"
+    local arrowTex = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
     local ARROW_SIZE = 16
     local arrow = header:CreateTexture(nil, "OVERLAY")
     arrow:SetSize(ARROW_SIZE, ARROW_SIZE)
