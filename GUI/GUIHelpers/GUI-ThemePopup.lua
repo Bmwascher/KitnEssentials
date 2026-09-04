@@ -20,12 +20,10 @@ local HEADER_HEIGHT = 32
 -- Outside-click closing
 ---------------------------------------------------------------------------------
 
--- Frames a click on must not close the popup, in addition to the popup
--- itself and an open ColorPickerFrame. Without this, the release of a click
--- on an opener reads as "outside" and fights the toggle the same click fired.
--- Keyed by slot rather than by frame: the Home row is rebuilt on every theme
--- change with a fresh button, and a set keyed by frame would grow an orphan
--- per rebuild inside the every-frame check below.
+-- Frames a click on must not close the popup, alongside the popup itself and
+-- an open ColorPickerFrame; without the exemption a click on an opener reads
+-- as "outside" and fights the toggle it just fired. Keyed by slot, not frame:
+-- the Home row is rebuilt with a fresh button on every theme change.
 GUIFrame.themePopupOpeners = GUIFrame.themePopupOpeners or {}
 GUIFrame.themePopupShown = false
 
@@ -170,7 +168,6 @@ local function BuildThemePopup()
         currentY = currentY + height + (spacing or T.paddingSmall)
     end
 
-    -- 1. Preset grid
     presetSelector = GUIFrame:CreatePresetSwatches(content, {
         value = (db and db.Preset) or "KitnUI",
         callback = function(presetName) KE:SetThemePreset(presetName) end,
@@ -186,7 +183,7 @@ local function BuildThemePopup()
     manager:Register(presetSelector, "preset")
     AdvanceY(selectorHeight)
 
-    -- 2. Class-colour note, shown only in class mode
+    -- Shown only in class mode
     local classRow = GUIFrame:CreateRow(content, T.rowHeightLast)
     classRow:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -currentY)
     classRow:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -currentY)
@@ -212,7 +209,6 @@ local function BuildThemePopup()
     manager:Register(classRow, "class")
     AdvanceY(T.rowHeightLast)
 
-    -- 3. Four colour pickers
     local pickerRow1 = GUIFrame:CreateRow(content, T.rowHeight)
     pickerRow1:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -currentY)
     pickerRow1:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -currentY)
@@ -249,7 +245,6 @@ local function BuildThemePopup()
     manager:Register(selectedTextPicker, "custom")
     AdvanceY(T.rowHeight)
 
-    -- 4. Separator
     local sepRow = GUIFrame:CreateRow(content, T.rowHeightSeparator)
     sepRow:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -currentY)
     sepRow:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -currentY)
@@ -257,7 +252,7 @@ local function BuildThemePopup()
     sepRow:AddWidget(sep, 1)
     AdvanceY(T.rowHeightSeparator)
 
-    -- 5. Tint switch, ungated: it applies regardless of theme mode
+    -- Ungated: the tint switch applies regardless of theme mode
     local tintRow = GUIFrame:CreateRow(content, T.rowHeight)
     tintRow:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -currentY)
     tintRow:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -currentY)
@@ -268,7 +263,6 @@ local function BuildThemePopup()
     tintRow:AddWidget(tintCheckbox, 1)
     AdvanceY(T.rowHeight)
 
-    -- 6. Copy From Current Preset and Reset Theme
     local actionRow = GUIFrame:CreateRow(content, T.rowHeightLast)
     actionRow:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -currentY)
     actionRow:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -currentY)

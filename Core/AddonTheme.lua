@@ -97,9 +97,8 @@ local THEME_PRESETS = {
 KE.ThemePresets = THEME_PRESETS
 KE.ThemePresetOrder = { "KitnUI", "Nighthold", "Firelands", "Icecrown", "Dreamsurge", "Twilight", "Sunwell", "Torghast" }
 
--- The colour skinned Blizzard frames wear when the accent is not allowed to
--- reach them. Bright enough to read as a highlight against the near-black
--- window family, dull enough to read as no brand at all.
+-- The colour skinned Blizzard frames take when the accent is not allowed to
+-- reach them: visible against the near-black windows, not a brand colour.
 local SKIN_NEUTRAL = { 0.651, 0.651, 0.651, 1 }
 KE.SkinNeutralColor = SKIN_NEUTRAL
 KE.ThemeModeOptions = {
