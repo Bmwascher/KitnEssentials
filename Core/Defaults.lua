@@ -979,6 +979,7 @@ local Defaults = {
             Order = { "crit", "haste", "mastery", "vers", "leech", "avoidance", "speed" },
             Decimals = 2,
             Separator = ":",
+            TextDirection = "LEFT",
             LabelStyle = "full",
             CustomLabels = {},
             ColorMode = "palette",

@@ -137,6 +137,11 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
         { key = "", text = "None" },
     }
 
+    local directionList = {
+        { key = "LEFT", text = "Left (Crit: 800)" },
+        { key = "RIGHT", text = "Right (800: Crit)" },
+    }
+
     local colorModeList = {
         { key = "palette", text = "One Per Stat" },
         { key = "class", text = "Class Color" },
@@ -243,8 +248,19 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
             ApplySettings()
         end,
     })
-    row5c:AddWidget(gapSlider, 1)
+    row5c:AddWidget(gapSlider, 0.5)
     manager:Register(gapSlider, "all")
+
+    local directionDropdown = GUIFrame:CreateDropdown(row5c, "Direction", {
+        options = directionList,
+        value = db.TextDirection or "LEFT",
+        callback = function(selected)
+            db.TextDirection = selected
+            ApplySettings()
+        end,
+    })
+    row5c:AddWidget(directionDropdown, 0.5)
+    manager:Register(directionDropdown, "all")
     card5:AddRow(row5c, Theme.rowHeightLast, 0)
 
     yOffset = card5:GetNextOffset()
