@@ -191,10 +191,10 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
         value = (themeDb and themeDb.Preset) or "KitnUI",
         callback = function(presetName) KE:SetThemePreset(presetName) end,
     })
-    -- The strip keeps its own height, so AddWidget's top anchor would park it
-    -- above the dropdown and button beside it.
-    row4:AddWidget(presetSwatches, 0.42, nil, 0,
-        -(Theme.rowHeightLast - presetSwatches:GetHeight()) / 2)
+    -- Aligned with the dropdown's control box rather than centred in the row:
+    -- GUI-KEDropdown.lua drops its button 14 below the row top to clear the
+    -- label, and the chips are the same height as that button.
+    row4:AddWidget(presetSwatches, 0.42, nil, 0, -14)
     themeManager:Register(presetSwatches, "preset")
 
     local customizeBtn = GUIFrame:CreateButton(row4, "Customize...", {

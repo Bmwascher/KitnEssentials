@@ -35,7 +35,9 @@ function GUIFrame:CreatePresetSwatches(parent, config)
     local buttons = {}
 
     if compact then
-        local CHIP = 22
+        -- Matches the dropdown control box in GUI-KEDropdown.lua, so a strip
+        -- placed beside one lines up with it.
+        local CHIP = 24
         local GAP = 6
 
         for i, presetName in ipairs(presetOrder) do
