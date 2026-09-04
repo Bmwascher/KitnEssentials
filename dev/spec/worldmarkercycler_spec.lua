@@ -73,10 +73,16 @@ local function snapshot(env)
     return copy
 end
 
--- The module wraps the cycle button first and the clear button second.
+-- The cycle button is wrapped against ITSELF, the clear button against it. That
+-- relation picks the two apart, so a reordering of the wraps cannot silently
+-- swap which body each case is asserting on.
 local function bodies()
     local _, _, _, wrapped = L.loadWorldMarkerCycler()
-    return wrapped[1].body, wrapped[2].body
+    local cycle, clear
+    for _, w in ipairs(wrapped) do
+        if w.frame == w.header then cycle = w.body else clear = w.body end
+    end
+    return assert(cycle, "no self-wrapped cycle body"), assert(clear, "no clear body")
 end
 
 local function availOf(taken)
