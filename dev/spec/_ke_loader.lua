@@ -2797,4 +2797,40 @@ function L.loadCombatState(overrides)
     return helpers.loadModule("Core/CombatState.lua", {}), declaredSecret
 end
 
+-- Modules/Utilities/WorldMarkerCycler.lua. The module captures its secure-handler
+-- and binding functions as file-scope upvalues, so every stub below must exist
+-- BEFORE loadModule; IsRaidMarkerActive is an override rather than a global a
+-- spec reassigns afterwards, for the same reason (see loadDMCore's group
+-- predicates). The secure-handler stubs only RECORD what the module emitted:
+-- nothing here models the raid-marker system, and the snippet bodies are never
+-- executed as secure code. Returns WMC, KE, the executed-body list and the
+-- wrapped-body list, both { frame = <frame>, body = <string> } in call order;
+-- the wrapped list additionally carries script and header.
+function L.loadWorldMarkerCycler(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+
+    local executed, wrapped = {}, {}
+    _G.SecureHandlerExecute = function(frame, body)
+        executed[#executed + 1] = { frame = frame, body = body }
+    end
+    _G.SecureHandlerWrapScript = function(frame, script, header, body)
+        wrapped[#wrapped + 1] =
+            { frame = frame, script = script, header = header, body = body }
+    end
+    _G.SetOverrideBindingClick = function() end
+    _G.ClearOverrideBindings = function() end
+    _G.UIParent = noopFrame()
+    -- Default board: nothing placed, so every position primes free.
+    _G.IsRaidMarkerActive = overrides.IsRaidMarkerActive or function() return false end
+
+    -- Colon-called by the module, so the stub takes self first; a one-argument
+    -- shape would receive KE as the closure and error the moment a case reached
+    -- OnDisable.
+    local KE = { Print = function() end, RunAfterCombat = function(_, fn) fn() end }
+    helpers.loadModule("Modules/Utilities/WorldMarkerCycler.lua", KE)
+    return modules["WorldMarkerCycler"], KE, executed, wrapped
+end
+
 return L

@@ -1,0 +1,219 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  dev/spec/worldmarkercycler_spec.lua                     ║
+-- ║  World Marker Cycler: selection, reset and priming.      ║
+-- ╚══════════════════════════════════════════════════════════╝
+--
+-- The module's marker choice lives in snippet bodies it BUILDS as strings and
+-- hands to the secure environment. These cases run those exact strings as
+-- ordinary Lua, so what is under test is the module's own algorithm, never a
+-- reimplementation of it. Nothing here models the raid-marker system.
+--
+-- The boundary, stated because it is easy to overclaim: this proves the LOGIC
+-- is right. It cannot prove the restricted environment would accept the body.
+-- Every construct used is identical in both, but a future edit that reached for
+-- something the restricted environment forbids would pass here and fail in
+-- game. Legality is proved by an in-game CLICK, not by /reload alone: the body
+-- is only stored at registration and is compiled the first time it runs.
+
+local L = require("dev.spec._ke_loader")
+
+-- Runs an emitted "avail=newtable() avail[1]=true ..." body and returns the
+-- table it built.
+local function runAvailBody(body)
+    local chunk = assert(loadstring(body))
+    local env = { newtable = function() return {} end }
+    setfenv(chunk, env)
+    chunk()
+    return env.avail
+end
+
+-- Runs a wrapped click body against a mutable environment standing in for the
+-- secure one. Returns the macrotext the body asked for (nil if it placed
+-- nothing) and every attribute write it made, so a case can assert that a
+-- refusal wrote nothing at all. The leading local declaration reproduces the
+-- wrap's own "self,button,down" signature.
+local function runClickBody(body, env, down)
+    local chunk = assert(loadstring("local self, button, down = ...\n" .. body))
+    setfenv(chunk, env)
+    local placed
+    local writes = {}
+    local selfStub = {
+        SetAttribute = function(_, key, value)
+            writes[#writes + 1] = { key = key, value = value }
+            if key == "macrotext" then placed = value end
+        end,
+    }
+    chunk(selfStub, "LeftButton", down)
+    return placed, writes
+end
+
+-- The environment a click body sees. `next` belongs to it rather than being
+-- injected at call time, so a caller's snapshot covers everything the body can
+-- reach and the runner never mutates what it is measuring.
+local function newClickEnv(fields)
+    local env = { next = next }
+    for k, v in pairs(fields) do env[k] = v end
+    return env
+end
+
+-- Deep copy of EVERY environment key, so a refusal case fails on a stray global
+-- as well as on a changed one. A snippet's global write persists in the real
+-- managed environment, so an unexpected new key is a real defect, not noise.
+local function snapshot(env)
+    local copy = {}
+    for k, v in pairs(env) do
+        if type(v) == "table" then
+            local t = {}
+            for tk, tv in pairs(v) do t[tk] = tv end
+            copy[k] = t
+        else
+            copy[k] = v
+        end
+    end
+    return copy
+end
+
+-- The cycle button is wrapped against ITSELF, the clear button against it. That
+-- relation picks the two apart, so a reordering of the wraps cannot silently
+-- swap which body each case is asserting on.
+local function bodies()
+    local _, _, _, wrapped = L.loadWorldMarkerCycler()
+    local cycle, clear
+    for _, w in ipairs(wrapped) do
+        if w.frame == w.header then cycle = w.body else clear = w.body end
+    end
+    return assert(cycle, "no self-wrapped cycle body"), assert(clear, "no clear body")
+end
+
+local function availOf(taken)
+    local t = {}
+    for n = 1, 8 do t[n] = not taken[n] end
+    return t
+end
+
+describe("WorldMarkerCycler marker selection", function()
+    it("places the first free position and records it as the last placement", function()
+        local cycle = bodies()
+        local order = { 5, 3, 8, 1, 7, 2, 6, 4 }
+        local env = newClickEnv({ order = order, avail = availOf({ [1] = true, [2] = true }), last = 2 })
+
+        local placed = runClickBody(cycle, env, true)
+
+        assert.equals("/worldmarker [@cursor] 8", placed)
+        assert.is_false(env.avail[3])
+        assert.equals(3, env.last)
+    end)
+
+    it("advances one position past the last placement when nothing is free", function()
+        local cycle = bodies()
+        -- Differ only in the stored last position, so one table drives them:
+        -- a fresh order table, mid-list, and the end-to-first wrap.
+        local cases = {
+            { last = 0, pos = 1 },
+            { last = 3, pos = 4 },
+            { last = 7, pos = 8 },
+            { last = 8, pos = 1 },
+        }
+        for _, case in ipairs(cases) do
+            local order = { 1, 2, 3, 4, 5, 6, 7, 8 }
+            local env = newClickEnv({ order = order, avail = availOf({
+                [1] = true, [2] = true, [3] = true, [4] = true,
+                [5] = true, [6] = true, [7] = true, [8] = true,
+            }), last = case.last })
+
+            local placed = runClickBody(cycle, env, true)
+
+            assert.equals("/worldmarker [@cursor] " .. case.pos, placed, "last=" .. case.last)
+            assert.equals(case.pos, env.last, "last=" .. case.last)
+            assert.is_false(env.avail[case.pos], "last=" .. case.last)
+        end
+    end)
+
+    it("refuses without touching state on key-up, no order, or an empty order", function()
+        local cycle = bodies()
+        -- One assertion, three refusal inputs: the guard's three clauses.
+        local cases = {
+            { name = "key-up", order = { 1, 2, 3 }, down = false },
+            { name = "no order table", order = nil, down = true },
+            { name = "empty order", order = {}, down = true },
+        }
+        for _, case in ipairs(cases) do
+            local env = newClickEnv({ order = case.order, avail = availOf({}), last = 4 })
+            local before = snapshot(env)
+
+            local placed, writes = runClickBody(cycle, env, case.down)
+
+            assert.is_nil(placed, case.name)
+            assert.equals(0, #writes, case.name)
+            assert.same(before, snapshot(env), case.name)
+        end
+    end)
+end)
+
+describe("WorldMarkerCycler clear reset", function()
+    it("frees every position on key-down and leaves the order alone", function()
+        local _, clear = bodies()
+        local order = { 5, 3, 8, 1, 7, 2, 6, 4 }
+        local env = newClickEnv({ order = order, avail = availOf({
+            [1] = true, [2] = true, [3] = true, [4] = true,
+            [5] = true, [6] = true, [7] = true, [8] = true,
+        }), last = 6 })
+
+        local _, writes = runClickBody(clear, env, true)
+
+        for n = 1, 8 do assert.is_true(env.avail[n], "position " .. n) end
+        assert.same({ 5, 3, 8, 1, 7, 2, 6, 4 }, env.order)
+        assert.equals(6, env.last)
+        assert.equals(0, #writes)
+    end)
+
+    it("does nothing at all on key-up", function()
+        local _, clear = bodies()
+        local env = newClickEnv({
+            order = { 5, 3, 8, 1, 7, 2, 6, 4 },
+            avail = availOf({ [1] = true, [4] = true, [7] = true }),
+            last = 1,
+        })
+        local before = snapshot(env)
+
+        local placed, writes = runClickBody(clear, env, false)
+
+        assert.is_nil(placed)
+        assert.equals(0, #writes)
+        assert.same(before, snapshot(env))
+    end)
+end)
+
+describe("WorldMarkerCycler availability priming", function()
+    it("flags each ORDER POSITION by the marker sitting at it, not by marker id", function()
+        -- Permuted deliberately: in the default { 1, 2, ... 8 } a position and
+        -- the marker id at it coincide, so an identity list cannot tell the two
+        -- indexings apart and would pass either way.
+        local order = { 5, 3, 8, 1, 7, 2, 6, 4 }
+        local active = { [1] = true, [3] = true, [6] = true }
+
+        local WMC, _, executed = L.loadWorldMarkerCycler({
+            IsRaidMarkerActive = function(id) return active[id] == true end,
+        })
+        WMC.db = { OrderList = order }
+
+        WMC:PrimeAvailability()
+
+        local avail = runAvailBody(executed[#executed].body)
+        for pos, id in ipairs(order) do
+            assert.equals(not active[id], avail[pos], "position " .. pos)
+        end
+    end)
+
+    it("refuses to prime in combat, emitting nothing", function()
+        local WMC, _, executed = L.loadWorldMarkerCycler({
+            InCombatLockdown = function() return true end,
+        })
+        WMC.db = { OrderList = { 1, 2, 3 } }
+        local before = #executed
+
+        WMC:PrimeAvailability()
+
+        assert.equals(before, #executed)
+    end)
+end)
