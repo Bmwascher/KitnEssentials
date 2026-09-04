@@ -1079,8 +1079,11 @@ end
 --
 -- Fight length "[M:SS]" at the right end of the display-position-1 window's
 -- header band (db.ShowCombatClock, default off). Painted from KE.CombatState's
--- OnClockTick, the same dedicated clock ticker the Combat Timer reads -- the two
--- surfaces render the same sampled pin and cannot disagree.
+-- OnClockTick, the same dedicated clock ticker the Combat Timer reads -- but
+-- NOT the same value: this clock renders the FIGHT, so it restarts at a boss
+-- pull in step with the bars below it, while the Combat Timer renders the whole
+-- engagement and runs on through that pull. They agree whenever the fight and
+-- the engagement are the same thing, and differ across a chain pull by design.
 --
 -- TWO SOURCES, chosen by what the window is showing. A window on a STORED
 -- session -- pinned from the segment menu, or fallen back to the newest stored
