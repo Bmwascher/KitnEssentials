@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.4.36
+
+### Secondary Stats Display
+- **NEW:** Direction setting. Rows can read label first (Crit: 800) or value
+  first (800: Crit), and the block lines up on the matching edge
+- Tuned the default placement and font size
+
+---
+
 ## v4.4.35
 
 ### Addon Theme

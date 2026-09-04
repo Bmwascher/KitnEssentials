@@ -63,7 +63,7 @@ The home page also carries the general settings: minimap button, login message, 
 | CVars | One-click console variable panel that reads its values live from your client, including separate scale sliders for the windowed and maximized world map |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault, with class color and sound |
 | Quality of Life | Four tools on one page: Spell Alert Opacity (per-spec opt-in grid for Blizzard's proc overlay flashes, plus an opacity slider), Move Frames (drag Blizzard windows anywhere), Copy Anything (pull spell, item, NPC, and aura IDs to the clipboard from tooltips), and Slash Commands (shorthand commands such as `/rl`, `/cd`, `/fs`, `/leave`, `/reset`, `/mute`, `/music`) |
-| Secondary Stats Display | Movable readout for Crit, Haste, Mastery and Versatility, with optional Leech, Avoidance and Speed, per-stat percent or rating, decimal and label styles, and Edit Mode placement |
+| Secondary Stats Display | Movable readout for Crit, Haste, Mastery and Versatility, with optional Leech, Avoidance and Speed, per-stat percent or rating, direction, decimal and label styles, and Edit Mode placement |
 | Utilities | Seven tools on one page: Priest: PI Macro (builds a Power Infusion macro with trinkets, racials, and potions), Raid Notifications (gateway usability, reset and loot boss reminders, Mythic bench alert, seasonal bonus rolls), Ready Check (clickable consumable icons on ready check, including Warlock Soulstone with auto-target healer), Recuperate (one-click self-heal with health-based visibility), Time Spiral (movement proc tracker with glow and countdown, all classes), and World Markers (cycle markers at the cursor with drag-to-reorder priority) |
 
 ## Dungeon Tools
