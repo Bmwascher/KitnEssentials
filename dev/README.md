@@ -99,7 +99,9 @@ Runs the comment and commit-message guards over the pushed range, then
 `luacheck` + `busted`, all blocking, before every push — each tool
 gates independently, so a machine missing one still runs the other. Also
 prints a non-blocking note when `.luacheckrc` drifts from the local WoW API
-reference (see `dev/scripts/check-luacheckrc-drift.lua`). Override a single
+reference (see `dev/scripts/check-luacheckrc-drift.lua`) and when `References/`
+breaks the folder rule (`dev/scripts/check-references-folders.lua`; the same
+check runs at Claude Code session start). Override a single
 push with `git push --no-verify`. If a tool isn't on PATH the hook skips it
 with a notice rather than blocking (CI still runs everything).
 

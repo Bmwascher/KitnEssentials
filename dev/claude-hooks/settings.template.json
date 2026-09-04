@@ -18,6 +18,24 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh",
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/references-check.ps1\"; exit $LASTEXITCODE"
+            ],
+            "timeout": 30,
+            "statusMessage": "references folder check"
+          }
+        ]
+      }
     ]
   }
 }

@@ -249,4 +249,14 @@ if command -v lua >/dev/null 2>&1 \
     fi
 fi
 
+# References/ folder rule (non-blocking, quiet when clean). Local-only: the
+# tree is gitignored, so CI never sees it.
+if command -v lua >/dev/null 2>&1 \
+    && [ -f dev/scripts/check-references-folders.lua ] \
+    && [ -d References ]; then
+    if ! lua dev/scripts/check-references-folders.lua >/dev/null 2>&1; then
+        echo "[pre-push] note (non-blocking): References/ breaks the folder rule — run: lua dev/scripts/check-references-folders.lua" >&2
+    fi
+fi
+
 echo "[pre-push] OK"
