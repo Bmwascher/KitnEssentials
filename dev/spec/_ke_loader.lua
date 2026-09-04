@@ -184,6 +184,21 @@ function L.loadEditMode(KE)
     return helpers.loadModule("Core/EditMode.lua", KE).EditMode
 end
 
+-- Core/AddonTheme.lua. RAID_CLASS_COLORS and UnitClass are captured as
+-- file-scope upvalues by the class-color resolver, so both must exist on _G
+-- before the load. Neither is managed by _wow_mock, so they are set here
+-- directly rather than through installMock. Returns the KE table; the caller
+-- seeds db.global.Theme itself.
+function L.loadAddonTheme(env)
+    env = env or {}
+    _G.RAID_CLASS_COLORS = env.RAID_CLASS_COLORS or {
+        WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
+    }
+    _G.UnitClass = env.UnitClass or function() return "Mock", "WARRIOR" end
+    local KE = {}
+    return helpers.loadModule("Core/AddonTheme.lua", KE)
+end
+
 -- Modules/DamageMeter/Core.lua (KE.DamageMeter is set at file scope).
 -- Secret handling is DECLARED, never real: a table with __secret == true
 -- counts as secret, so specs exercise guard branches only — real 12.0 taint
