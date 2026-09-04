@@ -88,7 +88,7 @@ local function BuildThemePopup()
     local mainFrame = GUIFrame.mainFrame
     local db = KE.db and KE.db.global and KE.db.global.Theme
 
-    popup = CreateFrame("Frame", nil, mainFrame, "BackdropTemplate")
+    popup = CreateFrame("Frame", "KE_ThemePopup", mainFrame, "BackdropTemplate")
     popup:SetSize(490, 368)
     popup:SetPoint("CENTER", mainFrame, "CENTER", 0, 0)
     popup:SetFrameStrata("DIALOG")
