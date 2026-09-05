@@ -46,7 +46,12 @@ function GUIFrame:CreatePairedRow(card, config)
 
     -- Runs at build too: a saved profile can already hold a dependent switched
     -- on beneath a master that is off, and it would otherwise keep acting unseen.
-    if clearNow then depCfg.clear() end
+    -- Only when there is something to clear. The value is read fresh by the
+    -- caller's content builder, and clearing unconditionally would run the
+    -- module's whole apply chain on every page build with the master off.
+    -- The flip-time clear below stays unconditional: by then this value is the
+    -- one captured at build, which the player may have changed since.
+    if clearNow and depCfg.value then depCfg.clear() end
 
     local row = GUIFrame:CreateRow(card.content, height)
 
