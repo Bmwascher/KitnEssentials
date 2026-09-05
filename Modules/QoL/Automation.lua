@@ -582,20 +582,20 @@ end
 
 function AU:SetupTalkingHeadHider()
     if self._talkingHeadHooked then return end
+    -- CloseImmediately, not Hide: it also stops the voice-over and clears
+    -- the playing state. Hooked on PlayCurrent only; Reset runs inside it.
     local function HideTalkingHead(frame)
         if not AU.db or not AU.db.Enabled then return end
         if AU.db.HideTalkingHead and frame then
-            frame:Hide()
+            frame:CloseImmediately()
         end
     end
     if _G.TalkingHeadFrame then
         self:SecureHook(_G.TalkingHeadFrame, "PlayCurrent", HideTalkingHead)
-        self:SecureHook(_G.TalkingHeadFrame, "Reset", HideTalkingHead)
     else
         self:SecureHook("TalkingHead_LoadUI", function()
             if _G.TalkingHeadFrame then
                 self:SecureHook(_G.TalkingHeadFrame, "PlayCurrent", HideTalkingHead)
-                self:SecureHook(_G.TalkingHeadFrame, "Reset", HideTalkingHead)
             end
         end)
     end

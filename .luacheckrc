@@ -118,6 +118,7 @@ read_globals = {
     "GetPhysicalScreenSize", "GetCursorPosition",
     "RunNextFrame",
     "IsModifierKeyDown",
+    "IsSecureCmd",
     "EventUtil",
 
     -- Aura container (12.1 secure aura display)

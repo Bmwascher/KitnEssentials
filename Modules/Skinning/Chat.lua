@@ -1636,7 +1636,21 @@ function CHAT:EditBoxOnKeyDown(editbox, key)
 
     local historyLine = maxLines - (editbox.historyIndex - 1)
     local historyText = lines[historyLine]
-    if historyText then editbox:SetText(historyText) end
+    if not historyText then return end
+    if KE.ChatRecallRefused(historyText, self:IsRecallRestricted()) then
+        if not self.recallNoticeShown then
+            self.recallNoticeShown = true
+            KE:Print("Recall skipped: that line carries a link and chat is restricted here. Alt+Up still recalls it.")
+        end
+        return
+    end
+    editbox:SetText(historyText)
+end
+
+function CHAT:IsRecallRestricted()
+    if InCombatLockdown() then return true end
+    if C_CVar.GetCVarBool("addonChatRestrictionsForced") then return true end
+    return C_ChatInfo.InChatMessagingLockdown ~= nil and C_ChatInfo.InChatMessagingLockdown() == true
 end
 
 function CHAT:StyleEditbox(editbox)
@@ -1695,7 +1709,7 @@ function CHAT:StyleEditbox(editbox)
             -- UNVERIFIED, and a fail-closed design does not persist an
             -- unverified value to find out.
             if KE:IsSecretValue(text) then return end
-            if text and #text > 0 then
+            if KE.ChatRecallStores(text) then
                 tinsert(eb.historyLines, text)
                 while #eb.historyLines > 50 do
                     tremove(eb.historyLines, 1)
