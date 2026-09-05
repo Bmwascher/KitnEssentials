@@ -1422,8 +1422,13 @@ local deleteHooked = setmetatable({}, { __mode = "k" })
 -- Every dialog decorated once keeps this hook for good, but one button is
 -- shared between them. Without the owner test, a pooled frame that hosted an
 -- earlier prompt tears down the button of whichever dialog holds it now.
+-- A bare call, with no dialog, is the teardown path and always acts.
+local function DeleteHideActs(dialog, owner)
+    return dialog == nil or dialog == owner
+end
+
 local function HideDeleteButton(dialog)
-    if dialog and dialog ~= deleteOwner then return end
+    if not DeleteHideActs(dialog, deleteOwner) then return end
     deleteOwner = nil
     if deleteButton then
         deleteButton:Hide()
@@ -1496,11 +1501,14 @@ local function DecorateDeleteDialog(dialog)
     btn:ClearAllPoints()
     -- Sized from the dialog's own buttons, not from the thin edit box it
     -- replaces, so it matches the Yes and No beside it.
+    -- The methods existing is not the same as them returning numbers, and the
+    -- edit box is already hidden by here: an error would leave the dialog with
+    -- neither a typing box nor a button.
     local w, h = 150, 22
-    if yes.GetWidth then
-        w = math.max(yes:GetWidth() + 30, w)
-        h = math.max(yes:GetHeight(), h)
-    end
+    local yw = yes.GetWidth and yes:GetWidth()
+    local yh = yes.GetHeight and yes:GetHeight()
+    if yw then w = math.max(yw + 30, w) end
+    if yh then h = math.max(yh, h) end
     btn:SetSize(w, h)
     btn:SetPoint("CENTER", editBox, "CENTER", 0, 0)
     btn:SetText("Click to Confirm")
@@ -1597,7 +1605,7 @@ function SetupFastLoot()
             if not AU.db or not AU.db.Enabled then return end
             if not AU.db.FastLoot then return end
 
-            local now = GetTime()
+            local now = assert(GetTime(), "GetTime returned nil")
             if not FastLootReady(now, fastLootLast, FAST_LOOT_THROTTLE) then return end
             fastLootLast = now
 

@@ -1336,6 +1336,46 @@ describe("Fast Loot gate, throttle and registration", function()
         fx.AU:TeardownPorts()
         assert.is_false(frame:IsEventRegistered("LOOT_READY"))
     end)
+
+    -- The same rule for the delete watcher, which used to latch on and never
+    -- let go. Both halves are driven: its own key through ApplySettings, and
+    -- the module master through TeardownPorts.
+    it("unregisters the delete watcher on either switch", function()
+        local fx = installedFixture()
+        fx.AU.db.AutoFillDelete = true
+        fx.AU:ApplySettings()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoFillDelete")
+        local frame = findUpvalue(setup, "deleteWatcher")
+        assert.is_true(frame:IsEventRegistered("DELETE_ITEM_CONFIRM"))
+
+        fx.AU.db.AutoFillDelete = false
+        fx.AU:ApplySettings()
+        assert.is_false(frame:IsEventRegistered("DELETE_ITEM_CONFIRM"))
+
+        fx.AU.db.AutoFillDelete = true
+        fx.AU:ApplySettings()
+        assert.is_true(frame:IsEventRegistered("DELETE_ITEM_CONFIRM"))
+
+        fx.AU.db.Enabled = false
+        fx.AU:TeardownPorts()
+        assert.is_false(frame:IsEventRegistered("DELETE_ITEM_CONFIRM"))
+    end)
+
+    -- The shared Confirm button belongs to one pooled dialog at a time. Every
+    -- dialog it ever decorated keeps the hide hook for good, so the hook must
+    -- ask whether it owns the button before tearing it down.
+    it("acts on its owner's hide and on a bare call, and refuses another dialog's", function()
+        local fx = installedFixture()
+        fx.AU:ApplySettings()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoFillDelete")
+        local decorate = findUpvalue(setup, "DecorateDeleteDialog")
+        local hide = findUpvalue(decorate, "HideDeleteButton")
+        local acts = findUpvalue(hide, "DeleteHideActs")
+        local owner, other = {}, {}
+        assert.is_true(acts(owner, owner))
+        assert.is_true(acts(nil, owner))
+        assert.is_false(acts(other, owner))
+    end)
 end)
 
 ---------------------------------------------------------------------------------
