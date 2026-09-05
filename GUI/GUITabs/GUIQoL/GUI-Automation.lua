@@ -81,21 +81,44 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
     local card = GUIFrame:CreateCard(scrollChild, "Convenience", yOffset)
     manager:Register(card, "all")
 
-    local row1 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local autoFillDeleteCheck = GUIFrame:CreateCheckbox(row1, "Auto-Fill DELETE Text", {
-        value = db.AutoFillDelete ~= false,
-        callback = function(checked) db.AutoFillDelete = checked; ApplySettings() end,
+    GUIFrame:CreatePairedRow(card, {
+        manager = manager,
+        master = {
+            label = "Auto Loot",
+            get = function() return db.AutoLoot ~= false end,
+            callback = function(checked) db.AutoLoot = checked; ApplySettings() end,
+        },
+        dependent = {
+            kind = "checkbox",
+            label = "Fast Loot",
+            value = db.FastLoot == true,
+            tooltip = "Takes loot the instant it is available, skipping the game's brief fade.\n\nStill applies when you hold your auto-loot modifier on a normally-manual loot. Fishing is left alone.",
+            callback = function(checked) db.FastLoot = checked; ApplySettings() end,
+            -- Applies as well as clears, because the clear also runs at
+            -- construction, where nothing else would unregister LOOT_READY.
+            clear = function() db.FastLoot = false; ApplySettings() end,
+        },
     })
-    row1:AddWidget(autoFillDeleteCheck, 0.5)
-    manager:Register(autoFillDeleteCheck, "all")
 
-    local autoLootCheck = GUIFrame:CreateCheckbox(row1, "Auto Loot", {
-        value = db.AutoLoot ~= false,
-        callback = function(checked) db.AutoLoot = checked; ApplySettings() end,
+    GUIFrame:CreatePairedRow(card, {
+        manager = manager,
+        master = {
+            label = "Delete Confirmation",
+            get = function() return db.AutoFillDelete ~= false end,
+            tooltip = "Makes the delete-an-item dialog easier to get through.\n\nApplies to the dialogs that ask you to type the word, which are the ones for high-quality items and high-quality quest items. Ordinary items already delete on a single click.",
+            callback = function(checked) db.AutoFillDelete = checked; ApplySettings() end,
+        },
+        dependent = {
+            kind = "dropdown",
+            label = "Style",
+            options = {
+                { key = "click", text = "Click to Confirm" },
+                { key = "auto",  text = "Type It For Me" },
+            },
+            value = db.DeleteConfirmStyle or "click",
+            callback = function(val) db.DeleteConfirmStyle = val end,
+        },
     })
-    row1:AddWidget(autoLootCheck, 0.5)
-    manager:Register(autoLootCheck, "all")
-    card:AddRow(row1, Theme.rowHeight)
 
     local row2 = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
     local autoConfirmLootRollCheck = GUIFrame:CreateCheckbox(row2, "Auto-Confirm Loot Roll Popup", {
@@ -123,25 +146,26 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
         local cardHousing = GUIFrame:CreateCard(scrollChild, "Housing Item Auto-Roll", yOffset)
         manager:Register(cardHousing, "all")
 
-        local rowHousing = GUIFrame:CreateRow(cardHousing.content, Theme.rowHeightLast)
-        local autoPassHousingCheck = GUIFrame:CreateCheckbox(rowHousing, "Auto-Roll on Housing Items", {
-            value = db.AutoPassHousing == true,
-            callback = function(checked) db.AutoPassHousing = checked; ApplySettings() end,
-        })
-        rowHousing:AddWidget(autoPassHousingCheck, 0.5)
-        manager:Register(autoPassHousingCheck, "all")
-
-        local rollModeDropdown = GUIFrame:CreateDropdown(rowHousing, "Roll Type", {
-            options = {
-                { key = "PASS", text = "Pass" },
-                { key = "NEED", text = "Need" },
+        GUIFrame:CreatePairedRow(cardHousing, {
+            height = Theme.rowHeightLast,
+            spacing = 0,
+            manager = manager,
+            master = {
+                label = "Auto-Roll on Housing Items",
+                get = function() return db.AutoPassHousing == true end,
+                callback = function(checked) db.AutoPassHousing = checked; ApplySettings() end,
             },
-            value = db.AutoPassHousingMode or "PASS",
-            callback = function(val) db.AutoPassHousingMode = val end,
+            dependent = {
+                kind = "dropdown",
+                label = "Roll Type",
+                options = {
+                    { key = "PASS", text = "Pass" },
+                    { key = "NEED", text = "Need" },
+                },
+                value = db.AutoPassHousingMode or "PASS",
+                callback = function(val) db.AutoPassHousingMode = val end,
+            },
         })
-        rowHousing:AddWidget(rollModeDropdown, 0.5)
-        manager:Register(rollModeDropdown, "all")
-        cardHousing:AddRow(rowHousing, Theme.rowHeightLast, 0)
 
         cardHousing:AddLabel("|cff888888Auto-rolls on Housing items based on your roll type selection. Useful in raids/dungeons where housing decor drops aren't gear upgrades.|r")
 
@@ -572,29 +596,34 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
         row1a:AddWidget(autoSellCheck, 0.5)
         manager:Register(autoSellCheck, "all")
 
-        local autoRepairCheck = GUIFrame:CreateCheckbox(row1a, "Auto Repair Gear", {
-            value = db.AutoRepair ~= false,
-            callback = function(checked) db.AutoRepair = checked; ApplySettings() end,
-        })
-        row1a:AddWidget(autoRepairCheck, 0.5)
-        manager:Register(autoRepairCheck, "all")
-        card1:AddRow(row1a, Theme.rowHeight)
-
-        local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-        local useGuildCheck = GUIFrame:CreateCheckbox(row1b, "Use Guild Funds for Repair", {
-            value = db.UseGuildFunds ~= false,
-            callback = function(checked) db.UseGuildFunds = checked; ApplySettings() end,
-        })
-        row1b:AddWidget(useGuildCheck, 0.5)
-        manager:Register(useGuildCheck, "all")
-
-        local repairReportCheck = GUIFrame:CreateCheckbox(row1b, "Announce Repair Cost", {
+        -- Announce Repair Cost is deliberately not paired: it announces a
+        -- hand-clicked repair and another addon's repair too, so it must not
+        -- read as a third dependent of Auto Repair.
+        local repairReportCheck = GUIFrame:CreateCheckbox(row1a, "Announce Repair Cost", {
             value = db.RepairReport ~= false,
             callback = function(checked) db.RepairReport = checked; ApplySettings() end,
         })
-        row1b:AddWidget(repairReportCheck, 0.5)
+        row1a:AddWidget(repairReportCheck, 0.5)
         manager:Register(repairReportCheck, "all")
-        card1:AddRow(row1b, Theme.rowHeightLast, 0)
+        card1:AddRow(row1a, Theme.rowHeight)
+
+        GUIFrame:CreatePairedRow(card1, {
+            height = Theme.rowHeightLast,
+            spacing = 0,
+            manager = manager,
+            master = {
+                label = "Auto Repair Gear",
+                get = function() return db.AutoRepair ~= false end,
+                callback = function(checked) db.AutoRepair = checked; ApplySettings() end,
+            },
+            dependent = {
+                kind = "checkbox",
+                label = "Use Guild Funds for Repair",
+                value = db.UseGuildFunds ~= false,
+                callback = function(checked) db.UseGuildFunds = checked; ApplySettings() end,
+                clear = function() db.UseGuildFunds = false; ApplySettings() end,
+            },
+        })
 
         yOffset = card1:GetNextOffset()
     end
