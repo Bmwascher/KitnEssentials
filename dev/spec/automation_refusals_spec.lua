@@ -137,6 +137,16 @@ local function newFixture()
     local originalErrHandler = function() end
     _G.UIErrorsFrame:SetScript("OnEvent", originalErrHandler)
 
+    -- The application dialog and its Sign Up button. The dialog's OnShow hook
+    -- refuses to install without the global, so the Ctrl refusal is
+    -- unreachable otherwise; the button records clicks so the refusal is
+    -- observable rather than merely dispatched.
+    _G.LFGListApplicationDialog = newSpy("LFGListApplicationDialog")
+    _G.LFGListApplicationDialog.SignUpButton = newSpy("LFGListSignUpButton")
+    _G.LFGListApplicationDialog.SignUpButton.IsEnabled = function() return true end
+    _G.LFGListApplicationDialog.SignUpButton.Click = function() record("LFGListSignUpButton", "Click") end
+    _G.IsControlKeyDown = function() return _G.KE_SPEC_CTRL == true end
+
     _G.ExpansionLandingPageMinimapButton = newSpy("ExpansionLandingPageMinimapButton")
     _G.ActionStatus = newSpy("ActionStatus")
     _G.PaperDollFrame = newSpy("PaperDollFrame")
@@ -1416,10 +1426,10 @@ end)
 -- refusal has to run before the caller touches Blizzard's result APIs, and a
 -- refusal placed after those reads would fire too late to stop the throw.
 --
--- Not covered here: the dialog auto-click's Ctrl refusal. That code is
--- unchanged by this branch, and reaching it needs a stateful
--- LFGListApplicationDialog with SignUpButton -- the kind of fake the test
--- policy calls a smell. It is a smoke step.
+-- The dialog auto-click's Ctrl refusal is covered too. It is a refusal rule,
+-- and the contract wants those specced even in unchanged code; reaching it
+-- needs only a recording button behind the dialog global, not a simulation of
+-- the frame lifecycle.
 ---------------------------------------------------------------------------------
 describe("Quick Signup double-click decision", function()
     local function predicate()
@@ -1461,7 +1471,11 @@ describe("Quick Signup double-click decision", function()
         local Should = predicate()
         local cases = {
             { name = "same entry but past the threshold",  over = { now = 100.5 } },
-            { name = "exactly at the threshold",           over = { now = 100.4 } },
+            -- Zero as the previous stamp keeps the comparison exact: 100.4 minus
+            -- 100.0 is not 0.4 in floating point, and a case written that way is
+            -- rejected by both < and <=, so it cannot see an inclusive-boundary
+            -- regression at all. Same trap the Fast Loot throttle case documents.
+            { name = "exactly at the threshold",           over = { lastTime = 0, now = 0.4 } },
             { name = "a different entry, however recent",  over = { lastEntry = 7 } },
             { name = "no previous click, so a first click can never sign up",
               over = { lastEntry = NONE } },
@@ -1475,5 +1489,43 @@ describe("Quick Signup double-click decision", function()
         for _, case in ipairs(cases) do
             assert.is_false(call(Should, case.over), case.name)
         end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- The skip key on the application dialog. With Quick Signup on this is the only
+-- route to the note box, so a refusal that stops refusing silently removes the
+-- one way to type a note.
+---------------------------------------------------------------------------------
+describe("Quick Signup skip key", function()
+    local function dialogSeams()
+        local fx = installedFixture()
+        fx.AU.db.AutoQueueConfirm = true
+        fx.AU:ApplySettings()
+        return fx, _G.LFGListApplicationDialog:GetScript("OnShow")
+    end
+
+    it("clicks Sign Up when the dialog opens", function()
+        _G.KE_SPEC_CTRL = false
+        local fx, onShow = dialogSeams()
+        assert.is_not_nil(onShow)
+        onShow(_G.LFGListApplicationDialog)
+        assert.equals(1, fx.findFrameCalls("LFGListSignUpButton", "Click"))
+    end)
+
+    it("refuses while the skip key is held", function()
+        _G.KE_SPEC_CTRL = true
+        local fx, onShow = dialogSeams()
+        onShow(_G.LFGListApplicationDialog)
+        assert.equals(0, fx.findFrameCalls("LFGListSignUpButton", "Click"))
+        _G.KE_SPEC_CTRL = false
+    end)
+
+    it("refuses when the setting is off, key or no key", function()
+        _G.KE_SPEC_CTRL = false
+        local fx, onShow = dialogSeams()
+        fx.AU.db.AutoQueueConfirm = false
+        onShow(_G.LFGListApplicationDialog)
+        assert.equals(0, fx.findFrameCalls("LFGListSignUpButton", "Click"))
     end)
 end)

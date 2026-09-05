@@ -1404,8 +1404,8 @@ local function SetupAutoQueueConfirm()
         local signUp = panel.SignUpButton
         if not signUp or not signUp:IsEnabled() then return end
 
-        lastClickEntry, lastClickTime = nil, 0
         LFGListSearchPanel_SignUp(panel)
+        lastClickEntry, lastClickTime = nil, 0
     end)
 
     local dialog = LFGListApplicationDialog
@@ -1446,8 +1446,12 @@ local notePlanted = false
 -- check after it.
 local function ReadActivityID(resultID)
     if resultID == nil then return nil end
-    -- Both callers route through here, so the lockdown refusal lives here too
-    -- rather than in one of them.
+    -- Both refusals live here because both callers route through here. They
+    -- are different axes: IsFullyRestricted covers combat, encounter,
+    -- challenge mode and PvP; InLockdown covers the communication-restricted
+    -- maps that make this read secret. The teardown clears without coming
+    -- through here, so a restricted state can never strand a planted value.
+    if KE:IsFullyRestricted() then return nil end
     if InLockdown() then return nil end
     local activityID
     pcall(function()
