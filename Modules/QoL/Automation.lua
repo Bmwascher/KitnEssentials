@@ -1371,7 +1371,7 @@ local function SetupAutoQueueConfirm()
     if AU._lfgHooked then return end
     AU._lfgHooked = true
 
-    -- Above the dialog guard below: the two hooks are independent, and a
+    -- Installed above the dialog guard: the two hooks are independent, and a
     -- missing dialog global must not take the double click down with it.
     hooksecurefunc("LFGListSearchEntry_OnClick", function(entry, button)
         if not AU.db or not AU.db.Enabled then return end
@@ -1434,11 +1434,11 @@ end
 -- Preventing the clear is the only mechanism available, which is why this
 -- writes a Blizzard field at all.
 --
--- The field has one direct reader, inside that same function. That bounds what
--- reads the value, NOT the taint: once the comparison reads it, everything the
--- rest of the function writes is written tainted, and no teardown lifts that
--- before a reload. The alternative is replacing the global outright, which
--- taints the _G slot for every reader in the game.
+-- The field has one direct reader, which bounds what reads the value and NOT
+-- the taint: once that comparison reads it, everything the rest of the function
+-- writes is written tainted, and no teardown lifts that before a reload. The
+-- alternative, replacing the global outright, taints the _G slot for every
+-- reader in the game.
 
 local notePlanted = false
 
