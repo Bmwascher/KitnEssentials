@@ -1415,9 +1415,16 @@ local DELETE_DIALOGS = {
 }
 
 local deleteButton
+local deleteOwner
+local deleteWatcher
 local deleteHooked = setmetatable({}, { __mode = "k" })
 
-local function HideDeleteButton()
+-- Every dialog decorated once keeps this hook for good, but one button is
+-- shared between them. Without the owner test, a pooled frame that hosted an
+-- earlier prompt tears down the button of whichever dialog holds it now.
+local function HideDeleteButton(dialog)
+    if dialog and dialog ~= deleteOwner then return end
+    deleteOwner = nil
     if deleteButton then
         deleteButton:Hide()
         -- The handler closes over the previous dialog's Yes button, which is
@@ -1497,6 +1504,7 @@ local function DecorateDeleteDialog(dialog)
     btn:SetSize(w, h)
     btn:SetPoint("CENTER", editBox, "CENTER", 0, 0)
     btn:SetText("Click to Confirm")
+    deleteOwner = dialog
     btn:SetScript("OnClick", function(self)
         -- The dialog accepts with DeleteCursorItem(), which never reads the edit
         -- box, so the typing was only ever a gate on this button.
@@ -1512,23 +1520,31 @@ local function DecorateDeleteDialog(dialog)
 end
 
 function SetupAutoFillDelete()
-    if AU._deleteHooked then return end
-    AU._deleteHooked = true
-
     -- DELETE_ITEM_CONFIRM fires as the dialog is raised, and
     -- StaticPopup_ForEachShownDialog finds whichever pooled slot it landed in.
     -- Popups are pooled, so there is no one frame to hook.
-    local watcher = CreateFrame("Frame")
-    watcher:RegisterEvent("DELETE_ITEM_CONFIRM")
-    watcher:SetScript("OnEvent", function()
-        if not AU.db or not AU.db.Enabled then return end
-        if not AU.db.AutoFillDelete then return end
-        local each = _G.StaticPopup_ForEachShownDialog
-        if not each then return end
-        each(function(dialog)
-            if DELETE_DIALOGS[dialog.which] then pcall(DecorateDeleteDialog, dialog) end
+    if not deleteWatcher then
+        deleteWatcher = CreateFrame("Frame")
+        deleteWatcher:SetScript("OnEvent", function()
+            if not AU.db or not AU.db.Enabled then return end
+            if not AU.db.AutoFillDelete then return end
+            local each = _G.StaticPopup_ForEachShownDialog
+            if not each then return end
+            each(function(dialog)
+                if DELETE_DIALOGS[dialog.which] then pcall(DecorateDeleteDialog, dialog) end
+            end)
         end)
-    end)
+    end
+
+    -- Follows the master as well as the setting, and this function runs from
+    -- TeardownPorts too. ApplySettings returns before reaching here once
+    -- Automation is off, so without both of those the frame would keep
+    -- DELETE_ITEM_CONFIRM registered with the module disabled.
+    if AU.db.Enabled and AU.db.AutoFillDelete then
+        deleteWatcher:RegisterEvent("DELETE_ITEM_CONFIRM")
+    else
+        deleteWatcher:UnregisterAllEvents()
+    end
 end
 
 end
@@ -1590,7 +1606,7 @@ function SetupFastLoot()
             local modifier = IsModifiedClick("AUTOLOOTTOGGLE") == true
             if not ShouldFastLoot(autoLoot, modifier, isFishing, FreeBagSlots()) then return end
 
-            for i = GetNumLootItems(), 1, -1 do
+            for i = (GetNumLootItems() or 0), 1, -1 do
                 LootSlot(i)
             end
         end)
@@ -3047,6 +3063,7 @@ function AU:TeardownPorts()
     SetupOmniumButton()
     SetupTrainAllButton()
     SetupFastLoot()
+    SetupAutoFillDelete()
 end
 
 function AU:OnDisable()

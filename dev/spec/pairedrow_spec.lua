@@ -56,7 +56,7 @@ local function newHarness()
     return G, { content = {}, AddRow = function() end }
 end
 
-local function lootPair(G, card, db)
+local function lootPair(G, card, db, calls)
     local _, master, dependent = G:CreatePairedRow(card, {
         master = {
             label = "Auto Loot",
@@ -68,7 +68,10 @@ local function lootPair(G, card, db)
             label = "Fast Loot",
             value = db.FastLoot == true,
             callback = function(checked) db.FastLoot = checked end,
-            clear = function() db.FastLoot = false end,
+            clear = function()
+                if calls then calls.clear = calls.clear + 1 end
+                db.FastLoot = false
+            end,
         },
     })
     return master, dependent
@@ -108,5 +111,28 @@ describe("PairedRow callback wiring", function()
         -- after it. It must not resurrect a setting the player cannot see.
         dependentB.cfg.callback(true)
         assert.is_false(db.FastLoot)
+    end)
+
+    -- The flip-time clear, on its own. The refusal case above starts with the
+    -- dependent already off, so removing this clear entirely leaves it passing.
+    it("clears a dependent that was on when its master is switched off", function()
+        local G, card = newHarness()
+        local db = { AutoLoot = true, FastLoot = true }
+        local master = lootPair(G, card, db)
+        master.cfg.callback(false)
+        assert.is_false(db.FastLoot)
+    end)
+
+    -- The build-time clear is conditional: an apply chain runs inside it, and
+    -- firing it for a dependent already off runs that chain for nothing.
+    it("does not clear at build when the dependent is already off", function()
+        local G, card = newHarness()
+        local calls = { clear = 0 }
+        lootPair(G, card, { AutoLoot = false, FastLoot = false }, calls)
+        assert.equals(0, calls.clear)
+
+        local inherited = { clear = 0 }
+        lootPair(G, card, { AutoLoot = false, FastLoot = true }, inherited)
+        assert.equals(1, inherited.clear)
     end)
 end)
