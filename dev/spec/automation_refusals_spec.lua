@@ -1414,7 +1414,7 @@ end)
 -- lives in this one predicate over values, so none of these cases needs a fake
 -- of the LFG frames -- which is also why the guards live there: the lockdown
 -- refusal has to run before the caller touches Blizzard's result APIs, and a
--- refusal buried in the hook body after those reads would never fire.
+-- refusal placed after those reads would fire too late to stop the throw.
 --
 -- Not covered here: the dialog auto-click's Ctrl refusal. That code is
 -- unchanged by this branch, and reaching it needs a stateful

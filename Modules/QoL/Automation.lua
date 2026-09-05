@@ -1397,9 +1397,9 @@ local function SetupAutoQueueConfirm()
 
         -- Only past the refusal, because both of these reach
         -- GetSearchResultInfo. Blizzard's own OnClick already selected the row
-        -- on the first click, so KE never calls LFGListSearchPanel_SelectResult
-        -- -- that reaches UpdateResults, which poisons the result provider for
-        -- the session when it runs from addon execution.
+        -- on the first click, so KE never calls LFGListSearchPanel_SelectResult,
+        -- which reaches UpdateResults and poisons the result provider for the
+        -- session when it runs from addon execution.
         if not LFGListSearchPanelUtil_CanSelectResult(resultID) then return end
         local signUp = panel.SignUpButton
         if not signUp or not signUp:IsEnabled() then return end
@@ -1436,9 +1436,7 @@ end
 --
 -- The field has one direct reader, which bounds what reads the value and NOT
 -- the taint: once that comparison reads it, everything the rest of the function
--- writes is written tainted, and no teardown lifts that before a reload. The
--- alternative, replacing the global outright, taints the _G slot for every
--- reader in the game.
+-- writes is written tainted, and no teardown lifts that before a reload.
 
 local notePlanted = false
 
@@ -1463,7 +1461,6 @@ local function ReadActivityID(resultID)
         if ids == nil or issecrettable(ids) then return end
         activityID = ids[1]
     end)
-    if issecretvalue(activityID) then return nil end
     return activityID
 end
 
