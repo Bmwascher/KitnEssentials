@@ -889,28 +889,29 @@ local function WantIDs(db)
     return true
 end
 
+-- Gate BEFORE the lookup, not inside the draw: Lua evaluates the argument
+-- first, so a check inside would still spend a texture lookup on every tooltip
+-- with the setting off.
+local function WantIconIDs(db)
+    return db and db.ShowIconIDs == true
+end
+
 -- The id reaching here has already passed the secret check, so the argument is
 -- clean; the RETURN is guarded because neither icon API declares SecretReturns
 -- and an undeclared secret return would blow up the %d.
-local function AddIconIDLine(tt, db, iconID)
-    if not (db and db.ShowIconIDs == true) then return end
+local function AddIconIDLine(tt, iconID)
     if not iconID then return end
     if KE.IsSecretValue and KE:IsSecretValue(iconID) then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Icon ID:|r %d", iconID))
-end
-
-local function SpellIconID(spellID)
-    if not (C_Spell and C_Spell.GetSpellTexture) then return nil end
-    local ok, iconID = pcall(C_Spell.GetSpellTexture, spellID)
-    if not ok then return nil end
-    return iconID
 end
 
 local function AddSpellIDLine(tt, spellID, db)
     if KE.IsSecretValue and KE:IsSecretValue(spellID) then return end
     if not spellID then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellID))
-    AddIconIDLine(tt, db, SpellIconID(spellID))
+    if WantIconIDs(db) then
+        AddIconIDLine(tt, C_Spell.GetSpellTexture(spellID))
+    end
     tt:Show()
 end
 
@@ -993,7 +994,9 @@ local function AddAuraIDLine(tt, spellId, db)
     if KE.IsSecretValue and KE:IsSecretValue(spellId) then return end
     if not spellId then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellId))
-    AddIconIDLine(tt, db, SpellIconID(spellId))
+    if WantIconIDs(db) then
+        AddIconIDLine(tt, C_Spell.GetSpellTexture(spellId))
+    end
     tt:Show()
 end
 
@@ -1013,9 +1016,8 @@ function TT:OnTooltipSetItem(tt, data)
     local id = data and data.id
     if not id or KE:IsSecretValue(id) then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Item ID:|r %d", id))
-    if C_Item and C_Item.GetItemIconByID then
-        local ok, iconID = pcall(C_Item.GetItemIconByID, id)
-        if ok then AddIconIDLine(tt, db, iconID) end
+    if WantIconIDs(db) then
+        AddIconIDLine(tt, C_Item.GetItemIconByID(id))
     end
 end
 

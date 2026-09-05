@@ -334,7 +334,7 @@ GUIFrame:RegisterTabbedContent("CVars", function()
     local DEV     = { id = "CVarsDev",     label = "Dev" }
 
     local AU = GetAutomationModule()
-    if AU and AU.HasLiveDevCVars and AU:HasLiveDevCVars() then
+    if AU and AU:HasLiveDevCVars() then
         return { GENERAL, DEV }
     end
     return { GENERAL }
