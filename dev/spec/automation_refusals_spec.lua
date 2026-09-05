@@ -138,14 +138,22 @@ local function newFixture()
     _G.UIErrorsFrame:SetScript("OnEvent", originalErrHandler)
 
     -- The application dialog and its Sign Up button. The dialog's OnShow hook
-    -- refuses to install without the global, so the Ctrl refusal is
+    -- refuses to install without the global, so the skip-key refusal is
     -- unreachable otherwise; the button records clicks so the refusal is
     -- observable rather than merely dispatched.
     _G.LFGListApplicationDialog = newSpy("LFGListApplicationDialog")
     _G.LFGListApplicationDialog.SignUpButton = newSpy("LFGListSignUpButton")
     _G.LFGListApplicationDialog.SignUpButton.IsEnabled = function() return true end
     _G.LFGListApplicationDialog.SignUpButton.Click = function() record("LFGListSignUpButton", "Click") end
-    _G.IsControlKeyDown = function() return _G.KE_SPEC_CTRL == true end
+
+    -- One held key at a time. These three must be assigned before the module
+    -- loads: Automation captures IsShiftKeyDown as a file-scope upvalue, so a
+    -- later assignment would not reach it. Each reads the global at call time,
+    -- so a case can change the held key without reloading.
+    _G.KE_SPEC_HELD_KEY = nil
+    _G.IsControlKeyDown = function() return _G.KE_SPEC_HELD_KEY == "CTRL" end
+    _G.IsShiftKeyDown = function() return _G.KE_SPEC_HELD_KEY == "SHIFT" end
+    _G.IsAltKeyDown = function() return _G.KE_SPEC_HELD_KEY == "ALT" end
 
     _G.ExpansionLandingPageMinimapButton = newSpy("ExpansionLandingPageMinimapButton")
     _G.ActionStatus = newSpy("ActionStatus")
@@ -1505,24 +1513,46 @@ describe("Quick Signup skip key", function()
         return fx, _G.LFGListApplicationDialog:GetScript("OnShow")
     end
 
+    after_each(function() _G.KE_SPEC_HELD_KEY = nil end)
+
     it("clicks Sign Up when the dialog opens", function()
-        _G.KE_SPEC_CTRL = false
         local fx, onShow = dialogSeams()
         assert.is_not_nil(onShow)
         onShow(_G.LFGListApplicationDialog)
         assert.equals(1, fx.findFrameCalls("LFGListSignUpButton", "Click"))
     end)
 
-    it("refuses while the skip key is held", function()
-        _G.KE_SPEC_CTRL = true
+    it("refuses while the configured key is held, whichever it is", function()
+        for _, key in ipairs({ "SHIFT", "CTRL", "ALT" }) do
+            local fx, onShow = dialogSeams()
+            fx.AU.db.SignupModifier = key
+            _G.KE_SPEC_HELD_KEY = key
+            onShow(_G.LFGListApplicationDialog)
+            assert.equals(0, fx.findFrameCalls("LFGListSignUpButton", "Click"))
+        end
+    end)
+
+    -- The setting has to select ONE key. A resolver that asked all three would
+    -- pass every case above and still block a signup the player never meant to
+    -- interrupt.
+    it("signs up while a key other than the configured one is held", function()
         local fx, onShow = dialogSeams()
+        fx.AU.db.SignupModifier = "SHIFT"
+        _G.KE_SPEC_HELD_KEY = "ALT"
+        onShow(_G.LFGListApplicationDialog)
+        assert.equals(1, fx.findFrameCalls("LFGListSignUpButton", "Click"))
+    end)
+
+    -- Profiles saved before the setting existed carry no value at all.
+    it("falls back to Shift when the setting is unset", function()
+        local fx, onShow = dialogSeams()
+        fx.AU.db.SignupModifier = nil
+        _G.KE_SPEC_HELD_KEY = "SHIFT"
         onShow(_G.LFGListApplicationDialog)
         assert.equals(0, fx.findFrameCalls("LFGListSignUpButton", "Click"))
-        _G.KE_SPEC_CTRL = false
     end)
 
     it("refuses when the setting is off, key or no key", function()
-        _G.KE_SPEC_CTRL = false
         local fx, onShow = dialogSeams()
         fx.AU.db.AutoQueueConfirm = false
         onShow(_G.LFGListApplicationDialog)

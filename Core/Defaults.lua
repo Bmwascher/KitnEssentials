@@ -568,6 +568,7 @@ local Defaults = {
             AutoQueueConfirm = true,
             QuickSignupDoubleClick = false, -- Second trigger under Quick Signup
             PersistSignupNote = false,      -- Keep the note across activities
+            SignupModifier = "SHIFT",       -- Held to reach the note box
             AutoSlotKeystone = true,
             AutoFillDelete = true,
             DeleteConfirmStyle = "click",   -- "click" = a button; "auto" = pre-type the word

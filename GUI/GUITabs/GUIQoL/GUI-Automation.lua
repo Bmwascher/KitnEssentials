@@ -508,7 +508,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
         manager = manager,
         master = {
             label = "Quick Signup",
-            tooltip = "Signs you up as soon as the application window opens.\n\nHold Ctrl to keep the window open instead, which is how you reach the note box.",
+            tooltip = "Signs you up as soon as the application window opens.\n\nHold the key set below to keep the window open instead, which is how you reach the note box.",
             get = function() return db.AutoQueueConfirm ~= false end,
             callback = function(checked) db.AutoQueueConfirm = checked; ApplySettings() end,
         },
@@ -522,7 +522,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
         },
     })
 
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local autoKeystoneCheck = GUIFrame:CreateCheckbox(row2b, "Auto Slot Keystone", {
         value = db.AutoSlotKeystone ~= false,
         callback = function(checked) db.AutoSlotKeystone = checked; ApplySettings() end,
@@ -537,7 +537,23 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     })
     row2b:AddWidget(persistNoteCheck, 0.5)
     manager:Register(persistNoteCheck, "all")
-    card2:AddRow(row2b, Theme.rowHeightLast, 0)
+    card2:AddRow(row2b, Theme.rowHeight)
+
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local signupModDropdown = GUIFrame:CreateDropdown(row2c, "Hold to Open Signup Note", {
+        options = {
+            { key = "SHIFT", text = "Shift" },
+            { key = "CTRL",  text = "Ctrl" },
+            { key = "ALT",   text = "Alt" },
+        },
+        value = db.SignupModifier or "SHIFT",
+        callback = function(val) db.SignupModifier = val end,
+    })
+    row2c:AddWidget(signupModDropdown, 1)
+    manager:Register(signupModDropdown, "all")
+    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+
+    card2:AddLabel("|cff888888Quick Signup: hold the selected key to keep the application window open, which is the only way to reach the note box while Quick Signup is on.|r")
 
     yOffset = card2:GetNextOffset()
 

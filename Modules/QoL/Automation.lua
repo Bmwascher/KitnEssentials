@@ -1333,12 +1333,23 @@ local function SetupAutoRoleCheck()
     end
 end
 
+-- An unset or unrecognised key reads as not held, which is what makes "NONE"
+-- work for the quest dropdown. The signup dropdown deliberately omits that
+-- option: with no key there would be no way to reach the note box.
+local function IsModifierHeld(mod)
+    if mod == "CTRL" then return IsControlKeyDown() end
+    if mod == "ALT" then return IsAltKeyDown() end
+    if mod == "SHIFT" then return IsShiftKeyDown() end
+    return false
+end
+
 -- Quick Signup --
 --
 -- Two triggers on one setting. AutoQueueConfirm clicks the application
 -- dialog's own Sign Up button when it opens; QuickSignupDoubleClick adds
--- double-clicking a search result as a second way to reach it. Ctrl skips the
--- auto-click, which is the only way to reach the note box while this is on.
+-- double-clicking a search result as a second way to reach it. Holding the
+-- chosen modifier skips the auto-click, which is the only way to reach the
+-- note box while this is on.
 
 local DOUBLE_CLICK_THRESHOLD = 0.4
 local lastClickEntry, lastClickTime = nil, 0
@@ -1414,7 +1425,7 @@ local function SetupAutoQueueConfirm()
         if not AU.db or not AU.db.Enabled then return end
         if KE:IsFullyRestricted() then return end
         if not AU.db.AutoQueueConfirm then return end
-        if IsControlKeyDown() then return end
+        if IsModifierHeld(AU.db.SignupModifier or "SHIFT") then return end
         local confirmBtn = dlg.SignUpButton
         if confirmBtn and confirmBtn:IsEnabled() then
             confirmBtn:Click()
@@ -2007,12 +2018,7 @@ end
 -- Quest Automation --
 
 local function IsQuestModifierHeld()
-    local mod = AU.db.QuestModifier
-    if not mod or mod == "" or mod == "NONE" then return false end
-    if mod == "CTRL" then return IsControlKeyDown() end
-    if mod == "ALT" then return IsAltKeyDown() end
-    if mod == "SHIFT" then return IsShiftKeyDown() end
-    return false
+    return IsModifierHeld(AU.db.QuestModifier)
 end
 
 -- Targeted weekly quests handled by their own per-quest auto-handler. The
