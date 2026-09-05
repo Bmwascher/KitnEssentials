@@ -1333,11 +1333,81 @@ local function SetupAutoRoleCheck()
     end
 end
 
--- Auto Queue Confirm --
+-- Quick Signup --
+--
+-- Two triggers on one setting. AutoQueueConfirm clicks the application
+-- dialog's own Sign Up button when it opens; QuickSignupDoubleClick adds
+-- double-clicking a search result as a second way to reach it. Ctrl skips the
+-- auto-click, which is the only way to reach the note box while this is on.
+
+local DOUBLE_CLICK_THRESHOLD = 0.4
+local lastClickEntry, lastClickTime = nil, 0
+
+-- Chat messaging lockdown is a separate axis from KE:IsFullyRestricted, which
+-- is built from combat, encounter, challenge mode and PvP. GetSearchResultInfo
+-- is SecretInChatMessagingLockdown, so anything reading it from our tainted
+-- execution throws inside one.
+local function InLockdown()
+    local chatInfo = _G.C_ChatInfo
+    if chatInfo and chatInfo.InChatMessagingLockdown then
+        return chatInfo.InChatMessagingLockdown()
+    end
+    return IsInInstance()
+end
+
+-- Every decision the double click makes, over values only. Nothing here
+-- reaches GetSearchResultInfo, which is what lets the lockdown refusal run
+-- before the caller touches Blizzard's result APIs.
+local function ShouldQuickSignUp(masterOn, dependentOn, inLockdown, isSelected,
+                                 lastEntry, lastTime, entry, now, threshold)
+    if not masterOn or not dependentOn then return false end
+    if inLockdown then return false end
+    if entry == nil or not isSelected then return false end
+    if lastEntry == nil or lastEntry ~= entry then return false end
+    return (now - lastTime) < threshold
+end
 
 local function SetupAutoQueueConfirm()
     if AU._lfgHooked then return end
     AU._lfgHooked = true
+
+    -- Above the dialog guard below: the two hooks are independent, and a
+    -- missing dialog global must not take the double click down with it.
+    hooksecurefunc("LFGListSearchEntry_OnClick", function(entry, button)
+        if not AU.db or not AU.db.Enabled then return end
+        if KE:IsFullyRestricted() then return end
+        if button == "RightButton" then return end
+        if not entry then return end
+
+        local panel = LFGListFrame and LFGListFrame.SearchPanel
+        if not panel then return end
+
+        local now = assert(GetTime(), "GetTime returned nil")
+        local resultID = entry.resultID
+
+        if not ShouldQuickSignUp(AU.db.AutoQueueConfirm ~= false,
+                                 AU.db.QuickSignupDoubleClick == true,
+                                 InLockdown(),
+                                 panel.selectedResult == resultID,
+                                 lastClickEntry, lastClickTime,
+                                 resultID, now, DOUBLE_CLICK_THRESHOLD) then
+            lastClickEntry, lastClickTime = resultID, now
+            return
+        end
+
+        -- Only past the refusal, because both of these reach
+        -- GetSearchResultInfo. Blizzard's own OnClick already selected the row
+        -- on the first click, so KE never calls LFGListSearchPanel_SelectResult
+        -- -- that reaches UpdateResults, which poisons the result provider for
+        -- the session when it runs from addon execution.
+        if not LFGListSearchPanelUtil_CanSelectResult(resultID) then return end
+        local signUp = panel.SignUpButton
+        if not signUp or not signUp:IsEnabled() then return end
+
+        lastClickEntry, lastClickTime = nil, 0
+        LFGListSearchPanel_SignUp(panel)
+    end)
+
     local dialog = LFGListApplicationDialog
     if not dialog then return end
     dialog:HookScript("OnShow", function(dlg)
@@ -1350,6 +1420,81 @@ local function SetupAutoQueueConfirm()
             confirmBtn:Click()
         end
     end)
+end
+
+-- Persistent Signup Note --
+--
+-- Blizzard clears the note box only when the listing's activity differs from
+-- the one the dialog last showed (LFGList.lua, LFGListApplicationDialog_Show).
+-- Same activity already persists in stock; this widens it to every activity by
+-- planting the incoming activity id so that comparison finds them equal.
+--
+-- The note box itself cannot be written: its OnLoad calls
+-- SetSecurityDisableSetText, and both SetText and Insert are refused outright.
+-- Preventing the clear is the only mechanism available, which is why this
+-- writes a Blizzard field at all.
+--
+-- The field has one direct reader, inside that same function. That bounds what
+-- reads the value, NOT the taint: once the comparison reads it, everything the
+-- rest of the function writes is written tainted, and no teardown lifts that
+-- before a reload. The alternative is replacing the global outright, which
+-- taints the _G slot for every reader in the game.
+
+local notePlanted = false
+
+-- Degrades to nil rather than throwing: activityIDs is a secret table inside a
+-- chat messaging lockdown, and indexing one from tainted execution throws.
+-- issecrettable covers contents, so an array of numbers needs no per-element
+-- check after it.
+local function ReadActivityID(resultID)
+    if resultID == nil then return nil end
+    local activityID
+    pcall(function()
+        local info = C_LFGList.GetSearchResultInfo(resultID)
+        if type(info) ~= "table" then return end
+        local ids = info.activityIDs
+        if ids == nil or issecrettable(ids) then return end
+        activityID = ids[1]
+    end)
+    if issecretvalue(activityID) then return nil end
+    return activityID
+end
+
+local function PlantActivityID(resultID)
+    local dialog = LFGListApplicationDialog
+    if not dialog then return end
+    local activityID = ReadActivityID(resultID)
+    if activityID == nil then return end
+    dialog.activityID = activityID
+    notePlanted = true
+end
+
+local function SetupPersistSignupNote()
+    if not AU._noteHooked then
+        AU._noteHooked = true
+        hooksecurefunc("LFGListSearchPanel_SelectResult", function(_, resultID)
+            if not AU.db or not AU.db.Enabled then return end
+            if KE:IsFullyRestricted() then return end
+            if not AU.db.PersistSignupNote then return end
+            PlantActivityID(resultID)
+        end)
+    end
+
+    local on = AU.db.Enabled and AU.db.PersistSignupNote
+    if on then
+        -- Blizzard's OnClick skips SelectResult when the row is already
+        -- selected, so enabling while a listing is selected would otherwise do
+        -- nothing until the player picked a different one.
+        local panel = LFGListFrame and LFGListFrame.SearchPanel
+        if panel then PlantActivityID(panel.selectedResult) end
+    elseif notePlanted then
+        -- Only a field this feature wrote. Costs one extra clear on the next
+        -- open, because nil compares unequal to every activity; stock resumes
+        -- after that.
+        local dialog = LFGListApplicationDialog
+        if dialog then dialog.activityID = nil end
+        notePlanted = false
+    end
 end
 
 -- Auto Slot Keystone --
@@ -3022,6 +3167,7 @@ function AU:ApplySettings()
     SetupRepairReport()
     SetupAutoRoleCheck()
     SetupAutoQueueConfirm()
+    SetupPersistSignupNote()
     SetupAutoSlotKeystone()
     SetupAutoFillDelete()
     ApplyAutoLoot()
@@ -3071,6 +3217,7 @@ function AU:TeardownPorts()
     SetupTrainAllButton()
     SetupFastLoot()
     SetupAutoFillDelete()
+    SetupPersistSignupNote()
 end
 
 function AU:OnDisable()

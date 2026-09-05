@@ -1408,3 +1408,72 @@ describe("Delete prompt rewrite", function()
         assert.is_nil(Rewrite("Type DELETE to confirm.", nil, "Click below."))
     end)
 end)
+
+---------------------------------------------------------------------------------
+-- Quick Signup's double-click decision. Every guard the double click makes
+-- lives in this one predicate over values, so none of these cases needs a fake
+-- of the LFG frames -- which is also why the guards live there: the lockdown
+-- refusal has to run before the caller touches Blizzard's result APIs, and a
+-- refusal buried in the hook body after those reads would never fire.
+--
+-- Not covered here: the dialog auto-click's Ctrl refusal. That code is
+-- unchanged by this branch, and reaching it needs a stateful
+-- LFGListApplicationDialog with SignUpButton -- the kind of fake the test
+-- policy calls a smell. It is a smoke step.
+---------------------------------------------------------------------------------
+describe("Quick Signup double-click decision", function()
+    local function predicate()
+        local fx = newFixture()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoQueueConfirm")
+        return findUpvalue(setup, "ShouldQuickSignUp")
+    end
+
+    -- Defaults every case starts from: a genuine second click on the selected
+    -- row, 0.1s after the first, with both settings on and no lockdown.
+    -- NONE rather than nil for "override this to nil": a nil stored in the
+    -- override table is indistinguishable from an absent key.
+    local NONE = {}
+    local function call(Should, over)
+        over = over or {}
+        local function pick(key, fallback)
+            local v = over[key]
+            if v == nil then return fallback end
+            if v == NONE then return nil end
+            return v
+        end
+        return Should(
+            pick("masterOn", true),
+            pick("dependentOn", true),
+            pick("inLockdown", false),
+            pick("isSelected", true),
+            pick("lastEntry", 42),
+            pick("lastTime", 100.0),
+            pick("entry", 42),
+            pick("now", 100.1),
+            0.4)
+    end
+
+    it("takes a second click on the same entry inside the threshold", function()
+        assert.is_true(call(predicate()))
+    end)
+
+    it("refuses everything that is not that", function()
+        local Should = predicate()
+        local cases = {
+            { name = "same entry but past the threshold",  over = { now = 100.5 } },
+            { name = "exactly at the threshold",           over = { now = 100.4 } },
+            { name = "a different entry, however recent",  over = { lastEntry = 7 } },
+            { name = "no previous click, so a first click can never sign up",
+              over = { lastEntry = NONE } },
+            { name = "no entry id on the clicked row", over = { entry = NONE } },
+            { name = "the row is not the panel's selection", over = { isSelected = false } },
+            { name = "chat messaging lockdown",            over = { inLockdown = true } },
+            { name = "the master is off",                  over = { masterOn = false } },
+            { name = "the dependent is off",               over = { dependentOn = false } },
+            { name = "both off",                           over = { masterOn = false, dependentOn = false } },
+        }
+        for _, case in ipairs(cases) do
+            assert.is_false(call(Should, case.over), case.name)
+        end
+    end)
+end)

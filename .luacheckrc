@@ -91,6 +91,9 @@ globals = {
     "PVPArenaTextString", "PVPInfoTextString",
     "CompactRaidFrameManager",
     "GameTooltipDefaultContainer",
+    -- Persistent Signup Note plants activityID so Blizzard's own comparison
+    -- skips its note clear; the field has one reader, inside that comparison.
+    "LFGListApplicationDialog",
 }
 
 -- WoW API globals this addon reads
@@ -342,7 +345,7 @@ read_globals = {
     "C_ClassTalents", "C_SpecializationInfo", "C_Traits",
 
     -- Mythic+ / Challenges
-    "C_ChallengeMode", "C_MythicPlus", "C_ScenarioInfo", "C_Scenario",
+    "C_ChallengeMode", "C_MythicPlus", "C_ScenarioInfo", "C_Scenario", "C_LFGList",
 
     -- PvP
     "C_PvP",
@@ -478,7 +481,8 @@ read_globals = {
     "ExternalDefensivesFrame",
     "LFDRoleCheckPopup", "LFDRoleCheckPopupAcceptButton",
     "LFDRoleCheckPopupRoleButtonTank", "LFDRoleCheckPopupRoleButtonHealer", "LFDRoleCheckPopupRoleButtonDPS",
-    "LFGListApplicationDialog",
+    "LFGListFrame",
+    "LFGListSearchPanelUtil_CanSelectResult", "LFGListSearchPanel_SignUp",
     "ItemSocketingFrame",
     "MainMenuMicroButton",
     "MonthlyActivitiesObjectiveTracker",
