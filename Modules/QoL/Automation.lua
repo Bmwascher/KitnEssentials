@@ -1430,8 +1430,7 @@ local function EnsureDeleteButton()
     if deleteButton then return deleteButton end
     -- Parented to UIParent rather than to a dialog: StaticPopups are pooled, so
     -- a button parented to whichever one showed first would be dragged around
-    -- by a later, unrelated popup. Blizzard's own button template, because it
-    -- sits beside this dialog's Yes and No and should match them.
+    -- by a later, unrelated popup.
     deleteButton = CreateFrame("Button", "KE_DeleteConfirmButton", UIParent, "UIPanelButtonTemplate")
     deleteButton:SetFrameStrata("FULLSCREEN_DIALOG")
     return deleteButton
@@ -1489,8 +1488,7 @@ local function DecorateDeleteDialog(dialog)
     editBox:Hide()
     btn:ClearAllPoints()
     -- Sized from the dialog's own buttons, not from the thin edit box it
-    -- replaces: a button cut to the box reads as an afterthought beside Yes
-    -- and No.
+    -- replaces, so it matches the Yes and No beside it.
     local w, h = 150, 22
     if yes.GetWidth then
         w = math.max(yes:GetWidth() + 30, w)
@@ -1567,7 +1565,7 @@ local function ShouldFastLoot(autoLootCVar, modifierHeld, isFishing, freeSlots)
     return true
 end
 
--- Walked once per loot. Walking it per loot slot is the shape to avoid.
+-- Walked once per loot, not once per loot slot.
 local function FreeBagSlots()
     local free = 0
     for bag = 0, (NUM_BAG_FRAMES or 4) do
