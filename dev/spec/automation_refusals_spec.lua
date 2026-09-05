@@ -1337,3 +1337,35 @@ describe("Fast Loot gate, throttle and registration", function()
         assert.is_false(frame:IsEventRegistered("LOOT_READY"))
     end)
 end)
+
+---------------------------------------------------------------------------------
+-- Delete Confirmation: the prompt rewrite
+--
+-- String surgery on a Blizzard dialog's own text. It refuses rather than
+-- mangles when the confirmation word is absent, which is the branch a later
+-- edit breaks silently.
+---------------------------------------------------------------------------------
+describe("Delete prompt rewrite", function()
+    local function rewriter()
+        local fx = newFixture()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoFillDelete")
+        local decorate = findUpvalue(setup, "DecorateDeleteDialog")
+        local retitle = findUpvalue(decorate, "RetitleDeleteDialog")
+        return findUpvalue(retitle, "RewriteDeletePrompt")
+    end
+
+    it("drops only the paragraph carrying the confirmation word", function()
+        local Rewrite = rewriter()
+        local text = "This item is rare.\n\nType DELETE to confirm.\n\nThis cannot be undone."
+        assert.equals(
+            "This item is rare.\n\nThis cannot be undone.\n\nClick below.",
+            Rewrite(text, "DELETE", "Click below."))
+    end)
+
+    it("refuses rather than mangles when it cannot find the word", function()
+        local Rewrite = rewriter()
+        assert.is_nil(Rewrite("Destroy this item?", "DELETE", "Click below."))
+        assert.is_nil(Rewrite(nil, "DELETE", "Click below."))
+        assert.is_nil(Rewrite("Type DELETE to confirm.", nil, "Click below."))
+    end)
+end)

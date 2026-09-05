@@ -1395,19 +1395,144 @@ local function SetupAutoSlotKeystone()
     end)
 end
 
--- Auto Fill DELETE --
+-- Delete Confirmation --
+--
+-- Two styles: "auto" types the client's own confirmation word, "click" hides
+-- the typing box and puts a button in its place.
 
-local function SetupAutoFillDelete()
-    if not AU.db.AutoFillDelete then return end
+-- Block-scoped for the same reason Fast Loot is: chunk-scope room.
+local SetupAutoFillDelete
+do
+
+-- Only DELETE_GOOD_ITEM and DELETE_GOOD_QUEST_ITEM ask the player to type.
+-- The plain two are listed anyway because the hasEditBox test below is what
+-- decides, and they fall out there without a special case.
+local DELETE_DIALOGS = {
+    DELETE_ITEM = true,
+    DELETE_GOOD_ITEM = true,
+    DELETE_QUEST_ITEM = true,
+    DELETE_GOOD_QUEST_ITEM = true,
+}
+
+local deleteButton
+local deleteHooked = setmetatable({}, { __mode = "k" })
+
+local function HideDeleteButton()
+    if deleteButton then
+        deleteButton:Hide()
+        -- The handler closes over the previous dialog's Yes button, which is
+        -- a pooled frame about to be reused for something else.
+        deleteButton:SetScript("OnClick", nil)
+    end
+end
+
+local function EnsureDeleteButton()
+    if deleteButton then return deleteButton end
+    -- Parented to UIParent rather than to a dialog: StaticPopups are pooled, so
+    -- a button parented to whichever one showed first would be dragged around
+    -- by a later, unrelated popup. Blizzard's own button template, because it
+    -- sits beside this dialog's Yes and No and should match them.
+    deleteButton = CreateFrame("Button", "KE_DeleteConfirmButton", UIParent, "UIPanelButtonTemplate")
+    deleteButton:SetFrameStrata("FULLSCREEN_DIALOG")
+    return deleteButton
+end
+
+-- Drops the paragraph telling the player to type the word and adds the
+-- sentence that is true once there is a button. Returns nil when the word is
+-- absent, so the caller leaves the text alone rather than mangling it.
+-- Matched by the GlobalString rather than by position, so every locale works.
+local function RewriteDeletePrompt(text, confirmWord, replacement)
+    if not text or not confirmWord then return nil end
+    if not text:find(confirmWord, 1, true) then return nil end
+
+    local kept = {}
+    for part in (text .. "\n\n"):gmatch("(.-)\n\n") do
+        if part ~= "" and not part:find(confirmWord, 1, true) then
+            kept[#kept + 1] = part
+        end
+    end
+    kept[#kept + 1] = replacement
+    return table.concat(kept, "\n\n")
+end
+
+-- The "type DELETE to confirm" sentence is untrue once there is a button.
+local function RetitleDeleteDialog(dialog)
+    local text = dialog.Text and dialog.Text.GetText and dialog.Text:GetText()
+    if not text or KE:IsSecretValue(text) then return end
+    local rewritten = RewriteDeletePrompt(text, _G.DELETE_ITEM_CONFIRM_STRING,
+        "Click the button below to confirm.")
+    if rewritten then dialog.Text:SetText(rewritten) end
+end
+
+local function DecorateDeleteDialog(dialog)
+    local editBox = dialog.EditBox
+
+    -- dialog.EditBox exists on EVERY StaticPopup: the pooled frame always
+    -- carries one and simply hides it. Whether this dialog wants typing is
+    -- hasEditBox on its definition, and testing for the child instead puts a
+    -- Confirm button on ordinary "do you want to destroy this?" prompts.
+    local def = dialog.which and StaticPopupDialogs and StaticPopupDialogs[dialog.which]
+    if not editBox or not (def and def.hasEditBox) then return end
+
+    if (AU.db.DeleteConfirmStyle or "click") == "auto" then
+        -- The client's own word, so every locale matches.
+        editBox:SetText(_G.DELETE_ITEM_CONFIRM_STRING or "")
+        return
+    end
+
+    local yes = dialog.GetButton1 and dialog:GetButton1()
+    if not yes then return end
+
+    RetitleDeleteDialog(dialog)
+
+    local btn = EnsureDeleteButton()
+    editBox:Hide()
+    btn:ClearAllPoints()
+    -- Sized from the dialog's own buttons, not from the thin edit box it
+    -- replaces: a button cut to the box reads as an afterthought beside Yes
+    -- and No.
+    local w, h = 150, 22
+    if yes.GetWidth then
+        w = math.max(yes:GetWidth() + 30, w)
+        h = math.max(yes:GetHeight(), h)
+    end
+    btn:SetSize(w, h)
+    btn:SetPoint("CENTER", editBox, "CENTER", 0, 0)
+    btn:SetText("Click to Confirm")
+    btn:SetScript("OnClick", function(self)
+        -- The dialog accepts with DeleteCursorItem(), which never reads the edit
+        -- box, so the typing was only ever a gate on this button.
+        yes:Enable()
+        self:SetText("|cff40ff40Confirmed|r")
+    end)
+    btn:Show()
+
+    if not deleteHooked[dialog] then
+        deleteHooked[dialog] = true
+        dialog:HookScript("OnHide", HideDeleteButton)
+    end
+end
+
+function SetupAutoFillDelete()
     if AU._deleteHooked then return end
     AU._deleteHooked = true
-    hooksecurefunc(StaticPopupDialogs["DELETE_GOOD_ITEM"], "OnShow", function(self)
+
+    -- DELETE_ITEM_CONFIRM fires as the dialog is raised, and
+    -- StaticPopup_ForEachShownDialog finds whichever pooled slot it landed in.
+    -- Popups are pooled, so there is no one frame to hook.
+    local watcher = CreateFrame("Frame")
+    watcher:RegisterEvent("DELETE_ITEM_CONFIRM")
+    watcher:SetScript("OnEvent", function()
         if not AU.db or not AU.db.Enabled then return end
         if not AU.db.AutoFillDelete then return end
-        if self.EditBox then
-            self.EditBox:SetText("DELETE")
-        end
+        local each = _G.StaticPopup_ForEachShownDialog
+        if not each then return end
+        each(function(dialog)
+            if DELETE_DIALOGS[dialog.which] then pcall(DecorateDeleteDialog, dialog) end
+        end)
     end)
+end
+
 end
 
 -- Fast Loot --
