@@ -569,6 +569,7 @@ local Defaults = {
             AutoSlotKeystone = true,
             AutoFillDelete = true,
             AutoLoot = true,
+            FastLoot = false,               -- Take loot the instant it is available
             AutoConfirmLootRoll = true,
             AutoPassHousing = true,
             AutoPassHousingMode = "NEED",  -- "PASS" or "NEED"

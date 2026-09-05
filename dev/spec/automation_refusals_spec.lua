@@ -1273,3 +1273,67 @@ describe("Automation Great Vault button", function()
         assert.is_false(fx.lastArg("KE_OmniumFoilButton", "SetShown"))
     end)
 end)
+
+---------------------------------------------------------------------------------
+-- Fast Loot: the gate, the throttle and the registration
+--
+-- Invented branching with a silent failure mode both ways round: a gate that
+-- stops refusing loots the player meant to take by hand, and a throttle that
+-- stops throttling fires the whole body on every LOOT_READY. Reached as
+-- upvalues, the same recipe the rest of this file uses for module seams.
+---------------------------------------------------------------------------------
+describe("Fast Loot gate, throttle and registration", function()
+    local function fastLootSeams()
+        local fx = newFixture()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupFastLoot")
+        return findUpvalue(setup, "ShouldFastLoot"),
+               findUpvalue(setup, "FastLootReady")
+    end
+
+    it("acts only on a loot that is genuinely an auto-loot with somewhere to put it", function()
+        local ShouldFastLoot = fastLootSeams()
+        local cases = {
+            { name = "ordinary auto-loot",          cvar = true,  mod = false, fishing = false, free = 5, want = true },
+            { name = "modifier held on a manual loot", cvar = false, mod = true,  fishing = false, free = 5, want = true },
+            { name = "modifier held on an auto-loot is a deliberate manual loot",
+              cvar = true,  mod = true,  fishing = false, free = 5, want = false },
+            { name = "auto-loot off and no modifier", cvar = false, mod = false, fishing = false, free = 5, want = false },
+            { name = "fishing loot is left alone",   cvar = true,  mod = false, fishing = true,  free = 5, want = false },
+            { name = "bags full, so it bails rather than loops",
+              cvar = true,  mod = false, fishing = false, free = 0, want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.equals(case.want,
+                ShouldFastLoot(case.cvar, case.mod, case.fishing, case.free), case.name)
+        end
+    end)
+
+    it("throttles inside the window and lets the next loot through at it", function()
+        local _, FastLootReady = fastLootSeams()
+        -- Zero as the last stamp keeps every comparison exact: 10 + 0.3 - 10 is
+        -- not 0.3 in floating point and a case written that way passes or fails
+        -- on the rounding, not on the rule. The limit is passed as a literal:
+        -- the rule is what this case discriminates, not the tuning of it.
+        assert.is_false(FastLootReady(0.2, 0, 0.3))
+        assert.is_true(FastLootReady(0.3, 0, 0.3))
+        assert.is_true(FastLootReady(1, 0, 0.3))
+    end)
+
+    -- A refusal rule that breaks silently: with Automation switched off the
+    -- handler still returns early, so a stuck registration shows up as nothing
+    -- at all until some later edit trusts the registration instead. Switching
+    -- the master off is also the one transition ApplySettings returns before
+    -- reaching, so only TeardownPorts can carry the unregister.
+    it("unregisters when Automation goes off, not only when Fast Loot does", function()
+        local fx = installedFixture()
+        fx.AU.db.FastLoot = true
+        fx.AU:ApplySettings()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupFastLoot")
+        local frame = findUpvalue(setup, "fastLootFrame")
+        assert.is_true(frame:IsEventRegistered("LOOT_READY"))
+
+        fx.AU.db.Enabled = false
+        fx.AU:TeardownPorts()
+        assert.is_false(frame:IsEventRegistered("LOOT_READY"))
+    end)
+end)

@@ -1410,11 +1410,90 @@ local function SetupAutoFillDelete()
     end)
 end
 
+-- Fast Loot --
+--
+-- Blizzard plays the loot window's fade before the items are taken. Looting
+-- every slot the moment LOOT_READY fires skips that wait.
+--
+-- The throttle stamp is declared outside the handler on purpose. Inside it,
+-- it resets to zero on every call and the throttle never fires.
+
+-- Block-scoped: this file is near Lua 5.1's 200 main-chunk local ceiling.
+local SetupFastLoot
+do
+
+local FAST_LOOT_THROTTLE = 0.3
+local fastLootFrame = nil
+local fastLootLast = 0
+
+local function FastLootReady(now, last, limit)
+    return (now - last) >= limit
+end
+
+-- The exclusive-or is Blizzard's own rule for whether a loot is an auto-loot:
+-- the CVar, flipped by the modifier. A deliberately manual loot stays manual,
+-- and holding the modifier on a normally-manual loot still qualifies.
+local function ShouldFastLoot(autoLootCVar, modifierHeld, isFishing, freeSlots)
+    if isFishing then return false end
+    if (autoLootCVar == true) == (modifierHeld == true) then return false end
+    -- Bail rather than loop: LootSlot would no-op per item and Blizzard's own
+    -- full-bag message still reaches the player.
+    if (freeSlots or 0) <= 0 then return false end
+    return true
+end
+
+-- Walked once per loot. Walking it per loot slot is the shape to avoid.
+local function FreeBagSlots()
+    local free = 0
+    for bag = 0, (NUM_BAG_FRAMES or 4) do
+        free = free + (C_Container.GetContainerNumFreeSlots(bag) or 0)
+    end
+    return free
+end
+
+function SetupFastLoot()
+    if not fastLootFrame then
+        fastLootFrame = CreateFrame("Frame")
+        fastLootFrame:SetScript("OnEvent", function()
+            if not AU.db or not AU.db.Enabled then return end
+            if not AU.db.FastLoot then return end
+
+            local now = GetTime()
+            if not FastLootReady(now, fastLootLast, FAST_LOOT_THROTTLE) then return end
+            fastLootLast = now
+
+            local isFishing = IsFishingLoot and IsFishingLoot() == true
+            local autoLoot = C_CVar.GetCVarBool("autoLootDefault") == true
+            local modifier = IsModifiedClick("AUTOLOOTTOGGLE") == true
+            if not ShouldFastLoot(autoLoot, modifier, isFishing, FreeBagSlots()) then return end
+
+            for i = GetNumLootItems(), 1, -1 do
+                LootSlot(i)
+            end
+        end)
+    end
+
+    -- Follows the master as well as the setting, and this function runs from
+    -- TeardownPorts too. ApplySettings returns before reaching here once
+    -- Automation is off, so without both of those the frame would keep
+    -- LOOT_READY registered with the module disabled.
+    if AU.db.Enabled and AU.db.FastLoot then
+        fastLootFrame:RegisterEvent("LOOT_READY")
+    else
+        fastLootFrame:UnregisterAllEvents()
+    end
+end
+
+end
+
 -- Auto Loot --
 
 local function ApplyAutoLoot()
-    if not AU.db.AutoLoot then return end
-    C_CVar.SetCVar("autoLootDefault", AU.db.AutoLoot and "1" or "0")
+    local want = AU.db.AutoLoot and "1" or "0"
+    -- Writing a CVar it already holds can flush the client config, and
+    -- ApplySettings re-runs this whole chain on every toggle on the page.
+    if C_CVar.GetCVar("autoLootDefault") == want then return end
+    C_CVar.SetCVar("autoLootDefault", want)
 end
 
 -- Auto-Confirm Loot Roll Popup --
@@ -2800,6 +2879,7 @@ function AU:ApplySettings()
     SetupAutoSlotKeystone()
     SetupAutoFillDelete()
     ApplyAutoLoot()
+    SetupFastLoot()
     SetupAutoConfirmLootRoll()
     SetupAutoPassHousing()
     SetupConfirmBonusRoll()
@@ -2843,6 +2923,7 @@ function AU:TeardownPorts()
     ApplyHideTransforms()
     SetupOmniumButton()
     SetupTrainAllButton()
+    SetupFastLoot()
 end
 
 function AU:OnDisable()
