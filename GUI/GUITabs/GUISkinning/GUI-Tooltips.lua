@@ -208,7 +208,13 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         MkCheck("Always Show Realm",
             function() return db.AlwaysShowRealm == true end,
             function(v) db.AlwaysShowRealm = v end,
-            "Spells out a cross-realm player's realm in full. Off shows Blizzard's short marker instead, which keeps the tooltip narrow."), 40,
+            "Spells out a cross-realm player's realm in full. Off shows Blizzard's short marker instead, which keeps the tooltip narrow."), 40)
+    PairRow(card2,
+        MkCheck("Show Icon IDs",
+            function() return db.ShowIconIDs == true end,
+            function(v) db.ShowIconIDs = v end,
+            "Adds the icon's file ID beneath the Spell ID and Item ID lines. Needs Show Spell/Item IDs to be showing."), 40,
+        nil, nil,
         true)
     yOffset = card2:GetNextOffset()
 

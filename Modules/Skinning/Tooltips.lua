@@ -889,10 +889,28 @@ local function WantIDs(db)
     return true
 end
 
-local function AddSpellIDLine(tt, spellID)
+-- The id reaching here has already passed the secret check, so the argument is
+-- clean; the RETURN is guarded because neither icon API declares SecretReturns
+-- and an undeclared secret return would blow up the %d.
+local function AddIconIDLine(tt, db, iconID)
+    if not (db and db.ShowIconIDs == true) then return end
+    if not iconID then return end
+    if KE.IsSecretValue and KE:IsSecretValue(iconID) then return end
+    tt:AddLine(format(ID_LABEL_COLOR .. "Icon ID:|r %d", iconID))
+end
+
+local function SpellIconID(spellID)
+    if not (C_Spell and C_Spell.GetSpellTexture) then return nil end
+    local ok, iconID = pcall(C_Spell.GetSpellTexture, spellID)
+    if not ok then return nil end
+    return iconID
+end
+
+local function AddSpellIDLine(tt, spellID, db)
     if KE.IsSecretValue and KE:IsSecretValue(spellID) then return end
     if not spellID then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellID))
+    AddIconIDLine(tt, db, SpellIconID(spellID))
     tt:Show()
 end
 
@@ -918,7 +936,7 @@ function TT:OnTooltipSetSpell(tt, data)
         id = data and data.id
     end
 
-    AddSpellIDLine(tt, id)
+    AddSpellIDLine(tt, id, db)
 end
 
 function TT:OnTooltipSetPetAction(tt, slot)
@@ -928,7 +946,7 @@ function TT:OnTooltipSetPetAction(tt, slot)
 
     local _, _, _, _, _, _, spellID = GetPetActionInfo(slot)
     if DEBUG_TT then DebugPetActionSetter(slot, spellID) end
-    AddSpellIDLine(tt, spellID)
+    AddSpellIDLine(tt, spellID, db)
 end
 
 -- Engine-rendered aura IDs reach forbidden aura-container tooltips and secret
@@ -967,11 +985,15 @@ local function EngineDrawsAuraIDs()
     return ok and cur == "1"
 end
 
-local function AddAuraIDLine(tt, spellId)
+-- The icon line inherits this early return rather than working around it: with
+-- the engine drawing the ID, a lone Icon ID would sit under a line KE did not
+-- write.
+local function AddAuraIDLine(tt, spellId, db)
     if EngineDrawsAuraIDs() then return end
     if KE.IsSecretValue and KE:IsSecretValue(spellId) then return end
     if not spellId then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Spell ID:|r %d", spellId))
+    AddIconIDLine(tt, db, SpellIconID(spellId))
     tt:Show()
 end
 
@@ -981,7 +1003,7 @@ function TT:OnTooltipSetUnitAura(tt, data)
     local db = self.db
     if IsEmbeddedTip(tt) then return end
     if not db or tt:IsForbidden() or not WantIDs(db) then return end
-    AddAuraIDLine(tt, data and data.id)
+    AddAuraIDLine(tt, data and data.id, db)
 end
 
 function TT:OnTooltipSetItem(tt, data)
@@ -991,6 +1013,10 @@ function TT:OnTooltipSetItem(tt, data)
     local id = data and data.id
     if not id or KE:IsSecretValue(id) then return end
     tt:AddLine(format(ID_LABEL_COLOR .. "Item ID:|r %d", id))
+    if C_Item and C_Item.GetItemIconByID then
+        local ok, iconID = pcall(C_Item.GetItemIconByID, id)
+        if ok then AddIconIDLine(tt, db, iconID) end
+    end
 end
 
 -- Anchor --------------------------------------------------------------
