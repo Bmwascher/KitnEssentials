@@ -1,129 +1,139 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.4.38
-
-### Redrawn settings window icons
-- Redrew the home, menu and minimize icons in the title bar, the collapse
-  arrow used across the window, and the tick and cross on every checkbox.
-  Each one is now drawn for the smallest size it actually appears at
-- The three title bar icons are larger and now match the close button beside
-  them instead of sitting under it
-- The collapse arrow is a different shape. It gets turned sideways for slider
-  steppers, dropdowns and the sidebar sections, and the old one became a thin
-  spike whenever it turned
-- The checkbox tick and cross are now close to the same size as each other.
-  The old tick was nearly twice the cross
-- The icon files are about a sixteenth of their old size
-
----
-
-## v4.4.37
-
-### Combat Timer
-- Across a chain pull the Combat Timer now measures the whole engagement
-  instead of restarting when the boss engages
-
-### Damage Meter
-- The meter's clock still restarts at the boss, in step with the bars below it.
-  The two clocks differ on purpose during a chain pull
-
----
-
-## v4.4.36
-
-### Secondary Stats Display
-- **NEW:** Direction setting. Rows can read label first (Crit: 800) or value
-  first (800: Crit), and the block lines up on the matching edge
-- Tuned the default placement and font size
-
----
-
-## v4.4.35
-
-### Addon Theme
-- The Addon Theme page has left the sidebar. It now opens as a Customize Theme
-  popup from the title bar, with the eight presets as a chip strip
-- **NEW:** Also Tint Skinned Frames. On by default, so nothing changes unless
-  you want it to. Turn it off to hold skinned Blizzard frames at a fixed
-  neutral colour while the settings window still follows your accent. Takes
-  effect on the next reload
-
----
-
-## v4.4.34
+## v4.5.0
 
 ### Secondary Stats Display
 - **NEW:** A movable readout for Crit, Haste, Mastery and Versatility, with
   optional Leech, Avoidance and Speed. Each stat can show a percentage, a
-  rating, or both, with decimal places, separator and label style settings, and
-  full Edit Mode placement
+  rating, or both, with decimal places, separator and label styles, and full
+  Edit Mode placement
+- Rows can read label first (Crit: 800) or value first (800: Crit), and the
+  block lines up on the matching edge
 
----
+### Movement Buffs
+- **NEW:** A display for movement speed buffs on yourself, anchored beside the
+  player frame, under Aura Tracking. It ships switched off
+- The list holds 85 spells with 60 enabled to start. The rest, including
+  Stealth, Greater Invisibility, Hover and Time Spiral, are listed but off so
+  you can enable only what you want
+- Buffs you cast on yourself and buffs other players give you share the display
+- Add your own spell IDs or switch off any shipped one. Kitn Defaults restores
+  the shipped list without deleting rows you added
 
-## v4.4.33
+### Class Tools
+- **NEW:** The class-gated modules now share one Class Tools page under Combat:
+  Disintegrate ticks, Havoc Tracker, Hunter's Mark, Missing Forms and the
+  Stasis tracker
 
-### World Markers
-- Clearing markers during combat no longer leaves the cycle stranded partway
-  through the list. The next marker you place starts from the top again
-
----
-
-## v4.4.32
+### Removed modules
+- Ebon Might Tracker, Ebon Might Extension Helper, Prescience Tracker and
+  Burning Rush have been removed, along with their settings pages
+- Patch 12.1 hides aura identity while you are in combat, so the tracking these
+  modules were built on is no longer possible. They were removed rather than
+  left to fail quietly
 
 ### Damage Meter
 - **NEW:** Click any group member's bar during combat to open their spell
   breakdown live. Two players of the same class and spec cannot be told apart
-  mid-fight, so those open once combat ends
-- Percentages are hidden in a live ally breakdown and return when the fight ends
-
----
-
-## v4.4.31
-
-### Damage Meter
-- **NEW:** Northern Sky Raid Tools nicknames now appear on meter bars and in
-  the dungeon death message. A nickname you have saved yourself still wins
-- The meter's own nickname toggle is gone. NSRT's Enable Nicknames is the only
+  mid-fight, so those open once combat ends. Percentages are hidden in a live
+  ally breakdown and return when the fight ends
+- **NEW:** Northern Sky Raid Tools nicknames now appear on meter bars and in the
+  dungeon death message. A nickname you have saved yourself still wins. The
+  meter's own nickname toggle is gone; NSRT's Enable Nicknames is the only
   switch now
+- The meter's clock and the Combat Timer now read one shared combat clock, so
+  they no longer drift apart on the same fight
+- In the open world the meter waits until you enter combat yourself before it
+  starts. Dungeons are unchanged
+- Redrew all twelve meter icons so they hold their shape at the size they are
+  drawn. The old ones blurred into grey smudges. The four buttons at the top
+  right are a quarter larger and now match each other, and the report button is
+  a new picture that no longer looks dimmer than its neighbours
+- The meter loads on a fresh install again. It asked for a piece of shared code
+  the addon never included, so it only ever worked when another addon you
+  happened to have supplied it first
+
+### Combat Timer
+- The timer no longer keeps counting after a wipe. It stops when the group
+  leaves combat, and zoning out mid-fight clears it
+- Across a chain pull it now measures the whole engagement instead of
+  restarting when the boss engages. The meter's clock still restarts at the
+  boss, in step with the bars below it, so the two differ on purpose there
 
 ### Healer Mana
 - Northern Sky Raid Tools nicknames now appear on healer bars
 
----
+### Aura Tracking
+- All five aura displays can count the last few seconds with one decimal. Look
+  for Show Decimals Below (sec) in Font Settings, or in the Appearance card on
+  the Player Buffs and Player Debuffs pages. Set it to 0 to switch decimals off
+- The Debuff Tracker, External Cooldowns and Movement Buffs start at 1 second;
+  Player Buffs and Player Debuffs start off. Weapon enchant timers follow the
+  same setting
+- The settings preview now counts down the way the real display does. It used
+  to round up, so it read a second ahead
+- Fixed your buffs and debuffs disappearing when you opened an aura settings
+  page inside a Mythic+ key, a raid boss fight or combat. They stayed gone
+  until you reloaded, and now return as soon as you close the page
 
-## v4.4.30
+### Aura Externals
+- You now choose which buffs the display shows. Thirty-eight spells ship
+  enabled, covering externals, raid-wide cooldowns and support buffs, and you
+  can add any spell you like
+- Two buttons refill the list: one restores everything shipped, the other
+  enables only the spells the game itself flags as external defensives
+- Each entry shows its spell icon, and the list reads alphabetically
+- A new option hides buffs you cast on yourself, leaving only what other
+  players put on you. Note this hides your own raid cooldowns too
+- The sound now plays for anything on your list, including spells you added. It
+  previously played for a fixed seven and ignored everything else
+- Timers count down the way the Cooldown Manager does, rather than reading a
+  second higher
+- Shipped settings retuned: three icons per row across two rows, a slower and
+  chunkier pixel glow, and the application sound on by default
+- The spell list and application sound are now the same controls the Movement
+  Buffs page uses, so both pages behave identically
+- The Label box is now Custom Name, and shipped rows no longer come with one
+  filled in. The list shows the game's own name for each spell, so it stays
+  correct in your language and after a spell is renamed
 
-### Combat Timer
-- The Combat Timer and the Damage Meter's clock now read one shared combat
-  clock, so they no longer drift apart on the same fight
-- The timer no longer keeps counting after a wipe. It stops when the group
-  leaves combat, and zoning out mid-fight clears it
+### Glow Settings
+- Pixel Glow is back. It was quietly replaced by the Ants style and now draws
+  its marching dashed border again, including inside dungeons where the old
+  version froze
+- The Ants glow no longer draws from the wrong part of its artwork, the Alert
+  glow animates instead of crawling, and tinted glows look lit rather than flat
+- Switching a glow off now stops its animations instead of only hiding them
 
-### Damage Meter
-- In the open world the meter now waits until you enter combat yourself before
-  it starts. Dungeons are unchanged
-
----
-
-## v4.4.29
+### Frame Anchoring
+- Fixed anything set to anchor to Player Frame attaching to Blizzard's player
+  frame instead of your unit frame addon's. It happened on every login and
+  usually corrected itself a moment later, so most of the time you never saw it
+- Inside a Mythic+ key, a raid boss fight or combat the correction was blocked
+  and the wrong position stuck for the rest of the run. External Cooldowns, the
+  Debuff Tracker and Movement Buffs were where you noticed it
+- The fix checks again during login, covers every display with the Player Frame
+  anchor, and stops running once the login is over
 
 ### Enemy Casts
-- Turning Show Cast Target off and back on now brings the target names straight
-  back, instead of leaving live bars blank until each mob's next cast
-
----
-
-## v4.4.28
-
-### Enemy Casts
+- **NEW:** An interrupted cast now names who kicked it, in their class colour,
+  and holds the bar for a moment so you can read it
+- With Combat Only on, pulling a mob that is already casting shows its bar
+  straight away instead of waiting for its next cast
 - An interrupted cast no longer keeps the old target name beside the
   "Interrupted by" text
-- Target names no longer disappear from live cast bars when you change an
-  Enemy Casts display setting. They stayed hidden until each mob's next cast
+- Target names no longer disappear from live cast bars when you change a
+  display setting, and turning Show Cast Target off and back on brings them
+  straight back. They used to stay hidden until each mob's next cast
 
----
-
-## v4.4.27
+### Combat Texts
+- Interrupt notices now match your own, pet and supported projectile interrupts
+  to the hostile cast they stopped, rather than accepting any nearby
+  interrupted cast. This ends the friendly-spell misattributions caused by a
+  missed kick, while keeping Warlock pet interrupts, Avenger's Shield and Solar
+  Beam
+- The notice shows `Interrupted`, the stopped spell's icon in standard styling,
+  and a muted blue spell name on one aligned line
 
 ### Combat Cross
 - The visibility setting is now a dropdown with six choices, matching the
@@ -134,44 +144,76 @@
 - The old In Party and In Raid choices are gone. If you used either, your
   setting becomes In Instance automatically
 
-### Character sheet
-- **NEW:** The alt-click comparison flyout now tints each item's border to its
-  rarity, the same as the equipped slots
-- Turning Item Rarity Borders off turns these off too
-
-### Enemy Casts
-- **NEW:** An interrupted cast now names who kicked it, in their class colour,
-  and holds the bar for a moment so you can read it
-- With Combat Only on, pulling a mob that is already casting now shows its bar
-  straight away instead of waiting for its next cast
+### Character Sheet
+- **NEW:** Your Mythic+ rating now appears where the race line used to be,
+  coloured by rating. Nothing shows if you are unrated this season
+- **NEW:** The alt-click comparison flyout tints each item's border to its
+  rarity, the same as the equipped slots. Turning Item Rarity Borders off turns
+  these off too
+- Your name and level sit centred over your character rather than over the
+  window
 
 ### Chat
 - Battle.net whispers in your replayed chat history now show the right sender.
-  They could previously show a different friend's name after a relog, because
-  the stored name tag is only valid for the session that stored it
+  They could show a different friend's name after a relog, because the stored
+  name tag is only valid for the session that stored it
+- Redrew the copy icon so it reads as two sheets of paper. At the size it is
+  drawn the old one blurred into a single shape
 
----
+### Group Finder
+- Fixed the bug that filled your screen with errors after browsing groups. The
+  panel used to filter Blizzard's result list itself, which broke the list for
+  the rest of the session; it now hands your choices to Blizzard's own filter
+- The panel is now the Mythic+ filter pane and nothing else. It appears when
+  you search for Mythic+ groups and hides the rest of the time
+- The Quick Access buttons are gone. Every one had become a trip to the Premade
+  Groups page, and any that did more reintroduced the errors above
+- Raider.IO's profile now sits one pixel from whichever panel is on the right
+  and stays there. The gap used to grow a pixel every time a profile drew
+- Turning the module off hands Blizzard's filter back the way it found it, and
+  so does a filter addon loading while you play
+- Double-clicking a category tile starts a group again straight after the
+  Group Finder opens, instead of only once the season data had loaded
 
-## v4.4.26
+### Role Icons
+- One setting now picks which role icons the Group Finder and group chat both
+  draw, replacing a hidden option only half the addon read
+- Nine icon styles, including six new bundled sets. The style list shows each
+  set's actual icons instead of naming them
+- Role icons in party and raid chat now appear for everyone in the group. They
+  previously appeared for you alone
+- The icons no longer flash the stock artwork before ours while you browse
+  groups outside a dungeon
 
-### Four modules removed
-- Ebon Might Tracker, Ebon Might Extension Helper, Prescience Tracker and
-  Burning Rush have been removed, along with their settings pages
-- Patch 12.1 hides aura identity while you are in combat, so the tracking these
-  modules were built on is no longer possible. They were removed rather than
-  left to fail quietly
+### No Movement Alert
+- Abilities with a single charge, such as Shimmer, are tracked as charge
+  abilities instead of plain cooldowns
+- Only the talent you actually have shows for a paired choice. Blink and
+  Shimmer, Dash and Tiger Dash, and Roll and Chi Torpedo no longer appear
+  together, and the untalented half is no longer the one that shows
+- Cooldowns count down for their full length. Some, such as Flying Serpent
+  Kick, appeared for about a second and then vanished
 
-### A new Class Tools page
-- **NEW:** The class-gated modules now share one Class Tools page under Combat:
-  Disintegrate ticks, Havoc Tracker, Hunter's Mark, Missing Forms and the
-  Stasis tracker
+### Targeted Spells
+- Enemies that begin casting at you before they are in combat no longer create
+  an entry. Casts from enemies already fighting are unaffected
+- Casts from enemies on nameplates beyond the first forty are now tracked
+- Significantly cheaper to run: it listens only to the nameplates around you
+  instead of every casting unit in the world, shares one timer across pending
+  casts, reuses the important-cast glow, and caps its animation at 60 frames a
+  second
 
-### The settings sidebar is reorganised
-- Sections are now in alphabetical order
-- Class Utilities is gone as a section. Totem Tracker moved to Aura Tracking and
-  Priest: PI Macro to QoL Utilities
-- Combat Potion, Healer Mana, No Movement Alert, Pet Status and Player Absorbs
-  are together on one Status Texts page
+### Disintegrate Ticks
+- Normal and chained tick placement now follows the current channel timing,
+  including four- and five-tick talent setups
+- Ticks draw on every visible supported Blizzard, Midnight Simple Unit Frames,
+  EllesmereUI, AzortharionUI and EQOL cast bar. The obsolete UUF, BCDM, Ayije
+  and NephUI integrations are removed; warning text, appearance and tick-width
+  settings are unchanged
+
+### World Markers
+- Clearing markers during combat no longer leaves the cycle stranded partway
+  through the list. The next marker you place starts from the top again
 
 ### Focus Marker
 - The macro is now named `!FocusMarker`, so it sorts to the top of your macro
@@ -179,290 +221,78 @@
 - If you already had one named FocusMarker, delete it and drag the new one to
   your bar. The addon will not adopt the old one
 
-### Character sheet
-- **NEW:** Your Mythic+ rating now appears where the race line used to be,
-  coloured by rating. Nothing shows if you are unrated this season
-- Your name and level sit centred over your character rather than over the
-  window
-
-### The repair message says who paid
+### Automation
 - **NEW:** After an auto repair the message names the payer: guild funds, your
-  own gold, or a split of the two with the guild's share shown
-- A repair you clicked yourself, or one another addon made, still reports the
-  cost without naming a payer
+  own gold, or a split with the guild's share shown. A repair you clicked
+  yourself, or one another addon made, still reports the cost without naming a
+  payer
 - A guild rank with unlimited withdrawal can now use guild funds. Those ranks
   previously always paid their own gold, whatever the setting said
-- With junk in your bags and a guild-funded repair, the junk may sell a fraction
-  of a second later than before
 - Closing the merchant window immediately after a repair no longer loses the
   message. The report waits a moment for the bill to settle
+- With junk in your bags and a guild-funded repair, the junk may sell a
+  fraction of a second later than before
 
----
-
-## v4.4.25
-
-### New damage meter icons
-- Redrew all twelve damage meter icons so they hold their shape at the size
-  they are actually drawn. The old ones blurred into grey smudges
-- The four buttons at the top right of a meter window are a quarter larger and
-  now match each other in size
-- The report button is a new picture and no longer looks dimmer than its
-  neighbours
-- The icon files are about a seventh of their old size, with no change to how
-  they look
-
----
-
-## v4.4.24
-
-### A clearer copy button on chat
-- Redrew the copy icon so it reads as two sheets of paper. At the size it is
-  actually drawn the old one blurred into a single shape
-
----
-
-## v4.4.23
-
-### See what KitnEssentials costs you
-- The settings window now shows a live CPU readout at the bottom of the sidebar.
-  It updates every few seconds and tells you what share of your current frame
-  KitnEssentials is using
-- Hover it for an explanation of where the number comes from
-
-### A reminder when CPU profiling is left on
-- Detailed CPU profiling makes the game slower, and it is easy to switch on for
-  a test and forget about it. If it is still on after a reload, you now get a
-  chat warning and a popup offering to switch it off and reload for you
-- The popup waits until you are out of combat
-- The sidebar also shows a Detailed profiler: ON line while it is active
-
-### Smaller things
-- The version number in the settings window no longer repeats the addon name
-
----
-
-## v4.4.22
-
-### Anchoring to your player frame
-- Fixed anything set to anchor to Player Frame attaching to Blizzard's player
-  frame instead of your unit frame addon's. It happened on every login, and
-  usually corrected itself a moment later, so most of the time you never saw it
-- Inside a Mythic+ key, a raid boss fight or combat, the correction was blocked
-  and the wrong position stuck for the rest of the run. The three aura trackers
-  were where you noticed it: External Cooldowns, the Debuff Tracker and Movement
-  Buffs would sit next to Blizzard's frame after a reload
-- The fix checks again during login and moves anything that landed on the wrong
-  frame. It covers every display with the Player Frame anchor, not only the aura
-  ones, and it stops running once the login is over
-
----
-
-## v4.4.21
-
-### Aura displays
-- Fixed your buffs and debuffs disappearing when you opened the settings panel
-  on an aura page inside a Mythic+ key, a raid boss fight or combat. They stayed
-  gone until you reloaded. They now come back as soon as you close the page
-- This affected all five aura displays: Player Buffs, Player Debuffs, the Debuff
-  Tracker, External Cooldowns and Movement Buffs
-
----
-
-## v4.4.20
-
-### Aura timers
-- All five aura displays can now count the last few seconds with one decimal.
-  Look for Show Decimals Below (sec) in Font Settings, or in the Appearance card
-  on the Player Buffs and Player Debuffs pages
-- The slider sets how many seconds from the end the decimal appears. Set it to 0
-  to switch decimals off
-- The Debuff Tracker, External Cooldowns and Movement Buffs start at 1 second.
-  Player Buffs and Player Debuffs start switched off
-- Weapon enchant timers on the Player Buffs display follow the same setting
-- The preview in the settings panel now counts down the same way the real
-  display does. It used to round up, so it read a second ahead
-
----
-
-## v4.4.19
-
-### Movement Buffs (new)
-- A new display for movement speed buffs on yourself, anchored beside the player
-  frame. Find it in the settings panel under Aura Tracking
-- It ships switched off. Turn it on and seven cards appear: position, size and
-  growth, the spell list, glow, sound, and fonts
-- The list holds 85 spells. Sixty are on to start with. The rest, including
-  Stealth, Greater Invisibility, Hover and Time Spiral, are listed but switched
-  off so you can enable only the ones you want to see
-- Both the buffs you cast on yourself and the ones other players give you show
-  in the same display
-- Add your own spell IDs, or switch off any of the shipped ones. Kitn Defaults
-  restores the shipped list without deleting rows you added
-
-### External Tracker
-- The spell list and the application sound are now the same controls the
-  Movement Buffs page uses, so both pages behave identically
-- The Label box is now called Custom Name, and shipped rows no longer come with
-  one filled in. The list shows the game's own name for each spell, so it stays
-  correct in your language and after a spell is renamed. Typing a Custom Name
-  still overrides it
-
----
-
-## v4.4.18
-
-### Profiler
-- `/kes profiler cpu` now separates direct frame CPU from overlapping frame-tree
-  totals, reports normalized reset-window rates, and explains callback
-  attribution limits
-- Snapshot comparisons now refuse CPU and frame deltas after a profiler reset
-  instead of presenting incomparable numbers
-
----
-
-## v4.4.17
-
-### Damage Meter
-- The meter loads on a fresh install again. It asked for a piece of shared code
-  the addon never actually included, so it only ever worked when some other
-  addon you happened to have installed supplied it first. When none did, the
-  meter never started and the screen filled with errors
-
-## v4.4.16
-
-### Group Finder Panel
-- Fixed the bug that filled your screen with errors after browsing groups. The
-  panel used to filter Blizzard's result list itself, which broke the list for
-  the rest of the session; it now hands your choices to Blizzard's own group
-  filter and lets the game do the work
-- The panel is now the Mythic+ filter pane and nothing else. It appears when you
-  search for Mythic+ groups and hides the rest of the time
-- The Quick Access buttons are gone. Every one of them had become a trip to the
-  Premade Groups page, and any of them that did more than that reintroduced the
-  errors above
-- Raider.IO's profile now sits one pixel from whichever panel is on the right,
-  and stays there. The gap used to grow a pixel every time a profile drew
-- Turning the module off hands Blizzard's filter back the way it found it, and
-  so does a filter addon loading while you play
-
-## v4.4.15
-
-### Aura Externals
-- You now choose which buffs the display shows. A list of thirty-eight spells
-  ships enabled, covering externals, raid-wide cooldowns and support buffs, and
-  you can add any spell you like
-- Two buttons refill the list: one restores everything we ship, the other
-  enables only the spells the game itself flags as external defensives
-- Each entry in the list shows its spell icon, and the list reads alphabetically
-- A new option hides buffs you cast on yourself, leaving only what other players
-  put on you. Note this hides your own raid cooldowns too
-- The sound now plays for anything on your list, including spells you added.
-  It previously played for a fixed seven and ignored everything else
-- Timers count down the same way the Cooldown Manager does, rather than reading
-  a second higher
-- Shipped settings retuned: three icons per row across two rows, a slower and
-  chunkier pixel glow, and the application sound on by default
-
-### Glow Settings
-- Pixel Glow is back. It was quietly replaced by the Ants style and now draws
-  its marching dashed border again, including inside dungeons where the old
-  version froze
-- The Ants glow no longer draws from the wrong part of its artwork
-- The Alert glow animates instead of crawling
-- Tinted glows look lit again rather than flat
-- Switching a glow off now stops its animations instead of only hiding them
-
-## v4.4.14
-
-### Group Finder & Chat Role Icons
-- One setting now picks which role icons the Group Finder and group chat both
-  draw, replacing a hidden option that only half the addon read
-- Nine icon styles to choose from, including six new bundled sets
-- The style list shows each set's actual icons instead of naming them, so you
-  pick by looking rather than by guessing
-- Role icons in party and raid chat now appear for everyone in the group. They
-  previously appeared for you alone
-- The icons no longer flash the stock artwork before ours while you browse
-  groups outside a dungeon
-
-## v4.4.13
-
-### No Movement Alert
-- Abilities with a single charge, such as Shimmer, are now tracked as charge
-  abilities instead of plain cooldowns
-- Only the talent you actually have shows for a paired choice. Blink and
-  Shimmer, Dash and Tiger Dash, and Roll and Chi Torpedo no longer appear
-  together, and the untalented half is no longer the one that shows
-- Cooldowns now count down for their full length. Some abilities, such as
-  Flying Serpent Kick, appeared for about a second and then vanished
+### Vantus Rune
+- The Guild Bank button follows the active Baganator skin and falls back to
+  Blizzard's Guild Bank, so changing skins no longer makes it disappear
+- Added the current rune icon with KitnEssentials styling. The button border
+  and label update immediately when the theme accent changes
 
 ### LFG Reminder
 - The dungeon teleport shortcuts point at the current season's dungeons
 - The teleport tooltip now sits beside the button at any interface scale
 
-### LFG Quick Create
-- Double-clicking a category tile starts a group again straight after the
-  Group Finder opens, instead of only once the season data had loaded. The
-  window to double-click is also a little longer
-
 ### Skinning
-- The BigWigs queue timer bar now follows the ready check box that is actually
+- The BigWigs queue timer bar follows the ready check box that is actually
   shown, instead of drifting off the popup
 - Multi-row tab strips in addon options no longer overlap
 - Character frame tabs keep the standard tab text size
 
-### Settings Sidebar
-- The highlight on the selected page now follows the theme accent and is easier
-  to see
+### Addon Theme
+- The Addon Theme page has left the sidebar. It opens as a Customize Theme
+  popup from the title bar, with the eight presets as a chip strip
+- **NEW:** Also Tint Skinned Frames. On by default, so nothing changes unless
+  you want it to. Turn it off to hold skinned Blizzard frames at a fixed
+  neutral colour while the settings window still follows your accent. Takes
+  effect on the next reload
 
----
+### Settings Window
+- Sidebar sections are now in alphabetical order. Class Utilities is gone as a
+  section: Totem Tracker moved to Aura Tracking and Priest: PI Macro to QoL
+  Utilities. Combat Potion, Healer Mana, No Movement Alert, Pet Status and
+  Player Absorbs share one Status Texts page
+- Redrew the home, menu and minimize icons in the title bar, the collapse arrow
+  used across the window, and the tick and cross on every checkbox. Each is now
+  drawn for the smallest size it appears at
+- The three title bar icons are larger and match the close button beside them
+  instead of sitting under it
+- The collapse arrow is a different shape, turned sideways for slider steppers,
+  dropdowns and sidebar sections. The old one became a thin spike whenever it
+  turned
+- The checkbox tick and cross are close to the same size. The old tick was
+  nearly twice the cross
+- The highlight on the selected page follows the theme accent and is easier to
+  see
+- The version number no longer repeats the addon name
 
-## v4.4.12
+### Profiler
+- **NEW:** The settings window shows a live CPU readout at the bottom of the
+  sidebar, updating every few seconds, telling you what share of your current
+  frame KitnEssentials is using. Hover it for an explanation
+- **NEW:** Detailed CPU profiling makes the game slower and is easy to leave
+  on. If it is still on after a reload you get a chat warning and a popup
+  offering to switch it off and reload for you. The popup waits until you are
+  out of combat, and the sidebar shows a Detailed profiler: ON line meanwhile
+- `/kes profiler cpu` separates direct frame CPU from overlapping frame-tree
+  totals, reports normalized reset-window rates, and explains callback
+  attribution limits
+- Snapshot comparisons refuse CPU and frame deltas after a profiler reset
+  instead of presenting incomparable numbers
 
-### Targeted Spells
-- Enemies that begin casting at you before they are in combat no longer create
-  an entry. Casts from enemies already fighting are unaffected
-- Significantly reduced the cost of tracking casts. The module now listens only
-  to the nameplates around you instead of every casting unit in the world, uses
-  one shared timer for pending casts instead of one per cast, reuses the
-  important-cast glow between casts, and caps its animation at 60 frames a
-  second
-- Casts from enemies on nameplates beyond the first forty are now tracked
-
----
-
-## v4.4.11
-
-### Combat Texts
-- Interrupt notices now correlate your own, pet and supported projectile
-  interrupts to the hostile cast they stopped, rather than accepting any nearby
-  interrupted cast. This prevents the friendly-spell misattributions caused by
-  a missed kick while retaining Warlock pet interrupts, Avenger's Shield and
-  Solar Beam
-- The notice now shows `Interrupted`, the stopped spell's icon in standard
-  KitnEssentials styling, and a muted blue spell name on one aligned line
-
----
-
-## v4.4.10
-
-### Vantus Rune
-- The Guild Bank button now follows the active Baganator skin and falls back to
-  Blizzard's Guild Bank, so changing skins no longer makes the button disappear
-- Added the current rune icon with KitnEssentials styling. The button border and
-  label now update immediately when the theme accent changes
-
----
-
-## v4.4.9
-
-### Disintegrate Ticks
-- Updated normal and chained Disintegrate tick placement to follow the current
-  channel timing, including four- and five-tick talent setups
-- Cast-bar detection now draws ticks on every visible supported Blizzard,
-  Midnight Simple Unit Frames, EllesmereUI, AzortharionUI and EQOL bar. The
-  obsolete UUF, BCDM, Ayije and NephUI integrations are removed, while existing
-  warning text, appearance and tick-width settings remain intact
+### Housekeeping
+- Icon artwork across the addon is a fraction of its old size, with no change
+  to how it looks
 
 ---
 
