@@ -1448,10 +1448,17 @@ local notePlanted = false
 -- check after it.
 local function ReadActivityID(resultID)
     if resultID == nil then return nil end
+    -- Both callers route through here, so the lockdown refusal lives here too
+    -- rather than in one of them.
+    if InLockdown() then return nil end
     local activityID
     pcall(function()
         local info = C_LFGList.GetSearchResultInfo(resultID)
         if type(info) ~= "table" then return end
+        -- The whole return before any field of it: issecrettable reports a
+        -- table whose accesses would produce secrets, so asking about a field
+        -- first is asking after the read that would throw.
+        if issecrettable(info) then return end
         local ids = info.activityIDs
         if ids == nil or issecrettable(ids) then return end
         activityID = ids[1]
