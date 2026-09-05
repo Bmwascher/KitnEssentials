@@ -1,15 +1,14 @@
 -- The CVars page is tabbed: GUI-CVars.lua declares the strip via
--- RegisterTabbedContent. The Dev tab is built solely from the six
--- addon-restriction CVars, so a client without them would otherwise render a
--- tab holding a warning label and nothing else -- the same refusal every card
--- on the page already makes one level down. This spec proves that branch and
--- that every declared tab id resolves to a registered content builder, the
--- same discipline gui_automation_subtabs_spec.lua uses for the Automation page.
+-- RegisterTabbedContent, and offers the Dev tab only when the client has one of
+-- the CVars that fill it -- AU:HasLiveDevCVars carries why. This spec proves
+-- that branch and that every declared tab id resolves to a registered content
+-- builder, the same discipline gui_automation_subtabs_spec.lua uses for the
+-- Automation page.
 --
 -- The Automation stand-in exposes HasLiveDevCVars alone: the predicate's own
 -- inputs (the live read AND the match predicate both biting) are already
 -- covered in cvars_live_read_spec.lua, so faking anything more here would test
--- the fake.
+-- the fake. The fixture holds nothing the three cases do not reach.
 local helpers = require("dev.spec._helpers")
 
 describe("GUI-CVars: subtab id coverage", function()
@@ -21,14 +20,9 @@ describe("GUI-CVars: subtab id coverage", function()
             tabStrips = {},
             RegisterContent = function(self, id, fn) self.registeredContent[id] = fn end,
             RegisterTabbedContent = function(self, id, tabs) self.tabStrips[id] = tabs end,
-            CreateWidgetStateManager = function() return { Register = function() end, UpdateAll = function() end } end,
         }
 
-        KE = {
-            GUIFrame = GUIFrame,
-            Theme = { rowHeight = 30, rowHeightLast = 30 },
-            db = { profile = { Automation = {}, MapScale = {} } },
-        }
+        KE = { GUIFrame = GUIFrame }
 
         helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-CVars.lua", KE)
     end)
