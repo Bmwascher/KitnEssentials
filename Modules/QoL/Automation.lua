@@ -1422,9 +1422,8 @@ local deleteHooked = setmetatable({}, { __mode = "k" })
 -- Every dialog decorated once keeps this hook for good, but one button is
 -- shared between them. Without the owner test, a pooled frame that hosted an
 -- earlier prompt tears down the button of whichever dialog holds it now.
--- A bare call, with no dialog, is the teardown path and always acts.
 local function DeleteHideActs(dialog, owner)
-    return dialog == nil or dialog == owner
+    return dialog == owner
 end
 
 local function HideDeleteButton(dialog)

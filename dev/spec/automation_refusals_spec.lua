@@ -1364,7 +1364,7 @@ describe("Fast Loot gate, throttle and registration", function()
     -- The shared Confirm button belongs to one pooled dialog at a time. Every
     -- dialog it ever decorated keeps the hide hook for good, so the hook must
     -- ask whether it owns the button before tearing it down.
-    it("acts on its owner's hide and on a bare call, and refuses another dialog's", function()
+    it("acts on its owner's hide and refuses another dialog's", function()
         local fx = installedFixture()
         fx.AU:ApplySettings()
         local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoFillDelete")
@@ -1373,7 +1373,6 @@ describe("Fast Loot gate, throttle and registration", function()
         local acts = findUpvalue(hide, "DeleteHideActs")
         local owner, other = {}, {}
         assert.is_true(acts(owner, owner))
-        assert.is_true(acts(nil, owner))
         assert.is_false(acts(other, owner))
     end)
 end)
