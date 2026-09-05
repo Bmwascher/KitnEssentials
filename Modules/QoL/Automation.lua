@@ -122,6 +122,45 @@ AU.CVAR_DEFS = {
         label = "Class Colored Friendly Names",
         type = "boolean",
     },
+    -- Dev: force addon restrictions on for testing. Blizzard surfaces none of
+    -- them, and turning one on looks exactly like every addon breaking, so they
+    -- live behind their own tab with a warning.
+    {
+        key = "addonPvPMatchRestrictionsForced",
+        label = "Force PvP Match Addon Restrictions",
+        type = "boolean",
+        dev = true,
+    },
+    {
+        key = "addonMapRestrictionsForced",
+        label = "Force Map Addon Restrictions",
+        type = "boolean",
+        dev = true,
+    },
+    {
+        key = "addonEncounterRestrictionsForced",
+        label = "Force Encounter Addon Restrictions",
+        type = "boolean",
+        dev = true,
+    },
+    {
+        key = "addonCombatRestrictionsForced",
+        label = "Force Combat Addon Restrictions",
+        type = "boolean",
+        dev = true,
+    },
+    {
+        key = "addonChatRestrictionsForced",
+        label = "Force Chat Addon Restrictions",
+        type = "boolean",
+        dev = true,
+    },
+    {
+        key = "addonChallengeModeRestrictionsForced",
+        label = "Force M+ Addon Restrictions",
+        type = "boolean",
+        dev = true,
+    },
 }
 
 AU.CVAR_SLIDER_DEFS = {
@@ -192,6 +231,17 @@ function AU:FilterLiveDefs(defs, match)
         end
     end
     return kept
+end
+
+local function IsDevDef(def)
+    return def.dev == true
+end
+
+-- The Dev tab is built from these alone, so a client with none of them would
+-- otherwise show a tab holding its warning label and nothing else -- the same
+-- refusal every card on the page already makes one level down.
+function AU:HasLiveDevCVars()
+    return #self:FilterLiveDefs(self.CVAR_DEFS, IsDevDef) > 0
 end
 
 -- Some CVars are only half a switch. `companion` is the master flag that has to
