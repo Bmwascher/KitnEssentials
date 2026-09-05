@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.5.1
+
+### Chat
+- Pressing Up to recall a line that contains an item, spell or keystone link
+  no longer causes a blocked-action error while you are in combat or in a
+  restricted instance. The line is skipped with a one-time notice, and Alt+Up
+  still recalls it; plain lines recall as before
+- Protected commands such as /ping and /cast no longer enter the Up/Down
+  recall history
+
+### Automation
+- Hide Talking Head now also stops the voice-over instead of only hiding the
+  frame
+
+---
+
 ## v4.5.0
 
 ### Secondary Stats Display
