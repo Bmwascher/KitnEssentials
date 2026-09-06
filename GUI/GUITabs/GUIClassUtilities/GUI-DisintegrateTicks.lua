@@ -85,7 +85,11 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
     local card2 = GUIFrame:CreateCard(scrollChild, "Tick Settings", yOffset)
     manager:Register(card2, "all")
 
-    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local euiLoaded = C_AddOns and C_AddOns.IsAddOnLoaded
+        and C_AddOns.IsAddOnLoaded("EllesmereUIResourceBars")
+
+    local row2 = GUIFrame:CreateRow(card2.content,
+        euiLoaded and Theme.rowHeight or Theme.rowHeightLast)
     local tickColorPicker = GUIFrame:CreateColorPicker(row2, "Tick Color", {
         color = db.TickColor or { 1, 1, 1, 0.8 },
         callback = function(r, g, b, a)
@@ -103,7 +107,30 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
     })
     row2:AddWidget(tickWidthSlider, 0.5)
     manager:Register(tickWidthSlider, "all")
-    card2:AddRow(row2, Theme.rowHeightLast, 0)
+    if euiLoaded then
+        card2:AddRow(row2, Theme.rowHeight)
+    else
+        card2:AddRow(row2, Theme.rowHeightLast, 0)
+    end
+
+    -- Only offered when EllesmereUI's resource bars are loaded: with them
+    -- absent the setting governs nothing and the row would be a dead control.
+    if euiLoaded then
+        local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+        local hideEUICheck = GUIFrame:CreateCheckbox(row2b, "Hide EllesmereUI Tick Markers", {
+            value = db.HideEUITickMarkers ~= false,
+            tooltip = "Turns off EllesmereUI's own channel tick markers while you are on "
+                .. "Devastation or Preservation, so the cast bar shows one set of ticks. "
+                .. "Turned back on when you spec away or turn this module off.",
+            callback = function(checked)
+                db.HideEUITickMarkers = checked
+                if DT and DT.SyncEUITickMarkers then DT:SyncEUITickMarkers() end
+            end,
+        })
+        row2b:AddWidget(hideEUICheck, 1)
+        manager:Register(hideEUICheck, "all")
+        card2:AddRow(row2b, Theme.rowHeightLast, 0)
+    end
 
     yOffset = card2:GetNextOffset()
 
