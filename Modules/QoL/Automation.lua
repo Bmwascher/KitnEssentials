@@ -1129,30 +1129,27 @@ function AnnounceRepair(force)
 
     if spent <= 0 then return end
 
-    local money = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString
-        and C_CurrencyInfo.GetCoinTextureString(spent)
+    local style = AU.db.RepairReportStyle
+    local money = AU:FormatMoney(spent, style)
     if not money then return end
 
     if branch == "player" then
-        KE:Print(string_format("Repaired for %s (your gold).", money))
+        KE:Print(string_format("Repaired for %s with your own gold.", money))
         return
     end
 
     if branch == "guild" then
         local guildPart, ownPart = AU:RepairSplit(spent, ownSpent, guildFunds)
         if guildPart and guildPart > 0 and ownPart > 0 then
-            local guildMoney = C_CurrencyInfo.GetCoinTextureString(guildPart)
-            if guildMoney then
-                KE:Print(string_format(
-                    "Repaired for %s (guild %s, rest yours).",
-                    money, guildMoney))
-                return
-            end
+            KE:Print(string_format(
+                "Repaired for %s, %s of it from guild funds.",
+                money, AU:FormatMoney(guildPart, style)))
+            return
         elseif guildPart and guildPart > 0 then
-            KE:Print(string_format("Repaired for %s (guild funds).", money))
+            KE:Print(string_format("Repaired for %s with guild funds.", money))
             return
         elseif guildPart then
-            KE:Print(string_format("Repaired for %s (your gold).", money))
+            KE:Print(string_format("Repaired for %s with your own gold.", money))
             return
         end
     end
