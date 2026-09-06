@@ -24,6 +24,8 @@ local PlayerUtil = PlayerUtil
 local hooksecurefunc = hooksecurefunc
 local math_ceil = math.ceil
 local UnitChannelInfo = UnitChannelInfo
+local InCombatLockdown = InCombatLockdown
+local C_Timer = C_Timer
 
 
 ---------------------------------------------------------------------------------
@@ -1143,9 +1145,8 @@ do
     entry:RegisterEvent("PLAYER_ENTERING_WORLD")
     entry:SetScript("OnEvent", function()
         DT.euiTickMarkersReady = true
-        -- Every ordinary addon has loaded by now, so if the registration still
-        -- has not taken, that addon is absent and the listener would otherwise
-        -- sit armed for the session on every install that does not have it.
+        -- Every ordinary addon is up by now, so a registration that still has
+        -- not taken never will.
         StopWaitingForEUI()
         DT:SyncEUITickMarkers()
         -- EllesmereUI defers a first-login profile switch two frames, and its
