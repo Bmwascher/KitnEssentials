@@ -210,17 +210,11 @@ function HM:DrawnModeKey()
     return self._drawnModeKey or self:GetActiveModeKey()
 end
 
--- Called at the point of drawing, and nowhere that merely reads. A context
--- change also needs a fresh Edit Mode snapshot: the snapshot is keyed by
--- element while the setter writes whichever table was drawn, so a stale one
--- reverts a Raid stack to Party's coordinates. Re-registering used to take that
--- snapshot as a side effect of re-adoption; this keeps the behaviour without
--- the re-adoption.
---
--- The settings table is compared as well as the mode, because a profile switch
--- rebinds db to a different table while the mode can stay the same on both
--- sides. Mode alone would see no change and leave the outgoing profile's
--- coordinates as the revert target for the incoming one.
+-- Called where the stack is drawn, never from a reader. The Edit Mode snapshot
+-- is keyed by element while the setter writes whichever table was drawn, so a
+-- context change needs a fresh one or Revert sends a Raid stack to Party's
+-- coordinates. The settings table is compared too: a profile switch rebinds db
+-- while the mode can stay the same on both sides.
 function HM:SetDrawnMode()
     local previousMode, previousDB = self._drawnModeKey, self._drawnDB
     self._drawnModeKey = self:GetActiveModeKey()
@@ -804,9 +798,9 @@ end
 
 -- Point the overlay label at the mode the stack was last drawn in. Called on
 -- every draw; the compare inside SetElementLabel makes the unchanged case free.
--- Registers instead when the element is absent, because HM:Refresh tears the
--- container down and unregisters, and the re-show that used to restore the
--- registration only runs when the module was previewing.
+-- Registers instead when the element is absent: HM:Refresh tears the container
+-- down and unregisters, and the re-show that restores the registration runs
+-- only when the module was previewing.
 function HM:RefreshEditMode()
     if not KE.EditMode then return end
     if not self.editModeRegistered then
@@ -855,7 +849,7 @@ function HM:ShowPreview()
     self.isPreview = true
     wipe(self.currentHealers)
     -- No page context means this preview is Edit Mode's, so the row count
-    -- follows the live mode. Reading the field alone drew one row in a raid.
+    -- follows the live mode. Reading the field alone draws one row in a raid.
     local ctx = self:PreviewContext()
     local raidPreview = (ctx == "RAID") or (ctx == nil and self:GetMode() == "RAID")
     local previewCount = raidPreview and (self.db.MaxHealers or 6) or 1
