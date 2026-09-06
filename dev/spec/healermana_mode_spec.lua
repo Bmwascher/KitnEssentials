@@ -47,3 +47,23 @@ describe("HealerMana mode resolution", function()
         assert.are.equal(baseline, calls)
     end)
 end)
+
+-- Tier 2: a guard whose failure is silent. Lifted into a predicate so the
+-- case needs no raid roster fake; the loop that consults it is covered by
+-- the diff.
+describe("HealerMana:ExcludesSelf", function()
+    it("is true only when the raid toggle is on and the player's spec heals", function()
+        for _, case in ipairs({
+            { toggle = true,  healer = true,  expected = true },
+            { toggle = true,  healer = false, expected = false },
+            { toggle = false, healer = true,  expected = false },
+            { toggle = false, healer = false, expected = false },
+        }) do
+            local HM, KE = L.loadHealerMana()
+            KE.IsPlayerHealerSpec = function() return case.healer end
+            HM.db.ExcludeSelfHealer = case.toggle
+            assert.are.equal(case.expected, HM:ExcludesSelf(),
+                "toggle=" .. tostring(case.toggle) .. " healer=" .. tostring(case.healer))
+        end
+    end)
+end)

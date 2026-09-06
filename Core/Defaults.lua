@@ -1617,6 +1617,7 @@ local Defaults = {
                 EnableInRaid = true,        -- master toggle: Raid Mode active at all
                 MaxHealers = 6,             -- cap on raid healers shown
                 ExcludeBenchGroups = true,  -- hide healers in raid subgroups 7-8 (bench convention)
+                ExcludeSelfHealer = false,  -- Raid: leave the player's own row out when their spec heals
                 GrowDirection = "DOWN",     -- "DOWN" | "UP"
                 FrameSpacing = 4,           -- px gap between stacked frames
                 SplitPositioning = false,   -- off = both modes share Position

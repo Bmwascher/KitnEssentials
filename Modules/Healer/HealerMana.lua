@@ -27,6 +27,7 @@ local DEBUG_HM = false
 
 local CreateFrame = CreateFrame
 local UnitExists = UnitExists
+local UnitGUID = UnitGUID
 local UnitIsConnected = UnitIsConnected
 local UnitIsPlayer = UnitIsPlayer
 local UnitClass = UnitClass
@@ -492,6 +493,13 @@ function HM:HealOrphanedPreview()
     return false
 end
 
+-- Raid Mode only. Party's DisableOnHealer hides the whole tracker; this
+-- removes one row, so the other healers stay visible.
+function HM:ExcludesSelf()
+    if not (self.db and self.db.ExcludeSelfHealer) then return false end
+    return KE:IsPlayerHealerSpec() and true or false
+end
+
 function HM:FindHealers()
     if DEBUG_HM then KE:Print("[HM] FindHealers entry isPreview=" .. tostring(self.isPreview) .. " enabled=" .. tostring(self.db and self.db.Enabled)) end
     if not self.db or not self.db.Enabled then return end
@@ -517,7 +525,8 @@ function HM:FindHealers()
         self:RefreshEditMode()  -- keep the overlay label in sync if mode flipped
     end
 
-    -- DisableOnHealer only suppresses Dungeon Mode (Raid shows you as a healer).
+    -- DisableOnHealer only suppresses Party; Raid drops the player's own row
+    -- through ExcludesSelf instead.
     if mode == "DUNGEON" and self.db.DisableOnHealer and KE:IsPlayerHealerSpec() then
         if DEBUG_HM then KE:Print("[HM] FindHealers hide: DisableOnHealer + player healer (Dungeon)") end
         self:HideFrames()
@@ -535,12 +544,15 @@ function HM:FindHealers()
     if mode == "RAID" then
         local maxHealers = self.db.MaxHealers or 6
         local excludeBench = self.db.ExcludeBenchGroups
+        -- UnitGUID stays plain for units in the raid, so the compare is safe.
+        local selfGUID = self:ExcludesSelf() and UnitGUID("player") or nil
         local count = 0
         local n = GetNumGroupMembers()
         for i = 1, n do
             if count >= maxHealers then break end
             local unit = "raid" .. i  -- includes the player naturally
             if UnitExists(unit) and IsHealer(unit) then
+                local isSelf = selfGUID ~= nil and UnitGUID(unit) == selfGUID
                 -- Skip bench-group healers when enabled. The raid index i maps
                 -- 1:1 to GetRaidRosterInfo(i); its subgroup return is a plain
                 -- number (NOT secret — RaidNotifications:CheckBench compares it
@@ -552,7 +564,7 @@ function HM:FindHealers()
                     local _, _, subgroup = GetRaidRosterInfo(i)
                     benched = (subgroup == 7 or subgroup == 8)
                 end
-                if not benched then
+                if not benched and not isSelf then
                     count = count + 1
                     self.currentHealers[count] = self:BuildHealerSnapshot(unit)
                 end
