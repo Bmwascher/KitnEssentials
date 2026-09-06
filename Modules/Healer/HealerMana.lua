@@ -73,7 +73,6 @@ HM.currentHealers = {}
 HM._lastMode = nil
 HM.mode = "DUNGEON"     -- held mode; only RefreshMode writes it
 HM.previewContext = nil  -- "RAID" | "DUNGEON" | nil (set by GUI preview switch)
-HM.guiConfigContext = nil  -- "RAID" | "DUNGEON" | nil (which context the GUI edits)
 HM.isPreview = false
 HM.libSpecCache = {}  -- [playerName] = specID, fed by LibSpec.RegisterGroup callback
 
@@ -183,23 +182,65 @@ end
 -- the position tables and the look/layout twins, so a reader and a writer can
 -- never disagree about which set a change lands in. Split off = always Dungeon;
 -- a GUI preview overrides the live mode so Raid can be configured from a party.
+-- The tab the settings page is on only describes what to draw while that page
+-- is open. Edit Mode restarts previews on its own, so a context read after the
+-- page has gone would answer for the mode the page was editing. Cleared on
+-- close instead of read-gated, it would be lost on an Edit Mode category
+-- change, which restarts previews without re-rendering the page.
+function HM:PreviewContext()
+    local PM = KE.PreviewManager
+    if PM and PM.guiOpen then return self.previewContext end
+    return nil
+end
+
 function HM:GetActiveModeKey()
     if not self.db or not self.db.SplitPositioning then return "DUNGEON" end
-    if self.isPreview and self.previewContext then
-        return (self.previewContext == "RAID") and "RAID" or "DUNGEON"
+    local ctx = self:PreviewContext()
+    if self.isPreview and ctx then
+        return (ctx == "RAID") and "RAID" or "DUNGEON"
     end
     return self:GetMode()
 end
 
+-- The mode the stack on screen was drawn in. Every reader that describes what
+-- is currently displayed resolves through this rather than re-deriving: the
+-- live resolution can flip with no redraw, and then the readers and the frames
+-- disagree about which mode's settings are on screen.
+function HM:DrawnModeKey()
+    return self._drawnModeKey or self:GetActiveModeKey()
+end
+
+-- Called at the point of drawing, and nowhere that merely reads. A context
+-- change also needs a fresh Edit Mode snapshot: the snapshot is keyed by
+-- element while the setter writes whichever table was drawn, so a stale one
+-- reverts a Raid stack to Party's coordinates. Re-registering used to take that
+-- snapshot as a side effect of re-adoption; this keeps the behaviour without
+-- the re-adoption.
+--
+-- The settings table is compared as well as the mode, because a profile switch
+-- rebinds db to a different table while the mode can stay the same on both
+-- sides. Mode alone would see no change and leave the outgoing profile's
+-- coordinates as the revert target for the incoming one.
+function HM:SetDrawnMode()
+    local previousMode, previousDB = self._drawnModeKey, self._drawnDB
+    self._drawnModeKey = self:GetActiveModeKey()
+    self._drawnDB = self.db
+    local changed = previousMode ~= self._drawnModeKey or previousDB ~= self.db
+    if previousMode and changed
+        and KE.EditMode and KE.EditMode.SnapshotElementPosition then
+        KE.EditMode:SnapshotElementPosition("HealerMana")
+    end
+end
+
 function HM:GetActivePositionKey()
-    return (self:GetActiveModeKey() == "RAID") and "RaidPosition" or "Position"
+    return (self:DrawnModeKey() == "RAID") and "RaidPosition" or "Position"
 end
 
 -- Active value for a look/layout key. An absent twin means this mode follows
 -- Dungeon, so only nil falls through: `false` is a value a setting can hold.
 function HM:Look(key)
     if not self.db then return nil end
-    if self:GetActiveModeKey() == "RAID" then
+    if self:DrawnModeKey() == "RAID" then
         local value = self.db["Raid" .. key]
         if value ~= nil then return value end
     end
@@ -209,7 +250,7 @@ end
 -- The look/layout keys that carry a Raid twin. The seeder walks this; add a
 -- key here and it is seeded, but its GUI control still needs its own wiring.
 HM.LOOK_KEYS = {
-    "FrameWidth", "IconSize", "IconType",
+    "FrameWidth", "IconSize", "IconType", "FontFace",
     "NameFontSize", "NameXOffset", "NameYOffset",
     "ManaFontSize", "ManaXOffset", "ManaYOffset",
     "FontOutline", "HighManaColor",
@@ -266,7 +307,7 @@ end
 function HM:GetEditModeLabel()
     if self.db and self.db.SplitPositioning then
         return (self:GetActivePositionKey() == "RaidPosition")
-            and "Healer Mana (Raid)" or "Healer Mana (Dungeon)"
+            and "Healer Mana (Raid)" or "Healer Mana (Party)"
     end
     return "Healer Mana"
 end
@@ -314,7 +355,7 @@ function HM:CreateHealerFrame()
     KE:ApplyIconZoom(frame.icon)
 
     -- Name
-    local fontPath = KE:GetFontPath(self.db.FontFace)
+    local fontPath = KE:GetFontPath(self:Look("FontFace"))
     local fontOutline = self:Look("FontOutline") or "OUTLINE"
 
     frame.name = frame:CreateFontString(nil, "OVERLAY")
@@ -340,7 +381,7 @@ function HM:GetHealerFrame(index)
 end
 
 function HM:UpdateFrameAppearance(frame)
-    local fontPath = KE:GetFontPath(self.db.FontFace)
+    local fontPath = KE:GetFontPath(self:Look("FontFace"))
     local fontOutline = self:Look("FontOutline")
     local manaOutline = (fontOutline == "NONE") and "" or "OUTLINE"
 
@@ -522,7 +563,6 @@ function HM:FindHealers()
     if mode ~= self._lastMode then
         self._lastMode = mode
         for _, frame in pairs(self.healerFrames) do frame:Hide() end
-        self:RefreshEditMode()  -- keep the overlay label in sync if mode flipped
     end
 
     -- DisableOnHealer only suppresses Party; Raid drops the player's own row
@@ -630,6 +670,7 @@ end
 function HM:UpdateHealerFrames()
     local count = #self.currentHealers
     if count == 0 then return end
+    self:SetDrawnMode()
 
     for i = 1, count do
         local frame = self:GetHealerFrame(i)
@@ -649,6 +690,7 @@ function HM:UpdateHealerFrames()
     self:PositionFrames()
     self:ApplyContainerPosition()
     self.containerFrame:Show()
+    self:RefreshEditMode()
 end
 
 function HM:UpdateMana()
@@ -760,15 +802,20 @@ function HM:RegWithEditMode()
     end
 end
 
--- Re-register so the overlay label reflects the current mode/context. Cheap and
--- only meaningful when split is on (label is constant otherwise). Called when
--- the GUI Configure For dropdown changes or the live mode crosses a boundary.
+-- Point the overlay label at the mode the stack was last drawn in. Called on
+-- every draw; the compare inside SetElementLabel makes the unchanged case free.
+-- Registers instead when the element is absent, because HM:Refresh tears the
+-- container down and unregisters, and the re-show that used to restore the
+-- registration only runs when the module was previewing.
 function HM:RefreshEditMode()
-    if not (KE.EditMode and self.containerFrame) then return end
-    if not (self.db and self.db.SplitPositioning) then return end
-    if KE.EditMode.UnregisterElement then KE.EditMode:UnregisterElement("HealerMana") end
-    self.editModeRegistered = false
-    self:RegWithEditMode()
+    if not KE.EditMode then return end
+    if not self.editModeRegistered then
+        self:RegWithEditMode()
+        return
+    end
+    if KE.EditMode.SetElementLabel then
+        KE.EditMode:SetElementLabel("HealerMana", self:GetEditModeLabel())
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -785,7 +832,7 @@ function HM:ShowPreview()
     self:RegWithEditMode()
 
     -- Prefer a live healer when actually grouped and NOT previewing raid context.
-    if self.db.Enabled and IsInGroup() and self.previewContext ~= "RAID" and not IsInRaid() then
+    if self.db.Enabled and IsInGroup() and self:PreviewContext() ~= "RAID" and not IsInRaid() then
         local playerIsHealerSelf = IsHealer("player") and not (self.db.DisableOnHealer and KE:IsPlayerHealerSpec())
         local liveUnit = playerIsHealerSelf and "player" or nil
         if not liveUnit then
@@ -807,7 +854,11 @@ function HM:ShowPreview()
     -- Canned preview. Raid context -> MaxHealers fake healers; else one.
     self.isPreview = true
     wipe(self.currentHealers)
-    local previewCount = (self.previewContext == "RAID") and (self.db.MaxHealers or 6) or 1
+    -- No page context means this preview is Edit Mode's, so the row count
+    -- follows the live mode. Reading the field alone drew one row in a raid.
+    local ctx = self:PreviewContext()
+    local raidPreview = (ctx == "RAID") or (ctx == nil and self:GetMode() == "RAID")
+    local previewCount = raidPreview and (self.db.MaxHealers or 6) or 1
     -- Sample healer specs (drive only the icon/class color in the preview).
     -- Names are generic "Healer N"; only the spec/class is read here.
     local CANNED = {
@@ -848,6 +899,7 @@ function HM:HidePreview()
     else
         self:HideFrames()
     end
+    self:RefreshEditMode()
 end
 
 ---------------------------------------------------------------------------------

@@ -236,6 +236,21 @@ function EditMode:UnregisterElement(key)
     end
 end
 
+-- Rename a registered element in place. A module whose overlay label depends on
+-- its own mode has to resync the label whenever that mode changes, and
+-- re-registering to do it would re-snapshot the revert position on every
+-- adoption. displayName has exactly three readers: the overlay text at creation,
+-- the pooled reuse path, and the nudge frame's selected-element line.
+function EditMode:SetElementLabel(key, label)
+    local element = key and self.registeredElements[key]
+    if not element or not label or element.displayName == label then return end
+    element.displayName = label
+
+    local overlay = self.overlayFrames[key]
+    if overlay and overlay.text then overlay.text:SetText(label) end
+    if self.selectedElementKey == key then self:UpdateNudgeFrameInfo() end
+end
+
 function EditMode:GetElementFrame(element)
     if element.frame then
         return element.frame

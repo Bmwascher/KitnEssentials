@@ -67,3 +67,21 @@ describe("HealerMana:ExcludesSelf", function()
         end
     end)
 end)
+
+describe("HealerMana:PreviewContext", function()
+    it("answers with the page's context only while the page is open", function()
+        for _, case in ipairs({
+            { guiOpen = true,  context = "RAID",    expected = "RAID" },
+            { guiOpen = true,  context = "DUNGEON", expected = "DUNGEON" },
+            { guiOpen = true,  context = nil,       expected = nil },
+            { guiOpen = false, context = "RAID",    expected = nil },
+            { guiOpen = false, context = nil,       expected = nil },
+        }) do
+            local HM, KE = L.loadHealerMana()
+            KE.PreviewManager = { guiOpen = case.guiOpen }
+            HM.previewContext = case.context
+            assert.are.equal(case.expected, HM:PreviewContext(),
+                "guiOpen=" .. tostring(case.guiOpen) .. " context=" .. tostring(case.context))
+        end
+    end)
+end)
