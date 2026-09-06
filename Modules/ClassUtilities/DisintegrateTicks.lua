@@ -1045,13 +1045,20 @@ end
 -- At load, not at world entry. A suppression written last session is already in
 -- the saved data, and EllesmereUI's spec pre-seed copies the outgoing profile
 -- across during PLAYER_LOGIN, before any world-entry work could register this.
+local exclusionWaiter
+local function StopWaitingForEUI()
+    if not exclusionWaiter then return end
+    exclusionWaiter:UnregisterEvent("ADDON_LOADED")
+    exclusionWaiter:SetScript("OnEvent", nil)
+    exclusionWaiter = nil
+end
+
 if not ExcludeTickMarkersFromProfileSync() then
-    local waiter = CreateFrame("Frame")
-    waiter:RegisterEvent("ADDON_LOADED")
-    waiter:SetScript("OnEvent", function(self, _, name)
+    exclusionWaiter = CreateFrame("Frame")
+    exclusionWaiter:RegisterEvent("ADDON_LOADED")
+    exclusionWaiter:SetScript("OnEvent", function(_, _, name)
         if name == "EllesmereUI" and ExcludeTickMarkersFromProfileSync() then
-            self:UnregisterEvent("ADDON_LOADED")
-            self:SetScript("OnEvent", nil)
+            StopWaitingForEUI()
         end
     end)
 end
@@ -1136,6 +1143,10 @@ do
     entry:RegisterEvent("PLAYER_ENTERING_WORLD")
     entry:SetScript("OnEvent", function()
         DT.euiTickMarkersReady = true
+        -- Every ordinary addon has loaded by now, so if the registration still
+        -- has not taken, that addon is absent and the listener would otherwise
+        -- sit armed for the session on every install that does not have it.
+        StopWaitingForEUI()
         DT:SyncEUITickMarkers()
         -- EllesmereUI defers a first-login profile switch two frames, and its
         -- own rebuild sits at half a second, so settle well past both.
