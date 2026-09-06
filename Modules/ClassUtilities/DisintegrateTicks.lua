@@ -853,11 +853,8 @@ function DT:OnEvent(event, unit, ...)
             self:HideTicks()
             self:HideWarning()
         end
-        self:SyncEUITickMarkers()
-        -- EllesmereUI switches profiles synchronously inside its own handler
-        -- for this event and neither addon controls handler order, so re-read
-        -- next frame, once every handler has run.
-        C_Timer.After(0, function() self:SyncEUITickMarkers() end)
+        -- The tick-marker coordination watches this event on its own frame, so
+        -- it keeps working while the module is disabled.
 
     elseif event == "PLAYER_DEAD" then
         self.massDisintegrateStacks = 0
@@ -1004,6 +1001,21 @@ function DT:UnregisterSpecEvents()
 end
 
 ---------------------------------------------------------------------------------
+-- Settings
+---------------------------------------------------------------------------------
+function DT:ApplySettings()
+    self:ApplyTickColor()
+    self:ApplyWarningSettings()
+    self:UpdateWarningPosition()
+    self:SyncEUITickMarkers()
+end
+
+function DT:ApplyPosition()
+    if not self.db.Enabled then return end
+    self:UpdateWarningPosition()
+end
+
+---------------------------------------------------------------------------------
 -- EllesmereUI cast bar tick markers
 ---------------------------------------------------------------------------------
 -- EllesmereUI draws its own channel tick marks on the same cast bar this module
@@ -1115,7 +1127,10 @@ function DT:SyncEUITickMarkers()
     end
     self.euiTickMarkersRetries = 0
 
-    -- EllesmereUI's convention: only a literal false is off.
+    -- Reading an absent key as ON is this addon's own convention, the one
+    -- KE:EUISheetActive follows; EllesmereUI's own read treats it as off. They
+    -- cannot disagree in practice, because it seeds the key true into every
+    -- profile when it merges its defaults.
     local action = DT.ResolveEUITickMarkers(want, cb.showChannelTicks ~= false,
         owner[profileName] == true)
     if action == "hide" then
@@ -1138,12 +1153,25 @@ function DT:SyncEUITickMarkers()
 end
 
 -- Its own frame, not the module's AceEvent: a disabled module still has to
--- restore, and OnDisable unregisters everything. Stays registered so zone
--- changes reconcile a stand-down without the user touching this module.
+-- restore, and OnDisable unregisters everything. It carries the spec event for
+-- the same reason. A profile suppressed under one spec is only healed when
+-- that spec comes back, and with the listener on the module a disabled module
+-- would never see it return.
 do
     local entry = CreateFrame("Frame")
     entry:RegisterEvent("PLAYER_ENTERING_WORLD")
-    entry:SetScript("OnEvent", function()
+    entry:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    entry:SetScript("OnEvent", function(_, event, unit)
+        if event == "PLAYER_SPECIALIZATION_CHANGED" then
+            if unit ~= "player" then return end
+            DT:SyncEUITickMarkers()
+            -- EllesmereUI switches profiles synchronously inside its own
+            -- handler for this event and neither addon controls handler order,
+            -- so re-read next frame once every handler has run.
+            C_Timer.After(0, function() DT:SyncEUITickMarkers() end)
+            return
+        end
+
         DT.euiTickMarkersReady = true
         -- Every ordinary addon is up by now, so a registration that still has
         -- not taken never will.
@@ -1153,21 +1181,6 @@ do
         -- own rebuild sits at half a second, so settle well past both.
         C_Timer.After(1, function() DT:SyncEUITickMarkers() end)
     end)
-end
-
----------------------------------------------------------------------------------
--- Settings
----------------------------------------------------------------------------------
-function DT:ApplySettings()
-    self:ApplyTickColor()
-    self:ApplyWarningSettings()
-    self:UpdateWarningPosition()
-    self:SyncEUITickMarkers()
-end
-
-function DT:ApplyPosition()
-    if not self.db.Enabled then return end
-    self:UpdateWarningPosition()
 end
 
 ---------------------------------------------------------------------------------

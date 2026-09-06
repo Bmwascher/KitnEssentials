@@ -4,9 +4,10 @@
 -- setting turned off with no path back, or hands back one this module never
 -- took -- and neither shows up in a lint or a diff.
 --
--- The resolver is the whole spec budget. The writer around it, the refresh
--- call, the load-time sync-exclusion registration, the world-entry frame and
--- the retry are integration and are verified in game, per the tiered policy.
+-- The resolver is the whole spec budget. Everything around it is integration,
+-- and the plan for this branch states what the in-game steps actually reach
+-- and what they do not: the retry and the refresh call in particular are not
+-- proven by them. Do not read this file as covering more than the resolver.
 
 local loader = require("dev.spec._ke_loader")
 local mock = require("dev.spec._wow_mock")
