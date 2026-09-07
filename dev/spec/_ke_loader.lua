@@ -2769,6 +2769,7 @@ function L.loadHealerMana(overrides)
                 ManaXOffset = 4,
                 ManaYOffset = -2,
                 FontOutline = "OUTLINE",
+                FontFace = "Expressway",
                 HighManaColor = { 1, 1, 1, 1 },
                 GrowDirection = "DOWN",
                 FrameSpacing = 4,

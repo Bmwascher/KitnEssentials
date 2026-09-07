@@ -37,7 +37,8 @@ describe("HealerMana:Look", function()
     end)
 
     it("honours the preview context over the live mode", function()
-        local HM = L.loadHealerMana({ IsInRaid = function() return false end })
+        local HM, KE = L.loadHealerMana({ IsInRaid = function() return false end })
+        KE.PreviewManager = { guiOpen = true }
         HM.db.SplitPositioning = true
         HM.db.RaidIconSize = 48
         HM:RefreshMode()
@@ -93,7 +94,7 @@ describe("HealerMana:SeedRaidLook", function()
             "NameFontSize", "NameXOffset", "NameYOffset",
             "ManaFontSize", "ManaXOffset", "ManaYOffset",
             "FontOutline", "HighManaColor",
-            "GrowDirection", "FrameSpacing",
+            "GrowDirection", "FrameSpacing", "FontFace",
         }
         local HM = L.loadHealerMana()
         HM:SeedRaidLook()
