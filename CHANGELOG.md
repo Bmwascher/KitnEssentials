@@ -1,6 +1,50 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.5.1
+## v4.6.0
+
+### CVars
+- **NEW:** A Dev tab holding the addon-restriction console variables, for
+  testing how the interface behaves in a restricted state. The page is now
+  split into General and Dev, and the Dev tab only appears if your client
+  offers those variables
+- The Auto Loot: Rate slider has been removed. Fast Loot replaces it and skips
+  the delay entirely
+
+### Tooltips
+- **NEW:** Show Icon IDs adds the icon file number beneath the existing spell
+  and item ID lines. Off by default, and it follows the Show Spell/Item IDs
+  setting rather than drawing on its own
+
+### Automation
+- **NEW:** Fast Loot takes loot the instant it is available, skipping the
+  game's brief fade. It leaves fishing alone and only acts when auto loot is
+  already in effect
+- **NEW:** Delete Confirmation now offers two styles: a button you click to
+  confirm, or having the word typed in for you
+- **NEW:** Quick Signup. Double-click a group listing to sign up without
+  pressing the button, and hold your chosen key to keep the dialog open
+- **NEW:** Your signup note now survives moving between listings instead of
+  clearing each time
+- Settings that only make sense together are now paired on one row, and the
+  dependent control is hidden while the setting above it is off. Auto Loot with
+  Fast Loot, Auto Repair with Use Guild Funds, Delete Confirmation with its
+  style, and Housing Auto-Roll with its roll type
+- Repair messages now read as plain sentences instead of bracketed asides, and
+  a Repair Cost Style setting chooses how much of the bill is spelled out. They
+  no longer run off the edge of a narrow chat window
+- Hide Talking Head now also stops the voice-over instead of only hiding the
+  frame
+
+### Healer Mana
+- Settings are now split into Party and Raid tabs. The Configure For dropdown
+  is gone
+- **NEW:** Raid can use its own font face, and can leave your own row out when
+  your specialization heals
+
+### Class Tools
+- **NEW:** Disintegrate tick marks can now hide EllesmereUI's own cast bar tick
+  markers while they are drawing, and put them back when you change
+  specialization or switch the feature off
 
 ### Chat
 - Pressing Up to recall a line that contains an item, spell or keystone link
@@ -9,10 +53,6 @@
   still recalls it; plain lines recall as before
 - Protected commands such as /ping and /cast no longer enter the Up/Down
   recall history
-
-### Automation
-- Hide Talking Head now also stops the voice-over instead of only hiding the
-  frame
 
 ---
 

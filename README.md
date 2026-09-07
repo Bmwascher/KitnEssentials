@@ -58,9 +58,9 @@ The home page also carries the general settings: minimap button, login message, 
 
 | Page | Description |
 |---|---|
-| Automation | Auto-repair with a repair cost announcement, auto-sell, auto-confirm queues, auto-slot keystone, skip cinematics, hide event toasts and zone text, merchant and auction house conveniences, and one-click withdrawal of the highest-quality current-tier Vantus Rune from the guild bank |
+| Automation | Auto-repair with a repair cost announcement, auto-sell, fast loot, a choice of delete confirmation style, auto-confirm queues, Group Finder quick signup with a persistent signup note, auto-slot keystone, skip cinematics, hide event toasts and zone text, merchant and auction house conveniences, and one-click withdrawal of the highest-quality current-tier Vantus Rune from the guild bank |
 | Combat Logger | Automatic combat logging for raids, dungeons, M+, PvP, arenas, and scenarios including delves, with per-content toggles, a one-click Advanced Combat Logging switch, and a Warcraft Recorder preset |
-| CVars | One-click console variable panel that reads its values live from your client, including separate scale sliders for the windowed and maximized world map |
+| CVars | One-click console variable panel that reads its values live from your client, including separate scale sliders for the windowed and maximized world map, and a Dev tab of addon-restriction variables for testing |
 | Great Vault Alert | Shows your loot spec when opening the Great Vault, with class color and sound |
 | Quality of Life | Four tools on one page: Spell Alert Opacity (per-spec opt-in grid for Blizzard's proc overlay flashes, plus an opacity slider), Move Frames (drag Blizzard windows anywhere), Copy Anything (pull spell, item, NPC, and aura IDs to the clipboard from tooltips), and Slash Commands (shorthand commands such as `/rl`, `/cd`, `/fs`, `/leave`, `/reset`, `/mute`, `/music`) |
 | Secondary Stats Display | Movable readout for Crit, Haste, Mastery and Versatility, with optional Leech, Avoidance and Speed, per-stat percent or rating, direction, decimal and label styles, and Edit Mode placement |
@@ -100,7 +100,7 @@ Curated dungeon ability timers driven by BigWigs events, with hand-tuned cast du
 | Damage Meter | Standalone multi-window damage and healing meter built on the 12.0 damage meter API, replacing Blizzard's built-in one. Proportional dock with shared backdrop, per-content auto-swapping layouts, eight meter types, class-colored bars with nickname support, header combat clock anchored to the game's own fight timer, spell breakdown for your own bar and death recaps for any row that stay open in combat, target details, segment history, and report-to-chat |
 | Mythic+ Timer | Self-contained keystone timer HUD — count-up timer with +3/+2/+1 threshold marks, aggregate forces bar, per-boss objective list with clear times and personal-best deltas, deaths line with class-colored hover log, personal-best splits, Challenger's Peril aware cutoffs, enemy tooltip and nameplate forces overlay, keystone auto-insert, Blizzard objective-tracker hider, boss-split party chat posts, and a live preview. Six-tab config page (`/kes mt`) |
 | Skyriding UI | Skyriding vigor bar with second wind tracker and whirling surge cooldown icon |
-| Tooltips | Tooltip backdrop and font restyling, cursor anchoring, spell, item, aura, and pet ability IDs including Always-mode Blizzard aura coverage, guild rank, Mythic rating, target line, class-colored health bar, and hide-in-combat |
+| Tooltips | Tooltip backdrop and font restyling, cursor anchoring, spell, item, aura, and pet ability IDs including Always-mode Blizzard aura coverage and optional icon IDs, guild rank, Mythic rating, target line, class-colored health bar, and hide-in-combat |
 
 ## ElvUI Tags
 
