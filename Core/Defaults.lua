@@ -568,7 +568,9 @@ local Defaults = {
             AutoQueueConfirm = true,
             AutoSlotKeystone = true,
             AutoFillDelete = true,
+            DeleteConfirmStyle = "click",   -- "click" = a button; "auto" = pre-type the word
             AutoLoot = true,
+            FastLoot = false,               -- Take loot the instant it is available
             AutoConfirmLootRoll = true,
             AutoPassHousing = true,
             AutoPassHousingMode = "NEED",  -- "PASS" or "NEED"

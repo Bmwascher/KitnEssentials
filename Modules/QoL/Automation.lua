@@ -1395,26 +1395,251 @@ local function SetupAutoSlotKeystone()
     end)
 end
 
--- Auto Fill DELETE --
+-- Delete Confirmation --
+--
+-- Two styles: "auto" types the client's own confirmation word, "click" hides
+-- the typing box and puts a button in its place.
 
-local function SetupAutoFillDelete()
-    if not AU.db.AutoFillDelete then return end
-    if AU._deleteHooked then return end
-    AU._deleteHooked = true
-    hooksecurefunc(StaticPopupDialogs["DELETE_GOOD_ITEM"], "OnShow", function(self)
-        if not AU.db or not AU.db.Enabled then return end
-        if not AU.db.AutoFillDelete then return end
-        if self.EditBox then
-            self.EditBox:SetText("DELETE")
+-- Block-scoped for the same reason Fast Loot is: chunk-scope room.
+local SetupAutoFillDelete
+do
+
+-- Only DELETE_GOOD_ITEM and DELETE_GOOD_QUEST_ITEM ask the player to type.
+-- The plain two are listed anyway because the hasEditBox test below is what
+-- decides, and they fall out there without a special case.
+local DELETE_DIALOGS = {
+    DELETE_ITEM = true,
+    DELETE_GOOD_ITEM = true,
+    DELETE_QUEST_ITEM = true,
+    DELETE_GOOD_QUEST_ITEM = true,
+}
+
+local deleteButton
+local deleteOwner
+local deleteWatcher
+local deleteHooked = setmetatable({}, { __mode = "k" })
+
+-- Every dialog decorated once keeps this hook for good, but one button is
+-- shared between them. Without the owner test, a pooled frame that hosted an
+-- earlier prompt tears down the button of whichever dialog holds it now.
+local function DeleteHideActs(dialog, owner)
+    return dialog == owner
+end
+
+local function HideDeleteButton(dialog)
+    if not DeleteHideActs(dialog, deleteOwner) then return end
+    deleteOwner = nil
+    if deleteButton then
+        deleteButton:Hide()
+        -- The handler closes over the previous dialog's Yes button, which is
+        -- a pooled frame about to be reused for something else.
+        deleteButton:SetScript("OnClick", nil)
+    end
+end
+
+local function EnsureDeleteButton()
+    if deleteButton then return deleteButton end
+    -- Parented to UIParent rather than to a dialog: StaticPopups are pooled, so
+    -- a button parented to whichever one showed first would be dragged around
+    -- by a later, unrelated popup.
+    deleteButton = CreateFrame("Button", "KE_DeleteConfirmButton", UIParent, "UIPanelButtonTemplate")
+    deleteButton:SetFrameStrata("FULLSCREEN_DIALOG")
+    return deleteButton
+end
+
+-- Drops the paragraph telling the player to type the word and adds the
+-- sentence that is true once there is a button. Returns nil when the word is
+-- absent, so the caller leaves the text alone rather than mangling it.
+-- Matched by the GlobalString rather than by position, so every locale works.
+local function RewriteDeletePrompt(text, confirmWord, replacement)
+    if not text or not confirmWord then return nil end
+    if not text:find(confirmWord, 1, true) then return nil end
+
+    local kept = {}
+    for part in (text .. "\n\n"):gmatch("(.-)\n\n") do
+        if part ~= "" and not part:find(confirmWord, 1, true) then
+            kept[#kept + 1] = part
         end
+    end
+    kept[#kept + 1] = replacement
+    return table.concat(kept, "\n\n")
+end
+
+-- The "type DELETE to confirm" sentence is untrue once there is a button.
+local function RetitleDeleteDialog(dialog)
+    local text = dialog.Text and dialog.Text.GetText and dialog.Text:GetText()
+    if not text or KE:IsSecretValue(text) then return end
+    local rewritten = RewriteDeletePrompt(text, _G.DELETE_ITEM_CONFIRM_STRING,
+        "Click the button below to confirm.")
+    if rewritten then dialog.Text:SetText(rewritten) end
+end
+
+local function DecorateDeleteDialog(dialog)
+    local editBox = dialog.EditBox
+
+    -- dialog.EditBox exists on EVERY StaticPopup: the pooled frame always
+    -- carries one and simply hides it. Whether this dialog wants typing is
+    -- hasEditBox on its definition, and testing for the child instead puts a
+    -- Confirm button on ordinary "do you want to destroy this?" prompts.
+    local def = dialog.which and StaticPopupDialogs and StaticPopupDialogs[dialog.which]
+    if not editBox or not (def and def.hasEditBox) then return end
+
+    if (AU.db.DeleteConfirmStyle or "click") == "auto" then
+        -- The client's own word, so every locale matches.
+        editBox:SetText(_G.DELETE_ITEM_CONFIRM_STRING or "")
+        return
+    end
+
+    local yes = dialog.GetButton1 and dialog:GetButton1()
+    if not yes then return end
+
+    RetitleDeleteDialog(dialog)
+
+    local btn = EnsureDeleteButton()
+    editBox:Hide()
+    btn:ClearAllPoints()
+    -- Sized from the dialog's own buttons, not from the thin edit box it
+    -- replaces, so it matches the Yes and No beside it.
+    -- The methods existing is not the same as them returning numbers, and the
+    -- edit box is already hidden by here: an error would leave the dialog with
+    -- neither a typing box nor a button.
+    local w, h = 150, 22
+    local yw = yes.GetWidth and yes:GetWidth()
+    local yh = yes.GetHeight and yes:GetHeight()
+    if yw then w = math.max(yw + 30, w) end
+    if yh then h = math.max(yh, h) end
+    btn:SetSize(w, h)
+    btn:SetPoint("CENTER", editBox, "CENTER", 0, 0)
+    btn:SetText("Click to Confirm")
+    deleteOwner = dialog
+    btn:SetScript("OnClick", function(self)
+        -- The dialog accepts with DeleteCursorItem(), which never reads the edit
+        -- box, so the typing was only ever a gate on this button.
+        yes:Enable()
+        self:SetText("|cff40ff40Confirmed|r")
     end)
+    btn:Show()
+
+    if not deleteHooked[dialog] then
+        deleteHooked[dialog] = true
+        dialog:HookScript("OnHide", HideDeleteButton)
+    end
+end
+
+function SetupAutoFillDelete()
+    -- DELETE_ITEM_CONFIRM fires as the dialog is raised, and
+    -- StaticPopup_ForEachShownDialog finds whichever pooled slot it landed in.
+    -- Popups are pooled, so there is no one frame to hook.
+    if not deleteWatcher then
+        deleteWatcher = CreateFrame("Frame")
+        deleteWatcher:SetScript("OnEvent", function()
+            if not AU.db or not AU.db.Enabled then return end
+            if not AU.db.AutoFillDelete then return end
+            local each = _G.StaticPopup_ForEachShownDialog
+            if not each then return end
+            each(function(dialog)
+                if DELETE_DIALOGS[dialog.which] then pcall(DecorateDeleteDialog, dialog) end
+            end)
+        end)
+    end
+
+    -- Follows the master as well as the setting, and this function runs from
+    -- TeardownPorts too. ApplySettings returns before reaching here once
+    -- Automation is off, so without both of those the frame would keep
+    -- DELETE_ITEM_CONFIRM registered with the module disabled.
+    if AU.db.Enabled and AU.db.AutoFillDelete then
+        deleteWatcher:RegisterEvent("DELETE_ITEM_CONFIRM")
+    else
+        deleteWatcher:UnregisterAllEvents()
+    end
+end
+
+end
+
+-- Fast Loot --
+--
+-- Blizzard plays the loot window's fade before the items are taken. Looting
+-- every slot the moment LOOT_READY fires skips that wait.
+--
+-- The throttle stamp is declared outside the handler on purpose. Inside it,
+-- it resets to zero on every call and the throttle never fires.
+
+-- Block-scoped: this file is near Lua 5.1's 200 main-chunk local ceiling.
+local SetupFastLoot
+do
+
+local FAST_LOOT_THROTTLE = 0.3
+local fastLootFrame = nil
+local fastLootLast = 0
+
+local function FastLootReady(now, last, limit)
+    return (now - last) >= limit
+end
+
+-- The exclusive-or is Blizzard's own rule for whether a loot is an auto-loot:
+-- the CVar, flipped by the modifier. A deliberately manual loot stays manual,
+-- and holding the modifier on a normally-manual loot still qualifies.
+local function ShouldFastLoot(autoLootCVar, modifierHeld, isFishing, freeSlots)
+    if isFishing then return false end
+    if (autoLootCVar == true) == (modifierHeld == true) then return false end
+    -- Bail rather than loop: LootSlot would no-op per item and Blizzard's own
+    -- full-bag message still reaches the player.
+    if (freeSlots or 0) <= 0 then return false end
+    return true
+end
+
+-- Walked once per loot, not once per loot slot.
+local function FreeBagSlots()
+    local free = 0
+    for bag = 0, (NUM_BAG_FRAMES or 4) do
+        free = free + (C_Container.GetContainerNumFreeSlots(bag) or 0)
+    end
+    return free
+end
+
+function SetupFastLoot()
+    if not fastLootFrame then
+        fastLootFrame = CreateFrame("Frame")
+        fastLootFrame:SetScript("OnEvent", function()
+            if not AU.db or not AU.db.Enabled then return end
+            if not AU.db.FastLoot then return end
+
+            local now = assert(GetTime(), "GetTime returned nil")
+            if not FastLootReady(now, fastLootLast, FAST_LOOT_THROTTLE) then return end
+            fastLootLast = now
+
+            local isFishing = IsFishingLoot and IsFishingLoot() == true
+            local autoLoot = C_CVar.GetCVarBool("autoLootDefault") == true
+            local modifier = IsModifiedClick("AUTOLOOTTOGGLE") == true
+            if not ShouldFastLoot(autoLoot, modifier, isFishing, FreeBagSlots()) then return end
+
+            for i = (GetNumLootItems() or 0), 1, -1 do
+                LootSlot(i)
+            end
+        end)
+    end
+
+    -- Follows the master as well as the setting, and this function runs from
+    -- TeardownPorts too. ApplySettings returns before reaching here once
+    -- Automation is off, so without both of those the frame would keep
+    -- LOOT_READY registered with the module disabled.
+    if AU.db.Enabled and AU.db.FastLoot then
+        fastLootFrame:RegisterEvent("LOOT_READY")
+    else
+        fastLootFrame:UnregisterAllEvents()
+    end
+end
+
 end
 
 -- Auto Loot --
 
 local function ApplyAutoLoot()
-    if not AU.db.AutoLoot then return end
-    C_CVar.SetCVar("autoLootDefault", AU.db.AutoLoot and "1" or "0")
+    local want = AU.db.AutoLoot and "1" or "0"
+    -- Writing a CVar it already holds can flush the client config, and
+    -- ApplySettings re-runs this whole chain on every toggle on the page.
+    if C_CVar.GetCVar("autoLootDefault") == want then return end
+    C_CVar.SetCVar("autoLootDefault", want)
 end
 
 -- Auto-Confirm Loot Roll Popup --
@@ -2800,6 +3025,7 @@ function AU:ApplySettings()
     SetupAutoSlotKeystone()
     SetupAutoFillDelete()
     ApplyAutoLoot()
+    SetupFastLoot()
     SetupAutoConfirmLootRoll()
     SetupAutoPassHousing()
     SetupConfirmBonusRoll()
@@ -2843,6 +3069,8 @@ function AU:TeardownPorts()
     ApplyHideTransforms()
     SetupOmniumButton()
     SetupTrainAllButton()
+    SetupFastLoot()
+    SetupAutoFillDelete()
 end
 
 function AU:OnDisable()

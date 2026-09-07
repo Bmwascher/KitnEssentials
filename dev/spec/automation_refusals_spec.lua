@@ -1273,3 +1273,138 @@ describe("Automation Great Vault button", function()
         assert.is_false(fx.lastArg("KE_OmniumFoilButton", "SetShown"))
     end)
 end)
+
+---------------------------------------------------------------------------------
+-- Fast Loot: the gate, the throttle and the registration
+--
+-- Invented branching with a silent failure mode both ways round: a gate that
+-- stops refusing loots the player meant to take by hand, and a throttle that
+-- stops throttling fires the whole body on every LOOT_READY. Reached as
+-- upvalues, the same recipe the rest of this file uses for module seams.
+---------------------------------------------------------------------------------
+describe("Fast Loot gate, throttle and registration", function()
+    local function fastLootSeams()
+        local fx = newFixture()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupFastLoot")
+        return findUpvalue(setup, "ShouldFastLoot"),
+               findUpvalue(setup, "FastLootReady")
+    end
+
+    it("acts only on a loot that is genuinely an auto-loot with somewhere to put it", function()
+        local ShouldFastLoot = fastLootSeams()
+        local cases = {
+            { name = "ordinary auto-loot",          cvar = true,  mod = false, fishing = false, free = 5, want = true },
+            { name = "modifier held on a manual loot", cvar = false, mod = true,  fishing = false, free = 5, want = true },
+            { name = "modifier held on an auto-loot is a deliberate manual loot",
+              cvar = true,  mod = true,  fishing = false, free = 5, want = false },
+            { name = "auto-loot off and no modifier", cvar = false, mod = false, fishing = false, free = 5, want = false },
+            { name = "fishing loot is left alone",   cvar = true,  mod = false, fishing = true,  free = 5, want = false },
+            { name = "bags full, so it bails rather than loops",
+              cvar = true,  mod = false, fishing = false, free = 0, want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.equals(case.want,
+                ShouldFastLoot(case.cvar, case.mod, case.fishing, case.free), case.name)
+        end
+    end)
+
+    it("throttles inside the window and lets the next loot through at it", function()
+        local _, FastLootReady = fastLootSeams()
+        -- Zero as the last stamp keeps every comparison exact: 10 + 0.3 - 10 is
+        -- not 0.3 in floating point and a case written that way passes or fails
+        -- on the rounding, not on the rule. The limit is passed as a literal:
+        -- the rule is what this case discriminates, not the tuning of it.
+        assert.is_false(FastLootReady(0.2, 0, 0.3))
+        assert.is_true(FastLootReady(0.3, 0, 0.3))
+        assert.is_true(FastLootReady(1, 0, 0.3))
+    end)
+
+    -- A refusal rule that breaks silently: with Automation switched off the
+    -- handler still returns early, so a stuck registration shows up as nothing
+    -- at all until some later edit trusts the registration instead. Switching
+    -- the master off is also the one transition ApplySettings returns before
+    -- reaching, so only TeardownPorts can carry the unregister.
+    it("unregisters when Automation goes off, not only when Fast Loot does", function()
+        local fx = installedFixture()
+        fx.AU.db.FastLoot = true
+        fx.AU:ApplySettings()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupFastLoot")
+        local frame = findUpvalue(setup, "fastLootFrame")
+        assert.is_true(frame:IsEventRegistered("LOOT_READY"))
+
+        fx.AU.db.Enabled = false
+        fx.AU:TeardownPorts()
+        assert.is_false(frame:IsEventRegistered("LOOT_READY"))
+    end)
+
+    -- The same rule for the delete watcher, which used to latch on and never
+    -- let go. Both halves are driven: its own key through ApplySettings, and
+    -- the module master through TeardownPorts.
+    it("unregisters the delete watcher on either switch", function()
+        local fx = installedFixture()
+        fx.AU.db.AutoFillDelete = true
+        fx.AU:ApplySettings()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoFillDelete")
+        local frame = findUpvalue(setup, "deleteWatcher")
+        assert.is_true(frame:IsEventRegistered("DELETE_ITEM_CONFIRM"))
+
+        fx.AU.db.AutoFillDelete = false
+        fx.AU:ApplySettings()
+        assert.is_false(frame:IsEventRegistered("DELETE_ITEM_CONFIRM"))
+
+        fx.AU.db.AutoFillDelete = true
+        fx.AU:ApplySettings()
+        assert.is_true(frame:IsEventRegistered("DELETE_ITEM_CONFIRM"))
+
+        fx.AU.db.Enabled = false
+        fx.AU:TeardownPorts()
+        assert.is_false(frame:IsEventRegistered("DELETE_ITEM_CONFIRM"))
+    end)
+
+    -- The shared Confirm button belongs to one pooled dialog at a time. Every
+    -- dialog it ever decorated keeps the hide hook for good, so the hook must
+    -- ask whether it owns the button before tearing it down.
+    it("acts on its owner's hide and refuses another dialog's", function()
+        local fx = installedFixture()
+        fx.AU:ApplySettings()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoFillDelete")
+        local decorate = findUpvalue(setup, "DecorateDeleteDialog")
+        local hide = findUpvalue(decorate, "HideDeleteButton")
+        local acts = findUpvalue(hide, "DeleteHideActs")
+        local owner, other = {}, {}
+        assert.is_true(acts(owner, owner))
+        assert.is_false(acts(other, owner))
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Delete Confirmation: the prompt rewrite
+--
+-- String surgery on a Blizzard dialog's own text. It refuses rather than
+-- mangles when the confirmation word is absent, which is the branch a later
+-- edit breaks silently.
+---------------------------------------------------------------------------------
+describe("Delete prompt rewrite", function()
+    local function rewriter()
+        local fx = newFixture()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoFillDelete")
+        local decorate = findUpvalue(setup, "DecorateDeleteDialog")
+        local retitle = findUpvalue(decorate, "RetitleDeleteDialog")
+        return findUpvalue(retitle, "RewriteDeletePrompt")
+    end
+
+    it("drops only the paragraph carrying the confirmation word", function()
+        local Rewrite = rewriter()
+        local text = "This item is rare.\n\nType DELETE to confirm.\n\nThis cannot be undone."
+        assert.equals(
+            "This item is rare.\n\nThis cannot be undone.\n\nClick below.",
+            Rewrite(text, "DELETE", "Click below."))
+    end)
+
+    it("refuses rather than mangles when it cannot find the word", function()
+        local Rewrite = rewriter()
+        assert.is_nil(Rewrite("Destroy this item?", "DELETE", "Click below."))
+        assert.is_nil(Rewrite(nil, "DELETE", "Click below."))
+        assert.is_nil(Rewrite("Type DELETE to confirm.", nil, "Click below."))
+    end)
+end)
