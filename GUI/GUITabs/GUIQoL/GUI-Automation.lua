@@ -502,22 +502,58 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     row2a:AddWidget(autoRoleCheck, 0.5)
     manager:Register(autoRoleCheck, "all")
 
-    local autoQueueCheck = GUIFrame:CreateCheckbox(row2a, "Auto Confirm Queue", {
-        value = db.AutoQueueConfirm ~= false,
-        callback = function(checked) db.AutoQueueConfirm = checked; ApplySettings() end,
-    })
-    row2a:AddWidget(autoQueueCheck, 0.5)
-    manager:Register(autoQueueCheck, "all")
     card2:AddRow(row2a, Theme.rowHeight)
 
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    GUIFrame:CreatePairedRow(card2, {
+        manager = manager,
+        master = {
+            label = "Quick Signup",
+            tooltip = "Signs you up as soon as the application window opens.\n\nHold the key set below to keep the window open instead, which is how you reach the note box.",
+            get = function() return db.AutoQueueConfirm ~= false end,
+            callback = function(checked) db.AutoQueueConfirm = checked; ApplySettings() end,
+        },
+        dependent = {
+            kind = "checkbox",
+            label = "Double-Click to Sign Up",
+            value = db.QuickSignupDoubleClick == true,
+            tooltip = "Double-click a group in the list to sign up, instead of selecting it and pressing Sign Up.",
+            callback = function(checked) db.QuickSignupDoubleClick = checked; ApplySettings() end,
+            clear = function() db.QuickSignupDoubleClick = false; ApplySettings() end,
+        },
+    })
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local autoKeystoneCheck = GUIFrame:CreateCheckbox(row2b, "Auto Slot Keystone", {
         value = db.AutoSlotKeystone ~= false,
         callback = function(checked) db.AutoSlotKeystone = checked; ApplySettings() end,
     })
     row2b:AddWidget(autoKeystoneCheck, 0.5)
     manager:Register(autoKeystoneCheck, "all")
-    card2:AddRow(row2b, Theme.rowHeightLast, 0)
+
+    local persistNoteCheck = GUIFrame:CreateCheckbox(row2b, "Persistent Signup Note", {
+        value = db.PersistSignupNote == true,
+        tooltip = "Keeps your note to the leader when you move between groups.\n\nThe game already keeps it within one dungeon; this keeps it across all of them.",
+        callback = function(checked) db.PersistSignupNote = checked; ApplySettings() end,
+    })
+    row2b:AddWidget(persistNoteCheck, 0.5)
+    manager:Register(persistNoteCheck, "all")
+    card2:AddRow(row2b, Theme.rowHeight)
+
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local signupModDropdown = GUIFrame:CreateDropdown(row2c, "Hold to Open Signup Note", {
+        options = {
+            { key = "SHIFT", text = "Shift" },
+            { key = "CTRL",  text = "Ctrl" },
+            { key = "ALT",   text = "Alt" },
+        },
+        value = db.SignupModifier or "SHIFT",
+        callback = function(val) db.SignupModifier = val end,
+    })
+    row2c:AddWidget(signupModDropdown, 1)
+    manager:Register(signupModDropdown, "all")
+    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+
+    card2:AddLabel("|cff888888Quick Signup: hold the selected key to keep the application window open, which is the only way to reach the note box while Quick Signup is on.|r")
 
     yOffset = card2:GetNextOffset()
 

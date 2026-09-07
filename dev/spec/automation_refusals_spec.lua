@@ -137,6 +137,24 @@ local function newFixture()
     local originalErrHandler = function() end
     _G.UIErrorsFrame:SetScript("OnEvent", originalErrHandler)
 
+    -- The application dialog and its Sign Up button. The dialog's OnShow hook
+    -- refuses to install without the global, so the skip-key refusal is
+    -- unreachable otherwise; the button records clicks so the refusal is
+    -- observable rather than merely dispatched.
+    _G.LFGListApplicationDialog = newSpy("LFGListApplicationDialog")
+    _G.LFGListApplicationDialog.SignUpButton = newSpy("LFGListSignUpButton")
+    _G.LFGListApplicationDialog.SignUpButton.IsEnabled = function() return true end
+    _G.LFGListApplicationDialog.SignUpButton.Click = function() record("LFGListSignUpButton", "Click") end
+
+    -- One held key at a time. These three must be assigned before the module
+    -- loads: Automation captures IsShiftKeyDown as a file-scope upvalue, so a
+    -- later assignment would not reach it. Each reads the global at call time,
+    -- so a case can change the held key without reloading.
+    _G.KE_SPEC_HELD_KEY = nil
+    _G.IsControlKeyDown = function() return _G.KE_SPEC_HELD_KEY == "CTRL" end
+    _G.IsShiftKeyDown = function() return _G.KE_SPEC_HELD_KEY == "SHIFT" end
+    _G.IsAltKeyDown = function() return _G.KE_SPEC_HELD_KEY == "ALT" end
+
     _G.ExpansionLandingPageMinimapButton = newSpy("ExpansionLandingPageMinimapButton")
     _G.ActionStatus = newSpy("ActionStatus")
     _G.PaperDollFrame = newSpy("PaperDollFrame")
@@ -1406,5 +1424,138 @@ describe("Delete prompt rewrite", function()
         assert.is_nil(Rewrite("Destroy this item?", "DELETE", "Click below."))
         assert.is_nil(Rewrite(nil, "DELETE", "Click below."))
         assert.is_nil(Rewrite("Type DELETE to confirm.", nil, "Click below."))
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- Quick Signup's double-click decision. Every guard the double click makes
+-- lives in this one predicate over values, so none of these cases needs a fake
+-- of the LFG frames -- which is also why the guards live there: the lockdown
+-- refusal has to run before the caller touches Blizzard's result APIs, and a
+-- refusal placed after those reads would fire too late to stop the throw.
+--
+-- The dialog auto-click's Ctrl refusal is covered too. It is a refusal rule,
+-- and the contract wants those specced even in unchanged code; reaching it
+-- needs only a recording button behind the dialog global, not a simulation of
+-- the frame lifecycle.
+---------------------------------------------------------------------------------
+describe("Quick Signup double-click decision", function()
+    local function predicate()
+        local fx = newFixture()
+        local setup = findUpvalue(fx.AU.ApplySettings, "SetupAutoQueueConfirm")
+        return findUpvalue(setup, "ShouldQuickSignUp")
+    end
+
+    -- Defaults every case starts from: a genuine second click on the selected
+    -- row, 0.1s after the first, with both settings on and no lockdown.
+    -- NONE rather than nil for "override this to nil": a nil stored in the
+    -- override table is indistinguishable from an absent key.
+    local NONE = {}
+    local function call(Should, over)
+        over = over or {}
+        local function pick(key, fallback)
+            local v = over[key]
+            if v == nil then return fallback end
+            if v == NONE then return nil end
+            return v
+        end
+        return Should(
+            pick("masterOn", true),
+            pick("dependentOn", true),
+            pick("inLockdown", false),
+            pick("isSelected", true),
+            pick("lastEntry", 42),
+            pick("lastTime", 100.0),
+            pick("entry", 42),
+            pick("now", 100.1),
+            0.4)
+    end
+
+    it("takes a second click on the same entry inside the threshold", function()
+        assert.is_true(call(predicate()))
+    end)
+
+    it("refuses everything that is not that", function()
+        local Should = predicate()
+        local cases = {
+            { name = "same entry but past the threshold",  over = { now = 100.5 } },
+            -- Zero as the previous stamp keeps the comparison exact: 100.4 minus
+            -- 100.0 is not 0.4 in floating point, and a case written that way is
+            -- rejected by both < and <=, so it cannot see an inclusive-boundary
+            -- regression at all. Same trap the Fast Loot throttle case documents.
+            { name = "exactly at the threshold",           over = { lastTime = 0, now = 0.4 } },
+            { name = "a different entry, however recent",  over = { lastEntry = 7 } },
+            { name = "no previous click, so a first click can never sign up",
+              over = { lastEntry = NONE } },
+            { name = "no entry id on the clicked row", over = { entry = NONE } },
+            { name = "the row is not the panel's selection", over = { isSelected = false } },
+            { name = "chat messaging lockdown",            over = { inLockdown = true } },
+            { name = "the master is off",                  over = { masterOn = false } },
+            { name = "the dependent is off",               over = { dependentOn = false } },
+            { name = "both off",                           over = { masterOn = false, dependentOn = false } },
+        }
+        for _, case in ipairs(cases) do
+            assert.is_false(call(Should, case.over), case.name)
+        end
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- The skip key on the application dialog. With Quick Signup on this is the only
+-- route to the note box, so a refusal that stops refusing silently removes the
+-- one way to type a note.
+---------------------------------------------------------------------------------
+describe("Quick Signup skip key", function()
+    local function dialogSeams()
+        local fx = installedFixture()
+        fx.AU.db.AutoQueueConfirm = true
+        fx.AU:ApplySettings()
+        return fx, _G.LFGListApplicationDialog:GetScript("OnShow")
+    end
+
+    after_each(function() _G.KE_SPEC_HELD_KEY = nil end)
+
+    it("clicks Sign Up when the dialog opens", function()
+        local fx, onShow = dialogSeams()
+        assert.is_not_nil(onShow)
+        onShow(_G.LFGListApplicationDialog)
+        assert.equals(1, fx.findFrameCalls("LFGListSignUpButton", "Click"))
+    end)
+
+    it("refuses while the configured key is held, whichever it is", function()
+        for _, key in ipairs({ "SHIFT", "CTRL", "ALT" }) do
+            local fx, onShow = dialogSeams()
+            fx.AU.db.SignupModifier = key
+            _G.KE_SPEC_HELD_KEY = key
+            onShow(_G.LFGListApplicationDialog)
+            assert.equals(0, fx.findFrameCalls("LFGListSignUpButton", "Click"))
+        end
+    end)
+
+    -- The setting has to select ONE key. A resolver that asked all three would
+    -- pass every case above and still block a signup the player never meant to
+    -- interrupt.
+    it("signs up while a key other than the configured one is held", function()
+        local fx, onShow = dialogSeams()
+        fx.AU.db.SignupModifier = "SHIFT"
+        _G.KE_SPEC_HELD_KEY = "ALT"
+        onShow(_G.LFGListApplicationDialog)
+        assert.equals(1, fx.findFrameCalls("LFGListSignUpButton", "Click"))
+    end)
+
+    -- Profiles saved before the setting existed carry no value at all.
+    it("falls back to Shift when the setting is unset", function()
+        local fx, onShow = dialogSeams()
+        fx.AU.db.SignupModifier = nil
+        _G.KE_SPEC_HELD_KEY = "SHIFT"
+        onShow(_G.LFGListApplicationDialog)
+        assert.equals(0, fx.findFrameCalls("LFGListSignUpButton", "Click"))
+    end)
+
+    it("refuses when the setting is off, key or no key", function()
+        local fx, onShow = dialogSeams()
+        fx.AU.db.AutoQueueConfirm = false
+        onShow(_G.LFGListApplicationDialog)
+        assert.equals(0, fx.findFrameCalls("LFGListSignUpButton", "Click"))
     end)
 end)
