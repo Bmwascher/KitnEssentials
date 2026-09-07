@@ -196,7 +196,7 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
         local card6 = GUIFrame:CreateCard(scrollChild, "Sliders", yOffset)
         manager:Register(card6, "all")
 
-        local currentSliderRow
+        local currentSliderRow, currentSliderRowHeight
         for i, def in ipairs(sliderDefs) do
             local key = def.key
             local currentVal = AU:GetLiveCVar(def) or 0
@@ -204,8 +204,13 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
             local isFirstInPair = (i % 2 == 1)
             local isLastDef = (i == #sliderDefs)
 
+            -- Height is settled when the row is made, not when it is closed:
+            -- a pair opens on one iteration and closes on the next, and the two
+            -- must agree. The row is the card's last when it holds the last def.
             if isFirstInPair then
-                currentSliderRow = GUIFrame:CreateRow(card6.content, 60)
+                currentSliderRowHeight = (i + 1 >= #sliderDefs)
+                    and Theme.rowHeightLast or Theme.rowHeight
+                currentSliderRow = GUIFrame:CreateRow(card6.content, currentSliderRowHeight)
             end
 
             local slider = GUIFrame:CreateSlider(currentSliderRow, def.label, {
@@ -223,9 +228,9 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
 
             if not isFirstInPair or isLastDef then
                 if isLastDef then
-                    card6:AddRow(currentSliderRow, 60, 0)
+                    card6:AddRow(currentSliderRow, currentSliderRowHeight, 0)
                 else
-                    card6:AddRow(currentSliderRow, 60)
+                    card6:AddRow(currentSliderRow, currentSliderRowHeight)
                 end
             end
         end

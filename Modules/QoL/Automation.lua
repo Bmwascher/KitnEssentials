@@ -176,12 +176,6 @@ AU.CVAR_SLIDER_DEFS = {
         type = "number",
         min = 0, max = 3, step = 1,
     },
-    {
-        key = "autoLootRate",
-        label = "Auto Loot: Rate",
-        type = "number",
-        min = 0, max = 150, step = 1,
-    },
 }
 
 ---------------------------------------------------------------------------------

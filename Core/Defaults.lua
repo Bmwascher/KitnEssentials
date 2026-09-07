@@ -617,7 +617,6 @@ local Defaults = {
             -- CVars (merged) - sliders
             SpellQueueWindow = nil,
             RAIDweatherDensity = nil,
-            autoLootRate = nil,
             -- CVars (merged) - dev
             addonPvPMatchRestrictionsForced = nil,
             addonMapRestrictionsForced = nil,

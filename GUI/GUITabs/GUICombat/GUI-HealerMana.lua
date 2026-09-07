@@ -330,20 +330,23 @@ GUIFrame:RegisterContent("HealerManaRaid", function(scrollChild, yOffset)
         value = db.ExcludeBenchGroups ~= false,
         callback = function(checked) db.ExcludeBenchGroups = checked; Refresh() end,
     })
-    rowRaid3:AddWidget(excludeBenchCheck, 1)
+    rowRaid3:AddWidget(excludeBenchCheck, 0.5)
     manager:Register(excludeBenchCheck, "raidConfig")
-    card:AddRow(rowRaid3, Theme.rowHeight)
 
-    local rowRaid4 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
-    local excludeSelfCheck = GUIFrame:CreateCheckbox(rowRaid4, "Leave me out when my spec is a healer", {
+    -- Same label as Party's DisableOnHealer: both mean "do not show me". Party
+    -- tracks one healer, so hiding the player's row empties the tracker; Raid
+    -- has other rows to keep.
+    local excludeSelfCheck = GUIFrame:CreateCheckbox(rowRaid3, "Hide when my spec is a healer", {
         value = db.ExcludeSelfHealer == true,
         callback = function(checked) db.ExcludeSelfHealer = checked; Refresh() end,
     })
-    rowRaid4:AddWidget(excludeSelfCheck, 1)
+    rowRaid3:AddWidget(excludeSelfCheck, 0.5)
     manager:Register(excludeSelfCheck, "raidConfig")
-    card:AddRow(rowRaid4, Theme.rowHeight)
+    card:AddRow(rowRaid3, Theme.rowHeight)
 
-    local rowRaid5 = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
+    card:AddSeparator()
+
+    local rowRaid5 = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     local splitToggle = GUIFrame:CreateCheckbox(rowRaid5, "Separate Raid Settings", {
         value = editsRaid,
         callback = function(checked)
@@ -354,14 +357,17 @@ GUIFrame:RegisterContent("HealerManaRaid", function(scrollChild, yOffset)
             RebuildPage()  -- the rebuilt tab moves the preview and adds or drops the cards
         end,
     })
-    rowRaid5:AddWidget(splitToggle, 1)
+    rowRaid5:AddWidget(splitToggle, 0.5)
     manager:Register(splitToggle, "raidConfig")
-    card:AddRow(rowRaid5, Theme.rowHeightLast, 0)
 
-    if not editsRaid then
-        card:AddNote("Raid uses the Party tab's position, appearance and font. " ..
-            "Separate Raid Settings gives Raid its own.")
-    end
+    local splitNote = GUIFrame:CreateText(rowRaid5,
+        KE:ColorTextByTheme("Note"),
+        KE:ColorTextByTheme("-") .. " " .. (editsRaid
+            and "Raid keeps its own position, appearance and font."
+            or "Raid follows the Party tab. Turn on for its own position, appearance and font."),
+        Theme.rowHeight, "hide", true)
+    rowRaid5:AddWidget(splitNote, 0.5)
+    card:AddRow(rowRaid5, Theme.rowHeight, 0)
 
     -- raidConfig gates everything but Enable in Raid on that flag (UpdateAll
     -- also gates on the module's master Enabled toggle).
