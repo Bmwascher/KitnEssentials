@@ -1011,6 +1011,43 @@ function AU:RepairSplit(paid, ownSpent, guildFunds)
     return guildPart, own
 end
 
+-- Chat money. Three coin textures put a repair line over the panel width; a
+-- coloured unit letter is narrower and reads the same. Only the letter is
+-- coloured, so the digits take the message colour like the words around them.
+--
+-- Cut, not rounded, so the figure never exceeds what was paid. When the bill
+-- is under one unit of the style's smallest denomination the floor steps down
+-- until something can print, so a 50c repair under "gold" still says 50c
+-- rather than nothing.
+do
+    local UNITS = {
+        { per = 10000, letter = "|cffffd100g|r" },
+        { per = 100,   letter = "|cffc7c7cfs|r" },
+        { per = 1,     letter = "|cffeda55fc|r" },
+    }
+    local STYLE_FLOOR = { gold = 10000, silver = 100, exact = 1 }
+
+    function AU:FormatMoney(copper, style)
+        if type(copper) ~= "number" then return nil end
+        local floorUnit = STYLE_FLOOR[style] or STYLE_FLOOR.gold
+        while floorUnit > 1 and copper < floorUnit do
+            floorUnit = floorUnit / 100
+        end
+
+        local parts, remaining = {}, math.floor(copper)
+        for _, unit in ipairs(UNITS) do
+            if unit.per < floorUnit then break end
+            local amount = math.floor(remaining / unit.per)
+            remaining = remaining - amount * unit.per
+            if amount > 0 then
+                parts[#parts + 1] = amount .. unit.letter
+            end
+        end
+        if #parts == 0 then parts[1] = "0" .. UNITS[3].letter end
+        return table.concat(parts, " ")
+    end
+end
+
 local repairReportFrame, repairBill
 
 -- One repair action can surface as several durability events with the bill
@@ -1092,30 +1129,27 @@ function AnnounceRepair(force)
 
     if spent <= 0 then return end
 
-    local money = C_CurrencyInfo and C_CurrencyInfo.GetCoinTextureString
-        and C_CurrencyInfo.GetCoinTextureString(spent)
+    local style = AU.db.RepairReportStyle
+    local money = AU:FormatMoney(spent, style)
     if not money then return end
 
     if branch == "player" then
-        KE:Print(string_format("Repaired for %s (your gold).", money))
+        KE:Print(string_format("Repaired for %s with your own gold.", money))
         return
     end
 
     if branch == "guild" then
         local guildPart, ownPart = AU:RepairSplit(spent, ownSpent, guildFunds)
         if guildPart and guildPart > 0 and ownPart > 0 then
-            local guildMoney = C_CurrencyInfo.GetCoinTextureString(guildPart)
-            if guildMoney then
-                KE:Print(string_format(
-                    "Repaired for %s (guild %s, rest yours).",
-                    money, guildMoney))
-                return
-            end
+            KE:Print(string_format(
+                "Repaired for %s, %s of it from guild funds.",
+                money, AU:FormatMoney(guildPart, style)))
+            return
         elseif guildPart and guildPart > 0 then
-            KE:Print(string_format("Repaired for %s (guild funds).", money))
+            KE:Print(string_format("Repaired for %s with guild funds.", money))
             return
         elseif guildPart then
-            KE:Print(string_format("Repaired for %s (your gold).", money))
+            KE:Print(string_format("Repaired for %s with your own gold.", money))
             return
         end
     end

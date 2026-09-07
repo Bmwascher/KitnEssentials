@@ -631,17 +631,31 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
         })
         row1a:AddWidget(autoSellCheck, 0.5)
         manager:Register(autoSellCheck, "all")
-
-        -- Announce Repair Cost is deliberately not paired: it announces a
-        -- hand-clicked repair and another addon's repair too, so it must not
-        -- read as a third dependent of Auto Repair.
-        local repairReportCheck = GUIFrame:CreateCheckbox(row1a, "Announce Repair Cost", {
-            value = db.RepairReport ~= false,
-            callback = function(checked) db.RepairReport = checked; ApplySettings() end,
-        })
-        row1a:AddWidget(repairReportCheck, 0.5)
-        manager:Register(repairReportCheck, "all")
         card1:AddRow(row1a, Theme.rowHeight)
+
+        -- Announce Repair Cost is a master of its own row, not a dependent
+        -- of Auto Repair: it announces a hand-clicked repair and another
+        -- addon's repair too.
+        GUIFrame:CreatePairedRow(card1, {
+            manager = manager,
+            master = {
+                label = "Announce Repair Cost",
+                get = function() return db.RepairReport ~= false end,
+                callback = function(checked) db.RepairReport = checked; ApplySettings() end,
+            },
+            dependent = {
+                kind = "dropdown",
+                label = "Style",
+                options = {
+                    { key = "gold",   text = "Whole Gold" },
+                    { key = "silver", text = "Gold and Silver" },
+                    { key = "exact",  text = "Exact" },
+                },
+                value = db.RepairReportStyle or "gold",
+                tooltip = "How much of the repair cost the chat line shows.\n\nWhole Gold: 144g. Gold and Silver: 144g 8s. Exact: 144g 8s 3c. A bill too small for the chosen style shows the next unit down.",
+                callback = function(val) db.RepairReportStyle = val end,
+            },
+        })
 
         GUIFrame:CreatePairedRow(card1, {
             height = Theme.rowHeightLast,

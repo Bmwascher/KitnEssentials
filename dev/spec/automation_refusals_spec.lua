@@ -1158,6 +1158,60 @@ describe("repair split", function()
     end)
 end)
 
+describe("repair money text", function()
+    -- The colour escapes are pinned once, in the case that is about them.
+    -- Every other case reads the bare text so a colour change cannot make
+    -- an arithmetic case fail for the wrong reason.
+    local function plain(s)
+        return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+    end
+
+    it("prints every non-zero part under exact and skips a zero part", function()
+        local AU = newFixture().AU
+        assert.equals("144g 8s 3c", plain(AU:FormatMoney(1440803, "exact")))
+        assert.equals("144g 3c", plain(AU:FormatMoney(1440003, "exact")))
+    end)
+
+    it("drops copper under silver and skips a zero silver", function()
+        local AU = newFixture().AU
+        assert.equals("144g 8s", plain(AU:FormatMoney(1440803, "silver")))
+        assert.equals("144g", plain(AU:FormatMoney(1440003, "silver")))
+    end)
+
+    it("cuts silver and copper under gold, one gold exactly included", function()
+        local AU = newFixture().AU
+        assert.equals("144g", plain(AU:FormatMoney(1446099, "gold")))
+        assert.equals("1g", plain(AU:FormatMoney(10000, "gold")))
+    end)
+
+    it("steps down for a bill under the style's smallest unit", function()
+        local AU = newFixture().AU
+        assert.equals("99s", plain(AU:FormatMoney(9999, "gold")))
+        assert.equals("99c", plain(AU:FormatMoney(99, "gold")))
+        assert.equals("50c", plain(AU:FormatMoney(50, "silver")))
+        assert.equals("0c", plain(AU:FormatMoney(0, "gold")))
+    end)
+
+    it("treats an unknown or missing style as gold", function()
+        local AU = newFixture().AU
+        assert.equals("144g", plain(AU:FormatMoney(1440803, "icons")))
+        assert.equals("144g", plain(AU:FormatMoney(1440803, nil)))
+    end)
+
+    it("colours only the unit letter", function()
+        local AU = newFixture().AU
+        assert.equals(
+            "1|cffffd100g|r 1|cffc7c7cfs|r 1|cffeda55fc|r",
+            AU:FormatMoney(10101, "exact"))
+    end)
+
+    it("returns nil for a non-number", function()
+        local AU = newFixture().AU
+        assert.is_nil(AU:FormatMoney(nil, "exact"))
+        assert.is_nil(AU:FormatMoney("144", "exact"))
+    end)
+end)
+
 describe("guild withdrawal coverage", function()
     it("treats the unlimited sentinel as covering any bill", function()
         local AU = newFixture().AU

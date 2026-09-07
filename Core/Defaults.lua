@@ -564,6 +564,7 @@ local Defaults = {
             AutoRepair = true,
             UseGuildFunds = true,
             RepairReport = true,
+            RepairReportStyle = "gold",     -- "gold", "silver" or "exact": smallest unit printed
             AutoRoleCheck = true,
             AutoQueueConfirm = true,
             QuickSignupDoubleClick = false, -- Second trigger under Quick Signup
