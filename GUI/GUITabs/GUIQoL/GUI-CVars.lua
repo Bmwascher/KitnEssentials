@@ -23,56 +23,68 @@ local function GetMapScaleModule()
     return KitnEssentials and KitnEssentials:GetModule("MapScale", true)
 end
 
-GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
+-- Both tabs draw CVar checkboxes and both grey out under the same master
+-- toggle, so the shared pieces take a context table rather than closing over
+-- one builder's locals.
+local function NewContext()
     local db = KE.db and KE.db.profile.Automation
-    if not db then return yOffset end
+    if not db then return nil end
+    return {
+        db = db,
+        AU = GetAutomationModule(),
+        manager = GUIFrame:CreateWidgetStateManager(),
+    }
+end
+
+local function RefreshStates(ctx)
+    ctx.manager:UpdateAll(ctx.db.CVarsEnabled ~= false)
+end
+
+local function AddCVarCheckbox(ctx, card, def, existingRow, widthPct)
+    local db, AU = ctx.db, ctx.AU
+    local key = def.key
+    local label = def.label
+    if def.desc then
+        label = label .. "  |cff888888- " .. def.desc .. "|r"
+    end
+    local row = existingRow or GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    local checkbox = GUIFrame:CreateCheckbox(row, label, {
+        value = AU and AU:GetLiveCVar(def) or false,
+        callback = function(checked)
+            -- The write still goes through the profile as well as the
+            -- client, so the value keeps travelling with the profile and
+            -- "Apply CVars on Login" keeps working. Only the display source
+            -- changed.
+            db[key] = checked
+            if AU then
+                AU._suppressCVarUpdate = true
+                AU:ApplyCVars()
+                AU._suppressCVarUpdate = false
+            end
+        end,
+    })
+    row:AddWidget(checkbox, widthPct or 1)
+    ctx.manager:Register(checkbox, "all")
+    if not existingRow then
+        card:AddRow(row, Theme.rowHeight)
+    end
+end
+
+-- The rule itself lives on the module so it can be tested; this only covers
+-- the page being built before Automation exists.
+local function LiveDefs(ctx, defs, match)
+    if not ctx.AU then return {} end
+    return ctx.AU:FilterLiveDefs(defs, match)
+end
+
+GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
+    local ctx = NewContext()
+    if not ctx then return yOffset end
+    local db, AU, manager = ctx.db, ctx.AU, ctx.manager
 
     -- Map scale lives in its own profile block (KE.db.profile.MapScale), not
     -- in `db` above — a separate module keeps its own enable lifecycle.
     local mapDB = KE.db and KE.db.profile.MapScale
-
-    local AU = GetAutomationModule()
-    local manager = GUIFrame:CreateWidgetStateManager()
-
-    local function RefreshStates()
-        manager:UpdateAll(db.CVarsEnabled ~= false)
-    end
-
-    local function AddCVarCheckbox(card, def, existingRow, widthPct)
-        local key = def.key
-        local label = def.label
-        if def.desc then
-            label = label .. "  |cff888888- " .. def.desc .. "|r"
-        end
-        local row = existingRow or GUIFrame:CreateRow(card.content, Theme.rowHeight)
-        local checkbox = GUIFrame:CreateCheckbox(row, label, {
-            value = AU and AU:GetLiveCVar(def) or false,
-            callback = function(checked)
-                -- The write still goes through the profile as well as the
-                -- client, so the value keeps travelling with the profile and
-                -- "Apply CVars on Login" keeps working. Only the display source
-                -- changed.
-                db[key] = checked
-                if AU then
-                    AU._suppressCVarUpdate = true
-                    AU:ApplyCVars()
-                    AU._suppressCVarUpdate = false
-                end
-            end,
-        })
-        row:AddWidget(checkbox, widthPct or 1)
-        manager:Register(checkbox, "all")
-        if not existingRow then
-            card:AddRow(row, Theme.rowHeight)
-        end
-    end
-
-    -- The rule itself lives on the module so it can be tested; this only covers
-    -- the page being built before Automation exists.
-    local function LiveDefs(defs, match)
-        if not AU then return {} end
-        return AU:FilterLiveDefs(defs, match)
-    end
 
     ----------------------------------------------------------------
     -- Card 1: CVars Enable
@@ -85,7 +97,7 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
         callback = function(checked)
             db.CVarsEnabled = checked
             if AU and checked then AU:ApplyCVars() end
-            RefreshStates()
+            RefreshStates(ctx)
         end,
         msgPopup = true,
         msgText = "CVars",
@@ -100,14 +112,14 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 2: Floating Combat Text
     ----------------------------------------------------------------
-    local ftDefs = LiveDefs(AU and AU.CVAR_DEFS or {}, function(def)
+    local ftDefs = LiveDefs(ctx, AU and AU.CVAR_DEFS or {}, function(def)
         return def.key:find("^floatingCombatText") ~= nil or def.key == "enableFloatingCombatText"
     end)
     if #ftDefs > 0 then
         local card2 = GUIFrame:CreateCard(scrollChild, "Floating Combat Text", yOffset)
         manager:Register(card2, "all")
         for _, def in ipairs(ftDefs) do
-            AddCVarCheckbox(card2, def)
+            AddCVarCheckbox(ctx, card2, def)
         end
         yOffset = card2:GetNextOffset()
     end
@@ -119,14 +131,14 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
         findYourselfModeOutline = true,
         occludedSilhouettePlayer = true,
     }
-    local charDefs = LiveDefs(AU and AU.CVAR_DEFS or {}, function(def)
+    local charDefs = LiveDefs(ctx, AU and AU.CVAR_DEFS or {}, function(def)
         return charEffectKeys[def.key] == true
     end)
     if #charDefs > 0 then
         local card3 = GUIFrame:CreateCard(scrollChild, "Character Visibility", yOffset)
         manager:Register(card3, "all")
         for _, def in ipairs(charDefs) do
-            AddCVarCheckbox(card3, def)
+            AddCVarCheckbox(ctx, card3, def)
         end
         yOffset = card3:GetNextOffset()
     end
@@ -134,14 +146,14 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 4: Tooltips
     ----------------------------------------------------------------
-    local tooltipDefs = LiveDefs(AU and AU.CVAR_DEFS or {}, function(def)
+    local tooltipDefs = LiveDefs(ctx, AU and AU.CVAR_DEFS or {}, function(def)
         return def.key == "alwaysCompareItems"
     end)
     if #tooltipDefs > 0 then
         local card4 = GUIFrame:CreateCard(scrollChild, "Tooltips", yOffset)
         manager:Register(card4, "all")
         for _, def in ipairs(tooltipDefs) do
-            AddCVarCheckbox(card4, def)
+            AddCVarCheckbox(ctx, card4, def)
         end
         yOffset = card4:GetNextOffset()
     end
@@ -149,7 +161,7 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Nameplates
     ----------------------------------------------------------------
-    local nameplateDefs = LiveDefs(AU and AU.CVAR_DEFS or {}, function(def)
+    local nameplateDefs = LiveDefs(ctx, AU and AU.CVAR_DEFS or {}, function(def)
         return def.key:find("^nameplate") ~= nil
     end)
     if #nameplateDefs > 0 then
@@ -163,9 +175,9 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
             local isLastPair = (i + 1 >= n)
             local rowHeight = isLastPair and Theme.rowHeightLast or Theme.rowHeight
             local row = GUIFrame:CreateRow(card5.content, rowHeight)
-            AddCVarCheckbox(card5, nameplateDefs[i], row, 0.5)
+            AddCVarCheckbox(ctx, card5, nameplateDefs[i], row, 0.5)
             if nameplateDefs[i + 1] then
-                AddCVarCheckbox(card5, nameplateDefs[i + 1], row, 0.5)
+                AddCVarCheckbox(ctx, card5, nameplateDefs[i + 1], row, 0.5)
             end
             if isLastPair then
                 card5:AddRow(row, rowHeight, 0)
@@ -179,7 +191,7 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 6: Sliders
     ----------------------------------------------------------------
-    local sliderDefs = LiveDefs(AU and AU.CVAR_SLIDER_DEFS or {})
+    local sliderDefs = LiveDefs(ctx, AU and AU.CVAR_SLIDER_DEFS or {})
     if #sliderDefs > 0 then
         local card6 = GUIFrame:CreateCard(scrollChild, "Sliders", yOffset)
         manager:Register(card6, "all")
@@ -276,6 +288,54 @@ GUIFrame:RegisterContent("CVars", function(scrollChild, yOffset)
         end
     end
 
-    RefreshStates()
+    RefreshStates(ctx)
     return yOffset
+end)
+
+GUIFrame:RegisterContent("CVarsDev", function(scrollChild, yOffset)
+    local ctx = NewContext()
+    if not ctx then return yOffset end
+
+    local devDefs = LiveDefs(ctx, ctx.AU and ctx.AU.CVAR_DEFS or {}, function(def)
+        return def.dev == true
+    end)
+    if #devDefs == 0 then return yOffset end
+
+    local card = GUIFrame:CreateCard(scrollChild, "Dev CVars", yOffset)
+    ctx.manager:Register(card, "all")
+
+    card:AddLabel("|cffCC8800These force addon restrictions |cff33ff33on|r|cffCC8800 for testing. Leave them off for normal play — with one on, addons behave as though you were in a restricted state.|r")
+
+    -- One per row: at half width these labels truncate. The last row wants
+    -- rowHeightLast, which AddCVarCheckbox's own row never carries, so the
+    -- caller builds the row and closes the card itself.
+    local n = #devDefs
+    for i = 1, n do
+        local isLast = (i == n)
+        local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
+        local row = GUIFrame:CreateRow(card.content, rowHeight)
+        AddCVarCheckbox(ctx, card, devDefs[i], row, 1)
+        if isLast then
+            card:AddRow(row, rowHeight, 0)
+        else
+            card:AddRow(row, rowHeight)
+        end
+    end
+    yOffset = card:GetNextOffset()
+
+    RefreshStates(ctx)
+    return yOffset
+end)
+
+-- A shrinking list needs no extra care: ResolveActiveTab already falls back to
+-- the first tab when the remembered id is gone.
+GUIFrame:RegisterTabbedContent("CVars", function()
+    local GENERAL = { id = "CVarsGeneral", label = "General" }
+    local DEV     = { id = "CVarsDev",     label = "Dev" }
+
+    local AU = GetAutomationModule()
+    if AU and AU:HasLiveDevCVars() then
+        return { GENERAL, DEV }
+    end
+    return { GENERAL }
 end)

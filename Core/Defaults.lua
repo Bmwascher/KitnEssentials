@@ -607,6 +607,13 @@ local Defaults = {
             SpellQueueWindow = nil,
             RAIDweatherDensity = nil,
             autoLootRate = nil,
+            -- CVars (merged) - dev
+            addonPvPMatchRestrictionsForced = nil,
+            addonMapRestrictionsForced = nil,
+            addonEncounterRestrictionsForced = nil,
+            addonCombatRestrictionsForced = nil,
+            addonChatRestrictionsForced = nil,
+            addonChallengeModeRestrictionsForced = nil,
         },
 
         AuctionHouseFilter = {
@@ -1905,6 +1912,7 @@ local Defaults = {
                 CursorOffsetX = 10,
                 CursorOffsetY = -10,
                 ShowIDs = "MODIFIER",
+                ShowIconIDs = false,
                 Position = {
                     AnchorFrom = "BOTTOMRIGHT",
                     AnchorTo = "BOTTOMRIGHT",
