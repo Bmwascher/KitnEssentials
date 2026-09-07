@@ -58,6 +58,10 @@ local Defaults = {
         -- restore, leaving a restrictive filter behind with the module off.
         GroupFinderPanelOwnsFilter = false,
 
+        -- Keyed by EllesmereUI profile name. Its profiles are account-level,
+        -- and the reasoning above applies unchanged.
+        EUITickMarkersHiddenIn = {},
+
         -- Tool preferences, not module settings: they describe how edit mode
         -- behaves, so they sit beside the other account-wide entries here
         -- rather than in a profile. A per-profile grid would mean switching
@@ -515,6 +519,7 @@ local Defaults = {
 
         DisintegrateTicks = {
             Enabled = false,
+            HideEUITickMarkers = true,
             TickColor = { 1, 1, 1, 0.8 },
             TickWidth = 2,
             ClipWarning = {

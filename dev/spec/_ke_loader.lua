@@ -2860,4 +2860,28 @@ function L.loadWorldMarkerCycler(overrides)
     return modules["WorldMarkerCycler"], KE, executed, wrapped
 end
 
+-- Modules/ClassUtilities/DisintegrateTicks.lua, for the pure tick-marker
+-- resolver only. The module builds frames and registers a cast-bar provider at
+-- file scope, so the mock has to satisfy those before the resolver is reachable.
+function L.loadDisintegrateTicks(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.C_SpellBook = {
+        IsSpellKnown = function() return false end,
+        IsSpellKnownOrInSpellBook = function() return false end,
+    }
+    _G.C_AddOns = { IsAddOnLoaded = function() return false, false end }
+    _G.EventRegistry = { RegisterCallback = function() end, UnregisterCallback = function() end }
+    _G.hooksecurefunc = function() end
+    _G.Constants = { UICharacterClasses = { Evoker = 13 } }
+    local KE = {
+        Print = function() end,
+        IsSafeValue = function() return true end,
+        db = { global = {}, profile = { DisintegrateTicks = {} } },
+    }
+    helpers.loadModule("Modules/ClassUtilities/DisintegrateTicks.lua", KE)
+    return modules["DisintegrateTicks"], KE
+end
+
 return L

@@ -24,6 +24,8 @@ local PlayerUtil = PlayerUtil
 local hooksecurefunc = hooksecurefunc
 local math_ceil = math.ceil
 local UnitChannelInfo = UnitChannelInfo
+local InCombatLockdown = InCombatLockdown
+local C_Timer = C_Timer
 
 
 ---------------------------------------------------------------------------------
@@ -851,6 +853,8 @@ function DT:OnEvent(event, unit, ...)
             self:HideTicks()
             self:HideWarning()
         end
+        -- The tick-marker coordination watches this event on its own frame, so
+        -- it keeps working while the module is disabled.
 
     elseif event == "PLAYER_DEAD" then
         self.massDisintegrateStacks = 0
@@ -1003,11 +1007,180 @@ function DT:ApplySettings()
     self:ApplyTickColor()
     self:ApplyWarningSettings()
     self:UpdateWarningPosition()
+    self:SyncEUITickMarkers()
 end
 
 function DT:ApplyPosition()
     if not self.db.Enabled then return end
     self:UpdateWarningPosition()
+end
+
+---------------------------------------------------------------------------------
+-- EllesmereUI cast bar tick markers
+---------------------------------------------------------------------------------
+-- EllesmereUI draws its own channel tick marks on the same cast bar this module
+-- draws on, so both sets appear at once. Turning its master toggle off while
+-- this module is drawing leaves one set, and it goes back on when we stop.
+--
+-- The settings live in that addon's central account-level store. This handle is
+-- the supported reach into it, and its profile field is re-pointed in place on
+-- a profile switch, so it is read fresh every time and never cached.
+local function EUICastBarSettings()
+    local db = _G._ERB_AceDB
+    local profile = db and db.profile
+    local cb = profile and profile.castBar
+    if type(cb) ~= "table" then return nil end
+    return cb, db._profileName or "Default"
+end
+
+local function RefreshEUICastBar()
+    -- Cosmetic only: the toggle is re-read at every channel start, so skipping
+    -- this leaves just a channel already in progress drawn the old way.
+    if InCombatLockdown() then return end
+    local apply = _G._ERB_Apply
+    if type(apply) == "function" then apply() end
+    local eui = _G.EllesmereUI
+    if eui and type(eui.NotifyElementResized) == "function" then
+        eui.NotifyElementResized("ERB_CastBar")
+    end
+end
+
+-- A profile sync copies cast bar settings wholesale between sync-group members
+-- and EllesmereUI's own exclusion list covers geometry only, so a suppression
+-- could be copied into a profile we hold no record for and never restored.
+-- Registering the key as excluded is a runtime call that writes no saved data.
+local function ExcludeTickMarkersFromProfileSync()
+    local eui = _G.EllesmereUI
+    if not (eui and type(eui.RegisterSyncExclusions) == "function") then return false end
+    eui.RegisterSyncExclusions("EllesmereUIResourceBars", { "castBar.showChannelTicks" })
+    return true
+end
+
+-- At load, not at world entry. A suppression written last session is already in
+-- the saved data, and EllesmereUI's spec pre-seed copies the outgoing profile
+-- across during PLAYER_LOGIN, before any world-entry work could register this.
+local exclusionWaiter
+local function StopWaitingForEUI()
+    if not exclusionWaiter then return end
+    exclusionWaiter:UnregisterEvent("ADDON_LOADED")
+    exclusionWaiter:SetScript("OnEvent", nil)
+    exclusionWaiter = nil
+end
+
+if not ExcludeTickMarkersFromProfileSync() then
+    exclusionWaiter = CreateFrame("Frame")
+    exclusionWaiter:RegisterEvent("ADDON_LOADED")
+    exclusionWaiter:SetScript("OnEvent", function(_, _, name)
+        if name == "EllesmereUI" and ExcludeTickMarkersFromProfileSync() then
+            StopWaitingForEUI()
+        end
+    end)
+end
+
+-- want:    this module wants the bar to itself
+-- current: EllesmereUI's toggle as it reads now; nil when unreachable
+-- owned:   our record says we turned it off in the active EllesmereUI profile
+---@return string action "hide" | "restore" | "standdown" | "release" | "none"
+function DT.ResolveEUITickMarkers(want, current, owned)
+    if current == nil then return "none" end
+    if want then
+        if owned then return current and "standdown" or "none" end
+        return current and "hide" or "none"
+    end
+    if not owned then return "none" end
+    return current and "release" or "restore"
+end
+
+function DT:RetryEUITickMarkersSync()
+    self.euiTickMarkersRetries = (self.euiTickMarkersRetries or 0) + 1
+    if self.euiTickMarkersRetries > 40 then return end
+    C_Timer.After(0.5, function() self:SyncEUITickMarkers() end)
+end
+
+function DT:SyncEUITickMarkers()
+    if not self.euiTickMarkersReady then return end
+    local cb, profileName = EUICastBarSettings()
+    local g = KE.db and KE.db.global
+    if not cb or not g then return end
+    local owner = g.EUITickMarkersHiddenIn
+    if type(owner) ~= "table" then
+        owner = {}
+        g.EUITickMarkersHiddenIn = owner
+    end
+
+    -- IsEnabled() is true on any character whose profile has the module on:
+    -- OnEnable's own class check returns after the module is already marked
+    -- enabled. Without this gate a character with no spec waits forever on one.
+    local armed = self:IsEnabled() and self.db and self.db.Enabled ~= false
+        and self.db.HideEUITickMarkers ~= false
+        and select(3, UnitClass("player")) == Constants.UICharacterClasses.Evoker
+    local want = false
+    if armed then
+        -- The spec reads nil for a moment after a slow login. Deciding on that
+        -- would restore the markers on a Devastation login, and nothing would
+        -- hide them again until the next spec change.
+        if PlayerUtil.GetCurrentSpecID() == nil then
+            self:RetryEUITickMarkersSync()
+            return
+        end
+        want = self:IsValidSpec()
+    end
+    self.euiTickMarkersRetries = 0
+
+    -- Reading an absent key as ON is this addon's own convention, the one
+    -- KE:EUISheetActive follows; EllesmereUI's own read treats it as off. They
+    -- cannot disagree in practice, because it seeds the key true into every
+    -- profile when it merges its defaults.
+    local action = DT.ResolveEUITickMarkers(want, cb.showChannelTicks ~= false,
+        owner[profileName] == true)
+    if action == "hide" then
+        cb.showChannelTicks = false
+        owner[profileName] = true
+        RefreshEUICastBar()
+        KE:Print("Disintegrate Ticks: hid EllesmereUI's cast bar tick markers while this module draws them.")
+    elseif action == "restore" then
+        cb.showChannelTicks = true
+        owner[profileName] = nil
+        RefreshEUICastBar()
+        KE:Print("Disintegrate Ticks: restored EllesmereUI's cast bar tick markers.")
+    elseif action == "release" then
+        owner[profileName] = nil
+    elseif action == "standdown" then
+        owner[profileName] = nil
+        self.db.HideEUITickMarkers = false
+        KE:Print("Disintegrate Ticks: EllesmereUI's tick markers were turned back on, so Hide EllesmereUI Tick Markers is now off.")
+    end
+end
+
+-- Its own frame, not the module's AceEvent: a disabled module still has to
+-- restore, and OnDisable unregisters everything. It carries the spec event for
+-- the same reason. A profile suppressed under one spec is only healed when
+-- that spec comes back, and with the listener on the module a disabled module
+-- would never see it return.
+do
+    local entry = CreateFrame("Frame")
+    entry:RegisterEvent("PLAYER_ENTERING_WORLD")
+    entry:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    entry:SetScript("OnEvent", function(_, event, unit)
+        if event == "PLAYER_SPECIALIZATION_CHANGED" then
+            if unit ~= "player" then return end
+            DT:SyncEUITickMarkers()
+            -- EllesmereUI switches profiles synchronously inside its own
+            -- handler for this event and neither addon controls handler order,
+            -- so re-read next frame once every handler has run.
+            C_Timer.After(0, function() DT:SyncEUITickMarkers() end)
+            return
+        end
+
+        DT.euiTickMarkersReady = true
+        -- Every ordinary addon is up by now, so a registration that still has
+        -- not taken never will.
+        StopWaitingForEUI()
+        DT:SyncEUITickMarkers()
+        -- EllesmereUI defers a first-login profile switch two frames, and its
+        -- own rebuild sits at half a second, so settle well past both.
+        C_Timer.After(1, function() DT:SyncEUITickMarkers() end)
+    end)
 end
 
 ---------------------------------------------------------------------------------
@@ -1089,6 +1262,7 @@ function DT:OnEnable()
 end
 
 function DT:OnDisable()
+    self:SyncEUITickMarkers()
     self:UnregisterSpecEvents()
     self:UnregisterEvent("LOADING_SCREEN_DISABLED")
     self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
