@@ -178,10 +178,10 @@ end
 -- Walks _G for KE-named globals + Ace modules' .frame attribute and samples
 -- direct and inclusive CPU for each discovered frame.
 --
--- GetFrameCPUUsage charges a script handler, not a frame instance, so frames
--- built from one template each report the whole shared cost, and inclusive
--- sampling multiplies that by the child count. Only the direct figure is
--- reported, and identical counters are grouped.
+-- Frames built from one template have been observed to report one shared cost
+-- each, which fits GetFrameCPUUsage charging a script handler rather than a
+-- frame instance; inclusive sampling then multiplies that by the child count.
+-- Only the direct figure is reported, and identical counters are grouped.
 
 local function IsFrame(v)
     if type(v) ~= "table" then return false end

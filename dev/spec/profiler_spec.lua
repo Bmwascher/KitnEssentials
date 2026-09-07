@@ -542,12 +542,15 @@ describe("Profiler shared-counter grouping", function()
     end)
 
     it("drops rows with no direct cost instead of pairing them", function()
-        local state = rowsFor({
-            { name = "KE_Alpha", selfMs = 0, selfCalls = 20 },
-            { name = "KE_Beta", selfMs = 0, selfCalls = 20 },
-            { name = "KE_Gamma", selfMs = 4, selfCalls = 8 },
+        local state = rowsFor({ { name = "KE_Gamma", selfMs = 4, selfCalls = 8 } })
+        -- Handed straight to the function under test: GatherCpuRows admits a row
+        -- only when its self or tree cost is nonzero, so a zero row routed
+        -- through it would never reach the filter this case exists for.
+        local groups = state.profiler.GroupSharedRows({
+            { name = "KE_Alpha", selfMs = 0, selfCalls = 20, treeMs = 3, treeCalls = 20 },
+            { name = "KE_Beta", selfMs = 0, selfCalls = 20, treeMs = 3, treeCalls = 20 },
+            { name = "KE_Gamma", selfMs = 4, selfCalls = 8, treeMs = 4, treeCalls = 8 },
         })
-        local groups = state.profiler.GroupSharedRows(state.profiler.GatherCpuRows())
 
         assert.equals(1, #groups)
         assert.same({ "KE_Gamma" }, groups[1].names)
@@ -614,10 +617,11 @@ describe("Profiler snapshots", function()
     end)
 
     it("groups deltas on the whole before and after tuple, not the growth alone", function()
-        local shared1, shared2, offset = frame(), frame(), frame()
+        local shared1, shared2, msOffset, callOffset = frame(), frame(), frame(), frame()
         _G.KE_Alpha = shared1
         _G.KE_Beta = shared2
-        _G.KE_Gamma = offset
+        _G.KE_Gamma = msOffset
+        _G.KE_Delta = callOffset
 
         local start = { selfMs = 1, selfCalls = 10, treeMs = 2, treeCalls = 20 }
         local state = loadProfiler({
@@ -626,8 +630,12 @@ describe("Profiler snapshots", function()
             frameCPU = {
                 [shared1] = start,
                 [shared2] = start,
-                -- Same +4.00 ms growth as the pair, from a higher baseline.
-                [offset] = { selfMs = 3, selfCalls = 10, treeMs = 4, treeCalls = 20 },
+                -- Gamma matches the pair's growth on a higher millisecond
+                -- baseline; Delta matches its milliseconds outright and differs
+                -- only in calls. Both halves of the key are load-bearing, so
+                -- dropping either half from it merges one of them into the pair.
+                [msOffset] = { selfMs = 3, selfCalls = 10, treeMs = 4, treeCalls = 20 },
+                [callOffset] = { selfMs = 1, selfCalls = 12, treeMs = 2, treeCalls = 22 },
             },
         })
 
@@ -637,13 +645,15 @@ describe("Profiler snapshots", function()
         state.setAddonMs(30)
         state.setFrameCPU(shared1, { selfMs = 5, selfCalls = 30, treeMs = 9, treeCalls = 50 })
         state.setFrameCPU(shared2, { selfMs = 5, selfCalls = 30, treeMs = 9, treeCalls = 50 })
-        state.setFrameCPU(offset, { selfMs = 7, selfCalls = 30, treeMs = 11, treeCalls = 50 })
+        state.setFrameCPU(msOffset, { selfMs = 7, selfCalls = 30, treeMs = 11, treeCalls = 50 })
+        state.setFrameCPU(callOffset, { selfMs = 5, selfCalls = 35, treeMs = 9, treeCalls = 55 })
         state.profiler.TakeSnapshot("after")
         state.profiler.DiffSnapshots("before", "after")
 
         local output = table.concat(state.printed, "\n")
         assert.is_truthy(output:find("identical counters x2: KE_Alpha, KE_Beta", 1, true))
         assert.is_truthy(output:find("+4.00 ms (3.00 -> 7.00) KE_Gamma", 1, true))
+        assert.is_truthy(output:find("+4.00 ms (1.00 -> 5.00) KE_Delta", 1, true))
     end)
 
     it("keeps one frame interval when a preferred alias is added", function()
