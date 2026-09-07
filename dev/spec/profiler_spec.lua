@@ -291,7 +291,6 @@ describe("Profiler CPU rows", function()
         assert.equals(100, rows[1].selfCalls)
         assert.equals(40, rows[1].treeMs)
         assert.equals(300, rows[1].treeCalls)
-        assert.equals(28, rows[1].childMs)
     end)
 
     it("prefers a global alias over module and GUI aliases", function()
@@ -444,7 +443,7 @@ describe("Profiler CPU report", function()
         assert.is_nil(output:find("sampling duration unknown", 1, true))
     end)
 
-    it("sorts direct and tree sections independently with name tie breaks", function()
+    it("sorts the direct section by cost with a name tie break", function()
         local alpha = frame()
         local beta = frame()
         local gamma = frame()
@@ -460,9 +459,12 @@ describe("Profiler CPU report", function()
                     treeMs = 12,
                     treeCalls = 12,
                 },
+                -- Beta's call count differs from Alpha's so the two stay
+                -- separate rows; identical counters would group and the name
+                -- tie break this case exists for would go untested.
                 [beta] = {
                     selfMs = 5,
-                    selfCalls = 5,
+                    selfCalls = 6,
                     treeMs = 4,
                     treeCalls = 4,
                 },
@@ -478,21 +480,91 @@ describe("Profiler CPU report", function()
 
         local output = table.concat(state.printed, "\n")
         local directStart = assert(output:find("by direct CPU:", 1, true))
-        local treeStart = assert(output:find("by inclusive CPU:", directStart, true))
-        local directOutput = output:sub(directStart, treeStart - 1)
-        local treeOutput = output:sub(treeStart)
+        local directOutput = output:sub(directStart)
 
         local directGamma = assert(directOutput:find("KE_Gamma", 1, true))
         local directAlpha = assert(directOutput:find("KE_Alpha", 1, true))
         local directBeta = assert(directOutput:find("KE_Beta", 1, true))
         assert.is_true(directGamma < directAlpha)
         assert.is_true(directAlpha < directBeta)
+    end)
+end)
 
-        local treeAlpha = assert(treeOutput:find("KE_Alpha", 1, true))
-        local treeGamma = assert(treeOutput:find("KE_Gamma", 1, true))
-        local treeBeta = assert(treeOutput:find("KE_Beta", 1, true))
-        assert.is_true(treeAlpha < treeGamma)
-        assert.is_true(treeGamma < treeBeta)
+describe("Profiler shared-counter grouping", function()
+    local function rowsFor(entries)
+        local frameCPU = {}
+        for _, entry in ipairs(entries) do
+            local subject = frame()
+            _G[entry.name] = subject
+            frameCPU[subject] = {
+                selfMs = entry.selfMs,
+                selfCalls = entry.selfCalls,
+                treeMs = entry.selfMs,
+                treeCalls = entry.selfCalls,
+            }
+        end
+        return loadProfiler({ frameCPU = frameCPU })
+    end
+
+    before_each(function()
+        _G.KE_Alpha = nil
+        _G.KE_Beta = nil
+        _G.KE_Gamma = nil
+        _G.KE_Delta = nil
+    end)
+
+    it("merges rows sharing a cost and call pair, leaving distinct rows alone", function()
+        local state = rowsFor({
+            { name = "KE_Beta", selfMs = 5, selfCalls = 20 },
+            { name = "KE_Alpha", selfMs = 5, selfCalls = 20 },
+            { name = "KE_Gamma", selfMs = 9, selfCalls = 30 },
+        })
+        local groups = state.profiler.GroupSharedRows(state.profiler.GatherCpuRows())
+
+        assert.equals(2, #groups)
+        assert.equals(9, groups[1].selfMs)
+        assert.equals(1, groups[1].count)
+        assert.same({ "KE_Gamma" }, groups[1].names)
+        assert.equals(2, groups[2].count)
+        assert.same({ "KE_Alpha", "KE_Beta" }, groups[2].names)
+    end)
+
+    it("keeps rows apart when only the call count differs", function()
+        local state = rowsFor({
+            { name = "KE_Alpha", selfMs = 5, selfCalls = 20 },
+            { name = "KE_Beta", selfMs = 5, selfCalls = 21 },
+        })
+        local groups = state.profiler.GroupSharedRows(state.profiler.GatherCpuRows())
+
+        assert.equals(2, #groups)
+        assert.equals(1, groups[1].count)
+        assert.equals(1, groups[2].count)
+    end)
+
+    it("drops rows with no direct cost instead of pairing them", function()
+        local state = rowsFor({
+            { name = "KE_Alpha", selfMs = 0, selfCalls = 20 },
+            { name = "KE_Beta", selfMs = 0, selfCalls = 20 },
+            { name = "KE_Gamma", selfMs = 4, selfCalls = 8 },
+        })
+        local groups = state.profiler.GroupSharedRows(state.profiler.GatherCpuRows())
+
+        assert.equals(1, #groups)
+        assert.same({ "KE_Gamma" }, groups[1].names)
+    end)
+
+    it("spends the row limit on groups rather than frames", function()
+        local state = rowsFor({
+            { name = "KE_Alpha", selfMs = 5, selfCalls = 20 },
+            { name = "KE_Beta", selfMs = 5, selfCalls = 20 },
+            { name = "KE_Gamma", selfMs = 5, selfCalls = 20 },
+            { name = "KE_Delta", selfMs = 9, selfCalls = 30 },
+        })
+        state.profiler.RunCommand("cpu 2")
+
+        local output = table.concat(state.printed, "\n")
+        assert.is_truthy(output:find("KE_Delta", 1, true))
+        assert.is_truthy(output:find("identical counters x3", 1, true))
     end)
 end)
 
@@ -539,7 +611,39 @@ describe("Profiler snapshots", function()
         assert.is_truthy(output:find("+20.00 ms over 10.0 sec", 1, true))
         assert.is_truthy(output:find("2.00 ms/sec", 1, true))
         assert.is_truthy(output:find("+4.00 ms", 1, true))
-        assert.is_truthy(output:find("+7.00 ms", 1, true))
+    end)
+
+    it("groups deltas on the whole before and after tuple, not the growth alone", function()
+        local shared1, shared2, offset = frame(), frame(), frame()
+        _G.KE_Alpha = shared1
+        _G.KE_Beta = shared2
+        _G.KE_Gamma = offset
+
+        local start = { selfMs = 1, selfCalls = 10, treeMs = 2, treeCalls = 20 }
+        local state = loadProfiler({
+            now = 100,
+            addonMs = 10,
+            frameCPU = {
+                [shared1] = start,
+                [shared2] = start,
+                -- Same +4.00 ms growth as the pair, from a higher baseline.
+                [offset] = { selfMs = 3, selfCalls = 10, treeMs = 4, treeCalls = 20 },
+            },
+        })
+
+        state.profiler.ResetCpu()
+        state.profiler.TakeSnapshot("before")
+        state.setNow(110)
+        state.setAddonMs(30)
+        state.setFrameCPU(shared1, { selfMs = 5, selfCalls = 30, treeMs = 9, treeCalls = 50 })
+        state.setFrameCPU(shared2, { selfMs = 5, selfCalls = 30, treeMs = 9, treeCalls = 50 })
+        state.setFrameCPU(offset, { selfMs = 7, selfCalls = 30, treeMs = 11, treeCalls = 50 })
+        state.profiler.TakeSnapshot("after")
+        state.profiler.DiffSnapshots("before", "after")
+
+        local output = table.concat(state.printed, "\n")
+        assert.is_truthy(output:find("identical counters x2: KE_Alpha, KE_Beta", 1, true))
+        assert.is_truthy(output:find("+4.00 ms (3.00 -> 7.00) KE_Gamma", 1, true))
     end)
 
     it("keeps one frame interval when a preferred alias is added", function()
@@ -744,12 +848,12 @@ describe("Profiler snapshots", function()
         assert.is_truthy(output:find("CPU/frame deltas unavailable", 1, true))
     end)
 
-    it("refuses frame deltas for a self-only, tree-only, self-call-only, or tree-call-only counter decrease", function()
+    it("refuses frame deltas for a direct counter decrease but not a tree-only one", function()
         local variants = {
-            { selfMs = 4, selfCalls = 21, treeMs = 9, treeCalls = 31 },
-            { selfMs = 6, selfCalls = 21, treeMs = 7, treeCalls = 31 },
-            { selfMs = 6, selfCalls = 19, treeMs = 9, treeCalls = 31 },
-            { selfMs = 6, selfCalls = 21, treeMs = 9, treeCalls = 29 },
+            { selfMs = 4, selfCalls = 21, treeMs = 9, treeCalls = 31, refused = true },
+            { selfMs = 6, selfCalls = 19, treeMs = 9, treeCalls = 31, refused = true },
+            { selfMs = 6, selfCalls = 21, treeMs = 7, treeCalls = 31, refused = false },
+            { selfMs = 6, selfCalls = 21, treeMs = 9, treeCalls = 29, refused = false },
         }
 
         for _, variant in ipairs(variants) do
@@ -778,7 +882,12 @@ describe("Profiler snapshots", function()
 
             local output = table.concat(state.printed, "\n")
             assert.is_truthy(output:find("+10.00 ms over 10.0 sec", 1, true))
-            assert.is_truthy(output:find("Frame deltas unavailable", 1, true))
+            if variant.refused then
+                assert.is_truthy(output:find("Frame deltas unavailable", 1, true))
+            else
+                assert.is_nil(output:find("Frame deltas unavailable", 1, true))
+                assert.is_truthy(output:find("+1.00 ms", 1, true))
+            end
         end
     end)
 end)

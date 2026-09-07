@@ -24,6 +24,7 @@ local print     = print
 local format    = string.format
 local sort      = table.sort
 local insert    = table.insert
+local concat    = table.concat
 local pairs     = pairs
 local ipairs    = ipairs
 local type      = type
@@ -174,13 +175,13 @@ end
 ---------------------------------------------------------------------------------
 -- Frame discovery
 ---------------------------------------------------------------------------------
--- This developer profiler intentionally reports per-frame CPU; function-level
--- attribution is out of scope. We walk _G for KE-named globals + Ace modules'
--- .frame attribute and sample direct and inclusive CPU for each discovered frame.
+-- Walks _G for KE-named globals + Ace modules' .frame attribute and samples
+-- direct and inclusive CPU for each discovered frame.
 --
--- Inclusive (includeChildren=true) over-counts when both a parent and its child
--- frame are reported separately, but it reveals the cost folded into a module's
--- bars and icons.
+-- GetFrameCPUUsage charges a script handler, not a frame instance, so frames
+-- built from one template each report the whole shared cost, and inclusive
+-- sampling multiplies that by the child count. Only the direct figure is
+-- reported, and identical counters are grouped.
 
 local function IsFrame(v)
     if type(v) ~= "table" then return false end
@@ -251,7 +252,6 @@ local function GatherCpuRows()
                     selfCalls = selfCalls or 0,
                     treeMs = treeMs,
                     treeCalls = treeCalls or 0,
-                    childMs = math_max(treeMs - selfMs, 0),
                 })
             end
         end
@@ -266,18 +266,74 @@ local function GatherCpuRows()
     return rows
 end
 
-local function SortedRows(rows, key)
-    local copy = {}
-    for _, row in ipairs(rows) do
-        copy[#copy + 1] = row
+-- Equal counters are evidence of a shared handler, not proof: an accidental
+-- collision groups too, and partial sharing does not group at all. The label
+-- claims only what was measured.
+local NAMES_SHOWN = 3
+local FRAME_CAVEAT = "Frames with identical CPU counters are grouped: frames built from one template have been observed to report one shared cost each. Timer and plain Lua callback work is not attributed to frames."
+
+local function DescribeGroup(names, count)
+    if count < 2 then
+        return names[1]
     end
-    sort(copy, function(a, b)
-        if a[key] ~= b[key] then
-            return a[key] > b[key]
+    local shown = {}
+    for index = 1, math_min(NAMES_SHOWN, count) do
+        shown[index] = names[index]
+    end
+    local suffix = count > NAMES_SHOWN and " ..." or ""
+    return format("identical counters x%d: %s%s", count, concat(shown, ", "), suffix)
+end
+
+local function CollectGroups(entries, keyOf)
+    local groups = {}
+    local byKey = {}
+
+    for _, entry in ipairs(entries) do
+        local key = keyOf(entry)
+        local group = byKey[key]
+        if not group then
+            group = { names = {}, count = 0 }
+            for field, value in pairs(entry) do
+                if field ~= "name" then
+                    group[field] = value
+                end
+            end
+            byKey[key] = group
+            groups[#groups + 1] = group
         end
-        return a.name < b.name
+        group.count = group.count + 1
+        group.names[group.count] = entry.name
+    end
+
+    for _, group in ipairs(groups) do
+        sort(group.names)
+    end
+    return groups
+end
+
+local function GroupSharedRows(rows)
+    local scored = {}
+    for _, row in ipairs(rows) do
+        if row.selfMs > 0 then
+            scored[#scored + 1] = {
+                name = row.name,
+                selfMs = row.selfMs,
+                selfCalls = row.selfCalls,
+            }
+        end
+    end
+
+    local groups = CollectGroups(scored, function(entry)
+        return format("%.17g|%.17g", entry.selfMs, entry.selfCalls)
     end)
-    return copy
+
+    sort(groups, function(a, b)
+        if a.selfMs ~= b.selfMs then
+            return a.selfMs > b.selfMs
+        end
+        return a.names[1] < b.names[1]
+    end)
+    return groups
 end
 
 ---------------------------------------------------------------------------------
@@ -390,34 +446,23 @@ local function PrintCpuTop(arg)
 
     if #rows == 0 then
         p("No frame CPU samples yet. Try /kes profiler reset, exercise the UI, then /kes profiler cpu again.")
-        p("Frame rankings omit timer and plain Lua callback attribution. /kes profiler peak reports addon-wide tick metrics only; it cannot identify which callback caused a spike.")
+        p(FRAME_CAVEAT)
         return
     end
 
-    local selfRows = SortedRows(rows, "selfMs")
+    local groups = GroupSharedRows(rows)
     pf("Top %d named KE frames by direct CPU:", n)
-    local selfRank = 0
-    for _, row in ipairs(selfRows) do
-        if row.selfMs > 0 and selfRank < n then
-            selfRank = selfRank + 1
-            local perCall = row.selfCalls > 0 and row.selfMs / row.selfCalls or 0
-            pf("  %2d. %.2f ms (calls=%d, %.4f ms/call) %s",
-                selfRank, row.selfMs, row.selfCalls, perCall, row.name)
-        end
+    for index = 1, math_min(n, #groups) do
+        local group = groups[index]
+        local perCall = group.selfCalls > 0 and group.selfMs / group.selfCalls or 0
+        pf("  %2d. %.2f ms (calls=%d, %.4f ms/call) %s",
+            index, group.selfMs, group.selfCalls, perCall,
+            DescribeGroup(group.names, group.count))
     end
-    if selfRank == 0 then
+    if #groups == 0 then
         p("  No direct frame work recorded.")
     end
-
-    local treeRows = SortedRows(rows, "treeMs")
-    pf("Top %d named KE frame trees by inclusive CPU:", n)
-    for index = 1, math_min(n, #treeRows) do
-        local row = treeRows[index]
-        pf("  %2d. %.2f ms tree (self=%.2f, descendants=%.2f, calls=%d) %s",
-            index, row.treeMs, row.selfMs, row.childMs, row.treeCalls, row.name)
-    end
-    p("Tree rows overlap and may include non-KE descendant work; do not add them or compare them directly with addon total.")
-    p("Frame rankings omit timer and plain Lua callback attribution. /kes profiler peak reports addon-wide tick metrics only; it cannot identify which callback caused a spike.")
+    p(FRAME_CAVEAT)
 end
 
 local function PrintMemory()
@@ -557,17 +602,20 @@ local function FrameCountersComparable(a, b)
 
     for frameId, row in pairs(afterById) do
         local old = beforeById[frameId]
+        -- Tree counters are captured but no longer reported. A tree-only drop
+        -- has benign causes (a descendant destroyed or reparented) and would
+        -- otherwise veto direct deltas over a figure nothing prints.
         if old and ((row.selfMs or 0) < (old.selfMs or 0)
-            or (row.selfCalls or 0) < (old.selfCalls or 0)
-            or (row.treeMs or 0) < (old.treeMs or 0)
-            or (row.treeCalls or 0) < (old.treeCalls or 0)) then
+            or (row.selfCalls or 0) < (old.selfCalls or 0)) then
             return nil, "counter"
         end
     end
     return beforeById
 end
 
-local function PositiveFrameDeltas(beforeById, b, key)
+-- Grouped on the whole before/after tuple, not on the delta: equal growth from
+-- different baselines would print one member's numbers as if they were shared.
+local function PositiveFrameDeltas(beforeById, b)
     local deltas = {}
     local newlyObserved = 0
     for _, row in ipairs(b.frames or {}) do
@@ -575,8 +623,8 @@ local function PositiveFrameDeltas(beforeById, b, key)
         if not old then
             newlyObserved = newlyObserved + 1
         else
-            local prior = old[key] or 0
-            local current = row[key] or 0
+            local prior = old.selfMs or 0
+            local current = row.selfMs or 0
             local delta = current - prior
             if delta > 0.01 then
                 deltas[#deltas + 1] = {
@@ -584,17 +632,25 @@ local function PositiveFrameDeltas(beforeById, b, key)
                     delta = delta,
                     prior = prior,
                     current = current,
+                    priorCalls = old.selfCalls or 0,
+                    currentCalls = row.selfCalls or 0,
                 }
             end
         end
     end
-    sort(deltas, function(x, y)
+
+    local groups = CollectGroups(deltas, function(entry)
+        return format("%.17g|%.17g|%.17g|%.17g",
+            entry.prior, entry.current, entry.priorCalls, entry.currentCalls)
+    end)
+
+    sort(groups, function(x, y)
         if x.delta ~= y.delta then
             return x.delta > y.delta
         end
-        return x.name < y.name
+        return x.names[1] < y.names[1]
     end)
-    return deltas, newlyObserved
+    return groups, newlyObserved
 end
 
 local function DiffSnapshots(aName, bName)
@@ -628,7 +684,7 @@ local function DiffSnapshots(aName, bName)
         return
     end
 
-    local selfDeltas, newlyObserved = PositiveFrameDeltas(beforeById, b, "selfMs")
+    local selfDeltas, newlyObserved = PositiveFrameDeltas(beforeById, b)
     if newlyObserved > 0 then
         pf("  %d newly observed frame(s) omitted from frame deltas.", newlyObserved)
     end
@@ -637,19 +693,10 @@ local function DiffSnapshots(aName, bName)
         for index = 1, math_min(10, #selfDeltas) do
             local delta = selfDeltas[index]
             pf("    %+.2f ms (%.2f -> %.2f) %s",
-                delta.delta, delta.prior, delta.current, delta.name)
+                delta.delta, delta.prior, delta.current,
+                DescribeGroup(delta.names, delta.count))
         end
-    end
-
-    local treeDeltas = PositiveFrameDeltas(beforeById, b, "treeMs")
-    if #treeDeltas > 0 then
-        p("  Top inclusive frame-tree deltas:")
-        for index = 1, math_min(10, #treeDeltas) do
-            local delta = treeDeltas[index]
-            pf("    %+.2f ms (%.2f -> %.2f) %s",
-                delta.delta, delta.prior, delta.current, delta.name)
-        end
-        p("  Tree deltas overlap; do not add them together.")
+        p("  " .. FRAME_CAVEAT)
     end
 end
 
@@ -707,7 +754,7 @@ local function PrintHelp()
     p("Usage: /kes profiler <subcommand>")
     p("  on | off          — toggle scriptProfile cvar. /reload required to take effect.")
     p("  status            — show whether profiling is ON/OFF.")
-    p("  cpu [N]           — addon rate plus direct-frame and inclusive-tree rankings (default 15).")
+    p("  cpu [N]           — addon rate plus the direct-frame ranking (default 15).")
     p("  top [N]           — top-N addons (any) by RecentAverageTime (default 10).")
     p("  peak              — addon-wide live tick metrics; does not identify callbacks.")
     p("  mem               — KE memory + delta from previous mem call.")
@@ -776,6 +823,7 @@ Profiler.ListSnapshots  = ListSnapshots
 Profiler.ClearSnapshots = ClearSnapshots
 Profiler.ResetCpu       = ResetCpu
 Profiler.GatherCpuRows  = GatherCpuRows
+Profiler.GroupSharedRows = GroupSharedRows
 Profiler.GetFooterDisplay = GetFooterDisplay
 
 KE.Profiler = Profiler
