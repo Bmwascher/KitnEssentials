@@ -614,6 +614,10 @@ describe("Profiler snapshots", function()
         _G.KE_Gamma = nil
         _G.KE_Global = nil
         _G.KE_Zeta = nil
+        _G.KE_Delta = nil
+        _G.KE_Epsilon = nil
+        _G.KE_Eta = nil
+        _G.KE_Theta = nil
     end)
 
     it("reports CPU and frame deltas inside one known reset window", function()
@@ -659,6 +663,17 @@ describe("Profiler snapshots", function()
         _G.KE_Gamma = msOffset
         _G.KE_Delta = callOffset
 
+        -- One frame per keyed component, each matching the pair on the other
+        -- three. The offset rows above differ in two components at once, so
+        -- they discriminate a whole half of the key and no single part of it:
+        -- dropping just one endpoint went unnoticed until these were added.
+        local onePrior, oneCurrent, onePriorCalls, oneCurrentCalls =
+            frame(), frame(), frame(), frame()
+        _G.KE_Epsilon = onePrior
+        _G.KE_Zeta = oneCurrent
+        _G.KE_Eta = onePriorCalls
+        _G.KE_Theta = oneCurrentCalls
+
         local start = { selfMs = 1, selfCalls = 10, treeMs = 2, treeCalls = 20 }
         local state = loadProfiler({
             now = 100,
@@ -672,6 +687,10 @@ describe("Profiler snapshots", function()
                 -- dropping either half from it merges one of them into the pair.
                 [msOffset] = { selfMs = 3, selfCalls = 10, treeMs = 4, treeCalls = 20 },
                 [callOffset] = { selfMs = 1, selfCalls = 12, treeMs = 2, treeCalls = 22 },
+                [onePrior] = { selfMs = 2, selfCalls = 10, treeMs = 2, treeCalls = 20 },
+                [oneCurrent] = start,
+                [onePriorCalls] = { selfMs = 1, selfCalls = 11, treeMs = 2, treeCalls = 20 },
+                [oneCurrentCalls] = start,
             },
         })
 
@@ -683,6 +702,10 @@ describe("Profiler snapshots", function()
         state.setFrameCPU(shared2, { selfMs = 5, selfCalls = 30, treeMs = 9, treeCalls = 50 })
         state.setFrameCPU(msOffset, { selfMs = 7, selfCalls = 30, treeMs = 11, treeCalls = 50 })
         state.setFrameCPU(callOffset, { selfMs = 5, selfCalls = 35, treeMs = 9, treeCalls = 55 })
+        state.setFrameCPU(onePrior, { selfMs = 5, selfCalls = 30, treeMs = 9, treeCalls = 50 })
+        state.setFrameCPU(oneCurrent, { selfMs = 6, selfCalls = 30, treeMs = 9, treeCalls = 50 })
+        state.setFrameCPU(onePriorCalls, { selfMs = 5, selfCalls = 30, treeMs = 9, treeCalls = 50 })
+        state.setFrameCPU(oneCurrentCalls, { selfMs = 5, selfCalls = 31, treeMs = 9, treeCalls = 50 })
         state.profiler.TakeSnapshot("after")
         state.profiler.DiffSnapshots("before", "after")
 
