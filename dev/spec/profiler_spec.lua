@@ -595,6 +595,15 @@ describe("Profiler shared-counter grouping", function()
         local output = table.concat(state.printed, "\n")
         assert.is_truthy(output:find("KE_Delta", 1, true))
         assert.is_truthy(output:find("identical counters x3", 1, true))
+
+        -- Asking for one row is what makes the limit itself load-bearing: with
+        -- two groups and a limit of two, a build that ignores the limit prints
+        -- the same lines as one that honours it.
+        local before = #state.printed
+        state.profiler.RunCommand("cpu 1")
+        local limited = table.concat(state.printed, "\n", before + 1, #state.printed)
+        assert.is_truthy(limited:find("identical counters x3", 1, true))
+        assert.is_nil(limited:find("KE_Delta", 1, true))
     end)
 end)
 
