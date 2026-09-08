@@ -883,6 +883,33 @@ describe("Profiler snapshots", function()
         assert.is_truthy(output:find("CPU/frame deltas unavailable", 1, true))
     end)
 
+    it("counts a non-finite counter as an omission instead of refusing the diff", function()
+        local subject = frame()
+        _G.KE_Alpha = subject
+        local state = loadProfiler({
+            now = 100,
+            addonMs = 10,
+            -- An infinite prior call count: every later value is below it, so
+            -- comparing it as a decrease would refuse the whole diff over one
+            -- unusable row.
+            frameCPU = {
+                [subject] = { selfMs = 5, selfCalls = math.huge, treeMs = 8, treeCalls = 30 },
+            },
+        })
+
+        state.profiler.ResetCpu()
+        state.profiler.TakeSnapshot("before")
+        state.setNow(110)
+        state.setAddonMs(20)
+        state.setFrameCPU(subject, { selfMs = 6, selfCalls = 20, treeMs = 9, treeCalls = 31 })
+        state.profiler.TakeSnapshot("after")
+        state.profiler.DiffSnapshots("before", "after")
+
+        local output = table.concat(state.printed, "\n")
+        assert.is_nil(output:find("Frame deltas unavailable", 1, true))
+        assert.is_truthy(output:find("1 frame(s) omitted: a counter was not a finite number.", 1, true))
+    end)
+
     it("refuses frame deltas for a direct counter decrease but not a tree-only one", function()
         local variants = {
             { selfMs = 4, selfCalls = 21, treeMs = 9, treeCalls = 31, refused = true },

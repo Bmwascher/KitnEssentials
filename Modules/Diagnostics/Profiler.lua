@@ -603,6 +603,11 @@ local function BuildFrameIndexes(snapshot)
     return byId, byName
 end
 
+local function FiniteCounterPair(old, row)
+    return IsFinite(old.selfMs or 0) and IsFinite(row.selfMs or 0)
+        and IsFinite(old.selfCalls or 0) and IsFinite(row.selfCalls or 0)
+end
+
 local function FrameCountersComparable(a, b)
     local beforeById, beforeByName = BuildFrameIndexes(a)
     local afterById, afterByName = BuildFrameIndexes(b)
@@ -622,7 +627,12 @@ local function FrameCountersComparable(a, b)
         -- Tree counters are captured but no longer reported. A tree-only drop
         -- has benign causes (a descendant destroyed or reparented) and would
         -- otherwise veto direct deltas over a figure nothing prints.
-        if old and ((row.selfMs or 0) < (old.selfMs or 0)
+        --
+        -- A non-finite counter is passed over rather than compared: any value
+        -- is below an infinity, so comparing one would refuse the whole diff
+        -- over a single unusable row. The delta path drops and counts it.
+        if old and FiniteCounterPair(old, row)
+            and ((row.selfMs or 0) < (old.selfMs or 0)
             or (row.selfCalls or 0) < (old.selfCalls or 0)) then
             return nil, "counter"
         end
@@ -644,8 +654,7 @@ local function PositiveFrameDeltas(beforeById, b)
             local prior = old.selfMs or 0
             local current = row.selfMs or 0
             local delta = current - prior
-            if not (IsFinite(prior) and IsFinite(current)
-                and IsFinite(old.selfCalls or 0) and IsFinite(row.selfCalls or 0)) then
+            if not FiniteCounterPair(old, row) then
                 dropped = dropped + 1
             elseif delta > 0.01 then
                 deltas[#deltas + 1] = {
