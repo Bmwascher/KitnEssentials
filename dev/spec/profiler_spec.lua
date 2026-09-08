@@ -453,20 +453,22 @@ describe("Profiler CPU report", function()
 
         local state = loadProfiler({
             frameCPU = {
+                -- Two fixtures serve the tie break. The call counts differ so
+                -- the rows stay separate rather than grouping, and the tree
+                -- costs order them Beta before Alpha on the way in, opposite to
+                -- the alphabetical order asserted below: fed the other way the
+                -- assertion holds whether or not the comparator sorts names.
                 [alpha] = {
                     selfMs = 5,
                     selfCalls = 5,
-                    treeMs = 12,
-                    treeCalls = 12,
+                    treeMs = 4,
+                    treeCalls = 4,
                 },
-                -- Beta's call count differs from Alpha's so the two stay
-                -- separate rows; identical counters would group and the name
-                -- tie break this case exists for would go untested.
                 [beta] = {
                     selfMs = 5,
                     selfCalls = 6,
-                    treeMs = 4,
-                    treeCalls = 4,
+                    treeMs = 12,
+                    treeCalls = 12,
                 },
                 [gamma] = {
                     selfMs = 9,
