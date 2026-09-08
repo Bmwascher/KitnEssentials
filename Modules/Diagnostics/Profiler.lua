@@ -33,6 +33,7 @@ local tonumber  = tonumber
 local tostring  = tostring
 local math_min  = math.min
 local math_max  = math.max
+local math_huge = math.huge
 local time      = time
 local date      = date
 
@@ -311,10 +312,23 @@ local function CollectGroups(entries, keyOf)
     return groups
 end
 
+-- A NaN call count fails the `> 0` guard on the per-call figure, so the row
+-- would report 0.0000 ms/call and a %d conversion of its own; both read as
+-- measurements. A counter that cannot be trusted is dropped instead.
+local function IsFinite(value)
+    return type(value) == "number"
+        and value == value
+        and value ~= math_huge
+        and value ~= -math_huge
+end
+
 local function GroupSharedRows(rows)
     local scored = {}
+    local dropped = 0
     for _, row in ipairs(rows) do
-        if row.selfMs > 0 then
+        if not (IsFinite(row.selfMs) and IsFinite(row.selfCalls)) then
+            dropped = dropped + 1
+        elseif row.selfMs > 0 then
             scored[#scored + 1] = {
                 name = row.name,
                 selfMs = row.selfMs,
@@ -333,7 +347,7 @@ local function GroupSharedRows(rows)
         end
         return a.names[1] < b.names[1]
     end)
-    return groups
+    return groups, dropped
 end
 
 ---------------------------------------------------------------------------------
@@ -450,7 +464,10 @@ local function PrintCpuTop(arg)
         return
     end
 
-    local groups = GroupSharedRows(rows)
+    local groups, dropped = GroupSharedRows(rows)
+    if dropped > 0 then
+        pf("%d frame(s) omitted: a counter was not a finite number.", dropped)
+    end
     pf("Top %d named KE frames by direct CPU:", n)
     for index = 1, math_min(n, #groups) do
         local group = groups[index]
@@ -618,6 +635,7 @@ end
 local function PositiveFrameDeltas(beforeById, b)
     local deltas = {}
     local newlyObserved = 0
+    local dropped = 0
     for _, row in ipairs(b.frames or {}) do
         local old = beforeById[row.frameId]
         if not old then
@@ -626,7 +644,10 @@ local function PositiveFrameDeltas(beforeById, b)
             local prior = old.selfMs or 0
             local current = row.selfMs or 0
             local delta = current - prior
-            if delta > 0.01 then
+            if not (IsFinite(prior) and IsFinite(current)
+                and IsFinite(old.selfCalls or 0) and IsFinite(row.selfCalls or 0)) then
+                dropped = dropped + 1
+            elseif delta > 0.01 then
                 deltas[#deltas + 1] = {
                     name = row.name,
                     delta = delta,
@@ -650,7 +671,7 @@ local function PositiveFrameDeltas(beforeById, b)
         end
         return x.names[1] < y.names[1]
     end)
-    return groups, newlyObserved
+    return groups, newlyObserved, dropped
 end
 
 local function DiffSnapshots(aName, bName)
@@ -684,9 +705,12 @@ local function DiffSnapshots(aName, bName)
         return
     end
 
-    local selfDeltas, newlyObserved = PositiveFrameDeltas(beforeById, b)
+    local selfDeltas, newlyObserved, dropped = PositiveFrameDeltas(beforeById, b)
     if newlyObserved > 0 then
         pf("  %d newly observed frame(s) omitted from frame deltas.", newlyObserved)
+    end
+    if dropped > 0 then
+        pf("  %d frame(s) omitted: a counter was not a finite number.", dropped)
     end
     if #selfDeltas > 0 then
         p("  Top direct-frame deltas:")

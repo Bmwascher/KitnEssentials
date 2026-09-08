@@ -559,6 +559,25 @@ describe("Profiler shared-counter grouping", function()
         assert.same({ "KE_Gamma" }, groups[1].names)
     end)
 
+    it("drops a row whose counter is not a finite number", function()
+        local state = rowsFor({ { name = "KE_Gamma", selfMs = 4, selfCalls = 8 } })
+        local nan = 0 / 0
+        for _, bad in ipairs({ nan, math.huge, -math.huge }) do
+            -- The cost is real and only the call count is unusable, which is
+            -- the case that reaches the per-call formatter and prints a rate
+            -- the frame never had.
+            local groups, dropped = state.profiler.GroupSharedRows({
+                { name = "KE_Alpha", selfMs = 5, selfCalls = bad },
+                { name = "KE_Beta", selfMs = bad, selfCalls = 20 },
+                { name = "KE_Gamma", selfMs = 4, selfCalls = 8 },
+            })
+
+            assert.equals(2, dropped)
+            assert.equals(1, #groups)
+            assert.same({ "KE_Gamma" }, groups[1].names)
+        end
+    end)
+
     it("spends the row limit on groups rather than frames", function()
         -- The shared group outranks the lone row on cost, so a limit charged
         -- by member count exhausts itself on the group and never reaches
