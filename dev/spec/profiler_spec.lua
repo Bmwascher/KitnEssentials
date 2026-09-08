@@ -514,12 +514,15 @@ describe("Profiler shared-counter grouping", function()
     end)
 
     it("merges rows sharing a cost and call pair, leaving distinct rows alone", function()
-        local state = rowsFor({
-            { name = "KE_Beta", selfMs = 5, selfCalls = 20 },
-            { name = "KE_Alpha", selfMs = 5, selfCalls = 20 },
-            { name = "KE_Gamma", selfMs = 9, selfCalls = 30 },
+        local state = rowsFor({ { name = "KE_Gamma", selfMs = 9, selfCalls = 30 } })
+        -- Members are handed over out of alphabetical order and never routed
+        -- through GatherCpuRows, which sorts equal-cost rows by name: fed that
+        -- way the assertion below holds even with the group's own sort gone.
+        local groups = state.profiler.GroupSharedRows({
+            { name = "KE_Beta", selfMs = 5, selfCalls = 20, treeMs = 5, treeCalls = 20 },
+            { name = "KE_Alpha", selfMs = 5, selfCalls = 20, treeMs = 5, treeCalls = 20 },
+            { name = "KE_Gamma", selfMs = 9, selfCalls = 30, treeMs = 9, treeCalls = 30 },
         })
-        local groups = state.profiler.GroupSharedRows(state.profiler.GatherCpuRows())
 
         assert.equals(2, #groups)
         assert.equals(9, groups[1].selfMs)
@@ -557,11 +560,14 @@ describe("Profiler shared-counter grouping", function()
     end)
 
     it("spends the row limit on groups rather than frames", function()
+        -- The shared group outranks the lone row on cost, so a limit charged
+        -- by member count exhausts itself on the group and never reaches
+        -- KE_Delta; charged once per group, both lines print.
         local state = rowsFor({
-            { name = "KE_Alpha", selfMs = 5, selfCalls = 20 },
-            { name = "KE_Beta", selfMs = 5, selfCalls = 20 },
-            { name = "KE_Gamma", selfMs = 5, selfCalls = 20 },
-            { name = "KE_Delta", selfMs = 9, selfCalls = 30 },
+            { name = "KE_Alpha", selfMs = 9, selfCalls = 30 },
+            { name = "KE_Beta", selfMs = 9, selfCalls = 30 },
+            { name = "KE_Gamma", selfMs = 9, selfCalls = 30 },
+            { name = "KE_Delta", selfMs = 5, selfCalls = 20 },
         })
         state.profiler.RunCommand("cpu 2")
 
