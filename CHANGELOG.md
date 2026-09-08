@@ -1,5 +1,12 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.1
+
+### Player Crosshair
+- The Augmentation Evoker range check now uses Azure Strike. Living Flame
+  reaches further on Augmentation than the rest of the kit, so the crosshair
+  read as in range for targets your other abilities could not actually reach
+
 ## v4.6.0
 
 ### CVars
