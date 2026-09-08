@@ -271,7 +271,7 @@ end
 -- collision groups too, and partial sharing does not group at all. The label
 -- claims only what was measured.
 local NAMES_SHOWN = 3
-local FRAME_CAVEAT = "Frames with identical CPU counters are grouped: frames built from one template have been observed to report one shared cost each. Timer and plain Lua callback work is not attributed to frames."
+local FRAME_CAVEAT = "Frames with identical CPU counters are grouped: frames built from one template have been observed to report one shared cost each. These costs do not sum to a total: a handler shared by frames that differ elsewhere is charged in full to each of them. Timer and plain Lua callback work is not attributed to frames."
 
 local function DescribeGroup(names, count)
     if count < 2 then
