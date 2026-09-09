@@ -12,6 +12,9 @@ exclude_files = {
     ".superpowers/**",      -- same shape, different tool: a worktree here carries
                             -- its own .wow-api-reference clone, which the top-level
                             -- exclusion above cannot reach
+    "dev/docs/**",          -- gitignored local notes. Review artifacts land here
+                            -- holding copies of upstream library files, which
+                            -- blocked a main push the same way (2026-09-08).
 }
 
 -- Headless test harness (busted, not in-game). These files run under a desktop
