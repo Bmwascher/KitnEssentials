@@ -1,5 +1,12 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.2
+
+### Automation
+- Auto Repair now reports the full cost when you close the merchant window
+  before the repair finishes settling. Closing and reopening quickly could
+  lose the report entirely, or announce only part of what you paid
+
 ## v4.6.1
 
 ### Player Crosshair
