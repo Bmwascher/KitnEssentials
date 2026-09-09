@@ -758,6 +758,22 @@ local function findUpvalue(fn, name)
     end
 end
 
+-- Modules/Skinning/Frames/Communities.lua. ChatPaneFontSize is a file-local
+-- with no stored handle, so it is reached the way UIWidgets' locals are: it is
+-- an upvalue of Skin, and S:Register hands Skin over. Recovering it off the
+-- upvalue slot means the whole skin never has to run. Returns the function
+-- and the KE table its db is read from.
+function L.loadCommunitiesSkin(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local captured
+    local KE = { Skins = {
+        palette = { brand = { 1, 0, 0.55, 1 } },
+        Register = function(_, _, fn) captured = fn end,
+    } }
+    helpers.loadModule("Modules/Skinning/Frames/Communities.lua", KE)
+    return findUpvalue(captured, "ChatPaneFontSize"), KE
+end
+
 -- Modules/Skinning/UIWidgets.lua. StyleWidgetByType is a module METHOD, so
 -- it's reachable straight off the returned UIW table -- no seam needed.
 -- InTooltip and SetFontIfChanged are file-locals with no stored handle:

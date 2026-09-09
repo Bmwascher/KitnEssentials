@@ -159,6 +159,20 @@ local function SkinClubFinder(cf)
     S.data(cf).skinned = true
 end
 
+-- Chat text takes the Chat module's size, but only while that module is the
+-- thing driving chat fonts. With it off the frame already carries a size
+-- Blizzard derived, and nil tells S.SetFont to keep that baseline.
+local function ChatPaneFontSize()
+    local chat = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.Chat
+    if not chat or not chat.Enabled then return nil end
+    -- A zero size means unset to the Chat module, which falls back; S.SetFont
+    -- would clamp it to 8 instead. Reject it so the two cannot disagree.
+    local size = tonumber(chat.FontSize)
+    if not size or size <= 0 then return nil end
+    return size
+end
+
 local function Skin()
     local frame = _G.CommunitiesFrame
     if not frame then return end
@@ -481,13 +495,23 @@ local function Skin()
         if csb then S.ScrollBar(csb) end
 
         if frame.Chat.MessageFrame then
-            S.SetFont(frame.Chat.MessageFrame, nil, "OUTLINE")
+            S.SetFont(frame.Chat.MessageFrame, ChatPaneFontSize(), "OUTLINE")
         end
     end
 
     if frame.ChatEditBox then
-        frame.ChatEditBox:SetAlpha(0)
-        if frame.ChatEditBox.EnableMouse then frame.ChatEditBox:EnableMouse(false) end
+        local box = frame.ChatEditBox
+        S.EditBox(box)
+        -- The box is 32 tall and hangs 4 past the chat pane on the left and 3
+        -- on the right, sized for a bevel that overhung it. Inset the backdrop
+        -- rather than re-anchor the box, which Blizzard re-points from the
+        -- maximize and minimize callbacks.
+        local bd = S.GetBackdrop(box)
+        if bd then
+            bd:ClearAllPoints()
+            bd:SetPoint("TOPLEFT", box, "TOPLEFT", 4, -6)
+            bd:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -3, 6)
+        end
     end
 
     if gb and gb.FactionFrame then
