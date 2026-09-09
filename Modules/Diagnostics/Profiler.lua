@@ -251,8 +251,7 @@ local function GatherCpuRows()
                     name = candidate.name,
                     selfMs = selfMs,
                     -- The API declares a non-nilable call count: a missing one is
-                    -- a broken contract, not an idle frame. Zero would be a
-                    -- measurement.
+                    -- a broken contract, not an idle frame.
                     selfCalls = type(selfCalls) == "number" and selfCalls or nil,
                     treeMs = treeMs,
                     treeCalls = type(treeCalls) == "number" and treeCalls or nil,
@@ -340,8 +339,7 @@ local function FormatCalls(selfCalls)
 end
 
 -- A cost with no calls behind it has no rate: the division would print a zero
--- the sample never contained. The profiler's placeholder for a value it does
--- not have is a question mark.
+-- the sample never contained.
 local function FormatPerCall(selfMs, selfCalls)
     if selfCalls and selfCalls > 0 then
         return format("%.4f ms/call", selfMs / selfCalls)
