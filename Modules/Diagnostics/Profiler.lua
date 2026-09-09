@@ -250,9 +250,12 @@ local function GatherCpuRows()
                     frameId = ResolveFrameId(frameObject),
                     name = candidate.name,
                     selfMs = selfMs,
-                    selfCalls = selfCalls or 0,
+                    -- The API declares a non-nilable call count: a missing one is
+                    -- a broken contract, not an idle frame. Zero would be a
+                    -- measurement.
+                    selfCalls = type(selfCalls) == "number" and selfCalls or nil,
                     treeMs = treeMs,
-                    treeCalls = treeCalls or 0,
+                    treeCalls = type(treeCalls) == "number" and treeCalls or nil,
                 })
             end
         end
@@ -322,11 +325,25 @@ local function IsFinite(value)
         and value ~= -math_huge
 end
 
+-- An absent call count is not a measured zero. Unknown stays unknown wherever a
+-- count is printed, keyed or compared; a present but unusable one is dropped.
+local function CounterUsable(value)
+    return value == nil or IsFinite(value)
+end
+
+local function CounterKey(value)
+    return value and format("%.17g", value) or "?"
+end
+
+local function FormatCalls(selfCalls)
+    return selfCalls and format("%d", selfCalls) or "?"
+end
+
 -- A cost with no calls behind it has no rate: the division would print a zero
 -- the sample never contained. The profiler's placeholder for a value it does
 -- not have is a question mark.
 local function FormatPerCall(selfMs, selfCalls)
-    if selfCalls > 0 then
+    if selfCalls and selfCalls > 0 then
         return format("%.4f ms/call", selfMs / selfCalls)
     end
     return "? ms/call"
@@ -336,7 +353,7 @@ local function GroupSharedRows(rows)
     local scored = {}
     local dropped = 0
     for _, row in ipairs(rows) do
-        if not (IsFinite(row.selfMs) and IsFinite(row.selfCalls)) then
+        if not (IsFinite(row.selfMs) and CounterUsable(row.selfCalls)) then
             dropped = dropped + 1
         elseif row.selfMs > 0 then
             scored[#scored + 1] = {
@@ -348,7 +365,7 @@ local function GroupSharedRows(rows)
     end
 
     local groups = CollectGroups(scored, function(entry)
-        return format("%.17g|%.17g", entry.selfMs, entry.selfCalls)
+        return format("%.17g|%s", entry.selfMs, CounterKey(entry.selfCalls))
     end)
 
     sort(groups, function(a, b)
@@ -481,8 +498,8 @@ local function PrintCpuTop(arg)
     pf("Top %d named KE frames by direct CPU:", n)
     for index = 1, math_min(n, #groups) do
         local group = groups[index]
-        pf("  %2d. %.2f ms (calls=%d, %s) %s",
-            index, group.selfMs, group.selfCalls,
+        pf("  %2d. %.2f ms (calls=%s, %s) %s",
+            index, group.selfMs, FormatCalls(group.selfCalls),
             FormatPerCall(group.selfMs, group.selfCalls),
             DescribeGroup(group.names, group.count))
     end
@@ -615,7 +632,14 @@ end
 
 local function FiniteCounterPair(old, row)
     return IsFinite(old.selfMs or 0) and IsFinite(row.selfMs or 0)
-        and IsFinite(old.selfCalls or 0) and IsFinite(row.selfCalls or 0)
+        and CounterUsable(old.selfCalls) and CounterUsable(row.selfCalls)
+end
+
+-- An unknown count on either side is not a decrease. Read as zero it would
+-- refuse every frame delta in the diff over a count nothing measured.
+local function CallsDecreased(old, row)
+    return old.selfCalls ~= nil and row.selfCalls ~= nil
+        and row.selfCalls < old.selfCalls
 end
 
 local function FrameCountersComparable(a, b)
@@ -643,7 +667,7 @@ local function FrameCountersComparable(a, b)
         -- over a single unusable row. The delta path drops and counts it.
         if old and FiniteCounterPair(old, row)
             and ((row.selfMs or 0) < (old.selfMs or 0)
-            or (row.selfCalls or 0) < (old.selfCalls or 0)) then
+            or CallsDecreased(old, row)) then
             return nil, "counter"
         end
     end
@@ -672,16 +696,17 @@ local function PositiveFrameDeltas(beforeById, b)
                     delta = delta,
                     prior = prior,
                     current = current,
-                    priorCalls = old.selfCalls or 0,
-                    currentCalls = row.selfCalls or 0,
+                    priorCalls = old.selfCalls,
+                    currentCalls = row.selfCalls,
                 }
             end
         end
     end
 
     local groups = CollectGroups(deltas, function(entry)
-        return format("%.17g|%.17g|%.17g|%.17g",
-            entry.prior, entry.current, entry.priorCalls, entry.currentCalls)
+        return format("%.17g|%.17g|%s|%s",
+            entry.prior, entry.current,
+            CounterKey(entry.priorCalls), CounterKey(entry.currentCalls))
     end)
 
     sort(groups, function(x, y)

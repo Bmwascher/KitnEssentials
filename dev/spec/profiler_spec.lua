@@ -137,9 +137,13 @@ local function loadProfiler(options)
     _G.GetFrameCPUUsage = function(subject, includeChildren)
         calls[#calls + 1] = includeChildren and "frame-tree" or "frame-self"
         local values = frameCPU[subject] or {}
+        -- callsMissing returns a cost with no count at all. The API declares the
+        -- count non-nilable, so only a fake can produce that case.
         if includeChildren then
+            if values.callsMissing then return values.treeMs or 0 end
             return values.treeMs or 0, values.treeCalls or 0
         end
+        if values.callsMissing then return values.selfMs or 0 end
         return values.selfMs or 0, values.selfCalls or 0
     end
     _G.Enum = {
@@ -491,26 +495,30 @@ describe("Profiler CPU report", function()
         assert.is_true(directAlpha < directBeta)
     end)
 
-    it("marks the per-call figure unknown when a cost carries no calls", function()
+    it("separates a measured rate, a measured zero and an absent call count", function()
         local alpha = frame()
         local beta = frame()
+        local gamma = frame()
         _G.KE_Alpha = alpha
         _G.KE_Beta = beta
+        _G.KE_Gamma = gamma
 
-        -- The measured row is fed alongside the zero-call one so the case
-        -- discriminates a formatter that always prints a rate from one that
-        -- always disclaims it.
+        -- All three rows are fed together: the measured rate discriminates a
+        -- formatter that always disclaims, and the zero row discriminates one
+        -- that treats every zero-rate row as an absent count.
         local state = loadProfiler({
             frameCPU = {
-                [alpha] = { selfMs = 5, selfCalls = 0, treeMs = 5, treeCalls = 0 },
-                [beta] = { selfMs = 4, selfCalls = 8, treeMs = 4, treeCalls = 8 },
+                [alpha] = { selfMs = 5, callsMissing = true },
+                [beta] = { selfMs = 4, selfCalls = 0, treeMs = 4, treeCalls = 0 },
+                [gamma] = { selfMs = 3, selfCalls = 6, treeMs = 3, treeCalls = 6 },
             },
         })
-        state.profiler.RunCommand("cpu 2")
+        state.profiler.RunCommand("cpu 3")
 
         local output = table.concat(state.printed, "\n")
+        assert.is_truthy(output:find("(calls=?, ? ms/call)", 1, true))
         assert.is_truthy(output:find("(calls=0, ? ms/call)", 1, true))
-        assert.is_truthy(output:find("(calls=8, 0.5000 ms/call)", 1, true))
+        assert.is_truthy(output:find("(calls=6, 0.5000 ms/call)", 1, true))
         assert.is_nil(output:find("0.0000 ms/call", 1, true))
     end)
 end)
@@ -601,6 +609,25 @@ describe("Profiler shared-counter grouping", function()
             assert.equals(1, #groups)
             assert.same({ "KE_Gamma" }, groups[1].names)
         end
+    end)
+
+    it("keeps an absent call count apart from a measured zero", function()
+        local state = rowsFor({ { name = "KE_Delta", selfMs = 4, selfCalls = 8 } })
+        -- Handed straight to the function under test: an absent count reaches it
+        -- from a snapshot or a contract-breaking API return, neither of which
+        -- this fixture builder can express.
+        local groups, dropped = state.profiler.GroupSharedRows({
+            { name = "KE_Beta", selfMs = 5, treeMs = 5 },
+            { name = "KE_Alpha", selfMs = 5, treeMs = 5 },
+            { name = "KE_Gamma", selfMs = 5, selfCalls = 0, treeMs = 5, treeCalls = 0 },
+        })
+
+        assert.equals(0, dropped)
+        assert.equals(2, #groups)
+        assert.same({ "KE_Alpha", "KE_Beta" }, groups[1].names)
+        assert.is_nil(groups[1].selfCalls)
+        assert.same({ "KE_Gamma" }, groups[2].names)
+        assert.equals(0, groups[2].selfCalls)
     end)
 
     it("spends the row limit on groups rather than frames", function()
@@ -965,6 +992,33 @@ describe("Profiler snapshots", function()
         local output = table.concat(state.printed, "\n")
         assert.is_nil(output:find("Frame deltas unavailable", 1, true))
         assert.is_truthy(output:find("1 frame(s) omitted: a counter was not a finite number.", 1, true))
+    end)
+
+    it("keeps frame deltas when a later call count is absent", function()
+        local subject = frame()
+        _G.KE_Alpha = subject
+        local state = loadProfiler({
+            now = 100,
+            addonMs = 10,
+            frameCPU = {
+                [subject] = { selfMs = 5, selfCalls = 20, treeMs = 8, treeCalls = 30 },
+            },
+        })
+
+        state.profiler.ResetCpu()
+        state.profiler.TakeSnapshot("before")
+        state.setNow(110)
+        state.setAddonMs(20)
+        -- Read as zero, the absent count is a decrease from 20 and refuses every
+        -- frame delta in the diff over a count nothing measured.
+        state.setFrameCPU(subject, { selfMs = 6, callsMissing = true, treeMs = 9 })
+        state.profiler.TakeSnapshot("after")
+        state.profiler.DiffSnapshots("before", "after")
+
+        local output = table.concat(state.printed, "\n")
+        assert.is_nil(output:find("Frame deltas unavailable", 1, true))
+        assert.is_nil(output:find("omitted", 1, true))
+        assert.is_truthy(output:find("+1.00 ms (5.00 -> 6.00)", 1, true))
     end)
 
     it("refuses frame deltas for a direct counter decrease but not a tree-only one", function()
