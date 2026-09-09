@@ -3,6 +3,11 @@
 local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G
+local hooksecurefunc = hooksecurefunc
+
+-- Blizzard's slot is 58px, oversized next to the rest of the window once the
+-- ornate frame around it is gone.
+local SLOT_SIZE = 46
 
 local function Skin()
     local frame = _G.ItemUpgradeFrame
@@ -52,6 +57,25 @@ local function Skin()
         -- native size, LARGER than the 58px button, centered) -- not a
         -- frame. Backdropping it drew an oversized box around art that
         -- KillAllTextures had already removed. No treatment needed.
+
+        -- The empty slot's green plus is the button's NORMAL TEXTURE, not its
+        -- icon; Blizzard re-sets it with SetNormalAtlas every time the slot
+        -- empties, after we skin. Left alone it draws at native atlas size over
+        -- the border. Pin it inside the backdrop and re-pin on every set.
+        local function PinNormal()
+            local tex = button.GetNormalTexture and button:GetNormalTexture()
+            if not tex then return end
+            tex:ClearAllPoints()
+            tex:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+            tex:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        end
+        if not S.data(button).normalPinned then
+            S.data(button).normalPinned = true
+            button:SetSize(SLOT_SIZE, SLOT_SIZE)
+            hooksecurefunc(button, "SetNormalAtlas", PinNormal)
+            hooksecurefunc(button, "SetNormalTexture", PinNormal)
+        end
+        PinNormal()
     end
 
     -- (animated gold arrow clipped by our borders):
