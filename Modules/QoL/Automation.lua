@@ -716,7 +716,7 @@ local repairPendingGen = 0
 -- The compare is what makes this correct, not the Cancel. Cancel is called on
 -- supersede, but nothing here relies on it preventing a callback already queued
 -- for this frame: such a callback finds a different handle stored and returns.
-local announceTimer, watchTimer, graceTimer
+local repairTimers = {}
 -- FORWARD DECLARATION, and it is load-bearing. ArmRepairWatch's expiry calls
 -- AnnounceRepair, but that function is defined further down beside the report
 -- frame. Without this line the call would resolve as a global, read nil, and
@@ -777,23 +777,23 @@ end
 -- callback to it, and a callback left over from a window that has been flushed
 -- cannot fire into the window that replaced it.
 local function ScheduleAnnounce()
-    if announceTimer then announceTimer:Cancel() end
+    if repairTimers.announce then repairTimers.announce:Cancel() end
     local mine
     mine = C_Timer.NewTimer(0.5, function()
-        if announceTimer ~= mine then return end
-        announceTimer = nil
+        if repairTimers.announce ~= mine then return end
+        repairTimers.announce = nil
         AnnounceRepair()
     end)
-    announceTimer = mine
+    repairTimers.announce = mine
 end
 
 local function DisarmRepairWatch()
     repairWatchGen = repairWatchGen + 1
     repairOwnBranch, repairGuildFunds, repairExpected = nil, nil, nil
     repairMoneyLast, repairMoneySpent = nil, nil
-    if watchTimer then
-        watchTimer:Cancel()
-        watchTimer = nil
+    if repairTimers.watch then
+        repairTimers.watch:Cancel()
+        repairTimers.watch = nil
     end
     ReleaseHeldSweep()
 end
@@ -835,11 +835,11 @@ local function ArmRepairWatch(branch, expected, guildFunds, gold, sweep)
     repairMoneySpent = gold and 0 or nil
     repairHeldSweep = sweep
 
-    if watchTimer then watchTimer:Cancel() end
+    if repairTimers.watch then repairTimers.watch:Cancel() end
     local mine
     mine = C_Timer.NewTimer(WATCH_EXPIRY, function()
-        if watchTimer ~= mine then return end
-        watchTimer = nil
+        if repairTimers.watch ~= mine then return end
+        repairTimers.watch = nil
 
         -- A debit has landed and THIS watch's own settle window is still
         -- counting down. That window exists to stop a partial bill being split,
@@ -877,7 +877,7 @@ local function ArmRepairWatch(branch, expected, guildFunds, gold, sweep)
         -- have done while this callback was running.
         if gen == repairWatchGen then DisarmRepairWatch() end
     end)
-    watchTimer = mine
+    repairTimers.watch = mine
 end
 
 local function SetupAutoSellRepair()
@@ -1053,9 +1053,9 @@ end
 local repairReportFrame, repairBill
 
 local function ClearGraceTimer()
-    if graceTimer then
-        graceTimer:Cancel()
-        graceTimer = nil
+    if repairTimers.grace then
+        repairTimers.grace:Cancel()
+        repairTimers.grace = nil
     end
 end
 
@@ -1264,11 +1264,11 @@ local function SetupRepairReport()
                 ClearGraceTimer()
                 local mine
                 mine = C_Timer.NewTimer(CLOSE_GRACE, function()
-                    if graceTimer ~= mine then return end
-                    graceTimer = nil
+                    if repairTimers.grace ~= mine then return end
+                    repairTimers.grace = nil
                     repairBill = nil
                 end)
-                graceTimer = mine
+                repairTimers.grace = mine
                 return
             end
 
@@ -1299,7 +1299,7 @@ local function SetupRepairReport()
             -- wrong AMOUNT: damage taken after this point nets against the
             -- repair. Re-reading below keeps the two apart, because a rise is
             -- never reported.
-            if graceTimer and repairBill ~= nil and fresh ~= nil then
+            if repairTimers.grace and repairBill ~= nil and fresh ~= nil then
                 local spent = AU:RepairSpend(repairBill, fresh)
                 if spent then RecordRepairDrop(spent) end
             end
