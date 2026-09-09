@@ -696,8 +696,10 @@ local merchantFrame
 -- the guild branch: the player branch is unambiguous, and a repair KE did not
 -- start has no trustworthy window to measure.
 --
--- repairWatchGen is the cancellation. Bumping it orphans any expiry still
--- pending from an earlier repair, so a stale timer cannot clear live state.
+-- repairWatchGen identifies the REPAIR. It is not the cancellation -- the timer
+-- handles below are -- and it survives only because the pending announcement is
+-- stamped with it, which is how AnnounceRepair tells whether the payer sitting
+-- in these globals still describes the repair it is about to announce.
 local repairOwnBranch, repairGuildFunds, repairExpected
 local repairMoneyLast, repairMoneySpent
 local repairWatchGen, repairHeldSweep = 0, nil
@@ -707,20 +709,14 @@ local repairPending, repairPendingTotal = false, 0
 -- while an OLDER announcement is still in flight; without this the older
 -- announcement would read the newer payer straight out of the globals.
 local repairPendingGen = 0
--- Which SCHEDULED announcement is still allowed to run. repairWatchGen tracks
--- the repair; this tracks the callback. They are different things: one repair
--- can schedule several announcements -- the first bill drop arms one, and every
--- debit re-arms it -- and every one of those callbacks stays live and would
--- otherwise fire in turn, the earliest of them consuming a ledger that is still
--- filling.
-local repairAnnounceEpoch = 0
--- Which MERCHANT VISIT the stored bill belongs to. repairWatchGen tracks the
--- REPAIR; this tracks the visit, and they move independently -- a visit can
--- open without arming a watch, and a watch can outlive the visit that armed it.
--- Keying the bill's cleanup on the watch generation gets both cases wrong: a
--- watch that expires first strands the bill, and a reopen that arms no watch
--- lets a stale timer wipe the new visit's baseline.
-local repairMerchantGen = 0
+-- The live timer for each timed job that can be SUPERSEDED before it fires.
+-- Each callback decides whether it still speaks for its job by comparing the
+-- handle it captured against the one stored here.
+--
+-- The compare is what makes this correct, not the Cancel. Cancel is called on
+-- supersede, but nothing here relies on it preventing a callback already queued
+-- for this frame: such a callback finds a different handle stored and returns.
+local repairTimers = {}
 -- FORWARD DECLARATION, and it is load-bearing. ArmRepairWatch's expiry calls
 -- AnnounceRepair, but that function is defined further down beside the report
 -- frame. Without this line the call would resolve as a global, read nil, and
@@ -781,18 +777,24 @@ end
 -- callback to it, and a callback left over from a window that has been flushed
 -- cannot fire into the window that replaced it.
 local function ScheduleAnnounce()
-    repairAnnounceEpoch = repairAnnounceEpoch + 1
-    local epoch = repairAnnounceEpoch
-    C_Timer.After(0.5, function()
-        if epoch ~= repairAnnounceEpoch then return end
+    if repairTimers.announce then repairTimers.announce:Cancel() end
+    local mine
+    mine = C_Timer.NewTimer(0.5, function()
+        if repairTimers.announce ~= mine then return end
+        repairTimers.announce = nil
         AnnounceRepair()
     end)
+    repairTimers.announce = mine
 end
 
 local function DisarmRepairWatch()
     repairWatchGen = repairWatchGen + 1
     repairOwnBranch, repairGuildFunds, repairExpected = nil, nil, nil
     repairMoneyLast, repairMoneySpent = nil, nil
+    if repairTimers.watch then
+        repairTimers.watch:Cancel()
+        repairTimers.watch = nil
+    end
     ReleaseHeldSweep()
 end
 
@@ -833,8 +835,11 @@ local function ArmRepairWatch(branch, expected, guildFunds, gold, sweep)
     repairMoneySpent = gold and 0 or nil
     repairHeldSweep = sweep
 
-    C_Timer.After(WATCH_EXPIRY, function()
-        if gen ~= repairWatchGen then return end
+    if repairTimers.watch then repairTimers.watch:Cancel() end
+    local mine
+    mine = C_Timer.NewTimer(WATCH_EXPIRY, function()
+        if repairTimers.watch ~= mine then return end
+        repairTimers.watch = nil
 
         -- A debit has landed and THIS watch's own settle window is still
         -- counting down. That window exists to stop a partial bill being split,
@@ -867,9 +872,12 @@ local function ArmRepairWatch(branch, expected, guildFunds, gold, sweep)
 
         -- A non-stale announcement already disarmed and bumped the generation,
         -- so this is skipped. A stale one did not, and this watch still needs
-        -- its own cleanup.
+        -- its own cleanup. This stays a GENERATION test, not a handle test: it
+        -- asks whether the repair moved on, which is what AnnounceRepair may
+        -- have done while this callback was running.
         if gen == repairWatchGen then DisarmRepairWatch() end
     end)
+    repairTimers.watch = mine
 end
 
 local function SetupAutoSellRepair()
@@ -1044,6 +1052,13 @@ end
 
 local repairReportFrame, repairBill
 
+local function ClearGraceTimer()
+    if repairTimers.grace then
+        repairTimers.grace:Cancel()
+        repairTimers.grace = nil
+    end
+end
+
 -- One repair action can surface as several durability events with the bill
 -- falling in stages, and announcing each drop turns one repair into a
 -- paragraph. Deltas accumulate and are announced once the bill stops moving.
@@ -1171,6 +1186,39 @@ local function ReadRepairBill()
     return cost
 end
 
+-- Book a fall in the repair bill against the pending announcement.
+--
+-- Shared, because a fall shows up two ways: the durability event that follows a
+-- repair, and the fresh bill read when a merchant reopens while that event is
+-- still in flight.
+local function RecordRepairDrop(spent)
+    -- A pending announcement stamped with a DIFFERENT watch belongs to a repair
+    -- that is already finished. It must be flushed BEFORE this drop is added,
+    -- because the accumulator below is shared: merged, the two amounts print as
+    -- one line under the older repair's stamp, and the newer repair is left
+    -- with an empty ledger and no announcement of its own. Flushing first
+    -- prints the old figure alone and frees the slot, so the lines below then
+    -- open a fresh window for this drop.
+    --
+    -- The forced call is stale by construction, so it drops the payer, prints
+    -- the plain line, and leaves the live watch armed.
+    if repairPending and repairPendingGen ~= repairWatchGen then
+        AnnounceRepair(true)
+    end
+
+    repairPendingTotal = repairPendingTotal + spent
+    if not repairPending then
+        repairPending = true
+        -- Stamp the watch this announcement belongs to. MERCHANT_CLOSED keeps a
+        -- pending total alive on purpose, so a close-and-reopen can arm a NEW
+        -- watch while this announcement is still in flight; without the stamp
+        -- it would read the new payer out of the globals and pin it to an
+        -- older, unrelated repair.
+        repairPendingGen = repairWatchGen
+        ScheduleAnnounce()
+    end
+end
+
 local function SetupRepairReport()
     if repairReportFrame then return end
     repairReportFrame = CreateFrame("Frame")
@@ -1182,33 +1230,61 @@ local function SetupRepairReport()
         if event == "MERCHANT_CLOSED" then
             -- A repair KE started can have its bill drop land AFTER the window
             -- shuts. Tearing the window down here loses the report for a repair
-            -- that did happen, so an armed watch with nothing pending yet gets
-            -- one short beat to let the drop arrive.
+            -- that did happen, so an armed watch gets one short beat to let the
+            -- drop arrive.
             --
             -- Damage taken in that beat cannot be misread as a repair: it
             -- RAISES the bill, and only a fall is ever reported.
-            --
-            -- The held junk sale is deliberately NOT deferred with it. It is
-            -- released now, while the merchant is still closing, because a sale
-            -- attempted a beat later has no merchant left to sell to.
-            if repairOwnBranch and not repairPending then
-                ReleaseHeldSweep()
-                -- TWO generations, because the two halves below answer to
-                -- different owners. The bill belongs to the merchant VISIT, so
-                -- a reopen inside the grace window must keep its own fresh
-                -- baseline; the watch belongs to the REPAIR, and its expiry may
-                -- have retired it before this even runs.
-                local wgen, mgen = repairWatchGen, repairMerchantGen
-                C_Timer.After(CLOSE_GRACE, function()
-                    if mgen == repairMerchantGen then repairBill = nil end
-                    if wgen == repairWatchGen and not repairPending then
-                        DisarmRepairWatch()
-                    end
+            if repairOwnBranch then
+                -- TWO timers, because the two jobs answer to different
+                -- owners. Sharing one is a real defect: a reopen or a second
+                -- close would then postpone the payer's retirement along with
+                -- the bill's, and a hand repair in the extra stretch inherits
+                -- a payer that should already be gone.
+                --
+                -- The payer belongs to the REPAIR, and only a repair with
+                -- nothing pending is retired here at all: once an announcement
+                -- is armed it consumes the payer itself. Its deadline is fixed
+                -- by the repair that armed it, so a later close is not a reason
+                -- to move it and it holds no handle -- the generation it
+                -- captured already says whether the repair it speaks for is
+                -- still the live one.
+                --
+                -- The held junk sale goes with this half. It is released now,
+                -- while the merchant is still closing, because a sale attempted
+                -- a beat later has no merchant left to sell to.
+                if not repairPending then
+                    ReleaseHeldSweep()
+                    local wgen = repairWatchGen
+                    C_Timer.After(CLOSE_GRACE, function()
+                        if wgen == repairWatchGen and not repairPending then
+                            DisarmRepairWatch()
+                        end
+                    end)
+                end
+
+                -- The bill belongs to the merchant VISIT, so a later close or
+                -- reopen retires this half.
+                --
+                -- It is held whether or not an announcement is pending. A
+                -- pending one means the repair is still settling and more of
+                -- the bill is still to fall; dropping the baseline here leaves
+                -- the durability event with nothing to measure against, and
+                -- the rest of the repair goes unreported.
+                ClearGraceTimer()
+                local mine
+                mine = C_Timer.NewTimer(CLOSE_GRACE, function()
+                    if repairTimers.grace ~= mine then return end
+                    repairTimers.grace = nil
+                    repairBill = nil
                 end)
+                repairTimers.grace = mine
                 return
             end
 
+            -- The baseline is gone, so the grace timer holding it goes too.
             repairBill = nil
+            ClearGraceTimer()
             -- Only a repair that never armed an announcement is cleared here.
             -- AnnounceRepair consumes the rest itself.
             if not repairPending then DisarmRepairWatch() end
@@ -1217,12 +1293,31 @@ local function SetupRepairReport()
 
         if not AU.db or not AU.db.Enabled or not AU.db.RepairReport then
             repairBill = nil
+            ClearGraceTimer()
             return
         end
 
         if event == "MERCHANT_SHOW" then
-            repairMerchantGen = repairMerchantGen + 1
-            repairBill = ReadRepairBill()
+            local fresh = ReadRepairBill()
+
+            -- A live close-grace timer means the PREVIOUS visit's repair is
+            -- still waiting for its durability event. This read already shows
+            -- the result of that repair, so the fall from the held baseline IS
+            -- the repair and is booked here rather than left for the event.
+            --
+            -- Holding that baseline for the event to find instead reports the
+            -- wrong AMOUNT: damage taken after this point nets against the
+            -- repair. Re-reading below keeps the two apart, because a rise is
+            -- never reported.
+            if repairTimers.grace and repairBill ~= nil and fresh ~= nil then
+                local spent = AU:RepairSpend(repairBill, fresh)
+                if spent then RecordRepairDrop(spent) end
+            end
+
+            -- The previous repair's payer is retired by a separate timer and
+            -- is not touched here.
+            ClearGraceTimer()
+            repairBill = fresh
             return
         end
 
@@ -1286,31 +1381,7 @@ local function SetupRepairReport()
         repairBill = bill
         if not spent then return end
 
-        -- A pending announcement stamped with a DIFFERENT watch belongs to a
-        -- repair that is already finished. It must be flushed BEFORE this drop
-        -- is added, because the accumulator below is shared: merged, the two
-        -- amounts print as one line under the older repair's stamp, and the
-        -- newer repair is left with an empty ledger and no announcement of its
-        -- own. Flushing first prints the old figure alone and frees the slot,
-        -- so the lines below then open a fresh window for this drop.
-        --
-        -- The forced call is stale by construction, so it drops the payer,
-        -- prints the plain line, and leaves the live watch armed.
-        if repairPending and repairPendingGen ~= repairWatchGen then
-            AnnounceRepair(true)
-        end
-
-        repairPendingTotal = repairPendingTotal + spent
-        if not repairPending then
-            repairPending = true
-            -- Stamp the watch this announcement belongs to. MERCHANT_CLOSED
-            -- keeps a pending total alive on purpose, so a close-and-reopen can
-            -- arm a NEW watch while this announcement is still in flight;
-            -- without the stamp it would read the new payer out of the globals
-            -- and pin it to an older, unrelated repair.
-            repairPendingGen = repairWatchGen
-            ScheduleAnnounce()
-        end
+        RecordRepairDrop(spent)
     end)
 end
 
