@@ -709,13 +709,9 @@ local repairPending, repairPendingTotal = false, 0
 -- while an OLDER announcement is still in flight; without this the older
 -- announcement would read the newer payer straight out of the globals.
 local repairPendingGen = 0
--- The live timer for each timed job that can be SUPERSEDED before it fires.
--- Each callback decides whether it still speaks for its job by comparing the
--- handle it captured against the one stored here.
---
--- The compare is what makes this correct, not the Cancel. Cancel is called on
--- supersede, but nothing here relies on it preventing a callback already queued
--- for this frame: such a callback finds a different handle stored and returns.
+-- The live timer for each timed job that can be superseded before it fires.
+-- The COMPARE is what makes this correct, not the Cancel: a callback already
+-- queued for this frame finds a different handle stored and returns.
 local repairTimers = {}
 -- FORWARD DECLARATION, and it is load-bearing. ArmRepairWatch's expiry calls
 -- AnnounceRepair, but that function is defined further down beside the report
@@ -1186,8 +1182,6 @@ local function ReadRepairBill()
     return cost
 end
 
--- Book a fall in the repair bill against the pending announcement.
---
 -- Shared, because a fall shows up two ways: the durability event that follows a
 -- repair, and the fresh bill read when a merchant reopens while that event is
 -- still in flight.
@@ -1237,22 +1231,19 @@ local function SetupRepairReport()
             -- RAISES the bill, and only a fall is ever reported.
             if repairOwnBranch then
                 -- TWO timers, because the two jobs answer to different
-                -- owners. Sharing one is a real defect: a reopen or a second
-                -- close would then postpone the payer's retirement along with
-                -- the bill's, and a hand repair in the extra stretch inherits
-                -- a payer that should already be gone.
+                -- owners. Sharing one lets a reopen or a second close postpone
+                -- the payer's retirement along with the bill's, and a hand
+                -- repair in the extra stretch inherits a payer that should
+                -- already be gone.
                 --
-                -- The payer belongs to the REPAIR, and only a repair with
-                -- nothing pending is retired here at all: once an announcement
-                -- is armed it consumes the payer itself. Its deadline is fixed
-                -- by the repair that armed it, so a later close is not a reason
-                -- to move it and it holds no handle -- the generation it
-                -- captured already says whether the repair it speaks for is
-                -- still the live one.
+                -- The payer belongs to the REPAIR: its deadline is fixed by the
+                -- repair that armed it, so it holds no handle and the captured
+                -- generation says whether that repair is still live. An armed
+                -- announcement consumes the payer itself, hence the gate.
                 --
-                -- The held junk sale goes with this half. It is released now,
-                -- while the merchant is still closing, because a sale attempted
-                -- a beat later has no merchant left to sell to.
+                -- The held junk sale goes with this half, released while the
+                -- merchant is still closing: a sale a beat later has no
+                -- merchant left to sell to.
                 if not repairPending then
                     ReleaseHeldSweep()
                     local wgen = repairWatchGen
@@ -1264,13 +1255,10 @@ local function SetupRepairReport()
                 end
 
                 -- The bill belongs to the merchant VISIT, so a later close or
-                -- reopen retires this half.
-                --
-                -- It is held whether or not an announcement is pending. A
-                -- pending one means the repair is still settling and more of
-                -- the bill is still to fall; dropping the baseline here leaves
-                -- the durability event with nothing to measure against, and
-                -- the rest of the repair goes unreported.
+                -- reopen retires this half. It is held even with an
+                -- announcement pending: the repair is still settling, and
+                -- dropping the baseline leaves the durability event nothing to
+                -- measure against, losing the rest of the repair.
                 ClearGraceTimer()
                 local mine
                 mine = C_Timer.NewTimer(CLOSE_GRACE, function()
@@ -1282,7 +1270,6 @@ local function SetupRepairReport()
                 return
             end
 
-            -- The baseline is gone, so the grace timer holding it goes too.
             repairBill = nil
             ClearGraceTimer()
             -- Only a repair that never armed an announcement is cleared here.
