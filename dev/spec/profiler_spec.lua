@@ -490,6 +490,29 @@ describe("Profiler CPU report", function()
         assert.is_true(directGamma < directAlpha)
         assert.is_true(directAlpha < directBeta)
     end)
+
+    it("marks the per-call figure unknown when a cost carries no calls", function()
+        local alpha = frame()
+        local beta = frame()
+        _G.KE_Alpha = alpha
+        _G.KE_Beta = beta
+
+        -- The measured row is fed alongside the zero-call one so the case
+        -- discriminates a formatter that always prints a rate from one that
+        -- always disclaims it.
+        local state = loadProfiler({
+            frameCPU = {
+                [alpha] = { selfMs = 5, selfCalls = 0, treeMs = 5, treeCalls = 0 },
+                [beta] = { selfMs = 4, selfCalls = 8, treeMs = 4, treeCalls = 8 },
+            },
+        })
+        state.profiler.RunCommand("cpu 2")
+
+        local output = table.concat(state.printed, "\n")
+        assert.is_truthy(output:find("(calls=0, ? ms/call)", 1, true))
+        assert.is_truthy(output:find("(calls=8, 0.5000 ms/call)", 1, true))
+        assert.is_nil(output:find("0.0000 ms/call", 1, true))
+    end)
 end)
 
 describe("Profiler shared-counter grouping", function()

@@ -312,14 +312,24 @@ local function CollectGroups(entries, keyOf)
     return groups
 end
 
--- A NaN call count fails the `> 0` guard on the per-call figure, so the row
--- would report 0.0000 ms/call and a %d conversion of its own; both read as
--- measurements. A counter that cannot be trusted is dropped instead.
+-- A NaN call count still reaches the row's own %d conversion, which prints it
+-- as a number nothing measured. A counter that cannot be trusted is dropped
+-- instead.
 local function IsFinite(value)
     return type(value) == "number"
         and value == value
         and value ~= math_huge
         and value ~= -math_huge
+end
+
+-- A cost with no calls behind it has no rate: the division would print a zero
+-- the sample never contained. The profiler's placeholder for a value it does
+-- not have is a question mark.
+local function FormatPerCall(selfMs, selfCalls)
+    if selfCalls > 0 then
+        return format("%.4f ms/call", selfMs / selfCalls)
+    end
+    return "? ms/call"
 end
 
 local function GroupSharedRows(rows)
@@ -471,9 +481,9 @@ local function PrintCpuTop(arg)
     pf("Top %d named KE frames by direct CPU:", n)
     for index = 1, math_min(n, #groups) do
         local group = groups[index]
-        local perCall = group.selfCalls > 0 and group.selfMs / group.selfCalls or 0
-        pf("  %2d. %.2f ms (calls=%d, %.4f ms/call) %s",
-            index, group.selfMs, group.selfCalls, perCall,
+        pf("  %2d. %.2f ms (calls=%d, %s) %s",
+            index, group.selfMs, group.selfCalls,
+            FormatPerCall(group.selfMs, group.selfCalls),
             DescribeGroup(group.names, group.count))
     end
     if #groups == 0 then
