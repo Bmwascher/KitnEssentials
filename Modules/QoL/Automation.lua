@@ -1230,37 +1230,47 @@ local function SetupRepairReport()
         if event == "MERCHANT_CLOSED" then
             -- A repair KE started can have its bill drop land AFTER the window
             -- shuts. Tearing the window down here loses the report for a repair
-            -- that did happen, so an armed watch with nothing pending yet gets
-            -- one short beat to let the drop arrive.
+            -- that did happen, so an armed watch gets one short beat to let the
+            -- drop arrive.
             --
             -- Damage taken in that beat cannot be misread as a repair: it
             -- RAISES the bill, and only a fall is ever reported.
-            --
-            -- The held junk sale is deliberately NOT deferred with it. It is
-            -- released now, while the merchant is still closing, because a sale
-            -- attempted a beat later has no merchant left to sell to.
-            if repairOwnBranch and not repairPending then
-                ReleaseHeldSweep()
+            if repairOwnBranch then
                 -- TWO timers, because the two jobs answer to different
                 -- owners. Sharing one is a real defect: a reopen or a second
                 -- close would then postpone the payer's retirement along with
                 -- the bill's, and a hand repair in the extra stretch inherits
                 -- a payer that should already be gone.
                 --
-                -- The payer belongs to the REPAIR. Its deadline is fixed by the
-                -- repair that armed it, so a later close is not a reason to
-                -- move it and it holds no handle -- the generation it captured
-                -- already says whether the repair it speaks for is still the
-                -- live one.
-                local wgen = repairWatchGen
-                C_Timer.After(CLOSE_GRACE, function()
-                    if wgen == repairWatchGen and not repairPending then
-                        DisarmRepairWatch()
-                    end
-                end)
+                -- The payer belongs to the REPAIR, and only a repair with
+                -- nothing pending is retired here at all: once an announcement
+                -- is armed it consumes the payer itself. Its deadline is fixed
+                -- by the repair that armed it, so a later close is not a reason
+                -- to move it and it holds no handle -- the generation it
+                -- captured already says whether the repair it speaks for is
+                -- still the live one.
+                --
+                -- The held junk sale goes with this half. It is released now,
+                -- while the merchant is still closing, because a sale attempted
+                -- a beat later has no merchant left to sell to.
+                if not repairPending then
+                    ReleaseHeldSweep()
+                    local wgen = repairWatchGen
+                    C_Timer.After(CLOSE_GRACE, function()
+                        if wgen == repairWatchGen and not repairPending then
+                            DisarmRepairWatch()
+                        end
+                    end)
+                end
 
                 -- The bill belongs to the merchant VISIT, so a later close or
                 -- reopen retires this half.
+                --
+                -- It is held whether or not an announcement is pending. A
+                -- pending one means the repair is still settling and more of
+                -- the bill is still to fall; dropping the baseline here leaves
+                -- the durability event with nothing to measure against, and
+                -- the rest of the repair goes unreported.
                 ClearGraceTimer()
                 local mine
                 mine = C_Timer.NewTimer(CLOSE_GRACE, function()
