@@ -173,15 +173,12 @@ local function ChatPaneFontSize()
     return size
 end
 
--- Blizzard leaves 31 between the community list and the chat pane, and 15
--- between the pane and its scroll bar -- room for art that the skin strips, so
--- the pane ends up starting inboard of the dropdown above it. Pull it out to
--- meet the dropdown and bring the bar in. The pane's other corner is left
--- alone, so this widens rather than shifts.
---
--- Maximized only. The minimized layout anchors the pane to the window instead
--- and hides the inset, so the inset's visibility is what tells the two apart --
--- no display-mode global, which luacheck would want an allowlist entry for.
+-- Blizzard leaves 31 between the community list and the chat pane and 15
+-- between the pane and its scroll bar, room for art the skin strips. Pull the
+-- pane out to the dropdown above it and bring the bar in; its other corner is
+-- left alone, so this widens rather than shifts. Maximized only -- the
+-- minimized layout anchors the pane to the window and hides the inset, which
+-- is what tells the two apart.
 local function LayoutChat(frame)
     local chat = frame.Chat
     local inset = chat and chat.InsetFrame
@@ -192,9 +189,8 @@ local function LayoutChat(frame)
 
     local sb, mf = chat.ScrollBar, chat.MessageFrame
     if sb and mf then
-        -- Blizzard sets the two left anchors 5 apart, which cannot both hold;
-        -- the top one wins. Give them the same offset so the gap is the number
-        -- written here.
+        -- Blizzard's two left anchors sit 5 apart and cannot both hold; the
+        -- top one wins. Match them so the gap is the number written here.
         sb:ClearAllPoints()
         sb:SetPoint("TOPLEFT", mf, "TOPRIGHT", 8, 1)
         sb:SetPoint("BOTTOMLEFT", mf, "BOTTOMRIGHT", 8, -25)
@@ -228,14 +224,11 @@ local function Skin()
                     end)
                 end
             end
-            -- The pane and its bar are re-pointed from the maximize
-            -- callback, and that callback also runs unclicked -- restoring the
-            -- saved state the first time the window opens, after the skin has
-            -- already run. Hook the method, not the button, or the restore
-            -- path puts Blizzard's spacing back and only a manual toggle ever
-            -- corrects it. A secure post-hook runs after Blizzard's own work,
-            -- leaving the SetCVar that follows it untainted. Minimizing lands
-            -- here too and is filtered by LayoutChat's own guard.
+            -- The maximize callback re-points both, and runs unclicked when
+            -- the window first restores its saved state -- after the skin.
+            -- Hooking the button instead leaves every fresh login on
+            -- Blizzard's spacing. A secure post-hook keeps the SetCVar that
+            -- follows it untainted.
             hooksecurefunc(mmf, "Maximize", function()
                 LayoutChat(frame)
             end)
@@ -528,19 +521,13 @@ local function Skin()
 
             S.StripTextures(frame.Chat.InsetFrame)
             S.Backdrop(frame.Chat.InsetFrame)
-            -- The inset sits 10 wider than the pane on each side and hangs 28
-            -- below it, where it framed the input's old bevel. With that bevel
-            -- stripped and the input carrying its own backdrop, the sides no
-            -- longer line up with anything and the overhang draws a second
-            -- panel behind the input. Put the backdrop on the pane instead, so
-            -- it ends flush with the input's own edges, and stop it 9 above the
-            -- pane's bottom. The input's backdrop starts at 10 -- 4 for the gap
-            -- Blizzard leaves, 6 for the inset it takes -- so 9 leaves a 1px
-            -- line of window between the two borders. The 7 keeps
-            -- the headroom the inset had above the messages. Both corners take
-            -- the same frame: mixing them cost 10 off the left alone.
-            -- Only the maximized layout reaches this: minimizing hides the
-            -- inset, and this backdrop with it.
+            -- The inset sits 10 wider than the pane each side and hangs 28
+            -- below it, framing the input's old bevel. With that bevel stripped
+            -- and the input carrying its own backdrop, the overhang draws a
+            -- second panel behind the input. Anchor to the pane instead: 7
+            -- keeps the inset's headroom above the messages, 9 stops a pixel
+            -- short of the input's backdrop, which starts 10 down -- 4 for
+            -- Blizzard's gap, 6 for its own inset.
             local ibd = S.GetBackdrop(frame.Chat.InsetFrame)
             if ibd then
                 ibd:ClearAllPoints()
