@@ -173,6 +173,34 @@ local function ChatPaneFontSize()
     return size
 end
 
+-- Blizzard leaves 31 between the community list and the chat pane, and 15
+-- between the pane and its scroll bar -- room for art that the skin strips, so
+-- the pane ends up starting inboard of the dropdown above it. Pull it out to
+-- meet the dropdown and bring the bar in. The pane's other corner is left
+-- alone, so this widens rather than shifts.
+--
+-- Maximized only. The minimized layout anchors the pane to the window instead
+-- and hides the inset, so the inset's visibility is what tells the two apart --
+-- no display-mode global, which luacheck would want an allowlist entry for.
+local function LayoutChat(frame)
+    local chat = frame.Chat
+    local inset = chat and chat.InsetFrame
+    if not (inset and inset:IsShown()) then return end
+    if not frame.CommunitiesList then return end
+
+    chat:SetPoint("TOPLEFT", frame.CommunitiesList, "TOPRIGHT", 25, -44)
+
+    local sb, mf = chat.ScrollBar, chat.MessageFrame
+    if sb and mf then
+        -- Blizzard sets the two left anchors 5 apart, which cannot both hold;
+        -- the top one wins. Give them the same offset so the gap is the number
+        -- written here.
+        sb:ClearAllPoints()
+        sb:SetPoint("TOPLEFT", mf, "TOPRIGHT", 8, 1)
+        sb:SetPoint("BOTTOMLEFT", mf, "BOTTOMRIGHT", 8, -25)
+    end
+end
+
 local function Skin()
     local frame = _G.CommunitiesFrame
     if not frame then return end
@@ -200,6 +228,18 @@ local function Skin()
                     end)
                 end
             end
+            -- The pane and its bar are re-pointed from the maximize
+            -- callback, and that callback also runs unclicked -- restoring the
+            -- saved state the first time the window opens, after the skin has
+            -- already run. Hook the method, not the button, or the restore
+            -- path puts Blizzard's spacing back and only a manual toggle ever
+            -- corrects it. A secure post-hook runs after Blizzard's own work,
+            -- leaving the SetCVar that follows it untainted. Minimizing lands
+            -- here too and is filtered by LayoutChat's own guard.
+            hooksecurefunc(mmf, "Maximize", function()
+                LayoutChat(frame)
+            end)
+
             S.data(mmf).aeDecoHook = true
         end
     end
@@ -516,6 +556,8 @@ local function Skin()
         if frame.Chat.MessageFrame then
             S.SetFont(frame.Chat.MessageFrame, ChatPaneFontSize(), "OUTLINE")
         end
+
+        LayoutChat(frame)
     end
 
     if frame.ChatEditBox then
