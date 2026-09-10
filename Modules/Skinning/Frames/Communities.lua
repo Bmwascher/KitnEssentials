@@ -166,8 +166,10 @@ local function ChatPaneFontSize()
     local chat = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.Chat
     if not chat or not chat.Enabled then return nil end
-    -- A zero size means unset to the Chat module, which falls back; S.SetFont
-    -- would clamp it to 8 instead. Reject it so the two cannot disagree.
+    -- The GUI bounds this 8-24, so a non-positive size only arrives from a
+    -- hand-edited profile. Keep Blizzard's size rather than let S.SetFont clamp
+    -- to 8. At exactly 0 the Chat module renders 14 and this pane will not
+    -- match it; that config is unreachable through the GUI and left alone.
     local size = tonumber(chat.FontSize)
     if not size or size <= 0 then return nil end
     return size
@@ -227,8 +229,8 @@ local function Skin()
             -- The maximize callback re-points both, and runs unclicked when
             -- the window first restores its saved state -- after the skin.
             -- Hooking the button instead leaves every fresh login on
-            -- Blizzard's spacing. A secure post-hook keeps the SetCVar that
-            -- follows it untainted.
+            -- Blizzard's spacing. A secure post-hook runs after Maximize
+            -- returns, so the SetCVar inside it has already gone untainted.
             hooksecurefunc(mmf, "Maximize", function()
                 LayoutChat(frame)
             end)
