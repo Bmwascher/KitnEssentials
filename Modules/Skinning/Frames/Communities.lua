@@ -488,6 +488,25 @@ local function Skin()
 
             S.StripTextures(frame.Chat.InsetFrame)
             S.Backdrop(frame.Chat.InsetFrame)
+            -- The inset sits 10 wider than the pane on each side and hangs 28
+            -- below it, where it framed the input's old bevel. With that bevel
+            -- stripped and the input carrying its own backdrop, the sides no
+            -- longer line up with anything and the overhang draws a second
+            -- panel behind the input. Put the backdrop on the pane instead, so
+            -- it ends flush with the input's own edges, and stop it 9 above the
+            -- pane's bottom. The input's backdrop starts at 10 -- 4 for the gap
+            -- Blizzard leaves, 6 for the inset it takes -- so 9 leaves a 1px
+            -- line of window between the two borders. The 7 keeps
+            -- the headroom the inset had above the messages. Both corners take
+            -- the same frame: mixing them cost 10 off the left alone.
+            -- Only the maximized layout reaches this: minimizing hides the
+            -- inset, and this backdrop with it.
+            local ibd = S.GetBackdrop(frame.Chat.InsetFrame)
+            if ibd then
+                ibd:ClearAllPoints()
+                ibd:SetPoint("TOPLEFT", frame.Chat, "TOPLEFT", 0, 7)
+                ibd:SetPoint("BOTTOMRIGHT", frame.Chat, "BOTTOMRIGHT", 0, -9)
+            end
         end
 
         local csb = frame.Chat.ScrollBar
