@@ -166,10 +166,8 @@ local function ChatPaneFontSize()
     local chat = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.Chat
     if not chat or not chat.Enabled then return nil end
-    -- The GUI bounds this 8-24, so a non-positive size only arrives from a
-    -- hand-edited profile. Keep Blizzard's size rather than let S.SetFont clamp
-    -- to 8. At exactly 0 the Chat module renders 14 and this pane will not
-    -- match it; that config is unreachable through the GUI and left alone.
+    -- Keep Blizzard's size rather than let S.SetFont clamp a non-positive
+    -- one to 8. The GUI bounds this 8-24, so it only arrives hand-edited.
     local size = tonumber(chat.FontSize)
     if not size or size <= 0 then return nil end
     return size
@@ -229,8 +227,7 @@ local function Skin()
             -- The maximize callback re-points both, and runs unclicked when
             -- the window first restores its saved state -- after the skin.
             -- Hooking the button instead leaves every fresh login on
-            -- Blizzard's spacing. A secure post-hook runs after Maximize
-            -- returns, so the SetCVar inside it has already gone untainted.
+            -- Blizzard's spacing.
             hooksecurefunc(mmf, "Maximize", function()
                 LayoutChat(frame)
             end)
@@ -523,10 +520,8 @@ local function Skin()
 
             S.StripTextures(frame.Chat.InsetFrame)
             S.Backdrop(frame.Chat.InsetFrame)
-            -- The inset sits 10 wider than the pane each side and hangs 28
-            -- below it, framing the input's old bevel. With that bevel stripped
-            -- and the input carrying its own backdrop, the overhang draws a
-            -- second panel behind the input. Anchor to the pane instead: 7
+            -- The inset hangs 28 below the pane, where its overhang now draws
+            -- a second panel behind the input. Anchor to the pane instead: 7
             -- keeps the inset's headroom above the messages, 9 stops a pixel
             -- short of the input's backdrop, which starts 10 down -- 4 for
             -- Blizzard's gap, 6 for its own inset.
