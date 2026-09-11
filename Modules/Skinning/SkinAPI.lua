@@ -2615,16 +2615,17 @@ end
 -- Pin a button's state font objects to the size its label was given, so a
 -- hover or selection swap does not re-render the label at Blizzard's size.
 -- Called from the S.SetFont fold for a button's own label; size is the
--- requested size S.SetFont resolved, never nil there. A managed tab keeps
--- Blizzard's sizing outright (noGeometry), and the refusal clears the record
--- so an earlier pin's hooks stop asserting.
+-- requested size S.SetFont resolved, never nil there. A managed tab
+-- (noGeometry) refuses the pin while its label still resolves through the
+-- ordinary size path. Every refusal clears the record so an earlier pin's
+-- hooks stop asserting.
 ---@param button Button
 ---@param size number requested size, as S.SetFont records it
 ---@param outline string requested outline flag
 function S.PinButtonFont(button, size, outline)
-    if not (button and button.SetNormalFontObject) then return end
+    if not button then return end
     local d = S.data(button)
-    if not size or d.noGeometry then
+    if not button.SetNormalFontObject or not size or d.noGeometry then
         d.buttonFont = nil
         return
     end

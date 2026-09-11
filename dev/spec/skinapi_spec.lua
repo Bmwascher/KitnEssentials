@@ -1093,8 +1093,10 @@ describe("SkinAPI PinButtonFont", function()
         _G.CreateFont = nil
     end)
 
-    it("driven through SetFont on the button's own label, the resolved size reaches all three states and each keeps its colour", function()
-        local b = button(threeStates())
+    it("driven through SetFont on the button's own label, the resolved size reaches all three states and each keeps its colour and justification", function()
+        local states = threeStates()
+        states.Normal = stateObject(1, 0.82, 0, 1, "LEFT", "TOP")
+        local b = button(states)
         -- A second string under the same button must NOT pin: it is not the
         -- button's label.
         local other = { SetFont = function() end, GetFont = b.Text.GetFont,
@@ -1112,6 +1114,8 @@ describe("SkinAPI PinButtonFont", function()
         assert.same({ 1, 0.82, 0, 1 }, seen.Normal.color)
         assert.same({ 1, 1, 1, 1 }, seen.Highlight.color)
         assert.same({ 0.5, 0.5, 0.5, 1 }, seen.Disabled.color)
+        assert.same({ h = "LEFT", v = "TOP" }, seen.Normal.justify)
+        assert.same({ h = "CENTER", v = "MIDDLE" }, seen.Highlight.justify)
     end)
 
     it("returns the same cached object for the same request across a base-size change, and a different one for a different colour", function()
@@ -1229,19 +1233,15 @@ describe("SkinAPI PinButtonFont", function()
         assert.same({ 0, 0, 1, 1 }, b.states.Normal.color)
     end)
 
-    it("refuses a button with no SetNormalFontObject", function()
+    it("refuses a button with no SetNormalFontObject, clearing an earlier pin's record", function()
         local b = button(threeStates())
+        S.SetFont(b.Text, 12, "")
         b.SetNormalFontObject = nil
         S.PinButtonFont(b, 12, "")
-        assert.equals(0, #b.assigned)
         assert.is_nil(S.data(b).buttonFont)
-    end)
-
-    it("carries the state object's justification into the shared object", function()
-        local b = button({ Normal = stateObject(1, 0.82, 0, 1, "LEFT", "TOP") })
-        S.SetFont(b.Text, 12, "")
-        assert.equals("LEFT", b.states.Normal.justify.h)
-        assert.equals("TOP", b.states.Normal.justify.v)
+        local external = stateObject(0, 0, 1)
+        b:SetHighlightFontObject(external)
+        assert.equals(external, b.states.Highlight)
     end)
 end)
 
