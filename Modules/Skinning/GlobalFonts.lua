@@ -43,6 +43,11 @@ local OUTLINED = {
 }
 local PLAIN = { "InvoiceTextFontNormal" }
 
+-- Raid warning and boss emote text is animated by scaling it between fixed
+-- heights, and a size that disagrees with the animation's own height maths
+-- renders blurry, so this object keeps 20 whatever the base size is.
+local FIXED_SIZES = { GameFontNormalHuge = 20 }
+
 local stockSizes = {}
 
 -- the original face/size/flags of every object we touch, so the
@@ -112,12 +117,14 @@ local function Apply()
                     }
                 end
                 if stock then
-
-                    local effStock = stock
-                    if flags == "OUTLINE" and effStock < 12 and not name:find("Tiny") then
-                        effStock = 12
+                    local size = FIXED_SIZES[name]
+                    if not size then
+                        local effStock = stock
+                        if flags == "OUTLINE" and effStock < 12 and not name:find("Tiny") then
+                            effStock = 12
+                        end
+                        size = math.floor(effStock * base / 12 + 0.5)
                     end
-                    local size = math.floor(effStock * base / 12 + 0.5)
                     pcall(KE.ApplyFont, KE, obj, face, size, flags)
 
                     if obj.SetShadowColor then pcall(obj.SetShadowColor, obj, 0, 0, 0, 0) end
