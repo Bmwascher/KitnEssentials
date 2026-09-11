@@ -5,14 +5,14 @@ local hooksecurefunc = hooksecurefunc
 
 local function SkinAttachment(btn)
     if not btn then return end
+    local icon = btn.icon or btn.Icon or (btn.GetNormalTexture and btn:GetNormalTexture())
     if not S.data(btn).skinned then
-        S.StripTextures(btn)
+        S.StripKeepingIcon(btn, icon)
         S.Backdrop(btn)
         S.Hover(btn)
         if btn.IconBorder then S.IconBorder(btn.IconBorder, S.GetBackdrop(btn)) end
         S.data(btn).skinned = true
     end
-    local icon = btn.icon or btn.Icon or (btn.GetNormalTexture and btn:GetNormalTexture())
     if icon then
         icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
         icon:ClearAllPoints()
@@ -147,10 +147,10 @@ local function Skin()
     for _, name in next, { "OpenMailLetterButton", "OpenMailMoneyButton" } do
         local btn = _G[name]
         if btn then
-            S.StripTextures(btn)
+            local icon = _G[name .. "IconTexture"]
+            S.StripKeepingIcon(btn, icon)
             S.Backdrop(btn)
             S.Hover(btn)
-            local icon = _G[name .. "IconTexture"]
             if icon then
                 icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
                 icon:ClearAllPoints()
