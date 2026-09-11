@@ -321,6 +321,25 @@ function S.StripTextures(frame, kill)
     S.KillRegions(frame)
 end
 
+-- Strip a frame without losing the icon it holds: read the icon's art back
+-- first, strip, then reapply. Atlas wins over texture because an atlas-set
+-- region reports no texture path.
+---@param frame Frame
+---@param icon Texture|nil
+---@param kill boolean|nil hide the stripped regions rather than clearing them
+---@return Texture|nil icon the same icon, for call-site chaining
+function S.StripKeepingIcon(frame, icon, kill)
+    local atlas = icon and icon.GetAtlas and icon:GetAtlas()
+    local tex = icon and icon.GetTexture and icon:GetTexture()
+    S.StripTextures(frame, kill)
+    if atlas and atlas ~= "" and icon.SetAtlas then
+        icon:SetAtlas(atlas)
+    elseif tex and icon.SetTexture then
+        icon:SetTexture(tex)
+    end
+    return icon
+end
+
 function S.Template(frame, kind, inset)
     local bd = S.Backdrop(frame, inset)
     if bd then
