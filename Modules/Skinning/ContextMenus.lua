@@ -25,15 +25,13 @@ local math_max = math.max
 local C_AddOns = C_AddOns
 local C_Timer = C_Timer
 
--- Flip to true, /reload, then right-click a UNIT and hover a submenu. The log
--- answers the one thing source cannot: which branch of SkinFrame's
--- secret-dimension rescue a submenu frame actually takes.
+-- Flip to true, /reload, then right-click a unit and hover a submenu. The log
+-- shows every frame that reaches SkinFrame, whether its backdrop was reused
+-- (a pooled frame coming back) and the size the backdrop is tracking.
 local DEBUG_CM = false
 
+-- Weak-keyed: menu frames are pooled and must not be held alive by us.
 local backdrops = setmetatable({}, { __mode = "k" })
--- Frames whose Blizzard art we have removed. Weak-keyed: pooled menu
--- frames must not be held alive by this.
-local stripped = setmetatable({}, { __mode = "k" })
 local ourFrames = setmetatable({}, { __mode = "k" })
 
 
@@ -43,6 +41,37 @@ end
 
 function CM:UpdateDB()
     self.db = KE.db.profile.Skinning.ContextMenus
+end
+
+-- The inset is asked for, not guessed: MenuProxyMixin lays its own content
+-- out from frame:GetInset() (InitScrollLayout / PerformLayout), so that is
+-- where the panel belongs at any scale. A submenu anchors its TOPLEFT to its
+-- parent ROW's TOPRIGHT (GenerateSubmenuInternal), and the row ends one
+-- right-inset short of the parent menu's edge, so the two frames overlap;
+-- EXTRA_X pulls both x edges in further to narrow that overlap.
+--   INSET_SHARE  how much of the menu's own margin to keep (1 = hug the text,
+--                0 = Blizzard's full margin)
+--   PAD          extra room on every side, on top of that
+--   EXTRA_X      extra x-inset on top of that, per panel
+local INSET_SHARE = 0.5
+local PAD = 2
+local EXTRA_X = 1.5
+local FALLBACK_X, FALLBACK_Y = 2, 2
+
+local function Inset(value, extra)
+    return math_max((value or 0) * INSET_SHARE - PAD + (extra or 0), 0)
+end
+
+local function GetInsets(frame)
+    if frame.GetInset then
+        local ok, inset = pcall(frame.GetInset, frame)
+        if ok and type(inset) == "table"
+            and not KE:IsSecretValue(inset.left) and not KE:IsSecretValue(inset.top) then
+            return Inset(inset.left, EXTRA_X), Inset(inset.top),
+                   Inset(inset.right, EXTRA_X), Inset(inset.bottom)
+        end
+    end
+    return FALLBACK_X, FALLBACK_Y, FALLBACK_X, FALLBACK_Y
 end
 
 -- The menu skin is four operations on the menu frame ITSELF:
@@ -62,100 +91,11 @@ local function SkinFrame(frame)
     local S = GetS()
     if not S then return end
 
-    -- Menus opened from secure UnitPopup paths (right-click a unit frame)
-    -- carry SECRET dimensions. Anchoring TOPLEFT+BOTTOMRIGHT makes our
-    -- backdrop derive its size from theirs, so
-    -- BackdropTemplateMixin:SetupTextureCoordinates reads a secret
-    -- GetWidth() and dies at Backdrop.lua:
-    --
-    --   attempt to perform arithmetic on local 'width' (a secret number
-    --   value, while execution tainted by an addon)
-    --
-    -- The size is therefore read BEFORE anything is created or anchored --
-    -- S.Backdrop two-point anchors on creation, so checking afterwards would
-    -- already be too late. A menu that will not give usable numbers simply
-    -- goes unskinned; it keeps Blizzard's own look rather than erroring.
-    local w, h = frame:GetWidth(), frame:GetHeight()
-    if DEBUG_CM then
-        -- tostring(frame) is the table address: the same address reappearing
-        -- across menus is what proves pooling, which is the whole question here.
-        KE:Print("[CM] SkinFrame " .. tostring(frame)
-            .. " usableSize=" .. tostring(w ~= nil and h ~= nil
-                and not KE:IsSecretValue(w) and not KE:IsSecretValue(h))
-            .. " hasBackdrop=" .. tostring(backdrops[frame] ~= nil)
-            .. " wasStripped=" .. tostring(stripped[frame] ~= nil))
-    end
-    if not w or not h or KE:IsSecretValue(w) or KE:IsSecretValue(h) then
-        -- menu frames are POOLED. A frame stripped on an earlier
-        -- (readable) menu comes back for a secret one, and hiding our
-        -- backdrop then left it stripped AND unbacked -- text floating on
-        -- the world with no panel, which is what the Target Marker Icon
-        -- submenu was showing.
-        --
-        -- If we have already stripped this frame, its Blizzard art is gone
-        -- and hiding ours is strictly worse than keeping it at its last
-        -- known size. Only frames we have never touched are left alone.
-        local existing = backdrops[frame]
-        if existing then
-            if DEBUG_CM then
-                KE:Print("[CM]   rescue A: reuse existing backdrop -> "
-                    .. (stripped[frame] and "SHOW" or "HIDE"))
-            end
-            if stripped[frame] then existing:Show() else existing:Hide() end
-        elseif stripped[frame] then
-            -- Stripped on a previous use and pooled back with no backdrop
-            -- of its own: build one now. Two-point anchoring is only
-            -- unsafe because it makes OUR width derive from a secret one;
-            -- SetAllPoints on a frame that is already ours to draw is the
-            -- lesser evil against an invisible menu.
-            local bd = S.Backdrop(frame)
-            if DEBUG_CM then
-                KE:Print("[CM]   rescue B: rebuild on stripped pooled frame -> bd="
-                    .. tostring(bd ~= nil))
-            end
-            if bd then
-                backdrops[frame] = bd
-                ourFrames[bd] = true
-                bd:Show()
-            end
-        elseif DEBUG_CM then
-            -- The suspected submenu case: never skinned, never stripped, so
-            -- nothing happens and Blizzard's own art should still be showing.
-            -- If the submenu looks BARE here, the strip came from somewhere else.
-            KE:Print("[CM]   rescue C: untouched frame, no action")
-        end
-        return
-    end
-
-    -- PRE-LAYOUT GUARD. A menu frame reports 1x1 until Blizzard
-    -- has laid it out, and the acquired-frame callback can fire before that
-    -- happens. Those numbers are READABLE -- just wrong -- so the secret-value
-    -- test above cannot catch them, and every branch below trusts them.
-    --
-    -- Stripping on a 1x1 measurement is unrecoverable in one pass: the Blizzard
-    -- art goes, our backdrop is built 1x1 and is invisible, and the menu then
-    -- lays out to full size with its text drawn over nothing. That is exactly
-    -- the submenu bug: an in-game log showed the root at 164x342 and the
-    -- submenu at 1x1 in the same open.
-    --
-    -- Bailing WITHOUT stripping leaves Blizzard's own art in place, which looks
-    -- correct. The deferral in OnMenuOpen is what actually gets these frames
-    -- skinned; this guard is the backstop for anything that is still unlaid
-    -- out a frame later. 16 is below any real menu (one row is ~20px tall) and
-    -- far above the 1x1 default.
-    if w < 16 or h < 16 then
-        if DEBUG_CM then
-            KE:Print("[CM]   PRE-LAYOUT skip (not stripped): w=" .. tostring(w)
-                .. " h=" .. tostring(h))
-        end
-        return
-    end
-
-    -- Stripped only once we know the menu can be skinned -- stripping and
-    -- then bailing would leave it with no background at all.
     S.StripTextures(frame)
-    stripped[frame] = true
 
+    -- Relink rather than rebuild: menu frames are POOLED, and a frame
+    -- already skinned comes back for a different menu.
+    local reused = backdrops[frame] ~= nil
     local bd = backdrops[frame]
     if not bd then
         bd = S.Backdrop(frame)
@@ -165,23 +105,31 @@ local function SkinFrame(frame)
             if frame.ScrollBar then S.TrimScrollBar(frame.ScrollBar) end
         end
     end
+    if not bd then return end
 
-    -- Explicit size, not a BOTTOMRIGHT anchor: the geometry stays ours even
-    -- if the menu's own dimensions turn secret later in the session.
-    if bd then
-        bd:ClearAllPoints()
-        bd:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
-        bd:SetSize(math_max(w - 2, 1), math_max(h - 2, 1))
-    end
+    -- Two-point anchoring: the backdrop takes its size from the menu, so
+    -- nothing here measures a pooled frame before Blizzard has relaid it out.
+    -- A menu opened from a secure path has secret dimensions, which the
+    -- backdrop then inherits; S.Backdrop's per-instance
+    -- SetupTextureCoordinates returns early on an unreadable size, so that
+    -- is safe.
+    local left, top, right, bottom = GetInsets(frame)
+    bd:ClearAllPoints()
+    bd:SetPoint("TOPLEFT", frame, "TOPLEFT", left, -top)
+    bd:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -right, bottom)
 
-    if bd then
-        local lvl = (frame.GetFrameLevel and frame:GetFrameLevel()) or 1
-        bd:SetFrameLevel(math_max(lvl - 1, 0))
-        bd:Show()
-    end
+    local lvl = (frame.GetFrameLevel and frame:GetFrameLevel()) or 1
+    bd:SetFrameLevel(math_max(lvl - 1, 0))
+    bd:Show()
+
     if DEBUG_CM then
-        KE:Print("[CM]   SKINNED normally: w=" .. tostring(w) .. " h=" .. tostring(h)
-            .. " bd=" .. tostring(bd ~= nil))
+        -- tostring(frame) is the table address: the same address reappearing
+        -- across menus is what proves pooling.
+        local w, h = frame:GetWidth(), frame:GetHeight()
+        local function show(v) return KE:IsSecretValue(v) and "secret" or tostring(v) end
+        KE:Print("[CM] SkinFrame " .. tostring(frame) .. (reused and " reused" or " new")
+            .. " size=" .. show(w) .. "x" .. show(h)
+            .. " inset=" .. left .. "," .. top .. "," .. right .. "," .. bottom)
     end
 end
 
