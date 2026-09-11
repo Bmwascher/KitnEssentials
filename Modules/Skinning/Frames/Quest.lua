@@ -143,14 +143,17 @@ local function QuestInfo_Display()
 
     if rewardsFrame.RewardButtons then
         for i, questItem in ipairs(rewardsFrame.RewardButtons) do
-            local point, relativeTo, relativePoint, _, y = questItem:GetPoint()
+            local point, relativeTo, relativePoint, x, y = questItem:GetPoint()
             if point and relativeTo and relativePoint then
                 if i == 1 then
                     questItem:SetPoint(point, relativeTo, relativePoint, 0, y)
                 elseif relativePoint == "BOTTOMLEFT" then
                     questItem:SetPoint(point, relativeTo, relativePoint, 0, -4)
                 else
-                    questItem:SetPoint(point, relativeTo, relativePoint, 4, 0)
+                    -- Blizzard's own column gap. A reward row is already wider
+                    -- than the panel, so any extra pushes the right-hand
+                    -- button's last pixels off it.
+                    questItem:SetPoint(point, relativeTo, relativePoint, x, 0)
                 end
             end
 
