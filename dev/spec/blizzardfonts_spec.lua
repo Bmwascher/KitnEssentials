@@ -1,8 +1,8 @@
 -- Modules/Skinning/BlizzardFonts.lua -- game-wide replacement of Blizzard's
 -- shared font OBJECTS. Loaded directly (not through dev/spec/_ke_loader.lua)
 -- because the module needs _G font-object fakes the loader has no shape for
--- -- see fontObject() below. KE.GetFontOutline, KE.SlugFlags, KE.GetFontPath
--- and KE.GetEffectiveFont are stubbed here rather than pulled from a real
+-- -- see fontObject() below. KE.GetFontOutline, KE.SlugFlags, KE.GetFontPath,
+-- KE.GetEffectiveFont and KE.GetGlobalFont are stubbed here rather than pulled from a real
 -- Core/Globals.lua load: the boundary under test is whether BlizzardFonts
 -- CALLS them correctly, not what they compute
 -- (Core/Globals.lua's own spec already covers GetFontOutline's filter).
@@ -51,6 +51,7 @@ describe("BlizzardFonts", function()
             SlugFlags = function(_, flags) return flags end,
             GetFontPath = function(_, name) return "Fonts\\" .. (name or "Expressway") .. ".TTF" end,
             GetEffectiveFont = function(_, moduleDB) return moduleDB and moduleDB.FontFace end,
+            GetGlobalFont = function() return "Expressway" end,
             Skins = dbOverrides.Skins,
             db = {
                 profile = {
@@ -163,6 +164,20 @@ describe("BlizzardFonts", function()
             local obj = plant("QuestFont", fontObject("Fonts\\FRIZQT__.TTF", 13, ""))
             BF:ApplyAll()
             assert.equals("Fonts\\ChosenFace.TTF", (obj:GetFont()))
+        end)
+
+        -- S.SetSkinFont decides whether to re-sweep by comparing the new pick
+        -- against S.FONT_FACE. Left at the seed after a stored-face sweep, a
+        -- later pick OF the seed name would read as no change and never
+        -- re-sweep, leaving stock text on the stored face.
+        it("keeps the skin face in step with the stored face it swept", function()
+            load({
+                BlizzardFrames = { FontBaseSize = 12, FontFace = "ChosenFace" },
+                Skins = { FONT_FACE = "Expressway" },
+            })
+            plant("QuestFont", fontObject("Fonts\\FRIZQT__.TTF", 13, ""))
+            BF:ApplyAll()
+            assert.equals("ChosenFace", KE.Skins.FONT_FACE)
         end)
 
         it("prefers the live skin face once that state is initialised", function()

@@ -217,13 +217,16 @@ function BF:ApplyAll()
         and KE.db.profile.Skinning.BlizzardFrames
     -- The skin face, resolved the way every skinned string resolves it. With
     -- the frame skin off nothing initialises that state from the profile, so
-    -- the stored choice is read directly rather than the parse-time seed.
+    -- the stored choice is read directly rather than the parse-time seed, and
+    -- the skin's face is kept in step so a later live pick compares against
+    -- what was actually swept.
     local S = KE.Skins
     local face
     if S and S._offsetInit then
         face = S.FONT_FACE
     else
-        face = KE:GetEffectiveFont(bsdb)
+        face = KE:GetEffectiveFont(bsdb) or KE:GetGlobalFont()
+        if S then S.FONT_FACE = face end
     end
     face = KE:GetFontPath(face)
     local base = (bsdb and tonumber(bsdb.FontBaseSize)) or 12
