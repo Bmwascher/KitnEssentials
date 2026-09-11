@@ -71,9 +71,7 @@ local function SkinReward(frame)
     end
 end
 
--- Follower rewards are a portrait beside a name plate, not an icon button:
--- the plate becomes a backdrop, the round ring becomes a square one that
--- carries the follower's quality colour.
+-- Follower rewards are a portrait beside a name plate, not an icon button.
 local function SkinFollowerReward(frame)
     local portrait = frame and frame.PortraitFrame
     if not (portrait and portrait.PortraitRingQuality) then return end
