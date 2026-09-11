@@ -133,7 +133,7 @@ local function RowShell(bu)
         S.IconBorder(bu.iconBorder, S.GetBackdrop(icon))
     end
 
-    S.StripTextures(bu)
+    S.StripKeepingIcon(bu, icon)
 
     local bd = S.Backdrop(bu)
     if bd then
