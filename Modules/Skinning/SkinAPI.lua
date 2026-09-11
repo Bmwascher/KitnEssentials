@@ -2179,11 +2179,7 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
             tab.SelectedTexture:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -1, 1)
         end
     end
-    for _, region in ipairs({ tab:GetRegions() }) do
-        if region:IsObjectType("Texture") and region:GetAtlas() == "QuestLog-Tab-side-Glow-hover" then
-            S.KillTexture(region)
-        end
-    end
+    S.KillSideTabArt(tab)
     S.HoverWash(tab)
     S.data(tab).aeSideTab = true
 end
