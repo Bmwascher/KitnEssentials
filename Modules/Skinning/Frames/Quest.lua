@@ -71,6 +71,48 @@ local function SkinReward(frame)
     end
 end
 
+-- Follower rewards are a portrait beside a name plate, not an icon button:
+-- the plate becomes a backdrop, the round ring becomes a square one that
+-- carries the follower's quality colour.
+local function SkinFollowerReward(frame)
+    local portrait = frame and frame.PortraitFrame
+    if not (portrait and portrait.PortraitRingQuality) then return end
+
+    local d = S.data(frame)
+    if not d.skinned then
+        d.skinned = true
+        local bd = S.Backdrop(frame)
+        if bd then
+            bd:ClearAllPoints()
+            bd:SetPoint("TOPLEFT", frame, "TOPLEFT", 40, -5)
+            bd:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 2, 5)
+        end
+        if frame.BG then frame.BG:Hide() end
+
+        portrait:ClearAllPoints()
+        portrait:SetPoint("RIGHT", bd or frame, "LEFT", -2, 0)
+        if portrait.PortraitRing then portrait.PortraitRing:Hide() end
+        portrait.PortraitRingQuality:SetTexture()
+        if portrait.LevelBorder then portrait.LevelBorder:SetAlpha(0) end
+        if portrait.Portrait then portrait.Portrait:SetTexCoord(0.2, 0.85, 0.2, 0.85) end
+        if portrait.Level then
+            portrait.Level:ClearAllPoints()
+            portrait.Level:SetPoint("BOTTOM", portrait, 0, 3)
+        end
+
+        local square = CreateFrame("Frame", nil, portrait)
+        square:SetFrameLevel(math.max(portrait:GetFrameLevel() - 1, 0))
+        square:SetPoint("TOPLEFT", 2, -2)
+        square:SetPoint("BOTTOMRIGHT", -2, 2)
+        S.Backdrop(square)
+        d.squareBG = square
+    end
+
+    local r, g, b = portrait.PortraitRingQuality:GetVertexColor()
+    local sbd = S.GetBackdrop(d.squareBG)
+    if sbd and r then sbd:SetBackdropBorderColor(r, g, b, 1) end
+end
+
 local function QuestID()
     if _G.QuestInfoFrame and _G.QuestInfoFrame.questLog then
         return C_QuestLog.GetSelectedQuest()
@@ -231,7 +273,11 @@ local function QuestInfo_Display()
                 SkinReward(spellIcon)
             end
         end
-
+        if rewardsFrame.followerRewardPool then
+            for followerReward in rewardsFrame.followerRewardPool:EnumerateActive() do
+                SkinFollowerReward(followerReward)
+            end
+        end
     end
 
     if rewardsFrame.reputationRewardPool then
