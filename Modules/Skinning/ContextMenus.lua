@@ -23,7 +23,6 @@ local hooksecurefunc = hooksecurefunc
 local ipairs = ipairs -- luacheck: ignore 211/ipairs
 local math_max = math.max
 local C_AddOns = C_AddOns
-local C_Timer = C_Timer
 
 -- Flip to true, /reload, then right-click a unit and hover a submenu. The log
 -- shows every frame that reaches SkinFrame, whether its backdrop was reused
@@ -135,32 +134,16 @@ end
 
 local function OnMenuOpen(manager, _ownerRegion, menuDescription)
     local menu = manager and manager.GetOpenMenu and manager:GetOpenMenu()
-    -- This marker is what separates ROOT from SUBMENU in the log: the first
-    -- SkinFrame line after an OPEN is the root menu; every SkinFrame line after
-    -- that with no intervening OPEN arrived through the acquired-frame
-    -- callback, which is how submenus reach us.
+    -- The first SkinFrame line after an OPEN is the root menu; every later one
+    -- with no intervening OPEN arrived through the acquired-frame callback,
+    -- which is how submenus reach us.
     if DEBUG_CM then
-        KE:Print("[CM] === OPEN === root=" .. tostring(menu ~= nil)
-            .. " canRegisterAcquired="
-            .. tostring(menuDescription ~= nil
-                and menuDescription.AddMenuAcquiredCallback ~= nil))
+        KE:Print("[CM] === OPEN === root=" .. tostring(menu ~= nil))
     end
     if menu then SkinFrame(menu) end
 
-    -- DEFERRED BY ONE FRAME. Acquired frames -- which is how
-    -- SUBMENUS reach us -- arrive before Blizzard has laid them out, measuring
-    -- 1x1. Skinning them synchronously stripped their art and built an
-    -- invisible 1x1 backdrop; see the pre-layout guard in SkinFrame for the
-    -- full diagnosis. C_Timer.After(0) puts the measurement one frame later,
-    -- by which point the layout has run.
-    --
-    -- The root menu above is deliberately NOT deferred. It measures correctly
-    -- today (164x342 in the diagnostic log) and deferring it would flash an
-    -- unskinned menu for a frame. The guard covers it if that ever changes.
     if menuDescription and menuDescription.AddMenuAcquiredCallback then
-        menuDescription:AddMenuAcquiredCallback(function(frame)
-            C_Timer.After(0, function() SkinFrame(frame) end)
-        end)
+        menuDescription:AddMenuAcquiredCallback(SkinFrame)
     end
 end
 
