@@ -103,7 +103,7 @@ end
 local function ReskinMapPOI(frame)
     if not frame or S.data(frame).skinned or not frame.Texture then return end
     S.data(frame).skinned = true
-    S.StripTextures(frame); S.Backdrop(frame)
+    S.StripKeepingIcon(frame, frame.Texture); S.Backdrop(frame)
     if frame.HighlightTexture then
         frame.HighlightTexture:SetTexture(WHITE)
         frame.HighlightTexture:SetVertexColor(1, 1, 1, 0.2)
