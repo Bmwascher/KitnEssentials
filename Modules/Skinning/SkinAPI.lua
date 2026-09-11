@@ -322,8 +322,8 @@ function S.StripTextures(frame, kill)
 end
 
 -- Strip a frame without losing the icon it holds: read the icon's art back
--- first, strip, then reapply. Atlas wins over texture because an atlas-set
--- region reports no texture path.
+-- first, strip, then reapply. Atlas is tried first because GetAtlas is nil
+-- on a plainly textured icon, so the texture branch still runs for those.
 ---@param frame Frame
 ---@param icon Texture|nil
 ---@param kill boolean|nil hide the stripped regions rather than clearing them
@@ -1457,10 +1457,10 @@ function S.EditBox(editbox, keepFont)
 end
 
 -- Both bounds are on OUR backdrop's inset, not a licence to relocate a tab
--- row. The leading bound is small because an uncapped correction once dragged
--- a Crafting Orders tab onto its Search button; the chain bound is wider
--- because a chained backdrop starts 12px short on rows anchored at -16 and
--- needs +13 to close to the 1px target.
+-- row: a leading tab whose parent is the whole frame can otherwise be dragged
+-- across it onto whatever sits at the edge. The chain bound is wider because
+-- a chained backdrop on a row anchored at -16 starts 12px short and needs +13
+-- to close to the 1px target.
 local MAX_INSET_CORRECTION = 8
 local MAX_CHAIN_GAP = 40
 
