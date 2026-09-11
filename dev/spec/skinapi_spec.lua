@@ -914,6 +914,43 @@ describe("S.SetSkinFont", function()
         assert.are.equal(15, S._EffectiveSize(11))
     end)
 
+
+    -- The face-change gate is KE's own branching (upstream re-sweeps on every
+    -- call). The first case is the trap: the GUI writes the profile before
+    -- calling the setter, so a first-call EnsureFontInit reads the new face
+    -- back and a comparison against S.FONT_FACE alone sees no change.
+    describe("Blizzard font sweep re-run", function()
+        local KE, sweeps
+        before_each(function()
+            KE = L.loadSkinAPI()
+            S = KE.Skins
+            sweeps = 0
+            S.ApplyGlobalFonts = function() sweeps = sweeps + 1 end
+            local bf = _G.KitnEssentials:GetModule("BlizzardFonts")
+            bf.IsEnabled = function() return true end
+            bf.ApplyAll = function() sweeps = sweeps + 1 end
+        end)
+
+        it("runs on the first call when the profile already carries the new face", function()
+            KE.db.profile.Skinning.BlizzardFrames.FontFace = "NewFace"
+            S.SetSkinFont("NewFace", nil, nil)
+            assert.are.equal(2, sweeps)
+        end)
+
+        it("runs on an ordinary face change", function()
+            S.SetSkinFont("FirstFace", nil, nil)
+            sweeps = 0
+            S.SetSkinFont("SecondFace", nil, nil)
+            assert.are.equal(2, sweeps)
+        end)
+
+        it("does not run on a size-only change", function()
+            S.SetSkinFont("FirstFace", nil, nil)
+            sweeps = 0
+            S.SetSkinFont(nil, 15, nil)
+            assert.are.equal(0, sweeps)
+        end)
+    end)
 end)
 
 -- These three need the KE.ApplyFont recorder, because S.SetFont routes every

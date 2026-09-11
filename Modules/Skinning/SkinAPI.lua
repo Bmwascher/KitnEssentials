@@ -2498,15 +2498,21 @@ function S.SetFontOutline(enabled)
 end
 
 function S.SetSkinFont(face, size, outline)
+    -- Captured before EnsureFontInit: the GUI writes the new face to the
+    -- profile before calling here, and a first-call init would read it back
+    -- as if it were already in force.
+    local priorFace = S.FONT_FACE
     EnsureFontInit()
     local changed = false
+    local faceChanged = false
 
     -- An empty face means the global font, not a name to store.
     if face ~= nil then
         local resolved = (face == "") and KE:GetGlobalFont() or face
-        if resolved ~= S.FONT_FACE then
+        if resolved ~= priorFace or resolved ~= S.FONT_FACE then
             S.FONT_FACE = resolved
             changed = true
+            faceChanged = true
         end
     end
 
@@ -2525,6 +2531,17 @@ function S.SetSkinFont(face, size, outline)
     if not changed then return end
 
     ReapplyFonts()
+
+    -- The two Blizzard font-object sweeps resolve this same face; without
+    -- this a new choice reaches every skinned string and none of the stock
+    -- text. Each sweep checks its own switch. Size and outline are not
+    -- re-swept: both sweeps read their own base size and carry fixed flags.
+    if faceChanged then
+        if S.ApplyGlobalFonts then S.ApplyGlobalFonts() end
+        local bf = KitnEssentials and KitnEssentials.GetModule
+            and KitnEssentials:GetModule("BlizzardFonts", true)
+        if bf and bf.IsEnabled and bf:IsEnabled() and bf.ApplyAll then bf:ApplyAll() end
+    end
 end
 
 -- 12.0.7 shadow doctrine: instance-level SetShadowColor/SetShadowOffset no longer
