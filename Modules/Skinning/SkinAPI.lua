@@ -322,8 +322,9 @@ function S.StripTextures(frame, kill)
 end
 
 -- Strip a frame without losing the icon it holds: read the icon's art back
--- first, strip, then reapply. Atlas is tried first because GetAtlas is nil
--- on a plainly textured icon, so the texture branch still runs for those.
+-- first, strip, then reapply. Atlas is tried first; a plainly textured icon
+-- reports no atlas (nil or an empty string), so the texture branch still
+-- runs for those.
 ---@param frame Frame
 ---@param icon Texture|nil
 ---@param kill boolean|nil hide the stripped regions rather than clearing them
