@@ -31,13 +31,19 @@ end
 -- Styling
 ---------------------------------------------------------------------------------
 
+-- One resolution for every message font, so a legacy SOFTOUTLINE stored in
+-- a profile is mapped by KE:GetFontOutline instead of reaching SetFont as a
+-- literal.
+local function MessageFont(db)
+    return KE:GetFontPath(db.Font), KE:GetFontOutline(db.FontOutline or "OUTLINE")
+end
+
 function SK:ZoneTextStyling()
     local zoneDB = self.db.ZoneText
     if zoneDB.Hide then
         _G.ZoneTextFrame:UnregisterAllEvents()
     else
-        local fontPath = KE:GetFontPath(self.db.Font)
-        local outline = self.db.FontOutline == "NONE" and "" or (self.db.FontOutline or "OUTLINE")
+        local fontPath, outline = MessageFont(self.db)
         ZoneTextString:SetFont(fontPath, zoneDB.MainZone.Size, outline)
         ZoneTextString:SetShadowColor(0, 0, 0, 0)
         ZoneTextString:SetShadowOffset(0, 0)
@@ -73,8 +79,7 @@ function SK:StyleUIErrorsFrame()
         UIErrorsFrame:Show()
         UIErrorsFrame:SetAlpha(1)
 
-        local fontPath = KE:GetFontPath(self.db.Font)
-        local outline = self.db.FontOutline == "NONE" and "" or (self.db.FontOutline or "OUTLINE")
+        local fontPath, outline = MessageFont(self.db)
         UIErrorsFrame:SetFont(fontPath, errorsDB.Size, outline)
 
         if errorsDB.Position then
@@ -100,8 +105,7 @@ function SK:StyleActionStatusText()
         ActionStatus.Text:Show()
         ActionStatus.Text:SetAlpha(1)
 
-        local fontPath = KE:GetFontPath(self.db.Font)
-        local outline = self.db.FontOutline == "NONE" and "" or (self.db.FontOutline or "OUTLINE")
+        local fontPath, outline = MessageFont(self.db)
         ActionStatus.Text:SetFont(fontPath, statusDB.Size, outline)
 
         if statusDB.Position then
@@ -120,8 +124,7 @@ function SK:StyleChatBubbles()
     local bubblesDB = self.db.ChatBubbles
     if not bubblesDB or not bubblesDB.Enabled or not ChatBubbleFont then return end
 
-    local fontPath = KE:GetFontPath(self.db.Font)
-    local outline = self.db.FontOutline == "NONE" and "" or (self.db.FontOutline or "OUTLINE")
+    local fontPath, outline = MessageFont(self.db)
     ChatBubbleFont:SetFont(fontPath, bubblesDB.Size, outline)
 end
 
