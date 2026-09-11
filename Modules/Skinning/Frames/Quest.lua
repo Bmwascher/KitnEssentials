@@ -4,6 +4,7 @@ local _G = _G
 local next, ipairs, pairs = next, ipairs, pairs
 local gsub, strmatch, strfind = string.gsub, string.match, string.find
 local hooksecurefunc = hooksecurefunc
+local CreateFrame = CreateFrame
 
 local sealFrameTextColor = {
     ["480404"] = "c20606",
@@ -120,19 +121,76 @@ local function ShowObjectives()
     end
 end
 
-local function QuestInfoItem_OnClick(btn)
-    local highlight = _G.QuestInfoItemHighlight
-    if not (highlight and btn and btn.Icon) then return end
-    highlight:ClearAllPoints()
-    highlight:SetPoint("TOPLEFT", btn.Icon, "TOPLEFT", -1, 1)
-    highlight:SetPoint("BOTTOMRIGHT", btn.Icon, "BOTTOMRIGHT", 1, -1)
-
+-- The selection outline is an owned frame per reward button, not Blizzard's
+-- `QuestInfoItemHighlight`: theirs is one shared 256x64 glow, re-pointed on
+-- every click and every redisplay, so a 1px outline drawn on it never sits
+-- right. 1px inside the button on every side, since the two reward columns
+-- are one pixel apart and an outline flush with the button touches its
+-- neighbour.
+--
+-- Clamped to the rewards frame's right edge: a reward row is wider than the
+-- panel, so the right-hand button's own right edge is off screen. Re-applied
+-- on every show because the buttons are pooled and a row's width is not
+-- settled until it has been laid out.
+local function PositionSelectionOverlay(f, btn)
     local rewards = _G.QuestInfoRewardsFrame
-    if rewards and rewards.RewardButtons then
-        for _, button in ipairs(rewards.RewardButtons) do
-            if button.Name then button.Name:SetTextColor(1, 1, 1) end
-        end
+    local limit = rewards and rewards.GetRight and rewards:GetRight()
+    local right = btn.GetRight and btn:GetRight()
+
+    f:ClearAllPoints()
+    f:SetPoint("TOPLEFT", btn, "TOPLEFT", 1, -1)
+    if limit and right and right > limit then
+        f:SetPoint("BOTTOMRIGHT", rewards, "BOTTOMRIGHT", -1, 0)
+        f:SetPoint("BOTTOM", btn, "BOTTOM", 0, 1)
+    else
+        f:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
     end
+end
+
+local function EnsureSelectionOverlay(btn)
+    local d = S.data(btn)
+    if d.keSelection then return d.keSelection end
+
+    local f = CreateFrame("Frame", nil, btn)
+    PositionSelectionOverlay(f, btn)
+    f:SetFrameLevel(btn:GetFrameLevel() + 1)
+
+    local bd = S.Backdrop(f, 0, true)
+    if bd then
+        bd:SetBackdropBorderColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 1)
+    end
+
+    local fill = f:CreateTexture(nil, "BACKGROUND")
+    fill:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
+    fill:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
+    fill:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3],
+        S.palette.brandRestA)
+
+    f:Hide()
+    d.keSelection = f
+    return f
+end
+
+local function ClearSelectionOverlays()
+    local rewards = _G.QuestInfoRewardsFrame
+    if not (rewards and rewards.RewardButtons) then return end
+    for _, button in ipairs(rewards.RewardButtons) do
+        local sel = S.data(button).keSelection
+        if sel then sel:Hide() end
+        if button.Name then button.Name:SetTextColor(1, 1, 1) end
+    end
+end
+
+local function QuestInfoItem_OnClick(btn)
+    if not (btn and btn.Icon) then return end
+
+    local blizz = _G.QuestInfoItemHighlight
+    if blizz then blizz:Hide() end
+
+    ClearSelectionOverlays()
+    local sel = EnsureSelectionOverlay(btn)
+    PositionSelectionOverlay(sel, btn)
+    sel:Show()
     if btn.Name then btn.Name:SetTextColor(1, 0.8, 0.1) end
 end
 
@@ -140,6 +198,10 @@ local function QuestInfo_Display()
     local infoFrame = _G.QuestInfoFrame
     local rewardsFrame = infoFrame and infoFrame.rewardsFrame
     if not rewardsFrame then return end
+
+    -- A fresh quest has nothing chosen, and the buttons come from a pool: an
+    -- overlay left shown would mark whatever reward inherits that frame.
+    ClearSelectionOverlays()
 
     if rewardsFrame.RewardButtons then
         for i, questItem in ipairs(rewardsFrame.RewardButtons) do
@@ -267,14 +329,12 @@ local function Skin()
         end
     end
 
+    -- Stripped as well as hidden: Blizzard's `UI-QuestItemHighlight` texture
+    -- would otherwise flare on the next click.
     local highlight = _G.QuestInfoItemHighlight
     if highlight then
         S.StripTextures(highlight)
-        local bd = S.Backdrop(highlight, 0, true)
-        if bd then
-            bd:SetBackdropBorderColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 1)
-        end
-        highlight:SetSize(142, 40)
+        highlight:Hide()
     end
 
     if not S.skinIndex.__questInfoHooks then
