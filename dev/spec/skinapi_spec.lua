@@ -1319,3 +1319,65 @@ describe("SkinAPI _CanCalibrateTab", function()
         assert.is_true(S._CanCalibrateTab(clear(), true))
     end)
 end)
+
+describe("SkinAPI IconBorder", function()
+    local helpers = require("dev.spec._helpers")
+    local S
+
+    -- A border texture whose hooked setters fire whatever hooksecurefunc
+    -- registered, the way the live texture does. No atlas: quest reward
+    -- borders are plain textures, so the colour arrives via SetVertexColor.
+    local function border()
+        local t = { shown = false, rgb = { 1, 1, 1 }, hooks = {} }
+        local function fire(method, ...)
+            for _, fn in ipairs(t.hooks[method] or {}) do fn(t, ...) end
+        end
+        t.IsShown = function() return t.shown end
+        t.GetAtlas = function() return nil end
+        t.GetVertexColor = function() return unpack(t.rgb) end
+        t.GetParent = function() return nil end
+        t.SetVertexColor = function(_, r, g, b) t.rgb = { r, g, b }; fire("SetVertexColor", r, g, b) end
+        t.SetShown = function(_, v) t.shown = v; fire("SetShown", v) end
+        t.Show = function() t.shown = true; fire("Show") end
+        t.Hide = function(_, sentinel) t.shown = false; fire("Hide", sentinel) end
+        t.SetAtlas = function(_, a) fire("SetAtlas", a) end
+        return t
+    end
+
+    local function backdrop()
+        local bd = { border = nil }
+        bd.SetBackdropBorderColor = function(_, r, g, b, a) bd.border = { r, g, b, a } end
+        return bd
+    end
+
+    before_each(function()
+        local KE = L.loadSkinAPI()
+        local stub = _G.hooksecurefunc
+        _G.hooksecurefunc = function(target, method, fn)
+            target.hooks[method] = target.hooks[method] or {}
+            table.insert(target.hooks[method], fn)
+        end
+        helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
+        _G.hooksecurefunc = stub
+        S = KE.Skins
+    end)
+
+    -- The redisplay of a pooled reward button: Blizzard shows the border (KE's
+    -- hook hides it again), paints the quality, and then the consumer's
+    -- post-hook re-calls S.IconBorder. The first call reads the border's
+    -- state; a re-call must leave the hook-painted colour alone.
+    it("keeps the hook-painted quality colour on a re-call of a hooked border", function()
+        local b, bd = border(), backdrop()
+        b:SetShown(true)
+        b:SetVertexColor(0.2, 0.4, 0.6)
+        S.IconBorder(b, bd)
+        assert.are.same({ 0.2, 0.4, 0.6, 1 }, bd.border)
+        assert.is_false(b.shown)
+
+        b:SetShown(true)
+        b:SetVertexColor(0.6, 0.2, 0.9)
+        assert.are.same({ 0.6, 0.2, 0.9, 1 }, bd.border)
+        S.IconBorder(b, bd)
+        assert.are.same({ 0.6, 0.2, 0.9, 1 }, bd.border)
+    end)
+end)

@@ -1195,6 +1195,10 @@ function S.IconBorder(border, backdrop)
     if not backdrop then return end
     local d = S.data(border)
     d.ibBackdrop = backdrop
+    -- Once hooked, the hooks own the colour. Re-reading IsShown() here would
+    -- see the Hide(0) the hooks applied and reset a quality colour they just
+    -- painted (every redisplay of a pooled reward button).
+    if d.ibHooked then return end
 
     if border:IsShown() then
         local r, g, b = ibQualityRGB(ibQuality(border:GetAtlas()))
@@ -1203,15 +1207,13 @@ function S.IconBorder(border, backdrop)
     else
         ibReset(border)
     end
-    if not d.ibHooked then
-        d.ibHooked = true
-        border:Hide()
-        hooksecurefunc(border, "SetAtlas", ibAtlas)
-        hooksecurefunc(border, "SetVertexColor", ibVertex)
-        hooksecurefunc(border, "SetShown", ibShown)
-        hooksecurefunc(border, "Show", ibShow)
-        hooksecurefunc(border, "Hide", ibHide)
-    end
+    d.ibHooked = true
+    border:Hide()
+    hooksecurefunc(border, "SetAtlas", ibAtlas)
+    hooksecurefunc(border, "SetVertexColor", ibVertex)
+    hooksecurefunc(border, "SetShown", ibShown)
+    hooksecurefunc(border, "Show", ibShow)
+    hooksecurefunc(border, "Hide", ibHide)
 end
 
 function S.NavButton(button)
