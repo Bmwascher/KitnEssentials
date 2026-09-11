@@ -66,18 +66,12 @@ local function RefreshLayout()
     end
 end
 
-local function PositionViewerTab(tab, _, _, _, x, y)
-    if x ~= 1 or y ~= 0 then
-        tab:ClearAllPoints()
-        tab:SetPoint("TOPLEFT", _G.CooldownViewerSettings, "TOPRIGHT", 1, 0)
-    end
-end
-
-local function PositionAurasTab(tab, _, _, _, x, y)
-    if x ~= 0 or y ~= -1 then
-        tab:ClearAllPoints()
-        tab:SetPoint("TOP", _G.CooldownViewerSettings.SpellsTab, "BOTTOM", 0, -1)
-    end
+local function KeepTabAnchored(tab, _, _, _, x, y)
+    local a = S.data(tab).tabAnchor
+    if not a then return end
+    if x == a.x and y == a.y then return end
+    tab:ClearAllPoints()
+    tab:SetPoint(a.point, a.rel, a.relPoint, a.x, a.y)
 end
 
 local function PositionTabIcon(icon, point)
@@ -86,41 +80,54 @@ local function PositionTabIcon(icon, point)
     icon:SetPoint("CENTER")
 end
 
+-- Fallback for a build without the parentArray.
+local function TabList(viewer)
+    local tabs = viewer.TabButtons
+    if type(tabs) == "table" and #tabs > 0 then return tabs end
+    return { viewer.SpellsTab, viewer.AurasTab, viewer.GroupBuffsTab }
+end
+
 local function HandleAbilityTabs(viewer)
-    for i, tab in next, { viewer.SpellsTab, viewer.AurasTab } do
-        S.Backdrop(tab)
-        tab:SetSize(30, 40)
-        if i == 1 then
-            tab:ClearAllPoints()
-            tab:SetPoint("TOPLEFT", viewer, "TOPRIGHT", 1, 0)
-            hooksecurefunc(tab, "SetPoint", PositionViewerTab)
+    local prev
+    for i, tab in ipairs(TabList(viewer)) do
+        local d = S.data(tab)
+
+        local a
+        if i == 1 or not prev then
+            a = { point = "TOPLEFT", rel = viewer, relPoint = "TOPRIGHT", x = 1, y = 0 }
         else
-            tab:ClearAllPoints()
-            tab:SetPoint("TOP", viewer.SpellsTab, "BOTTOM", 0, -1)
-            hooksecurefunc(tab, "SetPoint", PositionAurasTab)
+            a = { point = "TOP", rel = prev, relPoint = "BOTTOM", x = 0, y = -1 }
         end
+        d.tabAnchor = a
+        tab:SetSize(30, 40)
+        tab:ClearAllPoints()
+        tab:SetPoint(a.point, a.rel, a.relPoint, a.x, a.y)
+
+        if not d.tabSkinned then
+            d.tabSkinned = true
+            S.Backdrop(tab)
+            hooksecurefunc(tab, "SetPoint", KeepTabAnchored)
+            if tab.Icon then
+                hooksecurefunc(tab.Icon, "SetPoint", PositionTabIcon)
+                hooksecurefunc(tab.Icon, "SetSize", function(ic, w, h)
+                    if (w ~= 20 or h ~= 20) and not S.data(ic).sizing then
+                        S.data(ic).sizing = true
+                        ic:SetSize(20, 20)
+                        S.data(ic).sizing = nil
+                    end
+                end)
+                S.Icon(tab.Icon)
+            end
+            S.HoverWash(tab)
+        end
+
         if tab.Icon then
             tab.Icon:ClearAllPoints()
             tab.Icon:SetPoint("CENTER")
-            hooksecurefunc(tab.Icon, "SetPoint", PositionTabIcon)
+            tab.Icon:SetSize(20, 20)
         end
         if tab.Background then tab.Background:SetAlpha(0) end
-        if tab.Icon then
-
-            local icon = tab.Icon
-            icon:SetSize(20, 20)
-            hooksecurefunc(icon, "SetSize", function(ic, w, h)
-                if (w ~= 20 or h ~= 20) and not S.data(ic).sizing then
-                    S.data(ic).sizing = true
-                    ic:SetSize(20, 20)
-                    S.data(ic).sizing = nil
-                end
-            end)
-
-            S.Icon(icon)
-        end
         if tab.SelectedTexture then
-
             tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
             tab.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.18)
             local tbd = S.GetBackdrop(tab)
@@ -130,7 +137,7 @@ local function HandleAbilityTabs(viewer)
         end
 
         S.KillSideTabArt(tab)
-        S.HoverWash(tab)
+        prev = tab
     end
 end
 
