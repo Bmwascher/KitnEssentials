@@ -45,10 +45,10 @@ describe("BlizzardFonts", function()
         dbOverrides = dbOverrides or {}
         local modules = helpers.installAddonShim()
         KE = {
-            FONT = "Fonts\\Expressway.TTF",
             ShouldNotLoadModule = function() return false end,
             GetFontOutline = stubOutline,
             SlugFlags = function(_, flags) return flags end,
+            GetFontPath = function(_, name) return "Fonts\\" .. (name or "Expressway") .. ".TTF" end,
             db = {
                 profile = {
                     Skinning = {

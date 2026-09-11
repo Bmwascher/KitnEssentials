@@ -213,7 +213,9 @@ function BF:ApplyAll()
     self:UpdateDB()
     if not self.db or not self.db.Enabled then return end
 
-    local face = KE.FONT
+    -- The skin face, resolved the way every skinned string resolves it.
+    local S = KE.Skins
+    local face = KE:GetFontPath(S and S.FONT_FACE)
     local bsdb = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
     local base = (bsdb and tonumber(bsdb.FontBaseSize)) or 12
