@@ -156,9 +156,17 @@ function SK:ResetActionStatusText()
     ActionStatus.Text:SetPoint("TOP", UIParent, "TOP", 0, -150)
 end
 
+function SK:ResetZoneText()
+    if not _G.ZoneTextFrame then return end
+    _G.ZoneTextFrame:RegisterEvent("ZONE_CHANGED")
+    _G.ZoneTextFrame:RegisterEvent("ZONE_CHANGED_INDOORS")
+    _G.ZoneTextFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+end
+
 function SK:Reset()
     self:ResetUIErrorsFrame()
     self:ResetActionStatusText()
+    self:ResetZoneText()
 end
 
 ---------------------------------------------------------------------------------
