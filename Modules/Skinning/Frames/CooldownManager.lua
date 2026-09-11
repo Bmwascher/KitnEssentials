@@ -141,6 +141,25 @@ local function HandleAbilityTabs(viewer)
     end
 end
 
+local function HandleGroupBuffSection(section)
+    if not section then return end
+    if section.Header then HandleHeader(section.Header) end
+    local pool = section.itemPool
+    if pool and not hookedItemPools[pool] then
+        hookedItemPools[pool] = true
+        HandleSettingItemPool(pool)
+        hooksecurefunc(pool, "Acquire", HandleSettingItemPool)
+    end
+end
+
+local function HandleGroupBuffFilter(viewer)
+    local gbf = viewer.GroupBuffFilter
+    if not gbf then return end
+    if gbf.Scroll then S.ScrollBar(gbf.Scroll.ScrollBar) end
+    HandleGroupBuffSection(gbf.shownSection)
+    HandleGroupBuffSection(gbf.hiddenSection)
+end
+
 local function Skin()
     local viewer = _G.CooldownViewerSettings
     if viewer then
@@ -154,6 +173,7 @@ local function Skin()
         S.Button(viewer.UndoButton)
         if viewer.LayoutDropdown then pcall(S.DropDown, viewer.LayoutDropdown) end
         HandleAbilityTabs(viewer)
+        HandleGroupBuffFilter(viewer)
         RefreshLayout()
         hooksecurefunc(viewer, "RefreshLayout", RefreshLayout)
     end
