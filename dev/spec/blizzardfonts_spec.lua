@@ -1,8 +1,8 @@
 -- Modules/Skinning/BlizzardFonts.lua -- game-wide replacement of Blizzard's
 -- shared font OBJECTS. Loaded directly (not through dev/spec/_ke_loader.lua)
 -- because the module needs _G font-object fakes the loader has no shape for
--- -- see fontObject() below. KE.GetFontOutline, KE.SlugFlags and
--- KE.GetFontPath are stubbed here rather than pulled from a real
+-- -- see fontObject() below. KE.GetFontOutline, KE.SlugFlags, KE.GetFontPath
+-- and KE.GetEffectiveFont are stubbed here rather than pulled from a real
 -- Core/Globals.lua load: the boundary under test is whether BlizzardFonts
 -- CALLS them correctly, not what they compute
 -- (Core/Globals.lua's own spec already covers GetFontOutline's filter).
@@ -39,8 +39,9 @@ describe("BlizzardFonts", function()
     end
 
     -- Loads a fresh copy of the module (new `originals` upvalue each time)
-    -- against a hand-built KE. dbOverrides may replace BlizzardFonts and/or
-    -- BlizzardFrames; anything not given falls back to a sane default.
+    -- against a hand-built KE. dbOverrides may replace BlizzardFonts,
+    -- BlizzardFrames and/or the KE.Skins seed; anything not given falls back
+    -- to a sane default.
     local function load(dbOverrides)
         dbOverrides = dbOverrides or {}
         local modules = helpers.installAddonShim()
@@ -49,6 +50,8 @@ describe("BlizzardFonts", function()
             GetFontOutline = stubOutline,
             SlugFlags = function(_, flags) return flags end,
             GetFontPath = function(_, name) return "Fonts\\" .. (name or "Expressway") .. ".TTF" end,
+            GetEffectiveFont = function(_, moduleDB) return moduleDB and moduleDB.FontFace end,
+            Skins = dbOverrides.Skins,
             db = {
                 profile = {
                     Skinning = {
@@ -145,6 +148,31 @@ describe("BlizzardFonts", function()
             BF:ApplyAll()
             local p, s, f = obj:GetFont()
             assert.same({ "Fonts\\FRIZQT__.TTF", 13, "" }, { p, s, f })
+        end)
+    end)
+
+    -- The skin's live face is only initialised from the profile once the
+    -- frame skin runs. This sweep can be on with that skin off, and the seed
+    -- it would read then is the parse-time literal, not the user's choice.
+    describe("face source", function()
+        it("reads the stored skin face while the skin's font state is uninitialised", function()
+            load({
+                BlizzardFrames = { FontBaseSize = 12, FontFace = "ChosenFace" },
+                Skins = { FONT_FACE = "Expressway" },
+            })
+            local obj = plant("QuestFont", fontObject("Fonts\\FRIZQT__.TTF", 13, ""))
+            BF:ApplyAll()
+            assert.equals("Fonts\\ChosenFace.TTF", (obj:GetFont()))
+        end)
+
+        it("prefers the live skin face once that state is initialised", function()
+            load({
+                BlizzardFrames = { FontBaseSize = 12, FontFace = "ChosenFace" },
+                Skins = { FONT_FACE = "LiveFace", _offsetInit = true },
+            })
+            local obj = plant("QuestFont", fontObject("Fonts\\FRIZQT__.TTF", 13, ""))
+            BF:ApplyAll()
+            assert.equals("Fonts\\LiveFace.TTF", (obj:GetFont()))
         end)
     end)
 
