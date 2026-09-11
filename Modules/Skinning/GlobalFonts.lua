@@ -31,6 +31,15 @@ local OUTLINED = {
 
     "AchievementCriteriaFont", "AchievementDateFont", "AchievementDescriptionFont",
     "AchievementPointsFont", "AchievementPointsFontSmall",
+
+    -- Button state-font partners. A Button swaps between three font objects
+    -- on hover and disable, so rescaling one of a trio and not the others
+    -- resizes the label the moment the cursor touches it. Each name here is
+    -- the odd one out of a trio whose other members are swept here or by
+    -- the Blizzard font sweep.
+    "GameFontHighlightOutline",
+    "GameFontDisableHuge", "GameFontDisableTiny2", "GameFontDisableLeft",
+    "GameFontWhiteLarge", "GameFontDisableMed2",
 }
 local PLAIN = { "InvoiceTextFontNormal" }
 
