@@ -1,9 +1,10 @@
 -- Modules/Skinning/BlizzardFonts.lua -- game-wide replacement of Blizzard's
 -- shared font OBJECTS. Loaded directly (not through dev/spec/_ke_loader.lua)
 -- because the module needs _G font-object fakes the loader has no shape for
--- -- see fontObject() below. KE.GetFontOutline and KE.FONT are stubbed here
--- rather than pulled from a real Core/Globals.lua load: the boundary under
--- test is whether BlizzardFonts CALLS them correctly, not what they compute
+-- -- see fontObject() below. KE.GetFontOutline, KE.SlugFlags and
+-- KE.GetFontPath are stubbed here rather than pulled from a real
+-- Core/Globals.lua load: the boundary under test is whether BlizzardFonts
+-- CALLS them correctly, not what they compute
 -- (Core/Globals.lua's own spec already covers GetFontOutline's filter).
 local helpers = require("dev.spec._helpers")
 
@@ -47,6 +48,7 @@ describe("BlizzardFonts", function()
             FONT = "Fonts\\Expressway.TTF",
             ShouldNotLoadModule = function() return false end,
             GetFontOutline = stubOutline,
+            SlugFlags = function(_, flags) return flags end,
             db = {
                 profile = {
                     Skinning = {

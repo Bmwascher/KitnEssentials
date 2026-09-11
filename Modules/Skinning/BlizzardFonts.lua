@@ -240,21 +240,21 @@ function BF:ApplyAll()
 
             local kind = entry[2 + 1]
             if kind == "O" then
-                obj:SetFont(face, size, KE:GetFontOutline("OUTLINE"))
+                obj:SetFont(face, size, KE:SlugFlags(KE:GetFontOutline("OUTLINE"), size))
                 obj:SetShadowColor(0, 0, 0, 0)
                 obj:SetShadowOffset(0, 0)
             elseif kind == "T" then
-                obj:SetFont(face, size, KE:GetFontOutline("THICKOUTLINE"))
+                obj:SetFont(face, size, KE:SlugFlags(KE:GetFontOutline("THICKOUTLINE"), size))
                 obj:SetShadowColor(0, 0, 0, 0)
                 obj:SetShadowOffset(0, 0)
             elseif kind == "S" or kind == "SB" then
 
-                obj:SetFont(face, size, KE:GetFontOutline(""))
+                obj:SetFont(face, size, KE:SlugFlags(KE:GetFontOutline(""), size))
                 obj:SetShadowColor(0, 0, 0, 0)
                 obj:SetShadowOffset(0, 0)
             else
 
-                obj:SetFont(face, size, KE:GetFontOutline(""))
+                obj:SetFont(face, size, KE:SlugFlags(KE:GetFontOutline(""), size))
                 obj:SetShadowColor(0, 0, 0, 0)
                 obj:SetShadowOffset(0, 0)
             end
