@@ -321,7 +321,7 @@ local function SkinEncounterJournal()
             local sugg = suggest["Suggestion" .. i]
             if sugg then
                 if sugg.bg then sugg.bg:Hide() end
-                S.StripTextures(sugg)
+                S.StripKeepingIcon(sugg, sugg.icon)
                 S.Backdrop(sugg)
                 local cd = sugg.centerDisplay
                 if cd then
