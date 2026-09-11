@@ -983,3 +983,264 @@ describe("S.SetSkinFont applied output", function()
         assert.equals("OUTLINE", applied[#applied].outline)
     end)
 end)
+
+-- S.PinButtonFont and the shared font-object registry. The hook cases need a
+-- real hooksecurefunc captured into SkinAPI's file-local, which the loader
+-- stubs to a no-op before load; so the module is loaded a second time under a
+-- recording global, restored before any assertion can run. The button double
+-- fires the recorded hooks from its own setters, which is how a post-hook
+-- behaves in the client, so a hook firing DURING an assignment is observable.
+describe("SkinAPI PinButtonFont", function()
+    local helpers = require("dev.spec._helpers")
+    local KE, S, applied
+
+    -- A Blizzard-style state object: only what PinState reads.
+    local function stateObject(r, g, b, a, jh, jv)
+        return {
+            GetTextColor = function() return r, g, b, a or 1 end,
+            GetJustifyH = function() return jh or "CENTER" end,
+            GetJustifyV = function() return jv or "MIDDLE" end,
+            GetFont = function() return "Fonts\\FRIZQT__.TTF", 10, "" end,
+        }
+    end
+
+    -- What CreateFont hands back: records colour and justification so a
+    -- re-pin reading the CURRENT state object sees what we set.
+    local function fontObject(name)
+        local o = { name = name, color = {}, justify = {} }
+        o.SetFont = function() return true end
+        o.SetShadowColor = function() end
+        o.SetShadowOffset = function() end
+        o.SetTextColor = function(_, r, g, b, a) o.color = { r, g, b, a } end
+        o.GetTextColor = function() return unpack(o.color) end
+        o.SetJustifyH = function(_, v) o.justify.h = v end
+        o.SetJustifyV = function(_, v) o.justify.v = v end
+        o.GetJustifyH = function() return o.justify.h end
+        o.GetJustifyV = function() return o.justify.v end
+        o.GetFont = function() return "Fonts\\FRIZQT__.TTF", 10, "" end
+        return o
+    end
+
+    local STATES = { "Normal", "Highlight", "Disabled" }
+
+    -- A button whose three state setters record the assignment and then fire
+    -- whatever hooksecurefunc registered against that setter.
+    local function button(states)
+        local b = { states = {}, assigned = {}, hooks = {} }
+        for _, st in ipairs(STATES) do
+            b.states[st] = states and states[st]
+            b["Get" .. st .. "FontObject"] = function(self) return self.states[st] end
+            b["Set" .. st .. "FontObject"] = function(self, obj)
+                self.states[st] = obj
+                self.assigned[#self.assigned + 1] = { state = st, obj = obj }
+                for _, fn in ipairs(self.hooks["Set" .. st .. "FontObject"] or {}) do
+                    fn(self, obj)
+                end
+            end
+        end
+        b.Text = {
+            SetFont = function() end,
+            GetFont = function() return "Fonts\\FRIZQT__.TTF", 12, "" end,
+            SetShadowColor = function() end,
+            GetParent = function() return b end,
+        }
+        b.GetFontString = function(self) return self.Text end
+        return b
+    end
+
+    local function threeStates()
+        return {
+            Normal = stateObject(1, 0.82, 0),
+            Highlight = stateObject(1, 1, 1),
+            Disabled = stateObject(0.5, 0.5, 0.5),
+        }
+    end
+
+    local function appliedTo(obj)
+        local last
+        for _, rec in ipairs(applied) do
+            if rec.fs == obj then last = rec end
+        end
+        return last
+    end
+
+    before_each(function()
+        KE = L.loadSkinAPI()
+        -- Reload under a recording hooksecurefunc so the file-local captures
+        -- it; the global is put back before the body runs.
+        local stub = _G.hooksecurefunc
+        _G.hooksecurefunc = function(target, method, fn)
+            target.hooks[method] = target.hooks[method] or {}
+            table.insert(target.hooks[method], fn)
+        end
+        helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
+        _G.hooksecurefunc = stub
+        S = KE.Skins
+
+        _G.CreateFont = function(name) return fontObject(name) end
+        applied = {}
+        KE.ApplyFont = function(_, fs, face, size, outline)
+            applied[#applied + 1] = { fs = fs, face = face, size = size, outline = outline }
+            return true
+        end
+        -- Non-cancelling base and offset: a requested 12 renders as 18, so an
+        -- accidental double application cannot hide behind identity.
+        S.SetSkinFont(nil, 16, nil)
+        S.SetFontOffset(2)
+    end)
+
+    after_each(function()
+        _G.CreateFont = nil
+    end)
+
+    it("driven through SetFont on the button's own label, the resolved size reaches all three states and each keeps its colour", function()
+        local b = button(threeStates())
+        -- A second string under the same button must NOT pin: it is not the
+        -- button's label.
+        local other = { SetFont = function() end, GetFont = b.Text.GetFont,
+                        SetShadowColor = function() end, GetParent = function() return b end }
+        S.SetFont(other, 12, "")
+        assert.equals(0, #b.assigned)
+
+        S.SetFont(b.Text, 12, "")
+        assert.equals(3, #b.assigned)
+        local seen = {}
+        for _, rec in ipairs(b.assigned) do
+            seen[rec.state] = rec.obj
+            assert.equals(18, appliedTo(rec.obj).size)
+        end
+        assert.same({ 1, 0.82, 0, 1 }, seen.Normal.color)
+        assert.same({ 1, 1, 1, 1 }, seen.Highlight.color)
+        assert.same({ 0.5, 0.5, 0.5, 1 }, seen.Disabled.color)
+    end)
+
+    it("returns the same cached object for the same request across a base-size change, and a different one for a different colour", function()
+        local b = button(threeStates())
+        S.SetFont(b.Text, 12, "")
+        local first = b.states.Normal
+        local before = #applied
+
+        S.SetSkinFont(nil, 20, nil)
+        -- The refresh re-applies the label AND the object; the fold then
+        -- re-pins and hits the cache. Identity is the assertion, not a count.
+        assert.equals(first, b.states.Normal)
+        assert.equals(22, appliedTo(first).size)
+        assert.is_true(#applied > before)
+
+        assert.are_not.equal(b.states.Normal, b.states.Highlight)
+    end)
+
+    it("SetFontOffset re-renders a registered font object to the new resolved size", function()
+        local b = button(threeStates())
+        S.SetFont(b.Text, 12, "")
+        local obj = b.states.Normal
+        S.SetFontOffset(4)
+        assert.equals(20, appliedTo(obj).size)
+    end)
+
+    it("SetFontOutline re-renders a registered font object with the new flags", function()
+        local b = button(threeStates())
+        S.SetFont(b.Text, 12, "OUTLINE")
+        local obj = b.states.Normal
+        assert.equals("", appliedTo(obj).outline)
+        S.SetFontOutline(true)
+        assert.equals("OUTLINE", appliedTo(obj).outline)
+    end)
+
+    it("SetSkinFont re-renders a registered font object to the new face, size and flags, including a face-only change", function()
+        local b = button(threeStates())
+        S.SetFont(b.Text, 12, "")
+        local obj = b.states.Normal
+        S.SetSkinFont("Other Face", nil, nil)
+        assert.equals("Other Face", appliedTo(obj).face)
+        assert.equals(18, appliedTo(obj).size)
+        S.SetSkinFont(nil, 14, "THICK")
+        assert.equals(16, appliedTo(obj).size)
+        assert.equals("THICKOUTLINE", appliedTo(obj).outline)
+    end)
+
+    it("refuses a noGeometry button outright: no application, no assignment, no hooks", function()
+        local b = button(threeStates())
+        S.data(b).noGeometry = true
+        local before = #applied
+        S.SetFont(b.Text, 12, "")
+        assert.equals(0, #b.assigned)
+        assert.is_nil(next(b.hooks))
+        -- The label itself is still applied; only the pin refused.
+        assert.equals(before + 1, #applied)
+    end)
+
+    it("leaves a state with no font object of its own untouched", function()
+        local b = button({ Normal = stateObject(1, 0.82, 0) })
+        S.SetFont(b.Text, 12, "")
+        assert.equals(1, #b.assigned)
+        assert.equals("Normal", b.assigned[1].state)
+        assert.is_nil(b.states.Highlight)
+        assert.is_nil(b.states.Disabled)
+    end)
+
+    it("re-pins a reassigned state at KE's size while taking the newly assigned object's colour", function()
+        local b = button(threeStates())
+        S.SetFont(b.Text, 12, "")
+        -- Blizzard swaps the disabled object to a white one, as a legacy
+        -- tab's selection does.
+        b:SetDisabledFontObject(stateObject(1, 1, 1))
+        local now = b.states.Disabled
+        assert.same({ 1, 1, 1, 1 }, now.color)
+        assert.equals(18, appliedTo(now).size)
+        assert.equals(b.states.Highlight, now)
+    end)
+
+    it("uses the LATEST requested pair, with the callback firing during the re-pin's own assignment", function()
+        local b = button(threeStates())
+        S.SetFont(b.Text, 12, "")
+        -- Re-pin at a different requested size. The double fires the hook
+        -- synchronously inside each setter, so a record written after the
+        -- assignment would leave the hook re-pinning at the old pair.
+        S.SetFont(b.Text, 14, "")
+        for _, st in ipairs(STATES) do
+            assert.equals(20, appliedTo(b.states[st]).size, st)
+        end
+        b:SetNormalFontObject(stateObject(0, 1, 0))
+        assert.equals(20, appliedTo(b.states.Normal).size)
+        assert.same({ 0, 1, 0, 1 }, b.states.Normal.color)
+    end)
+
+    it("noGeometry set after a successful pin stops the callback re-asserting", function()
+        local b = button(threeStates())
+        S.SetFont(b.Text, 12, "")
+        S.data(b).noGeometry = true
+        local external = stateObject(0, 0, 1)
+        b:SetNormalFontObject(external)
+        assert.equals(external, b.states.Normal)
+    end)
+
+    it("a refusal after an accepted pin clears the record so the callback stops, and a later pin resumes", function()
+        local b = button(threeStates())
+        S.SetFont(b.Text, 12, "")
+        S.PinButtonFont(b, nil, "")
+        local external = stateObject(0, 0, 1)
+        b:SetNormalFontObject(external)
+        assert.equals(external, b.states.Normal)
+
+        S.PinButtonFont(b, 12, "")
+        assert.are_not.equal(external, b.states.Normal)
+        assert.equals(18, appliedTo(b.states.Normal).size)
+        assert.same({ 0, 0, 1, 1 }, b.states.Normal.color)
+    end)
+
+    it("refuses a button with no SetNormalFontObject", function()
+        local b = button(threeStates())
+        b.SetNormalFontObject = nil
+        S.PinButtonFont(b, 12, "")
+        assert.equals(0, #b.assigned)
+        assert.is_nil(S.data(b).buttonFont)
+    end)
+
+    it("carries the state object's justification into the shared object", function()
+        local b = button({ Normal = stateObject(1, 0.82, 0, 1, "LEFT", "TOP") })
+        S.SetFont(b.Text, 12, "")
+        assert.equals("LEFT", b.states.Normal.justify.h)
+        assert.equals("TOP", b.states.Normal.justify.v)
+    end)
+end)

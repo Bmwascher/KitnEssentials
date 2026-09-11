@@ -2407,14 +2407,53 @@ local function EnsureFontInit()
     end
 end
 
+-- One resolution for a FontString and for a shared font object, so the two
+-- cannot disagree about what a requested (size, outline) renders as.
+-- Requested outline goes to the registry; only the effective one reaches the
+-- font, so the switch is reversible.
+local function ResolveFont(size, outline)
+    local eff = S._EffectiveSize(size)
+    if eff < 8 then eff = 8 end
+    local effOutline = ""
+    if S.fontOutlineMode == "THICK" then
+        effOutline = "THICKOUTLINE"
+    elseif S.fontOutline then
+        effOutline = outline
+    end
+    return eff, effOutline
+end
+
+-- Shared font objects KE has created, keyed on the object, holding the
+-- requested pair so a settings change can re-render them. fontRegistry is
+-- keyed on FontStrings and cannot hold these; a cached object is initialised
+-- only on a cache miss, so nothing else would ever refresh it.
+local fontObjects = setmetatable({}, { __mode = "k" })
+
+local function ApplyFontObject(obj, size, outline)
+    local eff, effOutline = ResolveFont(size, outline)
+    pcall(KE.ApplyFont, KE, obj, S.FONT_FACE, eff, effOutline)
+    -- The shadow has to be cleared on the object: a FontString's rendered
+    -- shadow comes from its font object, as documented above S.PrimeNoShadow.
+    if obj.SetShadowColor then pcall(obj.SetShadowColor, obj, 0, 0, 0, 0) end
+    if obj.SetShadowOffset then pcall(obj.SetShadowOffset, obj, 0, 0) end
+    fontObjects[obj] = { size = size, outline = outline }
+end
+
+local function ReapplyFonts()
+    for fs, rec in pairs(fontRegistry) do
+        S.SetFont(fs, rec.size, rec.outline)
+    end
+    for obj, rec in pairs(fontObjects) do
+        ApplyFontObject(obj, rec.size, rec.outline)
+    end
+end
+
 function S.SetFontOffset(offset)
     EnsureFontInit()
     offset = tonumber(offset) or 0
     if offset == S.fontOffset then return end
     S.fontOffset = offset
-    for fs, rec in pairs(fontRegistry) do
-        S.SetFont(fs, rec.size, rec.outline)
-    end
+    ReapplyFonts()
 end
 
 -- Global outline switch. fontRegistry holds the outline each call site ASKED
@@ -2426,9 +2465,7 @@ function S.SetFontOutline(enabled)
     if mode == S.fontOutlineMode then return end
     S.fontOutlineMode = mode
     S.fontOutline = (mode ~= "NONE")
-    for fs, rec in pairs(fontRegistry) do
-        S.SetFont(fs, rec.size, rec.outline)
-    end
+    ReapplyFonts()
 end
 
 function S.SetSkinFont(face, size, outline)
@@ -2458,9 +2495,7 @@ function S.SetSkinFont(face, size, outline)
 
     if not changed then return end
 
-    for fs, rec in pairs(fontRegistry) do
-        S.SetFont(fs, rec.size, rec.outline)
-    end
+    ReapplyFonts()
 end
 
 -- 12.0.7 shadow doctrine: instance-level SetShadowColor/SetShadowOffset no longer
@@ -2489,6 +2524,89 @@ function S.PrimeNoShadow(fontString)
     pcall(fontString.SetFontObject, fontString, noShadowFont)
 end
 
+-- A button's three state font objects must share a SIZE without sharing a
+-- COLOUR, and a Font object also carries its own justification, which some
+-- fixed-width labels rely on. All of that is in the key.
+local buttonFontCache = {}
+local buttonFontCount = 0
+
+local function StateFontObject(size, outline, r, g, b, a, jh, jv)
+    local key = table.concat({ tostring(size), tostring(outline), tostring(r), tostring(g),
+        tostring(b), tostring(a), tostring(jh), tostring(jv) }, "|")
+    local obj = buttonFontCache[key]
+    if obj then return obj end
+    buttonFontCount = buttonFontCount + 1
+    obj = CreateFont("KE_SkinButtonFont" .. buttonFontCount)
+    ApplyFontObject(obj, size, outline)
+    obj:SetTextColor(r, g, b, a)
+    if jh and obj.SetJustifyH then obj:SetJustifyH(jh) end
+    if jv and obj.SetJustifyV then obj:SetJustifyV(jv) end
+    buttonFontCache[key] = obj
+    return obj
+end
+
+local BUTTON_FONT_STATES = {
+    { get = "GetNormalFontObject", set = "SetNormalFontObject" },
+    { get = "GetHighlightFontObject", set = "SetHighlightFontObject" },
+    { get = "GetDisabledFontObject", set = "SetDisabledFontObject" },
+}
+
+-- A state with no object is left alone: there is nothing to re-apply over
+-- our SetFont, and inventing an object would invent a colour.
+local function PinState(button, state, size, outline)
+    local cur = button[state.get] and button[state.get](button)
+    if not cur or not cur.GetTextColor then return end
+    local r, g, b, a = cur:GetTextColor()
+    local jh = cur.GetJustifyH and cur:GetJustifyH()
+    local jv = cur.GetJustifyV and cur:GetJustifyV()
+    button[state.set](button, StateFontObject(size, outline, r, g, b, a, jh, jv))
+end
+
+-- Blizzard swaps a state's object to change the label's COLOUR (a selected
+-- legacy tab reads white), so a reassigned state is re-pinned at our size
+-- with the NEW object's colour rather than re-asserting the old object.
+-- Hook-and-re-assert, never method replacement: see S.KillTexture.
+local function HookStates(button, d)
+    if d.buttonFontHooked then return end
+    d.buttonFontHooked = true
+    local applying = false
+    for _, state in ipairs(BUTTON_FONT_STATES) do
+        hooksecurefunc(button, state.set, function(self)
+            if applying then return end
+            local sd = S.data(self)
+            if sd.noGeometry then return end
+            local rec = sd.buttonFont
+            if not rec then return end
+            applying = true
+            PinState(self, state, rec.size, rec.outline)
+            applying = false
+        end)
+    end
+end
+
+-- Pin a button's state font objects to the size its label was given, so a
+-- hover or selection swap does not re-render the label at Blizzard's size.
+-- Called from the S.SetFont fold for a button's own label; size is the
+-- requested size S.SetFont resolved, never nil there. A managed tab keeps
+-- Blizzard's sizing outright (noGeometry), and the refusal clears the record
+-- so an earlier pin's hooks stop asserting.
+---@param button Button
+---@param size number requested size, as S.SetFont records it
+---@param outline string requested outline flag
+function S.PinButtonFont(button, size, outline)
+    if not (button and button.SetNormalFontObject) then return end
+    local d = S.data(button)
+    if not size or d.noGeometry then
+        d.buttonFont = nil
+        return
+    end
+    d.buttonFont = { size = size, outline = outline or "" }
+    for _, state in ipairs(BUTTON_FONT_STATES) do
+        PinState(button, state, size, outline or "")
+    end
+    HookStates(button, d)
+end
+
 function S.SetFont(fontString, size, outline)
     if not fontString or not fontString.SetFont then return end
 
@@ -2509,16 +2627,7 @@ function S.SetFont(fontString, size, outline)
         and d.fontOutlineOn == S.fontOutline and d.fontFace == S.FONT_FACE
         and d.fontBase == S.fontBaseSize
         and d.fontOutlineMode == S.fontOutlineMode then return end
-    local eff = S._EffectiveSize(size)
-    if eff < 8 then eff = 8 end
-    -- Requested outline goes to the registry and the dirty record; only the
-    -- effective one reaches the font, so the switch is reversible.
-    local effOutline = ""
-    if S.fontOutlineMode == "THICK" then
-        effOutline = "THICKOUTLINE"
-    elseif S.fontOutline then
-        effOutline = outline
-    end
+    local eff, effOutline = ResolveFont(size, outline)
     S.PrimeNoShadow(fontString)
     pcall(KE.ApplyFont, KE, fontString, S.FONT_FACE, eff, effOutline)
 
@@ -2534,6 +2643,13 @@ function S.SetFont(fontString, size, outline)
         rec.size, rec.outline = size, outline
     else
         fontRegistry[fontString] = { size = size, outline = outline }
+    end
+
+    -- A button's own label: its state objects would re-render it at their
+    -- size on the next state change, so pin them at this one.
+    local parent = fontString.GetParent and fontString:GetParent()
+    if parent and parent.GetFontString and parent:GetFontString() == fontString then
+        S.PinButtonFont(parent, size, outline)
     end
 end
 
