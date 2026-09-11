@@ -178,6 +178,17 @@ local function Skin()
         hooksecurefunc(viewer, "RefreshLayout", RefreshLayout)
     end
 
+    -- The border here is the .BG nine-slice, not a .Border key.
+    local alert = _G.GroupBuffFilterEditVisualAlert
+    if alert then
+        if alert.BG then S.StripTextures(alert.BG) end
+        S.Template(alert, "Window")
+        S.CloseButton(alert.CloseButton)
+        S.Button(alert.AddButton)
+        if alert.Icon then S.Icon(alert.Icon, true) end
+        if alert.VisualDropdown then pcall(S.DropDown, alert.VisualDropdown) end
+    end
+
     local import = _G.CooldownViewerImportLayoutDialog
     if import then
         if import.Border then import.Border:Hide() end
