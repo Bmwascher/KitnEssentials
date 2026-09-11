@@ -129,11 +129,7 @@ local function HandleAbilityTabs(viewer)
             tab.SelectedTexture:SetPoint("BOTTOMRIGHT", tbd or tab, "BOTTOMRIGHT", -1, 1)
         end
 
-        for _, region in next, { tab:GetRegions() } do
-            if region:IsObjectType("Texture") and region:GetAtlas() == "QuestLog-Tab-side-Glow-hover" then
-                S.KillTexture(region)
-            end
-        end
+        S.KillSideTabArt(tab)
         S.HoverWash(tab)
     end
 end
