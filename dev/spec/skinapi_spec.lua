@@ -1027,8 +1027,23 @@ end)
 -- recording global, restored before any assertion can run. The button double
 -- fires the recorded hooks from its own setters, which is how a post-hook
 -- behaves in the client, so a hook firing DURING an assignment is observable.
-describe("SkinAPI PinButtonFont", function()
+-- Reload SkinAPI under a recording hooksecurefunc so the file-local captures
+-- it; the global is put back before the body runs. Targets carry a `hooks`
+-- table keyed by method.
+local function loadSkinAPIRecordingHooks()
     local helpers = require("dev.spec._helpers")
+    local KE = L.loadSkinAPI()
+    local stub = _G.hooksecurefunc
+    _G.hooksecurefunc = function(target, method, fn)
+        target.hooks[method] = target.hooks[method] or {}
+        table.insert(target.hooks[method], fn)
+    end
+    helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
+    _G.hooksecurefunc = stub
+    return KE
+end
+
+describe("SkinAPI PinButtonFont", function()
     local KE, S, applied
 
     -- A Blizzard-style state object: only what PinState reads.
@@ -1102,16 +1117,7 @@ describe("SkinAPI PinButtonFont", function()
     end
 
     before_each(function()
-        KE = L.loadSkinAPI()
-        -- Reload under a recording hooksecurefunc so the file-local captures
-        -- it; the global is put back before the body runs.
-        local stub = _G.hooksecurefunc
-        _G.hooksecurefunc = function(target, method, fn)
-            target.hooks[method] = target.hooks[method] or {}
-            table.insert(target.hooks[method], fn)
-        end
-        helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
-        _G.hooksecurefunc = stub
+        KE = loadSkinAPIRecordingHooks()
         S = KE.Skins
 
         _G.CreateFont = function(name) return fontObject(name) end
@@ -1321,7 +1327,6 @@ describe("SkinAPI _CanCalibrateTab", function()
 end)
 
 describe("SkinAPI IconBorder", function()
-    local helpers = require("dev.spec._helpers")
     local S
 
     -- A border texture whose hooked setters fire whatever hooksecurefunc
@@ -1351,15 +1356,7 @@ describe("SkinAPI IconBorder", function()
     end
 
     before_each(function()
-        local KE = L.loadSkinAPI()
-        local stub = _G.hooksecurefunc
-        _G.hooksecurefunc = function(target, method, fn)
-            target.hooks[method] = target.hooks[method] or {}
-            table.insert(target.hooks[method], fn)
-        end
-        helpers.loadModule("Modules/Skinning/SkinAPI.lua", KE)
-        _G.hooksecurefunc = stub
-        S = KE.Skins
+        S = loadSkinAPIRecordingHooks().Skins
     end)
 
     -- The redisplay of a pooled reward button: Blizzard shows the border (KE's
