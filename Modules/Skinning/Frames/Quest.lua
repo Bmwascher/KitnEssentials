@@ -121,17 +121,10 @@ local function ShowObjectives()
     end
 end
 
--- The selection outline is an owned frame per reward button, not Blizzard's
--- `QuestInfoItemHighlight`: theirs is one shared 256x64 glow, re-pointed on
--- every click and every redisplay, so a 1px outline drawn on it never sits
--- right. 1px inside the button on every side, since the two reward columns
--- are one pixel apart and an outline flush with the button touches its
--- neighbour.
---
--- Clamped to the rewards frame's right edge: a reward row is wider than the
--- panel, so the right-hand button's own right edge is off screen. Re-applied
--- on every show because the buttons are pooled and a row's width is not
--- settled until it has been laid out.
+-- An owned overlay per reward button: Blizzard's `QuestInfoItemHighlight` is
+-- one shared glow that their code re-points on every click and redisplay.
+-- Clamped to the rewards frame's right edge because a reward row is wider
+-- than the panel.
 local function PositionSelectionOverlay(f, btn)
     local rewards = _G.QuestInfoRewardsFrame
     local limit = rewards and rewards.GetRight and rewards:GetRight()
@@ -212,9 +205,7 @@ local function QuestInfo_Display()
                 elseif relativePoint == "BOTTOMLEFT" then
                     questItem:SetPoint(point, relativeTo, relativePoint, 0, -4)
                 else
-                    -- Blizzard's own column gap. A reward row is already wider
-                    -- than the panel, so any extra pushes the right-hand
-                    -- button's last pixels off it.
+                    -- Blizzard's own gap; any extra clips the right-hand button.
                     questItem:SetPoint(point, relativeTo, relativePoint, x, 0)
                 end
             end
