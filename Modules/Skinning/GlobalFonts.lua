@@ -70,10 +70,9 @@ local function Restore()
 end
 S.RestoreGlobalFonts = Restore
 
--- Platynator keys a per-alphabet font table off GameFontNormal, which this
--- sweep rewrites, so its lookup misses and its nameplate init crashes on the
--- nil. Safe to decide here: Apply runs at module enable, after every
--- non-load-on-demand addon is present.
+-- Platynator's nameplate setup breaks once this sweep has rewritten
+-- GameFontNormal. Safe to decide here: Apply runs at module enable, after
+-- every non-load-on-demand addon is present.
 function S.GlobalFontsBlockedBy()
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Platynator") then
         return "Platynator"
