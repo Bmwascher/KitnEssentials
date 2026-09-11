@@ -1244,3 +1244,41 @@ describe("SkinAPI PinButtonFont", function()
         assert.equals("TOP", b.states.Normal.justify.v)
     end)
 end)
+
+-- The refusal rules in front of CalibrateTabGap, lifted into a pure predicate
+-- so no frame double is needed. Each fixture satisfies the predicate except in
+-- the one field its name calls out.
+describe("SkinAPI _CanCalibrateTab", function()
+    local S
+    before_each(function() S = L.loadSkinAPI().Skins end)
+
+    local function clear()
+        return { selTex = {}, gapDone = nil, noGeometry = nil }
+    end
+
+    it("refuses a tab already latched", function()
+        local d = clear()
+        d.gapDone = true
+        assert.is_false(S._CanCalibrateTab(d, true))
+    end)
+
+    it("refuses a tab that is not a tracked selection tab", function()
+        local d = clear()
+        d.selTex = nil
+        assert.is_false(S._CanCalibrateTab(d, true))
+    end)
+
+    it("refuses a tab that is off screen", function()
+        assert.is_false(S._CanCalibrateTab(clear(), false))
+    end)
+
+    it("refuses a tab whose geometry Blizzard manages", function()
+        local d = clear()
+        d.noGeometry = true
+        assert.is_false(S._CanCalibrateTab(d, true))
+    end)
+
+    it("allows a visible, tracked, unlatched, unmanaged tab", function()
+        assert.is_true(S._CanCalibrateTab(clear(), true))
+    end)
+end)

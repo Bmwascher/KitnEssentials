@@ -1456,9 +1456,30 @@ function S.EditBox(editbox, keepFont)
     S.data(editbox).skinned = true
 end
 
+-- Both bounds are on OUR backdrop's inset, not a licence to relocate a tab
+-- row. The leading bound is small because an uncapped correction once dragged
+-- a Crafting Orders tab onto its Search button; the chain bound is wider
+-- because a chained backdrop starts 12px short on rows anchored at -16 and
+-- needs +13 to close to the 1px target.
+local MAX_INSET_CORRECTION = 8
+local MAX_CHAIN_GAP = 40
+
+-- The refusals that decide whether a tab may be measured at all, lifted out
+-- so they can be tested without a frame. A refused tab is never latched here:
+-- the OnShow hook brings it back once it can be measured.
+---@param d table the tab's S.data record
+---@param visible boolean|nil tab:IsVisible()
+---@return boolean
+function S._CanCalibrateTab(d, visible)
+    if d.gapDone or not d.selTex then return false end
+    if not visible then return false end
+    if d.noGeometry then return false end
+    return true
+end
+
 local function CalibrateTabGap(tab)
     local d = S.data(tab)
-    if d.gapDone or not d.selTex then return end
+    if not S._CanCalibrateTab(d, tab:IsVisible()) then return end
 
     local n = tab:GetNumPoints()
     if n == 0 then return end
@@ -1480,13 +1501,7 @@ local function CalibrateTabGap(tab)
         if not bdL or not pL then return end
         local delta = bdL - pL
 
-        -- This corrects OUR backdrop's inset on a leading tab -- a few
-        -- pixels. It is not a licence to relocate the tab row: on
-        -- Crafting Orders the parent is the whole frame and the Search
-        -- button sits at its left edge, so an uncapped correction dragged
-        -- the first tab ~85px left and parked it on top of Search.
         -- Anything past the inset scale is deliberate layout; leave it.
-        local MAX_INSET_CORRECTION = 8
         if math.abs(delta) > MAX_INSET_CORRECTION then
             d.gapDone = true
             return
@@ -1503,11 +1518,17 @@ local function CalibrateTabGap(tab)
         d.gapDone = true
         return
     end
+    -- The neighbour's edge is as stale as ours would be while it is hidden.
+    if not chainRel:IsVisible() then return end
     local prevBD = S.GetBackdrop(chainRel)
     local left = myBD and myBD:GetLeft()
     local right = prevBD and prevBD:GetRight()
     if not left or not right then return end
     local gap = left - right
+    if math.abs(gap) > MAX_CHAIN_GAP then
+        d.gapDone = true
+        return
+    end
     pts[chainIdx][4] = pts[chainIdx][4] - (gap - 1)
     tab:ClearAllPoints()
     for i = 1, n do
@@ -1693,14 +1714,25 @@ function S.Tab(tab)
                         local sd2 = S.data(s2)
                         if sd2.flushDone then return end
                         C_Timer.After(0, function()
-                            if sd2.flushDone then return end
+                            if sd2.flushDone or not s2:IsVisible() then return end
+                            -- The measured edge is the first child's, and
+                            -- Blizzard lets one tab hide while its system
+                            -- stays shown. Neither refusal latches; the next
+                            -- OnShow is when to try again.
                             local first = select(1, s2:GetChildren())
-                            local bd = first and S.GetBackdrop(first)
+                            if not first or not first:IsVisible() then return end
+                            local bd = S.GetBackdrop(first)
                             local owner = s2:GetParent()
                             local bdL = bd and bd:GetLeft()
                             local oL = owner and owner:GetLeft()
                             if bdL and oL then
                                 local delta = bdL - oL
+                                -- Past the inset scale is deliberate layout:
+                                -- judged, so latched, never retried.
+                                if math.abs(delta) > MAX_INSET_CORRECTION then
+                                    sd2.flushDone = true
+                                    return
+                                end
                                 if math.abs(delta) > 0.5 and s2.AdjustPointsOffset then
                                     s2:AdjustPointsOffset(-delta, 0)
                                 end
