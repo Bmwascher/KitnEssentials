@@ -1237,8 +1237,6 @@ function TT:OnEnable()
     -- answered too.
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
 
-    -- Blizzard restyles a tooltip's backdrop per content; re-assert from KE's
-    -- own stack, never from inside Blizzard's pass.
     if not self._restyleTicker then
         self._restyleTicker = C_Timer.NewTicker(0.1, function()
             local tt = _G.GameTooltip
