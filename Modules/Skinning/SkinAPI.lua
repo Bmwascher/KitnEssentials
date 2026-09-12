@@ -2420,8 +2420,8 @@ function S._EffectiveSize(size)
 end
 
 -- One resolution for the stored skin face: a real name from the profile,
--- otherwise the addon's global font. Three readers share it; a fourth copy is
--- how the sweeps and the skin drifted onto different faces.
+-- otherwise the addon's global font. Three readers share it, and a copy per
+-- reader is how they drift.
 local function StoredSkinFace(bs)
     if bs and type(bs.FontFace) == "string" and bs.FontFace ~= "" then
         return bs.FontFace
@@ -2448,10 +2448,10 @@ local function EnsureFontInit()
 end
 
 -- Both Blizzard font-object sweeps resolve their face here. The skin only
--- loads its face from the profile once the frame skin runs, so a sweep reading
--- S.FONT_FACE alone used the parse-time seed while the picker's choice sat in
--- the profile, and the two sweeps rendered different faces. The resolved name
--- is written back so a later pick still registers as a change.
+-- loads its face from the profile once the frame skin runs, so with that skin
+-- off a sweep reading S.FONT_FACE alone gets the parse-time seed while the
+-- picker's choice sits in the profile. The resolved name is written back so a
+-- later pick still registers as a change.
 function S.ResolveSkinFace()
     if S._offsetInit then return S.FONT_FACE end
     local bs = KE.db and KE.db.profile and KE.db.profile.Skinning

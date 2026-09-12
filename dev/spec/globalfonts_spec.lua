@@ -85,15 +85,27 @@ describe("GlobalFonts", function()
     end)
 
     -- GameFontDisable inherits GameFontNormal and declares no height, so it
-    -- follows whatever the sweep writes to the parent. Reading stock inside
-    -- the write loop captured that propagated size and scaled it again: at a
-    -- base of 13 the pair rendered 13 and 14.
+    -- follows whatever is written to the parent. A stock size read after that
+    -- write is a scaled size, and scaling it again is what split the pair.
     it("does not rescale a child that followed its parent's swept size", function()
         local child = childFontObject(planted)
         _G.GameFontDisable = child
         load({})
         S.ApplyGlobalFonts()
         assert.equals(14, applied[planted][2])
+        assert.equals(14, applied[child][2])
+    end)
+
+    -- The other sweep owns objects that are parents of these, and it writes on
+    -- its own schedule. Once stock is taken, a foreign write to a parent must
+    -- not reach this sweep's arithmetic.
+    it("keeps the stock it snapshotted when another writer moves a parent", function()
+        local child = childFontObject(planted)
+        _G.GameFontDisable = child
+        load({})
+        S.SnapshotGlobalFontStock()
+        planted:SetFont("Fonts\\Other.TTF", 20, "")
+        S.ApplyGlobalFonts()
         assert.equals(14, applied[child][2])
     end)
 end)

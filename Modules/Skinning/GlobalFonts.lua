@@ -85,6 +85,33 @@ local PASSES = {
     { names = PLAIN, flags = "NONE" },
 }
 
+-- Blizzard's own sizes, taken before any sweep writes. An object that declares
+-- no height of its own follows its XML parent at runtime, so a stock read taken
+-- after a parent was written captures the scaled size and scales it again.
+-- Parents live both earlier in these lists and in the opt-in sweep's own list,
+-- which is why this is a pass of its own and why that sweep calls it too.
+local function SnapshotStock()
+    for _, pass in ipairs(PASSES) do
+        local names = pass.names
+        for i = 1, #names do
+            local name = names[i]
+            local obj = _G[name]
+            if obj and obj.GetFont and not stockSizes[name] then
+                local f, size, fl = obj:GetFont()
+                stockSizes[name] = size
+                local r, g, b, a
+                if obj.GetShadowColor then r, g, b, a = obj:GetShadowColor() end
+                stockFonts[name] = {
+                    face = f, size = size, flags = fl,
+                    shadow = r and { r, g, b, a } or nil,
+                }
+            end
+        end
+    end
+end
+
+S.SnapshotGlobalFontStock = SnapshotStock
+
 local function Apply()
     local face = S.ResolveSkinFace()
     if not face or not KE.ApplyFont then return end
@@ -103,29 +130,7 @@ local function Apply()
         and KE.db.profile.Skinning.BlizzardFrames
     local base = (bs and tonumber(bs.FontBaseSize)) or 12
 
-    -- Every stock size is read before any object is written. An object that
-    -- declares no height of its own follows its XML parent at runtime, so one
-    -- swept earlier in the list hands its already-scaled size to its children
-    -- -- and reading stock inside the write loop captured that and scaled it a
-    -- second time. GameFontDisable and GameFontHighlightOutline are both such
-    -- children, and at a base of 13 they rendered 14 against their parents' 13.
-    for _, pass in ipairs(PASSES) do
-        local names = pass.names
-        for i = 1, #names do
-            local name = names[i]
-            local obj = _G[name]
-            if obj and obj.GetFont and not stockSizes[name] then
-                local f, size, fl = obj:GetFont()
-                stockSizes[name] = size
-                local r, g, b, a
-                if obj.GetShadowColor then r, g, b, a = obj:GetShadowColor() end
-                stockFonts[name] = {
-                    face = f, size = size, flags = fl,
-                    shadow = r and { r, g, b, a } or nil,
-                }
-            end
-        end
-    end
+    SnapshotStock()
 
     for _, pass in ipairs(PASSES) do
         local names, flags = pass.names, pass.flags

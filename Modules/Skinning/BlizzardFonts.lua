@@ -219,6 +219,10 @@ function BF:ApplyAll()
     -- cannot render different faces.
     local S = KE.Skins
     local face = KE:GetFontPath(S and S.ResolveSkinFace and S.ResolveSkinFace())
+    -- Several names that sweep owns are height-less children of objects in the
+    -- list below, and it reads their stock lazily. Letting it read after this
+    -- sweep has written the parents would record a scaled size as stock.
+    if S and S.SnapshotGlobalFontStock then S.SnapshotGlobalFontStock() end
     local base = (bsdb and tonumber(bsdb.FontBaseSize)) or 12
     for i = 1, #FONT_LIST do
         local entry = FONT_LIST[i]
