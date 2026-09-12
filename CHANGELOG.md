@@ -1,41 +1,95 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.6.3
+## v4.6.12
 
 ### Skinning
 - **NEW:** Top-Centre Widgets control under UI Widgets: move the top-of-screen
   objective display (the keystone objective line, delve and event bars) with
   the Edit Mode mover, scale it, set its layer, or hide it. Off by default;
   turning it off returns the display to where the game had it
-- Guild and Community chat: the message box is usable again
-- Mount Journal, Pet Journal, Encounter Journal suggestions and mail
-  attachment icons no longer go blank when their rows are first drawn
-- Button labels keep their size when hovered or disabled instead of jumping
-- The Blizzard font sweeps follow the face picked on the Blizzard Frames page,
-  and the font picker reaches stock text without a reload
-- Zone text returns as soon as the Blizzard Messages module is switched off
-- Raid warning text stays sharp through its grow-and-shrink animation
-- Cooldown Manager: the Group Buffs tab, its filter panel and its alert dialog
-  are skinned, and side-tab hover art no longer bleeds through
-- Right-click menus opened after a taller one no longer draw an oversized
-  backdrop; scrolling menus keep their panel sized to the visible rows
-- Quest rewards keep their quality-coloured border when the quest is shown a
-  second time; the selected choice reward is outlined cleanly, the second
-  reward button is no longer clipped, and follower rewards are skinned
-- Buff and debuff tooltips are themed like every other tooltip
-- Hovering a world-quest, delve or Prey map pin no longer throws an error, and
-  tooltips closing after showing a widget set no longer taint the interface
+
+---
+
+## v4.6.11
+
+### Skinning
+- Hovering a world-quest, delve or Prey map pin no longer throws an error
 - UI widget text sits where the game places it instead of being stretched;
   widgets on nameplates and in the objective tracker keep the game's own art
 - Group Finder: the applicant viewer's art recrops without tainting the
   listing
-- Item Upgrade slot art stays inside its border when the slot is emptied
+
+---
+
+## v4.6.10
+
+### Skinning
+- Buff and debuff tooltips are themed like every other tooltip
+- Tooltips closing after showing a widget set no longer taint the interface
 - World Map quest details: the rewards block has a backdrop
 - The Dungeon Finder queue popup is bordered like the rest of the interface
 - BigWigs queue timer follows the ready-check box that is actually shown
 - BetterFriendlist: the invite button keeps its hover, raid names render
   without smooth scaling, tab rows no longer flicker when clicked, and the
   selected tab is marked with the theme colour
+
+---
+
+## v4.6.9
+
+### Skinning
+- Quest rewards keep their quality-coloured border when the quest is shown a
+  second time; the selected choice reward is outlined cleanly, the second
+  reward button is no longer clipped, and follower rewards are skinned
+
+---
+
+## v4.6.8
+
+### Skinning
+- Right-click menus opened after a taller one no longer draw an oversized
+  backdrop; scrolling menus keep their panel sized to the visible rows
+
+---
+
+## v4.6.7
+
+### Skinning
+- Cooldown Manager: the Group Buffs tab, its filter panel and its alert dialog
+  are skinned, and side-tab hover art no longer bleeds through
+
+---
+
+## v4.6.6
+
+### Skinning
+- The Blizzard font sweeps follow the face picked on the Blizzard Frames page,
+  and the font picker reaches stock text without a reload
+- Zone text returns as soon as the Blizzard Messages module is switched off
+- Raid warning text stays sharp through its grow-and-shrink animation
+
+---
+
+## v4.6.5
+
+### Skinning
+- Mount Journal, Pet Journal, Encounter Journal suggestions and mail
+  attachment icons no longer go blank when their rows are first drawn
+
+---
+
+## v4.6.4
+
+### Skinning
+- Button labels keep their size when hovered or disabled instead of jumping
+
+---
+
+## v4.6.3
+
+### Skinning
+- Guild and Community chat: the message box is usable again
+- Item Upgrade slot art stays inside its border when the slot is emptied
 
 ---
 
