@@ -735,14 +735,12 @@ local function Skin()
     local BFLNS = _G.BetterFriendlist
     if BFLNS and BFLNS.GetModule then
         -- The muted dark-theme chrome carried the selected-tab cue, an accent
-        -- border; KE's own border carries it now, in their theme's accent.
+        -- border; KE's own border carries it now, in the brand colour.
         local function PaintTabBorder(tab, selected)
             local bd = S.GetBackdrop(tab)
             if not bd then return end
             if selected then
-                local r, g, b = 1, 0.82, 0
-                if BFLNS.GetThemeAccentColor then r, g, b = BFLNS:GetThemeAccentColor(r, g, b, 1) end
-                bd:SetBackdropBorderColor(r, g, b, 1)
+                bd:SetBackdropBorderColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 1)
             else
                 bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2], S.borderColor[3], S.borderColor[4])
             end
