@@ -533,9 +533,10 @@ local function Skin()
         hooksecurefunc(tab, "SetPoint", CleanTabAnchors)
         CleanTabAnchors(tab)
     end
-    -- BFL's dark theme backdrops each tab edge to edge and lights the selected
+    -- BFL's dark theme backdrops each tab edge to edge and borders the selected
     -- one, two pixels outside KE's inset box and over the next tab. Its opt-out
-    -- flag hides that backdrop on every state pass; the Hide covers one built.
+    -- flag hides that backdrop on every state pass; the Hide removes one built
+    -- before this ran.
     local function MuteDarkTabChrome(tab)
         tab.BFL_DarkNoButtonChrome = true
         if tab.BFL_DarkBackdrop then tab.BFL_DarkBackdrop:Hide() end
