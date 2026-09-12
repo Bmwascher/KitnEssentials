@@ -633,11 +633,14 @@ local function armHover(button, anchor, l, t, r, b)
     local hl = d.hover
     if not hl then
         hl = button:CreateTexture(nil, "HIGHLIGHT")
-        hl:SetTexture(HOVER_TEX)
-        hl:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
-        hl:SetAlpha(HOVER_ALPHA)
         d.hover = hl
     end
+    -- Every call, not only on creation: the highlight is a region of the
+    -- button, so a StripTextures on the button clears it, and a caller that
+    -- re-strips per redraw restores it by calling S.Hover again.
+    hl:SetTexture(HOVER_TEX)
+    hl:SetVertexColor(HOVER_COLOR[1], HOVER_COLOR[2], HOVER_COLOR[3])
+    hl:SetAlpha(HOVER_ALPHA)
     if l == 1 and t == -1 and r == -1 and b == 1 and anchor and anchor.backdropInfo then
         S.InsetToEdge(hl, anchor)
     else

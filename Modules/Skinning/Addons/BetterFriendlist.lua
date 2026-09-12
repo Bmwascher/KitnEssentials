@@ -187,7 +187,7 @@ local function FlattenInviteButton(tp)
         d.bflSkinned = true
         local w, h = tp:GetSize()
         if w and h then tp:SetSize(math.floor(w + 0.5), math.floor(h + 0.5)) end
-        local bd = S.Backdrop(tp, 4)
+        S.Backdrop(tp, 4)
         local plus = tp:CreateFontString(nil, "OVERLAY")
         plus:SetPoint("CENTER", 0, 0)
         S.SetFont(plus, 16, "")
@@ -195,11 +195,12 @@ local function FlattenInviteButton(tp)
         d.invitePlus = plus
         tp:HookScript("OnEnable", InvitePlusPaint)
         tp:HookScript("OnDisable", InvitePlusPaint)
-        S.Hover(tp, bd)
     end
 
     S.StripTextures(tp)
     S.ClearButtonArt(tp)
+    -- After the strip, which clears the hover highlight too.
+    S.Hover(tp, S.GetBackdrop(tp))
     InvitePlusPaint(tp)
 end
 
