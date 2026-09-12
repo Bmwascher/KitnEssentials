@@ -192,6 +192,7 @@ if ($gitOk -and (Test-Path -LiteralPath $mirrors)) {
         if ($m.Success) {
             & git -C $root merge-base --is-ancestor $m.Groups[1].Value main 2>$null
             if ($LASTEXITCODE -eq 0) { $stale += Rel $mdir.FullName }
+            elseif ($LASTEXITCODE -ne 1) { $gitOk = $false }
         }
     }
 }
@@ -216,15 +217,21 @@ if ($gitOk) {
 $liveRoundRoots = @($roundRoots | Where-Object { $d = Full $_; (Test-Path -LiteralPath $d) -and (Get-ChildItem -LiteralPath $d -Force | Select-Object -First 1) })
 if ($liveRoundRoots.Count -gt 1) { $notes += "[G] rounds live in $($liveRoundRoots.Count) roots: $($liveRoundRoots -join ', ')" }
 
+# a git failure in any phase leaves the stale list unjudged
+if (-not $gitOk) {
+    if ($fails -notcontains '[B/C/D] git queries failed; branch-based rules skipped') { $fails += '[B/C/D] git queries failed; branch-based rules skipped' }
+    $stale = @()
+}
+
 # -Archive
 if ($Archive -and $stale.Count -gt 0) {
     New-Item -ItemType Directory -Force $archiveRoot | Out-Null
     $manifest = Join-Path $archiveRoot ('MANIFEST-{0}.txt' -f (Get-Date -Format 'yyyy-MM-dd'))
     foreach ($rel in $stale) {
         $src = Full $rel
-        $dstRel = $rel
-        if (Test-Path -LiteralPath (Join-Path $archiveRoot ($rel -replace '/', '\'))) {
-            $dstRel = $rel + '.' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+        $dstRel = $rel; $n = 0
+        while (Test-Path -LiteralPath (Join-Path $archiveRoot ($dstRel -replace '/', '\'))) {
+            $n++; $dstRel = '{0}.{1}-{2}' -f $rel, (Get-Date -Format 'yyyyMMdd-HHmmss'), $n
         }
         $dst = Join-Path $archiveRoot ($dstRel -replace '/', '\')
         New-Item -ItemType Directory -Force (Split-Path $dst -Parent) | Out-Null
