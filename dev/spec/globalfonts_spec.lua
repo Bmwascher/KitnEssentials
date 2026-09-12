@@ -1,8 +1,8 @@
--- Modules/Skinning/GlobalFonts.lua -- the Platynator guard and the stock-size
--- snapshot. Apply() is the
--- refusal surface: it must write nothing while Platynator is loaded, since
--- that addon's nameplate setup breaks once the sweep has rewritten
--- GameFontNormal. Loaded directly (not through dev/spec/_ke_loader.lua): the
+-- Modules/Skinning/GlobalFonts.lua -- the two refusals and the stock-size
+-- snapshot. Apply() is the refusal surface: it must write nothing while
+-- Platynator is loaded, since that addon's nameplate setup breaks once the
+-- sweep has rewritten GameFontNormal, and nothing while the frame-skin module
+-- is off. Loaded directly (not through dev/spec/_ke_loader.lua): the
 -- module needs a _G font-object fake and a KE.Skins seed the loader has no
 -- shape for. C_AddOns.IsAddOnLoaded is a constant stub per case, not a
 -- stateful fake -- the guard reads it once per Apply.
