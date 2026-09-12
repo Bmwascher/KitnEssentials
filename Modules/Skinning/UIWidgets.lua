@@ -13,21 +13,31 @@ local UIW = KitnEssentials:NewModule("UIWidgets", "AceEvent-3.0")
 -- "UIWidgets" fails the name test. ContextMenus.lua sets it for the same reason.
 UIW.keDeferToReload = true
 
-local hooksecurefunc = hooksecurefunc
-local pairs = pairs
+local pairs, ipairs = pairs, ipairs
+local pcall = pcall
 local _G = _G
 local C_Timer = C_Timer
+local CreateFrame = CreateFrame
 local unpack = unpack
+local math_max = math.max
 
-local hooked = {
-    statusBar = false,
-    textWithState = false,
-    captureBar = false,
+-- The four containers this module restyles. Widgets are pooled and drawn by
+-- many owners (tooltips, nameplates, the objective tracker); everything
+-- outside these four is left as Blizzard made it.
+local OWNED_CONTAINERS = {
+    "UIWidgetTopCenterContainerFrame",
+    "UIWidgetCenterScreenContainerFrame",
+    "UIWidgetPowerBarContainerFrame",
+    "UIWidgetBelowMinimapContainerFrame",
 }
 
 local ignoreWidget = {
     [283] = 3463,
 }
+
+-- Never a field on the widget: a pooled frame carries its fields into
+-- whatever shows it next.
+local backdrops = setmetatable({}, { __mode = "k" })
 
 function UIW:UpdateDB()
     self.db = KE.db.profile.Skinning.UIWidgets
@@ -98,7 +108,10 @@ function UIW:StyleStatusBarWidget(widget)
         widget.Label:SetJustifyH("CENTER")
     end
 
+    -- A capture bar's Bar is a Texture (UIWidgetTemplateCaptureBar.xml), not
+    -- a frame; the backdrop below is parented to it.
     local bar = widget.Bar
+    if bar and bar.GetObjectType and bar:IsObjectType("Texture") then bar = nil end
     if bar then
 
         if bar.Label and barDB.StyleBarText then
@@ -135,10 +148,10 @@ function UIW:StyleStatusBarWidget(widget)
             if bar.BorderCenter then bar.BorderCenter:SetAlpha(0) end
             if bar.Spark then bar.Spark:SetAlpha(0) end
 
-            if not bar.keUIWidgetBackdrop then
+            if not backdrops[bar] then
 
                 local backdrop = CreateFrame("Frame", nil, bar)
-                backdrop:SetFrameLevel(math.max(bar:GetFrameLevel() - 1, 0))
+                backdrop:SetFrameLevel(math_max(bar:GetFrameLevel() - 1, 0))
                 backdrop:SetPoint("TOPLEFT", bar, "TOPLEFT", -1, 1)
                 backdrop:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 1, -1)
 
@@ -153,7 +166,7 @@ function UIW:StyleStatusBarWidget(widget)
                 KE:AddBorders(borderFrame, barDB.BorderColor)
 
                 backdrop.borderFrame = borderFrame
-                bar.keUIWidgetBackdrop = backdrop
+                backdrops[bar] = backdrop
             end
         end
     end
@@ -182,127 +195,76 @@ function UIW:StyleTextWidget(widget)
     end
 end
 
--- UI widgets are pooled, and GameTooltip borrows them for the widget sets on
--- Area POI tooltips. Restyling one there means our insecure ClearAllPoints /
--- SetPoint / SetWidth run on a frame Blizzard then lays out itself, and on
--- hide DefaultWidgetLayout -> LayoutFrame compares a secret number in tainted
--- execution:
---
---   LayoutFrame.lua: attempt to compare a secret number value
---   (execution tainted by an addon)
---
--- Nothing is lost by skipping them: tooltip widget sets are transient and
--- already inherit the tooltip's own styling.
--- was a parent walk that called :GetName() on whatever it
--- found. Something in that chain is not a real frame -- a proxy or a
--- plain table with a GetName field -- and the call died with
---
---   UIWidgets.lua: calling '?' on bad self
---   (Usage: local name = self:GetName())
---
--- reported from clicking the wind orb in Skyreach.
---
--- No walk is needed. Blizzard passes the container straight to Setup:
---
---   UIWidgetTemplateStatusBarMixin:Setup(widgetInfo, widgetContainer)
---
--- and GameTooltip creates exactly one (GameTooltip.lua: self.widgetContainer
--- = CreateFrame("FRAME", nil, self, "UIWidgetContainerTemplate")). So the
--- test is an identity comparison against the tooltips that own one --
--- no method calls on unknown objects, nothing to go wrong.
-local TOOLTIPS_WITH_WIDGETS = {
-    "GameTooltip", "ItemRefTooltip", "EmbeddedItemTooltip",
-    "GameTooltipTooltip", "NamePlateTooltip",
-}
-
-local function InTooltip(_widget, container)
-    if not container then return false end
-
-    for _, name in ipairs(TOOLTIPS_WITH_WIDGETS) do
-        local tip = _G[name]
-        if tip and rawget(tip, "widgetContainer") == container then return true end
-    end
-    return false
-end
-
-function UIW:SetupHooks()
-
-    if not hooked.statusBar and _G.UIWidgetTemplateStatusBarMixin then
-        hooksecurefunc(_G.UIWidgetTemplateStatusBarMixin, "Setup", function(widget, _, container)
-            if self.db.Enabled and self.db.StatusBar.Enabled and not InTooltip(widget, container) then
-                self:StyleStatusBarWidget(widget)
-            end
-        end)
-        hooked.statusBar = true
-    end
-
-    if not hooked.textWithState and _G.UIWidgetTemplateTextWithStateMixin then
-        hooksecurefunc(_G.UIWidgetTemplateTextWithStateMixin, "Setup", function(widget, _, container)
-            if self.db.Enabled and self.db.TextWidget.Enabled and not InTooltip(widget, container) then
-                self:StyleTextWidget(widget)
-            end
-        end)
-        hooked.textWithState = true
-    end
-
-    local extraBarMixins = {
-        "UIWidgetTemplateDiscreteProgressBarMixin",
-        "UIWidgetTemplateCaptureBarMixin",
-        "UIWidgetTemplateDoubleStatusBarMixin",
-    }
-    for _, mixinName in ipairs(extraBarMixins) do
-        local mixin = _G[mixinName]
-        if mixin and mixin.Setup and not hooked[mixinName] then
-            hooksecurefunc(mixin, "Setup", function(widget, _, container)
-                if self.db.Enabled and self.db.StatusBar.Enabled and not InTooltip(widget, container) then
-                    self:StyleWidgetByType(widget)
-                end
-            end)
-            hooked[mixinName] = true
-        end
-    end
-
-    if not (hooked.statusBar and hooked.textWithState) then
-        C_Timer.After(0, function() -- was 1s; widget mixins
-            if self:IsEnabled() then self:SetupHooks() end -- appear within frames
-        end)
-    end
-end
-
-function UIW:StyleExistingWidgets()
-    if not self.db.Enabled then return end
-
-    if _G.UIWidgetTopCenterContainerFrame and _G.UIWidgetTopCenterContainerFrame.widgetFrames then
-        for _, widget in pairs(_G.UIWidgetTopCenterContainerFrame.widgetFrames) do
-            self:StyleWidgetByType(widget)
-        end
-    end
-
-    if _G.UIWidgetCenterScreenContainerFrame and _G.UIWidgetCenterScreenContainerFrame.widgetFrames then
-        for _, widget in pairs(_G.UIWidgetCenterScreenContainerFrame.widgetFrames) do
-            self:StyleWidgetByType(widget)
-        end
-    end
-
-    if _G.UIWidgetPowerBarContainerFrame and _G.UIWidgetPowerBarContainerFrame.widgetFrames then
-        for _, widget in pairs(_G.UIWidgetPowerBarContainerFrame.widgetFrames) do
-            self:StyleWidgetByType(widget)
-        end
-    end
-
-    if _G.UIWidgetBelowMinimapContainerFrame and _G.UIWidgetBelowMinimapContainerFrame.widgetFrames then
-        for _, widget in pairs(_G.UIWidgetBelowMinimapContainerFrame.widgetFrames) do
-            self:StyleWidgetByType(widget)
-        end
-    end
-end
-
 function UIW:StyleWidgetByType(widget)
     if not widget or widget:IsForbidden() then return end
     if widget.Bar and self.db.StatusBar.Enabled then
         self:StyleStatusBarWidget(widget)
     elseif widget.Text and not widget.Bar and self.db.TextWidget.Enabled then
         self:StyleTextWidget(widget)
+    end
+end
+
+-- One timer drains however many widgets a sweep queued. pcall: a widget
+-- mid-teardown must not stop the rest of the drain.
+local queue, queued, flushScheduled = {}, setmetatable({}, { __mode = "k" }), false
+
+function UIW:Flush()
+    flushScheduled = false
+
+    local list = queue
+    queue = {}
+
+    for i = 1, #list do
+        local widget = list[i]
+        queued[widget] = nil
+        if self:IsEnabled() and self.db.Enabled then
+            pcall(self.StyleWidgetByType, self, widget)
+        end
+    end
+end
+
+function UIW:QueueWidget(widget)
+    if not widget or queued[widget] then return end
+
+    queued[widget] = true
+    queue[#queue + 1] = widget
+
+    if not flushScheduled then
+        flushScheduled = true
+        C_Timer.After(0, function() UIW:Flush() end)
+    end
+end
+
+-- No hook on the widget mixins: a post-hook on Setup runs inside
+-- UIWidgetManager's pass and taints the rest of it, and the next widget's
+-- own Setup then throws on a secret. The game's widget events drive the
+-- restyle from KE's own frame instead, one frame after Blizzard's
+-- containers have processed the change.
+local restyleScheduled = false
+function UIW:OnWidgetEvent()
+    if restyleScheduled or not self.db.Enabled then return end
+    restyleScheduled = true
+    C_Timer.After(0, function()
+        restyleScheduled = false
+        if UIW:IsEnabled() then UIW:StyleExistingWidgets() end
+    end)
+end
+
+function UIW:SetupHooks()
+    self:RegisterEvent("UPDATE_UI_WIDGET", "OnWidgetEvent")
+    self:RegisterEvent("UPDATE_ALL_UI_WIDGETS", "OnWidgetEvent")
+end
+
+function UIW:StyleExistingWidgets()
+    if not self.db.Enabled then return end
+
+    for _, name in ipairs(OWNED_CONTAINERS) do
+        local container = _G[name]
+        if container and container.widgetFrames then
+            for _, widget in pairs(container.widgetFrames) do
+                self:QueueWidget(widget)
+            end
+        end
     end
 end
 

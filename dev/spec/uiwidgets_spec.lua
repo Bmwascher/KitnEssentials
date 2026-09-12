@@ -1,28 +1,12 @@
 -- Modules/Skinning/UIWidgets.lua -- restyles Blizzard's on-screen UI widget
 -- frames (top-centre status bars / text widgets used by M+ timers, event
 -- progress, power bars). Almost everything in this module touches real
--- widget frames and is only verifiable in-game; InTooltip (a file-local
--- recovered via debug.getupvalue) and the ApplySettings font-cache
--- invalidation path are the pure decision points reachable headlessly
--- through dev/spec/_ke_loader.lua's loadUIWidgets.
+-- widget frames and is only verifiable in-game; the ApplySettings
+-- font-cache invalidation path is the pure decision point reachable
+-- headlessly through dev/spec/_ke_loader.lua's loadUIWidgets.
 local L = require("dev.spec._ke_loader")
 
 describe("UIWidgets", function()
-    describe("InTooltip identity", function()
-        local InTooltip
-
-        before_each(function()
-            local _, _, seams = L.loadUIWidgets()
-            InTooltip = seams.InTooltip
-        end)
-
-        it("does not error when a tooltip global is itself nil", function()
-            -- None of GameTooltip/ItemRefTooltip/etc. are planted at all.
-            assert.has_no.errors(function()
-                assert.is_false(InTooltip(nil, {}))
-            end)
-        end)
-    end)
 
     describe("ApplySettings font cache invalidation", function()
         -- GetFontSettings caches the resolved font/outline keyed on
