@@ -301,11 +301,11 @@ local function Skin()
                 local body = sf and (sf.MOTD or sf.GuildInformation or sf.EditBox)
                 if not body and sf and sf.GetScrollChild then body = sf:GetScrollChild() end
                 if body then
-                    if body.SetFont then KE:ApplyFont(body, KE.FONT, 13, "") end
+                    if body.SetFont then KE:ApplyFont(body, S.FONT_FACE, 13, "") end
                     if body.GetRegions then
                         for _, r in ipairs({ body:GetRegions() }) do
                             if r.IsObjectType and r:IsObjectType("FontString") then
-                                KE:ApplyFont(r, KE.FONT, 13, "")
+                                KE:ApplyFont(r, S.FONT_FACE, 13, "")
                             end
                         end
                     end
