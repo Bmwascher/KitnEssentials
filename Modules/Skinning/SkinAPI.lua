@@ -387,7 +387,7 @@ end
 -- background). Resolves the atlas's raw file rect via
 -- C_Texture.GetAtlasInfo and insets by the given fractions. Reentry-
 -- guarded in case the texture also carries a SetAtlas hook; the current
--- caller runs from a ticker, so the guard is idle.
+-- callers run from KE's own timers, so the guard is idle.
 function S.CropAtlasEdges(tex, xPct, yPct)
     if not tex then return end
     local d = S.data(tex)
@@ -1138,7 +1138,7 @@ end
 function S.SelectedFill(bu)
     local sel = bu and bu.SelectedTexture
     if not sel or not sel.SetColorTexture then return end
-    sel:SetColorTexture(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], 0.15)
+    S.PaintBrand(sel, "SetColorTexture", 0.15)
     local anchor = S.GetBackdrop(bu) or bu
     sel:ClearAllPoints()
     sel:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
