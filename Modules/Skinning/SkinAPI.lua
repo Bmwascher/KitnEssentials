@@ -386,7 +386,8 @@ end
 -- ApplicationViewer InfoBackground, the ChallengeMode keystone frame
 -- background). Resolves the atlas's raw file rect via
 -- C_Texture.GetAtlasInfo and insets by the given fractions. Reentry-
--- guarded so it can be called from a SetAtlas post-hook.
+-- guarded in case the texture also carries a SetAtlas hook; the current
+-- caller runs from a ticker, so the guard is idle.
 function S.CropAtlasEdges(tex, xPct, yPct)
     if not tex then return end
     local d = S.data(tex)
