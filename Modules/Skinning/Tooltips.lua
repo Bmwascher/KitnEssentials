@@ -11,8 +11,9 @@
 --     GameTooltip_SetDefaultAnchor hook for anchoring,
 --     NineSlice:SetAlpha(0) + own backdrop for the style, global font
 --     objects for text, statusbar height/texture/text.
--- Zero idle cost: every code path is a tooltip event or hook. No OnUpdate;
--- the only timer is a single next-frame CVar re-assert per zone-in.
+-- Near-zero idle cost: every code path is a tooltip event or hook. No
+-- OnUpdate; the timers are a 0.1s GameTooltip restyle tick while the module
+-- is enabled and a single next-frame CVar re-assert per zone-in.
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -1144,13 +1145,13 @@ function TT:OnEnable()
                 tt:HookScript("OnShow", function(frame) TT:StyleTooltip(frame) end)
             end
         end
-        -- Retail resets tooltip style per content (item-quality borders
-        -- etc.) through this shared path; restyle after it runs.
-        if _G.SharedTooltip_SetBackdropStyle then
-            hooksecurefunc("SharedTooltip_SetBackdropStyle", function(tt, _, isEmbedded)
-                if not isEmbedded and not tt.IsEmbedded and TT:IsEnabled() then
-                    TT:StyleTooltip(tt)
-                end
+        -- Not SharedTooltip_SetBackdropStyle: GameTooltip_OnHide calls it and
+        -- then compares a secret, and a post-hook that runs inside that pass
+        -- taints it. OnLoad runs once per new tooltip; the ticker in OnEnable
+        -- re-asserts from KE's own stack.
+        if _G.SharedTooltip_OnLoad then
+            hooksecurefunc("SharedTooltip_OnLoad", function(tt)
+                if tt and not tt.IsEmbedded and TT:IsEnabled() then TT:StyleTooltip(tt) end
             end)
         end
 
@@ -1208,6 +1209,15 @@ function TT:OnEnable()
     -- clobbers a write made that early. Kept registered so a later reset is
     -- answered too.
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+    -- Blizzard restyles a tooltip's backdrop per content; re-assert from KE's
+    -- own stack, never from inside Blizzard's pass.
+    if not self._restyleTicker then
+        self._restyleTicker = C_Timer.NewTicker(0.1, function()
+            local tt = _G.GameTooltip
+            if tt and tt:IsShown() then TT:StyleTooltip(tt) end
+        end)
+    end
 
     self:EnsureAnchor()
     self:ApplySettings()
@@ -1278,6 +1288,10 @@ function TT:OnDisable()
     self:UnregisterEvent("MODIFIER_STATE_CHANGED")
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     self:SyncAuraSpellIDCVar(true)
+    if self._restyleTicker then
+        self._restyleTicker:Cancel()
+        self._restyleTicker = nil
+    end
     -- The anchor frame survives, so the guard has to be cleared or a later
     -- enable would skip registration and leave the tool holding a dead key.
     if KE.EditMode then KE.EditMode:UnregisterElement("TooltipAnchor") end
