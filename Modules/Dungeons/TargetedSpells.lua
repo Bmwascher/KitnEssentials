@@ -752,9 +752,12 @@ function TS:PopulateEntry(entry, unit, info)
     if fs then
         fs:ClearAllPoints()
         fs:SetPoint("CENTER", entry, "CENTER", 0, 0)
-        local ok = pcall(fs.SetFont, fs, self.cachedFontPath, db.FontSize,
+        -- pcall's status only reports a throw; a FontString's SetFont also
+        -- returns false for an asset that did not load (KE:IsFontValid reads
+        -- the same pair).
+        local ok, loaded = pcall(fs.SetFont, fs, self.cachedFontPath, db.FontSize,
             self.cachedFontOutline)
-        if not ok then
+        if not ok or loaded == false then
             pcall(fs.SetFont, fs, KE:GetFontPath("Expressway"), db.FontSize, "OUTLINE")
         end
         local c = db.FontColor
