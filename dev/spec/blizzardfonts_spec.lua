@@ -49,6 +49,7 @@ describe("BlizzardFonts", function()
             GetFontOutline = stubOutline,
             SlugFlags = function(_, flags) return flags end,
             GetFontPath = function(_, name) return "Fonts\\" .. (name or "Expressway") .. ".TTF" end,
+            Skins = dbOverrides.Skins,
             db = {
                 profile = {
                     Skinning = {
@@ -145,6 +146,29 @@ describe("BlizzardFonts", function()
             BF:ApplyAll()
             local p, s, f = obj:GetFont()
             assert.same({ "Fonts\\FRIZQT__.TTF", 13, "" }, { p, s, f })
+        end)
+    end)
+
+    -- The always-on sweep owns objects that inherit from names in FONT_LIST and
+    -- reads their stock lazily. Writing this sweep's objects first would hand
+    -- it a scaled size to record as stock, so the order is the invariant --
+    -- calling the snapshot at all is not enough.
+    describe("stock snapshot ordering", function()
+        it("takes the other sweep's stock before it writes its first object", function()
+            local order = {}
+            load({ Skins = {
+                ResolveSkinFace = function() return "Expressway" end,
+                SnapshotGlobalFontStock = function() order[#order + 1] = "snapshot" end,
+            } })
+            local obj = plant("QuestFont", fontObject("Fonts\\FRIZQT__.TTF", 13, ""))
+            local write = obj.SetFont
+            obj.SetFont = function(self, path, size, flags)
+                order[#order + 1] = "write"
+                return write(self, path, size, flags)
+            end
+            BF:ApplyAll()
+            assert.equals("snapshot", order[1])
+            assert.equals("write", order[2])
         end)
     end)
 
