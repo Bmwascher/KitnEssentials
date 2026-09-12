@@ -154,6 +154,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             step = 1,
             value = barDB.Width or 0,
             labelWidth = 80,
+            tooltip = "Fixed bar width. Blizzard resizes the bar on every update and the width is put back a moment later, so a non-zero value can flicker. 0 keeps Blizzard's size.",
             callback = function(val)
                 barDB.Width = val
                 ApplySettings()
