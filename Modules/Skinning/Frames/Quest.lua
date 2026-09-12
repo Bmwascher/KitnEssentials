@@ -65,8 +65,8 @@ local function SkinReward(frame)
 
     -- The warband / already-known marker hangs off the name's right edge and
     -- can end past the button when the reward row overhangs the panel.
-    -- Anchored to the button it cannot leave it; Blizzard's
-    -- UpdateQuestRewardContextIcon sets only the atlas and shown state.
+    -- Anchored to the button it cannot leave it; Blizzard's context-icon
+    -- updates never change the anchor.
     if frame.QuestRewardContextIcon then
         frame.QuestRewardContextIcon:ClearAllPoints()
         frame.QuestRewardContextIcon:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
