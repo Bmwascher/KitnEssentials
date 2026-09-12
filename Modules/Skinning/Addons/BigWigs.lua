@@ -12,21 +12,14 @@ local hooksecurefunc = hooksecurefunc
 -- to whichever box is actually shown instead, or the bar detaches from the
 -- thing it is timing.
 local queueTimer
-local AnchorQueueTimer
-local function HookQueueBox(box)
-    if not box or S.data(box).keQueueAnchorHook then return end
-    S.data(box).keQueueAnchorHook = true
-    box:HookScript("OnShow", function() AnchorQueueTimer() end)
-end
-
-function AnchorQueueTimer()
+local function AnchorQueueTimer()
     local f = queueTimer
     if not f then return end
     local status = _G.LFGDungeonReadyStatus
     local dialog = _G.LFGDungeonReadyDialog
     local target = (status and status:IsShown() and status)
         or (dialog and dialog:IsShown() and dialog)
-        or dialog
+        or dialog or f:GetParent()
     if not target then return end
 
     f:ClearAllPoints()
@@ -37,11 +30,19 @@ function AnchorQueueTimer()
     -- is the gap beneath it.
     f:SetPoint("TOPLEFT", target, "BOTTOMLEFT", 1, -5)
     f:SetPoint("TOPRIGHT", target, "BOTTOMRIGHT", -1, -5)
+end
 
-    -- Installed from here, not at file scope: the two boxes need not exist
-    -- when this file runs, but by the time a queue bar exists the popup is up.
-    HookQueueBox(status)
-    HookQueueBox(dialog)
+-- Hooked before the first anchor pass and again from the bar's own OnShow,
+-- so a box that is missing at the first message is still hooked by the time
+-- the popup is up.
+local function HookQueueBoxes()
+    for _, name in ipairs({ "LFGDungeonReadyDialog", "LFGDungeonReadyStatus" }) do
+        local box = _G[name]
+        if box and box.HookScript and not S.data(box).keQueueAnchorHook then
+            S.data(box).keQueueAnchorHook = true
+            box:HookScript("OnShow", AnchorQueueTimer)
+        end
+    end
 end
 
 local function SkinQueueTimer()
@@ -53,7 +54,12 @@ local function SkinQueueTimer()
         S.StatusBar(frame)
         S.ProgressFill(frame)
         queueTimer = frame
+        HookQueueBoxes()
         AnchorQueueTimer()
+        frame:HookScript("OnShow", function()
+            HookQueueBoxes()
+            AnchorQueueTimer()
+        end)
         if frame.text then
             frame.text.SetFormattedText = function(tf, _, time) tf:SetText(format("%d", time)) end
             S.SetFont(frame.text, 15, "OUTLINE")
