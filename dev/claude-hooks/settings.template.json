@@ -33,7 +33,11 @@
             ],
             "timeout": 30,
             "statusMessage": "references folder check"
-          },
+          }
+        ]
+      },
+      {
+        "hooks": [
           {
             "type": "command",
             "command": "pwsh",
