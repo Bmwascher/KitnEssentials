@@ -197,6 +197,27 @@ describe("Core/Globals.lua helpers", function()
             assert.is_true(KE:ApplyFont(recorder(true), "Expressway", 13, "OUTLINE"))
         end)
 
+        -- A shared font object (GameFontNormal and friends) declares no return
+        -- for SetFont, unlike a FontString. Treating that nil as a refusal
+        -- replaced the requested face with the stock one on every such object.
+        it("keeps the requested face when SetFont returns no verdict", function()
+            local obj = { calls = {} }
+            obj.IsObjectType = function() return false end
+            obj.SetFont = function(_, ...) obj.calls[#obj.calls + 1] = { ... } end
+            assert.is_true(KE:ApplyFont(obj, "GoodFont", 13, "OUTLINE"))
+            assert.equals(1, #obj.calls)
+            assert.equals(KE:GetFontPath("GoodFont"), obj.calls[1][1])
+        end)
+
+        it("still substitutes the stock face on an explicit refusal", function()
+            local obj = { calls = {} }
+            obj.IsObjectType = function() return false end
+            obj.SetFont = function(_, ...) obj.calls[#obj.calls + 1] = { ... } return false end
+            KE:ApplyFont(obj, "GoodFont", 13, "OUTLINE")
+            assert.equals(2, #obj.calls)
+            assert.equals("Fonts\\FRIZQT__.TTF", obj.calls[2][1])
+        end)
+
         it("swallows a rejected text type instead of propagating it", function()
             -- HTMLTextType is not enumerated in the generated API docs, so an
             -- unsupported member must not abort the remaining types.

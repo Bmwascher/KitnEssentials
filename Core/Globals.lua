@@ -581,7 +581,11 @@ local DEFAULT_FONT = "Expressway"
 
 function KE:IsFontValid(fontPath)
     if not fontPath or fontPath == "" then return false end
-    return pcall(fontProbe.SetFont, fontProbe, fontPath, 12, "")
+    -- pcall's own status only reports an error. The probe's success value is
+    -- what says whether the asset loaded, and a FontString does return one --
+    -- returning the status alone accepted every non-empty path.
+    local ok, loaded = pcall(fontProbe.SetFont, fontProbe, fontPath, 12, "")
+    return ok and loaded ~= false
 end
 
 -- Match KE's flat-DB font key convention. New modules adding a font reference
@@ -702,11 +706,15 @@ function KE:ApplyFont(fontString, fontName, fontSize, fontOutline)
     end
 
     ---@cast fontString FontString
+    -- A FontString's SetFont returns a success boolean; a shared font object's
+    -- declares no return at all, so nil means "no verdict" and only an explicit
+    -- false is a refusal. Reading nil as failure substituted the stock face on
+    -- every font object styled through here, whatever face was asked for.
     local success = fontString:SetFont(fontPath, size, outline)
-    if not success then
+    if success == false then
         success = fontString:SetFont("Fonts\\FRIZQT__.TTF", size, outline)
     end
-    return success
+    return success ~= false
 end
 
 ---------------------------------------------------------------------------------
