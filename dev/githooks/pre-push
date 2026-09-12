@@ -259,4 +259,12 @@ if command -v lua >/dev/null 2>&1 \
     fi
 fi
 
+# Process-artifact retention rule (non-blocking, quiet when clean). Local-only:
+# every root it checks is gitignored.
+if command -v pwsh >/dev/null 2>&1 \n    && [ -f dev/scripts/check-artifact-retention.ps1 ] \n    && [ -d dev/docs ]; then
+    if ! pwsh -NoProfile -NonInteractive -File dev/scripts/check-artifact-retention.ps1 >/dev/null 2>&1; then
+        echo "[pre-push] note (non-blocking): process artifacts break the retention rule - run: pwsh dev/scripts/check-artifact-retention.ps1" >&2
+    fi
+fi
+
 echo "[pre-push] OK"

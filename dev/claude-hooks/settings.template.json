@@ -33,6 +33,18 @@
             ],
             "timeout": 30,
             "statusMessage": "references folder check"
+          },
+          {
+            "type": "command",
+            "command": "pwsh",
+            "args": [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "& \"$env:CLAUDE_PROJECT_DIR/.claude/hooks/retention-check.ps1\"; exit $LASTEXITCODE"
+            ],
+            "timeout": 60,
+            "statusMessage": "artifact retention check"
           }
         ]
       }
