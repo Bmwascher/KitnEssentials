@@ -94,6 +94,10 @@ local function SkinMisc()
     strip_bd(_G.ItemTextFrame, true)
     strip_bd(_G.AddonCompartmentFrame)
 
+    -- The Dungeon Finder eyeball's popup: not a tooltip, so the Tooltips
+    -- module never reaches it.
+    if _G.QueueStatusFrame then S.Frame(_G.QueueStatusFrame) end
+
     -- Social toasts. SocialToastTemplate is a plain BackdropTemplate, so the
     -- backdrop is ours to replace outright. The glow is an OVERLAY texture
     -- drawn outside the frame, so it survives that and has to go by name.
