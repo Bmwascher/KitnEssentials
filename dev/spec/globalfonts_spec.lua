@@ -41,6 +41,7 @@ describe("GlobalFonts", function()
         S = {
             FONT_FACE = "Expressway",
             RegisterEarly = function() end,
+            IsActive = function() return true end,
             -- SkinAPI owns the face rule and skinapi_spec covers it; this
             -- module's concern is which objects it writes and at what size.
             ResolveSkinFace = function() return "Expressway" end,
@@ -72,6 +73,13 @@ describe("GlobalFonts", function()
     it("writes nothing while Platynator is loaded", function()
         load({ Platynator = true })
         assert.equals("Platynator", S.GlobalFontsBlockedBy())
+        S.ApplyGlobalFonts()
+        assert.is_nil(next(applied))
+    end)
+
+    it("writes nothing while the frame-skin module is off", function()
+        load({})
+        S.IsActive = function() return false end
         S.ApplyGlobalFonts()
         assert.is_nil(next(applied))
     end)
