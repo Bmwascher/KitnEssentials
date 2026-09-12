@@ -296,23 +296,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         manager:Register(styleTextCheck, "textwidget")
         card4:AddRow(row4a, Theme.rowHeight)
 
-        -- Width slider (0 = default/auto)
-        local row4width = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-        local textWidthSlider = GUIFrame:CreateSlider(row4width, "Width (0=Auto)", {
-            min = 0,
-            max = 400,
-            step = 1,
-            value = textDB.Width or 0,
-            labelWidth = 80,
-            callback = function(val)
-                textDB.Width = val
-                ApplySettings()
-            end
-        })
-        row4width:AddWidget(textWidthSlider, 1)
-        manager:Register(textWidthSlider, "textwidget")
-        card4:AddRow(row4width, Theme.rowHeight)
-
         -- Font Size Slider
         local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
         local textSizeSlider = GUIFrame:CreateSlider(row4b, "Font Size", {

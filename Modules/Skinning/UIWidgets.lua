@@ -173,13 +173,9 @@ function UIW:StyleTextWidget(widget)
     local fontPath, outline = self:GetFontSettings()
     local textDB = self.db.TextWidget
 
-    local width = textDB.Width or 0
-    if width > 0 then
-        widget:SetWidth(width)
-    end
-
-    -- Font only. Setup sizes the widget from this fontstring's string width,
-    -- and a LEFT/RIGHT anchor here overrides the width Setup gives it.
+    -- Font only. Setup sizes the widget from this fontstring's string width
+    -- on every update; a forced widget width leaves Text at its TOPLEFT
+    -- anchor, and a LEFT/RIGHT anchor here overrides the width Setup gives it.
     if widget.Text and textDB.StyleText then
         SetFontIfChanged(widget.Text, fontPath, textDB.Size, outline)
         widget.Text:SetShadowColor(0, 0, 0, 0)

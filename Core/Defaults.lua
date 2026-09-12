@@ -2139,7 +2139,6 @@ local Defaults = {
                 -- Text widgets
                 TextWidget = {
                     Enabled = true,
-                    Width = 400, -- Custom width (0 = use default)
                     StyleText = true,
                     Size = 17,
                 },
