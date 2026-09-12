@@ -309,8 +309,12 @@ local function Skin()
 
                 bd:SetPoint("BOTTOMRIGHT", d, "BOTTOMRIGHT", 1, -5)
             end
-            if d.RewardsFrameContainer and d.RewardsFrameContainer.RewardsFrame then
-                S.StripTextures(d.RewardsFrameContainer.RewardsFrame)
+            local rewards = d.RewardsFrameContainer and d.RewardsFrameContainer.RewardsFrame
+            if rewards then
+                S.StripTextures(rewards)
+                -- Full alpha: the description scrolls underneath this frame.
+                local rbd = S.Backdrop(rewards)
+                if rbd then rbd:SetBackdropColor(S.bgColor[1], S.bgColor[2], S.bgColor[3], 1) end
             end
             for _, b in next, { d.AbandonButton, d.ShareButton, d.TrackButton } do
                 if b then
