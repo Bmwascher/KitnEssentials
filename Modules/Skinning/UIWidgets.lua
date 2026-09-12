@@ -98,14 +98,11 @@ function UIW:StyleStatusBarWidget(widget)
         end
     end
 
+    -- Font only. Setup measures Label's width and height and sizes the widget
+    -- from them; an anchor written here would be measured instead of the text.
     if widget.Label and barDB.StyleLabel then
         SetFontIfChanged(widget.Label, fontPath, barDB.LabelSize, outline)
         widget.Label:SetShadowColor(0, 0, 0, 0)
-
-        widget.Label:ClearAllPoints()
-        widget.Label:SetPoint("LEFT", widget, "LEFT", 0, 0)
-        widget.Label:SetPoint("RIGHT", widget, "RIGHT", 0, 0)
-        widget.Label:SetJustifyH("CENTER")
     end
 
     -- A capture bar's Bar is a Texture (UIWidgetTemplateCaptureBar.xml), not
@@ -117,12 +114,6 @@ function UIW:StyleStatusBarWidget(widget)
         if bar.Label and barDB.StyleBarText then
             SetFontIfChanged(bar.Label, fontPath, barDB.BarTextSize, outline)
             bar.Label:SetShadowColor(0, 0, 0, 0)
-
-            bar.Label:ClearAllPoints()
-            bar.Label:SetPoint("LEFT", bar, "LEFT", 0, 0)
-            bar.Label:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
-            bar.Label:SetJustifyH("CENTER")
-            bar.Label:SetJustifyV("MIDDLE")
         end
 
         if bar.LeftText and barDB.StyleBarText then
@@ -183,15 +174,11 @@ function UIW:StyleTextWidget(widget)
         widget:SetWidth(width)
     end
 
+    -- Font only. Setup sizes the widget from this fontstring's string width,
+    -- and a LEFT/RIGHT anchor here overrides the width Setup gives it.
     if widget.Text and textDB.StyleText then
         SetFontIfChanged(widget.Text, fontPath, textDB.Size, outline)
         widget.Text:SetShadowColor(0, 0, 0, 0)
-
-        widget.Text:ClearAllPoints()
-        widget.Text:SetPoint("LEFT", widget, "LEFT", 0, 0)
-        widget.Text:SetPoint("RIGHT", widget, "RIGHT", 0, 0)
-        widget.Text:SetJustifyH("CENTER")
-        widget.Text:SetJustifyV("MIDDLE")
     end
 end
 

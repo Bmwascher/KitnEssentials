@@ -20,10 +20,6 @@ describe("UIWidgets", function()
             function fs:GetFont() return self.path, self.size, self.outline end
             function fs:SetFont(p, s, o) self.path, self.size, self.outline = p, s, o end
             function fs:SetShadowColor() end
-            function fs:ClearAllPoints() end
-            function fs:SetPoint() end
-            function fs:SetJustifyH() end
-            function fs:SetJustifyV() end
             return fs
         end
 
