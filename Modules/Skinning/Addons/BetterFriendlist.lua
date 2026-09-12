@@ -533,6 +533,13 @@ local function Skin()
         hooksecurefunc(tab, "SetPoint", CleanTabAnchors)
         CleanTabAnchors(tab)
     end
+    -- BFL's dark theme backdrops each tab edge to edge and lights the selected
+    -- one, two pixels outside KE's inset box and over the next tab. Its opt-out
+    -- flag hides that backdrop on every state pass; the Hide covers one built.
+    local function MuteDarkTabChrome(tab)
+        tab.BFL_DarkNoButtonChrome = true
+        if tab.BFL_DarkBackdrop then tab.BFL_DarkBackdrop:Hide() end
+    end
 
     for i = 1, 4 do
         local tab = _G["BetterFriendsFrameTab" .. i]
@@ -540,6 +547,7 @@ local function Skin()
             S.data(tab).noGeometry = true
             S.Tab(tab)
             ArmAnchorShim(tab)
+            MuteDarkTabChrome(tab)
         end
     end
     for i = 1, 4 do
@@ -548,6 +556,7 @@ local function Skin()
             S.data(tab).noGeometry = true
             S.Tab(tab)
             ArmAnchorShim(tab)
+            MuteDarkTabChrome(tab)
             if i == 1 then ArmBottomHeadY(tab) end
         end
     end
