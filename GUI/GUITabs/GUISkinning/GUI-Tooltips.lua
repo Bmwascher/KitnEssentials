@@ -141,7 +141,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         end
         -- AddHeaderToggle's own OnClick already calls RefreshContent.
     end)
-    card1:AddLabel("Skins the game tooltip and its companions: dark backdrop, custom fonts, health bar styling, class-colored names, target line, and spell/item IDs. Visual-only post-hooks in the EllesmereUI performance style -- zero cost while no tooltip is shown.")
+    card1:AddLabel("Skins the game tooltip and its companions: dark backdrop, custom fonts, health bar styling, class-colored names, target line, and spell/item IDs. Visual-only post-hooks; near-zero cost while no tooltip is shown.")
 
     -- Say WHY it is off when another addon owns the feature -- the
     -- sidebar goes red, but the page itself would otherwise be silent.
