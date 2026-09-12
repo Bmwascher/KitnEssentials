@@ -356,7 +356,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
                 tcDB.Enabled = checked
                 ApplyTopCenter()
                 RefreshStates()
-                -- Decides whether the mover deserves a box.
                 if KE.EditMode then KE.EditMode:RefreshLiveState() end
             end,
         })
