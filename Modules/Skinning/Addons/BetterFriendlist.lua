@@ -163,6 +163,17 @@ local function InvitePlusPaint(tp)
     end
 end
 
+-- BFL re-fonts raid names with its own font object and smooth scaling on
+-- each roster update; KE's font goes back on after theirs, smooth scaling
+-- off, or the letters sit at uneven heights.
+local function RefontRaidName(button)
+    local name = button and button.Name
+    if not name or not S.data(button).bflSlotSkinned then return end
+    S.data(name).fontSize = nil   -- their SetFontObject changed the string under KE's cache
+    S.SetFont(name, 12, "OUTLINE")
+    if name.SetSmoothScaling then pcall(name.SetSmoothScaling, name, false) end
+end
+
 -- (BFL's original invite art comes back on top of ours
 -- after clicking invite): this built once and then bailed on every
 -- later call -- but we are hooked to UpdateFriendButton/InitializeEntry,
@@ -516,19 +527,10 @@ local function Skin()
     local function ArmAnchorShim(tab)
         if S.data(tab).anchorShim then return end
         S.data(tab).anchorShim = true
-        local pending = false
-        -- Deferred rather than inline: BFL re-anchors and re-widths the whole
-        -- row in one pass, so acting on the first SetPoint of that pass means
-        -- measuring a half-applied layout. No point-count test -- CleanTabAnchors
-        -- early-outs when there is nothing to do.
-        hooksecurefunc(tab, "SetPoint", function(t)
-            if pending then return end
-            pending = true
-            _G.C_Timer.After(0, function()
-                pending = false
-                CleanTabAnchors(t)
-            end)
-        end)
+        -- Inline, not deferred: CleanTabAnchors measures nothing, and a
+        -- deferred answer drew the row at Blizzard's offset for one frame on
+        -- every tab click. Its early-out is the re-entry guard.
+        hooksecurefunc(tab, "SetPoint", CleanTabAnchors)
         CleanTabAnchors(tab)
     end
 
@@ -573,7 +575,11 @@ local function Skin()
                             S.FixSubPixelEdge(slot)
 
                             for _, key in ipairs({ "Name", "Level" }) do
-                                if slot[key] then S.SetFont(slot[key], 12, "OUTLINE") end
+                                local fs = slot[key]
+                                if fs then
+                                    S.SetFont(fs, 12, "OUTLINE")
+                                    if fs.SetSmoothScaling then pcall(fs.SetSmoothScaling, fs, false) end
+                                end
                             end
                             if slot.EmptyText then S.SetFont(slot.EmptyText, 12, "") end
                             local bgTex = slot.Background
@@ -752,6 +758,11 @@ local function Skin()
         if RFM and type(RFM.UpdateGroupLayout) == "function" then
             hooksecurefunc(RFM, "UpdateGroupLayout", function()
                 NormalizeRaidGrid(2)
+            end)
+        end
+        if RFM and type(RFM.UpdateMemberButton) == "function" then
+            hooksecurefunc(RFM, "UpdateMemberButton", function(_, button)
+                RefontRaidName(button)
             end)
         end
 
