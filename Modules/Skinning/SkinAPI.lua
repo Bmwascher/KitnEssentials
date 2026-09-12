@@ -104,11 +104,24 @@ local function ApplyColor(target, value)
     end
 end
 
+-- Regions painted in the brand colour at skin time, keyed by region with
+-- the paint method and rest alpha. RefreshPalette walks them so a theme
+-- swap reaches frames built before it; hover handlers repaint on their own.
+local brandPaint = setmetatable({}, { __mode = "k" })
+function S.PaintBrand(obj, method, alpha)
+    brandPaint[obj] = { method = method, alpha = alpha }
+    local b = S.palette.brand
+    obj[method](obj, b[1], b[2], b[3], alpha)
+end
+
 function S.RefreshPalette()
     local accent = KE.GetSkinBrandColor and KE:GetSkinBrandColor()
     if accent then
         S.palette.brand[1], S.palette.brand[2], S.palette.brand[3] = accent[1], accent[2], accent[3]
         S.palette.progress[1], S.palette.progress[2], S.palette.progress[3] = accent[1], accent[2], accent[3]
+        for obj, p in pairs(brandPaint) do
+            obj[p.method](obj, accent[1], accent[2], accent[3], p.alpha)
+        end
     end
 
     -- Saved window colours. Read here rather than at file scope: this runs
@@ -1692,7 +1705,7 @@ function S.Tab(tab)
             local anchor = S.GetBackdrop(tab) or tab
             local t = tab:CreateTexture(nil, "ARTWORK")
 
-            t:SetColorTexture(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], 0.15)
+            S.PaintBrand(t, "SetColorTexture", 0.15)
             t:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
             t:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
             t:Hide()
@@ -2207,7 +2220,7 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
     if tab.Background then tab.Background:SetAlpha(0) end
     if tab.SelectedTexture then
         tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
-        tab.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.18)
+        S.PaintBrand(tab.SelectedTexture, "SetColorTexture", 0.18)
         local tbd = S.GetBackdrop(tab)
         if tbd then
             S.InsetToEdge(tab.SelectedTexture, tbd)
@@ -2830,7 +2843,7 @@ function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpd
         end
         local bd = S.Backdrop(thumb)
         if bd then
-            bd:SetBackdropColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], THUMB_REST)
+            S.PaintBrand(bd, "SetBackdropColor", THUMB_REST)
             bd:SetFrameLevel((thumb.GetFrameLevel and thumb:GetFrameLevel()) or 1)
         end
         thumb:HookScript("OnEnter", thumbOnEnter)
@@ -2929,7 +2942,7 @@ function S.ScrollBar(scrollbar, ignoreUpdates)
         if thumb and thumb.SetTexture then
             thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
             if thumb.SetTexCoord then thumb:SetTexCoord(0, 1, 0, 1) end
-            thumb:SetVertexColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], THUMB_REST)
+            S.PaintBrand(thumb, "SetVertexColor", THUMB_REST)
         end
     end
     S.data(scrollbar).skinned = true
