@@ -533,9 +533,9 @@ local function CropLFGInfoBackground(av)
 end
 
 -- Re-applies the viewer restyle from KE's own execution. Blizzard re-atlases
--- InfoBackground inside LFGListApplicationViewer_UpdateInfo and then
--- boolean-tests the listing's secret censored field, so a post-hook on
--- SetAtlas taints that call whether or not it defers its work.
+-- InfoBackground inside LFGListApplicationViewer_UpdateInfo, and the rest of
+-- that execution reads the listing's secret fields, so a post-hook on
+-- SetAtlas taints it whether or not it defers its work.
 local function SweepViewer()
     local av = _G.LFGListFrame and _G.LFGListFrame.ApplicationViewer
     if not av or not av:IsVisible() then return end

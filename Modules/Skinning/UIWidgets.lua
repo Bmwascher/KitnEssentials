@@ -229,8 +229,8 @@ end
 -- No hook on the widget mixins: a post-hook on Setup runs inside
 -- UIWidgetManager's pass and taints the rest of it, and the next widget's
 -- own Setup then throws on a secret. The game's widget events drive the
--- restyle from KE's own frame instead, one frame after Blizzard's
--- containers have processed the change.
+-- restyle from KE's own frame instead: one timer tick to sweep after
+-- Blizzard's containers have processed the change, a second to flush.
 local restyleScheduled = false
 function UIW:OnWidgetEvent()
     if restyleScheduled or not self.db.Enabled then return end
