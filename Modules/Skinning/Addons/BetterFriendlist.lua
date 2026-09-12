@@ -749,8 +749,16 @@ local function Skin()
             hooksecurefunc(BFLNS, "ApplyTabVisualState", function(_, tab, selected)
                 if tab and S.data(tab).anchorShim then PaintTabBorder(tab, selected) end
             end)
-            pcall(BFLNS.RefreshBottomTabVisualState, BFLNS)
-            pcall(BFLNS.RefreshTopTabVisualState, BFLNS)
+            -- A palette sweep repaints any border still matching the old default,
+            -- and a brand change leaves the cue in the old colour; both rows
+            -- repaint through the addon's own state pass.
+            local function RepaintTabs()
+                pcall(BFLNS.RefreshBottomTabVisualState, BFLNS)
+                pcall(BFLNS.RefreshTopTabVisualState, BFLNS)
+            end
+            hooksecurefunc(S, "SetSkinColors", RepaintTabs)
+            hooksecurefunc(S, "RefreshPalette", RepaintTabs)
+            RepaintTabs()
         end
         local FriendsList = BFLNS:GetModule("FriendsList")
         if FriendsList then
