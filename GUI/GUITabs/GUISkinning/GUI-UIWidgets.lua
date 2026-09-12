@@ -332,6 +332,90 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
 
         yOffset = card4:GetNextOffset()
 
+        ----------------------------------------------------------------
+        -- Card 5: Top-Centre Widgets (container control)
+        ----------------------------------------------------------------
+        local tcDB = db.TopCenter
+        manager:SetCondition("topcenter", function()
+            return tcDB.Enabled == true
+        end)
+
+        local function ApplyTopCenter()
+            local UIW = KitnEssentials:GetModule("UIWidgets", true)
+            if UIW and UIW:IsEnabled() then UIW:ApplyTopCenter() end
+        end
+
+        local card5 = GUIFrame:CreateCard(scrollChild, "Top-Centre Widgets", yOffset)
+        manager:Register(card5, "all")
+        card5:AddLabel("Moves, scales or hides Blizzard's top-centre widget container (M+ objective line, delve and event bars) in every zone.")
+
+        local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+        local tcEnableCheck = GUIFrame:CreateCheckbox(row5a, "Control Top-Centre Widgets", {
+            value = tcDB.Enabled == true,
+            callback = function(checked)
+                tcDB.Enabled = checked
+                ApplyTopCenter()
+                RefreshStates()
+                -- Decides whether the mover deserves a box.
+                if KE.EditMode then KE.EditMode:RefreshLiveState() end
+            end,
+        })
+        row5a:AddWidget(tcEnableCheck, 0.5)
+        manager:Register(tcEnableCheck, "all")
+
+        local tcHideCheck = GUIFrame:CreateCheckbox(row5a, "Hide (All Zones)", {
+            value = tcDB.Hide == true,
+            callback = function(checked)
+                tcDB.Hide = checked
+                ApplyTopCenter()
+            end,
+        })
+        row5a:AddWidget(tcHideCheck, 0.5)
+        manager:Register(tcHideCheck, "topcenter")
+        card5:AddRow(row5a, Theme.rowHeight)
+
+        local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
+        local tcScaleSlider = GUIFrame:CreateSlider(row5b, "Scale", {
+            min = 0.5, max = 2.0, step = 0.05,
+            value = tcDB.Scale or 1.0,
+            labelWidth = 60,
+            callback = function(val)
+                tcDB.Scale = val
+                ApplyTopCenter()
+            end,
+        })
+        row5b:AddWidget(tcScaleSlider, 1)
+        manager:Register(tcScaleSlider, "topcenter")
+        card5:AddRow(row5b, Theme.rowHeight)
+
+        yOffset = card5:GetNextOffset()
+
+        ----------------------------------------------------------------
+        -- Card 6: Top-Centre Widget Position
+        ----------------------------------------------------------------
+        -- db is the TopCenter sub-table, so the card's root keys
+        -- (anchorFrameType/ParentFrame/Strata) land there and cannot touch
+        -- the alert-frame cards below, which share this page.
+        local tcPosCard, tcPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            title = "Top-Centre Widget Position",
+            db = tcDB,
+            dbKeys = {
+                selfPoint = "AnchorFrom",
+                anchorPoint = "AnchorTo",
+                xOffset = "XOffset",
+                yOffset = "YOffset",
+            },
+            showAnchorFrameType = true,
+            showStrata = true,
+            onChangeCallback = ApplyTopCenter,
+        })
+
+        if tcPosCard.positionWidgets then
+            manager:RegisterGroup(tcPosCard.positionWidgets, "topcenter")
+        end
+        manager:Register(tcPosCard, "topcenter")
+        yOffset = tcPosOffset
+
         RefreshStates()
     end
 

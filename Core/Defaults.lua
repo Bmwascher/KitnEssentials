@@ -2143,6 +2143,22 @@ local Defaults = {
                     StyleText = true,
                     Size = 17,
                 },
+                -- Blizzard's top-centre widget container (M+ objective line,
+                -- delve and event bars). Off = Blizzard's own placement.
+                TopCenter = {
+                    Enabled = false,
+                    Hide = false,
+                    Scale = 1.0,
+                    -- Seeded: the position card shows HIGH for an unset
+                    -- strata, and the container sits at MEDIUM.
+                    Strata = "MEDIUM",
+                    Position = {
+                        AnchorFrom = "TOP",
+                        AnchorTo = "TOP",
+                        XOffset = 0,
+                        YOffset = -15,
+                    },
+                },
             },
             -- Game-wide replacement of Blizzard's shared font OBJECTS (quest
             -- text, objective tracker, number fonts, mail...). Off by

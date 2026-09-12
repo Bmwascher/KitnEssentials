@@ -51,4 +51,76 @@ describe("UIWidgets", function()
             assert.equals("Fonts\\New.ttf", widget2.Text.path)
         end)
     end)
+
+    describe("ApplyTopCenter snapshot lifecycle", function()
+        -- The container's pre-move placement is recorded once and replayed
+        -- on disable; a wrong record silently leaves the frame moved.
+        local function fakeContainer(point, rel, relPoint, x, y, scale, strata)
+            local f = { point = point, rel = rel, relPoint = relPoint, x = x, y = y,
+                        scale = scale, strata = strata, shown = true }
+            function f:GetPoint() return self.point, self.rel, self.relPoint, self.x, self.y end
+            function f:SetPoint(p, r, rp, px, py)
+                self.point, self.rel, self.relPoint, self.x, self.y = p, r, rp, px, py
+            end
+            function f:ClearAllPoints() end
+            function f:GetScale() return self.scale end
+            function f:SetScale(s) self.scale = s end
+            function f:GetFrameStrata() return self.strata end
+            function f:SetFrameStrata(s) self.strata = s end
+            function f:SetShown(b) self.shown = b end
+            function f:Show() self.shown = true end
+            return f
+        end
+
+        local function loadWithContainer()
+            local UIW, KE = L.loadUIWidgets()
+            KE.ApplyFramePosition = function() end
+            UIW:UpdateDB()
+            UIW.db.Enabled = true
+            UIW.db.TopCenter = {
+                Enabled = true, Hide = false, Scale = 1.5, Strata = "HIGH",
+                Position = { AnchorFrom = "TOP", AnchorTo = "TOP", XOffset = 0, YOffset = -200 },
+            }
+            UIW.topCenterHolder = { name = "holder" }
+            local c = fakeContainer("TOP", _G.UIParent, "TOP", 0, -15, 1, "MEDIUM")
+            _G.UIWidgetTopCenterContainerFrame = c
+            return UIW, c
+        end
+
+        it("disabling after repeated applies replays the placement recorded before the first move", function()
+            local UIW, c = loadWithContainer()
+            UIW:ApplyTopCenter()
+            UIW.db.TopCenter.Scale = 2
+            UIW.db.TopCenter.Hide = true
+            UIW:ApplyTopCenter()
+            assert.equals(2, c.scale)
+            assert.is_false(c.shown)
+
+            UIW.db.TopCenter.Enabled = false
+            UIW:ApplyTopCenter()
+            assert.equals("TOP", c.point)
+            assert.equals(_G.UIParent, c.rel)
+            assert.equals(-15, c.y)
+            assert.equals(1, c.scale)
+            assert.equals("MEDIUM", c.strata)
+            assert.is_true(c.shown)
+        end)
+
+        it("re-enabling after a restore records the current placement, not the stale one", function()
+            local UIW, c = loadWithContainer()
+            UIW:ApplyTopCenter()
+            UIW.db.TopCenter.Enabled = false
+            UIW:ApplyTopCenter()
+
+            -- The container is elsewhere by the time the control comes back.
+            c:SetPoint("TOP", _G.UIParent, "TOP", 0, -40)
+            c.scale = 0.8
+            UIW.db.TopCenter.Enabled = true
+            UIW:ApplyTopCenter()
+            UIW.db.TopCenter.Enabled = false
+            UIW:ApplyTopCenter()
+            assert.equals(-40, c.y)
+            assert.equals(0.8, c.scale)
+        end)
+    end)
 end)

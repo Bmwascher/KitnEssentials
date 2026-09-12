@@ -18,6 +18,7 @@ local pcall = pcall
 local _G = _G
 local C_Timer = C_Timer
 local CreateFrame = CreateFrame
+local UIParent = UIParent
 local unpack = unpack
 local math_max = math.max
 
@@ -56,6 +57,9 @@ function UIW:OnEnable()
 
     self:SetupHooks()
     self:StyleExistingWidgets()
+    self:EnsureTopCenterHolder()
+    self:ApplyTopCenter()
+    self:RegisterEditMode()
 
     self:RegisterEvent("PLAYER_ENTERING_WORLD", function()
 
@@ -255,6 +259,87 @@ function UIW:StyleExistingWidgets()
     end
 end
 
+---------------------------------------------------------------------------------
+-- Top-centre container control
+---------------------------------------------------------------------------------
+-- The container is a plain UIParent child anchored once in XML; nothing in
+-- the client re-anchors it and it only shows itself when it registers its
+-- widget set at load. So one placement from KE's own execution holds, and
+-- no hook on the container is needed (a post-hook there would run inside
+-- UIWidgetManager's pass and taint the widgets it lays out next).
+
+function UIW:EnsureTopCenterHolder()
+    if self.topCenterHolder then return end
+    self.topCenterHolder = CreateFrame("Frame", "KE_TopCenterWidgetHolder", UIParent)
+    self.topCenterHolder:SetSize(400, 40)
+end
+
+function UIW:ApplyTopCenter()
+    local container = _G.UIWidgetTopCenterContainerFrame
+    local tc = self.db and self.db.TopCenter
+    if not (container and tc and self.topCenterHolder) then return end
+
+    if not tc.Enabled then
+        -- Replay the placement recorded before the first move.
+        local orig = self._topCenterOrig
+        if orig then
+            container:ClearAllPoints()
+            container:SetPoint(orig.point, orig.relativeTo, orig.relativePoint, orig.x, orig.y)
+            container:SetScale(orig.scale)
+            container:SetFrameStrata(orig.strata)
+            container:Show()
+            self._topCenterOrig = nil
+        end
+        return
+    end
+
+    if not self._topCenterOrig then
+        local point, relativeTo, relativePoint, x, y = container:GetPoint()
+        self._topCenterOrig = {
+            point = point or "TOP", relativeTo = relativeTo or UIParent,
+            relativePoint = relativePoint or "TOP", x = x or 0, y = y or -15,
+            scale = container:GetScale(), strata = container:GetFrameStrata(),
+        }
+    end
+
+    KE:ApplyFramePosition(self.topCenterHolder, tc.Position, tc)
+    container:ClearAllPoints()
+    container:SetPoint("TOP", self.topCenterHolder, "TOP", 0, 0)
+    container:SetScale(tc.Scale or 1)
+    container:SetFrameStrata(tc.Strata or "MEDIUM")
+    container:SetShown(not tc.Hide)
+end
+
+function UIW:RegisterEditMode()
+    if not KE.EditMode or self.editModeRegistered then return end
+    self.editModeRegistered = true
+    KE.EditMode:RegisterElement({
+        key = "TopCenterWidgets",
+        module = self,
+        isEligible = function()
+            return self.db and self.db.TopCenter
+                and self.db.TopCenter.Enabled == true or false
+        end,
+        displayName = "Top-Centre Widgets",
+        frame = self.topCenterHolder,
+        getPosition = function() return self.db.TopCenter.Position end,
+        setPosition = function(pos)
+            local p = self.db.TopCenter.Position
+            p.AnchorFrom = pos.AnchorFrom
+            p.AnchorTo = pos.AnchorTo
+            p.XOffset = pos.XOffset
+            p.YOffset = pos.YOffset
+            self:ApplyTopCenter()
+        end,
+        getParentFrame = function()
+            local tc = self.db.TopCenter
+            return KE:ResolveAnchorFrame(tc.anchorFrameType, tc.ParentFrame)
+        end,
+        guiPath = "SkinBlizzardFrames",
+        guiTab = "SkinBlizzardFramesWidgets",
+    })
+end
+
 -- ApplySettings does not call UpdateDB. GetFontSettings caches its resolved
 -- font path and outline keyed on _styleGen, and _styleGen only bumps inside
 -- UpdateDB, so without this call the Font and Outline dropdowns write
@@ -267,6 +352,7 @@ function UIW:ApplySettings()
     self:UpdateDB()
     if not self.db.Enabled then return end
     self:StyleExistingWidgets()
+    self:ApplyTopCenter()
 end
 
 function UIW:OnDisable()
