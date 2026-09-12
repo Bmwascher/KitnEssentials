@@ -80,8 +80,13 @@ function S.GlobalFontsBlockedBy()
     return nil
 end
 
+local PASSES = {
+    { names = OUTLINED, flags = "OUTLINE" },
+    { names = PLAIN, flags = "NONE" },
+}
+
 local function Apply()
-    local face = S.FONT_FACE
+    local face = S.ResolveSkinFace()
     if not face or not KE.ApplyFont then return end
 
     if S.GlobalFontsBlockedBy() then return end
@@ -97,37 +102,49 @@ local function Apply()
     local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
     local base = (bs and tonumber(bs.FontBaseSize)) or 12
-    for _, pass in ipairs({ { names = OUTLINED, flags = "OUTLINE" }, { names = PLAIN, flags = "NONE" } }) do
+
+    -- Every stock size is read before any object is written. An object that
+    -- declares no height of its own follows its XML parent at runtime, so one
+    -- swept earlier in the list hands its already-scaled size to its children
+    -- -- and reading stock inside the write loop captured that and scaled it a
+    -- second time. GameFontDisable and GameFontHighlightOutline are both such
+    -- children, and at a base of 13 they rendered 14 against their parents' 13.
+    for _, pass in ipairs(PASSES) do
+        local names = pass.names
+        for i = 1, #names do
+            local name = names[i]
+            local obj = _G[name]
+            if obj and obj.GetFont and not stockSizes[name] then
+                local f, size, fl = obj:GetFont()
+                stockSizes[name] = size
+                local r, g, b, a
+                if obj.GetShadowColor then r, g, b, a = obj:GetShadowColor() end
+                stockFonts[name] = {
+                    face = f, size = size, flags = fl,
+                    shadow = r and { r, g, b, a } or nil,
+                }
+            end
+        end
+    end
+
+    for _, pass in ipairs(PASSES) do
         local names, flags = pass.names, pass.flags
         for i = 1, #names do
             local name = names[i]
             local obj = _G[name]
-            if obj and obj.GetFont then
-                local stock = stockSizes[name]
-                if not stock then
-                    local f, size, fl = obj:GetFont()
-                    stock = size
-                    stockSizes[name] = size
-                    local r, g, b, a
-                    if obj.GetShadowColor then r, g, b, a = obj:GetShadowColor() end
-                    stockFonts[name] = {
-                        face = f, size = size, flags = fl,
-                        shadow = r and { r, g, b, a } or nil,
-                    }
-                end
-                if stock then
-                    local size = FIXED_SIZES[name]
-                    if not size then
-                        local effStock = stock
-                        if flags == "OUTLINE" and effStock < 12 and not name:find("Tiny") then
-                            effStock = 12
-                        end
-                        size = math.floor(effStock * base / 12 + 0.5)
+            local stock = obj and obj.GetFont and stockSizes[name]
+            if stock then
+                local size = FIXED_SIZES[name]
+                if not size then
+                    local effStock = stock
+                    if flags == "OUTLINE" and effStock < 12 and not name:find("Tiny") then
+                        effStock = 12
                     end
-                    pcall(KE.ApplyFont, KE, obj, face, size, flags)
-
-                    if obj.SetShadowColor then pcall(obj.SetShadowColor, obj, 0, 0, 0, 0) end
+                    size = math.floor(effStock * base / 12 + 0.5)
                 end
+                pcall(KE.ApplyFont, KE, obj, face, size, flags)
+
+                if obj.SetShadowColor then pcall(obj.SetShadowColor, obj, 0, 0, 0, 0) end
             end
         end
     end

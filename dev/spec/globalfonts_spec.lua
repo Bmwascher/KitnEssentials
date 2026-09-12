@@ -1,4 +1,5 @@
--- Modules/Skinning/GlobalFonts.lua -- the Platynator guard. Apply() is the
+-- Modules/Skinning/GlobalFonts.lua -- the Platynator guard and the stock-size
+-- snapshot. Apply() is the
 -- refusal surface: it must write nothing while Platynator is loaded, since
 -- that addon's nameplate setup breaks once the sweep has rewritten
 -- GameFontNormal. Loaded directly (not through dev/spec/_ke_loader.lua): the
@@ -16,17 +17,41 @@ local function fontObject(path, size, flags)
     return o
 end
 
-describe("GlobalFonts Platynator guard", function()
+-- An object with no height of its own reads its XML parent's font until it is
+-- given one. That runtime propagation IS the defect the snapshot outruns, so a
+-- fake without it cannot fail the case below.
+local function childFontObject(parent)
+    local o = { _font = nil }
+    function o:GetFont()
+        local f = self._font or { parent:GetFont() }
+        return f[1], f[2], f[3]
+    end
+    function o:SetFont(p, s, f) self._font = { p, s, f } end
+    function o:GetShadowColor() return 0, 0, 0, 1 end
+    function o:SetShadowColor() end
+    return o
+end
+
+describe("GlobalFonts", function()
     local S, applied, planted
 
     local function load(loadedAddOns)
         _G.C_AddOns = { IsAddOnLoaded = function(name) return loadedAddOns[name] == true end }
         applied = {}
-        S = { FONT_FACE = "Expressway", RegisterEarly = function() end }
+        S = {
+            FONT_FACE = "Expressway",
+            RegisterEarly = function() end,
+            -- SkinAPI owns the face rule and skinapi_spec covers it; this
+            -- module's concern is which objects it writes and at what size.
+            ResolveSkinFace = function() return "Expressway" end,
+        }
         local KE = {
             Skins = S,
+            -- Writes as well as records: the real helper calls SetFont, and
+            -- without that the parent never propagates to its child.
             ApplyFont = function(_, obj, face, size, flags)
                 applied[obj] = { face, size, flags }
+                obj:SetFont(face, size, flags)
             end,
             db = { profile = { Skinning = { BlizzardFrames = { FontBaseSize = 14 } } } },
         }
@@ -40,6 +65,7 @@ describe("GlobalFonts Platynator guard", function()
 
     after_each(function()
         _G.GameFontNormal = nil
+        _G.GameFontDisable = nil
         _G.C_AddOns = nil
     end)
 
@@ -56,5 +82,18 @@ describe("GlobalFonts Platynator guard", function()
         S.ApplyGlobalFonts()
         assert.is_not_nil(applied[planted])
         assert.equals("Expressway", applied[planted][1])
+    end)
+
+    -- GameFontDisable inherits GameFontNormal and declares no height, so it
+    -- follows whatever the sweep writes to the parent. Reading stock inside
+    -- the write loop captured that propagated size and scaled it again: at a
+    -- base of 13 the pair rendered 13 and 14.
+    it("does not rescale a child that followed its parent's swept size", function()
+        local child = childFontObject(planted)
+        _G.GameFontDisable = child
+        load({})
+        S.ApplyGlobalFonts()
+        assert.equals(14, applied[planted][2])
+        assert.equals(14, applied[child][2])
     end)
 end)

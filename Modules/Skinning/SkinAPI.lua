@@ -2419,6 +2419,16 @@ function S._EffectiveSize(size)
         + (S.fontBaseSize - S.FONT_BASE_DEFAULT) + S.fontOffset
 end
 
+-- One resolution for the stored skin face: a real name from the profile,
+-- otherwise the addon's global font. Three readers share it; a fourth copy is
+-- how the sweeps and the skin drifted onto different faces.
+local function StoredSkinFace(bs)
+    if bs and type(bs.FontFace) == "string" and bs.FontFace ~= "" then
+        return bs.FontFace
+    end
+    return KE:GetGlobalFont()
+end
+
 -- One-shot db read for both font switches. It has to run BEFORE either setter
 -- assigns, not just on the first SetFont: the GUI writes the db and calls the
 -- setter straight through, so a still-pending read would clobber the new value
@@ -2434,11 +2444,20 @@ local function EnsureFontInit()
     S.fontBaseSize = (bs and tonumber(bs.FontSize)) or S.FONT_BASE_DEFAULT
     -- No chosen skin face means follow the addon's global font, not the
     -- bundled literal this file seeds at parse time.
-    if bs and type(bs.FontFace) == "string" and bs.FontFace ~= "" then
-        S.FONT_FACE = bs.FontFace
-    else
-        S.FONT_FACE = KE:GetGlobalFont()
-    end
+    S.FONT_FACE = StoredSkinFace(bs)
+end
+
+-- Both Blizzard font-object sweeps resolve their face here. The skin only
+-- loads its face from the profile once the frame skin runs, so a sweep reading
+-- S.FONT_FACE alone used the parse-time seed while the picker's choice sat in
+-- the profile, and the two sweeps rendered different faces. The resolved name
+-- is written back so a later pick still registers as a change.
+function S.ResolveSkinFace()
+    if S._offsetInit then return S.FONT_FACE end
+    local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.BlizzardFrames
+    S.FONT_FACE = StoredSkinFace(bs)
+    return S.FONT_FACE
 end
 
 -- One resolution for a FontString and for a shared font object, so the two
@@ -3443,12 +3462,7 @@ function BF:OnEnable()
     S.fontOutlineMode = S._ResolveOutlineMode(bs and bs.FontOutline)
     S.fontOutline = (S.fontOutlineMode ~= "NONE")
     S.fontBaseSize = (bs and tonumber(bs.FontSize)) or S.FONT_BASE_DEFAULT
-    -- Mirrors the resolution in EnsureFontInit; the two must not drift.
-    if bs and type(bs.FontFace) == "string" and bs.FontFace ~= "" then
-        S.FONT_FACE = bs.FontFace
-    else
-        S.FONT_FACE = KE:GetGlobalFont()
-    end
+    S.FONT_FACE = StoredSkinFace(bs)
 
     runList(earlySkins)
 

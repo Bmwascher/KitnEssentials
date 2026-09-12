@@ -867,6 +867,42 @@ describe("S.SetSkinColors", function()
     end)
 end)
 
+-- The two Blizzard font-object sweeps both read this, and the frame skin is
+-- what loads the face from the profile -- so with that skin off the branch
+-- below is the only thing standing between the sweeps and two different faces.
+describe("S.ResolveSkinFace", function()
+    local KE, S
+    before_each(function()
+        KE = L.loadSkinAPI()
+        S = KE.Skins
+    end)
+
+    it("reads the stored face while the skin's font state is uninitialised", function()
+        KE.db.profile.Skinning.BlizzardFrames.FontFace = "ChosenFace"
+        assert.are.equal("ChosenFace", S.ResolveSkinFace())
+    end)
+
+    it("falls back to the global font when no face is stored", function()
+        KE.db.profile.Skinning.BlizzardFrames.FontFace = ""
+        assert.are.equal("Expressway", S.ResolveSkinFace())
+    end)
+
+    it("prefers the live face once that state is initialised", function()
+        KE.db.profile.Skinning.BlizzardFrames.FontFace = "ChosenFace"
+        S.SetSkinFont("LiveFace", nil, nil)
+        assert.are.equal("LiveFace", S.ResolveSkinFace())
+    end)
+
+    -- S.SetSkinFont decides whether to re-sweep by comparing the pick against
+    -- S.FONT_FACE. Left at the parse-time seed after a stored-face sweep, a
+    -- later pick OF the seed name reads as no change and never re-sweeps.
+    it("writes the resolved name back for the setter to compare against", function()
+        KE.db.profile.Skinning.BlizzardFrames.FontFace = "ChosenFace"
+        S.ResolveSkinFace()
+        assert.are.equal("ChosenFace", S.FONT_FACE)
+    end)
+end)
+
 describe("S.SetSkinFont", function()
     local S
     before_each(function() S = L.loadSkinAPI().Skins end)
