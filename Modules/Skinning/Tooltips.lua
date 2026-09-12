@@ -1162,11 +1162,10 @@ function TT:OnEnable()
     if not self.hooked then
         self.hooked = true
 
-        -- No OnShow hook on the list (see StyleTooltip): ApplySettings styles
-        -- it at enable. Not SharedTooltip_SetBackdropStyle either:
-        -- GameTooltip_OnHide calls it and then compares a secret, and a
-        -- post-hook that runs inside that pass taints it. OnLoad runs once
-        -- per new tooltip; the ticker below re-asserts from KE's own stack.
+        -- No OnShow hook on the list (see StyleTooltip), and not
+        -- SharedTooltip_SetBackdropStyle either: GameTooltip_OnHide calls it
+        -- and then compares a secret, and a post-hook that runs inside that
+        -- pass taints it.
         if _G.SharedTooltip_OnLoad then
             hooksecurefunc("SharedTooltip_OnLoad", function(tt)
                 if tt and not tt.IsEmbedded and TT:IsEnabled() then TT:StyleTooltip(tt) end
