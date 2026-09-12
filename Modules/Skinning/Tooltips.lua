@@ -248,6 +248,32 @@ local function UnstyleTooltip(tt)
     end
 end
 
+-- The engine aura tooltip is forbidden, so it is styled through
+-- AuraContainerInbound.SetTooltipBackdrop (a plain function, not a method)
+-- and returned to stock with ResetTooltipStyle. forceOff: see
+-- SyncAuraSpellIDCVar.
+function TT:SyncAuraTooltip(forceOff)
+    local inbound = _G.AuraContainerInbound
+    if not inbound then return end
+    local db = self.db
+    if forceOff or not db then
+        if inbound.ResetTooltipStyle then pcall(inbound.ResetTooltipStyle) end
+        return
+    end
+    if not inbound.SetTooltipBackdrop then return end
+    local bg, bd = db.BackdropColor, db.BorderColor
+    pcall(inbound.SetTooltipBackdrop, {
+        backdropInfo = {
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+            insets = { left = 0, right = 0, top = 0, bottom = 0 },
+        },
+        centerColor = CreateColor(bg[1], bg[2], bg[3], bg[4] or 0.9),
+        borderColor = CreateColor(bd[1], bd[2], bd[3], bd[4] or 1),
+    })
+end
+
 -- Fonts ---------------------------------------------------------------
 
 -- The shared font objects cover every tooltip line at zero per-line cost.
@@ -1125,6 +1151,7 @@ function TT:ApplySettings()
         local tt = _G[name]
         if tt and tt:IsShown() then self:StyleTooltip(tt) end
     end
+    self:SyncAuraTooltip()
 end
 
 function TT:OnInitialize()
@@ -1288,6 +1315,7 @@ function TT:OnDisable()
     self:UnregisterEvent("MODIFIER_STATE_CHANGED")
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     self:SyncAuraSpellIDCVar(true)
+    self:SyncAuraTooltip(true)
     if self._restyleTicker then
         self._restyleTicker:Cancel()
         self._restyleTicker = nil
