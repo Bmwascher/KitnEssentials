@@ -528,6 +528,39 @@ function S.RefreshLFGRoleIcons()
     if dd and dd.RoleCount then UpdateRoleCount(dd.RoleCount) end
 end
 
+local function CropLFGInfoBackground(av)
+    if av.InfoBackground then S.CropAtlasEdges(av.InfoBackground, 0.035, 0.10) end
+end
+
+-- Re-applies the viewer restyle from KE's own execution. Blizzard re-atlases
+-- InfoBackground inside LFGListApplicationViewer_UpdateInfo and then
+-- boolean-tests the listing's secret censored field, so a post-hook on
+-- SetAtlas taints that call whether or not it defers its work.
+local function SweepViewer()
+    local av = _G.LFGListFrame and _G.LFGListFrame.ApplicationViewer
+    if not av or not av:IsVisible() then return end
+    CropLFGInfoBackground(av)
+end
+
+local viewerSweepStarted = false
+local function StartViewerSweep()
+    if viewerSweepStarted then return end
+    viewerSweepStarted = true
+
+    local driver = CreateFrame("Frame")
+    driver:RegisterEvent("GROUP_ROSTER_UPDATE")
+    driver:RegisterEvent("PLAYER_ROLES_ASSIGNED")
+    driver:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+    driver:RegisterEvent("LFG_LIST_APPLICANT_UPDATED")
+    driver:SetScript("OnEvent", function() C_Timer.After(0, SweepViewer) end)
+
+    -- Showing the viewer fires none of those events, and an OnShow hook on
+    -- it runs inside the LFG_LIST_ACTIVE_ENTRY_UPDATE execution that goes on
+    -- to test censored. A ticker from KE's own stack instead; while the
+    -- Group Finder is closed each tick is two lookups and one IsVisible.
+    C_Timer.NewTicker(0.2, SweepViewer)
+end
+
 local GROUP_BUTTON_ICONS = { 133076, 133074, 464820 }
 
 local function Skin()
@@ -956,30 +989,14 @@ local function Skin()
             -- the art and border are one atlas, so the border is
             -- cropped off in TEXCOORD space -- resolve the atlas's file
             -- rect via C_Texture.GetAtlasInfo and inset past the baked
-            -- decorative frame (~3.5% x, ~10% y). Re-applied whenever
-            -- Blizzard re-SetAtlas-es (activity/category changes), and
-            -- a border-only S.Backdrop frame supplies the 1px edge.
-            local function CropInfoBackground(tex)
-                S.CropAtlasEdges(tex, 0.035, 0.10) -- promoted primitive
-            end
-            if av.InfoBackground and not S.data(av.InfoBackground).cropHooked then
-                S.data(av.InfoBackground).cropHooked = true
-                -- DEFERRED. LFGListApplicationViewer_UpdateInfo re-atlases
-                -- this texture and then compares SECRET values (the
-                -- listing name is |Kl21|k) -- running our crop inside
-                -- that call taints it:
-                --
-                --   LFGList.lua: attempt to compare a secret number
-                --   value (execution tainted by 'KitnEssentials')
-                hooksecurefunc(av.InfoBackground, "SetAtlas", function(tex)
-                    if S.data(tex).cropQueued then return end
-                    S.data(tex).cropQueued = true
-                    C_Timer.After(0, function()
-                        S.data(tex).cropQueued = nil
-                        CropInfoBackground(tex)
-                    end)
-                end)
-                CropInfoBackground(av.InfoBackground)
+            -- decorative frame (~3.5% x, ~10% y). Re-applied by the viewer
+            -- sweep whenever Blizzard re-SetAtlas-es (activity/category
+            -- changes), and a border-only S.Backdrop frame supplies the 1px
+            -- edge.
+            if av.InfoBackground and not S.data(av.InfoBackground).cropSweep then
+                S.data(av.InfoBackground).cropSweep = true
+                CropLFGInfoBackground(av)
+                StartViewerSweep()
                 local bg = CreateFrame("Frame", nil, av)
                 bg:SetAllPoints(av.InfoBackground)
                 bg:SetFrameLevel(av:GetFrameLevel() + 1)
