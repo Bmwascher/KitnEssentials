@@ -734,6 +734,26 @@ local function Skin()
 
     local BFLNS = _G.BetterFriendlist
     if BFLNS and BFLNS.GetModule then
+        -- The muted dark-theme chrome carried the selected-tab cue, an accent
+        -- border; KE's own border carries it now, in their theme's accent.
+        local function PaintTabBorder(tab, selected)
+            local bd = S.GetBackdrop(tab)
+            if not bd then return end
+            if selected then
+                local r, g, b = 1, 0.82, 0
+                if BFLNS.GetThemeAccentColor then r, g, b = BFLNS:GetThemeAccentColor(r, g, b, 1) end
+                bd:SetBackdropBorderColor(r, g, b, 1)
+            else
+                bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2], S.borderColor[3], S.borderColor[4])
+            end
+        end
+        if type(BFLNS.ApplyTabVisualState) == "function" then
+            hooksecurefunc(BFLNS, "ApplyTabVisualState", function(_, tab, selected)
+                if tab and S.data(tab).anchorShim then PaintTabBorder(tab, selected) end
+            end)
+            pcall(BFLNS.RefreshBottomTabVisualState, BFLNS)
+            pcall(BFLNS.RefreshTopTabVisualState, BFLNS)
+        end
         local FriendsList = BFLNS:GetModule("FriendsList")
         if FriendsList then
             pcall(function()
