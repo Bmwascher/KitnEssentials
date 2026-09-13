@@ -48,4 +48,34 @@ if printf '%s' "$subject" | grep -qE '^[A-Z]'; then
     exit 1
 fi
 
+# Release commits ("vX.Y.Z: ..."): the staged .toc must carry the same
+# version (blocking: a mismatch ships the wrong fallback version), and the
+# bump tier is checked against the top CHANGELOG entry (family AGENTS.md,
+# Git, release-version tiers). A minor/major with no **NEW:** bullet, or a
+# patch with one, is a note only; the tier decision stays with the author.
+rel="$(printf '%s' "$subject" | grep -oE '^v[0-9]+\.[0-9]+\.[0-9]+:' | tr -d 'v:')"
+if [ -n "$rel" ]; then
+    toc_ver="$(git show :KitnEssentials.toc 2>/dev/null | grep -m1 '^## X-Manual-Version:' | awk '{print $3}')"
+    if [ "$toc_ver" != "$rel" ]; then
+        echo "[commit-msg] BLOCKED: release subject is v$rel but the staged KitnEssentials.toc X-Manual-Version is '${toc_ver:-missing}'. Stage the bumped .toc, or override with: git commit --no-verify" >&2
+        exit 1
+    fi
+    prev="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | tr -d v)"
+    if printf '%s' "$prev" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+        set -- $(printf '%s' "$prev" | tr . ' '); pM=$1; pm=$2
+        set -- $(printf '%s' "$rel" | tr . ' '); rM=$1; rm_=$2
+        if [ "$rM" != "$pM" ]; then tier=major; elif [ "$rm_" != "$pm" ]; then tier=minor; else tier=patch; fi
+        entry="$(git show :CHANGELOG.md 2>/dev/null | awk '/^## v/{n++} n==1' )"
+        if ! printf '%s
+' "$entry" | grep -q "^## v$rel\$"; then
+            echo "[commit-msg] note (non-blocking): the top CHANGELOG.md entry is not '## v$rel' - collapse the per-merge entries under the release version." >&2
+        elif printf '%s
+' "$entry" | grep -q '\*\*NEW:\*\*'; then
+            [ "$tier" = patch ] && echo "[commit-msg] note (non-blocking): v$prev -> v$rel is a patch bump but the entry has **NEW:** bullets - a new module/page/control is a minor (family AGENTS.md, release-version tiers)." >&2
+        else
+            [ "$tier" != patch ] && echo "[commit-msg] note (non-blocking): v$prev -> v$rel is a $tier bump but the entry has no **NEW:** bullet - fixes and polish alone stay a patch (family AGENTS.md, release-version tiers)." >&2
+        fi
+    fi
+fi
+
 exit 0
