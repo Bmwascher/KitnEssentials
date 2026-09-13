@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.18
+
+### Skinning
+- Ticked checkboxes and slider fills in skinned windows take a new theme
+  colour as soon as the preset is swapped
+
+---
+
 ## v4.6.17
 
 ### Skinning
