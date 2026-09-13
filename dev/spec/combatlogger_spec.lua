@@ -192,25 +192,20 @@ describe("CombatLogger arena classification", function()
     end)
 
     describe("scenario logging", function()
-        it("logs a Torghast scenario when Scenario is on", function()
+        -- The rule ignores difficultyID entirely: 167 (Torghast), 208 (delve)
+        -- and an unknown/absent id all take the same branch. The widening's
+        -- whole point was that the old rule returned false for 208 without
+        -- consulting any setting.
+        it("logs any scenario difficulty when Scenario is on", function()
             CL.db = db({ Scenario = true })
-            local should, label = CL:ShouldLog("scenario", 167, 5)
+            for _, difficultyID in ipairs({ 167, 208 }) do
+                local should, label = CL:ShouldLog("scenario", difficultyID, 5)
+                assert.is_true(should)
+                assert.equals("a scenario", label)
+            end
+            local should, label = CL:ShouldLog("scenario", nil, nil)
             assert.is_true(should)
             assert.equals("a scenario", label)
-        end)
-
-        it("logs a delve scenario when Scenario is on", function()
-            -- The whole point of the widening: 208 is not 167, and the old
-            -- rule returned false for it without consulting any setting.
-            CL.db = db({ Scenario = true })
-            local should, label = CL:ShouldLog("scenario", 208, 5)
-            assert.is_true(should)
-            assert.equals("a scenario", label)
-        end)
-
-        it("logs a scenario of unknown difficulty when Scenario is on", function()
-            CL.db = db({ Scenario = true })
-            assert.is_true((CL:ShouldLog("scenario", nil, nil)))
         end)
 
         it("refuses every scenario when Scenario is off", function()
@@ -229,12 +224,9 @@ describe("CombatLogger arena classification", function()
     end)
 
     describe("advanced logging prompt", function()
-        it("prompts when PromptAdvanced is absent", function()
+        it("prompts unless PromptAdvanced is explicitly false", function()
             CL.db = db({})
             assert.is_true(CL:_ShouldPromptAdvanced())
-        end)
-
-        it("prompts when PromptAdvanced is true", function()
             CL.db = db({ PromptAdvanced = true })
             assert.is_true(CL:_ShouldPromptAdvanced())
         end)

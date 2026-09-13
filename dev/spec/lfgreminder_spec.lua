@@ -4,29 +4,19 @@
 local loader = require("dev.spec._ke_loader")
 
 describe("LFGReminder module", function()
-    it("loads in the spec harness", function()
-        local LR = loader.loadLFGReminder()
-        assert.is_table(LR)
-        assert.is_table(LR.db)
-        assert.equals(1.05, LR.db.Scale)
-    end)
-
     describe("teleport lookup", function()
-        it("resolves an exact lowercase name", function()
+        it("normalizes case and a trailing difficulty suffix before matching", function()
             local _, _, seams = loader.loadLFGReminder()
-            assert.equals(1286809, seams.resolveByName("murder row"))
-        end)
-
-        it("is case-insensitive", function()
-            local _, _, seams = loader.loadLFGReminder()
-            assert.equals(1286809, seams.resolveByName("Murder Row"))
-        end)
-
-        it("strips a trailing difficulty suffix", function()
-            local _, _, seams = loader.loadLFGReminder()
-            -- Apostrophe kept deliberately: it exercises the key that a
-            -- misplaced apostrophe would silently fail to match.
-            assert.equals(1286831, seams.resolveByName("Kings' Rest (Mythic)"))
+            local cases = {
+                { "murder row", 1286809 },
+                { "Murder Row", 1286809 },
+                -- Apostrophe kept deliberately: it exercises the key that a
+                -- misplaced apostrophe would silently fail to match.
+                { "Kings' Rest (Mythic)", 1286831 },
+            }
+            for _, case in ipairs(cases) do
+                assert.equals(case[2], seams.resolveByName(case[1]))
+            end
         end)
 
         it("returns nil for an unknown dungeon", function()

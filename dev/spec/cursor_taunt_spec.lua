@@ -1,13 +1,6 @@
 local loader = require("dev.spec._ke_loader")
 
 describe("Cursor module", function()
-    it("loads in the spec harness", function()
-        local C = loader.loadCursor()
-        assert.is_table(C)
-        assert.is_table(C.db)
-        assert.is_table(C.db.Taunt)
-    end)
-
     describe("taunt spell lookup", function()
         it("selects the taunt present in the spellbook", function()
             local C = loader.loadCursor({

@@ -1,6 +1,10 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  dev/spec/dm_history_spec.lua                            ║
--- ║  DamageMeter/History.lua — snapshot store (Tier 2).      ║
+-- ║  DamageMeter/History.lua's snapshot store, plus the      ║
+-- ║  history-related provenance/lifecycle hooks in           ║
+-- ║  DamageMeter/Core.lua (OnChallengeEvent, OnDisable,      ║
+-- ║  HeaderReset/OnMeterReset, SetWindowView, GetSession/    ║
+-- ║  GetSource chokepoints). Tier 2.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- HONESTY BOUNDARY (see dev/README.md): C_DamageMeter / C_ChallengeMode /
