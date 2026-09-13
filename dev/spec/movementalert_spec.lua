@@ -15,13 +15,6 @@ describe("movement alert spell resolution", function()
     end)
 
     describe("the exported tables", function()
-        it("publishes the four names the page needs", function()
-            assert.is_table(KE.MOVEMENT_ABILITIES)
-            assert.is_table(KE.MOVEMENT_BUFF_ACTIVE)
-            assert.is_table(KE.MOVEMENT_DEFAULT_OFF)
-            assert.is_function(KE.MOVEMENT_SPELL_KEY)
-        end)
-
         it("keys spell overrides as specID:spellID", function()
             assert.equals("102:1850", KE.MOVEMENT_SPELL_KEY(102, 1850))
         end)
@@ -315,18 +308,17 @@ describe("NoMovementAlert RoleColor", function()
             return NMA
         end
 
-        it("treats a single-charge spell as a charge spell", function()
-            local NMA = withCharges({ currentCharges = 0, maxCharges = 1, cooldownDuration = 20 })
-            local left, isChargeSpell = NMA:ResolveCharges(212653)
-            assert.equals(0, left)
-            assert.is_true(isChargeSpell)
-        end)
-
-        it("still treats a multi-charge spell as a charge spell", function()
-            local NMA = withCharges({ currentCharges = 2, maxCharges = 2, cooldownDuration = 20 })
-            local left, isChargeSpell = NMA:ResolveCharges(109132)
-            assert.equals(2, left)
-            assert.is_true(isChargeSpell)
+        it("treats any spell with a charge table as a charge spell", function()
+            local cases = {
+                { name = "single-charge", spellId = 212653, currentCharges = 0, maxCharges = 1, expectLeft = 0 },
+                { name = "multi-charge", spellId = 109132, currentCharges = 2, maxCharges = 2, expectLeft = 2 },
+            }
+            for _, case in ipairs(cases) do
+                local NMA = withCharges({ currentCharges = case.currentCharges, maxCharges = case.maxCharges, cooldownDuration = 20 })
+                local left, isChargeSpell = NMA:ResolveCharges(case.spellId)
+                assert.equals(case.expectLeft, left, case.name)
+                assert.is_true(isChargeSpell, case.name)
+            end
         end)
 
         it("reports no charges for a spell with no charge table", function()

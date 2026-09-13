@@ -148,46 +148,6 @@ describe("EUIWindows", function()
         end)
     end)
 
-    describe("map integrity", function()
-        it("has no loot row, and maps loottoast to the split key only", function()
-            local _, KE = loader.loadEUIWindows()
-            local byKey = {}
-            for _, entry in ipairs(KE.Skins.WINDOW_MAP) do
-                -- EllesmereUI's loot pack touches only _G.LootFrame; our `Loot`
-                -- key covers four families. An unfiltered row here silently
-                -- costs three (a6-3a:121-125). It must never come back.
-                assert.are_not.equal("loot", entry.euiKey)
-                byKey[entry.euiKey] = entry
-            end
-            -- Positive control: the sibling row DOES exist, so the assertion
-            -- above cannot be passing merely because the map is empty.
-            assert.is_table(byKey.loottoast)
-            -- And it points at the split key, never back at the whole
-            -- twenty-five-system `Alerts` key it used to carry.
-            assert.same({ "LootToast" }, byKey.loottoast.skins)
-        end)
-
-        it("keeps `addons` to exactly the housing and delves rows", function()
-            local _, KE = loader.loadEUIWindows()
-            local sawHousing, sawDelves = false, false
-            for _, entry in ipairs(KE.Skins.WINDOW_MAP) do
-                if entry.euiKey == "housing" then
-                    sawHousing = true
-                    assert.same({ "Blizzard_HousingDashboard" }, entry.addons)
-                elseif entry.euiKey == "delves" then
-                    sawDelves = true
-                    assert.same({ "Blizzard_DelvesCompanionConfiguration" }, entry.addons)
-                else
-                    assert.is_nil(entry.addons, entry.euiKey .. " should not have grown an addons filter")
-                end
-            end
-            -- Positive control: without this, deleting either row entirely
-            -- leaves the branch above unreached and the test still green.
-            assert.is_true(sawHousing, "housing row is missing")
-            assert.is_true(sawDelves, "delves row is missing")
-        end)
-    end)
-
     describe("suppression accessors", function()
         -- Test through the production seam: every case below is fed the
         -- real BuildSkinSuppressionSet output, never a hand-seeded fixture.

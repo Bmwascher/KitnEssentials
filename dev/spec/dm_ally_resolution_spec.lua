@@ -129,6 +129,9 @@ describe("MatchRowToRoster refuses rather than guessing", function()
     end)
 end)
 
+-- BuildRosterIndex calls IsInRaid/IsInGroup/GetNumGroupMembers/UnitGUID/
+-- UnitClass directly with no injectable seam, so there is no pure predicate
+-- to extract this onto -- the fake is the only way to drive it.
 describe("BuildRosterIndex fails closed on an unreadable member", function()
     local SECRET = { __secret = true }
 

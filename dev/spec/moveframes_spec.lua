@@ -28,16 +28,15 @@ describe("MoveFrames.lua", function()
             _G.NoSuchGlobal = nil
         end)
 
-        it("resolves a single segment", function()
-            assert.equal(_G.Alpha, getFrame("Alpha"))
-        end)
-
-        it("resolves two segments", function()
-            assert.equal(_G.Alpha.Beta, getFrame("Alpha.Beta"))
-        end)
-
-        it("resolves three segments", function()
-            assert.equal(_G.Alpha.Beta.Gamma, getFrame("Alpha.Beta.Gamma"))
+        it("resolves a dotted path of any depth", function()
+            local cases = {
+                { path = "Alpha", expect = _G.Alpha },
+                { path = "Alpha.Beta", expect = _G.Alpha.Beta },
+                { path = "Alpha.Beta.Gamma", expect = _G.Alpha.Beta.Gamma },
+            }
+            for _, c in ipairs(cases) do
+                assert.equal(c.expect, getFrame(c.path))
+            end
         end)
 
         it("returns nil without error on a broken mid-path", function()
