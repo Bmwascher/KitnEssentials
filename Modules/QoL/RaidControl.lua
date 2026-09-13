@@ -15,8 +15,11 @@
 --
 -- Taint/combat discipline: every secure attribute write and every Show/Hide
 -- of a secure frame is InCombatLockdown-guarded, and state changes asked for
--- during combat are deferred to PLAYER_REGEN_ENABLED. Open/close of the panel
--- itself runs through secure handler snippets, so it still works in combat.
+-- during combat are deferred to one PLAYER_REGEN_ENABLED handler,
+-- OnRegenEnabled. One handler, because AceEvent keeps a single callback per
+-- event per object: a second registration silently displaces the first.
+-- Open/close of the panel itself runs through secure handler snippets, so it
+-- still works in combat.
 --
 -- ONE EXCEPTION, and it is deliberate. OnDisable's combat deferral cannot
 -- fire: Ace tears the module's events down immediately afterwards, so the
@@ -789,11 +792,29 @@ local function ReanchorSection(section, bottom, target)
     end
 end
 
-function RC:OnRegen_PositionSections()
+function RC:OnRegenEnabled()
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    self._positionDirty = nil
-    self:PositionSections()
-    self:FitRolePlate()
+
+    if not self:IsEnabled() then
+        self._positionDirty = nil
+        if self.setup then
+            self.ShowButton:Hide()
+            self.Panel:Hide()
+        end
+        return
+    end
+
+    if not self.setup then self:Setup() end
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "ToggleRaidControl")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "ToggleRaidControl")
+    self:ToggleRaidControl()
+
+    -- After the roster pass, so the replay sees the final group context.
+    if self._positionDirty then
+        self._positionDirty = nil
+        self:PositionSections()
+        self:FitRolePlate()
+    end
 end
 
 function RC:PositionSections()
@@ -804,10 +825,8 @@ function RC:PositionSections()
     -- TargetIcons always was. Combat-deferred dirty flag: bail entirely in
     -- combat, replay the full layout on PLAYER_REGEN_ENABLED.
     if InCombatLockdown() then
-        if not self._positionDirty then
-            self._positionDirty = true
-            self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegen_PositionSections")
-        end
+        self._positionDirty = true
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
         return
     end
     local bottom = ScreenPosition(self.ShowButton)
@@ -890,9 +909,9 @@ function RC:ApplyGroupContext()
 end
 
 -- --- Show/hide driver -------------------------------------------------------
-function RC:ToggleRaidControl(event)
+function RC:ToggleRaidControl()
     if InCombatLockdown() then
-        self:RegisterEvent("PLAYER_REGEN_ENABLED", "ToggleRaidControl")
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
         return
     end
 
@@ -901,10 +920,6 @@ function RC:ToggleRaidControl(event)
     self:ApplyGroupContext()
     self.ShowButton:SetShown(status and not panel.toggled)
     panel:SetShown(status and panel.toggled)
-
-    if event == "PLAYER_REGEN_ENABLED" then
-        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    end
 end
 
 -- --- Drag / position persistence --------------------------------------------
@@ -1437,7 +1452,7 @@ function RC:OnEnable()
     if KE.GroupSort then KE.GroupSort:Start() end
 
     if InCombatLockdown() then
-        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
         return
     end
 
@@ -1447,19 +1462,6 @@ function RC:OnEnable()
     self:ToggleRaidControl()
 end
 
-function RC:OnCombatEnd()
-    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    if self:IsEnabled() then
-        self:Setup()
-        self:RegisterEvent("GROUP_ROSTER_UPDATE", "ToggleRaidControl")
-        self:RegisterEvent("PLAYER_ENTERING_WORLD", "ToggleRaidControl")
-        self:ToggleRaidControl()
-    else
-        self.ShowButton:Hide()
-        self.Panel:Hide()
-    end
-end
-
 function RC:OnDisable()
     if KE.GroupSort then KE.GroupSort:Stop() end
     self:UnregisterEvent("GROUP_ROSTER_UPDATE")
@@ -1467,7 +1469,7 @@ function RC:OnDisable()
     if not self.setup then return end
 
     if InCombatLockdown() then
-        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
+        self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
         return
     end
     self.ShowButton:Hide()
