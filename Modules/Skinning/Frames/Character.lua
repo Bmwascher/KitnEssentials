@@ -18,7 +18,6 @@ local ItemLocation = ItemLocation
 
 local ILVL_FONT = 13
 local TITLE_FONT = 13
-local BRAND = S.palette.brand
 local STAT_GRAD_WIDTH = 80
 local STAT_GRAD_TEX = "Interface\\Buttons\\WHITE8x8"
 
@@ -197,7 +196,6 @@ end
 
 local EQUIP_FONT = 13
 local EQUIP_HOVER_ALPHA = 0.30
-local EQUIP_SELECT_ALPHA = 0.24
 local function StyleEquipRow(child)
     if not child or not child.icon or child.aeEquipSkinned then return end
     if child.BgTop then child.BgTop:SetTexture(nil) end
@@ -209,7 +207,7 @@ local function StyleEquipRow(child)
         child.HighlightBar:SetDrawLayer("BACKGROUND")
     end
     if child.SelectedBar then
-        child.SelectedBar:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], EQUIP_SELECT_ALPHA)
+        S.PaintBrand(child.SelectedBar, "SetColorTexture", S.palette.selectedA)
         child.SelectedBar:SetDrawLayer("BACKGROUND")
     end
     S.FontStrings(child, EQUIP_FONT, "")

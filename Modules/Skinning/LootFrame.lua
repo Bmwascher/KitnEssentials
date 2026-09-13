@@ -116,7 +116,7 @@ local function CreateSlot(id)
 
     local hover = slot:CreateTexture(nil, "HIGHLIGHT")
     hover:SetAllPoints()
-    hover:SetColorTexture(0.851, 0.851, 0.851, 0.15)
+    hover:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     hover:Hide()
     slot.hover = hover
 

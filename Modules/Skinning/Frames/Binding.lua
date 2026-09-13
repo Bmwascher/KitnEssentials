@@ -27,7 +27,7 @@ local function HandleScrollChild(child)
                 child.FrameHighlight:SetPoint("TOPLEFT", bd, "TOPLEFT", 1, -1)
                 child.FrameHighlight:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -1, 1)
             end
-            child.FrameHighlight:SetColorTexture(0.851, 0.851, 0.851, 0.15)
+            child.FrameHighlight:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
         end
 
         if icon then
@@ -68,7 +68,7 @@ local function DressTabPortrait(button, texture)
         S.Icon(button.Portrait, true)
     end
     if button.Highlight and button.Portrait then
-        button.Highlight:SetColorTexture(0.851, 0.851, 0.851, 0.15)
+        button.Highlight:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     end
 end
 

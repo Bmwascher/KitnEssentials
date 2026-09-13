@@ -27,7 +27,7 @@ local function SkinSetButton(button)
     end
     if button.BackgroundTexture then button.BackgroundTexture:SetAlpha(0) end
     if button.HighlightTexture then
-        button.HighlightTexture:SetColorTexture(1, 1, 1, 0.25)
+        button.HighlightTexture:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
         button.HighlightTexture:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
         button.HighlightTexture:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
     end
@@ -112,7 +112,7 @@ local function SkinCartRow(button)
     if button.TopBraceTexture then S.StripTextures(button.TopBraceTexture) end
     if button.BottomBraceTexture then S.StripTextures(button.BottomBraceTexture) end
     if button.HighlightTexture then
-        button.HighlightTexture:SetColorTexture(1, 1, 1, 0.25)
+        button.HighlightTexture:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     end
     if button.PriceIcon and not S.data(button.PriceIcon).skinned then
         S.Icon(button.PriceIcon)

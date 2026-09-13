@@ -106,12 +106,12 @@ local function SkinListButton(button)
         local bd = S.Backdrop(button)
         if bd then bd:SetAllPoints(button) end
         if button.SelectedBar then
-            button.SelectedBar:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], 0.15)
+            S.PaintBrand(button.SelectedBar, "SetColorTexture", S.palette.selectedA)
             if bd then button.SelectedBar:ClearAllPoints(); button.SelectedBar:SetPoint("TOPLEFT", bd, 1, -1); button.SelectedBar:SetPoint("BOTTOMRIGHT", bd, -1, 1) end
         end
         local hl = button.GetHighlightTexture and button:GetHighlightTexture()
         if hl then
-            hl:SetColorTexture(1, 1, 1, 0.25)
+            hl:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
             if bd then hl:ClearAllPoints(); hl:SetPoint("TOPLEFT", bd, 1, -1); hl:SetPoint("BOTTOMRIGHT", bd, -1, 1) end
         end
     end
@@ -162,7 +162,7 @@ local function SkinIconGridButton(child)
         end
     end
     if child.SelectedTexture then
-        child.SelectedTexture:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], 0.30)
+        S.PaintBrand(child.SelectedTexture, "SetColorTexture", S.palette.selectedA)
         if icon then child.SelectedTexture:SetAllPoints(icon) end
     end
 end
@@ -331,7 +331,7 @@ local function SkinMainFrame()
                 end
                 local hl = child.GetHighlightTexture and child:GetHighlightTexture()
                 if hl then
-                    hl:SetColorTexture(1, 1, 1, 0.25)
+                    hl:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
                     hl:SetAllPoints(tex)
                 end
             end

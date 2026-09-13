@@ -107,7 +107,7 @@ local function TreatNeighborhoodRow(row)
     S.Backdrop(row)
     S.Hover(row)
     local sel = row:CreateTexture(nil, "ARTWORK")
-    sel:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
+    S.PaintBrand(sel, "SetColorTexture", S.palette.selectedA)
     local anchor = S.GetBackdrop(row) or row
     sel:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
     sel:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
@@ -242,8 +242,7 @@ local function SkinDashboard()
             -- selected atlas. Recolour theirs; only build ours when absent.
             if tab.SelectedTexture then
                 tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
-                tab.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2],
-                    S.palette.brand[3], 0.18)
+                S.PaintBrand(tab.SelectedTexture, "SetColorTexture", S.palette.selectedA)
                 local tbd = S.GetBackdrop(tab)
                 if tbd then
                     S.InsetToEdge(tab.SelectedTexture, tbd)
@@ -254,7 +253,7 @@ local function SkinDashboard()
                 end
             else
                 local selT = tab:CreateTexture(nil, "BACKGROUND", nil, 1)
-                selT:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.18)
+                S.PaintBrand(selT, "SetColorTexture", S.palette.selectedA)
                 local tbd = S.GetBackdrop(tab)
                 selT:SetPoint("TOPLEFT", tbd or tab, "TOPLEFT", 1, -1)
                 selT:SetPoint("BOTTOMRIGHT", tbd or tab, "BOTTOMRIGHT", -1, 1)

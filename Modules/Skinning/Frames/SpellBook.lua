@@ -51,7 +51,7 @@ local function TintProfessionSpell(button)
     if spellBookItemInfo and spellBookItemInfo.isPassive then
         button.highlightTexture:SetColorTexture(1, 1, 1, 0)
     else
-        button.highlightTexture:SetColorTexture(1, 1, 1, 0.25)
+        button.highlightTexture:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     end
 
     for _, key in ipairs(SPELL_LABELS) do
@@ -80,7 +80,7 @@ local function DressSkillButton(button)
     if not button then return end
 
     button:SetCheckedTexture(WHITE)
-    button:GetCheckedTexture():SetColorTexture(1, 1, 1, 0.25)
+    S.PaintBrand(button:GetCheckedTexture(), "SetColorTexture", S.palette.selectedA)
     button:SetPushedTexture(WHITE)
     button:GetPushedTexture():SetColorTexture(1, 1, 1, 0.5)
 

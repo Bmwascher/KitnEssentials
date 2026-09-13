@@ -68,7 +68,7 @@ local BRAND_SELECT_INSET = { 1, -1, -1, 1 }
 local function BrandSelection(tex, anchor, inset)
     if not tex then return end
     tex:SetTexture("Interface\\Buttons\\WHITE8x8")
-    tex:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
+    S.PaintBrand(tex, "SetColorTexture", S.palette.selectedA)
     if anchor then
         inset = inset or BRAND_SELECT_INSET
         tex:ClearAllPoints()
@@ -350,7 +350,7 @@ local function SkinFlyoutButton(button, index)
 
     S.Vanish(button, FLYOUT_ART)
     S.ClearButtonArt(button, true)
-    button:GetHighlightTexture():SetColorTexture(1, 1, 1, 0.25)
+    button:GetHighlightTexture():SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
 
     local icon = index and select(index, button:GetRegions())
     if icon then S.Icon(icon, true) end
@@ -476,7 +476,7 @@ local function SkinPets()
         petButton.petTypeIcon:SetPoint("BOTTOMLEFT", 2, 2)
 
         petButtonHighlight:SetTexture("Interface\\Buttons\\WHITE8x8")
-        petButtonHighlight:SetVertexColor(1, 1, 1, 0.25)
+        petButtonHighlight:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
         petButtonHighlight:SetAllPoints(petButton.icon)
 
         S.StripTextures(_G["PetJournalLoadoutPet" .. i .. "HelpFrame"])
@@ -696,7 +696,7 @@ local function SkinWardrobe()
                         local texture = region:GetTexture()
                         if texture == MODEL_HOVER_TEX
                             or (texture == MODEL_STATE_TEX and not keyed[region]) then
-                            region:SetColorTexture(1, 1, 1, 0.25)
+                            region:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
                             region:SetBlendMode("ADD")
                             region:SetAllPoints(Model)
                         end
@@ -765,7 +765,7 @@ local function OnWarbandSceneData(frame)
     if not frame.SetHighlightTexture then return end
 
     local hover = frame:CreateTexture()
-    hover:SetColorTexture(1, 1, 1, 0.25)
+    hover:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     hover:SetAllPoints(frame.Icon)
     frame:SetHighlightTexture(hover)
 end

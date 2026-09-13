@@ -7,7 +7,7 @@ local function EnsureSel(btn)
     local d = S.data(btn)
     if not d.selTex then
         local t = btn:CreateTexture(nil, "ARTWORK")
-        t:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
+        S.PaintBrand(t, "SetColorTexture", S.palette.selectedA)
         local anchor = S.GetBackdrop(btn) or btn
         t:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
         t:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)

@@ -30,7 +30,7 @@ local function ScrollChild(button)
     if button.disabledBG then button.disabledBG:SetTexture(nil) end
 
     if button.selectedTex then
-        button.selectedTex:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
+        S.PaintBrand(button.selectedTex, "SetColorTexture", S.palette.selectedA)
         if bd then
             button.selectedTex:ClearAllPoints()
             button.selectedTex:SetPoint("TOPLEFT", bd, "TOPLEFT", 1, -1)
@@ -100,7 +100,7 @@ local function Skin()
         if step.icon then step.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
 
         if step.selectedTex then
-            step.selectedTex:SetColorTexture(0.851, 0.851, 0.851, 0.15)
+            step.selectedTex:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
             if sbd then
                 step.selectedTex:ClearAllPoints()
                 step.selectedTex:SetPoint("TOPLEFT", sbd, "TOPLEFT", 1, -1)

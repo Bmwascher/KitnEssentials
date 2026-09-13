@@ -55,8 +55,6 @@ local function OnDressUpResized(frame, isMinimized)
     end
 end
 
-local SET_SELECTED_ALPHA = 0.15
-
 local function DressSetButton(button)
     if S.data(button).skinned then return end
     S.data(button).skinned = true
@@ -64,9 +62,9 @@ local function DressSetButton(button)
     S.SlotIcon(button.Icon, button.IconBorder)
     S.Vanish(button, { "BackgroundTexture" })
 
-    local brand, hover = S.palette.brand, S.palette.hover
+    local hover = S.palette.hover
     if button.SelectedTexture then
-        button.SelectedTexture:SetColorTexture(brand[1], brand[2], brand[3], SET_SELECTED_ALPHA)
+        S.PaintBrand(button.SelectedTexture, "SetColorTexture", S.palette.selectedA)
     end
     if button.HighlightTexture then
         button.HighlightTexture:SetColorTexture(hover[1], hover[2], hover[3], hover[4])

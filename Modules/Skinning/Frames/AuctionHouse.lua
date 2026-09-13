@@ -116,7 +116,7 @@ local function SkinSellSlot(button)
     button:SetPushedTexture(0)
 
     if button.Highlight then
-        button.Highlight:SetColorTexture(1, 1, 1, 0.25)
+        button.Highlight:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
         button.Highlight:SetAllPoints(button.Icon)
     end
 
@@ -247,7 +247,7 @@ local function Skin()
 
         if button.Text then S.SetFont(button.Text, 12, "OUTLINE") end
         button.NormalTexture:SetAlpha(0)
-        button.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
+        S.PaintBrand(button.SelectedTexture, "SetColorTexture", S.palette.selectedA)
         button.HighlightTexture:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     end)
 

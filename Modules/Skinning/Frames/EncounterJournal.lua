@@ -495,7 +495,7 @@ local function SkinEncounterJournal()
                 local d = S.data(child)
                 if not d.selTex then
                     local t = child:CreateTexture(nil, "ARTWORK")
-                    t:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
+                    S.PaintBrand(t, "SetColorTexture", S.palette.selectedA)
                     local anchor = S.GetBackdrop(child) or child
                     t:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
                     t:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)

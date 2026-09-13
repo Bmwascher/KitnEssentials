@@ -24,7 +24,7 @@ local function TabSetSelected(tab, selected)
         local bd = S.GetBackdrop(tab)
         if not bd then return end
         local t = tab:CreateTexture(nil, "ARTWORK")
-        t:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], 0.15)
+        S.PaintBrand(t, "SetColorTexture", S.palette.selectedA)
         t:SetPoint("TOPLEFT", bd, "TOPLEFT", 1, -1)
         t:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -1, 1)
         t:Hide()
@@ -122,7 +122,7 @@ local function RefreshTree(self, ...)
                 local isSel = selected and line and line.uniquevalue == selected
                 if isSel then
 
-                    button.highlight:SetVertexColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
+                    button.highlight:SetVertexColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], S.palette.selectedA)
                 else
                     button.highlight:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], 0.15)
                 end

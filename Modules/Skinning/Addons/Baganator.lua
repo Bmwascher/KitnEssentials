@@ -4,7 +4,6 @@ local _G = _G
 local next = next -- luacheck: ignore 211/next
 local hooksecurefunc = hooksecurefunc -- luacheck: ignore 211/hooksecurefunc
 
-local BRAND = S.palette.brand
 local HOVER = S.palette.hover
 
 local skinners = {}
@@ -76,7 +75,7 @@ skinners.SideTabButton = function(tab)
         tab.SelectedTexture:ClearAllPoints()
         tab.SelectedTexture:SetPoint("CENTER")
         tab.SelectedTexture:SetSize(25, 25)
-        tab.SelectedTexture:SetColorTexture(BRAND[1], BRAND[2], BRAND[3], 0.20)
+        S.PaintBrand(tab.SelectedTexture, "SetColorTexture", S.palette.selectedA)
     end
     S.Backdrop(tab)
     S.Hover(tab)
