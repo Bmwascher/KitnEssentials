@@ -167,6 +167,7 @@ read_globals = {
     "UnitIsBossMob", "UnitIsTapDenied", "UnitIsGroupLeader",
     "UnitHasVehicleUI", "UnitInVehicle", "UnitOnTaxi",
     "UnitAffectingCombat", "UnitCanAssist", "UnitCanAttack",
+    "UnitThreatSituation", "UnitPlayerControlled",
     "UnitInParty", "UnitInRaid", "UnitIsVisible",
     "UnitFactionGroup", "UnitSpellHaste", "UnitStat",
 

@@ -488,6 +488,9 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
         return db.Enabled ~= false and db.ShowForces ~= false
             and (fmt == "COUNT" or fmt == "COUNT_PERCENT" or fmt == "REMAINING")
     end)
+    manager:SetCondition("forcesOn", function()
+        return db.Enabled ~= false and db.ShowForces ~= false
+    end)
 
     -- Card 1: Forces (toggle + text format + placement + custom tokens)
     local forcesCard = GUIFrame:CreateCard(scrollChild, "Forces", yOffset)
@@ -501,7 +504,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    rowFo1:AddWidget(showForcesCheck, 0.5)
+    rowFo1:AddWidget(showForcesCheck, 1 / 3)
     manager:Register(showForcesCheck, "all")
     -- Bar-only visibility: the % text survives as a stacked row (all-text
     -- HUD); Placement is moot while hidden (gated via the forcesBar group).
@@ -512,8 +515,20 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    rowFo1:AddWidget(forcesBarCheck, 0.5)
+    rowFo1:AddWidget(forcesBarCheck, 1 / 3)
     manager:Register(forcesBarCheck, "all")
+    local pullCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Pull Estimate", {
+        value = db.ShowPullOverlay == true,
+        tooltip = "Adds a gray segment after the credited forces and a (+count / percent) label "
+            .. "for the enemies you have pulled but not yet killed. Only enemies with a visible "
+            .. "nameplate are counted, so the estimate shrinks when plates leave the screen.",
+        callback = function(checked)
+            db.ShowPullOverlay = checked; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    rowFo1:AddWidget(pullCheck, 1 / 3)
+    manager:Register(pullCheck, "forcesOn")
     forcesCard:AddRow(rowFo1, Theme.rowHeight)
 
     local rowFo2 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
@@ -542,7 +557,6 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     rowFo2:AddWidget(bracketDrop, 1 / 3)
     manager:Register(bracketDrop, "forcesBrackets")
     forcesCard:AddRow(rowFo2, Theme.rowHeight)
-
     local rowFo3 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
     local customBox = GUIFrame:CreateEditBox(rowFo3, "Custom Format", {
         value = db.ForcesCustomFormat or ":count:/:totalcount: :percent:",
@@ -730,6 +744,10 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("threshLabels", function()
         return db.Enabled ~= false and db.ShowThresholdLabels ~= false
     end)
+    manager:SetCondition("pullBar", function()
+        return db.Enabled ~= false and db.ShowForces ~= false
+            and db.ShowForcesBar ~= false and db.ShowPullOverlay == true
+    end)
 
     -- Card 1: Timer — Colors
     local timerColors = GUIFrame:CreateCard(scrollChild, "Timer — Colors", yOffset)
@@ -758,7 +776,14 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
         { "Forces Bar",      "ForcesColor",         { 0.73, 0.62, 0.13 }, "forcesBar" },
         { "Forces Complete", "ForcesCompleteColor", { 0, 1, 0.14 } },
         { "Forces Text",     "ForcesTextColor",     { 1, 1, 1 } },
+        { "Pull Estimate",   "PullOverlayColor",    { 0.6, 0.6, 0.6 },    "pullBar" },
     })
+
+    local rowFcSep = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeightSeparator)
+    local fcSep = GUIFrame:CreateSeparator(rowFcSep)
+    rowFcSep:AddWidget(fcSep, 1)
+    manager:Register(fcSep, "all")
+    forcesColors:AddRow(rowFcSep, Theme.rowHeightSeparator)
 
     local bandedRow = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeight)
     local bandedCheck = GUIFrame:CreateCheckbox(bandedRow, "Banded Colors (by % bracket)", {
