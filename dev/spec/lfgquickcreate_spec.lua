@@ -108,4 +108,58 @@ describe("Modules/Dungeons/LFGQuickCreate.lua", function()
             assert.is_nil(upvalue(capturedCallback, "playerShortName"))
         end)
     end)
+
+    describe("listing refusal", function()
+        -- Same upvalue walk dev/spec/_ke_loader.lua uses for its seams;
+        -- MakeButton is a forward-declared file local reached through Init.
+        local function findUpvalue(fn, name)
+            local i = 1
+            while true do
+                local upName, upVal = debug.getupvalue(fn, i)
+                if not upName then return nil end
+                if upName == name then return upVal end
+                i = i + 1
+            end
+        end
+
+        local cases = {
+            { label = "refuses a nil activity id before calling CreateListing",
+              lfgID = nil, listed = true, calls = 0, line = "Halls" },
+            { label = "names the dungeon and id when the game refuses",
+              lfgID = 501, listed = false, calls = 1, line = "Halls.*501" },
+            { label = "says nothing when the client returns nil",
+              lfgID = 501, listed = nil, calls = 1, line = nil },
+        }
+
+        for _, case in ipairs(cases) do
+            it(case.label, function()
+                local calls, lines = 0, {}
+                local QC, KE = loader.loadLFGQuickCreate({
+                    C_LFGList = {
+                        GetActivityInfoTable = function(id)
+                            return id and { fullName = "Halls of Atonement" } or nil
+                        end,
+                        GetOwnedKeystoneActivityAndGroupAndLevel = function() return nil end,
+                        CreateListing = function() calls = calls + 1 return case.listed end,
+                    },
+                })
+                KE.Print = function(_, msg) lines[#lines + 1] = msg end
+                KE.ApplyIconZoom = function() end
+                KE.AddIconBorders = function() end
+
+                local Init = findUpvalue(QC.OnEnable, "Init")
+                local MakeButton = findUpvalue(Init, "MakeButton")
+                local btn = MakeButton(_G.UIParent, { key = "Halls", lfgID = case.lfgID, mapID = 1, cmID = 1 }, 1)
+                btn:GetScript("OnClick")(btn, "LeftButton")
+
+                assert.equals(case.calls, calls)
+                if case.line then
+                    assert.equals(1, #lines)
+                    assert.truthy(lines[1]:find(case.line))
+                else
+                    assert.same({}, lines)
+                end
+            end)
+        end
+    end)
 end)
