@@ -20,6 +20,7 @@ local H = KE.CastbarHelpers
 
 local PlaySoundFile = PlaySoundFile
 local C_Timer = C_Timer
+local CreateFrame = CreateFrame
 
 local UNIT = "focus"
 local FRAME_OPTS = {
@@ -62,9 +63,21 @@ function FC:OnEnable()
         "UNIT_SPELLCAST_FAILED", "UNIT_SPELLCAST_INTERRUPTED",
         "UNIT_SPELLCAST_INTERRUPTIBLE", "UNIT_SPELLCAST_NOT_INTERRUPTIBLE",
     }
-    for _, event in ipairs(castEvents) do
-        self:RegisterEvent(event, "OnCastEvent")
+    if not self.unitEventFrame then
+        local f = CreateFrame("Frame")
+        f:SetScript("OnEvent", function(_, event, ...)
+            if event == "UNIT_SPELLCAST_SUCCEEDED" then
+                self:OnPlayerCastSucceeded(event, ...)
+            else
+                self:OnCastEvent(event, ...)
+            end
+        end)
+        self.unitEventFrame = f
     end
+    for _, event in ipairs(castEvents) do
+        self.unitEventFrame:RegisterUnitEvent(event, UNIT)
+    end
+    self.unitEventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
 
     self:RegisterEvent("PLAYER_FOCUS_CHANGED")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "CacheInterruptId")
@@ -73,7 +86,6 @@ function FC:OnEnable()
     self:RegisterEvent("SPELLS_CHANGED", "CacheInterruptId")
     self:RegisterEvent("UNIT_TARGET", "OnUnitTarget")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupRosterUpdate")
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnPlayerCastSucceeded")
 
     H.EnsureOnUpdate(self)
     self:CacheInterruptId()
@@ -81,6 +93,7 @@ function FC:OnEnable()
 end
 
 function FC:OnDisable()
+    if self.unitEventFrame then self.unitEventFrame:UnregisterAllEvents() end
     if self.frame then
         self.frame:SetScript("OnUpdate", nil)
         self.frame:Hide()

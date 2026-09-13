@@ -1103,6 +1103,9 @@ function NMA:OnEnable()
     self:RegisterEvent("PLAYER_TALENT_UPDATE", "OnSpecChanged")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnSpecChanged")
+    -- While attached, Combat Texts' container height changes as its
+    -- messages come and go; combat transitions are when that happens, and
+    -- Refresh -> Update -> ApplyPosition re-seats this underneath.
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "Refresh")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "Refresh")
     -- Combat exit is not the only release. The restriction predicate also covers
@@ -1110,15 +1113,23 @@ function NMA:OnEnable()
     -- buff readback now depends on that predicate -- so without this the module
     -- can hold its restricted answer with no aura or glow event to correct it.
     self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
-    -- While attached, Combat Texts' container height changes as its
-    -- messages come and go; combat transitions are when that happens, and
-    -- Refresh -> Update -> ApplyPosition re-seats this underneath.
-    self:RegisterEvent("UNIT_AURA", "OnAura")
+    if not self.unitEventFrame then
+        local f = CreateFrame("Frame")
+        f:SetScript("OnEvent", function(_, event, ...)
+            if event == "UNIT_AURA" then
+                self:OnAura(event, ...)
+            else
+                self:OnTrackedCast(event, ...)
+            end
+        end)
+        self.unitEventFrame = f
+    end
+    self.unitEventFrame:RegisterUnitEvent("UNIT_AURA", "player")
     self:RegisterEvent("PLAYER_DEAD", "ClearBuffFallback")
     self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "OnGlowShow")
     self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", "OnGlowHide")
     self:SeedGlowState()
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnTrackedCast")
+    self.unitEventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
 
     self:BuildTracked()
     self:Update()
@@ -1139,6 +1150,7 @@ function NMA:OnSpecChanged()
 end
 
 function NMA:OnDisable()
+    if self.unitEventFrame then self.unitEventFrame:UnregisterAllEvents() end
     self:UnregisterAllEvents()
     self:CancelChargeTimers()
     self:StopTicker()

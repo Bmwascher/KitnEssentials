@@ -2046,9 +2046,10 @@ function DT:_SpawnMessageBar(spellId, key)
     end
 
     local lead = tonumber(data.leadDelay) or 0
-    if lead > 0 and C_Timer and C_Timer.After then
+    if lead > 0 then
         dprint(string_format("MessageBar spawn spell=%d delayed=%.1f", spellId, lead))
-        C_Timer.After(lead, spawn)
+        -- On the module timer so OnDisable cancels a pending spawn.
+        self:ScheduleTimer(spawn, lead)
     else
         dprint(string_format("MessageBar spawn spell=%d", spellId))
         spawn()
@@ -3242,6 +3243,7 @@ end
 function DT:OnEnable()
     dprint("OnEnable")
     self:UpdateDB()
+    if not (self.db and self.db.Enabled) then return end
     self:UpdateGroupPositions()
 
     local encCount, spellCount = 0, 0
@@ -3289,6 +3291,7 @@ function DT:OnDisable()
     self:_UnregisterAbsorbEvent()
     self:_HideAllShieldBars()
     self:StopPhaseTracking()
+    self:StopAllBars()
 end
 
 function DT:EventCallback(event, ...)
