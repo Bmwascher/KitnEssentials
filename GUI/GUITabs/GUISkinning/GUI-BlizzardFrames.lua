@@ -238,8 +238,8 @@ local function AddonInstalled(entry)
     return C_AddOns.DoesAddOnExist(entry.addon)
 end
 
--- The addon whose presence makes this skin stand down, or nil. Only rows
--- with a `blockedBy` accessor can answer; the skin itself already refuses.
+-- The addon this skin stands down for and why, or nil. Only rows with a
+-- `blockedBy` accessor can answer; the skin itself already refuses.
 local function BlockedBy(entry)
     if not entry.blockedBy then return nil end
     return entry.blockedBy()
