@@ -173,6 +173,13 @@ describe("movement alert spell resolution", function()
 end)
 
 describe("NoMovementAlert RoleColor", function()
+    -- A secret that throws on comparison, as the client's does, so a guard
+    -- that slips a secret into `>` fails here rather than in a key.
+    local SECRET = setmetatable({}, {
+        __lt = function() error("attempt to compare a secret value") end,
+        __le = function() error("attempt to compare a secret value") end,
+    })
+
     it("returns the saved colour for each role in custom mode", function()
         local NMA = L.loadMovementAlert()
         NMA.db = {
@@ -328,12 +335,6 @@ describe("NoMovementAlert RoleColor", function()
             assert.is_false(isChargeSpell)
         end)
 
-        -- A secret that throws on comparison, as the client's does, so a guard
-        -- that slips a secret into `>` fails here rather than in a key.
-        local SECRET = setmetatable({}, {
-            __lt = function() error("attempt to compare a secret value") end,
-            __le = function() error("attempt to compare a secret value") end,
-        })
         local function withSecretCount(info)
             local NMA, KE = L.loadMovementAlert({
                 C_Spell = {
@@ -366,10 +367,6 @@ describe("NoMovementAlert RoleColor", function()
     -- spent. Readable, Lua compares; secret, the client evaluates a curve into
     -- an alpha and Lua never looks.
     describe("charge cooldown visibility", function()
-        local SECRET = setmetatable({}, {
-            __lt = function() error("attempt to compare a secret value") end,
-            __le = function() error("attempt to compare a secret value") end,
-        })
         local EVALUATED = {}
 
         local function withDuration(rem, total)
@@ -386,19 +383,19 @@ describe("NoMovementAlert RoleColor", function()
                         }
                     end,
                 },
+                C_CurveUtil = {
+                    CreateCurve = function()
+                        return { SetType = function() end, AddPoint = function() end }
+                    end,
+                },
+                Enum = { LuaCurveType = { Step = 1 } },
             })
             KE.IsSecretValue = function(_, value) return value == SECRET end
-            _G.C_CurveUtil = {
-                CreateCurve = function()
-                    return { SetType = function() end, AddPoint = function() end }
-                end,
-            }
-            _G.Enum.LuaCurveType = { Step = 1 }
             return NMA
         end
 
         it("shows only a real recharge that is still running", function()
-            local NMA = withDuration(0, 0)
+            local NMA = withDuration(nil, nil)
             local cases = {
                 { name = "GCD-length total, a charge is banked", rem = 1.2, total = 1.5, expect = false },
                 { name = "recharge finished", rem = 0, total = 20, expect = false },
