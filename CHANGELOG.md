@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.24
+
+### Dungeon Timers
+- Turning the module off now clears any running timer bars (preview bars
+  from the settings page stay), and a bar that was about to appear from a
+  boss message no longer shows up after the module is turned off
+
+### Performance
+- Group Sort, the tooltip skin, the Group Finder skin, Focus Castbar and
+  Movement Alert no longer do background work while their feature is off
+  or idle: Group Sort only listens while Raid Control is on or a sort is
+  running, the tooltip restyle runs only while a tooltip is shown, the
+  Group Finder sweep runs only while you have a listing up, and Focus
+  Castbar and Movement Alert only receive events for the units they watch
+
+---
+
 ## v4.6.23
 
 ### Mythic+ Timer
