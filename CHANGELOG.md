@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.21
+
+### LFG Reminder
+- Switching to a profile that turns the reminder on now applies that
+  profile's scale, position and Disable-Feature text right away instead of
+  keeping the previous profile's until a setting is touched
+
+---
+
 ## v4.6.20
 
 ### Mythic+ Timer
