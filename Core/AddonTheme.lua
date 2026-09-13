@@ -295,8 +295,9 @@ function KE:CopyPresetToCustom()
     end
 end
 
--- Skinned regions take their colour once, at frame-build time, so flipping this
--- switch only reaches frames built after it. The palette is updated immediately
+-- Most skinned regions take their colour once, at frame-build time, so flipping
+-- this switch only reaches frames built after it (the few registered through
+-- Skins.PaintBrand repaint live). The palette is updated immediately
 -- regardless, so anything built later is already correct.
 function KE:SetTintSkins(enabled)
     if not self.db or not self.db.global or not self.db.global.Theme then return end
