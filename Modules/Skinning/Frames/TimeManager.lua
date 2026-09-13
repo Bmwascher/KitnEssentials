@@ -30,7 +30,7 @@ local function Skin()
             nt:SetPoint("BOTTOMRIGHT", swCheck, "BOTTOMRIGHT", -1, 1)
         end
         local hover = swCheck:CreateTexture()
-        hover:SetColorTexture(1, 1, 1, 0.3)
+        hover:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
         hover:SetPoint("TOPLEFT", swCheck, "TOPLEFT", 2, -2)
         hover:SetPoint("BOTTOMRIGHT", swCheck, "BOTTOMRIGHT", -2, 2)
         swCheck:SetHighlightTexture(hover)

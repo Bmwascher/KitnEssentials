@@ -5,10 +5,6 @@ local pairs = pairs
 local hooksecurefunc = hooksecurefunc
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
--- Never hardcode the accent here: read the palette table (mutated in
--- place by S.RefreshPalette) so it tracks the live theme.
-local BRAND = S.palette.brand
-
 -- was a 0.1s poll (MDT skinned in visibly). Per-frame now.
 local function WaitFor(check, run, tries)
     S.WaitFor(check, run, (tries or 20) * 30)
@@ -61,12 +57,12 @@ local function ReskinDungeonButtons(MDT)
             if button.highlightTexture then
 
                 button.highlightTexture:SetTexture(WHITE)
-                button.highlightTexture:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], 0.15)
+                button.highlightTexture:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
                 Inset(button.highlightTexture)
             end
             if button.selectedTexture then
                 button.selectedTexture:SetTexture(WHITE)
-                button.selectedTexture:SetVertexColor(BRAND[1], BRAND[2], BRAND[3], 0.24)
+                S.PaintBrand(button.selectedTexture, "SetVertexColor", S.palette.selectedA)
                 Inset(button.selectedTexture)
             end
             local SIZE = 40

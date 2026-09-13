@@ -32,12 +32,12 @@ local function HandleSettingItem(item)
     if icon then
         local highlight = item.Highlight
         if highlight then
-            highlight:SetColorTexture(1, 1, 1, 0.25)
+            highlight:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
             highlight:SetAllPoints(icon)
         elseif item.CreateTexture then
 
             local hl = item:CreateTexture(nil, "HIGHLIGHT")
-            hl:SetColorTexture(1, 1, 1, 0.25)
+            hl:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
             hl:SetAllPoints(icon)
         end
         S.Icon(icon, true)
@@ -129,7 +129,7 @@ local function HandleAbilityTabs(viewer)
         if tab.Background then tab.Background:SetAlpha(0) end
         if tab.SelectedTexture then
             tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
-            tab.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.18)
+            S.PaintBrand(tab.SelectedTexture, "SetColorTexture", S.palette.selectedA)
             local tbd = S.GetBackdrop(tab)
             tab.SelectedTexture:ClearAllPoints()
             tab.SelectedTexture:SetPoint("TOPLEFT", tbd or tab, "TOPLEFT", 1, -1)

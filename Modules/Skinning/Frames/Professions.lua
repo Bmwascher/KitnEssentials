@@ -16,7 +16,7 @@ local function SkinFlyoutItem(item)
     S.SlotIcon(item.icon, item.IconBorder)
 
     local hl = item:GetHighlightTexture()
-    hl:SetColorTexture(1, 1, 1, 0.25)
+    hl:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     S.BleedOutside(hl, item)
 end
 
@@ -49,7 +49,7 @@ local function SkinReagentSlot(button)
     if button.SlotBackground then button.SlotBackground:SetAlpha(0) end
 
     local hl = button:GetHighlightTexture()
-    hl:SetColorTexture(1, 1, 1, 0.25)
+    hl:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     S.BleedOutside(hl, button)
 
     local normal = button:GetNormalTexture()

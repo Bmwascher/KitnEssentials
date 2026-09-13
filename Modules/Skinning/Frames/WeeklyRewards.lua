@@ -52,7 +52,7 @@ local function OnSelectionChanged(frame)
     local d = S.data(frame)
     if selected and not d.selFill then
         local t = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
-        t:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
+        S.PaintBrand(t, "SetColorTexture", S.palette.selectedA)
         t:SetPoint("TOPLEFT", bd, "TOPLEFT", 1, -1)
         t:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -1, 1)
         d.selFill = t

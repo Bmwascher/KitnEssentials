@@ -9,7 +9,7 @@ local function RestyleRowHighlight(button)
     local hl = button.GetHighlightTexture and button:GetHighlightTexture()
     if hl then
         hl:SetTexture("Interface\\Buttons\\WHITE8x8")
-        hl:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], 0.15)
+        hl:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     end
 end
 
@@ -56,7 +56,7 @@ local function StyleQuestLog()
                 S.StripTextures(header)
                 if header.Background then S.Backdrop(header.Background) end
                 if header.Highlight then
-                    header.Highlight:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], 0.15)
+                    header.Highlight:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
                 end
                 d.aeRow = true
             end
@@ -111,7 +111,7 @@ local function SkinStoryHeader(header)
     if header.Divider then header.Divider:Hide() end
     if header.HighlightTexture then
         header.HighlightTexture:SetTexture("Interface\\Buttons\\WHITE8x8")
-        header.HighlightTexture:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], 0.15)
+        header.HighlightTexture:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
         if header.Background then header.HighlightTexture:SetAllPoints(header.Background) end
     end
     if header.CollapseButton then S.Collapse(header.CollapseButton) end

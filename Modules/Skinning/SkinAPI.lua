@@ -83,6 +83,9 @@ S.palette = {
     brand      = { 1, 1, 1 },
     hover      = { 0.851, 0.851, 0.851, 0.15 },
     progress   = { 1, 1, 1, 0.40 },
+    -- Brand fill behind a selected tab, row or button. One value for every
+    -- surface; selection is told from the grey hover by colour, not strength.
+    selectedA  = 0.25,
     brandFillA = 0.8,
     brandRestA = 0.35,
 }
@@ -635,7 +638,7 @@ local function clearButtonStates(button)
 end
 
 local HOVER_COLOR = S.palette.hover
-local HOVER_ALPHA = 0.15
+local HOVER_ALPHA = S.palette.hover[4]
 
 local HOVER_TEX = "Interface\\Buttons\\WHITE8x8"
 local function killRegisteredHighlight(btn)
@@ -1138,7 +1141,7 @@ end
 function S.SelectedFill(bu)
     local sel = bu and bu.SelectedTexture
     if not sel or not sel.SetColorTexture then return end
-    S.PaintBrand(sel, "SetColorTexture", 0.15)
+    S.PaintBrand(sel, "SetColorTexture", S.palette.selectedA)
     local anchor = S.GetBackdrop(bu) or bu
     sel:ClearAllPoints()
     sel:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
@@ -1706,7 +1709,7 @@ function S.Tab(tab)
             local anchor = S.GetBackdrop(tab) or tab
             local t = tab:CreateTexture(nil, "ARTWORK")
 
-            S.PaintBrand(t, "SetColorTexture", 0.15)
+            S.PaintBrand(t, "SetColorTexture", S.palette.selectedA)
             t:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
             t:SetPoint("BOTTOMRIGHT", anchor, "BOTTOMRIGHT", -1, 1)
             t:Hide()
@@ -2221,7 +2224,7 @@ function S.SideTab(tab, anchorParent, prevTab, iconSize)
     if tab.Background then tab.Background:SetAlpha(0) end
     if tab.SelectedTexture then
         tab.SelectedTexture:SetDrawLayer("BACKGROUND", 1)
-        S.PaintBrand(tab.SelectedTexture, "SetColorTexture", 0.18)
+        S.PaintBrand(tab.SelectedTexture, "SetColorTexture", S.palette.selectedA)
         local tbd = S.GetBackdrop(tab)
         if tbd then
             S.InsetToEdge(tab.SelectedTexture, tbd)

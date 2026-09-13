@@ -12,7 +12,7 @@ local function SkinFlyoutButton(button)
     S.SlotIcon(button.icon, button.IconBorder)
     button:SetNormalTexture(0)
     button:SetPushedTexture(0)
-    button:GetHighlightTexture():SetColorTexture(1, 1, 1, 0.25)
+    button:GetHighlightTexture():SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
 end
 
 local function FlyoutButtons(frame)
@@ -44,7 +44,7 @@ local function DressCategoryButton(button)
 
     if button.Text then S.SetFont(button.Text, 12, "OUTLINE") end
     button.NormalTexture:Hide()
-    button.SelectedTexture:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 0.15)
+    S.PaintBrand(button.SelectedTexture, "SetColorTexture", S.palette.selectedA)
     button.HighlightTexture:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
 end
 
@@ -138,7 +138,7 @@ local function RepaintOrderSlot(button)
     S.Vanish(button, SLOT_BLANK)
 
     local hover = button:GetHighlightTexture()
-    hover:SetColorTexture(1, 1, 1, 0.25)
+    hover:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     S.BleedOutside(hover, button)
 
     local pressed = button:GetPushedTexture()
@@ -264,7 +264,7 @@ local function Skin()
             S.SlotIcon(itemButton.Icon, itemButton.IconBorder)
             local itemHighlight = itemButton:GetHighlightTexture()
             local ibd = S.GetBackdrop(itemButton.Icon)
-            itemHighlight:SetColorTexture(1, 1, 1, 0.25)
+            itemHighlight:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
             if ibd then
                 itemHighlight:ClearAllPoints()
                 itemHighlight:SetPoint("TOPLEFT", ibd, "TOPLEFT", 1, -1)
