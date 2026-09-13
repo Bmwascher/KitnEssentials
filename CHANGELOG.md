@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.19
+
+### Skinning
+- Guild message of the day and guild information text follow the Skin Font
+  face, size and outline as you change them, without reopening the panel
+
+---
+
 ## v4.6.18
 
 ### Skinning
