@@ -221,19 +221,14 @@ function NMA:ThresholdAlpha(spellId, seconds)
     return alpha
 end
 
--- A charge spell is out of movement at ZERO charges, and the count is not
--- how that is found out: under cooldown restrictions the count is secret,
--- and a count kept in Lua drifts whenever a cast event is missed or keyed
--- to another id. The cooldown's TOTAL length is the discriminator: with a
--- charge banked the spell reports only a GCD-length cooldown, and the full
--- recharge appears once the last charge is spent. Readable, that is a
--- comparison against the GCD ceiling; secret, a Step curve the client
--- evaluates into the slot's alpha.
---
--- Deliberately WITHOUT ignoreGCD: skipping the GCD makes a banked-charge
--- spell report the recharge of the charge already spent, which shows the
--- alert while the button can still be pressed. The GCD-length total IS the
--- signal.
+-- A charge spell is out of movement at zero charges, and the count cannot
+-- say so: it is secret under cooldown restrictions, and a count kept in Lua
+-- drifts on any missed cast event. The cooldown's total length can: a banked
+-- charge reports only a GCD-length cooldown, the full recharge appears once
+-- the last charge is spent. Readable, that is a comparison against the GCD
+-- ceiling; secret, a Step curve the client evaluates into the slot's alpha.
+-- Without ignoreGCD on purpose: skipping the GCD reports the recharge of a
+-- charge already spent while the button can still be pressed.
 local CHARGE_GCD_CEILING = 1.5
 
 function NMA:ChargeCurve()
@@ -286,10 +281,9 @@ function NMA:ReadChargeCooldown(spellId)
 end
 
 -- Only maxCharges has to be readable: the API never makes it secret, while
--- the count and the recharge length are secret under cooldown restrictions.
--- Refusing the whole record on the count meant a charge spell first seen
--- under restrictions was never recognised as one. ResolveCharges guards the
--- other fields.
+-- the count and the recharge length are secret under cooldown restrictions,
+-- and a charge spell first seen there must still be recognised as one.
+-- ResolveCharges guards the other fields.
 local function SafeCharges(spellId)
     if not (C_Spell and C_Spell.GetSpellCharges) then return nil end
     local ok, info = pcall(C_Spell.GetSpellCharges, spellId)
@@ -681,9 +675,8 @@ function NMA:ResolveCharges(spellId)
     -- never tracked.
     if info and info.maxCharges and info.maxCharges >= 1 then
         -- The count and the recharge length are each secret on their own
-        -- under cooldown restrictions. Neither reaches a comparison: an
-        -- unreadable count leaves the maintained one alone, an unreadable
-        -- length keeps the last readable one.
+        -- under cooldown restrictions: an unreadable count leaves the
+        -- maintained one alone, an unreadable length keeps the last readable.
         local cur = info.currentCharges
         if KE:IsSecretValue(cur) then cur = nil end
         local recharge = info.cooldownDuration
@@ -798,8 +791,6 @@ function NMA:Update()
             local rem, _, isSecret
 
             if isChargeSpell then
-                -- The count decides nothing about visibility; it only feeds
-                -- the ready-state suffix below.
                 rem, _, isSecret, slotAlpha = self:ReadChargeCooldown(entry.spellId)
                 slotAlpha = slotAlpha or 1
             else
@@ -812,11 +803,9 @@ function NMA:Update()
 
             if isSecret then
                 anyRunning = true
-                -- A charge spell's duration object answers even when nothing
-                -- is recharging, so a secret read says nothing about a
-                -- cooldown running; arming the ready sound on it would play
-                -- it for a spell that was never down once the restriction
-                -- lifts.
+                -- A charge spell's duration object answers even while ready,
+                -- so a secret read does not mean a cooldown ran; arming the
+                -- ready sound on it would play it when the restriction lifts.
                 if not isChargeSpell then
                     self.readyFired = self.readyFired or {}
                     self.readyFired[entry.spellId] = true
