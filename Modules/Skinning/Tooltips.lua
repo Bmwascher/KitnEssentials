@@ -194,20 +194,15 @@ local function EnsureStyler(tt)
     return s
 end
 
--- this runs from GameTooltip's OnShow, so it executes on EVERY
--- tooltip -- including map POI hovers, where Blizzard follows the show
--- with GameTooltip_AddWidgetSet. Any insecure work here taints that
--- execution, and the widget layout then dies on a secret number:
---
---   Blizzard_UIWidgetTemplateTextWithState.lua: attempt to perform
---   arithmetic on local 'textHeight' (a secret number value, while
---   execution tainted by an addon)
+-- Never called from a tooltip's OnShow: a map POI hover shows the tooltip
+-- and then calls GameTooltip_AddWidgetSet in the same execution, and any
+-- addon code on that path taints the widget layout, which then dies on a
+-- secret number. Bailing out early does not help; running is the taint.
+-- Styling happens at enable, on OnLoad for new tooltips, and from the
+-- restyle ticker.
 --
 -- The styling is idempotent -- the same textures with the same colours
--- every time -- so after the first show there is nothing to do. Bailing
--- out before touching anything means the OnShow hook is inert on all
--- subsequent shows, and the tainted window shrinks to the very first
--- tooltip of the session instead of every one.
+-- every time -- so a repeat call after the first is free.
 local function ColorsMatch(a, b)
     if not a or not b then return false end
     for i = 1, 4 do
@@ -1146,10 +1141,11 @@ function TT:ApplySettings()
     self:StyleHealthBar()
     self:ApplyPosition()
     self:SyncAuraSpellIDCVar()
-    -- Restyle anything currently shown so color edits apply live.
+    -- Hidden tooltips take the style too: this pass is what styles the
+    -- login-time list, and a colour edit reaches every tooltip live.
     for _, name in pairs(STYLE_LIST) do
         local tt = _G[name]
-        if tt and tt:IsShown() then self:StyleTooltip(tt) end
+        if tt then self:StyleTooltip(tt) end
     end
     self:SyncAuraTooltip()
 end
@@ -1166,16 +1162,10 @@ function TT:OnEnable()
     if not self.hooked then
         self.hooked = true
 
-        for _, name in pairs(STYLE_LIST) do
-            local tt = _G[name]
-            if tt and tt.HookScript then
-                tt:HookScript("OnShow", function(frame) TT:StyleTooltip(frame) end)
-            end
-        end
-        -- Not SharedTooltip_SetBackdropStyle: GameTooltip_OnHide calls it and
-        -- then compares a secret, and a post-hook that runs inside that pass
-        -- taints it. OnLoad runs once per new tooltip; the ticker in OnEnable
-        -- re-asserts from KE's own stack.
+        -- No OnShow hook on the list (see StyleTooltip), and not
+        -- SharedTooltip_SetBackdropStyle either: GameTooltip_OnHide calls it
+        -- and then compares a secret, and a post-hook that runs inside that
+        -- pass taints it.
         if _G.SharedTooltip_OnLoad then
             hooksecurefunc("SharedTooltip_OnLoad", function(tt)
                 if tt and not tt.IsEmbedded and TT:IsEnabled() then TT:StyleTooltip(tt) end
