@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.17
+
+### Skinning
+- Selected tabs, rows and buttons across every skinned window share one
+  highlight strength instead of varying from window to window, and they take
+  a new theme colour as soon as the preset is swapped
+- Row and button mouseover highlights use the same neutral wash everywhere
+
+---
+
 ## v4.6.16
 
 ### Skinning
