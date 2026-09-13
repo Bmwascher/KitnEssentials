@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.16
+
+### Skinning
+- The Blizzard Fonts row greys out while EllesmereUI's Apply to All Game Text
+  is on, and says so: that setting rewrites the stock fonts at login and would
+  undo KitnEssentials' pass
+
+---
+
 ## v4.6.15
 
 ### Skinning
