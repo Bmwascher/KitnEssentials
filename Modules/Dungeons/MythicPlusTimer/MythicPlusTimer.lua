@@ -840,6 +840,13 @@ function MPT:OnEnable()
     -- MANDATORY in Phase 1 — the HUD file does not exist yet; mirrors the
     -- PurgeStaleSplits guard idiom below.
     if self.BuildHUD then self:BuildHUD() end
+    -- A HUD built by an earlier enable keeps the textures, colours and layout
+    -- it was last configured under (BuildHUD returns on frames.root, and its
+    -- fresh build seeds the bar background from a constant, not the profile).
+    -- ProfileManager skips ApplySettings for modules it just enabled, so this
+    -- is the only place a profile switch that turns the module on lands the
+    -- new profile's settings. One layout pass per enable; no per-frame cost.
+    if self.ApplySettings then self:ApplySettings() end
     self:RegWithEditMode()
     -- Restore HUD if we /reload'd mid-key.
     self:CheckForActiveRun()
