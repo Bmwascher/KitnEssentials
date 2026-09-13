@@ -213,9 +213,15 @@ local function FlashTabIfNotShown(frame, info, chatType, chatGroup, chatTarget)
 
     local allowAlerts = ((frame ~= _G.DEFAULT_CHAT_FRAME and info.flashTab) or (frame == _G.DEFAULT_CHAT_FRAME and info.flashTabOnGeneral)) and
         ((chatType == 'WHISPER' or chatType == 'BN_WHISPER') or (_G.CHAT_OPTIONS and not _G.CHAT_OPTIONS.HIDE_FRAME_ALERTS))
-    if allowAlerts and KE:NotSecretValue(chatTarget) and not _G.FCFManager_ShouldSuppressMessageFlash(frame, chatGroup, chatTarget) then
-        _G.FCF_StartAlertFlash(frame)
+    if not allowAlerts then return end
+    -- The target name is secret in chat-messaging lockdown and only the
+    -- suppression test reads it, so a secret target flashes rather than
+    -- going silent.
+    local suppressed = false
+    if KE:NotSecretValue(chatTarget) then
+        suppressed = _G.FCFManager_ShouldSuppressMessageFlash(frame, chatGroup, chatTarget)
     end
+    if not suppressed then _G.FCF_StartAlertFlash(frame) end
 end
 
 -- Get class-colored name
@@ -1025,8 +1031,17 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
         body = format(chatFormat .. '%s', pflag .. sender, message)
     end
 
+    -- A community channel name (arg4) is secret in chat-messaging lockdown;
+    -- ResolvePrefixedChannelName cannot take one (strlenutf8 refuses it), so
+    -- the tag is joined C-side. Losing the tag beats losing the line: the
+    -- caller drops any body it does not get back.
     if channelLength and channelLength > 0 and arg8 and arg4 then
-        body = '|Hchannel:channel:' .. arg8 .. '|h[' .. ResolvePrefixedChannelName(arg4) .. ']|h ' .. body
+        if KE:IsSafeValue(arg4) and KE:IsSafeValue(arg8) then
+            body = '|Hchannel:channel:' .. arg8 .. '|h[' .. ResolvePrefixedChannelName(arg4) .. ']|h ' .. body
+        elseif KE:IsSafeValue(arg8) then
+            local tag = KE:WrapSecretText(arg4, '|Hchannel:channel:' .. arg8 .. '|h[', ']|h ')
+            if tag then body = KE:WrapSecretText(body, tag) or body end
+        end
     end
 
     return body
