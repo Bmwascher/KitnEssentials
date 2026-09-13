@@ -1031,16 +1031,14 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
         body = format(chatFormat .. '%s', pflag .. sender, message)
     end
 
-    -- The event docs mark the channel name (arg4) NeverSecret, but a field
-    -- trace showed it reaching ResolvePrefixedChannelName as a secret in
-    -- chat-messaging lockdown, where strlenutf8 refuses it; when it is, the
-    -- tag is joined C-side. Losing the tag beats losing the line: the caller
-    -- drops any body it does not get back.
-    if channelLength and channelLength > 0 and arg8 and arg4 then
-        if KE:IsSafeValue(arg4) and KE:IsSafeValue(arg8) then
-            body = '|Hchannel:channel:' .. arg8 .. '|h[' .. ResolvePrefixedChannelName(arg4) .. ']|h ' .. body
-        elseif KE:IsSafeValue(arg8) then
-            local tag = KE:WrapSecretText(arg4, '|Hchannel:channel:' .. arg8 .. '|h[', ']|h ')
+    -- The resolver fetches the club and stream names, which are secret in
+    -- chat-messaging lockdown; it refuses most of them (strlenutf8) and can
+    -- return one untruncated. A refusal costs only the tag, since the caller
+    -- drops a nil body, and the joins stay C-side for a secret name.
+    if channelLength and channelLength > 0 and KE:IsSafeValue(arg4) and KE:IsSafeValue(arg8) then
+        local ok, name = pcall(ResolvePrefixedChannelName, arg4)
+        if ok and type(name) ~= 'nil' then
+            local tag = KE:WrapSecretText(name, '|Hchannel:channel:' .. arg8 .. '|h[', ']|h ')
             if tag then body = KE:WrapSecretText(body, tag) or body end
         end
     end

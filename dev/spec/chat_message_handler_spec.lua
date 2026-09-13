@@ -184,22 +184,26 @@ end)
 
 describe("ChatMessageHandler community channel tag", function()
     -- MessageFormatter is reached with a plain frame table, as the Battle.net
-    -- link cases do; no chat-frame fake is needed. The mock WrapString joins
-    -- plain strings, which is enough to see WHICH join the guard picked; real
-    -- secret semantics are in-game only.
-    local SECRET = "SECRET"
-    local frame, info, wrapCalls
+    -- link cases do; no chat-frame fake is needed. The resolver and WrapString
+    -- stubs are plain functions swapped per row, which is enough to see WHICH
+    -- path the guard took; real secret semantics are in-game only.
+    local frame, info, wrapCalls, resolver, wrap
+
+    local function resolves(name) return "Resolved " .. name end
+    local function refuses() error("Usage: strlenutf8(string)") end
+    local function joins(body, prefix, suffix) return (prefix or "") .. body .. (suffix or "") end
+    local function declines() return nil end
 
     before_each(function()
         frame = { defaultLanguage = "Common" }
         info = {}
         wrapCalls = 0
         _G.CHAT_CHANNEL_GET = "%s: "
-        _G.ChatFrameUtil = { ResolvePrefixedChannelName = function(name) return "Resolved " .. name end }
+        _G.ChatFrameUtil = { ResolvePrefixedChannelName = function(name) return resolver(name) end }
         _G.C_StringUtil = {
-            WrapString = function(body, prefix, suffix)
+            WrapString = function(...)
                 wrapCalls = wrapCalls + 1
-                return (prefix or "") .. body .. (suffix or "")
+                return wrap(...)
             end,
         }
     end)
@@ -210,24 +214,25 @@ describe("ChatMessageHandler community channel tag", function()
         _G.C_StringUtil = nil
     end)
 
-    local function formatBody(name, id)
-        local KE = L.loadChatMessageHandler({ issecretvalue = function(v) return v == SECRET end })
+    local function formatBody()
+        local KE = L.loadChatMessageHandler()
         return KE.ChatMessageHandler:MessageFormatter(frame, info, "CHANNEL", "CHANNEL", "target", 1, "Godling",
-            "hello", "Godling", nil, name, nil, nil, nil, id, nil, nil, 11, nil, nil, nil, nil, nil, nil)
+            "hello", "Godling", nil, "6. Guild Chat", nil, nil, nil, 5, nil, nil, 11, nil, nil, nil, nil, nil, nil)
     end
 
     -- The tag, when built, is the line's prefix; the sender link follows it.
     local cases = {
-        { "safe name and id go through the resolver", "Guild Chat", 5,
-          "|Hchannel:channel:5|h[Resolved Guild Chat]|h |Hplayer:", 0 },
-        { "secret name with a safe id is joined C-side, unresolved", SECRET, 5,
-          "|Hchannel:channel:5|h[SECRET]|h |Hplayer:", 2 },
-        { "secret id prints the body without a tag", "Guild Chat", SECRET,
+        { "a resolved name is joined C-side in front of the body", resolves, joins,
+          "|Hchannel:channel:5|h[Resolved 6. Guild Chat]|h |Hplayer:", 2 },
+        { "a resolver refusal prints the body without a tag", refuses, joins,
           "|Hplayer:", 0 },
+        { "a wrap refusal prints the body without a tag", resolves, declines,
+          "|Hplayer:", 1 },
     }
     for _, c in ipairs(cases) do
         it(c[1], function()
-            local body = formatBody(c[2], c[3])
+            resolver, wrap = c[2], c[3]
+            local body = formatBody()
             assert.are.equal(c[4], body:sub(1, #c[4]), body)
             assert.are.equal(c[5], wrapCalls)
         end)
