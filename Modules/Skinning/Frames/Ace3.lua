@@ -54,10 +54,11 @@ local function SkinTab(tab)
     tab.deselectedTextX, tab.selectedTextX = -3, -3
     tab.deselectedTextY, tab.selectedTextY = -1, -1
     if tab.SetPushedTextOffset then tab:SetPushedTextOffset(0, 0) end
-    if tab.text and tab.text.SetPoint then
-        tab.text:ClearAllPoints()
-        tab.text:SetPoint("CENTER", tab, "CENTER", -3, -1)
-    end
+    -- The label keeps AceGUI's LEFT/RIGHT anchor: that pair is its width
+    -- constraint (the resize pass calls SetWidth(0)), so a single CENTER
+    -- point leaves a long label unconstrained across the neighbouring tabs.
+    -- The nudge is the offsets above, which PanelTemplates feeds into its
+    -- own CENTER point.
 
     S.FontStrings(tab, 12, "OUTLINE")
     local fs = tab.GetFontString and tab:GetFontString()
@@ -97,29 +98,10 @@ local function SkinTab(tab)
     if LevelLock then LevelLock(tab) end
 end
 
-local aceTreeFont
-local TREENOOP = function() end
-local function PinTreeButtonFont(button)
-    if S.data(button).keTreeFont then return end
-    if not (button.SetNormalFontObject and button.text) then return end
-    if not aceTreeFont then
-        local face = button.text:GetFont()
-        if not face then return end
-        local f = _G.CreateFont("KE_AceTreeFont")
-        f:SetFont(face, 13, KE:GetFontOutline("OUTLINE"))
-
-        f:SetTextColor(1, 0.82, 0)
-        aceTreeFont = f
-    end
-    S.data(button).keTreeFont = true
-
-    if button.SetPushedTextOffset then button:SetPushedTextOffset(0, 0) end
-    button:SetNormalFontObject(aceTreeFont)
-    if button.SetHighlightFontObject then button:SetHighlightFontObject(aceTreeFont) end
-    button.SetNormalFontObject = TREENOOP
-    button.SetHighlightFontObject = TREENOOP
-end
-
+-- No font pin on tree buttons: AceGUI colour-codes the sidebar by level
+-- through three font objects (gold category, white child, grey disabled),
+-- and a pinned object overrides all three. The global font sweep already
+-- carries the face and size on them.
 local function RefreshTree(self, ...)
     if self.ke_oldRefreshTree then self.ke_oldRefreshTree(self, ...) end
     local buttons, lines = self.buttons, self.lines
@@ -144,15 +126,7 @@ local function RefreshTree(self, ...)
                 else
                     button.highlight:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], 0.15)
                 end
-                if button.text and button.text.SetTextColor then
-                    if isSel then
-                        button.text:SetTextColor(1, 1, 1)
-                    else
-                        button.text:SetTextColor(1, 0.82, 0)
-                    end
-                end
             end
-            PinTreeButtonFont(button)
         end
     end
 end
