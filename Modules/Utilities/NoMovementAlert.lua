@@ -221,11 +221,16 @@ function NMA:ThresholdAlpha(spellId, seconds)
     return alpha
 end
 
+-- Only maxCharges has to be readable: the API never makes it secret, while
+-- the count and the recharge length are secret under cooldown restrictions.
+-- Refusing the whole record on the count meant a charge spell first seen
+-- under restrictions was never recognised as one. ResolveCharges guards the
+-- other fields.
 local function SafeCharges(spellId)
     if not (C_Spell and C_Spell.GetSpellCharges) then return nil end
     local ok, info = pcall(C_Spell.GetSpellCharges, spellId)
     if not ok or type(info) ~= "table" then return nil end
-    if KE:IsSecretValue(info.currentCharges) or KE:IsSecretValue(info.maxCharges) then return nil end
+    if KE:IsSecretValue(info.maxCharges) then return nil end
     return info
 end
 
@@ -367,13 +372,11 @@ function NMA:OnInitialize()
     self.tracked = {}
     self.auraActive = {}
     self.glowing = {}
-    -- Charge counts are SECRET in combat, so a live read there returns
-    -- nothing and the spell falls through to the plain-cooldown path --
-    -- which for a charge spell sitting on charges is zero, hence
-    -- "Infernal Strike - 0". Remember what was learned while the values
-    -- were readable and maintain it through cast events instead.
-    --   chargeMeta[spellId] = { max, recharge }  -- learned when readable
-    --   chargeCount[spellId] = last known count  -- kept current in combat
+    -- Charge counts are secret under cooldown restrictions. Visibility never
+    -- reads them (ReadChargeCooldown); the maintained count only feeds the
+    -- ready-state "xN" suffix.
+    --   chargeMeta[spellId] = { max, recharge }  -- learned from any readable record
+    --   chargeCount[spellId] = last readable count, kept current by cast events
     self.chargeMeta = {}
     self.chargeCount = {}
     self.chargeTimers = {}
@@ -509,8 +512,8 @@ function NMA:BuildTracked()
 
         seen[spellId] = true
         seenName[info.name] = true
-        -- Learn charge shape while the values are readable; the resolver
-        -- falls back to this in combat.
+        -- Learn the charge shape from the first record; the resolver keeps it
+        -- for the ready-state suffix.
         self:ResolveCharges(spellId)
         out[#out + 1] = {
             spellId = spellId,
@@ -609,19 +612,30 @@ function NMA:ResolveCharges(spellId)
     local info = SafeCharges(spellId)
     -- Any charge table at all means a charge spell. Gating above 1 drops
     -- single-charge spells into the no-charges path, where their recharge is
-    -- never tracked; Shimmer reports maxCharges 1.
+    -- never tracked.
     if info and info.maxCharges and info.maxCharges >= 1 then
-        self.chargeMeta[spellId] = {
-            max = info.maxCharges,
-            recharge = info.cooldownDuration or 0,
-        }
-        self.chargeCount[spellId] = info.currentCharges or 0
-        return self.chargeCount[spellId], true
+        -- The count and the recharge length are each secret on their own
+        -- under cooldown restrictions. Neither reaches a comparison: an
+        -- unreadable count leaves the maintained one alone, an unreadable
+        -- length keeps the last readable one.
+        local cur = info.currentCharges
+        if KE:IsSecretValue(cur) then cur = nil end
+        local recharge = info.cooldownDuration
+        if KE:IsSecretValue(recharge) then recharge = nil end
+
+        local meta = self.chargeMeta[spellId]
+        if not meta then
+            meta = { max = info.maxCharges, recharge = recharge or 0 }
+            self.chargeMeta[spellId] = meta
+        else
+            meta.max = info.maxCharges
+            if recharge then meta.recharge = recharge end
+        end
+        if cur ~= nil then self.chargeCount[spellId] = cur end
+        return self.chargeCount[spellId] or meta.max, true
     end
     local meta = self.chargeMeta[spellId]
     if meta then
-        -- Known charge spell, count currently unreadable: use the value
-        -- we have been maintaining rather than guessing zero.
         return self.chargeCount[spellId] or meta.max, true
     end
     return nil, false
