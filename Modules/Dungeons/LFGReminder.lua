@@ -526,6 +526,16 @@ function LR:RefreshVisuals()
     ApplyDisableVisibility()
 end
 
+-- BuildPopup returns an existing popup untouched, so a profile switch reaches
+-- it only through here. OnEnable calls it itself: ProfileManager skips
+-- ApplySettings for modules it just enabled. The popup parents a secure
+-- button, so its anchors and scale are protected in combat.
+function LR:ApplySettings()
+    if not popup or InCombatLockdown() then return end
+    self:RefreshVisuals()
+    ApplySavedPosition()
+end
+
 function LR:LFG_LIST_JOINED_GROUP(_, resultID)
     -- Fires the moment the player joins a Group Finder group; unlike
     -- browse/apply, the search result is readable here. Capture
@@ -653,6 +663,7 @@ function LR:OnEnable()
     if not InCombatLockdown() then
         BuildPopup()  -- secure button needs out-of-combat creation
     end
+    self:ApplySettings()
     self:RegisterEvent("LFG_LIST_JOINED_GROUP")
     self:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
     self:RegisterEvent("GROUP_ROSTER_UPDATE")
