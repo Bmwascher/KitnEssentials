@@ -88,6 +88,32 @@ describe("LootRoll ApplyPosition", function()
         LR:ApplyPosition()
         assert.is_nil(LR._lastPoint())
     end)
+
+    -- The alert stack module places the bonus-roll frames itself, held by the
+    -- container or not; a second writer here would leave their anchor to hook
+    -- order. The ordinary roll windows stay this module's either way.
+    it("leaves the bonus-roll frames to Alert Frames only while that module is enabled", function()
+        local function rollFrame(name)
+            local f = { _points = {} }
+            f.GetName = function() return name end
+            f.ClearAllPoints = function(self) self._points = {} end
+            f.SetPoint = function(self, point) self._points[#self._points + 1] = point end
+            return f
+        end
+        for _, alertFramesOn in ipairs({ true, false }) do
+            _G.KitnEssentials:GetModule("AlertFrames").IsEnabled = function() return alertFramesOn end
+            LR.db = { Reposition = true, Position =
+                { Point = "BOTTOM", RelPoint = "CENTER", X = 0, Y = 205 } }
+            local c = makeContainer(200)
+            local roll, prompt = rollFrame("GroupLootFrame1"), rollFrame("BonusRollFrame")
+            c.rollFrames = { roll, prompt }
+            c.maxIndex = 2
+            container(c)
+            LR:ApplyPosition()
+            assert.equal(1, #roll._points, "roll window, AlertFrames=" .. tostring(alertFramesOn))
+            assert.equal(alertFramesOn and 0 or 1, #prompt._points, "prompt, AlertFrames=" .. tostring(alertFramesOn))
+        end
+    end)
 end)
 
 -- The container's OnShow hook must position the stack anchor SYNCHRONOUSLY.
