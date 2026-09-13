@@ -840,6 +840,10 @@ function MPT:OnEnable()
     -- MANDATORY in Phase 1 — the HUD file does not exist yet; mirrors the
     -- PurgeStaleSplits guard idiom below.
     if self.BuildHUD then self:BuildHUD() end
+    -- BuildHUD returns on an existing root, and ProfileManager skips
+    -- ApplySettings for modules it just enabled: without this, a profile
+    -- switch that turns the module on keeps the previous profile's HUD look.
+    if self.ApplySettings then self:ApplySettings() end
     self:RegWithEditMode()
     -- Restore HUD if we /reload'd mid-key.
     self:CheckForActiveRun()
