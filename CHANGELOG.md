@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.20
+
+### Mythic+ Timer
+- Switching to a profile that turns the timer on now repaints its bars,
+  background, fonts and position from that profile right away instead of
+  keeping the previous profile's look until a setting is touched
+
+---
+
 ## v4.6.19
 
 ### Skinning
