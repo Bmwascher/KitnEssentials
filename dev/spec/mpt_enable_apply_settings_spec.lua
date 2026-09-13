@@ -1,12 +1,7 @@
--- Lifecycle spec for MythicPlusTimer's OnEnable settings pass.
---
--- BuildHUD returns as soon as frames.root exists, and ProfileManager skips
--- ApplySettings for modules it just enabled ("newly-enabled modules apply
--- settings inside their own OnEnable"). A profile switch that turns the module
--- on therefore reaches a HUD still configured under the previous profile unless
--- OnEnable itself re-applies. This pins that OnEnable calls ApplySettings after
--- BuildHUD, on a prebuilt HUD and on a fresh one (whose bar background is seeded
--- from a constant, not the profile).
+-- Pins that MPT:OnEnable calls ApplySettings after BuildHUD. BuildHUD returns
+-- on an existing root and ProfileManager skips ApplySettings for modules it
+-- just enabled, so a profile switch that turns the module on otherwise keeps
+-- the previous profile's HUD look.
 --
 -- Loads the REAL Modules/Dungeons/MythicPlusTimer/MythicPlusTimer.lua headlessly.
 -- Collaborators from sibling files and Ace mixins are stubbed AFTER load: the
