@@ -89,6 +89,9 @@ local FRAME_SKINS = {
     { key = "GMChat",                   text = "GM Chat" },
     { key = "GenericTrait",             text = "Generic Traits" },
     { key = "GlobalFonts",              text = "Blizzard Fonts",
+      blockedBy = function()
+          return KE.Skins and KE.Skins.GlobalFontsBlockedBy and KE.Skins.GlobalFontsBlockedBy()
+      end,
       isOn = function()
           local db = GetDB()
           return not (db and db.Skins and db.Skins.GlobalFonts == false)
@@ -234,6 +237,12 @@ local function AddonInstalled(entry)
     return C_AddOns.DoesAddOnExist(entry.addon)
 end
 
+-- The addon whose presence makes this skin stand down, or nil. Only rows
+-- with a `blockedBy` accessor can answer; the skin itself already refuses.
+local function BlockedBy(entry)
+    return entry.blockedBy and entry.blockedBy() or nil
+end
+
 -- True when at least one row in `entries` is covered by EllesmereUI. Keyed on the
 -- rows themselves rather than on whether EllesmereUI is loaded, so the note
 -- appears exactly when there is a mark on screen to explain -- and never on
@@ -299,6 +308,9 @@ local function ResolveRow(entry)
         -- clip in every case. The greying plus the note line above the grid
         -- carry the meaning instead.
         tooltip = "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
+        disabled = true
+    elseif BlockedBy(entry) then
+        tooltip = BlockedBy(entry) .. " breaks once these fonts are rewritten, so KitnEssentials leaves them alone while it is installed. The setting is kept."
         disabled = true
     elseif not AddonInstalled(entry) then
         -- Addon Skins keeps its per-row text: that list is two columns wide, at
@@ -473,7 +485,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
         if KE.Skins and KE.Skins.GetSuppressionState then
             state = KE.Skins.GetSuppressionState(entry.key)
         end
-        if state ~= "full" and EntryIsOn(entry, db.Skins) then anyOn = true break end
+        if state ~= "full" and not BlockedBy(entry) and EntryIsOn(entry, db.Skins) then anyOn = true break end
     end
 
     card:AddHeaderToggle(anyOn, function(checked)
@@ -489,7 +501,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
             if KE.Skins and KE.Skins.GetSuppressionState then
                 state = KE.Skins.GetSuppressionState(entry.key)
             end
-            if state ~= "full" and SetEntry(entry, db.Skins, checked) then
+            if state ~= "full" and not BlockedBy(entry) and SetEntry(entry, db.Skins, checked) then
                 needsReload = true
             end
         end
@@ -499,6 +511,12 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
 
     if AnySuppressed(FRAME_SKINS) then
         card:AddNote("Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
+    end
+    for _, entry in ipairs(FRAME_SKINS) do
+        local blocker = BlockedBy(entry)
+        if blocker then
+            card:AddNote(entry.text .. " is greyed while " .. blocker .. " is installed; that addon breaks once these fonts are rewritten.")
+        end
     end
 
     -- No solo rows in this list today -- Context Menus was one until its label

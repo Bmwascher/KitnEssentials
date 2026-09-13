@@ -118,9 +118,11 @@ local function Apply()
 
     if S.GlobalFontsBlockedBy() then return end
 
-    -- Honoured here as well as at RegisterEarly: the font-size slider calls
-    -- ApplyGlobalFonts directly, which would otherwise re-apply the override
-    -- for a user who has turned it off.
+    -- Both switches are honoured here as well as at RegisterEarly: the
+    -- font-size slider and the face picker call ApplyGlobalFonts directly,
+    -- which would otherwise sweep for a user who has turned the frame-skin
+    -- module or this row off.
+    if not S:IsActive() then return end
     local frames = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
     local skins = frames and frames.Skins

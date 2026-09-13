@@ -319,6 +319,15 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
             assert.is_true(containsKey(calls, "Socket"), "bulk-on never asked the accessor about Socket")
             assert.is_true(containsKey(calls, "Barber"), "bulk-on never asked the accessor about Barber")
         end)
+
+        it("bulk-on leaves a row another addon blocks untouched", function()
+            KE.Skins.GlobalFontsBlockedBy = function() return "Platynator" end
+            -- Seeded off so bulk-on's write (nil) would be observable.
+            KE.db.profile.Skinning.BlizzardFrames = freshDB({ GlobalFonts = false })
+            buildFrames()
+            headerToggle.callback(true)
+            assert.is_false(KE.db.profile.Skinning.BlizzardFrames.Skins.GlobalFonts)
+        end)
     end)
     -- Context Menus is the one FRAME_SKINS row that answers through isOn /
     -- onToggle instead of db.Skins. The failure this pins: dropping it from the
