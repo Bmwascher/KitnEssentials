@@ -216,6 +216,8 @@ function MPT:BuildHUD()
     root.thresh2Text   = FS(nil, textOverlay)  -- remaining label at +2 tick
     root.thresh1Text   = FS(nil, textOverlay)  -- remaining label at +1 (bar end)
     root.forcesText    = FS(nil, textOverlay)  -- forces percent/count text
+    root.forcesPullText = FS(nil, textOverlay) -- pull estimate, left of forcesText (opaque text; never read back)
+    root.forcesPullText:Hide()
     root.timerMeasureText = FS()           -- hidden ruler for the PB tuck's
     root.timerMeasureText:Hide()           -- worst-case timer-width reservation
     root.raceLineText  = FS()              -- LINES-mode race line: static label ("+2 Chest (26:24):")
@@ -267,15 +269,22 @@ function MPT:BuildHUD()
     forcesBg:SetVertexColor(0.031, 0.031, 0.031, 0.8)
     bars.forcesWrap, bars.forcesBar, bars.forcesBg = forcesWrap, forcesBar, forcesBg
 
-    -- Pull-preview hook: DEAD on 12.0 — per-unit forces progress is secret
-    -- (memory: project_warpdeplete_forces_preview_blocked; aggregate criteria
-    -- are kill-credited only). Created hidden, never fed data, gated by
-    -- db.ShowPullOverlay (defaults false); GUI exposes nothing in
-    -- Phase 1. If a future 12.x de-secrets per-unit forces, implement the
-    -- engaged-but-unkilled feed here.
-    bars.forcesPullOverlay = forcesBar:CreateTexture(nil, "ARTWORK")
-    bars.forcesPullOverlay:SetColorTexture(1, 1, 1, 0.35)
-    bars.forcesPullOverlay:Hide()
+    -- Pull estimate: a StatusBar clipped to the forces track, its left edge
+    -- anchored to the credited fill's right edge, fed an opaque count by
+    -- MythicPlusTimer_Pull.lua through SetPullDisplay. Width is set in
+    -- ApplyLayout (the track's inner width); height rides the fill texture.
+    local pullClip = CreateFrame("Frame", nil, forcesBar)
+    pullClip:SetAllPoints(forcesBar)
+    pullClip:SetClipsChildren(true)
+    pullClip:SetFrameLevel(forcesBar:GetFrameLevel() + 1)
+    local pullBar = CreateFrame("StatusBar", nil, pullClip)
+    pullBar:SetPoint("TOPLEFT", forcesBar:GetStatusBarTexture(), "TOPRIGHT", 0, 0)
+    pullBar:SetPoint("BOTTOMLEFT", forcesBar:GetStatusBarTexture(), "BOTTOMRIGHT", 0, 0)
+    pullBar:SetStatusBarTexture(barTex)
+    pullBar:SetMinMaxValues(0, 1)
+    pullBar:SetValue(0)
+    pullBar:Hide()
+    bars.forcesPullClip, bars.forcesPullBar = pullClip, pullBar
 
     -- Deaths hover hit-frame (built once). The headline FontString is
     -- MPT.frames.root.deathsText (created above).
@@ -1124,7 +1133,7 @@ function MPT:RenderForces()
     if not bars or not f or not db then return end
 
     if not db.ShowForces then
-        bars.forcesWrap:Hide(); f.forcesText:Hide(); return
+        bars.forcesWrap:Hide(); f.forcesText:Hide(); self:ClearPullDisplay(); return
     end
     -- Bar-only visibility (ShowForcesBar): the text below always renders —
     -- with the bar hidden it becomes a stacked row (ApplyLayout owns that).
@@ -1214,6 +1223,72 @@ function MPT:RenderForces()
     self.SetTextGated(f.forcesText, str)
     self.SetColorGated(f.forcesText, tc[1], tc[2], tc[3])
     f.forcesText:Show()
+
+    -- Preview only: a public fixture (36 of the preview's 240 total, 15.00%)
+    -- through the same sinks. Live runs are fed by MythicPlusTimer_Pull.lua.
+    if self.isPreview then
+        if db.ShowPullOverlay then
+            self:SetPullDisplay(36, "36", "15.00")
+        else
+            self:ClearPullDisplay()
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Pull-estimate sinks. `count`, `countText` and `percentText` may be secret:
+-- they go straight into SetValue / SetFormattedText and are never read back,
+-- compared, measured or cached (SetTextGated / SetValueGated would compare).
+---------------------------------------------------------------------------------
+
+function MPT:SetPullDisplay(count, countText, percentText)
+    local f    = self.frames and self.frames.root
+    local bars = self.frames and self.frames.bars
+    local db   = self.db
+    if not f or not bars or not db then return end
+    local total = self.run and self.run.forces and self.run.forces.total
+    if type(total) ~= "number" or total <= 0 then return end
+    local bar = bars.forcesPullBar
+    if db.ShowForcesBar ~= false then
+        -- Colour follows the bound profile per delivery like the sibling
+        -- fills (RenderForces); gated because SetStatusBarColor is a draw call.
+        local pc = db.PullOverlayColor or { 0.6, 0.6, 0.6 }
+        if bar._keFillR ~= pc[1] or bar._keFillG ~= pc[2] or bar._keFillB ~= pc[3] then
+            bar._keFillR, bar._keFillG, bar._keFillB = pc[1], pc[2], pc[3]
+            bar:SetStatusBarColor(pc[1], pc[2], pc[3])
+        end
+        bar:SetMinMaxValues(0, total)
+        bar:SetValue(count)
+        bar:Show()
+    else
+        bar:Hide()
+    end
+    local fs = f.forcesPullText
+    local mode = MPT.PullTextFormat(db.ForcesFormat)
+    if mode == "COUNT_PERCENT" then
+        fs:SetFormattedText("(+%s - %s%%)", countText, percentText)
+    elseif mode == "COUNT" then
+        fs:SetFormattedText("(+%s)", countText)
+    else
+        fs:SetFormattedText("(+%s%%)", percentText)
+    end
+    local tc = db.ForcesTextColor or { 1, 1, 1 }
+    self.SetColorGated(fs, tc[1], tc[2], tc[3])
+    fs:Show()
+end
+
+-- Clears only the contribution elements; scheduler state is untouched.
+function MPT:ClearPullDisplay()
+    local f    = self.frames and self.frames.root
+    local bars = self.frames and self.frames.bars
+    if bars and bars.forcesPullBar then
+        bars.forcesPullBar:SetValue(0)
+        bars.forcesPullBar:Hide()
+    end
+    if f and f.forcesPullText then
+        f.forcesPullText:SetText("")
+        f.forcesPullText:Hide()
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -1419,6 +1494,7 @@ function MPT:ApplyLayout()
         applyFont(f.raceLineText, "Threshold")
         applyFont(f.raceLineValueText, "Threshold")
         applyFont(f.forcesText,  "Forces")
+        applyFont(f.forcesPullText, "Forces")
 
         applyFont(f.timerMeasureText, "Timer")
         -- PB tuck reservation: worst-case timer-row width at the Timer font.
@@ -1519,6 +1595,11 @@ function MPT:ApplyLayout()
               -- text slightly higher into the bar (feedback).
             f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "BOTTOMRIGHT", -2, 2)
         end
+        -- Pull label hangs off the credited label by anchor only; its width is
+        -- never measured (the text may be secret).
+        f.forcesPullText:ClearAllPoints()
+        f.forcesPullText:SetPoint("RIGHT", f.forcesText, "LEFT", -4, 0)
+        bars.forcesPullBar:SetWidth(max(1, barW - 2))
     end
 
     -- Length-gated vertical relayout.
@@ -1749,6 +1830,7 @@ function MPT:ApplySettings()
     -- Re-apply the StatusBar textures (user can change BarTexture in GUI).
     bars.timerBar:SetStatusBarTexture(barTex)
     bars.forcesBar:SetStatusBarTexture(barTex)
+    bars.forcesPullBar:SetStatusBarTexture(barTex)
     -- Re-apply the background textures + empty-track tint (BarBackgroundColor;
     -- BuildHUD only seeds the initial #080808 dark).
     local bgc = self.db.BarBackgroundColor or { 0.031, 0.031, 0.031 }
@@ -1766,6 +1848,12 @@ function MPT:ApplySettings()
 
     self:ApplyLayout()    -- fonts, bar sizes, position, scale, backdrop, Strata
     self:NotifyRefresh()  -- debounced Render repaints texts/colors (works in preview)
+    -- Settings or profile changed: drop any in-flight estimate and rebuild
+    -- under the new state (format, colour, opt-in, DB rebind).
+    if self.ClearPullEstimate then
+        self:ClearPullEstimate()
+        self:SyncPullEstimate()
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -1828,6 +1916,7 @@ function MPT:ShowPreview()
     self._savedRun = self.run                   -- stash any leftover (non-active) run state
     self.run = BuildPreviewRun()                -- fresh table per show — never a shared static
     self.isPreview = true
+    if self.ClearPullEstimate then self:ClearPullEstimate() end   -- no live work under a preview
     self:ApplyTrackerVisibility()               -- preview always hides the Blizzard tracker
     self.frames.root:Show()
     self:Render()
@@ -1838,6 +1927,7 @@ function MPT:HidePreview()
     self.isPreview = false
     self.run = self._savedRun
     self._savedRun = nil
+    self:ClearPullDisplay()   -- drop the preview fixture
     -- Restore the tracker we hid for the preview. ApplyTrackerVisibility keeps
     -- it hidden when a live run still wants it (mid-key GUI close, toggle on).
     self:ApplyTrackerVisibility()
@@ -1847,5 +1937,9 @@ function MPT:HidePreview()
         if self.frames and self.frames.root then self.frames.root:Hide() end
     else
         self:Render()
+        -- Live run restored: resume the estimate. Guarded so the
+        -- OnDisable -> HidePreview path (enabledState already false) cannot
+        -- reactivate work on a module that is going away.
+        if self.SyncPullEstimate and self:IsEnabled() then self:SyncPullEstimate() end
     end
 end

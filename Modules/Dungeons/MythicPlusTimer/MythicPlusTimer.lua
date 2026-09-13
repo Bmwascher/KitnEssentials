@@ -343,10 +343,11 @@ local MPT_DEFAULTS = {
         {0.408, 0.804, 1},        -- 80-99%
         Full = {0.804, 1, 0.655}, -- 100%
     },
-    -- Hidden/disabled pull-preview overlay (dead on 12.0 — per-unit forces are
-    -- secret). No data
-    -- feed; GUI exposes nothing.
+    -- Pull estimate (MythicPlusTimer_Pull.lua): gray segment after the
+    -- credited fill plus a (+count / percent) label for the exposed,
+    -- engaged nameplates. Opt-in.
     ShowPullOverlay = false,
+    PullOverlayColor = {0.6, 0.6, 0.6},
 
     -- Objectives / boss list
     ShowObjectives = true,
