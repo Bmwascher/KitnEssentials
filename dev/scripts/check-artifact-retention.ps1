@@ -24,7 +24,7 @@
 #   [F] a keep entry whose branch is merged or whose date has passed - FAIL
 #       (the exemption has expired; delete the line or archive the entry)
 #   [G] rounds written to more than one root         - note (parallax path
-#       drift; one root only)
+#       drift; one root only; a root holding just its .gitignore is empty)
 #
 # Keep list (local, optional): dev/docs/retention-keep.txt, one entry per
 # line, `relative/path|branch|reason` or `relative/path|until:YYYY-MM-DD|reason`.
@@ -216,8 +216,9 @@ if ($gitOk) {
     }
 }
 
-# [G] rounds in more than one root
-$liveRoundRoots = @($roundRoots | Where-Object { $d = Full $_; (Test-Path -LiteralPath $d) -and (Get-ChildItem -LiteralPath $d -Force | Select-Object -First 1) })
+# [G] rounds in more than one root. A root holding only its own .gitignore
+# is the empty SDD workspace parallax creates on demand, not a rounds root.
+$liveRoundRoots = @($roundRoots | Where-Object { $d = Full $_; (Test-Path -LiteralPath $d) -and (Get-ChildItem -LiteralPath $d -Force | Where-Object { $_.Name -ne '.gitignore' } | Select-Object -First 1) })
 if ($liveRoundRoots.Count -gt 1) { $notes += "[G] rounds live in $($liveRoundRoots.Count) roots: $($liveRoundRoots -join ', ')" }
 
 # a git failure in any phase leaves the stale list unjudged
