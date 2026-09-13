@@ -3242,6 +3242,7 @@ end
 function DT:OnEnable()
     dprint("OnEnable")
     self:UpdateDB()
+    if not (self.db and self.db.Enabled) then return end
     self:UpdateGroupPositions()
 
     local encCount, spellCount = 0, 0
@@ -3289,6 +3290,7 @@ function DT:OnDisable()
     self:_UnregisterAbsorbEvent()
     self:_HideAllShieldBars()
     self:StopPhaseTracking()
+    self:StopAllBars()
 end
 
 function DT:EventCallback(event, ...)
