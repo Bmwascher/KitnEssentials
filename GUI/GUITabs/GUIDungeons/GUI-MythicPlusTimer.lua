@@ -779,6 +779,12 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
         { "Pull Estimate",   "PullOverlayColor",    { 0.6, 0.6, 0.6 },    "pullBar" },
     })
 
+    local rowFcSep = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeightSeparator)
+    local fcSep = GUIFrame:CreateSeparator(rowFcSep)
+    rowFcSep:AddWidget(fcSep, 1)
+    manager:Register(fcSep, "all")
+    forcesColors:AddRow(rowFcSep, Theme.rowHeightSeparator)
+
     local bandedRow = GUIFrame:CreateRow(forcesColors.content, Theme.rowHeight)
     local bandedCheck = GUIFrame:CreateCheckbox(bandedRow, "Banded Colors (by % bracket)", {
         value = db.ForcesBandedColors == true,
