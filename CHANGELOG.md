@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.14
+
+### Skinning
+- Guild and community info text (message of the day, guild information)
+  renders in the picked font instead of the stock face
+- The Blizzard Fonts row greys out while an addon that breaks on rewritten
+  fonts is installed, and says which one
+
+---
+
 ## v4.6.13
 
 ### Skinning
