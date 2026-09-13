@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.4
+
+### Skinning
+- Scrollbar thumbs and the selected tab or button fills on skinned frames
+  take a new theme colour as soon as the preset is swapped, instead of
+  keeping the old colour until moused over or reopened
+
+---
+
 ## v4.6.12
 
 ### Skinning
