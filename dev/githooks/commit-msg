@@ -60,8 +60,8 @@ if [ -n "$rel" ]; then
         echo "[commit-msg] BLOCKED: release subject is v$rel but the staged KitnEssentials.toc X-Manual-Version is '${toc_ver:-missing}'. Stage the bumped .toc, or override with: git commit --no-verify" >&2
         exit 1
     fi
-    prev="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null | tr -d v)"
-    if [ -n "$prev" ]; then
+    prev="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null | tr -d v)"
+    if printf '%s' "$prev" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
         set -- $(printf '%s' "$prev" | tr . ' '); pM=$1; pm=$2
         set -- $(printf '%s' "$rel" | tr . ' '); rM=$1; rm_=$2
         if [ "$rM" != "$pM" ]; then tier=major; elif [ "$rm_" != "$pm" ]; then tier=minor; else tier=patch; fi

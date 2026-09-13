@@ -487,7 +487,7 @@
   on. If it is still on after a reload you get a chat warning and a popup
   offering to switch it off and reload for you. The popup waits until you are
   out of combat, and the sidebar shows a Detailed profiler: ON line meanwhile
-- The profiler command separates direct frame CPU from overlapping frame-tree
+- `/kes profiler cpu` separates direct frame CPU from overlapping frame-tree
   totals, reports normalized reset-window rates, and explains its own
   attribution limits
 - Snapshot comparisons refuse CPU and frame deltas after a profiler reset
@@ -835,8 +835,6 @@
   match their width or height
 - Anchors now survive an EllesmereUI layout import, and a size match still
   reaches a frame that appears late
-
----
 
 ---
 
@@ -1840,7 +1838,8 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 ### Maintenance Tracker
 - **NEW:** Maintenance Tracker, one icon per key maintenance buff showing how
   many group members currently have it and the lowest remaining duration across
-  them, color-coded by urgency (green → amber → red as it runs low). Spec-aware:
+  them, color-coded by urgency (green, amber, then red as it runs low).
+  Spec-aware:
   Atonement (Discipline Priest), Renewing + Enveloping Mist (Mistweaver Monk),
   Rejuvenation incl. Germination (Restoration Druid), Riptide (Restoration
   Shaman), Echo (Preservation Evoker). Multi-spell specs render side-by-side
@@ -1904,13 +1903,14 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   existing marker first
 
 ### Tags
-- **NEW:** a mana-percent tag, shows the unit's mana % below 100, hidden at
-  full mana
+- **NEW:** `kes:mana:percent` tag, shows the unit's mana % below 100, hidden
+  at full mana
 
 ### Sidebar
 - Section labels relabelled for clarity: "Combat Utilities", "General
   Utilities", "Dungeon & Party Utilities". Module entries renamed too: Aura
-  Debuffs → "Advanced Debuffs", Aura Externals → "External and Defensive Buffs"
+  Debuffs is now "Advanced Debuffs", Aura Externals is now "External and
+  Defensive Buffs"
 - Auction House Filter sidebar entry removed (its toggles now live in the
   Automation tab)
 
@@ -1948,8 +1948,6 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 
 ### Hide ActionBars
 - The Hide ActionBars module has been removed
-
----
 
 ---
 
@@ -1999,9 +1997,9 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   the cast (ground effects, dispatched adds), the bar continues for a
   configurable duration after the cast finishes instead of vanishing on
   completion
-- **NEW:** Spawn-on-message bars: for abilities that only report as a chat
-  message rather than a countdown, the curated entry can opt into spawning
-  on the message with a curator-supplied duration
+- **NEW:** Spawn-on-message bars: for abilities BigWigs announces as a
+  message rather than a timer, the curated entry can opt into spawning a
+  bar on that message with a curator-supplied duration
 - **NEW:** Phantom follow-up bars: for abilities where one cast triggers a
   delayed secondary effect, a second bar spawns automatically when the
   parent's cast resolves
@@ -2038,6 +2036,10 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   Hearty Blooming Feast, and Champion's Bento. Blizzard split these consumables
   onto separate buffs, so food detection now correctly identifies which feast
   each player ate
+
+### GUI
+- Dragging the settings window or an edit-mode handle now starts from the
+  point you clicked instead of jumping to the frame's anchor
 
 ---
 
@@ -2238,12 +2240,12 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 
 ### Interrupt Tracker
 - Cooling preview bars now skip redraws when the bar wouldn't visibly move
-- No longer runs background updates when no bars are active, so there's
-  zero ongoing cost when idle
+- No longer runs background updates when no bars are active, so it costs
+  nothing per frame while idle
 
 ### Combat Timer
-- No longer runs background updates when not running, zero ongoing cost out
-  of combat with no preview
+- No longer runs background updates when not running, so it costs nothing
+  per frame out of combat with no preview
 
 ### Cursor Circle / Dispel Cursor
 - Per-frame position work skips when the cursor is stationary, these were
@@ -2274,6 +2276,8 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 - Resize-grip on the GUI window no longer spazzes when clicked rapidly
 - Navigating between sections no longer needlessly re-triggers every
   module's preview
+- Switching between module pages reuses the page's widgets instead of
+  building them fresh, so pages open noticeably faster
 
 ### Profiler
 - **NEW:** In-game CPU and memory profiler (`/kes profiler`) with named
@@ -2336,7 +2340,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 - **NEW:** Anchors ElvUI Player / Target / Focus / Pet frames to other
   frames (the Essential Cooldown Viewer by default), with a per-frame
   chooser for the parent target and per-frame anchor + offset overrides.
-  Includes a Focus frame option not found elsewhere
+  Includes a Focus frame option
 - **NEW:** Live status indicator on the top card: green when ElvUI is
   loaded, yellow when the standalone ElvUI_Anchor addon is detected (yields
   to it to avoid two layers competing), red when ElvUI is missing
@@ -2440,7 +2444,10 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   Battle.net, Tooltips, Details Backdrop) and standalone modules (Dungeon
   Timers, Dungeon Casts, Vantus Rune, World Map search box, Disintegrate
   tick width, Ebon Might Tracker border, Skyriding UI pills) are now crisp
-  at any UI scale, eliminating residual halos at non-1.0 UI scales
+  at any UI scale
+- Right-anchored frame edges (the Combat Timer's right bracket, Range
+  Display, Enemy Counter, Action Bars column positioning) now land on exact
+  pixels, eliminating residual halos at non-1.0 UI scales
 
 ### Range Display
 - Now shows `28+` (or whatever cap your class has) instead of just `28`
@@ -2664,7 +2671,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   no OH weapon equipped, healthstone hides when no Warlock in group, class
   slot Warlock-only
 - **NEW:** Dual-mode positioning: auto-anchor to the ready check popup for
-  non-starters, fallback UIParent anchor for the starter (Blizzard skips
+  non-starters, a screen-anchored fallback for the starter (the game skips
   the popup for whoever initiates), plus a full custom-anchor mode
 - **NEW:** Close button for the ready check starter so the icon row can be
   dismissed without waiting for the timeout
@@ -2734,6 +2741,8 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 ### Dungeon Timers
 - Fixed an extend-timer overwrite race, a new BigWigs timer arriving
   mid-extension now defers instead of silently hiding the visible extension
+- Extended bars are no longer cut short when BigWigs stops its own bars or
+  a boss module disables
 
 ### Cursor Circle
 - Removed 3 non-functional crosshair/heart textures (Crosshair 1, Crosshair
@@ -2744,8 +2753,8 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 ## v1.12.2
 
 ### Dungeon Timers
-- Fixed bar previews invisible when the bar group was anchored to a
-  non-UIParent frame (e.g. ElvUI unit frames)
+- Fixed bar previews being invisible when the bar group was anchored to
+  another addon's frame (for example ElvUI unit frames)
 - Unified anchor pattern across Dungeon Timers / Dungeon Casts / Interrupt
   Tracker, identical X/Y offsets now produce identical positions across the
   three modules
@@ -2794,8 +2803,8 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   the active sidebar section (edit mode still shows all)
 - **NEW:** Full content-area takeover panels for the dungeon trigger editor
   pages
-- **NEW:** Sidebar sections can be individually shown/hidden or always
-  enabled for the Dungeon Timers section
+- **NEW:** Dungeon Timers sidebar entries grey out and stop responding to
+  clicks while their module is off, or can be marked always enabled
 
 ### Combat Cross / Combat Texts / Core
 - Fixed a crash caused by fading frames that contain soft-outline text
@@ -2897,19 +2906,18 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 - Evoker only
 
 ### Bloodlust Tracker
-- Simplified to two modes (animated overlay + Static Icon with countdown).
-  Removed several legacy presets and detection modes to simplify the
-  module
+- Simplified to two modes: animated overlay, and Static Icon with countdown.
+  The Chipi Chipi, 9MM Bang and Sarah Gamer Word presets, the sound-only
+  mode and the haste-approximation detection fallback have been removed
 - **NEW:** Combat Only toggle
 - Fixed a multi-trigger sound bug where a single Bloodlust/Heroism/Time
   Warp cast could play the alert more than once
 - Unified anchor behavior across both modes
 
 ### Prescience Tracker
-- **Renamed:** "Aug Buffs Tracker" to "Prescience Tracker". Module only
-  tracks Prescience and Shifting Sands, the narrower name fits and frees
-  the "aug" namespace for the new Ebon Might Tracker. Existing profiles
-  reset this module's settings to defaults
+- "Aug Buffs Tracker" is now "Prescience Tracker", since the module only
+  tracks Prescience and Shifting Sands. Existing profiles reset this
+  module's settings to defaults
 - Fixed the role icon drawing behind the main buff icon
 - Fixed the Class Color Names toggle leaking state across GUI page rebuilds
 
@@ -2928,8 +2936,8 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 ## v1.10.2
 
 ### WarpDeplete+
-- **Renamed:** from "WarpDeplete Forces" to reflect expanded scope (forces +
-  death fixes + tooltip)
+- "WarpDeplete Forces" is now "WarpDeplete+", reflecting its wider scope
+  (forces, death fixes and tooltip)
 - Fixed pull-forces overlay double-counting with WarpDeplete's own killed
   tracker, now only counts alive mobs
 - Fixed death tooltip showing "No Recorded Player Deaths" in M+
@@ -3008,8 +3016,8 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   Dragon Riding UI -> Skyriding UI
 
 ### Custom Buffs
-- **Removed:** Section and all 4 modules (Buff Icons, Buff Bars, Externals/
-  Defensives, Movement Buffs), deprecated
+- The section and all four of its modules (Buff Icons, Buff Bars,
+  Externals/Defensives, Movement Buffs) have been removed
 
 ### Battle Res / Combat Timer / No Movement Alert
 - Fixed edit mode borders that were 1px off or oversized; frames now size
@@ -3096,8 +3104,9 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 
 ### Combat Texts
 - **NEW:** Interrupt Text: displays the interrupted spell name and icon on
-  a successful kick, with spec-aware detection. Works in dungeons
-- **Renamed:** "Interrupt Announce" to "Interrupt Text"
+  a successful kick, with spec-aware detection. Works in dungeons, with
+  configurable text, colour and fade
+- "Interrupt Announce" is now "Interrupt Text"
 - Combat Enter/Exit combined into a single "Combat Messages" card with one
   enable toggle
 - Per-type fade durations, Combat Messages and Interrupt Text each have
@@ -3180,15 +3189,14 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 
 ### Aug Buffs Tracker
 - **NEW:** Growth Direction setting, entries grow Down, Up, Left, or Right
-  from the anchor
+  from the anchor. Resizing the tracker no longer shifts its entries
 - Fixed entries randomly disappearing in combat caused by ID collisions
   across different players in raids
 - Buff tracking now updates additively during combat instead of wiping and
   rescanning
 
 ### Raid Notifications
-- **Removed:** Loot Boss save detection, encounter ID mapping proved
-  unreliable
+- Loot Boss save detection has been removed; it proved unreliable
 
 ---
 
@@ -3246,6 +3254,10 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 - Uninterruptible casts no longer cause an error, and the option that hides
   them works again
 
+### No Movement Alert
+- Debug messages no longer print to chat. The same cleanup covers Bloodlust
+  Tracker, Battle Res, Cursor Circle, Disintegrate Ticks and Dispel Cursor
+
 ---
 
 ## v1.6.6
@@ -3275,8 +3287,8 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   "NO %n - %t" format), Dispel Cursor (enabled, cyan text, offset 3)
 
 ### No Movement Alert
-- **Removed:** Demon Hunter Shift from spell list; multi-charge spells
-  aren't compatible with 12.0.5 cooldown detection
+- Demon Hunter Shift has been removed from the spell list; three-charge
+  spells cannot be tracked under the 12.0.5 cooldown restrictions
 
 ---
 
@@ -3365,9 +3377,9 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   stance, Paladin aura, or Evoker attunement with per-stance colors
 
 ### Missing Buffs
-- **Removed:** Buff/food/flask/enchant/poison tracking replaced by the
-  BuffReminders addon. Stance text feature extracted into the new Class
-  Stance Texts module
+- Buff, food, flask, enchant and poison tracking has been removed in favour
+  of the BuffReminders addon. The stance text feature moved into the new
+  Class Stance Texts module
 
 ---
 
@@ -3454,7 +3466,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 - Skinning section auto-collapses when ElvUI is detected
 - Skinning sidebar reordered, General UI Clean Up and Buffs/Debuffs pinned
   at top, rest alphabetized
-- **Renamed:** Range Checker Text to Range Display
+- Range Checker Text is now Range Display
 - Color pickers paired side-by-side where previously stacked (Combat
   Timer, Range Display)
 - Automation page: all toggle pairs now side-by-side (Cinematics,
@@ -3491,8 +3503,8 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 ### Disintegrate Castbar Ticks (new module)
 - **NEW:** Evoker-only (Devastation/Preservation). Displays tick marks on
   your cast bar during Disintegrate channels with a configurable "DON'T
-  CLIP" warning for Mass Disintegrate. Supports Unhalted Unit Frames, the
-  Blizzard Cooldown Manager, Ayije CDM, and Blizzard cast bars
+  CLIP" warning for Mass Disintegrate. Supports Unhalted Unit Frames,
+  BetterCooldownManager, Ayije CDM, and Blizzard cast bars
 
 ### World Marker Cycler (new module)
 - **NEW:** Cycles through world markers at cursor position with
@@ -3558,19 +3570,22 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 ### GUI
 - Merged Profiles and Theme into a unified "Settings" sidebar section
 - Moved Cursor Circle from Quality of Life to Combat section
-- **Removed:** Personal Defensives and Personal Movement Buffs from the GUI
-  sidebar (now handled by ACDM)
+- Personal Defensives and Personal Movement Buffs have been removed from
+  the sidebar; ACDM handles them now
 
-### Misc fixes
-- GUI-Theme: added nil guards for custom color picker access
-- ActionBars: minimum size guard in proc glow hook to prevent errors on
-  unsized buttons
-- DispelCursor: throttled cursor updates and proper event cleanup on
-  disable
-- AddonTheme: recursion guard to prevent an infinite loop when refreshing
-  the theme
-- CustomOutline: secret value guards now cover all text/alpha comparisons
-- Sidebar: accent bar and selection highlight now update with theme changes
+### GUI
+- The custom colour picker no longer errors when its colour is unset
+- Refreshing the theme can no longer lock the game in a loop
+- The sidebar's accent bar and selection highlight update with theme changes
+
+### ActionBars
+- The proc glow no longer errors on buttons that have no size yet
+
+### Dispel Cursor
+- Cursor updates are throttled, and the module fully stops when disabled
+
+### Font Outlines
+- Outlined text no longer errors on protected combat text
 - CursorCircle / CombatCross: now update live with theme color changes
 
 ---
@@ -3614,7 +3629,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 - Improved compatibility with protected aura data
 
 ### ActionBars
-- Proc glow (SpellActivationAlert) size now matches button size dynamically
+- The proc glow now matches the button size
 
 ---
 
@@ -3653,8 +3668,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 
 ## v1.0.2
 
-### Misc
-- Minor tweaks
+- Internal maintenance; nothing player-visible
 
 ---
 
