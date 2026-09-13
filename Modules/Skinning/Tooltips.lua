@@ -313,12 +313,14 @@ function TT:StyleHealthBar()
     local bar = _G.GameTooltipStatusBar
     if not bar or not self.db then return end
     local db = self.db
-    -- fully remove the bar. Blizzard re-shows it per
-    -- unit tooltip, so the OnShow hook in OnEnable keeps it hidden.
+    -- Blizzard re-shows the bar for every unit tooltip from inside its own
+    -- pass, where a hook would taint it. Alpha survives that Show, so the
+    -- hidden setting is an alpha write made here, from KE's own path.
     if db.HealthBarHidden then
-        bar:Hide()
+        bar:SetAlpha(0)
         return
     end
+    bar:SetAlpha(1)
     bar:SetHeight(db.HealthBarHeight or 7)
     local tex = KE.LSM and KE.LSM:Fetch("statusbar", db.HealthBarTexture or "Blizzard", true)
     if tex then bar:SetStatusBarTexture(tex) end
@@ -1204,12 +1206,6 @@ function TT:OnEnable()
                 if TT:IsEnabled() then TT:OnTooltipSetItem(tt, data) end
             end)
         end
-
-        if _G.GameTooltipStatusBar then
-            _G.GameTooltipStatusBar:HookScript("OnShow", function(bar)
-                if TT:IsEnabled() and TT.db and TT.db.HealthBarHidden then bar:Hide() end
-            end)
-        end
     end
 
     -- AceHook's UnhookAll (OnEmbedDisable) strips every SecureHook when the
@@ -1320,6 +1316,7 @@ function TT:OnDisable()
         local tt = _G[name]
         if tt then UnstyleTooltip(tt) end
     end
+    if _G.GameTooltipStatusBar then _G.GameTooltipStatusBar:SetAlpha(1) end
 end
 
 -- Test seams; addon code never calls them.
