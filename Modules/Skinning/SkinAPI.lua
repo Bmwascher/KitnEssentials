@@ -83,11 +83,9 @@ S.palette = {
     brand      = { 1, 1, 1 },
     hover      = { 0.851, 0.851, 0.851, 0.15 },
     progress   = { 1, 1, 1, 0.40 },
-    -- Brand fill behind a selected tab, row or button. Equal to brandRestA so
-    -- a selected tab and a resting scrollbar thumb read as one strength; a
-    -- fainter tint washes out in a saturated accent. Selection is told from
-    -- the grey hover by colour, not strength.
-    selectedA  = 0.35,
+    -- Brand fill behind a selected tab, row or button. One value for every
+    -- surface; selection is told from the grey hover by colour, not strength.
+    selectedA  = 0.25,
     brandFillA = 0.8,
     brandRestA = 0.35,
 }
