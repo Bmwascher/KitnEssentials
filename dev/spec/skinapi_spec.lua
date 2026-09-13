@@ -108,6 +108,17 @@ describe("SkinAPI palette", function()
         S.RefreshPalette()
         assert.same({ 0.0, 1.0, 0.5, 0.35 }, painted)
     end)
+
+    it("leaves a forgotten region alone on the next refresh", function()
+        local painted = {}
+        local tex = { SetVertexColor = function(_, r, g, b, a) painted = { r, g, b, a } end }
+        S.PaintBrand(tex, "SetVertexColor", 0.35)
+        S.ForgetBrand(tex)
+        tex:SetVertexColor(0.486, 0.486, 0.486, 1)
+        KE.GetSkinBrandColor = function() return { 0.0, 1.0, 0.5, 1 } end
+        S.RefreshPalette()
+        assert.same({ 0.486, 0.486, 0.486, 1 }, painted)
+    end)
 end)
 
 describe("SkinAPI WaitFor", function()

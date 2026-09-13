@@ -117,6 +117,12 @@ function S.PaintBrand(obj, method, alpha)
     obj[method](obj, b[1], b[2], b[3], alpha)
 end
 
+-- For a region that leaves the brand colour (a disabled control), so a later
+-- refresh does not paint it brand again.
+function S.ForgetBrand(obj)
+    brandPaint[obj] = nil
+end
+
 function S.RefreshPalette()
     local accent = KE.GetSkinBrandColor and KE:GetSkinBrandColor()
     if accent then
@@ -1281,7 +1287,7 @@ function S.CheckRefresh(check)
         S.data(region).flat = true
         region:SetAlpha(1)
         region:SetTexture("Interface\\Buttons\\WHITE8x8")
-        region:SetVertexColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], S.palette.brandRestA)
+        S.PaintBrand(region, "SetVertexColor", S.palette.brandRestA)
         region:ClearAllPoints()
 
         region:SetPoint("TOPLEFT", aeBD or check, "TOPLEFT", 1, -1)
@@ -1336,7 +1342,7 @@ function S.CheckBox(check)
         region:SetAlpha(1)
         region:SetTexture("Interface\\Buttons\\WHITE8x8")
 
-        region:SetVertexColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], S.palette.brandRestA)
+        S.PaintBrand(region, "SetVertexColor", S.palette.brandRestA)
         region:ClearAllPoints()
 
         region:SetPoint("TOPLEFT", aeBD or check, "TOPLEFT", 1, -1)
@@ -2963,7 +2969,7 @@ function S.StepSlider(stepper)
         local thumb = slider.Thumb
         if thumb then
             thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
-            thumb:SetVertexColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], S.palette.brandFillA)
+            S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
             thumb:SetSize(10, 18)
         end
 
@@ -2981,7 +2987,7 @@ function S.StepSlider(stepper)
                 local step = CreateFrame("StatusBar", nil, slider)
                 step:SetFrameLevel(bd:GetFrameLevel() + 1)
                 step:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
-                step:SetStatusBarColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], 0.35)
+                S.PaintBrand(step, "SetStatusBarColor", 0.35)
                 local px = PixelBorder()
                 step:SetPoint("TOPLEFT", bd, "TOPLEFT", px, -px)
                 step:SetPoint("BOTTOMLEFT", bd, "BOTTOMLEFT", px, px)
@@ -2993,9 +2999,11 @@ function S.StepSlider(stepper)
                 local function stateColor()
                     local on = not slider.IsEnabled or slider:IsEnabled()
                     if on then
-                        thumb:SetVertexColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], S.palette.brandFillA)
-                        step:SetStatusBarColor(BRAND_HL[1], BRAND_HL[2], BRAND_HL[3], 0.35)
+                        S.PaintBrand(thumb, "SetVertexColor", S.palette.brandFillA)
+                        S.PaintBrand(step, "SetStatusBarColor", 0.35)
                     else
+                        S.ForgetBrand(thumb)
+                        S.ForgetBrand(step)
                         thumb:SetVertexColor(0.486, 0.486, 0.486, 1)
                         step:SetStatusBarColor(0.486, 0.486, 0.486, 0.35)
                     end
