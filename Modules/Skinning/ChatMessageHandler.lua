@@ -1031,10 +1031,11 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
         body = format(chatFormat .. '%s', pflag .. sender, message)
     end
 
-    -- A community channel name (arg4) is secret in chat-messaging lockdown;
-    -- ResolvePrefixedChannelName cannot take one (strlenutf8 refuses it), so
-    -- the tag is joined C-side. Losing the tag beats losing the line: the
-    -- caller drops any body it does not get back.
+    -- The event docs mark the channel name (arg4) NeverSecret, but a field
+    -- trace showed it reaching ResolvePrefixedChannelName as a secret in
+    -- chat-messaging lockdown, where strlenutf8 refuses it; when it is, the
+    -- tag is joined C-side. Losing the tag beats losing the line: the caller
+    -- drops any body it does not get back.
     if channelLength and channelLength > 0 and arg8 and arg4 then
         if KE:IsSafeValue(arg4) and KE:IsSafeValue(arg8) then
             body = '|Hchannel:channel:' .. arg8 .. '|h[' .. ResolvePrefixedChannelName(arg4) .. ']|h ' .. body
