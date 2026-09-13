@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.22
+
+### Mythic+ Timer
+- **NEW:** Show Pull Estimate (Features > Forces) adds a gray segment after
+  the credited forces and a (+count - percent) label for the enemies you
+  have pulled but not yet killed; the segment shrinks as kills land and the
+  gray colour has its own swatch under Display > Forces Colors
+- The Forces card's three toggles now share one row, and the colour swatches
+  are separated from the banded colour controls
+
+---
+
 ## v4.6.21
 
 ### LFG Reminder
