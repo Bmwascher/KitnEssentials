@@ -547,18 +547,28 @@ local function StartViewerSweep()
     if viewerSweepStarted then return end
     viewerSweepStarted = true
 
-    local driver = CreateFrame("Frame")
+    local driver = CreateFrame("Frame", "KE_LFGViewerSweepDriver")
+    -- Showing the viewer fires none of those events, and an OnShow hook on
+    -- it runs inside the LFG_LIST_ACTIVE_ENTRY_UPDATE execution that goes on
+    -- to test censored. A ticker from KE's own stack instead. The viewer is
+    -- a valid panel only while the player has an active listing, so the
+    -- ticker exists only then.
+    local function SyncViewerSweep()
+        local listed = _G.C_LFGList.HasActiveEntryInfo()
+        if listed and not driver.ticker then
+            driver.ticker = C_Timer.NewTicker(0.2, SweepViewer)
+        elseif not listed and driver.ticker then
+            driver.ticker:Cancel()
+            driver.ticker = nil
+        end
+        SweepViewer()
+    end
     driver:RegisterEvent("GROUP_ROSTER_UPDATE")
     driver:RegisterEvent("PLAYER_ROLES_ASSIGNED")
     driver:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
     driver:RegisterEvent("LFG_LIST_APPLICANT_UPDATED")
-    driver:SetScript("OnEvent", function() C_Timer.After(0, SweepViewer) end)
-
-    -- Showing the viewer fires none of those events, and an OnShow hook on
-    -- it runs inside the LFG_LIST_ACTIVE_ENTRY_UPDATE execution that goes on
-    -- to test censored. A ticker from KE's own stack instead; while the
-    -- Group Finder is closed each tick is two lookups and one IsVisible.
-    C_Timer.NewTicker(0.2, SweepViewer)
+    driver:SetScript("OnEvent", function() C_Timer.After(0, SyncViewerSweep) end)
+    C_Timer.After(0, SyncViewerSweep)
 end
 
 local GROUP_BUTTON_ICONS = { 133076, 133074, 464820 }
