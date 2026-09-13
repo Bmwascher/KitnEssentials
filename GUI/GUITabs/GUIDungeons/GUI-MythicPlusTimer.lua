@@ -518,7 +518,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     rowFo1:AddWidget(forcesBarCheck, 1 / 3)
     manager:Register(forcesBarCheck, "all")
     local pullCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Pull Estimate", {
-        value = db.ShowPullOverlay == true,
+        value = db.ShowPullOverlay ~= false,
         tooltip = "Adds a gray segment after the credited forces and a (+count / percent) label "
             .. "for the enemies you have pulled but not yet killed. Only enemies with a visible "
             .. "nameplate are counted, so the estimate shrinks when plates leave the screen.",
@@ -746,7 +746,7 @@ BuildDisplayTab = function(scrollChild, yOffset, db, manager)
     end)
     manager:SetCondition("pullBar", function()
         return db.Enabled ~= false and db.ShowForces ~= false
-            and db.ShowForcesBar ~= false and db.ShowPullOverlay == true
+            and db.ShowForcesBar ~= false and db.ShowPullOverlay ~= false
     end)
 
     -- Card 1: Timer — Colors

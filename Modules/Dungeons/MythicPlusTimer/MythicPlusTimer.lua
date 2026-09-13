@@ -345,8 +345,8 @@ local MPT_DEFAULTS = {
     },
     -- Pull estimate (MythicPlusTimer_Pull.lua): gray segment after the
     -- credited fill plus a (+count / percent) label for the exposed,
-    -- engaged nameplates. Opt-in.
-    ShowPullOverlay = false,
+    -- engaged nameplates.
+    ShowPullOverlay = true,
     PullOverlayColor = {0.6, 0.6, 0.6},
 
     -- Objectives / boss list

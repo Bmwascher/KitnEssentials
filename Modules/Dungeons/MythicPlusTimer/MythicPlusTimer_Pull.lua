@@ -42,7 +42,7 @@ local BUILD_INTERVAL = 0.1
 
 function MPT.PullEligible(db, run, isPreview)
     if not db or not run then return false end
-    if not db.Enabled or db.ShowForces == false or db.ShowPullOverlay ~= true then return false end
+    if not db.Enabled or db.ShowForces == false or db.ShowPullOverlay == false then return false end
     if isPreview or not run.active or run.completed then return false end
     local fo = run.forces
     if not fo or fo.completed then return false end
