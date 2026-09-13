@@ -16,7 +16,8 @@
 #       scratch; a checkout-wide search must never walk video frames)
 #   [B] a date-named entry older than -Days whose slug matches no unmerged
 #       branch                                       - stale (note)
-#   [C] a review mirror whose commit is in main      - stale (note)
+#   [C] a review mirror whose commit is in main      - stale (note; a name
+#       suffix git cannot resolve is not a mirror)
 #   [D] a worktree whose branch is merged into main  - stale (note; never
 #       touched by -Archive, remove with `git worktree remove`)
 #   [E] an entry larger than 50 MB                   - note
@@ -27,8 +28,9 @@
 #
 # Keep list (local, optional): dev/docs/retention-keep.txt, one entry per
 # line, `relative/path|branch|reason` or `relative/path|until:YYYY-MM-DD|reason`.
-# An entry exempts that path (and, for [B], any entry containing it) from [A]
-# and [B] while the branch is unmerged or through the end of the named day.
+# An entry exempts that path (and, for [B], any entry containing it) from [A],
+# [B] and [E] while the local branch is unmerged or through the end of the
+# named day.
 # Work with no branch yet takes the dated form; frozen-but-unbuilt plans use
 # the branch they will land on.
 #
@@ -38,7 +40,8 @@
 # nothing; a wrongly archived one is a move, listed in the manifest.
 #
 # -Archive moves every [B]/[C] stale entry to
-# KitnDev/_archive/KitnEssentials-process/<same relative path> (suffixed with
+# <parent of the checkout>/_archive/KitnEssentials-process/<same relative path>
+# (KitnDev/_archive/... for the primary checkout; suffixed with
 # a timestamp when that path is already taken) and appends the moved paths to
 # MANIFEST-<date>.txt there. Nothing is ever deleted. Git unavailable means
 # [B]/[C]/[D] cannot be judged: FAIL, no archive.
@@ -192,7 +195,7 @@ if ($gitOk -and (Test-Path -LiteralPath $mirrors)) {
         if ($m.Success) {
             & git -C $root merge-base --is-ancestor $m.Groups[1].Value main 2>$null
             if ($LASTEXITCODE -eq 0) { $stale += Rel $mdir.FullName }
-            elseif ($LASTEXITCODE -ne 1) { $gitOk = $false }
+            elseif ($LASTEXITCODE -ne 1 -and $LASTEXITCODE -ne 128) { $gitOk = $false }
         }
     }
 }
