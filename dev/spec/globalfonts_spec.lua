@@ -1,8 +1,9 @@
--- Modules/Skinning/GlobalFonts.lua -- the two refusals and the stock-size
+-- Modules/Skinning/GlobalFonts.lua -- the three refusals and the stock-size
 -- snapshot. Apply() is the refusal surface: it must write nothing while
 -- Platynator is loaded, since that addon's nameplate setup breaks once the
--- sweep has rewritten GameFontNormal, and nothing while the frame-skin module
--- is off. Loaded directly (not through dev/spec/_ke_loader.lua): the
+-- sweep has rewritten GameFontNormal, nothing while EllesmereUI's Apply to
+-- All Game Text is on, since that rewrites every font object after this
+-- sweep, and nothing while the frame-skin module is off. Loaded directly (not through dev/spec/_ke_loader.lua): the
 -- module needs a _G font-object fake and a KE.Skins seed the loader has no
 -- shape for. C_AddOns.IsAddOnLoaded is a constant stub per case, not a
 -- stateful fake -- the guard reads it once per Apply.
@@ -75,6 +76,15 @@ describe("GlobalFonts", function()
         assert.equals("Platynator", S.GlobalFontsBlockedBy())
         S.ApplyGlobalFonts()
         assert.is_nil(next(applied))
+    end)
+
+    it("writes nothing while EllesmereUI's Apply to All Game Text is on", function()
+        load({})
+        _G.EllesmereUIDB = { fonts = { applyToAllGameText = true } }
+        assert.equals("EllesmereUI", (S.GlobalFontsBlockedBy()))
+        S.ApplyGlobalFonts()
+        assert.is_nil(next(applied))
+        _G.EllesmereUIDB = nil
     end)
 
     it("writes nothing while the frame-skin module is off", function()

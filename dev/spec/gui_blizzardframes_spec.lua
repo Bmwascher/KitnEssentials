@@ -321,7 +321,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         end)
 
         it("bulk-on leaves a row another addon blocks untouched", function()
-            KE.Skins.GlobalFontsBlockedBy = function() return "Platynator" end
+            KE.Skins.GlobalFontsBlockedBy = function() return "Platynator", "breaks." end
             -- Seeded off so bulk-on's write (nil) would be observable.
             KE.db.profile.Skinning.BlizzardFrames = freshDB({ GlobalFonts = false })
             buildFrames()
