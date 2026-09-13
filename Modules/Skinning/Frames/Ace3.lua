@@ -124,7 +124,7 @@ local function RefreshTree(self, ...)
 
                     button.highlight:SetVertexColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], S.palette.selectedA)
                 else
-                    button.highlight:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], 0.15)
+                    button.highlight:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
                 end
             end
         end
@@ -490,7 +490,7 @@ local function SkinWidget(widget)
         if widget.text then S.SetFont(widget.text, 13, "OUTLINE") end
         if widget.highlight and widget.highlight.SetTexture then
             widget.highlight:SetTexture("Interface\\Buttons\\WHITE8x8")
-            widget.highlight:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], 0.15)
+            widget.highlight:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
         end
     end
 end

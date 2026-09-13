@@ -119,7 +119,6 @@ end
 -- row never has to be asked where it lives. Each list owns one function and
 -- only touches regions its own template actually defines.
 local ROW_DRAG_ACTIVE = { 0.9, 0.8, 0.1, 0.3 }
-local ROW_HIGHLIGHT_ALPHA = 0.25
 
 local function RowShell(bu)
     local icon = bu.icon
@@ -162,7 +161,7 @@ local function DressDragButton(drag, icon)
     local hl = drag:GetHighlightTexture()
     if hl then
         SetInsideOf(hl, icon)
-        hl:SetVertexColor(1, 1, 1, ROW_HIGHLIGHT_ALPHA)
+        hl:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
     end
 end
 

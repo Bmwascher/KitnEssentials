@@ -57,7 +57,7 @@ local function ReskinDungeonButtons(MDT)
             if button.highlightTexture then
 
                 button.highlightTexture:SetTexture(WHITE)
-                button.highlightTexture:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], 0.15)
+                button.highlightTexture:SetVertexColor(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
                 Inset(button.highlightTexture)
             end
             if button.selectedTexture then

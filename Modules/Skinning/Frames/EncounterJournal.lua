@@ -174,7 +174,7 @@ local function SkinEncounterJournal()
                     if child.SetHighlightTexture then
                         child:SetHighlightTexture("Interface\\Buttons\\WHITE8x8")
                         local hl = child:GetHighlightTexture()
-                        hl:SetVertexColor(GREY[1], GREY[2], GREY[3], 0.15)
+                        hl:SetVertexColor(GREY[1], GREY[2], GREY[3], S.palette.hover[4])
                         hl:ClearAllPoints()
 
                         local anchor = S.GetBackdrop(child.bgImage) or child.bgImage or child
@@ -264,7 +264,7 @@ local function SkinEncounterJournal()
                     if tab.GetHighlightTexture then
                         local hl = tab:GetHighlightTexture()
                         if hl then
-                            hl:SetColorTexture(GREY[1], GREY[2], GREY[3], 0.15)
+                            hl:SetColorTexture(GREY[1], GREY[2], GREY[3], S.palette.hover[4])
                             hl:ClearAllPoints()
                             hl:SetPoint("TOPLEFT", bd or tab, "TOPLEFT", 1, -1)
                             hl:SetPoint("BOTTOMRIGHT", bd or tab, "BOTTOMRIGHT", -1, 1)

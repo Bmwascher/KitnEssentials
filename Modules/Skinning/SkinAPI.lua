@@ -640,7 +640,7 @@ local function clearButtonStates(button)
 end
 
 local HOVER_COLOR = S.palette.hover
-local HOVER_ALPHA = 0.15
+local HOVER_ALPHA = S.palette.hover[4]
 
 local HOVER_TEX = "Interface\\Buttons\\WHITE8x8"
 local function killRegisteredHighlight(btn)
