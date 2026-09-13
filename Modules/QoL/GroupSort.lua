@@ -29,8 +29,9 @@
 -- roster matches the goal. 15-second backstop, 5-second cooldown between runs,
 -- hard combat gate, lead/assist gate, and a chat-lockdown gate.
 --
--- Performance: no OnUpdate anywhere. Work happens on a button press and on
--- GROUP_ROSTER_UPDATE while a sort is in flight.
+-- Performance: no OnUpdate anywhere, nothing registered at file scope.
+-- The spec callback lives while Raid Control is enabled or a sort is in
+-- flight; GROUP_ROSTER_UPDATE is registered only while a sort is in flight.
 -- ===========================================================================
 
 ---@class KE
@@ -142,6 +143,18 @@ local function RegisterLibSpec()
     end)
 end
 
+function GS:Start()
+    RegisterLibSpec()
+end
+
+function GS:Stop()
+    if not libSpecRegistered then return end
+    local LS = LibStub and LibStub("LibSpecialization", true)
+    if LS then LS.UnregisterGroup(GS) end
+    libSpecRegistered = false
+    wipe(specs)
+end
+
 local function GetSpec(unit)
     local G = UnitGUID(unit)
     if not G or (issecretvalue and issecretvalue(G)) then return 0 end
@@ -151,6 +164,31 @@ end
 -- --- Engine state ------------------------------------------------------------
 
 local Groups = { Processing = false }
+
+local driver
+
+local function RaidControlEnabled()
+    local rc = KitnEssentials:GetModule("RaidControl", true)
+    return rc ~= nil and rc:IsEnabled()
+end
+
+local function SetProcessing(on)
+    Groups.Processing = on
+    if on then
+        if not driver then
+            driver = CreateFrame("Frame")
+            driver:SetScript("OnEvent", function()
+                if Groups.Processing then GS:ArrangeGroups() end
+            end)
+        end
+        driver:RegisterEvent("GROUP_ROSTER_UPDATE")
+    else
+        if driver then driver:UnregisterEvent("GROUP_ROSTER_UPDATE") end
+        -- A macro-started sort registered the spec callback itself; with
+        -- Raid Control off nothing else releases it.
+        if not RaidControlEnabled() then GS:Stop() end
+    end
+end
 
 -- --- Sorting -----------------------------------------------------------------
 
@@ -303,7 +341,7 @@ function GS:ArrangeGroups(firstcall, finalcheck)
     if not firstcall and not Groups.Processing then return end
     local now = GetTime()
     if firstcall then
-        Groups.Processing = true
+        SetProcessing(true)
         Groups.Processed = 0
         Groups.ProcessStart = now
         for i = 1, 40 do
@@ -318,7 +356,7 @@ function GS:ArrangeGroups(firstcall, finalcheck)
         end
     end
     if Groups.ProcessStart and now > Groups.ProcessStart + 15 then
-        Groups.Processing = false
+        SetProcessing(false)
         return -- backstop: probably looping
     end
 
@@ -349,7 +387,7 @@ function GS:ArrangeGroups(firstcall, finalcheck)
                 end
             end
             if allprocessed then
-                Groups.Processing = false
+                SetProcessing(false)
                 return
             end
         else
@@ -464,17 +502,13 @@ function GS:Cancel()
         KE:Print("Group Sort: nothing running.")
         return
     end
-    Groups.Processing = false
+    SetProcessing(false)
     Groups.ProcessStart = nil
     lastRun = nil -- do not also make them sit out the run cooldown
     KE:Print("Group Sort: cancelled.")
 end
 
 function GS:Run(mode) -- "default" | "split" | "odds"
-    -- Whether spec broadcasts have already been arriving decides whether the
-    -- sort can start immediately -- see the delay at the end of this function.
-    local hadSpecData = libSpecRegistered
-    RegisterLibSpec()
     -- Hard combat gate: the buttons grey out too, but keybinds, macros, and
     -- edge-of-combat clicks all land here.
     if _G.InCombatLockdown() or UnitAffectingCombat("player") then
@@ -507,26 +541,13 @@ function GS:Run(mode) -- "default" | "split" | "odds"
     difficultyID = (instanceType == "raid" and difficultyID) or GetRaidDifficultyID() or 0
     if difficultyID == 16 then Flex = false end
     if difficultyID == 233 then MythicFlex = true end
-    -- RegisterLibSpec runs at login, so by the time anyone presses a button
-    -- the data has normally been arriving all session. The fixed 2s pause was
-    -- why a press looked like it did nothing: every refusal prints, so
-    -- silence meant the sort was accepted and sitting in a timer.
+    -- Registration follows the refusals so a refused press subscribes to
+    -- nothing; the 2 s pause is for a press that registered just now.
+    local hadSpecData = libSpecRegistered
+    RegisterLibSpec()
     if hadSpecData then
         self:SortGroup(Flex, default, odds, MythicFlex)
     else
         _G.C_Timer.After(2, function() self:SortGroup(Flex, default, odds, MythicFlex) end)
     end
 end
-
--- --- Continuation driver -----------------------------------------------------
-
-local driver = CreateFrame("Frame")
-driver:RegisterEvent("GROUP_ROSTER_UPDATE")
-driver:RegisterEvent("PLAYER_LOGIN")
-driver:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_LOGIN" then
-        RegisterLibSpec() -- start collecting broadcasts early
-    elseif Groups.Processing then
-        GS:ArrangeGroups()
-    end
-end)

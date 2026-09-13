@@ -1434,6 +1434,7 @@ end
 
 function RC:OnEnable()
     self:UpdateDB()
+    if KE.GroupSort then KE.GroupSort:Start() end
 
     if InCombatLockdown() then
         self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
@@ -1460,6 +1461,7 @@ function RC:OnCombatEnd()
 end
 
 function RC:OnDisable()
+    if KE.GroupSort then KE.GroupSort:Stop() end
     self:UnregisterEvent("GROUP_ROSTER_UPDATE")
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     if not self.setup then return end

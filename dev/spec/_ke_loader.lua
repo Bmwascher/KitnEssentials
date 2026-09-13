@@ -2055,18 +2055,18 @@ end
 -- Modules/QoL/GroupSort.lua. The module captures its WoW API functions as
 -- file-scope locals at load, so every mock must be on _G BEFORE
 -- helpers.loadModule runs -- setting one afterwards leaves the module
--- holding a stale upvalue. installMock(overrides, {}) is required even though
--- no defaults are needed: the continuation driver calls CreateFrame at file
--- scope.
+-- holding a stale upvalue. installMock(overrides, {}) is required to seed
+-- the captured globals; the driver frame itself is created lazily.
 -- Groups (engine state) is reached through GS.GetSortedGroup's upvalues;
 -- writing Processing/ProcessStart into it drives the in-progress refusal
 -- rule. Returns GS, KE, seams.
 function L.loadGroupSort(overrides)
     overrides = overrides or {}
-    -- The continuation driver calls CreateFrame at FILE SCOPE, so
-    -- installMock cannot be skipped.
+    -- The module reads WoW globals at file scope, so installMock cannot
+    -- be skipped; the driver frame itself is created lazily.
     installMock(overrides, {})
     helpers.installAddonShim()
+    _G.KitnEssentials:NewModule("RaidControl").IsEnabled = function() return false end
     -- Every one of these is captured as a file-scope local at load, so it has
     -- to exist on _G BEFORE loadModule. Setting any of them afterwards leaves
     -- the module holding a stale upvalue.
