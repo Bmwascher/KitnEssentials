@@ -864,6 +864,7 @@ function MPT:OnDisable()
     -- the REAL run table. (PreviewManager won't re-show: ShowSectionPreviews
     -- gates on db.Enabled; sibling Enable-toggle-kills-preview pattern.)
     if self.isPreview then self:HidePreview() end
+    if self.ClearPullEstimate then self:ClearPullEstimate() end
     -- Pending refresh timer must not render on a disabled module; ticker must detach.
     self:StopTimerLoop()
     self._refreshQueued = nil
@@ -1085,6 +1086,7 @@ function MPT:OnTimerTick()
     self:OnDeathCountUpdated()
     self:UpdateForces()
     self:UpdateObjectives()
+    if self.SyncPullEstimate then self:SyncPullEstimate() end  -- 1 Hz reconciliation fallback
     self:NotifyRefresh()
 end
 
@@ -1247,6 +1249,7 @@ function MPT:SCENARIO_CRITERIA_UPDATE()
     if not self.run.active then return end
     self:UpdateForces()
     self:UpdateObjectives()
+    if self.SyncPullEstimate then self:SyncPullEstimate() end  -- credited count moved: revalidate the estimate
     -- Completion salvage net (deferred): if everything just finished but
     -- CHALLENGE_MODE_COMPLETED never arrives, complete from cached state 2s
     -- later. The real event wins the race and carries the authoritative ms
@@ -1478,6 +1481,7 @@ function MPT:StartRun()
     self:OnTimerTick()                    -- prime the display immediately
     self:ApplyTrackerVisibility()         -- QoL hide (combat-guarded, Step 5)
     self:SetOverlayActive(true)           -- activate nameplate % overlay for this run
+    if self.SyncPullEstimate then self:SyncPullEstimate() end
     self:NotifyRefresh()
 end
 
@@ -1552,6 +1556,7 @@ function MPT:CompleteRun()
     MPT.db._activeRunDeaths = nil  -- ditto for the reload-survival death log
     self:CommitSplits()   -- persist improved per-boss + overall times to the global store
     self:SetOverlayActive(false)          -- release nameplate texts; run is over
+    if self.ClearPullEstimate then self:ClearPullEstimate() end
     self:NotifyRefresh()
 end
 
@@ -1614,6 +1619,7 @@ function MPT:ResetRun(keepCaches)
     self:StopTimerLoop()
     self:ApplyTrackerVisibility()
     self:SetOverlayActive(false)          -- release nameplate texts; run cancelled/reset
+    if self.ClearPullEstimate then self:ClearPullEstimate() end
     self:NotifyRefresh()
 end
 
