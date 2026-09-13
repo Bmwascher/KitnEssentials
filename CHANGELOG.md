@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.15
+
+### Skinning
+- Addon option trees (BigWigs, Details, WeakAuras) keep their own row
+  colouring: category rows gold, child rows smaller, disabled rows grey
+- Option tabs squeezed onto a second row no longer overlap
+- The already-known marker on quest rewards sits inside the reward button
+
+---
+
 ## v4.6.14
 
 ### Skinning
