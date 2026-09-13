@@ -146,6 +146,25 @@ local function newFixture()
     _G.LFGListApplicationDialog.SignUpButton.IsEnabled = function() return true end
     _G.LFGListApplicationDialog.SignUpButton.Click = function() record("LFGListSignUpButton", "Click") end
 
+    -- The role check popup, its three role buttons and Accept. Each role
+    -- button carries a checkButton spy because the handler indexes it.
+    local lfgRoles = { true, false, false, false }
+    _G.LFDRoleCheckPopup = newSpy("LFDRoleCheckPopup")
+    for _, role in ipairs({ "Tank", "Healer", "DPS" }) do
+        local button = newSpy("LFDRoleCheckPopupRoleButton" .. role)
+        local checkLabel = "LFDRoleCheckPopupRoleButton" .. role .. ".check"
+        button.checkButton = newSpy(checkLabel)
+        button.checkButton.IsEnabled = function() return true end
+        -- The generic spy drops arguments; the ticked value is what the case reads.
+        button.checkButton.SetChecked = function(_, v) record(checkLabel, "SetChecked", v) end
+        _G["LFDRoleCheckPopupRoleButton" .. role] = button
+    end
+    _G.LFDRoleCheckPopupAcceptButton = newSpy("LFDRoleCheckPopupAcceptButton")
+    _G.GetLFGRoles = function() return lfgRoles[1], lfgRoles[2], lfgRoles[3], lfgRoles[4] end
+    -- Sixth return is the battleground flag the handler reads.
+    local bgRoleCheck = false
+    _G.GetLFGRoleUpdate = function() return true, 1, 1, nil, nil, bgRoleCheck end
+
     -- One held key at a time. These three must be assigned before the module
     -- loads: Automation captures IsShiftKeyDown as a file-scope upvalue, so a
     -- later assignment would not reach it. Each reads the global at call time,
@@ -245,6 +264,8 @@ local function newFixture()
         createCount = function() return createCount end,
         originalErrHandler = originalErrHandler,
         clearLedger = function() for i = #ledger, 1, -1 do ledger[i] = nil end end,
+        setLFGRoles = function(t) lfgRoles = t end,
+        setBGRoleCheck = function(v) bgRoleCheck = v end,
         findFrameCalls = function(label, method)
             local n = 0
             for _, e in ipairs(ledger) do
@@ -1612,4 +1633,52 @@ describe("Quick Signup skip key", function()
         onShow(_G.LFGListApplicationDialog)
         assert.equals(0, fx.findFrameCalls("LFGListSignUpButton", "Click"))
     end)
+end)
+
+describe("Automation auto role check", function()
+    -- The refusal was KE:IsFullyRestricted, which is up for a whole dungeon
+    -- run; the handler reads no unit data, so the setting is the only gate.
+    local cases = {
+        { label = "answers under full restriction with the setting on",
+          restricted = true, setting = true, roles = { true, false, true, false },
+          clicks = 1, ticked = { Tank = false, Healer = true, DPS = false } },
+        { label = "leaves the pre-tick alone when no Group Finder role is set",
+          restricted = true, setting = true, roles = { true, false, false, false },
+          clicks = 1, ticked = {} },
+        { label = "leaves a battleground check's PvP roles alone",
+          restricted = true, setting = true, roles = { true, false, true, false }, bg = true,
+          clicks = 1, ticked = {} },
+        { label = "refuses with the setting off",
+          restricted = false, setting = false, roles = { true, false, true, false },
+          clicks = 0, ticked = {} },
+    }
+
+    for _, case in ipairs(cases) do
+        it(case.label, function()
+            local fx = newFixture()
+            local AU = fx.AU
+            AU.db = { Enabled = true, AutoRoleCheck = true }
+            fx.setCombat(false)
+            AU:ApplySettings()
+            local onShow = _G.LFDRoleCheckPopup:GetScript("OnShow")
+            assert.is_function(onShow)
+
+            AU.db.AutoRoleCheck = case.setting
+            fx.KE.IsFullyRestricted = function() return case.restricted end
+            fx.setLFGRoles(case.roles)
+            fx.setBGRoleCheck(case.bg == true)
+            fx.clearLedger()
+            onShow()
+
+            assert.equals(case.clicks, fx.findFrameCalls("LFDRoleCheckPopupAcceptButton", "Click"))
+            for _, role in ipairs({ "Tank", "Healer", "DPS" }) do
+                local label = "LFDRoleCheckPopupRoleButton" .. role .. ".check"
+                if case.ticked[role] == nil then
+                    assert.equals(0, fx.findFrameCalls(label, "SetChecked"))
+                else
+                    assert.equals(case.ticked[role], fx.lastArg(label, "SetChecked"))
+                end
+            end
+        end)
+    end
 end)

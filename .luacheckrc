@@ -486,7 +486,7 @@ read_globals = {
     "LFDRoleCheckPopup", "LFDRoleCheckPopupAcceptButton",
     "LFDRoleCheckPopupRoleButtonTank", "LFDRoleCheckPopupRoleButtonHealer", "LFDRoleCheckPopupRoleButtonDPS",
     "LFGListFrame",
-    "LFGListSearchPanelUtil_CanSelectResult", "LFGListSearchPanel_SignUp",
+    "LFGListSearchPanelUtil_CanSelectResult", "LFGListSearchPanel_SignUp", "GetLFGRoles", "GetLFGRoleUpdate",
     "ItemSocketingFrame",
     "MainMenuMicroButton",
     "MonthlyActivitiesObjectiveTracker",
