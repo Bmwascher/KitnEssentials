@@ -504,7 +504,7 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    rowFo1:AddWidget(showForcesCheck, 0.5)
+    rowFo1:AddWidget(showForcesCheck, 1 / 3)
     manager:Register(showForcesCheck, "all")
     -- Bar-only visibility: the % text survives as a stacked row (all-text
     -- HUD); Placement is moot while hidden (gated via the forcesBar group).
@@ -515,8 +515,20 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
-    rowFo1:AddWidget(forcesBarCheck, 0.5)
+    rowFo1:AddWidget(forcesBarCheck, 1 / 3)
     manager:Register(forcesBarCheck, "all")
+    local pullCheck = GUIFrame:CreateCheckbox(rowFo1, "Show Pull Estimate", {
+        value = db.ShowPullOverlay == true,
+        tooltip = "Adds a gray segment after the credited forces and a (+count / percent) label "
+            .. "for the enemies you have pulled but not yet killed. Only enemies with a visible "
+            .. "nameplate are counted, so the estimate shrinks when plates leave the screen.",
+        callback = function(checked)
+            db.ShowPullOverlay = checked; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    rowFo1:AddWidget(pullCheck, 1 / 3)
+    manager:Register(pullCheck, "forcesOn")
     forcesCard:AddRow(rowFo1, Theme.rowHeight)
 
     local rowFo2 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
@@ -545,21 +557,6 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     rowFo2:AddWidget(bracketDrop, 1 / 3)
     manager:Register(bracketDrop, "forcesBrackets")
     forcesCard:AddRow(rowFo2, Theme.rowHeight)
-    local rowFoPull = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
-    local pullCheck = GUIFrame:CreateCheckbox(rowFoPull, "Show Pull Estimate", {
-        value = db.ShowPullOverlay == true,
-        tooltip = "Adds a gray segment after the credited forces and a (+count / percent) label "
-            .. "for the enemies you have pulled but not yet killed. Only enemies with a visible "
-            .. "nameplate are counted, so the estimate shrinks when plates leave the screen.",
-        callback = function(checked)
-            db.ShowPullOverlay = checked; ApplySettings()
-            manager:UpdateAll(db.Enabled ~= false)
-        end,
-    })
-    rowFoPull:AddWidget(pullCheck, 1)
-    manager:Register(pullCheck, "forcesOn")
-    forcesCard:AddRow(rowFoPull, Theme.rowHeight)
-
     local rowFo3 = GUIFrame:CreateRow(forcesCard.content, Theme.rowHeight)
     local customBox = GUIFrame:CreateEditBox(rowFo3, "Custom Format", {
         value = db.ForcesCustomFormat or ":count:/:totalcount: :percent:",
