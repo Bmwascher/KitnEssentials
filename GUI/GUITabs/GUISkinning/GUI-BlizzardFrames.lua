@@ -90,7 +90,8 @@ local FRAME_SKINS = {
     { key = "GenericTrait",             text = "Generic Traits" },
     { key = "GlobalFonts",              text = "Blizzard Fonts",
       blockedBy = function()
-          return KE.Skins and KE.Skins.GlobalFontsBlockedBy and KE.Skins.GlobalFontsBlockedBy()
+          if not (KE.Skins and KE.Skins.GlobalFontsBlockedBy) then return nil end
+          return KE.Skins.GlobalFontsBlockedBy()
       end,
       isOn = function()
           local db = GetDB()
@@ -237,10 +238,11 @@ local function AddonInstalled(entry)
     return C_AddOns.DoesAddOnExist(entry.addon)
 end
 
--- The addon whose presence makes this skin stand down, or nil. Only rows
--- with a `blockedBy` accessor can answer; the skin itself already refuses.
+-- The addon this skin stands down for and why, or nil. Only rows with a
+-- `blockedBy` accessor can answer; the skin itself already refuses.
 local function BlockedBy(entry)
-    return entry.blockedBy and entry.blockedBy() or nil
+    if not entry.blockedBy then return nil end
+    return entry.blockedBy()
 end
 
 -- True when at least one row in `entries` is covered by EllesmereUI. Keyed on the
@@ -310,7 +312,8 @@ local function ResolveRow(entry)
         tooltip = "EllesmereUI already skins this window, so KitnEssentials leaves it alone. Turn EllesmereUI's window skin off to use this one."
         disabled = true
     elseif BlockedBy(entry) then
-        tooltip = BlockedBy(entry) .. " breaks once these fonts are rewritten, so KitnEssentials leaves them alone while it is installed. The setting is kept."
+        local blocker, why = BlockedBy(entry)
+        tooltip = blocker .. " " .. why .. " The setting is kept."
         disabled = true
     elseif not AddonInstalled(entry) then
         -- Addon Skins keeps its per-row text: that list is two columns wide, at
@@ -513,9 +516,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
         card:AddNote("Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
     end
     for _, entry in ipairs(FRAME_SKINS) do
-        local blocker = BlockedBy(entry)
+        local blocker, why = BlockedBy(entry)
         if blocker then
-            card:AddNote(entry.text .. " is greyed while " .. blocker .. " is installed; that addon breaks once these fonts are rewritten.")
+            card:AddNote(entry.text .. " is greyed: " .. blocker .. " " .. why)
         end
     end
 

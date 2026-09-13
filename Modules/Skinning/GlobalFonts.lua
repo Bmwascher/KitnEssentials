@@ -70,12 +70,17 @@ local function Restore()
 end
 S.RestoreGlobalFonts = Restore
 
--- Platynator's nameplate setup breaks once this sweep has rewritten
--- GameFontNormal. Safe to decide here: Apply runs at module enable, after
--- every non-load-on-demand addon is present.
+-- The addon this sweep yields to and why, for the GUI row. Decided here
+-- because Apply runs at module enable, after every non-load-on-demand addon
+-- has loaded its saved variables. EllesmereUI's saved table is read directly:
+-- its accessor creates the table when absent.
 function S.GlobalFontsBlockedBy()
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Platynator") then
-        return "Platynator"
+        return "Platynator", "breaks once these fonts are rewritten, so KitnEssentials leaves them alone while it is installed."
+    end
+    local fonts = _G.EllesmereUIDB and _G.EllesmereUIDB.fonts
+    if fonts and fonts.applyToAllGameText then
+        return "EllesmereUI", "rewrites every stock font at login while its Apply to All Game Text is on, which would override this. Turn that off to use this row."
     end
     return nil
 end
