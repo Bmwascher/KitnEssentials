@@ -34,7 +34,6 @@ local type = type
 
 local GetProgress = C_ScenarioInfo and C_ScenarioInfo.GetUnitCriteriaProgressValues
 
--- Ten builds per second at most.
 local BUILD_INTERVAL = 0.1
 
 ---------------------------------------------------------------------------------
@@ -88,7 +87,6 @@ local function PlateToken(plate)
     if type(unit) == "string" then return unit end
 end
 
--- Fills `out` with the admitted, deduplicated nameplate tokens.
 local function CollectPullTokens(out)
     wipe(out)
     wipe(seen)

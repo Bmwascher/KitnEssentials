@@ -1927,7 +1927,7 @@ function MPT:HidePreview()
     self.isPreview = false
     self.run = self._savedRun
     self._savedRun = nil
-    self:ClearPullDisplay()   -- drop the preview fixture
+    self:ClearPullDisplay()
     -- Restore the tracker we hid for the preview. ApplyTrackerVisibility keeps
     -- it hidden when a live run still wants it (mid-key GUI close, toggle on).
     self:ApplyTrackerVisibility()
