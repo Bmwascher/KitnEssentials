@@ -11,9 +11,10 @@
 --     GameTooltip_SetDefaultAnchor hook for anchoring,
 --     NineSlice:SetAlpha(0) + own backdrop for the style, global font
 --     objects for text, statusbar height/texture/text.
--- Near-zero idle cost: every code path is a tooltip event or hook. No
--- OnUpdate; the timers are a 0.1s GameTooltip restyle tick while the module
--- is enabled and a single next-frame CVar re-assert per zone-in.
+-- Near-zero idle cost: every code path is a tooltip event or hook. The
+-- restyle runs from an owned child frame of GameTooltip whose OnUpdate
+-- dispatches only while the tooltip is shown and only while the module is
+-- enabled; the one timer is a next-frame CVar re-assert per zone-in.
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
@@ -55,6 +56,8 @@ local GetPetActionInfo = GetPetActionInfo
 local CreateColor = CreateColor
 local type = type
 local S = KE.Skins
+
+local RESTYLE_INTERVAL = 0.1
 
 local function DebugIsSecret(value)
     return KE.IsSecretValue and KE:IsSecretValue(value) and true or false
@@ -199,7 +202,7 @@ end
 -- addon code on that path taints the widget layout, which then dies on a
 -- secret number. Bailing out early does not help; running is the taint.
 -- Styling happens at enable, on OnLoad for new tooltips, and from the
--- restyle ticker.
+-- restyle driver.
 --
 -- The styling is idempotent -- the same textures with the same colours
 -- every time -- so a repeat call after the first is free.
@@ -1223,10 +1226,16 @@ function TT:OnEnable()
     -- answered too.
     self:RegisterEvent("PLAYER_ENTERING_WORLD")
 
-    if not self._restyleTicker then
-        self._restyleTicker = C_Timer.NewTicker(0.1, function()
-            local tt = _G.GameTooltip
-            if tt and tt:IsShown() then TT:StyleTooltip(tt) end
+    if _G.GameTooltip then
+        if not self.restyleDriver then
+            self.restyleDriver = CreateFrame("Frame", nil, _G.GameTooltip)
+        end
+        local restyleElapsed = 0
+        self.restyleDriver:SetScript("OnUpdate", function(_, elapsed)
+            restyleElapsed = restyleElapsed + elapsed
+            if restyleElapsed < RESTYLE_INTERVAL then return end
+            restyleElapsed = 0
+            TT:StyleTooltip(_G.GameTooltip)
         end)
     end
 
@@ -1300,10 +1309,7 @@ function TT:OnDisable()
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     self:SyncAuraSpellIDCVar(true)
     self:SyncAuraTooltip(true)
-    if self._restyleTicker then
-        self._restyleTicker:Cancel()
-        self._restyleTicker = nil
-    end
+    if self.restyleDriver then self.restyleDriver:SetScript("OnUpdate", nil) end
     -- The anchor frame survives, so the guard has to be cleared or a later
     -- enable would skip registration and leave the tool holding a dead key.
     if KE.EditMode then KE.EditMode:UnregisterElement("TooltipAnchor") end
