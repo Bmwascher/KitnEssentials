@@ -182,6 +182,58 @@ describe("ChatMessageHandler Battle.net player link", function()
     end)
 end)
 
+describe("ChatMessageHandler community channel tag", function()
+    -- MessageFormatter is reached with a plain frame table, as the Battle.net
+    -- link cases do; no chat-frame fake is needed. The mock WrapString joins
+    -- plain strings, which is enough to see WHICH join the guard picked; real
+    -- secret semantics are in-game only.
+    local SECRET = "SECRET"
+    local frame, info, wrapCalls
+
+    before_each(function()
+        frame = { defaultLanguage = "Common" }
+        info = {}
+        wrapCalls = 0
+        _G.CHAT_CHANNEL_GET = "%s: "
+        _G.ChatFrameUtil = { ResolvePrefixedChannelName = function(name) return "Resolved " .. name end }
+        _G.C_StringUtil = {
+            WrapString = function(body, prefix, suffix)
+                wrapCalls = wrapCalls + 1
+                return (prefix or "") .. body .. (suffix or "")
+            end,
+        }
+    end)
+
+    after_each(function()
+        _G.CHAT_CHANNEL_GET = nil
+        _G.ChatFrameUtil = nil
+        _G.C_StringUtil = nil
+    end)
+
+    local function formatBody(name, id)
+        local KE = L.loadChatMessageHandler({ issecretvalue = function(v) return v == SECRET end })
+        return KE.ChatMessageHandler:MessageFormatter(frame, info, "CHANNEL", "CHANNEL", "target", 1, "Godling",
+            "hello", "Godling", nil, name, nil, nil, nil, id, nil, nil, 11, nil, nil, nil, nil, nil, nil)
+    end
+
+    -- The tag, when built, is the line's prefix; the sender link follows it.
+    local cases = {
+        { "safe name and id go through the resolver", "Guild Chat", 5,
+          "|Hchannel:channel:5|h[Resolved Guild Chat]|h |Hplayer:", 0 },
+        { "secret name with a safe id is joined C-side, unresolved", SECRET, 5,
+          "|Hchannel:channel:5|h[SECRET]|h |Hplayer:", 2 },
+        { "secret id prints the body without a tag", "Guild Chat", SECRET,
+          "|Hplayer:", 0 },
+    }
+    for _, c in ipairs(cases) do
+        it(c[1], function()
+            local body = formatBody(c[2], c[3])
+            assert.are.equal(c[4], body:sub(1, #c[4]), body)
+            assert.are.equal(c[5], wrapCalls)
+        end)
+    end
+end)
+
 describe("ChatMessageHandler body highlight", function()
     local KE, CMH, played
 
