@@ -5,7 +5,6 @@ local _G = _G
 local mixinHooked = false
 
 local WHITE = "Interface\\Buttons\\WHITE8x8"
-local BRAND = S.palette.brand
 
 local function HideDecorations(frame)
     if frame.NineSlice and frame.NineSlice.SetAlpha then frame.NineSlice:SetAlpha(0) end
@@ -29,11 +28,11 @@ local function HideDecorations(frame)
     end
 end
 
-local function FlattenSelection(frame, alpha, anchor)
+local function FlattenSelection(frame, anchor)
     if frame.Selection then
         if frame.Selection.SetAtlas then frame.Selection:SetAtlas(nil) end
         frame.Selection:SetTexture(WHITE)
-        frame.Selection:SetVertexColor(BRAND[1], BRAND[2], BRAND[3], alpha or 0.18)
+        S.PaintBrand(frame.Selection, "SetVertexColor", S.palette.selectedA)
         if anchor then
             frame.Selection:ClearAllPoints()
             frame.Selection:SetPoint("TOPLEFT", anchor, "TOPLEFT", 1, -1)
@@ -94,12 +93,12 @@ local function StyleListEntry(child)
         end
         child.aeRow = true
     end
-    FlattenSelection(child, 0.18, S.GetBackdrop(child))
+    FlattenSelection(child, S.GetBackdrop(child))
 end
 
 local function StyleMemberRow(child)
     if not child then return end
-    FlattenSelection(child, 0.18)
+    FlattenSelection(child)
     if child.aeMemberRow then return end
 
     S.FontStringsDeep(child, 12, "OUTLINE", 2)

@@ -100,7 +100,7 @@ local function Skin()
         if step.icon then step.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
 
         if step.selectedTex then
-            step.selectedTex:SetColorTexture(S.palette.hover[1], S.palette.hover[2], S.palette.hover[3], S.palette.hover[4])
+            S.PaintBrand(step.selectedTex, "SetColorTexture", S.palette.selectedA)
             if sbd then
                 step.selectedTex:ClearAllPoints()
                 step.selectedTex:SetPoint("TOPLEFT", sbd, "TOPLEFT", 1, -1)

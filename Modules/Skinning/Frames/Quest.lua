@@ -199,14 +199,13 @@ local function EnsureSelectionOverlay(btn)
 
     local bd = S.Backdrop(f, 0, true)
     if bd then
-        bd:SetBackdropBorderColor(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3], 1)
+        S.PaintBrand(bd, "SetBackdropBorderColor", 1)
     end
 
     local fill = f:CreateTexture(nil, "BACKGROUND")
     fill:SetPoint("TOPLEFT", f, "TOPLEFT", 1, -1)
     fill:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
-    fill:SetColorTexture(S.palette.brand[1], S.palette.brand[2], S.palette.brand[3],
-        S.palette.brandRestA)
+    S.PaintBrand(fill, "SetColorTexture", S.palette.selectedA)
 
     f:Hide()
     d.keSelection = f
