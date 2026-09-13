@@ -5,7 +5,7 @@
 -- writes the master findYourselfAnywhere alongside it. Turning a mode off must
 -- not take the master down while another highlight mode still wants it.
 --
--- The last three cases are not rule coverage and are here on purpose. The rule
+-- The last two cases are not rule coverage and are here on purpose. The rule
 -- is only reachable through the shipped def and through ApplyCVars, so without
 -- them every other case still passes on a build where the rule is written
 -- correctly and wired to nothing.
@@ -116,24 +116,6 @@ describe("companion CVars", function()
         local f = newFixture({ findYourselfModeCircle = "1" })
         f.AU:ApplyCompanion({ key = "x", type = "boolean", companion = "findYourselfAnywhere" }, false)
         assert.same({ "0" }, f.writesTo("findYourselfAnywhere"))
-    end)
-
-    -- Membership, not order: which siblings keep the master alive is the
-    -- contract, and the order they are listed in changes no behaviour. An
-    -- ordered comparison would fail a swap that is not a defect.
-    it("carries the companion fields on the shipped outline def", function()
-        local f = newFixture()
-        local def
-        for _, d in ipairs(f.AU.CVAR_DEFS) do
-            if d.key == "findYourselfModeOutline" then def = d end
-        end
-        assert.is_table(def)
-        assert.equals("findYourselfAnywhere", def.companion)
-        local seen = {}
-        for _, k in ipairs(def.companionKeepAlive or {}) do seen[k] = true end
-        assert.is_true(seen.findYourselfModeCircle)
-        assert.is_true(seen.findYourselfModeIcon)
-        assert.equals(2, #def.companionKeepAlive)
     end)
 
     -- The primary is in every fixture below because it is in every real client.

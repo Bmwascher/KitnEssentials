@@ -15,13 +15,13 @@ describe("KE:GetAnchorFractions", function()
         BOTTOMLEFT  = { 0,   0   }, BOTTOM = { 0.5, 0   }, BOTTOMRIGHT = { 1, 0   },
     }
 
-    for point, want in pairs(POINTS) do
-        it("places " .. point, function()
+    it("places every named anchor point at its fraction", function()
+        for point, want in pairs(POINTS) do
             local x, y = KE:GetAnchorFractions(point)
-            assert.equals(want[1], x)
-            assert.equals(want[2], y)
-        end)
-    end
+            assert.equals(want[1], x, point)
+            assert.equals(want[2], y, point)
+        end
+    end)
 
     -- Saved profiles predate the current dropdowns and can hold anything. A
     -- throw here would take the whole edit-mode overlay down with it.
