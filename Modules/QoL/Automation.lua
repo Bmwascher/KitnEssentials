@@ -174,6 +174,12 @@ AU.CVAR_SLIDER_DEFS = {
         type = "number",
         min = 0, max = 3, step = 1,
     },
+    {
+        key = "WorldTextScale_v2",
+        label = "Floating Combat Text: Size",
+        type = "number",
+        min = 0.5, max = 2, step = 0.05,
+    },
 }
 
 ---------------------------------------------------------------------------------

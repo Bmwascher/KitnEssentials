@@ -70,6 +70,40 @@ local function AddCVarCheckbox(ctx, card, def, existingRow, widthPct)
     end
 end
 
+-- The slider twin of AddCVarCheckbox: the write goes to the client directly
+-- rather than through ApplyCVars, which would re-walk every def for one
+-- value.
+local function AddCVarSlider(ctx, card, def, existingRow, widthPct)
+    local db, AU = ctx.db, ctx.AU
+    local key = def.key
+    local row = existingRow or GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    local slider = GUIFrame:CreateSlider(row, def.label, {
+        min = def.min, max = def.max, step = def.step,
+        value = AU and AU:GetLiveCVar(def) or 0,
+        callback = function(val)
+            db[key] = val
+            if AU then
+                AU._suppressCVarUpdate = true
+                C_CVar.SetCVar(key, tostring(val))
+                AU._suppressCVarUpdate = false
+            end
+        end,
+    })
+    row:AddWidget(slider, widthPct or 1)
+    ctx.manager:Register(slider, "all")
+    if not existingRow then
+        card:AddRow(row, Theme.rowHeight)
+    end
+end
+
+-- The size slider is a number def, so it lives with the other sliders on
+-- the module and is drawn here with the toggles it scales.
+local function IsFloatingCombatTextDef(def)
+    return def.key:find("^floatingCombatText") ~= nil
+        or def.key == "enableFloatingCombatText"
+        or def.key == "WorldTextScale_v2"
+end
+
 -- The rule itself lives on the module so it can be tested; this only covers
 -- the page being built before Automation exists.
 local function LiveDefs(ctx, defs, match)
@@ -112,14 +146,16 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 2: Floating Combat Text
     ----------------------------------------------------------------
-    local ftDefs = LiveDefs(ctx, AU and AU.CVAR_DEFS or {}, function(def)
-        return def.key:find("^floatingCombatText") ~= nil or def.key == "enableFloatingCombatText"
-    end)
-    if #ftDefs > 0 then
+    local ftDefs = LiveDefs(ctx, AU and AU.CVAR_DEFS or {}, IsFloatingCombatTextDef)
+    local ftSliderDefs = LiveDefs(ctx, AU and AU.CVAR_SLIDER_DEFS or {}, IsFloatingCombatTextDef)
+    if #ftDefs + #ftSliderDefs > 0 then
         local card2 = GUIFrame:CreateCard(scrollChild, "Floating Combat Text", yOffset)
         manager:Register(card2, "all")
         for _, def in ipairs(ftDefs) do
             AddCVarCheckbox(ctx, card2, def)
+        end
+        for _, def in ipairs(ftSliderDefs) do
+            AddCVarSlider(ctx, card2, def, nil, 0.5)
         end
         yOffset = card2:GetNextOffset()
     end
@@ -191,16 +227,15 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 6: Sliders
     ----------------------------------------------------------------
-    local sliderDefs = LiveDefs(ctx, AU and AU.CVAR_SLIDER_DEFS or {})
+    local sliderDefs = LiveDefs(ctx, AU and AU.CVAR_SLIDER_DEFS or {}, function(def)
+        return not IsFloatingCombatTextDef(def)
+    end)
     if #sliderDefs > 0 then
         local card6 = GUIFrame:CreateCard(scrollChild, "Sliders", yOffset)
         manager:Register(card6, "all")
 
         local currentSliderRow, currentSliderRowHeight
         for i, def in ipairs(sliderDefs) do
-            local key = def.key
-            local currentVal = AU:GetLiveCVar(def) or 0
-
             local isFirstInPair = (i % 2 == 1)
             local isLastDef = (i == #sliderDefs)
 
@@ -213,18 +248,7 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
                 currentSliderRow = GUIFrame:CreateRow(card6.content, currentSliderRowHeight)
             end
 
-            local slider = GUIFrame:CreateSlider(currentSliderRow, def.label, {
-                min = def.min, max = def.max, step = def.step,
-                value = currentVal,
-                callback = function(val)
-                    db[key] = val
-                    AU._suppressCVarUpdate = true
-                    C_CVar.SetCVar(key, tostring(val))
-                    AU._suppressCVarUpdate = false
-                end,
-            })
-            currentSliderRow:AddWidget(slider, 0.5)
-            manager:Register(slider, "all")
+            AddCVarSlider(ctx, card6, def, currentSliderRow, 0.5)
 
             if not isFirstInPair or isLastDef then
                 if isLastDef then
