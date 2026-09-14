@@ -121,7 +121,7 @@ read_globals = {
     "ShowUIPanel", "HideUIPanel",
     "WorldFrame",
     "GetMouseFoci", "GetMouseFocus",
-    "GetPhysicalScreenSize", "GetCursorPosition",
+    "GetPhysicalScreenSize", "GetCursorPosition", "GetScreenWidth", "GetScreenHeight",
     "RunNextFrame",
     "IsModifierKeyDown",
     "IsSecureCmd",

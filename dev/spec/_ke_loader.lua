@@ -1899,7 +1899,8 @@ end
 -- before helpers.loadModule -- reusing wowStrsplit above (already
 -- delimiter-first) rather than adding a second local of the same name.
 -- Returns MF, KE, seams (seams.getFrame, seams.blizzardFrames,
--- seams.blizzardFramesOnDemand, seams.disabled, seams.modifierHeld).
+-- seams.blizzardFramesOnDemand, seams.disabled, seams.modifierHeld,
+-- seams.dragPath, seams.secureDrag).
 function L.loadMoveFrames(overrides)
     overrides = overrides or {}
     local modules = helpers.installAddonShim()
@@ -1925,6 +1926,8 @@ function L.loadMoveFrames(overrides)
         blizzardFramesOnDemand = findUpvalue(MF.OnEnable, "BlizzardFramesOnDemand"),
         disabled = findUpvalue(MF.SetMovable, "disabled"),
         modifierHeld = findUpvalue(MF.Frame_StartMoving, "ModifierHeld"),
+        dragPath = findUpvalue(MF.Frame_StartMoving, "DragPath"),
+        secureDrag = findUpvalue(MF.SetMovable, "secureDrag"),
     }
     return MF, KE, seams
 end

@@ -35,6 +35,8 @@ local table_insert = table.insert
 
 local InCombatLockdown, RunNextFrame = InCombatLockdown, RunNextFrame
 local IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown = IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown
+local GetCursorPosition, GetScreenWidth, GetScreenHeight = GetCursorPosition, GetScreenWidth, GetScreenHeight
+local CreateFrame, UIParent = CreateFrame, UIParent
 
 -- tDeleteItem and GenerateFlatClosure are not in the project's luacheck
 -- read_globals allowlist; reach them through _G rather than widen it.
@@ -447,6 +449,7 @@ local BlizzardFramesOnDemand = {
 
 local disabled = {}    -- [frame] = true while movement is suppressed via SetMovable API
 local moveTargets = {} -- [handle frame] = frame that actually moves
+local secureDrag = {}  -- .frame plus press-time cursor and centre while a protected drag is live
 
 local MODIFIER_DOWN = {
     SHIFT = IsShiftKeyDown,
@@ -497,6 +500,95 @@ local function GetFrame(frameOrName)
     return frame
 end
 
+-- Secure drag ------------------------------------------------------------------
+-- Insecure SetMovable / EnableMouse / StartMoving / SetPoint on a protected
+-- frame taint its tree; PVEFrame is protected once its result list is up,
+-- and that list compares secret values. A protected frame is moved only by
+-- a secure snippet, which taints nothing, and never in combat.
+
+local function IsProtectedFrame(frame)
+    return frame and frame.IsProtected and frame:IsProtected() == true
+end
+
+-- Created on first use (the positioner by the first secure positioning
+-- request, the updater by the first protected drag), so nothing exists
+-- until one happens.
+local securePositioner, secureDragUpdater
+
+-- Parented to UIParent so self:GetParent() inside the snippet IS UIParent:
+-- every point it writes is relative to that.
+local function SecureSetPoint(frame, point, relPoint, x, y)
+    if InCombatLockdown() then return false end
+    if not securePositioner then
+        securePositioner = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate")
+    end
+    securePositioner:SetFrameRef("f", frame)
+    securePositioner:SetAttribute("p", point)
+    securePositioner:SetAttribute("rp", relPoint)
+    securePositioner:SetAttribute("x", x)
+    securePositioner:SetAttribute("y", y)
+    securePositioner:Execute([[
+        local f = self:GetFrameRef("f")
+        if not f then return end
+        f:ClearAllPoints()
+        f:SetPoint(self:GetAttribute("p"), self:GetParent(), self:GetAttribute("rp"), self:GetAttribute("x"), self:GetAttribute("y"))
+    ]])
+    return true
+end
+
+local function StopSecureDrag()
+    if secureDragUpdater then secureDragUpdater:Hide() end
+    secureDrag.frame = nil
+end
+
+-- Moves the dragged frame's centre by the cursor's travel since the press,
+-- clamped so the centre stays on screen (a protected frame never gets
+-- SetClampedToScreen). Shown only while a protected drag is live.
+local function SecureDrag_OnUpdate()
+    local frame = secureDrag.frame
+    if not frame or InCombatLockdown() then
+        StopSecureDrag()
+        return
+    end
+    local cx, cy = GetCursorPosition()
+    local es = frame:GetEffectiveScale()
+    local ues = UIParent:GetEffectiveScale()
+    local ucx, ucy = UIParent:GetCenter()
+    if not (es and ues and ucx and es > 0 and ues > 0) then return end
+    local sx = secureDrag.startX + (cx - secureDrag.cursorX)
+    local sy = secureDrag.startY + (cy - secureDrag.cursorY)
+    local sw, sh = GetScreenWidth() * ues, GetScreenHeight() * ues
+    if sx < 0 then sx = 0 elseif sx > sw then sx = sw end
+    if sy < 0 then sy = 0 elseif sy > sh then sy = sh end
+    SecureSetPoint(frame, "CENTER", "CENTER", (sx - ucx * ues) / es, (sy - ucy * ues) / es)
+end
+
+local function StartSecureDrag(frame)
+    if InCombatLockdown() then return end
+    local fcx, fcy = frame:GetCenter()
+    local es = frame:GetEffectiveScale()
+    if not (fcx and fcy and es) then return end
+    if not secureDragUpdater then
+        secureDragUpdater = CreateFrame("Frame")
+        secureDragUpdater:SetScript("OnUpdate", SecureDrag_OnUpdate)
+    end
+    secureDrag.frame = frame
+    secureDrag.cursorX, secureDrag.cursorY = GetCursorPosition()
+    secureDrag.startX, secureDrag.startY = fcx * es, fcy * es
+    secureDragUpdater:Show()
+end
+
+-- Which drag a press gets: "secure" for a protected frame out of combat,
+-- "native" for an ordinary frame, nil for none.
+local function DragPath(button, modifierHeld, protected, inCombat, isDisabled)
+    if button ~= "LeftButton" or isDisabled or not modifierHeld then return nil end
+    if protected then
+        if inCombat then return nil end
+        return "secure"
+    end
+    return "native"
+end
+
 -- Movement handlers ----------------------------------------------------------
 
 function MF:Frame_StartMoving(this, button)
@@ -504,8 +596,13 @@ function MF:Frame_StartMoving(this, button)
         return
     end
     local moveTarget = moveTargets[this]
-    if button == "LeftButton" and moveTarget and moveTarget:IsMovable() and not disabled[moveTarget]
-        and ModifierHeld(self.db and self.db.Modifier) then
+    if not moveTarget then return end
+    local protected = IsProtectedFrame(moveTarget) or IsProtectedFrame(this)
+    local path = DragPath(button, ModifierHeld(self.db and self.db.Modifier), protected,
+        InCombatLockdown(), disabled[moveTarget])
+    if path == "secure" then
+        StartSecureDrag(moveTarget)
+    elseif path == "native" and moveTarget:IsMovable() then
         moveTarget:StartMoving()
     end
 end
@@ -515,10 +612,14 @@ function MF:Frame_StopMoving(this, button)
         return
     end
     local moveTarget = moveTargets[this]
-    if button == "LeftButton" and moveTarget then
-        moveTarget:StopMovingOrSizing()
-        -- No position save here: moved frames are deliberately temporary.
+    if button ~= "LeftButton" or not moveTarget then return end
+    if IsProtectedFrame(moveTarget) or IsProtectedFrame(this) then
+        if secureDrag.frame == moveTarget then
+            StopSecureDrag()
+        end
+        return
     end
+    moveTarget:StopMovingOrSizing()
 end
 
 function MF:HandleFrame(this, bindTo)
@@ -532,19 +633,22 @@ function MF:HandleFrame(this, bindTo)
     if InCombatLockdown() and thisFrame:IsProtected() then
         AfterCombat(function()
             self:HandleFrame(this, bindTo)
-            -- No reposition-from-saved-coords pass: nothing is remembered.
         end)
         return
     end
 
-    thisFrame:SetMovable(true)
-    thisFrame:SetClampedToScreen(true)
-    thisFrame:EnableMouse(true)
-    moveTargets[thisFrame] = bindingTargetFrame or thisFrame
+    local target = bindingTargetFrame or thisFrame
+    -- Protection can arrive after this runs (PVEFrame gains it with its
+    -- result list); the drag handlers re-check it per press.
+    if not (IsProtectedFrame(thisFrame) or IsProtectedFrame(target)) then
+        thisFrame:SetMovable(true)
+        thisFrame:SetClampedToScreen(true)
+        thisFrame:EnableMouse(true)
+    end
+    moveTargets[thisFrame] = target
 
     self:SecureHookScript(thisFrame, "OnMouseDown", "Frame_StartMoving")
     self:SecureHookScript(thisFrame, "OnMouseUp", "Frame_StopMoving")
-    -- No SetPoint hook on the move target: that is persistence machinery.
 end
 
 function MF:HandleFramesWithTable(frameTable, parent)
@@ -596,7 +700,7 @@ function MF:HandleAddon(_, addon)
             end)
         elseif addon == "Blizzard_PlayerSpells" and _G.HeroTalentsSelectionDialog and _G.PlayerSpellsFrame then
             local function startStopMoving(frame)
-                if InCombatLockdown() and frame:IsProtected() then
+                if not MF.initialized or IsProtectedFrame(frame) then
                     return
                 end
                 local backup = frame:IsMovable()
@@ -636,6 +740,9 @@ function MF:SetMovable(frame, movable)
         return
     end
     disabled[targetFrame] = not movable
+    if not movable and secureDrag.frame == targetFrame then
+        StopSecureDrag()
+    end
 end
 
 -- Lifecycle -------------------------------------------------------------------
@@ -720,6 +827,7 @@ function MF:OnDisable()
     -- reload -- the GUI flags a reload prompt on disable.
     wipe(moveTargets)
     wipe(disabled)
+    StopSecureDrag()
     wipe(combatQueue)
     self.initialized = nil
     self.StopRunning = nil
