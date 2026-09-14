@@ -1038,7 +1038,6 @@ function DC:OnCastInterrupted(event, unit, ...)
     bar.castBar:SetValue(1)
     if bar.timeText then bar.timeText:SetText("") end
     if bar.spark then bar.spark:Hide() end
-    -- The cast is over: nothing left to time a kick against.
     H.HideKickMark(bar.kickMark)
     self:UpdateTargetGlow(bar)
     -- Nothing on the hold path hides these, so left alone the dead cast's
