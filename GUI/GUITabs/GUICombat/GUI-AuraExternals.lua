@@ -261,6 +261,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
                 unsupported = rows.pixelExtras,
                 autocast    = rows.autocast,
                 proc        = rows.proc,
+                border      = rows.border,
             }
         end,
         showSpeed = function() return true end,

@@ -61,6 +61,7 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
         scale = dbKeys.scale or "GlowScale",
         startAnim = dbKeys.startAnim or "GlowStartAnim",
         duration = dbKeys.duration or "GlowDuration",
+        pulse = dbKeys.pulse or "GlowPulse",
     }
 
     local widgets = {}
@@ -72,6 +73,7 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
         pixelExtras = {},
         autocast = {},
         proc = {},
+        border = {},
     }
     local freqSlider
 
@@ -234,6 +236,27 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     card:AddRow(rowProc, Theme.rowHeight)
     table_insert(typeOnlyRows.proc, rowProc)
 
+    local rowBorder = GUIFrame:CreateRow(card.content, Theme.rowHeight)
+    local borderThicknessSlider = GUIFrame:CreateSlider(rowBorder, "Thickness", {
+        min = 1,
+        max = 8,
+        step = 1,
+        value = db[keys.thickness],
+        callback = function(val) setValue(keys.thickness, val) end
+    })
+    rowBorder:AddWidget(borderThicknessSlider, 0.5)
+    table_insert(widgets, borderThicknessSlider)
+
+    local pulseCheck = GUIFrame:CreateCheckbox(rowBorder, "Pulse", {
+        value = db[keys.pulse] ~= false,
+        tooltip = "Fade the border in and out while it is up. Off, it is a steady outline.",
+        callback = function(checked) setValue(keys.pulse, checked) end
+    })
+    rowBorder:AddWidget(pulseCheck, 0.5)
+    table_insert(widgets, pulseCheck)
+    card:AddRow(rowBorder, Theme.rowHeight)
+    table_insert(typeOnlyRows.border, rowBorder)
+
     card.glowWidgets = widgets
     card.typeOnlyRows = typeOnlyRows
     card._initialized = false
@@ -241,6 +264,14 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
     function card.updateTypeVisibility()
         local glowType = resolveType(db[keys.type])
         local enabled = db[keys.enabled]
+
+        -- Two rows carry a Thickness slider over one key; the one hidden
+        -- while the other changed shows the saved value when it appears.
+        local thickness = db[keys.thickness]
+        if thickness ~= nil then
+            if thicknessSlider.SetValue then thicknessSlider:SetValue(thickness, true) end
+            if borderThicknessSlider.SetValue then borderThicknessSlider:SetValue(thickness, true) end
+        end
 
         local baseHeight = card.headerHeight + Theme.paddingSmall * 2
         local currentY = (Theme.rowHeight + Theme.paddingSmall) * 2 + Theme.rowHeightSeparator + Theme.paddingSmall
@@ -278,6 +309,7 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
                 pixel    = merged,
                 autocast = typeOnlyRows.autocast,
                 proc     = typeOnlyRows.proc,
+                border   = typeOnlyRows.border,
             }
         end
 
