@@ -221,6 +221,10 @@ function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
             return db.RaidHeroic == true, "a Heroic raid"
         end
         if difficultyID == 16 then return db.RaidMythic == true, "a Mythic raid" end
+        -- 233 is the flexible-size Mythic the Lairs run at. Its own key
+        -- rather than riding RaidMythic: a Lair is not a fixed-size Mythic
+        -- raid, so a player can log one and not the other.
+        if difficultyID == 233 then return db.RaidMythicFlex == true, "a flexible Mythic raid" end
         if difficultyID == 33 or difficultyID == 151 then
             return db.RaidTimewalking == true, "a Timewalking raid"
         end

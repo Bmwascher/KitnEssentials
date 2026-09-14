@@ -654,6 +654,7 @@ local Defaults = {
             RaidNormal = true,
             RaidHeroic = true,
             RaidMythic = true,
+            RaidMythicFlex = true,
             RaidTimewalking = false,
             -- PvP
             PvPRegularBG = false,
