@@ -128,9 +128,7 @@ local function CreateReminderFrame(nameSuffix, iconID)
 end
 
 -- "<SHORT> +<level>" plus the dungeon's icon fileID for the owned keystone;
--- nil, nil without one. The short name fits under a 64 px icon where the
--- full name ran well past it. C_ChallengeMode.GetMapUIInfo supplies both
--- the name and the icon.
+-- nil, nil without one.
 local function GetOwnedKeyDisplay()
     local level = C_MythicPlus.GetOwnedKeystoneLevel()
     local challengeMapID = C_MythicPlus.GetOwnedKeystoneChallengeMapID()
@@ -188,7 +186,6 @@ local function SetKeyLine(frame, text, icon)
     LayoutKeyLine(frame)
 end
 
--- Applies the shared look and position to one reminder frame.
 local function ApplyReminderFrame(frame)
     local db = KH.db
     if not frame or not db then return end
@@ -213,7 +210,7 @@ local function ApplyReminderFrame(frame)
 end
 
 ---------------------------------------------------------------------------------
--- Glow helpers (one pixel-glow shape, shared settings)
+-- Glow helpers
 ---------------------------------------------------------------------------------
 local function StartGlow(frame)
     local db = KH.db
@@ -500,8 +497,7 @@ end
 -- Preview
 -- One preview for both: the reminders share every setting, so the page shows
 -- one frame, Reroll while its switch is on, else Your Key. The other frame
--- stands down while the preview is up (a live one comes back in HidePreview);
--- with one shared position two copies would sit on the same pixels.
+-- stands down while the preview is up; a live one comes back in HidePreview.
 ---------------------------------------------------------------------------------
 function KH:PreviewFrame()
     if self.db.RerollEnabled ~= false then return self.rerollFrame, "REROLL KEY?" end

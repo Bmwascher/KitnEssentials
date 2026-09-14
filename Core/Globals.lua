@@ -835,11 +835,9 @@ local function ChallengeMapIDByName(name)
     return challengeMapByName[name]
 end
 
--- The short name for a dungeon: the listed one (BigWigs' locale first, the
--- English column second) when the name or map ID is a listed keystone
--- dungeon, else its initials with the stop-words dropped, else the first
--- four letters. Split by exclusion, not %w, so a name in another script
--- still yields its first bytes.
+-- Listed row first, else initials with the stop-words dropped, else the first
+-- four letters. Split by exclusion, not %w, so a name in another script still
+-- yields its first bytes.
 function KE:AbbreviateDungeonName(name, mapID)
     if type(name) ~= "string" or name == "" then return name end
     local short = KeystoneShortName(mapID) or KeystoneShortName(ChallengeMapIDByName(name))
