@@ -459,10 +459,12 @@ local framePaths = {}  -- [frame] = dotted path it was registered under; keys th
 local applying = {}    -- [frame] = true while our own SetPoint is in flight
 local onShowExtra = {} -- [frame] = work Frame_OnShow runs after the saved point is applied
 
--- Put back where it was dragged, the choice dialog opens off its own layout
--- and the bonus roll prompt off the anchor Alert Frames gives it.
+-- Put back where it was dragged, the choice dialog opens off its own layout,
+-- the bonus roll prompt off the anchor Alert Frames gives it, and the loot
+-- container off Blizzard's managed layout; a drag on those is temporary.
 local IGNORE_REMEMBER = {
     BonusRollFrame = true,
+    GroupLootContainer = true,
     PlayerChoiceFrame = true,
 }
 

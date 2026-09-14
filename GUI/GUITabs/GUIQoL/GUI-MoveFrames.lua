@@ -30,6 +30,7 @@ GUIFrame:RegisterContent("MoveFrames", function(scrollChild, yOffset)
     card:AddLabel("Left-click and drag almost any Blizzard window -- character panel, map, merchant, professions and most others -- to move it anywhere on screen.")
     card:AddLabel("Positions are temporary unless Remember Positions is on: every window returns to its normal spot the next time it opens.")
     card:AddLabel("Steps aside automatically if BlizzMove or MoveAnything is installed. Protected windows cannot be moved while you are in combat.")
+    card:AddLabel("Loot roll windows can be dragged but go back to their managed spot on the next roll, even with Remember Positions on.")
 
     local moving = GUIFrame:CreateCard(scrollChild, "Moving", card:GetNextOffset())
 
