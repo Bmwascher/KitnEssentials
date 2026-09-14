@@ -1892,13 +1892,14 @@ end
 -- Modules/QoL/MoveFrames.lua. GetFrame is called directly by MF.HandleFrame
 --; both frame tables are referenced directly by MF.OnEnable
 --; disabled is the file-local table MF:SetMovable
--- writes to -- all four seams are one debug.getupvalue hop.
+-- writes to -- four of the five seams are one debug.getupvalue hop; modifierHeld
+-- is an upvalue of MF.Frame_StartMoving.
 -- strsplit is delimiter-first and not supplied by _wow_mock.lua; the module
 -- captures it as a file-scope local, so a real equivalent must be on _G
 -- before helpers.loadModule -- reusing wowStrsplit above (already
 -- delimiter-first) rather than adding a second local of the same name.
 -- Returns MF, KE, seams (seams.getFrame, seams.blizzardFrames,
--- seams.blizzardFramesOnDemand, seams.disabled).
+-- seams.blizzardFramesOnDemand, seams.disabled, seams.modifierHeld).
 function L.loadMoveFrames(overrides)
     overrides = overrides or {}
     local modules = helpers.installAddonShim()
@@ -1908,6 +1909,11 @@ function L.loadMoveFrames(overrides)
     _G.RunNextFrame = overrides.RunNextFrame or function() end
     _G.GenerateFlatClosure = overrides.GenerateFlatClosure or function(f) return f end
     _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
+    -- Captured into MODIFIER_DOWN at load time, so a spec's fake key state
+    -- must be on _G before loadModule runs.
+    _G.IsShiftKeyDown = overrides.IsShiftKeyDown or function() return false end
+    _G.IsControlKeyDown = overrides.IsControlKeyDown or function() return false end
+    _G.IsAltKeyDown = overrides.IsAltKeyDown or function() return false end
     _G.C_AddOns = { IsAddOnLoaded = function() return false end }
     local KE = { db = { profile = { MoveFrames = {} } } }
     helpers.loadModule("Modules/QoL/MoveFrames.lua", KE)
@@ -1918,6 +1924,7 @@ function L.loadMoveFrames(overrides)
         blizzardFrames = findUpvalue(MF.OnEnable, "BlizzardFrames"),
         blizzardFramesOnDemand = findUpvalue(MF.OnEnable, "BlizzardFramesOnDemand"),
         disabled = findUpvalue(MF.SetMovable, "disabled"),
+        modifierHeld = findUpvalue(MF.Frame_StartMoving, "ModifierHeld"),
     }
     return MF, KE, seams
 end

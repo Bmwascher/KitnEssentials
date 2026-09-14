@@ -87,4 +87,33 @@ describe("MoveFrames.lua", function()
             assert.is_false(seams.disabled[frameStub])
         end)
     end)
+
+    describe("ModifierHeld", function()
+        it("passes for the configured key only, and always for NONE", function()
+            local cases = {
+                { modifier = "NONE",  held = nil,     expect = true },
+                { modifier = "NONE",  held = "SHIFT", expect = true },
+                { modifier = nil,     held = nil,     expect = true },
+                { modifier = "SHIFT", held = "SHIFT", expect = true },
+                { modifier = "SHIFT", held = "CTRL",  expect = false },
+                { modifier = "SHIFT", held = nil,     expect = false },
+                { modifier = "CTRL",  held = "CTRL",  expect = true },
+                { modifier = "CTRL",  held = nil,     expect = false },
+                { modifier = "ALT",   held = "ALT",   expect = true },
+                { modifier = "ALT",   held = "SHIFT", expect = false },
+            }
+            for _, c in ipairs(cases) do
+                local function down(key) return function() return c.held == key end end
+                local shift = down("SHIFT")
+                local _, _, s = L.loadMoveFrames({
+                    IsShiftKeyDown = shift, IsControlKeyDown = down("CTRL"), IsAltKeyDown = down("ALT"),
+                })
+                -- The module captures these at load; a loader that routed them
+                -- through the managed mock would drop the override silently.
+                assert.equal(shift, _G.IsShiftKeyDown)
+                assert.equal(c.expect, s.modifierHeld(c.modifier),
+                    tostring(c.modifier) .. " with " .. tostring(c.held) .. " held")
+            end
+        end)
+    end)
 end)

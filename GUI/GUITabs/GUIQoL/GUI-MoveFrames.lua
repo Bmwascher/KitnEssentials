@@ -1,6 +1,7 @@
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
+local Theme = KE.Theme
 
 GUIFrame:RegisterContent("MoveFrames", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.MoveFrames
@@ -29,5 +30,21 @@ GUIFrame:RegisterContent("MoveFrames", function(scrollChild, yOffset)
     card:AddLabel("Positions are temporary on purpose. Every window returns to its normal spot the next time it opens.")
     card:AddLabel("Steps aside automatically if BlizzMove or MoveAnything is installed. Protected windows cannot be moved while you are in combat.")
 
-    return card:GetNextOffset()
+    local moving = GUIFrame:CreateCard(scrollChild, "Moving", card:GetNextOffset())
+
+    local rowMod = GUIFrame:CreateRow(moving.content, Theme.rowHeightLast)
+    local modDropdown = GUIFrame:CreateDropdown(rowMod, "Hold To Move", {
+        options = {
+            { key = "NONE",  text = "None" },
+            { key = "SHIFT", text = "Shift" },
+            { key = "CTRL",  text = "Ctrl" },
+            { key = "ALT",   text = "Alt" },
+        },
+        value = db.Modifier or "NONE",
+        callback = function(val) db.Modifier = val end,
+    })
+    rowMod:AddWidget(modDropdown, 1)
+    moving:AddRow(rowMod, Theme.rowHeightLast, 0)
+
+    return moving:GetNextOffset()
 end)

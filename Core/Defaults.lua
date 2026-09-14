@@ -1577,6 +1577,7 @@ local Defaults = {
 
         MoveFrames = {
             Enabled = false,
+            Modifier = "NONE",
         },
 
         RaidControl = {

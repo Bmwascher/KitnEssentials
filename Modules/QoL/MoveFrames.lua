@@ -34,6 +34,7 @@ local strsplit, wipe = strsplit, wipe
 local table_insert = table.insert
 
 local InCombatLockdown, RunNextFrame = InCombatLockdown, RunNextFrame
+local IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown = IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown
 
 -- tDeleteItem and GenerateFlatClosure are not in the project's luacheck
 -- read_globals allowlist; reach them through _G rather than widen it.
@@ -447,6 +448,18 @@ local BlizzardFramesOnDemand = {
 local disabled = {}    -- [frame] = true while movement is suppressed via SetMovable API
 local moveTargets = {} -- [handle frame] = frame that actually moves
 
+local MODIFIER_DOWN = {
+    SHIFT = IsShiftKeyDown,
+    CTRL = IsControlKeyDown,
+    ALT = IsAltKeyDown,
+}
+
+-- Hold To Move: NONE (or anything unknown) means any left-drag moves the window.
+local function ModifierHeld(modifier)
+    local fn = MODIFIER_DOWN[modifier or "NONE"]
+    return (not fn) or fn() == true
+end
+
 -- Combat deferral: a minimal local queue drained on PLAYER_REGEN_ENABLED.
 local combatQueue = {}
 local function AfterCombat(fn)
@@ -491,7 +504,8 @@ function MF:Frame_StartMoving(this, button)
         return
     end
     local moveTarget = moveTargets[this]
-    if button == "LeftButton" and moveTarget and moveTarget:IsMovable() and not disabled[moveTarget] then
+    if button == "LeftButton" and moveTarget and moveTarget:IsMovable() and not disabled[moveTarget]
+        and ModifierHeld(self.db and self.db.Modifier) then
         moveTarget:StartMoving()
     end
 end
