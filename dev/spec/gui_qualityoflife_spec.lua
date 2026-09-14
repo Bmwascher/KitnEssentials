@@ -38,9 +38,9 @@ describe("tabbed pages: declared ids resolve to builders", function()
         return type(tabs) == "function" and tabs() or tabs
     end
 
-    it("gives Keystone Helper four tabs, each with a builder", function()
+    it("gives Keystone Helper three tabs, each with a builder", function()
         local tabs = strip("KeystoneHelper")
-        assert.equals(4, #tabs)
+        assert.equals(3, #tabs)
         for _, tab in ipairs(tabs) do
             assert.is_function(GUIFrame.registeredContent[tab.id],
                 "no builder registered for declared tab id " .. tab.id)

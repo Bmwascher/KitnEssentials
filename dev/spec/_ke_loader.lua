@@ -2121,6 +2121,8 @@ function L.loadKeystoneHelper(overrides)
             local c = color or fallback or { 1, 1, 1, 1 }
             return c[1], c[2], c[3], c[4]
         end,
+        PixelSnap = function(_, value) return value end,
+        AbbreviateDungeonName = function(_, name) return name end,
         ResolveAnchorFrame = function(_, frameType, parentFrame)
             return { _frameType = frameType, _parentFrame = parentFrame }
         end,
