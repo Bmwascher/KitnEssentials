@@ -72,14 +72,15 @@ local expansionEnchantableSlots = {
 }
 
 -- Which side of the character panel each slot sits on
-local slotLayout = {
-    [INVSLOT_HEAD] = "left",      [INVSLOT_NECK] = "left",
-    [INVSLOT_SHOULDER] = "left",  [INVSLOT_BACK] = "left",
-    [INVSLOT_CHEST] = "left",     [INVSLOT_WRIST] = "left",
-    [INVSLOT_WAIST] = "right",
-    [INVSLOT_LEGS] = "right",     [INVSLOT_FEET] = "right",
-    [INVSLOT_FINGER1] = "right",  [INVSLOT_FINGER2] = "right",
-    [INVSLOT_MAINHAND] = "center", [INVSLOT_OFFHAND] = "center",
+-- Which side of the icon a slot's text strip (item level, enchant, warning)
+-- sits on. The right column reads leftward, the left column rightward, and the
+-- weapons read outward -- main hand left, off hand right -- so their strips
+-- never meet under the model. Not the same as RIGHT_SLOTS, which is the icon's
+-- position on the sheet and places the track letter's corner: the off hand is
+-- a right-side icon with a right-side strip.
+local STRIP_LEFT_SLOTS = {
+    [6] = true, [7] = true, [8] = true, [10] = true,
+    [11] = true, [12] = true, [13] = true, [14] = true, [16] = true,
 }
 
 -- Enchantable slot buttons
@@ -370,11 +371,6 @@ local RIGHT_SLOTS = {
     [11] = true, [12] = true, [13] = true, [14] = true, [17] = true,
 }
 
--- The two weapon slots under the model. They appear in RIGHT_SLOTS too, for gem
--- and enchant anchoring, but their item level is centred above the icon rather
--- than pinned to an inner edge -- so anything ordering by side must exclude them.
-local CENTER_SLOTS = { [16] = true, [17] = true }
-
 -- Track indicator quality atlas regex (extracted from item link).
 local qualityAtlasPattern = "|A:(Professions%-ChatIcon%-Quality%-[^:]+):%d+:%d+"
 
@@ -602,24 +598,14 @@ local function CreateSlotText(button, slot)
     KE:ApplyFontToText(text, fontFace, fontSize, fontOutline)
     text:SetTextColor(1, 0, 0, 1)
 
-    -- Inset toward the model to align with the slot-detail enchant name.
-    local side = slotLayout[slot]
-    if side == "left" then
-        text:SetPoint("TOPLEFT", button, "TOPRIGHT", 3, -4)
-    elseif side == "right" then
-        text:SetPoint("TOPRIGHT", button, "TOPLEFT", -3, -4)
-    elseif side == "center" then
-        -- Weapons: match the slot-detail enchant-name anchor (bottom-side of the
-        -- slot) so the warning sits where a real enchant name would, clear of the
-        -- ilvl number above the slot. y=4 lifts the baseline so the offhand enchant
-        -- doesn't clip the ilvl row beneath the weapon strip.
-        if slot == INVSLOT_MAINHAND then
-            text:SetJustifyH("RIGHT")
-            text:SetPoint("BOTTOMRIGHT", button, "BOTTOMLEFT", -3, 4)
-        else
-            text:SetJustifyH("LEFT")
-            text:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 3, 4)
-        end
+    -- On the strip's enchant line: the icon's bottom edge with the enchant's own
+    -- offsets from CreateSlotDetail, so the warning takes the enchant's place.
+    if STRIP_LEFT_SLOTS[slot] then
+        text:SetJustifyH("RIGHT")
+        text:SetPoint("BOTTOMRIGHT", button, "BOTTOMLEFT", -3, 2)
+    else
+        text:SetJustifyH("LEFT")
+        text:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 3, 2)
     end
     return text
 end
@@ -1607,29 +1593,21 @@ end
 CP._MergeTrackIntoIlvl = MergeTrackIntoIlvl
 
 -- The item level always sits nearest the icon, so the order flips with the
--- column. Extracted rather than inlined because the design names this ordering
--- as a decision to test, and a branch inside a render function cannot be
--- reached from a spec.
-local function IlvlLine(base, span, isRight)
+-- strip's side. Extracted rather than inlined because the design names this
+-- ordering as a decision to test, and a branch inside a render function cannot
+-- be reached from a spec. An unreadable item level keeps its span.
+local function IlvlLine(base, span, spanOnLeft)
     if not span then return base end
-    if isRight then return span .. " " .. base end
+    if not base then return span end
+    if spanOnLeft then return span .. " " .. base end
     return base .. " " .. span
 end
 CP._IlvlLine = IlvlLine
 
 local function IlvlSpanOnLeft(slotID)
-    return RIGHT_SLOTS[slotID] and true or false
+    return STRIP_LEFT_SLOTS[slotID] and true or false
 end
 CP._IlvlSpanOnLeft = IlvlSpanOnLeft
-
--- Weapons use a second centered line so two upgrade spans cannot meet between
--- the slots. Every other slot keeps the span inline with its item level.
-local function SlotIlvlLines(slotID, base, span)
-    if CENTER_SLOTS[slotID] then return base, span end
-    if not base then return span, nil end
-    return IlvlLine(base, span, IlvlSpanOnLeft(slotID)), nil
-end
-CP._SlotIlvlLines = SlotIlvlLines
 
 -- Whether the track span this render drew is MISSING rather than absent, so the
 -- next call must not short-circuit past it. Extracted for the same reason as the
@@ -1860,8 +1838,7 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     local ffd = self:GetFFD(slotFrame)
     if ffd.detail then return ffd.detail end
 
-    local isRight  = RIGHT_SLOTS[slotID]
-    local isCenter = CENTER_SLOTS[slotID]
+    local stripLeft = STRIP_LEFT_SLOTS[slotID]
     local fontFace    = self.db.FontFace
     local fontSize    = self.db.SlotInfoFontSize or 11
     local fontOutline = self.db.FontOutline or "OUTLINE"
@@ -1881,12 +1858,6 @@ function CP:CreateSlotDetail(slotFrame, slotID)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
     detail.ilvlText:SetShadowColor(0, 0, 0, 0)
 
-    if isCenter then
-        detail.weaponSpanText = detail:CreateFontString(nil, "OVERLAY")
-        KE:ApplyFont(detail.weaponSpanText, fontFace, fontSize, fontOutline)
-        detail.weaponSpanText:SetShadowColor(0, 0, 0, 0)
-    end
-
     local iconSize = SLOT_GEM_ICON_SIZE
     detail.gemIcons = {}
     for i = 1, SLOT_DETAIL_MAX_GEMS do
@@ -1901,44 +1872,26 @@ function CP:CreateSlotDetail(slotFrame, slotID)
         detail.gemIcons[i] = iconFrame
     end
 
-    -- Static anchors per slot side: enchant at the slot's
-    -- inner-TOP, item level at the inner-BOTTOM, gem icons inline beside the ilvl.
+    -- Static anchors per strip side: item level at the icon's top edge, enchant
+    -- at its bottom edge, gem icons inline beside the item level. The warning in
+    -- CreateSlotText uses the enchant's offsets, so the two share a line.
     detail.enchantText:ClearAllPoints()
     detail.ilvlText:ClearAllPoints()
-    if isCenter then
-        -- Weapons at the bottom-center: ilvl above the slot; enchant + gems to the
-        -- outer side (mainhand -> left, offhand -> right). y=4 on the enchant lifts
-        -- the baseline so the offhand enchant doesn't clip the ilvl row below the
-        -- weapon strip. Must stay in lockstep with the warning anchor in
-        -- CreateSlotText so the missing-enchant red text occupies the same line.
-        detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", -100, 0)
-        detail:SetPoint("TOPRIGHT", slotFrame, "TOPRIGHT", 0, -100)
-        detail.ilvlText:SetPoint("BOTTOM", slotFrame, "TOP", 0, 3)
-        detail.weaponSpanText:SetPoint("BOTTOM", detail.ilvlText, "TOP", 0, 1)
-        if slotID == 16 then
-            detail.enchantText:SetJustifyH("RIGHT")
-            detail.enchantText:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", -3, 4)
-            AnchorGemsLeftOf(detail, detail.ilvlText)
-        else
-            detail.enchantText:SetJustifyH("LEFT")
-            detail.enchantText:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", 3, 4)
-            AnchorGemsRightOf(detail, detail.ilvlText)
-        end
-    elseif isRight then
+    if stripLeft then
         detail:SetPoint("TOPRIGHT", slotFrame, "TOPLEFT", 0, 0)
         detail:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMLEFT", 0, 0)
         detail.ilvlText:SetJustifyH("RIGHT")
-        detail.ilvlText:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", -3, 2)
+        detail.ilvlText:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -3, -6)
         detail.enchantText:SetJustifyH("RIGHT")
-        detail.enchantText:SetPoint("TOPRIGHT", detail, "TOPRIGHT", -3, -6)
+        detail.enchantText:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", -3, 2)
         AnchorGemsLeftOf(detail, detail.ilvlText)
     else
         detail:SetPoint("TOPLEFT", slotFrame, "TOPRIGHT", 0, 0)
         detail:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMRIGHT", 0, 0)
         detail.ilvlText:SetJustifyH("LEFT")
-        detail.ilvlText:SetPoint("BOTTOMLEFT", detail, "BOTTOMLEFT", 3, 2)
+        detail.ilvlText:SetPoint("TOPLEFT", detail, "TOPLEFT", 3, -6)
         detail.enchantText:SetJustifyH("LEFT")
-        detail.enchantText:SetPoint("TOPLEFT", detail, "TOPLEFT", 3, -6)
+        detail.enchantText:SetPoint("BOTTOMLEFT", detail, "BOTTOMLEFT", 3, 2)
         AnchorGemsRightOf(detail, detail.ilvlText)
     end
 
@@ -2041,9 +1994,6 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     -- Re-apply font each call so the size slider is live.
     KE:ApplyFont(detail.enchantText, fontFace, fontSize, fontOutline)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
-    if detail.weaponSpanText then
-        KE:ApplyFont(detail.weaponSpanText, fontFace, fontSize, fontOutline)
-    end
 
     -- Enchant label (green). "No Enchant" stays with the warning feature.
     if self.db.ShowEnchantNames and not euiOwnsEnchant then
@@ -2055,10 +2005,9 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         detail.enchantText:Hide()
     end
 
-    -- Item level, colored by the equipped item's quality. While the item is
-    -- still upgrading, weapons put the track span on a separate upper line;
-    -- other slots keep it inline. The item level retains its quality colour,
-    -- while the span carries the track colour.
+    -- Item level, colored by the equipped item's quality, with the track span
+    -- inline while the item is still upgrading. The item level retains its
+    -- quality colour, while the span carries the track colour.
     if self.db.ShowSlotItemLevel and not euiOwnsIlvl then
         local lvl = self:GetSlotItemLevel(unit, slotID)
 
@@ -2078,20 +2027,12 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
             end
         end
 
-        local ilvlLine, weaponSpanLine = SlotIlvlLines(slotID, base, span)
+        local ilvlLine = IlvlLine(base, span, IlvlSpanOnLeft(slotID))
         detail.ilvlText:SetText(ilvlLine or "")
         detail.ilvlText:SetShown(ilvlLine ~= nil)
-        if detail.weaponSpanText then
-            detail.weaponSpanText:SetText(weaponSpanLine or "")
-            detail.weaponSpanText:SetShown(weaponSpanLine ~= nil)
-        end
     else
         detail.ilvlText:SetText("")
         detail.ilvlText:Hide()
-        if detail.weaponSpanText then
-            detail.weaponSpanText:SetText("")
-            detail.weaponSpanText:Hide()
-        end
     end
 
     -- Gem icons inline beside the ilvl text (only scan socketable slots).

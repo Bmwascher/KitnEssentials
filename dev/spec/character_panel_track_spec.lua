@@ -193,8 +193,9 @@ describe("Slot track: the merge decision", function()
 end)
 
 -- The item level sits nearest the icon, so which side the span goes on depends
--- on which column the slot is in. Getting it backwards puts the track under the
--- model on one whole side of the sheet.
+-- on which side the slot's text strip is on. Getting it backwards puts the track
+-- under the model on one whole side of the sheet; getting a weapon backwards
+-- runs its span into the other weapon's strip.
 describe("Slot track: which side the span goes on", function()
     it("puts the span OUTSIDE the level in the right column", function()
         assert.equals("M4/6 250", loadCP()._IlvlLine("250", "M4/6", true))
@@ -208,54 +209,21 @@ describe("Slot track: which side the span goes on", function()
         assert.equals("250", loadCP()._IlvlLine("250", nil, true))
     end)
 
-    it("still orders an ordinary right-column slot to the right", function()
-        assert.is_true(loadCP()._IlvlSpanOnLeft(6))
+    it("keeps the span when the level is unreadable", function()
+        assert.equals("M4/6", loadCP()._IlvlLine(nil, "M4/6", true))
     end)
-end)
 
-describe("Slot track: item-level line composition", function()
-    it("splits weapon spans onto their own upper line", function()
-        local compose = loadCP()._SlotIlvlLines
-        local mainIlvl, mainSpan
-        local offIlvl, offSpan
-        if compose then
-            mainIlvl, mainSpan = compose(16, "250", "M4/6")
-            offIlvl, offSpan = compose(17, "260", "H2/6")
+    it("orders each strip by the side it sits on, weapons outward", function()
+        local spanOnLeft = loadCP()._IlvlSpanOnLeft
+        local cases = {
+            { slot = 6,  left = true,  name = "right column" },
+            { slot = 1,  left = false, name = "left column" },
+            { slot = 16, left = true,  name = "main hand reads outward, to the left" },
+            { slot = 17, left = false, name = "off hand reads outward, to the right" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.left, spanOnLeft(c.slot), c.name)
         end
-        assert.equals("250", mainIlvl)
-        assert.equals("M4/6", mainSpan)
-        assert.equals("260", offIlvl)
-        assert.equals("H2/6", offSpan)
-    end)
-
-    it("keeps ordinary slot spans inline", function()
-        local compose = loadCP()._SlotIlvlLines
-        local rightLine, rightSpan
-        local leftLine, leftSpan
-        if compose then
-            rightLine, rightSpan = compose(6, "250", "M4/6")
-            leftLine, leftSpan = compose(1, "260", "H2/6")
-        end
-        assert.equals("M4/6 250", rightLine)
-        assert.is_nil(rightSpan)
-        assert.equals("260 H2/6", leftLine)
-        assert.is_nil(leftSpan)
-    end)
-
-    it("returns only the centered item level when a weapon has no span", function()
-        local compose = loadCP()._SlotIlvlLines
-        local ilvlLine, spanLine
-        if compose then ilvlLine, spanLine = compose(16, "250", nil) end
-        assert.equals("250", ilvlLine)
-        assert.is_nil(spanLine)
-    end)
-
-    it("keeps a weapon span when its item level is unreadable", function()
-        local compose = loadCP()._SlotIlvlLines
-        local ilvlLine, spanLine
-        if compose then ilvlLine, spanLine = compose(17, nil, "H2/6") end
-        assert.is_nil(ilvlLine)
-        assert.equals("H2/6", spanLine)
     end)
 end)
 
