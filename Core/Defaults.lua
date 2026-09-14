@@ -215,6 +215,8 @@ local Defaults = {
             ColorMode  = "theme",
             Color      = { 1, 1, 1, 1 },
             Visibility = "always",
+            Border     = false,
+            BorderSize = 1,
 
             GCD = {
                 Enabled            = true,
