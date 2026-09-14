@@ -132,6 +132,14 @@ edit, and beats living on `--no-verify`.
 uses all of those except `shorts`, plus `namesCI` and `namesCS`. A guard blocks
 when any set it needs is missing or empty.
 
+Every guard also blocks origin vocabulary that names no addon: "the upstream
+reference", "reference fix", "build 745", "ported verbatim". An unnamed
+upstream is still provenance; a message or comment says what the change does
+and why it is right, never where it came from. That pattern is `ng_origin` in
+`dev/githooks/lib/name-guards.sh`, tracked because it is ordinary English, and
+it scrubs the API reference clone first so "api reference" and
+"reference build 12.1.0.69382" pass.
+
 `pre-commit` also reads the added code lines of the staged diff (comments
 stripped) and blocks `COMBAT_LOG_EVENT_UNFILTERED`,
 `CombatLogGetCurrentEventInfo(` and `self:RegisterUnitEvent(`, and blocks a
