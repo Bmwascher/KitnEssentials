@@ -1719,6 +1719,30 @@ local Defaults = {
                     Color = { 0.35, 1, 0.35, 1 },
                 },
 
+                -- Your own kick. Tint, mark and fade ride colour curves and
+                -- bar values; nothing branches on the cooldown in Lua.
+                Kick = {
+                    ReadyTint = true,
+                    ReadyColor = { 0.920, 0.350, 0.200, 1 },
+                    RangeFade = true,
+                    RangeAlpha = 0.45,
+                    Tick = true,
+                    TickColor = { 1, 1, 1, 1 },
+                    Window = false,
+                    WindowColor = { 0.318, 0.820, 0.357, 1 },
+                },
+
+                -- Casts aimed at the player: glow engine settings
+                TargetGlow = {
+                    GlowEnabled = true,
+                    GlowType = "border",
+                    GlowColor = { 1, 0.85, 0.25, 1 },
+                    GlowThickness = 2,
+                    GlowLines = 8,
+                    GlowFrequency = 0.25,
+                    GlowPulse = true,
+                },
+
                 -- Icon settings
                 Icon = {
                     Enabled = true,
