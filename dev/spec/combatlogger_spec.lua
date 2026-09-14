@@ -251,9 +251,9 @@ describe("CombatLogger content rules", function()
         }
     end)
 
-    it("refuses a raid queued as a party regardless of difficulty", function()
-        -- Some raid content reports instanceType "party"; without the size
-        -- guard it would follow whichever dungeon toggle matched.
+    it("refuses a raid-sized party at a dungeon difficulty", function()
+        -- A raid-sized group at a dungeon difficulty is not a dungeon; without
+        -- the size guard it would follow whichever dungeon toggle matched.
         assert.is_false(CL:ShouldLog("party", 1, 20))
         assert.is_true(CL:ShouldLog("party", 1, 5))
     end)
@@ -286,6 +286,10 @@ describe("CombatLogger difficulty-first classification", function()
         local cases = {
             { instanceType = "raid",  difficultyID = 233, db = { RaidMythicFlex = true },  should = true,  label = "a flexible Mythic raid" },
             { instanceType = "raid",  difficultyID = 233, db = { RaidMythicFlex = false }, should = false, label = "a flexible Mythic raid" },
+            { instanceType = "party", difficultyID = 233, db = { RaidMythicFlex = true },  should = true,  label = "a flexible Mythic raid" },
+            { instanceType = "party", difficultyID = 16,  db = { RaidMythic = true },      should = true,  label = "a Mythic raid" },
+            { instanceType = "raid",  difficultyID = 220, db = { RaidNormal = true, RaidMythic = true }, should = false },
+            { instanceType = "raid",  difficultyID = 250, db = { RaidNormal = true, RaidMythic = true }, should = false },
         }
         for _, c in ipairs(cases) do
             CL.db = c.db

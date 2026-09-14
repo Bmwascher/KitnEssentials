@@ -198,8 +198,24 @@ function CL:StopLoggingNow()
     end
 end
 
+-- A raid difficulty identifies raid content whatever GetInstanceInfo calls
+-- the place: a raid queued as a party reports "party", and a Lair
+-- may not report "raid". 220 (Story) and 250 (World) are listed so
+-- they resolve in the raid branch, where neither has a toggle and both
+-- answer no.
+local RAID_DIFFICULTIES = {
+    [3] = true, [4] = true, [5] = true, [6] = true, [7] = true, [9] = true,
+    [14] = true, [15] = true, [16] = true, [17] = true,
+    [33] = true, [151] = true,
+    [220] = true, [233] = true, [250] = true,
+}
+
 function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
     local db = self.db
+
+    if instanceType ~= "raid" and RAID_DIFFICULTIES[difficultyID] then
+        instanceType = "raid"
+    end
 
     if instanceType == "party" then
         -- Guard: maxPlayers <= 5 to exclude raids queued as party
