@@ -72,7 +72,7 @@ local expansionEnchantableSlots = {
 }
 
 -- Which side of the icon a slot's text strip (item level, enchant, warning)
--- sits on: each column reads away from the model, the weapons read outward so
+-- sits on: each column reads toward the model, the weapons read outward so
 -- their strips never meet under it. Not RIGHT_SLOTS, which places the track
 -- letter's corner: the off hand is a right-side icon with a right-side strip.
 local STRIP_LEFT_SLOTS = {
