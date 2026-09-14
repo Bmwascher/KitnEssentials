@@ -218,7 +218,7 @@ function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
     end
 
     if instanceType == "party" then
-        -- Guard: maxPlayers <= 5 to exclude raids queued as party
+        -- A raid-sized group at a dungeon difficulty is not a dungeon.
         if maxPlayers and maxPlayers > 5 then return false end
 
         if difficultyID == 1 then return db.DungeonNormal == true, "a Normal dungeon" end
