@@ -71,13 +71,10 @@ local expansionEnchantableSlots = {
     },
 }
 
--- Which side of the character panel each slot sits on
 -- Which side of the icon a slot's text strip (item level, enchant, warning)
--- sits on. The right column reads leftward, the left column rightward, and the
--- weapons read outward -- main hand left, off hand right -- so their strips
--- never meet under the model. Not the same as RIGHT_SLOTS, which is the icon's
--- position on the sheet and places the track letter's corner: the off hand is
--- a right-side icon with a right-side strip.
+-- sits on: each column reads away from the model, the weapons read outward so
+-- their strips never meet under it. Not RIGHT_SLOTS, which places the track
+-- letter's corner: the off hand is a right-side icon with a right-side strip.
 local STRIP_LEFT_SLOTS = {
     [6] = true, [7] = true, [8] = true, [10] = true,
     [11] = true, [12] = true, [13] = true, [14] = true, [16] = true,
@@ -312,10 +309,9 @@ local function ProcessEnchantText(text, style)
         return text
     end
 
-    -- An enchant that prints its effect instead of a name ("+41 Intellect &
-    -- +115 Stamina": spellthreads, armour kits) starts with a number once the
-    -- signs are gone. The numbers change with the rank, so drop them and let
-    -- the stat words carry the label.
+    -- An effect line ("+41 Intellect & +115 Stamina": spellthreads, armour
+    -- kits) starts with a number once the signs are gone; the numbers change
+    -- with the rank, so the stat words alone carry the label.
     if text:find("^%d") then
         text = text:gsub("%d+%%?%s*", "")
     end
