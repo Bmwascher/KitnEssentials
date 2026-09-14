@@ -27,7 +27,6 @@ local C_Timer = C_Timer
 local C_ChallengeMode = C_ChallengeMode
 local C_MythicPlus = C_MythicPlus
 local select = select
-local string_format = string.format
 
 -- LibCustomGlow for the pixel-glow nag on both reminder frames. Optional
 -- dependency — module degrades gracefully (no glow) if missing.
@@ -128,17 +127,18 @@ local function CreateReminderFrame(nameSuffix, iconID)
     return frame
 end
 
--- "<dungeon> - <level>" plus the dungeon's icon fileID for the owned
--- keystone; nil, nil without one. C_ChallengeMode.GetMapUIInfo supplies
--- both the name and the icon.
+-- "<SHORT> +<level>" plus the dungeon's icon fileID for the owned keystone;
+-- nil, nil without one. The short name fits under a 64 px icon where the
+-- full name ran well past it. C_ChallengeMode.GetMapUIInfo supplies both
+-- the name and the icon.
 local function GetOwnedKeyDisplay()
     local level = C_MythicPlus.GetOwnedKeystoneLevel()
     local challengeMapID = C_MythicPlus.GetOwnedKeystoneChallengeMapID()
     if not level or not challengeMapID then return nil, nil end
 
     local name, _, _, texture = C_ChallengeMode.GetMapUIInfo(challengeMapID)
-    if not name then return tostring(level), texture end
-    return string_format("%s - %d", name, level), texture
+    if not name then return "+" .. level, texture end
+    return KE:AbbreviateDungeonName(name, challengeMapID) .. " +" .. level, texture
 end
 
 -- Icon renders square, sized off the text height (KEY_ICON_SCALE), on a
@@ -527,7 +527,7 @@ function KH:ShowPreview()
 
     -- Preview shows the player's real key when one is owned.
     local keyLineText, keyLineIcon = GetOwnedKeyDisplay()
-    if not keyLineText then keyLineText = "Algeth'ar Academy - 23" end
+    if not keyLineText then keyLineText = "AA +23" end
 
     frame.title:SetText(title)
     SetKeyLine(frame, keyLineText, keyLineIcon)

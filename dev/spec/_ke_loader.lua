@@ -1706,7 +1706,6 @@ function L.loadGroupFinderPanel(overrides)
         getPartyRoles       = GFP._GetPartyRoles,
         seasonGroups        = GFP._SeasonGroups,
         isDungeonSearchMode = GFP._IsDungeonSearchMode,
-        abbreviate          = GFP._Abbreviate,
         armMinScoreSave     = GFP._ArmMinScoreSave,
     }
     return GFP, KE, seams
