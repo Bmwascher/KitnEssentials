@@ -39,7 +39,6 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
             Enabled = true,
             Duration = 0.5,
             InterruptedColor = { 0.1, 0.8, 0.1, 1 },
-            SuccessColor = { 0.8, 0.1, 0.1, 1 },
         }
     end
     if not db.TargetMarker then
@@ -620,15 +619,8 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
         color = db.HoldTimer.InterruptedColor or { 0.1, 0.8, 0.1, 1 },
         callback = function(r, g, b, a) db.HoldTimer.InterruptedColor = { r, g, b, a } end,
     })
-    row8b:AddWidget(interruptedPicker, 0.5)
+    row8b:AddWidget(interruptedPicker, 1)
     manager:Register(interruptedPicker, "holdTimer")
-
-    local successPicker = GUIFrame:CreateColorPicker(row8b, "Cast Success", {
-        color = db.HoldTimer.SuccessColor or { 0.8, 0.1, 0.1, 1 },
-        callback = function(r, g, b, a) db.HoldTimer.SuccessColor = { r, g, b, a } end,
-    })
-    row8b:AddWidget(successPicker, 0.5)
-    manager:Register(successPicker, "holdTimer")
     cardHold:AddRow(row8b, Theme.rowHeightLast, 0)
 
     yOffset = cardHold:GetNextOffset()
