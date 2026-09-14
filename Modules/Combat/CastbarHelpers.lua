@@ -509,7 +509,7 @@ function H.StartKickReadyTimer(self)
         return
     end
 
-    local cd = C_Spell.GetSpellCooldownDuration(self.interruptId)
+    local cd = H.ReadKickCooldown(self.interruptId)
     if not cd then
         H.UpdateKickIndicator(self, nil)
         return
@@ -556,7 +556,7 @@ function H.UpdateBarColor(self, interruptDuration)
     end
 
     if kick and kick.Enabled and self.interruptId and hasActiveCast then
-        local cooldown = interruptDuration or C_Spell.GetSpellCooldownDuration(self.interruptId)
+        local cooldown = interruptDuration or H.ReadKickCooldown(self.interruptId)
         if not cooldown then return end
 
         -- "Kick ready" color is the current cast type's color (Casting /
@@ -574,12 +574,7 @@ function H.UpdateBarColor(self, interruptDuration)
         end
         local readyColor = CreateColor(cr, cg, cb, ca)
 
-        local interruptibleColor = C_CurveUtil.EvaluateColorFromBoolean(
-            cooldown:IsZero(),
-            readyColor,
-            self.colors.NotReady
-        )
-        texture:SetVertexColorFromBoolean(self.notInterruptible, self.colors.Uninterruptible, interruptibleColor)
+        H.PaintKickColor(texture, cooldown, readyColor, self.colors.NotReady, self.notInterruptible, self.colors.Uninterruptible)
         return
     end
 
@@ -612,7 +607,7 @@ function H.UpdateKickIndicator(self, cooldown)
     end
 
     if not cooldown and self.interruptId then
-        cooldown = C_Spell.GetSpellCooldownDuration(self.interruptId)
+        cooldown = H.ReadKickCooldown(self.interruptId)
     end
     if not cooldown then return end
 
@@ -647,7 +642,7 @@ function H.SetupKickCooldownBar(self)
     self.kickCooldownBar:SetAllPoints(self.castBar)
     self.kickCooldownBar:SetReverseFill(isChannel)
     self.kickCooldownBar:SetMinMaxValues(0, duration:GetTotalDuration())
-    local cooldown = C_Spell.GetSpellCooldownDuration(self.interruptId)
+    local cooldown = H.ReadKickCooldown(self.interruptId)
     if cooldown then
         self.kickCooldownBar:SetValue(cooldown:GetRemainingDuration())
     else
@@ -663,6 +658,184 @@ function H.SetupKickCooldownBar(self)
     end
 
     H.StartKickReadyTimer(self)
+end
+
+---------------------------------------------------------------------------------
+-- Kick cooldown, tint and mark (Focus Castbar and Dungeon Casts)
+---------------------------------------------------------------------------------
+
+-- The cooldown OBJECT, never a number. In restricted content its IsZero and
+-- remaining values are secret, so callers hand the object to colour, alpha
+-- and bar-value sinks and branch only on whether it exists.
+function H.ReadKickCooldown(interruptId, ignoreGCD)
+    if not interruptId then return nil end
+    if not (C_Spell and C_Spell.GetSpellCooldownDuration) then return nil end
+    local cd
+    if ignoreGCD then
+        cd = C_Spell.GetSpellCooldownDuration(interruptId, true)
+    else
+        cd = C_Spell.GetSpellCooldownDuration(interruptId)
+    end
+    if not (cd and cd.IsZero) then return nil end
+    return cd
+end
+
+-- Ready/not-ready is a colour curve on the secret IsZero; shielded goes on
+-- last, so a cast nobody can interrupt reads as shielded whatever the
+-- cooldown is doing.
+function H.PaintKickColor(texture, cooldown, readyColor, notReadyColor, notInterruptible, shieldedColor)
+    local color = C_CurveUtil.EvaluateColorFromBoolean(cooldown:IsZero(), readyColor, notReadyColor)
+    if notInterruptible ~= nil then
+        texture:SetVertexColorFromBoolean(notInterruptible, shieldedColor, color)
+    else
+        texture:SetVertexColor(color:GetRGB())
+    end
+end
+
+local KICK_TICK_WIDTH = 2
+local PREVIEW_KICK_FRACTION = 0.45
+
+-- The two fill edges are summed by the layout, so a snapped edge drags the
+-- tick a pixel back and forth as the cast runs. SetFillStyle re-mints the
+-- fill with snapping on, which is why this runs after it, not at creation.
+local function UnsnapFill(statusBar)
+    local tex = statusBar:GetStatusBarTexture()
+    if tex and tex.SetSnapToPixelGrid then
+        tex:SetSnapToPixelGrid(false)
+        tex:SetTexelSnappingBias(0)
+    end
+end
+
+-- The mark belongs at (cast elapsed + kick remaining), both secret, so
+-- neither is added in Lua: two invisible StatusBars are stacked and the
+-- engine sums their fills. The positioner's fill edge is "now"; the marker
+-- starts at that edge and its fill edge is where the kick returns. Elapsed
+-- grows as the cooldown shrinks, so one snapshot holds for the cast; the
+-- pass re-snapshots for a kick pressed mid-cast. The host clips, so a mark
+-- past the end of the cast is simply not drawn.
+function H.CreateKickMark(castBar)
+    local host = CreateFrame("Frame", nil, castBar)
+    host:SetClipsChildren(true)
+    host:SetAllPoints(castBar)
+    host:SetFrameLevel(castBar:GetFrameLevel())
+
+    local positioner = CreateFrame("StatusBar", nil, host)
+    positioner:SetStatusBarTexture([[Interface\Buttons\WHITE8x8]])
+    positioner:GetStatusBarTexture():SetAlpha(0)
+    positioner:SetAllPoints(host)
+    positioner:Hide()
+
+    local marker = CreateFrame("StatusBar", nil, host)
+    marker:SetStatusBarTexture([[Interface\Buttons\WHITE8x8]])
+    marker:GetStatusBarTexture():SetAlpha(0)
+    marker:Hide()
+
+    local window = host:CreateTexture(nil, "ARTWORK", nil, 2)
+    window:SetColorTexture(1, 1, 1, 1)
+    window:Hide()
+
+    local tick = host:CreateTexture(nil, "ARTWORK", nil, 3)
+    tick:SetColorTexture(1, 1, 1, 1)
+    tick:SetWidth(KICK_TICK_WIDTH)
+    tick:Hide()
+
+    return { host = host, positioner = positioner, marker = marker, tick = tick, window = window }
+end
+
+function H.HideKickMark(mark)
+    if not mark then return end
+    mark.tick:Hide()
+    mark.window:Hide()
+    mark.positioner:Hide()
+    mark.marker:Hide()
+    mark.armed = nil
+end
+
+-- A channel drains the other way, so both bars flip to Reverse and every
+-- anchor mirrors. The tick and window stay hidden until the first refresh
+-- gives them a size and an alpha.
+function H.ArmKickMark(mark, reverse)
+    local style = reverse and Enum.StatusBarFillStyle.Reverse or Enum.StatusBarFillStyle.Standard
+    mark.positioner:SetFillStyle(style)
+    mark.marker:SetFillStyle(style)
+    UnsnapFill(mark.positioner)
+    UnsnapFill(mark.marker)
+
+    local host = mark.host
+    local posFill = mark.positioner:GetStatusBarTexture()
+    local markFill = mark.marker:GetStatusBarTexture()
+    mark.marker:ClearAllPoints()
+    mark.tick:ClearAllPoints()
+    mark.window:ClearAllPoints()
+    mark.tick:SetPoint("TOP", host, "TOP", 0, 0)
+    mark.tick:SetPoint("BOTTOM", host, "BOTTOM", 0, 0)
+    mark.window:SetPoint("TOP", host, "TOP", 0, 0)
+    mark.window:SetPoint("BOTTOM", host, "BOTTOM", 0, 0)
+    if reverse then
+        mark.marker:SetPoint("RIGHT", posFill, "LEFT")
+        mark.tick:SetPoint("RIGHT", markFill, "LEFT")
+        mark.window:SetPoint("LEFT", host, "LEFT", 0, 0)
+        mark.window:SetPoint("RIGHT", markFill, "LEFT")
+    else
+        mark.marker:SetPoint("LEFT", posFill, "RIGHT")
+        mark.tick:SetPoint("LEFT", markFill, "RIGHT")
+        mark.window:SetPoint("LEFT", markFill, "RIGHT")
+        mark.window:SetPoint("RIGHT", host, "RIGHT", 0, 0)
+    end
+
+    mark.positioner:Show()
+    mark.marker:Show()
+    mark.tick:Hide()
+    mark.window:Hide()
+    mark.armed = true
+end
+
+-- Sized on every refresh rather than at arm time: a bar acquired and
+-- populated in the same frame has not been laid out, so its width reads 0.
+-- Both readings are taken together so the mark describes one instant.
+function H.RefreshKickMark(mark, castDuration, kickCd, notInterruptible, showTick, showWindow)
+    if not mark.armed then return end
+    local total = castDuration and castDuration.GetTotalDuration and castDuration:GetTotalDuration()
+    if not kickCd or total == nil then
+        H.HideKickMark(mark)
+        return
+    end
+
+    local host = mark.host
+    mark.marker:SetSize(host:GetWidth(), host:GetHeight())
+    mark.positioner:SetMinMaxValues(0, total)
+    mark.marker:SetMinMaxValues(0, total)
+    mark.positioner:SetValue(castDuration:GetElapsedDuration())
+    mark.marker:SetValue(kickCd:GetRemainingDuration())
+
+    -- Hidden while the kick is already up and on a cast nothing can kick.
+    -- Both booleans may be secret, so each is a colour curve, chained.
+    local ev = C_CurveUtil.EvaluateColorValueFromBoolean
+    local alpha = 1
+    if notInterruptible ~= nil then
+        alpha = ev(notInterruptible, 0, alpha)
+    end
+    alpha = ev(kickCd:IsZero(), 0, alpha)
+    mark.tick:SetAlpha(alpha)
+    mark.window:SetAlpha(alpha)
+    mark.tick:SetShown(showTick and true or false)
+    mark.window:SetShown(showWindow and true or false)
+end
+
+-- Static: out of combat most kicks are up and the live mark hides itself,
+-- so a live preview would look broken to exactly the users configuring it.
+function H.PreviewKickMark(mark, showTick, showWindow)
+    if not mark.armed then return end
+    local host = mark.host
+    mark.marker:SetSize(host:GetWidth(), host:GetHeight())
+    mark.positioner:SetMinMaxValues(0, 1)
+    mark.positioner:SetValue(0)
+    mark.marker:SetMinMaxValues(0, 1)
+    mark.marker:SetValue(PREVIEW_KICK_FRACTION)
+    mark.tick:SetAlpha(1)
+    mark.window:SetAlpha(1)
+    mark.tick:SetShown(showTick and true or false)
+    mark.window:SetShown(showWindow and true or false)
 end
 
 ---------------------------------------------------------------------------------
