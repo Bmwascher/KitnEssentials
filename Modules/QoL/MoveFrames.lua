@@ -560,10 +560,12 @@ end
 
 -- Moves the dragged frame's centre by the cursor's travel since the press,
 -- clamped so the centre stays on screen (a protected frame never gets
--- SetClampedToScreen). Shown only while a protected drag is live.
+-- SetClampedToScreen). Shown only while a protected drag is live. A window
+-- hidden mid-drag (Escape with the button held) gets no OnMouseUp, so the
+-- updater ends that drag itself.
 local function SecureDrag_OnUpdate()
     local frame = secureDrag.frame
-    if not frame or InCombatLockdown() then
+    if not frame or InCombatLockdown() or not frame:IsVisible() then
         StopSecureDrag()
         return
     end
