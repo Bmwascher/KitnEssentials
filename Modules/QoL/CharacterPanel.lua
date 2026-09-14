@@ -347,10 +347,10 @@ local ITEM_TRACKS = {
 
 -- Crafted gear track auto-detection from item level.
 local CRAFTED_TRACKS = {
-    { minIlvl = 295, letter = "C", color = { 1.00, 0.50, 0.00 }, weaponOnly = true },
-    { minIlvl = 285, letter = "C", color = { 1.00, 0.50, 0.00 } },
-    { minIlvl = 282, letter = "C", color = { 0.78, 0.30, 0.78 } },
-    { minIlvl = 269, letter = "C", color = { 0.00, 0.70, 1.00 } },
+    { minIlvl = 295, letter = "CR", color = { 1.00, 0.50, 0.00 }, weaponOnly = true },
+    { minIlvl = 285, letter = "CR", color = { 1.00, 0.50, 0.00 } },
+    { minIlvl = 282, letter = "CR", color = { 0.78, 0.30, 0.78 } },
+    { minIlvl = 269, letter = "CR", color = { 0.00, 0.70, 1.00 } },
 }
 
 -- All equipped slots — for track indicators and gem helper anchor frames.
