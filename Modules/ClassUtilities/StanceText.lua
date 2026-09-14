@@ -152,7 +152,7 @@ local function SpellIsKnown(spellID)
 end
 
 -- Reused rather than rebuilt: UNIT_AURA for the player fires constantly in
--- combat, and the reference's inline version allocates nothing on this path.
+-- combat, so this path must allocate nothing.
 local evalContext = {
     hasAura = HasAura,
     isKnown = SpellIsKnown,

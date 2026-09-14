@@ -78,8 +78,7 @@ local function Store()
 end
 CH.Store = Store
 
--- Nothing received inside an instance is written to disk. The upstream this
--- feature is modelled on has no such rule; it is the phase's own requirement.
+-- Nothing received inside an instance is written to disk.
 --
 -- ASKED AT THE MOMENT OF THE DECISION, not cached. A cache would have to assume
 -- something about which events fire at an instance boundary and in what order
@@ -108,9 +107,9 @@ function CH:InsideInstance()
     return inInstance ~= false
 end
 
--- Cheaper than the reference's gsub and strictly wider: any |K refuses, even
+-- A plain find rather than a gsub, and strictly wider: any |K refuses, even
 -- one with no closing |k. Wider and cheaper is the right trade for a rule about
--- writing to disk, and unlike the gsub it allocates nothing per message.
+-- writing to disk, and the find allocates nothing per message.
 local function BodyIsUnsafe(body)
     if KE:IsSecretValue(body) then return true end
     if type(body) ~= "string" or body == "" then return true end
