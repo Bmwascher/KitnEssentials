@@ -6,7 +6,8 @@
 -- dev/spec/lint/moveframes_tables_spec.lua. DragPath is the drag predicate
 -- that routes a press to the secure snippet, the native drag, or nothing;
 -- MF:SetMovable is also checked for the yield guard that stops a live
--- secure drag on a frame it disables.
+-- secure drag on a frame it disables. CanRemember is the refusal rule
+-- gating Remember Positions (opt-in).
 local L = require("dev.spec._ke_loader")
 
 describe("MoveFrames.lua", function()
@@ -141,6 +142,36 @@ describe("MoveFrames.lua", function()
             }
             for _, c in ipairs(cases) do
                 assert.equal(c[6], seams.dragPath(c[1], c[2], c[3], c[4], c[5]), c[7])
+            end
+        end)
+    end)
+
+    describe("CanRemember", function()
+        local frame
+
+        before_each(function()
+            frame = { GetName = function() end }
+            seams.framePaths[frame] = "MerchantFrame"
+        end)
+
+        it("remembers a registered window only with the setting on and the module running", function()
+            local on = { Enabled = true, RememberPositions = true }
+            local cases = {
+                { name = "setting off",        db = { Enabled = true, RememberPositions = false }, expect = false },
+                { name = "no db",              db = nil,                                            expect = false },
+                { name = "yielded to a mover", db = on, stop = "BlizzMove",                         expect = false },
+                { name = "no registered path", db = on, path = false,                              expect = false },
+                { name = "never-remember path", db = on, path = "BonusRollFrame",                  expect = false },
+                { name = "ordinary window",    db = on,                                            expect = true },
+            }
+            for _, c in ipairs(cases) do
+                MF.db = c.db
+                MF.StopRunning = c.stop
+                if c.path ~= nil then seams.framePaths[frame] = c.path or nil end
+                local ok, path = seams.canRemember(MF, frame)
+                assert.equal(c.expect, ok, c.name)
+                if c.expect then assert.equal("MerchantFrame", path, c.name) end
+                seams.framePaths[frame] = "MerchantFrame"
             end
         end)
     end)

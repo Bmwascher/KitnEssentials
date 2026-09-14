@@ -4,20 +4,24 @@
 -- ║  Purpose: Let the player left-click and drag almost any  ║
 -- ║           Blizzard window anywhere on screen.            ║
 -- ║                                                          ║
--- ║  Positions are TEMPORARY BY DESIGN. Nothing is saved,    ║
--- ║  so every window returns to its normal managed spot the  ║
--- ║  next time it opens. That is the requested behaviour,    ║
--- ║  not a missing feature -- do not add persistence.        ║
+-- ║  Positions are temporary by default: a window returns    ║
+-- ║  to its managed spot the next time it opens. Remember    ║
+-- ║  Positions (opt-in) keeps one saved point per window     ║
+-- ║  and puts it back on show and after Blizzard re-points   ║
+-- ║  it.                                                     ║
 -- ║                                                          ║
 -- ║  ONE-WAY IN PART: disabling unhooks the drag scripts,    ║
 -- ║  but the SetMovable / EnableMouse flags already written  ║
 -- ║  onto Blizzard frames stay until the next /reload. The   ║
 -- ║  config page says so and offers the reload.              ║
 -- ║                                                          ║
--- ║  Touching a protected frame from addon code taints it.   ║
--- ║  Both mouse handlers and the frame setup return early    ║
--- ║  under InCombatLockdown() on a protected frame -- those  ║
--- ║  three guards are load-bearing, never remove one.        ║
+-- ║  A protected frame never gets SetMovable / EnableMouse   ║
+-- ║  / StartMoving / SetPoint from insecure code: that       ║
+-- ║  taints its tree. It drags through a secure snippet,     ║
+-- ║  never in combat. Protection can arrive late (PVEFrame   ║
+-- ║  gains it with its result list), so the drag handlers    ║
+-- ║  re-check it per drag. The three InCombatLockdown        ║
+-- ║  guards are load-bearing, never remove one.              ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -451,6 +455,17 @@ local disabled = {}    -- [frame] = true while movement is suppressed via SetMov
 local moveTargets = {} -- [handle frame] = frame that actually moves
 local secureDrag = {}  -- .frame plus press-time cursor and centre while a protected drag is live
 
+local framePaths = {}  -- [frame] = dotted path it was registered under; keys the saved positions
+local applying = {}    -- [frame] = true while our own SetPoint is in flight
+local onShowExtra = {} -- [frame] = work Frame_OnShow runs after the saved point is applied
+
+-- Put back where it was dragged, the choice dialog opens off its own layout
+-- and the bonus roll prompt off the anchor Alert Frames gives it.
+local IGNORE_REMEMBER = {
+    BonusRollFrame = true,
+    PlayerChoiceFrame = true,
+}
+
 local MODIFIER_DOWN = {
     SHIFT = IsShiftKeyDown,
     CTRL = IsControlKeyDown,
@@ -560,7 +575,9 @@ local function SecureDrag_OnUpdate()
     local sw, sh = GetScreenWidth() * ues, GetScreenHeight() * ues
     if sx < 0 then sx = 0 elseif sx > sw then sx = sw end
     if sy < 0 then sy = 0 elseif sy > sh then sy = sh end
+    applying[frame] = true
     SecureSetPoint(frame, "CENTER", "CENTER", (sx - ucx * ues) / es, (sy - ucy * ues) / es)
+    applying[frame] = nil
 end
 
 local function StartSecureDrag(frame)
@@ -587,6 +604,74 @@ local function DragPath(button, modifierHeld, protected, inCombat, isDisabled)
         return "secure"
     end
     return "native"
+end
+
+-- Remembered positions ---------------------------------------------------------
+-- One saved point per window, put back from the window's OnShow and again
+-- whenever Blizzard re-points it: the panel manager writes the default spot
+-- on every open, so a single apply never holds.
+
+local function CanRemember(self, frame)
+    local db = self.db
+    if not (db and db.RememberPositions) or self.StopRunning then return false end
+    local path = framePaths[frame]
+    if not path or IGNORE_REMEMBER[path] then return false end
+    return true, path
+end
+
+function MF:Remember(frame)
+    local ok, path = CanRemember(self, frame)
+    if not ok then return end
+    local p, rel, rp, x, y = frame:GetPoint(1)
+    if not p or not KE:IsSafeValue(x) or not KE:IsSafeValue(y) then return end
+    -- Stops the client's layout cache restoring the dragged spot on its own.
+    -- An insecure write, so never on a protected window.
+    if frame.SetUserPlaced and not IsProtectedFrame(frame) then frame:SetUserPlaced(false) end
+    local db = self.db
+    if type(db.Positions) ~= "table" then db.Positions = {} end
+    db.Positions[path] = {
+        point = p,
+        relativeTo = (rel and rel.GetName and rel:GetName()) or "UIParent",
+        relPoint = rp or p,
+        x = x,
+        y = y,
+    }
+end
+
+function MF:ApplySaved(frame)
+    local ok, path = CanRemember(self, frame)
+    if not ok then return end
+    local rec = self.db.Positions and self.db.Positions[path]
+    if not rec or not rec.point then return end
+    applying[frame] = true
+    if IsProtectedFrame(frame) then
+        -- The snippet anchors to UIParent by construction.
+        SecureSetPoint(frame, rec.point, rec.relPoint or rec.point, rec.x or 0, rec.y or 0)
+    else
+        local rel = (rec.relativeTo and _G[rec.relativeTo]) or UIParent
+        frame:ClearAllPoints()
+        frame:SetPoint(rec.point, rel, rec.relPoint or rec.point, rec.x or 0, rec.y or 0)
+    end
+    applying[frame] = nil
+end
+
+-- Post-hooks on the moving frame. `applying` breaks the recursion from our
+-- own write; a live secure drag is never fought.
+function MF:Frame_OnSetPoint(frame)
+    if applying[frame] or secureDrag.frame == frame then return end
+    self:ApplySaved(frame)
+end
+
+function MF:Frame_OnShow(frame)
+    self:ApplySaved(frame)
+    local extra = onShowExtra[frame]
+    if extra then extra(frame) end
+end
+
+-- Windows return to Blizzard's layout the next time they open; one that is
+-- open now stays put until then.
+function MF:ResetPositions()
+    if self.db and type(self.db.Positions) == "table" then wipe(self.db.Positions) end
 end
 
 -- Movement handlers ----------------------------------------------------------
@@ -616,10 +701,12 @@ function MF:Frame_StopMoving(this, button)
     if IsProtectedFrame(moveTarget) or IsProtectedFrame(this) then
         if secureDrag.frame == moveTarget then
             StopSecureDrag()
+            self:Remember(moveTarget)
         end
         return
     end
     moveTarget:StopMovingOrSizing()
+    self:Remember(moveTarget)
 end
 
 function MF:HandleFrame(this, bindTo)
@@ -647,8 +734,26 @@ function MF:HandleFrame(this, bindTo)
     end
     moveTargets[thisFrame] = target
 
+    -- Saved positions key on the dotted path of the frame that MOVES, so a
+    -- window reached through a handle stores under the window.
+    framePaths[thisFrame] = framePaths[thisFrame]
+        or (type(this) == "string" and this)
+        or (thisFrame.GetName and thisFrame:GetName())
+    if not framePaths[target] then
+        framePaths[target] = (type(bindTo) == "string" and bindTo) or framePaths[thisFrame]
+    end
+
     self:SecureHookScript(thisFrame, "OnMouseDown", "Frame_StartMoving")
     self:SecureHookScript(thisFrame, "OnMouseUp", "Frame_StopMoving")
+
+    -- Several handles can share one target; each hook goes on once.
+    if not self:IsHooked(target, "OnShow") then
+        self:SecureHookScript(target, "OnShow", "Frame_OnShow")
+    end
+    if not self:IsHooked(target, "SetPoint") then
+        self:SecureHook(target, "SetPoint", "Frame_OnSetPoint")
+    end
+    if target:IsVisible() then self:ApplySaved(target) end
 end
 
 function MF:HandleFramesWithTable(frameTable, parent)
@@ -709,16 +814,20 @@ function MF:HandleAddon(_, addon)
                 frame:StopMovingOrSizing()
                 frame:SetMovable(backup)
             end
+            local function onShow(frame)
+                startStopMoving(frame)
+                RunNextFrame(GenerateFlatClosure(startStopMoving, frame))
+            end
 
             startStopMoving(_G.HeroTalentsSelectionDialog)
-            self:SecureHookScript(_G.PlayerSpellsFrame, "OnShow", function(frame)
-                startStopMoving(frame)
-                RunNextFrame(GenerateFlatClosure(startStopMoving, frame))
-            end)
-            self:SecureHookScript(_G.HeroTalentsSelectionDialog, "OnShow", function(frame)
-                startStopMoving(frame)
-                RunNextFrame(GenerateFlatClosure(startStopMoving, frame))
-            end)
+            -- Both frames already carry the Frame_OnShow hook, and AceHook
+            -- refuses a second one, so the fix rides that handler.
+            for _, frame in pairs({ _G.PlayerSpellsFrame, _G.HeroTalentsSelectionDialog }) do
+                if not self:IsHooked(frame, "OnShow") then
+                    self:SecureHookScript(frame, "OnShow", "Frame_OnShow")
+                end
+                onShowExtra[frame] = onShow
+            end
         end
     end)
 end
@@ -829,6 +938,9 @@ function MF:OnDisable()
     wipe(disabled)
     StopSecureDrag()
     wipe(combatQueue)
+    wipe(framePaths)
+    wipe(applying)
+    wipe(onShowExtra)
     self.initialized = nil
     self.StopRunning = nil
 end
