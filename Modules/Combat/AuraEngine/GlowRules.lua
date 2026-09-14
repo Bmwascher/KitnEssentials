@@ -44,10 +44,12 @@ GlowRules.FLIPBOOKS = {
 }
 
 -- Every selectable style, and which host draws it. The flipbook host steps a
--- sheet; the pixel host marches four masked dash strips. ResolveType keys off
--- this rather than FLIPBOOKS, which knows only about the sheet-based three.
+-- sheet; the pixel host marches four masked dash strips; the border host
+-- pulses four anchored edges. ResolveType keys off this rather than
+-- FLIPBOOKS, which knows only about the sheet-based three.
 GlowRules.STYLES = {
     pixel    = { kind = "pixel" },
+    border   = { kind = "border" },
     ants     = { kind = "flipbook" },
     procloop = { kind = "flipbook" },
     alert    = { kind = "flipbook" },
