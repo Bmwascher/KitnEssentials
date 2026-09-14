@@ -843,14 +843,21 @@ function H.StartCast(self)
     self.icon:SetTexture(texture or FALLBACK_ICON)
     self.spark:Show()
     self.text:SetText(text or name or "")
-    self.time:SetText("")
+    -- Written now rather than on the next OnUpdate tick, which would blank
+    -- the timer for a frame on every StartCast, a re-sync included.
+    local remaining = duration and duration:GetRemainingDuration()
+    if remaining then
+        local decimals = duration:EvaluateRemainingDuration(KE.curves.DurationDecimals)
+        self.time:SetFormattedText('%.' .. decimals .. 'f', remaining)
+    else
+        self.time:SetText("")
+    end
 
     H.UpdateBarColor(self)
     H.SetupKickCooldownBar(self)
     H.UpdateTargetNames(self)
     H.UpdateTargetMarker(self)
     H.UpdateGlow(self)
-    if self.PlayCastSound then self:PlayCastSound() end
     H.EnsureOnUpdate(self)
     self.frame:Show()
 end
@@ -945,18 +952,45 @@ function H.UpdateInterruptible(self)
     H.UpdateKickIndicator(self, nil)
 end
 
+-- Presence only: both reads are secret in restricted content, and a
+-- secret compares to nil without error.
+function H.UnitHasLiveCast(unit)
+    return UnitCastingInfo(unit) ~= nil or UnitChannelInfo(unit) ~= nil
+end
+
+-- A STOP can arrive after the next cast's START during fast recasts, so a
+-- non-interrupt end with a cast still live re-syncs instead of ending. A
+-- channel STOP never re-syncs: in restricted content the cast reads can
+-- still report the finished channel as secret values, and nothing would
+-- clear a bar re-synced onto it.
+function H.ShouldResyncOnEnd(isChannelStop, wasInterrupted, hasLiveCast)
+    if isChannelStop or wasInterrupted then return false end
+    return hasLiveCast == true
+end
+
 function H.OnCastEvent(self, event, unit, ...)
     if unit ~= self.unit then return end
     if event:find("START") then
         H.StartCast(self)
+        -- Sounded from the event: StartCast also runs for a cast already in
+        -- progress (a focus change, a re-sync), and only a START is a new
+        -- cast. The flags stay nil when StartCast showed nothing.
+        if (self.casting or self.channeling or self.empowering) and self.PlayCastSound then
+            self:PlayCastSound()
+        end
     elseif event:find("STOP") then
         local interruptedBy
-        if event:find("CHANNEL") then
+        local isChannelStop = event:find("CHANNEL") ~= nil
+        if isChannelStop then
             interruptedBy = select(3, ...)
         elseif event:find("EMPOWER") then
             interruptedBy = select(4, ...)
         end
         local wasInterrupted = interruptedBy ~= nil
+        if H.ShouldResyncOnEnd(isChannelStop, wasInterrupted, H.UnitHasLiveCast(unit)) then
+            H.StartCast(self)
+            return
+        end
         H.EndCast(self, wasInterrupted, interruptedBy)
     elseif event:find("INTERRUPTED") then
         local interruptedBy = select(3, ...)
@@ -976,6 +1010,10 @@ function H.OnCastEvent(self, event, unit, ...)
         end
         H.EndCast(self, true, interruptedBy)
     elseif event:find("FAILED") then
+        if H.ShouldResyncOnEnd(false, false, H.UnitHasLiveCast(unit)) then
+            H.StartCast(self)
+            return
+        end
         H.EndCast(self, false)
     elseif event:find("INTERRUPTIBLE") then
         H.UpdateInterruptible(self)

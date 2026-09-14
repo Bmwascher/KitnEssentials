@@ -25,4 +25,16 @@ describe("Castbar end-of-cast decisions", function()
             assert.equals(c.hold, H.ShouldHoldOnEnd(c.settings, c.interrupted), c.name)
         end
     end)
+
+    it("re-syncs a stale end onto a live cast, except after an interrupt or a channel stop", function()
+        local cases = {
+            { channelStop = false, interrupted = false, live = true,  resync = true,  name = "stale cast stop" },
+            { channelStop = false, interrupted = false, live = false, resync = false, name = "nothing casting" },
+            { channelStop = false, interrupted = true,  live = true,  resync = false, name = "interrupt keeps its overlay" },
+            { channelStop = true,  interrupted = false, live = true,  resync = false, name = "channel stop always ends" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.resync, H.ShouldResyncOnEnd(c.channelStop, c.interrupted, c.live), c.name)
+        end
+    end)
 end)
