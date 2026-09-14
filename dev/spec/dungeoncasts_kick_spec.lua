@@ -51,3 +51,20 @@ describe("DungeonCasts kick range fade", function()
         end
     end)
 end)
+
+describe("DungeonCasts Targeting You arming rule", function()
+    it("arms only for an enabled glow on a non-tank spec", function()
+        local DC = L.loadDungeonCasts()
+        local cases = {
+            { enabled = true,  tank = false, armed = true,  name = "enabled, not a tank" },
+            { enabled = true,  tank = true,  armed = false, name = "enabled, tank" },
+            { enabled = false, tank = false, armed = false, name = "disabled" },
+            { enabled = nil,   tank = false, armed = true,  name = "unset defaults on" },
+        }
+        for _, c in ipairs(cases) do
+            DC.db = { TargetGlow = { GlowEnabled = c.enabled } }
+            DC.isTank = c.tank
+            assert.equals(c.armed, DC:TargetGlowArmed(), c.name)
+        end
+    end)
+end)
