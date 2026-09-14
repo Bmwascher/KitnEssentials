@@ -855,14 +855,21 @@ function H.StartCast(self)
     self.frame:Show()
 end
 
-function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
+-- Only a kick is worth holding for: a bar that lingers after every cast
+-- reads as stuck.
+function H.ShouldHoldOnEnd(holdSettings, wasInterrupted)
+    if not holdSettings or not holdSettings.Enabled then return false end
+    return wasInterrupted == true
+end
+
+function H.EndCast(self, wasInterrupted, interruptedBy)
     if not self.frame or not self.frame:IsShown() then return end
     if self.holdTimer then return end
 
     H.CancelKickReadyTimer(self, "EndCast")
 
     local holdSettings = self.db.HoldTimer
-    if not holdSettings or not holdSettings.Enabled then
+    if not H.ShouldHoldOnEnd(holdSettings, wasInterrupted) then
         self.spark:Hide()
         H.HideTargetNames(self)
         H.HideTargetMarker(self)
@@ -881,23 +888,14 @@ function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
     self.castBar:SetValue(1)
     self.time:SetText("")
 
-    local texture = self.castBar:GetStatusBarTexture()
-    if wasInterrupted then
-        local interrupterName = interruptedBy and H.GetColoredNameFromGUID(interruptedBy)
-        if interrupterName then
-            self.text:SetText(("Interrupted by %s"):format(interrupterName))
-        else
-            self.text:SetText("Interrupted")
-        end
-        local r, g, b, a = KE:ResolveColor(holdSettings.InterruptedColor, { 0.1, 0.8, 0.1, 1 })
-        texture:SetVertexColor(r, g, b, a)
-    elseif showHold then
-        local r, g, b, a = KE:ResolveColor(holdSettings.FailedColor, { 0.5, 0.5, 0.5, 1 })
-        texture:SetVertexColor(r, g, b, a)
+    local interrupterName = interruptedBy and H.GetColoredNameFromGUID(interruptedBy)
+    if interrupterName then
+        self.text:SetText(("Interrupted by %s"):format(interrupterName))
     else
-        local r, g, b, a = KE:ResolveColor(holdSettings.SuccessColor, { 0.8, 0.1, 0.1, 1 })
-        texture:SetVertexColor(r, g, b, a)
+        self.text:SetText("Interrupted")
     end
+    local r, g, b, a = KE:ResolveColor(holdSettings.InterruptedColor, { 0.1, 0.8, 0.1, 1 })
+    self.castBar:GetStatusBarTexture():SetVertexColor(r, g, b, a)
 
     H.ResetCastState(self)
 
@@ -959,7 +957,7 @@ function H.OnCastEvent(self, event, unit, ...)
             interruptedBy = select(4, ...)
         end
         local wasInterrupted = interruptedBy ~= nil
-        H.EndCast(self, wasInterrupted, wasInterrupted, interruptedBy)
+        H.EndCast(self, wasInterrupted, interruptedBy)
     elseif event:find("INTERRUPTED") then
         local interruptedBy = select(3, ...)
         if DEBUG_CB then
@@ -976,9 +974,9 @@ function H.OnCastEvent(self, event, unit, ...)
             KE:Print(("[CB] INTERRUPTED unit=%s interruptedBy=%s player=%s pet=%s"):format(
                 tostring(unit), byStr, tostring(playerGUID), tostring(petGUID)))
         end
-        H.EndCast(self, true, true, interruptedBy)
+        H.EndCast(self, true, interruptedBy)
     elseif event:find("FAILED") then
-        H.EndCast(self, true, false)
+        H.EndCast(self, false)
     elseif event:find("INTERRUPTIBLE") then
         H.UpdateInterruptible(self)
     end
