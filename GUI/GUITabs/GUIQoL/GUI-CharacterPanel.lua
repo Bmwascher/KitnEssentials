@@ -315,8 +315,20 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         end,
         tooltip = "For Hex of Leeching: Short reads \"Leech\", Verbose reads \"Leeching\", Full reads \"Hex of Leeching\". Long names are shortened to fit beside the slot whichever style you pick.",
     })
-    rowSDStyle:AddWidget(enchantStyleDrop, 1)
+    rowSDStyle:AddWidget(enchantStyleDrop, 0.5)
     manager:Register(enchantStyleDrop, "all")
+
+    local rankCheck = GUIFrame:CreateCheckbox(rowSDStyle, "Show Enchant Rank", {
+        value = db.ShowEnchantRank == true,
+        callback = function(checked)
+            db.ShowEnchantRank = checked
+            local CP = GetModule()
+            if CP then CP:RefreshSlotDisplays() end
+        end,
+        tooltip = "Adds the crafted enchant's tier after its name, so a rank 1 enchant reads apart from a rank 3.",
+    })
+    rowSDStyle:AddWidget(rankCheck, 0.5)
+    manager:Register(rankCheck, "all")
     cardSD:AddRow(rowSDStyle, Theme.rowHeight)
 
     local rowSD2 = GUIFrame:CreateRow(cardSD.content, Theme.rowHeightLast)

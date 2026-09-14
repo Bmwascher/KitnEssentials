@@ -511,13 +511,19 @@ function CP:GetSlotEnchantID(unit, slot)
     return nil
 end
 
--- Effect name from the tooltip's "Enchanted: Enchant <Slot> - <Effect>" line.
--- Returns the full "Enchant <Slot> - <Effect>" text after the "Enchanted: "
--- prefix. ProcessEnchantText does the nickname-map / strip / abbreviate (in that
--- order), so we deliberately do NOT pre-strip here.
+-- The rank is read off the raw line before the atlas is stripped: a crafted
+-- enchant shows its tier only as that icon, and nothing else exposes it.
+local function ParseEnchantLine(text)
+    local rank = tonumber(text:match("%-Tier(%d)"))
+    text = text:gsub("%s*|A:.-|a", "")
+    return strtrim(text), rank
+end
+CP._ParseEnchantLine = ParseEnchantLine
+
+-- Effect name and rank from the tooltip's "Enchanted: ..." line, the text after
+-- the prefix as the tooltip gives it: ProcessEnchantText strips and maps it.
 -- data (optional): pre-fetched C_TooltipInfo.GetInventoryItem(unit, slot) table
--- shared by the caller's render pass — each fetch allocates a fresh table, so
--- the render paths thread ONE read through enchant/track/gem consumers.
+-- shared by the caller's render pass, so one read serves every consumer.
 local function GetSlotEnchantName(unit, slot, data)
     unit = unit or "player"
     data = data or C_TooltipInfo.GetInventoryItem(unit, slot)
@@ -526,11 +532,7 @@ local function GetSlotEnchantName(unit, slot, data)
     for _, line in ipairs(data.lines) do
         local text = line.leftText
         if text and text:find(prefix, 1, true) == 1 then
-            local body = text:sub(#prefix + 1)
-            -- Strip the trailing quality-atlas markup ("|A:Professions-...|a") that
-            -- crafted enchants append, so it can't leak into the label.
-            body = body:gsub("%s*|A:.-|a", "")
-            return strtrim(body)
+            return ParseEnchantLine(text:sub(#prefix + 1))
         end
     end
     return nil
@@ -541,16 +543,23 @@ end
 local SLOT_ENCHANT_MAX_LEN = 18
 local SLOT_GEM_ICON_SIZE   = 14
 
+-- Cut first, then append, so the digit is never the part that is cut.
+local function FinishEnchantLabel(label, rank, showRank)
+    if #label > SLOT_ENCHANT_MAX_LEN then label = label:sub(1, SLOT_ENCHANT_MAX_LEN) end
+    if showRank and rank then label = label .. " " .. rank end
+    return label
+end
+CP._FinishEnchantLabel = FinishEnchantLabel
+
 function CP:ResolveEnchantLabel(unit, slot, data)
     unit = unit or "player"
     -- Enchant-ID check is the locale-robust "is it enchanted?" gate; the readable
     -- label comes from the tooltip + ProcessEnchantText.
     if not self:GetSlotEnchantID(unit, slot) then return nil end
-    local name = GetSlotEnchantName(unit, slot, data)
+    local name, rank = GetSlotEnchantName(unit, slot, data)
     if not name then return "Enchanted" end
     name = ProcessEnchantText(name, self.db.EnchantNameStyle)
-    if #name > SLOT_ENCHANT_MAX_LEN then name = name:sub(1, SLOT_ENCHANT_MAX_LEN) end
-    return name
+    return FinishEnchantLabel(name, rank, self.db.ShowEnchantRank)
 end
 
 function CP:GetSlotItemLevel(unit, slot)

@@ -478,6 +478,44 @@ describe("Enchant name style", function()
 end)
 
 ---------------------------------------------------------------------------------
+-- Enchant rank
+---------------------------------------------------------------------------------
+-- The tier of a crafted enchant is only ever the quality atlas on the tooltip
+-- line; the read has to happen before that markup is stripped, and the digit
+-- has to survive the label cut. strtrim is a WoW global the loader does not
+-- carry, so the parse case supplies it.
+describe("Enchant rank", function()
+    local function trim(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
+
+    it("reads the tier off the raw line and drops the atlas from the name", function()
+        local CP = loadCP({ strtrim = trim })
+        local cases = {
+            { line = "Rite of the Hash'ey |A:Professions-ChatIcon-Quality-12-Tier2:20:20|a",
+              name = "Rite of the Hash'ey", rank = 2 },
+            { line = "Radiant Critical Strike", name = "Radiant Critical Strike", rank = nil },
+        }
+        for _, c in ipairs(cases) do
+            local name, rank = CP._ParseEnchantLine(c.line)
+            assert.equals(c.name, name, c.line)
+            assert.equals(c.rank, rank, c.line)
+        end
+    end)
+
+    it("appends the rank only when asked and read, after the length cut", function()
+        local CP = loadCP()
+        local cases = {
+            { label = "Leech", rank = 2,   show = true,  want = "Leech 2" },
+            { label = "Leech", rank = 2,   show = false, want = "Leech" },
+            { label = "Leech", rank = nil, show = true,  want = "Leech" },
+            { label = "abcdefghijklmnopqrstu", rank = 3, show = true, want = "abcdefghijklmnopqr 3" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, CP._FinishEnchantLabel(c.label, c.rank, c.show), c.label)
+        end
+    end)
+end)
+
+---------------------------------------------------------------------------------
 -- Item H: conditional auto-apply
 ---------------------------------------------------------------------------------
 describe("Enchant auto-apply: unambiguous slot resolution", function()
