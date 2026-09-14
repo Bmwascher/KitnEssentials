@@ -752,10 +752,11 @@ end
 ---------------------------------------------------------------------------------
 
 -- Challenge-mode map ID -> the short name players say. The first value is
--- BigWigs' locale key for that dungeon; with BigWigs loaded its own locale
--- answers, so a new season's names arrive with its update. The second is
--- the English text used when it is not loaded. Shared by the keystone
--- reminders and the Group Finder dungeon toggles so the two never disagree.
+-- BigWigs' locale key for that dungeon, whose wording wins while BigWigs is
+-- loaded; the second is the English text used when it is not. A map ID
+-- missing from this list falls to the initials fallback either way. Shared
+-- by the keystone reminders and the Group Finder dungeon toggles so the two
+-- never disagree.
 local KEYSTONE_SHORT = {
     [500] = { "TheRookery", "ROOK" },
     [504] = { "DarkflameCleft", "DFC" },
