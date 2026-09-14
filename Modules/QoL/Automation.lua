@@ -1172,9 +1172,9 @@ end
 --
 -- issecretvalue before type(), because the type check is itself a read and a
 -- secret value throws on one. Whether this return can be secret is undocumented
--- both ways; a reference addon records a user report of the comparison throwing
--- here, and a single readable in-game sample cannot rule out a situational
--- secret. Unreadable therefore means say nothing, not guess.
+-- both ways; there is a field report of the comparison throwing here, and a
+-- single readable in-game sample cannot rule out a situational secret.
+-- Unreadable therefore means say nothing, not guess.
 local function ReadRepairBill()
     local cost = GetRepairAllCost()
     if KE:IsSecretValue(cost) then return end

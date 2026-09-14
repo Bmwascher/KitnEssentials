@@ -55,9 +55,9 @@ local math_ceil = math.ceil
 local math_floor = math.floor
 
 -- Applied unconditionally to every group, regardless of the user's own
--- blocklist. These are the never-secret nuisance auras the reference filters;
--- spell-ID filtering only works at all for never-secret spells, which is why
--- the list cannot be opened up to arbitrary boss debuffs.
+-- blocklist. These are never-secret nuisance auras; spell-ID filtering only
+-- works at all for never-secret spells, which is why the list cannot be
+-- opened up to arbitrary boss debuffs.
 Rules.HARDCODED_BLOCKLIST = {
     57723,   -- Exhaustion
     390435,  -- Exhaustion
@@ -269,9 +269,8 @@ function Rules.BuildExternalsPreview(icons, iconsBig, total, showBig)
     return entries
 end
 
--- Two inputs and no more. There are no "load conditions" here -- that is
--- the reference's concept for its user-created displays, and neither KE module
--- has any such setting.
+-- Two inputs and no more. There are no "load conditions" here; neither KE
+-- module has any such setting.
 --
 -- vehicleDisabled is a stored flag the event handlers maintain, NOT a live
 -- query: the API that answers it is unreliable at the moment the entry event

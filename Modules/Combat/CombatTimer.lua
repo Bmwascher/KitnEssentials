@@ -28,7 +28,7 @@ CT.text = nil
 CT.lastDisplayedText = ""
 CT.isPreview = false
 
--- Brackets live in the timer string itself, as the reference renders them.
+-- Brackets live in the timer string itself.
 -- They were previously two extra FontStrings pinned to the frame edges, which
 -- left the space between a bracket and the digits to whatever the frame sizing
 -- had spare rather than to the font's own spacing. Cached because FormatTime

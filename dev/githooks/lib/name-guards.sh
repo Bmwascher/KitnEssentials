@@ -48,6 +48,21 @@ ng_dates="$ng_dates|(^|[^0-9])(0?[1-9]|[12][0-9]|3[01])-(0?[1-9]|1[0-2])-[0-9]{2
 ng_dates="$ng_dates|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b[,[:space:]]+(19|20)[0-9][0-9]"
 ng_dates="$ng_dates|\b(january|february|march|april|june|july|august|september|october|november|december)\b[,[:space:]]+(19|20)[0-9][0-9]"
 
+# Origin vocabulary that names no addon and is still provenance: "ported from
+# the upstream reference (build 745)" tells a reader the code came from
+# somewhere else and from which release. Blocked on sight in commit messages
+# and shipped comments. Deliberately narrow: "port", "parity" and "derived
+# from" stay legal because the project says them about its own code. The API
+# reference clone is scrubbed first (ng_scrub_apiref): "api reference" and
+# "reference build 12.1.0.69382" are that clone, not an addon.
+ng_origin='\bupstream\b|\bthe reference\b|\breference'"'"'s\b'
+ng_origin="$ng_origin"'|\breferences? (fix|fixes|addon|addons|implementation|build|builds|version|module|code|behaviou?r|shape|list|path|row|logic|handling)\b'
+ng_origin="$ng_origin"'|\bbuilds? [0-9]{2,4}([^0-9.]|$)|\b(verbatim|fidelity) port\b|\bport(ed)? verbatim\b|\b(source|donor) (addon|module|implementation)\b'
+
+ng_scrub_apiref() {
+    sed -E 's/reference build [0-9]+(\.[0-9]+)+|(wow-)?api[- ]reference|reference clone|reference-tracker/apiref/Ig'
+}
+
 # ng_valid_pattern <tag> <name> <pattern> — grep exits 1 for no match and 2
 # for a bad pattern. Unchecked, an unparsable set errors into the scanners'
 # fallbacks and reads as a clean scan.
@@ -80,6 +95,7 @@ ng_load() {
     fi
     ng_valid_pattern "$tag" "ng_history" "$ng_history" || return 1
     ng_valid_pattern "$tag" "ng_dates" "$ng_dates" || return 1
+    ng_valid_pattern "$tag" "ng_origin" "$ng_origin" || return 1
     local set val
     for set in "$@"; do
         eval "val=\${$set:-}"
@@ -172,12 +188,18 @@ ng_commit_comments() {
 # No head inside the pipelines: under pipefail, grep dying on SIGPIPE reads
 # as "no match" and waves the push through.
 ng_scan_text() {
-    local tag="$1" noun="$2" text="$3" hit hit2 chit
+    local tag="$1" noun="$2" text="$3" hit hit2 chit ohit
     hit="$(printf '%s\n' "$text" | grep -ioE "$stems" | sort -u | tr '\n' ' ' || true)"
     hit2="$(printf '%s\n' "$text" | grep -iwoE "$shorts" | sort -u | tr '\n' ' ' || true)"
     if [ -n "$hit$hit2" ]; then
         echo "[$tag] BLOCKED: $noun contains upstream addon name(s): $hit$hit2" >&2
         echo "[$tag] Reference provenance belongs in local docs, never in published history." >&2
+        return 1
+    fi
+    ohit="$(printf '%s\n' "$text" | ng_scrub_apiref | grep -ioE "$ng_origin" | sort -u | tr '\n' ' ' || true)"
+    if [ -n "$ohit" ]; then
+        echo "[$tag] BLOCKED: $noun carries origin vocabulary: $ohit" >&2
+        echo "[$tag] Say what the change does and why it is right, never where it came from: an unnamed upstream is still provenance." >&2
         return 1
     fi
     # Compat names are addons the project legitimately talks about — it
@@ -196,7 +218,7 @@ ng_scan_text() {
 
 # ng_scan_comments <tag> <noun> <comment lines> — the full comment rule set.
 ng_scan_comments() {
-    local tag="$1" noun="$2" comments="$3" fail=0 hits chits hhits provlines
+    local tag="$1" noun="$2" comments="$3" fail=0 hits chits hhits provlines ohits
     [ -n "$comments" ] || return 0
     # namesCI holds names that are not English or WoW words, so they scan
     # case-insensitively; namesCS holds names that double as plausible WoW
@@ -212,6 +234,11 @@ ng_scan_comments() {
         echo "[$tag] BLOCKED: $noun — addon(s) named next to provenance vocabulary: $chits" >&2
         fail=1
     fi
+    ohits="$(printf '%s\n' "$comments" | ng_scrub_apiref | grep -ioE "$ng_origin" | sort -u | tr '\n' ' ' || true)"
+    if [ -n "$ohits" ]; then
+        echo "[$tag] BLOCKED: $noun — origin vocabulary (an unnamed upstream is still provenance): $ohits" >&2
+        fail=1
+    fi
     hhits="$( { printf '%s\n' "$comments" | grep -nE "$ng_history"; printf '%s\n' "$comments" | grep -niE "$ng_dates"; } | sort -u || true)"
     if [ -n "$hhits" ]; then
         echo "[$tag] BLOCKED: $noun — plan-step/date/history references:" >&2
@@ -219,7 +246,7 @@ ng_scan_comments() {
         fail=1
     fi
     if [ "$fail" -eq 1 ]; then
-        echo "[$tag] Comment rules: decisions stand on their own — no names, no plan steps, no dates, no session history in shipped comments." >&2
+        echo "[$tag] Comment rules: decisions stand on their own — no names, no origin, no plan steps, no dates, no session history in shipped comments." >&2
         return 1
     fi
     return 0
