@@ -41,6 +41,8 @@ local YOURKEY_ICON = 4352494   -- keystone icon 2
 local AUTO_HIDE_SECONDS = 300  -- 5 minutes
 local KEY_ICON_GAP = 4         -- px between the key line's dungeon icon and text
 local KEY_ICON_SCALE = 1.2     -- key-line icon renders slightly larger than the text
+local KEY_LINE_GAP = 8         -- px between the icon's bottom edge and the key line
+local KEY_TEXT_LIFT = 0.12     -- share of the font size the key text is raised by
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -115,7 +117,6 @@ local function CreateReminderFrame(nameSuffix, iconID)
     -- Standard KE icon treatment (zoom crop + 1px borders) needs a frame
     -- wrapper — AddIconBorders anchors its border textures to frame edges.
     local keyIcon = CreateFrame("Frame", nil, frame)
-    keyIcon:SetPoint("RIGHT", keyText, "LEFT", -KEY_ICON_GAP, 0)
     keyIcon:Hide()
     local keyIconTex = keyIcon:CreateTexture(nil, "ARTWORK")
     keyIconTex:SetAllPoints()
@@ -140,20 +141,40 @@ local function GetOwnedKeyDisplay()
     return string_format("%s - %d", name, level), texture
 end
 
--- Icon renders square, sized off the text height (KEY_ICON_SCALE).
+-- Icon renders square, sized off the text height (KEY_ICON_SCALE), on a
+-- whole number of pixels so all four border edges land on the grid.
 local function KeyIconSize()
     local fontSize = (KH.db and KH.db.FontSize) or 36
-    return math.floor(fontSize * KEY_ICON_SCALE + 0.5)
+    return KE:PixelSnap(math.floor(fontSize * KEY_ICON_SCALE + 0.5))
 end
 
+-- Icon and text laid out as one centred pair under the frame. The icon is
+-- anchored to the frame, never to the text: a fontstring's edge lands on a
+-- fraction of a pixel, and a 1 px border on a fractional edge splits across
+-- two rows. Anchoring from BOTTOMLEFT with a snapped offset keeps the icon's
+-- left edge on the grid at any frame width. The text hangs off the icon with
+-- its top and bottom pinned to it, lifted by a share of the font size because
+-- the face draws its glyphs below the middle of the line box.
 local function LayoutKeyLine(frame)
     local iconSize = KeyIconSize()
     frame.keyIcon:SetSize(iconSize, iconSize)
+    frame.keyIcon:ClearAllPoints()
     frame.keyText:ClearAllPoints()
-    -- Shift right by half the icon+gap so the icon+text pair stays centered
-    -- under the frame; no shift when the icon is hidden.
-    local xOffset = frame.keyIcon:IsShown() and (iconSize + KEY_ICON_GAP) / 2 or 0
-    frame.keyText:SetPoint("TOP", frame, "BOTTOM", xOffset, -8)
+    if frame.keyIcon:IsShown() then
+        local textWidth = frame.keyText:GetStringWidth() or 0
+        local pairWidth = iconSize + KEY_ICON_GAP + textWidth
+        local left = KE:PixelSnap((frame:GetWidth() - pairWidth) / 2)
+        frame.keyIcon:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", left, -KE:PixelSnap(KEY_LINE_GAP))
+        local lift = KE:PixelSnap(((KH.db and KH.db.FontSize) or 36) * KEY_TEXT_LIFT)
+        frame.keyText:SetPoint("TOPLEFT", frame.keyIcon, "TOPRIGHT", KEY_ICON_GAP, lift)
+        frame.keyText:SetPoint("BOTTOMLEFT", frame.keyIcon, "BOTTOMRIGHT", KEY_ICON_GAP, lift)
+        frame.keyText:SetJustifyH("LEFT")
+        frame.keyText:SetJustifyV("MIDDLE")
+    else
+        frame.keyText:SetPoint("TOP", frame, "BOTTOM", 0, -KEY_LINE_GAP)
+        frame.keyText:SetJustifyH("CENTER")
+        frame.keyText:SetJustifyV("MIDDLE")
+    end
 end
 
 local function SetKeyLine(frame, text, icon)
