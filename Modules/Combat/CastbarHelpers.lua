@@ -233,16 +233,11 @@ end
 -- non-player interrupters — Demo warlock Felhunter Spell Lock and Felguard
 -- Axe Toss kicks degraded to bare "Interrupted" with no "by X".
 --
--- 12.0 secret-value note: in restricted contexts (M+ / raids / outdoor cast
--- restrictions), the interrupter GUID itself is SecretWhenUnitSpellCastRestricted,
--- and so are UnitNameFromGUID's name return and UnitClassFromGUID's classFile.
--- Empirically (DEBUG_CB trace, open-world Felhunter/Felguard test),
--- secret cstrings flow through WrapTextInColorCode -> string.format -> SetText
--- without taint errors and render as their underlying values. So we deliberately
--- do NOT bail on secret-name; only on truly nil. This contradicts the "Do NOT
--- concat with color codes" guidance documented for TargetedSpells in
--- another module's surface — that warning is module-context-dependent, not
--- universal. The castbar interrupt text path is safe.
+-- Secret-value note: the interrupter GUID is secret with its event
+-- (SecretWhenUnitSpellCastRestricted) and the name UnitNameFromGUID returns
+-- is SecretWhenUnitIdentityRestricted. WrapTextInColorCode (C_ColorUtil) and
+-- SetFormattedText accept a secret string, so a secret name is not a reason
+-- to bail; only nil is.
 --
 -- The `if interruptedBy ~= nil` case (Blizzard omits the GUID for some
 -- player-cast interrupts like Avenger's Shield, sometimes for warlock kicks)
@@ -713,14 +708,9 @@ function H.UpdateTargetNames(self)
         return
     end
 
-    -- UnitSpellTargetName returns the target's NAME (cstring), secret when
-    -- the target is a player. SetText accepts secret strings directly. We
-    -- separate name (SetText) and color (SetTextColor with clean r/g/b)
-    -- here for clarity, but empirical testing on UNIT_SPELLCAST_INTERRUPTED
-    -- (see H.GetColoredNameFromGUID above) shows that secret
-    -- cstrings ALSO survive WrapTextInColorCode/string.format/SetText
-    -- without taint errors — so concat with color codes is not a hazard,
-    -- just less readable than the split SetText + SetTextColor pattern.
+    -- UnitSpellTargetName returns the target's name, secret when the target
+    -- is a player. SetText accepts a secret string; the colour goes through
+    -- SetTextColor with plain r/g/b so no Lua string work touches the name.
     local targetName = UnitSpellTargetName and UnitSpellTargetName(unit) or nil
     if not targetName then
         targetText:SetAlpha(0)
@@ -897,7 +887,7 @@ function H.EndCast(self, wasInterrupted, interruptedBy)
 
     local interrupterName = interruptedBy and H.GetColoredNameFromGUID(interruptedBy)
     if interrupterName then
-        self.text:SetText(("Interrupted by %s"):format(interrupterName))
+        self.text:SetFormattedText("Interrupted by %s", interrupterName)
     else
         self.text:SetText("Interrupted")
     end
