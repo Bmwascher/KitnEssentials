@@ -197,6 +197,7 @@ local enchantNicknames = {
     ["Strength of Halazzi"]     = "Bleed",
     ["Worldsoul Aegis"]         = "Shield->AoE",
     ["Worldsoul Tenacity"]      = "Proc Vers",
+    ["Rite of the Hash'ey"]      = "Proc Secondary",
     ["Empowered Blessing of Speed"] = "Speed+Vigor",
     ["Blessing of Speed"]           = "Speed",
     ["Empowered Rune of Avoidance"] = "Avoid+MS",
@@ -212,11 +213,9 @@ local enchantNicknames = {
     ["Mark of the Magister"]   = "Int & Mana",
     ["Mark of the Rootwarden"] = "Agi & Speed",
     ["Mark of the Worldsoul"]  = "Primary Stat",
-    ["Arcanoweave Spellthread"]    = "Int & Mana",
     ["Blood Knight's Armor Kit"]   = "Agi/Str & Armor",
     ["Forest Hunter's Armor Kit"]  = "Ag/Str & Stam",
     ["Thalassian Scout Armor Kit"] = "Agi/Str",
-    ["Bright Linen Spellthread"]   = "Int",
     ["Shaladrassil's Roots"] = "Leech & Stam",
     ["Silvermoon's Mending"] = "Leech",
     ["Farstrider's Hunt"]    = "Speed & Stam",
@@ -311,6 +310,14 @@ local function ProcessEnchantText(text, style)
         text = EnchantKeyword(text)
         _enchantLabelCache[cacheKey] = text
         return text
+    end
+
+    -- An enchant that prints its effect instead of a name ("+41 Intellect &
+    -- +115 Stamina": spellthreads, armour kits) starts with a number once the
+    -- signs are gone. The numbers change with the rank, so drop them and let
+    -- the stat words carry the label.
+    if text:find("^%d") then
+        text = text:gsub("%d+%%?%s*", "")
     end
 
     -- Nickname values are literal display labels. Iterate longest-key-first (see

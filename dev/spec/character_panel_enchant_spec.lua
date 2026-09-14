@@ -451,6 +451,18 @@ describe("Enchant name style", function()
         assert.is_nil(CP._ProcessEnchantText(raw, "short"):find("+", 1, true))
     end)
 
+    it("reduces an effect line to its stat words with the numbers dropped, short style only", function()
+        local CP = loadCP()
+        local cases = {
+            { line = "+41 Intellect & +115 Stamina", style = "short",   label = "Int & Stam" },
+            { line = "+41 Intellect & +4% Mana",     style = "short",   label = "Int & Mana" },
+            { line = "+10 Stats 2",                  style = "verbose", label = "2" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.label, CP._ProcessEnchantText(c.line, c.style), c.style .. " " .. c.line)
+        end
+    end)
+
     -- The cache defect. This case MUST be seen to fail against a cache keyed
     -- on the raw text alone: that is what proves it tests the key and not
     -- merely the resolver.
