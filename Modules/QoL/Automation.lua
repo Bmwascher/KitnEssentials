@@ -608,11 +608,13 @@ local function SetupSkipCinematics()
     cinematicFrame = CreateFrame("Frame")
     cinematicFrame:RegisterEvent("CINEMATIC_START")
     cinematicFrame:RegisterEvent("PLAY_MOVIE")
-    cinematicFrame:SetScript("OnEvent", function(_, event)
+    cinematicFrame:SetScript("OnEvent", function(_, event, canBeCancelled)
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
         if not AU.db.SkipCinematics then return end
         if event == "CINEMATIC_START" then
+            -- One that cannot be cancelled is a vehicle or scene sequence, where
+            -- Blizzard's cancel falls through to CancelScene or VehicleExit.
+            if KE:IsFullyRestricted() and not canBeCancelled then return end
             CinematicFrame_CancelCinematic()
         elseif event == "PLAY_MOVIE" then
             pcall(GameMovieFinished)

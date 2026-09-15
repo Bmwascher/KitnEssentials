@@ -1682,3 +1682,36 @@ describe("Automation auto role check", function()
         end)
     end
 end)
+
+---------------------------------------------------------------------------------
+-- Skip Cinematics under full restriction. Only a cinematic that can be cancelled
+-- is skipped there: for any other, Blizzard's cancel ends a scene or exits a
+-- vehicle.
+---------------------------------------------------------------------------------
+describe("Automation Skip Cinematics restriction", function()
+    local cases = {
+        { label = "skips a cancellable cinematic under full restriction",
+          restricted = true, cancellable = true, cancels = 1 },
+        { label = "refuses one that cannot be cancelled under full restriction",
+          restricted = true, cancellable = false, cancels = 0 },
+        { label = "skips one that cannot be cancelled when unrestricted",
+          restricted = false, cancellable = false, cancels = 1 },
+    }
+
+    for _, case in ipairs(cases) do
+        it(case.label, function()
+            -- The module caches this global at load, so the spy goes in first.
+            local cancels = 0
+            _G.CinematicFrame_CancelCinematic = function() cancels = cancels + 1 end
+            local fx = newFixture()
+            local AU = fx.AU
+            AU.db = { Enabled = true, SkipCinematics = true }
+            AU:ApplySettings()
+            local setup = findUpvalue(AU.ApplySettings, "SetupSkipCinematics")
+            local frame = findUpvalue(setup, "cinematicFrame")
+            fx.KE.IsFullyRestricted = function() return case.restricted end
+            frame:Fire("CINEMATIC_START", case.cancellable, 0)
+            assert.equals(case.cancels, cancels)
+        end)
+    end
+end)
