@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-Utilities.lua                                       ║
--- ║  GUI: six small utilities on one page. The per-module    ║
+-- ║  GUI: seven small utilities on one page. The per-module  ║
 -- ║  builders stay registered under their own ids and are    ║
 -- ║  dispatched here as tabs.                                ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -11,6 +11,7 @@ local GUIFrame = KE.GUIFrame
 
 GUIFrame:RegisterTabbedContent("Utilities", {
     { id = "PIMacroBuilder",        label = "Priest: PI Macro" },
+    { id = "PIAssist",              label = "Priest: PI Assist" },
     { id = "RaidNotifications",     label = "Raid Notifications" },
     { id = "ReadyCheckConsumables", label = "Ready Check" },
     { id = "Recuperate",            label = "Recuperate" },

@@ -72,6 +72,7 @@
     <Script file="GUITabs\GUIClassUtilities\GUI-HavocTracker.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-SpellAlerts.lua" />
     <Script file="GUITabs\GUIClassUtilities\GUI-PIMacroBuilder.lua" />
+    <Script file="GUITabs\GUIClassUtilities\GUI-PIAssist.lua" />
 
     <!-- Utilities tabs -->
     <Script file="GUITabs\GUIUtilities\GUI-PlayerAbsorbs.lua" />
