@@ -882,7 +882,6 @@ local function SetupAutoSellRepair()
     merchantFrame:RegisterEvent("MERCHANT_SHOW")
     merchantFrame:SetScript("OnEvent", function()
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
 
         -- Held rather than called, so the guild branch below can delay it. Nil
         -- when there is nothing to sell or the feature is off.
