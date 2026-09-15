@@ -1466,7 +1466,6 @@ local function SetupAutoQueueConfirm()
     -- missing dialog global must not take the double click down with it.
     hooksecurefunc("LFGListSearchEntry_OnClick", function(entry, button)
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
         if button == "RightButton" then return end
         if not entry then return end
 
@@ -1503,7 +1502,6 @@ local function SetupAutoQueueConfirm()
     if not dialog then return end
     dialog:HookScript("OnShow", function(dlg)
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
         if not AU.db.AutoQueueConfirm then return end
         if IsModifierHeld(AU.db.SignupModifier or "SHIFT") then return end
         local confirmBtn = dlg.SignUpButton
