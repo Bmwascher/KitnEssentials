@@ -73,6 +73,7 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         items = {
             { id = "Automation",        text = "Automation", keywords = { "automation", "auto", "role", "quest", "repair", "sell", "accept", "group", "duel", "delete", "ah", "auction house", "house", "housing", "vantus rune", "merchant", "vendor", "pages", "shop", "buy", "buyback", "extend", "wide" } },
+            { id = "BonusRoll",         text = "Bonus Roll", keywords = { "bonus roll", "bonus", "coin", "roll", "pass", "auto pass", "auto-pass", "loot spec", "confirm", "seal" } },
             { id = "CombatLogger",      text = "Combat Logger", keywords = { "combat log", "logging", "advanced logging", "warcraftlogs", "raid", "scenario", "scenarios", "delve", "delves", "torghast", "warcraft recorder", "recorder", "preset" } },
             { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "world map scale", "map", "map scale", "scale", "maximized", "maximised", "fullscreen", "maximized map" } },
             { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
