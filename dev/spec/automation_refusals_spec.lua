@@ -1715,3 +1715,38 @@ describe("Automation Skip Cinematics restriction", function()
         end)
     end
 end)
+
+---------------------------------------------------------------------------------
+-- The legacy greeting hand-in keeps the full-restriction refusal; the rest of the
+-- quest handler acts there.
+---------------------------------------------------------------------------------
+describe("Automation quest greeting hand-in restriction", function()
+    local cases = {
+        { label = "hands in a completed quest when unrestricted",
+          restricted = false, handIns = 1, accepts = 0 },
+        { label = "skips the hand-in under full restriction and still accepts",
+          restricted = true, handIns = 0, accepts = 1 },
+    }
+
+    for _, case in ipairs(cases) do
+        it(case.label, function()
+            local fx = newFixture()
+            local AU = fx.AU
+            local handIns, accepts = 0, 0
+            _G.GetNumActiveQuests = function() return 1 end
+            _G.GetActiveTitle = function() return "Done", true end
+            _G.SelectActiveQuest = function() handIns = handIns + 1 end
+            _G.GetNumAvailableQuests = function() return 1 end
+            _G.SelectAvailableQuest = function() accepts = accepts + 1 end
+            AU.db = { Enabled = true, AutoAcceptQuests = true,
+                      AutoTurnInQuests = true, QuestModifier = "NONE" }
+            AU:ApplySettings()
+            local setup = findUpvalue(AU.ApplySettings, "SetupAutoQuests")
+            local frame = findUpvalue(setup, "questFrame")
+            fx.KE.IsFullyRestricted = function() return case.restricted end
+            frame:Fire("QUEST_GREETING")
+            assert.equals(case.handIns, handIns)
+            assert.equals(case.accepts, accepts)
+        end)
+    end
+end)

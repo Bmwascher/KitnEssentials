@@ -1999,7 +1999,6 @@ local function SetupAutoQuests()
     questFrame:RegisterEvent("GOSSIP_SHOW")
     questFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
         if IsQuestModifierHeld() then return end
 
         if event == "QUEST_DETAIL" then
@@ -2018,7 +2017,9 @@ local function SetupAutoQuests()
                 end
             end
         elseif event == "QUEST_GREETING" then
-            if AU.db.AutoTurnInQuests then
+            -- The legacy hand-in stays refused under full restriction:
+            -- SelectActiveQuest is unverified there.
+            if AU.db.AutoTurnInQuests and not KE:IsFullyRestricted() then
                 for i = 1, GetNumActiveQuests() do
                     local _, isComplete = GetActiveTitle(i)
                     if isComplete then
@@ -2070,7 +2071,6 @@ local function SetupAutoVoidcoresGold()
     voidcoresFrame:RegisterEvent("QUEST_PROGRESS")
     voidcoresFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
         if not AU.db.AutoVoidcoresGold then return end
         if IsQuestModifierHeld() then return end
         if C_QuestLog.IsQuestFlaggedCompleted(VOIDCORES_GOLD_QUEST_ID) then return end
