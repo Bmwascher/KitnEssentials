@@ -254,7 +254,7 @@ function BR:Press(opened, target)
     self.pending, self.pendingAccept = nil, nil
 
     if not self:PromptIsLive(target, self:ConfirmOn()) then
-        KE:Print(KE:ColorTextByTheme("That bonus roll prompt has already gone."))
+        KE:Print(KE:ColorTextByTheme("That bonus roll is no longer available."))
         return
     end
     local btn = TargetButton(target)
@@ -307,7 +307,7 @@ function BR:OnPrompt()
         self:SyncOverlays()
         if self:TryAutoPass() then return end
         if self:PromptIsLive("roll", self:ConfirmOn()) then
-            KE:Print(KE:ColorTextByTheme("A bonus roll is waiting: click the coin to choose Spend or Pass."))
+            KE:Print(KE:ColorTextByTheme("A bonus roll is waiting: click the dice to choose Spend or Pass."))
         end
     end)
 end

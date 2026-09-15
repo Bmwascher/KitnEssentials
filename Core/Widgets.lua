@@ -268,7 +268,9 @@ end
 -- widget, shown or not — a widget left visible from the last mode is a bug).
 -- NOTE: single-field-accept mode (showEditBox + onAccept, no second box)
 -- currently has no live caller — untested API surface.
--- opts (optional table): acceptColor / cancelColor tint the button labels; closeIsNeutral makes the X and ESC close without running onCancel, for a dialog whose cancel button is itself an action.
+-- opts (optional table): acceptColor / cancelColor tint the button labels;
+-- closeIsNeutral makes the X and ESC close without running onCancel, for a
+-- dialog whose cancel button is itself an action.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts)
