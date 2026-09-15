@@ -167,10 +167,18 @@ function GUIFrame:Show()
         self:InitializeSidebarExpansion()
         self:RefreshSidebar()
         self:SelectSidebarItem("HomePage")
-    elseif self._contentDirtyWhileHidden then
-        -- A refresh was requested while hidden (RefreshContent's hidden gate
-        -- swallowed it) — replay it once so the reopened page isn't stale.
-        self:RefreshContent()
+    else
+        -- The expand-all setting describes how the window opens, so it is
+        -- re-applied on every open; off leaves hand-collapsed sections alone.
+        if KE.db and KE.db.profile and KE.db.profile.ExpandSidebarOnOpen then
+            self:ApplySidebarExpansion()
+            self:RefreshSidebar()
+        end
+        if self._contentDirtyWhileHidden then
+            -- A refresh was requested while hidden (RefreshContent's hidden gate
+            -- swallowed it) — replay it once so the reopened page isn't stale.
+            self:RefreshContent()
+        end
     end
 end
 

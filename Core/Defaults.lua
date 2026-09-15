@@ -102,6 +102,8 @@ local Defaults = {
     profile = {
         -- Global
         ShowChatMessage = true,
+        -- Off keeps only the sections marked defaultExpanded open.
+        ExpandSidebarOnOpen = false,
         -- Slug is Blizzard's GPU glyph renderer. On by default because the
         -- shipped configuration already rendered slugged before the setting
         -- existed; defaulting off would be a silent downgrade on upgrade.

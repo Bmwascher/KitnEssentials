@@ -239,22 +239,27 @@ end
 -- Search
 ---------------------------------------------------------------------------------
 local sidebarInitialized = false
+-- Once per session: what the player expands by hand survives closing the
+-- window. ApplySidebarExpansion is the plain reset the setting re-runs.
 function GUIFrame:InitializeSidebarExpansion()
     if sidebarInitialized then return end
+    self:ApplySidebarExpansion()
+    sidebarInitialized = true
+end
+
+function GUIFrame:ApplySidebarExpansion()
     wipe(self.sidebarExpanded)
+    local expandAll = KE.db and KE.db.profile and KE.db.profile.ExpandSidebarOnOpen
 
     for _, section in ipairs(self.sidebarConfig) do
-        if section.type == "header" and section.defaultExpanded then
+        if section.type == "header" and (expandAll or section.defaultExpanded) then
             local sectionOff = (section.elvUIDisabled and KE.ShouldNotLoadModule and KE:ShouldNotLoadModule())
                 or (section.disabledCheck and type(section.disabledCheck) == "function" and section.disabledCheck())
-            if sectionOff then
-                self.sidebarExpanded[section.id] = nil
-            else
+            if not sectionOff then
                 self.sidebarExpanded[section.id] = true
             end
         end
     end
-    sidebarInitialized = true
 end
 
 ---------------------------------------------------------------------------------
