@@ -44,6 +44,7 @@ local CELL_SPACING = 2
 GUIFrame:RegisterContent("BonusRoll", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.BonusRoll
     if not db then return yOffset end
+    if type(db.AutoPass) ~= "table" then db.AutoPass = {} end
 
     local manager = GUIFrame:CreateWidgetStateManager()
     manager:SetCondition("confirm", function() return db.Confirm ~= false end)
