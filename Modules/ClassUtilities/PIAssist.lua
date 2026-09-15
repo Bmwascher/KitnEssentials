@@ -6,16 +6,11 @@
 -- ║  Note: Priest only.                                      ║
 -- ╚══════════════════════════════════════════════════════════╝
 --
--- NOTHING HERE READS AN AURA OR ANOTHER PLAYER'S COOLDOWN; both are secret
+-- Nothing here reads an aura or another player's cooldown; both are secret
 -- in a fight. A Blizzard aura container is bound to the target's unit with a
 -- spell-id filter for their burst buffs: the engine matches, the engine shows
--- its button, and the glow built on that button rides it. Everything parented
--- to the button is built inside initializeFrame, the one window the engine
--- allows, and anchored to a holder of ours whose size is known; the button is
--- never touched again.
---
--- The one number read is the player's own Power Infusion cooldown, static
--- spell data. FPS cost: none idle; events only, one container, no OnUpdate.
+-- its button, and the glow built on that button rides it. The one number read
+-- is the player's own Power Infusion cooldown, static spell data.
 
 ---@class KE
 local KE = select(2, ...)
@@ -167,10 +162,8 @@ function PA:TargetName()
     return nil
 end
 
--- Names are secret in restricted content; KeepsLastUnit decides what a
--- scan that could not read every name is allowed to keep. resolvedFor is
--- the raw stored string, realm included, so a realm change is a new name
--- even though the match itself is on the short name.
+-- resolvedFor is the raw stored string, realm included, so a realm change
+-- is a new name even though the match itself is on the short name.
 function PA:ResolveTarget()
     local stored = self:TargetName()
     local want = NormalizeName(stored)
@@ -269,8 +262,7 @@ end
 
 ---------------------------------------------------------------------------------
 -- Holder + container. The holder is ours and sits over the unit frame; the
--- container is bound to the unit; the glow is built on the engine's button in
--- its one legal window and anchored to the holder, so it follows the frame.
+-- container is bound to the unit.
 ---------------------------------------------------------------------------------
 local function ContainersAvailable()
     if _G.AuraContainerSortMethod == nil and C_AddOns and C_AddOns.LoadAddOn

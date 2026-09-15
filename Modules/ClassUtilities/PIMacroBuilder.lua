@@ -110,11 +110,10 @@ function PI:ApplyMacro()
     return ok
 end
 
--- Stores the name and rewrites the macro; an empty name clears the slot and
--- the macro falls back to the current target. While the module is on the
--- name is committed only once the macro carries it; off, the name is stored
--- and the macro catches up at enable. An unchanged name is a no-op: the
--- settings edit box fires its callback twice per Enter.
+-- While the module is on the name is committed only once the macro carries
+-- it; off, the name is stored and the macro catches up at enable. An
+-- unchanged name is a no-op: the settings edit box fires its callback twice
+-- per Enter.
 function PI:SetTarget(name)
     self:UpdateDB()
     local clean = type(name) == "string" and name ~= "" and name or nil
