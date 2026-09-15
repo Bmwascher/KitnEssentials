@@ -42,8 +42,8 @@ local ticker
 local FRAME_METHODS = { "SetPoint", "ClearAllPoints", "SetWidth", "SetHeight", "SetSize", "SetAlpha", "Show", "Hide" }
 local TEXT_METHODS  = { "SetPoint", "ClearAllPoints", "SetWidth", "SetAlpha", "SetFont" }
 
--- The first non-Blizzard, non-tracer line answers "whose code decided this";
--- Blizzard is only ever the messenger.
+-- The first non-Blizzard, non-tracer line names whose code decided the write;
+-- Blizzard's own frames only relay it.
 function Tracer.ParseCaller(stack)
     if type(stack) ~= "string" then return "?" end
     local first
