@@ -355,6 +355,24 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         return
     end
 
+    -- /kes trace [FrameName] [seconds]: case preserved because frame names
+    -- are. A trailing integer is the duration; alone it means the frame
+    -- under the cursor.
+    local traceRest = msg:match("^[Tt][Rr][Aa][Cc][Ee]$") and "" or msg:match("^[Tt][Rr][Aa][Cc][Ee]%s+(.+)$")
+    if traceRest then
+        if KE.Tracer and KE.Tracer.Run then
+            local name, seconds = traceRest:match("^(.-)%s+(%d+)$")
+            if not name then
+                seconds = traceRest:match("^(%d+)$")
+                if not seconds and traceRest ~= "" then name = traceRest end
+            end
+            KE.Tracer.Run(name, tonumber(seconds))
+        else
+            KE:Print("tracer not loaded.")
+        end
+        return
+    end
+
     msg = msg:lower()
     local taintRest
     if msg == "taint" then
@@ -410,7 +428,7 @@ SlashCmdList["KITNESSENTIALS"] = function(msg)
         end
     else
         -- "help" and anything unrecognized: list every subcommand.
-        KE:Print("Commands: /kes or gui (settings) | edit or unlock | wa [on|off] | profiler or prof | taint [clear] | dm [reset | report [count] [channel]] | mt [clearsplits] | skins [verify | rerun <key>] | trash | conflicts | resetgui")
+        KE:Print("Commands: /kes or gui (settings) | edit or unlock | wa [on|off] | profiler or prof | trace [Frame] [secs] | taint [clear] | dm [reset | report [count] [channel]] | mt [clearsplits] | skins [verify | rerun <key>] | trash | conflicts | resetgui")
     end
 end
 
