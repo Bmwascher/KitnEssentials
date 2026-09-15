@@ -24,12 +24,9 @@ local pcall, type = pcall, type
 local string_format = string.format
 
 -- No script on a Blizzard button is replaced or hooked: a replaced OnClick
--- taints the roll. An overlay Button over the Roll button takes the click and
--- leaves their handler untouched; if the overlay is ever absent the game's
--- button works as it always did. Spend presses THEIR button, so the spell id,
--- the enabled state and the roll call stay Blizzard's, and every state is
--- re-checked at press time so a prompt that timed out under the dialog spends
--- nothing.
+-- taints the roll. An overlay Button takes the click instead, and Spend
+-- presses Blizzard's own button, so the spell id and the roll call stay
+-- theirs; if the overlay is ever absent their button works as it always did.
 
 ---------------------------------------------------------------------------------
 -- DB
@@ -264,11 +261,10 @@ function BR:Press(opened, target)
     if btn and btn.Click then btn:Click("LeftButton") end
 end
 
--- Hides the dialog directly so neither of its buttons runs: a prompt timing
--- out must not turn into a pass. Only while the singleton still shows THIS
--- module's prompt: Core/Widgets.lua nils `_onAccept` on every close and
--- overwrites it on every new prompt, so a dialog the X dismissed or another
--- prompt replaced is left alone.
+-- Hides the dialog directly so neither button runs: a prompt timing out must
+-- not turn into a pass. Only while the singleton still shows this module's
+-- prompt (Core/Widgets.lua nils `_onAccept` on every close and overwrites it
+-- on every new prompt), so a dismissed or replaced dialog is left alone.
 function BR:ClosePrompt()
     local accept = self.pendingAccept
     self.pending, self.pendingAccept = nil, nil

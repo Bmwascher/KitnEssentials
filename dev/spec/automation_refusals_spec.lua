@@ -211,7 +211,8 @@ local function newFixture()
     _G.C_CVar = { GetCVar = function() return "0" end, SetCVar = function() end }
     _G.C_Secrets = nil
 
-    -- The file caches StaticPopupDialogs at load (Automation.lua:35), so the table must exist before the chunk runs.
+    -- The file caches StaticPopupDialogs in a local at load, so the table
+    -- must exist before the chunk runs.
     _G.StaticPopupDialogs = {}
 
     local modules = helpers.installAddonShim()
