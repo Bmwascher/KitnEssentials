@@ -1535,12 +1535,9 @@ local notePlanted = false
 -- check after it.
 local function ReadActivityID(resultID)
     if resultID == nil then return nil end
-    -- Both refusals live here because both callers route through here. They
-    -- are different axes: IsFullyRestricted covers combat, encounter,
-    -- challenge mode and PvP; InLockdown covers the communication-restricted
-    -- maps that make this read secret. The teardown clears without coming
-    -- through here, so a restricted state can never strand a planted value.
-    if KE:IsFullyRestricted() then return nil end
+    -- The refusal lives here because both callers route through here. The
+    -- teardown clears without coming through here, so a lockdown can never
+    -- strand a planted value.
     if InLockdown() then return nil end
     local activityID
     pcall(function()
@@ -1571,7 +1568,6 @@ local function SetupPersistSignupNote()
         AU._noteHooked = true
         hooksecurefunc("LFGListSearchPanel_SelectResult", function(_, resultID)
             if not AU.db or not AU.db.Enabled then return end
-            if KE:IsFullyRestricted() then return end
             if not AU.db.PersistSignupNote then return end
             PlantActivityID(resultID)
         end)
