@@ -948,6 +948,76 @@ local Defaults = {
             Target = "",
         },
 
+        PIAssist = {
+            Enabled = false,
+            HealersOnly = true,
+            OnlyWhenPIReady = true,
+            Grace = 0,
+            GlowEnabled = true,
+            GlowType = "border",
+            GlowColor = { 1, 0.85, 0.25, 1 },
+            GlowThickness = 2,
+            GlowLines = 8,
+            GlowFrequency = 0.25,
+            GlowPulse = true,
+            SoundEnabled = false,
+            SoundName = "None",
+            -- Burst buffs, one per major damage cooldown. Seeded rows carry
+            -- default = true so the card lets them be switched off but not
+            -- deleted.
+            Allowlist = {
+                -- Death Knight
+                [1249658] = { enabled = true, default = true },
+                [152279]  = { enabled = true, default = true },
+                [42650]   = { enabled = true, default = true },
+                -- Demon Hunter
+                [191427]  = { enabled = true, default = true },
+                [187827]  = { enabled = true, default = true },
+                [321067]  = { enabled = true, default = true },
+                [321068]  = { enabled = true, default = true },
+                [162264]  = { enabled = true, default = true },
+                [471306]  = { enabled = true, default = true },
+                [1217605] = { enabled = true, default = true },
+                [473671]  = { enabled = true, default = true },
+                [1217607] = { enabled = true, default = true },
+                -- Druid
+                [194223]  = { enabled = true, default = true },
+                [106951]  = { enabled = true, default = true },
+                [50334]   = { enabled = true, default = true },
+                [102560]  = { enabled = true, default = true },
+                -- Evoker
+                [403631]  = { enabled = true, default = true },
+                [375087]  = { enabled = true, default = true },
+                -- Hunter
+                [186254]  = { enabled = true, default = true },
+                [1235388] = { enabled = true, default = true },
+                [1285912] = { enabled = true, default = true },
+                [19574]   = { enabled = true, default = true },
+                [288613]  = { enabled = true, default = true },
+                -- Mage
+                [190319]  = { enabled = true, default = true },
+                [365350]  = { enabled = true, default = true },
+                [365362]  = { enabled = true, default = true },
+                -- Monk
+                [1249625] = { enabled = true, default = true },
+                -- Paladin
+                [31884]   = { enabled = true, default = true },
+                -- Rogue
+                [13750]   = { enabled = true, default = true },
+                [121471]  = { enabled = true, default = true },
+                -- Shaman
+                [114050]  = { enabled = true, default = true },
+                [114051]  = { enabled = true, default = true },
+                [114052]  = { enabled = true, default = true },
+                [1219480] = { enabled = true, default = true },
+                -- Warlock
+                [265273]  = { enabled = true, default = true },
+                -- Warrior
+                [107574]  = { enabled = true, default = true },
+                [1719]    = { enabled = true, default = true },
+            },
+        },
+
         SlashCommands = {
             CDMEnabled = true,
             RLEnabled = true,

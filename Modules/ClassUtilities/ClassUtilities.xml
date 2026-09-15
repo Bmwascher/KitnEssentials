@@ -10,4 +10,5 @@
     <Script file="HavocTracker.lua" />
     <Script file="SpellAlerts.lua" />
     <Script file="PIMacroBuilder.lua" />
+    <Script file="PIAssist.lua" />
 </Ui>
