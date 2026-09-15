@@ -15,6 +15,7 @@
     <Script file="MapScale.lua" />
     <Script file="CopyAnything.lua" />
     <Script file="AlertFrames.lua" />
+    <Script file="BonusRoll.lua" />
     <Script file="MerchantPages.lua" />
     <Script file="ColorPicker.lua" />
     <Script file="MoveFrames.lua" />

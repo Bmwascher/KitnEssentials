@@ -2517,6 +2517,24 @@ function L.loadCombatLogger(overrides)
     return CL, rec
 end
 
+-- Modules/QoL/BonusRoll.lua. The frame reads sit behind pure predicates the
+-- spec calls directly, so no prompt frame is faked. Returns BR, KE.
+function L.loadBonusRoll(overrides)
+    overrides = overrides or {}
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.GetInstanceInfo = overrides.GetInstanceInfo
+        or function() return "Test", "none", 0, "", 0 end
+
+    local KE = {
+        prints = {},
+        ColorTextByTheme = function(_, text) return text end,
+    }
+    KE.Print = function(_, msg) KE.prints[#KE.prints + 1] = msg end
+    helpers.loadModule("Modules/QoL/BonusRoll.lua", KE)
+    return modules["BonusRoll"], KE
+end
+
 -- Modules/DungeonTimers/DungeonRegistry.lua. Pure data + helpers on KE;
 -- the shim provides the truthy KitnEssentials global its guard checks.
 function L.loadDungeonRegistry()
