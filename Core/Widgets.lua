@@ -140,6 +140,13 @@ local function ThemeButton(btn, Theme, labelText, isPrimary)
     btn:SetWidth(math.max(BUTTON_WIDTH, textWidth + BUTTON_TEXT_PADDING))
 end
 
+-- Colours a prompt button's label only; plate and border stay themed. For a
+-- dialog whose two choices mean different things (spend a coin, keep it).
+local function TintPromptLabel(btn, color)
+    if not (btn and color) then return end
+    btn.label:SetTextColor(color[1], color[2], color[3], 1)
+end
+
 local function CreateThemedButton(parent, Theme, labelText, isPrimary)
     local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
     btn:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
@@ -205,7 +212,7 @@ local function EnsurePromptDialog()
         -- RemoveEscapeHandler for the same treatment).
         if key == "ESCAPE" then
             if not InCombatLockdown() then self:SetPropagateKeyboardInput(false) end
-            ClosePrompt(self, true)
+            ClosePrompt(self, not self._closeIsNeutral)
         else
             if not InCombatLockdown() then self:SetPropagateKeyboardInput(true) end
         end
@@ -247,7 +254,7 @@ local function EnsurePromptDialog()
         if t then closeTex:SetVertexColor(t[1], t[2], t[3], t[4] or 1) end
     end)
     closeBtn:SetScript("OnClick", function()
-        ClosePrompt(dialog, true)
+        ClosePrompt(dialog, not dialog._closeIsNeutral)
     end)
 
     KE.promptDialog = dialog
@@ -261,9 +268,10 @@ end
 -- widget, shown or not — a widget left visible from the last mode is a bug).
 -- NOTE: single-field-accept mode (showEditBox + onAccept, no second box)
 -- currently has no live caller — untested API surface.
+-- opts (optional table): acceptColor / cancelColor tint the button labels; closeIsNeutral makes the X and ESC close without running onCancel, for a dialog whose cancel button is itself an action.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
-                              showSecondEditBox, secondEditBoxLabel)
+                              showSecondEditBox, secondEditBoxLabel, opts)
     local Theme = KE.Theme
     if not Theme then
         StaticPopupDialogs["KE_PROMPT_DIALOG"] = {
@@ -279,6 +287,8 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         }
         return StaticPopup_Show("KE_PROMPT_DIALOG")
     end
+
+    if type(opts) ~= "table" then opts = nil end
 
     if KE.activePrompt then
         KE.activePrompt:Hide()
@@ -474,6 +484,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     ------------------------------------------------------------------
     dialog._onAccept = onAccept
     dialog._onCancel = onCancel
+    dialog._closeIsNeutral = (opts and opts.closeIsNeutral == true) or false
     dialog._showEditBox = showEditBox and true or false
     dialog._showSecondEditBox = twoField
     -- Hover scripts read these (theme can change between prompts).
@@ -659,6 +670,8 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     elseif dialog.buttonContainer and showButtons then
         ThemeButton(dialog.acceptBtn, Theme, acceptText or "Accept", true)
         ThemeButton(dialog.cancelBtn, Theme, cancelText or "Cancel", false)
+        TintPromptLabel(dialog.acceptBtn, opts and opts.acceptColor)
+        TintPromptLabel(dialog.cancelBtn, opts and opts.cancelColor)
 
         -- ThemeButton grows a button to fit its label, so the pair can now
         -- outgrow the dialog. Two things follow, and the second is the one an
