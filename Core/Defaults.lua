@@ -945,6 +945,7 @@ local Defaults = {
             Potion = "item:241309",
             FleetingPotion = "",
             Custom = "",
+            Target = "",
         },
 
         SlashCommands = {
