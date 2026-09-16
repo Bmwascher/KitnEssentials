@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.37
+
+### Priest: PI Assist
+- **New module, off by default, Priest only:** puts a pulsing border on the
+  raid frame of the player your Power Infusion macro targets while they have
+  a burst cooldown up, so you can see the moment to press it. It follows the
+  macro's target, watches 37 burst cooldowns you can switch on or off
+  individually, and can play a sound
+- Options for healers only, a grace period, and holding the glow back until
+  your own Power Infusion is off cooldown
+
+---
+
 ## v4.6.36
 
 ### Bonus Roll
