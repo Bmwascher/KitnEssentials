@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.25
+
+### Chat
+- Community channel lines no longer go missing in a dungeon, raid or rated
+  match: when the game refuses to resolve a channel's name there, the line
+  now prints without its tag instead of being dropped
+- The General tab flashes for a whisper again while another tab is in front,
+  even when the game hides who sent it
+
+---
+
 ## v4.6.24
 
 ### Dungeon Timers
