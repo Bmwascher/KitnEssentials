@@ -219,30 +219,11 @@ end
 -- non-player interrupters — Demo warlock Felhunter Spell Lock and any pet/NPC
 -- kick degraded to bare "Interrupted" with no "by X".
 --
--- IMPORTANT 12.0 limitation: UNIT_SPELLCAST_INTERRUPTED's interruptedBy GUID
--- is itself SecretWhenUnitSpellCastRestricted in instanced PvE/PvP (M+, raid,
--- rated PvP, training dummy zones with restriction). When the GUID is secret,
--- both APIs return secret strings; we bail at the IsSafeValue check below and
--- the caller falls back to plain "Interrupted". In restricted contexts
--- Blizzard secured the data and no API can recover the name. See
--- CombatTexts.lua for the same observation, where
--- self-attribution uses flag correlation instead. The swap still helps in
--- non-restricted contexts (open world) where interpolated GUIDs are plain.
--- UnitNameFromGUID + UnitClassFromGUID resolve for ALL unit GUIDs (player,
--- pet, NPC), not just players. GetPlayerInfoByGUID silently returned nil for
--- non-player interrupters — Demo warlock Felhunter Spell Lock and Felguard
--- Axe Toss kicks degraded to bare "Interrupted" with no "by X".
---
--- 12.0 secret-value note: in restricted contexts (M+ / raids / outdoor cast
--- restrictions), the interrupter GUID itself is SecretWhenUnitSpellCastRestricted,
--- and so are UnitNameFromGUID's name return and UnitClassFromGUID's classFile.
--- Empirically (DEBUG_CB trace, open-world Felhunter/Felguard test),
--- secret cstrings flow through WrapTextInColorCode -> string.format -> SetText
--- without taint errors and render as their underlying values. So we deliberately
--- do NOT bail on secret-name; only on truly nil. This contradicts the "Do NOT
--- concat with color codes" guidance documented for TargetedSpells in
--- another module's surface — that warning is module-context-dependent, not
--- universal. The castbar interrupt text path is safe.
+-- Secret-value note: the interrupter GUID is secret with its event
+-- (SecretWhenUnitSpellCastRestricted) and the name UnitNameFromGUID returns
+-- is SecretWhenUnitIdentityRestricted. WrapTextInColorCode (C_ColorUtil) and
+-- SetFormattedText accept a secret string, so a secret name is not a reason
+-- to bail; only nil is.
 --
 -- The `if interruptedBy ~= nil` case (Blizzard omits the GUID for some
 -- player-cast interrupts like Avenger's Shield, sometimes for warlock kicks)
@@ -713,14 +694,9 @@ function H.UpdateTargetNames(self)
         return
     end
 
-    -- UnitSpellTargetName returns the target's NAME (cstring), secret when
-    -- the target is a player. SetText accepts secret strings directly. We
-    -- separate name (SetText) and color (SetTextColor with clean r/g/b)
-    -- here for clarity, but empirical testing on UNIT_SPELLCAST_INTERRUPTED
-    -- (see H.GetColoredNameFromGUID above) shows that secret
-    -- cstrings ALSO survive WrapTextInColorCode/string.format/SetText
-    -- without taint errors — so concat with color codes is not a hazard,
-    -- just less readable than the split SetText + SetTextColor pattern.
+    -- UnitSpellTargetName returns the target's name, secret when the target
+    -- is a player. SetText accepts a secret string; the colour goes through
+    -- SetTextColor with plain r/g/b so no Lua string work touches the name.
     local targetName = UnitSpellTargetName and UnitSpellTargetName(unit) or nil
     if not targetName then
         targetText:SetAlpha(0)
@@ -843,26 +819,40 @@ function H.StartCast(self)
     self.icon:SetTexture(texture or FALLBACK_ICON)
     self.spark:Show()
     self.text:SetText(text or name or "")
-    self.time:SetText("")
+    -- Written now rather than on the next OnUpdate tick, which would blank
+    -- the timer for a frame on every StartCast, a re-sync included.
+    local remaining = duration and duration:GetRemainingDuration()
+    if remaining then
+        local decimals = duration:EvaluateRemainingDuration(KE.curves.DurationDecimals)
+        self.time:SetFormattedText('%.' .. decimals .. 'f', remaining)
+    else
+        self.time:SetText("")
+    end
 
     H.UpdateBarColor(self)
     H.SetupKickCooldownBar(self)
     H.UpdateTargetNames(self)
     H.UpdateTargetMarker(self)
     H.UpdateGlow(self)
-    if self.PlayCastSound then self:PlayCastSound() end
     H.EnsureOnUpdate(self)
     self.frame:Show()
 end
 
-function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
+-- Only a kick is worth holding for: a bar that lingers after every cast
+-- reads as stuck.
+function H.ShouldHoldOnEnd(holdSettings, wasInterrupted)
+    if not holdSettings or not holdSettings.Enabled then return false end
+    return wasInterrupted == true
+end
+
+function H.EndCast(self, wasInterrupted, interruptedBy)
     if not self.frame or not self.frame:IsShown() then return end
     if self.holdTimer then return end
 
     H.CancelKickReadyTimer(self, "EndCast")
 
     local holdSettings = self.db.HoldTimer
-    if not holdSettings or not holdSettings.Enabled then
+    if not H.ShouldHoldOnEnd(holdSettings, wasInterrupted) then
         self.spark:Hide()
         H.HideTargetNames(self)
         H.HideTargetMarker(self)
@@ -881,23 +871,14 @@ function H.EndCast(self, showHold, wasInterrupted, interruptedBy)
     self.castBar:SetValue(1)
     self.time:SetText("")
 
-    local texture = self.castBar:GetStatusBarTexture()
-    if wasInterrupted then
-        local interrupterName = interruptedBy and H.GetColoredNameFromGUID(interruptedBy)
-        if interrupterName then
-            self.text:SetText(("Interrupted by %s"):format(interrupterName))
-        else
-            self.text:SetText("Interrupted")
-        end
-        local r, g, b, a = KE:ResolveColor(holdSettings.InterruptedColor, { 0.1, 0.8, 0.1, 1 })
-        texture:SetVertexColor(r, g, b, a)
-    elseif showHold then
-        local r, g, b, a = KE:ResolveColor(holdSettings.FailedColor, { 0.5, 0.5, 0.5, 1 })
-        texture:SetVertexColor(r, g, b, a)
+    local interrupterName = interruptedBy and H.GetColoredNameFromGUID(interruptedBy)
+    if interrupterName then
+        self.text:SetFormattedText("Interrupted by %s", interrupterName)
     else
-        local r, g, b, a = KE:ResolveColor(holdSettings.SuccessColor, { 0.8, 0.1, 0.1, 1 })
-        texture:SetVertexColor(r, g, b, a)
+        self.text:SetText("Interrupted")
     end
+    local r, g, b, a = KE:ResolveColor(holdSettings.InterruptedColor, { 0.1, 0.8, 0.1, 1 })
+    self.castBar:GetStatusBarTexture():SetVertexColor(r, g, b, a)
 
     H.ResetCastState(self)
 
@@ -947,19 +928,46 @@ function H.UpdateInterruptible(self)
     H.UpdateKickIndicator(self, nil)
 end
 
+-- Presence only: both reads are secret in restricted content, and a
+-- secret compares to nil without error.
+function H.UnitHasLiveCast(unit)
+    return UnitCastingInfo(unit) ~= nil or UnitChannelInfo(unit) ~= nil
+end
+
+-- A STOP can arrive after the next cast's START during fast recasts, so a
+-- non-interrupt end with a cast still live re-syncs instead of ending. A
+-- channel STOP never re-syncs: in restricted content the cast reads can
+-- still report the finished channel as secret values, and nothing would
+-- clear a bar re-synced onto it.
+function H.ShouldResyncOnEnd(isChannelStop, wasInterrupted, hasLiveCast)
+    if isChannelStop or wasInterrupted then return false end
+    return hasLiveCast == true
+end
+
 function H.OnCastEvent(self, event, unit, ...)
     if unit ~= self.unit then return end
     if event:find("START") then
         H.StartCast(self)
+        -- Sounded from the event: StartCast also runs for a cast already in
+        -- progress (a focus change, a re-sync), and only a START is a new
+        -- cast. The flags stay nil when StartCast showed nothing.
+        if (self.casting or self.channeling or self.empowering) and self.PlayCastSound then
+            self:PlayCastSound()
+        end
     elseif event:find("STOP") then
         local interruptedBy
-        if event:find("CHANNEL") then
+        local isChannelStop = event:find("CHANNEL") ~= nil
+        if isChannelStop then
             interruptedBy = select(3, ...)
         elseif event:find("EMPOWER") then
             interruptedBy = select(4, ...)
         end
         local wasInterrupted = interruptedBy ~= nil
-        H.EndCast(self, wasInterrupted, wasInterrupted, interruptedBy)
+        if H.ShouldResyncOnEnd(isChannelStop, wasInterrupted, H.UnitHasLiveCast(unit)) then
+            H.StartCast(self)
+            return
+        end
+        H.EndCast(self, wasInterrupted, interruptedBy)
     elseif event:find("INTERRUPTED") then
         local interruptedBy = select(3, ...)
         if DEBUG_CB then
@@ -976,9 +984,13 @@ function H.OnCastEvent(self, event, unit, ...)
             KE:Print(("[CB] INTERRUPTED unit=%s interruptedBy=%s player=%s pet=%s"):format(
                 tostring(unit), byStr, tostring(playerGUID), tostring(petGUID)))
         end
-        H.EndCast(self, true, true, interruptedBy)
+        H.EndCast(self, true, interruptedBy)
     elseif event:find("FAILED") then
-        H.EndCast(self, true, false)
+        if H.ShouldResyncOnEnd(false, false, H.UnitHasLiveCast(unit)) then
+            H.StartCast(self)
+            return
+        end
+        H.EndCast(self, false)
     elseif event:find("INTERRUPTIBLE") then
         H.UpdateInterruptible(self)
     end

@@ -407,7 +407,6 @@ local Defaults = {
                 Enabled = true,
                 Duration = 0.5,
                 InterruptedColor = { 0.102, 0.8, 0.102, 1 },
-                SuccessColor = { 0.8, 0.102, 0.102, 1 },
             },
             KickIndicator = {
                 Enabled = true,
