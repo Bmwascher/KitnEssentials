@@ -132,7 +132,7 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
             end
         end,
     })
-    row3a:AddWidget(minimapCheck, 0.5)
+    row3a:AddWidget(minimapCheck, 0.33)
 
     local chatCheck = GUIFrame:CreateCheckbox(row3a, "Show Command in Chat on Login", {
         value = db and db.ShowChatMessage ~= false,
@@ -141,7 +141,19 @@ GUIFrame:RegisterContent("HomePage", function(scrollChild, yOffset)
             db.ShowChatMessage = checked
         end,
     })
-    row3a:AddWidget(chatCheck, 0.5)
+    row3a:AddWidget(chatCheck, 0.33)
+
+    local expandCheck = GUIFrame:CreateCheckbox(row3a, "Expand All Sidebar Sections", {
+        value = db and db.ExpandSidebarOnOpen == true,
+        tooltip = "Every sidebar section opens expanded. Off opens only Core; sections you expand by hand stay open until the next reload.",
+        callback = function(checked)
+            if not db then return end
+            db.ExpandSidebarOnOpen = checked
+            GUIFrame:ApplySidebarExpansion()
+            GUIFrame:RefreshSidebar()
+        end,
+    })
+    row3a:AddWidget(expandCheck, 0.33)
     card2:AddRow(row3a, Theme.rowHeight)
 
     local row3b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
