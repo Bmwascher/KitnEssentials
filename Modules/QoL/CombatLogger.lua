@@ -198,11 +198,27 @@ function CL:StopLoggingNow()
     end
 end
 
+-- A raid difficulty identifies raid content whatever GetInstanceInfo calls
+-- the place: a raid queued as a party reports "party", and a Lair
+-- may not report "raid". 220 (Story) and 250 (World) are listed so
+-- they resolve in the raid branch, where neither has a toggle and both
+-- answer no.
+local RAID_DIFFICULTIES = {
+    [3] = true, [4] = true, [5] = true, [6] = true, [7] = true, [9] = true,
+    [14] = true, [15] = true, [16] = true, [17] = true,
+    [33] = true, [151] = true,
+    [220] = true, [233] = true, [250] = true,
+}
+
 function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
     local db = self.db
 
+    if instanceType ~= "raid" and RAID_DIFFICULTIES[difficultyID] then
+        instanceType = "raid"
+    end
+
     if instanceType == "party" then
-        -- Guard: maxPlayers <= 5 to exclude raids queued as party
+        -- A raid-sized group at a dungeon difficulty is not a dungeon.
         if maxPlayers and maxPlayers > 5 then return false end
 
         if difficultyID == 1 then return db.DungeonNormal == true, "a Normal dungeon" end
@@ -221,6 +237,10 @@ function CL:ShouldLog(instanceType, difficultyID, maxPlayers)
             return db.RaidHeroic == true, "a Heroic raid"
         end
         if difficultyID == 16 then return db.RaidMythic == true, "a Mythic raid" end
+        -- 233 is the flexible-size Mythic the Lairs run at. Its own key
+        -- rather than riding RaidMythic: a Lair is not a fixed-size Mythic
+        -- raid, so a player can log one and not the other.
+        if difficultyID == 233 then return db.RaidMythicFlex == true, "a flexible Mythic raid" end
         if difficultyID == 33 or difficultyID == 151 then
             return db.RaidTimewalking == true, "a Timewalking raid"
         end

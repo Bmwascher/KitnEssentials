@@ -26,6 +26,7 @@ local RAIDS = {
     { key = "RaidNormal",      label = "Normal" },
     { key = "RaidHeroic",      label = "Heroic" },
     { key = "RaidMythic",      label = "Mythic" },
+    { key = "RaidMythicFlex",  label = "Mythic Flex" },
     { key = "RaidTimewalking", label = "Timewalking" },
 }
 
@@ -43,7 +44,7 @@ local PVP = {
 -- Timewalking dungeons and war games are absent for the same reason.
 local RECORDER_PRESET = {
     "DungeonMythicPlus", "DungeonMythic", "DungeonHeroic", "DungeonNormal",
-    "RaidLFR", "RaidNormal", "RaidHeroic", "RaidMythic", "RaidTimewalking",
+    "RaidLFR", "RaidNormal", "RaidHeroic", "RaidMythic", "RaidMythicFlex", "RaidTimewalking",
     "PvPRatedArena", "PvPSoloShuffle", "PvPArenaSkirmish",
     "PvPRatedBG", "PvPRegularBG",
 }
