@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.29
+
+### Move Frames
+- Windows the game protects can be dragged again -- the Group Finder once
+  its result list is up, and the Quick Keybind panel -- instead of silently
+  refusing to move
+- **New:** Hold To Move, a modifier you must hold to drag a window. Default
+  None, so dragging works as before until you choose one
+- **New:** Remember Positions, off by default, keeps each window where you
+  last dragged it. The two loot roll windows stay draggable but are never
+  remembered, so they always return to their own anchor
+
+---
+
 ## v4.6.28
 
 ### Alert Frames
