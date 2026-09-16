@@ -1,5 +1,27 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.27
+
+### Raid Control
+- Converting a party to a raid during a fight now fills in the raid-only
+  rows the moment you leave combat, instead of waiting for the next time
+  someone joins or leaves
+
+### Automation
+- Role checks are answered again inside dungeons, raids and rated matches,
+  using the roles you have ticked in the Dungeon Finder
+
+### LFG Quick Create
+- A tile the game refuses to list now says so in chat instead of looking
+  like a dead click
+
+### Vehicle Exit
+- The leave-vehicle button stays where you put it after a flight path or an
+  Edit Mode save, instead of jumping to the top-left corner until you opened
+  Toggle Anchors
+
+---
+
 ## v4.6.26
 
 ### Movement Alert
