@@ -218,7 +218,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 5: Glow Settings
     ----------------------------------------------------------------
-    local glowCard, glowOffset, glowWidgets = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
         title = "Glow",
         db = db,
         dbKeys = {
@@ -265,9 +265,6 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
         onChangeCallback = ApplySettings,
     })
     manager:Register(glowCard, "all")
-    if glowWidgets then
-        manager:RegisterGroup(glowWidgets, "all")
-    end
     yOffset = glowOffset
 
     ----------------------------------------------------------------

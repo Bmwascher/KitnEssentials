@@ -545,7 +545,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 10: Targeting You (glow engine card; Pulse Border or Pixel)
     ----------------------------------------------------------------
-    local glowCard, glowOffset, glowWidgets = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
         title = "Targeting You",
         db = db.TargetGlow,
         dbKeys = {
@@ -588,9 +588,6 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         onChangeCallback = ApplyVisuals,
     })
     manager:Register(glowCard, "all")
-    if glowWidgets then
-        manager:RegisterGroup(glowWidgets, "all")
-    end
     yOffset = glowOffset
 
     RefreshStates()

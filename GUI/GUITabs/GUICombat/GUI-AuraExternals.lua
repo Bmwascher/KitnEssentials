@@ -216,7 +216,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Card 4: Glow Settings
     ----------------------------------------------------------------
-    local glowCard, glowOffset, glowWidgets = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+    local glowCard, glowOffset = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
         title = "Glow Settings",
         db = db,
         dbKeys = {
@@ -283,9 +283,6 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
         onChangeCallback = ApplySettings,
     })
     manager:Register(glowCard, "all")
-    if glowWidgets then
-        manager:RegisterGroup(glowWidgets, "all")
-    end
     yOffset = glowOffset
 
     local function GetShippedAllowlist()
