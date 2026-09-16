@@ -72,6 +72,7 @@ PA.soundUnit = nil
 PA.sounds = nil
 PA.active = false
 PA.previewing = false
+PA.watchedCells = {}
 PA.glowPending = false
 PA.previewHost = nil
 PA.previewGlow = nil
@@ -341,6 +342,22 @@ function PA:ApplyGlow()
     self.glowPending = not ok
 end
 
+-- The cell can go away without the unit changing: another addon swaps its
+-- party header for its raid header, or Blizzard rebuilds the compact frames.
+-- No roster event lands after that rebuild, so the holder would keep sitting
+-- on a cell that is no longer on screen. Each cell is hooked once, and the
+-- re-resolve is deferred a frame so the replacement exists to be found.
+function PA:WatchCell(frame)
+    if not frame or self.watchedCells[frame] then return end
+    self.watchedCells[frame] = true
+    frame:HookScript("OnHide", function()
+        if not (self:IsEnabled() and self.active) then return end
+        C_Timer.After(0, function()
+            if self:IsEnabled() and self.active then self:ResolveTarget() end
+        end)
+    end)
+end
+
 -- Points the display at the current unit and that unit's frame. Called from
 -- every path that can change either, and cheap enough to call blind.
 function PA:SyncDisplay()
@@ -369,6 +386,7 @@ function PA:SyncDisplay()
     -- protection and could not be hidden in combat.
     holder:ClearAllPoints()
     holder:SetAllPoints(frame)
+    self:WatchCell(frame)
     holder:SetFrameStrata(frame:GetFrameStrata() or "HIGH")
     holder:Show()
 
