@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.36
+
+### Bonus Roll
+- **New module, on by default:** a confirmation before a bonus roll coin is
+  spent. Clicking the dice opens a dialog naming your current loot spec with
+  Spend and Pass, and the game's own prompt keeps running behind it. The
+  older Confirm Bonus Roll tick under Automation is gone; the confirmation
+  is now live for everyone rather than only Automation users
+- **New:** Automatically Pass In, all boxes off by default, passes the roll
+  for you in the content you choose -- open world, delves and scenarios,
+  and each dungeon or raid difficulty
+- Every decision it makes is printed in chat, and a Preview the Prompt
+  button on the page shows the dialog without spending anything
+
+---
+
 ## v4.6.35
 
 ### Cursor
