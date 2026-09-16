@@ -22,6 +22,10 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     manager:SetCondition("interrupt", function()
         return db.Interrupt and db.Interrupt.Enabled ~= false
     end)
+    manager:SetCondition("kickTint",   function() return db.Kick.ReadyTint end)
+    manager:SetCondition("kickRange",  function() return db.Kick.RangeFade end)
+    manager:SetCondition("kickMark",   function() return db.Kick.Tick end)
+    manager:SetCondition("kickWindow", function() return db.Kick.Window end)
 
     local statusbarList = {}
     if LSM then
@@ -449,6 +453,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         callback = function(checked)
             db.Kick.ReadyTint = checked
             ApplyVisuals()
+            RefreshStates()
         end,
     })
     row9a:AddWidget(readyTintCheck, 0.5)
@@ -462,7 +467,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         end,
     })
     row9a:AddWidget(readyColorPicker, 0.5)
-    manager:Register(readyColorPicker, "all")
+    manager:Register(readyColorPicker, "kickTint")
     card9:AddRow(row9a, Theme.rowHeight)
 
     local row9b = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
@@ -474,6 +479,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         callback = function(checked)
             db.Kick.RangeFade = checked
             ApplyVisuals()
+            RefreshStates()
         end,
     })
     row9b:AddWidget(rangeFadeCheck, 0.5)
@@ -488,7 +494,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         end,
     })
     row9b:AddWidget(rangeAlphaSlider, 0.5)
-    manager:Register(rangeAlphaSlider, "all")
+    manager:Register(rangeAlphaSlider, "kickRange")
     card9:AddRow(row9b, Theme.rowHeight)
 
     local row9c = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
@@ -500,6 +506,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         callback = function(checked)
             db.Kick.Tick = checked
             ApplyVisuals()
+            RefreshStates()
         end,
     })
     row9c:AddWidget(tickCheck, 0.5)
@@ -513,7 +520,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         end,
     })
     row9c:AddWidget(tickColorPicker, 0.5)
-    manager:Register(tickColorPicker, "all")
+    manager:Register(tickColorPicker, "kickMark")
     card9:AddRow(row9c, Theme.rowHeight)
 
     local row9d = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
@@ -524,6 +531,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         callback = function(checked)
             db.Kick.Window = checked
             ApplyVisuals()
+            RefreshStates()
         end,
     })
     row9d:AddWidget(windowCheck, 0.5)
@@ -537,7 +545,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         end,
     })
     row9d:AddWidget(windowColorPicker, 0.5)
-    manager:Register(windowColorPicker, "all")
+    manager:Register(windowColorPicker, "kickWindow")
     card9:AddRow(row9d, Theme.rowHeightLast, 0)
 
     yOffset = card9:GetNextOffset()
