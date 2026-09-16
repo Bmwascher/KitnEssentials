@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.41
+
+### Character Panel
+- The upgrade-track letter on a maxed item sits inside its icon corner
+  instead of touching the rarity border, on both column sides; the two
+  weapon slots are unchanged
+- A weapon enchant that procs a secondary stat reads `Proc Sec`, matching
+  `Proc Prim`
+
+---
+
 ## v4.6.40
 
 ### Fixes
