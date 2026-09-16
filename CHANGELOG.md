@@ -1,5 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.33
+
+### Character Panel
+- **Changed:** on both the character and inspect sheets the item level now
+  sits on the top edge of each icon with the enchant on the bottom, the two
+  having swapped places, and gems sit beside the item level. The weapons put
+  their text on their outward side with the upgrade track inline, so nothing
+  sits under the model between them
+- **Changed:** an enchant whose tooltip prints its effect rather than a name
+  now reads as its stat words without the numbers, so a spellthread reads
+  "Int & Stam" instead of "41 Int & 115 Stam"
+- Crafted items read `CR` rather than `C`, so they no longer look like the
+  Champion track
+- **New:** Show Enchant Rank, off by default, appends a crafted enchant's
+  tier to its label
+
+---
+
 ## v4.6.32
 
 ### Dungeon Casts
