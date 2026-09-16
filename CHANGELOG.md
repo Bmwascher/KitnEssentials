@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.26
+
+### Movement Alert
+- Charge spells like Shimmer now read their cooldown directly instead of a
+  charge count the game hides in dungeons and raids, so the alert no longer
+  shows a phantom countdown with a charge still banked, or stays silent
+  after the last one is spent
+- Spirit Walk is recognised from the spell you actually cast, so it can no
+  longer produce two rows at once
+
+---
+
 ## v4.6.25
 
 ### Chat
