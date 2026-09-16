@@ -26,7 +26,6 @@ local GetMoney = GetMoney
 local GetGuildBankWithdrawMoney = GetGuildBankWithdrawMoney
 local GetGuildBankMoney = GetGuildBankMoney
 local CinematicFrame_CancelCinematic = CinematicFrame_CancelCinematic
-local GameMovieFinished = GameMovieFinished
 local C_Container = C_Container
 local C_Item = C_Item
 local C_CVar = C_CVar
@@ -607,18 +606,13 @@ local function SetupSkipCinematics()
     if cinematicFrame then return end
     cinematicFrame = CreateFrame("Frame")
     cinematicFrame:RegisterEvent("CINEMATIC_START")
-    cinematicFrame:RegisterEvent("PLAY_MOVIE")
-    cinematicFrame:SetScript("OnEvent", function(_, event, canBeCancelled)
+    cinematicFrame:SetScript("OnEvent", function(_, _, canBeCancelled)
         if not AU.db or not AU.db.Enabled then return end
         if not AU.db.SkipCinematics then return end
-        if event == "CINEMATIC_START" then
-            -- One that cannot be cancelled is a vehicle or scene sequence, where
-            -- Blizzard's cancel falls through to CancelScene or VehicleExit.
-            if KE:IsFullyRestricted() and not canBeCancelled then return end
-            CinematicFrame_CancelCinematic()
-        elseif event == "PLAY_MOVIE" then
-            pcall(GameMovieFinished)
-        end
+        -- One that cannot be cancelled is a vehicle or scene sequence, where
+        -- Blizzard's cancel falls through to CancelScene or VehicleExit.
+        if KE:IsFullyRestricted() and not canBeCancelled then return end
+        CinematicFrame_CancelCinematic()
     end)
 end
 
