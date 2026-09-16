@@ -301,7 +301,9 @@ end
 local function AnchorBonusRoll()
     if not LR:IsEnabled() then return end
     local db = LR.db
-    if not db or not db.Replace then return end
+    -- The bars, not the saved flag: a profile switch that defers to /reload
+    -- can save Replace while the legacy stacker is still the one running.
+    if not db or not db.Replace or not LR._barsWired then return end
 
     local f = _G.BonusRollFrame
     if not f or not f:IsShown() then return end

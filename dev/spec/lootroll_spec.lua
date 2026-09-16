@@ -207,6 +207,7 @@ describe("LootRoll bonus roll anchoring", function()
     before_each(function()
         LR = L.loadLootRoll()
         LR.IsEnabled = function() return true end
+        LR._barsWired = true
         _G.BonusRollFrame = makeFrame()
     end)
 
@@ -242,6 +243,15 @@ describe("LootRoll bonus roll anchoring", function()
         -- prompt twice, by two mechanisms that disagree.
         LR.db = { Enabled = true, Replace = false,
             Position = { Point = "TOP", RelPoint = "TOP", X = 30, Y = -120 } }
+        LR.AnchorBonusRoll()
+        assert.equal(0, #_G.BonusRollFrame._points)
+    end)
+
+    it("does nothing when Replace is saved but the bars were never wired", function()
+        -- A profile switch that defers its disable to /reload can save Replace
+        -- while the legacy stacker is still the one placing the frames.
+        LR._barsWired = nil
+        LR.db = { Enabled = true, Replace = true, Position = {} }
         LR.AnchorBonusRoll()
         assert.equal(0, #_G.BonusRollFrame._points)
     end)

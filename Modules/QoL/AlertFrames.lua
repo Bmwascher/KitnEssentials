@@ -86,7 +86,7 @@ end
 -- switch rebinds its db but defers the enable change to /reload.
 local function LootRollReplacesRolls()
     local LR = KitnEssentials.GetModule and KitnEssentials:GetModule("LootRoll", true)
-    return LR and LR.IsEnabled and LR:IsEnabled() and LR.db and LR.db.Replace and true or false
+    return LR and LR.IsEnabled and LR:IsEnabled() and LR.db and LR.db.Replace and LR._barsWired and true or false
 end
 
 -- Trading Post (PerksProgram) support: when Blizzard re-bases the alert stack
