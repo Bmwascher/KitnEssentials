@@ -11,6 +11,7 @@ end
 ---@field editModeRegistered boolean? true while the EditMode element is registered; nil after OnDisable/UnregisterElement
 ---@field _barsWired boolean? true once SetupRollBars has registered START_LOOT_ROLL and pulled Blizzard's routed handler; nil after TeardownRollBars
 ---@field _bonusWired boolean? true once the Replace-mode BonusRollFrame re-anchor hook is installed; never cleared (hooksecurefunc is permanent)
+---@field _bonusShowHooked boolean? true once the prompt's OnShow hook is installed; never cleared (HookScript is permanent)
 ---@field _previewBar table? the RollBar table currently showing the GUI preview; nil when no preview is active
 ---@field _previewTimer table? the C_Timer handle draining the preview; nil once cancelled or fired
 local LR = KitnEssentials:NewModule("LootRoll", "AceEvent-3.0")
@@ -147,6 +148,18 @@ function LR:GetStackAnchor()
     return a
 end
 
+local BONUS_ROLL_FRAMES = {
+    BonusRollFrame = true, BonusRollLootWonFrame = true, BonusRollMoneyWonFrame = true,
+}
+
+-- Alert Frames places the bonus-roll frames itself, held by the container or
+-- not (Modules/QoL/AlertFrames.lua); a second writer here would leave their
+-- anchor to hook order. Off, they are ordinary container contents again.
+local function AlertFramesPlacesBonusRolls()
+    local AF = KitnEssentials.GetModule and KitnEssentials:GetModule("AlertFrames", true)
+    return AF and AF.IsEnabled and AF:IsEnabled() and true or false
+end
+
 -- Blizzard's own line from GroupLootContainer_Update, with the anchor frame
 -- passed in: slot i's CENTER sits reservedSize * (i - 0.5) above the stack's
 -- bottom edge. Passing the container itself hands the frames back unchanged.
@@ -154,9 +167,11 @@ local function StackRollFrames(c, anchor)
     local rolls = c.rollFrames
     if type(rolls) ~= "table" then return end
     local reserved = c.reservedSize or 100
+    local yield = AlertFramesPlacesBonusRolls()
     for i = 1, (c.maxIndex or 0) do
         local f = rolls[i]
-        if f and f.ClearAllPoints then
+        if f and f.ClearAllPoints
+           and not (yield and f.GetName and BONUS_ROLL_FRAMES[f:GetName()]) then
             f:ClearAllPoints()
             f:SetPoint("CENTER", anchor, "BOTTOM", 0, reserved * (i - 1 + 0.5))
         end
@@ -308,9 +323,16 @@ function LR:Setup()
     -- Installed for BOTH modes and guarded inside on db.Replace, because
     -- hooksecurefunc cannot be undone. Its own flag, not _wired: _wired
     -- belongs to the legacy branch that Setup never reaches in Replace mode.
+    -- GroupLootContainer_AddFrame shows the prompt only AFTER the update the
+    -- post-hook runs from, so the first show needs the OnShow hook too.
     if not self._bonusWired and type(_G.GroupLootContainer_Update) == "function" then
         hooksecurefunc("GroupLootContainer_Update", AnchorBonusRoll)
         self._bonusWired = true
+    end
+    local prompt = _G.BonusRollFrame
+    if prompt and prompt.HookScript and not self._bonusShowHooked then
+        prompt:HookScript("OnShow", AnchorBonusRoll)
+        self._bonusShowHooked = true
     end
 
     if self.db.Replace then

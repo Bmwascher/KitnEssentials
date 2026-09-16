@@ -79,11 +79,14 @@ function AF:ApplyEventToastPosition()
 end
 
 -- Replace-mode LootRoll owns the BonusRollFrame PROMPT (it anchors it to its
--- own bar stack). The winnings toasts belong to GroupLootContainer for as long
--- as it holds them; only once it lets go are they this module's to stack.
+-- own bar stack from the same GroupLootContainer_Update post-hook), so this
+-- module stands aside for it in that mode and the two hooks' install order
+-- never matters. The two winnings toasts are this module's in every mode.
+-- Read the RUNNING enabled state, as LootRoll's own anchor does: a profile
+-- switch rebinds its db but defers the enable change to /reload.
 local function LootRollReplacesRolls()
     local LR = KitnEssentials.GetModule and KitnEssentials:GetModule("LootRoll", true)
-    return LR and LR.db and LR.db.Enabled and LR.db.Replace and true or false
+    return LR and LR.IsEnabled and LR:IsEnabled() and LR.db and LR.db.Replace and true or false
 end
 
 -- Trading Post (PerksProgram) support: when Blizzard re-bases the alert stack
@@ -140,30 +143,24 @@ function AF:PostAlertMove()
     af:ClearAllPoints()
     af:SetAllPoints(perksAnchor or self.holder)
 
-    self:PositionGroupLootContainer()
+    self:PositionBonusRollToasts()
 end
 
--- The container renders wherever its LAST anchors point, so it only snaps
--- into the stack when AlertFrame:UpdateAnchors next runs. GroupLootContainer
+-- GroupLootContainer is left where Blizzard's managed layout parks it. It
+-- draws nothing, and a managed frame's anchors belong to that layout pass: a
+-- competing SetPoint provokes a relayout, which provokes the SetPoint, and a
+-- long-lived frame in the container (the bonus-roll prompt) visibly bounces
+-- between the two spots. The frames it holds are placed instead; they are
+-- ordinary children, so their anchors are ours to write. GroupLootContainer
 -- is absent from .luacheckrc's read_globals, so it is reached through _G.
--- Nothing to yield to any more: LootRoll used to move this container and now
--- moves the roll FRAMES off it instead (Modules/Skinning/LootRoll.lua), so
--- the two no longer compete.
-function AF:PositionGroupLootContainer()
-    local glc = _G.GroupLootContainer
-    if not (glc and self.holder) then return end
-    local perksAnchor = GetPerksAnchor()
-    glc:ClearAllPoints()
-    glc:SetPoint(POSITION, perksAnchor or self.holder, POINT, X_OFFSET, Y_OFFSET)
-end
-
 local BONUS_ROLL_FRAMES = { "BonusRollFrame", "BonusRollLootWonFrame", "BonusRollMoneyWonFrame" }
 
 -- The only two frames GroupLootFrame.lua hands to AddAlertFrame directly. Every
 -- other alert arrives via AlertFrameQueueMixin:ShowAlert, which runs
 -- UpdateAnchors first, so it is already chained by the time our hook sees it --
 -- re-anchoring one of those onto the holder drops it out of the stack and it
--- renders on top of the alert before it.
+-- renders on top of the alert before it. A name added here must also be in
+-- BONUS_ROLL_FRAMES, which is what places it.
 local DIRECT_ALERT_FRAMES = {
     BonusRollLootWonFrame = true,
     BonusRollMoneyWonFrame = true,
@@ -174,59 +171,52 @@ local function IsDirectAlertFrame(frame)
     return DIRECT_ALERT_FRAMES[frame:GetName()] == true
 end
 
--- A frame in rollFrames is already stacked by the game relative to the
--- container, which PositionGroupLootContainer has just placed, so it is not
--- ours to move. GroupLootFrame.lua puts a winnings toast there on the line
--- BEFORE it calls AddAlertFrame on the same frame, which is why the alert hook
--- needs this test too: placing a held toast renders it at our anchor and the
--- container's next update then drags it to the loot roll anchor.
-local function IsHeldByLootContainer(frame)
-    local glc = _G.GroupLootContainer
-    if not (frame and glc and type(glc.rollFrames) == "table") then return false end
-    for _, f in pairs(glc.rollFrames) do
-        if f == frame then return true end
-    end
-    return false
+local function PlacesBonusRollFrame(name, lootRollReplaces)
+    return not (name == "BonusRollFrame" and lootRollReplaces)
 end
 
+-- Weak-keyed dedupe rather than a field on Blizzard's frame.
+local showHooked = setmetatable({}, { __mode = "k" })
+
+-- Blizzard anchors these to the container inside GroupLootContainer_Update,
+-- and a winnings toast stays in rollFrames for its whole life
+-- (GroupLootContainer_ReplaceFrame puts it there before AddAlertFrame sees
+-- it), so a frame placed once is dragged back on the next update. Running
+-- from the post-hook makes this the last write in the same execution.
+-- GroupLootContainer_AddFrame and _ReplaceFrame run Update BEFORE Show, so
+-- the pass that first sees a new frame sees it hidden; the OnShow hook
+-- closes that gap. bonusStackTop is what the alert chain continues from.
+-- LootRoll's legacy stacker yields these frames while this module is enabled
+-- (Modules/Skinning/LootRoll.lua), so they have one writer.
 function AF:PositionBonusRollToasts()
     if not self.holder then return end
-    local glc = _G.GroupLootContainer
-    local anchor = GetPerksAnchor() or self.holder
-    if glc and glc:IsShown() then anchor = glc end
+    local replaces = LootRollReplacesRolls()
+    local base = GetPerksAnchor() or self.holder
+    local anchor = base
     for _, name in ipairs(BONUS_ROLL_FRAMES) do
         local f = _G[name]
-        if f and f:IsShown() and not IsHeldByLootContainer(f) and f.ClearAllPoints
-           and not (name == "BonusRollFrame" and LootRollReplacesRolls()) then
-            f:ClearAllPoints()
-            f:SetPoint(POSITION, anchor, POINT, X_OFFSET, Y_OFFSET)
-            anchor = f
+        if f and f.ClearAllPoints then
+            if not showHooked[f] and f.HookScript then
+                showHooked[f] = true
+                f:HookScript("OnShow", function()
+                    if AF:IsEnabled() then AF:PositionBonusRollToasts() end
+                end)
+            end
+            if f:IsShown() and PlacesBonusRollFrame(name, replaces) then
+                f:ClearAllPoints()
+                f:SetPoint(POSITION, anchor, POINT, X_OFFSET, Y_OFFSET)
+                anchor = f
+            end
         end
     end
-end
-
--- Re-apply after Blizzard's managed layout has settled. Coalesced; the
--- layout marks itself dirty and can settle on EITHER of the next two
--- frames, so both passes place -- one placement after two ticks would
--- leave a first-frame settle unanswered.
-function AF:ReassertContainer()
-    if self.reassertPending then return end
-    self.reassertPending = true
-
-    local frames = 0
-    local function settle()
-        frames = frames + 1
-        if self:IsEnabled() then
-            self:PositionGroupLootContainer()
-            self:PositionBonusRollToasts()
-        end
-        if frames < 2 then
-            C_Timer.After(0, settle)
-        else
-            self.reassertPending = false
-        end
+    -- Alerts already on screen sit where the last UpdateAnchors left them,
+    -- so a frame placed under them overlaps until the chain is walked again.
+    local top = anchor ~= base and anchor or nil
+    if top ~= self.bonusStackTop then
+        self.bonusStackTop = top
+        local af = _G.AlertFrame
+        if af and af.UpdateAnchors then af:UpdateAnchors() end
     end
-    C_Timer.After(0, settle)
 end
 
 ---------------------------------------------------------------------------------
@@ -277,8 +267,25 @@ local function IsExternallyAnchored(sys)
     return mixin ~= nil and sys.AdjustAnchors == mixin.AdjustAnchors
 end
 
+-- GroupLootContainer is the one externally anchored subsystem that is
+-- replaced. Blizzard's version returns the container whenever it is shown and
+-- every alert behind it in the chain stacks from there -- the bottom of the
+-- screen, now that the container is left to the managed layout. The frames
+-- it holds sit on the alert stack instead, so the chain continues from the
+-- top of those; when none is placed it passes through untouched.
+local function AdjustAnchorsThroughBonusStack(_, relativeAlert)
+    local top = AF.bonusStackTop
+    if top and top:IsShown() then return top end
+    return relativeAlert
+end
+
 local function AdjustSubSystem(sys)
-    if IsExternallyAnchored(sys) then return end
+    if IsExternallyAnchored(sys) then
+        if sys.anchorFrame ~= nil and sys.anchorFrame == _G.GroupLootContainer then
+            sys.AdjustAnchors = AdjustAnchorsThroughBonusStack
+        end
+        return
+    end
 
     if sys.alertFramePool then
         sys.AdjustAnchors = AdjustQueuedAnchors
@@ -312,46 +319,25 @@ function AF:InstallHooks()
     if af.SetBaseAnchorFrame then hooksecurefunc(af, "SetBaseAnchorFrame", Reroot) end
     if af.ResetBaseAnchorFrame then hooksecurefunc(af, "ResetBaseAnchorFrame", Reroot) end
 
-    -- GroupLootContainer stays exactly as Blizzard manages it. LootRoll
-    -- moves the roll FRAMES off it instead of moving the container
-    -- (Modules/Skinning/LootRoll.lua), so nothing here needs to reparent it.
     local glc = _G.GroupLootContainer
     if glc then glc:EnableMouse(false) end
-    -- Managed-frame relayouts can run without GroupLootContainer_Update.
-    local layoutParent = glc and glc.layoutParent
-    if layoutParent and type(layoutParent.Layout) == "function" then
-        hooksecurefunc(layoutParent, "Layout", function()
-            if AF:IsEnabled() then AF:PositionGroupLootContainer() end
-        end)
-    end
-    -- Place the container in the SAME execution that shows it.
+    -- Blizzard has just re-anchored everything in rollFrames to the container;
+    -- pick the bonus-roll frames back up in the same execution.
     if type(_G.GroupLootContainer_Update) == "function" then
         hooksecurefunc("GroupLootContainer_Update", function()
-            if not AF:IsEnabled() then return end
-            AF:PositionGroupLootContainer()
-            AF:PositionBonusRollToasts()
-            AF:ReassertContainer()
+            if AF:IsEnabled() then AF:PositionBonusRollToasts() end
         end)
-    end
-    -- Blizzard's managed layout settles a frame or two after the update
-    -- above runs, so also re-assert on the container's own OnShow.
-    if glc and not self.glcShowHooked then
-        self.glcShowHooked = true
-        glc:HookScript("OnShow", function() AF:ReassertContainer() end)
     end
 
     -- BonusRollLootWonFrame / BonusRollMoneyWonFrame are added through
     -- AddAlertFrame rather than as subsystems, so AdjustSubSystem never
-    -- sees them; place them directly when Blizzard adds them. AddAlertFrame is
-    -- the shared entry point for every alert, so the filter is what keeps this
-    -- off the ones a subsystem already placed.
+    -- sees them. AddAlertFrame is the shared entry point for every alert, so
+    -- the filter is what keeps this off the ones a subsystem already placed.
     hooksecurefunc(af, "AddAlertFrame", function(_, frame)
         if not (AF:IsEnabled() and AF.holder and frame and frame.ClearAllPoints) then return end
         if not IsDirectAlertFrame(frame) then return end
-        if IsHeldByLootContainer(frame) then return end
         AF:PostAlertMove()
-        frame:ClearAllPoints()
-        frame:SetPoint(POSITION, GetPerksAnchor() or AF.holder, POINT, X_OFFSET, Y_OFFSET)
+        AF:PositionBonusRollToasts()
     end)
 end
 

@@ -1769,7 +1769,7 @@ end
 -- handle, but AF:PostAlertMove calls it directly, so it sits in that method's
 -- upvalue slots; findUpvalue recovers it without ever creating a frame or
 -- calling OnEnable. Returns AF, KE, seams -- seams.shouldGrowUp,
--- seams.isDirectAlertFrame, seams.isHeldByLootContainer, seams.adjustSubSystem.
+-- seams.isDirectAlertFrame, seams.placesBonusRollFrame, seams.adjustSubSystem.
 -- For the AddAlertFrame post-hook itself, use L.loadAlertFramesWithHooks below.
 function L.loadAlertFrames()
     local modules = helpers.installAddonShim()
@@ -1786,7 +1786,7 @@ function L.loadAlertFrames()
         -- Referenced only by the AddAlertFrame closure InstallHooks builds, which
         -- makes it an upvalue of InstallHooks itself.
         isDirectAlertFrame = findUpvalue(AF.InstallHooks, "IsDirectAlertFrame"),
-        isHeldByLootContainer = findUpvalue(AF.PositionBonusRollToasts, "IsHeldByLootContainer"),
+        placesBonusRollFrame = findUpvalue(AF.PositionBonusRollToasts, "PlacesBonusRollFrame"),
         -- The refusal itself rather than its predicate: AdjustSubSystem is what
         -- decides whether a subsystem's AdjustAnchors gets replaced, so a spec
         -- that calls it observes the decision instead of restating the test.
@@ -1843,58 +1843,6 @@ function L.loadAlertFramesWithHooks()
 
     AF:InstallHooks()
     return AF, captured, calls, KE
-end
-
--- Modules/QoL/AlertFrames.lua with the managed-frame layout parent present.
--- The layout pass restores GroupLootContainer's stock screen-bottom anchor;
--- rec.fireManagedLayout runs that pass and then the post-hook InstallHooks
--- registered, matching hooksecurefunc's order. Returns AF, rec, KE.
-function L.loadAlertFramesWithManagedLayout()
-    local modules = helpers.installAddonShim()
-    local KE = {
-        db = { profile = { AlertFrames = {} } },
-        ApplyFramePosition = function() end,
-        CreateReloadPrompt = function() end,
-        Print = function() end,
-    }
-
-    local uiParent = trackablePointFrame()
-    local holder = trackablePointFrame()
-    local container = trackablePointFrame()
-    local alertFrame = { alertFrameSubSystems = {} }
-    local layoutParent = {}
-    local layoutHook
-
-    function layoutParent:Layout()
-        container:ClearAllPoints()
-        container:SetPoint("BOTTOM", uiParent, "BOTTOM", 0, 0)
-    end
-    container.layoutParent = layoutParent
-
-    _G.UIParent = uiParent
-    _G.AlertFrame = alertFrame
-    _G.GroupLootContainer = container
-    _G.GroupLootContainer_Update = function() end
-    _G.hooksecurefunc = function(target, name, fn)
-        if target == layoutParent and name == "Layout" then layoutHook = fn end
-    end
-
-    helpers.loadModule("Modules/QoL/AlertFrames.lua", KE)
-    local AF = modules["AlertFrames"]
-    AF.IsEnabled = function() return true end
-    AF.holder = holder
-    AF:InstallHooks()
-
-    local rec = {
-        container = container,
-        holder = holder,
-        uiParent = uiParent,
-    }
-    rec.fireManagedLayout = function()
-        layoutParent:Layout()
-        if layoutHook then layoutHook(layoutParent) end
-    end
-    return AF, rec, KE
 end
 
 -- Modules/QoL/ColorPicker.lua captures WoW string globals as file-scope
