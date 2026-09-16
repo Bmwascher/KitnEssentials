@@ -1891,11 +1891,8 @@ function L.loadColorPicker(overrides)
     return CP, KE, seams
 end
 
--- Modules/QoL/MoveFrames.lua. GetFrame is called directly by MF.HandleFrame
---; both frame tables are referenced directly by MF.OnEnable
---; disabled is the file-local table MF:SetMovable
--- writes to -- four of the five seams are one debug.getupvalue hop; modifierHeld
--- is an upvalue of MF.Frame_StartMoving.
+-- Modules/QoL/MoveFrames.lua. Every seam is one debug.getupvalue hop from an
+-- exported method except framePaths, which is an upvalue of CanRemember.
 -- strsplit is delimiter-first and not supplied by _wow_mock.lua; the module
 -- captures it as a file-scope local, so a real equivalent must be on _G
 -- before helpers.loadModule -- reusing wowStrsplit above (already

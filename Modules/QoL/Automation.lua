@@ -26,7 +26,6 @@ local GetMoney = GetMoney
 local GetGuildBankWithdrawMoney = GetGuildBankWithdrawMoney
 local GetGuildBankMoney = GetGuildBankMoney
 local CinematicFrame_CancelCinematic = CinematicFrame_CancelCinematic
-local GameMovieFinished = GameMovieFinished
 local C_Container = C_Container
 local C_Item = C_Item
 local C_CVar = C_CVar
@@ -607,18 +606,13 @@ local function SetupSkipCinematics()
     if cinematicFrame then return end
     cinematicFrame = CreateFrame("Frame")
     cinematicFrame:RegisterEvent("CINEMATIC_START")
-    cinematicFrame:RegisterEvent("PLAY_MOVIE")
-    cinematicFrame:SetScript("OnEvent", function(_, event, canBeCancelled)
+    cinematicFrame:SetScript("OnEvent", function(_, _, canBeCancelled)
         if not AU.db or not AU.db.Enabled then return end
         if not AU.db.SkipCinematics then return end
-        if event == "CINEMATIC_START" then
-            -- One that cannot be cancelled is a vehicle or scene sequence, where
-            -- Blizzard's cancel falls through to CancelScene or VehicleExit.
-            if KE:IsFullyRestricted() and not canBeCancelled then return end
-            CinematicFrame_CancelCinematic()
-        elseif event == "PLAY_MOVIE" then
-            pcall(GameMovieFinished)
-        end
+        -- One that cannot be cancelled is a vehicle or scene sequence, where
+        -- Blizzard's cancel falls through to CancelScene or VehicleExit.
+        if KE:IsFullyRestricted() and not canBeCancelled then return end
+        CinematicFrame_CancelCinematic()
     end)
 end
 
@@ -1527,6 +1521,24 @@ end
 -- writes is written tainted, and no teardown lifts that before a reload.
 
 local notePlanted = false
+local noteLockdownWatcher
+
+-- Blizzard's dialog compares this field with a secret activity id inside a chat
+-- messaging lockdown, and the compare throws while the field is one written
+-- here. Removing the field before a Sign Up there leaves Blizzard nothing of
+-- ours to read.
+local function ClearPlantedNote()
+    local dialog = LFGListApplicationDialog
+    if dialog then dialog.activityID = nil end
+    notePlanted = false
+    if noteLockdownWatcher then noteLockdownWatcher:UnregisterAllEvents() end
+end
+
+-- The restriction event fires before a restriction is enforced, so the
+-- lockdown is read on the next frame.
+local function ClearNoteIfLockedDown()
+    if notePlanted and InLockdown() then ClearPlantedNote() end
+end
 
 -- Degrades to nil rather than throwing: activityIDs is a secret table inside a
 -- chat messaging lockdown, and indexing one from tainted execution throws.
@@ -1560,6 +1572,14 @@ local function PlantActivityID(resultID)
     if activityID == nil then return end
     dialog.activityID = activityID
     notePlanted = true
+    if not noteLockdownWatcher then
+        noteLockdownWatcher = CreateFrame("Frame")
+        noteLockdownWatcher:SetScript("OnEvent", function()
+            C_Timer.After(0, ClearNoteIfLockedDown)
+        end)
+    end
+    noteLockdownWatcher:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+    noteLockdownWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 end
 
 local function SetupPersistSignupNote()
@@ -1583,9 +1603,7 @@ local function SetupPersistSignupNote()
         -- Only a field this feature wrote. Costs one extra clear on the next
         -- open, because nil compares unequal to every activity; stock resumes
         -- after that.
-        local dialog = LFGListApplicationDialog
-        if dialog then dialog.activityID = nil end
-        notePlanted = false
+        ClearPlantedNote()
     end
 end
 

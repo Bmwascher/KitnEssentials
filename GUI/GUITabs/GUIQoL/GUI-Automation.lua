@@ -239,7 +239,7 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
     manager:Register(card1, "all")
 
     local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local skipCinematicsCheck = GUIFrame:CreateCheckbox(row1a, "Skip Cinematics & Movies", {
+    local skipCinematicsCheck = GUIFrame:CreateCheckbox(row1a, "Skip Cinematics", {
         value = db.SkipCinematics ~= false,
         callback = function(checked) db.SkipCinematics = checked; ApplySettings() end,
     })

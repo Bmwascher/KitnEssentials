@@ -170,7 +170,7 @@ describe("Modules/QoL/AlertFrames.lua", function()
             _G.BonusRollLootWonFrame = nil
             _G.BonusRollMoneyWonFrame = nil
             local LR = _G.KitnEssentials:GetModule("LootRoll")
-            LR.db, LR.IsEnabled = nil, nil
+            LR.db, LR.IsEnabled, LR._barsWired = nil, nil, nil
         end)
 
         it("returns the top placed frame, or passes the chain through when it placed none", function()
@@ -185,6 +185,7 @@ describe("Modules/QoL/AlertFrames.lua", function()
                 -- prompt anchor reads, and this module must read the same.
                 { name = "Loot Roll disabled by profile, still running", prompt = true, won = false, replace = true, running = true, dbEnabled = false, top = "relative" },
                 { name = "Loot Roll enabled by profile, not yet running", prompt = true, won = false, replace = true, running = false, dbEnabled = true, top = "prompt" },
+                { name = "Replace saved by profile, bars never wired", prompt = true, won = false, replace = true, wired = false, top = "prompt" },
             }
             for _, c in ipairs(cases) do
                 local prompt, won = bonusFrame(c.prompt), bonusFrame(c.won)
@@ -195,6 +196,7 @@ describe("Modules/QoL/AlertFrames.lua", function()
                 if running == nil then running = true end
                 LR.IsEnabled = function() return running end
                 LR.db = { Enabled = c.dbEnabled ~= false, Replace = c.replace }
+                LR._barsWired = c.wired ~= false
                 AF:PositionBonusRollToasts()
                 if c.hideAfter then prompt.shown = false end
                 local expected = ({ prompt = prompt, won = won, relative = relative })[c.top]

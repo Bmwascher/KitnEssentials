@@ -523,8 +523,11 @@ end
 -- and that list compares secret values. A protected frame is moved only by
 -- a secure snippet, which taints nothing, and never in combat.
 
+-- IsProtected can return a secret; a secret counts as protected.
 local function IsProtectedFrame(frame)
-    return frame and frame.IsProtected and frame:IsProtected() == true
+    if not (frame and frame.IsProtected) then return false end
+    local protected = frame:IsProtected()
+    return KE:IsSecretValue(protected) or protected == true
 end
 
 -- Created on first use (the positioner by the first secure positioning
@@ -681,7 +684,7 @@ end
 -- Movement handlers ----------------------------------------------------------
 
 function MF:Frame_StartMoving(this, button)
-    if InCombatLockdown() and this:IsProtected() then
+    if InCombatLockdown() and IsProtectedFrame(this) then
         return
     end
     local moveTarget = moveTargets[this]
@@ -697,7 +700,7 @@ function MF:Frame_StartMoving(this, button)
 end
 
 function MF:Frame_StopMoving(this, button)
-    if InCombatLockdown() and this:IsProtected() then
+    if InCombatLockdown() and IsProtectedFrame(this) then
         return
     end
     local moveTarget = moveTargets[this]
@@ -721,7 +724,7 @@ function MF:HandleFrame(this, bindTo)
         return
     end
 
-    if InCombatLockdown() and thisFrame:IsProtected() then
+    if InCombatLockdown() and IsProtectedFrame(thisFrame) then
         AfterCombat(function()
             self:HandleFrame(this, bindTo)
         end)
@@ -783,7 +786,7 @@ function MF:HandleAddon(_, addon)
     AfterCombat(function()
         if addon == "Blizzard_EncounterJournal" then
             local replacement = function(rewardFrame)
-                if rewardFrame.data then
+                if rewardFrame.data and not IsProtectedFrame(_G.EncounterJournalTooltip) then
                     _G.EncounterJournalTooltip:ClearAllPoints()
                 end
                 self.hooks.AdventureJournal_Reward_OnEnter(rewardFrame)
@@ -794,7 +797,7 @@ function MF:HandleAddon(_, addon)
             self:RawHookScript(_G.EncounterJournal.suggestFrame.Suggestion3.reward, "OnEnter", replacement)
         elseif addon == "Blizzard_Communities" then
             local dialog = _G.CommunitiesFrame.NotificationSettingsDialog
-            if dialog then
+            if dialog and not IsProtectedFrame(dialog) then
                 dialog:ClearAllPoints()
                 dialog:SetAllPoints()
             end
@@ -803,7 +806,7 @@ function MF:HandleAddon(_, addon)
             -- cannot be undone. That way module disable
             -- removes them and a re-enable does not stack a second copy.
             self:SecureHookScript(_G.PlayerChoiceFrame, "OnHide", function()
-                if not InCombatLockdown() or not _G.PlayerChoiceFrame:IsProtected() then
+                if not IsProtectedFrame(_G.PlayerChoiceFrame) then
                     _G.PlayerChoiceFrame:ClearAllPoints()
                 end
             end)
@@ -897,20 +900,14 @@ function MF:OnEnable()
 
     -- Mail inset reparent. Not an ElvUI-only fix -- the insets are parented
     -- oddly and drag the wrong frame without it.
-    if _G.MailFrameInset then
+    if _G.MailFrameInset and _G.OpenMailFrameInset
+        and not (IsProtectedFrame(_G.MailFrameInset) or IsProtectedFrame(_G.OpenMailFrameInset)) then
         _G.OpenMailFrameInset:SetParent(_G.OpenMailFrame)
         _G.MailFrameInset:SetParent(_G.MailFrame)
     end
 
     -- Always-loaded Blizzard frames
     self:HandleFramesWithTable(BlizzardFrames)
-
-    -- Legacy PVP frame guard (nil on Midnight; ported for parity)
-    if _G.BattlefieldFrame and _G.PVPParentFrame then
-        _G.BattlefieldFrame:SetParent(_G.PVPParentFrame)
-        _G.BattlefieldFrame:ClearAllPoints()
-        _G.BattlefieldFrame:SetAllPoints()
-    end
 
     -- Load-on-demand Blizzard frames
     self:RegisterEvent("ADDON_LOADED", "HandleAddon")
@@ -926,7 +923,7 @@ function MF:OnEnable()
         local GetBagsShown = _G.ContainerFrameSettingsManager.GetBagsShown
         self:SecureHook(_G.ContainerFrameSettingsManager, "GetBagsShown", function()
             for _, bag in pairs(GetBagsShown(_G.ContainerFrameSettingsManager) or {}) do
-                bag:ClearAllPoints()
+                if not IsProtectedFrame(bag) then bag:ClearAllPoints() end
             end
         end)
     end

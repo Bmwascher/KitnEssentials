@@ -637,7 +637,9 @@ function DC:KickPassDue(now)
     return true
 end
 
-function DC:CacheKickSpell()
+-- PLAYER_SPECIALIZATION_CHANGED fires for every group member's spec change.
+function DC:CacheKickSpell(_, unit)
+    if unit and unit ~= "player" then return end
     H.CacheInterruptId(self)
     -- Own spec, never secret. Tanks get no targeting glow: every trash cast
     -- is aimed at them, so it would never go out.

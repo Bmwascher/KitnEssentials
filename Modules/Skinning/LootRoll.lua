@@ -247,17 +247,11 @@ function LR:GetMover()
     m:SetSize(340, 90)
     m:SetFrameStrata("FULLSCREEN_DIALOG")
     m:SetClampedToScreen(true)
-    -- ("their own unlock anchors on top of the addon's
-    -- toggle anchors ... causing position mismatches"): the mover's own
-    -- drag scripts are gone and it never Shows itself any more. It had
-    -- been a SECOND draggable anchor sitting on the same frame EditMode
-    -- already owns, with its own OnDragStop that force-wrote CENTER/CENTER
-    -- regardless of what EditMode had just stored -- so dragging one moved
-    -- the other's idea of the anchor. /kes edit is the single anchor UI
-    -- now; this frame is a positioned, invisible proxy that EditMode
-    -- overlays (its overlay does SetAllPoints(target), which needs the
-    -- proxy anchored but not shown, and EditMode draws its own border,
-    -- tint and label -- so ours are removed rather than doubled).
+    -- A positioned, invisible proxy: EditMode owns this frame's anchor, so the
+    -- mover carries no drag scripts and never Shows itself. A second draggable
+    -- anchor on the same frame fights EditMode's stored position. The overlay
+    -- does SetAllPoints(target), which needs the proxy anchored but not shown,
+    -- and draws its own border, tint and label, so this frame draws none.
     self.mover = m
     self:SyncMover()
     m:Hide()
@@ -301,7 +295,9 @@ end
 local function AnchorBonusRoll()
     if not LR:IsEnabled() then return end
     local db = LR.db
-    if not db or not db.Replace then return end
+    -- The bars, not the saved flag: a profile switch that defers to /reload
+    -- can save Replace while the legacy stacker is still the one running.
+    if not db or not db.Replace or not LR._barsWired then return end
 
     local f = _G.BonusRollFrame
     if not f or not f:IsShown() then return end

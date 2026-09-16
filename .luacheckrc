@@ -435,7 +435,7 @@ read_globals = {
     "ResetInstances",
     "GetServerTime", "GetTimePreciseSec", "GetLocale",
     "ReloadUI", "print",
-    "GameMovieFinished", "CinematicFrame_CancelCinematic",
+    "CinematicFrame_CancelCinematic",
     "Evoker", -- Evoker-specific
     "GetUnitEmpowerMinHoldTime", "GetUnitEmpowerHoldAtMaxTime",
     "FrameStackTooltip_Toggle",

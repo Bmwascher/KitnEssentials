@@ -1296,7 +1296,13 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
 
                 local accessID = self:GetAccessID(chatGroup, arg8)
                 local typeID = self:GetAccessID(infoType, arg8, arg12)
-                frame:AddMessage(format(globalstring, arg8, ResolvePrefixedChannelName(arg4)), info.r, info.g, info.b,
+                -- Same resolver as the channel tag: it can refuse a secret
+                -- community name, and a name it does return can itself be
+                -- secret. Nothing here is declared to take one, so the
+                -- unresolved name stands in for both.
+                local ok, name = pcall(ResolvePrefixedChannelName, arg4)
+                if not ok or type(name) == 'nil' or KE:IsSecretValue(name) then name = arg4 end
+                frame:AddMessage(format(globalstring, arg8, name), info.r, info.g, info.b,
                     info.id, accessID, typeID)
             end
         elseif chatType == 'BN_INLINE_TOAST_ALERT' then

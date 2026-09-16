@@ -188,7 +188,6 @@ function BR:GetOverlay(kind)
 
     ov = CreateFrame("Button", nil, p)
     ov:SetAllPoints(target)
-    ov:SetFrameStrata(target:GetFrameStrata())
     -- Above the button and above anything the loot skin lays over it.
     ov:SetFrameLevel(target:GetFrameLevel() + 5)
     ov:RegisterForClicks("LeftButtonUp")

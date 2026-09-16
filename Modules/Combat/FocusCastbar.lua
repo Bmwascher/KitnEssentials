@@ -146,7 +146,9 @@ end
 ---------------------------------------------------------------------------------
 -- Event handlers (Ace3 dispatches by method name)
 ---------------------------------------------------------------------------------
-function FC:CacheInterruptId()
+-- PLAYER_SPECIALIZATION_CHANGED fires for every group member's spec change.
+function FC:CacheInterruptId(_, unit)
+    if unit and unit ~= "player" then return end
     H.CacheInterruptId(self)
 end
 
