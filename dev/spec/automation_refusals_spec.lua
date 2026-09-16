@@ -1750,3 +1750,47 @@ describe("Automation quest greeting hand-in restriction", function()
         end)
     end
 end)
+
+---------------------------------------------------------------------------------
+-- Persist Signup Note removes its planted activity id once a chat messaging
+-- lockdown is on, where Blizzard's dialog would compare it with a secret.
+---------------------------------------------------------------------------------
+describe("Automation Persist Signup Note lockdown clear", function()
+    local cases = {
+        { label = "removes the planted id when the lockdown is on a frame later",
+          lockdown = true, want = nil },
+        { label = "keeps the planted id when no lockdown follows the event",
+          lockdown = false, want = 7 },
+    }
+
+    for _, case in ipairs(cases) do
+        it(case.label, function()
+            local lockdown = false
+            _G.C_ChatInfo = { InChatMessagingLockdown = function() return lockdown end }
+            _G.C_LFGList = { GetSearchResultInfo = function() return { activityIDs = { 7 } } end }
+            _G.issecrettable = function() return false end
+            local fx = newFixture()
+            local AU = fx.AU
+            AU.db = { Enabled = true, PersistSignupNote = true }
+            AU:ApplySettings()
+            fx.hookedGlobals.LFGListSearchPanel_SelectResult(nil, 5)
+            local dialog = _G.LFGListApplicationDialog
+            assert.equals(7, rawget(dialog, "activityID"))
+
+            local setup = findUpvalue(AU.ApplySettings, "SetupPersistSignupNote")
+            local plant = findUpvalue(setup, "PlantActivityID")
+            local watcher = findUpvalue(plant, "noteLockdownWatcher")
+            -- The event arrives before the restriction is enforced, so the
+            -- lockdown only turns on between the event and the deferred read:
+            -- a clear made inside the handler would fire against a false
+            -- reading and is caught here rather than by the row's outcome.
+            watcher:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 1)
+            assert.equals(7, rawget(dialog, "activityID"))
+            lockdown = case.lockdown
+            for _, t in ipairs(fx.timers) do t.fn() end
+            assert.equals(case.want, rawget(dialog, "activityID"))
+
+            _G.C_ChatInfo, _G.C_LFGList, _G.issecrettable = nil, nil, nil
+        end)
+    end
+end)
