@@ -67,20 +67,11 @@ GUIFrame:RegisterContent("BonusRoll", function(scrollChild, yOffset)
     -- Card 1: Bonus Roll (enable)
     ---------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Bonus Roll", yOffset)
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local enableCheck = GUIFrame:CreateCheckbox(row1, "Enable Bonus Roll", {
-        value = db.Enabled == true,
-        callback = function(checked)
-            ApplyModuleState(checked)
-            manager:UpdateAll(checked)
-        end,
-        msgPopup = true,
-        msgText = "Bonus Roll",
-        msgOn = "On",
-        msgOff = "Off",
-    })
-    row1:AddWidget(enableCheck, 1)
-    card1:AddRow(row1, Theme.rowHeight)
+    card1:AddHeaderToggle(db.Enabled == true, function(checked)
+        ApplyModuleState(checked)
+        manager:UpdateAll(checked)
+        KE:Print("Bonus Roll: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+    end)
 
     local noteHeight = 50
     local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
