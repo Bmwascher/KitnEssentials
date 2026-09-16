@@ -1292,6 +1292,9 @@ function L.loadDungeonCasts(overrides)
         GetCastInfo = function() return nil end,
         GetChannelInfo = function() return nil end,
     }
+    -- The module localises C_Spell at file scope, so the override is
+    -- assigned before the load, as C_CastingInfo above.
+    _G.C_Spell = overrides.C_Spell or {}
     local KE = { Print = function() end, curves = {} }
     helpers.loadModule("Modules/Dungeons/DungeonCasts.lua", KE)
     return modules["DungeonCasts"], KE

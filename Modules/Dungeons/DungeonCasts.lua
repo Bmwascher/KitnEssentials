@@ -30,6 +30,12 @@ local C_Timer = C_Timer
 local C_DurationUtil = C_DurationUtil
 local C_CastingInfo = C_CastingInfo
 local C_ClassColor = C_ClassColor
+local C_Spell = C_Spell
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationRole = GetSpecializationRole
+local UnitIsUnit = UnitIsUnit
+local pcall = pcall
+local issecretvalue = issecretvalue
 local Enum = Enum
 local CreateColor = CreateColor
 local pairs, ipairs = pairs, ipairs
@@ -45,6 +51,15 @@ local UPDATE_THROTTLE = 0.033
 local PREVIEW_DURATION = 8
 local NAMEPLATE_PATTERN = "^nameplate%d+$"
 local MAX_NAMEPLATES = 40
+
+-- The kick pass runs at its own slower rate inside the bar tick: a cooldown
+-- and a range change a few times a minute, and neither raises an event.
+local KICK_PASS_INTERVAL = 0.15
+
+local H = KE.CastbarHelpers
+
+-- Handed to a released bar's glow host so its animations stop.
+local GLOW_OFF = { GlowEnabled = false }
 
 ---------------------------------------------------------------------------------
 -- Preview Data
@@ -92,10 +107,12 @@ end
 -- Pre-builds ColorMixin objects
 function DC:CreateColorObjects()
     local db = self.db
+    local rr, rg, rb = KE:ResolveColor(db.Kick and db.Kick.ReadyColor, { 0.920, 0.350, 0.200, 1 })
     self.colors = {
         Casting = CreateColor(db.CastingColor[1], db.CastingColor[2], db.CastingColor[3]),
         Channeling = CreateColor(db.ChannelingColor[1], db.ChannelingColor[2], db.ChannelingColor[3]),
         Shielded = CreateColor(db.NotInterruptibleColor[1], db.NotInterruptibleColor[2], db.NotInterruptibleColor[3]),
+        Ready = CreateColor(rr, rg, rb),
     }
 end
 
@@ -224,6 +241,18 @@ function DC:CreateBarFrame()
     frame.raidIcon = frame:CreateTexture(nil, "OVERLAY")
     frame.raidIcon:SetTexture("Interface/TargetingFrame/UI-RaidTargetingIcons")
     frame.raidIcon:Hide()
+
+    frame.kickMark = H.CreateKickMark(frame.castBar)
+
+    -- Whether the caster targets you is a secret boolean in a key. It drives
+    -- this gate's alpha; the glow host inside animates its own alpha, and
+    -- alpha multiplies down the tree, so the two never share a property.
+    frame.targetGate = CreateFrame("Frame", nil, frame)
+    frame.targetGate:SetAllPoints(frame)
+    frame.targetGate:SetFrameLevel(frame:GetFrameLevel() + 8)
+    frame.targetGate:EnableMouse(false)
+    frame.targetGate:SetAlpha(0)
+    frame.targetGlow = KE.AuraGlow.CreateHost(frame.targetGate, GLOW_OFF)
 
     return frame
 end
@@ -390,6 +419,17 @@ function DC:ConfigureBar(bar)
         bar.raidIcon:ClearAllPoints()
         bar.raidIcon:SetPoint("RIGHT", bar, "LEFT", -4, 0)
     end
+
+    -- Colours only. The mark is armed and hidden by the cast lifecycle, not
+    -- here: UpdateFrameVisuals re-runs this on live bars.
+    local kickDb = db.Kick
+    if kickDb then
+        local tr, tg, tb, ta = KE:ResolveColor(kickDb.TickColor, { 1, 1, 1, 1 })
+        bar.kickMark.tick:SetColorTexture(tr, tg, tb, ta)
+        local wr, wg, wb, wa = KE:ResolveColor(kickDb.WindowColor, { 0.318, 0.820, 0.357, 1 })
+        bar.kickMark.window:SetColorTexture(wr, wg, wb, wa)
+    end
+    self:ApplyTargetGlowHost(bar)
 end
 
 ---------------------------------------------------------------------------------
@@ -424,6 +464,11 @@ function DC:ReleaseBar(bar)
     bar.previewTargetClass = nil
     bar.targetName = nil
     bar.targetClass = nil
+    bar.targetUnit = nil
+    bar.rangeFaded = nil
+    H.HideKickMark(bar.kickMark)
+    if bar.targetGate then bar.targetGate:SetAlpha(0) end
+    if bar.targetGlow then KE.AuraGlow.Configure(bar.targetGlow, GLOW_OFF) end
     bar.raidIcon:Hide()
     bar.targetText:Hide()
     bar.targetSeparator:Hide()
@@ -462,8 +507,10 @@ end
 -- Bar Visuals
 ---------------------------------------------------------------------------------
 
--- Determines bar color based on casting/channeling and interruptible state
-function DC:UpdateBarColor(bar)
+-- Three states blend into one colour, two of them secret: the cast kind,
+-- whether the kick is up, and whether the cast can be kicked at all.
+-- kickCd is the pass's shared read; event callers fall back to the cached one.
+function DC:UpdateBarColor(bar, kickCd)
     if not bar or not bar.castBar then return end
     local texture = bar.castBar:GetStatusBarTexture()
 
@@ -482,7 +529,13 @@ function DC:UpdateBarColor(bar)
         return
     end
 
+    if kickCd == nil then kickCd = self._kickCd end
     local baseColor = bar.channeling and self.colors.Channeling or self.colors.Casting
+    local kickDb = self.db.Kick
+    if kickDb and kickDb.ReadyTint and kickCd then
+        H.PaintKickColor(texture, kickCd, self.colors.Ready, baseColor, bar.notInterruptible, self.colors.Shielded)
+        return
+    end
     if bar.notInterruptible ~= nil then
         texture:SetVertexColorFromBoolean(bar.notInterruptible, self.colors.Shielded, baseColor)
     else
@@ -567,6 +620,160 @@ function DC:UpdateTargetText(bar, targetName, targetClass)
         bar.targetSeparator:Show()
     else
         bar.targetSeparator:Hide()
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Your own kick
+---------------------------------------------------------------------------------
+-- Cooldown, remaining and range are secret inside a key; all three still
+-- drive colour, alpha and bar fills, which resolve them C-side. One cooldown
+-- read per pass is shared by every bar; event-driven callers reuse the last
+-- pass's object, at most KICK_PASS_INTERVAL old.
+
+function DC:KickPassDue(now)
+    if self._nextKickPass and now < self._nextKickPass then return false end
+    self._nextKickPass = now + KICK_PASS_INTERVAL
+    return true
+end
+
+function DC:CacheKickSpell()
+    H.CacheInterruptId(self)
+    -- Own spec, never secret. Tanks get no targeting glow: every trash cast
+    -- is aimed at them, so it would never go out.
+    local specIndex = GetSpecialization()
+    self.isTank = (specIndex and GetSpecializationRole(specIndex) == "TANK") or false
+    for _, bar in pairs(self.activeFrames) do
+        self:ApplyTargetGlowHost(bar)
+    end
+end
+
+-- Interrupts are off the global cooldown, so the GCD is ignored.
+function DC:ReadKickCooldown()
+    return H.ReadKickCooldown(self.interruptId, true)
+end
+
+-- Armed only when a mark is wanted and, outside the preview, when there is
+-- a kick to time it against; the preview draws the setting, not a reading.
+function DC:ArmKickMark(bar, reverse)
+    local kickDb = self.db.Kick
+    local wanted = kickDb and (kickDb.Tick or kickDb.Window)
+    if wanted and not self.isPreview then
+        wanted = self.interruptId ~= nil
+    end
+    if not wanted then
+        H.HideKickMark(bar.kickMark)
+        return
+    end
+    H.ArmKickMark(bar.kickMark, reverse and true or false)
+end
+
+function DC:RefreshKickMark(bar, kickCd)
+    local kickDb = self.db.Kick
+    if not kickDb or not (kickDb.Tick or kickDb.Window) then
+        H.HideKickMark(bar.kickMark)
+        return
+    end
+    H.RefreshKickMark(bar.kickMark, bar.cachedDuration, kickCd, bar.notInterruptible, kickDb.Tick, kickDb.Window)
+end
+
+function DC:PreviewKickMark(bar)
+    local kickDb = self.db.Kick
+    if not kickDb then return end
+    H.PreviewKickMark(bar.kickMark, kickDb.Tick, kickDb.Window)
+end
+
+-- Suppress absurd multi-day NPC channels (secret-safe: the secret remaining
+-- duration is sampled by the curve, never read in Lua).
+function DC:RestoreBarAlpha(bar)
+    bar.rangeFaded = nil
+    local duration = bar.cachedDuration
+    if duration then
+        bar:SetAlpha(duration:EvaluateRemainingDuration(KE.curves.IsLongCast))
+    else
+        bar:SetAlpha(1)
+    end
+end
+
+-- IsSpellInRange answers plainly on this build; a secret answer is treated
+-- as in range. The alpha is written on a range transition only, so an
+-- in-range bar keeps the alpha PopulateBar gave it instead of re-sampling
+-- the long-cast curve every pass; the dim is itself a curve on the cast's
+-- duration, so a suppressed long cast stays suppressed while dimmed.
+function DC:UpdateKickRange(bar)
+    if self.isPreview then return end
+    local kickDb = self.db.Kick
+    local inRange = true
+    if kickDb and kickDb.RangeFade and self.interruptId and bar.unit
+        and C_Spell and C_Spell.IsSpellInRange then
+        inRange = C_Spell.IsSpellInRange(self.interruptId, bar.unit)
+        if issecretvalue(inRange) or inRange == nil then inRange = true end
+    end
+    if inRange then
+        if bar.rangeFaded then self:RestoreBarAlpha(bar) end
+    elseif not bar.rangeFaded then
+        bar.rangeFaded = true
+        local opacity = kickDb.RangeAlpha or 0.45
+        local duration = bar.cachedDuration
+        if duration then
+            bar:SetAlpha(duration:EvaluateRemainingDuration(H.GetDimCurve(self, opacity)))
+        else
+            bar:SetAlpha(opacity)
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Targeting you
+---------------------------------------------------------------------------------
+
+function DC:TargetGlowArmed()
+    local tg = self.db and self.db.TargetGlow
+    if not tg or tg.GlowEnabled == false then return false end
+    return not self.isTank
+end
+
+-- The profile table reaches the engine through a view whose only own key is
+-- GlowEnabled, so the arming rule never writes into the profile.
+local glowView = setmetatable({}, {
+    __index = function(_, key)
+        local tg = DC.db and DC.db.TargetGlow
+        return tg and tg[key]
+    end,
+})
+
+function DC:ApplyTargetGlowHost(bar)
+    if not bar.targetGlow then return end
+    local frameDb = self.db.Frame
+    glowView.GlowEnabled = self:TargetGlowArmed()
+    KE.AuraGlow.Configure(bar.targetGlow, glowView, frameDb.Width, frameDb.Height)
+end
+
+-- The answer is a secret boolean in restricted content and goes straight
+-- into the gate's alpha; `~= nil` is an existence test and is allowed on a
+-- secret. A unit that answers nothing gets no glow. UnitIsUnit returns
+-- nothing rather than throwing on a token pair it cannot compare; the pcall
+-- covers the remaining error paths.
+function DC:UpdateTargetGlow(bar)
+    local gate = bar.targetGate
+    if not gate then return end
+    if not self:TargetGlowArmed() or not bar.unit or bar.holdUntil then
+        gate:SetAlpha(0)
+        return
+    end
+    if self.isPreview then
+        gate:SetAlpha(bar.previewTarget and 1 or 0)
+        return
+    end
+    if not bar.targetUnit then
+        gate:SetAlpha(0)
+        return
+    end
+    local ok, mine = pcall(UnitIsUnit, bar.targetUnit, "player")
+    if ok and (issecretvalue(mine) or mine ~= nil) then
+        gate:SetAlphaFromBoolean(mine, 1, 0)
+    else
+        gate:SetAlpha(0)
     end
 end
 
@@ -656,6 +863,7 @@ function DC:PopulateBar(bar, unit, data)
     bar.cachedDuration = data.duration
     bar.spellName = data.text or data.name
     bar.startTime = GetTime()
+    bar.targetUnit = unit .. "target"
 
     if bar.icon then
         bar.icon:SetTexture(data.texture or FALLBACK_ICON)
@@ -664,16 +872,19 @@ function DC:PopulateBar(bar, unit, data)
 
     if data.duration then
         bar.castBar:SetTimerDuration(data.duration, Enum.StatusBarInterpolation.Immediate, data.direction)
-        -- Suppress absurd multi-day NPC channels (secret-safe: the secret
-        -- remaining duration is sampled by the curve, never read in Lua).
-        bar:SetAlpha(data.duration:EvaluateRemainingDuration(KE.curves.IsLongCast))
-    else
-        bar:SetAlpha(1)
     end
+    self:RestoreBarAlpha(bar)
 
-    self:UpdateBarColor(bar)
+    local kickCd = self:ReadKickCooldown()
+    self._kickCd = kickCd
+    self:UpdateBarColor(bar, kickCd)
     self:UpdateRaidIcon(bar, unit)
     self:UpdateTargetText(bar, data.targetName, data.targetClass)
+    -- Armed here so the mark is in place for the first frame of the cast.
+    self:ArmKickMark(bar, data.isChanneling)
+    self:RefreshKickMark(bar, kickCd)
+    self:UpdateKickRange(bar)
+    self:UpdateTargetGlow(bar)
 
     if bar.spark then
         bar.spark:SetShown(data.isCasting and self.db.BarDisplay.SparkEnabled)
@@ -827,6 +1038,8 @@ function DC:OnCastInterrupted(event, unit, ...)
     bar.castBar:SetValue(1)
     if bar.timeText then bar.timeText:SetText("") end
     if bar.spark then bar.spark:Hide() end
+    H.HideKickMark(bar.kickMark)
+    self:UpdateTargetGlow(bar)
     -- Nothing on the hold path hides these, so left alone the dead cast's
     -- target sits beside the interrupt text for the whole hold.
     if bar.targetText then bar.targetText:Hide() end
@@ -939,6 +1152,12 @@ end
 function DC:OnUpdate()
     local now = GetTime()
     local decimalsCurve = KE.curves and KE.curves.DurationDecimals
+    local kickDue = not self.isPreview and self:KickPassDue(now)
+    local kickCd
+    if kickDue then
+        kickCd = self:ReadKickCooldown()
+        self._kickCd = kickCd
+    end
     for unit, bar in pairs(self.activeFrames) do
         -- Interrupt holds expire here rather than on a per-bar timer: one
         -- tick already runs while bars are up, and a timer would have to be
@@ -962,6 +1181,14 @@ function DC:OnUpdate()
                     end
                 end
             end
+        end
+
+        -- A held bar wears the interrupt colour and its cast is over.
+        if kickDue and bar:IsShown() and not bar.holdUntil then
+            self:UpdateBarColor(bar, kickCd)
+            self:RefreshKickMark(bar, kickCd)
+            self:UpdateKickRange(bar)
+            self:UpdateTargetGlow(bar)
         end
     end
 end
@@ -1029,6 +1256,21 @@ function DC:UpdateFrameVisuals()
             -- A held bar's target belonged to the cast the interrupt ended.
             self:UpdateTargetText(bar, bar.targetName, bar.targetClass)
         end
+
+        -- ConfigureBar only recolours the mark; a live cast is re-armed so a
+        -- toggled Tick or Window shows without waiting for the next cast.
+        if self.isPreview then
+            self:ArmKickMark(bar, bar.channeling)
+            self:PreviewKickMark(bar)
+        elseif not bar.holdUntil then
+            self:ArmKickMark(bar, bar.channeling)
+            self:RefreshKickMark(bar, self:ReadKickCooldown())
+            -- Range Fade or its opacity may have changed: start undimmed and
+            -- let the range check dim the bar again at the new value.
+            self:RestoreBarAlpha(bar)
+            self:UpdateKickRange(bar)
+        end
+        self:UpdateTargetGlow(bar)
     end
 
     self:PositionAllBars()
@@ -1106,6 +1348,12 @@ function DC:CreatePreviewBars()
     end
 
     self:PositionAllBars()
+
+    for _, bar in pairs(self.activeFrames) do
+        self:ArmKickMark(bar, bar.channeling)
+        self:PreviewKickMark(bar)
+        self:UpdateTargetGlow(bar)
+    end
 end
 
 function DC:ShowPreview()
@@ -1183,6 +1431,12 @@ function DC:OnEnable()
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatStart")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
 
+    -- Which spell is the kick changes with spec, talents and pet.
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "CacheKickSpell")
+    self:RegisterEvent("SPELLS_CHANGED", "CacheKickSpell")
+    self:RegisterEvent("LOADING_SCREEN_DISABLED", "CacheKickSpell")
+    self:CacheKickSpell()
+
     self:CheckInstanceType()
     self:SetUpdateFrameRunning(self.instanceActive)
 
@@ -1232,6 +1486,8 @@ function DC:OnDisable()
     self:HidePreview()
     self:ReleaseAllBars()
     self.instanceActive = false
+    self._kickCd = nil
+    self._nextKickPass = nil
 
     self:SetUpdateFrameRunning(false)
     if self.anchorFrame then

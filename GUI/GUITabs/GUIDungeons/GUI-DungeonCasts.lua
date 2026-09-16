@@ -434,6 +434,165 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
 
     yOffset = card8:GetNextOffset()
 
+    ----------------------------------------------------------------
+    -- Card 9: Your Interrupt
+    ----------------------------------------------------------------
+    local card9 = GUIFrame:CreateCard(scrollChild, "Your Interrupt", yOffset)
+    manager:Register(card9, "all")
+
+    local row9a = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
+    local readyTintCheck = GUIFrame:CreateCheckbox(row9a, "Tint When Kick Is Ready", {
+        value = db.Kick.ReadyTint,
+        tooltip = "Colour the bar while your own interrupt is off cooldown.\n\n"
+            .. "A cast that cannot be interrupted at all still shows the Shielded colour, "
+            .. "whatever your cooldown is doing.",
+        callback = function(checked)
+            db.Kick.ReadyTint = checked
+            ApplyVisuals()
+        end,
+    })
+    row9a:AddWidget(readyTintCheck, 0.5)
+    manager:Register(readyTintCheck, "all")
+
+    local readyColorPicker = GUIFrame:CreateColorPicker(row9a, "Kick Ready Colour", {
+        color = db.Kick.ReadyColor,
+        callback = function(r, g, b, a)
+            db.Kick.ReadyColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row9a:AddWidget(readyColorPicker, 0.5)
+    manager:Register(readyColorPicker, "all")
+    card9:AddRow(row9a, Theme.rowHeight)
+
+    local row9b = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
+    local rangeFadeCheck = GUIFrame:CreateCheckbox(row9b, "Fade Out Of Kick Range", {
+        value = db.Kick.RangeFade,
+        tooltip = "Dim the whole bar while the caster is out of range of your interrupt, "
+            .. "so a cast you cannot reach reads differently from one you can.\n\n"
+            .. "Without an interrupt of your own this does nothing.",
+        callback = function(checked)
+            db.Kick.RangeFade = checked
+            ApplyVisuals()
+        end,
+    })
+    row9b:AddWidget(rangeFadeCheck, 0.5)
+    manager:Register(rangeFadeCheck, "all")
+
+    local rangeAlphaSlider = GUIFrame:CreateSlider(row9b, "Out Of Range Opacity", {
+        min = 0.1, max = 1, step = 0.05,
+        value = db.Kick.RangeAlpha,
+        callback = function(value)
+            db.Kick.RangeAlpha = value
+            ApplyVisuals()
+        end,
+    })
+    row9b:AddWidget(rangeAlphaSlider, 0.5)
+    manager:Register(rangeAlphaSlider, "all")
+    card9:AddRow(row9b, Theme.rowHeight)
+
+    local row9c = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
+    local tickCheck = GUIFrame:CreateCheckbox(row9c, "Show Kick Ready Mark", {
+        value = db.Kick.Tick,
+        tooltip = "Marks the point on the bar where your interrupt comes off cooldown, "
+            .. "so you can see whether you will get it back before the cast lands.\n\n"
+            .. "It hides itself while your interrupt is up, and on a cast nothing can interrupt.",
+        callback = function(checked)
+            db.Kick.Tick = checked
+            ApplyVisuals()
+        end,
+    })
+    row9c:AddWidget(tickCheck, 0.5)
+    manager:Register(tickCheck, "all")
+
+    local tickColorPicker = GUIFrame:CreateColorPicker(row9c, "Mark Colour", {
+        color = db.Kick.TickColor,
+        callback = function(r, g, b, a)
+            db.Kick.TickColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row9c:AddWidget(tickColorPicker, 0.5)
+    manager:Register(tickColorPicker, "all")
+    card9:AddRow(row9c, Theme.rowHeight)
+
+    local row9d = GUIFrame:CreateRow(card9.content, Theme.rowHeightLast)
+    local windowCheck = GUIFrame:CreateCheckbox(row9d, "Shade The Kickable Window", {
+        value = db.Kick.Window,
+        tooltip = "Also shade the part of the cast that will still be running once your "
+            .. "interrupt is back, so the time you have to press it is visible.",
+        callback = function(checked)
+            db.Kick.Window = checked
+            ApplyVisuals()
+        end,
+    })
+    row9d:AddWidget(windowCheck, 0.5)
+    manager:Register(windowCheck, "all")
+
+    local windowColorPicker = GUIFrame:CreateColorPicker(row9d, "Window Colour", {
+        color = db.Kick.WindowColor,
+        callback = function(r, g, b, a)
+            db.Kick.WindowColor = { r, g, b, a }
+            ApplyVisuals()
+        end,
+    })
+    row9d:AddWidget(windowColorPicker, 0.5)
+    manager:Register(windowColorPicker, "all")
+    card9:AddRow(row9d, Theme.rowHeightLast, 0)
+
+    yOffset = card9:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 10: Targeting You (glow engine card; Pulse Border or Pixel)
+    ----------------------------------------------------------------
+    local glowCard, glowOffset, glowWidgets = GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, {
+        title = "Targeting You",
+        db = db.TargetGlow,
+        dbKeys = {
+            enabled   = "GlowEnabled",
+            type      = "GlowType",
+            color     = "GlowColor",
+            lines     = "GlowLines",
+            frequency = "GlowFrequency",
+            thickness = "GlowThickness",
+            pulse     = "GlowPulse",
+        },
+        types = {
+            { key = "border", text = "Pulse Border" },
+            { key = "pixel",  text = "Pixel" },
+        },
+        resolveType = KE.AuraGlowRules.ResolveType,
+        typeTooltip = "A glow around the bar while the caster is targeting you. The game "
+            .. "decides who is targeted and draws it, so nothing a dungeon hides is read.\n\n"
+            .. "Off on tank specs: everything targets the tank, so it would never go out.",
+        typeRows = function(rows)
+            return {
+                border      = rows.border,
+                pixel       = rows.pixel,
+                unsupported = rows.pixelExtras,
+                autocast    = rows.autocast,
+                proc        = rows.proc,
+            }
+        end,
+        showSpeed = function(glowType) return glowType == "pixel" end,
+        speedAdapter = {
+            read = function(readDb, readKeys)
+                return KE.AuraGlowRules.NormaliseFrequency(
+                    KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 1)
+            end,
+            write   = KE.AuraGlowRules.WriteSpeed,
+            setType = KE.AuraGlowRules.SetType,
+            min     = 0.05,
+            max     = 1,
+        },
+        onChangeCallback = ApplyVisuals,
+    })
+    manager:Register(glowCard, "all")
+    if glowWidgets then
+        manager:RegisterGroup(glowWidgets, "all")
+    end
+    yOffset = glowOffset
+
     RefreshStates()
     return yOffset
 end)

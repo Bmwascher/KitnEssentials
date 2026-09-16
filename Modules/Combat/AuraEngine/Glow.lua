@@ -1,7 +1,8 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Modules/Combat/AuraEngine/Glow.lua                      ║
--- ║  Purpose: the flipbook glow host -- animation-driven, so ║
--- ║  it keeps animating while auras are secret.              ║
+-- ║  Purpose: the glow host -- flipbook, pixel and           ║
+-- ║  pulse-border styles, animation-driven, so it keeps      ║
+-- ║  animating while auras are secret.                       ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -27,6 +28,9 @@ local SPEED_KEYS = { type = "GlowType", frequency = "GlowFrequency", duration = 
 local DASH_H   = [[Interface\AddOns\KitnEssentials\Media\Glows\glow-dash-h.tga]]
 local DASH_V   = [[Interface\AddOns\KitnEssentials\Media\Glows\glow-dash-v.tga]]
 local DASH_MASK = [[Interface\Buttons\WHITE8X8]]
+local EDGES = { "top", "bottom", "left", "right" }
+local BORDER_PULSE_MIN_ALPHA = 0.25
+local BORDER_PULSE_DURATION = 0.5
 
 local function ResolveEntry(settings)
     local key = GlowRules.ResolveType(settings.GlowType)
@@ -37,13 +41,16 @@ end
 -- the translation carries dashes into the masked span from outside it and the
 -- loop point never shows. Anchors differ per edge because each strip enters
 -- from the side it travels away from.
-local function ConfigurePixel(host, settings, period)
+-- Width and height default to IconSize, so an aura button stays square and
+-- a bar-shaped host passes its own.
+local function ConfigurePixel(host, settings, period, width, height)
     local dashes = host.dashes
     if not dashes then return end
 
-    local size = settings.IconSize or 32
+    local w = width or settings.IconSize or 32
+    local h = height or settings.IconSize or 32
     local thickness = GlowRules.NormalisePixelThickness(settings.GlowThickness)
-    local p = GlowRules.PixelPerimeter(settings.GlowLines, size, size, period)
+    local p = GlowRules.PixelPerimeter(settings.GlowLines, w, h, period)
     local r, g, b, a = KE:ResolveColor(settings.GlowColor, { 0, 1, 0, 1 })
 
     local edges = {
@@ -65,8 +72,8 @@ local function ConfigurePixel(host, settings, period)
         d.strip:ClearAllPoints()
 
         if not e.vertical then
-            d.mask:SetSize(size, thickness)
-            d.strip:SetSize(size + p.cycle, thickness)
+            d.mask:SetSize(w, thickness)
+            d.strip:SetSize(w + p.cycle, thickness)
             if i == 1 then
                 d.mask:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
                 d.strip:SetPoint("TOPLEFT", host, "TOPLEFT", -p.cycle, 0)
@@ -76,8 +83,8 @@ local function ConfigurePixel(host, settings, period)
             end
             d.strip:SetTexCoord(phase, phase + p.spanH, 0, 1)
         else
-            d.mask:SetSize(thickness, size)
-            d.strip:SetSize(thickness, size + p.cycle)
+            d.mask:SetSize(thickness, h)
+            d.strip:SetSize(thickness, h + p.cycle)
             if i == 2 then
                 d.mask:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
                 d.strip:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, p.cycle)
@@ -103,10 +110,47 @@ local function HidePixel(host)
     end
 end
 
+-- Four edges anchored to the host follow it at any size with no size read.
+-- The pulse is an Alpha animation on the host itself; a caller that gates
+-- the glow on a value it may not read drives a PARENT frame's alpha with
+-- SetAlphaFromBoolean, and the two never touch one property.
+local function ConfigureBorder(host, settings)
+    local edges = host.edges
+    if not edges then return end
+    local thickness = GlowRules.NormalisePixelThickness(settings.GlowThickness)
+    local r, g, b, a = KE:ResolveColor(settings.GlowColor, { 1, 0.85, 0.25, 1 })
+    edges.top:SetHeight(thickness)
+    edges.bottom:SetHeight(thickness)
+    edges.left:SetWidth(thickness)
+    edges.right:SetWidth(thickness)
+    for i = 1, 4 do
+        local edge = edges[EDGES[i]]
+        edge:SetColorTexture(r, g, b, a)
+        edge:Show()
+    end
+    -- Restarted only when stopped: a colour or thickness edit must not
+    -- stutter a running pulse.
+    if settings.GlowPulse ~= false then
+        if not host.pulseGroup:IsPlaying() then host.pulseGroup:Play() end
+    else
+        host.pulseGroup:Stop()
+        host:SetAlpha(1)
+    end
+end
+
+local function HideBorder(host)
+    if not host.edges then return end
+    host.pulseGroup:Stop()
+    host:SetAlpha(1)
+    for i = 1, 4 do
+        host.edges[EDGES[i]]:Hide()
+    end
+end
+
 -- Shared by CreateHost and Apply so the two can never drift: CreateHost
 -- calls this once to seed a valid starting state, Apply calls it again on
 -- every reconfiguration to pick up changed settings.
-local function ConfigureHost(host, settings)
+local function ConfigureHost(host, settings, width, height)
     -- Glow off stops every group rather than only hiding the host. A playing
     -- animation on a hidden texture still costs a C-side update, which is the
     -- same reason the pixel branch below stops the sheet layers instead of
@@ -119,6 +163,7 @@ local function ConfigureHost(host, settings)
             host.overlay:Hide()
         end
         HidePixel(host)
+        HideBorder(host)
         host.texture:Hide()
         host.appliedFlip = nil
         host:Hide()
@@ -144,13 +189,29 @@ local function ConfigureHost(host, settings)
         -- Cleared so a later return to a flipbook style is seen as a change
         -- and restarts, rather than trusting state from before the switch.
         host.appliedFlip = nil
+        HideBorder(host)
 
-        ConfigurePixel(host, settings, period)
+        ConfigurePixel(host, settings, period, width, height)
         host:SetShown(settings.GlowEnabled and true or false)
         return
     end
 
+    if style.kind == "border" then
+        host.animGroup:Stop()
+        host.texture:Hide()
+        if host.overlay then
+            host.overlay:Hide()
+            host.overlayGroup:Stop()
+        end
+        host.appliedFlip = nil
+        HidePixel(host)
+        ConfigureBorder(host, settings)
+        host:Show()
+        return
+    end
+
     HidePixel(host)
+    HideBorder(host)
 
     local entry = ResolveEntry(settings)
     local texture = host.texture
@@ -236,6 +297,10 @@ local function ConfigureHost(host, settings)
     host:SetShown(settings.GlowEnabled and true or false)
 end
 
+-- For hosts that are not aura buttons (a cast bar's gate frame): the caller
+-- owns the host and passes its plain width and height for the pixel style.
+Glow.Configure = ConfigureHost
+
 -- initializeFrame is the only legally guaranteed window to parent a frame to
 -- an aura button, and button:GetFrameLevel() is only legal to read here,
 -- before the access restriction attaches.
@@ -295,6 +360,35 @@ function Glow.CreateHost(button, settings)
         dashes[i] = { mask = mask, strip = strip, group = group, move = move }
     end
     host.dashes = dashes
+
+    -- Created here for the same reason as the strips: after this window a
+    -- child can no longer be parented to an aura button.
+    local edges = {}
+    for i = 1, 4 do
+        local edge = host:CreateTexture(nil, "OVERLAY")
+        edge:SetSnapToPixelGrid(true)
+        edge:SetTexelSnappingBias(0)
+        edge:Hide()
+        edges[EDGES[i]] = edge
+    end
+    edges.top:SetPoint("TOPLEFT", host, "TOPLEFT", 0, 0)
+    edges.top:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, 0)
+    edges.bottom:SetPoint("BOTTOMLEFT", host, "BOTTOMLEFT", 0, 0)
+    edges.bottom:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 0)
+    edges.left:SetPoint("TOPLEFT", edges.top, "BOTTOMLEFT", 0, 0)
+    edges.left:SetPoint("BOTTOMLEFT", edges.bottom, "TOPLEFT", 0, 0)
+    edges.right:SetPoint("TOPRIGHT", edges.top, "BOTTOMRIGHT", 0, 0)
+    edges.right:SetPoint("BOTTOMRIGHT", edges.bottom, "TOPRIGHT", 0, 0)
+    host.edges = edges
+
+    local pulseGroup = host:CreateAnimationGroup()
+    pulseGroup:SetLooping("BOUNCE")
+    local pulse = pulseGroup:CreateAnimation("Alpha")
+    pulse:SetFromAlpha(1)
+    pulse:SetToAlpha(BORDER_PULSE_MIN_ALPHA)
+    pulse:SetDuration(BORDER_PULSE_DURATION)
+    pulse:SetSmoothing("IN_OUT")
+    host.pulseGroup = pulseGroup
 
     ConfigureHost(host, settings)
 
