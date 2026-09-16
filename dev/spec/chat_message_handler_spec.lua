@@ -182,6 +182,63 @@ describe("ChatMessageHandler Battle.net player link", function()
     end)
 end)
 
+describe("ChatMessageHandler community channel tag", function()
+    -- MessageFormatter is reached with a plain frame table, as the Battle.net
+    -- link cases do; no chat-frame fake is needed. The resolver and WrapString
+    -- stubs are plain functions swapped per row, which is enough to see WHICH
+    -- path the guard took; real secret semantics are in-game only.
+    local frame, info, wrapCalls, resolver, wrap
+
+    local function resolves(name) return "Resolved " .. name end
+    local function refuses() error("Usage: strlenutf8(string)") end
+    local function joins(body, prefix, suffix) return (prefix or "") .. body .. (suffix or "") end
+    local function declines() return nil end
+
+    before_each(function()
+        frame = { defaultLanguage = "Common" }
+        info = {}
+        wrapCalls = 0
+        _G.CHAT_CHANNEL_GET = "%s: "
+        _G.ChatFrameUtil = { ResolvePrefixedChannelName = function(name) return resolver(name) end }
+        _G.C_StringUtil = {
+            WrapString = function(...)
+                wrapCalls = wrapCalls + 1
+                return wrap(...)
+            end,
+        }
+    end)
+
+    after_each(function()
+        _G.CHAT_CHANNEL_GET = nil
+        _G.ChatFrameUtil = nil
+        _G.C_StringUtil = nil
+    end)
+
+    local function formatBody()
+        local KE = L.loadChatMessageHandler()
+        return KE.ChatMessageHandler:MessageFormatter(frame, info, "CHANNEL", "CHANNEL", "target", 1, "Godling",
+            "hello", "Godling", nil, "6. Guild Chat", nil, nil, nil, 5, nil, nil, 11, nil, nil, nil, nil, nil, nil)
+    end
+
+    -- The tag, when built, is the line's prefix; the sender link follows it.
+    local cases = {
+        { "a resolved name is joined C-side in front of the body", resolves, joins,
+          "|Hchannel:channel:5|h[Resolved 6. Guild Chat]|h |Hplayer:", 2 },
+        { "a resolver refusal prints the body without a tag", refuses, joins,
+          "|Hplayer:", 0 },
+        { "a wrap refusal prints the body without a tag", resolves, declines,
+          "|Hplayer:", 1 },
+    }
+    for _, c in ipairs(cases) do
+        it(c[1], function()
+            resolver, wrap = c[2], c[3]
+            local body = formatBody()
+            assert.are.equal(c[4], body:sub(1, #c[4]), body)
+            assert.are.equal(c[5], wrapCalls)
+        end)
+    end
+end)
+
 describe("ChatMessageHandler body highlight", function()
     local KE, CMH, played
 

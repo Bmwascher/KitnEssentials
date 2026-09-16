@@ -213,9 +213,15 @@ local function FlashTabIfNotShown(frame, info, chatType, chatGroup, chatTarget)
 
     local allowAlerts = ((frame ~= _G.DEFAULT_CHAT_FRAME and info.flashTab) or (frame == _G.DEFAULT_CHAT_FRAME and info.flashTabOnGeneral)) and
         ((chatType == 'WHISPER' or chatType == 'BN_WHISPER') or (_G.CHAT_OPTIONS and not _G.CHAT_OPTIONS.HIDE_FRAME_ALERTS))
-    if allowAlerts and KE:NotSecretValue(chatTarget) and not _G.FCFManager_ShouldSuppressMessageFlash(frame, chatGroup, chatTarget) then
-        _G.FCF_StartAlertFlash(frame)
+    if not allowAlerts then return end
+    -- The target name is secret in chat-messaging lockdown and only the
+    -- suppression test reads it, so a secret target flashes rather than
+    -- going silent.
+    local suppressed = false
+    if KE:NotSecretValue(chatTarget) then
+        suppressed = _G.FCFManager_ShouldSuppressMessageFlash(frame, chatGroup, chatTarget)
     end
+    if not suppressed then _G.FCF_StartAlertFlash(frame) end
 end
 
 -- Get class-colored name
@@ -1025,8 +1031,16 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
         body = format(chatFormat .. '%s', pflag .. sender, message)
     end
 
-    if channelLength and channelLength > 0 and arg8 and arg4 then
-        body = '|Hchannel:channel:' .. arg8 .. '|h[' .. ResolvePrefixedChannelName(arg4) .. ']|h ' .. body
+    -- The resolver fetches the club and stream names, which are secret in
+    -- chat-messaging lockdown; it refuses most of them (strlenutf8) and can
+    -- return one untruncated. A refusal costs only the tag, since the caller
+    -- drops a nil body, and the joins stay C-side for a secret name.
+    if channelLength and channelLength > 0 and KE:IsSafeValue(arg4) and KE:IsSafeValue(arg8) then
+        local ok, name = pcall(ResolvePrefixedChannelName, arg4)
+        if ok and type(name) ~= 'nil' then
+            local tag = KE:WrapSecretText(name, '|Hchannel:channel:' .. arg8 .. '|h[', ']|h ')
+            if tag then body = KE:WrapSecretText(body, tag) or body end
+        end
     end
 
     return body
