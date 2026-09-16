@@ -43,7 +43,7 @@ local MOVEMENT_ABILITIES = {
     PALADIN     = { [65] = { 190784 }, [66] = { 190784 }, [70] = { 190784 } },
     PRIEST      = { [256] = { 121536, 73325 }, [257] = { 121536, 73325 }, [258] = { 121536, 73325 } },
     ROGUE       = { [259] = { 36554, 2983 }, [260] = { 195457, 2983 }, [261] = { 36554, 2983 } },
-    SHAMAN      = { [262] = { 79206, 90328, 192063, 58875 }, [263] = { 90328, 192063, 58875 }, [264] = { 79206, 90328, 192063, 58875 } },
+    SHAMAN      = { [262] = { 79206, 58875, 192063, 90328 }, [263] = { 58875, 192063, 90328 }, [264] = { 79206, 58875, 192063, 90328 } },
     WARLOCK     = { [265] = { 48020, 111400 }, [266] = { 48020, 111400 }, [267] = { 48020, 111400 } },
     WARRIOR     = { [71] = { 6544 }, [72] = { 6544 }, [73] = { 6544 } },
 }
@@ -163,14 +163,14 @@ function NMA:ReadCooldown(spellId)
     local rem = info.timeUntilEndOfStartRecovery
     -- Only on an explicit false, never on nil: see the duration-object note
     -- above. On nil, a missing rem means ready.
-    if rem == nil and info.isOnGCD == false and C_Spell.GetSpellCooldownDuration then
+    if type(rem) == "nil" and info.isOnGCD == false and C_Spell.GetSpellCooldownDuration then
         local duration = C_Spell.GetSpellCooldownDuration(spellId)
         if duration then
             local okD, r = pcall(duration.GetRemainingDuration, duration)
             if okD then rem = r end
         end
     end
-    if rem == nil then return nil end
+    if type(rem) == "nil" then return nil end
 
     if KE:IsSecretValue(rem) then return rem, nil, true end
     if rem > 0 then return rem, info.duration, false end
@@ -221,11 +221,74 @@ function NMA:ThresholdAlpha(spellId, seconds)
     return alpha
 end
 
+-- A charge spell is out of movement at zero charges, and the count cannot
+-- say so: it is secret under cooldown restrictions, and a count kept in Lua
+-- drifts on any missed cast event. The cooldown's total length can: a banked
+-- charge reports only a GCD-length cooldown, the full recharge appears once
+-- the last charge is spent. Readable, that is a comparison against the GCD
+-- ceiling; secret, a Step curve the client evaluates into the slot's alpha.
+-- Without ignoreGCD on purpose: skipping the GCD reports the recharge of a
+-- charge already spent while the button can still be pressed.
+local CHARGE_GCD_CEILING = 1.5
+
+function NMA:ChargeCurve()
+    if not (C_CurveUtil and C_CurveUtil.CreateCurve and Enum and Enum.LuaCurveType) then
+        return nil
+    end
+    if not self.chargeCurve then
+        local curve = C_CurveUtil.CreateCurve()
+        curve:SetType(Enum.LuaCurveType.Step)
+        curve:AddPoint(0, 0)   -- GCD-length: a charge is banked, hide
+        curve:AddPoint(1.6, 1) -- first point past the ceiling: a real recharge, show
+        self.chargeCurve = curve
+    end
+    return self.chargeCurve
+end
+
+-- Readable charge cooldown: shown only for a real recharge still running,
+-- never for the GCD-length cooldown a banked charge reports.
+function NMA:IsRechargeRunning(rem, total)
+    return type(total) == "number" and total > CHARGE_GCD_CEILING
+        and type(rem) == "number" and rem > 0
+end
+
+-- Returns rem, total, isSecret, alpha. alpha is 1 when readable and possibly
+-- secret when not: hand it to SetAlpha, never read it. Nil means ready or a
+-- charge still banked, nothing to show.
+function NMA:ReadChargeCooldown(spellId)
+    if not (C_Spell and C_Spell.GetSpellCooldownDuration) then return nil end
+    local ok, duration = pcall(C_Spell.GetSpellCooldownDuration, spellId)
+    if not ok or not duration then return nil end
+    local okR, rem = pcall(duration.GetRemainingDuration, duration)
+    local okT, total = pcall(duration.GetTotalDuration, duration)
+    if not (okR and okT) then return nil end
+
+    if KE:IsSecretValue(rem) or KE:IsSecretValue(total) then
+        local alpha = 1
+        local curve = self:ChargeCurve()
+        if curve and duration.EvaluateTotalDuration then
+            -- Base time, so haste cannot move either side of the threshold.
+            -- `or 1` on a secret is safe: a secret is always truthy.
+            local okE, evaluated = pcall(duration.EvaluateTotalDuration, duration, curve, 1)
+            if okE then alpha = evaluated or 1 end
+        end
+        return rem, total, true, alpha
+    end
+    if self:IsRechargeRunning(rem, total) then
+        return rem, total, false, 1
+    end
+    return nil
+end
+
+-- Only maxCharges has to be readable: the API never makes it secret, while
+-- the count and the recharge length are secret under cooldown restrictions,
+-- and a charge spell first seen there must still be recognised as one.
+-- ResolveCharges guards the other fields.
 local function SafeCharges(spellId)
     if not (C_Spell and C_Spell.GetSpellCharges) then return nil end
     local ok, info = pcall(C_Spell.GetSpellCharges, spellId)
     if not ok or type(info) ~= "table" then return nil end
-    if KE:IsSecretValue(info.currentCharges) or KE:IsSecretValue(info.maxCharges) then return nil end
+    if KE:IsSecretValue(info.maxCharges) then return nil end
     return info
 end
 
@@ -367,13 +430,11 @@ function NMA:OnInitialize()
     self.tracked = {}
     self.auraActive = {}
     self.glowing = {}
-    -- Charge counts are SECRET in combat, so a live read there returns
-    -- nothing and the spell falls through to the plain-cooldown path --
-    -- which for a charge spell sitting on charges is zero, hence
-    -- "Infernal Strike - 0". Remember what was learned while the values
-    -- were readable and maintain it through cast events instead.
-    --   chargeMeta[spellId] = { max, recharge }  -- learned when readable
-    --   chargeCount[spellId] = last known count  -- kept current in combat
+    -- Charge counts are secret under cooldown restrictions. Visibility never
+    -- reads them (ReadChargeCooldown); the maintained count only feeds the
+    -- ready-state "xN" suffix.
+    --   chargeMeta[spellId] = { max, recharge }  -- learned from any readable record
+    --   chargeCount[spellId] = last readable count, kept current by cast events
     self.chargeMeta = {}
     self.chargeCount = {}
     self.chargeTimers = {}
@@ -425,9 +486,11 @@ function NMA:StyleSlot(slot)
     KE:ApplyFontToText(slot.text, face, size, outline)
     slot.text:SetTextColor(c[1], c[2], c[3], c[4] or 1)
     slot:SetSize(220, size + 6)
-    -- Opaque by default so a slot reused from a threshold-hidden line comes
-    -- back visible. Update re-applies the hidden alpha after it lays out.
+    -- Opaque by default so a slot reused from a hidden line comes back
+    -- visible. Update re-applies both alphas after it lays out: the charge
+    -- gate on the slot, the threshold gate on the text.
     slot:SetAlpha(1)
+    slot.text:SetAlpha(1)
 end
 
 function NMA:LayoutSlots(count)
@@ -509,8 +572,8 @@ function NMA:BuildTracked()
 
         seen[spellId] = true
         seenName[info.name] = true
-        -- Learn charge shape while the values are readable; the resolver
-        -- falls back to this in combat.
+        -- Learn the charge shape from the first record; the resolver keeps it
+        -- for the ready-state suffix.
         self:ResolveCharges(spellId)
         out[#out + 1] = {
             spellId = spellId,
@@ -609,19 +672,29 @@ function NMA:ResolveCharges(spellId)
     local info = SafeCharges(spellId)
     -- Any charge table at all means a charge spell. Gating above 1 drops
     -- single-charge spells into the no-charges path, where their recharge is
-    -- never tracked; Shimmer reports maxCharges 1.
+    -- never tracked.
     if info and info.maxCharges and info.maxCharges >= 1 then
-        self.chargeMeta[spellId] = {
-            max = info.maxCharges,
-            recharge = info.cooldownDuration or 0,
-        }
-        self.chargeCount[spellId] = info.currentCharges or 0
-        return self.chargeCount[spellId], true
+        -- The count and the recharge length are each secret on their own
+        -- under cooldown restrictions: an unreadable count leaves the
+        -- maintained one alone, an unreadable length keeps the last readable.
+        local cur = info.currentCharges
+        if KE:IsSecretValue(cur) then cur = nil end
+        local recharge = info.cooldownDuration
+        if KE:IsSecretValue(recharge) then recharge = nil end
+
+        local meta = self.chargeMeta[spellId]
+        if not meta then
+            meta = { max = info.maxCharges, recharge = recharge or 0 }
+            self.chargeMeta[spellId] = meta
+        else
+            meta.max = info.maxCharges
+            if recharge then meta.recharge = recharge end
+        end
+        if cur ~= nil then self.chargeCount[spellId] = cur end
+        return self.chargeCount[spellId] or meta.max, true
     end
     local meta = self.chargeMeta[spellId]
     if meta then
-        -- Known charge spell, count currently unreadable: use the value
-        -- we have been maintaining rather than guessing zero.
         return self.chargeCount[spellId] or meta.max, true
     end
     return nil, false
@@ -688,11 +761,15 @@ function NMA:Update()
 
     local shown, anyRunning = 0, false
     local threshold = self:ThresholdSeconds()
-    -- Alphas are applied after LayoutSlots, which restyles every slot and
-    -- resets alpha as it goes.
-    local alphas = self.slotAlphas or {}
-    self.slotAlphas = alphas
-    wipe(alphas)
+    -- Two alpha sinks, applied after LayoutSlots (which restyles every slot
+    -- and resets both as it goes): the charge gate on the slot, the
+    -- threshold gate on its text. Both may be secret, so they multiply in
+    -- the frame tree, never in Lua.
+    local slotAlphas = self.slotAlphas or {}
+    local textAlphas = self.textAlphas or {}
+    self.slotAlphas, self.textAlphas = slotAlphas, textAlphas
+    wipe(slotAlphas)
+    wipe(textAlphas)
 
     for _, entry in ipairs(self.tracked) do
         -- Secret-safe render contract: `secretValue` means "show this,
@@ -701,6 +778,9 @@ function NMA:Update()
         -- secret number as an argument (never compared, never formatted
         -- by us).
         local plainLine, fmtLine, fmtValue, lineAlpha
+        -- 1 everywhere except a charge spell whose cooldown is secret, where
+        -- the client decides (ReadChargeCooldown).
+        local slotAlpha = 1
 
         if entry.isBuffActive then
             if self.auraActive[entry.spellId] then
@@ -708,28 +788,30 @@ function NMA:Update()
             end
         else
             local chargesLeft, isChargeSpell = self:ResolveCharges(entry.spellId)
+            local rem, _, isSecret
 
-            -- No usability gate: IsSpellUsable reports only learned status and
-            -- resources -- per its own docs -- and returns TRUE for a spell
-            -- sitting on cooldown, so gating on it would hide every countdown.
-            -- The charge rule is enforced just below instead.
-            local rem, _, isSecret = self:ReadCooldown(entry.spellId)
-
-            -- A charge spell with a charge still banked is NOT unavailable.
-            -- isOnGCD does not filter the recharge out, so spending one of two
-            -- charges put a countdown on screen for an ability the player
-            -- could still use. chargesLeft is a plain number even in combat --
-            -- SafeCharges refuses secret counts and ResolveCharges falls back
-            -- to the count it maintains -- so this comparison is safe.
-            if isChargeSpell and chargesLeft and chargesLeft > 0 then
-                rem, isSecret = nil, nil
+            if isChargeSpell then
+                rem, _, isSecret, slotAlpha = self:ReadChargeCooldown(entry.spellId)
+                slotAlpha = slotAlpha or 1
+            else
+                -- No usability gate: IsSpellUsable reports only learned status
+                -- and resources -- per its own docs -- and returns TRUE for a
+                -- spell sitting on cooldown, so gating on it would hide every
+                -- countdown.
+                rem, _, isSecret = self:ReadCooldown(entry.spellId)
             end
 
             if isSecret then
                 anyRunning = true
-                self.readyFired = self.readyFired or {}
-                self.readyFired[entry.spellId] = true
-                if rem ~= nil then
+                -- A charge spell's duration object answers even while ready,
+                -- so a secret read does not mean a cooldown ran; arming the
+                -- ready sound on it would play it when the restriction lifts.
+                if not isChargeSpell then
+                    self.readyFired = self.readyFired or {}
+                    self.readyFired[entry.spellId] = true
+                end
+                -- type() never throws on a secret; `~= nil` is a comparison.
+                if type(rem) ~= "nil" then
                     fmtLine = self:ComposeFormat(entry.customText or entry.name, "%.0f")
                     fmtValue = rem
                     if threshold then
@@ -771,14 +853,16 @@ function NMA:Update()
             else
                 text:SetText(plainLine)
             end
-            alphas[shown] = lineAlpha
+            slotAlphas[shown] = slotAlpha
+            textAlphas[shown] = lineAlpha
         end
     end
 
     if shown > 0 then
         self:LayoutSlots(shown)
         for i = 1, shown do
-            if alphas[i] ~= nil then self.slots[i]:SetAlpha(alphas[i]) end
+            self.slots[i]:SetAlpha(slotAlphas[i])
+            if type(textAlphas[i]) ~= "nil" then self.slots[i].text:SetAlpha(textAlphas[i]) end
         end
         self:ApplyPosition()
         self.frame:Show()

@@ -173,6 +173,13 @@ describe("movement alert spell resolution", function()
 end)
 
 describe("NoMovementAlert RoleColor", function()
+    -- A secret that throws on comparison, as the client's does, so a guard
+    -- that slips a secret into `>` fails here rather than in a key.
+    local SECRET = setmetatable({}, {
+        __lt = function() error("attempt to compare a secret value") end,
+        __le = function() error("attempt to compare a secret value") end,
+    })
+
     it("returns the saved colour for each role in custom mode", function()
         local NMA = L.loadMovementAlert()
         NMA.db = {
@@ -326,6 +333,86 @@ describe("NoMovementAlert RoleColor", function()
             local left, isChargeSpell = NMA:ResolveCharges(101545)
             assert.is_nil(left)
             assert.is_false(isChargeSpell)
+        end)
+
+        local function withSecretCount(info)
+            local NMA, KE = L.loadMovementAlert({
+                C_Spell = {
+                    GetSpellCooldown = function() return nil end,
+                    GetSpellCharges = function() return info end,
+                    GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,
+                },
+            })
+            KE.IsSecretValue = function(_, value) return value == SECRET end
+            NMA.chargeMeta, NMA.chargeCount = {}, {}
+            return NMA
+        end
+
+        it("still recognises a charge spell when only the count is secret", function()
+            -- Under cooldown restrictions the count and the recharge length are
+            -- secret while maxCharges stays plain; refusing the whole record
+            -- sent the spell down the plain-cooldown path.
+            local NMA = withSecretCount({ currentCharges = SECRET, maxCharges = 2, cooldownDuration = SECRET })
+            local left, isChargeSpell = NMA:ResolveCharges(212653)
+            assert.is_true(isChargeSpell)
+            assert.equals(2, left)            -- no readable count yet: the max stands in
+            assert.same({ max = 2, recharge = 0 }, NMA.chargeMeta[212653])
+            assert.is_nil(NMA.chargeCount[212653])
+        end)
+    end)
+
+    -- Out of movement means zero charges, and the count is not how that is
+    -- found out: the cooldown's TOTAL length is. A banked charge reports only
+    -- a GCD-length cooldown; the full recharge appears once the last charge is
+    -- spent. Readable, Lua compares; secret, the client evaluates a curve into
+    -- an alpha and Lua never looks.
+    describe("charge cooldown visibility", function()
+        local EVALUATED = {}
+
+        local function withDuration(rem, total)
+            local NMA, KE = L.loadMovementAlert({
+                C_Spell = {
+                    GetSpellCooldown = function() return nil end,
+                    GetSpellCharges = function() return nil end,
+                    GetSpellInfo = function(id) return { name = "Spell " .. tostring(id) } end,
+                    GetSpellCooldownDuration = function()
+                        return {
+                            GetRemainingDuration = function() return rem end,
+                            GetTotalDuration = function() return total end,
+                            EvaluateTotalDuration = function() return EVALUATED end,
+                        }
+                    end,
+                },
+                C_CurveUtil = {
+                    CreateCurve = function()
+                        return { SetType = function() end, AddPoint = function() end }
+                    end,
+                },
+                Enum = { LuaCurveType = { Step = 1 } },
+            })
+            KE.IsSecretValue = function(_, value) return value == SECRET end
+            return NMA
+        end
+
+        it("shows only a real recharge that is still running", function()
+            local NMA = withDuration(nil, nil)
+            local cases = {
+                { name = "GCD-length total, a charge is banked", rem = 1.2, total = 1.5, expect = false },
+                { name = "recharge finished", rem = 0, total = 20, expect = false },
+                { name = "real recharge running", rem = 12, total = 20, expect = true },
+            }
+            for _, case in ipairs(cases) do
+                assert.equals(case.expect, NMA:IsRechargeRunning(case.rem, case.total), case.name)
+            end
+        end)
+
+        it("hands a secret duration to the curve instead of comparing it", function()
+            local NMA = withDuration(SECRET, SECRET)
+            local rem, total, isSecret, alpha = NMA:ReadChargeCooldown(212653)
+            assert.equals(SECRET, rem)
+            assert.equals(SECRET, total)
+            assert.is_true(isSecret)
+            assert.equals(EVALUATED, alpha)
         end)
     end)
 

@@ -2299,6 +2299,9 @@ function L.loadMovementAlert(overrides)
     -- Absent by default, which is the pre-12.1 client and the broad-only path.
     -- A spec supplies it to exercise the exact-first branch.
     _G.C_Secrets = overrides.C_Secrets
+    -- Absent by default: ChargeCurve then yields no curve and the secret
+    -- charge path falls back to alpha 1.
+    _G.C_CurveUtil = overrides.C_CurveUtil
 
     local KE = {
         Print = function() end,
