@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.34
+
+### Keystone Helper
+- **Changed, and it resets a setting:** the two keystone reminders now share
+  one look and one position instead of carrying a font, size, colour and
+  mover each. If you had styled them separately, both now use the shared
+  settings and the second mover is gone. Edit Mode shows one element,
+  `Keystone Helper: Reminders`
+- **Changed:** the reminder's key line uses the short dungeon names players
+  actually say, taken from BigWigs when it is loaded, and the Group Finder
+  dungeon toggles use the same words. Several read differently as a result
+- The reminder icon no longer lands on a half pixel at odd sizes, so its
+  border draws as one crisp row
+
+---
+
 ## v4.6.33
 
 ### Character Panel
