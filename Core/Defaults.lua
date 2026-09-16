@@ -1079,6 +1079,8 @@ local Defaults = {
             ShowEnchantNames     = true,
             -- short = nickname + abbreviations, verbose = keyword only, full = as the tooltip gives it
             EnchantNameStyle     = "short",
+            -- Crafted enchants carry a tier the tooltip shows only as an icon
+            ShowEnchantRank      = false,
             ShowSlotGems         = true,
             SlotInfoFontSize     = 15,
 
