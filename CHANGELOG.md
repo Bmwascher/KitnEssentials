@@ -1,5 +1,27 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.40
+
+### Fixes
+- Community channel notices print in a key again instead of erroring, and
+  the chat edit box no longer creeps its text right each time you switch to
+  a community channel and back
+- Windows Move Frames handles open without error in combat, where the game
+  can refuse to say whether a frame is protected
+- A party member changing specialisation no longer rebuilds your own
+  interrupt cache
+- Glow controls stay greyed after leaving and returning to a page with the
+  glow switched off, on Dungeon Casts, External Tracker and Movement Buffs
+- Loot Roll writes its mover position once rather than twice
+- The Power Infusion assist border follows the raid frame that is actually
+  on screen when another addon swaps its party and raid headers
+- On the Dungeon Casts page each Your Interrupt colour or slider greys with
+  its own tick, and on the Bonus Roll page the auto-pass rows no longer clip
+  their labels. The Bonus Roll module switch moved to the card header, like
+  every other module
+
+---
+
 ## v4.6.39
 
 ### Automation
