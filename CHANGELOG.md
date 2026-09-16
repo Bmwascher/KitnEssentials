@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.35
+
+### Cursor
+- **New:** Black Border, off by default, draws a black edge on the outer and
+  inner side of the cursor ring, with its own thickness slider. It follows
+  whichever ring style you use and applies to the separate GCD ring and the
+  cast circle as well
+
+---
+
 ## v4.6.34
 
 ### Keystone Helper
