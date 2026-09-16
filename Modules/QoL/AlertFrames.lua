@@ -60,15 +60,12 @@ function AF:ApplyPosition()
     self:PostAlertMove()
 end
 
--- The event toast holder anchors independently of the alert stack holder, so
--- it needs its own anchorFrameType/ParentFrame/Strata root keys rather than
--- sharing self.db's (fix round 1, CRITICAL/IMPORTANT: the GUI's Card 4 used
--- to write db.Position and db.anchorFrameType/ParentFrame/Strata -- the same
--- fields Card 2 owns -- so the two position cards silently mirrored each
--- other. Card 4 now writes EventToastAnchorFrameType/EventToastParentFrame/
--- EventToastStrata; this builds the Config shape KE:ApplyFramePosition
--- expects out of those, mirroring HealerMana's GetActiveAnchorConfig
--- (Modules/Healer/HealerMana.lua).
+-- The event toast holder anchors independently of the alert stack, so it owns
+-- EventToastAnchorFrameType/EventToastParentFrame/EventToastStrata rather than
+-- sharing the root keys the alert stack writes -- two cards on one set of
+-- fields would mirror each other silently. This builds the Config shape
+-- KE:ApplyFramePosition expects out of those, as HealerMana's
+-- GetActiveAnchorConfig does.
 function AF:ApplyEventToastPosition()
     if not (self.toastHolder and self.db and self.db.EventToastPosition) then return end
     KE:ApplyFramePosition(self.toastHolder, self.db.EventToastPosition, {

@@ -1636,8 +1636,8 @@ describe("Quick Signup skip key", function()
 end)
 
 describe("Automation auto role check", function()
-    -- The refusal was KE:IsFullyRestricted, which is up for a whole dungeon
-    -- run; the handler reads no unit data, so the setting is the only gate.
+    -- The handler reads no unit data, so the setting is the only gate: a
+    -- restriction refusal here would be off for a whole dungeon run.
     local cases = {
         { label = "answers under full restriction with the setting on",
           restricted = true, setting = true, roles = { true, false, true, false },
