@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.32
+
+### Dungeon Casts
+- **Changed, on for everyone using the module:** a kickable cast now reads
+  your own interrupt. The bar is tinted while your kick is ready, dims to
+  45% while the caster is out of your range, carries a white mark where your
+  kick comes back, and a cast aimed at you carries a pulsing gold border --
+  never on a tank spec. Each of the four has its own tick and colour on the
+  Dungeon Casts page, plus an optional shade of the window you will get your
+  kick back in
+- **New:** a Pulse Border glow style, offered on the Dungeon Casts target
+  glow, with its own thickness and an optional pulse
+
+---
+
 ## v4.6.31
 
 ### Focus Castbar
