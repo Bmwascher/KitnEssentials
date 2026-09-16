@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.38
+
+### Settings
+- **New:** Expand All Sidebar Sections on the Home Page, off by default.
+  With it on, every sidebar section is open each time the window opens
+  instead of only Core
+
+### Developer
+- `/kes trace [Frame] [secs]` reports which addon file moves or resizes a
+  frame, for chasing a window that will not stay where it is put
+
+---
+
 ## v4.6.37
 
 ### Priest: PI Assist
