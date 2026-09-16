@@ -1,0 +1,30 @@
+## Title: |cffFF008CKitn|r|cffffffffEssentials|r
+## Notes: Standalone combat, utilities, quality of life, dungeons, and skinning modules for KitnUI.
+## Author: Bitebtw
+## Version: @project-version@
+## X-Manual-Version: 4.6.40
+## SavedVariables: KitnEssentialsDB, KitnEssentialsOptimizeDB
+## Interface: 120100
+## OptionalDeps: Ace3, LibSharedMedia-3.0, ElvUI
+## IconTexture: Interface\AddOns\KitnEssentials\Media\Icon\KES
+## Category-enUS: |cffFF008CKitn|rUI
+## X-Curse-Project-ID: 1485435
+## X-Wago-ID: n6VLEEGd
+
+Libs\Init.xml
+
+Modules\Diagnostics\TaintReport.lua
+Core\Core.xml
+Modules\Utilities\Utilities.xml
+Modules\Diagnostics\Diagnostics.xml
+Modules\ClassUtilities\ClassUtilities.xml
+
+Modules\Combat\Combat.xml
+Modules\Dungeons\Dungeons.xml
+Modules\Healer\Healer.xml
+Modules\DungeonTimers\DungeonTimers.xml
+Modules\QoL\QoL.xml
+Modules\Skinning\Skinning.xml
+Modules\DamageMeter\DamageMeter.xml
+
+GUI\GUI.xml
