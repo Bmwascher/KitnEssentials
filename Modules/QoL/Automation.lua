@@ -52,8 +52,6 @@ local AcceptResurrect = AcceptResurrect
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitExists = UnitExists
 local IsEncounterInProgress = IsEncounterInProgress
-local UnitGroupRolesAssigned = UnitGroupRolesAssigned
-local GetSpecializationRole = GetSpecializationRole
 
 ---------------------------------------------------------------------------------
 -- Constants
@@ -1373,11 +1371,8 @@ local function SetupRepairReport()
 end
 
 -- Auto Role Check --
--- Selects the player's role from their assigned group role, falling back to
--- their current spec, then auto-accepts the LFD role-check popup. Each role
--- button is gated on :IsEnabled() because the popup disables roles the player
--- can't fill. When the role can't be resolved we leave the popup's pre-filled
--- selection (the LFG queue choice) untouched and simply accept it.
+-- Each role button is gated on :IsEnabled() because the popup disables roles
+-- the player can't fill.
 
 local function SetRoleCheckButton(button, checked)
     if button and button.checkButton and button.checkButton:IsEnabled() then
@@ -1385,38 +1380,35 @@ local function SetRoleCheckButton(button, checked)
     end
 end
 
+-- The roles picked in the Group Finder, the same source Blizzard fills the
+-- popup from while it is hidden. Nothing here reads unit data, so no
+-- restriction gate: role checks arrive inside instances, where one would
+-- refuse for the whole run. A battleground check is already ticked from the
+-- PvP roles.
+local function OnRoleCheckShow()
+    if not AU.db or not AU.db.Enabled then return end
+    if not AU.db.AutoRoleCheck then return end
+
+    local _, _, _, _, _, isBattleground = GetLFGRoleUpdate()
+    local _, tank, healer, dps = GetLFGRoles()
+    if not isBattleground and (tank or healer or dps) then
+        SetRoleCheckButton(LFDRoleCheckPopupRoleButtonTank, tank)
+        SetRoleCheckButton(LFDRoleCheckPopupRoleButtonHealer, healer)
+        SetRoleCheckButton(LFDRoleCheckPopupRoleButtonDPS, dps)
+    end
+
+    if LFDRoleCheckPopupAcceptButton then
+        LFDRoleCheckPopupAcceptButton:Enable()
+        LFDRoleCheckPopupAcceptButton:Click()
+    end
+end
+
 local function SetupAutoRoleCheck()
     if not AU.db.AutoRoleCheck then return end
     if AU._lfdHooked then return end
+    if not LFDRoleCheckPopup then return end
     AU._lfdHooked = true
-    if LFDRoleCheckPopup then
-        LFDRoleCheckPopup:HookScript("OnShow", function()
-            if not AU.db or not AU.db.Enabled then return end
-            if KE:IsFullyRestricted() then return end
-            if not AU.db.AutoRoleCheck then return end
-
-            local role = UnitGroupRolesAssigned("player")
-            if role == "NONE" then
-                local specIndex = GetSpecialization()
-                if specIndex then
-                    role = GetSpecializationRole(specIndex)
-                end
-            end
-
-            -- Only override the pre-filled selection when we resolved a real
-            -- role; otherwise leave whatever the popup pre-checked in place.
-            if role == "TANK" or role == "HEALER" or role == "DAMAGER" then
-                SetRoleCheckButton(LFDRoleCheckPopupRoleButtonTank, role == "TANK")
-                SetRoleCheckButton(LFDRoleCheckPopupRoleButtonHealer, role == "HEALER")
-                SetRoleCheckButton(LFDRoleCheckPopupRoleButtonDPS, role == "DAMAGER")
-            end
-
-            if LFDRoleCheckPopupAcceptButton then
-                LFDRoleCheckPopupAcceptButton:Enable()
-                LFDRoleCheckPopupAcceptButton:Click()
-            end
-        end)
-    end
+    LFDRoleCheckPopup:HookScript("OnShow", OnRoleCheckShow)
 end
 
 -- An unset or unrecognised key reads as not held, which is what makes "NONE"

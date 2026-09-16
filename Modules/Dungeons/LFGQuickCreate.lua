@@ -509,7 +509,13 @@ MakeButton = function(parent, dungeon, index)
         local levelled = ActivityForLevel(activityID, self._level)
         if levelled then activityID = levelled end
 
-        C_LFGList.CreateListing({
+        -- `activityIDs = { nil }` is an empty table: a listing for no dungeon.
+        if not activityID then
+            KE:Print("Could not work out which activity to list for " .. self._label .. ".")
+            return
+        end
+
+        local listed = C_LFGList.CreateListing({
             activityIDs           = { activityID },
             questID               = nil,
             isAutoAccept          = false,
@@ -522,6 +528,12 @@ MakeButton = function(parent, dungeon, index)
             requiredItemLevel     = 0,
             requiredPvpRating     = 0,
         })
+        -- `== false`, not `not listed`: a client that returns nothing has not
+        -- refused anything.
+        if listed == false then
+            KE:Print(string.format("The game refused the %s listing (activity %d, playstyle %d).",
+                self._label, activityID, CurrentPlaystyle()))
+        end
 
         -- DO NOT call LFGListEntryCreation_Select here to pre-fill the form.
         -- BLOCKED, do not retry: Select reaches

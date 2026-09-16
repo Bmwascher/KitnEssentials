@@ -327,4 +327,50 @@ describe("RaidControl", function()
             assert.is_false(RC2.BuffStrip.cells[1].present)
         end)
     end)
+
+    describe("OnRegenEnabled", function()
+        -- One handler serves every combat deferral (AceEvent keeps one
+        -- callback per event per object), so the decision it takes from
+        -- (enabled, setup, positionDirty) is the queue. Order matters: the
+        -- roster pass re-anchors the sections itself, so a dirty layout is
+        -- replayed after it, once.
+        local cases = {
+            { enabled = false, setup = false, dirty = true,
+              jobs = { "unregister" } },
+            { enabled = false, setup = true, dirty = true,
+              jobs = { "unregister", "hide-button", "hide-panel" } },
+            { enabled = true, setup = false, dirty = false,
+              jobs = { "unregister", "setup", "register", "register", "toggle" } },
+            { enabled = true, setup = true, dirty = true,
+              jobs = { "unregister", "register", "register", "toggle", "position", "fit" } },
+        }
+
+        for _, case in ipairs(cases) do
+            it(("enabled=%s setup=%s dirty=%s runs %s"):format(
+                tostring(case.enabled), tostring(case.setup), tostring(case.dirty),
+                table.concat(case.jobs, ",")), function()
+                local jobs = {}
+                RC.IsEnabled = function() return case.enabled end
+                RC.setup = case.setup
+                RC._positionDirty = case.dirty or nil
+                RC.UnregisterEvent = function(_, e)
+                    if e == "PLAYER_REGEN_ENABLED" then jobs[#jobs + 1] = "unregister" end
+                end
+                RC.RegisterEvent = function(_, _, handler)
+                    jobs[#jobs + 1] = handler == "ToggleRaidControl" and "register" or "register:" .. tostring(handler)
+                end
+                RC.Setup = function(s) s.setup = true; jobs[#jobs + 1] = "setup" end
+                RC.ToggleRaidControl = function() jobs[#jobs + 1] = "toggle" end
+                RC.PositionSections = function() jobs[#jobs + 1] = "position" end
+                RC.FitRolePlate = function() jobs[#jobs + 1] = "fit" end
+                RC.ShowButton = { Hide = function() jobs[#jobs + 1] = "hide-button" end }
+                RC.Panel = { Hide = function() jobs[#jobs + 1] = "hide-panel" end }
+
+                RC:OnRegenEnabled()
+
+                assert.same(case.jobs, jobs)
+                assert.is_nil(RC._positionDirty)
+            end)
+        end
+    end)
 end)

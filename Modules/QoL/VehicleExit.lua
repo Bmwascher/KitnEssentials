@@ -24,10 +24,11 @@ local UnitInVehicle = UnitInVehicle
 local pcall = pcall
 local _G = _G
 
--- Blizzard registers this button as an Edit Mode system, and some action bar
--- addons re-pin it in a run-once setup at login -- which is why an Edit Mode
--- placement looks right until the next reload. Both writes happen once and
--- nothing re-asserts them, so being the last writer settles it.
+-- Blizzard registers this button as an Edit Mode system: Edit Mode's layout
+-- init parks every system at TOPLEFT before re-applying stored anchors, and
+-- some action bar addons re-pin it once at login. One late apply races both,
+-- so the position is applied again whenever the button could be needed: the
+-- events Blizzard's own button updates on, and Edit Mode layout changes.
 --
 -- OFF by default: with it off the button's position is never touched.
 local BUTTON_NAME = "MainMenuBarVehicleLeaveButton"
@@ -70,6 +71,12 @@ function VE:OnEnable()
 
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "ScheduleApply")
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
+    self:RegisterEvent("UNIT_ENTERED_VEHICLE", "OnVehicleEvent")
+    self:RegisterEvent("VEHICLE_UPDATE", "OnVehicleEvent")
+    self:RegisterEvent("UPDATE_BONUS_ACTIONBAR", "OnVehicleEvent")
+    -- EditModeManagerFrame answers this event by re-applying its layout;
+    -- a frame later lands after that pass instead of racing it.
+    self:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED", "ApplySoon")
     self:ScheduleApply()
 
     if not KE.EditMode then return end
@@ -113,6 +120,24 @@ end
 
 function VE:ScheduleApply()
     C_Timer.After(APPLY_DELAY, function()
+        if self:IsEnabled() then self:ApplyPosition() end
+    end)
+end
+
+-- UNIT_ENTERED_VEHICLE fires for every group member; the other two carry no
+-- unit.
+function VE:OnVehicleEvent(_, unit)
+    if unit and unit ~= "player" then return end
+    self:ApplySoon()
+end
+
+-- One frame later and coalesced: several of these arrive together when a
+-- vehicle is taken, and the position only has to be right once they settle.
+function VE:ApplySoon()
+    if self.applyQueued then return end
+    self.applyQueued = true
+    C_Timer.After(0, function()
+        self.applyQueued = nil
         if self:IsEnabled() then self:ApplyPosition() end
     end)
 end
