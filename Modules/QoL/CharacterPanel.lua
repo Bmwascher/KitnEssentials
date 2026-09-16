@@ -194,7 +194,7 @@ local enchantNicknames = {
     ["Strength of Halazzi"]     = "Bleed",
     ["Worldsoul Aegis"]         = "Shield->AoE",
     ["Worldsoul Tenacity"]      = "Proc Vers",
-    ["Rite of the Hash'ey"]      = "Proc Secondary",
+    ["Rite of the Hash'ey"]      = "Proc Sec",
     ["Empowered Blessing of Speed"] = "Speed+Vigor",
     ["Blessing of Speed"]           = "Speed",
     ["Empowered Rune of Avoidance"] = "Avoid+MS",
@@ -373,6 +373,11 @@ local RIGHT_SLOTS = {
     [6] = true, [7] = true, [8] = true, [10] = true,
     [11] = true, [12] = true, [13] = true, [14] = true, [17] = true,
 }
+
+-- Corner inset for the track letter on a column slot: x pulls it inside the
+-- icon, y lifts it off the bottom edge. The weapons keep the old 1/1.
+local TRACK_EDGE_X, TRACK_EDGE_Y = 2, 3
+local WEAPON_TRACK_SLOTS = { [16] = true, [17] = true }
 
 -- Track indicator quality atlas regex (extracted from item link).
 local qualityAtlasPattern = "|A:(Professions%-ChatIcon%-Quality%-[^:]+):%d+:%d+"
@@ -1643,10 +1648,22 @@ function CP:CreateTrackOverlay(slotFrame, slotID)
     overlay:SetSize(14, 14)
     overlay:SetFrameLevel(slotFrame:GetFrameLevel() + 10)
 
+    -- The two weapon buttons sit under the model with nothing beside them, so
+    -- their letter reads well hard against the corner. A column slot has the
+    -- text strip alongside it and needs the letter lifted off the icon's edge,
+    -- and a right-column slot pulled inside it rather than hung a pixel out.
+    local isWeapon = WEAPON_TRACK_SLOTS[slotID]
+    local x, y = TRACK_EDGE_X, TRACK_EDGE_Y
+    if isWeapon then
+        x, y = 1, 1
+    elseif isRight then
+        x = -TRACK_EDGE_X
+    end
+
     if isRight then
-        overlay:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMRIGHT", 1, 1)
+        overlay:SetPoint("BOTTOMRIGHT", slotFrame, "BOTTOMRIGHT", x, y)
     else
-        overlay:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", 1, 1)
+        overlay:SetPoint("BOTTOMLEFT", slotFrame, "BOTTOMLEFT", x, y)
     end
 
     overlay.text = overlay:CreateFontString(nil, "OVERLAY")
