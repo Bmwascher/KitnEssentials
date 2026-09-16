@@ -850,45 +850,24 @@ local Defaults = {
             RerollEnabled = false,
             YourKeyEnabled = false,
 
-            -- Each reminder owns its own appearance. Position is the one
-            -- thing they can share: YourKeyUseRerollPosition parks Your Key
-            -- on the Reroll coordinates instead of its own.
-            RerollSize = 64,
-            RerollFontOutline = "OUTLINE",
-            RerollFontSize = 36,
-            RerollFontColor = { 1, 1, 1, 1 },
-            RerollFontColorKey = { 1, 1, 1, 1 },
-            RerollStrata = "MEDIUM",
-            RerollAnchorFrameType = "UIPARENT",
-            RerollParentFrame = "UIParent",
-            RerollPosition = DefaultPosition(0, 165),
+            -- One look, one position and one glow for both reminders: they
+            -- never show at the same time.
+            Size = 64,
+            FontOutline = "OUTLINE",
+            FontSize = 36,
+            FontColor = { 1, 1, 1, 1 },
+            FontColorKey = { 1, 1, 1, 1 },
+            Strata = "MEDIUM",
+            AnchorFrameType = "UIPARENT",
+            ParentFrame = "UIParent",
+            Position = DefaultPosition(0, 165),
 
-            -- The X offset differs from Reroll's on purpose: switching the
-            -- follow off must not stack the two on identical coordinates.
-            YourKeyUseRerollPosition = true,
-            YourKeySize = 64,
-            YourKeyFontOutline = "OUTLINE",
-            YourKeyFontSize = 36,
-            YourKeyFontColor = { 1, 1, 1, 1 },
-            YourKeyFontColorKey = { 1, 1, 1, 1 },
-            YourKeyStrata = "MEDIUM",
-            YourKeyAnchorFrameType = "UIPARENT",
-            YourKeyParentFrame = "UIParent",
-            YourKeyPosition = DefaultPosition(150, 165),
-
-            -- Per-feature glow
-            RerollGlowEnabled = true,
-            RerollGlowColor = { 0, 1, 0, 1 },
-            RerollGlowLines = 5,
-            RerollGlowFrequency = 0.25,
-            RerollGlowLength = 10,
-            RerollGlowThickness = 2,
-            YourKeyGlowEnabled = true,
-            YourKeyGlowColor = { 0.2, 0.6, 1, 1 },
-            YourKeyGlowLines = 5,
-            YourKeyGlowFrequency = 0.25,
-            YourKeyGlowLength = 10,
-            YourKeyGlowThickness = 2,
+            GlowEnabled = true,
+            GlowColor = { 0, 1, 0, 1 },
+            GlowLines = 5,
+            GlowFrequency = 0.25,
+            GlowLength = 10,
+            GlowThickness = 2,
         },
 
         -- Mythic+ filter pane docked to the right of the Group Finder,

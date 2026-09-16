@@ -887,6 +887,11 @@ function KE:Init() end
 ---@return string
 function KE:GetPointFromAnchor(anchor) end
 
+---@param name string?
+---@param mapID number?
+---@return string?
+function KE:AbbreviateDungeonName(name, mapID) end
+
 ---@param itemId string?
 ---@return string? sectionId
 function KE:GetSectionForItem(itemId) end

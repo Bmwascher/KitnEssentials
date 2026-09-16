@@ -3,40 +3,6 @@
 local loader = require("dev.spec._ke_loader")
 
 describe("GroupFinderPanel pure helpers", function()
-    describe("Abbreviate", function()
-        local abbrev
-        before_each(function()
-            local _, _, seams = loader.loadGroupFinderPanel()
-            abbrev = seams.abbreviate
-        end)
-
-        it("takes initials of a plain multi-word name", function()
-            assert.equals("TD", abbrev("Test Dungeon"))
-        end)
-
-        it("drops of/the/and", function()
-            assert.equals("HF", abbrev("Halls of the Fallen"))
-        end)
-
-        it("splits on hyphens", function()
-            assert.equals("BRD", abbrev("Black-Rock Depths"))
-        end)
-
-        it("splits on apostrophes", function()
-            -- The apostrophe is a word boundary in the gmatch pattern, so
-            -- "Kael'thas" is two words ("Kael", "thas"), not one -- initials
-            -- are K, T, C, not K, C.
-            assert.equals("KTC", abbrev("Kael'thas Citadel"))
-        end)
-
-        it("falls back to four uppercased characters when the initials are too short", function()
-            -- One word, no stop word: initials give "D", which is under the
-            -- two-character floor, so the fallback takes the first four
-            -- characters uppercased.
-            assert.equals("DEEP", abbrev("Deep"))
-        end)
-    end)
-
     describe("GetPartyRoles", function()
         it("counts the player's spec role when solo", function()
             local _, _, seams = loader.loadGroupFinderPanel({

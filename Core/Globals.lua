@@ -748,6 +748,113 @@ function KE:GetPointFromAnchor(anchor)
 end
 
 ---------------------------------------------------------------------------------
+-- Dungeon Short Names
+---------------------------------------------------------------------------------
+
+-- Challenge-mode map ID -> the short name players say. The first value is
+-- BigWigs' locale key for that dungeon, whose wording wins while BigWigs is
+-- loaded; the second is the English text used when it is not. A map ID
+-- missing from this list falls to the initials fallback either way. Shared
+-- by the keystone reminders and the Group Finder dungeon toggles so the two
+-- never disagree.
+local KEYSTONE_SHORT = {
+    [500] = { "TheRookery", "ROOK" },
+    [504] = { "DarkflameCleft", "DFC" },
+    [499] = { "PrioryOfTheSacredFlame", "PRIORY" },
+    [506] = { "CinderbrewMeadery", "BREW" },
+    [525] = { "OperationFloodgate", "FLOOD" },
+    [382] = { "TheaterOfPain", "TOP" },
+    [247] = { "TheMotherlode", "ML" },
+    [370] = { "OperationMechagonWorkshop", "WORK" },
+    [542] = { "EcoDomeAldani", "ECODOME" },
+    [378] = { "HallsOfAtonement", "HOA" },
+    [503] = { "AraKaraCityOfEchoes", "ARAK" },
+    [392] = { "TazaveshSoleahsGambit", "GAMBIT" },
+    [391] = { "TazaveshStreetsOfWonder", "STREET" },
+    [505] = { "TheDawnbreaker", "DAWN" },
+    [199] = { "BlackRookHold", "BRH" },
+    [210] = { "CourtOfStars", "COS" },
+    [198] = { "DarkheartThicket", "DHT" },
+    [197] = { "EyeOfAzshara", "EOA" },
+    [200] = { "HallsOfValor", "HOV" },
+    [208] = { "MawOfSouls", "MOS" },
+    [206] = { "NeltharionsLair", "NL" },
+    [209] = { "TheArcway", "ARCWAY" },
+    [207] = { "VaultOfTheWardens", "VOTW" },
+    [227] = { "ReturnToKarazhanLower", "LKARA" },
+    [234] = { "ReturnToKarazhanUpper", "UKARA" },
+    [233] = { "CathedralOfEternalNight", "COEN" },
+    [239] = { "SeatOfTheTriumvirate", "SEAT" },
+    [583] = { "SeatOfTheTriumvirate", "SEAT" },
+    [557] = { "WindrunnerSpire", "SPIRE" },
+    [558] = { "MagistersTerrace", "MT" },
+    [560] = { "MaisaraCaverns", "CAVERN" },
+    [559] = { "NexusPointXenas", "XENAS" },
+    [402] = { "AlgetharAcademy", "AA" },
+    [161] = { "Skyreach", "SKY" },
+    [556] = { "PitOfSaron", "PIT" },
+    [249] = { "KingsRest", "REST" },
+    [250] = { "TempleOfSethraliss", "TEMPLE" },
+    [399] = { "RubyLifePools", "POOLS" },
+    [584] = { "TheBlindingVale", "VALE" },
+    [585] = { "VoidscarArena", "ARENA" },
+    [586] = { "DenOfNalorakk", "DEN" },
+    [587] = { "MurderRow", "MURDER" },
+    [588] = { "AltarOfFangs", "ALTAR" },
+}
+
+-- Short name for a challenge-mode map ID, or nil when it is not listed.
+-- BigWigsAPI:GetLocale raises when the locale table is not registered, so
+-- the read is pcall'd; anything but a non-empty string falls through to the
+-- English column.
+local function KeystoneShortName(mapID)
+    local entry = mapID and KEYSTONE_SHORT[mapID]
+    if not entry then return nil end
+    local api = _G.BigWigsAPI
+    local ok, L = pcall(function() return api and api.GetLocale and api:GetLocale("BigWigs") end)
+    local live = ok and type(L) == "table" and L["keystoneShortName_" .. entry[1]]
+    if type(live) == "string" and live ~= "" then return live end
+    return entry[2]
+end
+
+-- Name -> challenge-mode map ID, built once from the client's own map table
+-- so a caller that only has the name reaches the same row.
+local challengeMapByName
+local function ChallengeMapIDByName(name)
+    if not challengeMapByName then
+        challengeMapByName = {}
+        local ok, maps = pcall(function() return C_ChallengeMode.GetMapTable() end)
+        if ok and type(maps) == "table" then
+            for _, id in ipairs(maps) do
+                local okName, mapName = pcall(function() return C_ChallengeMode.GetMapUIInfo(id) end)
+                if okName and type(mapName) == "string" and challengeMapByName[mapName] == nil then
+                    challengeMapByName[mapName] = id
+                end
+            end
+        end
+    end
+    return challengeMapByName[name]
+end
+
+-- Listed row first, else initials with the stop-words dropped, else the first
+-- four letters. Split by exclusion, not %w, so a name in another script still
+-- yields its first bytes.
+function KE:AbbreviateDungeonName(name, mapID)
+    if type(name) ~= "string" or name == "" then return name end
+    local short = KeystoneShortName(mapID) or KeystoneShortName(ChallengeMapIDByName(name))
+    if short then return short end
+    local abbrev = ""
+    for word in name:gmatch("[^%s%-']+") do
+        local lw = word:lower()
+        if lw ~= "of" and lw ~= "the" and lw ~= "and" then
+            abbrev = abbrev .. word:sub(1, 1):upper()
+        end
+    end
+    if #abbrev < 2 then abbrev = name:sub(1, 4):upper() end
+    return abbrev
+end
+
+---------------------------------------------------------------------------------
 -- Preview Manager
 ---------------------------------------------------------------------------------
 

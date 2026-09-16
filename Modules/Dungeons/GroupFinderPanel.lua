@@ -110,36 +110,6 @@ local panel
 -- at call time. Declare where the readers are.
 local IsActive
 
--- Preferred short names (Midnight Season 1); anything unlisted falls back
--- to the initials algorithm, so new seasons degrade gracefully.
-local ABBREV_OVERRIDE = {
-    ["Windrunner Spire"]        = "WS",
-    ["Magisters' Terrace"]      = "MT",
-    ["Maisara Caverns"]         = "MC",
-    ["Nexus-Point Xenas"]       = "NPX",
-    ["Skyreach"]                = "SR",
-    ["Pit of Saron"]            = "POS",
-    ["Seat of the Triumvirate"] = "SEAT",
-    ["Algeth'ar Academy"]       = "AA",
-}
-
--- Lifted verbatim out of CreateFilterPanel so it can be tested. It depends
--- only on its argument and ABBREV_OVERRIDE; the enclosing function
--- contributed no state.
-local function Abbreviate(name)
-    local abbrev = ABBREV_OVERRIDE[name]
-    if abbrev then return abbrev end
-    abbrev = ""
-    for word in name:gmatch("[^%s%-']+") do
-        local lw = word:lower()
-        if lw ~= "of" and lw ~= "the" and lw ~= "and" then
-            abbrev = abbrev .. word:sub(1, 1):upper()
-        end
-    end
-    if #abbrev < 2 then abbrev = name:sub(1, 4):upper() end
-    return abbrev
-end
-
 -- 12.0.7 spec mapping. NO fallback to the deprecated globals -- they live in
 -- Blizzard_DeprecatedSpecialization and must not be called from new code.
 local function PlayerSpecRole()
@@ -192,7 +162,6 @@ GFP._PlayerSpecRole      = PlayerSpecRole
 GFP._GetPartyRoles       = GetPartyRoles
 GFP._SeasonGroups        = SeasonGroups
 GFP._IsDungeonSearchMode = IsDungeonSearchMode
-GFP._Abbreviate          = Abbreviate
 
 ------------------------------------------------------------------------
 -- Friend groups. While BROWSING on Midnight, search-result friend counts
@@ -863,7 +832,7 @@ local function CreateFilterPanel()
     for _, groupID in ipairs(groups) do
         local name = C_LFGList.GetActivityGroupInfo and C_LFGList.GetActivityGroupInfo(groupID)
         if name then
-            local btn = MakeToggle(f, S, Abbreviate(name),
+            local btn = MakeToggle(f, S, KE:AbbreviateDungeonName(name),
                 function() return GFP.db and GFP.db.DungeonFilter[groupID] end,
                 function()
                     local db = GFP.db

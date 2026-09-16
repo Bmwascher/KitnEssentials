@@ -707,3 +707,48 @@ describe("KE:AddFollowGlobalFont", function()
         end)
     end)
 end)
+
+describe("KE:AbbreviateDungeonName", function()
+    local KE
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+
+    -- The decision is which source answers: BigWigs' locale, the built-in
+    -- column, or the initials fallback. One row per branch; the map ID rows
+    -- use a listed ID (402) and the name rows resolve through a two-entry
+    -- fake map table. The BigWigs fake raises for the case that proves the
+    -- pcall.
+    local function bigWigs(locale)
+        return { GetLocale = function() return locale end }
+    end
+    local raising = { GetLocale = function() error("no locale registered") end }
+
+    it("answers from BigWigs, then the built-in column, then initials", function()
+        _G.C_ChallengeMode = {
+            GetMapTable = function() return { 402, 999 } end,
+            GetMapUIInfo = function(id)
+                if id == 402 then return "Algeth'ar Academy" end
+                if id == 999 then return "Unlisted Keep" end
+            end,
+        }
+        local cases = {
+            { name = "Algeth'ar Academy", mapID = 402, api = bigWigs({ keystoneShortName_AlgetharAcademy = "ACAD" }), want = "ACAD" },
+            { name = "Algeth'ar Academy", mapID = 402, api = nil,                                                     want = "AA" },
+            { name = "Algeth'ar Academy", mapID = 402, api = bigWigs({}),                                             want = "AA" },
+            { name = "Algeth'ar Academy", mapID = 402, api = raising,                                                 want = "AA" },
+            { name = "Algeth'ar Academy", mapID = nil, api = bigWigs({ keystoneShortName_AlgetharAcademy = "ACAD" }), want = "ACAD" },
+            { name = "Unlisted Keep",     mapID = 999, api = nil, want = "UK" },
+            { name = "Halls of the Fallen", mapID = nil, api = nil, want = "HF" },
+            { name = "Kael'thas Citadel", mapID = nil, api = nil, want = "KTC" },
+            { name = "Black-Rock Depths", mapID = nil, api = nil, want = "BRD" },
+            { name = "Deep",              mapID = nil, api = nil, want = "DEEP" },
+        }
+        for i, c in ipairs(cases) do
+            _G.BigWigsAPI = c.api
+            assert.equals(c.want, KE:AbbreviateDungeonName(c.name, c.mapID), "row " .. i)
+        end
+        _G.BigWigsAPI = nil
+        _G.C_ChallengeMode = nil
+    end)
+end)
