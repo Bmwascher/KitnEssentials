@@ -881,6 +881,7 @@ local PREVIEW_MODULES = {
     "BuffTracking", "PlayerDebuffTracking",
     "VehicleExit",
     "HavocTracker",
+    "PIAssist",
 }
 
 -- Section → preview module mapping for section-based previews
@@ -905,6 +906,7 @@ local SECTION_PREVIEW_MODULES = {
         "RaidNotifications", "Recuperate",
         "TimeSpiral", "ReadyCheckConsumables",
         "SecondaryStats",
+        "PIAssist",
     },
     -- Skyriding UI moved here from Quality of Life. Without this entry the
     -- module stays in PREVIEW_MODULES but no section reaches it, so opening its

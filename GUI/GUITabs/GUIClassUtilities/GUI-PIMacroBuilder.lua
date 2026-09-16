@@ -106,7 +106,26 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
         KE:ColorTextByTheme("-") .. " We recommend creating a helper macro containing " .. KE:ColorTextByTheme("/kitn pi") .. " for easy instant target updating!",
         70, "hide")
     usageRow:AddWidget(usageText, 1)
-    card2:AddRow(usageRow, 70, 0)
+    card2:AddRow(usageRow, 70)
+
+    local targetRow = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    -- Enter fires the callback twice in one frame (focus loss, then the
+    -- key handler); the latch commits once, refusals included.
+    local targetLatched = false
+    local targetInput = GUIFrame:CreateEditBox(targetRow, "PI Target", {
+        value = db.Target or "",
+        tooltip = "The player the macro falls back to when nothing friendly is under the mouse. "
+            .. "Leave empty to fall back to your current target. PI Assist glows this player's raid frame.",
+        callback = function(val)
+            if targetLatched then return end
+            targetLatched = true
+            C_Timer.After(0, function() targetLatched = false end)
+            if PI and PI.SetTarget then PI:SetTarget(val) else db.Target = val or "" end
+        end,
+    })
+    targetRow:AddWidget(targetInput, 1)
+    manager:Register(targetInput, "all")
+    card2:AddRow(targetRow, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 

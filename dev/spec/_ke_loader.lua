@@ -2458,6 +2458,105 @@ function L.loadHavocTracker(overrides)
     return HT, rec
 end
 
+-- Modules/ClassUtilities/PIAssist.lua. Same shape as loadHavocTracker: the
+-- gate's two sinks are replaced by counters, as are Activate's three sinks
+-- and its event registrations, so the real Activate can be driven with
+-- overrides.liveActivate = true. The module localises GetSpecializationRole
+-- at file scope, so it is assigned before the load. overrides.role is the
+-- spec role string ("HEALER" / "DAMAGER"); overrides.db is the PIAssist block;
+-- overrides.builder = { enabled = bool, applied = name } stands in for the
+-- PIMacroBuilder module TargetName consults (off with nothing applied by
+-- default); overrides.target is the stored PIMacroBuilder.Target.
+function L.loadPIAssist(overrides)
+    overrides = overrides or {}
+    local rec = { activate = 0, deactivate = 0, resolve = 0, filters = 0, glow = 0, events = {} }
+    local builder = overrides.builder or {}
+
+    installMock(overrides, {
+        C_Timer = inertTimer(),
+    })
+
+    _G.UIParent  = noopFrame()
+    _G.UnitClass = function() return "Priest", overrides.class or "PRIEST" end
+    _G.GetSpecialization = function() return overrides.specIndex end
+    _G.GetSpecializationInfo = function(index) return index and overrides.specID or nil end
+    _G.GetSpecializationRole = function(index) return index and overrides.role or nil end
+    _G.LibStub   = function() return nil end
+
+    local modules = helpers.installAddonShim()
+    modules["PIMacroBuilder"] = {
+        IsEnabled = function() return builder.enabled == true end,
+        appliedTarget = builder.applied,
+    }
+    local KE = {
+        db = { profile = {
+            PIAssist = overrides.db or { Enabled = true, HealersOnly = true },
+            PIMacroBuilder = { Target = overrides.target or "" },
+        } },
+        Print = function() end,
+        IsSecretValue = function() return false end,
+        IsSafeValue = function(_, v) return v ~= nil end,
+    }
+    helpers.loadModule("Modules/ClassUtilities/PIAssist.lua", KE)
+
+    local PA = modules["PIAssist"]
+    PA.db = KE.db.profile.PIAssist
+    local function count(name) rec.events[name] = (rec.events[name] or 0) + 1 end
+    PA.RegisterEvent = function(_, name) count(name) end
+    PA.EnsureCastFrame = function() return { RegisterUnitEvent = function(_, name) count(name) end } end
+    PA.ResolveTarget = function() rec.resolve = rec.resolve + 1 end
+    PA.ApplyFilters = function() rec.filters = rec.filters + 1 end
+    PA.ApplyGlow = function() rec.glow = rec.glow + 1 end
+    if not overrides.liveActivate then
+        PA.Activate = function() rec.activate = rec.activate + 1 end
+    end
+    PA.Deactivate = function() rec.deactivate = rec.deactivate + 1 end
+    return PA, rec
+end
+
+-- Modules/ClassUtilities/PIMacroBuilder.lua, for the SetTarget policy and
+-- the notify-on-change rule. The module localises InCombatLockdown at file
+-- scope, so it is routed through rec before the load; ApplyMacro is
+-- replaced by a stub that counts its calls and answers rec.writeOk unless
+-- overrides.realApply keeps the real one (the macro API is then inert:
+-- no macro is ever found, CreateMacro does nothing); IsEnabled answers
+-- rec.enabled; the PIAssist slot in the registry counts notifications.
+function L.loadPIMacroBuilder(overrides)
+    overrides = overrides or {}
+    local rec = {
+        combat = overrides.combat == true,
+        enabled = overrides.enabled ~= false,
+        writeOk = overrides.writeOk ~= false,
+        applied = 0,
+        notified = 0,
+    }
+
+    installMock(overrides, {})
+
+    _G.InCombatLockdown = function() return rec.combat end
+    _G.GetMacroIndexByName = function() return 0 end
+    _G.EditMacro = function() end
+    _G.CreateMacro = function() end
+    _G.UnitName = function() return nil end
+
+    local modules = helpers.installAddonShim()
+    modules["PIAssist"] = { OnTargetChanged = function() rec.notified = rec.notified + 1 end }
+    local KE = {
+        db = { profile = { PIMacroBuilder = { Target = overrides.target or "" } } },
+        Print = function() end,
+        IsSafeValue = function(_, v) return v ~= nil end,
+    }
+    helpers.loadModule("Modules/ClassUtilities/PIMacroBuilder.lua", KE)
+
+    local PI = modules["PIMacroBuilder"]
+    PI.db = KE.db.profile.PIMacroBuilder
+    PI.IsEnabled = function() return rec.enabled end
+    if not overrides.realApply then
+        PI.ApplyMacro = function() rec.applied = rec.applied + 1; return rec.writeOk end
+    end
+    return PI, rec
+end
+
 -- Modules/QoL/CombatLogger.lua. The module caches its whole API surface at
 -- file scope, so every name it reads has to exist on _G BEFORE loadModule --
 -- which is the point of loading it this way: a name cached from the wrong
