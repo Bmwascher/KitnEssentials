@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.39
+
+### Automation
+- **Changed:** five automations now act inside dungeons, raids, keys and
+  rated matches, where the game's addon restrictions used to stop them --
+  selling greys and repairing at a vendor, quick signup and auto queue
+  confirm, the persistent signup note, and accepting and turning in quests.
+  The legacy greeting hand-in keeps its refusal, and Skip Cinematics is
+  narrowed to cinematics the game says can be cancelled
+- The Skip Cinematics tick reads `Skip Cinematics`; its movie half was
+  removed because the call it used no longer exists
+
+---
+
 ## v4.6.38
 
 ### Settings
