@@ -36,8 +36,11 @@ local AUTO_PASS_GROUPS = {
         { key = "RaidMythic",      label = "Mythic" },
     } },
 }
-local LABEL_W, COLS = 0.18, 5
-local COL_W = (1 - LABEL_W) / COLS
+-- A row divides the space the header leaves among its OWN checkboxes rather
+-- than a fixed five, so the three-cell Dungeons row is not squeezed to the
+-- width the five-cell Raids row needs and its labels clip.
+local LABEL_W = 0.18
+local function CellWidth(count) return (1 - LABEL_W) / count end
 local CELL_H = 24
 local CELL_SPACING = 2
 
@@ -135,6 +138,7 @@ GUIFrame:RegisterContent("BonusRoll", function(scrollChild, yOffset)
     local card3 = GUIFrame:CreateCard(scrollChild, "Automatically Pass In", yOffset)
     manager:Register(card3, "all")
     for g, group in ipairs(AUTO_PASS_GROUPS) do
+        local cellWidth = CellWidth(#group.buckets)
         local row = GUIFrame:CreateRow(card3.content, CELL_H)
         local labelHost = CreateFrame("Frame", nil, row)
         labelHost:SetHeight(CELL_H)
@@ -151,7 +155,7 @@ GUIFrame:RegisterContent("BonusRoll", function(scrollChild, yOffset)
                 value = db.AutoPass[key] == true,
                 callback = function(checked) db.AutoPass[key] = checked; ApplySettings() end,
             })
-            row:AddWidget(cb, COL_W)
+            row:AddWidget(cb, cellWidth)
             manager:Register(cb, "all")
         end
         card3:AddRow(row, CELL_H, g == #AUTO_PASS_GROUPS and 0 or CELL_SPACING)
