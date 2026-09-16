@@ -1292,6 +1292,20 @@ function CHAT:OnChatEdit_OnEnterPressed(editBox)
     if info and info.sticky == 1 then editBox:SetAttribute("chatType", "SAY") end
 end
 
+-- The header update can return early or call itself, and this post-hook runs
+-- after each call, so a right inset it already widened is left alone. A
+-- community channel's header makes all four insets secret in chat-messaging
+-- lockdown, and SetTextInsets refuses secrets from addon code.
+local insetWritten = setmetatable({}, { __mode = "k" })
+
+function CHAT.EditBoxRightInset(left, right, top, bottom, written)
+    if issecretvalue(left) or issecretvalue(right) or issecretvalue(top) or issecretvalue(bottom) then
+        return nil
+    end
+    if right == written then return nil end
+    return right + 30
+end
+
 function CHAT:OnChatEdit_UpdateHeader(editbox)
     if not editbox then return end
 
@@ -1304,7 +1318,11 @@ function CHAT:OnChatEdit_UpdateHeader(editbox)
     local chanIndex = chanTarget and _G.GetChannelName(chanTarget)
 
     local insetLeft, insetRight, insetTop, insetBottom = editbox:GetTextInsets()
-    editbox:SetTextInsets(insetLeft, insetRight + 30, insetTop, insetBottom)
+    local right = CHAT.EditBoxRightInset(insetLeft, insetRight, insetTop, insetBottom, insetWritten[editbox])
+    if right then
+        insetWritten[editbox] = right
+        editbox:SetTextInsets(insetLeft, right, insetTop, insetBottom)
+    end
     self:ApplyFrameStyle(editbox, nil, true)
 
     if chanIndex and chatType == "CHANNEL" then
