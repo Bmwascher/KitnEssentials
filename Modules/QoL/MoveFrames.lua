@@ -684,7 +684,7 @@ end
 -- Movement handlers ----------------------------------------------------------
 
 function MF:Frame_StartMoving(this, button)
-    if InCombatLockdown() and this:IsProtected() then
+    if InCombatLockdown() and IsProtectedFrame(this) then
         return
     end
     local moveTarget = moveTargets[this]
@@ -700,7 +700,7 @@ function MF:Frame_StartMoving(this, button)
 end
 
 function MF:Frame_StopMoving(this, button)
-    if InCombatLockdown() and this:IsProtected() then
+    if InCombatLockdown() and IsProtectedFrame(this) then
         return
     end
     local moveTarget = moveTargets[this]
@@ -724,7 +724,7 @@ function MF:HandleFrame(this, bindTo)
         return
     end
 
-    if InCombatLockdown() and thisFrame:IsProtected() then
+    if InCombatLockdown() and IsProtectedFrame(thisFrame) then
         AfterCombat(function()
             self:HandleFrame(this, bindTo)
         end)
