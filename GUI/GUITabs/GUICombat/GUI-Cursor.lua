@@ -207,6 +207,9 @@ GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
     manager:SetCondition("cursorCustomColor", function()
         return db.Enabled ~= false and (db.ColorMode or "class") == "custom"
     end)
+    manager:SetCondition("cursorBorder", function()
+        return db.Enabled ~= false and db.Border == true
+    end)
     manager:SetCondition("gcdRingCustom", function()
         return db.GCD.Enabled == true
             and (db.GCD.Mode or "integrated") == "separate"
@@ -289,7 +292,7 @@ GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
     manager:Register(sizeSlider, "all")
     card2:AddRow(row2b, Theme.rowHeight)
 
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local colorModeDropdown = GUIFrame:CreateDropdown(row2c, "Color Mode", {
         options = KE.ColorModeOptions,
         value = db.ColorMode or "class",
@@ -313,7 +316,28 @@ GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
     })
     row2c:AddWidget(colorPicker, 0.5)
     manager:Register(colorPicker, "cursorCustomColor")
-    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+    card2:AddRow(row2c, Theme.rowHeight)
+
+    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local borderCheck = GUIFrame:CreateCheckbox(row2d, "Black Border", {
+        value = db.Border == true,
+        callback = function(checked)
+            db.Border = checked
+            RefreshModule()
+            RefreshStates()
+        end,
+    })
+    row2d:AddWidget(borderCheck, 0.5)
+    manager:Register(borderCheck, "all")
+
+    local borderSlider = GUIFrame:CreateSlider(row2d, "Border Size", {
+        min = 1, max = 4, step = 1,
+        value = db.BorderSize or 1,
+        callback = function(val) db.BorderSize = val; RefreshModule() end,
+    })
+    row2d:AddWidget(borderSlider, 0.5)
+    manager:Register(borderSlider, "cursorBorder")
+    card2:AddRow(row2d, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 

@@ -235,6 +235,43 @@ local function _makeFollowCursorOnUpdate()
     end
 end
 
+-- Border: the ring art drawn twice more in black, one copy a little larger
+-- and one a little smaller, behind the coloured ring. Each copy shows only
+-- where it reaches past the colour, so no new art is needed, every ring
+-- style gets one, and the edge matches the ring's own antialiasing. The
+-- copies are textures on the ring's frame, so the frame alpha the mouse-held
+-- mode writes reaches them with no per-frame work.
+local function _attachBorder(frame)
+    if frame.borderOut then return end
+    frame.borderOut = frame:CreateTexture(nil, "BACKGROUND", nil, -2)
+    frame.borderOut:SetPoint("CENTER")
+    frame.borderOut:Hide()
+    frame.borderIn = frame:CreateTexture(nil, "BACKGROUND", nil, -1)
+    frame.borderIn:SetPoint("CENTER")
+    frame.borderIn:Hide()
+end
+
+function C:ApplyBorder(frame, size, texPath)
+    if not (frame and frame.borderOut) then return end
+    local db = self.db
+    local on = db.Border == true
+    local b = db.BorderSize or 1
+    local inner = size - 2 * b
+    frame.borderOut:SetShown(on)
+    frame.borderIn:SetShown(on and inner > 0)
+    if not on then return end
+    frame.borderOut:SetTexture(texPath)
+    frame.borderIn:SetTexture(texPath)
+    frame.borderOut:SetSize(size + 2 * b, size + 2 * b)
+    if inner > 0 then frame.borderIn:SetSize(inner, inner) end
+end
+
+local function _setBorderAlpha(frame, a)
+    if not (frame and frame.borderOut) then return end
+    frame.borderOut:SetVertexColor(0, 0, 0, a)
+    frame.borderIn:SetVertexColor(0, 0, 0, a)
+end
+
 -- Color cache: avoid re-applying SetVertexColor on every Apply call when
 -- nothing changed. Invalidated on theme change.
 local _lastColorMode
@@ -256,14 +293,18 @@ function C:ApplyCursorColor()
         _lastColorMode = mode
         _lastR, _lastG, _lastB, _lastA = r, g, b, a
         self.cursorFrame.texture:SetVertexColor(r, g, b, a)
+        _setBorderAlpha(self.cursorFrame, a)
     end
 end
 
 function C:ApplyCursorSettings()
     if not self.cursorFrame then return end
     local db = self.db
-    self.cursorFrame:SetSize(db.Size or 50, db.Size or 50)
-    self.cursorFrame.texture:SetTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_normal)
+    local size = db.Size or 50
+    local tex = CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_normal
+    self.cursorFrame:SetSize(size, size)
+    self.cursorFrame.texture:SetTexture(tex)
+    self:ApplyBorder(self.cursorFrame, size, tex)
     self:ApplyCursorColor()
 end
 
@@ -338,6 +379,7 @@ function C:CreateGCDSatellite()
     gf.texture = gf:CreateTexture(nil, "BACKGROUND")
     gf.texture:SetAllPoints(gf)
     gf.texture:SetTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_light)
+    _attachBorder(gf)
 
     -- Cooldown swipe overlay
     gf.cooldown = CreateFrame("Cooldown", nil, gf, "CooldownFrameTemplate")
@@ -383,6 +425,7 @@ function C:ApplyGCDColor()
     local rr, rg, rb, ra = KE:GetAccentColor(db.RingColorMode or "theme", db.RingColor)
     local sr, sg, sb, sa = KE:GetAccentColor(db.SwipeColorMode or "custom", db.SwipeColor)
     if gf.texture then gf.texture:SetVertexColor(rr, rg, rb, ra) end
+    _setBorderAlpha(gf, ra)
     if gf.cooldown then
         gf.cooldown:SetSwipeColor(sr, sg, sb, sa)
         if gf.cooldown.SetSwipeTexture then
@@ -425,10 +468,12 @@ function C:ApplyGCDSatellite()
 
     -- Style
     local size = db.Size or 50
+    local tex = CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_light
     self.gcdFrame:SetSize(size, size)
     if self.gcdFrame.texture then
-        self.gcdFrame.texture:SetTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_light)
+        self.gcdFrame.texture:SetTexture(tex)
     end
+    self:ApplyBorder(self.gcdFrame, size, tex)
     self:ApplyGCDColor()
 
     -- Always attach to cursor frame when shown (anchor inheritance, free).
@@ -567,6 +612,7 @@ function C:CreateCastSatellite()
     cf.texture = cf:CreateTexture(nil, "BACKGROUND")
     cf.texture:SetAllPoints(cf)
     cf.texture:SetTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_normal)
+    _attachBorder(cf)
 
     -- Cooldown swipe
     cf.cooldown = CreateFrame("Cooldown", nil, cf, "CooldownFrameTemplate")
@@ -640,6 +686,7 @@ function C:ApplyCastColor()
     local rr, rg, rb, ra = KE:GetAccentColor(db.RingColorMode or "class", db.RingColor)
     local sr, sg, sb, sa = KE:GetAccentColor(db.SwipeColorMode or "theme", db.SwipeColor)
     if cf.texture then cf.texture:SetVertexColor(rr, rg, rb, ra) end
+    _setBorderAlpha(cf, ra)
     if cf.cooldown then
         cf.cooldown:SetSwipeColor(sr, sg, sb, sa)
         if cf.cooldown.SetSwipeTexture then
@@ -674,10 +721,12 @@ function C:ApplyCastSatellite()
     self:_AttachCastScripts()
 
     local size = db.Size or 72
+    local tex = CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_normal
     self.castFrame:SetSize(size, size)
     if self.castFrame.texture then
-        self.castFrame.texture:SetTexture(CIRCLE_TEXTURES[db.Texture] or CIRCLE_TEXTURES.circle_normal)
+        self.castFrame.texture:SetTexture(tex)
     end
+    self:ApplyBorder(self.castFrame, size, tex)
     if self.castFrame._spark then
         self.castFrame._spark:SetSize(size * 0.6, size * 0.6)
         self.castFrame._sparkGlow:SetSize(size * 0.9, size * 0.9)
@@ -1381,6 +1430,7 @@ function C:CreateCursorFrame()
     f.texture = f:CreateTexture(nil, "OVERLAY")
     f.texture:SetAllPoints(f)
     f.texture:SetTexture(CIRCLE_TEXTURES[self.db.Texture] or CIRCLE_TEXTURES.circle_normal)
+    _attachBorder(f)
 
     -- Integrated GCD swipe overlay (only used when db.GCD.Mode == "integrated")
     f.gcdCooldown = CreateFrame("Cooldown", nil, f, "CooldownFrameTemplate")
