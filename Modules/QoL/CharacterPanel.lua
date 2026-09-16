@@ -376,7 +376,7 @@ local RIGHT_SLOTS = {
 
 -- Corner inset for the track letter on a column slot: x pulls it inside the
 -- icon, y lifts it off the bottom edge. The weapons keep the old 1/1.
-local TRACK_EDGE_X, TRACK_EDGE_Y = 3, 3
+local TRACK_EDGE_X, TRACK_EDGE_Y = 1, 3
 local WEAPON_TRACK_SLOTS = { [16] = true, [17] = true }
 
 -- Track indicator quality atlas regex (extracted from item link).
