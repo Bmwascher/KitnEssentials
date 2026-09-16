@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.31
+
+### Focus Castbar
+- **Changed:** only an interrupted cast holds the bar now. A cast that
+  finishes or is cancelled hides it at once, and the Cast Success colour is
+  gone from the settings along with it
+- Setting focus on someone already mid-cast no longer plays the cast sound;
+  the sound plays when a cast starts
+- A cast that stops and immediately continues re-syncs the bar instead of
+  ending it, and the timer number is filled the moment a cast appears
+
+---
+
 ## v4.6.30
 
 ### Combat Logger
