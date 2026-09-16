@@ -523,8 +523,11 @@ end
 -- and that list compares secret values. A protected frame is moved only by
 -- a secure snippet, which taints nothing, and never in combat.
 
+-- IsProtected can return a secret; a secret counts as protected.
 local function IsProtectedFrame(frame)
-    return frame and frame.IsProtected and frame:IsProtected() == true
+    if not (frame and frame.IsProtected) then return false end
+    local protected = frame:IsProtected()
+    return KE:IsSecretValue(protected) or protected == true
 end
 
 -- Created on first use (the positioner by the first secure positioning
