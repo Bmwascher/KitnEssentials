@@ -608,11 +608,13 @@ local function SetupSkipCinematics()
     cinematicFrame = CreateFrame("Frame")
     cinematicFrame:RegisterEvent("CINEMATIC_START")
     cinematicFrame:RegisterEvent("PLAY_MOVIE")
-    cinematicFrame:SetScript("OnEvent", function(_, event)
+    cinematicFrame:SetScript("OnEvent", function(_, event, canBeCancelled)
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
         if not AU.db.SkipCinematics then return end
         if event == "CINEMATIC_START" then
+            -- One that cannot be cancelled is a vehicle or scene sequence, where
+            -- Blizzard's cancel falls through to CancelScene or VehicleExit.
+            if KE:IsFullyRestricted() and not canBeCancelled then return end
             CinematicFrame_CancelCinematic()
         elseif event == "PLAY_MOVIE" then
             pcall(GameMovieFinished)
@@ -880,7 +882,6 @@ local function SetupAutoSellRepair()
     merchantFrame:RegisterEvent("MERCHANT_SHOW")
     merchantFrame:SetScript("OnEvent", function()
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
 
         -- Held rather than called, so the guild branch below can delay it. Nil
         -- when there is nothing to sell or the feature is off.
@@ -1464,7 +1465,6 @@ local function SetupAutoQueueConfirm()
     -- missing dialog global must not take the double click down with it.
     hooksecurefunc("LFGListSearchEntry_OnClick", function(entry, button)
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
         if button == "RightButton" then return end
         if not entry then return end
 
@@ -1501,7 +1501,6 @@ local function SetupAutoQueueConfirm()
     if not dialog then return end
     dialog:HookScript("OnShow", function(dlg)
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
         if not AU.db.AutoQueueConfirm then return end
         if IsModifierHeld(AU.db.SignupModifier or "SHIFT") then return end
         local confirmBtn = dlg.SignUpButton
@@ -1535,12 +1534,9 @@ local notePlanted = false
 -- check after it.
 local function ReadActivityID(resultID)
     if resultID == nil then return nil end
-    -- Both refusals live here because both callers route through here. They
-    -- are different axes: IsFullyRestricted covers combat, encounter,
-    -- challenge mode and PvP; InLockdown covers the communication-restricted
-    -- maps that make this read secret. The teardown clears without coming
-    -- through here, so a restricted state can never strand a planted value.
-    if KE:IsFullyRestricted() then return nil end
+    -- The refusal lives here because both callers route through here. The
+    -- teardown clears without coming through here, so a lockdown can never
+    -- strand a planted value.
     if InLockdown() then return nil end
     local activityID
     pcall(function()
@@ -1571,7 +1567,6 @@ local function SetupPersistSignupNote()
         AU._noteHooked = true
         hooksecurefunc("LFGListSearchPanel_SelectResult", function(_, resultID)
             if not AU.db or not AU.db.Enabled then return end
-            if KE:IsFullyRestricted() then return end
             if not AU.db.PersistSignupNote then return end
             PlantActivityID(resultID)
         end)
@@ -2003,7 +1998,6 @@ local function SetupAutoQuests()
     questFrame:RegisterEvent("GOSSIP_SHOW")
     questFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
         if IsQuestModifierHeld() then return end
 
         if event == "QUEST_DETAIL" then
@@ -2022,7 +2016,9 @@ local function SetupAutoQuests()
                 end
             end
         elseif event == "QUEST_GREETING" then
-            if AU.db.AutoTurnInQuests then
+            -- The legacy hand-in stays refused under full restriction:
+            -- SelectActiveQuest is unverified there.
+            if AU.db.AutoTurnInQuests and not KE:IsFullyRestricted() then
                 for i = 1, GetNumActiveQuests() do
                     local _, isComplete = GetActiveTitle(i)
                     if isComplete then
@@ -2074,7 +2070,6 @@ local function SetupAutoVoidcoresGold()
     voidcoresFrame:RegisterEvent("QUEST_PROGRESS")
     voidcoresFrame:SetScript("OnEvent", function(_, event)
         if not AU.db or not AU.db.Enabled then return end
-        if KE:IsFullyRestricted() then return end
         if not AU.db.AutoVoidcoresGold then return end
         if IsQuestModifierHeld() then return end
         if C_QuestLog.IsQuestFlaggedCompleted(VOIDCORES_GOLD_QUEST_ID) then return end

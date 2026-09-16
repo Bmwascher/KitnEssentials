@@ -1682,3 +1682,71 @@ describe("Automation auto role check", function()
         end)
     end
 end)
+
+---------------------------------------------------------------------------------
+-- Skip Cinematics under full restriction. Only a cinematic that can be cancelled
+-- is skipped there: for any other, Blizzard's cancel ends a scene or exits a
+-- vehicle.
+---------------------------------------------------------------------------------
+describe("Automation Skip Cinematics restriction", function()
+    local cases = {
+        { label = "skips a cancellable cinematic under full restriction",
+          restricted = true, cancellable = true, cancels = 1 },
+        { label = "refuses one that cannot be cancelled under full restriction",
+          restricted = true, cancellable = false, cancels = 0 },
+        { label = "skips one that cannot be cancelled when unrestricted",
+          restricted = false, cancellable = false, cancels = 1 },
+    }
+
+    for _, case in ipairs(cases) do
+        it(case.label, function()
+            -- The module caches this global at load, so the spy goes in first.
+            local cancels = 0
+            _G.CinematicFrame_CancelCinematic = function() cancels = cancels + 1 end
+            local fx = newFixture()
+            local AU = fx.AU
+            AU.db = { Enabled = true, SkipCinematics = true }
+            AU:ApplySettings()
+            local setup = findUpvalue(AU.ApplySettings, "SetupSkipCinematics")
+            local frame = findUpvalue(setup, "cinematicFrame")
+            fx.KE.IsFullyRestricted = function() return case.restricted end
+            frame:Fire("CINEMATIC_START", case.cancellable, 0)
+            assert.equals(case.cancels, cancels)
+        end)
+    end
+end)
+
+---------------------------------------------------------------------------------
+-- The legacy greeting hand-in keeps the full-restriction refusal; the rest of the
+-- quest handler acts there.
+---------------------------------------------------------------------------------
+describe("Automation quest greeting hand-in restriction", function()
+    local cases = {
+        { label = "hands in a completed quest when unrestricted",
+          restricted = false, handIns = 1, accepts = 0 },
+        { label = "skips the hand-in under full restriction and still accepts",
+          restricted = true, handIns = 0, accepts = 1 },
+    }
+
+    for _, case in ipairs(cases) do
+        it(case.label, function()
+            local fx = newFixture()
+            local AU = fx.AU
+            local handIns, accepts = 0, 0
+            _G.GetNumActiveQuests = function() return 1 end
+            _G.GetActiveTitle = function() return "Done", true end
+            _G.SelectActiveQuest = function() handIns = handIns + 1 end
+            _G.GetNumAvailableQuests = function() return 1 end
+            _G.SelectAvailableQuest = function() accepts = accepts + 1 end
+            AU.db = { Enabled = true, AutoAcceptQuests = true,
+                      AutoTurnInQuests = true, QuestModifier = "NONE" }
+            AU:ApplySettings()
+            local setup = findUpvalue(AU.ApplySettings, "SetupAutoQuests")
+            local frame = findUpvalue(setup, "questFrame")
+            fx.KE.IsFullyRestricted = function() return case.restricted end
+            frame:Fire("QUEST_GREETING")
+            assert.equals(case.handIns, handIns)
+            assert.equals(case.accepts, accepts)
+        end)
+    end
+end)
