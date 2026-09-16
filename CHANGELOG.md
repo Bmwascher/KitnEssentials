@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.30
+
+### Combat Logger
+- **New:** a Mythic Flex tick for the flexible Mythic raid difficulty the
+  Lairs use, on by default like Mythic, so a Lair starts the combat log
+- A raid the game files under a party difficulty is now decided by its
+  difficulty rather than its instance type, so it logs under the raid ticks
+
+### CVars
+- **New:** a Floating Combat Text size slider on the CVars page, under the
+  four Floating Combat Text toggles. It shows the client's current value and
+  writes nothing until you move it
+
+---
+
 ## v4.6.29
 
 ### Move Frames
