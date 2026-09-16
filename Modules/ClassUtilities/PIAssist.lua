@@ -370,6 +370,11 @@ function PA:SyncDisplay()
     holder:ClearAllPoints()
     holder:SetAllPoints(frame)
     holder:SetFrameStrata(frame:GetFrameStrata() or "HIGH")
+    -- Same strata as the cell, but above it: the holder is a child of
+    -- UIParent, so it would otherwise sit at UIParent's level and the cell's
+    -- own textures -- the target highlight among them -- would draw over the
+    -- border. The holder is unprotected, so the level write is combat-safe.
+    holder:SetFrameLevel((frame:GetFrameLevel() or 0) + 5)
     holder:Show()
 
     if self.boundUnit ~= unit then
