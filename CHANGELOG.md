@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.28
+
+### Alert Frames
+- The bonus roll prompt no longer bounces between two positions: the loot
+  container is left to the game's own bottom-edge layout, and the three
+  bonus-roll frames are placed on the alert stack instead
+- **Changed:** with Loot Roll in Replace mode the prompt now sits where a
+  roll bar would, and ordinary roll windows no longer ride the alert stack
+  when Loot Roll is off
+
+---
+
 ## v4.6.27
 
 ### Raid Control
