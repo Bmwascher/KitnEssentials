@@ -16,7 +16,8 @@ local RECORD = "ModuleDefaultsOptIn"
 --   KeystoneHelper -- a container whose page has no master switch by design, so
 --                     the container must stay reachable. Its three feature
 --                     toggles are the switches that ship off (asserted below).
-local SHIPS_ENABLED = { UseElvUI = true, KeystoneHelper = true }
+-- BonusRoll ships on by ruling: the confirm is the point of the module.
+local SHIPS_ENABLED = { UseElvUI = true, KeystoneHelper = true, BonusRoll = true }
 
 local function migrateWith(sv)
     _G.KitnEssentialsDB = sv

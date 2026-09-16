@@ -546,9 +546,10 @@ function KE:ApplyThemeFont(fontStr, size) end
 ---@param cancelText string?
 ---@param showSecondEditBox boolean?
 ---@param secondEditBoxLabel string?
+---@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean? }?
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
-                              showSecondEditBox, secondEditBoxLabel) end
+                              showSecondEditBox, secondEditBoxLabel, opts) end
 
 --- Wraps KE:CreatePrompt with the standard reload-required chrome
 --- (Core/Widgets.lua). Returns the singleton prompt dialog frame.

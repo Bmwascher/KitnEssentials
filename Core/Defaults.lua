@@ -584,7 +584,6 @@ local Defaults = {
             AutoConfirmLootRoll = true,
             AutoPassHousing = true,
             AutoPassHousingMode = "NEED",  -- "PASS" or "NEED"
-            ConfirmBonusRoll = true,
             AutoAcceptQuests = false,
             AutoTurnInQuests = false,
             AutoVoidcoresGold = true,
@@ -626,6 +625,25 @@ local Defaults = {
             addonCombatRestrictionsForced = nil,
             addonChatRestrictionsForced = nil,
             addonChallengeModeRestrictionsForced = nil,
+        },
+
+        BonusRoll = {
+            Enabled = true,
+            Confirm = true,
+            ConfirmPass = false,
+            AutoPass = {
+                OpenWorld = false,
+                Delves = false,
+                Scenarios = false,
+                DungeonNormalHeroic = false,
+                DungeonMythic = false,
+                DungeonTimewalking = false,
+                RaidLFR = false,
+                RaidNormal = false,
+                RaidHeroic = false,
+                RaidMythic = false,
+                RaidTimewalking = false,
+            },
         },
 
         AuctionHouseFilter = {

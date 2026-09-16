@@ -211,8 +211,8 @@ local function newFixture()
     _G.C_CVar = { GetCVar = function() return "0" end, SetCVar = function() end }
     _G.C_Secrets = nil
 
-    -- File-scope assignment (StaticPopupDialogs["KE_BONUS_ROLL_CONFIRM"] = ...)
-    -- needs the table to exist before the chunk runs, not just inside a function.
+    -- The file caches StaticPopupDialogs in a local at load, so the table
+    -- must exist before the chunk runs.
     _G.StaticPopupDialogs = {}
 
     local modules = helpers.installAddonShim()

@@ -106,6 +106,7 @@
 
     <!-- QoL tabs -->
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-BonusRoll.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CVars.lua" />
     <Script file="GUITabs\GUIQoL\GUI-SlashCommands.lua" />
     <Script file="GUITabs\GUIQoL\GUI-DragonRiding.lua" />
