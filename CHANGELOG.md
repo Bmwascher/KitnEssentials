@@ -1,549 +1,292 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.6.48
+## v4.7.0
 
-### Secondary Stats Display
+### Bonus Roll
 
-- **NEW:** The tracker can be turned off for individual specialisations. A spec
-  you untick really stops the module rather than just hiding it, under Quality
-  of Life > Secondary Stats Display
+- **NEW module, on by default:** a confirmation before a bonus roll coin is
+  spent. Clicking the dice opens a dialog naming your current loot spec with
+  Spend and Pass, and the game's own prompt keeps running behind it. The older
+  Confirm Bonus Roll tick under Automation is gone; the confirmation is live for
+  everyone rather than only Automation users
+- **NEW:** Automatically Pass In, all boxes off by default, passes the roll for
+  you in the content you choose - open world, delves and scenarios, and each
+  dungeon or raid difficulty
+- Every decision it makes is printed in chat, and a Preview the Prompt button
+  shows the dialog without spending anything
 
-### No Movement Alert
+### Priest: PI Assist
 
-- The class dropdown opens on your own class every time instead of remembering
-  the last one you looked at
+- **NEW module, off by default, Priest only:** puts a pulsing border on the raid
+  frame of the player your Power Infusion macro targets while they have a burst
+  cooldown up, so you can see the moment to press it. It follows the macro's
+  target, watches 37 burst cooldowns you can switch on or off individually, and
+  can play a sound
+- Options for healers only, a grace period, and holding the glow back until your
+  own Power Infusion is off cooldown
 
----
+### Keystone Helper
 
-## v4.6.47
+- **Changed, and it resets a setting:** the two keystone reminders now share one
+  look and one position instead of carrying a font, size, colour and mover each.
+  If you had styled them separately, both now use the shared settings and the
+  second mover is gone. Edit Mode shows one element, `Keystone Helper: Reminders`
+- The reminder's key line uses the short dungeon names players actually say,
+  taken from BigWigs when it is loaded, and the Group Finder dungeon toggles use
+  the same words. Several read differently as a result
+- The reminder icon no longer lands on a half pixel at odd sizes
+
+### Dungeon Casts
+
+- **Changed, on for everyone using the module:** a kickable cast now reads your
+  own interrupt. The bar is tinted while your kick is ready, dims to 45% while
+  the caster is out of your range, carries a white mark where your kick comes
+  back, and a cast aimed at you carries a pulsing gold border - never on a tank
+  spec. Each of the four has its own tick and colour, plus an optional shade of
+  the window you will get your kick back in
+- **NEW:** a Pulse Border glow style on the target glow, with its own thickness
+  and an optional pulse
 
 ### Mythic+ Timer
 
-- The death list is easier to read: a darker backdrop behind it and more space
-  between the rows
+- **NEW:** Pull estimate, on by default: a gray segment after the credited
+  forces and a (+count - percent) label for the enemies you have pulled but not
+  yet killed; the segment shrinks as kills land. Toggle it under Features >
+  Forces, and its colour has its own swatch under Display > Forces Colors
+- The death list is easier to read: a darker backdrop and more space between rows
+- Switching to a profile that turns the timer on repaints its bars, background,
+  fonts and position right away
+- The Forces card's three toggles share one row, with the colour swatches
+  separated from the banded colour controls
 
----
+### Chat
 
-## v4.6.46
+- **NEW:** a whisper sound now ships with the addon and comes preselected for
+  both whispers and Battle.net whispers. Playing a sound on whisper is still off
+  by default - if you had it on without ever choosing a sound, you will start
+  hearing this one, so pick another or turn the option off under Chat > Whisper
+  Sounds
+- Currency you gain shows its icon in chat, the way a currency you link yourself
+  already did - Great Vault rewards and dungeon crests included
+- Community channel lines no longer go missing in a dungeon, raid or rated match:
+  when the game refuses to resolve a channel's name there, the line prints
+  without its tag instead of being dropped
+- Community channel notices print in a key again instead of erroring, and the
+  edit box no longer creeps its text right each time you switch to a community
+  channel and back
+- The General tab flashes for a whisper again while another tab is in front,
+  even when the game hides who sent it
+- Guild and Community chat: the message box is usable again
+
+### Secondary Stats Display
+
+- **NEW:** the tracker can be turned off for individual specialisations. A spec
+  you untick really stops the module rather than just hiding it, under Quality of
+  Life > Secondary Stats Display
+
+### Move Frames
+
+- **NEW:** Hold To Move, a modifier you must hold to drag a window. Default None,
+  so dragging works as before until you choose one
+- **NEW:** Remember Positions, off by default, keeps each window where you last
+  dragged it. The two loot roll windows stay draggable but are never remembered
+- Windows the game protects can be dragged again - the Group Finder once its
+  result list is up, and the Quick Keybind panel - and its handles open without
+  error in combat
+
+### Cursor
+
+- **NEW:** Black Border, off by default, draws a black edge on the outer and
+  inner side of the cursor ring, with its own thickness slider. It follows
+  whichever ring style you use and applies to the GCD ring and cast circle too
+
+### Skinning
+
+- **NEW:** Top-Centre Widgets under UI Widgets: move the top-of-screen objective
+  display (the keystone objective line, delve and event bars) with the Edit Mode
+  mover, scale it, set its layer, or hide it. Off by default; turning it off
+  returns the display to where the game had it
+- Selected tabs, rows and buttons across every skinned window share one highlight
+  strength, and scrollbar thumbs, tab fills, ticked checkboxes and slider fills
+  all take a new theme colour as soon as the preset is swapped
+- Guild message of the day and guild information follow the Skin Font face, size
+  and outline as you change them, without reopening the panel
+- Addon option trees (BigWigs, Details, WeakAuras) keep their own row colouring,
+  and option tabs squeezed onto a second row no longer overlap
+- Quest rewards keep their quality-coloured border when a quest is shown twice,
+  the chosen reward is outlined cleanly, follower rewards are skinned, and the
+  already-known marker sits inside the reward button
+- Right-click menus opened after a taller one no longer draw an oversized
+  backdrop; scrolling menus keep their panel sized to the visible rows
+- Cooldown Manager: the Group Buffs tab, its filter panel and its alert dialog
+  are skinned
+- Buff and debuff tooltips are themed like every other tooltip, the Dungeon
+  Finder queue popup is bordered, and World Map quest rewards get a backdrop
+- Mount Journal, Pet Journal, Encounter Journal suggestions and mail attachment
+  icons no longer go blank when their rows are first drawn
+- Button labels keep their size when hovered or disabled instead of jumping
+- Hovering a world-quest, delve or Prey map pin no longer throws an error, and
+  UI widget text sits where the game places it instead of being stretched
+- Item Upgrade slot art stays inside its border when the slot is emptied
+- BigWigs queue timer follows the ready-check box that is actually shown
+- BetterFriendlist: the invite button keeps its hover, raid names render without
+  smooth scaling, and tab rows no longer flicker when clicked
+
+### Blizzard Fonts
+
+- **NEW:** when another addon owns Blizzard's stock fonts, KitnEssentials says so
+  once at login instead of quietly standing down. Raid warnings and macro names
+  are where you notice it, and the message names the setting to change. Nothing
+  is printed if the stand-down costs you nothing
+- The Blizzard Fonts row greys out while such an addon is installed, and says
+  which one
+- The font sweeps follow the face picked on the Blizzard Frames page, and the
+  picker reaches stock text without a reload
+- Zone text returns as soon as Blizzard Messages is switched off, and raid
+  warning text stays sharp through its grow-and-shrink animation
+
+### Character Panel
+
+- **Changed:** on both the character and inspect sheets the item level sits on
+  the top edge of each icon with the enchant on the bottom, the two having
+  swapped places, and gems sit beside the item level. The weapons put their text
+  on their outward side with the upgrade track inline
+- **Changed:** an enchant whose tooltip prints its effect rather than a name now
+  reads as its stat words without the numbers, so a spellthread reads
+  "Int & Stam" instead of "41 Int & 115 Stam"
+- **NEW:** Show Enchant Rank, off by default, appends a crafted enchant's tier
+- Crafted items read `CR` rather than `C`, so they no longer look like the
+  Champion track, and the upgrade-track letter on a maxed item sits inside its
+  icon corner
+- A weapon enchant that procs a secondary stat reads `Proc Sec`
+
+### Automation
+
+- **Changed:** five automations now act inside dungeons, raids, keys and rated
+  matches, where the game's addon restrictions used to stop them - selling greys
+  and repairing at a vendor, quick signup and auto queue confirm, the persistent
+  signup note, and accepting and turning in quests. The legacy greeting hand-in
+  keeps its refusal, and Skip Cinematics is narrowed to cinematics the game says
+  can be cancelled. Its movie half was removed because the call it used no longer
+  exists
+- Role checks are answered again inside dungeons, raids and rated matches, using
+  the roles you have ticked in the Dungeon Finder
+- Auto Repair reports the full cost when you close the merchant window before the
+  repair finishes settling
+
+### Focus Castbar
+
+- **Changed:** only an interrupted cast holds the bar. A cast that finishes or is
+  cancelled hides it at once, and the Cast Success colour is gone with it
+- Setting focus on someone already mid-cast no longer plays the cast sound, and a
+  cast that stops and immediately continues re-syncs the bar instead of ending it
+
+### Totem Tracker
+
+- **NEW:** the totem bar can be moved and anchored from EllesmereUI's unlock
+  mode, the way the chat panel and damage meter already could. Nothing changes if
+  you do not use EllesmereUI
 
 ### Aura Displays
 
 - Auras lasting longer than a day now show days: a buff that read `30h` reads
   `1d`. Every aura display, not just buffs
 
----
-
-## v4.6.45
-
-### Totem Tracker
-
-- **NEW:** The totem bar can now be moved and anchored from EllesmereUI's unlock
-  mode, the way the chat panel and damage meter already could. Nothing changes if
-  you do not use EllesmereUI
-
----
-
-## v4.6.44
-
-### Blizzard Fonts
-
-- **NEW:** When another addon owns Blizzard's stock fonts, KitnEssentials now
-  says so once at login instead of quietly standing down. Raid warnings and
-  macro names are the places you notice it, and the message names the setting
-  to change
-- Nothing is printed if the stand-down costs you nothing
-
----
-
-## v4.6.43
-
-### Chat
-
-- **NEW:** A whisper sound now ships with the addon and comes preselected for
-  both whispers and Battle.net whispers
-- Playing a sound on whisper is still off by default. If you had it on without
-  ever choosing a sound, you will start hearing this one - pick another, or
-  turn the option off, under Chat > Whisper Sounds
-
----
-
-## v4.6.42
-
-### Chat
-
-- Currency you gain now shows its icon in chat, the way a currency you link
-  yourself already did - Great Vault rewards and the crests a dungeon awards
-  included
-
----
-
-## v4.6.41
-
-### Character Panel
-- The upgrade-track letter on a maxed item sits inside its icon corner
-  instead of touching the rarity border, on both column sides; the two
-  weapon slots are unchanged
-- A weapon enchant that procs a secondary stat reads `Proc Sec`, matching
-  `Proc Prim`
-
----
-
-## v4.6.40
-
-### Fixes
-- Community channel notices print in a key again instead of erroring, and
-  the chat edit box no longer creeps its text right each time you switch to
-  a community channel and back
-- Windows Move Frames handles open without error in combat, where the game
-  can refuse to say whether a frame is protected
-- A party member changing specialisation no longer rebuilds your own
-  interrupt cache
-- Glow controls stay greyed after leaving and returning to a page with the
-  glow switched off, on Dungeon Casts, External Tracker and Movement Buffs
-- Loot Roll writes its mover position once rather than twice
-- The Power Infusion assist border follows the raid frame that is actually
-  on screen when another addon swaps its party and raid headers
-- On the Dungeon Casts page each Your Interrupt colour or slider greys with
-  its own tick, and on the Bonus Roll page the auto-pass rows no longer clip
-  their labels. The Bonus Roll module switch moved to the card header, like
-  every other module
-
----
-
-## v4.6.39
-
-### Automation
-- **Changed:** five automations now act inside dungeons, raids, keys and
-  rated matches, where the game's addon restrictions used to stop them --
-  selling greys and repairing at a vendor, quick signup and auto queue
-  confirm, the persistent signup note, and accepting and turning in quests.
-  The legacy greeting hand-in keeps its refusal, and Skip Cinematics is
-  narrowed to cinematics the game says can be cancelled
-- The Skip Cinematics tick reads `Skip Cinematics`; its movie half was
-  removed because the call it used no longer exists
-
----
-
-## v4.6.38
-
 ### Settings
-- **New:** Expand All Sidebar Sections on the Home Page, off by default.
-  With it on, every sidebar section is open each time the window opens
-  instead of only Core
 
-### Developer
-- `/kes trace [Frame] [secs]` reports which addon file moves or resizes a
-  frame, for chasing a window that will not stay where it is put
-
----
-
-## v4.6.37
-
-### Priest: PI Assist
-- **New module, off by default, Priest only:** puts a pulsing border on the
-  raid frame of the player your Power Infusion macro targets while they have
-  a burst cooldown up, so you can see the moment to press it. It follows the
-  macro's target, watches 37 burst cooldowns you can switch on or off
-  individually, and can play a sound
-- Options for healers only, a grace period, and holding the glow back until
-  your own Power Infusion is off cooldown
-
----
-
-## v4.6.36
-
-### Bonus Roll
-- **New module, on by default:** a confirmation before a bonus roll coin is
-  spent. Clicking the dice opens a dialog naming your current loot spec with
-  Spend and Pass, and the game's own prompt keeps running behind it. The
-  older Confirm Bonus Roll tick under Automation is gone; the confirmation
-  is now live for everyone rather than only Automation users
-- **New:** Automatically Pass In, all boxes off by default, passes the roll
-  for you in the content you choose -- open world, delves and scenarios,
-  and each dungeon or raid difficulty
-- Every decision it makes is printed in chat, and a Preview the Prompt
-  button on the page shows the dialog without spending anything
-
----
-
-## v4.6.35
-
-### Cursor
-- **New:** Black Border, off by default, draws a black edge on the outer and
-  inner side of the cursor ring, with its own thickness slider. It follows
-  whichever ring style you use and applies to the separate GCD ring and the
-  cast circle as well
-
----
-
-## v4.6.34
-
-### Keystone Helper
-- **Changed, and it resets a setting:** the two keystone reminders now share
-  one look and one position instead of carrying a font, size, colour and
-  mover each. If you had styled them separately, both now use the shared
-  settings and the second mover is gone. Edit Mode shows one element,
-  `Keystone Helper: Reminders`
-- **Changed:** the reminder's key line uses the short dungeon names players
-  actually say, taken from BigWigs when it is loaded, and the Group Finder
-  dungeon toggles use the same words. Several read differently as a result
-- The reminder icon no longer lands on a half pixel at odd sizes, so its
-  border draws as one crisp row
-
----
-
-## v4.6.33
-
-### Character Panel
-- **Changed:** on both the character and inspect sheets the item level now
-  sits on the top edge of each icon with the enchant on the bottom, the two
-  having swapped places, and gems sit beside the item level. The weapons put
-  their text on their outward side with the upgrade track inline, so nothing
-  sits under the model between them
-- **Changed:** an enchant whose tooltip prints its effect rather than a name
-  now reads as its stat words without the numbers, so a spellthread reads
-  "Int & Stam" instead of "41 Int & 115 Stam"
-- Crafted items read `CR` rather than `C`, so they no longer look like the
-  Champion track
-- **New:** Show Enchant Rank, off by default, appends a crafted enchant's
-  tier to its label
-
----
-
-## v4.6.32
-
-### Dungeon Casts
-- **Changed, on for everyone using the module:** a kickable cast now reads
-  your own interrupt. The bar is tinted while your kick is ready, dims to
-  45% while the caster is out of your range, carries a white mark where your
-  kick comes back, and a cast aimed at you carries a pulsing gold border --
-  never on a tank spec. Each of the four has its own tick and colour on the
-  Dungeon Casts page, plus an optional shade of the window you will get your
-  kick back in
-- **New:** a Pulse Border glow style, offered on the Dungeon Casts target
-  glow, with its own thickness and an optional pulse
-
----
-
-## v4.6.31
-
-### Focus Castbar
-- **Changed:** only an interrupted cast holds the bar now. A cast that
-  finishes or is cancelled hides it at once, and the Cast Success colour is
-  gone from the settings along with it
-- Setting focus on someone already mid-cast no longer plays the cast sound;
-  the sound plays when a cast starts
-- A cast that stops and immediately continues re-syncs the bar instead of
-  ending it, and the timer number is filled the moment a cast appears
-
----
-
-## v4.6.30
+- **NEW:** Expand All Sidebar Sections on the Home Page, off by default. With it
+  on, every sidebar section is open each time the window opens instead of only
+  Core
 
 ### Combat Logger
-- **New:** a Mythic Flex tick for the flexible Mythic raid difficulty the
-  Lairs use, on by default like Mythic, so a Lair starts the combat log
-- A raid the game files under a party difficulty is now decided by its
-  difficulty rather than its instance type, so it logs under the raid ticks
+
+- **NEW:** a Mythic Flex tick for the flexible Mythic raid difficulty the Lairs
+  use, on by default like Mythic, so a Lair starts the combat log
+- A raid the game files under a party difficulty is decided by its difficulty
+  rather than its instance type, so it logs under the raid ticks
 
 ### CVars
-- **New:** a Floating Combat Text size slider on the CVars page, under the
-  four Floating Combat Text toggles. It shows the client's current value and
-  writes nothing until you move it
 
----
-
-## v4.6.29
-
-### Move Frames
-- Windows the game protects can be dragged again -- the Group Finder once
-  its result list is up, and the Quick Keybind panel -- instead of silently
-  refusing to move
-- **New:** Hold To Move, a modifier you must hold to drag a window. Default
-  None, so dragging works as before until you choose one
-- **New:** Remember Positions, off by default, keeps each window where you
-  last dragged it. The two loot roll windows stay draggable but are never
-  remembered, so they always return to their own anchor
-
----
-
-## v4.6.28
+- **NEW:** a Floating Combat Text size slider, under the four Floating Combat
+  Text toggles. It shows the client's current value and writes nothing until you
+  move it
 
 ### Alert Frames
-- The bonus roll prompt no longer bounces between two positions: the loot
-  container is left to the game's own bottom-edge layout, and the three
-  bonus-roll frames are placed on the alert stack instead
-- **Changed:** with Loot Roll in Replace mode the prompt now sits where a
-  roll bar would, and ordinary roll windows no longer ride the alert stack
-  when Loot Roll is off
 
----
-
-## v4.6.27
-
-### Raid Control
-- Converting a party to a raid during a fight now fills in the raid-only
-  rows the moment you leave combat, instead of waiting for the next time
-  someone joins or leaves
-
-### Automation
-- Role checks are answered again inside dungeons, raids and rated matches,
-  using the roles you have ticked in the Dungeon Finder
-
-### LFG Quick Create
-- A tile the game refuses to list now says so in chat instead of looking
-  like a dead click
-
-### Vehicle Exit
-- The leave-vehicle button stays where you put it after a flight path or an
-  Edit Mode save, instead of jumping to the top-left corner until you opened
-  Toggle Anchors
-
----
-
-## v4.6.26
+- The bonus roll prompt no longer bounces between two positions
+- **Changed:** with Loot Roll in Replace mode the prompt sits where a roll bar
+  would, and ordinary roll windows no longer ride the alert stack when Loot Roll
+  is off
 
 ### Movement Alert
-- Charge spells like Shimmer now read their cooldown directly instead of a
-  charge count the game hides in dungeons and raids, so the alert no longer
-  shows a phantom countdown with a charge still banked, or stays silent
-  after the last one is spent
-- Spirit Walk is recognised from the spell you actually cast, so it can no
-  longer produce two rows at once
 
----
+- Charge spells like Shimmer read their cooldown directly instead of a charge
+  count the game hides in dungeons and raids, so the alert no longer shows a
+  phantom countdown with a charge still banked, or stays silent after the last
+  one is spent
+- Spirit Walk is recognised from the spell you actually cast, so it can no longer
+  produce two rows at once
 
-## v4.6.25
+### No Movement Alert
 
-### Chat
-- Community channel lines no longer go missing in a dungeon, raid or rated
-  match: when the game refuses to resolve a channel's name there, the line
-  now prints without its tag instead of being dropped
-- The General tab flashes for a whisper again while another tab is in front,
-  even when the game hides who sent it
-
----
-
-## v4.6.24
+- The class dropdown opens on your own class every time instead of remembering
+  the last one you looked at
 
 ### Dungeon Timers
-- Turning the module off now clears any running timer bars (preview bars
-  from the settings page stay), and a bar that was about to appear from a
-  boss message no longer shows up after the module is turned off
 
-### Performance
-- Group Sort, the tooltip skin, the Group Finder skin, Focus Castbar and
-  Movement Alert no longer do background work while their feature is off
-  or idle: Group Sort only listens while Raid Control is on or a sort is
-  running, the tooltip restyle runs only while a tooltip is shown, the
-  Group Finder sweep runs only while you have a listing up, and Focus
-  Castbar and Movement Alert only receive events for the units they watch
-
----
-
-## v4.6.23
-
-### Mythic+ Timer
-- **NEW:** Pull estimate, on by default: a gray segment after the credited
-  forces and a (+count - percent) label for the enemies you have pulled but
-  not yet killed; the segment shrinks as kills land. Toggle it under
-  Features > Forces; the gray colour has its own swatch under Display >
-  Forces Colors
-- The Forces card's three toggles now share one row, and the colour swatches
-  are separated from the banded colour controls
-
----
-
-## v4.6.21
-
-### LFG Reminder
-- Switching to a profile that turns the reminder on now applies that
-  profile's scale, position and Disable-Feature text right away instead of
-  keeping the previous profile's until a setting is touched
-
----
-
-## v4.6.20
-
-### Mythic+ Timer
-- Switching to a profile that turns the timer on now repaints its bars,
-  background, fonts and position from that profile right away instead of
-  keeping the previous profile's look until a setting is touched
-
----
-
-## v4.6.19
-
-### Skinning
-- Guild message of the day and guild information text follow the Skin Font
-  face, size and outline as you change them, without reopening the panel
-
----
-
-## v4.6.18
-
-### Skinning
-- Ticked checkboxes and slider fills in skinned windows take a new theme
-  colour as soon as the preset is swapped
-
----
-
-## v4.6.17
-
-### Skinning
-- Selected tabs, rows and buttons across every skinned window share one
-  highlight strength instead of varying from window to window, and they take
-  a new theme colour as soon as the preset is swapped
-- Row and button mouseover highlights use the same neutral wash everywhere
-
----
-
-## v4.6.16
-
-### Skinning
-- The Blizzard Fonts row greys out while EllesmereUI's Apply to All Game Text
-  is on, and says so: that setting rewrites the stock fonts at login and would
-  undo KitnEssentials' pass
-
----
-
-## v4.6.15
-
-### Skinning
-- Addon option trees (BigWigs, Details, WeakAuras) keep their own row
-  colouring: category rows gold, child rows smaller, disabled rows grey
-- Option tabs squeezed onto a second row no longer overlap
-- The already-known marker on quest rewards sits inside the reward button
-
----
-
-## v4.6.14
-
-### Skinning
-- Guild and community info text (message of the day, guild information)
-  renders in the picked font instead of the stock face
-- The Blizzard Fonts row greys out while an addon that breaks on rewritten
-  fonts is installed, and says which one
-
----
-
-## v4.6.13
-
-### Skinning
-- Scrollbar thumbs and the selected tab or button fills on skinned frames
-  take a new theme colour as soon as the preset is swapped, instead of
-  keeping the old colour until moused over or reopened
-
----
-
-## v4.6.12
-
-### Skinning
-- **NEW:** Top-Centre Widgets control under UI Widgets: move the top-of-screen
-  objective display (the keystone objective line, delve and event bars) with
-  the Edit Mode mover, scale it, set its layer, or hide it. Off by default;
-  turning it off returns the display to where the game had it
-
----
-
-## v4.6.11
-
-### Skinning
-- Hovering a world-quest, delve or Prey map pin no longer throws an error
-- UI widget text sits where the game places it instead of being stretched;
-  widgets on nameplates and in the objective tracker keep the game's own art
-- Group Finder: the applicant viewer's art recrops without tainting the
-  listing
-
----
-
-## v4.6.10
-
-### Skinning
-- Buff and debuff tooltips are themed like every other tooltip
-- Tooltips closing after showing a widget set no longer taint the interface
-- World Map quest details: the rewards block has a backdrop
-- The Dungeon Finder queue popup is bordered like the rest of the interface
-- BigWigs queue timer follows the ready-check box that is actually shown
-- BetterFriendlist: the invite button keeps its hover, raid names render
-  without smooth scaling, tab rows no longer flicker when clicked, and the
-  selected tab is marked with the theme colour
-
----
-
-## v4.6.9
-
-### Skinning
-- Quest rewards keep their quality-coloured border when the quest is shown a
-  second time; the selected choice reward is outlined cleanly, the second
-  reward button is no longer clipped, and follower rewards are skinned
-
----
-
-## v4.6.8
-
-### Skinning
-- Right-click menus opened after a taller one no longer draw an oversized
-  backdrop; scrolling menus keep their panel sized to the visible rows
-
----
-
-## v4.6.7
-
-### Skinning
-- Cooldown Manager: the Group Buffs tab, its filter panel and its alert dialog
-  are skinned, and side-tab hover art no longer bleeds through
-
----
-
-## v4.6.6
-
-### Skinning
-- The Blizzard font sweeps follow the face picked on the Blizzard Frames page,
-  and the font picker reaches stock text without a reload
-- Zone text returns as soon as the Blizzard Messages module is switched off
-- Raid warning text stays sharp through its grow-and-shrink animation
-
----
-
-## v4.6.5
-
-### Skinning
-- Mount Journal, Pet Journal, Encounter Journal suggestions and mail
-  attachment icons no longer go blank when their rows are first drawn
-
----
-
-## v4.6.4
-
-### Skinning
-- Button labels keep their size when hovered or disabled instead of jumping
-
----
-
-## v4.6.3
-
-### Skinning
-- Guild and Community chat: the message box is usable again
-- Item Upgrade slot art stays inside its border when the slot is emptied
-
----
-
-## v4.6.2
-
-### Automation
-- Auto Repair now reports the full cost when you close the merchant window
-  before the repair finishes settling. Closing and reopening quickly could
-  lose the report entirely, or announce only part of what you paid
-
----
-
-## v4.6.1
+- Turning the module off clears any running timer bars, and a bar that was about
+  to appear from a boss message no longer shows up afterwards
 
 ### Player Crosshair
-- The Augmentation Evoker range check now uses Azure Strike. Living Flame
-  reaches further on Augmentation than the rest of the kit, so the crosshair
-  read as in range for targets your other abilities could not actually reach
+
+- The Augmentation Evoker range check uses Azure Strike. Living Flame reaches
+  further on Augmentation than the rest of the kit, so the crosshair read as in
+  range for targets your other abilities could not actually reach
+
+### Raid Control
+
+- Converting a party to a raid during a fight fills in the raid-only rows the
+  moment you leave combat
+
+### LFG Quick Create
+
+- A tile the game refuses to list now says so in chat instead of looking like a
+  dead click
+
+### LFG Reminder
+
+- Switching to a profile that turns the reminder on applies that profile's scale,
+  position and Disable-Feature text right away
+
+### Vehicle Exit
+
+- The leave-vehicle button stays where you put it after a flight path or an Edit
+  Mode save
+
+### Performance
+
+- Group Sort, the tooltip skin, the Group Finder skin, Focus Castbar and Movement
+  Alert no longer do background work while their feature is off or idle
+- A party member changing specialisation no longer rebuilds your own interrupt
+  cache, and Loot Roll writes its mover position once rather than twice
+
+### Fixes
+
+- The Power Infusion assist border follows the raid frame that is actually on
+  screen when another addon swaps its party and raid headers
+- Glow controls stay greyed after leaving and returning to a page with the glow
+  switched off, on Dungeon Casts, External Tracker and Movement Buffs
+- On the Dungeon Casts page each Your Interrupt colour or slider greys with its
+  own tick, and on the Bonus Roll page the auto-pass rows no longer clip their
+  labels. The Bonus Roll module switch moved to the card header, like every other
+  module
+- Tooltips closing after showing a widget set no longer taint the interface, and
+  the Group Finder applicant viewer's art recrops without tainting the listing
+
+### Developer
+
+- `/kes trace [Frame] [secs]` reports which addon file moves or resizes a frame,
+  for chasing a window that will not stay where it is put
 
 ---
 
