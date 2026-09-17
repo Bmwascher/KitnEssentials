@@ -228,18 +228,27 @@ function TT:LayoutButtons(visibleButtons)
     local size = db.IconSize
 
     local buttonsToLayout = visibleButtons or totemButtons
-    local numVisible = #buttonsToLayout
-    if numVisible == 0 then numVisible = 1 end
 
-    local totalWidth, totalHeight
-    if direction == "RIGHT" or direction == "LEFT" then
-        totalWidth  = (size * numVisible) + (spacing * (numVisible - 1))
-        totalHeight = size
-    else
-        totalWidth  = size
-        totalHeight = (size * numVisible) + (spacing * (numVisible - 1))
+    -- Reserve every slot only while EllesmereUI holds the anchor. It positions a
+    -- registered element by its centre and keeps its growth-edge path for its own
+    -- bars, so a container that resized as totems came and went would creep away
+    -- from the edge GrowDirection points at. Everywhere else the container stays
+    -- occupancy-sized: the reserved width counts against SetClampedToScreen, and a
+    -- bar placed near the edge it grows toward would be dragged inward by space
+    -- holding nothing.
+    local count = #buttonsToLayout
+    if KE.EUIUnlock and KE.EUIUnlock:IsAnchored("TotemTracker") then
+        count = GetTotemSlotCount()
+    elseif count == 0 then
+        count = 1
     end
-    containerFrame:SetSize(totalWidth, totalHeight)
+    local extent = (size * count) + (spacing * (count - 1))
+
+    if direction == "RIGHT" or direction == "LEFT" then
+        containerFrame:SetSize(extent, size)
+    else
+        containerFrame:SetSize(size, extent)
+    end
 
     for i, btn in ipairs(buttonsToLayout) do
         btn:ClearAllPoints()

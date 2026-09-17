@@ -10,9 +10,6 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
-
 local function GetModule()
     if KitnEssentials then
         return KitnEssentials:GetModule("NoMovementAlert", true)
@@ -26,32 +23,6 @@ local GROW_DIRECTIONS = {
     { key = "LEFT",  text = "Left" },
     { key = "RIGHT", text = "Right" },
 }
-
--- Spec header with a 1px black border around the icon.
-local function SpecHeader(parent, iconPath, labelText)
-    local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(26)
-
-    local border = row:CreateTexture(nil, "BACKGROUND")
-    border:SetSize(20, 20)
-    border:SetPoint("LEFT", row, "LEFT", 0, 0)
-    border:SetColorTexture(0, 0, 0, 1)
-
-    local icon = row:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(18, 18)
-    icon:SetPoint("CENTER", border, "CENTER")
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    if iconPath then icon:SetTexture(iconPath) else border:Hide() end
-
-    local fs = row:CreateFontString(nil, "OVERLAY")
-    fs:SetPoint("LEFT", border, "RIGHT", 6, 0)
-    fs:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(fs, "large")
-    fs:SetText(labelText)
-    fs:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-
-    return row
-end
 
 local function BuildSoundOptions()
     local out = { { key = "None", text = "None" } }
@@ -291,46 +262,20 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
 
     db.Spells = db.Spells or {}
     local _, playerClass = UnitClass("player")
-    local currentSpecId
-    if GetSpecialization then
-        local idx = GetSpecialization()
-        if idx and idx > 0 and GetSpecializationInfo then currentSpecId = GetSpecializationInfo(idx) end
-    end
+    local currentSpecId = GUIFrame.GetCurrentSpecID()
 
     -- Class picker -- overrides are account/profile data, not character
     -- data, so an author building a profile for subscribers needs to
     -- reach every class, not just the one they happen to be on.
-    local classOptions = {}
+    local classTokens = {}
     for token in pairs(KE.MOVEMENT_ABILITIES or {}) do
-        local label = (_G.LOCALIZED_CLASS_NAMES_MALE and _G.LOCALIZED_CLASS_NAMES_MALE[token]) or token
-        if token == playerClass then label = label .. "  " .. KE:ColorTextByTheme("(current)") end
-        classOptions[#classOptions + 1] = { key = token, text = label }
-    end
-    table.sort(classOptions, function(a, b) return a.text < b.text end)
-
-    db.SpellEditorClass = db.SpellEditorClass or playerClass
-    local shownClass = db.SpellEditorClass
-    if not (KE.MOVEMENT_ABILITIES and KE.MOVEMENT_ABILITIES[shownClass]) then
-        shownClass = playerClass
+        classTokens[#classTokens + 1] = token
     end
 
-    local classRow = GUIFrame:CreateRow(card7.content, 36)
-    local classDropdown
-    classDropdown = GUIFrame:CreateDropdown(classRow, "Class", {
-        options = classOptions,
-        value = shownClass,
-        callback = function(key)
-            db.SpellEditorClass = key
-            -- Close the list instantly, THEN rebuild a frame later: the
-            -- animated close was still running when the rebuild hit, and
-            -- the orphaned list frame flashed at the bottom of the screen.
-            if classDropdown and classDropdown._closeDropdown then
-                classDropdown._closeDropdown(true)
-            end
-            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
-        end,
+    local classRow, shownClass = GUIFrame:CreateClassPickerRow(card7.content, {
+        scope = "NoMovementAlert",
+        classTokens = classTokens,
     })
-    classRow:AddWidget(classDropdown, 1)
     card7:AddRow(classRow, 36)
 
     local byClass = KE.MOVEMENT_ABILITIES and KE.MOVEMENT_ABILITIES[shownClass]
@@ -349,12 +294,11 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
                 if n then specName = n end
                 specIcon = icon
             end
-            local headerText = specName
-            if specId == currentSpecId and shownClass == playerClass then
-                headerText = headerText .. "  " .. KE:ColorTextByTheme("(current)")
-            end
             local header = GUIFrame:CreateRow(card7.content, 26)
-            header:AddWidget(SpecHeader(header, specIcon, headerText), 1)
+            header:AddWidget(GUIFrame:CreateSpecHeaderRow(header, specName, {
+                icon = specIcon,
+                current = specId == currentSpecId and shownClass == playerClass,
+            }), 1)
             card7:AddRow(header, 26)
 
             -- Collapse by NAME. Several presets are the same ability under
