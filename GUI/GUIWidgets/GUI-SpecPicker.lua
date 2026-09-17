@@ -113,8 +113,9 @@ local CLASS_SHEET = "Interface\\WorldStateFrame\\Icons-Classes"
 local CLASS_SHEET_SIZE = 256
 
 -- KE draws class icons from the classicon atlas elsewhere, but the dropdown's
--- shared search matcher strips |T and not |A, so an atlas escape would hide the
--- option from a search on its own name.
+-- shared search matcher strips |T and not |A. An atlas label would carry its own
+-- sheet name into the searchable text, so a query like "icon" would match every
+-- class.
 local function ClassIcon(token)
     local coords = _G.CLASS_ICON_TCOORDS and _G.CLASS_ICON_TCOORDS[token]
     if not coords then return "" end

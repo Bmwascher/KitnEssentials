@@ -94,4 +94,23 @@ describe("SpecPicker rebuild on pick", function()
         picked("MAGE")
         assert.equals(1, refreshes, "picked a different class")
     end)
+
+    -- Every label opens with the same texture escape and first differs at the
+    -- icon's crop numbers, so a sort on the label orders the list by position on
+    -- the class sheet. WARRIOR and DEATHKNIGHT discriminate that: WARRIOR's crop
+    -- sorts first as text, DEATHKNIGHT's name sorts first as a word.
+    it("orders options by localized class name, not by the icon's crop", function()
+        _G.CLASS_ICON_TCOORDS = {
+            WARRIOR = { 0, 0.25, 0, 0.25 },
+            DEATHKNIGHT = { 0.25, .5, 0.5, .75 },
+        }
+        _G.LOCALIZED_CLASS_NAMES_MALE = { WARRIOR = "Warrior", DEATHKNIGHT = "Death Knight" }
+
+        local options = GUIFrame.BuildClassOptions({ "WARRIOR", "DEATHKNIGHT" }, nil)
+        local keys = {}
+        for index, option in ipairs(options) do keys[index] = option.key end
+        assert.same({ "DEATHKNIGHT", "WARRIOR" }, keys)
+
+        _G.CLASS_ICON_TCOORDS = nil
+    end)
 end)
