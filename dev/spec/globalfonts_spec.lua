@@ -35,7 +35,7 @@ local function childFontObject(parent)
 end
 
 describe("GlobalFonts", function()
-    local S, applied, planted
+    local S, KE, applied, planted
 
     local function load(loadedAddOns)
         _G.C_AddOns = { IsAddOnLoaded = function(name) return loadedAddOns[name] == true end }
@@ -48,7 +48,7 @@ describe("GlobalFonts", function()
             -- module's concern is which objects it writes and at what size.
             ResolveSkinFace = function() return "Expressway" end,
         }
-        local KE = {
+        KE = {
             Skins = S,
             -- Writes as well as records: the real helper calls SetFont, and
             -- without that the parent never propagates to its child.
@@ -126,5 +126,63 @@ describe("GlobalFonts", function()
         planted:SetFont("Fonts\\Other.TTF", 20, "")
         S.ApplyGlobalFonts()
         assert.equals(14, applied[child][2])
+    end)
+
+    -- Standing down is only worth telling the player about when it cost them
+    -- something. The four refusals below are the difference between a useful
+    -- notice and one that fires at someone who never asked for these fonts.
+    describe("stand-down notice", function()
+        local frames
+
+        local function block()
+            _G.EllesmereUIDB = { fonts = { applyToAllGameText = true } }
+        end
+
+        before_each(function()
+            load({})
+            frames = { FontBaseSize = 14 }
+            KE.db.profile.Skinning.BlizzardFrames = frames
+        end)
+
+        after_each(function() _G.EllesmereUIDB = nil end)
+
+        it("is due while a blocker holds the fonts and the row is on", function()
+            block()
+            local blocker, remedy = S.GlobalFontsNoticeDue()
+            assert.equals("EllesmereUI", blocker)
+            assert.is_string(remedy)
+        end)
+
+        it("is not due when nothing is blocking", function()
+            assert.is_nil(S.GlobalFontsNoticeDue())
+        end)
+
+        -- With the frame-skin module off the sweep would not have run anyway,
+        -- so yielding took nothing away.
+        it("is not due while the frame-skin module is off", function()
+            block()
+            S.IsActive = function() return false end
+            assert.is_nil(S.GlobalFontsNoticeDue())
+        end)
+
+        it("is not due while the per-row Global Fonts toggle is off", function()
+            block()
+            frames.Skins = { GlobalFonts = false }
+            assert.is_nil(S.GlobalFontsNoticeDue())
+        end)
+
+        it("is not due once the notice has been delivered", function()
+            block()
+            frames._globalFontsBlockedWarned = true
+            assert.is_nil(S.GlobalFontsNoticeDue())
+        end)
+
+        -- Re-arming is what makes the notice reappear for a player who turns
+        -- the other addon's option off and later back on.
+        it("clears the delivered flag once the block has lifted", function()
+            frames._globalFontsBlockedWarned = true
+            assert.is_nil(S.GlobalFontsNoticeDue())
+            assert.is_nil(frames._globalFontsBlockedWarned)
+        end)
     end)
 end)
