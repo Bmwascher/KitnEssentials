@@ -35,9 +35,22 @@ local function childFontObject(parent)
 end
 
 describe("GlobalFonts", function()
-    local S, applied, planted
+    local S, KE, applied, planted
+
+    -- The module creates its login watcher at file scope, so loading it needs a
+    -- frame constructor. A no-op double is enough: what the watcher registers
+    -- and when it fires are in-game concerns, and nothing here asserts on them.
+    local function frameDouble()
+        return {
+            RegisterEvent = function() end,
+            UnregisterEvent = function() end,
+            UnregisterAllEvents = function() end,
+            SetScript = function() end,
+        }
+    end
 
     local function load(loadedAddOns)
+        _G.CreateFrame = function() return frameDouble() end
         _G.C_AddOns = { IsAddOnLoaded = function(name) return loadedAddOns[name] == true end }
         applied = {}
         S = {
@@ -48,7 +61,7 @@ describe("GlobalFonts", function()
             -- module's concern is which objects it writes and at what size.
             ResolveSkinFace = function() return "Expressway" end,
         }
-        local KE = {
+        KE = {
             Skins = S,
             -- Writes as well as records: the real helper calls SetFont, and
             -- without that the parent never propagates to its child.
@@ -70,6 +83,7 @@ describe("GlobalFonts", function()
         _G.GameFontNormal = nil
         _G.GameFontDisable = nil
         _G.C_AddOns = nil
+        _G.CreateFrame = nil
     end)
 
     it("writes nothing while Platynator is loaded", function()
@@ -126,5 +140,67 @@ describe("GlobalFonts", function()
         planted:SetFont("Fonts\\Other.TTF", 20, "")
         S.ApplyGlobalFonts()
         assert.equals(14, applied[child][2])
+    end)
+
+    -- Standing down is only worth telling the player about when it cost them
+    -- something: the refusals below keep the notice off profiles that lost nothing.
+    describe("stand-down notice", function()
+        local frames
+
+        local function block()
+            _G.EllesmereUIDB = { fonts = { applyToAllGameText = true } }
+        end
+
+        before_each(function()
+            load({})
+            frames = { FontBaseSize = 14 }
+            KE.db.profile.Skinning.BlizzardFrames = frames
+        end)
+
+        after_each(function() _G.EllesmereUIDB = nil end)
+
+        it("is due while a blocker holds the fonts and the row is on", function()
+            block()
+            local blocker, remedy = S.GlobalFontsNoticeDue()
+            assert.equals("EllesmereUI", blocker)
+            assert.is_string(remedy)
+        end)
+
+        -- With the frame-skin module off the sweep would not have run anyway,
+        -- so yielding took nothing away.
+        it("is not due while the frame-skin module is off", function()
+            block()
+            S.IsActive = function() return false end
+            assert.is_nil(S.GlobalFontsNoticeDue())
+        end)
+
+        it("is not due while the per-row Global Fonts toggle is off", function()
+            block()
+            frames.Skins = { GlobalFonts = false }
+            assert.is_nil(S.GlobalFontsNoticeDue())
+        end)
+
+        it("is not due once the notice has been delivered", function()
+            block()
+            frames._globalFontsBlockedWarned = true
+            assert.is_nil(S.GlobalFontsNoticeDue())
+        end)
+
+        -- Both switches are off on purpose: with them on, a predicate that
+        -- checked them before the blocker would still clear the flag and this
+        -- case would pass. Off, it keeps a stale flag and never warns again.
+        it("clears the delivered flag once the block has lifted, switches off too", function()
+            S.IsActive = function() return false end
+            frames.Skins = { GlobalFonts = false }
+            frames._globalFontsBlockedWarned = true
+            assert.is_nil(S.GlobalFontsNoticeDue())
+            assert.is_nil(frames._globalFontsBlockedWarned)
+        end)
+
+        it("refuses without writing when the frame-skin table is missing", function()
+            block()
+            KE.db.profile.Skinning.BlizzardFrames = nil
+            assert.is_nil(S.GlobalFontsNoticeDue())
+        end)
     end)
 end)

@@ -76,13 +76,37 @@ S.RestoreGlobalFonts = Restore
 -- its accessor creates the table when absent.
 function S.GlobalFontsBlockedBy()
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Platynator") then
-        return "Platynator", "breaks once these fonts are rewritten, so KitnEssentials leaves them alone while it is installed."
+        return "Platynator", "breaks once these fonts are rewritten, so KitnEssentials leaves them alone while it is installed.",
+            "Blizzard Fonts is on, but Platynator breaks once those fonts are rewritten, so KitnEssentials left them alone - text outlines will be missing across the UI, including raid warnings and macro names. Uninstall Platynator to restore them."
     end
     local fonts = _G.EllesmereUIDB and _G.EllesmereUIDB.fonts
     if fonts and fonts.applyToAllGameText then
-        return "EllesmereUI", "rewrites every stock font at login while its Apply to All Game Text is on, which would override this. Turn that off to use this row."
+        return "EllesmereUI", "rewrites every stock font at login while its Apply to All Game Text is on, which would override this. Turn that off to use this row.",
+            "Blizzard Fonts is on, but EllesmereUI owns Blizzard's stock fonts, so KitnEssentials left them alone - text outlines will be missing across the UI, including raid warnings and macro names. Disable it in |cffffff00/eui|r > Global Settings > Fonts > Apply to All Game Text."
     end
     return nil
+end
+
+-- Whether the stand-down is costing this profile anything. Yielding is only
+-- worth a word when the sweep would otherwise have run: with the module or
+-- this row off, nothing was lost. The blocker lookup runs first so a profile
+-- that had the module off while the block lifted still re-arms.
+function S.GlobalFontsNoticeDue()
+    local frames = KE.db and KE.db.profile and KE.db.profile.Skinning
+        and KE.db.profile.Skinning.BlizzardFrames
+    if not frames then return nil end
+
+    local blocker, _, remedy = S.GlobalFontsBlockedBy()
+    if not blocker then
+        frames._globalFontsBlockedWarned = nil
+        return nil
+    end
+
+    if not S:IsActive() then return nil end
+    if frames.Skins and frames.Skins.GlobalFonts == false then return nil end
+    if frames._globalFontsBlockedWarned then return nil end
+
+    return blocker, remedy
 end
 
 local PASSES = {
@@ -180,3 +204,24 @@ S:RegisterEarly(function()
         end)
     end
 end, "SharedDropDownList")
+
+-- File scope because this watcher must exist before any skin module enables
+-- and outlives the sweep. The eligibility check runs before the timer is
+-- scheduled, so a profile that lost nothing creates nothing.
+local noticeWatcher = CreateFrame("Frame")
+noticeWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
+noticeWatcher:SetScript("OnEvent", function(self)
+    self:UnregisterAllEvents()
+    local blocker, remedy = S.GlobalFontsNoticeDue()
+    if not blocker then return end
+    C_Timer.After(5, function()
+        -- Flag inside the callback: a /reload during the defer window must not
+        -- mark the notice delivered (SavedVariables persist instantly; the
+        -- print does not). Re-check, since the block can lift during the wait.
+        if not S.GlobalFontsNoticeDue() then return end
+        local frames = KE.db and KE.db.profile and KE.db.profile.Skinning
+            and KE.db.profile.Skinning.BlizzardFrames
+        if frames then frames._globalFontsBlockedWarned = true end
+        KE:Print(remedy)
+    end)
+end)
