@@ -328,6 +328,19 @@ local function PublishPending()
     end
 end
 
+-- Whether EllesmereUI currently holds an unlock anchor for one of our elements,
+-- named by the element's own key. An anchored element is positioned by its
+-- centre, so a module that lays itself out has to know: its own size changes
+-- move both of its edges rather than growing from one. pcall because the query
+-- belongs to another addon and a raise here would take the caller's layout with
+-- it.
+function Bridge:IsAnchored(key)
+    local eui = EUI()
+    if not eui or type(eui.IsAnchored) ~= "function" then return false end
+    local ok, anchored = pcall(eui.IsAnchored, KEY_PREFIX .. key)
+    return ok and anchored == true
+end
+
 function Bridge:Register(config, opts)
     if type(config) ~= "table" or not config.key then return end
     if type(config.getPosition) ~= "function" or type(config.setPosition) ~= "function" then return end

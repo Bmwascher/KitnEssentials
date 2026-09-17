@@ -229,13 +229,20 @@ function TT:LayoutButtons(visibleButtons)
 
     local buttonsToLayout = visibleButtons or totemButtons
 
-    -- Size for every slot, not for the occupied ones. EllesmereUI anchors a
-    -- registered element by its centre and keeps its growth-edge path for its
-    -- own bars, so a container that resized as totems came and went would
-    -- expand both ways and ignore GrowDirection. A constant extent holds the
-    -- growth edge still under either owner; the buttons fill it from that edge.
-    local slots = GetTotemSlotCount()
-    local extent = (size * slots) + (spacing * (slots - 1))
+    -- Reserve every slot only while EllesmereUI holds the anchor. It positions a
+    -- registered element by its centre and keeps its growth-edge path for its own
+    -- bars, so a container that resized as totems came and went would creep away
+    -- from the edge GrowDirection points at. Everywhere else the container stays
+    -- occupancy-sized: the reserved width counts against SetClampedToScreen, and a
+    -- bar placed near the edge it grows toward would be dragged inward by space
+    -- holding nothing.
+    local count = #buttonsToLayout
+    if KE.EUIUnlock and KE.EUIUnlock:IsAnchored("TotemTracker") then
+        count = GetTotemSlotCount()
+    elseif count == 0 then
+        count = 1
+    end
+    local extent = (size * count) + (spacing * (count - 1))
 
     if direction == "RIGHT" or direction == "LEFT" then
         containerFrame:SetSize(extent, size)
