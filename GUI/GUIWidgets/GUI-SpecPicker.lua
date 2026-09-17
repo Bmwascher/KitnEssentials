@@ -203,7 +203,11 @@ function GUIFrame:CreateClassPickerRow(parent, config)
             if dropdown and dropdown._closeDropdown then
                 dropdown._closeDropdown(true)
             end
-
+            -- Re-picking the class already on screen draws nothing new, and
+            -- RefreshContent is a whole-page teardown that orphans every frame on
+            -- the page permanently -- the player sees it as a flash. The pick is
+            -- left unstored so closing the window does not mark the page dirty.
+            if key == shownClass then return end
             sessionClass[scope] = key
             C_Timer.After(0, function() GUIFrame:RefreshContent() end)
         end,

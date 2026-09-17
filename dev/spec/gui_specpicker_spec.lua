@@ -44,3 +44,54 @@ describe("SpecPicker class resolution", function()
         end
     end)
 end)
+
+-- A pick rebuilds the whole page, and that rebuild orphans every frame on the
+-- page permanently and reads as a flash. Re-picking the class already on screen
+-- has to refuse it. In game the refusal shows up only as the absence of a flash,
+-- which is why it is pinned here rather than left to smoke.
+describe("SpecPicker rebuild on pick", function()
+    local STUBBED = { "C_SpecializationInfo", "C_Timer", "UnitClass", "LOCALIZED_CLASS_NAMES_MALE" }
+    local GUIFrame, saved, refreshes, picked
+
+    before_each(function()
+        saved = {}
+        for _, key in ipairs(STUBBED) do saved[key] = _G[key] end
+
+        _G.C_SpecializationInfo = {}
+        -- Fires straight through: the picker defers its rebuild by a frame, and
+        -- the assertion below is on whether it happens at all, not when.
+        _G.C_Timer = { After = function(_, fn) fn() end }
+        _G.UnitClass = function() return "Evoker", "EVOKER" end
+        _G.LOCALIZED_CLASS_NAMES_MALE = { EVOKER = "Evoker", MAGE = "Mage" }
+
+        refreshes, picked = 0, nil
+        local KE = helpers.loadModule("GUI/GUIWidgets/GUI-SpecPicker.lua", {
+            ColorTextByTheme = function(_, text) return text end,
+            GUIFrame = {
+                RegisterContentCleanup = function() end,
+                CreateRow = function() return { AddWidget = function() end } end,
+                CreateDropdown = function(_, _, _, config) picked = config.callback; return {} end,
+                RefreshContent = function() refreshes = refreshes + 1 end,
+            },
+            Theme = {},
+        })
+        GUIFrame = KE.GUIFrame
+    end)
+
+    after_each(function()
+        for _, key in ipairs(STUBBED) do _G[key] = saved[key] end
+    end)
+
+    it("rebuilds the page only when the pick changes the class on screen", function()
+        local _, shown = GUIFrame:CreateClassPickerRow(nil, {
+            scope = "test", classTokens = { "EVOKER", "MAGE" },
+        })
+        assert.equals("EVOKER", shown)
+
+        picked("EVOKER")
+        assert.equals(0, refreshes, "re-picked the class already shown")
+
+        picked("MAGE")
+        assert.equals(1, refreshes, "picked a different class")
+    end)
+end)
