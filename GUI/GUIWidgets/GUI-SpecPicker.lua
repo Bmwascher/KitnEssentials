@@ -115,6 +115,15 @@ local closeHooked = false
 
 local function ResetSessionClass()
     sessionClass = {}
+    -- Clearing the pick is not enough on the way out. A page that has already
+    -- been drawn stays drawn while the window is shut, and reopening replays a
+    -- refresh only for content marked dirty, so the reopened page would still
+    -- show the class picked last time. Marked only while hidden: a sidebar
+    -- switch is already rebuilding, and setting it there would buy one
+    -- redundant refresh on the next open.
+    if not GUIFrame:IsShown() then
+        GUIFrame._contentDirtyWhileHidden = true
+    end
 end
 
 -- Fires only on a real sidebar item switch, so the pick survives the page
