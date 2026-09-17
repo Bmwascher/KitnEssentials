@@ -131,8 +131,6 @@ local function EnsureCloseHook()
     closeHooked = true
 end
 
--- Which class the picker shows: the pick made during this visit, else the
--- player's own class, else the first class offered.
 function GUIFrame.ResolvePickerClass(sessionToken, playerToken, tokens)
     local valid = {}
     for _, token in ipairs(tokens) do valid[token] = true end
