@@ -2095,8 +2095,8 @@ local Defaults = {
                 },
                 WhisperSounds = {
                     Enabled = false,
-                    WhisperSound = "None",
-                    BNetWhisperSound = "None",
+                    WhisperSound = "Whisper",
+                    BNetWhisperSound = "Whisper",
                 },
                 ClassColorWhispers = true,
                 GuildMemberStatus = true,

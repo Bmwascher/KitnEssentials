@@ -94,7 +94,7 @@ if KE.LSM then
         "Fixate Incoming", "Frontal", "Gun1", "Hide",
         "Intermission", "Interrupt", "Kick", "Knockback", "Leap",
         "Move", "Phasing", "Pools", "Pull", "Soak", "Soaks", "Split",
-        "Spread", "Stack", "Stop Casting", "Totem",
+        "Spread", "Stack", "Stop Casting", "Totem", "Whisper",
     }
     for _, name in ipairs(sounds) do
         KE.LSM:Register("sound", name, SOUND_DIR .. name .. ".ogg")
