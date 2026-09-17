@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.47
+
+### Mythic+ Timer
+
+- The death list is easier to read: a darker backdrop behind it and more space
+  between the rows
+
+---
+
 ## v4.6.46
 
 ### Aura Displays
