@@ -143,8 +143,7 @@ describe("GlobalFonts", function()
     end)
 
     -- Standing down is only worth telling the player about when it cost them
-    -- something. The refusals below are the difference between a useful notice
-    -- and one that fires at someone who never asked for these fonts.
+    -- something: the refusals below keep the notice off profiles that lost nothing.
     describe("stand-down notice", function()
         local frames
 
@@ -187,11 +186,9 @@ describe("GlobalFonts", function()
             assert.is_nil(S.GlobalFontsNoticeDue())
         end)
 
-        -- Both switches are off here on purpose. The blocker lookup has to run
-        -- BEFORE the switch refusals, or a profile that had the module off
-        -- while the block lifted keeps a stale flag and never warns again once
-        -- the block returns. A version of this case with the switches on
-        -- passes against that ordering bug.
+        -- Both switches are off on purpose: with them on, a predicate that
+        -- checked them before the blocker would still clear the flag and this
+        -- case would pass. Off, it keeps a stale flag and never warns again.
         it("clears the delivered flag once the block has lifted, switches off too", function()
             S.IsActive = function() return false end
             frames.Skins = { GlobalFonts = false }
