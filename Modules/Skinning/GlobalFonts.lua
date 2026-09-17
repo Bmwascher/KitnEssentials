@@ -77,12 +77,12 @@ S.RestoreGlobalFonts = Restore
 function S.GlobalFontsBlockedBy()
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("Platynator") then
         return "Platynator", "breaks once these fonts are rewritten, so KitnEssentials leaves them alone while it is installed.",
-            "Blizzard Fonts is on, but Platynator breaks once those fonts are rewritten, so KitnEssentials left them alone - text outlines will be missing across the UI, including raid warnings and macro names. Uninstall Platynator to restore them."
+            "Text outlines are missing across the UI - Platynator breaks if Blizzard's fonts are rewritten, so KitnEssentials left them alone. |cffffff00Uninstall Platynator to restore them.|r"
     end
     local fonts = _G.EllesmereUIDB and _G.EllesmereUIDB.fonts
     if fonts and fonts.applyToAllGameText then
         return "EllesmereUI", "rewrites every stock font at login while its Apply to All Game Text is on, which would override this. Turn that off to use this row.",
-            "Blizzard Fonts is on, but EllesmereUI owns Blizzard's stock fonts, so KitnEssentials left them alone - text outlines will be missing across the UI, including raid warnings and macro names. Disable it in |cffffff00/eui|r > Global Settings > Fonts > Apply to All Game Text."
+            "Text outlines are missing across the UI - EllesmereUI owns Blizzard's fonts while Apply to All Game Text is on. |cffffff00Turn that off in /eui > Global Settings > Fonts to restore them.|r"
     end
     return nil
 end
