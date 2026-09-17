@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.45
+
+### Totem Tracker
+
+- **NEW:** The totem bar can now be moved and anchored from EllesmereUI's unlock
+  mode, the way the chat panel and damage meter already could. Nothing changes if
+  you do not use EllesmereUI
+
+---
+
 ## v4.6.44
 
 ### Blizzard Fonts
