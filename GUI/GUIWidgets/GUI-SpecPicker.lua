@@ -112,9 +112,9 @@ end
 local CLASS_SHEET = "Interface\\WorldStateFrame\\Icons-Classes"
 local CLASS_SHEET_SIZE = 256
 
--- A |A atlas escape would give a sharper source, and the atlas is what KE uses
--- for class icons elsewhere, but KE.DropdownSearchMatches strips |T and not |A --
--- an atlas icon would silently defeat a search this picker may later switch on.
+-- KE draws class icons from the classicon atlas elsewhere, but the dropdown's
+-- shared search matcher strips |T and not |A, so an atlas escape would hide the
+-- option from a search on its own name.
 local function ClassIcon(token)
     local coords = _G.CLASS_ICON_TCOORDS and _G.CLASS_ICON_TCOORDS[token]
     if not coords then return "" end
@@ -204,9 +204,8 @@ function GUIFrame:CreateClassPickerRow(parent, config)
                 dropdown._closeDropdown(true)
             end
             -- Re-picking the class already on screen draws nothing new, and
-            -- RefreshContent is a whole-page teardown that orphans every frame on
-            -- the page permanently -- the player sees it as a flash. The pick is
-            -- left unstored so closing the window does not mark the page dirty.
+            -- RefreshContent is a whole-page teardown the player sees as a flash.
+            -- Left unstored so closing the window does not mark the page dirty.
             if key == shownClass then return end
             sessionClass[scope] = key
             C_Timer.After(0, function() GUIFrame:RefreshContent() end)
