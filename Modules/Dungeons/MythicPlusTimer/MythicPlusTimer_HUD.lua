@@ -306,14 +306,14 @@ function MPT:BuildHUD()
     deathTT:SetFrameLevel(200)
     deathTT:SetClampedToScreen(true)  -- cursor-left anchor near the screen edge
     deathTT:Hide()
-    -- Matches the Damage Meter segment-menu hover panel (0.05 fill @ 0.97,
-    -- solid black 1px border) so KE's hover popups read as one style.
-    KE:ApplyBackdrop(deathTT, { Enabled = true, Color = {0.05, 0.05, 0.05, 0.97}, BorderColor = {0, 0, 0, 1}, BorderSize = 1 })
+    -- Panel black, popup opacity. At the panel family's 0.8 alpha a fifth of
+    -- the scene behind shows through and the class-colored names lose contrast.
+    KE:ApplyBackdrop(deathTT, { Enabled = true, Color = {0.031, 0.031, 0.031, 0.97}, BorderColor = {0, 0, 0, 1}, BorderSize = 1 })
     deathTT._rows = {}
     MPT.frames.deathsTooltip = deathTT
 
     local TT_PAD   = 8
-    local TT_GAP   = 3
+    local TT_GAP   = 6
     local TT_FONT  = KE.FONT or "Fonts\\FRIZQT__.TTF"  -- EnsureRows seed; OnEnter re-applies the Deaths font
 
     local function EnsureRows(n)
