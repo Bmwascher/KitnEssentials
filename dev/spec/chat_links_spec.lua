@@ -199,11 +199,10 @@ describe("ChatLinks web addresses", function()
     end)
 end)
 
--- The filter only ever sees an event it was registered for, so the behaviour is
--- the registration, not the list it reads. `deliver` is that dispatch rule in
--- two lines -- a registered event runs the filter, an unregistered one passes
--- through -- which is what lets an absent event read as "no icon" rather than
--- as a nil call.
+-- The filter only ever sees an event it was registered for, so this case drives
+-- the registration instead of reading the event list. `deliver` is that dispatch
+-- rule: a registered event runs the filter, an unregistered one passes through,
+-- so an absent event reads as "no icon" rather than as a nil call.
 describe("ChatLinks filter registration", function()
     local CURRENCY = "|Hcurrency:3008:|h[Valorstones]|h"
 
