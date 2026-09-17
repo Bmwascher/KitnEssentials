@@ -13,8 +13,6 @@ local LSM = KE.LSM
 local table_insert = table.insert
 local ipairs, pairs = ipairs, pairs
 local tostring = tostring
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 
 local CLASS_TITLES = {
     WARRIOR = "Warrior Stances",
@@ -23,33 +21,6 @@ local CLASS_TITLES = {
     PRIEST  = "Priest Shadowform",
     EVOKER  = "Evoker Attunement",
 }
-
--- Icon plus name, drawn above each spec's controls so a card of five near
--- identical rows reads as a list of specs rather than a wall of checkboxes.
-local function SpecHeader(parent, iconPath, labelText)
-    local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(26)
-
-    local border = row:CreateTexture(nil, "BACKGROUND")
-    border:SetSize(20, 20)
-    border:SetPoint("LEFT", row, "LEFT", 0, 0)
-    border:SetColorTexture(0, 0, 0, 1)
-
-    local icon = row:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(18, 18)
-    icon:SetPoint("CENTER", border, "CENTER")
-    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    if iconPath then icon:SetTexture(iconPath) else border:Hide() end
-
-    local fs = row:CreateFontString(nil, "OVERLAY")
-    fs:SetPoint("LEFT", border, "RIGHT", 6, 0)
-    fs:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(fs, "large")
-    fs:SetText(labelText)
-    fs:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-
-    return row
-end
 
 local function GetModule()
     return KitnEssentials and KitnEssentials:GetModule("StanceText", true)
@@ -215,11 +186,7 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     -- One card per class, ALL classes -- settings can be prepared for an
     -- alt without logging into it.
     ------------------------------------------------------------------
-    local currentSpecId
-    if GetSpecialization and GetSpecializationInfo then
-        local idx = GetSpecialization()
-        if idx and idx > 0 then currentSpecId = GetSpecializationInfo(idx) end
-    end
+    local currentSpecId = GUIFrame.GetCurrentSpecID()
 
     if mod and mod.CLASS_ORDER then
         for _, classKey in ipairs(mod.CLASS_ORDER) do
@@ -238,12 +205,11 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
                     if n then specName = n end
                     specIcon = icon
                 end
-                local headerText = specName
-                if specID == currentSpecId then
-                    headerText = headerText .. "  " .. KE:ColorTextByTheme("(current)")
-                end
                 local header = GUIFrame:CreateRow(card.content, 26)
-                header:AddWidget(SpecHeader(header, specIcon, headerText), 1)
+                header:AddWidget(GUIFrame:CreateSpecHeaderRow(header, specName, {
+                    icon = specIcon,
+                    current = specID == currentSpecId,
+                }), 1)
                 card:AddRow(header, 26)
 
                 local row = GUIFrame:CreateRow(card.content, 40)
