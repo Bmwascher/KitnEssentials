@@ -300,7 +300,20 @@ end
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
+-- The public entry, and the ONLY thing a profile switch calls: ProfileManager
+-- rebinds the db and then applies settings, so without a gate check here the
+-- module keeps reading stats on a spec the incoming profile has turned off, and
+-- stays off on one the incoming profile has turned on, until the next zone.
+-- Routed, never recursive: the gate reaches the layout below through ApplyLayout.
 function SS:ApplySettings()
+    if self.isPreview or not self:IsEnabled() then
+        self:ApplyLayout()
+        return
+    end
+    self:ApplySpecGate()
+end
+
+function SS:ApplyLayout()
     if not self.frame then return end
     local db = self.db
 
@@ -379,7 +392,7 @@ function SS:ShowPreview()
     self:RegWithEditMode()
     self.isPreview = true
     self.frame:Show()
-    self:ApplySettings()
+    self:ApplyLayout()
 end
 
 -- The spec gate counts here as much as the master enable: without it, closing
@@ -433,7 +446,7 @@ function SS:StartForSpec()
     self.frame:Show()
     -- Re-applied even when the gate was already open, because this is also the
     -- redraw path for a zone change and a spec change.
-    self:ApplySettings()
+    self:ApplyLayout()
 end
 
 function SS:StopForSpec()
@@ -450,7 +463,10 @@ end
 -- Applied twice on purpose. The immediate pass keeps the redraw this event used
 -- to trigger, and handles the common case where the spec already reads
 -- correctly; the deferred one is the only pass whose spec read can be trusted.
-function SS:OnSpecChanged()
+function SS:OnSpecChanged(event, unit)
+    -- The spec event carries a unit token and fires for group members as well,
+    -- so without this every party spec swap would rebuild this player's block.
+    if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
     self:ApplySpecGate()
     C_Timer.After(SPEC_SETTLE_DELAY, function()
         if self:IsEnabled() then self:ApplySpecGate() end

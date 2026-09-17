@@ -8,18 +8,26 @@
 local helpers = require("dev.spec._helpers")
 
 describe("SpecPicker class resolution", function()
-    local GUIFrame
+    local GUIFrame, savedSpecInfo
 
     before_each(function()
         -- The widget binds KE.GUIFrame and KE.Theme at load, indexes
         -- C_SpecializationInfo at file scope, and registers a cleanup callback
         -- on GUIFrame, so all of it must exist before loadModule.
+        savedSpecInfo = _G.C_SpecializationInfo
         _G.C_SpecializationInfo = {}
         local KE = helpers.loadModule("GUI/GUIWidgets/GUI-SpecPicker.lua", {
             GUIFrame = { RegisterContentCleanup = function() end },
             Theme = {},
         })
         GUIFrame = KE.GUIFrame
+    end)
+
+    -- Restored so the empty namespace does not outlive this file and leave a
+    -- later spec loading a module against a C_SpecializationInfo with nothing
+    -- in it.
+    after_each(function()
+        _G.C_SpecializationInfo = savedSpecInfo
     end)
 
     it("opens on the visit's pick, else the player's class, else the first offered", function()
