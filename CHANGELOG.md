@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.44
+
+### Blizzard Fonts
+
+- **NEW:** When another addon owns Blizzard's stock fonts, KitnEssentials now
+  says so once at login instead of quietly standing down. Raid warnings and
+  macro names are the places you notice it, and the message names the setting
+  to change
+- Nothing is printed if the stand-down costs you nothing
+
+---
+
 ## v4.6.43
 
 ### Chat
