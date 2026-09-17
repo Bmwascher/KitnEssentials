@@ -228,18 +228,20 @@ function TT:LayoutButtons(visibleButtons)
     local size = db.IconSize
 
     local buttonsToLayout = visibleButtons or totemButtons
-    local numVisible = #buttonsToLayout
-    if numVisible == 0 then numVisible = 1 end
 
-    local totalWidth, totalHeight
+    -- Size for every slot, not for the occupied ones. EllesmereUI anchors a
+    -- registered element by its centre and keeps its growth-edge path for its
+    -- own bars, so a container that resized as totems came and went would
+    -- expand both ways and ignore GrowDirection. A constant extent holds the
+    -- growth edge still under either owner; the buttons fill it from that edge.
+    local slots = GetTotemSlotCount()
+    local extent = (size * slots) + (spacing * (slots - 1))
+
     if direction == "RIGHT" or direction == "LEFT" then
-        totalWidth  = (size * numVisible) + (spacing * (numVisible - 1))
-        totalHeight = size
+        containerFrame:SetSize(extent, size)
     else
-        totalWidth  = size
-        totalHeight = (size * numVisible) + (spacing * (numVisible - 1))
+        containerFrame:SetSize(size, extent)
     end
-    containerFrame:SetSize(totalWidth, totalHeight)
 
     for i, btn in ipairs(buttonsToLayout) do
         btn:ClearAllPoints()
