@@ -366,9 +366,12 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
 
     for index = 1, #specs do
         local specID = specs[index]
+        -- ForSpecID, not the older ByID the other spec cards still call: the
+        -- reference documents this one and says nothing about that one, so its
+        -- secret-value status cannot be checked. Same return positions.
         local specName, specIcon = "Spec " .. specID, nil
-        if GetSpecializationInfoByID then
-            local _, name, _, icon = GetSpecializationInfoByID(specID)
+        if GetSpecializationInfoForSpecID then
+            local _, name, _, icon = GetSpecializationInfoForSpecID(specID)
             if name then specName = name end
             specIcon = icon
         end

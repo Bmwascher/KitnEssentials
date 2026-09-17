@@ -201,6 +201,7 @@ read_globals = {
     -- Specialization
     "GetSpecializationRole",
     "GetSpecializationInfoByID", "GetNumClasses", "GetSpecializationInfoForClassID",
+    "GetSpecializationInfoForSpecID",
     "C_CreatureInfo",
 
     -- Instance / Group
