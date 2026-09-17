@@ -352,3 +352,47 @@ describe("EUIUnlockBridge size-match re-apply", function()
         assert.same({ "KE_Chat", "KE_DamageMeter" }, heights)
     end)
 end)
+
+-- A published element reports its owner's state through isHidden, and the
+-- element is never withdrawn, so this is the ONLY thing that tells unlock mode
+-- a module went away. Every KE caller passes one; a regression that dropped the
+-- supplied callback would silently fall back to frame presence, and a hidden
+-- module's frame still exists, so every mover would stay visible.
+describe("EUIUnlockBridge visibility reporting", function()
+    local function publish(opts)
+        local KE = L.loadEUIUnlockBridge()
+        local captured
+
+        _G.EllesmereUI = {
+            MakeUnlockElement = function(element) return element end,
+            RegisterUnlockElements = function(_, batch) captured = batch[1] end,
+        }
+
+        KE.EUIUnlock:Register({
+            key = "Thing",
+            frame = { GetWidth = function() return 10 end,
+                      GetHeight = function() return 10 end },
+            getPosition = function() return nil end,
+            setPosition = function() end,
+        }, opts)
+
+        return captured
+    end
+
+    after_each(function()
+        _G.EllesmereUI = nil
+    end)
+
+    it("follows the supplied callback, as a boolean, when the owner's state changes", function()
+        local disabled = false
+        local element = publish({ isHidden = function() return disabled end })
+
+        assert.is_false(element.isHidden())
+        disabled = true
+        assert.is_true(element.isHidden())
+    end)
+
+    it("reports on frame presence when no callback is supplied", function()
+        assert.is_false(publish().isHidden())
+    end)
+end)
