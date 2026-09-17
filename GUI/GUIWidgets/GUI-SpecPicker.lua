@@ -114,6 +114,10 @@ local sessionClass = {}
 local closeHooked = false
 
 local function ResetSessionClass()
+    -- Nothing picked means nothing to undraw. Closing the window fires this on
+    -- every page, so an unconditional body would mark content dirty for players
+    -- who never open a picker and cost them a page rebuild on every open.
+    if next(sessionClass) == nil then return end
     sessionClass = {}
     -- Clearing the pick is not enough on the way out. A page that has already
     -- been drawn stays drawn while the window is shut, and reopening replays a
