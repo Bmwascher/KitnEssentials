@@ -137,6 +137,9 @@ end
 -- a value the live display never shows.
 local function FormatRemaining(seconds, decimalThreshold)
     if seconds <= 0 then return "" end
+    if seconds >= 86400 then
+        return math_floor(seconds / 86400) .. "d"
+    end
     if seconds >= 3600 then
         return math_floor(seconds / 3600) .. "h"
     end
