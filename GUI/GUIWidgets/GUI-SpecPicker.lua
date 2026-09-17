@@ -111,7 +111,6 @@ end
 -- stored pick outlives its usefulness: the page then opens on whatever class was
 -- inspected last, which is rarely the one the player is on.
 local sessionClass = {}
-local closeHooked = false
 
 local function ResetSessionClass()
     -- Nothing picked means nothing to undraw. Closing the window fires this on
@@ -130,19 +129,9 @@ local function ResetSessionClass()
     end
 end
 
--- Fires only on a real sidebar item switch, so the pick survives the page
--- rebuild the dropdown's own callback triggers.
+-- Fires on a real sidebar item switch and on window close, but not on the
+-- in-place rebuild the dropdown's own callback triggers, so the pick survives it.
 GUIFrame:RegisterContentCleanup("SpecPickerClass", ResetSessionClass)
-
--- The main frame is built by GUI-MainFrame.lua, which loads after this file, so
--- the close hook waits for the first picker instead of binding at load.
-local function EnsureCloseHook()
-    if closeHooked then return end
-    local frame = GUIFrame.mainFrame
-    if not frame then return end
-    frame:HookScript("OnHide", ResetSessionClass)
-    closeHooked = true
-end
 
 function GUIFrame.ResolvePickerClass(sessionToken, playerToken, tokens)
     local valid = {}
@@ -156,7 +145,6 @@ end
 -- caller should draw, so the caller never reads the picker's state itself.
 function GUIFrame:CreateClassPickerRow(parent, config)
     if type(config) ~= "table" then config = {} end
-    EnsureCloseHook()
 
     local scope = config.scope or "default"
     local tokens = {}
