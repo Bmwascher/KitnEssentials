@@ -579,6 +579,7 @@ local FILTER_EVENTS = {
     "CHAT_MSG_BN_WHISPER",
     "CHAT_MSG_CHANNEL",
     "CHAT_MSG_COMMUNITIES_CHANNEL",
+    "CHAT_MSG_CURRENCY",
     "CHAT_MSG_EMOTE",
     "CHAT_MSG_GUILD",
     -- The guild variant is a separate event from CHAT_MSG_ACHIEVEMENT, and the

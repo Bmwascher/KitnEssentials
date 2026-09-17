@@ -198,3 +198,31 @@ describe("ChatLinks web addresses", function()
         assert.equal("look at https://example.com", out)
     end)
 end)
+
+-- The filter only ever sees an event it was registered for, so this case drives
+-- the registration instead of reading the event list. `deliver` is that dispatch
+-- rule: a registered event runs the filter, an unregistered one passes through,
+-- so an absent event reads as "no icon" rather than as a nil call.
+describe("ChatLinks filter registration", function()
+    local CURRENCY = "|Hcurrency:3008:|h[Valorstones]|h"
+
+    it("decorates a currency gain, which arrives on its own event", function()
+        local CL, KE = L.loadChatLinks()
+        CL.db = freshDB()
+        KE.ShouldNotLoadModule = function() return false end
+        _G.C_CurrencyInfo = { GetCurrencyInfo = function() return { iconFileID = 4321 } end }
+
+        local registered = {}
+        _G.ChatFrameUtil = { AddMessageEventFilter = function(event, fn) registered[event] = fn end }
+        CL:OnEnable()
+
+        local function deliver(event, msg)
+            local fn = registered[event]
+            if not fn then return msg end
+            return select(2, fn(nil, event, msg))
+        end
+
+        assert.equal("You receive currency: " .. ICON_4321 .. " " .. CURRENCY .. " x5.",
+            deliver("CHAT_MSG_CURRENCY", "You receive currency: " .. CURRENCY .. " x5."))
+    end)
+end)
