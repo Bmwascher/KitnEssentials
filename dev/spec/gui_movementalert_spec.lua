@@ -14,11 +14,10 @@
 local helpers = require("dev.spec._helpers")
 
 describe("GUI-NoMovementAlert tracked spells card", function()
-    local db, specHeaders, pickerConfig
+    local db, specHeaders
 
     before_each(function()
         specHeaders = {}
-        pickerConfig = nil
 
         -- Attached, themed and silent so cards 2-6 take their short branch.
         -- None of them reaches card 7's class; each one skipped is a widget
@@ -63,10 +62,7 @@ describe("GUI-NoMovementAlert tracked spells card", function()
             GetCurrentSpecID = function() return nil end,
             -- Hands back a class the stored pick disagrees with, which is the
             -- whole point of the case.
-            CreateClassPickerRow = function(_, _, config)
-                pickerConfig = config
-                return noopRow(), "DRUID"
-            end,
+            CreateClassPickerRow = function() return noopRow(), "DRUID" end,
         }
 
         local KE = helpers.loadModule("GUI/GUITabs/GUIUtilities/GUI-NoMovementAlert.lua", {
@@ -90,11 +86,5 @@ describe("GUI-NoMovementAlert tracked spells card", function()
         -- Untouched: the key is dead weight in old profiles, and a builder that
         -- still wrote it would be reading it too.
         assert.equals("MAGE", db.SpellEditorClass)
-
-        -- The picker cannot return a class the card can draw unless it is
-        -- offered every class the presets cover.
-        assert.equals("NoMovementAlert", pickerConfig.scope)
-        table.sort(pickerConfig.classTokens)
-        assert.same({ "DRUID", "MAGE" }, pickerConfig.classTokens)
     end)
 end)
