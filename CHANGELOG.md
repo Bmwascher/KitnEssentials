@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.48
+
+### Secondary Stats Display
+
+- **NEW:** The tracker can be turned off for individual specialisations. A spec
+  you untick really stops the module rather than just hiding it, under Quality
+  of Life > Secondary Stats Display
+
+### No Movement Alert
+
+- The class dropdown opens on your own class every time instead of remembering
+  the last one you looked at
+
+---
+
 ## v4.6.47
 
 ### Mythic+ Timer
