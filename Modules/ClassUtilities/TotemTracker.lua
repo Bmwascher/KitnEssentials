@@ -399,6 +399,51 @@ function TT:IsPreviewActive()
     return isPreviewActive
 end
 
+function TT:RegisterEditMode()
+    if not self.editModeConfig then
+        self.editModeConfig = {
+            key         = "TotemTracker",
+            module      = self,
+            displayName = "Totem Tracker",
+            frame       = containerFrame,
+            getPosition = function() return self.db.Position end,
+            setPosition = function(pos)
+                self.db.Position.AnchorFrom = pos.AnchorFrom
+                self.db.Position.AnchorTo   = pos.AnchorTo
+                self.db.Position.XOffset    = pos.XOffset
+                self.db.Position.YOffset    = pos.YOffset
+                self:ApplySettings()
+            end,
+            getAnchorFrom = function() return ContainerAnchorPoint(self.db) end,
+            getParentFrame = function()
+                return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
+            end,
+            guiPath = "TotemTracker",
+        }
+    end
+
+    if KE.EditMode and not self.editModeRegistered then
+        KE.EditMode:RegisterElement(self.editModeConfig)
+        self.editModeRegistered = true
+    end
+
+    if KE.EUIUnlock then
+        KE.EUIUnlock:Register(self.editModeConfig, {
+            label = "Totem Tracker",
+            order = 620,
+            isHidden = function()
+                return not (self.db and self.db.Enabled and containerFrame)
+            end,
+        })
+    end
+end
+
+function TT:UnregisterEditMode()
+    if KE.EditMode then KE.EditMode:UnregisterElement("TotemTracker") end
+    self.editModeRegistered = false
+    -- The EllesmereUI element deliberately stays; see CHAT:UnregisterEditMode.
+end
+
 function TT:OnEnable()
     if not self.db or not self.db.Enabled then return end
 
@@ -418,27 +463,7 @@ function TT:OnEnable()
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnTotemUpdate")
     C_Timer.After(0.1, function() self:UpdateTotems() end)
 
-    if KE.EditMode then
-        KE.EditMode:RegisterElement({
-            key         = "TotemTracker",
-            module      = self,
-            displayName = "Totem Tracker",
-            frame       = containerFrame,
-            getPosition = function() return self.db.Position end,
-            setPosition = function(pos)
-                self.db.Position.AnchorFrom = pos.AnchorFrom
-                self.db.Position.AnchorTo   = pos.AnchorTo
-                self.db.Position.XOffset    = pos.XOffset
-                self.db.Position.YOffset    = pos.YOffset
-                self:ApplySettings()
-            end,
-            getAnchorFrom = function() return ContainerAnchorPoint(self.db) end,
-            getParentFrame = function()
-                return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
-            end,
-            guiPath = "TotemTracker",
-        })
-    end
+    self:RegisterEditMode()
 end
 
 function TT:OnDisable()
@@ -452,5 +477,5 @@ function TT:OnDisable()
     end
 
     if containerFrame then containerFrame:Hide() end
-    if KE.EditMode then KE.EditMode:UnregisterElement("TotemTracker") end
+    self:UnregisterEditMode()
 end
