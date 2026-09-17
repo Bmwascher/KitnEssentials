@@ -1056,6 +1056,7 @@ local Defaults = {
         -- half of every width change. Accepted in exchange for the placement.
         SecondaryStats = {
             Enabled = false,
+            EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per global spec ID)
             Stats = {
                 crit      = { Shown = true,  ValueMode = "percent" },
                 haste     = { Shown = true,  ValueMode = "percent" },

@@ -10,6 +10,10 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
+-- The compact checkbox is a 22px cell. Four extra pixels keep the spec icons
+-- from touching each other without turning the list back into a stack of cards.
+local SPEC_ROW_HEIGHT = 26
+
 local STAT_KEYS = { "crit", "haste", "mastery", "vers", "leech", "avoidance", "speed" }
 local STAT_TEXT = {
     crit = "Crit", haste = "Haste", mastery = "Mastery", vers = "Versatility",
@@ -330,6 +334,75 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
     card6:AddRow(row6c, Theme.rowHeightLast, 0)
 
     yOffset = card6:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 7: Enable per Specialization
+    ----------------------------------------------------------------
+    local card7 = GUIFrame:CreateCard(scrollChild, "Enable per Specialization", yOffset)
+    manager:Register(card7, "all")
+    card7:AddLabel("Untick a specialization to stop the readout there. It stops reading stats on that spec, not just hiding. Specs you never touch stay on.")
+
+    if not db.EnabledSpecs then db.EnabledSpecs = {} end
+
+    local classSpecs = GUIFrame.GetClassSpecs()
+    local classTokens = {}
+    for token in pairs(classSpecs) do
+        classTokens[#classTokens + 1] = token
+    end
+
+    local classRow, shownClass = GUIFrame:CreateClassPickerRow(card7.content, {
+        scope = "SecondaryStats",
+        classTokens = classTokens,
+    })
+    manager:Register(classRow, "all")
+    card7:AddRow(classRow, 36)
+
+    local currentSpecId = GUIFrame.GetCurrentSpecID()
+    local specs = classSpecs[shownClass] or {}
+
+    if #specs == 0 then
+        card7:AddLabel("No specializations available for this class.")
+    end
+
+    for index = 1, #specs do
+        local specID = specs[index]
+        local specName, specIcon = "Spec " .. specID, nil
+        if GetSpecializationInfoByID then
+            local _, name, _, icon = GetSpecializationInfoByID(specID)
+            if name then specName = name end
+            specIcon = icon
+        end
+
+        local label = specName
+        if specIcon then
+            label = "|T" .. specIcon .. ":16:16:0:0:64:64:5:59:5:59|t " .. specName
+        end
+        if specID == currentSpecId then
+            label = label .. "  " .. KE:ColorTextByTheme("(current)")
+        end
+
+        local isLast = index == #specs
+        local row = GUIFrame:CreateRow(card7.content, SPEC_ROW_HEIGHT)
+        local specCheck = GUIFrame:CreateCompactCheckbox(row, label, {
+            value = db.EnabledSpecs[specID] ~= false,
+            callback = function(checked)
+                -- WRITTEN AS AN IF, not `checked and nil or false`: nil and
+                -- false are both falsy, so that idiom stores false on every
+                -- tick and a spec turned off can never be turned back on.
+                if checked then
+                    db.EnabledSpecs[specID] = nil
+                else
+                    db.EnabledSpecs[specID] = false
+                end
+                if SS and SS.ApplySpecGate then SS:ApplySpecGate() end
+            end,
+        })
+        row:AddWidget(specCheck, 1)
+        manager:Register(specCheck, "all")
+        card7:AddRow(row, SPEC_ROW_HEIGHT, isLast and 0 or nil)
+    end
+
+    yOffset = card7:GetNextOffset()
 
     RefreshStates()
     return yOffset

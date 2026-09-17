@@ -25,6 +25,8 @@ local GetLifesteal = GetLifesteal
 local GetAvoidance = GetAvoidance
 local GetSpeed = GetSpeed
 local issecretvalue = issecretvalue
+local GetSpecialization = C_SpecializationInfo.GetSpecialization
+local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local string_format = string.format
 local math_floor = math.floor
 local unpack = unpack
@@ -78,8 +80,29 @@ local UNIT_EVENTS = {
     UNIT_STATS = true,
     UNIT_SPELL_HASTE = true,
     PLAYER_DAMAGE_DONE_MODS = true,
-    PLAYER_SPECIALIZATION_CHANGED = true,
 }
+
+-- The events the per-spec gate owns. They are registered when the current spec
+-- is enabled and unregistered when it is not, which is what makes a disabled
+-- spec cost nothing. The two spec-watch events are deliberately NOT here: they
+-- have to outlive the gate or nothing could ever switch it back on.
+local STAT_EVENTS = {
+    "UNIT_STATS",
+    "UNIT_SPELL_HASTE",
+    "PLAYER_DAMAGE_DONE_MODS",
+    "COMBAT_RATING_UPDATE",
+    "MASTERY_UPDATE",
+    -- Blizzard declares a dedicated event for each tertiary. Without these
+    -- three, those rows only refresh when an unrelated event happens to fire.
+    "AVOIDANCE_UPDATE",
+    "LIFESTEAL_UPDATE",
+    "SPEED_UPDATE",
+    "SPELL_POWER_CHANGED",
+    "PLAYER_EQUIPMENT_CHANGED",
+}
+
+-- Talent and spec state is not reliable immediately on a spec change event.
+local SPEC_SETTLE_DELAY = 2
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -96,6 +119,29 @@ SS.pending = false
 ---------------------------------------------------------------------------------
 function SS:UpdateDB()
     self.db = KE.db.profile.SecondaryStats
+end
+
+---------------------------------------------------------------------------------
+-- Per-spec gate
+---------------------------------------------------------------------------------
+-- Absent means enabled. Only an explicit opt-out is ever stored, so a profile
+-- that has never touched the card stores nothing and behaves exactly as it did
+-- before the setting existed.
+--
+-- An unresolvable spec reads as enabled rather than disabled: failing closed
+-- would blank the readout on a fresh character or mid-load, which looks like
+-- the module is broken, while failing open corrects itself on the next event.
+function SS:IsSpecEnabled(db, specId)
+    local specs = db and db.EnabledSpecs
+    if not specs or not specId then return true end
+    return specs[specId] ~= false
+end
+
+function SS:ResolveSpecId()
+    if not GetSpecialization then return nil end
+    local index = GetSpecialization()
+    if not index or index == 0 then return nil end
+    return GetSpecializationInfo and GetSpecializationInfo(index)
 end
 
 ---------------------------------------------------------------------------------
@@ -336,9 +382,13 @@ function SS:ShowPreview()
     self:ApplySettings()
 end
 
+-- The spec gate counts here as much as the master enable: without it, closing
+-- the page on a spec the player has just unticked would leave the readout on
+-- screen until the next spec change.
 function SS:HidePreview()
     self.isPreview = false
-    if self.frame and not self.db.Enabled then
+    if not self.frame then return end
+    if not self.db.Enabled or not self:IsSpecEnabled(self.db, self:ResolveSpecId()) then
         self.frame:Hide()
     end
 end
@@ -354,27 +404,57 @@ end
 function SS:OnEnable()
     if not self.db.Enabled then return end
 
+    -- Registered OUTSIDE the gate, because the gate is what unregisters
+    -- everything else: a spec the player disabled has to stay able to hear
+    -- itself being switched away from, or it is off until a reload.
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnSpecChanged")
+
+    self:ApplySpecGate()
+end
+
+function SS:ApplySpecGate()
+    if self:IsSpecEnabled(self.db, self:ResolveSpecId()) then
+        self:StartForSpec()
+    else
+        self:StopForSpec()
+    end
+end
+
+function SS:StartForSpec()
     self:CreateDisplayFrame()
     self:RegWithEditMode()
 
-    self:RegisterEvent("UNIT_STATS", "OnStatEvent")
-    self:RegisterEvent("UNIT_SPELL_HASTE", "OnStatEvent")
-    self:RegisterEvent("PLAYER_DAMAGE_DONE_MODS", "OnStatEvent")
-    self:RegisterEvent("COMBAT_RATING_UPDATE", "OnStatEvent")
-    self:RegisterEvent("MASTERY_UPDATE", "OnStatEvent")
-    -- Blizzard declares a dedicated event for each tertiary. Without these
-    -- three, those rows only refresh when an unrelated event happens to fire.
-    self:RegisterEvent("AVOIDANCE_UPDATE", "OnStatEvent")
-    self:RegisterEvent("LIFESTEAL_UPDATE", "OnStatEvent")
-    self:RegisterEvent("SPEED_UPDATE", "OnStatEvent")
-    self:RegisterEvent("SPELL_POWER_CHANGED", "OnStatEvent")
-    self:RegisterEvent("PLAYER_EQUIPMENT_CHANGED", "OnStatEvent")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnStatEvent")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnStatEvent")
+    for index = 1, #STAT_EVENTS do
+        self:RegisterEvent(STAT_EVENTS[index], "OnStatEvent")
+    end
     self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
 
     self.frame:Show()
+    -- Re-applied even when the gate was already open, because this is also the
+    -- redraw path for a zone change and a spec change.
     self:ApplySettings()
+end
+
+function SS:StopForSpec()
+    for index = 1, #STAT_EVENTS do
+        self:UnregisterEvent(STAT_EVENTS[index])
+    end
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    self.pending = false
+    -- The preview owns the frame while the settings page is open, so a spec the
+    -- player just unticked still draws until they close the page.
+    if self.frame and not self.isPreview then self.frame:Hide() end
+end
+
+-- Applied twice on purpose. The immediate pass keeps the redraw this event used
+-- to trigger, and handles the common case where the spec already reads
+-- correctly; the deferred one is the only pass whose spec read can be trusted.
+function SS:OnSpecChanged()
+    self:ApplySpecGate()
+    C_Timer.After(SPEC_SETTLE_DELAY, function()
+        if self:IsEnabled() then self:ApplySpecGate() end
+    end)
 end
 
 function SS:OnDisable()
