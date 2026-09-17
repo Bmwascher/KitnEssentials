@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.43
+
+### Chat
+
+- **NEW:** A whisper sound now ships with the addon and comes preselected for
+  both whispers and Battle.net whispers
+- Playing a sound on whisper is still off by default. If you had it on without
+  ever choosing a sound, you will start hearing this one - pick another, or
+  turn the option off, under Chat > Whisper Sounds
+
+---
+
 ## v4.6.42
 
 ### Chat
