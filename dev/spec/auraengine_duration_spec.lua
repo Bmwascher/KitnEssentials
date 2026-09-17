@@ -48,11 +48,11 @@ describe("AuraEngine duration formatting", function()
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
         getDurationFormatter({ DecimalThreshold = 0 })
 
-        assert.equals(3, #captured.breakpoints)
-        assert.equals(0, captured.breakpoints[3].threshold)
-        assert.equals(1, captured.breakpoints[3].step)
-        assert.equals("%d", captured.breakpoints[3].format)
-        assert.equals("down", captured.breakpoints[3].rounding)
+        assert.equals(4, #captured.breakpoints)
+        assert.equals(0, captured.breakpoints[4].threshold)
+        assert.equals(1, captured.breakpoints[4].step)
+        assert.equals("%d", captured.breakpoints[4].format)
+        assert.equals("down", captured.breakpoints[4].rounding)
     end)
 
     it("adds a tenths rule under a non-zero threshold", function()
@@ -62,13 +62,29 @@ describe("AuraEngine duration formatting", function()
         local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
         getDurationFormatter({ DecimalThreshold = 5 })
 
-        assert.equals(4, #captured.breakpoints)
-        assert.equals(5, captured.breakpoints[3].threshold)
-        assert.equals(1, captured.breakpoints[3].step)
-        assert.equals("%d", captured.breakpoints[3].format)
-        assert.equals(0, captured.breakpoints[4].threshold)
-        assert.equals(0.1, captured.breakpoints[4].step)
-        assert.equals("%.1f", captured.breakpoints[4].format)
+        assert.equals(5, #captured.breakpoints)
+        assert.equals(5, captured.breakpoints[4].threshold)
+        assert.equals(1, captured.breakpoints[4].step)
+        assert.equals("%d", captured.breakpoints[4].format)
+        assert.equals(0, captured.breakpoints[5].threshold)
+        assert.equals(0.1, captured.breakpoints[5].step)
+        assert.equals("%.1f", captured.breakpoints[5].format)
+    end)
+
+    -- A tier appended after a lower one breaks the order the table is
+    -- written in.
+    it("lists breakpoints in strictly descending threshold order", function()
+        local captured = installFormatterStubs()
+        local KE = helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua")
+        helpers.loadModule("Modules/Combat/AuraEngine/Style.lua", KE)
+        local getDurationFormatter = findUpvalue(KE.AuraStyle.RegisterRegions, "GetDurationFormatter")
+
+        for _, decimalThreshold in ipairs({ 0, 5 }) do
+            getDurationFormatter({ DecimalThreshold = decimalThreshold })
+            for index = 2, #captured.breakpoints do
+                assert.is_true(captured.breakpoints[index - 1].threshold > captured.breakpoints[index].threshold)
+            end
+        end
     end)
 
     -- The four GUI builders present this value and both rendering paths act on
@@ -100,16 +116,16 @@ describe("AuraEngine duration formatting", function()
 
         for _, value in ipairs({ "abc", -1, 11, 3.5, 0 / 0, true }) do
             getDurationFormatter({ DecimalThreshold = value })
-            assert.equals(3, #captured.breakpoints)
+            assert.equals(4, #captured.breakpoints)
         end
 
         getDurationFormatter({})
-        assert.equals(3, #captured.breakpoints)
+        assert.equals(4, #captured.breakpoints)
 
         for _, value in ipairs({ 1, 10, "4" }) do
             getDurationFormatter({ DecimalThreshold = value })
-            assert.equals(4, #captured.breakpoints)
-            assert.equals(tonumber(value), captured.breakpoints[3].threshold)
+            assert.equals(5, #captured.breakpoints)
+            assert.equals(tonumber(value), captured.breakpoints[4].threshold)
         end
     end)
 
@@ -136,7 +152,7 @@ describe("AuraEngine duration formatting", function()
         assert.is_false(decimal == getDurationFormatter(settings))
     end)
 
-    it("formats preview durations in hours from the one-hour boundary", function()
+    it("formats preview durations in hours from one hour and days from one day", function()
         local Preview = L.loadAuraPreview()
         local buildFrames = findUpvalue(Preview.Enter, "BuildFrames")
         local populateEntryContent = findUpvalue(buildFrames, "PopulateEntryContent")
@@ -146,6 +162,10 @@ describe("AuraEngine duration formatting", function()
         assert.equals("59m", formatRemaining(3599))
         assert.equals("1h", formatRemaining(3600))
         assert.equals("23h", formatRemaining(84360))
+        assert.equals("23h", formatRemaining(86399))
+        assert.equals("1d", formatRemaining(86400))
+        assert.equals("1d", formatRemaining(172799))
+        assert.equals("30d", formatRemaining(2592000))
     end)
 
     -- Floors, like the live formatter: rounding up reads a second ahead of the
