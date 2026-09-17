@@ -38,6 +38,13 @@ local function GetDurationFormatter(settings)
 
     local breakpoints = {
         {
+            threshold = 86400,
+            format    = "%dd",
+            components = {
+                { div = 86400, step = 1, rounding = Enum.NumericRuleFormatRounding.Down },
+            },
+        },
+        {
             threshold = 3600,
             format    = "%dh",
             components = {
