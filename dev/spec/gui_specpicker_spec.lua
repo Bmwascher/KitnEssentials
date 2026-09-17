@@ -50,7 +50,10 @@ end)
 -- has to refuse it. In game the refusal shows up only as the absence of a flash,
 -- which is why it is pinned here rather than left to smoke.
 describe("SpecPicker rebuild on pick", function()
-    local STUBBED = { "C_SpecializationInfo", "C_Timer", "UnitClass", "LOCALIZED_CLASS_NAMES_MALE" }
+    local STUBBED = {
+        "C_SpecializationInfo", "C_Timer", "UnitClass",
+        "LOCALIZED_CLASS_NAMES_MALE", "CLASS_ICON_TCOORDS",
+    }
     local GUIFrame, saved, refreshes, picked
 
     before_each(function()
@@ -110,7 +113,5 @@ describe("SpecPicker rebuild on pick", function()
         local keys = {}
         for index, option in ipairs(options) do keys[index] = option.key end
         assert.same({ "DEATHKNIGHT", "WARRIOR" }, keys)
-
-        _G.CLASS_ICON_TCOORDS = nil
     end)
 end)
