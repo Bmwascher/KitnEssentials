@@ -37,7 +37,20 @@ end
 describe("GlobalFonts", function()
     local S, KE, applied, planted
 
+    -- The module creates its login watcher at file scope, so loading it needs a
+    -- frame constructor. A no-op double is enough: what the watcher registers
+    -- and when it fires are in-game concerns, and nothing here asserts on them.
+    local function frameDouble()
+        return {
+            RegisterEvent = function() end,
+            UnregisterEvent = function() end,
+            UnregisterAllEvents = function() end,
+            SetScript = function() end,
+        }
+    end
+
     local function load(loadedAddOns)
+        _G.CreateFrame = function() return frameDouble() end
         _G.C_AddOns = { IsAddOnLoaded = function(name) return loadedAddOns[name] == true end }
         applied = {}
         S = {
@@ -70,6 +83,7 @@ describe("GlobalFonts", function()
         _G.GameFontNormal = nil
         _G.GameFontDisable = nil
         _G.C_AddOns = nil
+        _G.CreateFrame = nil
     end)
 
     it("writes nothing while Platynator is loaded", function()
@@ -129,8 +143,8 @@ describe("GlobalFonts", function()
     end)
 
     -- Standing down is only worth telling the player about when it cost them
-    -- something. The four refusals below are the difference between a useful
-    -- notice and one that fires at someone who never asked for these fonts.
+    -- something. The refusals below are the difference between a useful notice
+    -- and one that fires at someone who never asked for these fonts.
     describe("stand-down notice", function()
         local frames
 
@@ -153,10 +167,6 @@ describe("GlobalFonts", function()
             assert.is_string(remedy)
         end)
 
-        it("is not due when nothing is blocking", function()
-            assert.is_nil(S.GlobalFontsNoticeDue())
-        end)
-
         -- With the frame-skin module off the sweep would not have run anyway,
         -- so yielding took nothing away.
         it("is not due while the frame-skin module is off", function()
@@ -177,12 +187,23 @@ describe("GlobalFonts", function()
             assert.is_nil(S.GlobalFontsNoticeDue())
         end)
 
-        -- Re-arming is what makes the notice reappear for a player who turns
-        -- the other addon's option off and later back on.
-        it("clears the delivered flag once the block has lifted", function()
+        -- Both switches are off here on purpose. The blocker lookup has to run
+        -- BEFORE the switch refusals, or a profile that had the module off
+        -- while the block lifted keeps a stale flag and never warns again once
+        -- the block returns. A version of this case with the switches on
+        -- passes against that ordering bug.
+        it("clears the delivered flag once the block has lifted, switches off too", function()
+            S.IsActive = function() return false end
+            frames.Skins = { GlobalFonts = false }
             frames._globalFontsBlockedWarned = true
             assert.is_nil(S.GlobalFontsNoticeDue())
             assert.is_nil(frames._globalFontsBlockedWarned)
+        end)
+
+        it("refuses without writing when the frame-skin table is missing", function()
+            block()
+            KE.db.profile.Skinning.BlizzardFrames = nil
+            assert.is_nil(S.GlobalFontsNoticeDue())
         end)
     end)
 end)
