@@ -20,6 +20,7 @@ local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local GetNumSpecializationsForClassID = C_SpecializationInfo.GetNumSpecializationsForClassID
 local table_sort = table.sort
+local string_format = string.format
 local ipairs = ipairs
 local next = next
 local type = type
@@ -107,6 +108,22 @@ end
 ---------------------------------------------------------------------------------
 -- Class picker
 ---------------------------------------------------------------------------------
+-- Class cells on one sheet, cropped by Blizzard's own coordinate table.
+local CLASS_SHEET = "Interface\\WorldStateFrame\\Icons-Classes"
+local CLASS_SHEET_SIZE = 256
+
+-- A |A atlas escape would give a sharper source, and the atlas is what KE uses
+-- for class icons elsewhere, but KE.DropdownSearchMatches strips |T and not |A --
+-- an atlas icon would silently defeat a search this picker may later switch on.
+local function ClassIcon(token)
+    local coords = _G.CLASS_ICON_TCOORDS and _G.CLASS_ICON_TCOORDS[token]
+    if not coords then return "" end
+    return string_format("|T%s:16:16:0:0:%d:%d:%d:%d:%d:%d|t ",
+        CLASS_SHEET, CLASS_SHEET_SIZE, CLASS_SHEET_SIZE,
+        coords[1] * CLASS_SHEET_SIZE, coords[2] * CLASS_SHEET_SIZE,
+        coords[3] * CLASS_SHEET_SIZE, coords[4] * CLASS_SHEET_SIZE)
+end
+
 -- The picked class lives for one visit to one page, never in the profile. A
 -- stored pick outlives its usefulness: the page then opens on whatever class was
 -- inspected last, which is rarely the one the player is on.
@@ -141,6 +158,24 @@ function GUIFrame.ResolvePickerClass(sessionToken, playerToken, tokens)
     return tokens[1]
 end
 
+-- Dropdown options for a class list, alphabetical by class name.
+--
+-- Sorted on the bare name, never the label: every label opens with the same |T
+-- escape and first differs at the icon's crop numbers, so sorting labels orders
+-- the list by position on the class sheet. The extra `name` field is ignored by
+-- the dropdown, which reads only `key` and `text`.
+function GUIFrame.BuildClassOptions(tokens, playerClass)
+    local options = {}
+    for _, token in ipairs(tokens) do
+        local name = (_G.LOCALIZED_CLASS_NAMES_MALE and _G.LOCALIZED_CLASS_NAMES_MALE[token]) or token
+        local label = ClassIcon(token) .. name
+        if token == playerClass then label = label .. "  " .. KE:ColorTextByTheme("(current)") end
+        options[#options + 1] = { key = token, text = label, name = name }
+    end
+    table_sort(options, function(a, b) return a.name < b.name end)
+    return options
+end
+
 -- Config: { scope, classTokens, label }. Returns the row and the class token the
 -- caller should draw, so the caller never reads the picker's state itself.
 function GUIFrame:CreateClassPickerRow(parent, config)
@@ -154,13 +189,7 @@ function GUIFrame:CreateClassPickerRow(parent, config)
     local _, playerClass = UnitClass("player")
     local shownClass = GUIFrame.ResolvePickerClass(sessionClass[scope], playerClass, tokens)
 
-    local options = {}
-    for _, token in ipairs(tokens) do
-        local label = (_G.LOCALIZED_CLASS_NAMES_MALE and _G.LOCALIZED_CLASS_NAMES_MALE[token]) or token
-        if token == playerClass then label = label .. "  " .. KE:ColorTextByTheme("(current)") end
-        options[#options + 1] = { key = token, text = label }
-    end
-    table_sort(options, function(a, b) return a.text < b.text end)
+    local options = GUIFrame.BuildClassOptions(tokens, playerClass)
 
     local row = GUIFrame:CreateRow(parent, 36)
     local dropdown
@@ -168,13 +197,14 @@ function GUIFrame:CreateClassPickerRow(parent, config)
         options = options,
         value = shownClass,
         callback = function(key)
-            sessionClass[scope] = key
             -- Close the list instantly, THEN rebuild a frame later: the animated
             -- close was still running when the rebuild hit, and the orphaned list
             -- frame flashed at the bottom of the screen.
             if dropdown and dropdown._closeDropdown then
                 dropdown._closeDropdown(true)
             end
+
+            sessionClass[scope] = key
             C_Timer.After(0, function() GUIFrame:RefreshContent() end)
         end,
     })
