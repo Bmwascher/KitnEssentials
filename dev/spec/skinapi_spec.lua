@@ -971,8 +971,8 @@ describe("S.SetSkinFont", function()
     end)
 
 
-    -- The face-change gate is KE's own branching (upstream re-sweeps on every
-    -- call). The first case is the trap: the GUI writes the profile before
+    -- The face-change gate is KE's own branching, not a sweep on every call.
+    -- The first case is the trap: the GUI writes the profile before
     -- calling the setter, so a first-call EnsureFontInit reads the new face
     -- back and a comparison against S.FONT_FACE alone sees no change.
     describe("Blizzard font sweep re-run", function()
