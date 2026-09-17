@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.46
+
+### Aura Displays
+
+- Auras lasting longer than a day now show days: a buff that read `30h` reads
+  `1d`. Every aura display, not just buffs
+
+---
+
 ## v4.6.45
 
 ### Totem Tracker
