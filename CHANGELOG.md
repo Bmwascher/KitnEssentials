@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.6.42
+
+### Chat
+
+- Currency you gain now shows its icon in chat, the way a currency you link
+  yourself already did - Great Vault rewards and the crests a dungeon awards
+  included
+
+---
+
 ## v4.6.41
 
 ### Character Panel
