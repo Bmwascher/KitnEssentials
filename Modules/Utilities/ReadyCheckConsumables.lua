@@ -357,13 +357,15 @@ function RCC:_EnableStateDriver()
     if DEBUG_RCC then KE:Print("[RCC] state driver registered.") end
 end
 
---- Unregisters the state driver. Only called from HideFrame's OOC teardown
---- path (the in-combat path defers the whole hide to PLAYER_REGEN_ENABLED,
---- which re-enters HideFrame out of combat).
+--- Unregisters the state driver. Only called from HideFrame's out-of-combat
+--- path (the in-combat path queues the whole hide on KE:RunAfterCombat,
+--- which re-enters HideFrame out of combat). Passing no attribute makes the
+--- manager drop its entry for the frame instead of keeping an empty one in
+--- its update loop.
 function RCC:_DisableStateDriver()
     if not self.stateDriverActive then return end
     if self.frame and self.frame.stateFrame then
-        UnregisterStateDriver(self.frame.stateFrame, "combat")
+        UnregisterAttributeDriver(self.frame.stateFrame)
     end
     self.stateDriverActive = false
     if DEBUG_RCC then KE:Print("[RCC] state driver unregistered.") end
@@ -1568,20 +1570,18 @@ function RCC:ShowFrame(initiatorUnit)
         return
     end
 
-    -- ClearAllPoints/SetParent/SetPoint/Show are all combat-protected on the
-    -- SecureHandlerStateTemplate. The RC's 15s window is too short for
-    -- re-showing at combat-end to be useful, so skip entirely. Leave any
-    -- pending PLAYER_REGEN_ENABLED (from a prior deferred hide) registered
-    -- so the previous RC's frame still tears down cleanly.
+    -- RegisterStateDriver and the click overlays' attribute writes are
+    -- combat-protected. The RC's 15s window is too short for re-showing at
+    -- combat-end to be useful, so skip entirely; a hide queued by a prior
+    -- check still runs at combat end.
     if InCombatLockdown() then
         if DEBUG_RCC then KE:Print("[RCC] ShowFrame: skipped (in combat).") end
         return
     end
 
-    -- Cancel any pending deferred hide from a previous RC that finished in
-    -- combat. Without this, a PLAYER_REGEN_ENABLED left over from the prior
-    -- HideFrame would fire after combat and hide this new RC mid-interaction.
-    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    -- A hide queued by a previous check that finished in combat must not
+    -- fire on this new row after combat ends.
+    self._hidePending = nil
 
     -- Build frame on first use (lazy; deferred until the first ready check).
     if not self.frame then
@@ -1639,29 +1639,30 @@ function RCC:ShowFrame(initiatorUnit)
         end
     end
 
-    -- Show BEFORE updating icons. UpdateAllIcons has an IsShown() early-return
-    -- (perf guard); updating first would skip and icons wouldn't get their
-    -- status textures or desaturation state. UpdateAllIcons ends with
-    -- RefreshLayout so no separate call is needed.
     self.frame:Show()
     -- Register the secure state driver now that the row is displayed. ShowFrame
     -- is OOC-guaranteed (InCombatLockdown guard near the top returns first), so
     -- this secure call never runs in lockdown.
     self:_EnableStateDriver()
-    self:UpdateAllIcons()
+    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+    -- Forced: whether the Blizzard popup this row is parented to is already
+    -- visible depends on event dispatch order, and the first paint must not.
+    -- UpdateAllIcons ends with RefreshLayout, so no separate call is needed.
+    self:UpdateAllIcons(true)
 
     if DEBUG_RCC then
-        KE:Print(string_format("[RCC] ShowFrame: shown (isStarter=%s).", tostring(isStarter)))
+        local parentFrame = self.frame:GetParent()
+        KE:Print(string_format("[RCC] ShowFrame: shown (isStarter=%s, parentVisible=%s).",
+            tostring(isStarter), tostring(parentFrame and parentFrame:IsVisible())))
     end
 end
 
 --- HideFrame
---- Called on READY_CHECK_FINISHED. Hides the consumable row.
---- HideFrame
 --- Full teardown on READY_CHECK_FINISHED, Close-button click, or OnDisable.
---- Beyond the obvious frame:Hide() (which cascades to all children), this
---- also explicitly stops LibCustomGlow animations and clears click-button
---- IsON flags. Without the explicit glow stop, LCG's animation group can
+--- Beyond frame:Hide() (which cascades to all children), this explicitly
+--- stops LibCustomGlow animations, hides the click overlays so a later check
+--- under an aura restriction cannot re-show stale ones, and unregisters the
+--- state driver. Without the explicit glow stop, LCG's animation group can
 --- continue to tick on the hidden frame, contributing to idle FPS drops.
 function RCC:HideFrame()
     if not self.frame then return end
@@ -1681,37 +1682,33 @@ function RCC:HideFrame()
         end
     end
 
-    -- Clear click-button IsON flags. The secure state-driver snippet keys
-    -- its combat-exit re-show off these; leaving them true would cause
-    -- phantom reshows on a subsequent combat-end while the frame is hidden.
-    for i = 1, NUM_SLOTS do
-        local btn = self.buttons[i]
-        if btn and btn.click then
-            btn.click.IsON = false
-        end
-    end
+    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 
-    -- self.frame is a SecureHandlerStateTemplate — Hide() is combat-protected.
-    -- Defer via PLAYER_REGEN_ENABLED if we're in combat. The LCG stops and
-    -- IsON clears above are unprotected and already ran, so the non-deferrable
-    -- cleanup is complete before we return. SetAlpha is unprotected too, so
-    -- we use it to make the frame visually disappear immediately — otherwise
-    -- the bar lingers on-screen until combat ends.
+    -- _DisableStateDriver writes to SecureStateDriverManager, a protected
+    -- Blizzard frame, and the click overlays are protected too, so the rest
+    -- of the teardown waits for combat to end. SetAlpha is unprotected and
+    -- makes the row disappear now. The queue is KE-owned: AceEvent's
+    -- UnregisterAllEvents on OnDisable cannot cancel it. _hidePending makes
+    -- the queued closures idempotent and stops event repaints meanwhile.
     if InCombatLockdown() then
         self.frame:SetAlpha(0)
-        self:RegisterEvent("PLAYER_REGEN_ENABLED", "HideFrame")
+        self._hidePending = true
+        KE:RunAfterCombat(function()
+            if self._hidePending then self:HideFrame() end
+        end)
         if DEBUG_RCC then KE:Print("[RCC] HideFrame: deferred (in combat, alpha=0).") end
         return
     end
 
-    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    -- Tear down the state driver on the OOC path only. The in-combat branch
-    -- above defers the whole hide to PLAYER_REGEN_ENABLED, which re-enters
-    -- HideFrame out of combat and reaches this line — so UnregisterStateDriver
-    -- is always called out of combat. Driver stays live through any combat that
-    -- overlaps the ready check, which is exactly when it's doing its job.
     self:_DisableStateDriver()
+    for i = 1, NUM_SLOTS do
+        local btn = self.buttons[i]
+        if btn and btn.click then
+            btn.click:Hide()
+        end
+    end
     self.frame:Hide()
+    self._hidePending = nil
 
     if DEBUG_RCC then KE:Print("[RCC] HideFrame: hidden (full cleanup).") end
 end
