@@ -248,6 +248,41 @@ function MPT.LiveMsElapsed(now, msBase, elapsed)
     return p, msBase
 end
 
+-- Rows for the death-list tooltip. "TIME": every death, chronological, with
+-- equal seconds ordered by name so the rows stay stable. "COUNT": one row per
+-- player with their total, most deaths first, then by name; the class comes
+-- from any of that player's entries that recorded one. Never reorders `log`.
+-- Busted-testable (dev/spec/mpt_death_rows_spec.lua).
+function MPT.BuildDeathRows(log, style)
+    local rows = {}
+    if style == "COUNT" then
+        local byName = {}
+        for i = 1, #log do
+            local e = log[i]
+            local name = e.name or ""
+            local row = byName[name]
+            if not row then
+                row = { name = name, count = 0 }
+                byName[name] = row
+                rows[#rows + 1] = row
+            end
+            row.count = row.count + 1
+            row.class = row.class or e.class
+        end
+        table.sort(rows, function(a, b)
+            if a.count ~= b.count then return a.count > b.count end
+            return a.name < b.name
+        end)
+    else
+        for i = 1, #log do rows[i] = log[i] end
+        table.sort(rows, function(a, b)
+            if a.t ~= b.t then return a.t < b.t end
+            return (a.name or "") < (b.name or "")
+        end)
+    end
+    return rows
+end
+
 -- Posts a one-line boss-kill split to the group channel (INSTANCE_CHAT / RAID /
 -- PARTY). Called from the fresh-stamp arm of UpdateObjectives ONLY — the
 -- restoration arm (reload mid-run) must never re-post. Guard: ChatOutputSplits
@@ -376,6 +411,7 @@ local MPT_DEFAULTS = {
     -- Deaths
     ShowDeaths = true,
     ShowDeathTooltip = true,
+    DeathTooltipStyle = "TIME",
     DeathsColor = {0.85, 0.85, 0.85},
     DeathPenaltyColor = {1, 0.42, 0.42},
 
