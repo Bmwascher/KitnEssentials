@@ -388,12 +388,9 @@ end
 -- can carry their class colour. The library sends no class, so the roster is
 -- the only source.
 --
--- UnitName is SecretWhenUnitIdentityRestricted
--- (UnitDocumentation.lua), so inside a dungeon the name comes back
--- secret and comparing it would throw -- that unit is skipped and the line
--- keeps the accent colour. UnitClass's SECOND return (classFilename) has no
--- ConditionalSecret flag (same file :908-913); the first one does, so it is
--- deliberately not read.
+-- UnitName is SecretWhenUnitNameIdentityRestricted and comparing a secret
+-- throws, so a unit whose name comes back secret is skipped and the line
+-- keeps the accent colour.
 local function PartyClassToken(shortName)
     for i = 1, 4 do
         local unit = "party" .. i
