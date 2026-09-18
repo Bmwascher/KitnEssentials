@@ -305,20 +305,6 @@ local Defaults = {
             WrongColor = { 1, 0.4, 0, 1 },            -- #FF6600
         },
 
-        -- Old GatewayAlert kept for migration (absorbed into RaidNotifications)
-        GatewayAlert = {
-            Enabled = false,
-            Strata = "HIGH",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 150),
-            FontSize = 16,
-            FontOutline = "OUTLINE",
-            ColorMode = "custom",
-            Color = { 0.969, 0.027, 0.945, 1 },  -- #F707F1
-            ShowIcons = true,
-        },
-
         RaidNotifications = {
             Enabled = false,
             Strata = "MEDIUM",
@@ -2599,6 +2585,11 @@ local KEY_RENAMES = {
     { id = "Skinning.Details.Delete",     block = "Skinning", old = "Details",     new = "Details",     convert = DeleteKey },
     { id = "Dungeons.InstanceReset.Delete", block = "Dungeons", old = "InstanceReset", new = "InstanceReset", convert = DeleteKey },
     { id = "Dungeons.DungeonTimers.Delete", block = "Dungeons", old = "DungeonTimers", new = "DungeonTimers", convert = DeleteKey },
+    -- Blocks of modules folded into a replacement. These run before the
+    -- replacement's own copy, so a block it never copied is lost with them.
+    { id = "BossDebuffs.Delete", path = { "BossDebuffs" }, convert = DeleteKey },
+    { id = "GatewayAlert.Delete", path = { "GatewayAlert" }, convert = DeleteKey },
+    { id = "Dungeons.WarpDepleteForces.Delete", block = "Dungeons", old = "WarpDepleteForces", new = "WarpDepleteForces", convert = DeleteKey },
 }
 
 function KE:MigrateCombatLoggerKeys()
