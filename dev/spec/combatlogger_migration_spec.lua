@@ -183,3 +183,18 @@ describe("visibility mode retirement", function()
         assert.are.equal("in_raid", _G.KitnEssentialsDB.profiles.Default.Cursor.Visibility)
     end)
 end)
+
+describe("saved key deletion", function()
+    after_each(function()
+        _G.KitnEssentialsDB = nil
+    end)
+
+    it("deletes the No Movement Alert class pick and keeps the rest of its block", function()
+        local sv = migrateWith({
+            profiles = { Default = { NoMovementAlert = { SpellEditorClass = "MAGE", Enabled = true } } },
+        })
+        local block = sv.profiles.Default.NoMovementAlert
+        assert.is_nil(block.SpellEditorClass)
+        assert.is_true(block.Enabled)
+    end)
+end)

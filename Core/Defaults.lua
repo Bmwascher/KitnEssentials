@@ -2552,6 +2552,15 @@ local KEY_RENAMES = {
         path = { "Cursor", "Taunt", "VisibilityOverride" },
         convert = RetireGroupModes,
     },
+    -- No reader: the class picker keeps its choice for the session only.
+    -- Returning nil deletes the key: the loop stores whatever convert returns.
+    {
+        id = "NoMovementAlert.SpellEditorClass.Delete",
+        block = "NoMovementAlert",
+        old = "SpellEditorClass",
+        new = "SpellEditorClass",
+        convert = function() return nil end,
+    },
 }
 
 function KE:MigrateCombatLoggerKeys()
