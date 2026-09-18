@@ -17,7 +17,7 @@ local GetInstanceInfo = GetInstanceInfo
 local GetLootSpecialization = GetLootSpecialization
 local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
-local GetSpecializationInfoByID = GetSpecializationInfoByID
+local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
 local UnitClass = UnitClass
 local RAID_CLASS_COLORS = RAID_CLASS_COLORS
 local pcall, type = pcall, type
@@ -78,8 +78,8 @@ local function BuildLootSpecLine()
             name = info[2]
             icon = info[4]
         end
-    elseif specID then
-        local info = { GetSpecializationInfoByID(specID) }
+    elseif specID and GetSpecializationInfoForSpecID then
+        local info = { GetSpecializationInfoForSpecID(specID) }
         name = info[2]
         icon = info[4]
     end

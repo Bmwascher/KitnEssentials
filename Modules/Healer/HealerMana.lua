@@ -35,7 +35,7 @@ local UnitName = UnitName
 local UnitPowerPercent = UnitPowerPercent
 local UnitPowerMax = UnitPowerMax
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
-local GetSpecializationInfoByID = GetSpecializationInfoByID
+local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
 local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
 local GetNumGroupMembers = GetNumGroupMembers
@@ -80,8 +80,8 @@ HM.libSpecCache = {}  -- [playerName] = specID, fed by LibSpec.RegisterGroup cal
 -- Helpers
 ---------------------------------------------------------------------------------
 local function GetSpecIcon(specID)
-    if not specID or specID == 0 then return nil end
-    local _, _, _, icon = GetSpecializationInfoByID(specID)
+    if not specID or specID == 0 or not GetSpecializationInfoForSpecID then return nil end
+    local _, _, _, icon = GetSpecializationInfoForSpecID(specID)
     return icon
 end
 

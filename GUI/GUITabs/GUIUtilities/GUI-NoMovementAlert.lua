@@ -289,8 +289,8 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
 
         for _, specId in ipairs(specIds) do
             local specName, specIcon = "Spec " .. specId, nil
-            if GetSpecializationInfoByID then
-                local _, n, _, icon = GetSpecializationInfoByID(specId)
+            if GetSpecializationInfoForSpecID then
+                local _, n, _, icon = GetSpecializationInfoForSpecID(specId)
                 if n then specName = n end
                 specIcon = icon
             end
