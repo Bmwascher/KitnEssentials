@@ -372,10 +372,8 @@ function MPT:BuildHUD()
             local short = Ambiguate(entry.name or "", "short")
             local colored = color and color:WrapTextInColorCode(short) or short
             row.name:SetText(colored)
-            row.name:SetTextColor(1, 1, 1, 0.80)
             local timeStr = _FmtShort(entry.t)  -- "3:44", not "03:44"
             row.time:SetText(timeStr)
-            row.time:SetTextColor(1, 1, 1, 0.80)
             local nw = row.name:GetStringWidth() or 0
             local tw = row.time:GetStringWidth() or 0
             if nw > maxNameW then maxNameW = nw end
