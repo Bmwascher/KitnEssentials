@@ -130,12 +130,11 @@ local CONFLICTS = {
                 -- NSRT is that addon's saved variable; ConsumablesDisplay is
                 -- its "Clickable Consumables" toggle, re-read on every
                 -- READY_CHECK before its container is built. Flipping it
-                -- needs no reload and touches no frame, which matters:
-                -- everything under that container is an ancestor of
-                -- SecureActionButtonTemplate buttons. The show function's
-                -- `force` argument bypasses the toggle; nothing calls it.
-                -- ReadyCheckSettings comes from NSRT's profile loader, so an
-                -- absent table is not ours to create.
+                -- touches no frame, which matters: the container and its
+                -- parent are ancestors of SecureActionButtonTemplate buttons.
+                -- The show function's `force` argument bypasses the toggle;
+                -- nothing calls it. ReadyCheckSettings comes from NSRT's
+                -- profile loader, so an absent table is not ours to create.
                 apply = function()
                     if type(_G.NSRT) ~= "table"
                         or type(_G.NSRT.ReadyCheckSettings) ~= "table" then
