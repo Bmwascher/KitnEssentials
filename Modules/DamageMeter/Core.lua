@@ -50,7 +50,7 @@ local IsInGuild = IsInGuild
 local GetNumGroupMembers = GetNumGroupMembers
 local UnitGUID = UnitGUID
 local Ambiguate = Ambiguate
-local GetSpecializationInfoByID = GetSpecializationInfoByID
+local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
 -- Current chat API. The bare global SendChatMessage is deprecated in 12.0, so capture the
 -- namespaced C_ChatInfo.SendChatMessage once at load and call it under a non-colliding
 -- local name (a local literally named SendChatMessage still trips the deprecation lint).
@@ -522,12 +522,12 @@ end
 -- LibSpec can't resolve.
 ---------------------------------------------------------------------------------
 
--- specID -> spec icon fileID (4th return of GetSpecializationInfoByID). nil for an
--- unknown / starter (0) spec so the caller keeps the class fallback. Mirrors
--- HealerMana's GetSpecIcon.
+-- specID -> spec icon fileID (4th return of GetSpecializationInfoForSpecID). nil
+-- for an unknown / starter (0) spec so the caller keeps the class fallback.
+-- Mirrors HealerMana's GetSpecIcon.
 local function GetSpecIcon(specID)
-    if not specID or specID == 0 then return nil end
-    local _, _, _, icon = GetSpecializationInfoByID(specID)
+    if not specID or specID == 0 or not GetSpecializationInfoForSpecID then return nil end
+    local _, _, _, icon = GetSpecializationInfoForSpecID(specID)
     return icon
 end
 

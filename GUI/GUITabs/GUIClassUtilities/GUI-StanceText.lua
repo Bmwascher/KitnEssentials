@@ -200,8 +200,8 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
                 local wantedName = mod.SPELL_NAMES[entry.spellID] or ""
 
                 local specIcon
-                if GetSpecializationInfoByID then
-                    local _, n, _, icon = GetSpecializationInfoByID(specID)
+                if GetSpecializationInfoForSpecID then
+                    local _, n, _, icon = GetSpecializationInfoForSpecID(specID)
                     if n then specName = n end
                     specIcon = icon
                 end

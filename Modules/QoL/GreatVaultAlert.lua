@@ -54,8 +54,8 @@ function GVA:GetLootSpecInfo()
             name = info[2]
             icon = info[4]
         end
-    else
-        local info = { GetSpecializationInfoByID(specID) }
+    elseif GetSpecializationInfoForSpecID then
+        local info = { GetSpecializationInfoForSpecID(specID) }
         name = info[2]
         icon = info[4]
     end
