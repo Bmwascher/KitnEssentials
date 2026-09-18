@@ -80,15 +80,15 @@ local _sigBuf = {}
 -- pull inward toward the separator.
 local TIMER_SEP_GAP = 3
 
--- Gap (px) between the PB/delta text and the reserved timer-row width
--- (tightened 18 -> 8, in-game feedback: PB sat too far left).
+-- Gap (px) between the PB/delta text and the reserved timer-row width.
+-- Kept small so the PB sits close to the timer.
 local TIMER_PB_GAP = 8
 
 -- Gap (px) between the race-line label ("+2 Chest (26:24):") and the value's
 -- reserved box — the label pins LEFT of the box so the per-second countdown
 -- never re-flows it. The box follows the value's digit shape (re-measured
 -- once per crossing in ApplyLayout), so this gap is the WHOLE visible gap.
--- (4 -> 2, live feedback: hug the countdown.)
+-- Kept small so the label hugs the countdown.
 local RACE_VAL_GAP = 2
 
 ---------------------------------------------------------------------------------
@@ -333,10 +333,8 @@ function MPT:BuildHUD()
         local log = MPT.run and MPT.run.deathLog
         if not log or #log == 0 then return end
 
-        -- Scale the tooltip rows with the Deaths font settings (round-4
-        -- feedback: the hardcoded 10px rows read far too small). Rows match
-        -- the headline size exactly — the earlier +2 read too large once the
-        -- rest of the tooltip was fixed (round-6 feedback).
+        -- Rows use the Deaths font settings at the headline's exact size: a
+        -- fixed small size is hard to read, and a larger one reads too big.
         local ttFace = MPT.db.DeathsFontFace or MPT.db.FontFace
         local ttSize = MPT.db.DeathsFontSize or MPT.db.FontSize or 13
         local rowH   = ttSize + 4
@@ -375,7 +373,7 @@ function MPT:BuildHUD()
             local colored = color and color:WrapTextInColorCode(short) or short
             row.name:SetText(colored)
             row.name:SetTextColor(1, 1, 1, 0.80)
-            local timeStr = _FmtShort(entry.t)  -- "3:44", not "03:44" (round-6 feedback)
+            local timeStr = _FmtShort(entry.t)  -- "3:44", not "03:44"
             row.time:SetText(timeStr)
             row.time:SetTextColor(1, 1, 1, 0.80)
             local nw = row.name:GetStringWidth() or 0
@@ -400,10 +398,10 @@ function MPT:BuildHUD()
             row.time:Show()
         end
 
-        -- Anchor LEFT of the cursor (round-6 feedback — anchored above the
-        -- deaths line it sat on top of the HUD). Placed once per OnEnter;
-        -- GetCursorPosition returns physical px, so divide by the UIParent
-        -- scale to land in frame coordinates.
+        -- Anchor LEFT of the cursor: anchored above the deaths line, the
+        -- tooltip covered the HUD. Placed once per OnEnter; GetCursorPosition
+        -- returns physical px, so divide by the UIParent scale to land in
+        -- frame coordinates.
         local cx, cy = GetCursorPosition()
         local s = UIParent:GetEffectiveScale()
         deathTT:ClearAllPoints()
@@ -431,7 +429,7 @@ end
 -- clock, re-glued at every whole-second flip by OnTimerTick. Display is
 -- throttled to 10 Hz and shows ONE decisecond
 -- digit — a 60 Hz three-digit readout churned unreadably and its
--- proportional-font width danced at frame rate (user feedback);
+-- proportional-font width danced at frame rate;
 -- the frozen completion time keeps the full .mmm via RenderTimer. The
 -- width reservation stays the .mmm template, so completion never moves
 -- the PB text. Detach-when-idle: the script exists only while
@@ -533,7 +531,7 @@ function MPT:RenderTimer()
     -- rounding). The static side never re-renders, so it is pixel-stable;
     -- only the changing part's left edge moves. The separator is its own FS
     -- so both side-gaps come from anchor offsets (TIMER_SEP_GAP) instead of
-    -- full space glyphs — tighter against the "/" per round-3 feedback.
+    -- full space glyphs, which sat too far from the "/".
     -- DETAIL's tail changes per tick, so it stays whole-string (suffix empty).
     local str, suffix
     if mode == "REMAINING" then
@@ -726,8 +724,7 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
         -- Right-aligned to the tick, fully above the bar — the same stagger
         -- rule as EDGE. Centering collided near the bar end: the centered
         -- +1 label clipped the frame edge, and right-aligning only the end
-        -- label jammed it into the centered +2 (live feedback,
-        -- rounds 1 + 2).
+        -- label jammed it into the centered +2.
         fs:SetPoint("BOTTOMRIGHT", timerBar, "TOPLEFT", x - 3, 2)
     elseif place == "BELOW" then
         -- Same right-aligned stagger, fully below the bar.
@@ -743,9 +740,8 @@ end
 -- declared at the top of the file, above BuildHUD.)
 
 -- Threshold label text: a live cutoff shows the remaining countdown; a missed
--- cutoff returns nil so the label hides (round-3 feedback — replaces the grey
--- absolute-time passed state). The tick itself
--- stays visible permanently as a bar divider (round-3c feedback).
+-- cutoff returns nil so the label hides. The tick itself stays visible
+-- permanently as a bar divider.
 local function _ThreshLabel(elapsed, cutoff)
     if elapsed > cutoff then return nil end
     return _FmtShort(cutoff - elapsed)
@@ -859,7 +855,7 @@ function MPT:RenderThresholds()
                 -- outgrown; the ticking positions use the project's
                 -- widest-digit "8" stand-in. An all-8s template kept a dead
                 -- half-digit of slack whenever the leading digit was a
-                -- narrow "1" (live feedback). The label re-anchors
+                -- narrow "1". The label re-anchors
                 -- only when the shape changes (leading-digit step,
                 -- digit-count crossing, sign flip — minute-scale events), so
                 -- it hugs the countdown at RACE_VAL_GAP without riding the
@@ -905,8 +901,8 @@ function MPT:RenderThresholds()
                 .. ":" .. place
     if bars._keThreshSig ~= sig then
         bars._keThreshSig = sig
-        -- Ticks are PERMANENT dividers (round-3c feedback: a solid bar near
-        -- the end looked off) — only the labels hide once a cutoff is missed.
+        -- Ticks are PERMANENT dividers (a solid bar near the end looked off);
+        -- only the labels hide once a cutoff is missed.
         _PlaceTick(bars.tick3, bars.timerBar, barW, barH, tickW, t3, maxTime, tr, tg, tb)
         _PlaceTick(bars.tick2, bars.timerBar, barW, barH, tickW, t2, maxTime, tr, tg, tb)
         if db.ShowThresholdLabels then
@@ -940,7 +936,7 @@ function MPT:RenderThresholds()
         _SetThreshText(f.thresh2Text, labelFn(elapsed, t2))
     end
     -- The +1 (bar end) label keeps counting INTO the negative after the timer
-    -- depletes ("-0:46" in the depleted color, round-3 feedback) instead of
+    -- depletes ("-0:46" in the depleted color) instead of
     -- hiding like the passed +3/+2 cutoffs.
     local l1 = _ThreshLabel(elapsed, t1)
     if not l1 then
@@ -953,7 +949,7 @@ end
 ---------------------------------------------------------------------------------
 -- RenderKey — key level bracket + affix line (TEXT or ICON mode).
 --
--- Row layout (round-3 feedback: "+3 Lindormi's Guidance" — key LEFT of the
+-- Row layout ("+3 Lindormi's Guidance": key LEFT of the
 -- affixes): affixText is the row anchor at the frame's right edge, owned by
 -- ApplyLayout's stacking pass even when hidden (ICON mode zeroes its text so
 -- the rect collapses to the edge). keyText anchors LEFT of the affixes —
@@ -1111,7 +1107,7 @@ end
 -- BAR color: db.ForcesColor, or the quintile palette when ForcesBandedColors
 -- is on (Full band at 100%). The bar never recolors at completion — the
 -- percent/count TEXT flips to db.ForcesCompleteColor instead, over its usual
--- db.ForcesTextColor (feedback; same ownership rule as the timer
+-- db.ForcesTextColor (same ownership rule as the timer
 -- bar: the number conveys state, the fill stays put).
 --
 -- ForcesBandPalette bands: [1]=0-20%, [2]=20-40%, [3]=40-60%,
@@ -1382,7 +1378,7 @@ function MPT:RenderObjectives()
             -- ShouldShowRecords) — ALWAYS, or COUNTDOWN before the timer starts.
             local pbHex = Hex(db.PBColor or { 0.81, 0.81, 0.81 })
             local a = max(0, min(1, db.PBOpacity or 1))
-            -- Bare time, no "PB" prefix (round-4 cleanup): the PB color already
+            -- Bare time, no "PB" prefix: the PB color already
             -- reads as the target, and the prefix crowded the row.
             rightText = format("%s%s|r", pbHex, _FmtShort(obj.pbTime))
             if a < 1 then timeFS:SetAlpha(a) else timeFS:SetAlpha(1) end
@@ -1565,8 +1561,8 @@ function MPT:ApplyLayout()
 
         -- Straggler anchors: relative positions that only change on config change.
         -- Never re-anchored inside Render* hot paths (perf: skip-SetPoint-when-stationary).
-        -- Key bracket rides LEFT of the affixes ("+12 Fortified · ...",
-        -- round-3 feedback). TEXT mode anchors it here; ICON mode re-anchors
+        -- Key bracket rides LEFT of the affixes ("+12 Fortified · ...").
+        -- TEXT mode anchors it here; ICON mode re-anchors
         -- it in RenderKey (icon count varies per run); with affixes hidden
         -- the stacking pass row()-anchors it alone at the right edge.
         if db.ShowAffixes and (db.AffixMode or "TEXT") == "TEXT" then
@@ -1592,7 +1588,7 @@ function MPT:ApplyLayout()
         else  -- EDGE (default): straddles the bar's BOTTOM edge at the right
               -- corner (the edge-straddling look) — half in / half out; the stacking
               -- pass reserves the protruding half-line. +2 y-bias rides the
-              -- text slightly higher into the bar (feedback).
+              -- text slightly higher into the bar.
             f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "BOTTOMRIGHT", -2, 2)
         end
         -- Pull label hangs off the credited label by anchor only; its width is
@@ -1691,7 +1687,7 @@ function MPT:ApplyLayout()
         y = y - rowH - ROW
     end
     -- Key + affix row: the affixes own the right edge with the key bracket to
-    -- their LEFT (round-3 feedback). affixText is the row anchor even when
+    -- their LEFT. affixText is the row anchor even when
     -- hidden (ICON mode zeroes its text; icons + key hang off its rect).
     -- With affixes off entirely the key bracket row-anchors alone.
     if db.ShowAffixes then
