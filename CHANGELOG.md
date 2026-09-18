@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.2
+
+### Skinning
+
+- The one-time "text outlines are missing" notice now names the addon that is
+  blocking outlines at the moment it prints, not the one found a few seconds
+  earlier
+
+---
+
 ## v4.7.1
 
 ### Mythic+ Timer
