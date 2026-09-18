@@ -80,15 +80,15 @@ local _sigBuf = {}
 -- pull inward toward the separator.
 local TIMER_SEP_GAP = 3
 
--- Gap (px) between the PB/delta text and the reserved timer-row width
--- (tightened 18 -> 8, in-game feedback: PB sat too far left).
+-- Gap (px) between the PB/delta text and the reserved timer-row width.
+-- Kept small so the PB sits close to the timer.
 local TIMER_PB_GAP = 8
 
 -- Gap (px) between the race-line label ("+2 Chest (26:24):") and the value's
 -- reserved box — the label pins LEFT of the box so the per-second countdown
 -- never re-flows it. The box follows the value's digit shape (re-measured
 -- once per crossing in ApplyLayout), so this gap is the WHOLE visible gap.
--- (4 -> 2, live feedback: hug the countdown.)
+-- Kept small so the label hugs the countdown.
 local RACE_VAL_GAP = 2
 
 ---------------------------------------------------------------------------------
@@ -194,7 +194,7 @@ function MPT:BuildHUD()
         local fs = (parent or root):CreateFontString(nil, layer or "ARTWORK")
         fs:SetWordWrap(false)
         fs:SetNonSpaceWrap(false)
-        -- Seed a real font at creation (EnsureRows pattern): ApplyLayout's
+        -- Seed a real font at creation: ApplyLayout's
         -- per-element fonts land on the DEFERRED first layout pass, but
         -- Render's SetText calls run synchronously before it — a template-
         -- less FontString with no font errors "Font not set" on SetText
@@ -292,127 +292,43 @@ function MPT:BuildHUD()
     MPT.frames.deathsHit:SetFrameLevel(MPT.frames.root:GetFrameLevel() + 5)
     MPT.frames.deathsHit:EnableMouse(true)
 
-    -- Custom two-column death tooltip (class-colored name LEFT, death-time RIGHT).
-    -- Construction notes:
-    --   * BackdropTemplate so SetBackdrop is available (KE:ApplyBackdrop requires it)
-    --   * KE:ApplyBackdrop draws the border (Enabled=true is load-bearing)
-    --   * KE.FONT is the row font
-    --   * "time" column is timestamped per-death (not an aggregated count)
-    -- Grow-only EnsureRows cache retained deliberately: row count is bounded by
-    -- party size × deaths and the tooltip is transient, so this is lower-risk
-    -- than adopting KE.FramePool (acknowledged deviation from spec §11).
-    local deathTT = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-    deathTT:SetFrameStrata("TOOLTIP")
-    deathTT:SetFrameLevel(200)
-    deathTT:SetClampedToScreen(true)  -- cursor-left anchor near the screen edge
-    deathTT:Hide()
-    -- Panel black, popup opacity. At the panel family's 0.8 alpha a fifth of
-    -- the scene behind shows through and the class-colored names lose contrast.
-    KE:ApplyBackdrop(deathTT, { Enabled = true, Color = {0.031, 0.031, 0.031, 0.97}, BorderColor = {0, 0, 0, 1}, BorderSize = 1 })
-    deathTT._rows = {}
-    MPT.frames.deathsTooltip = deathTT
-
-    local TT_PAD   = 8
-    local TT_GAP   = 6
-    local TT_FONT  = KE.FONT or "Fonts\\FRIZQT__.TTF"  -- EnsureRows seed; OnEnter re-applies the Deaths font
-
-    local function EnsureRows(n)
-        for i = #deathTT._rows + 1, n do
-            local nameFS = deathTT:CreateFontString(nil, "OVERLAY")
-            nameFS:SetFont(TT_FONT, 10, "")
-            nameFS:SetJustifyH("LEFT")
-            local timeFS = deathTT:CreateFontString(nil, "OVERLAY")
-            timeFS:SetFont(TT_FONT, 10, "")
-            timeFS:SetJustifyH("RIGHT")
-            deathTT._rows[i] = { name = nameFS, time = timeFS }
-        end
-    end
-
-    MPT.frames.deathsHit:SetScript("OnEnter", function()
+    -- The death list is drawn in GameTooltip so it takes the player's tooltip
+    -- style (KE's tooltip skin, another skin, or the default) and header font.
+    MPT.frames.deathsHit:SetScript("OnEnter", function(hit)
         if not MPT.db or not MPT.db.ShowDeathTooltip then return end
         local log = MPT.run and MPT.run.deathLog
         if not log or #log == 0 then return end
+        if GameTooltip:IsForbidden() then return end
 
-        -- Scale the tooltip rows with the Deaths font settings (round-4
-        -- feedback: the hardcoded 10px rows read far too small). Rows match
-        -- the headline size exactly — the earlier +2 read too large once the
-        -- rest of the tooltip was fixed (round-6 feedback).
-        local ttFace = MPT.db.DeathsFontFace or MPT.db.FontFace
-        local ttSize = MPT.db.DeathsFontSize or MPT.db.FontSize or 13
-        local rowH   = ttSize + 4
+        local byCount = MPT.db.DeathTooltipStyle == "COUNT"
+        local rows = MPT.BuildDeathRows(log, byCount and "COUNT" or "TIME")
 
-        -- Build sorted list (chronological by time-of-death).
-        local list = {}
-        for i = 1, #log do
-            list[i] = log[i]
-        end
-        -- Tiebreak on name so equal-second deaths keep a stable row order.
-        table.sort(list, function(a, b)
-            if a.t ~= b.t then return a.t < b.t end
-            return (a.name or "") < (b.name or "")
-        end)
-
-        EnsureRows(#list)
-
-        -- Hide all rows first.
-        for i = 1, #deathTT._rows do
-            deathTT._rows[i].name:Hide()
-            deathTT._rows[i].time:Hide()
+        GameTooltip:SetOwner(hit, "ANCHOR_NONE")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("Player Deaths", 1, 1, 1)
+        for i = 1, #rows do
+            local row = rows[i]
+            local color = row.class and RAID_CLASS_COLORS[row.class]
+            local r, g, b = 1, 1, 1
+            if color then r, g, b = color.r, color.g, color.b end
+            local right = byCount and tostring(row.count) or _FmtShort(row.t)  -- "3:44", not "03:44"
+            GameTooltip:AddDoubleLine(Ambiguate(row.name or "", "short"), right, r, g, b, 1, 1, 1)
         end
 
-        -- Measure max name and time widths for tooltip sizing.
-        local maxNameW = 0
-        local maxTimeW = 0
-        for i, entry in ipairs(list) do
-            local row = deathTT._rows[i]
-            -- Re-apply per show: EnsureRows seeds 10px; the user can change
-            -- the Deaths font card while the tooltip rows already exist.
-            KE:ApplyFont(row.name, ttFace, ttSize, "")
-            KE:ApplyFont(row.time, ttFace, ttSize, "")
-            local class = entry.class
-            local color = class and RAID_CLASS_COLORS[class]
-            local short = Ambiguate(entry.name or "", "short")
-            local colored = color and color:WrapTextInColorCode(short) or short
-            row.name:SetText(colored)
-            row.name:SetTextColor(1, 1, 1, 0.80)
-            local timeStr = _FmtShort(entry.t)  -- "3:44", not "03:44" (round-6 feedback)
-            row.time:SetText(timeStr)
-            row.time:SetTextColor(1, 1, 1, 0.80)
-            local nw = row.name:GetStringWidth() or 0
-            local tw = row.time:GetStringWidth() or 0
-            if nw > maxNameW then maxNameW = nw end
-            if tw > maxTimeW then maxTimeW = tw end
-        end
-
-        local ttW = TT_PAD + maxNameW + 12 + maxTimeW + TT_PAD
-        local ttH = TT_PAD + #list * rowH + (#list - 1) * TT_GAP + TT_PAD
-        deathTT:SetSize(ttW, ttH)
-
-        -- Position rows.
-        for i, _ in ipairs(list) do
-            local row = deathTT._rows[i]
-            local yOff = -TT_PAD - (i - 1) * (rowH + TT_GAP)
-            row.name:ClearAllPoints()
-            row.name:SetPoint("TOPLEFT", deathTT, "TOPLEFT", TT_PAD, yOff)
-            row.time:ClearAllPoints()
-            row.time:SetPoint("TOPRIGHT", deathTT, "TOPRIGHT", -TT_PAD, yOff)
-            row.name:Show()
-            row.time:Show()
-        end
-
-        -- Anchor LEFT of the cursor (round-6 feedback — anchored above the
-        -- deaths line it sat on top of the HUD). Placed once per OnEnter;
-        -- GetCursorPosition returns physical px, so divide by the UIParent
-        -- scale to land in frame coordinates.
+        -- Anchor LEFT of the cursor, because above the deaths line the list
+        -- covers the HUD. Placed once per OnEnter; GetCursorPosition returns
+        -- physical px and SetPoint offsets are in the tooltip's own scale, so
+        -- divide by the tooltip's effective scale.
         local cx, cy = GetCursorPosition()
-        local s = UIParent:GetEffectiveScale()
-        deathTT:ClearAllPoints()
-        deathTT:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", cx / s - 10, cy / s)
-        deathTT:Show()
+        local s = GameTooltip:GetEffectiveScale()
+        GameTooltip:ClearAllPoints()
+        GameTooltip:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", cx / s - 10, cy / s)
+        GameTooltip:Show()
     end)
 
-    MPT.frames.deathsHit:SetScript("OnLeave", function()
-        deathTT:Hide()
+    MPT.frames.deathsHit:SetScript("OnLeave", function(hit)
+        if GameTooltip:IsForbidden() then return end
+        if GameTooltip:IsOwned(hit) then GameTooltip:Hide() end
     end)
 
     root:Hide()
@@ -431,7 +347,7 @@ end
 -- clock, re-glued at every whole-second flip by OnTimerTick. Display is
 -- throttled to 10 Hz and shows ONE decisecond
 -- digit — a 60 Hz three-digit readout churned unreadably and its
--- proportional-font width danced at frame rate (user feedback);
+-- proportional-font width danced at frame rate;
 -- the frozen completion time keeps the full .mmm via RenderTimer. The
 -- width reservation stays the .mmm template, so completion never moves
 -- the PB text. Detach-when-idle: the script exists only while
@@ -533,7 +449,7 @@ function MPT:RenderTimer()
     -- rounding). The static side never re-renders, so it is pixel-stable;
     -- only the changing part's left edge moves. The separator is its own FS
     -- so both side-gaps come from anchor offsets (TIMER_SEP_GAP) instead of
-    -- full space glyphs — tighter against the "/" per round-3 feedback.
+    -- full space glyphs, which sat too far from the "/".
     -- DETAIL's tail changes per tick, so it stays whole-string (suffix empty).
     local str, suffix
     if mode == "REMAINING" then
@@ -726,8 +642,7 @@ local function _PlaceLabel(fs, timerBar, barW, cutoff, maxTime, place)
         -- Right-aligned to the tick, fully above the bar — the same stagger
         -- rule as EDGE. Centering collided near the bar end: the centered
         -- +1 label clipped the frame edge, and right-aligning only the end
-        -- label jammed it into the centered +2 (live feedback,
-        -- rounds 1 + 2).
+        -- label jammed it into the centered +2.
         fs:SetPoint("BOTTOMRIGHT", timerBar, "TOPLEFT", x - 3, 2)
     elseif place == "BELOW" then
         -- Same right-aligned stagger, fully below the bar.
@@ -743,9 +658,8 @@ end
 -- declared at the top of the file, above BuildHUD.)
 
 -- Threshold label text: a live cutoff shows the remaining countdown; a missed
--- cutoff returns nil so the label hides (round-3 feedback — replaces the grey
--- absolute-time passed state). The tick itself
--- stays visible permanently as a bar divider (round-3c feedback).
+-- cutoff returns nil so the label hides. The tick itself stays visible
+-- permanently as a bar divider.
 local function _ThreshLabel(elapsed, cutoff)
     if elapsed > cutoff then return nil end
     return _FmtShort(cutoff - elapsed)
@@ -859,7 +773,7 @@ function MPT:RenderThresholds()
                 -- outgrown; the ticking positions use the project's
                 -- widest-digit "8" stand-in. An all-8s template kept a dead
                 -- half-digit of slack whenever the leading digit was a
-                -- narrow "1" (live feedback). The label re-anchors
+                -- narrow "1". The label re-anchors
                 -- only when the shape changes (leading-digit step,
                 -- digit-count crossing, sign flip — minute-scale events), so
                 -- it hugs the countdown at RACE_VAL_GAP without riding the
@@ -905,8 +819,8 @@ function MPT:RenderThresholds()
                 .. ":" .. place
     if bars._keThreshSig ~= sig then
         bars._keThreshSig = sig
-        -- Ticks are PERMANENT dividers (round-3c feedback: a solid bar near
-        -- the end looked off) — only the labels hide once a cutoff is missed.
+        -- Ticks are PERMANENT dividers (a solid bar near the end looked off);
+        -- only the labels hide once a cutoff is missed.
         _PlaceTick(bars.tick3, bars.timerBar, barW, barH, tickW, t3, maxTime, tr, tg, tb)
         _PlaceTick(bars.tick2, bars.timerBar, barW, barH, tickW, t2, maxTime, tr, tg, tb)
         if db.ShowThresholdLabels then
@@ -940,7 +854,7 @@ function MPT:RenderThresholds()
         _SetThreshText(f.thresh2Text, labelFn(elapsed, t2))
     end
     -- The +1 (bar end) label keeps counting INTO the negative after the timer
-    -- depletes ("-0:46" in the depleted color, round-3 feedback) instead of
+    -- depletes ("-0:46" in the depleted color) instead of
     -- hiding like the passed +3/+2 cutoffs.
     local l1 = _ThreshLabel(elapsed, t1)
     if not l1 then
@@ -953,7 +867,7 @@ end
 ---------------------------------------------------------------------------------
 -- RenderKey — key level bracket + affix line (TEXT or ICON mode).
 --
--- Row layout (round-3 feedback: "+3 Lindormi's Guidance" — key LEFT of the
+-- Row layout ("+3 Lindormi's Guidance": key LEFT of the
 -- affixes): affixText is the row anchor at the frame's right edge, owned by
 -- ApplyLayout's stacking pass even when hidden (ICON mode zeroes its text so
 -- the rect collapses to the edge). keyText anchors LEFT of the affixes —
@@ -1077,7 +991,7 @@ function MPT:RenderDeaths()
     local fs, hit = MPT.frames.root.deathsText, MPT.frames.deathsHit
     if not db.ShowDeaths or (run.deaths or 0) <= 0 then
         fs:Hide(); hit:Hide()
-        if MPT.frames.deathsTooltip then MPT.frames.deathsTooltip:Hide() end
+        if not GameTooltip:IsForbidden() and GameTooltip:IsOwned(hit) then GameTooltip:Hide() end
         return
     end
     local dHex = Hex(db.DeathsColor or {0.85, 0.85, 0.85})
@@ -1111,7 +1025,7 @@ end
 -- BAR color: db.ForcesColor, or the quintile palette when ForcesBandedColors
 -- is on (Full band at 100%). The bar never recolors at completion — the
 -- percent/count TEXT flips to db.ForcesCompleteColor instead, over its usual
--- db.ForcesTextColor (feedback; same ownership rule as the timer
+-- db.ForcesTextColor (same ownership rule as the timer
 -- bar: the number conveys state, the fill stays put).
 --
 -- ForcesBandPalette bands: [1]=0-20%, [2]=20-40%, [3]=40-60%,
@@ -1382,7 +1296,7 @@ function MPT:RenderObjectives()
             -- ShouldShowRecords) — ALWAYS, or COUNTDOWN before the timer starts.
             local pbHex = Hex(db.PBColor or { 0.81, 0.81, 0.81 })
             local a = max(0, min(1, db.PBOpacity or 1))
-            -- Bare time, no "PB" prefix (round-4 cleanup): the PB color already
+            -- Bare time, no "PB" prefix: the PB color already
             -- reads as the target, and the prefix crowded the row.
             rightText = format("%s%s|r", pbHex, _FmtShort(obj.pbTime))
             if a < 1 then timeFS:SetAlpha(a) else timeFS:SetAlpha(1) end
@@ -1565,8 +1479,8 @@ function MPT:ApplyLayout()
 
         -- Straggler anchors: relative positions that only change on config change.
         -- Never re-anchored inside Render* hot paths (perf: skip-SetPoint-when-stationary).
-        -- Key bracket rides LEFT of the affixes ("+12 Fortified · ...",
-        -- round-3 feedback). TEXT mode anchors it here; ICON mode re-anchors
+        -- Key bracket rides LEFT of the affixes ("+12 Fortified · ...").
+        -- TEXT mode anchors it here; ICON mode re-anchors
         -- it in RenderKey (icon count varies per run); with affixes hidden
         -- the stacking pass row()-anchors it alone at the right edge.
         if db.ShowAffixes and (db.AffixMode or "TEXT") == "TEXT" then
@@ -1592,7 +1506,7 @@ function MPT:ApplyLayout()
         else  -- EDGE (default): straddles the bar's BOTTOM edge at the right
               -- corner (the edge-straddling look) — half in / half out; the stacking
               -- pass reserves the protruding half-line. +2 y-bias rides the
-              -- text slightly higher into the bar (feedback).
+              -- text slightly higher into the bar.
             f.forcesText:SetPoint("RIGHT", bars.forcesWrap, "BOTTOMRIGHT", -2, 2)
         end
         -- Pull label hangs off the credited label by anchor only; its width is
@@ -1691,7 +1605,7 @@ function MPT:ApplyLayout()
         y = y - rowH - ROW
     end
     -- Key + affix row: the affixes own the right edge with the key bracket to
-    -- their LEFT (round-3 feedback). affixText is the row anchor even when
+    -- their LEFT. affixText is the row anchor even when
     -- hidden (ICON mode zeroes its text; icons + key hang off its rect).
     -- With affixes off entirely the key bracket row-anchors alone.
     if db.ShowAffixes then

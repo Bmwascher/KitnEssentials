@@ -491,6 +491,9 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     manager:SetCondition("forcesOn", function()
         return db.Enabled ~= false and db.ShowForces ~= false
     end)
+    manager:SetCondition("deathTooltip", function()
+        return db.Enabled ~= false and db.ShowDeathTooltip ~= false
+    end)
 
     -- Card 1: Forces (toggle + text format + placement + custom tokens)
     local forcesCard = GUIFrame:CreateCard(scrollChild, "Forces", yOffset)
@@ -667,17 +670,33 @@ BuildFeaturesTab = function(scrollChild, yOffset, db, manager)
     manager:Register(showDeathsCheck, "all")
     local tipCheck = GUIFrame:CreateCheckbox(rowD1, "Hover Death Log", {
         value = db.ShowDeathTooltip ~= false,
-        callback = function(checked) db.ShowDeathTooltip = checked; ApplySettings() end,
+        callback = function(checked)
+            db.ShowDeathTooltip = checked; ApplySettings()
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
     })
     rowD1:AddWidget(tipCheck, 0.5)
     manager:Register(tipCheck, "all")
     deathsCard:AddRow(rowD1, Theme.rowHeight)
 
+    local rowD2 = GUIFrame:CreateRow(deathsCard.content, Theme.rowHeight)
+    local tipStyleDrop = GUIFrame:CreateDropdown(rowD2, "Hover Log Style", {
+        options = {
+            { key = "TIME",  text = "Each Death (with time)" },
+            { key = "COUNT", text = "Deaths per Player" },
+        },
+        value = db.DeathTooltipStyle or "TIME",
+        callback = function(key) db.DeathTooltipStyle = key end,
+    })
+    rowD2:AddWidget(tipStyleDrop, 0.5)
+    manager:Register(tipStyleDrop, "deathTooltip")
+    deathsCard:AddRow(rowD2, Theme.rowHeight)
+
     local dNoteRow = GUIFrame:CreateRow(deathsCard.content, Theme.rowHeightNote)
     local dNoteText = GUIFrame:CreateText(dNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Count and time-penalty read from Blizzard's authoritative death tracker.\n" ..
-        KE:ColorTextByTheme("-") .. " Hover the deaths line for a class-colored, timestamped log.",
+        KE:ColorTextByTheme("-") .. " Hover the deaths line for a class-colored log: each death with its time, or a count per player.",
         50, "hide")
     dNoteRow:AddWidget(dNoteText, 1)
     manager:Register(dNoteText, "all")
