@@ -2733,10 +2733,8 @@ function CHAT:ApplyGuildMemberStatus()
     if want and not guildStatusFilterActive then
         if _G.ChatFrameUtil and _G.ChatFrameUtil.AddMessageEventFilter then
             _G.ChatFrameUtil.AddMessageEventFilter("CHAT_MSG_SYSTEM", GuildStatusFilter)
-        elseif _G.ChatFrame_AddMessageEventFilter then
-            _G.ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", GuildStatusFilter)
+            guildStatusFilterActive = true
         end
-        guildStatusFilterActive = true
         if not self._inviteLinkHooked then
             self:SecureHook(_G.ItemRefTooltip, "SetHyperlink", "OnInviteLinkClick")
             self._inviteLinkHooked = true
@@ -2750,8 +2748,6 @@ function CHAT:RemoveGuildMemberStatusFilter()
     if not guildStatusFilterActive then return end
     if _G.ChatFrameUtil and _G.ChatFrameUtil.RemoveMessageEventFilter then
         _G.ChatFrameUtil.RemoveMessageEventFilter("CHAT_MSG_SYSTEM", GuildStatusFilter)
-    elseif _G.ChatFrame_RemoveMessageEventFilter then
-        _G.ChatFrame_RemoveMessageEventFilter("CHAT_MSG_SYSTEM", GuildStatusFilter)
     end
     guildStatusFilterActive = false
 end
