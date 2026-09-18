@@ -194,7 +194,7 @@ function MPT:BuildHUD()
         local fs = (parent or root):CreateFontString(nil, layer or "ARTWORK")
         fs:SetWordWrap(false)
         fs:SetNonSpaceWrap(false)
-        -- Seed a real font at creation (EnsureRows pattern): ApplyLayout's
+        -- Seed a real font at creation: ApplyLayout's
         -- per-element fonts land on the DEFERRED first layout pass, but
         -- Render's SetText calls run synchronously before it — a template-
         -- less FontString with no font errors "Font not set" on SetText
@@ -292,124 +292,43 @@ function MPT:BuildHUD()
     MPT.frames.deathsHit:SetFrameLevel(MPT.frames.root:GetFrameLevel() + 5)
     MPT.frames.deathsHit:EnableMouse(true)
 
-    -- Custom two-column death tooltip (class-colored name LEFT, death-time RIGHT).
-    -- Construction notes:
-    --   * BackdropTemplate so SetBackdrop is available (KE:ApplyBackdrop requires it)
-    --   * KE:ApplyBackdrop draws the border (Enabled=true is load-bearing)
-    --   * KE.FONT is the row font
-    --   * "time" column is timestamped per-death (not an aggregated count)
-    -- Grow-only EnsureRows cache retained deliberately: row count is bounded by
-    -- party size × deaths and the tooltip is transient, so this is lower-risk
-    -- than adopting KE.FramePool (acknowledged deviation from spec §11).
-    local deathTT = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
-    deathTT:SetFrameStrata("TOOLTIP")
-    deathTT:SetFrameLevel(200)
-    deathTT:SetClampedToScreen(true)  -- cursor-left anchor near the screen edge
-    deathTT:Hide()
-    -- Panel black, popup opacity. At the panel family's 0.8 alpha a fifth of
-    -- the scene behind shows through and the class-colored names lose contrast.
-    KE:ApplyBackdrop(deathTT, { Enabled = true, Color = {0.031, 0.031, 0.031, 0.97}, BorderColor = {0, 0, 0, 1}, BorderSize = 1 })
-    deathTT._rows = {}
-    MPT.frames.deathsTooltip = deathTT
-
-    local TT_PAD   = 8
-    local TT_GAP   = 6
-    local TT_FONT  = KE.FONT or "Fonts\\FRIZQT__.TTF"  -- EnsureRows seed; OnEnter re-applies the Deaths font
-
-    local function EnsureRows(n)
-        for i = #deathTT._rows + 1, n do
-            local nameFS = deathTT:CreateFontString(nil, "OVERLAY")
-            nameFS:SetFont(TT_FONT, 10, "")
-            nameFS:SetJustifyH("LEFT")
-            local timeFS = deathTT:CreateFontString(nil, "OVERLAY")
-            timeFS:SetFont(TT_FONT, 10, "")
-            timeFS:SetJustifyH("RIGHT")
-            deathTT._rows[i] = { name = nameFS, time = timeFS }
-        end
-    end
-
-    MPT.frames.deathsHit:SetScript("OnEnter", function()
+    -- The death list is drawn in GameTooltip so it takes the player's tooltip
+    -- style (KE's tooltip skin, another skin, or the default) and header font.
+    MPT.frames.deathsHit:SetScript("OnEnter", function(hit)
         if not MPT.db or not MPT.db.ShowDeathTooltip then return end
         local log = MPT.run and MPT.run.deathLog
         if not log or #log == 0 then return end
+        if GameTooltip:IsForbidden() then return end
 
-        -- Rows use the Deaths font settings at the headline's exact size: a
-        -- fixed small size is hard to read, and a larger one reads too big.
-        local ttFace    = MPT.db.DeathsFontFace or MPT.db.FontFace
-        local ttSize    = MPT.db.DeathsFontSize or MPT.db.FontSize or 13
-        local ttOutline = MPT.db.DeathsFontOutline or MPT.db.FontOutline or "OUTLINE"
-        local rowH   = ttSize + 4
+        local byCount = MPT.db.DeathTooltipStyle == "COUNT"
+        local rows = MPT.BuildDeathRows(log, byCount and "COUNT" or "TIME")
 
-        -- Build sorted list (chronological by time-of-death).
-        local list = {}
-        for i = 1, #log do
-            list[i] = log[i]
-        end
-        -- Tiebreak on name so equal-second deaths keep a stable row order.
-        table.sort(list, function(a, b)
-            if a.t ~= b.t then return a.t < b.t end
-            return (a.name or "") < (b.name or "")
-        end)
-
-        EnsureRows(#list)
-
-        -- Hide all rows first.
-        for i = 1, #deathTT._rows do
-            deathTT._rows[i].name:Hide()
-            deathTT._rows[i].time:Hide()
+        GameTooltip:SetOwner(hit, "ANCHOR_NONE")
+        GameTooltip:ClearLines()
+        GameTooltip:AddLine("Player Deaths", 1, 1, 1)
+        for i = 1, #rows do
+            local row = rows[i]
+            local color = row.class and RAID_CLASS_COLORS[row.class]
+            local r, g, b = 1, 1, 1
+            if color then r, g, b = color.r, color.g, color.b end
+            local right = byCount and tostring(row.count) or _FmtShort(row.t)  -- "3:44", not "03:44"
+            GameTooltip:AddDoubleLine(Ambiguate(row.name or "", "short"), right, r, g, b, 1, 1, 1)
         end
 
-        -- Measure max name and time widths for tooltip sizing.
-        local maxNameW = 0
-        local maxTimeW = 0
-        for i, entry in ipairs(list) do
-            local row = deathTT._rows[i]
-            -- Re-apply per show: EnsureRows seeds 10px; the user can change
-            -- the Deaths font card while the tooltip rows already exist.
-            KE:ApplyFontToText(row.name, ttFace, ttSize, ttOutline)
-            KE:ApplyFontToText(row.time, ttFace, ttSize, ttOutline)
-            local class = entry.class
-            local color = class and RAID_CLASS_COLORS[class]
-            local short = Ambiguate(entry.name or "", "short")
-            local colored = color and color:WrapTextInColorCode(short) or short
-            row.name:SetText(colored)
-            local timeStr = _FmtShort(entry.t)  -- "3:44", not "03:44"
-            row.time:SetText(timeStr)
-            local nw = row.name:GetStringWidth() or 0
-            local tw = row.time:GetStringWidth() or 0
-            if nw > maxNameW then maxNameW = nw end
-            if tw > maxTimeW then maxTimeW = tw end
-        end
-
-        local ttW = TT_PAD + maxNameW + 12 + maxTimeW + TT_PAD
-        local ttH = TT_PAD + #list * rowH + (#list - 1) * TT_GAP + TT_PAD
-        deathTT:SetSize(ttW, ttH)
-
-        -- Position rows.
-        for i, _ in ipairs(list) do
-            local row = deathTT._rows[i]
-            local yOff = -TT_PAD - (i - 1) * (rowH + TT_GAP)
-            row.name:ClearAllPoints()
-            row.name:SetPoint("TOPLEFT", deathTT, "TOPLEFT", TT_PAD, yOff)
-            row.time:ClearAllPoints()
-            row.time:SetPoint("TOPRIGHT", deathTT, "TOPRIGHT", -TT_PAD, yOff)
-            row.name:Show()
-            row.time:Show()
-        end
-
-        -- Anchor LEFT of the cursor: anchored above the deaths line, the
-        -- tooltip covered the HUD. Placed once per OnEnter; GetCursorPosition
-        -- returns physical px, so divide by the UIParent scale to land in
-        -- frame coordinates.
+        -- Anchor LEFT of the cursor, because above the deaths line the list
+        -- covers the HUD. Placed once per OnEnter; GetCursorPosition returns
+        -- physical px and SetPoint offsets are in the tooltip's own scale, so
+        -- divide by the tooltip's effective scale.
         local cx, cy = GetCursorPosition()
-        local s = UIParent:GetEffectiveScale()
-        deathTT:ClearAllPoints()
-        deathTT:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", cx / s - 10, cy / s)
-        deathTT:Show()
+        local s = GameTooltip:GetEffectiveScale()
+        GameTooltip:ClearAllPoints()
+        GameTooltip:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", cx / s - 10, cy / s)
+        GameTooltip:Show()
     end)
 
-    MPT.frames.deathsHit:SetScript("OnLeave", function()
-        deathTT:Hide()
+    MPT.frames.deathsHit:SetScript("OnLeave", function(hit)
+        if GameTooltip:IsForbidden() then return end
+        if GameTooltip:IsOwned(hit) then GameTooltip:Hide() end
     end)
 
     root:Hide()
@@ -1072,7 +991,7 @@ function MPT:RenderDeaths()
     local fs, hit = MPT.frames.root.deathsText, MPT.frames.deathsHit
     if not db.ShowDeaths or (run.deaths or 0) <= 0 then
         fs:Hide(); hit:Hide()
-        if MPT.frames.deathsTooltip then MPT.frames.deathsTooltip:Hide() end
+        if not GameTooltip:IsForbidden() and GameTooltip:IsOwned(hit) then GameTooltip:Hide() end
         return
     end
     local dHex = Hex(db.DeathsColor or {0.85, 0.85, 0.85})
