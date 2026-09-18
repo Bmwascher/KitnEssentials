@@ -2936,4 +2936,73 @@ function L.loadDisintegrateTicks(overrides)
     return modules["DisintegrateTicks"], KE
 end
 
+-- Modules/Utilities/ReadyCheckConsumables.lua. The module captures its API
+-- surface as upvalues at load, so every global below exists before
+-- loadModule and InCombatLockdown rides mock.install's override as a closure
+-- over seams.combat.inCombat (reassigning _G.InCombatLockdown afterwards
+-- reaches nothing). BuildFrame is never run: specs assign RCC.frame and
+-- RCC.buttons themselves. KE.RunAfterCombat appends closures to seams.queue
+-- and the spec drains it -- the combat-exit queue is the only thing that
+-- can deliver the deferred hide, which is why it is the one stateful fake.
+-- Returns RCC, KE, seams.
+function L.loadReadyCheckConsumables(overrides)
+    local seams = {
+        combat = { inCombat = false },
+        queue = {},
+        counts = { scans = 0, driverUnregistered = 0 },
+    }
+    installMock(overrides, {
+        C_Timer = inertTimer(),
+        InCombatLockdown = function() return seams.combat.inCombat end,
+    })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.LibStub = function() return nil end
+    _G.UnitClass = function() return "Warrior", "WARRIOR" end
+    _G.UnitIsUnit = function() return false end
+    _G.UnitExists = function() return false end
+    _G.UnitIsDeadOrGhost = function() return false end
+    _G.UnitGroupRolesAssigned = function() return "NONE" end
+    _G.GetUnitName = function() return nil end
+    _G.IsInRaid = function() return false end
+    _G.IsInGroup = function() return false end
+    _G.GetInventoryItemID = function() return nil end
+    _G.GetWeaponEnchantInfo = function() return false end
+    _G.C_Item = {
+        GetItemCount = function() return 0 end,
+        GetItemInfo = function() return nil end,
+        GetItemInfoInstant = function() return nil end,
+        GetItemIconByID = function() return nil end,
+    }
+    _G.C_SpecializationInfo = {
+        GetSpecialization = function() return nil end,
+        GetSpecializationInfo = function() return nil end,
+    }
+    _G.C_Spell = { GetSpellCooldown = function() return nil end }
+    _G.C_UnitAuras = {
+        GetAuraDataByIndex = function()
+            seams.counts.scans = seams.counts.scans + 1
+            return nil
+        end,
+    }
+    _G.RegisterStateDriver = function() end
+    _G.UnregisterAttributeDriver = function()
+        seams.counts.driverUnregistered = seams.counts.driverUnregistered + 1
+    end
+    local KE = {
+        db = { profile = { ReadyCheckConsumables = {} } },
+        Print = function() end,
+        IsSafeValue = function(_, v) return v ~= nil end,
+        AreAuraIdentitiesHidden = function() return false end,
+        RunAfterCombat = function(_, fn) seams.queue[#seams.queue + 1] = fn end,
+    }
+    helpers.loadModule("Modules/Utilities/ReadyCheckConsumables.lua", KE)
+    local RCC = modules["ReadyCheckConsumables"]
+    RCC.RegisterEvent = function() end
+    RCC.UnregisterEvent = function() end
+    RCC.UnregisterAllEvents = function() end
+    RCC.db = KE.db.profile.ReadyCheckConsumables
+    return RCC, KE, seams
+end
+
 return L
