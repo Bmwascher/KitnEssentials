@@ -154,8 +154,8 @@ end
 
 -- Cache only a RESOLVED class colour. Caching the white fallback leaves the
 -- labels white for the session when the first paint beats the colour system.
--- The secret test comes first: the class file is restricted in restricted
--- content, and testing its truth would throw.
+-- UnitClass is SecretWhenUnitIdentityRestricted and a secret must not index a
+-- table, so the class is tested before the colors[class] lookup.
 function SS:ClassHex()
     if self.classHex then return self.classHex end
     local _, class = UnitClass("player")
