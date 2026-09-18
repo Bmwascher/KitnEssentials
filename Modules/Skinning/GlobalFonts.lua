@@ -212,13 +212,14 @@ local noticeWatcher = CreateFrame("Frame")
 noticeWatcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 noticeWatcher:SetScript("OnEvent", function(self)
     self:UnregisterAllEvents()
-    local blocker, remedy = S.GlobalFontsNoticeDue()
-    if not blocker then return end
+    if not S.GlobalFontsNoticeDue() then return end
     C_Timer.After(5, function()
         -- Flag inside the callback: a /reload during the defer window must not
         -- mark the notice delivered (SavedVariables persist instantly; the
-        -- print does not). Re-check, since the block can lift during the wait.
-        if not S.GlobalFontsNoticeDue() then return end
+        -- print does not). Re-check, since the block can lift or change hands
+        -- during the wait.
+        local blocker, remedy = S.GlobalFontsNoticeDue()
+        if not blocker then return end
         local frames = KE.db and KE.db.profile and KE.db.profile.Skinning
             and KE.db.profile.Skinning.BlizzardFrames
         if frames then frames._globalFontsBlockedWarned = true end
