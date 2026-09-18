@@ -182,6 +182,62 @@ describe("Core/Conflicts.lua decision layer", function()
             assert.same({}, queue)
         end)
     end)
+
+    describe("ReadyCheckConsumables conflict entry", function()
+        -- Ignores the resolver on purpose: these cases reach apply/isActive
+        -- through the queued item, so the queue must not empty itself first.
+        local function rccEnv(enabled)
+            return {
+                profile = { ReadyCheckConsumables = { Enabled = enabled } },
+                isLoaded = function(name) return name == "NorthernSkyRaidTools" end,
+                shouldNotLoad = false,
+            }
+        end
+
+        -- _G is shared across the whole run, so every case that seeds the
+        -- rival's saved variable must put it back.
+        after_each(function() _G.NSRT = nil end)
+
+        it("queues one entry when the module is enabled and NorthernSkyRaidTools is loaded", function()
+            local queue = KE:BuildConflictQueue(rccEnv(true))
+            assert.equals(1, #queue)
+            assert.equals("ReadyCheckConsumables", queue[1].module)
+            assert.equals("NorthernSkyRaidTools", queue[1].source)
+        end)
+
+        it("queues nothing when the module is off", function()
+            assert.same({}, KE:BuildConflictQueue(rccEnv(false)))
+        end)
+
+        -- The rival's own loader fills ReadyCheckSettings. Creating it here
+        -- would seed a foreign addon's settings from a guess, so an absent
+        -- table is a refusal, not a repair. `after` is a separate literal:
+        -- comparing _G.NSRT against the table it IS would pass any write.
+        for _, case in ipairs({
+            { name = "NSRT is absent",              nsrt = nil, after = nil },
+            { name = "ReadyCheckSettings is absent", nsrt = {},  after = {} },
+        }) do
+            it("apply returns false and writes nothing when " .. case.name, function()
+                _G.NSRT = case.nsrt
+                local resolver = KE:BuildConflictQueue(rccEnv(true))[1].resolver
+                assert.is_false(resolver.apply())
+                assert.same(case.after, _G.NSRT)
+            end)
+        end
+
+        for _, case in ipairs({
+            { name = "false once ConsumablesDisplay is false",
+              nsrt = { ReadyCheckSettings = { ConsumablesDisplay = false } }, active = false },
+            { name = "true when ReadyCheckSettings is absent", nsrt = {},  active = true },
+            { name = "true when NSRT is absent",               nsrt = nil, active = true },
+        }) do
+            it("isActive is " .. case.name, function()
+                _G.NSRT = case.nsrt
+                local resolver = KE:BuildConflictQueue(rccEnv(true))[1].resolver
+                assert.equals(case.active, resolver.isActive())
+            end)
+        end
+    end)
 end)
 
 describe("Core/Conflicts.lua prompt queue", function()
