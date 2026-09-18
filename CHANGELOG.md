@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.1
+
+### Mythic+ Timer
+
+- The death list you get by hovering the deaths count now draws in the game
+  tooltip, so it takes your tooltip skin and font instead of its own look
+- **NEW:** Hover Log Style on the Deaths card: Each Death (with time), the
+  existing list, or Deaths per Player, one row per player with a count
+- Names and times in the list render at full strength; nothing is dimmed
+
+---
+
 ## v4.7.0
 
 ### Bonus Roll
