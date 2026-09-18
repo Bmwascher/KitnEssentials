@@ -318,6 +318,8 @@ local CLASS_SLOT = {
 
 RCC.frame       = nil   -- KE_ReadyCheckConsumables container
 RCC.buttons     = {}    -- [1..NUM_SLOTS] button frames
+RCC.previewFrame   = nil   -- KE_ReadyCheckConsumables_Preview container (settings preview only)
+RCC.previewButtons = nil   -- [1..NUM_SLOTS] preview stubs; no click overlays
 RCC.db          = nil
 RCC.stateDriverActive = false  -- true while the combat state driver is registered (see _EnableStateDriver)
 
@@ -1491,53 +1493,48 @@ end
 
 --- ApplySettings
 --- Called by the GUI panel when any config changes. Re-reads db, re-applies
---- font + base text color to existing FontStrings, then dispatches to the
---- appropriate layout function (ShowPreview in preview mode, RefreshLayout
---- otherwise — preview forces all 7 slots visible so the display doesn't
---- flip context-dependent slots on/off while the user tweaks settings).
---- If the frame hasn't been built yet, silently no-ops — next BuildFrame
---- will pick up the new values.
+--- font + base text color to whichever rows exist, re-lays the preview when
+--- one is up, and repaints the real row when it is live. Both dispatches
+--- run: a toggle changed while a preview and a real check are both on
+--- screen reaches both.
 function RCC:ApplySettings()
     self:UpdateDB()
-    if not self.frame then return end
+    if not self.frame and not self.previewFrame then return end
 
     local db = self.db
     if not db then return end
 
-    -- Re-apply font + base text color to all buttons. Hearty food color is
-    -- re-applied per update cycle inside UpdateFood when applicable.
+    -- Hearty food color is re-applied per update cycle inside UpdateFood.
     local dr, dg, db_, da = KE:ResolveColor(db.DurationColor, { 1, 1, 1, 1 })
-    for i = 1, NUM_SLOTS do
-        local btn = self.buttons[i]
-        if btn then
-            if btn.timeLeft then
-                KE:ApplyFontToText(btn.timeLeft,
-                    db.FontFace,
-                    db.FontSize    or 11,
-                    db.FontOutline or "OUTLINE")
-                btn.timeLeft:SetTextColor(dr, dg, db_, da)
-            end
-            if btn.countText then
-                KE:ApplyFontToText(btn.countText,
-                    db.FontFace,
-                    db.FontSize    or 11,
-                    db.FontOutline or "OUTLINE")
-                btn.countText:SetTextColor(dr, dg, db_, da)
+    local function applyFonts(buttons)
+        if not buttons then return end
+        for i = 1, NUM_SLOTS do
+            local btn = buttons[i]
+            if btn then
+                if btn.timeLeft then
+                    KE:ApplyFontToText(btn.timeLeft,
+                        db.FontFace,
+                        db.FontSize    or 11,
+                        db.FontOutline or "OUTLINE")
+                    btn.timeLeft:SetTextColor(dr, dg, db_, da)
+                end
+                if btn.countText then
+                    KE:ApplyFontToText(btn.countText,
+                        db.FontFace,
+                        db.FontSize    or 11,
+                        db.FontOutline or "OUTLINE")
+                    btn.countText:SetTextColor(dr, dg, db_, da)
+                end
             end
         end
     end
+    applyFonts(self.buttons)
+    applyFonts(self.previewButtons)
 
-    -- Dispatch layout — preview mode shows all slots regardless of context/toggles
-    -- so the user can see the full row and tweak settings without the display
-    -- flipping slots in and out based on OH weapon state, class, etc.
-    -- Non-preview: run UpdateAllIcons (includes RefreshLayout at its end) so
-    -- icon swaps from toggle changes take effect during an active ready check.
-    -- Early-returns safely if frame isn't shown.
     if self.inPreview then
         self:ShowPreview()
-    else
-        self:UpdateAllIcons()
     end
+    self:UpdateAllIcons()
 end
 
 ---------------------------------------------------------------------------------
@@ -1833,15 +1830,35 @@ function RCC:GetPreviewMock()
     return mock
 end
 
+--- BuildPreviewFrame
+--- The settings preview's own container: the 7 visual stubs on a plain
+--- UIParent frame, with no state frame, click overlays or Close button. A
+--- real ready check and a preview can therefore be on screen together
+--- without either touching the other's frames.
+function RCC:BuildPreviewFrame()
+    if self.previewFrame then return end
+    local db = self.db
+    if not db then return end
+
+    local iconSize = db.IconSize or 32
+    local spacing  = db.IconSpacing or 4
+
+    local f = CreateFrame("Frame", "KE_ReadyCheckConsumables_Preview", UIParent)
+    f:SetSize((iconSize * NUM_SLOTS) + (spacing * (NUM_SLOTS - 1)), iconSize)
+    f:SetPoint("CENTER", UIParent, "CENTER", 0, 85)
+    f:SetFrameStrata("HIGH")
+    f:Hide()
+
+    self.previewButtons = self:_BuildIconRow(f)
+    self.previewFrame = f
+end
+
 --- ShowPreview
---- Display the consumable row + a mock Ready Check popup at UIParent center.
+--- Display the preview row + a mock Ready Check popup at UIParent center.
 --- Respects user category toggles (Show<Category>) so disabling a category
 --- hides it from preview immediately. Ignores context-dependent visibility
 --- (OH weapon state, class match) so the preview stays consistent regardless
 --- of what the player is currently wearing or which class they're on.
---- Icons are reset to DEFAULT_ICONS so the preview never leaks buff icons
---- from a prior real ready check. The mock popup mimics the real ready check
---- frame so users see the tracker in proper context (same anchor, same spacing).
 --- Skipped entirely in KES edit mode — this module's frame is contextually
 --- anchored to ReadyCheckListenerFrame, not manually positioned by the user,
 --- so it doesn't need an edit-mode drag target.
@@ -1853,21 +1870,20 @@ function RCC:ShowPreview()
         return
     end
 
-    if not self.frame then
-        self:BuildFrame()
-        if not self.frame then return end
+    if not self.previewFrame then
+        self:BuildPreviewFrame()
+        if not self.previewFrame then return end
     end
+    local frame = self.previewFrame
 
     self.inPreview = true
 
-    self.frame:ClearAllPoints()
-    self.frame:SetParent(UIParent)
-
+    frame:ClearAllPoints()
     if db.HidePreviewMock then
         -- Mock popup suppressed — anchor the row slightly above screen center,
         -- roughly where the row would sit above the mock when the box is shown.
         if self.previewMock then self.previewMock:Hide() end
-        self.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 85)
+        frame:SetPoint("CENTER", UIParent, "CENTER", 0, 85)
     else
         -- Show mock popup at screen center, anchor consumable row to its top
         -- (same 5px gap as the real ReadyCheckListenerFrame anchor).
@@ -1875,11 +1891,8 @@ function RCC:ShowPreview()
         mock:ClearAllPoints()
         mock:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
         mock:Show()
-        self.frame:SetPoint("BOTTOM", mock, "TOP", 0, 2)
+        frame:SetPoint("BOTTOM", mock, "TOP", 0, 2)
     end
-
-    local iconSize = db.IconSize or 32
-    local spacing  = db.IconSpacing or 4
 
     -- User-toggle visibility map. No context filters — this is a settings preview.
     local visibility = {
@@ -1892,71 +1905,22 @@ function RCC:ShowPreview()
         [SLOT_CLASS]  = db.ShowClassItem   ~= false,
     }
 
-    local prev
-    local visibleCount = 0
-    for i = 1, NUM_SLOTS do
-        local btn = self.buttons[i]
-        if btn then
-            btn:SetSize(iconSize, iconSize)
-            if btn.statusTexture then
-                btn.statusTexture:SetSize(iconSize / 2, iconSize / 2)
-                btn.statusTexture:Hide()
-            end
-            -- Reset to placeholder icon (prevents carryover from a real ready check)
-            if btn.texture then
-                if DEFAULT_ICONS[i] then
-                    btn.texture:SetTexture(DEFAULT_ICONS[i])
-                end
-                btn.texture:SetDesaturated(false)
-            end
-            if btn.timeLeft  then btn.timeLeft:SetText("")  end
-            if btn.countText then btn.countText:SetText("") end
-
-            if visibility[i] then
-                btn:ClearAllPoints()
-                if prev then
-                    btn:SetPoint("LEFT", prev, "RIGHT", spacing, 0)
-                else
-                    btn:SetPoint("LEFT", self.frame, "LEFT", 0, 0)
-                end
-                btn:Show()
-                prev = btn
-                visibleCount = visibleCount + 1
-            else
-                btn:Hide()
-            end
-        end
-    end
-
-    if visibleCount > 0 then
-        local width = (iconSize * visibleCount) + (spacing * (visibleCount - 1))
-        self.frame:SetWidth(width)
-        self.frame:SetHeight(iconSize)
-    end
-
-    self.frame:Show()
+    self:_LayoutRow(frame, self.previewButtons, visibility)
+    frame:Show()
 end
 
 --- HidePreview
---- Exit preview mode. Hides the mock popup and restores the tracker's parent
---- to ReadyCheckListenerFrame so the next real ready check uses the correct
---- anchor.
+--- Exit preview mode. PreviewManager calls this on every GUI open and close
+--- for each registry module, so it must tolerate a preview that was never
+--- built.
 function RCC:HidePreview()
     self.inPreview = false
 
     if self.previewMock then
         self.previewMock:Hide()
     end
-
-    if not self.frame then return end
-
-    self.frame:Hide()
-
-    local parent = ReadyCheckListenerFrame or ReadyCheckFrame
-    if parent then
-        self.frame:SetParent(parent)
-        self.frame:ClearAllPoints()
-        self.frame:SetPoint("BOTTOM", parent, "TOP", 0, 2)
+    if self.previewFrame then
+        self.previewFrame:Hide()
     end
 end
 
@@ -1993,6 +1957,7 @@ end
 function RCC:OnDisable()
     self:UnregisterAllEvents()
     self:HideFrame()
+    self:HidePreview()
     self._lastSoulstoneTarget = nil
 
     if DEBUG_RCC then KE:Print("[RCC] OnDisable") end
