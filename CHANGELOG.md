@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.3
+
+### Profiles
+
+- Settings left behind by modules removed in earlier versions are cleared from
+  every saved profile on the next login, so exported profiles carry only live
+  settings. Nothing you use changes; a profile created or reset from now on
+  opens Raid Notifications at its own defaults
+
+---
+
 ## v4.7.2
 
 ### Skinning
