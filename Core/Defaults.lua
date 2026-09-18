@@ -305,20 +305,6 @@ local Defaults = {
             WrongColor = { 1, 0.4, 0, 1 },            -- #FF6600
         },
 
-        -- Old GatewayAlert kept for migration (absorbed into RaidNotifications)
-        GatewayAlert = {
-            Enabled = false,
-            Strata = "HIGH",
-            anchorFrameType = "UIPARENT",
-            ParentFrame = "UIParent",
-            Position = DefaultPosition(0, 150),
-            FontSize = 16,
-            FontOutline = "OUTLINE",
-            ColorMode = "custom",
-            Color = { 0.969, 0.027, 0.945, 1 },  -- #F707F1
-            ShowIcons = true,
-        },
-
         RaidNotifications = {
             Enabled = false,
             Strata = "MEDIUM",
@@ -2488,6 +2474,8 @@ local function RetireGroupModes(value)
     return value
 end
 
+local function DeleteKey() return nil end
+
 local KEY_RENAMES = {
     {
         id = "CombatLogger.ScenarioTorghast->Scenario",
@@ -2559,8 +2547,49 @@ local KEY_RENAMES = {
         block = "NoMovementAlert",
         old = "SpellEditorClass",
         new = "SpellEditorClass",
-        convert = function() return nil end,
+        convert = DeleteKey,
     },
+    -- Saved blocks of removed modules. A one-element path resolves to the
+    -- profile itself, so these delete a top-level block and create nothing.
+    { id = "MissingBuffs.Delete",        path = { "MissingBuffs" },        convert = DeleteKey },
+    { id = "BuffBars.Delete",            path = { "BuffBars" },            convert = DeleteKey },
+    { id = "BuffIcons.Delete",           path = { "BuffIcons" },           convert = DeleteKey },
+    { id = "ExternalsDefensives.Delete", path = { "ExternalsDefensives" }, convert = DeleteKey },
+    { id = "MovementBuffs.Delete",       path = { "MovementBuffs" },       convert = DeleteKey },
+    { id = "RacialsAnchor.Delete",       path = { "RacialsAnchor" },       convert = DeleteKey },
+    { id = "HideBars.Delete",            path = { "HideBars" },            convert = DeleteKey },
+    { id = "BloodlustTracker.Delete",    path = { "BloodlustTracker" },    convert = DeleteKey },
+    { id = "PositionController.Delete",  path = { "PositionController" },  convert = DeleteKey },
+    { id = "WorldMap.Delete",            path = { "WorldMap" },            convert = DeleteKey },
+    { id = "TargetCastbar.Delete",       path = { "TargetCastbar" },       convert = DeleteKey },
+    { id = "WindToolsGameBar.Delete",    path = { "WindToolsGameBar" },    convert = DeleteKey },
+    { id = "DispelGlow.Delete",          path = { "DispelGlow" },          convert = DeleteKey },
+    { id = "InnervateTracker.Delete",    path = { "InnervateTracker" },    convert = DeleteKey },
+    { id = "MaintenanceTracker.Delete",  path = { "MaintenanceTracker" },  convert = DeleteKey },
+    { id = "EbonMightHelper.Delete",     path = { "EbonMightHelper" },     convert = DeleteKey },
+    { id = "BurningRush.Delete",         path = { "BurningRush" },         convert = DeleteKey },
+    { id = "EbonMightTracker.Delete",    path = { "EbonMightTracker" },    convert = DeleteKey },
+    { id = "PrescienceTracker.Delete",   path = { "PrescienceTracker" },   convert = DeleteKey },
+    { id = "AugBuffsTracker.Delete",     path = { "AugBuffsTracker" },     convert = DeleteKey },
+    { id = "MissingEnchants.Delete",     path = { "MissingEnchants" },     convert = DeleteKey },
+    { id = "CursorCircle.Delete",        path = { "CursorCircle" },        convert = DeleteKey },
+    { id = "DispelCursor.Delete",        path = { "DispelCursor" },        convert = DeleteKey },
+    -- Keys of removed modules inside blocks that are still live.
+    { id = "Skinning.Battlenet.Delete",   block = "Skinning", old = "Battlenet",   new = "Battlenet",   convert = DeleteKey },
+    { id = "Skinning.ActionBars.Delete",  block = "Skinning", old = "ActionBars",  new = "ActionBars",  convert = DeleteKey },
+    { id = "Skinning.Auras.Delete",       block = "Skinning", old = "Auras",       new = "Auras",       convert = DeleteKey },
+    { id = "Skinning.UICleanup.Delete",   block = "Skinning", old = "UICleanup",   new = "UICleanup",   convert = DeleteKey },
+    { id = "Skinning.MicroMenu.Delete",   block = "Skinning", old = "MicroMenu",   new = "MicroMenu",   convert = DeleteKey },
+    { id = "Skinning.Mouseover.Delete",   block = "Skinning", old = "Mouseover",   new = "Mouseover",   convert = DeleteKey },
+    { id = "Skinning.RaidManager.Delete", block = "Skinning", old = "RaidManager", new = "RaidManager", convert = DeleteKey },
+    { id = "Skinning.Details.Delete",     block = "Skinning", old = "Details",     new = "Details",     convert = DeleteKey },
+    { id = "Dungeons.InstanceReset.Delete", block = "Dungeons", old = "InstanceReset", new = "InstanceReset", convert = DeleteKey },
+    { id = "Dungeons.DungeonTimers.Delete", block = "Dungeons", old = "DungeonTimers", new = "DungeonTimers", convert = DeleteKey },
+    -- Blocks of modules folded into a replacement. These run before the
+    -- replacement's own copy, so a block it never copied is lost with them.
+    { id = "BossDebuffs.Delete", path = { "BossDebuffs" }, convert = DeleteKey },
+    { id = "GatewayAlert.Delete", path = { "GatewayAlert" }, convert = DeleteKey },
+    { id = "Dungeons.WarpDepleteForces.Delete", block = "Dungeons", old = "WarpDepleteForces", new = "WarpDepleteForces", convert = DeleteKey },
 }
 
 function KE:MigrateCombatLoggerKeys()

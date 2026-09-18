@@ -197,4 +197,16 @@ describe("saved key deletion", function()
         assert.is_nil(block.SpellEditorClass)
         assert.is_true(block.Enabled)
     end)
+
+    it("deletes a removed module's top-level block and leaves a live one", function()
+        local sv = migrateWith({
+            profiles = { Default = {
+                MissingBuffs = { Enabled = true },
+                RaidNotifications = { Enabled = true },
+            } },
+        })
+        local profile = sv.profiles.Default
+        assert.is_nil(profile.MissingBuffs)
+        assert.is_true(profile.RaidNotifications.Enabled)
+    end)
 end)

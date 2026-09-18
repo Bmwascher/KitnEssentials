@@ -78,9 +78,8 @@ end
 
 -- One-time migration: carry the retired forces-overlay settings into
 -- this module's flat Overlay* keys. Guarded by a persistent OverlayMigrated
--- flag — NOT by the old table being nil, because AceDB/FillProfileDefaults
--- resurrect profile.Dungeons.WarpDepleteForces (with default values) on
--- every login until the Core/Defaults.lua block is removed.
+-- flag rather than by the old table being nil: an imported profile can
+-- still carry the table after the row that deletes it has run.
 -- Maps the old forces-overlay key -> new Overlay* key. Death-log persistence is dropped
 -- (the new module keeps deaths transient in MPT.run.deathLog).
 function MPT:MigrateLegacyOverlayDB()
@@ -111,10 +110,8 @@ function MPT:MigrateLegacyOverlayDB()
     end
 
     -- Old table is fully retired (Instance Reset Announcer + DeathLog drop with it).
-    -- Deliberately NOT nil-ing profile.Dungeons.WarpDepleteForces: the retired module
-    -- and its Defaults.lua block are deleted, so AceDB no longer reseeds the slot —
-    -- old SavedVariables may still carry it, but leaving the orphan untouched is
-    -- harmless and avoids mutating the profile table structure here.
+    -- A KEY_RENAMES row in Core/Defaults.lua deletes the old table before this
+    -- runs, so only an imported profile still carries it here.
 end
 
 ---------------------------------------------------------------------------------

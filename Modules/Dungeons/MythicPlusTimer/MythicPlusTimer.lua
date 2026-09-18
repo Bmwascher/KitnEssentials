@@ -835,8 +835,8 @@ function MPT:ResetToDefaults()
     if type(profile.MythicPlusTimer) == "table" then
         wipe(profile.MythicPlusTimer)   -- in place: keep table identity for any held refs
         -- Re-plant the migration stamp BEFORE UpdateDB: MigrateLegacyOverlayDB runs
-        -- inside UpdateDB and would otherwise re-import the retired (deliberately
-        -- orphaned) profile.Dungeons.WarpDepleteForces keys over the fresh defaults.
+        -- inside UpdateDB and would otherwise re-import any retired
+        -- profile.Dungeons.WarpDepleteForces keys over the fresh defaults.
         if wasMigrated then profile.MythicPlusTimer.OverlayMigrated = true end
     end
     self:UpdateDB()                     -- re-seed all defaults + re-bind self.db
