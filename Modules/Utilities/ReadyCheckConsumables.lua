@@ -515,17 +515,14 @@ function RCC:BuildFrame()
     -- SecureHandlerState for combat visibility.
     -- Slots with click buttons are hidden in combat via state driver.
     local stateFrame = CreateFrame("Frame", "KE_ReadyCheckConsumables_State", nil, "SecureHandlerStateTemplate")
+    -- Hide direction only. Combat entry is the one moment we are in lockdown;
+    -- re-showing after combat is ordinary Lua (PLAYER_REGEN_ENABLED repaints
+    -- the row), and a restricted handle cannot read plain Lua fields anyway.
     stateFrame:SetAttribute("_onstate-combat", [=[
-        for i = 1, 7 do
-            local btn = self:GetFrameRef("ClickBtn" .. i)
-            if btn then
-                if newstate == "hide" then
-                    btn:Hide()
-                elseif newstate == "show" then
-                    if btn.IsON then
-                        btn:Show()
-                    end
-                end
+        if newstate == "hide" then
+            for i = 1, 7 do
+                local btn = self:GetFrameRef("ClickBtn" .. i)
+                if btn then btn:Hide() end
             end
         end
     ]=])
@@ -553,7 +550,6 @@ function RCC:BuildFrame()
             click:SetAllPoints()
             click:Hide()
             click:RegisterForClicks("AnyUp", "AnyDown")
-            click.IsON = false
 
             -- Oil slots use item type with target-slot; others use macro
             if i == SLOT_OIL then
@@ -1107,10 +1103,8 @@ function RCC:UpdateFlask(auras)
             click:SetAttribute("type", "macro")
             click:SetAttribute("macrotext", "/stopmacro [combat]\n/use " .. clickName)
             click:Show()
-            click.IsON = true
         else
             click:Hide()
-            click.IsON = false
         end
     end
 end
@@ -1199,14 +1193,11 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
                 click:SetAttribute("item", itemName)
                 click:SetAttribute("target-slot", tostring(invSlot))
                 click:Show()
-                click.IsON = true
             else
                 click:Hide()
-                click.IsON = false
             end
         else
             click:Hide()
-            click.IsON = false
         end
     end
 end
@@ -1289,14 +1280,11 @@ function RCC:UpdateRune(auras)
                 click:SetAttribute("type", "macro")
                 click:SetAttribute("macrotext", "/stopmacro [combat]\n/use " .. name)
                 click:Show()
-                click.IsON = true
             else
                 click:Hide()
-                click.IsON = false
             end
         else
             click:Hide()
-            click.IsON = false
         end
     end
 end
@@ -1339,10 +1327,8 @@ function RCC:UpdateHealthstone()
             click:SetAttribute("type", "macro")
             click:SetAttribute("macrotext", "/stopmacro [combat]\n/cast Create Soulwell")
             click:Show()
-            click.IsON = true
         else
             click:Hide()
-            click.IsON = false
         end
     end
 end
@@ -1417,13 +1403,28 @@ function RCC:UpdateClassSlot()
         click:SetAttribute("type", "macro")
         click:SetAttribute("macrotext", macrotext)
         click:Show()
-        click.IsON = true
     end
 end
 
 ---------------------------------------------------------------------------------
 -- Main Update Orchestrator
 ---------------------------------------------------------------------------------
+
+--- _IsRowLive
+--- True while the real row should keep repainting on events: built, visible
+--- through its parent chain (a respondent's Ready/Not Ready hides the
+--- Blizzard popup the row is parented to), and not waiting on a deferred
+--- hide.
+function RCC:_IsRowLive()
+    return self.frame ~= nil and self.frame:IsVisible() and not self._hidePending
+end
+
+--- PLAYER_REGEN_ENABLED, registered only while a ready check is displayed.
+--- The state driver hid the click overlays on combat entry; a full repaint
+--- re-arms the ones that still apply and shows them again.
+function RCC:PLAYER_REGEN_ENABLED()
+    self:UpdateAllIcons()
+end
 
 --- UpdateAllIcons
 --- Scans player auras once, then dispatches to per-slot updaters. Called on
@@ -1435,8 +1436,12 @@ end
 ---   2. Per-aura spellId / expirationTime guards via ScanPlayerAuras filter.
 ---   3. Per-API guards inside individual slot updaters (weapon enchant exp/ID,
 ---      spell cooldown start/duration, item names passed to macrotext).
-function RCC:UpdateAllIcons()
-    if not self.frame or not self.frame:IsShown() then return end
+--- @param force boolean  literal true skips the liveness test (ShowFrame's
+---   first paint, before the popup's visibility is known); the aura gate
+---   still applies. Anything else, including an event name arriving in this
+---   position, does not force.
+function RCC:UpdateAllIcons(force)
+    if force ~= true and not self:_IsRowLive() then return end
 
     if KE:AreAuraIdentitiesHidden() then
         if DEBUG_RCC then KE:Print("[RCC] UpdateAllIcons: auras are secret, skipping.") end
@@ -1763,7 +1768,7 @@ function RCC:UNIT_AURA(_, unit)
 
     -- Group-unit aura change: only the Warlock dynamic class slot cares.
     local _, playerClass = UnitClass("player")
-    if playerClass == "WARLOCK" and self.frame and self.frame:IsShown() then
+    if playerClass == "WARLOCK" and self:_IsRowLive() then
         if DEBUG_RCC then
             KE:Print(string_format("[RCC] UNIT_AURA: group unit %s changed, refreshing class slot.",
                 tostring(unit)))
