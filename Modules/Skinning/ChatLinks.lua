@@ -630,10 +630,7 @@ function CL:OnEnable()
 
     if self.filtersRegistered then return end
 
-    -- Resolved at call time rather than cached at file scope, so the fallback
-    -- stays reachable on a client that has only the older global.
-    local add = (_G.ChatFrameUtil and _G.ChatFrameUtil.AddMessageEventFilter)
-        or _G.ChatFrame_AddMessageEventFilter
+    local add = _G.ChatFrameUtil and _G.ChatFrameUtil.AddMessageEventFilter
     if not add then return end
 
     for _, event in ipairs(FILTER_EVENTS) do
