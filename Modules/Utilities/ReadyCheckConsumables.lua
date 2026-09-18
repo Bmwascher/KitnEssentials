@@ -367,64 +367,25 @@ function RCC:_DisableStateDriver()
     if DEBUG_RCC then KE:Print("[RCC] state driver unregistered.") end
 end
 
---- BuildFrame
---- Creates the KE_ReadyCheckConsumables container and 7 icon button stubs.
---- The container anchors to ReadyCheckListenerFrame (falling back to
---- ReadyCheckFrame) so it floats above the ready check popup.
-function RCC:BuildFrame()
-    if self.frame then return end
-
-    -- Prefer ReadyCheckListenerFrame; fall back to ReadyCheckFrame (ElvUI replaces it).
-    local parent = ReadyCheckListenerFrame or ReadyCheckFrame
-    if not parent then
-        if DEBUG_RCC then KE:Print("[RCC] BuildFrame: no parent frame found, deferring.") end
-        return
-    end
-
+--- _BuildIconRow
+--- Creates the 7 visual icon stubs under `parent` and returns them indexed
+--- 1..NUM_SLOTS. Chains them left to right on `parent`; _LayoutRow re-anchors
+--- the visible ones. Builds no secure frame, so both the real row and the
+--- settings preview use it.
+function RCC:_BuildIconRow(parent)
     local db = self.db
     local iconSize = db.IconSize or 32
     local spacing  = db.IconSpacing or 4
-
-    -- Container frame (no backdrop — deliberately minimal; icons speak for themselves)
-    local f = CreateFrame("Frame", "KE_ReadyCheckConsumables", parent)
-    local totalWidth = (iconSize * NUM_SLOTS) + (spacing * (NUM_SLOTS - 1))
-    f:SetSize(totalWidth, iconSize)
-    f:SetPoint("BOTTOM", parent, "TOP", 0, 2)
-    f:SetFrameStrata("HIGH")
-    f:Hide()
-
-    -- SecureHandlerState for combat visibility.
-    -- Slots with click buttons are hidden in combat via state driver.
-    local stateFrame = CreateFrame("Frame", "KE_ReadyCheckConsumables_State", nil, "SecureHandlerStateTemplate")
-    stateFrame:SetAttribute("_onstate-combat", [=[
-        for i = 1, 7 do
-            local btn = self:GetFrameRef("ClickBtn" .. i)
-            if btn then
-                if newstate == "hide" then
-                    btn:Hide()
-                elseif newstate == "show" then
-                    if btn.IsON then
-                        btn:Show()
-                    end
-                end
-            end
-        end
-    ]=])
-    -- RegisterStateDriver is deferred to ShowFrame (registered only while a
-    -- ready check is displayed) and torn down in HideFrame. The snippet above
-    -- and the SetFrameRef wiring below are still set up here at build time.
-
-    f.stateFrame = stateFrame
-    self.buttons = {}
+    local buttons = {}
 
     for i = 1, NUM_SLOTS do
         -- Outer container frame (non-secure; houses the icon texture and text)
-        local btn = CreateFrame("Frame", nil, f)
+        local btn = CreateFrame("Frame", nil, parent)
         btn:SetSize(iconSize, iconSize)
         if i == 1 then
-            btn:SetPoint("LEFT", f, "LEFT", 0, 0)
+            btn:SetPoint("LEFT", parent, "LEFT", 0, 0)
         else
-            btn:SetPoint("LEFT", self.buttons[i - 1], "RIGHT", spacing, 0)
+            btn:SetPoint("LEFT", buttons[i - 1], "RIGHT", spacing, 0)
         end
 
         -- Icon texture (ARTWORK layer, default sublevel 0)
@@ -476,6 +437,107 @@ function RCC:BuildFrame()
         countText:SetText("")
         btn.countText = countText
 
+        buttons[i] = btn
+    end
+
+    return buttons
+end
+
+--- _LayoutRow
+--- Sizes every stub and its status overlay from db, chains the visible ones
+--- left to right on `container`, hides the rest, and fits the container to
+--- the visible count. `visibility` is indexed 1..NUM_SLOTS.
+function RCC:_LayoutRow(container, buttons, visibility)
+    local db = self.db
+    local iconSize = db.IconSize or 32
+    local spacing  = db.IconSpacing or 4
+
+    local prev
+    local totalVisible = 0
+    for i = 1, NUM_SLOTS do
+        local btn = buttons[i]
+        if btn then
+            btn:SetSize(iconSize, iconSize)
+            if btn.statusTexture then
+                btn.statusTexture:SetSize(iconSize / 2, iconSize / 2)
+            end
+            if visibility[i] then
+                btn:Show()
+                btn:ClearAllPoints()
+                if prev then
+                    btn:SetPoint("LEFT", prev, "RIGHT", spacing, 0)
+                else
+                    btn:SetPoint("LEFT", container, "LEFT", 0, 0)
+                end
+                prev = btn
+                totalVisible = totalVisible + 1
+            else
+                btn:Hide()
+            end
+        end
+    end
+
+    if totalVisible > 0 then
+        local width = (iconSize * totalVisible) + (spacing * (totalVisible - 1))
+        container:SetWidth(width)
+        container:SetHeight(iconSize)
+    end
+end
+
+--- BuildFrame
+--- Creates the KE_ReadyCheckConsumables container and 7 icon button stubs.
+--- The container anchors to ReadyCheckListenerFrame (falling back to
+--- ReadyCheckFrame) so it floats above the ready check popup.
+function RCC:BuildFrame()
+    if self.frame then return end
+
+    -- Prefer ReadyCheckListenerFrame; fall back to ReadyCheckFrame (ElvUI replaces it).
+    local parent = ReadyCheckListenerFrame or ReadyCheckFrame
+    if not parent then
+        if DEBUG_RCC then KE:Print("[RCC] BuildFrame: no parent frame found, deferring.") end
+        return
+    end
+
+    local db = self.db
+    local iconSize = db.IconSize or 32
+    local spacing  = db.IconSpacing or 4
+
+    -- Container frame (no backdrop — deliberately minimal; icons speak for themselves)
+    local f = CreateFrame("Frame", "KE_ReadyCheckConsumables", parent)
+    local totalWidth = (iconSize * NUM_SLOTS) + (spacing * (NUM_SLOTS - 1))
+    f:SetSize(totalWidth, iconSize)
+    f:SetPoint("BOTTOM", parent, "TOP", 0, 2)
+    f:SetFrameStrata("HIGH")
+    f:Hide()
+
+    -- SecureHandlerState for combat visibility.
+    -- Slots with click buttons are hidden in combat via state driver.
+    local stateFrame = CreateFrame("Frame", "KE_ReadyCheckConsumables_State", nil, "SecureHandlerStateTemplate")
+    stateFrame:SetAttribute("_onstate-combat", [=[
+        for i = 1, 7 do
+            local btn = self:GetFrameRef("ClickBtn" .. i)
+            if btn then
+                if newstate == "hide" then
+                    btn:Hide()
+                elseif newstate == "show" then
+                    if btn.IsON then
+                        btn:Show()
+                    end
+                end
+            end
+        end
+    ]=])
+    -- RegisterStateDriver is deferred to ShowFrame (registered only while a
+    -- ready check is displayed) and torn down in HideFrame. The snippet above
+    -- and the SetFrameRef wiring below are still set up here at build time.
+
+    f.stateFrame = stateFrame
+    local buttons = self:_BuildIconRow(f)
+    self.buttons = buttons
+
+    for i = 1, NUM_SLOTS do
+        local btn = buttons[i]
+
         -- SecureActionButton click frame for slots that can be activated.
         -- Click-enabled: flask (2), oil MH (3), oil OH (4), rune (5), class (7).
         -- Display-only: food (1, tracked via aura only), healthstone (6, dropped by Warlock).
@@ -510,8 +572,6 @@ function RCC:BuildFrame()
             stateFrame:SetFrameRef("ClickBtn" .. i, click)
             btn.click = click
         end
-
-        self.buttons[i] = btn
     end
 
     -- Named slot aliases for readability in update functions
@@ -1416,35 +1476,7 @@ function RCC:RefreshLayout()
         [SLOT_CLASS]  = (db.ShowClassItem   ~= false) and (CLASS_SLOT[playerClass] ~= nil),
     }
 
-    local iconSize = db.IconSize or 32
-    local spacing  = db.IconSpacing or 4
-
-    local prev
-    local totalVisible = 0
-    for i = 1, NUM_SLOTS do
-        local btn = self.buttons[i]
-        if btn then
-            if visibility[i] then
-                btn:Show()
-                btn:ClearAllPoints()
-                if prev then
-                    btn:SetPoint("LEFT", prev, "RIGHT", spacing, 0)
-                else
-                    btn:SetPoint("LEFT", self.frame, "LEFT", 0, 0)
-                end
-                prev = btn
-                totalVisible = totalVisible + 1
-            else
-                btn:Hide()
-            end
-        end
-    end
-
-    if totalVisible > 0 then
-        local width = (iconSize * totalVisible) + (spacing * (totalVisible - 1))
-        self.frame:SetWidth(width)
-        self.frame:SetHeight(iconSize)
-    end
+    self:_LayoutRow(self.frame, self.buttons, visibility)
 end
 
 --- RefreshIconVisibility
