@@ -335,8 +335,9 @@ function MPT:BuildHUD()
 
         -- Rows use the Deaths font settings at the headline's exact size: a
         -- fixed small size is hard to read, and a larger one reads too big.
-        local ttFace = MPT.db.DeathsFontFace or MPT.db.FontFace
-        local ttSize = MPT.db.DeathsFontSize or MPT.db.FontSize or 13
+        local ttFace    = MPT.db.DeathsFontFace or MPT.db.FontFace
+        local ttSize    = MPT.db.DeathsFontSize or MPT.db.FontSize or 13
+        local ttOutline = MPT.db.DeathsFontOutline or MPT.db.FontOutline or "OUTLINE"
         local rowH   = ttSize + 4
 
         -- Build sorted list (chronological by time-of-death).
@@ -365,8 +366,8 @@ function MPT:BuildHUD()
             local row = deathTT._rows[i]
             -- Re-apply per show: EnsureRows seeds 10px; the user can change
             -- the Deaths font card while the tooltip rows already exist.
-            KE:ApplyFont(row.name, ttFace, ttSize, "")
-            KE:ApplyFont(row.time, ttFace, ttSize, "")
+            KE:ApplyFontToText(row.name, ttFace, ttSize, ttOutline)
+            KE:ApplyFontToText(row.time, ttFace, ttSize, ttOutline)
             local class = entry.class
             local color = class and RAID_CLASS_COLORS[class]
             local short = Ambiguate(entry.name or "", "short")
