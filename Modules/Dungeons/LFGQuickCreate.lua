@@ -390,7 +390,8 @@ end
 --
 -- UnitName is SecretWhenUnitNameIdentityRestricted and comparing a secret
 -- throws, so a unit whose name comes back secret is skipped and the line
--- keeps the accent colour.
+-- keeps the accent colour. UnitClass is SecretWhenUnitIdentityRestricted,
+-- which exempts party members, so the class is read without a test.
 local function PartyClassToken(shortName)
     for i = 1, 4 do
         local unit = "party" .. i
