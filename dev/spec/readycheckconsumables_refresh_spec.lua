@@ -33,7 +33,7 @@ end
 
 describe("ReadyCheckConsumables UpdateAllIcons dispatch", function()
     local WORKERS = {
-        "UpdateFood", "UpdateFlask", "UpdateWeaponEnchant", "UpdateRune",
+        "UpdateFood", "UpdateFlask", "UpdateFlaskClick", "UpdateWeaponEnchant", "UpdateRune",
         "UpdateHealthstone", "UpdateClassSlot",
     }
     local RCC, KE, seams, called, laidOut
@@ -61,24 +61,26 @@ describe("ReadyCheckConsumables UpdateAllIcons dispatch", function()
     end)
 
     it("does not call a disabled category's worker", function()
+        -- Eight worker calls when everything is on (the weapon worker runs
+        -- once per hand); a disabled category removes its own.
         local cases = {
-            { key = "ShowFood",        absent = "UpdateFood" },
-            { key = "ShowFlask",       absent = "UpdateFlask" },
-            { key = "ShowWeaponOil",   absent = "UpdateWeaponEnchant:oil" },
-            { key = "ShowOffHandOil",  absent = "UpdateWeaponEnchant:oiloh" },
-            { key = "ShowAugmentRune", absent = "UpdateRune" },
-            { key = "ShowHealthstone", absent = "UpdateHealthstone" },
-            { key = "ShowClassItem",   absent = "UpdateClassSlot" },
+            { key = "ShowFood",        absent = { "UpdateFood" } },
+            { key = "ShowFlask",       absent = { "UpdateFlask", "UpdateFlaskClick" } },
+            { key = "ShowWeaponOil",   absent = { "UpdateWeaponEnchant:oil" } },
+            { key = "ShowOffHandOil",  absent = { "UpdateWeaponEnchant:oiloh" } },
+            { key = "ShowAugmentRune", absent = { "UpdateRune" } },
+            { key = "ShowHealthstone", absent = { "UpdateHealthstone" } },
+            { key = "ShowClassItem",   absent = { "UpdateClassSlot" } },
         }
         for _, c in ipairs(cases) do
             enableEveryCategory()
             RCC.db[c.key] = false
             called = {}
             RCC:UpdateAllIcons(true)
-            assert.is_nil(called[c.absent], c.key)
+            for _, name in ipairs(c.absent) do assert.is_nil(called[name], c.key) end
             local ran = 0
             for _, name in ipairs(WORKERS) do ran = ran + (called[name] or 0) end
-            assert.equals(6, ran, c.key)
+            assert.equals(8 - #c.absent, ran, c.key)
         end
     end)
 
@@ -99,7 +101,7 @@ describe("ReadyCheckConsumables UpdateAllIcons dispatch", function()
         end
     end)
 
-    it("repaints the weapon slots and lays out while aura identities are hidden, with no scan and no aura-driven worker", function()
+    it("repaints the weapon slots and the flask click and lays out while aura identities are hidden, with no scan and no aura-driven worker", function()
         KE.AreAuraIdentitiesHidden = function() return true end
         local unavailable = {}
         RCC._PaintUnavailable = function(_, btn) unavailable[#unavailable + 1] = btn end
@@ -109,6 +111,7 @@ describe("ReadyCheckConsumables UpdateAllIcons dispatch", function()
         assert.is_nil(called.UpdateFlask)
         assert.is_nil(called.UpdateRune)
         assert.equals(2, called.UpdateWeaponEnchant)
+        assert.equals(1, called.UpdateFlaskClick)
         assert.equals(3, #unavailable)
         assert.is_not_nil(laidOut)
     end)

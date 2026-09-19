@@ -194,18 +194,9 @@ local FLASK_BUFFS = {
     [1235057] = "vers",     -- Flask of Thalassian Resistance
 }
 
--- Per-spec flask stat priority (best-guess meta defaults, edit per tier).
--- Format: [specID] = { primaryStat, secondaryStat? }
--- Stats: "mastery" / "haste" / "crit" / "vers". Secondary is optional —
--- single-entry tables are valid (some specs have a clear single best stat).
---
--- Used as a fallback chain inside UpdateFlask when db.LastFlaskStat is nil
--- or out of stock. The user's actual usage (LastFlaskStat, updated every
--- time a flask buff is detected) always wins over these defaults; this
--- table only seeds the very first ready check of a brand-new session.
---
--- Specs not listed here fall through to the deterministic sorted fallback
--- (rank desc, stat alphabetical, itemID asc).
+-- Per-spec flask stat priority, [specID] = { primaryStat, secondaryStat? }.
+-- Meta defaults, edited per tier; only consulted while db.LastFlaskStat has
+-- nothing stocked, so a player's own flask choice always outranks them.
 local SPEC_FLASK_PRIORITY = {
     -- Death Knight
     [250]  = { "vers",    "crit"    },  -- Blood
@@ -262,22 +253,29 @@ local SPEC_FLASK_PRIORITY = {
     [73]   = { "haste",   "mastery" },  -- Protection
 }
 
--- Sorted itemID list of all FLASKS for deterministic final-fallback iteration.
--- Order: rank desc (rank 2 first), stat alphabetical, itemID asc.
--- Computed once at file load — FLASKS is static data.
+-- The flask click order: rank desc, then Fleeting before personal (the
+-- cauldron flask expires with the raid, the bought one keeps), then stat
+-- alphabetical, then itemID so the order is strict for table.sort. Every
+-- flask pick walks FLASKS_SORTED, so pairs() order never decides a tie.
+local function FlaskBefore(a, b)
+    local da, db = FLASKS[a], FLASKS[b]
+    local ra, rb = da.rank or 1, db.rank or 1
+    if ra ~= rb then return ra > rb end
+    if da.fleeting ~= db.fleeting then return da.fleeting == true end
+    if da.stat ~= db.stat then return da.stat < db.stat end
+    return a < b
+end
+
 local FLASKS_SORTED = {}
 do
     for itemID in pairs(FLASKS) do
         FLASKS_SORTED[#FLASKS_SORTED + 1] = itemID
     end
-    table_sort(FLASKS_SORTED, function(a, b)
-        local da, db = FLASKS[a], FLASKS[b]
-        local ra, rb = da.rank or 1, db.rank or 1
-        if ra ~= rb then return ra > rb end
-        if da.stat ~= db.stat then return da.stat < db.stat end
-        return a < b
-    end)
+    table_sort(FLASKS_SORTED, FlaskBefore)
 end
+-- Spec seams.
+RCC._FlaskBefore = FlaskBefore
+RCC._FlaskOrder = FLASKS_SORTED
 
 -- Healthstones — keyed by item ID.
 -- 5512: standard healthstone, craftable/droppable for any class to carry.
@@ -1028,36 +1026,12 @@ function RCC:_GetSpecFlaskPriority()
 end
 
 --- UpdateFlask
---- Aura scan against FLASK_BUFFS. When out of combat, wires the click button
---- to the player's preferred flask in bags.
----
---- Selection priority chain for the click target (first hit wins, each step
---- returns the highest-rank item in bags matching its stat):
----   1. db.LastFlaskStat — refreshed every time a flask buff is detected, so
----      the click keeps offering the stat line the player actually uses.
----      The ConsumableMemory aura-path Remember pattern
----      (Core/ConsumableMemory.lua), simplified to one global preference.
----   2. SPEC_FLASK_PRIORITY[spec][1] — meta-default primary stat for the
----      player's current spec. Only used on a fresh session before any
----      flask aura has populated LastFlaskStat.
----   3. SPEC_FLASK_PRIORITY[spec][2] — meta-default secondary stat (optional).
----   4. FLASKS_SORTED iteration — deterministic final fallback ordered by
----      (rank desc, stat alphabetical, itemID asc). Hit when LastFlaskStat
----      is nil, the spec isn't in SPEC_FLASK_PRIORITY (new spec from a
----      future patch), or none of the preferred stats are in bag.
----
---- Within any chosen stat, rank 2 is preferred over rank 1 (handled by
---- _BestForStat). Once the player applies any flask, LastFlaskStat locks
---- in for all future sessions across /reload.
----
---- Why this matters: 4 stat lines × 2 ranks × 2 forms = up to 16 flask
---- itemIDs, all mapped to 4 buffIDs. The previous "first match in pairs()"
---- scan was non-deterministic and would nominate a random flask whenever
---- the bag held multiple stat options.
+--- Paints the flask slot's ready state from the aura map and remembers the
+--- buffed stat line. The click half lives in UpdateFlaskClick, which reads
+--- bags only and so runs whether or not the aura walk did.
 function RCC:UpdateFlask(auras)
     local btn = self.buttons.flask
     if not btn then return end
-    local click = btn.click
 
     local activeAura, activeBuffId
     for buffId in pairs(FLASK_BUFFS) do
@@ -1074,11 +1048,9 @@ function RCC:UpdateFlask(auras)
         btn.texture:SetDesaturated(false)
         btn.timeLeft:SetText(formatDurationText(self:GetAuraRemaining(activeAura)))
 
-        -- Remember the stat line currently buffed so the click button keeps
-        -- nominating it even after the bag scan finds multiple stat options.
-        -- Tracked as the stat string (not buffId) so the preference survives
-        -- if Blizzard re-IDs the buff next season — as long as FLASKS data
-        -- keeps its `stat` field, the match still works.
+        -- Remembered as the stat string rather than the buff id so the
+        -- preference survives a re-id of the buff as long as FLASKS keeps
+        -- its stat field.
         if self.db then
             local stat = FLASK_BUFFS[activeBuffId]
             if stat then self.db.LastFlaskStat = stat end
@@ -1089,42 +1061,36 @@ function RCC:UpdateFlask(auras)
         btn.texture:SetDesaturated(true)
         btn.timeLeft:SetText("")
     end
+end
 
-    local cauldronOnly = self.db.CauldronFlasksOnly
+--- UpdateFlaskClick
+--- Nominates the flask the click will use and paints its icon and count;
+--- btn.nominatedItem carries the pick for probes. Bag reads carry no aura
+--- restriction, which is why this runs outside the aura-identity gate and
+--- arms in a keystone.
+function RCC:UpdateFlaskClick()
+    local btn = self.buttons.flask
+    if not btn then return end
+    local click = btn.click
+    local cauldronOnly = self.db and self.db.CauldronFlasksOnly
 
-    -- Bag scan (one pass): build a lookup of available eligible flasks
-    -- {[itemID] = { count, data }} so the priority chain below can do
-    -- O(1) lookups instead of re-scanning bags per priority step.
     local available = {}
-    local totalCount = 0
     for itemID, data in pairs(FLASKS) do
         if (not cauldronOnly) or data.fleeting then
             local count = GetItemCount(itemID, false, true)
-            if count and count > 0 then
-                available[itemID] = { count = count, data = data }
-                totalCount = totalCount + count
-            end
+            if count and count > 0 then available[itemID] = count end
         end
     end
-    btn.countText:SetText(totalCount > 0 and tostring(totalCount) or "")
 
-    -- Helper: highest-rank available item matching a stat (rank 2 wins over rank 1).
     local function bestForStat(stat)
-        local best, bestRank
-        for itemID, entry in pairs(available) do
-            if entry.data.stat == stat then
-                local rank = entry.data.rank or 1
-                if not bestRank or rank > bestRank then
-                    best, bestRank = itemID, rank
-                end
-            end
+        for _, itemID in ipairs(FLASKS_SORTED) do
+            if FLASKS[itemID].stat == stat and available[itemID] then return itemID end
         end
-        return best
+        return nil
     end
 
-    -- Priority chain
     local pickItem
-    local lastStat = self.db.LastFlaskStat
+    local lastStat = self.db and self.db.LastFlaskStat
     if lastStat then pickItem = bestForStat(lastStat) end
 
     if not pickItem then
@@ -1138,13 +1104,21 @@ function RCC:UpdateFlask(auras)
     end
 
     if not pickItem then
-        -- Deterministic final fallback (rank desc, stat alpha, itemID asc).
         for _, itemID in ipairs(FLASKS_SORTED) do
             if available[itemID] then
                 pickItem = itemID
                 break
             end
         end
+    end
+
+    btn.nominatedItem = pickItem
+    if pickItem then
+        self:SetIconFromItem(btn.texture, pickItem)
+        btn.countText:SetText(tostring(available[pickItem]))
+    else
+        btn.texture:SetTexture(DEFAULT_ICONS[SLOT_FLASK])
+        btn.countText:SetText("")
     end
 
     local clickName = pickItem and self:SafeItemName(pickItem) or nil
@@ -1493,6 +1467,7 @@ end
 --- unavailable and the weapon, healthstone and class slots still repaint,
 --- since C_PaperDollInfo.GetTemporaryEnchantmentInfo and C_Item.GetItemCount
 --- carry no aura restriction and the class slot asks its own per-spell gate.
+--- The flask click is bag-driven and repaints under the gate too.
 ---
 --- Secret value guards are layered:
 ---   1. KE:AreAuraIdentitiesHidden() — no aura walk and no aura-driven paint
@@ -1527,6 +1502,9 @@ function RCC:UpdateAllIcons(force)
         if visibility[SLOT_FLASK] then self:_PaintUnavailable(buttons.flask) end
         if visibility[SLOT_RUNE]  then self:_PaintUnavailable(buttons.rune) end
     end
+    -- After the unavailable paint so the bag-driven click, icon and count
+    -- land on top of it.
+    if visibility[SLOT_FLASK] then self:UpdateFlaskClick() end
     if visibility[SLOT_OIL]   then self:UpdateWeaponEnchant("oil",   16) end
     if visibility[SLOT_OILOH] then self:UpdateWeaponEnchant("oiloh", 17) end
     if visibility[SLOT_HS]    then self:UpdateHealthstone() end

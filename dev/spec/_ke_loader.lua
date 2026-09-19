@@ -2952,8 +2952,12 @@ function L.loadReadyCheckConsumables(overrides)
     -- keyed by inventory slot. SECRET is the declared-secret sentinel that
     -- KE.IsSafeValue rejects; it says nothing about the runtime's secrets.
     -- timers collects every C_Timer.After callback for the spec to fire;
-    -- glow counts the LibCustomGlow pixel-glow starts and stops; bagCount is
-    -- what C_Item.GetItemCount returns for every item; playerClass is the
+    -- glow counts the LibCustomGlow pixel-glow starts and stops; bagCounts
+    -- is what C_Item.GetItemCount returns per item, bagCount for any item
+    -- not listed there; equipped maps an inventory slot to its item id for
+    -- GetInventoryItemID, itemInfo an item id to { classID, subClassID } for
+    -- C_Item.GetItemInfoInstant, itemNames an item id to the name
+    -- C_Item.GetItemInfo returns (nil reads as uncached); playerClass is the
     -- class file token UnitClass hands back.
     local seams = {
         combat = { inCombat = false },
@@ -2963,6 +2967,10 @@ function L.loadReadyCheckConsumables(overrides)
         glow = { starts = 0, stops = 0 },
         playerClass = "WARRIOR",
         bagCount = 0,
+        bagCounts = {},
+        equipped = {},
+        itemInfo = {},
+        itemNames = {},
         auras = {},
         auraPageSize = nil,
         enchants = {},
@@ -2997,14 +3005,22 @@ function L.loadReadyCheckConsumables(overrides)
     _G.GetUnitName = function() return nil end
     _G.IsInRaid = function() return false end
     _G.IsInGroup = function() return false end
-    _G.GetInventoryItemID = function() return nil end
+    _G.GetInventoryItemID = function(_, slot) return seams.equipped[slot] end
     _G.C_PaperDollInfo = {
         GetTemporaryEnchantmentInfo = function(slot) return seams.enchants[slot] end,
     }
     _G.C_Item = {
-        GetItemCount = function() return seams.bagCount end,
-        GetItemInfo = function() return nil end,
-        GetItemInfoInstant = function() return nil end,
+        GetItemCount = function(itemID)
+            local count = seams.bagCounts[itemID]
+            if count == nil then count = seams.bagCount end
+            return count
+        end,
+        GetItemInfo = function(itemID) return seams.itemNames[itemID] end,
+        GetItemInfoInstant = function(itemID)
+            local info = seams.itemInfo[itemID]
+            if not info then return nil end
+            return itemID, "", "", "", 0, info[1], info[2]
+        end,
         GetItemIconByID = function() return nil end,
     }
     _G.C_SpecializationInfo = {
