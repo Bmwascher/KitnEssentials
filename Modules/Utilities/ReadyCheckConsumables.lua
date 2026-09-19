@@ -126,28 +126,69 @@ local HEARTY_FOOD_BUFFS = {
     [1232078] = true
 }
 
--- Weapon enhancements — unified table for oils, weapon stones, and ammo mods.
--- All three apply as temporary enchants, so C_PaperDollInfo.GetTemporaryEnchantmentInfo
--- reports them uniformly without a secondary confirmation click.
--- Keyed by enchant ID (enchantID in the returned TemporaryItemEnchantInfo).
--- Rank 1 = lower quality craft, Rank 2 = higher quality craft (some have rank 2 = lower ID).
+-- Weapon subclasses each enhancement accepts (Enum.ItemWeaponSubclass), the
+-- use-spell's own restriction. Bladed and blunt are the sharpening and
+-- weighting stones' lists; ammo is bows, guns and crossbows; the oil takes
+-- every weapon but thrown and fishing poles.
+local function subclassSet(...)
+    local set = {}
+    for i = 1, select("#", ...) do set[(select(i, ...))] = true end
+    return set
+end
+local BLADED_WEAPONS = subclassSet(0, 1, 6, 7, 8, 9, 13, 15)
+local BLUNT_WEAPONS  = subclassSet(4, 5, 10, 13)
+local RANGED_WEAPONS = subclassSet(2, 3, 18)
+local OILABLE_WEAPONS = {}
+for subclass = 0, 20 do
+    if subclass ~= 16 and subclass ~= 20 then OILABLE_WEAPONS[subclass] = true end
+end
+
+-- Weapon enhancements: oils, weapon stones and ammo mods, all temporary
+-- enchants that C_PaperDollInfo.GetTemporaryEnchantmentInfo reports alike.
+-- Keyed by enchant ID; rank 2 is the higher-quality craft.
 local WEAPON_ENHANCEMENTS = {
     -- Thalassian Phoenix Oil
-    [8051] = { item = 243733, kind = "oil",   rank = 1, name = "Thalassian Phoenix Oil"  },
-    [8052] = { item = 243734, kind = "oil",   rank = 2, name = "Thalassian Phoenix Oil"  },
+    [8051] = { item = 243733, kind = "oil",   rank = 1, name = "Thalassian Phoenix Oil", applies = OILABLE_WEAPONS },
+    [8052] = { item = 243734, kind = "oil",   rank = 2, name = "Thalassian Phoenix Oil", applies = OILABLE_WEAPONS },
     -- Refulgent Whetstone
-    [7906] = { item = 237370, kind = "stone", rank = 1, name = "Refulgent Whetstone"      },
-    [7905] = { item = 237371, kind = "stone", rank = 2, name = "Refulgent Whetstone"      },
+    [7906] = { item = 237370, kind = "stone", rank = 1, name = "Refulgent Whetstone",    applies = BLADED_WEAPONS },
+    [7905] = { item = 237371, kind = "stone", rank = 2, name = "Refulgent Whetstone",    applies = BLADED_WEAPONS },
     -- Refulgent Weightstone
-    [7907] = { item = 237367, kind = "stone", rank = 1, name = "Refulgent Weightstone"    },
-    [7908] = { item = 237369, kind = "stone", rank = 2, name = "Refulgent Weightstone"    },
+    [7907] = { item = 237367, kind = "stone", rank = 1, name = "Refulgent Weightstone",  applies = BLUNT_WEAPONS },
+    [7908] = { item = 237369, kind = "stone", rank = 2, name = "Refulgent Weightstone",  applies = BLUNT_WEAPONS },
     -- Laced Zoomshots
-    [8608] = { item = 257749, kind = "ammo",  rank = 1, name = "Laced Zoomshots"          },
-    [8609] = { item = 257750, kind = "ammo",  rank = 2, name = "Laced Zoomshots"          },
+    [8608] = { item = 257749, kind = "ammo",  rank = 1, name = "Laced Zoomshots",        applies = RANGED_WEAPONS },
+    [8609] = { item = 257750, kind = "ammo",  rank = 2, name = "Laced Zoomshots",        applies = RANGED_WEAPONS },
     -- Weighted Boomshots
-    [8610] = { item = 257751, kind = "ammo",  rank = 1, name = "Weighted Boomshots"       },
-    [8611] = { item = 257752, kind = "ammo",  rank = 2, name = "Weighted Boomshots"       },
+    [8610] = { item = 257751, kind = "ammo",  rank = 1, name = "Weighted Boomshots",     applies = RANGED_WEAPONS },
+    [8611] = { item = 257752, kind = "ammo",  rank = 2, name = "Weighted Boomshots",     applies = RANGED_WEAPONS },
 }
+
+-- The weapon click order: oil first (every spec but Shaman runs it), then
+-- rank desc, then item ID so the order is strict for table.sort. The pick
+-- walks ENHANCEMENTS_SORTED after the hand's own memory, so pairs() order
+-- never decides.
+local KIND_ORDER = { oil = 1, stone = 2, ammo = 2 }
+local ENHANCEMENT_BY_ITEM = {}
+local ENHANCEMENTS_SORTED = {}
+do
+    for _, data in pairs(WEAPON_ENHANCEMENTS) do
+        ENHANCEMENT_BY_ITEM[data.item] = data
+        ENHANCEMENTS_SORTED[#ENHANCEMENTS_SORTED + 1] = data.item
+    end
+    table_sort(ENHANCEMENTS_SORTED, function(a, b)
+        local da, db = ENHANCEMENT_BY_ITEM[a], ENHANCEMENT_BY_ITEM[b]
+        if KIND_ORDER[da.kind] ~= KIND_ORDER[db.kind] then
+            return KIND_ORDER[da.kind] < KIND_ORDER[db.kind]
+        end
+        if da.rank ~= db.rank then return da.rank > db.rank end
+        return a < b
+    end)
+end
+
+-- Each hand remembers its own last enhancement; the off hand would
+-- otherwise overwrite what the main hand just stored.
+local HAND_MEMORY_KEY = { [16] = "LastWeaponEnchantItemMH", [17] = "LastWeaponEnchantItemOH" }
 
 -- Augment Runes — keyed by buff spell ID for aura detection.
 -- Multiple tiers tracked because older-expansion runes may still be used:
@@ -1134,13 +1175,50 @@ function RCC:UpdateFlaskClick()
     end
 end
 
+--- _PickWeaponEnhancement
+--- The item the click on one weapon slot will apply, and its bag count. No
+--- weapon, a nil subclass read or nothing compatible in bags nominates
+--- nothing: the click is never armed with an item the weapon cannot take.
+function RCC:_PickWeaponEnhancement(invSlot)
+    local weaponID = GetInventoryItemID("player", invSlot)
+    if not weaponID then return nil, 0 end
+    local _, _, _, _, _, classID, subClassID = GetItemInfoInstant(weaponID)
+    if classID ~= 2 or not subClassID then return nil, 0 end
+
+    local counts = {}
+    local function stocked(itemID)
+        local data = ENHANCEMENT_BY_ITEM[itemID]
+        if not data or not data.applies[subClassID] then return false end
+        if counts[itemID] == nil then
+            counts[itemID] = GetItemCount(itemID, false, true) or 0
+        end
+        return counts[itemID] > 0
+    end
+
+    local remembered = self.db and self.db[HAND_MEMORY_KEY[invSlot]]
+    if remembered and stocked(remembered) then return remembered, counts[remembered] end
+
+    local family = remembered and ENHANCEMENT_BY_ITEM[remembered]
+    if family then
+        for _, itemID in ipairs(ENHANCEMENTS_SORTED) do
+            if ENHANCEMENT_BY_ITEM[itemID].name == family.name and stocked(itemID) then
+                return itemID, counts[itemID]
+            end
+        end
+    end
+
+    for _, itemID in ipairs(ENHANCEMENTS_SORTED) do
+        if stocked(itemID) then return itemID, counts[itemID] end
+    end
+    return nil, 0
+end
+
 --- UpdateWeaponEnchant
---- Detects an active temporary enchant on one weapon slot via
---- C_PaperDollInfo.GetTemporaryEnchantmentInfo. Covers oils, weapon stones,
---- and ammo mods uniformly. Swaps the slot's icon to match the specific
---- enchant when known.
---- slotKey: "oil" (MH) or "oiloh" (OH).
---- invSlot: 16 or 17.
+--- Paints one weapon slot from C_PaperDollInfo.GetTemporaryEnchantmentInfo
+--- (oils, stones and ammo mods alike), remembers a recognised active
+--- enchant for this hand, and arms the click with _PickWeaponEnhancement's
+--- choice. The icon always shows the click target, never the active enchant.
+--- slotKey: "oil" (MH) or "oiloh" (OH). invSlot: 16 or 17.
 function RCC:UpdateWeaponEnchant(slotKey, invSlot)
     local btn = self.buttons[slotKey]
     if not btn then return end
@@ -1170,13 +1248,9 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
             btn.timeLeft:SetText("")
         end
 
-        -- Icon + last-used memory (only if enchant ID is known and safe)
-        if KE:IsSafeValue(enchID) then
+        if self.db and KE:IsSafeValue(enchID) then
             local data = WEAPON_ENHANCEMENTS[enchID]
-            if data then
-                self:SetIconFromItem(btn.texture, data.item)
-                if self.db then self.db.LastWeaponEnchantItem = data.item end
-            end
+            if data then self.db[HAND_MEMORY_KEY[invSlot]] = data.item end
         end
     else
         btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
@@ -1185,37 +1259,23 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
         btn.timeLeft:SetText("")
     end
 
-    -- Click wiring — offer last-remembered item (or any available in bags)
-    local preferredItem = self.db and self.db.LastWeaponEnchantItem
-    local bagCount = 0
-
-    if preferredItem then
-        bagCount = GetItemCount(preferredItem, false, true) or 0
+    local pickItem, bagCount = self:_PickWeaponEnhancement(invSlot)
+    btn.nominatedItem = pickItem
+    if pickItem then
+        self:SetIconFromItem(btn.texture, pickItem)
+        btn.countText:SetText(tostring(bagCount))
+    else
+        btn.texture:SetTexture(DEFAULT_ICONS[slotKey == "oil" and SLOT_OIL or SLOT_OILOH])
+        btn.countText:SetText("")
     end
-    -- Fallback: if no memory or memory item is out of stock, pick any available
-    if bagCount == 0 then
-        for _, data in pairs(WEAPON_ENHANCEMENTS) do
-            local count = GetItemCount(data.item, false, true)
-            if count and count > 0 then
-                preferredItem = data.item
-                bagCount = count
-                break
-            end
-        end
-    end
-    btn.countText:SetText(bagCount > 0 and tostring(bagCount) or "")
 
     if click and not InCombatLockdown() then
-        if preferredItem and bagCount > 0 then
-            local itemName = self:SafeItemName(preferredItem)
-            if itemName then
-                click:SetAttribute("type", "item")
-                click:SetAttribute("item", itemName)
-                click:SetAttribute("target-slot", tostring(invSlot))
-                click:Show()
-            else
-                click:Hide()
-            end
+        local itemName = pickItem and self:SafeItemName(pickItem) or nil
+        if itemName then
+            click:SetAttribute("type", "item")
+            click:SetAttribute("item", itemName)
+            click:SetAttribute("target-slot", tostring(invSlot))
+            click:Show()
         else
             click:Hide()
         end

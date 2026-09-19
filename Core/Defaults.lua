@@ -1193,10 +1193,10 @@ local Defaults = {
             ShowHealthstone = true,
             ShowClassItem = true,    -- Warlock: Soulstone; hidden for other classes
 
-            -- Runtime memory (persisted): last weapon enhancement item used. Seeds
-            -- the click button so the tracker offers your preferred oil/stone/ammo
-            -- on future ready checks. Auto-updates when a different enchant is detected.
-            LastWeaponEnchantItem = nil,
+            -- Runtime memory (persisted): the last enhancement item seen active
+            -- on each hand, so the click keeps offering it. One key per hand.
+            LastWeaponEnchantItemMH = nil,
+            LastWeaponEnchantItemOH = nil,
 
             -- Runtime memory (persisted): last flask stat the player had buffed
             -- ("mastery" / "haste" / "crit" / "vers"). Multiple flask items can map

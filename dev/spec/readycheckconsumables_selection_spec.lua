@@ -15,6 +15,11 @@ local L = require("dev.spec._ke_loader")
 local MASTERY_PERSONAL_R1, MASTERY_PERSONAL_R2 = 241323, 241322
 local MASTERY_FLEETING_R1 = 245932
 local HASTE_PERSONAL_R2 = 241324
+local OIL_R1, OIL_R2 = 243733, 243734
+local WHETSTONE_R1, WHETSTONE_R2 = 237370, 237371
+local WEIGHTSTONE_R2 = 237369
+local ZOOMSHOTS_R2 = 257750
+local SWORD_1H, STAFF, BOW, FISHING_POLE = 7, 10, 2, 20
 
 local function recordingButton()
     local btn = {
@@ -91,5 +96,88 @@ describe("ReadyCheckConsumables flask selection", function()
         RCC:UpdateFlaskClick()
         assert.is_false(btn.click.shown)
         assert.equals("", btn.count)
+    end)
+end)
+
+describe("ReadyCheckConsumables weapon selection", function()
+    local RCC, seams, mh, oh
+
+    local function equip(slot, subclass)
+        local itemID = 900000 + slot
+        seams.equipped[slot] = itemID
+        seams.itemInfo[itemID] = { 2, subclass }
+    end
+
+    before_each(function()
+        local _
+        RCC, _, seams = L.loadReadyCheckConsumables()
+        mh, oh = recordingButton(), recordingButton()
+        RCC.buttons = { oil = mh, oiloh = oh }
+    end)
+
+    it("keeps main-hand and off-hand memory apart", function()
+        equip(16, SWORD_1H)
+        equip(17, SWORD_1H)
+        stock(seams, WHETSTONE_R2, OIL_R2)
+        seams.enchants[16] = { enchantID = 7905, remainingTimeMs = 60000 }
+        seams.enchants[17] = { enchantID = 8052, remainingTimeMs = 60000 }
+        RCC:UpdateWeaponEnchant("oil", 16)
+        RCC:UpdateWeaponEnchant("oiloh", 17)
+        assert.equals(WHETSTONE_R2, RCC.db.LastWeaponEnchantItemMH)
+        assert.equals(OIL_R2, RCC.db.LastWeaponEnchantItemOH)
+        assert.equals("item " .. WHETSTONE_R2, mh.click.attributes.item)
+        assert.equals("item " .. OIL_R2, oh.click.attributes.item)
+        assert.equals("16", mh.click.attributes["target-slot"])
+        assert.equals("17", oh.click.attributes["target-slot"])
+    end)
+
+    it("never offers an enhancement the weapon cannot take, and offers nothing when none fits", function()
+        local cases = {
+            { weapon = STAFF,        stocked = { WHETSTONE_R2 },                 pick = nil },
+            { weapon = SWORD_1H,     stocked = { ZOOMSHOTS_R2 },                 pick = nil },
+            { weapon = FISHING_POLE, stocked = { OIL_R2 },                       pick = nil },
+            { weapon = STAFF,        stocked = { WHETSTONE_R2, WEIGHTSTONE_R2 }, pick = WEIGHTSTONE_R2 },
+            { weapon = BOW,          stocked = { WHETSTONE_R2, ZOOMSHOTS_R2 },   pick = ZOOMSHOTS_R2 },
+        }
+        for _, c in ipairs(cases) do
+            seams.bagCounts, seams.itemNames = {}, {}
+            equip(16, c.weapon)
+            stock(seams, unpack(c.stocked))
+            RCC:UpdateWeaponEnchant("oil", 16)
+            if c.pick then
+                assert.equals("item " .. c.pick, mh.click.attributes.item)
+                assert.is_true(mh.click.shown)
+                assert.equals("5", mh.count)
+            else
+                assert.is_false(mh.click.shown)
+                assert.equals("", mh.count)
+            end
+        end
+    end)
+
+    it("arms no click on an off hand with nothing equipped", function()
+        stock(seams, OIL_R2)
+        RCC:UpdateWeaponEnchant("oiloh", 17)
+        assert.is_false(oh.click.shown)
+        assert.equals("", oh.count)
+    end)
+
+    it("prefers the remembered item, then its other rank, then oil, then rank", function()
+        local cases = {
+            { remembered = WHETSTONE_R2, stocked = { WHETSTONE_R2, OIL_R2 },     pick = WHETSTONE_R2 },
+            { remembered = WHETSTONE_R2, stocked = { WHETSTONE_R1, OIL_R2 },     pick = WHETSTONE_R1 },
+            { remembered = nil,          stocked = { WHETSTONE_R2, OIL_R1 },     pick = OIL_R1 },
+            { remembered = nil,          stocked = { OIL_R1, OIL_R2 },           pick = OIL_R2 },
+            { remembered = nil,          stocked = { WHETSTONE_R1, WHETSTONE_R2 }, pick = WHETSTONE_R2 },
+            { remembered = ZOOMSHOTS_R2, stocked = { ZOOMSHOTS_R2, OIL_R1 },     pick = OIL_R1 },
+        }
+        for _, c in ipairs(cases) do
+            seams.bagCounts, seams.itemNames = {}, {}
+            equip(16, SWORD_1H)
+            stock(seams, unpack(c.stocked))
+            RCC.db.LastWeaponEnchantItemMH = c.remembered
+            RCC:UpdateWeaponEnchant("oil", 16)
+            assert.equals("item " .. c.pick, mh.click.attributes.item, tostring(c.remembered))
+        end
     end)
 end)
