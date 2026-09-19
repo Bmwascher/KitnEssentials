@@ -2951,10 +2951,14 @@ function L.loadReadyCheckConsumables(overrides)
     -- it with a continuation token, as the live slot API can. enchants is
     -- keyed by inventory slot. SECRET is the declared-secret sentinel that
     -- KE.IsSafeValue rejects; it says nothing about the runtime's secrets.
+    -- glow counts the LibCustomGlow pixel-glow starts and stops; bagCount is
+    -- what C_Item.GetItemCount returns for every item.
     local seams = {
         combat = { inCombat = false },
         queue = {},
         counts = { scans = 0, driverUnregistered = 0 },
+        glow = { starts = 0, stops = 0 },
+        bagCount = 0,
         auras = {},
         auraPageSize = nil,
         enchants = {},
@@ -2966,7 +2970,17 @@ function L.loadReadyCheckConsumables(overrides)
     })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
-    _G.LibStub = function() return nil end
+    local glowLib = {
+        PixelGlow_Start = function() seams.glow.starts = seams.glow.starts + 1 end,
+        PixelGlow_Stop = function() seams.glow.stops = seams.glow.stops + 1 end,
+        ButtonGlow_Stop = function() end,
+        AutoCastGlow_Stop = function() end,
+        ProcGlow_Stop = function() end,
+    }
+    _G.LibStub = function(name)
+        if name == "LibCustomGlow-1.0" then return glowLib end
+        return nil
+    end
     _G.UnitClass = function() return "Warrior", "WARRIOR" end
     _G.UnitIsUnit = function() return false end
     _G.UnitExists = function() return false end
@@ -2980,7 +2994,7 @@ function L.loadReadyCheckConsumables(overrides)
         GetTemporaryEnchantmentInfo = function(slot) return seams.enchants[slot] end,
     }
     _G.C_Item = {
-        GetItemCount = function() return 0 end,
+        GetItemCount = function() return seams.bagCount end,
         GetItemInfo = function() return nil end,
         GetItemInfoInstant = function() return nil end,
         GetItemIconByID = function() return nil end,

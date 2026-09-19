@@ -929,6 +929,22 @@ local function formatDurationText(seconds)
     return string_format("%dm", math_ceil(seconds / 60))
 end
 
+local SOULSTONE_GLOW_COLOR = { 1, 1, 0, 1 }
+
+-- LibCustomGlow rebuilds the glow on every Start call, so a slot that is
+-- already glowing is left alone across repaints.
+local function StartGlow(btn, color)
+    if not LCG or btn.glowActive then return end
+    LCG.PixelGlow_Start(btn, color, 8, 0.25, 8, 2, 1, 1, false, nil)
+    btn.glowActive = true
+end
+
+local function StopGlow(btn)
+    if not btn.glowActive then return end
+    if LCG then LCG.PixelGlow_Stop(btn) end
+    btn.glowActive = false
+end
+
 ---------------------------------------------------------------------------------
 -- Per-Slot Updates
 ---------------------------------------------------------------------------------
@@ -1266,12 +1282,10 @@ function RCC:UpdateRune(auras)
     if unlimitedOnly and bestRune and not activeAura then
         self:SetIconFromItem(btn.texture, bestRune.item)
     end
-    if LCG then
-        if unlimitedOnly and bestRune and not activeAura then
-            LCG.PixelGlow_Start(btn, nil, 8, 0.25, 8, 2, 1, 1, false, nil)
-        else
-            LCG.PixelGlow_Stop(btn)
-        end
+    if unlimitedOnly and bestRune and not activeAura then
+        StartGlow(btn, nil)
+    else
+        StopGlow(btn)
     end
 
     if click and not InCombatLockdown() then
@@ -1388,12 +1402,10 @@ function RCC:UpdateClassSlot()
     -- Yellow pixel glow when Soulstone is missing (grayed-out state).
     -- Stops automatically when the slot transitions to ready (onCD branch).
     -- HideFrame stops all glows defensively on RC teardown.
-    if LCG then
-        if not onCD then
-            LCG.PixelGlow_Start(btn, {1, 1, 0, 1}, 8, 0.25, 8, 2, 1, 1, false, nil)
-        else
-            LCG.PixelGlow_Stop(btn)
-        end
+    if onCD then
+        StopGlow(btn)
+    else
+        StartGlow(btn, SOULSTONE_GLOW_COLOR)
     end
 
     if click and not InCombatLockdown() then
@@ -1669,15 +1681,17 @@ function RCC:HideFrame()
     -- Stop all LibCustomGlow animations on any slot that might have one.
     -- Rune and class (warlock soulstone) slots currently use glow; stopping
     -- all defensively future-proofs the cleanup if more glow effects are added.
-    if LCG then
-        for i = 1, NUM_SLOTS do
-            local btn = self.buttons[i]
-            if btn then
+    -- The flag is cleared with them so the next check can start a glow again.
+    for i = 1, NUM_SLOTS do
+        local btn = self.buttons[i]
+        if btn then
+            if LCG then
                 LCG.PixelGlow_Stop(btn)
                 LCG.ButtonGlow_Stop(btn)
                 LCG.AutoCastGlow_Stop(btn)
                 LCG.ProcGlow_Stop(btn)
             end
+            btn.glowActive = false
         end
     end
 
