@@ -136,6 +136,50 @@ describe("ReadyCheckConsumables _LayoutRow", function()
     end)
 end)
 
+describe("ReadyCheckConsumables RequestRefresh", function()
+    local RCC, seams, visible
+
+    local function fireTimers()
+        local fns = seams.timers
+        seams.timers = {}
+        for i = 1, #fns do fns[i]() end
+    end
+
+    before_each(function()
+        local loaded = { L.loadReadyCheckConsumables() }
+        RCC, seams = loaded[1], loaded[3]
+        visible = true
+        RCC.frame = liveFrame()
+        RCC.frame.IsVisible = function() return visible end
+        RCC.buttons = {}
+        RCC._LayoutRow = function() end
+    end)
+
+    it("collapses every request made in one frame into one repaint", function()
+        for _ = 1, 5 do RCC:RequestRefresh() end
+        assert.equals(1, #seams.timers)
+        fireTimers()
+        assert.equals(1, seams.counts.scans)
+    end)
+
+    it("repaints nothing once the row died before the queued repaint fired, and takes a new request afterwards", function()
+        RCC:RequestRefresh()
+        visible = false
+        fireTimers()
+        assert.equals(0, seams.counts.scans)
+
+        visible = true
+        RCC:RequestRefresh()
+        assert.equals(1, #seams.timers)
+    end)
+
+    it("schedules nothing for a row that is not live", function()
+        visible = false
+        RCC:RequestRefresh()
+        assert.equals(0, #seams.timers)
+    end)
+end)
+
 describe("ReadyCheckConsumables glow guard", function()
     it("does not restart a running glow, and the teardown stop clears the flag", function()
         local RCC, _, seams = L.loadReadyCheckConsumables()

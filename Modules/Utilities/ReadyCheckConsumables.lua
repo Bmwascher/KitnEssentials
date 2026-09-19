@@ -323,6 +323,7 @@ RCC.previewFrame   = nil   -- KE_ReadyCheckConsumables_Preview container (settin
 RCC.previewButtons = nil   -- [1..NUM_SLOTS] preview stubs; no click overlays
 RCC.db          = nil
 RCC.stateDriverActive = false  -- true while the combat state driver is registered (see _EnableStateDriver)
+RCC._refreshPending = nil      -- true while a coalesced repaint waits for the next frame (see RequestRefresh)
 RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
 
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
@@ -1464,7 +1465,7 @@ end
 --- The state driver hid the click overlays on combat entry; a full repaint
 --- re-arms the ones that still apply and shows them again.
 function RCC:PLAYER_REGEN_ENABLED()
-    self:UpdateAllIcons()
+    self:RequestRefresh()
 end
 
 --- _ComputeVisibility
@@ -1534,6 +1535,23 @@ function RCC:UpdateAllIcons(force)
     if visibility[SLOT_CLASS] then self:UpdateClassSlot() end
 
     self:_LayoutRow(self.frame, buttons, visibility)
+end
+
+-- Pre-declared so RequestRefresh allocates no closure per call.
+local function _RefreshFire()
+    RCC._refreshPending = nil
+    RCC:UpdateAllIcons()
+end
+
+--- RequestRefresh
+--- The event entry point. Every request made in one frame collapses into
+--- one UpdateAllIcons on the next. Liveness is tested here so a dead row
+--- schedules nothing, and again inside UpdateAllIcons so a request queued
+--- just before the row died repaints nothing.
+function RCC:RequestRefresh()
+    if self._refreshPending or not self:_IsRowLive() then return end
+    self._refreshPending = true
+    C_Timer.After(0, _RefreshFire)
 end
 
 --- RefreshLayout
@@ -1804,11 +1822,10 @@ function RCC:READY_CHECK_FINISHED()
     self:HideFrame()
 end
 
---- UNIT_AURA fires when a unit's aura set changes.
---- Player auras drive consumable status, so a player-unit change does the
---- full UpdateAllIcons sweep. Group-unit changes only matter to the Warlock
---- class slot (Soulstone target tracking) — we do a lightweight class-slot
---- refresh in that case rather than re-scanning all consumables.
+--- UNIT_AURA fires when a unit's aura set changes. The player's auras drive
+--- the consumable slots; a group member's matter only to the Warlock class
+--- slot (Soulstone target tracking). Both request the same coalesced
+--- repaint.
 --- @param _ string   event name (unused)
 --- @param unit string
 function RCC:UNIT_AURA(_, unit)
@@ -1817,25 +1834,23 @@ function RCC:UNIT_AURA(_, unit)
     if KE:IsUnreadableAuraPayload(unit, nil) then return end
     if unit == "player" then
         if DEBUG_RCC then KE:Print("[RCC] UNIT_AURA: player auras changed, refreshing.") end
-        self:UpdateAllIcons()
+        self:RequestRefresh()
         return
     end
 
-    -- Group-unit aura change: only the Warlock dynamic class slot cares.
     local _, playerClass = UnitClass("player")
-    if playerClass == "WARLOCK" and self:_IsRowLive() then
+    if playerClass == "WARLOCK" then
         if DEBUG_RCC then
-            KE:Print(string_format("[RCC] UNIT_AURA: group unit %s changed, refreshing class slot.",
-                tostring(unit)))
+            KE:Print(string_format("[RCC] UNIT_AURA: group unit %s changed, refreshing.", unit))
         end
-        self:UpdateClassSlot()
+        self:RequestRefresh()
     end
 end
 
 --- UNIT_INVENTORY_CHANGED fires when equipped items change (weapon oils).
 function RCC:UNIT_INVENTORY_CHANGED()
     if DEBUG_RCC then KE:Print("[RCC] UNIT_INVENTORY_CHANGED: refreshing.") end
-    self:UpdateAllIcons()
+    self:RequestRefresh()
 end
 
 ---------------------------------------------------------------------------------

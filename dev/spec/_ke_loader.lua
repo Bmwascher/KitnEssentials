@@ -2951,12 +2951,14 @@ function L.loadReadyCheckConsumables(overrides)
     -- it with a continuation token, as the live slot API can. enchants is
     -- keyed by inventory slot. SECRET is the declared-secret sentinel that
     -- KE.IsSafeValue rejects; it says nothing about the runtime's secrets.
+    -- timers collects every C_Timer.After callback for the spec to fire;
     -- glow counts the LibCustomGlow pixel-glow starts and stops; bagCount is
     -- what C_Item.GetItemCount returns for every item; playerClass is the
     -- class file token UnitClass hands back.
     local seams = {
         combat = { inCombat = false },
         queue = {},
+        timers = {},
         counts = { scans = 0, driverUnregistered = 0 },
         glow = { starts = 0, stops = 0 },
         playerClass = "WARRIOR",
@@ -2967,7 +2969,11 @@ function L.loadReadyCheckConsumables(overrides)
         SECRET = {},
     }
     installMock(overrides, {
-        C_Timer = inertTimer(),
+        C_Timer = {
+            After = function(_, fn) seams.timers[#seams.timers + 1] = fn end,
+            NewTicker = function() return { Cancel = function() end } end,
+            NewTimer = function() return { Cancel = function() end } end,
+        },
         InCombatLockdown = function() return seams.combat.inCombat end,
     })
     local modules = helpers.installAddonShim()
