@@ -136,7 +136,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     manager:Register(unlimitedRuneCheck, "all")
     card2:AddRow(row2c, Theme.rowHeight)
 
-    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local lowWarningCheck = GUIFrame:CreateCheckbox(row2d, "Warn when a buff is running low", {
         value = db.LowDurationWarning ~= false,
         callback = function(checked)
@@ -155,7 +155,16 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     })
     row2d:AddWidget(lowMinutesSlider, 0.5)
     manager:Register(lowMinutesSlider, "lowWarning")
-    card2:AddRow(row2d, Theme.rowHeightLast, 0)
+    card2:AddRow(row2d, Theme.rowHeight)
+
+    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local tooltipCheck = GUIFrame:CreateCheckbox(row2e, "Show tooltips on hover", {
+        value = db.ShowTooltips ~= false,
+        callback = function(checked) db.ShowTooltips = checked; ApplySettings() end,
+    })
+    row2e:AddWidget(tooltipCheck, 0.5)
+    manager:Register(tooltipCheck, "all")
+    card2:AddRow(row2e, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 

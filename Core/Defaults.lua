@@ -1214,6 +1214,7 @@ local Defaults = {
             LowDurationWarning  = true,   -- tint the timer and glow the slot when a buff runs low
             LowDurationMinutes  = 10,     -- the warning threshold, strictly under
             ClassChecks         = true,   -- Shaman imbues and shield, Paladin Lightsmith rite; replaces the oil on the hands they own
+            ShowTooltips        = true,   -- item or spell tooltip on hover over a click-enabled slot
 
             -- Visuals
             IconSize = 46,

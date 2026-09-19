@@ -626,6 +626,7 @@ function RCC:BuildFrame()
     local buttons = self:_BuildIconRow(f)
     self.buttons = buttons
 
+    local rcc = self
     for i = 1, NUM_SLOTS do
         local btn = buttons[i]
 
@@ -655,9 +656,16 @@ function RCC:BuildFrame()
                 -- macrotext set dynamically in UpdateAllIcons
             end
 
-            -- Dim parent on hover so the icon appears interactive
-            click:SetScript("OnEnter", function() btn:SetAlpha(0.7) end)
-            click:SetScript("OnLeave", function() btn:SetAlpha(1.0) end)
+            -- Dim parent on hover so the icon appears interactive; the
+            -- tooltip reads only the plain ids the repaint stored on btn.
+            click:SetScript("OnEnter", function(overlay)
+                btn:SetAlpha(0.7)
+                rcc:_ShowTooltip(overlay, btn)
+            end)
+            click:SetScript("OnLeave", function(overlay)
+                btn:SetAlpha(1.0)
+                rcc:_HideTooltip(overlay)
+            end)
 
             stateFrame:SetFrameRef("ClickBtn" .. i, click)
             btn.click = click
@@ -678,7 +686,6 @@ function RCC:BuildFrame()
     -- Hand-rolled minimal Backdrop button instead of UIPanelButtonTemplate
     -- to avoid the inner highlight/double-border look that template renders.
     -- Matches the clean single-edge MRT style.
-    local rcc = self
     local closeBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
     closeBtn:SetHeight(22)
     closeBtn:SetPoint("TOPLEFT",  f, "BOTTOMLEFT",  0, -2)
@@ -1010,17 +1017,6 @@ function RCC:_ResolveSoulstone()
     return (live ~= nil) or selfStoned, self:_BuildSoulstoneMacrotext(stoned, healer)
 end
 
---- CountItems
---- Sums bag+bank counts across a list of item IDs.
-function RCC:CountItems(itemIDs)
-    local total = 0
-    for _, id in ipairs(itemIDs) do
-        local count = GetItemCount(id, false, true)
-        if count then total = total + count end
-    end
-    return total
-end
-
 --- SafeItemName
 --- Returns a non-nil, non-secret item name, or nil if unavailable / secret.
 --- Item names can be secret in chat messaging lockdown per api-validator guidance.
@@ -1190,6 +1186,30 @@ function RCC:_ArmSpellClick(click, spellID, applyToSlot)
     click:SetAttribute("type", "macro")
     click:SetAttribute("macrotext", macrotext)
     click:Show()
+end
+
+--- _ShowTooltip
+--- The overlay's hover tooltip: the spell the slot's click casts when it
+--- nominated one, else the item it nominated. Set by id, never by name,
+--- and nothing is read back from the tooltip.
+function RCC:_ShowTooltip(owner, btn)
+    if not (self.db and self.db.ShowTooltips) then return end
+    if GameTooltip:IsForbidden() then return end
+    if btn.nominatedSpell then
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+        GameTooltip:SetSpellByID(btn.nominatedSpell)
+    elseif btn.nominatedItem then
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+        GameTooltip:SetItemByID(btn.nominatedItem)
+    else
+        return
+    end
+    GameTooltip:Show()
+end
+
+function RCC:_HideTooltip(owner)
+    if GameTooltip:IsForbidden() then return end
+    if GameTooltip:IsOwned(owner) then GameTooltip:Hide() end
 end
 
 --- _PaintUnavailable
@@ -1574,6 +1594,7 @@ function RCC:UpdateRune(auras)
     else
         self:_SetLowGlow(btn, low)
     end
+    btn.nominatedItem = bestRune and bestRune.item or nil
 
     if click and not InCombatLockdown() then
         if bestRune then
@@ -1602,14 +1623,20 @@ function RCC:UpdateHealthstone()
     local click = btn.click
 
     local _, playerClass = UnitClass("player")
-    local items = {}
+    local count, stocked = 0, nil
     for itemID, data in pairs(HEALTHSTONES) do
         if (not data.warlockOnly) or playerClass == "WARLOCK" then
-            items[#items + 1] = itemID
+            local n = GetItemCount(itemID, false, true)
+            if n and n > 0 then
+                count = count + n
+                stocked = stocked or itemID
+            end
         end
     end
+    -- The tooltip shows the stone the slot counts: a stocked one, else the
+    -- standard stone.
+    btn.nominatedItem = stocked or 5512
 
-    local count = self:CountItems(items)
     if count > 0 then
         btn.statusTexture:SetTexture(READY_TEXTURE)
         btn.statusTexture:Show()
