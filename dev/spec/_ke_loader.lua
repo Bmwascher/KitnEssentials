@@ -2952,12 +2952,14 @@ function L.loadReadyCheckConsumables(overrides)
     -- keyed by inventory slot. SECRET is the declared-secret sentinel that
     -- KE.IsSafeValue rejects; it says nothing about the runtime's secrets.
     -- glow counts the LibCustomGlow pixel-glow starts and stops; bagCount is
-    -- what C_Item.GetItemCount returns for every item.
+    -- what C_Item.GetItemCount returns for every item; playerClass is the
+    -- class file token UnitClass hands back.
     local seams = {
         combat = { inCombat = false },
         queue = {},
         counts = { scans = 0, driverUnregistered = 0 },
         glow = { starts = 0, stops = 0 },
+        playerClass = "WARRIOR",
         bagCount = 0,
         auras = {},
         auraPageSize = nil,
@@ -2981,7 +2983,7 @@ function L.loadReadyCheckConsumables(overrides)
         if name == "LibCustomGlow-1.0" then return glowLib end
         return nil
     end
-    _G.UnitClass = function() return "Warrior", "WARRIOR" end
+    _G.UnitClass = function() return seams.playerClass, seams.playerClass end
     _G.UnitIsUnit = function() return false end
     _G.UnitExists = function() return false end
     _G.UnitIsDeadOrGhost = function() return false end

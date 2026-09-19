@@ -81,8 +81,8 @@ local DEFAULT_ICONS = {
     [SLOT_CLASS]  = 136210,   -- class item placeholder
 }
 
--- Per-slot db toggle keys (consumed by RefreshLayout via direct db key access).
--- Kept here only for reference — RefreshLayout reads these keys by hardcoded name
+-- Per-slot db toggle keys (consumed by _ComputeVisibility via direct db key access).
+-- Kept here only for reference — _ComputeVisibility reads these keys by hardcoded name
 -- since it also needs per-slot contextual logic (OH weapon presence, class match).
 -- Keys: ShowFood, ShowFlask, ShowWeaponOil, ShowOffHandOil, ShowAugmentRune,
 --       ShowHealthstone, ShowClassItem.
@@ -323,6 +323,7 @@ RCC.previewFrame   = nil   -- KE_ReadyCheckConsumables_Preview container (settin
 RCC.previewButtons = nil   -- [1..NUM_SLOTS] preview stubs; no click overlays
 RCC.db          = nil
 RCC.stateDriverActive = false  -- true while the combat state driver is registered (see _EnableStateDriver)
+RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
 
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
 -- of the most recently confirmed Soulstone recipient so the click macro keeps
@@ -451,11 +452,24 @@ end
 --- _LayoutRow
 --- Sizes every stub and its status overlay from db, chains the visible ones
 --- left to right on `container`, hides the rest, and fits the container to
---- the visible count. `visibility` is indexed 1..NUM_SLOTS.
+--- the visible count. `visibility` is indexed 1..NUM_SLOTS. Nothing is
+--- touched unless the visible set or the geometry differs from the last pass
+--- over this container. The slot buttons parent secure click overlays, so
+--- they and the container are protected in combat; the key is left alone
+--- then, and the combat-exit repaint lays out.
 function RCC:_LayoutRow(container, buttons, visibility)
+    if InCombatLockdown() then return end
     local db = self.db
     local iconSize = db.IconSize or 32
     local spacing  = db.IconSpacing or 4
+
+    local mask = 0
+    for i = 1, NUM_SLOTS do
+        if visibility[i] then mask = mask + 2 ^ (i - 1) end
+    end
+    local key = string_format("%s:%s:%d", iconSize, spacing, mask)
+    if container._layoutKey == key then return end
+    container._layoutKey = key
 
     local prev
     local totalVisible = 0
@@ -943,6 +957,20 @@ local function StopGlow(btn)
     if not btn.glowActive then return end
     if LCG then LCG.PixelGlow_Stop(btn) end
     btn.glowActive = false
+end
+
+--- _PaintUnavailable
+--- An aura-driven slot while aura identities are hidden: no status mark, a
+--- greyed icon, no text, no glow and no armed click, so a slot that cannot
+--- be read never shows a state left over from an earlier check.
+function RCC:_PaintUnavailable(btn)
+    if not btn then return end
+    btn.statusTexture:Hide()
+    btn.texture:SetDesaturated(true)
+    btn.timeLeft:SetText("")
+    btn.countText:SetText("")
+    StopGlow(btn)
+    if btn.click and not InCombatLockdown() then btn.click:Hide() end
 end
 
 ---------------------------------------------------------------------------------
@@ -1439,13 +1467,37 @@ function RCC:PLAYER_REGEN_ENABLED()
     self:UpdateAllIcons()
 end
 
+--- _ComputeVisibility
+--- The real row's visible set: the user toggles, plus the off-hand slot only
+--- with an off-hand weapon, the healthstone slot only with a Warlock in the
+--- group, and the class slot only for a class that has one. Each predicate
+--- is asked once per repaint. ShowPreview keeps a toggle-only table of its
+--- own so the settings preview shows every category.
+function RCC:_ComputeVisibility()
+    local db = self.db
+    local _, playerClass = UnitClass("player")
+    local visibility = self._visibility
+    visibility[SLOT_FOOD]  = db.ShowFood        ~= false
+    visibility[SLOT_FLASK] = db.ShowFlask       ~= false
+    visibility[SLOT_OIL]   = db.ShowWeaponOil   ~= false
+    visibility[SLOT_OILOH] = (db.ShowOffHandOil  ~= false) and self:OffhandIsWeapon()
+    visibility[SLOT_RUNE]  = db.ShowAugmentRune ~= false
+    visibility[SLOT_HS]    = (db.ShowHealthstone ~= false) and self:IsWarlockInGroup()
+    visibility[SLOT_CLASS] = (db.ShowClassItem   ~= false) and (CLASS_SLOT[playerClass] ~= nil)
+    return visibility
+end
+
 --- UpdateAllIcons
---- Scans player auras once, then dispatches to per-slot updaters. Called on
---- READY_CHECK, UNIT_AURA, and UNIT_INVENTORY_CHANGED events.
+--- Computes the visible set, scans player auras once, repaints each visible
+--- slot, then lays the row out. Only the food, flask and rune slots need
+--- aura access; while aura identities are hidden they are painted
+--- unavailable and the weapon, healthstone and class slots still repaint,
+--- since C_PaperDollInfo.GetTemporaryEnchantmentInfo and C_Item.GetItemCount
+--- carry no aura restriction and the class slot asks its own per-spell gate.
 ---
 --- Secret value guards are layered:
----   1. KE:AreAuraIdentitiesHidden() early-return — skips entirely if the
----      global aura system is locked for this player.
+---   1. KE:AreAuraIdentitiesHidden() — no aura walk and no aura-driven paint
+---      while the global aura system is locked for this player.
 ---   2. Per-aura spellId / expirationTime guards via ScanPlayerAuras filter.
 ---   3. Per-API guards inside individual slot updaters (weapon enchant exp/ID,
 ---      spell cooldown start/duration, item names passed to macrotext).
@@ -1455,48 +1507,41 @@ end
 ---   position, does not force.
 function RCC:UpdateAllIcons(force)
     if force ~= true and not self:_IsRowLive() then return end
+    if not self.frame or not self.db then return end
 
+    local visibility = self:_ComputeVisibility()
+    local buttons = self.buttons
+
+    local auras
     if KE:AreAuraIdentitiesHidden() then
-        if DEBUG_RCC then KE:Print("[RCC] UpdateAllIcons: auras are secret, skipping.") end
-        return
+        if DEBUG_RCC then KE:Print("[RCC] UpdateAllIcons: auras are secret, aura slots unavailable.") end
+    else
+        auras = self:ScanPlayerAuras()
     end
 
-    local auras = self:ScanPlayerAuras()
+    if auras then
+        if visibility[SLOT_FOOD]  then self:UpdateFood(auras) end
+        if visibility[SLOT_FLASK] then self:UpdateFlask(auras) end
+        if visibility[SLOT_RUNE]  then self:UpdateRune(auras) end
+    else
+        if visibility[SLOT_FOOD]  then self:_PaintUnavailable(buttons.food) end
+        if visibility[SLOT_FLASK] then self:_PaintUnavailable(buttons.flask) end
+        if visibility[SLOT_RUNE]  then self:_PaintUnavailable(buttons.rune) end
+    end
+    if visibility[SLOT_OIL]   then self:UpdateWeaponEnchant("oil",   16) end
+    if visibility[SLOT_OILOH] then self:UpdateWeaponEnchant("oiloh", 17) end
+    if visibility[SLOT_HS]    then self:UpdateHealthstone() end
+    if visibility[SLOT_CLASS] then self:UpdateClassSlot() end
 
-    self:UpdateFood(auras)
-    self:UpdateFlask(auras)
-    self:UpdateWeaponEnchant("oil",   16)
-    self:UpdateWeaponEnchant("oiloh", 17)
-    self:UpdateRune(auras)
-    self:UpdateHealthstone()
-    self:UpdateClassSlot()
-
-    self:RefreshLayout()
+    self:_LayoutRow(self.frame, buttons, visibility)
 end
 
 --- RefreshLayout
---- Determines visible slots based on (a) user toggles and (b) contextual
---- factors: OH slot hidden when no OH weapon equipped, class slot hidden for
---- non-Warlocks. Then dynamically chains anchor points left-to-right so the
---- row stays tight with no gaps.
+--- Lays the real row out from the current visible set without repainting
+--- any slot.
 function RCC:RefreshLayout()
-    if not self.frame then return end
-    local db = self.db
-    if not db then return end
-
-    local _, playerClass = UnitClass("player")
-
-    local visibility = {
-        [SLOT_FOOD]   = db.ShowFood        ~= false,
-        [SLOT_FLASK]  = db.ShowFlask       ~= false,
-        [SLOT_OIL]    = db.ShowWeaponOil   ~= false,
-        [SLOT_OILOH]  = (db.ShowOffHandOil  ~= false) and self:OffhandIsWeapon(),
-        [SLOT_RUNE]   = db.ShowAugmentRune ~= false,
-        [SLOT_HS]     = (db.ShowHealthstone ~= false) and self:IsWarlockInGroup(),
-        [SLOT_CLASS]  = (db.ShowClassItem   ~= false) and (CLASS_SLOT[playerClass] ~= nil),
-    }
-
-    self:_LayoutRow(self.frame, self.buttons, visibility)
+    if not self.frame or not self.db then return end
+    self:_LayoutRow(self.frame, self.buttons, self:_ComputeVisibility())
 end
 
 --- RefreshIconVisibility
@@ -1658,7 +1703,7 @@ function RCC:ShowFrame(initiatorUnit)
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
     -- Forced: whether the Blizzard popup this row is parented to is already
     -- visible depends on event dispatch order, and the first paint must not.
-    -- UpdateAllIcons ends with RefreshLayout, so no separate call is needed.
+    -- UpdateAllIcons ends with the layout, so no separate call is needed.
     self:UpdateAllIcons(true)
 
     if DEBUG_RCC then
