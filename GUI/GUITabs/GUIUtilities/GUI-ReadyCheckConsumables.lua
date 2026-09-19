@@ -188,7 +188,9 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     manager:Register(runeCheck, "all")
     card3:AddRow(row3a, Theme.rowHeight)
 
-    local lastConsumableRowIsClass = playerClass == "WARLOCK"
+    -- One class row per class with a class slot or a class check; every
+    -- other class ends the card on the weapon row.
+    local lastConsumableRowIsClass = playerClass == "WARLOCK" or playerClass == "SHAMAN" or playerClass == "PALADIN"
     local row3b = GUIFrame:CreateRow(card3.content, lastConsumableRowIsClass and Theme.rowHeight or Theme.rowHeightLast)
     local oilCheck = GUIFrame:CreateCheckbox(row3b, "Weapon Enchant (MH)", {
         value = db.ShowWeaponOil ~= false,
@@ -214,12 +216,24 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
         card3:AddRow(row3b, Theme.rowHeight)
 
         local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-        local classCheck = GUIFrame:CreateCheckbox(row3c, "Class Action (Soulstone)", {
-            value = db.ShowClassItem ~= false,
-            callback = function(checked) db.ShowClassItem = checked; ApplySettings() end,
-        })
-        row3c:AddWidget(classCheck, 1)
-        manager:Register(classCheck, "all")
+        if playerClass ~= "PALADIN" then
+            local classCheck = GUIFrame:CreateCheckbox(row3c,
+                playerClass == "WARLOCK" and "Class Action (Soulstone)" or "Class Action (Shield)", {
+                value = db.ShowClassItem ~= false,
+                callback = function(checked) db.ShowClassItem = checked; ApplySettings() end,
+            })
+            row3c:AddWidget(classCheck, 0.5)
+            manager:Register(classCheck, "all")
+        end
+        if playerClass ~= "WARLOCK" then
+            local classChecksCheck = GUIFrame:CreateCheckbox(row3c,
+                playerClass == "SHAMAN" and "Check weapon imbues and shield" or "Check Lightsmith rite", {
+                value = db.ClassChecks ~= false,
+                callback = function(checked) db.ClassChecks = checked; ApplySettings() end,
+            })
+            row3c:AddWidget(classChecksCheck, 0.5)
+            manager:Register(classChecksCheck, "all")
+        end
         card3:AddRow(row3c, Theme.rowHeightLast)
     else
         card3:AddRow(row3b, Theme.rowHeightLast)
@@ -228,7 +242,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     local row3note = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local note3 = GUIFrame:CreateText(row3note,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Weapon Enchant (OH) also requires an off-hand weapon equipped. Healthstone also requires a Warlock in your group.",
+        KE:ColorTextByTheme("-") .. " Weapon Enchant (OH) also requires an off-hand weapon, or a shield your spec imbues. Healthstone also requires a Warlock in your group.",
         Theme.rowHeight, "hide")
     row3note:AddWidget(note3, 1)
     manager:Register(note3, "all")

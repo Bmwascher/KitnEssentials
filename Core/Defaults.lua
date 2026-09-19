@@ -1213,6 +1213,7 @@ local Defaults = {
             UnlimitedRunesOnly  = false,  -- click button only offers unlimited runes (DF/TWW)
             LowDurationWarning  = true,   -- tint the timer and glow the slot when a buff runs low
             LowDurationMinutes  = 10,     -- the warning threshold, strictly under
+            ClassChecks         = true,   -- Shaman imbues and shield, Paladin Lightsmith rite; replaces the oil on the hands they own
 
             -- Visuals
             IconSize = 46,

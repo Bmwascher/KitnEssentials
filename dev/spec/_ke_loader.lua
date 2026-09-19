@@ -2964,7 +2964,11 @@ function L.loadReadyCheckConsumables(overrides)
     -- stone }, stone being the sourceUnit C_UnitAuras.GetAuraDataBySpellName
     -- reports for a Soulstone on that unit (nil = no stone). A unit whose
     -- entry carries isPlayer is the player under its raid token.
-    -- soulstoneHidden is what KE.IsAuraHiddenForSpell answers.
+    -- soulstoneHidden is what KE.IsAuraHiddenForSpell answers, for every
+    -- spell asked. knownSpells is the set C_SpellBook.IsSpellKnown answers
+    -- true for, spec what C_SpecializationInfo.GetSpecialization returns,
+    -- and playerAuras maps a spell id to the AuraData
+    -- C_UnitAuras.GetPlayerAuraBySpellID hands back.
     local seams = {
         combat = { inCombat = false },
         queue = {},
@@ -2974,6 +2978,9 @@ function L.loadReadyCheckConsumables(overrides)
         playerClass = "WARRIOR",
         group = { mode = nil, units = {} },
         soulstoneHidden = false,
+        knownSpells = {},
+        spec = nil,
+        playerAuras = {},
         bagCount = 0,
         bagCounts = {},
         equipped = {},
@@ -3058,10 +3065,17 @@ function L.loadReadyCheckConsumables(overrides)
         GetItemIconByID = function() return nil end,
     }
     _G.C_SpecializationInfo = {
-        GetSpecialization = function() return nil end,
+        GetSpecialization = function() return seams.spec end,
         GetSpecializationInfo = function() return nil end,
     }
-    _G.C_Spell = { GetSpellCooldown = function() return nil end }
+    _G.C_Spell = {
+        GetSpellCooldown = function() return nil end,
+        GetSpellName = function(id) return "spell " .. tostring(id) end,
+        GetSpellTexture = function() return nil end,
+    }
+    _G.C_SpellBook = {
+        IsSpellKnown = function(id) return seams.knownSpells[id] == true end,
+    }
     -- The slot provider pages over seams.auras; scans counts walks, one per
     -- first-page call. ForEachAura repeats the provider until the token is
     -- exhausted and stops when the callback returns true, the two contract
@@ -3086,6 +3100,7 @@ function L.loadReadyCheckConsumables(overrides)
             if not u or u.stone == nil or spellName ~= "Soulstone" then return nil end
             return { sourceUnit = u.stone }
         end,
+        GetPlayerAuraBySpellID = function(id) return seams.playerAuras[id] end,
     }
     _G.C_UnitAuras = unitAuras
     _G.AuraUtil = {
