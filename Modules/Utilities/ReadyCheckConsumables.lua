@@ -1805,9 +1805,7 @@ function RCC:READY_CHECK(_, initiatorUnit, duration)
             safeName, tonumber(duration) or 0))
     end
 
-    -- Register per-check events (only active during a ready check window)
-    self:RegisterEvent("UNIT_AURA")
-    self:RegisterEvent("UNIT_INVENTORY_CHANGED")
+    self:_SetCheckEvents(true)
 
     self:ShowFrame(initiatorUnit)
 end
@@ -1816,10 +1814,31 @@ end
 function RCC:READY_CHECK_FINISHED()
     if DEBUG_RCC then KE:Print("[RCC] READY_CHECK_FINISHED") end
 
-    self:UnregisterEvent("UNIT_AURA")
-    self:UnregisterEvent("UNIT_INVENTORY_CHANGED")
+    self:_SetCheckEvents(false)
 
     self:HideFrame()
+end
+
+-- Subscribed for the ready-check window only. The row is repainted from
+-- scratch when it shows, so nothing is missed between checks, and bag and
+-- cooldown events fire far too often to keep a handler on for an idle module.
+local CHECK_EVENTS = {
+    "UNIT_AURA", "UNIT_INVENTORY_CHANGED", "BAG_UPDATE_DELAYED",
+    "GROUP_ROSTER_UPDATE", "PLAYER_SPECIALIZATION_CHANGED",
+}
+
+--- _SetCheckEvents
+--- Registers or drops the per-check subscriptions. SPELL_UPDATE_COOLDOWN
+--- feeds only the class slot, so a class without one never subscribes.
+function RCC:_SetCheckEvents(on)
+    if not on then
+        for _, event in ipairs(CHECK_EVENTS) do self:UnregisterEvent(event) end
+        self:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
+        return
+    end
+    for _, event in ipairs(CHECK_EVENTS) do self:RegisterEvent(event) end
+    local _, playerClass = UnitClass("player")
+    if CLASS_SLOT[playerClass] then self:RegisterEvent("SPELL_UPDATE_COOLDOWN") end
 end
 
 --- UNIT_AURA fires when a unit's aura set changes. The player's auras drive
@@ -1850,6 +1869,35 @@ end
 --- UNIT_INVENTORY_CHANGED fires when equipped items change (weapon oils).
 function RCC:UNIT_INVENTORY_CHANGED()
     if DEBUG_RCC then KE:Print("[RCC] UNIT_INVENTORY_CHANGED: refreshing.") end
+    self:RequestRefresh()
+end
+
+--- BAG_UPDATE_DELAYED: a consumable acquired or used during the check.
+function RCC:BAG_UPDATE_DELAYED()
+    self:RequestRefresh()
+end
+
+--- GROUP_ROSTER_UPDATE: the Warlock-in-group test and the healer fallback
+--- both read the roster.
+function RCC:GROUP_ROSTER_UPDATE()
+    self:RequestRefresh()
+end
+
+--- PLAYER_SPECIALIZATION_CHANGED: the flask preference is per spec.
+function RCC:PLAYER_SPECIALIZATION_CHANGED(_, unit)
+    if unit ~= "player" then return end
+    self:RequestRefresh()
+end
+
+--- SPELL_UPDATE_COOLDOWN drives the class slot's cooldown proxy. A nil
+--- spellID means every cooldown changed; any other spell's is irrelevant.
+function RCC:SPELL_UPDATE_COOLDOWN(_, spellID, baseSpellID)
+    if spellID ~= nil then
+        local _, playerClass = UnitClass("player")
+        local classData = CLASS_SLOT[playerClass]
+        if not classData then return end
+        if spellID ~= classData.spellID and baseSpellID ~= classData.spellID then return end
+    end
     self:RequestRefresh()
 end
 
@@ -2022,9 +2070,10 @@ function RCC:OnEnable()
     self:RegisterEvent("READY_CHECK")
     self:RegisterEvent("READY_CHECK_FINISHED")
 
-    -- UNIT_AURA and UNIT_INVENTORY_CHANGED are registered only during an
-    -- active ready check (in READY_CHECK handler) and unregistered in
-    -- READY_CHECK_FINISHED to avoid unnecessary processing at all other times.
+    -- The refresh triggers (CHECK_EVENTS and SPELL_UPDATE_COOLDOWN) are
+    -- registered only during an active ready check (in READY_CHECK handler)
+    -- and unregistered in READY_CHECK_FINISHED to avoid unnecessary
+    -- processing at all other times.
 
     if DEBUG_RCC then KE:Print("[RCC] OnEnable") end
 end
