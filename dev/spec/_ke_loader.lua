@@ -2950,6 +2950,7 @@ function L.loadReadyCheckConsumables(overrides)
         combat = { inCombat = false },
         queue = {},
         counts = { scans = 0, driverUnregistered = 0 },
+        enchants = {},
     }
     installMock(overrides, {
         C_Timer = inertTimer(),
@@ -2967,7 +2968,9 @@ function L.loadReadyCheckConsumables(overrides)
     _G.IsInRaid = function() return false end
     _G.IsInGroup = function() return false end
     _G.GetInventoryItemID = function() return nil end
-    _G.GetWeaponEnchantInfo = function() return false end
+    _G.C_PaperDollInfo = {
+        GetTemporaryEnchantmentInfo = function(slot) return seams.enchants[slot] end,
+    }
     _G.C_Item = {
         GetItemCount = function() return 0 end,
         GetItemInfo = function() return nil end,
