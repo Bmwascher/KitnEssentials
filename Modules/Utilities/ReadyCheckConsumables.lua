@@ -395,6 +395,7 @@ RCC.previewButtons = nil   -- [1..NUM_SLOTS] preview stubs; no click overlays
 RCC.db          = nil
 RCC.stateDriverActive = false  -- true while the combat state driver is registered (see _EnableStateDriver)
 RCC._refreshPending = nil      -- true while a coalesced repaint waits for the next frame (see RequestRefresh)
+RCC._hidePending = nil         -- true while a hide deferred by combat waits for RunAfterCombat; cleared by ShowFrame and the real hide (see HideFrame)
 RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
 RCC._warlockInGroup = nil      -- IsWarlockInGroup's answer for the current roster; nil until asked (see IsWarlockInGroup)
 RCC._classCheck = nil          -- the resolved class check for the current repaint (see _ComputeVisibility)
@@ -1506,7 +1507,8 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
 
     if DEBUG_RCC then
         KE:Print(string.format("[RCC] UpdateWeaponEnchant slot=%s invSlot=%d has=%s ench=%s",
-            tostring(slotKey), invSlot, tostring(info ~= nil), tostring(enchID)))
+            tostring(slotKey), invSlot, tostring(info ~= nil),
+            KE:IsSecretValue(enchID) and "secret" or tostring(enchID)))
     end
 
     if info then
@@ -1657,12 +1659,11 @@ function RCC:UpdateHealthstone()
             local n = GetItemCount(itemID, false, true)
             if n and n > 0 then
                 count = count + n
-                stocked = stocked or itemID
+                -- The tooltip prefers the Demonic stone when both are stocked.
+                if data.warlockOnly or not stocked then stocked = itemID end
             end
         end
     end
-    -- The tooltip shows the stone the slot counts: a stocked one, else the
-    -- standard stone.
     btn.nominatedItem = stocked or 5512
 
     if count > 0 then
