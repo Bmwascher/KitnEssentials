@@ -1841,10 +1841,10 @@ function RCC:_SetCheckEvents(on)
     if CLASS_SLOT[playerClass] then self:RegisterEvent("SPELL_UPDATE_COOLDOWN") end
 end
 
---- UNIT_AURA fires when a unit's aura set changes. The player's auras drive
---- the consumable slots; a group member's matter only to the Warlock class
---- slot (Soulstone target tracking). Both request the same coalesced
---- repaint.
+--- UNIT_AURA fires for every unit whose aura set changes. The player's
+--- auras drive the consumable slots; a party or raid member's matter only to
+--- the Warlock class slot (Soulstone target tracking). Every other token is
+--- dropped before it reaches the coalescer.
 --- @param _ string   event name (unused)
 --- @param unit string
 function RCC:UNIT_AURA(_, unit)
@@ -1858,7 +1858,7 @@ function RCC:UNIT_AURA(_, unit)
     end
 
     local _, playerClass = UnitClass("player")
-    if playerClass == "WARLOCK" then
+    if playerClass == "WARLOCK" and (unit:find("^party%d+$") or unit:find("^raid%d+$")) then
         if DEBUG_RCC then
             KE:Print(string_format("[RCC] UNIT_AURA: group unit %s changed, refreshing.", unit))
         end
@@ -1866,8 +1866,10 @@ function RCC:UNIT_AURA(_, unit)
     end
 end
 
---- UNIT_INVENTORY_CHANGED fires when equipped items change (weapon oils).
-function RCC:UNIT_INVENTORY_CHANGED()
+--- UNIT_INVENTORY_CHANGED fires for every unit whose equipment changes; only
+--- the player's weapon slots are read.
+function RCC:UNIT_INVENTORY_CHANGED(_, unit)
+    if unit ~= "player" then return end
     if DEBUG_RCC then KE:Print("[RCC] UNIT_INVENTORY_CHANGED: refreshing.") end
     self:RequestRefresh()
 end
