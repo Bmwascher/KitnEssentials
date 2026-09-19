@@ -2946,11 +2946,19 @@ end
 -- can deliver the deferred hide, which is why it is the one stateful fake.
 -- Returns RCC, KE, seams.
 function L.loadReadyCheckConsumables(overrides)
+    -- auras is walked by the AuraUtil.ForEachAura fake below, slot by slot;
+    -- auraPageSize nil hands every slot back in one page, a number pages by
+    -- it with a continuation token, as the live slot API can. enchants is
+    -- keyed by inventory slot. SECRET is the declared-secret sentinel that
+    -- KE.IsSafeValue rejects; it says nothing about the runtime's secrets.
     local seams = {
         combat = { inCombat = false },
         queue = {},
         counts = { scans = 0, driverUnregistered = 0 },
+        auras = {},
+        auraPageSize = nil,
         enchants = {},
+        SECRET = {},
     }
     installMock(overrides, {
         C_Timer = inertTimer(),
@@ -2982,10 +2990,42 @@ function L.loadReadyCheckConsumables(overrides)
         GetSpecializationInfo = function() return nil end,
     }
     _G.C_Spell = { GetSpellCooldown = function() return nil end }
-    _G.C_UnitAuras = {
-        GetAuraDataByIndex = function()
-            seams.counts.scans = seams.counts.scans + 1
-            return nil
+    -- The slot provider pages over seams.auras; scans counts walks, one per
+    -- first-page call. ForEachAura repeats the provider until the token is
+    -- exhausted and stops when the callback returns true, the two contract
+    -- points the module's walk depends on. Packed data only: the module
+    -- passes true, and an unpacked walk here is a wrong call, not a case.
+    local unitAuras = {
+        GetAuraSlots = function(_, _, _, token)
+            if not token then seams.counts.scans = seams.counts.scans + 1 end
+            local first, n = token or 1, #seams.auras
+            local last = n
+            if seams.auraPageSize then
+                last = math.min(first + seams.auraPageSize - 1, n)
+            end
+            local slots = {}
+            for slot = first, last do slots[#slots + 1] = slot end
+            local nextToken = (last < n) and (last + 1) or nil
+            return nextToken, unpack(slots)
+        end,
+        GetAuraDataBySlot = function(_, slot) return seams.auras[slot] end,
+    }
+    _G.C_UnitAuras = unitAuras
+    _G.AuraUtil = {
+        ForEachAura = function(unit, filter, batchSize, func, usePackedAura)
+            assert(usePackedAura == true, "the ForEachAura fake hands back packed AuraData only")
+            if batchSize and batchSize <= 0 then return end
+            local function walk(token, ...)
+                for i = 1, select("#", ...) do
+                    local aura = unitAuras.GetAuraDataBySlot(unit, (select(i, ...)))
+                    if aura and func(aura) then return nil end
+                end
+                return token
+            end
+            local token
+            repeat
+                token = walk(unitAuras.GetAuraSlots(unit, filter, batchSize, token))
+            until token == nil
         end,
     }
     _G.RegisterStateDriver = function() end
@@ -2995,7 +3035,7 @@ function L.loadReadyCheckConsumables(overrides)
     local KE = {
         db = { profile = { ReadyCheckConsumables = {} } },
         Print = function() end,
-        IsSafeValue = function(_, v) return v ~= nil end,
+        IsSafeValue = function(_, v) return v ~= nil and v ~= seams.SECRET end,
         AreAuraIdentitiesHidden = function() return false end,
         RunAfterCombat = function(_, fn) seams.queue[#seams.queue + 1] = fn end,
     }

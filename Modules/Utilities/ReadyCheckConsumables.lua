@@ -636,20 +636,23 @@ local READY_TEXTURE     = "Interface\\RaidFrame\\ReadyCheck-Ready"
 local NOT_READY_TEXTURE = "Interface\\RaidFrame\\ReadyCheck-NotReady"
 
 --- ScanPlayerAuras
---- Scans the player's HELPFUL auras once and returns a {spellId = auraData} map.
+--- Walks the player's HELPFUL auras once and returns a {spellId = auraData} map.
 --- Aura entries with secret spellIds are filtered out — they cannot be safely
 --- used as table keys or compared against data table IDs.
+--- The walk is uncapped: a nil batch size pages until the continuation token
+--- runs out, and the callback never ends it early. Callers gate on
+--- KE:AreAuraIdentitiesHidden() first; the slot calls hard error without
+--- aura access.
 function RCC:ScanPlayerAuras()
     local auras = {}
-    for i = 1, 40 do
-        local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
-        if not auraData then break end
+    AuraUtil.ForEachAura("player", "HELPFUL", nil, function(auraData)
+        if not auraData then return end
 
         local spellId = auraData.spellId
         if KE:IsSafeValue(spellId) then
             auras[spellId] = auraData
         end
-    end
+    end, true)
     return auras
 end
 
