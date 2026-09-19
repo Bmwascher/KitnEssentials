@@ -1012,13 +1012,11 @@ function RCC:_GetSoulstonedTarget(live)
 end
 
 --- _BuildSoulstoneMacrotext
---- The click macro: @mouseover, @target, the sticky name, the first living
---- healer, then @player. @target sits before the sticky so the warlock can
---- override it for one pull by targeting someone else first; the post-cast
---- aura refresh then makes that person the sticky. @mouseover is effectively
---- unreachable (clicking the icon steals mouseover) and stays for macro
---- pattern consistency. The `,help,nodead` conditionals fall through past a
---- dead name, so an out-of-combat refresh is enough.
+--- @target precedes the sticky name so targeting someone else overrides it
+--- for one pull; the post-cast refresh then makes that person the sticky.
+--- @mouseover is unreachable from the icon click and stays for macro
+--- consistency. `,help,nodead` falls through past a dead name, so an
+--- out-of-combat refresh is enough.
 function RCC:_BuildSoulstoneMacrotext(stoned, healer)
     local cast = "/cast [@mouseover,help,nodead][@target,help,nodead]"
     if stoned then
@@ -1128,16 +1126,12 @@ local CAST_GLOW_COLOR = { 1, 1, 0, 1 }
 local WAITING_TEXTURE = "Interface\\RaidFrame\\ReadyCheck-Waiting"
 
 --- SoulstoneState
---- The class slot's state from the cooldown struct and the roster pass:
---- "protected" when a stone is confirmed on someone (the aura outlasts the
---- cooldown, so this wins regardless of it), "unconfirmed" when the
---- cooldown runs but no stone was seen, "cast" otherwise. The second value
---- is the remaining cooldown, nil when it cannot be read or is not running.
+--- A confirmed stone wins regardless of the cooldown: the aura outlasts it.
 --- startTime and duration go secret under a cooldown restriction; isActive
---- is NeverSecret (SpellCooldownInfo), so on a secret pair the cooldown is
---- still known to run, only its length is not. The 1.5 s floor on the
---- readable pair filters the global cooldown; a secret pair cannot, so a
---- cast in a keystone reads "unconfirmed" for one global cooldown.
+--- is NeverSecret (SpellCooldownInfo), so a secret pair still says the
+--- cooldown runs, only not for how long. The 1.5 s floor filters the global
+--- cooldown on a readable pair; a secret pair cannot, so a cast in a
+--- keystone reads "unconfirmed" for one global cooldown.
 local function SoulstoneState(cdInfo, confirmed)
     local onCD, remain = false, nil
     if cdInfo then
