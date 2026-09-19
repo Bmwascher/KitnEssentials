@@ -134,3 +134,18 @@ describe("ReadyCheckConsumables Soulstone roster pass", function()
         assert.same({ "mouseover", "target", "Healer-Realm" }, nameTerms(macrotext))
     end)
 end)
+
+describe("ReadyCheckConsumables IsWarlockInGroup cache", function()
+    it("answers from the cache until a roster update, then rescans", function()
+        local RCC, _, seams = L.loadReadyCheckConsumables()
+        seams.group.mode = "party"
+        seams.group.units = { party1 = { name = "Mage-Realm", class = "MAGE" } }
+        assert.is_false(RCC:IsWarlockInGroup())
+
+        seams.group.units.party2 = { name = "Lock-Realm", class = "WARLOCK" }
+        assert.is_false(RCC:IsWarlockInGroup())
+
+        RCC:GROUP_ROSTER_UPDATE()
+        assert.is_true(RCC:IsWarlockInGroup())
+    end)
+end)

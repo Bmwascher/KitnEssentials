@@ -351,6 +351,7 @@ RCC.db          = nil
 RCC.stateDriverActive = false  -- true while the combat state driver is registered (see _EnableStateDriver)
 RCC._refreshPending = nil      -- true while a coalesced repaint waits for the next frame (see RequestRefresh)
 RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
+RCC._warlockInGroup = nil      -- IsWarlockInGroup's answer for the current roster; nil until asked (see IsWarlockInGroup)
 
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
 -- of the most recently confirmed Soulstone recipient so the click macro keeps
@@ -723,18 +724,24 @@ end
 --- IsWarlockInGroup
 --- Returns true if the player is a Warlock OR a Warlock exists in the current
 --- party/raid. Healthstones only exist when a Warlock is present to summon
---- them, so the HS slot is hidden otherwise (matches MRT's behavior).
---- Solo non-Warlocks: returns false (slot hidden).
+--- them, so the HS slot is hidden otherwise. Solo non-Warlocks: false.
+--- The roster walk runs once per roster: the answer is kept in
+--- _warlockInGroup until GROUP_ROSTER_UPDATE, ShowFrame or HideFrame
+--- clears it, so a repaint a player aura change triggers never re-walks.
 function RCC:IsWarlockInGroup()
-    local _, myClass = UnitClass("player")
-    if myClass == "WARLOCK" then return true end
+    local cached = self._warlockInGroup
+    if cached ~= nil then return cached end
 
-    if IsInRaid() then
+    local found = false
+    local _, myClass = UnitClass("player")
+    if myClass == "WARLOCK" then
+        found = true
+    elseif IsInRaid() then
         for i = 1, 40 do
             local unit = "raid" .. i
             if UnitExists(unit) then
                 local _, class = UnitClass(unit)
-                if class == "WARLOCK" then return true end
+                if class == "WARLOCK" then found = true; break end
             end
         end
     elseif IsInGroup() then
@@ -742,11 +749,12 @@ function RCC:IsWarlockInGroup()
             local unit = "party" .. i
             if UnitExists(unit) then
                 local _, class = UnitClass(unit)
-                if class == "WARLOCK" then return true end
+                if class == "WARLOCK" then found = true; break end
             end
         end
     end
-    return false
+    self._warlockInGroup = found
+    return found
 end
 
 --- _IsNameInGroup
@@ -1643,6 +1651,9 @@ function RCC:ShowFrame(initiatorUnit)
     -- A hide queued by a previous check that finished in combat must not
     -- fire on this new row after combat ends.
     self._hidePending = nil
+    -- Roster events are subscribed only while a check is open, so the
+    -- answer from the last check may be stale.
+    self._warlockInGroup = nil
 
     -- Build frame on first use (lazy; deferred until the first ready check).
     if not self.frame then
@@ -1772,6 +1783,7 @@ function RCC:HideFrame()
     end
     self.frame:Hide()
     self._hidePending = nil
+    self._warlockInGroup = nil
 
     if DEBUG_RCC then KE:Print("[RCC] HideFrame: hidden (full cleanup).") end
 end
@@ -1869,6 +1881,7 @@ end
 --- GROUP_ROSTER_UPDATE: the Warlock-in-group test and the healer fallback
 --- both read the roster.
 function RCC:GROUP_ROSTER_UPDATE()
+    self._warlockInGroup = nil
     self:RequestRefresh()
 end
 
