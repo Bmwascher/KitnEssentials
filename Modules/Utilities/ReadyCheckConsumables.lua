@@ -418,6 +418,7 @@ RCC._auraScans   = 0   -- ScanPlayerAuras walks
 RCC._auraEntries = 0   -- entries the most recent aura walk visited
 RCC._rosterScans = 0   -- _ScanSoulstoneRoster passes
 RCC._cooldownAll = 0   -- SPELL_UPDATE_COOLDOWN arrivals with a nil spellID
+RCC._counterNames = { "_requests", "_repaints", "_auraScans", "_auraEntries", "_rosterScans", "_cooldownAll" }
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -431,12 +432,7 @@ end
 --- Zeroes the work counters and nothing else, so a probe can bracket one
 --- scenario without disturbing the row.
 function RCC:_ResetCounters()
-    self._requests    = 0
-    self._repaints    = 0
-    self._auraScans   = 0
-    self._auraEntries = 0
-    self._rosterScans = 0
-    self._cooldownAll = 0
+    for _, name in ipairs(self._counterNames) do self[name] = 0 end
 end
 
 ---------------------------------------------------------------------------------
