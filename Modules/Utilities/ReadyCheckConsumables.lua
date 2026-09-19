@@ -326,29 +326,16 @@ local HEALTHSTONES = {
     [224464] = { warlockOnly = true,  name = "Demonic Healthstone" },
 }
 
--- Class slot — Warlock Soulstone (custom, NOT MRT parity).
--- MRT's real class slot is an Enhancement Shaman weapon imbue button (spell 192106);
--- we intentionally skip that and replace it with Warlock Soulstone tracking because
--- that's the practical raid use case (pre-pull stone on a Mass-Res healer for wipe
--- protection — healer self-res's from the stone, then Mass Res's the rest of the raid).
--- Slot hidden entirely for all non-Warlock classes.
---
--- Detection: spell cooldown on 20707. If the spell is on CD, the Warlock cast it
--- recently → someone in the raid has a Soulstone. Not as accurate as a raid-wide
--- aura scan (which would require full inspection logic), but
--- simple and sufficient — a Warlock isn't expected to recast Soulstone during its
--- CD window, so "spell on CD" ≈ "someone is stoned".
---
--- Click target priority: mouseover friendly → target friendly → self.
--- Self fallback prevents wasted casts if no appropriate target is hovered.
---- macrotext is `string | function(self) -> string`. Functions are invoked at
---- UpdateClassSlot time so the macrotext can be re-derived from world state
---- (used by Warlock Soulstone for healer-targeting priority chain).
+-- Class slot: the Warlock's Soulstone, the pre-pull stone on a healer so a
+-- wipe can be recovered. Hidden for every other class.
+--- resolve(rcc) runs once per repaint and returns whether a living group
+--- member (or the player) is confirmed to carry the player's Soulstone, and
+--- the click macro derived from the same roster pass.
 local CLASS_SLOT = {
     WARLOCK = {
-        spellID   = 20707,
-        name      = "Soulstone",
-        macrotext = function(rcc) return rcc:_BuildSoulstoneMacrotext() end,
+        spellID = 20707,
+        name    = "Soulstone",
+        resolve = function(rcc) return rcc:_ResolveSoulstone() end,
     },
 }
 
@@ -788,75 +775,83 @@ function RCC:_IsNameInGroup(name)
     return false
 end
 
---- _GetSoulstonedTarget
---- Returns the name of the player's current Soulstone target ("Name-Realm"),
---- or nil if no sticky target can be resolved.
----
---- Resolution order:
----   1. **Live scan** — first group member with a player-source Soulstone aura.
----      When found, populates RCC._lastSoulstoneTarget so subsequent calls can
----      fall back to it after the aura drops.
----   2. **Cache fallback** — if no live target, return RCC._lastSoulstoneTarget
----      provided the cached name is still in the group. This is the BR
----      stickiness behavior (Core/State.lua — "If not active, keep old
----      last target so macro still targets them after it falls off"): once
----      the warlock manually targets a specific healer with their first cast,
----      every subsequent click keeps nominating that same person, even after
----      the aura is consumed on their death. The macro's `,nodead` self-corrects
----      if the cached target is currently dead.
----   3. **Cache prune** — if the cached name is no longer in the group, clear
----      it and return nil so the priority chain falls through to "first living
----      healer." Mirrors BR's prune step (State.lua).
----
---- Player intentionally skipped from the live scan — matches BR's
---- `not UnitIsUnit(data.unit, "player")` guard. Self-stones are covered by
---- the macro's final [@player] fallback; pinning sticky priority to self
---- would route the next click back at us instead of letting the warlock
---- target a healer.
----
---- Secret-value guards: aura sourceUnit can be secret in chat-messaging
---- lockdown; treat secret/missing source as "not from us." GetUnitName is
---- guarded against SecretWhenUnitIdentityRestricted (encounter anonymization).
-function RCC:_GetSoulstonedTarget()
-    local function check(unit)
-        if KE:IsAuraHiddenForSpell("Soulstone") then return nil end
-        if not UnitExists(unit) then return nil end
-        if UnitIsDeadOrGhost(unit) then return nil end
-        local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, "Soulstone", "HELPFUL")
-        if not auraData then return nil end
-        local source = auraData.sourceUnit
-        if not KE:IsSafeValue(source) then return nil end
-        if not (source == "player" or UnitIsUnit(source, "player")) then return nil end
-        local n = GetUnitName(unit, true)
-        if not KE:IsSafeValue(n) then return nil end
-        return n
+-- True when `unit` carries a Soulstone the player cast. A secret or missing
+-- sourceUnit reads as "not from us"; the caller has already asked the
+-- per-spell gate, so the query itself cannot hard-error.
+local function HasPlayerSoulstone(unit)
+    local auraData = C_UnitAuras.GetAuraDataBySpellName(unit, "Soulstone", "HELPFUL")
+    if not auraData then return false end
+    local source = auraData.sourceUnit
+    if not KE:IsSafeValue(source) then return false end
+    return source == "player" or UnitIsUnit(source, "player")
+end
+
+--- _ScanSoulstoneRoster
+--- One pass over the group answering three questions: the first living
+--- member other than the player carrying the player's Soulstone (its
+--- "Name-Realm"), the first living HEALER, and whether the player carries
+--- their own stone. The per-spell aura gate is asked once; the walk is
+--- synchronous, so one answer covers every query it guards. The player is
+--- never the recipient: a self-stone is reported for the paint only, so
+--- the sticky cache cannot route the next click back at the caster.
+--- Returns recipient, healer, selfStoned.
+function RCC:_ScanSoulstoneRoster()
+    local hidden = KE:IsAuraHiddenForSpell("Soulstone")
+    local recipient, healer, selfStoned
+
+    local function visit(unit)
+        if not UnitExists(unit) or UnitIsDeadOrGhost(unit) then return end
+        if not hidden and not recipient and not selfStoned and HasPlayerSoulstone(unit) then
+            if UnitIsUnit(unit, "player") then
+                selfStoned = true
+            else
+                local n = GetUnitName(unit, true)
+                if KE:IsSafeValue(n) then recipient = n end
+            end
+        end
+        if not healer and UnitGroupRolesAssigned(unit) == "HEALER" then
+            local n = GetUnitName(unit, true)
+            if KE:IsSafeValue(n) then healer = n end
+        end
     end
 
-    local liveTarget
-    if IsInRaid() then
-        for i = 1, 40 do
-            local name = check("raid" .. i)
-            if name then liveTarget = name; break end
-        end
+    local inRaid = IsInRaid()
+    local prefix, count
+    if inRaid then
+        prefix, count = "raid", 40
     elseif IsInGroup() then
-        for i = 1, 4 do
-            local name = check("party" .. i)
-            if name then liveTarget = name; break end
+        prefix, count = "party", 4
+    end
+    if prefix then
+        for i = 1, count do
+            visit(prefix .. i)
+            if healer and (recipient or selfStoned or hidden) then break end
         end
     end
-
-    if liveTarget then
-        self._lastSoulstoneTarget = liveTarget
-        return liveTarget
+    -- party1..4 never includes the player; raid1..40 does.
+    if not inRaid and not hidden and not UnitIsDeadOrGhost("player") then
+        selfStoned = HasPlayerSoulstone("player")
     end
+    return recipient, healer, selfStoned == true
+end
 
-    -- No live target: keep nominating the cached name if they're still in group.
+--- _GetSoulstonedTarget
+--- The name the click macro should nominate first: the live recipient when
+--- the scan found one (and it becomes the sticky name), otherwise the sticky
+--- name while that member is still in the group. A live scan that finds
+--- nobody does not clear the cache: the stone was consumed or the auras are
+--- hidden, and either way the next click should re-stone the same person.
+--- The cache is pruned only when the member has left the group.
+function RCC:_GetSoulstonedTarget(live)
+    if live then
+        self._lastSoulstoneTarget = live
+        return live
+    end
     local cached = self._lastSoulstoneTarget
     if cached then
         if self:_IsNameInGroup(cached) then
             return cached
         end
-        -- Cached member left the group — prune.
         if DEBUG_RCC then
             KE:Print("[RCC] _GetSoulstonedTarget: cached target left group, clearing.")
         end
@@ -865,69 +860,15 @@ function RCC:_GetSoulstonedTarget()
     return nil
 end
 
---- _GetFirstLivingHealer
---- Returns the name of the first living group member assigned the HEALER role
---- ("Name-Realm" format), or nil if no living healer exists. Iteration order
---- matches raid/party slot order.
-function RCC:_GetFirstLivingHealer()
-    local function check(unit)
-        if not UnitExists(unit) then return nil end
-        if UnitIsDeadOrGhost(unit) then return nil end
-        if UnitGroupRolesAssigned(unit) ~= "HEALER" then return nil end
-        local n = GetUnitName(unit, true)
-        if not KE:IsSafeValue(n) then return nil end
-        return n
-    end
-
-    if IsInRaid() then
-        for i = 1, 40 do
-            local name = check("raid" .. i)
-            if name then return name end
-        end
-    elseif IsInGroup() then
-        for i = 1, 4 do
-            local name = check("party" .. i)
-            if name then return name end
-        end
-    end
-    return nil
-end
-
 --- _BuildSoulstoneMacrotext
---- Composes the dynamic macro string for the Warlock CLASS_SLOT click button.
----
---- Priority chain (intentionally diverges from BR's sticky-first ordering):
----   1. @mouseover (kept for macro-pattern consistency; effectively
----      unreachable since clicking the icon steals mouseover focus)
----   2. @target — lets the warlock manually override the sticky for one
----      pull by clicking on a different friendly first, then clicking the
----      RCC icon. The post-cast UNIT_AURA refresh updates the sticky
----      cache to the new target, so subsequent pulls auto-route to them
----      until the next manual override.
----   3. Sticky last target (sourced from _GetSoulstonedTarget — live scan
----      OR cache fallback) — the dominant priority during normal flow
----      because the warlock usually has the boss (hostile) targeted, so
----      the @target,help conditional fails and falls through here.
----   4. First living healer in group — fallback when no sticky exists yet
----      (first cast of the session before any soulstone has been placed).
----   5. @player — final self-fallback.
----
---- Why not sticky-first (BR's order at Buffs.lua)? With sticky-first,
---- a live sticky target shadows @target — the warlock can't override by
---- targeting a different healer; the click always routes to the cached
---- name. Putting @target before sticky makes "click target → click icon"
---- the natural manual-override flow.
----
---- The `,help,nodead` conditionals self-correct if a cached name is dead
---- (chain falls through to the next prefix), so out-of-combat-only
---- refresh remains sufficient.
----
---- Stays well under WoW's 255-char macro limit:
----   ~70 chars base + ~30 chars per dynamic prefix * 2 = ~150 chars max.
-function RCC:_BuildSoulstoneMacrotext()
-    local stoned = self:_GetSoulstonedTarget()
-    local healer = self:_GetFirstLivingHealer()
-
+--- The click macro: @mouseover, @target, the sticky name, the first living
+--- healer, then @player. @target sits before the sticky so the warlock can
+--- override it for one pull by targeting someone else first; the post-cast
+--- aura refresh then makes that person the sticky. @mouseover is effectively
+--- unreachable (clicking the icon steals mouseover) and stays for macro
+--- pattern consistency. The `,help,nodead` conditionals fall through past a
+--- dead name, so an out-of-combat refresh is enough.
+function RCC:_BuildSoulstoneMacrotext(stoned, healer)
     local cast = "/cast [@mouseover,help,nodead][@target,help,nodead]"
     if stoned then
         cast = cast .. "[@" .. stoned .. ",help,nodead]"
@@ -943,6 +884,15 @@ function RCC:_BuildSoulstoneMacrotext()
     end
 
     return "/stopmacro [combat]\n" .. cast
+end
+
+--- _ResolveSoulstone
+--- CLASS_SLOT.WARLOCK.resolve. The paint and the click read the same roster
+--- pass so they cannot disagree about who carries the stone.
+function RCC:_ResolveSoulstone()
+    local live, healer, selfStoned = self:_ScanSoulstoneRoster()
+    local stoned = self:_GetSoulstonedTarget(live)
+    return (live ~= nil) or selfStoned, self:_BuildSoulstoneMacrotext(stoned, healer)
 end
 
 --- CountItems
@@ -984,6 +934,34 @@ local function formatDurationText(seconds)
 end
 
 local SOULSTONE_GLOW_COLOR = { 1, 1, 0, 1 }
+local WAITING_TEXTURE = "Interface\\RaidFrame\\ReadyCheck-Waiting"
+
+--- SoulstoneState
+--- The class slot's state from the cooldown struct and the roster pass:
+--- "protected" when a stone is confirmed on someone (the aura outlasts the
+--- cooldown, so this wins regardless of it), "unconfirmed" when the
+--- cooldown runs but no stone was seen, "cast" otherwise. The second value
+--- is the remaining cooldown, nil when it cannot be read or is not running.
+--- startTime and duration go secret under a cooldown restriction; isActive
+--- is NeverSecret (SpellCooldownInfo), so on a secret pair the cooldown is
+--- still known to run, only its length is not. The 1.5 s floor on the
+--- readable pair filters the global cooldown; a secret pair cannot, so a
+--- cast in a keystone reads "unconfirmed" for one global cooldown.
+local function SoulstoneState(cdInfo, confirmed)
+    local onCD, remain = false, nil
+    if cdInfo then
+        if KE:IsSafeValue(cdInfo.startTime) and KE:IsSafeValue(cdInfo.duration) then
+            onCD = cdInfo.duration > 1.5
+            if onCD then remain = cdInfo.startTime + cdInfo.duration - GetTime() end
+        else
+            onCD = cdInfo.isActive == true
+        end
+    end
+    if confirmed then return "protected", remain end
+    if onCD then return "unconfirmed", remain end
+    return "cast", nil
+end
+RCC._SoulstoneState = SoulstoneState
 
 -- LibCustomGlow rebuilds the glow on every Start call, so a slot that is
 -- already glowing is left alone across repaints.
@@ -1412,13 +1390,12 @@ function RCC:UpdateHealthstone()
 end
 
 --- UpdateClassSlot
---- Warlock-only Soulstone slot. Uses C_Spell.GetSpellCooldown(20707) as a
---- proxy for "someone in the raid has a Soulstone": on CD ≈ stoned,
---- off CD ≈ need to cast.
----
---- Secret value guards: C_Spell.GetSpellCooldown's startTime and duration can
---- return secret values in 12.0 (per api-validator guidance) — we fallback to
---- 0 on secret so the off-CD branch triggers and no tainted arithmetic occurs.
+--- Warlock-only Soulstone slot, painted from SoulstoneState: green tick for
+--- a confirmed stone, yellow waiting mark for a running cooldown nobody is
+--- seen to carry, red cross plus glow when it should be cast. The timer
+--- is the remaining cooldown and stays empty while that is unreadable.
+--- _ComputeVisibility dispatches this only for a class with a CLASS_SLOT
+--- entry.
 function RCC:UpdateClassSlot()
     local btn = self.buttons.class
     if not btn then return end
@@ -1426,56 +1403,30 @@ function RCC:UpdateClassSlot()
 
     local _, playerClass = UnitClass("player")
     local classData = CLASS_SLOT[playerClass]
-    if not classData then
-        btn:Hide()
-        return
-    end
 
-    local start, duration = 0, 0
+    local cdInfo
     if C_Spell and C_Spell.GetSpellCooldown then
-        local cdInfo = C_Spell.GetSpellCooldown(classData.spellID)
-        -- Require BOTH fields safe. If only one is secret, we can't compute a
-        -- meaningful remaining-time, and showing "on CD — --" misleads the user.
-        -- Falling through to 0/0 (→ onCD=false, default "not ready" state) is
-        -- the accurate representation of "we cannot determine the state."
-        if cdInfo and KE:IsSafeValue(cdInfo.startTime) and KE:IsSafeValue(cdInfo.duration) then
-            start = cdInfo.startTime
-            duration = cdInfo.duration
-        end
+        cdInfo = C_Spell.GetSpellCooldown(classData.spellID)
     end
+    local confirmed, macrotext = classData.resolve(self)
+    local state, remain = SoulstoneState(cdInfo, confirmed)
+    btn.soulstoneState = state
 
-    -- >1.5s filters out GCD false-positives (Soulstone has a long CD, so this
-    -- is a safe threshold).
-    local onCD = duration > 1.5
-
-    if onCD then
-        btn.statusTexture:SetTexture(READY_TEXTURE)
-        btn.statusTexture:Show()
-        btn.texture:SetDesaturated(false)
-        local remain = start + duration - GetTime()
-        btn.timeLeft:SetText(formatDurationText(remain))
-    else
+    if state == "cast" then
         btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
-        btn.statusTexture:Show()
         btn.texture:SetDesaturated(true)
         btn.timeLeft:SetText("")
+        StartGlow(btn, SOULSTONE_GLOW_COLOR)
+    else
+        btn.statusTexture:SetTexture(state == "protected" and READY_TEXTURE or WAITING_TEXTURE)
+        btn.texture:SetDesaturated(false)
+        btn.timeLeft:SetText(formatDurationText(remain))
+        StopGlow(btn)
     end
+    btn.statusTexture:Show()
     btn.countText:SetText("")
 
-    -- Yellow pixel glow when Soulstone is missing (grayed-out state).
-    -- Stops automatically when the slot transitions to ready (onCD branch).
-    -- HideFrame stops all glows defensively on RC teardown.
-    if onCD then
-        StopGlow(btn)
-    else
-        StartGlow(btn, SOULSTONE_GLOW_COLOR)
-    end
-
     if click and not InCombatLockdown() then
-        local macrotext = classData.macrotext
-        if type(macrotext) == "function" then
-            macrotext = macrotext(self)
-        end
         click:SetAttribute("type", "macro")
         click:SetAttribute("macrotext", macrotext)
         click:Show()
