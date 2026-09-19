@@ -1469,11 +1469,9 @@ function RCC:PLAYER_REGEN_ENABLED()
 end
 
 --- _ComputeVisibility
---- The real row's visible set: the user toggles, plus the off-hand slot only
---- with an off-hand weapon, the healthstone slot only with a Warlock in the
---- group, and the class slot only for a class that has one. Each predicate
---- is asked once per repaint. ShowPreview keeps a toggle-only table of its
---- own so the settings preview shows every category.
+--- The real row's visible set, each contextual predicate asked once per
+--- repaint. ShowPreview keeps a toggle-only table of its own so the settings
+--- preview shows every category.
 function RCC:_ComputeVisibility()
     local db = self.db
     local _, playerClass = UnitClass("player")
