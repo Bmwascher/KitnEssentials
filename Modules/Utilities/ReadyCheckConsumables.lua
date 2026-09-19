@@ -407,12 +407,35 @@ RCC._lowGlowColor = { 1, 0.3, 0.3, 1 }  -- the low-duration glow colour, refille
 -- Pruned in _GetSoulstonedTarget when the cached name is no longer in group.
 RCC._lastSoulstoneTarget = nil
 
+-- Work counters. The repaint runs from a C_Timer callback the addon
+-- profiler cannot attribute to a frame, so these counts are the only
+-- per-module evidence of how often the work ran. Read by /run probes,
+-- zeroed by _ResetCounters, never saved.
+RCC._requests    = 0   -- RequestRefresh calls, before the coalescer drops any
+RCC._repaints    = 0   -- UpdateAllIcons runs past its guards, the forced first paint included
+RCC._auraScans   = 0   -- ScanPlayerAuras walks
+RCC._auraEntries = 0   -- entries the most recent aura walk visited
+RCC._rosterScans = 0   -- _ScanSoulstoneRoster passes
+RCC._cooldownAll = 0   -- SPELL_UPDATE_COOLDOWN arrivals with a nil spellID
+
 ---------------------------------------------------------------------------------
 -- DB Helper
 ---------------------------------------------------------------------------------
 
 function RCC:UpdateDB()
     self.db = KE.db.profile.ReadyCheckConsumables
+end
+
+--- _ResetCounters
+--- Zeroes the work counters and nothing else, so a probe can bracket one
+--- scenario without disturbing the row.
+function RCC:_ResetCounters()
+    self._requests    = 0
+    self._repaints    = 0
+    self._auraScans   = 0
+    self._auraEntries = 0
+    self._rosterScans = 0
+    self._cooldownAll = 0
 end
 
 ---------------------------------------------------------------------------------
@@ -740,15 +763,19 @@ local NOT_READY_TEXTURE = "Interface\\RaidFrame\\ReadyCheck-NotReady"
 --- KE:AreAuraIdentitiesHidden() first; the slot calls hard error without
 --- aura access.
 function RCC:ScanPlayerAuras()
+    self._auraScans = self._auraScans + 1
     local auras = {}
+    local visited = 0
     AuraUtil.ForEachAura("player", "HELPFUL", nil, function(auraData)
         if not auraData then return end
+        visited = visited + 1
 
         local spellId = auraData.spellId
         if KE:IsSafeValue(spellId) then
             auras[spellId] = auraData
         end
     end, true)
+    self._auraEntries = visited
     return auras
 end
 
@@ -918,6 +945,7 @@ end
 --- the sticky cache cannot route the next click back at the caster.
 --- Returns recipient, healer, selfStoned.
 function RCC:_ScanSoulstoneRoster()
+    self._rosterScans = self._rosterScans + 1
     local hidden = KE:IsAuraHiddenForSpell("Soulstone")
     local recipient, healer, selfStoned
 
@@ -1803,6 +1831,7 @@ end
 function RCC:UpdateAllIcons(force)
     if force ~= true and not self:_IsRowLive() then return end
     if not self.frame or not self.db then return end
+    self._repaints = self._repaints + 1
 
     local visibility = self:_ComputeVisibility()
     local buttons = self.buttons
@@ -1832,6 +1861,12 @@ function RCC:UpdateAllIcons(force)
     if visibility[SLOT_CLASS] then self:UpdateClassSlot() end
 
     self:_LayoutRow(self.frame, buttons, visibility)
+
+    if DEBUG_RCC then
+        KE:Print(string_format("[RCC] repaint %d: requests=%d auraScans=%d auraEntries=%d rosterScans=%d cooldownAll=%d",
+            self._repaints, self._requests, self._auraScans, self._auraEntries,
+            self._rosterScans, self._cooldownAll))
+    end
 end
 
 -- Pre-declared so RequestRefresh allocates no closure per call.
@@ -1846,6 +1881,7 @@ end
 --- schedules nothing, and again inside UpdateAllIcons so a request queued
 --- just before the row died repaints nothing.
 function RCC:RequestRefresh()
+    self._requests = self._requests + 1
     if self._refreshPending or not self:_IsRowLive() then return end
     self._refreshPending = true
     C_Timer.After(0, _RefreshFire)
@@ -2205,6 +2241,8 @@ function RCC:SPELL_UPDATE_COOLDOWN(_, spellID, baseSpellID)
         local classData = CLASS_SLOT[playerClass]
         if not classData or not classData.spellID then return end
         if spellID ~= classData.spellID and baseSpellID ~= classData.spellID then return end
+    else
+        self._cooldownAll = self._cooldownAll + 1
     end
     self:RequestRefresh()
 end
