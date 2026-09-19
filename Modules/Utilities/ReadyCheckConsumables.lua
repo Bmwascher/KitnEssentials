@@ -352,6 +352,7 @@ RCC.stateDriverActive = false  -- true while the combat state driver is register
 RCC._refreshPending = nil      -- true while a coalesced repaint waits for the next frame (see RequestRefresh)
 RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
 RCC._warlockInGroup = nil      -- IsWarlockInGroup's answer for the current roster; nil until asked (see IsWarlockInGroup)
+RCC._lowGlowColor = { 1, 0.3, 0.3, 1 }  -- the low-duration glow colour, refilled from db on every warning paint
 
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
 -- of the most recently confirmed Soulstone recipient so the click macro keeps
@@ -941,7 +942,50 @@ local function formatDurationText(seconds)
     return string_format("%dm", math_ceil(seconds / 60))
 end
 
-local SOULSTONE_GLOW_COLOR = { 1, 1, 0, 1 }
+local DURATION_COLOR_DEFAULT     = { 1, 1, 1, 1 }
+local HEARTY_FOOD_COLOR_DEFAULT  = { 0.2, 1.0, 0.2, 1.0 }
+local LOW_DURATION_COLOR_DEFAULT = { 1, 0.3, 0.3, 1 }
+
+--- IsLowDuration
+--- Strictly under the threshold. A nil remaining (permanent, secret or
+--- expired) or a nil threshold (warning off) never warns, so the
+--- comparison only ever sees plain numbers.
+local function IsLowDuration(remain, thresholdSeconds)
+    return remain ~= nil and thresholdSeconds ~= nil and remain < thresholdSeconds
+end
+RCC._IsLowDuration = IsLowDuration
+
+--- _LowDurationSeconds
+--- nil while the warning is off, which IsLowDuration reads as never.
+function RCC:_LowDurationSeconds()
+    local db = self.db
+    if not db or not db.LowDurationWarning then return nil end
+    return (db.LowDurationMinutes or 10) * 60
+end
+
+--- _PaintTimer
+--- The slot's timer text and colour from proven-plain seconds. Under the
+--- threshold the text takes LowDurationColor and _lowGlowColor is refilled
+--- from it; otherwise the slot's own colour (`baseKey`, default
+--- DurationColor). Every timer paint runs through here so a slot that was
+--- low reverts on the next repaint. Returns whether the warning applies
+--- so the caller composes the glow.
+function RCC:_PaintTimer(btn, remain, baseKey, baseDefault)
+    local low = IsLowDuration(remain, self:_LowDurationSeconds())
+    local r, g, b, a
+    if low then
+        r, g, b, a = KE:ResolveColor(self.db.LowDurationColor, LOW_DURATION_COLOR_DEFAULT)
+        local glow = self._lowGlowColor
+        glow[1], glow[2], glow[3], glow[4] = r, g, b, a
+    else
+        r, g, b, a = KE:ResolveColor(self.db[baseKey or "DurationColor"], baseDefault or DURATION_COLOR_DEFAULT)
+    end
+    btn.timeLeft:SetText(formatDurationText(remain))
+    btn.timeLeft:SetTextColor(r, g, b, a)
+    return low
+end
+
+local CAST_GLOW_COLOR = { 1, 1, 0, 1 }
 local WAITING_TEXTURE = "Interface\\RaidFrame\\ReadyCheck-Waiting"
 
 --- SoulstoneState
@@ -971,19 +1015,37 @@ local function SoulstoneState(cdInfo, confirmed)
 end
 RCC._SoulstoneState = SoulstoneState
 
--- LibCustomGlow rebuilds the glow on every Start call, so a slot that is
--- already glowing is left alone across repaints.
-local function StartGlow(btn, color)
-    if not LCG or btn.glowActive then return end
+-- LibCustomGlow rebuilds the glow on every Start call, so a slot already
+-- glowing for the same reason (`key`) is left alone across repaints; a
+-- different reason rebuilds it in that reason's colour.
+local function StartGlow(btn, color, key)
+    if not LCG then return end
+    if btn.glowActive and btn.glowKey == key then return end
     LCG.PixelGlow_Start(btn, color, 8, 0.25, 8, 2, 1, 1, false, nil)
     btn.glowActive = true
+    btn.glowKey = key
 end
 
 local function StopGlow(btn)
     if not btn.glowActive then return end
     if LCG then LCG.PixelGlow_Stop(btn) end
     btn.glowActive = false
+    btn.glowKey = nil
 end
+
+--- _SetLowGlow
+--- The low-duration glow when the warning applies, else no glow. Slots
+--- with another attention cue (a rune in bags, a stone to cast) compose it
+--- ahead of this call; the two never hold together, since those cues fire
+--- only while no timer runs.
+function RCC:_SetLowGlow(btn, low)
+    if low then
+        StartGlow(btn, self._lowGlowColor, "low")
+    else
+        StopGlow(btn)
+    end
+end
+
 
 --- _PaintUnavailable
 --- An aura-driven slot while aura identities are hidden: no status mark, a
@@ -1017,16 +1079,15 @@ function RCC:UpdateFood(auras)
             btn.statusTexture:SetTexture(READY_TEXTURE)
             btn.statusTexture:Show()
             btn.texture:SetDesaturated(false)
-            btn.timeLeft:SetText(formatDurationText(self:GetAuraRemaining(aura)))
 
             -- Hearty annotation: tint duration text green to flag "persists through death"
-            local cr, cg, cb, ca
+            local low
             if HEARTY_FOOD_BUFFS[spellId] then
-                cr, cg, cb, ca = KE:ResolveColor(self.db.HeartyFoodColor, { 0.2, 1.0, 0.2, 1.0 })
+                low = self:_PaintTimer(btn, self:GetAuraRemaining(aura), "HeartyFoodColor", HEARTY_FOOD_COLOR_DEFAULT)
             else
-                cr, cg, cb, ca = KE:ResolveColor(self.db.DurationColor, { 1, 1, 1, 1 })
+                low = self:_PaintTimer(btn, self:GetAuraRemaining(aura))
             end
-            btn.timeLeft:SetTextColor(cr, cg, cb, ca)
+            self:_SetLowGlow(btn, low)
             btn.countText:SetText("")
             return
         end
@@ -1037,6 +1098,7 @@ function RCC:UpdateFood(auras)
     btn.texture:SetDesaturated(true)
     btn.timeLeft:SetText("")
     btn.countText:SetText("")
+    StopGlow(btn)
 end
 
 --- _GetSpecFlaskPriority
@@ -1073,7 +1135,7 @@ function RCC:UpdateFlask(auras)
         btn.statusTexture:SetTexture(READY_TEXTURE)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(false)
-        btn.timeLeft:SetText(formatDurationText(self:GetAuraRemaining(activeAura)))
+        self:_SetLowGlow(btn, self:_PaintTimer(btn, self:GetAuraRemaining(activeAura)))
 
         -- Remembered as the stat string rather than the buff id so the
         -- preference survives a re-id of the buff as long as FLASKS keeps
@@ -1087,6 +1149,7 @@ function RCC:UpdateFlask(auras)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(true)
         btn.timeLeft:SetText("")
+        StopGlow(btn)
     end
 end
 
@@ -1228,11 +1291,9 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(false)
 
-        if KE:IsSafeValue(exp) and exp > 0 then
-            btn.timeLeft:SetText(string_format("%dm", math_ceil(exp / 1000 / 60)))
-        else
-            btn.timeLeft:SetText("")
-        end
+        local remain
+        if KE:IsSafeValue(exp) and exp > 0 then remain = exp / 1000 end
+        self:_SetLowGlow(btn, self:_PaintTimer(btn, remain))
 
         if self.db and KE:IsSafeValue(enchID) then
             local data = WEAPON_ENHANCEMENTS[enchID]
@@ -1243,6 +1304,7 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(true)
         btn.timeLeft:SetText("")
+        StopGlow(btn)
     end
 
     local pickItem, bagCount = self:_PickWeaponEnhancement(invSlot)
@@ -1285,11 +1347,12 @@ function RCC:UpdateRune(auras)
         end
     end
 
+    local low = false
     if activeAura then
         btn.statusTexture:SetTexture(READY_TEXTURE)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(false)
-        btn.timeLeft:SetText(formatDurationText(self:GetAuraRemaining(activeAura)))
+        low = self:_PaintTimer(btn, self:GetAuraRemaining(activeAura))
         if activeData then self:SetIconFromItem(btn.texture, activeData.item) end
     else
         btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
@@ -1332,9 +1395,9 @@ function RCC:UpdateRune(auras)
         self:SetIconFromItem(btn.texture, bestRune.item)
     end
     if unlimitedOnly and bestRune and not activeAura then
-        StartGlow(btn, nil)
+        StartGlow(btn, nil, "rune")
     else
-        StopGlow(btn)
+        self:_SetLowGlow(btn, low)
     end
 
     if click and not InCombatLockdown() then
@@ -1424,7 +1487,7 @@ function RCC:UpdateClassSlot()
         btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
         btn.texture:SetDesaturated(true)
         btn.timeLeft:SetText("")
-        StartGlow(btn, SOULSTONE_GLOW_COLOR)
+        StartGlow(btn, CAST_GLOW_COLOR, "cast")
     else
         btn.statusTexture:SetTexture(state == "protected" and READY_TEXTURE or WAITING_TEXTURE)
         btn.texture:SetDesaturated(false)
@@ -1580,13 +1643,15 @@ function RCC:ApplySettings()
     local db = self.db
     if not db then return end
 
-    -- Hearty food color is re-applied per update cycle inside UpdateFood.
-    local dr, dg, db_, da = KE:ResolveColor(db.DurationColor, { 1, 1, 1, 1 })
+    -- The base colour only: the repaint below re-applies the hearty and
+    -- low-duration tints, and restarts any glow in its current colour.
+    local dr, dg, db_, da = KE:ResolveColor(db.DurationColor, DURATION_COLOR_DEFAULT)
     local function applyFonts(buttons)
         if not buttons then return end
         for i = 1, NUM_SLOTS do
             local btn = buttons[i]
             if btn then
+                StopGlow(btn)
                 if btn.timeLeft then
                     KE:ApplyFontToText(btn.timeLeft,
                         db.FontFace,
@@ -1739,10 +1804,9 @@ end
 function RCC:HideFrame()
     if not self.frame then return end
 
-    -- Stop all LibCustomGlow animations on any slot that might have one.
-    -- Rune and class (warlock soulstone) slots currently use glow; stopping
-    -- all defensively future-proofs the cleanup if more glow effects are added.
-    -- The flag is cleared with them so the next check can start a glow again.
+    -- Stop all LibCustomGlow animations on any slot that might have one
+    -- (a low-duration warning, the rune nudge, a cast cue). The flag and
+    -- reason are cleared with them so the next check can start a glow again.
     for i = 1, NUM_SLOTS do
         local btn = self.buttons[i]
         if btn then
@@ -1753,6 +1817,7 @@ function RCC:HideFrame()
                 LCG.ProcGlow_Stop(btn)
             end
             btn.glowActive = false
+            btn.glowKey = nil
         end
     end
 

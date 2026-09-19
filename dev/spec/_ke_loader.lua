@@ -3116,6 +3116,10 @@ function L.loadReadyCheckConsumables(overrides)
         AreAuraIdentitiesHidden = function() return false end,
         IsAuraHiddenForSpell = function() return seams.soulstoneHidden end,
         RunAfterCombat = function(_, fn) seams.queue[#seams.queue + 1] = fn end,
+        ResolveColor = function(_, saved, default)
+            if not saved then return default[1], default[2], default[3], default[4] or 1 end
+            return saved[1] or default[1], saved[2] or default[2], saved[3] or default[3], saved[4] or default[4] or 1
+        end,
     }
     helpers.loadModule("Modules/Utilities/ReadyCheckConsumables.lua", KE)
     local RCC = modules["ReadyCheckConsumables"]

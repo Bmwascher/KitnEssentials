@@ -31,6 +31,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
 
     local manager = GUIFrame:CreateWidgetStateManager()
     manager:SetCondition("customPosition", function() return db.PositionMode == "custom" end)
+    manager:SetCondition("lowWarning", function() return db.LowDurationWarning ~= false end)
 
     local function ApplySettings()
         if mod and mod.ApplySettings then mod:ApplySettings() end
@@ -119,7 +120,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     manager:Register(hideMockCheck, "all")
     card2:AddRow(row2b, Theme.rowHeight)
 
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local cauldronOnlyCheck = GUIFrame:CreateCheckbox(row2c, "Use flasks only from raid cauldron", {
         value = db.CauldronFlasksOnly,
         callback = function(checked) db.CauldronFlasksOnly = checked; ApplySettings() end,
@@ -133,7 +134,28 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     })
     row2c:AddWidget(unlimitedRuneCheck, 0.5)
     manager:Register(unlimitedRuneCheck, "all")
-    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+    card2:AddRow(row2c, Theme.rowHeight)
+
+    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local lowWarningCheck = GUIFrame:CreateCheckbox(row2d, "Warn when a buff is running low", {
+        value = db.LowDurationWarning ~= false,
+        callback = function(checked)
+            db.LowDurationWarning = checked
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    row2d:AddWidget(lowWarningCheck, 0.5)
+    manager:Register(lowWarningCheck, "all")
+
+    local lowMinutesSlider = GUIFrame:CreateSlider(row2d, "Low Buff Threshold (minutes)", {
+        min = 1, max = 15, step = 1,
+        value = db.LowDurationMinutes or 10,
+        callback = function(val) db.LowDurationMinutes = val; ApplySettings() end,
+    })
+    row2d:AddWidget(lowMinutesSlider, 0.5)
+    manager:Register(lowMinutesSlider, "lowWarning")
+    card2:AddRow(row2d, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
@@ -315,10 +337,12 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
         onChange = ApplySettings,
         isLast = true,
         note = KE:ColorTextByTheme("-") .. " Duration Text is the base color for the timer/count above each icon.\n" ..
-            KE:ColorTextByTheme("-") .. " Hearty Food Text replaces it on the food slot when your active food persists through death.",
+            KE:ColorTextByTheme("-") .. " Hearty Food Text replaces it on the food slot when your active food persists through death.\n" ..
+            KE:ColorTextByTheme("-") .. " Low Duration Text replaces both, and colors the glow, when a buff is under the warning threshold.",
         colors = {
             { label = "Duration Text", key = "DurationColor", default = { 1, 1, 1, 1 } },
             { label = "Hearty Food Text", key = "HeartyFoodColor", default = { 0.2, 1.0, 0.2, 1.0 } },
+            { label = "Low Duration Text", key = "LowDurationColor", default = { 1.0, 0.3, 0.3, 1.0 } },
         },
     })
 

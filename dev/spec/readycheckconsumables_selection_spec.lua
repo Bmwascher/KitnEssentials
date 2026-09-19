@@ -25,7 +25,7 @@ local function recordingButton()
     local btn = {
         statusTexture = { SetTexture = function() end, Show = function() end, Hide = function() end },
         texture = { SetDesaturated = function() end, SetTexture = function() end },
-        timeLeft = { SetText = function() end },
+        timeLeft = { SetText = function() end, SetTextColor = function() end },
         countText = {},
         click = { attributes = {}, shown = false },
     }
