@@ -742,6 +742,7 @@ function RCC:BuildFrame()
     formatter:SetStripIntervalWhitespace(Enum.SecondsFormatterIntervalWhitespace.Strip)
     formatter:SetDesiredUnitCount(1)
     formatter:SetMinInterval(Enum.SecondsFormatterInterval.Seconds)
+    formatter:SetDefaultAbbreviation(Enum.SecondsFormatterAbbreviation.OneLetter)
     local binding = C_DurationUtil.CreateDurationTextBinding()
     binding:SetFormatter(formatter)
     binding:SetFontString(timerBar.text)
@@ -2041,8 +2042,10 @@ end
 
 --- _ShowTimerBar
 --- Parented to the popup rather than the row, so a respondent's Ready click
---- hides it with the popup in every position mode.
-function RCC:_ShowTimerBar(popup, seconds)
+--- hides it with the popup in every position mode. The starter sees no
+--- popup, only the row and its Close button, so the bar hangs under those
+--- instead of under the invisible ReadyCheckFrame box.
+function RCC:_ShowTimerBar(popup, seconds, underRow)
     local bar = self.timerBar
     if not bar then return end
     if not (self.db.ShowTimerBar and seconds and popup and ReadyCheckFrame) then
@@ -2053,8 +2056,9 @@ function RCC:_ShowTimerBar(popup, seconds)
     bar:SetStatusBarColor(accent[1], accent[2], accent[3], 1)
     bar:SetParent(popup)
     bar:ClearAllPoints()
-    bar:SetPoint("TOPLEFT",  ReadyCheckFrame, "BOTTOMLEFT",  0, -TIMER_BAR_GAP)
-    bar:SetPoint("TOPRIGHT", ReadyCheckFrame, "BOTTOMRIGHT", 0, -TIMER_BAR_GAP)
+    local above = underRow and self.frame.closeBtn or ReadyCheckFrame
+    bar:SetPoint("TOPLEFT",  above, "BOTTOMLEFT",  0, -TIMER_BAR_GAP)
+    bar:SetPoint("TOPRIGHT", above, "BOTTOMRIGHT", 0, -TIMER_BAR_GAP)
 
     local duration = C_DurationUtil.CreateDuration()
     duration:SetTimeFromStart(GetTime(), seconds)
@@ -2183,7 +2187,7 @@ function RCC:ShowFrame(initiatorUnit, duration)
     -- visible depends on event dispatch order, and the first paint must not.
     -- UpdateAllIcons ends with the layout, so no separate call is needed.
     self:UpdateAllIcons(true)
-    self:_ShowTimerBar(popup, TimerBarSeconds(duration))
+    self:_ShowTimerBar(popup, TimerBarSeconds(duration), isStarter)
 
     if DEBUG_RCC then
         local parentFrame = self.frame:GetParent()
