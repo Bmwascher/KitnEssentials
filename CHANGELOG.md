@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.11
+
+### Ready Check Consumables
+
+- When you start the check yourself the row sits above the ready check popup
+  and takes clicks again
+- A Warlock carrying both Healthstones sees the Demonic one's tooltip
+
+---
+
 ## v4.7.10
 
 ### Ready Check Consumables
