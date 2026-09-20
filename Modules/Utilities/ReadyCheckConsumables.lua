@@ -395,6 +395,7 @@ RCC.previewButtons = nil   -- [1..NUM_SLOTS] preview stubs; no click overlays
 RCC.db          = nil
 RCC.stateDriverActive = false  -- true while the combat state driver is registered (see _EnableStateDriver)
 RCC._refreshPending = nil      -- true while a coalesced repaint waits for the next frame (see RequestRefresh)
+RCC._hidePending = nil         -- true while a hide deferred by combat waits for RunAfterCombat; cleared by ShowFrame and the real hide (see HideFrame)
 RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
 RCC._warlockInGroup = nil      -- IsWarlockInGroup's answer for the current roster; nil until asked (see IsWarlockInGroup)
 RCC._classCheck = nil          -- the resolved class check for the current repaint (see _ComputeVisibility)
@@ -417,6 +418,7 @@ RCC._auraScans   = 0   -- ScanPlayerAuras walks
 RCC._auraEntries = 0   -- entries the most recent aura walk visited
 RCC._rosterScans = 0   -- _ScanSoulstoneRoster passes
 RCC._cooldownAll = 0   -- SPELL_UPDATE_COOLDOWN arrivals with a nil spellID
+RCC._counterNames = { "_requests", "_repaints", "_auraScans", "_auraEntries", "_rosterScans", "_cooldownAll" }
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -430,12 +432,7 @@ end
 --- Zeroes the work counters and nothing else, so a probe can bracket one
 --- scenario without disturbing the row.
 function RCC:_ResetCounters()
-    self._requests    = 0
-    self._repaints    = 0
-    self._auraScans   = 0
-    self._auraEntries = 0
-    self._rosterScans = 0
-    self._cooldownAll = 0
+    for _, name in ipairs(self._counterNames) do self[name] = 0 end
 end
 
 ---------------------------------------------------------------------------------
@@ -1011,13 +1008,11 @@ function RCC:_GetSoulstonedTarget(live)
 end
 
 --- _BuildSoulstoneMacrotext
---- The click macro: @mouseover, @target, the sticky name, the first living
---- healer, then @player. @target sits before the sticky so the warlock can
---- override it for one pull by targeting someone else first; the post-cast
---- aura refresh then makes that person the sticky. @mouseover is effectively
---- unreachable (clicking the icon steals mouseover) and stays for macro
---- pattern consistency. The `,help,nodead` conditionals fall through past a
---- dead name, so an out-of-combat refresh is enough.
+--- @target precedes the sticky name so targeting someone else overrides it
+--- for one pull; the post-cast refresh then makes that person the sticky.
+--- @mouseover is unreachable from the icon click and stays for macro
+--- consistency. `,help,nodead` falls through past a dead name, so an
+--- out-of-combat refresh is enough.
 function RCC:_BuildSoulstoneMacrotext(stoned, healer)
     local cast = "/cast [@mouseover,help,nodead][@target,help,nodead]"
     if stoned then
@@ -1127,16 +1122,12 @@ local CAST_GLOW_COLOR = { 1, 1, 0, 1 }
 local WAITING_TEXTURE = "Interface\\RaidFrame\\ReadyCheck-Waiting"
 
 --- SoulstoneState
---- The class slot's state from the cooldown struct and the roster pass:
---- "protected" when a stone is confirmed on someone (the aura outlasts the
---- cooldown, so this wins regardless of it), "unconfirmed" when the
---- cooldown runs but no stone was seen, "cast" otherwise. The second value
---- is the remaining cooldown, nil when it cannot be read or is not running.
+--- A confirmed stone wins regardless of the cooldown: the aura outlasts it.
 --- startTime and duration go secret under a cooldown restriction; isActive
---- is NeverSecret (SpellCooldownInfo), so on a secret pair the cooldown is
---- still known to run, only its length is not. The 1.5 s floor on the
---- readable pair filters the global cooldown; a secret pair cannot, so a
---- cast in a keystone reads "unconfirmed" for one global cooldown.
+--- is NeverSecret (SpellCooldownInfo), so a secret pair still says the
+--- cooldown runs, only not for how long. The 1.5 s floor filters the global
+--- cooldown on a readable pair; a secret pair cannot, so a cast in a
+--- keystone reads "unconfirmed" for one global cooldown.
 local function SoulstoneState(cdInfo, confirmed)
     local onCD, remain = false, nil
     if cdInfo then
@@ -1506,7 +1497,8 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
 
     if DEBUG_RCC then
         KE:Print(string.format("[RCC] UpdateWeaponEnchant slot=%s invSlot=%d has=%s ench=%s",
-            tostring(slotKey), invSlot, tostring(info ~= nil), tostring(enchID)))
+            tostring(slotKey), invSlot, tostring(info ~= nil),
+            KE:IsSecretValue(enchID) and "secret" or tostring(enchID)))
     end
 
     if info then
@@ -1657,12 +1649,11 @@ function RCC:UpdateHealthstone()
             local n = GetItemCount(itemID, false, true)
             if n and n > 0 then
                 count = count + n
-                stocked = stocked or itemID
+                -- The tooltip prefers the Demonic stone when both are stocked.
+                if data.warlockOnly or not stocked then stocked = itemID end
             end
         end
     end
-    -- The tooltip shows the stone the slot counts: a stocked one, else the
-    -- standard stone.
     btn.nominatedItem = stocked or 5512
 
     if count > 0 then
@@ -2009,10 +2000,11 @@ function RCC:ShowFrame(initiatorUnit)
 
     -- Anchor selection — three cases:
     --   1. Custom position: user-defined anchor (honors db settings).
-    --   2. Auto + we're the starter: ReadyCheckListenerFrame isn't shown to
-    --      the initiator (Blizzard auto-readies us, no popup needed), so a
-    --      child of that frame would stay hidden. Parent to UIParent and
-    --      position at screen center instead. Matches MRT's rlpointer pattern.
+    --   2. Auto + we're the starter: Blizzard shows ReadyCheckFrame to the
+    --      initiator too, an invisible DIALOG-strata box at screen centre
+    --      (only its ReadyCheckListenerFrame child is hidden). A row parked
+    --      at UIParent CENTER sits under that box and never receives the
+    --      mouse, so anchor above it like case 3.
     --   3. Auto + we're NOT the starter: anchor to ReadyCheckListenerFrame
     --      top so the row floats above the popup we see.
     self.frame:ClearAllPoints()
@@ -2024,6 +2016,9 @@ function RCC:ShowFrame(initiatorUnit)
             db.AnchorPoint or "CENTER",
             db.XOffset or 0,
             db.YOffset or 100)
+    elseif isStarter and ReadyCheckFrame then
+        self.frame:SetParent(ReadyCheckFrame)
+        self.frame:SetPoint("BOTTOM", ReadyCheckFrame, "TOP", 0, 2)
     elseif isStarter then
         self.frame:SetParent(UIParent)
         self.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
