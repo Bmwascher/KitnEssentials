@@ -98,46 +98,14 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     manager:Register(iconSpacingSlider, "all")
     card2:AddRow(row2a, Theme.rowHeight)
 
-    local row2sep = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
-    local sep2 = GUIFrame:CreateSeparator(row2sep)
-    row2sep:AddWidget(sep2, 1)
-    manager:Register(sep2, "all")
-    card2:AddRow(row2sep, Theme.rowHeightSeparator)
+    local row2sep1 = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep2a = GUIFrame:CreateSeparator(row2sep1)
+    row2sep1:AddWidget(sep2a, 1)
+    manager:Register(sep2a, "all")
+    card2:AddRow(row2sep1, Theme.rowHeightSeparator)
 
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local hideStarterCheck = GUIFrame:CreateCheckbox(row2b, "Hide when I initiate the ready check", {
-        value = db.HideForStarter,
-        callback = function(checked) db.HideForStarter = checked; ApplySettings() end,
-    })
-    row2b:AddWidget(hideStarterCheck, 0.5)
-    manager:Register(hideStarterCheck, "all")
-
-    local hideMockCheck = GUIFrame:CreateCheckbox(row2b, "Hide Preview Box (GUI only)", {
-        value = db.HidePreviewMock,
-        callback = function(checked) db.HidePreviewMock = checked; ApplySettings() end,
-    })
-    row2b:AddWidget(hideMockCheck, 0.5)
-    manager:Register(hideMockCheck, "all")
-    card2:AddRow(row2b, Theme.rowHeight)
-
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local cauldronOnlyCheck = GUIFrame:CreateCheckbox(row2c, "Use flasks only from raid cauldron", {
-        value = db.CauldronFlasksOnly,
-        callback = function(checked) db.CauldronFlasksOnly = checked; ApplySettings() end,
-    })
-    row2c:AddWidget(cauldronOnlyCheck, 0.5)
-    manager:Register(cauldronOnlyCheck, "all")
-
-    local unlimitedRuneCheck = GUIFrame:CreateCheckbox(row2c, "Use only unlimited augment rune", {
-        value = db.UnlimitedRunesOnly,
-        callback = function(checked) db.UnlimitedRunesOnly = checked; ApplySettings() end,
-    })
-    row2c:AddWidget(unlimitedRuneCheck, 0.5)
-    manager:Register(unlimitedRuneCheck, "all")
-    card2:AddRow(row2c, Theme.rowHeight)
-
-    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local lowWarningCheck = GUIFrame:CreateCheckbox(row2d, "Warn when a buff is running low", {
+    local lowWarningCheck = GUIFrame:CreateCheckbox(row2b, "Warn when a buff runs low", {
         value = db.LowDurationWarning ~= false,
         callback = function(checked)
             db.LowDurationWarning = checked
@@ -145,32 +113,70 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
             RefreshStates()
         end,
     })
-    row2d:AddWidget(lowWarningCheck, 0.5)
+    row2b:AddWidget(lowWarningCheck, 0.5)
     manager:Register(lowWarningCheck, "all")
 
-    local lowMinutesSlider = GUIFrame:CreateSlider(row2d, "Low Buff Threshold (minutes)", {
+    local lowMinutesSlider = GUIFrame:CreateSlider(row2b, "Low Buff Threshold (minutes)", {
         min = 1, max = 15, step = 1,
         value = db.LowDurationMinutes or 10,
         callback = function(val) db.LowDurationMinutes = val; ApplySettings() end,
     })
-    row2d:AddWidget(lowMinutesSlider, 0.5)
+    row2b:AddWidget(lowMinutesSlider, 0.5)
     manager:Register(lowMinutesSlider, "lowWarning")
-    card2:AddRow(row2d, Theme.rowHeight)
+    card2:AddRow(row2b, Theme.rowHeight)
 
-    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local tooltipCheck = GUIFrame:CreateCheckbox(row2e, "Show tooltips on hover", {
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local cauldronOnlyCheck = GUIFrame:CreateCheckbox(row2c, "Flasks: cauldron only", {
+        value = db.CauldronFlasksOnly,
+        callback = function(checked) db.CauldronFlasksOnly = checked; ApplySettings() end,
+    })
+    row2c:AddWidget(cauldronOnlyCheck, 0.5)
+    manager:Register(cauldronOnlyCheck, "all")
+
+    local unlimitedRuneCheck = GUIFrame:CreateCheckbox(row2c, "Runes: unlimited only", {
+        value = db.UnlimitedRunesOnly,
+        callback = function(checked) db.UnlimitedRunesOnly = checked; ApplySettings() end,
+    })
+    row2c:AddWidget(unlimitedRuneCheck, 0.5)
+    manager:Register(unlimitedRuneCheck, "all")
+    card2:AddRow(row2c, Theme.rowHeight)
+
+    local row2sep2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightSeparator)
+    local sep2b = GUIFrame:CreateSeparator(row2sep2)
+    row2sep2:AddWidget(sep2b, 1)
+    manager:Register(sep2b, "all")
+    card2:AddRow(row2sep2, Theme.rowHeightSeparator)
+
+    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local hideStarterCheck = GUIFrame:CreateCheckbox(row2d, "Hide when I start the check", {
+        value = db.HideForStarter,
+        callback = function(checked) db.HideForStarter = checked; ApplySettings() end,
+    })
+    row2d:AddWidget(hideStarterCheck, 0.5)
+    manager:Register(hideStarterCheck, "all")
+
+    local tooltipCheck = GUIFrame:CreateCheckbox(row2d, "Show tooltips on hover", {
         value = db.ShowTooltips ~= false,
         callback = function(checked) db.ShowTooltips = checked; ApplySettings() end,
     })
-    row2e:AddWidget(tooltipCheck, 0.5)
+    row2d:AddWidget(tooltipCheck, 0.5)
     manager:Register(tooltipCheck, "all")
+    card2:AddRow(row2d, Theme.rowHeight)
 
-    local timerBarCheck = GUIFrame:CreateCheckbox(row2e, "Show a timer bar under the ready check popup", {
+    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local timerBarCheck = GUIFrame:CreateCheckbox(row2e, "Show a timer bar under the popup", {
         value = db.ShowTimerBar ~= false,
         callback = function(checked) db.ShowTimerBar = checked; ApplySettings() end,
     })
     row2e:AddWidget(timerBarCheck, 0.5)
     manager:Register(timerBarCheck, "all")
+
+    local hideMockCheck = GUIFrame:CreateCheckbox(row2e, "Hide the preview box", {
+        value = db.HidePreviewMock,
+        callback = function(checked) db.HidePreviewMock = checked; ApplySettings() end,
+    })
+    row2e:AddWidget(hideMockCheck, 0.5)
+    manager:Register(hideMockCheck, "all")
     card2:AddRow(row2e, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
