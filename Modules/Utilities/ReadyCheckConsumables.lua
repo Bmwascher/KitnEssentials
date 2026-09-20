@@ -44,6 +44,7 @@ local IsSpellKnown          = C_SpellBook and C_SpellBook.IsSpellKnown
 local C_Spell               = C_Spell
 local C_UnitAuras           = C_UnitAuras
 local C_Item                = C_Item
+local Item                  = Item
 -- issecretvalue is accessed via KE:IsSafeValue / KE:IsSecretValue helpers
 -- (see Core/Secret.lua) — no module-local alias needed here.
 
@@ -400,6 +401,7 @@ RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, reb
 RCC._warlockInGroup = nil      -- IsWarlockInGroup's answer for the current roster; nil until asked (see IsWarlockInGroup)
 RCC._classCheck = nil          -- the resolved class check for the current repaint (see _ComputeVisibility)
 RCC._lowGlowColor = { 1, 0.3, 0.3, 1 }  -- the low-duration glow colour, refilled from db on every warning paint
+RCC._itemLoadRequested = {}    -- [itemID] = true once this session asked the client for the item's data (see SafeItemName)
 
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
 -- of the most recently confirmed Soulstone recipient so the click macro keeps
@@ -1040,12 +1042,28 @@ function RCC:_ResolveSoulstone()
     return (live ~= nil) or selfStoned, self:_BuildSoulstoneMacrotext(stoned, healer)
 end
 
+-- Pre-declared so a load request allocates no closure. RequestRefresh
+-- refuses a dead row and coalesces, so nothing else is tested here.
+local function _ItemLoaded()
+    RCC:RequestRefresh()
+end
+
 --- SafeItemName
 --- Returns a non-nil, non-secret item name, or nil if unavailable / secret.
 --- Item names can be secret in chat messaging lockdown per api-validator guidance.
+--- A nil read means the client has not cached the item yet (the first check
+--- after a login), so the item's data is requested once per session and
+--- the arrival repaints the row; the click stays unarmed until then.
 function RCC:SafeItemName(itemID)
     local name = GetItemInfo(itemID)
-    if name and KE:IsSafeValue(name) then return name end
+    if name == nil then
+        if itemID and not self._itemLoadRequested[itemID] then
+            self._itemLoadRequested[itemID] = true
+            Item:CreateFromItemID(itemID):ContinueOnItemLoad(_ItemLoaded)
+        end
+        return nil
+    end
+    if KE:IsSafeValue(name) then return name end
     return nil
 end
 

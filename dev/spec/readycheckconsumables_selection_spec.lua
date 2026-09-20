@@ -5,10 +5,12 @@
 -- enhancement memory; the weapon fallback offers nothing the equipped
 -- weapon cannot take and nothing at all when no compatible item is stocked;
 -- an empty off hand arms no click; and the weapon order is memory, the
--- memory's other rank, oil, then rank. Bags, the equipped weapon, its
--- subclass and cached names are plain loader seams; the click overlay is a
--- recording stub because the nominated item is read back from its
--- attributes, never from the secure frame.
+-- memory's other rank, oil, then rank. A nominated item the client has not
+-- cached arms no click and has its data requested once, and the arrival
+-- schedules one repaint only while the row is live. Bags, the equipped
+-- weapon, its subclass and cached names are plain loader seams; the click
+-- overlay is a recording stub because the nominated item is read back from
+-- its attributes, never from the secure frame.
 
 local L = require("dev.spec._ke_loader")
 
@@ -178,6 +180,44 @@ describe("ReadyCheckConsumables weapon selection", function()
             RCC.db.LastWeaponEnchantItemMH = c.remembered
             RCC:UpdateWeaponEnchant("oil", 16)
             assert.equals("item " .. c.pick, mh.click.attributes.item, tostring(c.remembered))
+        end
+    end)
+end)
+
+describe("ReadyCheckConsumables uncached item name", function()
+    local RCC, seams, btn
+
+    before_each(function()
+        local _
+        RCC, _, seams = L.loadReadyCheckConsumables()
+        btn = recordingButton()
+        RCC.buttons = { flask = btn }
+        RCC._GetSpecFlaskPriority = function() return nil end
+        seams.bagCounts[MASTERY_PERSONAL_R2] = 5
+    end)
+
+    it("arms no click on an uncached name and requests the item's data once across repaints", function()
+        RCC:UpdateFlaskClick()
+        RCC:UpdateFlaskClick()
+        assert.is_false(btn.click.shown)
+        assert.equals(1, #seams.itemLoads)
+        assert.equals(MASTERY_PERSONAL_R2, seams.itemLoads[1].id)
+
+        seams.itemNames[MASTERY_PERSONAL_R2] = "item " .. MASTERY_PERSONAL_R2
+        RCC:UpdateFlaskClick()
+        assert.is_true(btn.click.shown)
+        assert.equals(1, #seams.itemLoads)
+    end)
+
+    it("schedules one repaint from the load only while the row is live", function()
+        RCC:UpdateFlaskClick()
+        local cases = { { live = true, timers = 1 }, { live = false, timers = 0 } }
+        for i, c in ipairs(cases) do
+            seams.timers = {}
+            RCC._refreshPending = nil
+            RCC._IsRowLive = function() return c.live end
+            seams.itemLoads[1].fn()
+            assert.equals(c.timers, #seams.timers, "case " .. i)
         end
     end)
 end)
