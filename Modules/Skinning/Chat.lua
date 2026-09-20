@@ -670,8 +670,7 @@ end
 -- Chat setup, tab styling and docking
 ------------------------------------------------------------------------
 
-local ChatEditSetLastActiveWindow = (_G.ChatFrameUtil and _G.ChatFrameUtil.SetLastActiveWindow) or
-    _G.ChatEdit_SetLastActiveWindow
+local ChatEditSetLastActiveWindow = _G.ChatFrameUtil and _G.ChatFrameUtil.SetLastActiveWindow
 
 function CHAT:GetTab(chat)
     if not chat then return end
@@ -763,10 +762,6 @@ function CHAT:SetupChat()
             self:SecureHook(_G.ChatFrameUtil, "ActivateChat", "OnChatEdit_ActivateChat")
             self:SecureHook(_G.ChatFrameUtil, "DeactivateChat", "OnChatEdit_DeactivateChat")
             self:SecureHook(_G.ChatFrameUtil, "SetLastActiveWindow", "OnChatEdit_SetLastActiveWindow")
-        else
-            self:SecureHook("ChatEdit_ActivateChat", "OnChatEdit_ActivateChat")
-            self:SecureHook("ChatEdit_DeactivateChat", "OnChatEdit_DeactivateChat")
-            self:SecureHook("ChatEdit_SetLastActiveWindow", "OnChatEdit_SetLastActiveWindow")
         end
 
         if _G.FCFDockOverflowButton_UpdatePulseState then

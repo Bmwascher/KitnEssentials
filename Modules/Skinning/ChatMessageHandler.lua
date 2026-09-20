@@ -54,12 +54,10 @@ local tconcat = table.concat
 -- Blizzard globals not on KE's read_globals allowlist -- read through _G.
 -- per family convention rather than growing .luacheckrc for this port
 -- (Modules/Skinning/Chat.lua is the sibling precedent).
-local ChatEditSetLastTellTarget = (_G.ChatFrameUtil and _G.ChatFrameUtil.SetLastTellTarget) or _G.ChatEdit_SetLastTellTarget
-local ShouldColorChatByClass = (_G.ChatFrameUtil and _G.ChatFrameUtil.ShouldColorChatByClass) or _G.Chat_ShouldColorChatByClass or function(info) return info and info.colorNameByClass end
-local ResolvePrefixedChannelName = (_G.ChatFrameUtil and _G.ChatFrameUtil.ResolvePrefixedChannelName) or
-    _G.ChatFrame_ResolvePrefixedChannelName
-local GetMobileEmbeddedTexture = (_G.ChatFrameUtil and _G.ChatFrameUtil.GetMobileEmbeddedTexture) or
-    _G.ChatFrame_GetMobileEmbeddedTexture
+local ChatEditSetLastTellTarget = _G.ChatFrameUtil and _G.ChatFrameUtil.SetLastTellTarget
+local ShouldColorChatByClass = _G.ChatFrameUtil and _G.ChatFrameUtil.ShouldColorChatByClass
+local ResolvePrefixedChannelName = _G.ChatFrameUtil and _G.ChatFrameUtil.ResolvePrefixedChannelName
+local GetMobileEmbeddedTexture = _G.ChatFrameUtil and _G.ChatFrameUtil.GetMobileEmbeddedTexture
 
 local UNKNOWN = _G.UNKNOWN
 
