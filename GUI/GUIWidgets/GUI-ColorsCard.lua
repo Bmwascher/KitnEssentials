@@ -12,6 +12,8 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
+GUIFrame.ColorsCardPerRow = 2
+
 -- A colour key is a flat field on the profile table. Pages that nest their
 -- colours under a parent table are deliberately not routed through this card:
 -- writing the parent key would discard its siblings on the first edit.
@@ -35,6 +37,8 @@ end
 --   sources   = { { label, key, default, group, onChange }, ... }
 --   colors    = { { label, key, default, group }, ... }   (required, ordered)
 --   note      = string
+--   noteHeight = number            (default Theme.rowHeightNote)
+--   perRow    = number             (default GUIFrame.ColorsCardPerRow)
 --   isLast    = boolean
 --   title     = string             (default "Colors")
 -- }
@@ -44,6 +48,7 @@ function GUIFrame:CreateColorsCard(scrollChild, yOffset, config)
     local group    = config.stateGroup or "all"
     local onChange = config.onChange
     local colors   = config.colors
+    local perRow   = config.perRow or GUIFrame.ColorsCardPerRow
 
     local card = GUIFrame:CreateCard(scrollChild, config.title or "Colors", yOffset)
     manager:Register(card, group)
@@ -103,15 +108,15 @@ function GUIFrame:CreateColorsCard(scrollChild, yOffset, config)
         end
     end
 
-    -- Two pickers per row; an odd count leaves the right cell empty. The note
-    -- row, when present, is the card's real last row.
+    -- perRow pickers per row; a short last row leaves its right cells empty.
+    -- The note row, when present, is the card's real last row.
     local hasNote = config.note ~= nil
     local i = 1
     while i <= #colors do
-        local isLastRow = (not hasNote) and (i + 2 > #colors) and config.isLast
+        local isLastRow = (not hasNote) and (i + perRow > #colors) and config.isLast
         local height = isLastRow and Theme.rowHeightLast or Theme.rowHeight
         addRow(height, function(row)
-            for slot = 0, 1 do
+            for slot = 0, perRow - 1 do
                 local entry = colors[i + slot]
                 if entry then
                     local r, g, b, a = KE:ReadCardColor(db, entry)
@@ -122,20 +127,21 @@ function GUIFrame:CreateColorsCard(scrollChild, yOffset, config)
                             if onChange then onChange() end
                         end,
                     })
-                    row:AddWidget(picker, 0.5)
+                    row:AddWidget(picker, 1 / perRow)
                     manager:Register(picker, entry.group or group)
                 end
             end
         end, isLastRow and 0 or nil)
-        i = i + 2
+        i = i + perRow
     end
 
     -- Note rows have their own height; the card's ordinary row heights clip a
-    -- two-line note.
+    -- two-line note, and the shared note height clips a third line.
     if hasNote then
-        addRow(Theme.rowHeightNote, function(row)
+        local noteHeight = config.noteHeight or Theme.rowHeightNote
+        addRow(noteHeight, function(row)
             local text = GUIFrame:CreateText(row,
-                KE:ColorTextByTheme("Note"), config.note, Theme.rowHeightNote, "hide")
+                KE:ColorTextByTheme("Note"), config.note, noteHeight, "hide")
             row:AddWidget(text, 1)
             manager:Register(text, group)
         end, config.isLast and 0 or nil)
