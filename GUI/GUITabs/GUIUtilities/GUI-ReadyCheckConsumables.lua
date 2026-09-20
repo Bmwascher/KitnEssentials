@@ -367,7 +367,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
         perRow = 3,
         noteHeight = 74,
         note = KE:ColorTextByTheme("-") .. " Duration Text is the base color for the timer/count above each icon.\n" ..
-            KE:ColorTextByTheme("-") .. " Low Duration Text replaces it, and colors the glow, when a buff is under the warning threshold.\n" ..
+            KE:ColorTextByTheme("-") .. " Low Duration Text replaces the other two, and colors the glow, when a buff is under the warning threshold.\n" ..
             KE:ColorTextByTheme("-") .. " Hearty Food Text replaces the base color on the food slot when your active food persists through death.",
         colors = {
             { label = "Duration Text", key = "DurationColor", default = { 1, 1, 1, 1 } },
