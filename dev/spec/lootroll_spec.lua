@@ -217,10 +217,8 @@ describe("LootRoll bonus roll anchoring", function()
 
     after_each(function() _G.BonusRollFrame = nil end)
 
-    -- Bar 1 is the bottom row of the stack, so the slot under it is free
-    -- whatever rolls are up and never moves as they resolve. The offset is
-    -- the saved spacing plus one pixel for bar 1's border, so the visible
-    -- gap reads as Spacing.
+    -- The offset is the saved spacing plus one pixel for bar 1's border, so
+    -- the visible gap reads as Spacing.
     it("anchors the prompt's TOP under bar 1's BOTTOM by the spacing plus the gap", function()
         local cases = {
             { spacing = 4,   y = -5 },

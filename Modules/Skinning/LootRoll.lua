@@ -292,8 +292,7 @@ local BONUS_ROLL_GAP = 1
 -- boss drops group loot beside the bonus roll. The stack grows upward from
 -- the saved position, so the slot below is always free and never moves as
 -- rolls resolve; a hidden bar keeps its anchor, so with no roll up the
--- prompt sits just under the saved position. Hanging off the bar's frame
--- rather than the saved table means an edit-mode move carries it along.
+-- prompt sits just under the saved position.
 --
 -- Only the PROMPT. BonusRollLootWonFrame / BonusRollMoneyWonFrame, which
 -- replace it once the roll resolves, are loot toasts: they set AlertFrame as
