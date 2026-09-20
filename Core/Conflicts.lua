@@ -118,11 +118,51 @@ local CONFLICTS = {
             },
         },
     },
+    {
+        module = "ReadyCheckConsumables",
+        label  = "Ready Check Consumables",
+        dbPath = { "ReadyCheckConsumables" },
+        -- Not skinGated: the module runs whether or not ElvUI owns skinning.
+        addons = { "NorthernSkyRaidTools" },
+        resolvers = {
+            NorthernSkyRaidTools = {
+                label = "Northern Sky Raid Tools' Clickable Consumables",
+                -- NSRT is that addon's saved variable; ConsumablesDisplay is
+                -- its "Clickable Consumables" toggle, re-read on every
+                -- READY_CHECK before its container is built. Flipping it
+                -- touches no frame, which matters: the container and its
+                -- parent are ancestors of SecureActionButtonTemplate buttons.
+                -- The show function's `force` argument bypasses the toggle;
+                -- nothing calls it. ReadyCheckSettings comes from NSRT's
+                -- profile loader, so an absent table is not ours to create.
+                apply = function()
+                    if type(_G.NSRT) ~= "table"
+                        or type(_G.NSRT.ReadyCheckSettings) ~= "table" then
+                        return false
+                    end
+                    _G.NSRT.ReadyCheckSettings.ConsumablesDisplay = false
+                    return true
+                end,
+                -- Stateless companion to apply(). Mirrors NSRT's own gate,
+                -- which tests the toggle for truth; an unreadable table
+                -- reads as active so the prompt is not silenced by a layout
+                -- this code cannot see.
+                isActive = function()
+                    if type(_G.NSRT) ~= "table"
+                        or type(_G.NSRT.ReadyCheckSettings) ~= "table" then
+                        return true
+                    end
+                    return _G.NSRT.ReadyCheckSettings.ConsumablesDisplay
+                        and true or false
+                end,
+            },
+        },
+    },
     -- Neither row below carries a resolver, and that is deliberate.
     -- EllesmereUI ships each of these as its own single-purpose addon --
     -- own .toc, own SavedVariables, one feature -- so the whole-addon
     -- disable takes out exactly the conflicting feature and nothing else.
-    -- That is why EllesmereUIChat has no resolver either. The two
+    -- That is why EllesmereUIChat has no resolver either. The EllesmereUI
     -- resolvers above exist only because EllesmereUIBlizzardSkin and
     -- EllesmereUIQoL bundle unrelated features a user did not ask to lose.
     --
@@ -271,6 +311,7 @@ local ADDON_LABELS = {
     ["EllesmereUIMythicTimer"] = "EllesmereUI Mythic+ Timer",
     ["Prat-3.0"] = "Prat",
     ["BasicChatMods"] = "Basic Chat Mods",
+    ["NorthernSkyRaidTools"] = "Northern Sky Raid Tools",
 }
 
 local promptQueue = {}
