@@ -1211,6 +1211,10 @@ local Defaults = {
             HidePreviewMock     = true,  -- hide the fake Ready Check popup in the GUI preview
             CauldronFlasksOnly  = false,  -- click button only offers Fleeting (raid cauldron) flasks
             UnlimitedRunesOnly  = false,  -- click button only offers unlimited runes (DF/TWW)
+            LowDurationWarning  = true,   -- tint the timer and glow the slot when a buff runs low
+            LowDurationMinutes  = 10,     -- the warning threshold, strictly under
+            ClassChecks         = true,   -- Shaman imbues and shield, Paladin Lightsmith rite; replaces the oil on the hands they own
+            ShowTooltips        = true,   -- item or spell tooltip on hover over a click-enabled slot
 
             -- Visuals
             IconSize = 46,
@@ -1224,8 +1228,10 @@ local Defaults = {
             -- HeartyFoodColor: tints the food slot's duration text when the active
             -- food buff persists through death (a raid-group convention indicator).
             -- DurationColor: base color for duration + count text on all slots.
+            -- LowDurationColor: the timer text and glow under the warning threshold.
             HeartyFoodColor = { 0.2, 1.0, 0.2, 1.0 },
             DurationColor  = { 1.0, 1.0, 1.0, 1.0 },
+            LowDurationColor = { 1.0, 0.3, 0.3, 1.0 },
         },
 
         AuraExternals = {

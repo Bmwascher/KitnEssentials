@@ -40,6 +40,7 @@ local GetItemInfoInstant    = C_Item.GetItemInfoInstant
 local GetTemporaryEnchantmentInfo = C_PaperDollInfo.GetTemporaryEnchantmentInfo
 local GetSpecialization     = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
+local IsSpellKnown          = C_SpellBook and C_SpellBook.IsSpellKnown
 local C_Spell               = C_Spell
 local C_UnitAuras           = C_UnitAuras
 local C_Item                = C_Item
@@ -326,16 +327,60 @@ local HEALTHSTONES = {
     [224464] = { warlockOnly = true,  name = "Demonic Healthstone" },
 }
 
--- Class slot: the Warlock's Soulstone, the pre-pull stone on a healer so a
--- wipe can be recovered. Hidden for every other class.
---- resolve(rcc) runs once per repaint and returns whether a living group
---- member (or the player) is confirmed to carry the player's Soulstone, and
---- the click macro derived from the same roster pass.
+-- Class checks: the weapon imbues and the shield a spec keeps up. A hand
+-- holds one temporary enchant, so a hand a row owns is painted from its
+-- imbue and its click casts the imbue; a hand no row owns keeps the oil
+-- policy. `spec` and `known` select the row; a hand applies while its
+-- `gate` spell (the cast itself when unset) is known and the hand holds a
+-- weapon, or a shield for a `needsShield` imbue; `applyToSlot` casts leave
+-- a pending enchant that `/use` lands on the hand. `shield` is the aura the
+-- class slot tracks and the spell its click casts. Every id was verified in
+-- game.
+local INSTINCTIVE_IMBUEMENTS = 1270350  -- talent: casting the shield applies every imbue
+local CLASS_CHECKS = {
+    PALADIN = {
+        { known = 433568, hands = {
+            [16] = { ids = { [7143] = true }, cast = 433568, applyToSlot = true },
+        } },
+        { known = 433583, hands = {
+            [16] = { ids = { [7144] = true }, cast = 433583, applyToSlot = true },
+        } },
+    },
+    SHAMAN = {
+        { spec = 2, shield = 192106, hands = {
+            [16] = { ids = { [5401] = true }, cast = 33757 },
+            [17] = { ids = { [5400] = true }, cast = 318038 },
+        } },
+        { spec = 1, shield = 192106, hands = {
+            [16] = { ids = { [5400] = true }, cast = 318038 },
+            [17] = { ids = { [7587] = true }, cast = 462757, needsShield = true },
+        } },
+        { spec = 3, shield = 52127, hands = {
+            [16] = { ids = { [6498] = true }, cast = 382021 },
+            [17] = { ids = { [7528] = true }, cast = 457481, gate = 445033, needsShield = true },
+        } },
+    },
+}
+
+-- Class slot, one entry per class that has one; hidden for the rest.
+-- `applies(rcc)` is asked after the class check is resolved and decides
+-- the slot's visibility for this repaint; `update(rcc, btn)` paints it.
+-- The Warlock entry is the Soulstone: `spellID` feeds the cooldown proxy
+-- and its event filter, `resolve(rcc)` runs once per repaint and returns
+-- whether a living group member (or the player) is confirmed to carry the
+-- player's Soulstone, and the click macro derived from the same roster
+-- pass. The Shaman entry is the active row's shield aura.
 local CLASS_SLOT = {
     WARLOCK = {
         spellID = 20707,
         name    = "Soulstone",
         resolve = function(rcc) return rcc:_ResolveSoulstone() end,
+        applies = function() return true end,
+        update  = function(rcc, btn) rcc:_UpdateSoulstoneSlot(btn) end,
+    },
+    SHAMAN = {
+        applies = function(rcc) return rcc._classCheck ~= nil and rcc._classCheck.shield ~= nil end,
+        update  = function(rcc, btn) rcc:_UpdateShieldSlot(btn) end,
     },
 }
 
@@ -352,6 +397,8 @@ RCC.stateDriverActive = false  -- true while the combat state driver is register
 RCC._refreshPending = nil      -- true while a coalesced repaint waits for the next frame (see RequestRefresh)
 RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
 RCC._warlockInGroup = nil      -- IsWarlockInGroup's answer for the current roster; nil until asked (see IsWarlockInGroup)
+RCC._classCheck = nil          -- the resolved class check for the current repaint (see _ComputeVisibility)
+RCC._lowGlowColor = { 1, 0.3, 0.3, 1 }  -- the low-duration glow colour, refilled from db on every warning paint
 
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
 -- of the most recently confirmed Soulstone recipient so the click macro keeps
@@ -579,6 +626,7 @@ function RCC:BuildFrame()
     local buttons = self:_BuildIconRow(f)
     self.buttons = buttons
 
+    local rcc = self
     for i = 1, NUM_SLOTS do
         local btn = buttons[i]
 
@@ -608,9 +656,16 @@ function RCC:BuildFrame()
                 -- macrotext set dynamically in UpdateAllIcons
             end
 
-            -- Dim parent on hover so the icon appears interactive
-            click:SetScript("OnEnter", function() btn:SetAlpha(0.7) end)
-            click:SetScript("OnLeave", function() btn:SetAlpha(1.0) end)
+            -- Dim parent on hover so the icon appears interactive; the
+            -- tooltip reads only the plain ids the repaint stored on btn.
+            click:SetScript("OnEnter", function(overlay)
+                btn:SetAlpha(0.7)
+                rcc:_ShowTooltip(overlay, btn)
+            end)
+            click:SetScript("OnLeave", function(overlay)
+                btn:SetAlpha(1.0)
+                rcc:_HideTooltip(overlay)
+            end)
 
             stateFrame:SetFrameRef("ClickBtn" .. i, click)
             btn.click = click
@@ -631,7 +686,6 @@ function RCC:BuildFrame()
     -- Hand-rolled minimal Backdrop button instead of UIPanelButtonTemplate
     -- to avoid the inner highlight/double-border look that template renders.
     -- Matches the clean single-edge MRT style.
-    local rcc = self
     local closeBtn = CreateFrame("Button", nil, f, "BackdropTemplate")
     closeBtn:SetHeight(22)
     closeBtn:SetPoint("TOPLEFT",  f, "BOTTOMLEFT",  0, -2)
@@ -710,15 +764,75 @@ function RCC:GetAuraRemaining(auraData)
     return remain
 end
 
---- OffhandIsWeapon
---- Returns true if the player's OH slot holds an item with itemClassID == 2 (Weapon).
---- Shields, off-hand frills (itemClassID 4), and empty slots return false.
-function RCC:OffhandIsWeapon()
-    local itemID = GetInventoryItemID("player", 17)
-    if not itemID then return false end
+--- _HandKind
+--- "weapon" when the inventory slot holds an item of class 2, "shield"
+--- for class 4 subclass 6, nil for anything else (frills, an empty slot,
+--- an uncached read).
+function RCC:_HandKind(invSlot)
+    local itemID = GetInventoryItemID("player", invSlot)
+    if not itemID then return nil end
 
-    local _, _, _, _, _, classID = GetItemInfoInstant(itemID)
-    return classID == 2
+    local _, _, _, _, _, classID, subClassID = GetItemInfoInstant(itemID)
+    if classID == 2 then return "weapon" end
+    if classID == 4 and subClassID == 6 then return "shield" end
+    return nil
+end
+
+function RCC:OffhandIsWeapon()
+    return self:_HandKind(17) == "weapon"
+end
+
+--- ResolveClassCheck
+--- The active CLASS_CHECKS row for `spec` and the hands it owns: a hand
+--- whose gate spell is known and that holds what the imbue needs. With
+--- INSTINCTIVE_IMBUEMENTS known the shield cast applies every imbue, so
+--- owned hands cast the shield instead. `isKnown(spellID)` is injected so
+--- the spec drives it with plain tables; mainhand and offhand are
+--- _HandKind's answers. Returns nil when no row applies, else
+--- { shield = spellID?, hands = { [invSlot] = { ids, cast, applyToSlot } } }.
+local function ResolveClassCheck(rows, spec, isKnown, mainhand, offhand)
+    if not rows then return nil end
+    local row
+    for _, candidate in ipairs(rows) do
+        if (candidate.spec == nil or candidate.spec == spec)
+            and (candidate.known == nil or isKnown(candidate.known)) then
+            row = candidate
+            break
+        end
+    end
+    if not row then return nil end
+
+    local shieldCasts = row.shield ~= nil and isKnown(INSTINCTIVE_IMBUEMENTS)
+    local owned = {}
+    for invSlot, hand in pairs(row.hands) do
+        local holds
+        if hand.needsShield then
+            holds = invSlot == 17 and offhand == "shield"
+        else
+            holds = (invSlot == 16 and mainhand == "weapon") or (invSlot == 17 and offhand == "weapon")
+        end
+        if holds and isKnown(hand.gate or hand.cast) then
+            owned[invSlot] = {
+                ids = hand.ids,
+                cast = shieldCasts and row.shield or hand.cast,
+                applyToSlot = hand.applyToSlot,
+            }
+        end
+    end
+    return { shield = row.shield, hands = owned }
+end
+RCC._ResolveClassCheck = ResolveClassCheck
+
+--- _ActiveClassCheck
+--- ResolveClassCheck against the live character, nil while the toggle is
+--- off or the class has no rows; both answer before the two slot reads.
+function RCC:_ActiveClassCheck()
+    if not self.db or not self.db.ClassChecks then return nil end
+    local _, playerClass = UnitClass("player")
+    local rows = CLASS_CHECKS[playerClass]
+    if not rows or not IsSpellKnown then return nil end
+    local specIndex = GetSpecialization and GetSpecialization()
+    return ResolveClassCheck(rows, specIndex, IsSpellKnown, self:_HandKind(16), self:_HandKind(17))
 end
 
 --- IsWarlockInGroup
@@ -903,17 +1017,6 @@ function RCC:_ResolveSoulstone()
     return (live ~= nil) or selfStoned, self:_BuildSoulstoneMacrotext(stoned, healer)
 end
 
---- CountItems
---- Sums bag+bank counts across a list of item IDs.
-function RCC:CountItems(itemIDs)
-    local total = 0
-    for _, id in ipairs(itemIDs) do
-        local count = GetItemCount(id, false, true)
-        if count then total = total + count end
-    end
-    return total
-end
-
 --- SafeItemName
 --- Returns a non-nil, non-secret item name, or nil if unavailable / secret.
 --- Item names can be secret in chat messaging lockdown per api-validator guidance.
@@ -934,6 +1037,14 @@ function RCC:SetIconFromItem(texture, itemID)
     end
 end
 
+function RCC:SetIconFromSpell(texture, spellID)
+    if not texture or not spellID then return end
+    if C_Spell and C_Spell.GetSpellTexture then
+        local icon = C_Spell.GetSpellTexture(spellID)
+        if icon then texture:SetTexture(icon) end
+    end
+end
+
 --- SetDurationText
 --- Formats seconds as "Nm" minutes, ceiling. Empty string for nil.
 local function formatDurationText(seconds)
@@ -941,7 +1052,50 @@ local function formatDurationText(seconds)
     return string_format("%dm", math_ceil(seconds / 60))
 end
 
-local SOULSTONE_GLOW_COLOR = { 1, 1, 0, 1 }
+local DURATION_COLOR_DEFAULT     = { 1, 1, 1, 1 }
+local HEARTY_FOOD_COLOR_DEFAULT  = { 0.2, 1.0, 0.2, 1.0 }
+local LOW_DURATION_COLOR_DEFAULT = { 1, 0.3, 0.3, 1 }
+
+--- IsLowDuration
+--- Strictly under the threshold. A nil remaining (permanent, secret or
+--- expired) or a nil threshold (warning off) never warns, so the
+--- comparison only ever sees plain numbers.
+local function IsLowDuration(remain, thresholdSeconds)
+    return remain ~= nil and thresholdSeconds ~= nil and remain < thresholdSeconds
+end
+RCC._IsLowDuration = IsLowDuration
+
+--- _LowDurationSeconds
+--- nil while the warning is off, which IsLowDuration reads as never.
+function RCC:_LowDurationSeconds()
+    local db = self.db
+    if not db or not db.LowDurationWarning then return nil end
+    return (db.LowDurationMinutes or 10) * 60
+end
+
+--- _PaintTimer
+--- The slot's timer text and colour from proven-plain seconds. Under the
+--- threshold the text takes LowDurationColor and _lowGlowColor is refilled
+--- from it; otherwise the slot's own colour (`baseKey`, default
+--- DurationColor). Every timer paint runs through here so a slot that was
+--- low reverts on the next repaint. Returns whether the warning applies
+--- so the caller composes the glow.
+function RCC:_PaintTimer(btn, remain, baseKey, baseDefault)
+    local low = IsLowDuration(remain, self:_LowDurationSeconds())
+    local r, g, b, a
+    if low then
+        r, g, b, a = KE:ResolveColor(self.db.LowDurationColor, LOW_DURATION_COLOR_DEFAULT)
+        local glow = self._lowGlowColor
+        glow[1], glow[2], glow[3], glow[4] = r, g, b, a
+    else
+        r, g, b, a = KE:ResolveColor(self.db[baseKey or "DurationColor"], baseDefault or DURATION_COLOR_DEFAULT)
+    end
+    btn.timeLeft:SetText(formatDurationText(remain))
+    btn.timeLeft:SetTextColor(r, g, b, a)
+    return low
+end
+
+local CAST_GLOW_COLOR = { 1, 1, 0, 1 }
 local WAITING_TEXTURE = "Interface\\RaidFrame\\ReadyCheck-Waiting"
 
 --- SoulstoneState
@@ -971,18 +1125,91 @@ local function SoulstoneState(cdInfo, confirmed)
 end
 RCC._SoulstoneState = SoulstoneState
 
--- LibCustomGlow rebuilds the glow on every Start call, so a slot that is
--- already glowing is left alone across repaints.
-local function StartGlow(btn, color)
-    if not LCG or btn.glowActive then return end
+-- LibCustomGlow rebuilds the glow on every Start call, so a slot already
+-- glowing for the same reason (`key`) is left alone across repaints; a
+-- different reason rebuilds it in that reason's colour.
+local function StartGlow(btn, color, key)
+    if not LCG then return end
+    if btn.glowActive and btn.glowKey == key then return end
     LCG.PixelGlow_Start(btn, color, 8, 0.25, 8, 2, 1, 1, false, nil)
     btn.glowActive = true
+    btn.glowKey = key
 end
 
 local function StopGlow(btn)
     if not btn.glowActive then return end
     if LCG then LCG.PixelGlow_Stop(btn) end
     btn.glowActive = false
+    btn.glowKey = nil
+end
+
+--- _SetLowGlow
+--- The low-duration glow when the warning applies, else no glow. Slots
+--- with another attention cue (a rune in bags, a stone to cast) compose it
+--- ahead of this call; the two never hold together, since those cues fire
+--- only while no timer runs.
+function RCC:_SetLowGlow(btn, low)
+    if low then
+        StartGlow(btn, self._lowGlowColor, "low")
+    else
+        StopGlow(btn)
+    end
+end
+
+function RCC:_PaintRequirement(btn, present, remain)
+    if present then
+        btn.statusTexture:SetTexture(READY_TEXTURE)
+        btn.texture:SetDesaturated(false)
+        self:_SetLowGlow(btn, self:_PaintTimer(btn, remain))
+    else
+        btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
+        btn.texture:SetDesaturated(true)
+        self:_PaintTimer(btn, nil)
+        StartGlow(btn, CAST_GLOW_COLOR, "cast")
+    end
+    btn.statusTexture:Show()
+end
+
+--- _ArmSpellClick
+--- The click for a slot whose action is a spell: a macro casting it by
+--- name, plus `/use <slot>` when the cast leaves a pending enchant for the
+--- hand. Hidden when the name cannot be read.
+function RCC:_ArmSpellClick(click, spellID, applyToSlot)
+    if not click or InCombatLockdown() then return end
+    local name = spellID and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)
+    if not name or not KE:IsSafeValue(name) then
+        click:Hide()
+        return
+    end
+    local macrotext = "/stopmacro [combat]\n/cast " .. name
+    if applyToSlot then macrotext = macrotext .. "\n/use " .. applyToSlot end
+    click:SetAttribute("type", "macro")
+    click:SetAttribute("macrotext", macrotext)
+    click:Show()
+end
+
+--- _ShowTooltip
+--- The overlay's hover tooltip: the spell the slot's click casts when it
+--- nominated one, else the item it nominated. Set by id, never by name,
+--- and nothing is read back from the tooltip.
+function RCC:_ShowTooltip(owner, btn)
+    if not (self.db and self.db.ShowTooltips) then return end
+    if GameTooltip:IsForbidden() then return end
+    if btn.nominatedSpell then
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+        GameTooltip:SetSpellByID(btn.nominatedSpell)
+    elseif btn.nominatedItem then
+        GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+        GameTooltip:SetItemByID(btn.nominatedItem)
+    else
+        return
+    end
+    GameTooltip:Show()
+end
+
+function RCC:_HideTooltip(owner)
+    if GameTooltip:IsForbidden() then return end
+    if GameTooltip:IsOwned(owner) then GameTooltip:Hide() end
 end
 
 --- _PaintUnavailable
@@ -1017,16 +1244,15 @@ function RCC:UpdateFood(auras)
             btn.statusTexture:SetTexture(READY_TEXTURE)
             btn.statusTexture:Show()
             btn.texture:SetDesaturated(false)
-            btn.timeLeft:SetText(formatDurationText(self:GetAuraRemaining(aura)))
 
             -- Hearty annotation: tint duration text green to flag "persists through death"
-            local cr, cg, cb, ca
+            local low
             if HEARTY_FOOD_BUFFS[spellId] then
-                cr, cg, cb, ca = KE:ResolveColor(self.db.HeartyFoodColor, { 0.2, 1.0, 0.2, 1.0 })
+                low = self:_PaintTimer(btn, self:GetAuraRemaining(aura), "HeartyFoodColor", HEARTY_FOOD_COLOR_DEFAULT)
             else
-                cr, cg, cb, ca = KE:ResolveColor(self.db.DurationColor, { 1, 1, 1, 1 })
+                low = self:_PaintTimer(btn, self:GetAuraRemaining(aura))
             end
-            btn.timeLeft:SetTextColor(cr, cg, cb, ca)
+            self:_SetLowGlow(btn, low)
             btn.countText:SetText("")
             return
         end
@@ -1037,6 +1263,7 @@ function RCC:UpdateFood(auras)
     btn.texture:SetDesaturated(true)
     btn.timeLeft:SetText("")
     btn.countText:SetText("")
+    StopGlow(btn)
 end
 
 --- _GetSpecFlaskPriority
@@ -1073,7 +1300,7 @@ function RCC:UpdateFlask(auras)
         btn.statusTexture:SetTexture(READY_TEXTURE)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(false)
-        btn.timeLeft:SetText(formatDurationText(self:GetAuraRemaining(activeAura)))
+        self:_SetLowGlow(btn, self:_PaintTimer(btn, self:GetAuraRemaining(activeAura)))
 
         -- Remembered as the stat string rather than the buff id so the
         -- preference survives a re-id of the buff as long as FLASKS keeps
@@ -1087,6 +1314,7 @@ function RCC:UpdateFlask(auras)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(true)
         btn.timeLeft:SetText("")
+        StopGlow(btn)
     end
 end
 
@@ -1199,6 +1427,29 @@ function RCC:_PickWeaponEnhancement(invSlot)
     return nil, 0
 end
 
+--- _UpdateImbueHand
+--- A weapon slot the class check owns: ready when the hand carries one of
+--- the row's imbue enchants, the timer from remainingTimeMs. The icon and
+--- the click are the imbue spell, never an oil, since an oil applied here
+--- would strip the imbue.
+function RCC:_UpdateImbueHand(btn, invSlot, hand)
+    local info = GetTemporaryEnchantmentInfo(invSlot)
+    local enchID = info and info.enchantID
+    local present = KE:IsSafeValue(enchID) and hand.ids[enchID] == true
+    local remain
+    if present then
+        local exp = info.remainingTimeMs
+        if KE:IsSafeValue(exp) and exp > 0 then remain = exp / 1000 end
+    end
+
+    btn.nominatedItem = nil
+    btn.nominatedSpell = hand.cast
+    self:SetIconFromSpell(btn.texture, hand.cast)
+    btn.countText:SetText("")
+    self:_PaintRequirement(btn, present, remain)
+    self:_ArmSpellClick(btn.click, hand.cast, hand.applyToSlot and invSlot or nil)
+end
+
 --- UpdateWeaponEnchant
 --- Paints one weapon slot from C_PaperDollInfo.GetTemporaryEnchantmentInfo
 --- (oils, stones and ammo mods alike), remembers a recognised active
@@ -1209,6 +1460,13 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
     local btn = self.buttons[slotKey]
     if not btn then return end
     local click = btn.click
+
+    local hand = self._classCheck and self._classCheck.hands[invSlot]
+    if hand then
+        self:_UpdateImbueHand(btn, invSlot, hand)
+        return
+    end
+    btn.nominatedSpell = nil
 
     -- Nothing back means no temporary enchant; an empty or two-hander
     -- off-hand slot answers the same way, so nil is the whole test.
@@ -1228,11 +1486,9 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(false)
 
-        if KE:IsSafeValue(exp) and exp > 0 then
-            btn.timeLeft:SetText(string_format("%dm", math_ceil(exp / 1000 / 60)))
-        else
-            btn.timeLeft:SetText("")
-        end
+        local remain
+        if KE:IsSafeValue(exp) and exp > 0 then remain = exp / 1000 end
+        self:_SetLowGlow(btn, self:_PaintTimer(btn, remain))
 
         if self.db and KE:IsSafeValue(enchID) then
             local data = WEAPON_ENHANCEMENTS[enchID]
@@ -1243,6 +1499,7 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(true)
         btn.timeLeft:SetText("")
+        StopGlow(btn)
     end
 
     local pickItem, bagCount = self:_PickWeaponEnhancement(invSlot)
@@ -1285,11 +1542,12 @@ function RCC:UpdateRune(auras)
         end
     end
 
+    local low = false
     if activeAura then
         btn.statusTexture:SetTexture(READY_TEXTURE)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(false)
-        btn.timeLeft:SetText(formatDurationText(self:GetAuraRemaining(activeAura)))
+        low = self:_PaintTimer(btn, self:GetAuraRemaining(activeAura))
         if activeData then self:SetIconFromItem(btn.texture, activeData.item) end
     else
         btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
@@ -1332,10 +1590,11 @@ function RCC:UpdateRune(auras)
         self:SetIconFromItem(btn.texture, bestRune.item)
     end
     if unlimitedOnly and bestRune and not activeAura then
-        StartGlow(btn, nil)
+        StartGlow(btn, nil, "rune")
     else
-        StopGlow(btn)
+        self:_SetLowGlow(btn, low)
     end
+    btn.nominatedItem = bestRune and bestRune.item or nil
 
     if click and not InCombatLockdown() then
         if bestRune then
@@ -1364,14 +1623,20 @@ function RCC:UpdateHealthstone()
     local click = btn.click
 
     local _, playerClass = UnitClass("player")
-    local items = {}
+    local count, stocked = 0, nil
     for itemID, data in pairs(HEALTHSTONES) do
         if (not data.warlockOnly) or playerClass == "WARLOCK" then
-            items[#items + 1] = itemID
+            local n = GetItemCount(itemID, false, true)
+            if n and n > 0 then
+                count = count + n
+                stocked = stocked or itemID
+            end
         end
     end
+    -- The tooltip shows the stone the slot counts: a stocked one, else the
+    -- standard stone.
+    btn.nominatedItem = stocked or 5512
 
-    local count = self:CountItems(items)
     if count > 0 then
         btn.statusTexture:SetTexture(READY_TEXTURE)
         btn.statusTexture:Show()
@@ -1397,20 +1662,15 @@ function RCC:UpdateHealthstone()
     end
 end
 
---- UpdateClassSlot
---- Warlock-only Soulstone slot, painted from SoulstoneState: green tick for
---- a confirmed stone, yellow waiting mark for a running cooldown nobody is
+--- _UpdateSoulstoneSlot
+--- The Warlock class slot, painted from SoulstoneState: green tick for a
+--- confirmed stone, yellow waiting mark for a running cooldown nobody is
 --- seen to carry, red cross plus glow when it should be cast. The timer
---- is the remaining cooldown and stays empty while that is unreadable.
---- _ComputeVisibility dispatches this only for a class with a CLASS_SLOT
---- entry.
-function RCC:UpdateClassSlot()
-    local btn = self.buttons.class
-    if not btn then return end
+--- is the remaining cooldown and stays empty while that is unreadable; it
+--- is a cooldown, not a buff, so the low-duration warning never applies.
+function RCC:_UpdateSoulstoneSlot(btn)
     local click = btn.click
-
-    local _, playerClass = UnitClass("player")
-    local classData = CLASS_SLOT[playerClass]
+    local classData = CLASS_SLOT.WARLOCK
 
     local cdInfo
     if C_Spell and C_Spell.GetSpellCooldown then
@@ -1419,12 +1679,14 @@ function RCC:UpdateClassSlot()
     local confirmed, macrotext = classData.resolve(self)
     local state, remain = SoulstoneState(cdInfo, confirmed)
     btn.soulstoneState = state
+    btn.nominatedSpell = classData.spellID
+    btn.nominatedItem = nil
 
     if state == "cast" then
         btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
         btn.texture:SetDesaturated(true)
         btn.timeLeft:SetText("")
-        StartGlow(btn, SOULSTONE_GLOW_COLOR)
+        StartGlow(btn, CAST_GLOW_COLOR, "cast")
     else
         btn.statusTexture:SetTexture(state == "protected" and READY_TEXTURE or WAITING_TEXTURE)
         btn.texture:SetDesaturated(false)
@@ -1439,6 +1701,40 @@ function RCC:UpdateClassSlot()
         click:SetAttribute("macrotext", macrotext)
         click:Show()
     end
+end
+
+--- _UpdateShieldSlot
+--- The Shaman class slot: the active row's shield aura, asked by id behind
+--- the per-spell gate. While the gate hides it the slot paints unreadable
+--- (no mark, greyed, no timer) but the click stays armed, since casting the
+--- shield needs nothing the gate protects.
+function RCC:_UpdateShieldSlot(btn)
+    local spellID = self._classCheck.shield
+    btn.nominatedSpell = spellID
+    btn.nominatedItem = nil
+    self:SetIconFromSpell(btn.texture, spellID)
+    btn.countText:SetText("")
+
+    if KE:IsAuraHiddenForSpell(spellID) then
+        btn.statusTexture:Hide()
+        btn.texture:SetDesaturated(true)
+        self:_PaintTimer(btn, nil)
+        StopGlow(btn)
+    else
+        local aura = C_UnitAuras.GetPlayerAuraBySpellID(spellID)
+        self:_PaintRequirement(btn, aura ~= nil, aura and self:GetAuraRemaining(aura))
+    end
+    self:_ArmSpellClick(btn.click, spellID, nil)
+end
+
+--- UpdateClassSlot
+--- Hands the class slot to its CLASS_SLOT painter. _ComputeVisibility
+--- dispatches this only for a class with an entry whose `applies` held.
+function RCC:UpdateClassSlot()
+    local btn = self.buttons.class
+    if not btn then return end
+    local _, playerClass = UnitClass("player")
+    CLASS_SLOT[playerClass].update(self, btn)
 end
 
 ---------------------------------------------------------------------------------
@@ -1463,19 +1759,25 @@ end
 
 --- _ComputeVisibility
 --- The real row's visible set, each contextual predicate asked once per
---- repaint. ShowPreview keeps a toggle-only table of its own so the settings
---- preview shows every category.
+--- repaint. The class check is resolved here, once, for every slot updater
+--- that reads _classCheck. The off-hand slot shows for a weapon, or for a
+--- shield the check owns. ShowPreview keeps a toggle-only table of its own
+--- so the settings preview shows every category.
 function RCC:_ComputeVisibility()
     local db = self.db
     local _, playerClass = UnitClass("player")
     local visibility = self._visibility
+    local check = self:_ActiveClassCheck()
+    self._classCheck = check
+    local classSlot = CLASS_SLOT[playerClass]
     visibility[SLOT_FOOD]  = db.ShowFood        ~= false
     visibility[SLOT_FLASK] = db.ShowFlask       ~= false
     visibility[SLOT_OIL]   = db.ShowWeaponOil   ~= false
-    visibility[SLOT_OILOH] = (db.ShowOffHandOil  ~= false) and self:OffhandIsWeapon()
+    visibility[SLOT_OILOH] = (db.ShowOffHandOil  ~= false)
+        and (self:OffhandIsWeapon() or (check ~= nil and check.hands[17] ~= nil))
     visibility[SLOT_RUNE]  = db.ShowAugmentRune ~= false
     visibility[SLOT_HS]    = (db.ShowHealthstone ~= false) and self:IsWarlockInGroup()
-    visibility[SLOT_CLASS] = (db.ShowClassItem   ~= false) and (CLASS_SLOT[playerClass] ~= nil)
+    visibility[SLOT_CLASS] = (db.ShowClassItem   ~= false) and classSlot ~= nil and classSlot.applies(self)
     return visibility
 end
 
@@ -1580,13 +1882,15 @@ function RCC:ApplySettings()
     local db = self.db
     if not db then return end
 
-    -- Hearty food color is re-applied per update cycle inside UpdateFood.
-    local dr, dg, db_, da = KE:ResolveColor(db.DurationColor, { 1, 1, 1, 1 })
+    -- The base colour only: the repaint below re-applies the hearty and
+    -- low-duration tints, and restarts any glow in its current colour.
+    local dr, dg, db_, da = KE:ResolveColor(db.DurationColor, DURATION_COLOR_DEFAULT)
     local function applyFonts(buttons)
         if not buttons then return end
         for i = 1, NUM_SLOTS do
             local btn = buttons[i]
             if btn then
+                StopGlow(btn)
                 if btn.timeLeft then
                     KE:ApplyFontToText(btn.timeLeft,
                         db.FontFace,
@@ -1739,10 +2043,9 @@ end
 function RCC:HideFrame()
     if not self.frame then return end
 
-    -- Stop all LibCustomGlow animations on any slot that might have one.
-    -- Rune and class (warlock soulstone) slots currently use glow; stopping
-    -- all defensively future-proofs the cleanup if more glow effects are added.
-    -- The flag is cleared with them so the next check can start a glow again.
+    -- Stop all LibCustomGlow animations on any slot that might have one
+    -- (a low-duration warning, the rune nudge, a cast cue). The flag and
+    -- reason are cleared with them so the next check can start a glow again.
     for i = 1, NUM_SLOTS do
         local btn = self.buttons[i]
         if btn then
@@ -1753,6 +2056,7 @@ function RCC:HideFrame()
                 LCG.ProcGlow_Stop(btn)
             end
             btn.glowActive = false
+            btn.glowKey = nil
         end
     end
 
@@ -1828,7 +2132,8 @@ local CHECK_EVENTS = {
 
 --- _SetCheckEvents
 --- Registers or drops the per-check subscriptions. SPELL_UPDATE_COOLDOWN
---- feeds only the class slot, so a class without one never subscribes.
+--- feeds only a class slot with a cooldown proxy (`spellID`), so every
+--- other class never subscribes.
 function RCC:_SetCheckEvents(on)
     if not on then
         for _, event in ipairs(CHECK_EVENTS) do self:UnregisterEvent(event) end
@@ -1837,7 +2142,8 @@ function RCC:_SetCheckEvents(on)
     end
     for _, event in ipairs(CHECK_EVENTS) do self:RegisterEvent(event) end
     local _, playerClass = UnitClass("player")
-    if CLASS_SLOT[playerClass] then self:RegisterEvent("SPELL_UPDATE_COOLDOWN") end
+    local classSlot = CLASS_SLOT[playerClass]
+    if classSlot and classSlot.spellID then self:RegisterEvent("SPELL_UPDATE_COOLDOWN") end
 end
 
 --- UNIT_AURA fires for every unit whose aura set changes. The player's
@@ -1897,7 +2203,7 @@ function RCC:SPELL_UPDATE_COOLDOWN(_, spellID, baseSpellID)
     if spellID ~= nil then
         local _, playerClass = UnitClass("player")
         local classData = CLASS_SLOT[playerClass]
-        if not classData then return end
+        if not classData or not classData.spellID then return end
         if spellID ~= classData.spellID and baseSpellID ~= classData.spellID then return end
     end
     self:RequestRefresh()

@@ -31,6 +31,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
 
     local manager = GUIFrame:CreateWidgetStateManager()
     manager:SetCondition("customPosition", function() return db.PositionMode == "custom" end)
+    manager:SetCondition("lowWarning", function() return db.LowDurationWarning ~= false end)
 
     local function ApplySettings()
         if mod and mod.ApplySettings then mod:ApplySettings() end
@@ -119,7 +120,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     manager:Register(hideMockCheck, "all")
     card2:AddRow(row2b, Theme.rowHeight)
 
-    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local cauldronOnlyCheck = GUIFrame:CreateCheckbox(row2c, "Use flasks only from raid cauldron", {
         value = db.CauldronFlasksOnly,
         callback = function(checked) db.CauldronFlasksOnly = checked; ApplySettings() end,
@@ -133,7 +134,37 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     })
     row2c:AddWidget(unlimitedRuneCheck, 0.5)
     manager:Register(unlimitedRuneCheck, "all")
-    card2:AddRow(row2c, Theme.rowHeightLast, 0)
+    card2:AddRow(row2c, Theme.rowHeight)
+
+    local row2d = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local lowWarningCheck = GUIFrame:CreateCheckbox(row2d, "Warn when a buff is running low", {
+        value = db.LowDurationWarning ~= false,
+        callback = function(checked)
+            db.LowDurationWarning = checked
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    row2d:AddWidget(lowWarningCheck, 0.5)
+    manager:Register(lowWarningCheck, "all")
+
+    local lowMinutesSlider = GUIFrame:CreateSlider(row2d, "Low Buff Threshold (minutes)", {
+        min = 1, max = 15, step = 1,
+        value = db.LowDurationMinutes or 10,
+        callback = function(val) db.LowDurationMinutes = val; ApplySettings() end,
+    })
+    row2d:AddWidget(lowMinutesSlider, 0.5)
+    manager:Register(lowMinutesSlider, "lowWarning")
+    card2:AddRow(row2d, Theme.rowHeight)
+
+    local row2e = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local tooltipCheck = GUIFrame:CreateCheckbox(row2e, "Show tooltips on hover", {
+        value = db.ShowTooltips ~= false,
+        callback = function(checked) db.ShowTooltips = checked; ApplySettings() end,
+    })
+    row2e:AddWidget(tooltipCheck, 0.5)
+    manager:Register(tooltipCheck, "all")
+    card2:AddRow(row2e, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
 
@@ -166,7 +197,9 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     manager:Register(runeCheck, "all")
     card3:AddRow(row3a, Theme.rowHeight)
 
-    local lastConsumableRowIsClass = playerClass == "WARLOCK"
+    -- One class row per class with a class slot or a class check; every
+    -- other class ends the card on the weapon row.
+    local lastConsumableRowIsClass = playerClass == "WARLOCK" or playerClass == "SHAMAN" or playerClass == "PALADIN"
     local row3b = GUIFrame:CreateRow(card3.content, lastConsumableRowIsClass and Theme.rowHeight or Theme.rowHeightLast)
     local oilCheck = GUIFrame:CreateCheckbox(row3b, "Weapon Enchant (MH)", {
         value = db.ShowWeaponOil ~= false,
@@ -192,12 +225,24 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
         card3:AddRow(row3b, Theme.rowHeight)
 
         local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-        local classCheck = GUIFrame:CreateCheckbox(row3c, "Class Action (Soulstone)", {
-            value = db.ShowClassItem ~= false,
-            callback = function(checked) db.ShowClassItem = checked; ApplySettings() end,
-        })
-        row3c:AddWidget(classCheck, 1)
-        manager:Register(classCheck, "all")
+        if playerClass ~= "PALADIN" then
+            local classCheck = GUIFrame:CreateCheckbox(row3c,
+                playerClass == "WARLOCK" and "Class Action (Soulstone)" or "Class Action (Shield)", {
+                value = db.ShowClassItem ~= false,
+                callback = function(checked) db.ShowClassItem = checked; ApplySettings() end,
+            })
+            row3c:AddWidget(classCheck, 0.5)
+            manager:Register(classCheck, "all")
+        end
+        if playerClass ~= "WARLOCK" then
+            local classChecksCheck = GUIFrame:CreateCheckbox(row3c,
+                playerClass == "SHAMAN" and "Check weapon imbues and shield" or "Check Lightsmith rite", {
+                value = db.ClassChecks ~= false,
+                callback = function(checked) db.ClassChecks = checked; ApplySettings() end,
+            })
+            row3c:AddWidget(classChecksCheck, 0.5)
+            manager:Register(classChecksCheck, "all")
+        end
         card3:AddRow(row3c, Theme.rowHeightLast)
     else
         card3:AddRow(row3b, Theme.rowHeightLast)
@@ -206,7 +251,7 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     local row3note = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local note3 = GUIFrame:CreateText(row3note,
         KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Weapon Enchant (OH) also requires an off-hand weapon equipped. Healthstone also requires a Warlock in your group.",
+        KE:ColorTextByTheme("-") .. " Weapon Enchant (OH) also requires an off-hand weapon, or a shield your spec imbues. Healthstone also requires a Warlock in your group.",
         Theme.rowHeight, "hide")
     row3note:AddWidget(note3, 1)
     manager:Register(note3, "all")
@@ -315,10 +360,12 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
         onChange = ApplySettings,
         isLast = true,
         note = KE:ColorTextByTheme("-") .. " Duration Text is the base color for the timer/count above each icon.\n" ..
-            KE:ColorTextByTheme("-") .. " Hearty Food Text replaces it on the food slot when your active food persists through death.",
+            KE:ColorTextByTheme("-") .. " Hearty Food Text replaces it on the food slot when your active food persists through death.\n" ..
+            KE:ColorTextByTheme("-") .. " Low Duration Text replaces both, and colors the glow, when a buff is under the warning threshold.",
         colors = {
             { label = "Duration Text", key = "DurationColor", default = { 1, 1, 1, 1 } },
             { label = "Hearty Food Text", key = "HeartyFoodColor", default = { 0.2, 1.0, 0.2, 1.0 } },
+            { label = "Low Duration Text", key = "LowDurationColor", default = { 1.0, 0.3, 0.3, 1.0 } },
         },
     })
 
