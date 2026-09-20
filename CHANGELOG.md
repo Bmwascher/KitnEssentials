@@ -1,5 +1,21 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.12
+
+### Ready Check Consumables
+
+- **NEW:** A timer bar under the ready check popup counts the check down; on
+  by default, with a toggle on the settings page
+- The row and the popup close together the moment the countdown reaches zero
+  instead of a second or two later. A player who never answered no longer gets
+  the "you were away" chat line
+- A Shaman's weapon slots show the imbue that belongs on that hand instead of
+  the shield icon; the click still casts the shield that applies them
+- The first click of a session works even before the game has loaded the
+  item's data
+
+---
+
 ## v4.7.11
 
 ### Ready Check Consumables
