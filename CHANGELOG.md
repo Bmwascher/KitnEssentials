@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.8
+
+### Ready Check Consumables
+
+- Clicking the flask or weapon enchant icon uses the item the icon shows, with
+  ties between equal flasks settled the same way every time. Main hand and off
+  hand remember their last enchant separately, and a remembered item you no
+  longer carry falls back to a compatible one you do
+
+---
+
 ## v4.7.7
 
 ### Ready Check Consumables
