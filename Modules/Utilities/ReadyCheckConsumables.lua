@@ -2084,17 +2084,20 @@ end
 --- _ScheduleExpiry
 --- READY_CHECK_FINISHED arrives one to three seconds after the client's
 --- countdown reaches zero (integer payload plus the server's own timer and
---- latency), leaving an empty bar on screen. One timer per check tears the
---- row down at zero instead; the serial makes a timer from an earlier check
---- a no-op, and the finish event that follows finds nothing left to hide.
+--- latency), leaving an empty bar over a popup nobody can still answer in
+--- time. One timer per check tears the row down at zero and closes the
+--- popup the way its own buttons do (ReadyCheckFrame is not secure); the
+--- serial makes a timer from an earlier check a no-op, and the finish event
+--- that follows finds nothing left to hide. Closing the popup clears its
+--- initiator field, so Blizzard's "you were away" line is not printed.
 function RCC:_ScheduleExpiry(seconds)
     self._checkSerial = self._checkSerial + 1
     if not seconds then return end
     local serial = self._checkSerial
     C_Timer.After(seconds, function()
-        if RCC._checkSerial == serial and RCC:_IsRowLive() then
-            RCC:READY_CHECK_FINISHED()
-        end
+        if RCC._checkSerial ~= serial or not RCC:_IsRowLive() then return end
+        RCC:READY_CHECK_FINISHED()
+        if ReadyCheckFrame and ReadyCheckFrame:IsShown() then ReadyCheckFrame:Hide() end
     end)
 end
 
