@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.13
+
+### Ready Check Consumables
+
+- The settings page is regrouped: sizing, then the low-buff warning and the
+  flask and rune filters, then the popup behaviour, with shorter labels. The
+  Warlock requirement moved from a note to the Healthstone toggle's tooltip,
+  and the three text colours sit in one row with a note that no longer cuts
+  off
+
+---
+
 ## v4.7.12
 
 ### Ready Check Consumables
