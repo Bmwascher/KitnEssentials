@@ -810,12 +810,13 @@ end
 
 --- ResolveClassCheck
 --- The active CLASS_CHECKS row for `spec` and the hands it owns: a hand
---- whose gate spell is known and that holds what the imbue needs. With
---- INSTINCTIVE_IMBUEMENTS known the shield cast applies every imbue, so
---- owned hands cast the shield instead. `isKnown(spellID)` is injected so
---- the spec drives it with plain tables; mainhand and offhand are
---- _HandKind's answers. Returns nil when no row applies, else
---- { shield = spellID?, hands = { [invSlot] = { ids, cast, applyToSlot } } }.
+--- whose gate spell is known and that holds what the imbue needs. `cast` is
+--- the hand's imbue, for its icon and tooltip; `clickCast` is what the click
+--- casts, the shield once INSTINCTIVE_IMBUEMENTS makes it apply every imbue.
+--- `isKnown(spellID)` is injected so the spec drives it with plain tables;
+--- mainhand and offhand are _HandKind's answers. Returns nil when no row
+--- applies, else { shield = spellID?, hands = { [invSlot] = { ids, cast,
+--- clickCast, applyToSlot } } }.
 local function ResolveClassCheck(rows, spec, isKnown, mainhand, offhand)
     if not rows then return nil end
     local row
@@ -840,7 +841,8 @@ local function ResolveClassCheck(rows, spec, isKnown, mainhand, offhand)
         if holds and isKnown(hand.gate or hand.cast) then
             owned[invSlot] = {
                 ids = hand.ids,
-                cast = shieldCasts and row.shield or hand.cast,
+                cast = hand.cast,
+                clickCast = shieldCasts and row.shield or hand.cast,
                 applyToSlot = hand.applyToSlot,
             }
         end
@@ -1467,8 +1469,8 @@ end
 --- _UpdateImbueHand
 --- A weapon slot the class check owns: ready when the hand carries one of
 --- the row's imbue enchants, the timer from remainingTimeMs. The icon and
---- the click are the imbue spell, never an oil, since an oil applied here
---- would strip the imbue.
+--- tooltip are the imbue, the click is clickCast; never an oil, since an
+--- oil applied here would strip the imbue.
 function RCC:_UpdateImbueHand(btn, invSlot, hand)
     local info = GetTemporaryEnchantmentInfo(invSlot)
     local enchID = info and info.enchantID
@@ -1484,7 +1486,7 @@ function RCC:_UpdateImbueHand(btn, invSlot, hand)
     self:SetIconFromSpell(btn.texture, hand.cast)
     btn.countText:SetText("")
     self:_PaintRequirement(btn, present, remain)
-    self:_ArmSpellClick(btn.click, hand.cast, hand.applyToSlot and invSlot or nil)
+    self:_ArmSpellClick(btn.click, hand.clickCast, hand.applyToSlot and invSlot or nil)
 end
 
 --- UpdateWeaponEnchant

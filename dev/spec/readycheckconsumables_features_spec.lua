@@ -3,11 +3,12 @@
 -- threshold; a slot whose aura expiry is secret paints no timer, no warning
 -- colour and no glow; the class check owns exactly the hands a row's
 -- requirements cover, gated on the spell being known and the hand holding
--- what the imbue needs, and casts the shield instead once every imbue
--- rides on it; the class slot shows for a class with an entry whose
+-- what the imbue needs, and clicks the shield instead once every imbue
+-- rides on it while the icon stays the imbue; the class slot shows for a class with an entry whose
 -- predicate holds and the off-hand slot shows for a shield the check owns;
 -- an owned hand is ready only on the imbue, never on an oil, and its click
--- casts the imbue. Known spells, the spec index, equipment and enchants are
+-- casts the imbue, or the shield under Instinctive Imbuements while the
+-- slot still names the imbue. Known spells, the spec index, equipment and enchants are
 -- plain loader seams; the slot button is a recording stub because the
 -- paint is read back from its text and attributes.
 
@@ -109,7 +110,8 @@ describe("ReadyCheckConsumables class check resolution", function()
             { name = "Enhancement with Instinctive Imbuements", class = "SHAMAN", spec = 2,
               known = { WINDFURY, FLAMETONGUE, INSTINCTIVE_IMBUEMENTS },
               mh = SWORD_1H, oh = SWORD_1H, shield = LIGHTNING_SHIELD,
-              hands = { [MH] = { cast = LIGHTNING_SHIELD }, [OH] = { cast = LIGHTNING_SHIELD } } },
+              hands = { [MH] = { cast = WINDFURY, clickCast = LIGHTNING_SHIELD },
+                        [OH] = { cast = FLAMETONGUE, clickCast = LIGHTNING_SHIELD } } },
         }
         for _, c in ipairs(cases) do
             local RCC, seams = load(c.class, c.spec, c.known)
@@ -121,6 +123,7 @@ describe("ReadyCheckConsumables class check resolution", function()
             for invSlot, hand in pairs(c.hands) do
                 assert.is_not_nil(check.hands[invSlot], c.name .. " slot " .. invSlot)
                 assert.equals(hand.cast, check.hands[invSlot].cast, c.name .. " slot " .. invSlot)
+                assert.equals(hand.clickCast or hand.cast, check.hands[invSlot].clickCast, c.name .. " slot " .. invSlot)
                 assert.equals(hand.applyToSlot, check.hands[invSlot].applyToSlot, c.name .. " slot " .. invSlot)
             end
             for invSlot in pairs(check.hands) do
@@ -191,11 +194,12 @@ describe("ReadyCheckConsumables class-check visibility", function()
 end)
 
 describe("ReadyCheckConsumables owned hand paint", function()
-    it("is ready on the imbue and not on an oil, and the click casts the imbue either way", function()
+    it("is ready on the imbue and not on an oil, names the imbue, and the click casts the imbue or the shield", function()
         local cases = {
             { enchant = 5401, ready = true },
             { enchant = 8052, ready = false },
             { enchant = nil,  ready = false },
+            { enchant = 5401, ready = true, instinctive = true },
         }
         for i, c in ipairs(cases) do
             local RCC, _, seams = L.loadReadyCheckConsumables()
@@ -204,6 +208,7 @@ describe("ReadyCheckConsumables owned hand paint", function()
             seams.spec = 2
             seams.knownSpells[WINDFURY] = true
             seams.knownSpells[FLAMETONGUE] = true
+            if c.instinctive then seams.knownSpells[INSTINCTIVE_IMBUEMENTS] = true end
             equip(seams, MH, SWORD_1H)
             seams.bagCounts[243734] = 5
             seams.itemNames[243734] = "oil"
@@ -212,11 +217,12 @@ describe("ReadyCheckConsumables owned hand paint", function()
             RCC.buttons = { oil = btn }
             RCC:_ComputeVisibility()
             RCC:UpdateWeaponEnchant("oil", MH)
+            local clickSpell = c.instinctive and LIGHTNING_SHIELD or WINDFURY
             assert.equals(c.ready and "Interface\\RaidFrame\\ReadyCheck-Ready" or "Interface\\RaidFrame\\ReadyCheck-NotReady",
                 btn.statusTexture.tex, "case " .. i)
             assert.equals(c.ready and "60m" or "", btn.text, "case " .. i)
             assert.equals("macro", btn.click.attributes.type, "case " .. i)
-            assert.equals("/stopmacro [combat]\n/cast spell " .. WINDFURY, btn.click.attributes.macrotext, "case " .. i)
+            assert.equals("/stopmacro [combat]\n/cast spell " .. clickSpell, btn.click.attributes.macrotext, "case " .. i)
             assert.is_true(btn.click.shown, "case " .. i)
             assert.is_nil(btn.nominatedItem, "case " .. i)
             assert.equals(WINDFURY, btn.nominatedSpell, "case " .. i)
