@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.10
+
+### Ready Check Consumables
+
+- **NEW:** Warn when a buff runs low: a food, flask, rune or weapon enchant
+  with less time left than your threshold turns its timer red and glows. On by
+  default; the threshold slider is on the settings page
+- **NEW:** Shaman weapon imbues and shields, and Paladin Lightsmith rites, are
+  checked alongside the other consumables. On by default
+- Icons show the actual item or spell you have, and hovering an icon shows its
+  tooltip (togglable)
+
+---
+
 ## v4.7.9
 
 ### Ready Check Consumables
