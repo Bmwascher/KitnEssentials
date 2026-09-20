@@ -164,6 +164,13 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
     })
     row2e:AddWidget(tooltipCheck, 0.5)
     manager:Register(tooltipCheck, "all")
+
+    local timerBarCheck = GUIFrame:CreateCheckbox(row2e, "Show a timer bar under the ready check popup", {
+        value = db.ShowTimerBar ~= false,
+        callback = function(checked) db.ShowTimerBar = checked; ApplySettings() end,
+    })
+    row2e:AddWidget(timerBarCheck, 0.5)
+    manager:Register(timerBarCheck, "all")
     card2:AddRow(row2e, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()

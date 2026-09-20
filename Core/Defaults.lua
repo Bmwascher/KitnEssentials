@@ -1215,6 +1215,7 @@ local Defaults = {
             LowDurationMinutes  = 10,     -- the warning threshold, strictly under
             ClassChecks         = true,   -- Shaman imbues and shield, Paladin Lightsmith rite; replaces the oil on the hands they own
             ShowTooltips        = true,   -- item or spell tooltip on hover over a click-enabled slot
+            ShowTimerBar        = true,   -- countdown bar under the ready check popup
 
             -- Visuals
             IconSize = 46,

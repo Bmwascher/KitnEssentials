@@ -44,6 +44,9 @@ local IsSpellKnown          = C_SpellBook and C_SpellBook.IsSpellKnown
 local C_Spell               = C_Spell
 local C_UnitAuras           = C_UnitAuras
 local C_Item                = C_Item
+local Item                  = Item
+local C_DurationUtil        = C_DurationUtil
+local C_StringUtil          = C_StringUtil
 -- issecretvalue is accessed via KE:IsSafeValue / KE:IsSecretValue helpers
 -- (see Core/Secret.lua) — no module-local alias needed here.
 
@@ -395,11 +398,13 @@ RCC.previewButtons = nil   -- [1..NUM_SLOTS] preview stubs; no click overlays
 RCC.db          = nil
 RCC.stateDriverActive = false  -- true while the combat state driver is registered (see _EnableStateDriver)
 RCC._refreshPending = nil      -- true while a coalesced repaint waits for the next frame (see RequestRefresh)
+RCC._checkSerial = 0           -- bumped per ShowFrame; a stale expiry timer compares against it (see _ScheduleExpiry)
 RCC._hidePending = nil         -- true while a hide deferred by combat waits for RunAfterCombat; cleared by ShowFrame and the real hide (see HideFrame)
 RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
 RCC._warlockInGroup = nil      -- IsWarlockInGroup's answer for the current roster; nil until asked (see IsWarlockInGroup)
 RCC._classCheck = nil          -- the resolved class check for the current repaint (see _ComputeVisibility)
 RCC._lowGlowColor = { 1, 0.3, 0.3, 1 }  -- the low-duration glow colour, refilled from db on every warning paint
+RCC._itemLoadRequested = {}    -- [itemID] = true once this session asked the client for the item's data (see SafeItemName)
 
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
 -- of the most recently confirmed Soulstone recipient so the click macro keeps
@@ -733,6 +738,20 @@ function RCC:BuildFrame()
     closeBtn:Hide()
     f.closeBtn = closeBtn
 
+    local timerBar = self:_BuildTimerBar("KE_ReadyCheckConsumables_Timer", f)
+    local formatter = C_StringUtil.CreateSecondsFormatter()
+    formatter:SetStripIntervalWhitespace(Enum.SecondsFormatterIntervalWhitespace.Strip)
+    formatter:SetDesiredUnitCount(1)
+    formatter:SetMinInterval(Enum.SecondsFormatterInterval.Seconds)
+    formatter:SetDefaultAbbreviation(Enum.SecondsFormatterAbbreviation.OneLetter)
+    local binding = C_DurationUtil.CreateDurationTextBinding()
+    binding:SetFormatter(formatter)
+    binding:SetFontString(timerBar.text)
+    binding:SetExpiredText("")
+    binding:SetZeroDurationText("")
+    timerBar.binding = binding
+    self.timerBar = timerBar
+
     self.frame = f
 
     if DEBUG_RCC then
@@ -808,12 +827,13 @@ end
 
 --- ResolveClassCheck
 --- The active CLASS_CHECKS row for `spec` and the hands it owns: a hand
---- whose gate spell is known and that holds what the imbue needs. With
---- INSTINCTIVE_IMBUEMENTS known the shield cast applies every imbue, so
---- owned hands cast the shield instead. `isKnown(spellID)` is injected so
---- the spec drives it with plain tables; mainhand and offhand are
---- _HandKind's answers. Returns nil when no row applies, else
---- { shield = spellID?, hands = { [invSlot] = { ids, cast, applyToSlot } } }.
+--- whose gate spell is known and that holds what the imbue needs. `cast` is
+--- the hand's imbue, for its icon and tooltip; `clickCast` is what the click
+--- casts, the shield once INSTINCTIVE_IMBUEMENTS makes it apply every imbue.
+--- `isKnown(spellID)` is injected so the spec drives it with plain tables;
+--- mainhand and offhand are _HandKind's answers. Returns nil when no row
+--- applies, else { shield = spellID?, hands = { [invSlot] = { ids, cast,
+--- clickCast, applyToSlot } } }.
 local function ResolveClassCheck(rows, spec, isKnown, mainhand, offhand)
     if not rows then return nil end
     local row
@@ -838,7 +858,8 @@ local function ResolveClassCheck(rows, spec, isKnown, mainhand, offhand)
         if holds and isKnown(hand.gate or hand.cast) then
             owned[invSlot] = {
                 ids = hand.ids,
-                cast = shieldCasts and row.shield or hand.cast,
+                cast = hand.cast,
+                clickCast = shieldCasts and row.shield or hand.cast,
                 applyToSlot = hand.applyToSlot,
             }
         end
@@ -1040,12 +1061,28 @@ function RCC:_ResolveSoulstone()
     return (live ~= nil) or selfStoned, self:_BuildSoulstoneMacrotext(stoned, healer)
 end
 
+-- Pre-declared so a load request allocates no closure. RequestRefresh
+-- refuses a dead row and coalesces, so nothing else is tested here.
+local function _ItemLoaded()
+    RCC:RequestRefresh()
+end
+
 --- SafeItemName
 --- Returns a non-nil, non-secret item name, or nil if unavailable / secret.
 --- Item names can be secret in chat messaging lockdown per api-validator guidance.
+--- A nil read means the client has not cached the item yet (the first check
+--- after a login), so the item's data is requested once per session and
+--- the arrival repaints the row; the click stays unarmed until then.
 function RCC:SafeItemName(itemID)
     local name = GetItemInfo(itemID)
-    if name and KE:IsSafeValue(name) then return name end
+    if name == nil then
+        if itemID and not self._itemLoadRequested[itemID] then
+            self._itemLoadRequested[itemID] = true
+            Item:CreateFromItemID(itemID):ContinueOnItemLoad(_ItemLoaded)
+        end
+        return nil
+    end
+    if KE:IsSafeValue(name) then return name end
     return nil
 end
 
@@ -1449,8 +1486,8 @@ end
 --- _UpdateImbueHand
 --- A weapon slot the class check owns: ready when the hand carries one of
 --- the row's imbue enchants, the timer from remainingTimeMs. The icon and
---- the click are the imbue spell, never an oil, since an oil applied here
---- would strip the imbue.
+--- tooltip are the imbue, the click is clickCast; never an oil, since an
+--- oil applied here would strip the imbue.
 function RCC:_UpdateImbueHand(btn, invSlot, hand)
     local info = GetTemporaryEnchantmentInfo(invSlot)
     local enchID = info and info.enchantID
@@ -1466,7 +1503,7 @@ function RCC:_UpdateImbueHand(btn, invSlot, hand)
     self:SetIconFromSpell(btn.texture, hand.cast)
     btn.countText:SetText("")
     self:_PaintRequirement(btn, present, remain)
-    self:_ArmSpellClick(btn.click, hand.cast, hand.applyToSlot and invSlot or nil)
+    self:_ArmSpellClick(btn.click, hand.clickCast, hand.applyToSlot and invSlot or nil)
 end
 
 --- UpdateWeaponEnchant
@@ -1937,6 +1974,15 @@ function RCC:ApplySettings()
     end
     applyFonts(self.buttons)
     applyFonts(self.previewButtons)
+    local function applyBarFont(bar)
+        if not bar then return end
+        KE:ApplyFontToText(bar.text,
+            db.FontFace,
+            db.FontSize    or 11,
+            db.FontOutline or "OUTLINE")
+    end
+    applyBarFont(self.timerBar)
+    applyBarFont(self.previewTimerBar)
 
     if self.inPreview then
         self:ShowPreview()
@@ -1945,15 +1991,125 @@ function RCC:ApplySettings()
 end
 
 ---------------------------------------------------------------------------------
+-- Ready Check Timer Bar
+---------------------------------------------------------------------------------
+-- The countdown under the popup. The client animates the fill from a
+-- duration object and rewrites the text through a binding, so no script
+-- runs per frame.
+
+local TIMER_BAR_HEIGHT  = 10
+local TIMER_BAR_GAP     = 2
+local TIMER_BAR_TEXTURE = "Interface\\Buttons\\WHITE8X8"
+local PREVIEW_TIMER_FILL, PREVIEW_TIMER_TEXT = 0.6, "21s"
+
+--- The seconds READY_CHECK delivered, or nil: the value is secret in chat
+--- lockdown, and a bar is never guessed.
+local function TimerBarSeconds(value)
+    if not KE:IsSafeValue(value) then return nil end
+    local seconds = tonumber(value)
+    if seconds and seconds > 0 then return seconds end
+    return nil
+end
+RCC._TimerBarSeconds = TimerBarSeconds
+
+--- _BuildTimerBar
+--- The real bar gets its duration binding in BuildFrame; the preview's is
+--- painted static.
+function RCC:_BuildTimerBar(name, parent)
+    local db = self.db
+    local bar = CreateFrame("StatusBar", name, parent)
+    bar:SetHeight(TIMER_BAR_HEIGHT)
+    bar:SetStatusBarTexture(TIMER_BAR_TEXTURE)
+    bar:SetMinMaxValues(0, 1)
+    bar:SetValue(1)
+
+    local bg = bar:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.06, 0.06, 0.06, 0.95)
+
+    local border = CreateFrame("Frame", nil, bar, "BackdropTemplate")
+    border:SetAllPoints()
+    border:SetBackdrop({ edgeFile = TIMER_BAR_TEXTURE, edgeSize = KE:GetPixelSize() })
+    border:SetBackdropBorderColor(0, 0, 0, 1)
+
+    local text = border:CreateFontString(nil, "OVERLAY")
+    text:SetPoint("CENTER", bar, "CENTER", 0, 0)
+    KE:ApplyFontToText(text, db.FontFace, db.FontSize or 11, db.FontOutline or "OUTLINE")
+    bar.text = text
+
+    bar:Hide()
+    return bar
+end
+
+--- _ShowTimerBar
+--- Parented to the popup rather than the row, so a respondent's Ready click
+--- hides it with the popup in every position mode. The starter sees no
+--- popup, only the row and its Close button, so the bar hangs under those
+--- instead of under the invisible ReadyCheckFrame box.
+function RCC:_ShowTimerBar(popup, seconds, underRow)
+    local bar = self.timerBar
+    if not bar then return end
+    if not (self.db.ShowTimerBar and seconds and popup and ReadyCheckFrame) then
+        self:_HideTimerBar()
+        return
+    end
+    local accent = KE:GetThemeColor("accent") or { 1, 0, 0.549, 1 }
+    bar:SetStatusBarColor(accent[1], accent[2], accent[3], 1)
+    bar:SetParent(popup)
+    bar:ClearAllPoints()
+    local above = underRow and self.frame.closeBtn or ReadyCheckFrame
+    bar:SetPoint("TOPLEFT",  above, "BOTTOMLEFT",  0, -TIMER_BAR_GAP)
+    bar:SetPoint("TOPRIGHT", above, "BOTTOMRIGHT", 0, -TIMER_BAR_GAP)
+
+    local duration = C_DurationUtil.CreateDuration()
+    duration:SetTimeFromStart(GetTime(), seconds)
+    bar:SetTimerDuration(duration, Enum.StatusBarInterpolation.Immediate,
+        Enum.StatusBarTimerDirection.RemainingTime)
+    bar.binding:SetDuration(duration)
+    bar.binding:SetEnabled(true)
+    bar.duration = duration
+    bar:Show()
+end
+
+--- _HideTimerBar
+--- The bar is unprotected, so this runs even while HideFrame defers the
+--- rest of the teardown to combat end.
+function RCC:_HideTimerBar()
+    local bar = self.timerBar
+    if not bar then return end
+    bar.binding:SetEnabled(false)
+    bar:Hide()
+end
+
+--- _ScheduleExpiry
+--- READY_CHECK_FINISHED lands one to three seconds after the client's
+--- countdown reaches zero (integer payload, server timer, latency), so the
+--- row and popup close at zero instead. ReadyCheckFrame is not secure; its
+--- OnHide clears the initiator field, which silences Blizzard's "you were
+--- away" line for a respondent who never answered.
+function RCC:_ScheduleExpiry(seconds)
+    self._checkSerial = self._checkSerial + 1
+    if not seconds then return end
+    local serial = self._checkSerial
+    C_Timer.After(seconds, function()
+        if RCC._checkSerial ~= serial or not RCC:_IsRowLive() then return end
+        RCC:READY_CHECK_FINISHED()
+        if ReadyCheckFrame and ReadyCheckFrame:IsShown() then ReadyCheckFrame:Hide() end
+    end)
+end
+
+---------------------------------------------------------------------------------
 -- Frame Show / Hide
 ---------------------------------------------------------------------------------
 
 --- ShowFrame
---- Called on READY_CHECK. Builds the frame if needed, updates icons, and
---- shows the consumable row anchored to the ready check popup.
+--- Called on READY_CHECK. Builds the frame if needed, updates icons, shows
+--- the consumable row anchored to the ready check popup and the countdown
+--- bar under it.
 ---
 --- @param initiatorUnit string  unit that initiated the ready check (passed from event)
-function RCC:ShowFrame(initiatorUnit)
+--- @param duration number       seconds left in the check; secret in chat lockdown
+function RCC:ShowFrame(initiatorUnit, duration)
     local db = self.db
     if not db or not db.Enabled then return end
 
@@ -1998,15 +2154,17 @@ function RCC:ShowFrame(initiatorUnit)
     -- Restore alpha in case a prior deferred hide set it to 0 (see HideFrame).
     self.frame:SetAlpha(1)
 
-    -- Anchor selection — three cases:
-    --   1. Custom position: user-defined anchor (honors db settings).
-    --   2. Auto + we're the starter: Blizzard shows ReadyCheckFrame to the
-    --      initiator too, an invisible DIALOG-strata box at screen centre
-    --      (only its ReadyCheckListenerFrame child is hidden). A row parked
-    --      at UIParent CENTER sits under that box and never receives the
-    --      mouse, so anchor above it like case 3.
-    --   3. Auto + we're NOT the starter: anchor to ReadyCheckListenerFrame
-    --      top so the row floats above the popup we see.
+    -- The starter's ReadyCheckFrame is an invisible DIALOG-strata box at
+    -- screen centre; a row parked at UIParent CENTER sits under it and never
+    -- receives the mouse, so the starter parents to it too. Respondents get
+    -- the visible listener.
+    local popup
+    if isStarter then
+        popup = ReadyCheckFrame
+    else
+        popup = ReadyCheckListenerFrame or ReadyCheckFrame
+    end
+
     self.frame:ClearAllPoints()
     if db.PositionMode == "custom" then
         self.frame:SetParent(UIParent)
@@ -2016,24 +2174,15 @@ function RCC:ShowFrame(initiatorUnit)
             db.AnchorPoint or "CENTER",
             db.XOffset or 0,
             db.YOffset or 100)
-    elseif isStarter and ReadyCheckFrame then
-        self.frame:SetParent(ReadyCheckFrame)
-        self.frame:SetPoint("BOTTOM", ReadyCheckFrame, "TOP", 0, 2)
-    elseif isStarter then
+    elseif popup then
+        self.frame:SetParent(popup)
+        self.frame:SetPoint("BOTTOM", popup, "TOP", 0, 2)
+    else
+        -- Extremely defensive fallback: if neither Blizzard frame exists
+        -- (e.g. addon conflict reskin), floating at UIParent is better
+        -- than not showing at all.
         self.frame:SetParent(UIParent)
         self.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-    else
-        local parent = ReadyCheckListenerFrame or ReadyCheckFrame
-        if parent then
-            self.frame:SetParent(parent)
-            self.frame:SetPoint("BOTTOM", parent, "TOP", 0, 2)
-        else
-            -- Extremely defensive fallback: if neither Blizzard frame exists
-            -- (e.g. addon conflict reskin), floating at UIParent is better
-            -- than not showing at all.
-            self.frame:SetParent(UIParent)
-            self.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-        end
     end
 
     -- Close button: visible only when we're the starter (Blizzard shows no
@@ -2056,6 +2205,9 @@ function RCC:ShowFrame(initiatorUnit)
     -- visible depends on event dispatch order, and the first paint must not.
     -- UpdateAllIcons ends with the layout, so no separate call is needed.
     self:UpdateAllIcons(true)
+    local seconds = TimerBarSeconds(duration)
+    self:_ShowTimerBar(popup, seconds, isStarter)
+    self:_ScheduleExpiry(seconds)
 
     if DEBUG_RCC then
         local parentFrame = self.frame:GetParent()
@@ -2073,6 +2225,8 @@ end
 --- continue to tick on the hidden frame, contributing to idle FPS drops.
 function RCC:HideFrame()
     if not self.frame then return end
+
+    self:_HideTimerBar()
 
     -- Stop all LibCustomGlow animations on any slot that might have one
     -- (a low-duration warning, the rune nudge, a cast cue). The flag and
@@ -2130,7 +2284,7 @@ end
 --- READY_CHECK fires when a ready check is initiated.
 --- @param _ string          event name (unused)
 --- @param initiatorUnit string  unit that started the ready check
---- @param duration number       ready check window duration in seconds
+--- @param duration number       seconds left in the check when the event arrived
 function RCC:READY_CHECK(_, initiatorUnit, duration)
     if DEBUG_RCC then
         -- initiatorUnit carries SecretInChatMessagingLockdown — guard before tostring.
@@ -2141,7 +2295,7 @@ function RCC:READY_CHECK(_, initiatorUnit, duration)
 
     self:_SetCheckEvents(true)
 
-    self:ShowFrame(initiatorUnit)
+    self:ShowFrame(initiatorUnit, duration)
 end
 
 --- READY_CHECK_FINISHED fires when the ready check closes (all responded or timed out).
@@ -2315,6 +2469,10 @@ function RCC:BuildPreviewFrame()
 
     self.previewButtons = self:_BuildIconRow(f)
     self.previewFrame = f
+    local bar = self:_BuildTimerBar("KE_ReadyCheckConsumables_PreviewTimer", f)
+    bar:SetValue(PREVIEW_TIMER_FILL)
+    bar.text:SetText(PREVIEW_TIMER_TEXT)
+    self.previewTimerBar = bar
 end
 
 --- ShowPreview
@@ -2342,12 +2500,16 @@ function RCC:ShowPreview()
 
     self.inPreview = true
 
+    local bar = self.previewTimerBar
     frame:ClearAllPoints()
+    bar:ClearAllPoints()
     if db.HidePreviewMock then
         -- Mock popup suppressed — anchor the row slightly above screen center,
         -- roughly where the row would sit above the mock when the box is shown.
         if self.previewMock then self.previewMock:Hide() end
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, 85)
+        bar:SetPoint("TOP", frame, "BOTTOM", 0, -TIMER_BAR_GAP)
+        bar:SetWidth(323)
     else
         -- Show mock popup at screen center, anchor consumable row to its top
         -- (same 5px gap as the real ReadyCheckListenerFrame anchor).
@@ -2356,6 +2518,15 @@ function RCC:ShowPreview()
         mock:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
         mock:Show()
         frame:SetPoint("BOTTOM", mock, "TOP", 0, 2)
+        bar:SetPoint("TOPLEFT",  mock, "BOTTOMLEFT",  0, -TIMER_BAR_GAP)
+        bar:SetPoint("TOPRIGHT", mock, "BOTTOMRIGHT", 0, -TIMER_BAR_GAP)
+    end
+    if db.ShowTimerBar then
+        local accent = KE:GetThemeColor("accent") or { 1, 0, 0.549, 1 }
+        bar:SetStatusBarColor(accent[1], accent[2], accent[3], 1)
+        bar:Show()
+    else
+        bar:Hide()
     end
 
     -- User-toggle visibility map. No context filters — this is a settings preview.

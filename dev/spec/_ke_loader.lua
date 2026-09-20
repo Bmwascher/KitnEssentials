@@ -2957,8 +2957,10 @@ function L.loadReadyCheckConsumables(overrides)
     -- not listed there; equipped maps an inventory slot to its item id for
     -- GetInventoryItemID, itemInfo an item id to { classID, subClassID } for
     -- C_Item.GetItemInfoInstant, itemNames an item id to the name
-    -- C_Item.GetItemInfo returns (nil reads as uncached); playerClass is the
-    -- class file token UnitClass hands back. group is the roster the unit
+    -- C_Item.GetItemInfo returns (nil reads as uncached, and the Item fake
+    -- records each ContinueOnItemLoad in itemLoads as { id, fn } for the
+    -- spec to fire); playerClass is the class file token UnitClass hands
+    -- back. group is the roster the unit
     -- fakes read: mode "raid" or "party" (nil = solo) and units keyed by
     -- token ("raid3", "party1", "player"), each { name, class, role, dead,
     -- stone }, stone being the sourceUnit C_UnitAuras.GetAuraDataBySpellName
@@ -2986,6 +2988,7 @@ function L.loadReadyCheckConsumables(overrides)
         equipped = {},
         itemInfo = {},
         itemNames = {},
+        itemLoads = {},
         auras = {},
         auraPageSize = nil,
         enchants = {},
@@ -3063,6 +3066,15 @@ function L.loadReadyCheckConsumables(overrides)
             return itemID, "", "", "", 0, info[1], info[2]
         end,
         GetItemIconByID = function() return nil end,
+    }
+    _G.Item = {
+        CreateFromItemID = function(_, itemID)
+            return {
+                ContinueOnItemLoad = function(_, fn)
+                    seams.itemLoads[#seams.itemLoads + 1] = { id = itemID, fn = fn }
+                end,
+            }
+        end,
     }
     _G.C_SpecializationInfo = {
         GetSpecialization = function() return seams.spec end,
