@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.9
+
+### Ready Check Consumables
+
+- The Warlock Soulstone slot now tells three states apart: someone is
+  confirmed protected, the stone is on cooldown so someone probably is, and
+  nobody is (click to cast). In a raid, a stone you put on yourself no longer
+  aims the next click back at you instead of the healer
+
+---
+
 ## v4.7.8
 
 ### Ready Check Consumables
