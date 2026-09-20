@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.14
+
+### Ready Check Consumables
+
+- The flask stat each specialization prefers has been updated across every
+  class, so the flask a click offers when you carry several matches current
+  stat priorities
+
+---
+
 ## v4.7.13
 
 ### Ready Check Consumables
