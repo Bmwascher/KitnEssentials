@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.6
+
+### Ready Check Consumables
+
+- Weapon enchant detection reads the current game data directly, so oils and
+  imbues show correctly again, and characters carrying more than forty buffs
+  no longer have their food, flask or rune missed
+
+---
+
 ## v4.7.5
 
 ### Conflicts
