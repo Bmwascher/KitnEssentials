@@ -244,58 +244,58 @@ local FLASK_BUFFS = {
 -- nothing stocked, so a player's own flask choice always outranks them.
 local SPEC_FLASK_PRIORITY = {
     -- Death Knight
-    [250]  = { "vers",    "crit"    },  -- Blood
+    [250]  = { "haste",   "crit"    },  -- Blood
     [251]  = { "mastery", "crit"    },  -- Frost
-    [252]  = { "crit",    "mastery" },  -- Unholy
+    [252]  = { "mastery", "crit"    },  -- Unholy
     -- Demon Hunter
     [577]  = { "crit",    "mastery" },  -- Havoc
-    [581]  = { "haste",   "vers"    },  -- Vengeance
-    [1480] = { "haste",   "mastery" },  -- Devourer
+    [581]  = { "haste",   "crit"    },  -- Vengeance
+    [1480] = { "mastery", "crit"    },  -- Devourer
     -- Druid
     [102]  = { "mastery", "crit"    },  -- Balance
     [103]  = { "mastery", "haste"   },  -- Feral
     [104]  = { "haste",   "vers"    },  -- Guardian
     [105]  = { "haste",   "mastery" },  -- Restoration
     -- Evoker
-    [1467] = { "crit",    "haste"   },  -- Devastation
-    [1468] = { "haste",   "mastery" },  -- Preservation
-    [1473] = { "crit",    "haste"   },  -- Augmentation
+    [1467] = { "crit",    "mastery" },  -- Devastation
+    [1468] = { "mastery", "crit"    },  -- Preservation
+    [1473] = { "mastery", "crit"    },  -- Augmentation
     -- Hunter
     [253]  = { "mastery", "crit"    },  -- Beast Mastery
     [254]  = { "crit",    "mastery" },  -- Marksmanship
     [255]  = { "mastery", "crit"    },  -- Survival
     -- Mage
-    [62]   = { "mastery", "vers"    },  -- Arcane
-    [63]   = { "mastery", "haste"   },  -- Fire
+    [62]   = { "haste",   "vers"    },  -- Arcane
+    [63]   = { "haste",   "vers"    },  -- Fire
     [64]   = { "crit",    "mastery" },  -- Frost
     -- Monk
     [268]  = { "vers",    "crit"    },  -- Brewmaster
     [270]  = { "haste",   "crit"    },  -- Mistweaver
-    [269]  = { "crit",    "mastery" },  -- Windwalker
+    [269]  = { "mastery", "haste"   },  -- Windwalker
     -- Paladin
     [65]   = { "mastery", "haste"   },  -- Holy
     [66]   = { "haste",   "crit"    },  -- Protection
-    [70]   = { "mastery", "crit"    },  -- Retribution
+    [70]   = { "mastery", "haste"   },  -- Retribution
     -- Priest
-    [256]  = { "crit",    "haste"   },  -- Discipline
-    [257]  = { "crit",    "vers"    },  -- Holy
-    [258]  = { "mastery", "haste"   },  -- Shadow
+    [256]  = { "haste",   "crit"    },  -- Discipline
+    [257]  = { "crit",    "mastery" },  -- Holy
+    [258]  = { "mastery", "crit"    },  -- Shadow
     -- Rogue
     [259]  = { "crit",    "haste"   },  -- Assassination
-    [260]  = { "haste",   "crit"    },  -- Outlaw
+    [260]  = { "crit",    "haste"   },  -- Outlaw
     [261]  = { "mastery", "haste"   },  -- Subtlety
     -- Shaman
-    [262]  = { "mastery", "crit"    },  -- Elemental
-    [263]  = { "haste",   "mastery" },  -- Enhancement
-    [264]  = { "crit",    "vers"    },  -- Restoration
+    [262]  = { "crit",    "mastery" },  -- Elemental
+    [263]  = { "crit",    "mastery" },  -- Enhancement
+    [264]  = { "crit",    "haste"   },  -- Restoration
     -- Warlock
-    [265]  = { "crit",    "mastery" },  -- Affliction
+    [265]  = { "crit",    "haste"   },  -- Affliction
     [266]  = { "crit",    "haste"   },  -- Demonology
     [267]  = { "crit",    "mastery" },  -- Destruction
     -- Warrior
-    [71]   = { "crit",    "haste"   },  -- Arms
+    [71]   = { "haste",   "crit"    },  -- Arms
     [72]   = { "mastery", "haste"   },  -- Fury
-    [73]   = { "haste",   "mastery" },  -- Protection
+    [73]   = { "haste",   "crit"    },  -- Protection
 }
 
 -- The flask click order: rank desc, then Fleeting before personal (the
