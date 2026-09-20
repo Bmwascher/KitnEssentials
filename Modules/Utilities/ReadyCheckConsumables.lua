@@ -2000,10 +2000,11 @@ function RCC:ShowFrame(initiatorUnit)
 
     -- Anchor selection — three cases:
     --   1. Custom position: user-defined anchor (honors db settings).
-    --   2. Auto + we're the starter: ReadyCheckListenerFrame isn't shown to
-    --      the initiator (Blizzard auto-readies us, no popup needed), so a
-    --      child of that frame would stay hidden. Parent to UIParent and
-    --      position at screen center instead. Matches MRT's rlpointer pattern.
+    --   2. Auto + we're the starter: Blizzard shows ReadyCheckFrame to the
+    --      initiator too, an invisible DIALOG-strata box at screen centre
+    --      (only its ReadyCheckListenerFrame child is hidden). A row parked
+    --      at UIParent CENTER sits under that box and never receives the
+    --      mouse, so anchor above it like case 3.
     --   3. Auto + we're NOT the starter: anchor to ReadyCheckListenerFrame
     --      top so the row floats above the popup we see.
     self.frame:ClearAllPoints()
@@ -2015,6 +2016,9 @@ function RCC:ShowFrame(initiatorUnit)
             db.AnchorPoint or "CENTER",
             db.XOffset or 0,
             db.YOffset or 100)
+    elseif isStarter and ReadyCheckFrame then
+        self.frame:SetParent(ReadyCheckFrame)
+        self.frame:SetPoint("BOTTOM", ReadyCheckFrame, "TOP", 0, 2)
     elseif isStarter then
         self.frame:SetParent(UIParent)
         self.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
