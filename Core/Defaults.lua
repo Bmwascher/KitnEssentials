@@ -1198,12 +1198,9 @@ local Defaults = {
             LastWeaponEnchantItemMH = nil,
             LastWeaponEnchantItemOH = nil,
 
-            -- Runtime memory (persisted): last flask stat the player had buffed
-            -- ("mastery" / "haste" / "crit" / "vers"). Multiple flask items can map
-            -- to the same buff, and `pairs(FLASKS)` ordering is non-deterministic,
-            -- so without a preference the click button picks a random flask when the
-            -- bag holds more than one stat. UpdateFlask updates this whenever a
-            -- flask buff is detected — mirrors BR's ConsumableMemory aura path.
+            -- Runtime memory (persisted): the stat of the last flask buff seen
+            -- ("mastery" / "haste" / "crit" / "vers"). UpdateFlask records it; the
+            -- click prefers that stat when the bag holds flasks of several.
             LastFlaskStat = nil,
 
             -- Behavior
