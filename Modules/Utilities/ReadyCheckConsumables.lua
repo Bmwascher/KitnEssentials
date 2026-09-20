@@ -126,28 +126,69 @@ local HEARTY_FOOD_BUFFS = {
     [1232078] = true
 }
 
--- Weapon enhancements — unified table for oils, weapon stones, and ammo mods.
--- All three apply as temporary enchants, so C_PaperDollInfo.GetTemporaryEnchantmentInfo
--- reports them uniformly without a secondary confirmation click.
--- Keyed by enchant ID (enchantID in the returned TemporaryItemEnchantInfo).
--- Rank 1 = lower quality craft, Rank 2 = higher quality craft (some have rank 2 = lower ID).
+-- Weapon subclasses each enhancement accepts (Enum.ItemWeaponSubclass), the
+-- use-spell's own restriction. Bladed and blunt are the sharpening and
+-- weighting stones' lists; ammo is bows, guns and crossbows; the oil takes
+-- every weapon but thrown and fishing poles.
+local function subclassSet(...)
+    local set = {}
+    for i = 1, select("#", ...) do set[(select(i, ...))] = true end
+    return set
+end
+local BLADED_WEAPONS = subclassSet(0, 1, 6, 7, 8, 9, 13, 15)
+local BLUNT_WEAPONS  = subclassSet(4, 5, 10, 13)
+local RANGED_WEAPONS = subclassSet(2, 3, 18)
+local OILABLE_WEAPONS = {}
+for subclass = 0, 20 do
+    if subclass ~= 16 and subclass ~= 20 then OILABLE_WEAPONS[subclass] = true end
+end
+
+-- Weapon enhancements: oils, weapon stones and ammo mods, all temporary
+-- enchants that C_PaperDollInfo.GetTemporaryEnchantmentInfo reports alike.
+-- Keyed by enchant ID; rank 2 is the higher-quality craft.
 local WEAPON_ENHANCEMENTS = {
     -- Thalassian Phoenix Oil
-    [8051] = { item = 243733, kind = "oil",   rank = 1, name = "Thalassian Phoenix Oil"  },
-    [8052] = { item = 243734, kind = "oil",   rank = 2, name = "Thalassian Phoenix Oil"  },
+    [8051] = { item = 243733, kind = "oil",   rank = 1, name = "Thalassian Phoenix Oil", applies = OILABLE_WEAPONS },
+    [8052] = { item = 243734, kind = "oil",   rank = 2, name = "Thalassian Phoenix Oil", applies = OILABLE_WEAPONS },
     -- Refulgent Whetstone
-    [7906] = { item = 237370, kind = "stone", rank = 1, name = "Refulgent Whetstone"      },
-    [7905] = { item = 237371, kind = "stone", rank = 2, name = "Refulgent Whetstone"      },
+    [7906] = { item = 237370, kind = "stone", rank = 1, name = "Refulgent Whetstone",    applies = BLADED_WEAPONS },
+    [7905] = { item = 237371, kind = "stone", rank = 2, name = "Refulgent Whetstone",    applies = BLADED_WEAPONS },
     -- Refulgent Weightstone
-    [7907] = { item = 237367, kind = "stone", rank = 1, name = "Refulgent Weightstone"    },
-    [7908] = { item = 237369, kind = "stone", rank = 2, name = "Refulgent Weightstone"    },
+    [7907] = { item = 237367, kind = "stone", rank = 1, name = "Refulgent Weightstone",  applies = BLUNT_WEAPONS },
+    [7908] = { item = 237369, kind = "stone", rank = 2, name = "Refulgent Weightstone",  applies = BLUNT_WEAPONS },
     -- Laced Zoomshots
-    [8608] = { item = 257749, kind = "ammo",  rank = 1, name = "Laced Zoomshots"          },
-    [8609] = { item = 257750, kind = "ammo",  rank = 2, name = "Laced Zoomshots"          },
+    [8608] = { item = 257749, kind = "ammo",  rank = 1, name = "Laced Zoomshots",        applies = RANGED_WEAPONS },
+    [8609] = { item = 257750, kind = "ammo",  rank = 2, name = "Laced Zoomshots",        applies = RANGED_WEAPONS },
     -- Weighted Boomshots
-    [8610] = { item = 257751, kind = "ammo",  rank = 1, name = "Weighted Boomshots"       },
-    [8611] = { item = 257752, kind = "ammo",  rank = 2, name = "Weighted Boomshots"       },
+    [8610] = { item = 257751, kind = "ammo",  rank = 1, name = "Weighted Boomshots",     applies = RANGED_WEAPONS },
+    [8611] = { item = 257752, kind = "ammo",  rank = 2, name = "Weighted Boomshots",     applies = RANGED_WEAPONS },
 }
+
+-- The weapon click order: oil first (every spec but Shaman runs it), then
+-- rank desc, then item ID so the order is strict for table.sort. The pick
+-- walks ENHANCEMENTS_SORTED after the hand's own memory, so pairs() order
+-- never decides.
+local KIND_ORDER = { oil = 1, stone = 2, ammo = 2 }
+local ENHANCEMENT_BY_ITEM = {}
+local ENHANCEMENTS_SORTED = {}
+do
+    for _, data in pairs(WEAPON_ENHANCEMENTS) do
+        ENHANCEMENT_BY_ITEM[data.item] = data
+        ENHANCEMENTS_SORTED[#ENHANCEMENTS_SORTED + 1] = data.item
+    end
+    table_sort(ENHANCEMENTS_SORTED, function(a, b)
+        local da, db = ENHANCEMENT_BY_ITEM[a], ENHANCEMENT_BY_ITEM[b]
+        if KIND_ORDER[da.kind] ~= KIND_ORDER[db.kind] then
+            return KIND_ORDER[da.kind] < KIND_ORDER[db.kind]
+        end
+        if da.rank ~= db.rank then return da.rank > db.rank end
+        return a < b
+    end)
+end
+
+-- Each hand remembers its own last enhancement; the off hand would
+-- otherwise overwrite what the main hand just stored.
+local HAND_MEMORY_KEY = { [16] = "LastWeaponEnchantItemMH", [17] = "LastWeaponEnchantItemOH" }
 
 -- Augment Runes — keyed by buff spell ID for aura detection.
 -- Multiple tiers tracked because older-expansion runes may still be used:
@@ -194,18 +235,9 @@ local FLASK_BUFFS = {
     [1235057] = "vers",     -- Flask of Thalassian Resistance
 }
 
--- Per-spec flask stat priority (best-guess meta defaults, edit per tier).
--- Format: [specID] = { primaryStat, secondaryStat? }
--- Stats: "mastery" / "haste" / "crit" / "vers". Secondary is optional —
--- single-entry tables are valid (some specs have a clear single best stat).
---
--- Used as a fallback chain inside UpdateFlask when db.LastFlaskStat is nil
--- or out of stock. The user's actual usage (LastFlaskStat, updated every
--- time a flask buff is detected) always wins over these defaults; this
--- table only seeds the very first ready check of a brand-new session.
---
--- Specs not listed here fall through to the deterministic sorted fallback
--- (rank desc, stat alphabetical, itemID asc).
+-- Per-spec flask stat priority, [specID] = { primaryStat, secondaryStat? }.
+-- Meta defaults, edited per tier; only consulted while db.LastFlaskStat has
+-- nothing stocked, so a player's own flask choice always outranks them.
 local SPEC_FLASK_PRIORITY = {
     -- Death Knight
     [250]  = { "vers",    "crit"    },  -- Blood
@@ -262,22 +294,29 @@ local SPEC_FLASK_PRIORITY = {
     [73]   = { "haste",   "mastery" },  -- Protection
 }
 
--- Sorted itemID list of all FLASKS for deterministic final-fallback iteration.
--- Order: rank desc (rank 2 first), stat alphabetical, itemID asc.
--- Computed once at file load — FLASKS is static data.
+-- The flask click order: rank desc, then Fleeting before personal (the
+-- cauldron flask expires with the raid, the bought one keeps), then stat
+-- alphabetical, then itemID so the order is strict for table.sort. Every
+-- flask pick walks FLASKS_SORTED, so pairs() order never decides a tie.
+local function FlaskBefore(a, b)
+    local da, db = FLASKS[a], FLASKS[b]
+    local ra, rb = da.rank or 1, db.rank or 1
+    if ra ~= rb then return ra > rb end
+    if da.fleeting ~= db.fleeting then return da.fleeting == true end
+    if da.stat ~= db.stat then return da.stat < db.stat end
+    return a < b
+end
+
 local FLASKS_SORTED = {}
 do
     for itemID in pairs(FLASKS) do
         FLASKS_SORTED[#FLASKS_SORTED + 1] = itemID
     end
-    table_sort(FLASKS_SORTED, function(a, b)
-        local da, db = FLASKS[a], FLASKS[b]
-        local ra, rb = da.rank or 1, db.rank or 1
-        if ra ~= rb then return ra > rb end
-        if da.stat ~= db.stat then return da.stat < db.stat end
-        return a < b
-    end)
+    table_sort(FLASKS_SORTED, FlaskBefore)
 end
+-- Spec seams.
+RCC._FlaskBefore = FlaskBefore
+RCC._FlaskOrder = FLASKS_SORTED
 
 -- Healthstones — keyed by item ID.
 -- 5512: standard healthstone, craftable/droppable for any class to carry.
@@ -1028,36 +1067,12 @@ function RCC:_GetSpecFlaskPriority()
 end
 
 --- UpdateFlask
---- Aura scan against FLASK_BUFFS. When out of combat, wires the click button
---- to the player's preferred flask in bags.
----
---- Selection priority chain for the click target (first hit wins, each step
---- returns the highest-rank item in bags matching its stat):
----   1. db.LastFlaskStat — refreshed every time a flask buff is detected, so
----      the click keeps offering the stat line the player actually uses.
----      The ConsumableMemory aura-path Remember pattern
----      (Core/ConsumableMemory.lua), simplified to one global preference.
----   2. SPEC_FLASK_PRIORITY[spec][1] — meta-default primary stat for the
----      player's current spec. Only used on a fresh session before any
----      flask aura has populated LastFlaskStat.
----   3. SPEC_FLASK_PRIORITY[spec][2] — meta-default secondary stat (optional).
----   4. FLASKS_SORTED iteration — deterministic final fallback ordered by
----      (rank desc, stat alphabetical, itemID asc). Hit when LastFlaskStat
----      is nil, the spec isn't in SPEC_FLASK_PRIORITY (new spec from a
----      future patch), or none of the preferred stats are in bag.
----
---- Within any chosen stat, rank 2 is preferred over rank 1 (handled by
---- _BestForStat). Once the player applies any flask, LastFlaskStat locks
---- in for all future sessions across /reload.
----
---- Why this matters: 4 stat lines × 2 ranks × 2 forms = up to 16 flask
---- itemIDs, all mapped to 4 buffIDs. The previous "first match in pairs()"
---- scan was non-deterministic and would nominate a random flask whenever
---- the bag held multiple stat options.
+--- Paints the flask slot's ready state from the aura map and remembers the
+--- buffed stat line. The click half lives in UpdateFlaskClick, which reads
+--- bags only and so runs whether or not the aura walk did.
 function RCC:UpdateFlask(auras)
     local btn = self.buttons.flask
     if not btn then return end
-    local click = btn.click
 
     local activeAura, activeBuffId
     for buffId in pairs(FLASK_BUFFS) do
@@ -1074,11 +1089,9 @@ function RCC:UpdateFlask(auras)
         btn.texture:SetDesaturated(false)
         btn.timeLeft:SetText(formatDurationText(self:GetAuraRemaining(activeAura)))
 
-        -- Remember the stat line currently buffed so the click button keeps
-        -- nominating it even after the bag scan finds multiple stat options.
-        -- Tracked as the stat string (not buffId) so the preference survives
-        -- if Blizzard re-IDs the buff next season — as long as FLASKS data
-        -- keeps its `stat` field, the match still works.
+        -- Remembered as the stat string rather than the buff id so the
+        -- preference survives a re-id of the buff as long as FLASKS keeps
+        -- its stat field.
         if self.db then
             local stat = FLASK_BUFFS[activeBuffId]
             if stat then self.db.LastFlaskStat = stat end
@@ -1089,42 +1102,36 @@ function RCC:UpdateFlask(auras)
         btn.texture:SetDesaturated(true)
         btn.timeLeft:SetText("")
     end
+end
 
-    local cauldronOnly = self.db.CauldronFlasksOnly
+--- UpdateFlaskClick
+--- Nominates the flask the click will use and paints its icon and count;
+--- btn.nominatedItem carries the pick for probes. Bag reads carry no aura
+--- restriction, which is why this runs outside the aura-identity gate and
+--- arms in a keystone.
+function RCC:UpdateFlaskClick()
+    local btn = self.buttons.flask
+    if not btn then return end
+    local click = btn.click
+    local cauldronOnly = self.db and self.db.CauldronFlasksOnly
 
-    -- Bag scan (one pass): build a lookup of available eligible flasks
-    -- {[itemID] = { count, data }} so the priority chain below can do
-    -- O(1) lookups instead of re-scanning bags per priority step.
     local available = {}
-    local totalCount = 0
     for itemID, data in pairs(FLASKS) do
         if (not cauldronOnly) or data.fleeting then
             local count = GetItemCount(itemID, false, true)
-            if count and count > 0 then
-                available[itemID] = { count = count, data = data }
-                totalCount = totalCount + count
-            end
+            if count and count > 0 then available[itemID] = count end
         end
     end
-    btn.countText:SetText(totalCount > 0 and tostring(totalCount) or "")
 
-    -- Helper: highest-rank available item matching a stat (rank 2 wins over rank 1).
     local function bestForStat(stat)
-        local best, bestRank
-        for itemID, entry in pairs(available) do
-            if entry.data.stat == stat then
-                local rank = entry.data.rank or 1
-                if not bestRank or rank > bestRank then
-                    best, bestRank = itemID, rank
-                end
-            end
+        for _, itemID in ipairs(FLASKS_SORTED) do
+            if FLASKS[itemID].stat == stat and available[itemID] then return itemID end
         end
-        return best
+        return nil
     end
 
-    -- Priority chain
     local pickItem
-    local lastStat = self.db.LastFlaskStat
+    local lastStat = self.db and self.db.LastFlaskStat
     if lastStat then pickItem = bestForStat(lastStat) end
 
     if not pickItem then
@@ -1138,13 +1145,21 @@ function RCC:UpdateFlask(auras)
     end
 
     if not pickItem then
-        -- Deterministic final fallback (rank desc, stat alpha, itemID asc).
         for _, itemID in ipairs(FLASKS_SORTED) do
             if available[itemID] then
                 pickItem = itemID
                 break
             end
         end
+    end
+
+    btn.nominatedItem = pickItem
+    if pickItem then
+        self:SetIconFromItem(btn.texture, pickItem)
+        btn.countText:SetText(tostring(available[pickItem]))
+    else
+        btn.texture:SetTexture(DEFAULT_ICONS[SLOT_FLASK])
+        btn.countText:SetText("")
     end
 
     local clickName = pickItem and self:SafeItemName(pickItem) or nil
@@ -1160,13 +1175,50 @@ function RCC:UpdateFlask(auras)
     end
 end
 
+--- _PickWeaponEnhancement
+--- The item the click on one weapon slot will apply, and its bag count. No
+--- weapon, a nil subclass read or nothing compatible in bags nominates
+--- nothing: the click is never armed with an item the weapon cannot take.
+function RCC:_PickWeaponEnhancement(invSlot)
+    local weaponID = GetInventoryItemID("player", invSlot)
+    if not weaponID then return nil, 0 end
+    local _, _, _, _, _, classID, subClassID = GetItemInfoInstant(weaponID)
+    if classID ~= 2 or not subClassID then return nil, 0 end
+
+    local counts = {}
+    local function stocked(itemID)
+        local data = ENHANCEMENT_BY_ITEM[itemID]
+        if not data or not data.applies[subClassID] then return false end
+        if counts[itemID] == nil then
+            counts[itemID] = GetItemCount(itemID, false, true) or 0
+        end
+        return counts[itemID] > 0
+    end
+
+    local remembered = self.db and self.db[HAND_MEMORY_KEY[invSlot]]
+    if remembered and stocked(remembered) then return remembered, counts[remembered] end
+
+    local family = remembered and ENHANCEMENT_BY_ITEM[remembered]
+    if family then
+        for _, itemID in ipairs(ENHANCEMENTS_SORTED) do
+            if ENHANCEMENT_BY_ITEM[itemID].name == family.name and stocked(itemID) then
+                return itemID, counts[itemID]
+            end
+        end
+    end
+
+    for _, itemID in ipairs(ENHANCEMENTS_SORTED) do
+        if stocked(itemID) then return itemID, counts[itemID] end
+    end
+    return nil, 0
+end
+
 --- UpdateWeaponEnchant
---- Detects an active temporary enchant on one weapon slot via
---- C_PaperDollInfo.GetTemporaryEnchantmentInfo. Covers oils, weapon stones,
---- and ammo mods uniformly. Swaps the slot's icon to match the specific
---- enchant when known.
---- slotKey: "oil" (MH) or "oiloh" (OH).
---- invSlot: 16 or 17.
+--- Paints one weapon slot from C_PaperDollInfo.GetTemporaryEnchantmentInfo
+--- (oils, stones and ammo mods alike), remembers a recognised active
+--- enchant for this hand, and arms the click with _PickWeaponEnhancement's
+--- choice. The icon always shows the click target, never the active enchant.
+--- slotKey: "oil" (MH) or "oiloh" (OH). invSlot: 16 or 17.
 function RCC:UpdateWeaponEnchant(slotKey, invSlot)
     local btn = self.buttons[slotKey]
     if not btn then return end
@@ -1196,13 +1248,9 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
             btn.timeLeft:SetText("")
         end
 
-        -- Icon + last-used memory (only if enchant ID is known and safe)
-        if KE:IsSafeValue(enchID) then
+        if self.db and KE:IsSafeValue(enchID) then
             local data = WEAPON_ENHANCEMENTS[enchID]
-            if data then
-                self:SetIconFromItem(btn.texture, data.item)
-                if self.db then self.db.LastWeaponEnchantItem = data.item end
-            end
+            if data then self.db[HAND_MEMORY_KEY[invSlot]] = data.item end
         end
     else
         btn.statusTexture:SetTexture(NOT_READY_TEXTURE)
@@ -1211,37 +1259,23 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
         btn.timeLeft:SetText("")
     end
 
-    -- Click wiring — offer last-remembered item (or any available in bags)
-    local preferredItem = self.db and self.db.LastWeaponEnchantItem
-    local bagCount = 0
-
-    if preferredItem then
-        bagCount = GetItemCount(preferredItem, false, true) or 0
+    local pickItem, bagCount = self:_PickWeaponEnhancement(invSlot)
+    btn.nominatedItem = pickItem
+    if pickItem then
+        self:SetIconFromItem(btn.texture, pickItem)
+        btn.countText:SetText(tostring(bagCount))
+    else
+        btn.texture:SetTexture(DEFAULT_ICONS[slotKey == "oil" and SLOT_OIL or SLOT_OILOH])
+        btn.countText:SetText("")
     end
-    -- Fallback: if no memory or memory item is out of stock, pick any available
-    if bagCount == 0 then
-        for _, data in pairs(WEAPON_ENHANCEMENTS) do
-            local count = GetItemCount(data.item, false, true)
-            if count and count > 0 then
-                preferredItem = data.item
-                bagCount = count
-                break
-            end
-        end
-    end
-    btn.countText:SetText(bagCount > 0 and tostring(bagCount) or "")
 
     if click and not InCombatLockdown() then
-        if preferredItem and bagCount > 0 then
-            local itemName = self:SafeItemName(preferredItem)
-            if itemName then
-                click:SetAttribute("type", "item")
-                click:SetAttribute("item", itemName)
-                click:SetAttribute("target-slot", tostring(invSlot))
-                click:Show()
-            else
-                click:Hide()
-            end
+        local itemName = pickItem and self:SafeItemName(pickItem) or nil
+        if itemName then
+            click:SetAttribute("type", "item")
+            click:SetAttribute("item", itemName)
+            click:SetAttribute("target-slot", tostring(invSlot))
+            click:Show()
         else
             click:Hide()
         end
@@ -1493,6 +1527,7 @@ end
 --- unavailable and the weapon, healthstone and class slots still repaint,
 --- since C_PaperDollInfo.GetTemporaryEnchantmentInfo and C_Item.GetItemCount
 --- carry no aura restriction and the class slot asks its own per-spell gate.
+--- The flask click is bag-driven and repaints under the gate too.
 ---
 --- Secret value guards are layered:
 ---   1. KE:AreAuraIdentitiesHidden() — no aura walk and no aura-driven paint
@@ -1527,6 +1562,9 @@ function RCC:UpdateAllIcons(force)
         if visibility[SLOT_FLASK] then self:_PaintUnavailable(buttons.flask) end
         if visibility[SLOT_RUNE]  then self:_PaintUnavailable(buttons.rune) end
     end
+    -- After the unavailable paint so the bag-driven click, icon and count
+    -- land on top of it.
+    if visibility[SLOT_FLASK] then self:UpdateFlaskClick() end
     if visibility[SLOT_OIL]   then self:UpdateWeaponEnchant("oil",   16) end
     if visibility[SLOT_OILOH] then self:UpdateWeaponEnchant("oiloh", 17) end
     if visibility[SLOT_HS]    then self:UpdateHealthstone() end

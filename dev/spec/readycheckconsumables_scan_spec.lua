@@ -54,7 +54,7 @@ describe("ReadyCheckConsumables UpdateWeaponEnchant", function()
         RCC.buttons = {
             oil = {
                 statusTexture = { SetTexture = function() end, Show = function() end },
-                texture = { SetDesaturated = function(_, on) desaturated = on end },
+                texture = { SetDesaturated = function(_, on) desaturated = on end, SetTexture = function() end },
                 timeLeft = { SetText = function(_, s) timeText = s end },
                 countText = { SetText = function() end },
             },
