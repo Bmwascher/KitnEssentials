@@ -398,6 +398,7 @@ RCC.previewButtons = nil   -- [1..NUM_SLOTS] preview stubs; no click overlays
 RCC.db          = nil
 RCC.stateDriverActive = false  -- true while the combat state driver is registered (see _EnableStateDriver)
 RCC._refreshPending = nil      -- true while a coalesced repaint waits for the next frame (see RequestRefresh)
+RCC._checkSerial = 0           -- bumped per ShowFrame; a stale expiry timer compares against it (see _ScheduleExpiry)
 RCC._hidePending = nil         -- true while a hide deferred by combat waits for RunAfterCombat; cleared by ShowFrame and the real hide (see HideFrame)
 RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
 RCC._warlockInGroup = nil      -- IsWarlockInGroup's answer for the current roster; nil until asked (see IsWarlockInGroup)
@@ -2080,6 +2081,23 @@ function RCC:_HideTimerBar()
     bar:Hide()
 end
 
+--- _ScheduleExpiry
+--- READY_CHECK_FINISHED arrives one to three seconds after the client's
+--- countdown reaches zero (integer payload plus the server's own timer and
+--- latency), leaving an empty bar on screen. One timer per check tears the
+--- row down at zero instead; the serial makes a timer from an earlier check
+--- a no-op, and the finish event that follows finds nothing left to hide.
+function RCC:_ScheduleExpiry(seconds)
+    self._checkSerial = self._checkSerial + 1
+    if not seconds then return end
+    local serial = self._checkSerial
+    C_Timer.After(seconds, function()
+        if RCC._checkSerial == serial and RCC:_IsRowLive() then
+            RCC:READY_CHECK_FINISHED()
+        end
+    end)
+end
+
 ---------------------------------------------------------------------------------
 -- Frame Show / Hide
 ---------------------------------------------------------------------------------
@@ -2187,7 +2205,9 @@ function RCC:ShowFrame(initiatorUnit, duration)
     -- visible depends on event dispatch order, and the first paint must not.
     -- UpdateAllIcons ends with the layout, so no separate call is needed.
     self:UpdateAllIcons(true)
-    self:_ShowTimerBar(popup, TimerBarSeconds(duration), isStarter)
+    local seconds = TimerBarSeconds(duration)
+    self:_ShowTimerBar(popup, seconds, isStarter)
+    self:_ScheduleExpiry(seconds)
 
     if DEBUG_RCC then
         local parentFrame = self.frame:GetParent()
