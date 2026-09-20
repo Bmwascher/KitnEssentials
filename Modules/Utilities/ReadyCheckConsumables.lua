@@ -37,7 +37,7 @@ local GetItemCount          = C_Item.GetItemCount
 local GetItemInfo           = C_Item.GetItemInfo
 local GetInventoryItemID    = GetInventoryItemID
 local GetItemInfoInstant    = C_Item.GetItemInfoInstant
-local GetWeaponEnchantInfo  = GetWeaponEnchantInfo
+local GetTemporaryEnchantmentInfo = C_PaperDollInfo.GetTemporaryEnchantmentInfo
 local GetSpecialization     = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local C_Spell               = C_Spell
@@ -127,8 +127,9 @@ local HEARTY_FOOD_BUFFS = {
 }
 
 -- Weapon enhancements — unified table for oils, weapon stones, and ammo mods.
--- All three types apply via GetWeaponEnchantInfo() without a secondary confirmation click.
--- Keyed by enchant ID (returned as mainHandEnchantID / offHandEnchantID from the API).
+-- All three apply as temporary enchants, so C_PaperDollInfo.GetTemporaryEnchantmentInfo
+-- reports them uniformly without a secondary confirmation click.
+-- Keyed by enchant ID (enchantID in the returned TemporaryItemEnchantInfo).
 -- Rank 1 = lower quality craft, Rank 2 = higher quality craft (some have rank 2 = lower ID).
 local WEAPON_ENHANCEMENTS = {
     -- Thalassian Phoenix Oil
@@ -635,20 +636,23 @@ local READY_TEXTURE     = "Interface\\RaidFrame\\ReadyCheck-Ready"
 local NOT_READY_TEXTURE = "Interface\\RaidFrame\\ReadyCheck-NotReady"
 
 --- ScanPlayerAuras
---- Scans the player's HELPFUL auras once and returns a {spellId = auraData} map.
+--- Walks the player's HELPFUL auras once and returns a {spellId = auraData} map.
 --- Aura entries with secret spellIds are filtered out — they cannot be safely
 --- used as table keys or compared against data table IDs.
+--- The walk is uncapped: a nil batch size pages until the continuation token
+--- runs out, and the callback never ends it early. Callers gate on
+--- KE:AreAuraIdentitiesHidden() first; the slot calls hard error without
+--- aura access.
 function RCC:ScanPlayerAuras()
     local auras = {}
-    for i = 1, 40 do
-        local auraData = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
-        if not auraData then break end
+    AuraUtil.ForEachAura("player", "HELPFUL", nil, function(auraData)
+        if not auraData then return end
 
         local spellId = auraData.spellId
         if KE:IsSafeValue(spellId) then
             auras[spellId] = auraData
         end
-    end
+    end, true)
     return auras
 end
 
@@ -1112,9 +1116,10 @@ function RCC:UpdateFlask(auras)
 end
 
 --- UpdateWeaponEnchant
---- Detects active weapon enchant via GetWeaponEnchantInfo(). Covers oils,
---- weapon stones, and ammo mods uniformly (all three apply as standard enchants
---- in Midnight). Swaps the slot's icon to match the specific enchant when known.
+--- Detects an active temporary enchant on one weapon slot via
+--- C_PaperDollInfo.GetTemporaryEnchantmentInfo. Covers oils, weapon stones,
+--- and ammo mods uniformly. Swaps the slot's icon to match the specific
+--- enchant when known.
 --- slotKey: "oil" (MH) or "oiloh" (OH).
 --- invSlot: 16 or 17.
 function RCC:UpdateWeaponEnchant(slotKey, invSlot)
@@ -1122,26 +1127,20 @@ function RCC:UpdateWeaponEnchant(slotKey, invSlot)
     if not btn then return end
     local click = btn.click
 
-    local hasMH, mhExp, _, mhEnchID, hasOH, ohExp, _, ohEnchID = GetWeaponEnchantInfo()
-    local isMH  = (invSlot == 16)
-    -- The `a and b or c` ternary fails when b is false/nil — for slotKey="oil"
-    -- (isMH=true) when hasMH is false, the result is `false or hasOH` = hasOH,
-    -- which makes the MH slot mirror the OH slot's enchant state. Use explicit
-    -- if/else to keep MH and OH detection independent.
-    local has, exp, enchID
-    if isMH then
-        has, exp, enchID = hasMH, mhExp, mhEnchID
-    else
-        has, exp, enchID = hasOH, ohExp, ohEnchID
+    -- Nothing back means no temporary enchant; an empty or two-hander
+    -- off-hand slot answers the same way, so nil is the whole test.
+    local info = GetTemporaryEnchantmentInfo(invSlot)
+    local exp, enchID
+    if info then
+        exp, enchID = info.remainingTimeMs, info.enchantID
     end
 
     if DEBUG_RCC then
-        KE:Print(string.format("[RCC] UpdateWeaponEnchant slot=%s invSlot=%d hasMH=%s hasOH=%s mhEnch=%s ohEnch=%s -> has=%s",
-            tostring(slotKey), invSlot, tostring(hasMH), tostring(hasOH),
-            tostring(mhEnchID), tostring(ohEnchID), tostring(has)))
+        KE:Print(string.format("[RCC] UpdateWeaponEnchant slot=%s invSlot=%d has=%s ench=%s",
+            tostring(slotKey), invSlot, tostring(info ~= nil), tostring(enchID)))
     end
 
-    if has then
+    if info then
         btn.statusTexture:SetTexture(READY_TEXTURE)
         btn.statusTexture:Show()
         btn.texture:SetDesaturated(false)
