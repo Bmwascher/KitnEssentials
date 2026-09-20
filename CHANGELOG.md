@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.5
+
+### Conflicts
+
+- **NEW:** Northern Sky Raid Tools' own consumables bar can be switched off
+  from KitnEssentials so only one bar shows at a ready check. While both bars
+  are on you are asked which to keep; nothing changes until you answer
+
+---
+
 ## v4.7.4
 
 ### Ready Check Consumables
