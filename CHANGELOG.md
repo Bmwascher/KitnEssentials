@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.7
+
+### Ready Check Consumables
+
+- Counts and icons now refresh when your bags, cooldowns, group or
+  specialization change while a check is open, and a burst of changes repaints
+  the row once instead of once per change. Categories you have hidden do no
+  work at all
+
+---
+
 ## v4.7.6
 
 ### Ready Check Consumables
