@@ -2958,7 +2958,13 @@ function L.loadReadyCheckConsumables(overrides)
     -- GetInventoryItemID, itemInfo an item id to { classID, subClassID } for
     -- C_Item.GetItemInfoInstant, itemNames an item id to the name
     -- C_Item.GetItemInfo returns (nil reads as uncached); playerClass is the
-    -- class file token UnitClass hands back.
+    -- class file token UnitClass hands back. group is the roster the unit
+    -- fakes read: mode "raid" or "party" (nil = solo) and units keyed by
+    -- token ("raid3", "party1", "player"), each { name, class, role, dead,
+    -- stone }, stone being the sourceUnit C_UnitAuras.GetAuraDataBySpellName
+    -- reports for a Soulstone on that unit (nil = no stone). A unit whose
+    -- entry carries isPlayer is the player under its raid token.
+    -- soulstoneHidden is what KE.IsAuraHiddenForSpell answers.
     local seams = {
         combat = { inCombat = false },
         queue = {},
@@ -2966,6 +2972,8 @@ function L.loadReadyCheckConsumables(overrides)
         counts = { scans = 0, driverUnregistered = 0 },
         glow = { starts = 0, stops = 0 },
         playerClass = "WARRIOR",
+        group = { mode = nil, units = {} },
+        soulstoneHidden = false,
         bagCount = 0,
         bagCounts = {},
         equipped = {},
@@ -2997,14 +3005,40 @@ function L.loadReadyCheckConsumables(overrides)
         if name == "LibCustomGlow-1.0" then return glowLib end
         return nil
     end
-    _G.UnitClass = function() return seams.playerClass, seams.playerClass end
-    _G.UnitIsUnit = function() return false end
-    _G.UnitExists = function() return false end
-    _G.UnitIsDeadOrGhost = function() return false end
-    _G.UnitGroupRolesAssigned = function() return "NONE" end
-    _G.GetUnitName = function() return nil end
-    _G.IsInRaid = function() return false end
-    _G.IsInGroup = function() return false end
+    local function unitEntry(unit)
+        if unit == "player" then
+            return seams.group.units.player or { isPlayer = true }
+        end
+        return seams.group.units[unit]
+    end
+    local function isPlayer(unit)
+        local u = unitEntry(unit)
+        return u ~= nil and u.isPlayer == true
+    end
+    _G.UnitClass = function(unit)
+        local u = unit ~= "player" and unitEntry(unit) or nil
+        local class = (u and not u.isPlayer) and u.class or seams.playerClass
+        return class, class
+    end
+    _G.UnitIsUnit = function(a, b)
+        if a == b then return true end
+        return isPlayer(a) and isPlayer(b)
+    end
+    _G.UnitExists = function(unit) return unitEntry(unit) ~= nil end
+    _G.UnitIsDeadOrGhost = function(unit)
+        local u = unitEntry(unit)
+        return u ~= nil and u.dead == true
+    end
+    _G.UnitGroupRolesAssigned = function(unit)
+        local u = unitEntry(unit)
+        return (u and u.role) or "NONE"
+    end
+    _G.GetUnitName = function(unit)
+        local u = unitEntry(unit)
+        return u and u.name or nil
+    end
+    _G.IsInRaid = function() return seams.group.mode == "raid" end
+    _G.IsInGroup = function() return seams.group.mode ~= nil end
     _G.GetInventoryItemID = function(_, slot) return seams.equipped[slot] end
     _G.C_PaperDollInfo = {
         GetTemporaryEnchantmentInfo = function(slot) return seams.enchants[slot] end,
@@ -3047,6 +3081,11 @@ function L.loadReadyCheckConsumables(overrides)
             return nextToken, unpack(slots)
         end,
         GetAuraDataBySlot = function(_, slot) return seams.auras[slot] end,
+        GetAuraDataBySpellName = function(unit, spellName)
+            local u = unitEntry(unit)
+            if not u or u.stone == nil or spellName ~= "Soulstone" then return nil end
+            return { sourceUnit = u.stone }
+        end,
     }
     _G.C_UnitAuras = unitAuras
     _G.AuraUtil = {
@@ -3075,6 +3114,7 @@ function L.loadReadyCheckConsumables(overrides)
         Print = function() end,
         IsSafeValue = function(_, v) return v ~= nil and v ~= seams.SECRET end,
         AreAuraIdentitiesHidden = function() return false end,
+        IsAuraHiddenForSpell = function() return seams.soulstoneHidden end,
         RunAfterCombat = function(_, fn) seams.queue[#seams.queue + 1] = fn end,
     }
     helpers.loadModule("Modules/Utilities/ReadyCheckConsumables.lua", KE)
