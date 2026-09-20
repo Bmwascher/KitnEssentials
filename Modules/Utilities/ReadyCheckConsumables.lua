@@ -45,6 +45,8 @@ local C_Spell               = C_Spell
 local C_UnitAuras           = C_UnitAuras
 local C_Item                = C_Item
 local Item                  = Item
+local C_DurationUtil        = C_DurationUtil
+local C_StringUtil          = C_StringUtil
 -- issecretvalue is accessed via KE:IsSafeValue / KE:IsSecretValue helpers
 -- (see Core/Secret.lua) — no module-local alias needed here.
 
@@ -734,6 +736,19 @@ function RCC:BuildFrame()
     closeBtn:SetScript("OnClick", function() rcc:HideFrame() end)
     closeBtn:Hide()
     f.closeBtn = closeBtn
+
+    local timerBar = self:_BuildTimerBar("KE_ReadyCheckConsumables_Timer", f)
+    local formatter = C_StringUtil.CreateSecondsFormatter()
+    formatter:SetStripIntervalWhitespace(Enum.SecondsFormatterIntervalWhitespace.Strip)
+    formatter:SetDesiredUnitCount(1)
+    formatter:SetMinInterval(Enum.SecondsFormatterInterval.Seconds)
+    local binding = C_DurationUtil.CreateDurationTextBinding()
+    binding:SetFormatter(formatter)
+    binding:SetFontString(timerBar.text)
+    binding:SetExpiredText("")
+    binding:SetZeroDurationText("")
+    timerBar.binding = binding
+    self.timerBar = timerBar
 
     self.frame = f
 
@@ -1957,6 +1972,15 @@ function RCC:ApplySettings()
     end
     applyFonts(self.buttons)
     applyFonts(self.previewButtons)
+    local function applyBarFont(bar)
+        if not bar then return end
+        KE:ApplyFontToText(bar.text,
+            db.FontFace,
+            db.FontSize    or 11,
+            db.FontOutline or "OUTLINE")
+    end
+    applyBarFont(self.timerBar)
+    applyBarFont(self.previewTimerBar)
 
     if self.inPreview then
         self:ShowPreview()
@@ -1965,15 +1989,108 @@ function RCC:ApplySettings()
 end
 
 ---------------------------------------------------------------------------------
+-- Ready Check Timer Bar
+---------------------------------------------------------------------------------
+-- The countdown under the popup. The client animates the fill from a
+-- duration object and rewrites the text through a binding, so no script
+-- runs per frame.
+
+local TIMER_BAR_HEIGHT  = 10
+local TIMER_BAR_GAP     = 2
+local TIMER_BAR_TEXTURE = "Interface\\Buttons\\WHITE8X8"
+local PREVIEW_TIMER_FILL, PREVIEW_TIMER_TEXT = 0.6, "21s"
+
+--- The seconds READY_CHECK delivered, or nil: the value is secret in chat
+--- lockdown, and a bar is never guessed.
+local function TimerBarSeconds(value)
+    if not KE:IsSafeValue(value) then return nil end
+    local seconds = tonumber(value)
+    if seconds and seconds > 0 then return seconds end
+    return nil
+end
+RCC._TimerBarSeconds = TimerBarSeconds
+
+--- _BuildTimerBar
+--- One countdown bar: fill, dark backdrop, pixel border, centred text in
+--- the module's font. The real bar gets its duration binding in BuildFrame;
+--- the preview's is painted static.
+function RCC:_BuildTimerBar(name, parent)
+    local db = self.db
+    local bar = CreateFrame("StatusBar", name, parent)
+    bar:SetHeight(TIMER_BAR_HEIGHT)
+    bar:SetStatusBarTexture(TIMER_BAR_TEXTURE)
+    bar:SetMinMaxValues(0, 1)
+    bar:SetValue(1)
+
+    local bg = bar:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.06, 0.06, 0.06, 0.95)
+
+    local border = CreateFrame("Frame", nil, bar, "BackdropTemplate")
+    border:SetAllPoints()
+    border:SetBackdrop({ edgeFile = TIMER_BAR_TEXTURE, edgeSize = KE:GetPixelSize() })
+    border:SetBackdropBorderColor(0, 0, 0, 1)
+
+    local text = border:CreateFontString(nil, "OVERLAY")
+    text:SetPoint("CENTER", bar, "CENTER", 0, 0)
+    KE:ApplyFontToText(text, db.FontFace, db.FontSize or 11, db.FontOutline or "OUTLINE")
+    bar.text = text
+
+    bar:Hide()
+    return bar
+end
+
+--- _ShowTimerBar
+--- Parents the bar to the popup the row's auto mode uses, so a respondent's
+--- Ready click hides it with the popup in every position mode, anchors it
+--- under ReadyCheckFrame at the popup's width, and starts the countdown.
+--- No seconds, no popup or the setting off shows nothing.
+function RCC:_ShowTimerBar(popup, seconds)
+    local bar = self.timerBar
+    if not bar then return end
+    if not (self.db.ShowTimerBar and seconds and popup and ReadyCheckFrame) then
+        self:_HideTimerBar()
+        return
+    end
+    local accent = KE:GetThemeColor("accent") or { 1, 0, 0.549, 1 }
+    bar:SetStatusBarColor(accent[1], accent[2], accent[3], 1)
+    bar:SetParent(popup)
+    bar:ClearAllPoints()
+    bar:SetPoint("TOPLEFT",  ReadyCheckFrame, "BOTTOMLEFT",  0, -TIMER_BAR_GAP)
+    bar:SetPoint("TOPRIGHT", ReadyCheckFrame, "BOTTOMRIGHT", 0, -TIMER_BAR_GAP)
+
+    local duration = C_DurationUtil.CreateDuration()
+    duration:SetTimeFromStart(GetTime(), seconds)
+    bar:SetTimerDuration(duration, Enum.StatusBarInterpolation.Immediate,
+        Enum.StatusBarTimerDirection.RemainingTime)
+    bar.binding:SetDuration(duration)
+    bar.binding:SetEnabled(true)
+    bar.duration = duration
+    bar:Show()
+end
+
+--- _HideTimerBar
+--- The bar is unprotected, so this runs even while HideFrame defers the
+--- rest of the teardown to combat end.
+function RCC:_HideTimerBar()
+    local bar = self.timerBar
+    if not bar then return end
+    bar.binding:SetEnabled(false)
+    bar:Hide()
+end
+
+---------------------------------------------------------------------------------
 -- Frame Show / Hide
 ---------------------------------------------------------------------------------
 
 --- ShowFrame
---- Called on READY_CHECK. Builds the frame if needed, updates icons, and
---- shows the consumable row anchored to the ready check popup.
+--- Called on READY_CHECK. Builds the frame if needed, updates icons, shows
+--- the consumable row anchored to the ready check popup and the countdown
+--- bar under it.
 ---
 --- @param initiatorUnit string  unit that initiated the ready check (passed from event)
-function RCC:ShowFrame(initiatorUnit)
+--- @param duration number       seconds left in the check; secret in chat lockdown
+function RCC:ShowFrame(initiatorUnit, duration)
     local db = self.db
     if not db or not db.Enabled then return end
 
@@ -2018,15 +2135,19 @@ function RCC:ShowFrame(initiatorUnit)
     -- Restore alpha in case a prior deferred hide set it to 0 (see HideFrame).
     self.frame:SetAlpha(1)
 
-    -- Anchor selection — three cases:
-    --   1. Custom position: user-defined anchor (honors db settings).
-    --   2. Auto + we're the starter: Blizzard shows ReadyCheckFrame to the
-    --      initiator too, an invisible DIALOG-strata box at screen centre
-    --      (only its ReadyCheckListenerFrame child is hidden). A row parked
-    --      at UIParent CENTER sits under that box and never receives the
-    --      mouse, so anchor above it like case 3.
-    --   3. Auto + we're NOT the starter: anchor to ReadyCheckListenerFrame
-    --      top so the row floats above the popup we see.
+    -- The Blizzard popup: the starter gets ReadyCheckFrame, an invisible
+    -- DIALOG-strata box at screen centre whose ReadyCheckListenerFrame child
+    -- is hidden (a row parked at UIParent CENTER sits under that box and
+    -- never receives the mouse); a respondent gets the visible listener.
+    -- The row anchors above it in auto mode; the timer bar hangs under it in
+    -- every mode.
+    local popup
+    if isStarter then
+        popup = ReadyCheckFrame
+    else
+        popup = ReadyCheckListenerFrame or ReadyCheckFrame
+    end
+
     self.frame:ClearAllPoints()
     if db.PositionMode == "custom" then
         self.frame:SetParent(UIParent)
@@ -2036,24 +2157,15 @@ function RCC:ShowFrame(initiatorUnit)
             db.AnchorPoint or "CENTER",
             db.XOffset or 0,
             db.YOffset or 100)
-    elseif isStarter and ReadyCheckFrame then
-        self.frame:SetParent(ReadyCheckFrame)
-        self.frame:SetPoint("BOTTOM", ReadyCheckFrame, "TOP", 0, 2)
-    elseif isStarter then
+    elseif popup then
+        self.frame:SetParent(popup)
+        self.frame:SetPoint("BOTTOM", popup, "TOP", 0, 2)
+    else
+        -- Extremely defensive fallback: if neither Blizzard frame exists
+        -- (e.g. addon conflict reskin), floating at UIParent is better
+        -- than not showing at all.
         self.frame:SetParent(UIParent)
         self.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-    else
-        local parent = ReadyCheckListenerFrame or ReadyCheckFrame
-        if parent then
-            self.frame:SetParent(parent)
-            self.frame:SetPoint("BOTTOM", parent, "TOP", 0, 2)
-        else
-            -- Extremely defensive fallback: if neither Blizzard frame exists
-            -- (e.g. addon conflict reskin), floating at UIParent is better
-            -- than not showing at all.
-            self.frame:SetParent(UIParent)
-            self.frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
-        end
     end
 
     -- Close button: visible only when we're the starter (Blizzard shows no
@@ -2076,6 +2188,7 @@ function RCC:ShowFrame(initiatorUnit)
     -- visible depends on event dispatch order, and the first paint must not.
     -- UpdateAllIcons ends with the layout, so no separate call is needed.
     self:UpdateAllIcons(true)
+    self:_ShowTimerBar(popup, TimerBarSeconds(duration))
 
     if DEBUG_RCC then
         local parentFrame = self.frame:GetParent()
@@ -2093,6 +2206,8 @@ end
 --- continue to tick on the hidden frame, contributing to idle FPS drops.
 function RCC:HideFrame()
     if not self.frame then return end
+
+    self:_HideTimerBar()
 
     -- Stop all LibCustomGlow animations on any slot that might have one
     -- (a low-duration warning, the rune nudge, a cast cue). The flag and
@@ -2150,7 +2265,7 @@ end
 --- READY_CHECK fires when a ready check is initiated.
 --- @param _ string          event name (unused)
 --- @param initiatorUnit string  unit that started the ready check
---- @param duration number       ready check window duration in seconds
+--- @param duration number       seconds left in the check when the event arrived
 function RCC:READY_CHECK(_, initiatorUnit, duration)
     if DEBUG_RCC then
         -- initiatorUnit carries SecretInChatMessagingLockdown — guard before tostring.
@@ -2161,7 +2276,7 @@ function RCC:READY_CHECK(_, initiatorUnit, duration)
 
     self:_SetCheckEvents(true)
 
-    self:ShowFrame(initiatorUnit)
+    self:ShowFrame(initiatorUnit, duration)
 end
 
 --- READY_CHECK_FINISHED fires when the ready check closes (all responded or timed out).
@@ -2335,6 +2450,10 @@ function RCC:BuildPreviewFrame()
 
     self.previewButtons = self:_BuildIconRow(f)
     self.previewFrame = f
+    local bar = self:_BuildTimerBar("KE_ReadyCheckConsumables_PreviewTimer", f)
+    bar:SetValue(PREVIEW_TIMER_FILL)
+    bar.text:SetText(PREVIEW_TIMER_TEXT)
+    self.previewTimerBar = bar
 end
 
 --- ShowPreview
@@ -2362,12 +2481,16 @@ function RCC:ShowPreview()
 
     self.inPreview = true
 
+    local bar = self.previewTimerBar
     frame:ClearAllPoints()
+    bar:ClearAllPoints()
     if db.HidePreviewMock then
         -- Mock popup suppressed — anchor the row slightly above screen center,
         -- roughly where the row would sit above the mock when the box is shown.
         if self.previewMock then self.previewMock:Hide() end
         frame:SetPoint("CENTER", UIParent, "CENTER", 0, 85)
+        bar:SetPoint("TOP", frame, "BOTTOM", 0, -TIMER_BAR_GAP)
+        bar:SetWidth(323)
     else
         -- Show mock popup at screen center, anchor consumable row to its top
         -- (same 5px gap as the real ReadyCheckListenerFrame anchor).
@@ -2376,6 +2499,15 @@ function RCC:ShowPreview()
         mock:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
         mock:Show()
         frame:SetPoint("BOTTOM", mock, "TOP", 0, 2)
+        bar:SetPoint("TOPLEFT",  mock, "BOTTOMLEFT",  0, -TIMER_BAR_GAP)
+        bar:SetPoint("TOPRIGHT", mock, "BOTTOMRIGHT", 0, -TIMER_BAR_GAP)
+    end
+    if db.ShowTimerBar then
+        local accent = KE:GetThemeColor("accent") or { 1, 0, 0.549, 1 }
+        bar:SetStatusBarColor(accent[1], accent[2], accent[3], 1)
+        bar:Show()
+    else
+        bar:Hide()
     end
 
     -- User-toggle visibility map. No context filters — this is a settings preview.

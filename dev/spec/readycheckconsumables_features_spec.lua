@@ -8,7 +8,9 @@
 -- predicate holds and the off-hand slot shows for a shield the check owns;
 -- an owned hand is ready only on the imbue, never on an oil, and its click
 -- casts the imbue, or the shield under Instinctive Imbuements while the
--- slot still names the imbue. Known spells, the spec index, equipment and enchants are
+-- slot still names the imbue; the ready check's remaining time drives the
+-- countdown bar only when it is a safe positive number. Known spells, the
+-- spec index, equipment and enchants are
 -- plain loader seams; the slot button is a recording stub because the
 -- paint is read back from its text and attributes.
 
@@ -56,6 +58,21 @@ describe("ReadyCheckConsumables low-duration predicate", function()
         }
         for i, c in ipairs(cases) do
             assert.equals(c.low, RCC._IsLowDuration(c.remain, c.threshold), "case " .. i)
+        end
+    end)
+end)
+
+describe("ReadyCheckConsumables timer bar seconds", function()
+    it("returns a safe positive number and nil for secret, nil and zero", function()
+        local RCC, _, seams = L.loadReadyCheckConsumables()
+        local cases = {
+            { value = 35,           seconds = 35 },
+            { value = seams.SECRET, seconds = nil },
+            { value = nil,          seconds = nil },
+            { value = 0,            seconds = nil },
+        }
+        for i, c in ipairs(cases) do
+            assert.equals(c.seconds, RCC._TimerBarSeconds(c.value), "case " .. i)
         end
     end)
 end)
