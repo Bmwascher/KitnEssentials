@@ -81,8 +81,8 @@ local DEFAULT_ICONS = {
     [SLOT_CLASS]  = 136210,   -- class item placeholder
 }
 
--- Per-slot db toggle keys (consumed by RefreshLayout via direct db key access).
--- Kept here only for reference — RefreshLayout reads these keys by hardcoded name
+-- Per-slot db toggle keys (consumed by _ComputeVisibility via direct db key access).
+-- Kept here only for reference — _ComputeVisibility reads these keys by hardcoded name
 -- since it also needs per-slot contextual logic (OH weapon presence, class match).
 -- Keys: ShowFood, ShowFlask, ShowWeaponOil, ShowOffHandOil, ShowAugmentRune,
 --       ShowHealthstone, ShowClassItem.
@@ -323,6 +323,8 @@ RCC.previewFrame   = nil   -- KE_ReadyCheckConsumables_Preview container (settin
 RCC.previewButtons = nil   -- [1..NUM_SLOTS] preview stubs; no click overlays
 RCC.db          = nil
 RCC.stateDriverActive = false  -- true while the combat state driver is registered (see _EnableStateDriver)
+RCC._refreshPending = nil      -- true while a coalesced repaint waits for the next frame (see RequestRefresh)
+RCC._visibility = {}           -- [1..NUM_SLOTS] the real row's visible set, rebuilt in place each repaint
 
 -- Sticky last-target for the Warlock CLASS slot (Soulstone). Holds the name
 -- of the most recently confirmed Soulstone recipient so the click macro keeps
@@ -451,11 +453,24 @@ end
 --- _LayoutRow
 --- Sizes every stub and its status overlay from db, chains the visible ones
 --- left to right on `container`, hides the rest, and fits the container to
---- the visible count. `visibility` is indexed 1..NUM_SLOTS.
+--- the visible count. `visibility` is indexed 1..NUM_SLOTS. Nothing is
+--- touched unless the visible set or the geometry differs from the last pass
+--- over this container. The slot buttons parent secure click overlays, so
+--- they and the container are protected in combat; the key is left alone
+--- then, and the combat-exit repaint lays out.
 function RCC:_LayoutRow(container, buttons, visibility)
+    if InCombatLockdown() then return end
     local db = self.db
     local iconSize = db.IconSize or 32
     local spacing  = db.IconSpacing or 4
+
+    local mask = 0
+    for i = 1, NUM_SLOTS do
+        if visibility[i] then mask = mask + 2 ^ (i - 1) end
+    end
+    local key = string_format("%s:%s:%d", iconSize, spacing, mask)
+    if container._layoutKey == key then return end
+    container._layoutKey = key
 
     local prev
     local totalVisible = 0
@@ -929,6 +944,36 @@ local function formatDurationText(seconds)
     return string_format("%dm", math_ceil(seconds / 60))
 end
 
+local SOULSTONE_GLOW_COLOR = { 1, 1, 0, 1 }
+
+-- LibCustomGlow rebuilds the glow on every Start call, so a slot that is
+-- already glowing is left alone across repaints.
+local function StartGlow(btn, color)
+    if not LCG or btn.glowActive then return end
+    LCG.PixelGlow_Start(btn, color, 8, 0.25, 8, 2, 1, 1, false, nil)
+    btn.glowActive = true
+end
+
+local function StopGlow(btn)
+    if not btn.glowActive then return end
+    if LCG then LCG.PixelGlow_Stop(btn) end
+    btn.glowActive = false
+end
+
+--- _PaintUnavailable
+--- An aura-driven slot while aura identities are hidden: no status mark, a
+--- greyed icon, no text, no glow and no armed click, so a slot that cannot
+--- be read never shows a state left over from an earlier check.
+function RCC:_PaintUnavailable(btn)
+    if not btn then return end
+    btn.statusTexture:Hide()
+    btn.texture:SetDesaturated(true)
+    btn.timeLeft:SetText("")
+    btn.countText:SetText("")
+    StopGlow(btn)
+    if btn.click and not InCombatLockdown() then btn.click:Hide() end
+end
+
 ---------------------------------------------------------------------------------
 -- Per-Slot Updates
 ---------------------------------------------------------------------------------
@@ -1266,12 +1311,10 @@ function RCC:UpdateRune(auras)
     if unlimitedOnly and bestRune and not activeAura then
         self:SetIconFromItem(btn.texture, bestRune.item)
     end
-    if LCG then
-        if unlimitedOnly and bestRune and not activeAura then
-            LCG.PixelGlow_Start(btn, nil, 8, 0.25, 8, 2, 1, 1, false, nil)
-        else
-            LCG.PixelGlow_Stop(btn)
-        end
+    if unlimitedOnly and bestRune and not activeAura then
+        StartGlow(btn, nil)
+    else
+        StopGlow(btn)
     end
 
     if click and not InCombatLockdown() then
@@ -1388,12 +1431,10 @@ function RCC:UpdateClassSlot()
     -- Yellow pixel glow when Soulstone is missing (grayed-out state).
     -- Stops automatically when the slot transitions to ready (onCD branch).
     -- HideFrame stops all glows defensively on RC teardown.
-    if LCG then
-        if not onCD then
-            LCG.PixelGlow_Start(btn, {1, 1, 0, 1}, 8, 0.25, 8, 2, 1, 1, false, nil)
-        else
-            LCG.PixelGlow_Stop(btn)
-        end
+    if onCD then
+        StopGlow(btn)
+    else
+        StartGlow(btn, SOULSTONE_GLOW_COLOR)
     end
 
     if click and not InCombatLockdown() then
@@ -1424,16 +1465,38 @@ end
 --- The state driver hid the click overlays on combat entry; a full repaint
 --- re-arms the ones that still apply and shows them again.
 function RCC:PLAYER_REGEN_ENABLED()
-    self:UpdateAllIcons()
+    self:RequestRefresh()
+end
+
+--- _ComputeVisibility
+--- The real row's visible set, each contextual predicate asked once per
+--- repaint. ShowPreview keeps a toggle-only table of its own so the settings
+--- preview shows every category.
+function RCC:_ComputeVisibility()
+    local db = self.db
+    local _, playerClass = UnitClass("player")
+    local visibility = self._visibility
+    visibility[SLOT_FOOD]  = db.ShowFood        ~= false
+    visibility[SLOT_FLASK] = db.ShowFlask       ~= false
+    visibility[SLOT_OIL]   = db.ShowWeaponOil   ~= false
+    visibility[SLOT_OILOH] = (db.ShowOffHandOil  ~= false) and self:OffhandIsWeapon()
+    visibility[SLOT_RUNE]  = db.ShowAugmentRune ~= false
+    visibility[SLOT_HS]    = (db.ShowHealthstone ~= false) and self:IsWarlockInGroup()
+    visibility[SLOT_CLASS] = (db.ShowClassItem   ~= false) and (CLASS_SLOT[playerClass] ~= nil)
+    return visibility
 end
 
 --- UpdateAllIcons
---- Scans player auras once, then dispatches to per-slot updaters. Called on
---- READY_CHECK, UNIT_AURA, and UNIT_INVENTORY_CHANGED events.
+--- Computes the visible set, scans player auras once, repaints each visible
+--- slot, then lays the row out. Only the food, flask and rune slots need
+--- aura access; while aura identities are hidden they are painted
+--- unavailable and the weapon, healthstone and class slots still repaint,
+--- since C_PaperDollInfo.GetTemporaryEnchantmentInfo and C_Item.GetItemCount
+--- carry no aura restriction and the class slot asks its own per-spell gate.
 ---
 --- Secret value guards are layered:
----   1. KE:AreAuraIdentitiesHidden() early-return — skips entirely if the
----      global aura system is locked for this player.
+---   1. KE:AreAuraIdentitiesHidden() — no aura walk and no aura-driven paint
+---      while the global aura system is locked for this player.
 ---   2. Per-aura spellId / expirationTime guards via ScanPlayerAuras filter.
 ---   3. Per-API guards inside individual slot updaters (weapon enchant exp/ID,
 ---      spell cooldown start/duration, item names passed to macrotext).
@@ -1443,48 +1506,58 @@ end
 ---   position, does not force.
 function RCC:UpdateAllIcons(force)
     if force ~= true and not self:_IsRowLive() then return end
+    if not self.frame or not self.db then return end
 
+    local visibility = self:_ComputeVisibility()
+    local buttons = self.buttons
+
+    local auras
     if KE:AreAuraIdentitiesHidden() then
-        if DEBUG_RCC then KE:Print("[RCC] UpdateAllIcons: auras are secret, skipping.") end
-        return
+        if DEBUG_RCC then KE:Print("[RCC] UpdateAllIcons: auras are secret, aura slots unavailable.") end
+    else
+        auras = self:ScanPlayerAuras()
     end
 
-    local auras = self:ScanPlayerAuras()
+    if auras then
+        if visibility[SLOT_FOOD]  then self:UpdateFood(auras) end
+        if visibility[SLOT_FLASK] then self:UpdateFlask(auras) end
+        if visibility[SLOT_RUNE]  then self:UpdateRune(auras) end
+    else
+        if visibility[SLOT_FOOD]  then self:_PaintUnavailable(buttons.food) end
+        if visibility[SLOT_FLASK] then self:_PaintUnavailable(buttons.flask) end
+        if visibility[SLOT_RUNE]  then self:_PaintUnavailable(buttons.rune) end
+    end
+    if visibility[SLOT_OIL]   then self:UpdateWeaponEnchant("oil",   16) end
+    if visibility[SLOT_OILOH] then self:UpdateWeaponEnchant("oiloh", 17) end
+    if visibility[SLOT_HS]    then self:UpdateHealthstone() end
+    if visibility[SLOT_CLASS] then self:UpdateClassSlot() end
 
-    self:UpdateFood(auras)
-    self:UpdateFlask(auras)
-    self:UpdateWeaponEnchant("oil",   16)
-    self:UpdateWeaponEnchant("oiloh", 17)
-    self:UpdateRune(auras)
-    self:UpdateHealthstone()
-    self:UpdateClassSlot()
+    self:_LayoutRow(self.frame, buttons, visibility)
+end
 
-    self:RefreshLayout()
+-- Pre-declared so RequestRefresh allocates no closure per call.
+local function _RefreshFire()
+    RCC._refreshPending = nil
+    RCC:UpdateAllIcons()
+end
+
+--- RequestRefresh
+--- The event entry point. Every request made in one frame collapses into
+--- one UpdateAllIcons on the next. Liveness is tested here so a dead row
+--- schedules nothing, and again inside UpdateAllIcons so a request queued
+--- just before the row died repaints nothing.
+function RCC:RequestRefresh()
+    if self._refreshPending or not self:_IsRowLive() then return end
+    self._refreshPending = true
+    C_Timer.After(0, _RefreshFire)
 end
 
 --- RefreshLayout
---- Determines visible slots based on (a) user toggles and (b) contextual
---- factors: OH slot hidden when no OH weapon equipped, class slot hidden for
---- non-Warlocks. Then dynamically chains anchor points left-to-right so the
---- row stays tight with no gaps.
+--- Lays the real row out from the current visible set without repainting
+--- any slot.
 function RCC:RefreshLayout()
-    if not self.frame then return end
-    local db = self.db
-    if not db then return end
-
-    local _, playerClass = UnitClass("player")
-
-    local visibility = {
-        [SLOT_FOOD]   = db.ShowFood        ~= false,
-        [SLOT_FLASK]  = db.ShowFlask       ~= false,
-        [SLOT_OIL]    = db.ShowWeaponOil   ~= false,
-        [SLOT_OILOH]  = (db.ShowOffHandOil  ~= false) and self:OffhandIsWeapon(),
-        [SLOT_RUNE]   = db.ShowAugmentRune ~= false,
-        [SLOT_HS]     = (db.ShowHealthstone ~= false) and self:IsWarlockInGroup(),
-        [SLOT_CLASS]  = (db.ShowClassItem   ~= false) and (CLASS_SLOT[playerClass] ~= nil),
-    }
-
-    self:_LayoutRow(self.frame, self.buttons, visibility)
+    if not self.frame or not self.db then return end
+    self:_LayoutRow(self.frame, self.buttons, self:_ComputeVisibility())
 end
 
 --- RefreshIconVisibility
@@ -1646,7 +1719,7 @@ function RCC:ShowFrame(initiatorUnit)
     self:RegisterEvent("PLAYER_REGEN_ENABLED")
     -- Forced: whether the Blizzard popup this row is parented to is already
     -- visible depends on event dispatch order, and the first paint must not.
-    -- UpdateAllIcons ends with RefreshLayout, so no separate call is needed.
+    -- UpdateAllIcons ends with the layout, so no separate call is needed.
     self:UpdateAllIcons(true)
 
     if DEBUG_RCC then
@@ -1669,15 +1742,17 @@ function RCC:HideFrame()
     -- Stop all LibCustomGlow animations on any slot that might have one.
     -- Rune and class (warlock soulstone) slots currently use glow; stopping
     -- all defensively future-proofs the cleanup if more glow effects are added.
-    if LCG then
-        for i = 1, NUM_SLOTS do
-            local btn = self.buttons[i]
-            if btn then
+    -- The flag is cleared with them so the next check can start a glow again.
+    for i = 1, NUM_SLOTS do
+        local btn = self.buttons[i]
+        if btn then
+            if LCG then
                 LCG.PixelGlow_Stop(btn)
                 LCG.ButtonGlow_Stop(btn)
                 LCG.AutoCastGlow_Stop(btn)
                 LCG.ProcGlow_Stop(btn)
             end
+            btn.glowActive = false
         end
     end
 
@@ -1728,9 +1803,7 @@ function RCC:READY_CHECK(_, initiatorUnit, duration)
             safeName, tonumber(duration) or 0))
     end
 
-    -- Register per-check events (only active during a ready check window)
-    self:RegisterEvent("UNIT_AURA")
-    self:RegisterEvent("UNIT_INVENTORY_CHANGED")
+    self:_SetCheckEvents(true)
 
     self:ShowFrame(initiatorUnit)
 end
@@ -1739,17 +1812,37 @@ end
 function RCC:READY_CHECK_FINISHED()
     if DEBUG_RCC then KE:Print("[RCC] READY_CHECK_FINISHED") end
 
-    self:UnregisterEvent("UNIT_AURA")
-    self:UnregisterEvent("UNIT_INVENTORY_CHANGED")
+    self:_SetCheckEvents(false)
 
     self:HideFrame()
 end
 
---- UNIT_AURA fires when a unit's aura set changes.
---- Player auras drive consumable status, so a player-unit change does the
---- full UpdateAllIcons sweep. Group-unit changes only matter to the Warlock
---- class slot (Soulstone target tracking) — we do a lightweight class-slot
---- refresh in that case rather than re-scanning all consumables.
+-- Subscribed for the ready-check window only. The row is repainted from
+-- scratch when it shows, so nothing is missed between checks, and bag and
+-- cooldown events fire far too often to keep a handler on for an idle module.
+local CHECK_EVENTS = {
+    "UNIT_AURA", "UNIT_INVENTORY_CHANGED", "BAG_UPDATE_DELAYED",
+    "GROUP_ROSTER_UPDATE", "PLAYER_SPECIALIZATION_CHANGED",
+}
+
+--- _SetCheckEvents
+--- Registers or drops the per-check subscriptions. SPELL_UPDATE_COOLDOWN
+--- feeds only the class slot, so a class without one never subscribes.
+function RCC:_SetCheckEvents(on)
+    if not on then
+        for _, event in ipairs(CHECK_EVENTS) do self:UnregisterEvent(event) end
+        self:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
+        return
+    end
+    for _, event in ipairs(CHECK_EVENTS) do self:RegisterEvent(event) end
+    local _, playerClass = UnitClass("player")
+    if CLASS_SLOT[playerClass] then self:RegisterEvent("SPELL_UPDATE_COOLDOWN") end
+end
+
+--- UNIT_AURA fires for every unit whose aura set changes. The player's
+--- auras drive the consumable slots; a party or raid member's matter only to
+--- the Warlock class slot (Soulstone target tracking). Every other token is
+--- dropped before it reaches the coalescer.
 --- @param _ string   event name (unused)
 --- @param unit string
 function RCC:UNIT_AURA(_, unit)
@@ -1758,25 +1851,54 @@ function RCC:UNIT_AURA(_, unit)
     if KE:IsUnreadableAuraPayload(unit, nil) then return end
     if unit == "player" then
         if DEBUG_RCC then KE:Print("[RCC] UNIT_AURA: player auras changed, refreshing.") end
-        self:UpdateAllIcons()
+        self:RequestRefresh()
         return
     end
 
-    -- Group-unit aura change: only the Warlock dynamic class slot cares.
     local _, playerClass = UnitClass("player")
-    if playerClass == "WARLOCK" and self:_IsRowLive() then
+    if playerClass == "WARLOCK" and (unit:find("^party%d+$") or unit:find("^raid%d+$")) then
         if DEBUG_RCC then
-            KE:Print(string_format("[RCC] UNIT_AURA: group unit %s changed, refreshing class slot.",
-                tostring(unit)))
+            KE:Print(string_format("[RCC] UNIT_AURA: group unit %s changed, refreshing.", unit))
         end
-        self:UpdateClassSlot()
+        self:RequestRefresh()
     end
 end
 
---- UNIT_INVENTORY_CHANGED fires when equipped items change (weapon oils).
-function RCC:UNIT_INVENTORY_CHANGED()
+--- UNIT_INVENTORY_CHANGED fires for every unit whose equipment changes; only
+--- the player's weapon slots are read.
+function RCC:UNIT_INVENTORY_CHANGED(_, unit)
+    if unit ~= "player" then return end
     if DEBUG_RCC then KE:Print("[RCC] UNIT_INVENTORY_CHANGED: refreshing.") end
-    self:UpdateAllIcons()
+    self:RequestRefresh()
+end
+
+--- BAG_UPDATE_DELAYED: a consumable acquired or used during the check.
+function RCC:BAG_UPDATE_DELAYED()
+    self:RequestRefresh()
+end
+
+--- GROUP_ROSTER_UPDATE: the Warlock-in-group test and the healer fallback
+--- both read the roster.
+function RCC:GROUP_ROSTER_UPDATE()
+    self:RequestRefresh()
+end
+
+--- PLAYER_SPECIALIZATION_CHANGED: the flask preference is per spec.
+function RCC:PLAYER_SPECIALIZATION_CHANGED(_, unit)
+    if unit ~= "player" then return end
+    self:RequestRefresh()
+end
+
+--- SPELL_UPDATE_COOLDOWN drives the class slot's cooldown proxy. A nil
+--- spellID means every cooldown changed; any other spell's is irrelevant.
+function RCC:SPELL_UPDATE_COOLDOWN(_, spellID, baseSpellID)
+    if spellID ~= nil then
+        local _, playerClass = UnitClass("player")
+        local classData = CLASS_SLOT[playerClass]
+        if not classData then return end
+        if spellID ~= classData.spellID and baseSpellID ~= classData.spellID then return end
+    end
+    self:RequestRefresh()
 end
 
 ---------------------------------------------------------------------------------
@@ -1948,9 +2070,10 @@ function RCC:OnEnable()
     self:RegisterEvent("READY_CHECK")
     self:RegisterEvent("READY_CHECK_FINISHED")
 
-    -- UNIT_AURA and UNIT_INVENTORY_CHANGED are registered only during an
-    -- active ready check (in READY_CHECK handler) and unregistered in
-    -- READY_CHECK_FINISHED to avoid unnecessary processing at all other times.
+    -- The refresh triggers (CHECK_EVENTS and SPELL_UPDATE_COOLDOWN) are
+    -- registered only during an active ready check (in READY_CHECK handler)
+    -- and unregistered in READY_CHECK_FINISHED to avoid unnecessary
+    -- processing at all other times.
 
     if DEBUG_RCC then KE:Print("[RCC] OnEnable") end
 end
