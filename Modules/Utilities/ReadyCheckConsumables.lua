@@ -2082,14 +2082,11 @@ function RCC:_HideTimerBar()
 end
 
 --- _ScheduleExpiry
---- READY_CHECK_FINISHED arrives one to three seconds after the client's
---- countdown reaches zero (integer payload plus the server's own timer and
---- latency), leaving an empty bar over a popup nobody can still answer in
---- time. One timer per check tears the row down at zero and closes the
---- popup the way its own buttons do (ReadyCheckFrame is not secure); the
---- serial makes a timer from an earlier check a no-op, and the finish event
---- that follows finds nothing left to hide. Closing the popup clears its
---- initiator field, so Blizzard's "you were away" line is not printed.
+--- READY_CHECK_FINISHED lands one to three seconds after the client's
+--- countdown reaches zero (integer payload, server timer, latency), so the
+--- row and popup close at zero instead. ReadyCheckFrame is not secure; its
+--- OnHide clears the initiator field, which silences Blizzard's "you were
+--- away" line for a respondent who never answered.
 function RCC:_ScheduleExpiry(seconds)
     self._checkSerial = self._checkSerial + 1
     if not seconds then return end
