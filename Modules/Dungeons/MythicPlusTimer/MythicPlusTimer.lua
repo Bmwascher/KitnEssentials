@@ -60,9 +60,10 @@ local DEBUG_MPT = false
 
 -- CLEU-free death attribution. Midnight removed COMBAT_LOG_EVENT_UNFILTERED,
 -- so new deaths are detected by diffing GetDeathCount and scanning the party
--- for who newly went dead/ghost. Party GUIDs are non-secret (contract).
+-- for who newly went dead/ghost. Keyed on GUID: two members can share a
+-- short name across realms. Party GUIDs are non-secret (contract).
 local _prevDeathCount = 0
-local _partyAlive = {}  -- [name] = true while alive
+local _partyAlive = {}  -- [guid] = true while alive
 
 -- In-flight split cache: the objective clear times of the run currently being
 -- played, so a /reload can back-stamp them instead of re-timing them (a count
@@ -963,39 +964,26 @@ tickerFrame:Hide()
 
 -- Append one death to the log. Reconciled against GetDeathCount so the log
 -- never drifts (the headline is authoritative; this is the hover detail).
--- guid path: guarded (enemy GUIDs are secret). unit/name path: party-scan,
--- non-secret. Either way we only ever resolve party members.
-function MPT:RecordDeath(guid, knownName, knownUnit)
-    local run = MPT.run
+-- Both drivers fire for the same death (UNIT_DIED and the count diff), and
+-- the reconcile in OnDeathCountUpdated would then trim an older valid entry,
+-- so a death records only while its GUID is still in the alive snapshot and
+-- prunes it. Membership also keeps enemy and non-party GUIDs out. unit is
+-- set by the count scan and absent from UNIT_DIED.
+function MPT:RecordDeath(guid, unit)
+    if not guid or issecretvalue(guid) or not _partyAlive[guid] then return end
     local name, class
-    if knownUnit then
-        name = knownName or UnitName(knownUnit)
-        class = select(2, UnitClass(knownUnit))
-    elseif guid then
-        if issecretvalue(guid) then return end          -- enemy GUID -> bail
-        name = knownName or UnitNameFromGUID(guid)
-        -- select(2): class FILE token ("WARRIOR") for RAID_CLASS_COLORS keys —
-        -- first return is the localized name (and ConditionalSecret).
-        class = select(2, UnitClassFromGUID(guid))
-        if name and not UnitInParty(name) and name ~= UnitName("player") then
-            return                                       -- non-party death, ignore
-        end
-        -- Mutual exclusion with the GetDeathCount party-scan: both paths fire
-        -- for the same death (UNIT_DIED + count diff), and the front-trim
-        -- reconcile in OnDeathCountUpdated would then delete an older VALID
-        -- entry (log corrupts from death #2 on). Record only while the member
-        -- is still marked alive, and prune the snapshot so the later scan
-        -- can't append a duplicate (mirrors CheckForNewDeaths' prune).
-        -- Cross-realm caveat: UnitNameFromGUID can return "Name-Realm" while
-        -- the snapshot is keyed by UnitName's short form — the guid path is
-        -- then muted for that member and the count-scan records the death
-        -- instead (single entry either way; the scan is authoritative).
-        if not name or not _partyAlive[name] then return end
-        _partyAlive[name] = nil
+    if unit then
+        name = UnitName(unit)
+        class = select(2, UnitClass(unit))
     else
-        return
+        name = UnitNameFromGUID(guid)
+        -- select(2): class FILE token ("WARRIOR") for RAID_CLASS_COLORS keys;
+        -- the first return is the localized name (ConditionalSecret).
+        class = select(2, UnitClassFromGUID(guid))
     end
     if not name then return end
+    _partyAlive[guid] = nil
+    local run = MPT.run
     run.deathLog[#run.deathLog + 1] = {
         t = run.elapsed or 0,
         name = name,
@@ -1020,6 +1008,14 @@ function MPT:RecordDeath(guid, knownName, knownUnit)
     cache.log = run.deathLog
 end
 
+-- The snapshot key. UnitGUID is SecretWhenUnitIdentityRestricted; a party
+-- member's GUID in a keystone is never restricted, and a restricted one is
+-- left out rather than used as a table key.
+local function PartyKey(unit)
+    local guid = UnitGUID(unit)
+    if guid and not issecretvalue(guid) then return guid end
+end
+
 -- Rebuilds the alive snapshot from the current party state. Called after
 -- CheckForNewDeaths so the next diff starts from an up-to-date baseline.
 local function ScanPartyAlive()
@@ -1028,48 +1024,48 @@ local function ScanPartyAlive()
     local count = GetNumGroupMembers()
     for i = 1, count do
         local unit = (prefix == "party" and i == count) and "player" or (prefix .. i)
-        local name = UnitName(unit)
-        if name and not UnitIsDeadOrGhost(unit) then
-            _partyAlive[name] = true
+        local guid = PartyKey(unit)
+        if guid and not UnitIsDeadOrGhost(unit) then
+            _partyAlive[guid] = true
         end
     end
     -- Solo safety net: with GetNumGroupMembers() == 0 the loop never runs, so
     -- snapshot the player directly. In a real party the loop's i == count arm
     -- already covered "player" and this is an idempotent duplicate write.
     if prefix == "party" then
-        local name = UnitName("player")
-        if name and not UnitIsDeadOrGhost("player") then
-            _partyAlive[name] = true
+        local guid = PartyKey("player")
+        if guid and not UnitIsDeadOrGhost("player") then
+            _partyAlive[guid] = true
         end
     end
 end
 
--- Diffs the new death count against the prior snapshot to find who newly died.
--- Calls MPT:RecordDeath (a stub for now) for each newly-dead member.
+-- Diffs the new death count against the prior snapshot to find who newly died
+-- and records each one.
 local function CheckForNewDeaths(newDeathCount)
     if newDeathCount <= _prevDeathCount then
         _prevDeathCount = newDeathCount
         return
     end
-    -- Death count went up — find who is now dead that was alive last tick.
+    -- Death count went up: find who is now dead that was alive last tick.
     local prefix = IsInRaid() and "raid" or "party"
     local count = GetNumGroupMembers()
     for i = 1, count do
         local unit = (prefix == "party" and i == count) and "player" or (prefix .. i)
-        local name = UnitName(unit)
-        if name and _partyAlive[name] and UnitIsDeadOrGhost(unit) then
-            MPT:RecordDeath(nil, name, unit)
-            _partyAlive[name] = nil
+        local guid = PartyKey(unit)
+        if guid and _partyAlive[guid] and UnitIsDeadOrGhost(unit) then
+            MPT:RecordDeath(guid, unit)
+            _partyAlive[guid] = nil
         end
     end
     -- Trailing solo-player block: only reached when GetNumGroupMembers()==0.
     -- The loop's (i == count) branch already maps to "player" inside any party,
     -- so this fires only for a solo run with no group members iterated above.
     if prefix == "party" then
-        local name = UnitName("player")
-        if name and _partyAlive[name] and UnitIsDeadOrGhost("player") then
-            MPT:RecordDeath(nil, name, "player")
-            _partyAlive[name] = nil
+        local guid = PartyKey("player")
+        if guid and _partyAlive[guid] and UnitIsDeadOrGhost("player") then
+            MPT:RecordDeath(guid, "player")
+            _partyAlive[guid] = nil
         end
     end
     _prevDeathCount = newDeathCount
@@ -1310,10 +1306,9 @@ function MPT:ZONE_CHANGED_NEW_AREA()
 end
 
 -- Alternate death capture path: catches deaths the party-scan diff may miss
--- (e.g. rapid multi-death bursts between GetDeathCount ticks). Enemy mob deaths
--- also fire this event — guard against their GUIDs being secret.
+-- (e.g. rapid multi-death bursts between GetDeathCount ticks). Enemy mob
+-- deaths also fire this event; RecordDeath drops them.
 function MPT:UNIT_DIED(_, guid)
-    if not guid or issecretvalue(guid) then return end
     MPT:RecordDeath(guid)
 end
 
