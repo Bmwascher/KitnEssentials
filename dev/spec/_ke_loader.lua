@@ -2959,8 +2959,8 @@ function L.loadReadyCheckConsumables(overrides)
     -- C_Item.GetItemInfoInstant, itemNames an item id to the name
     -- C_Item.GetItemInfo returns (nil reads as uncached, and the Item fake
     -- records each ContinueOnItemLoad in itemLoads as { id, fn } for the
-    -- spec to fire); playerClass is the
-    -- class file token UnitClass hands back. group is the roster the unit
+    -- spec to fire); playerClass is the class file token UnitClass hands
+    -- back. group is the roster the unit
     -- fakes read: mode "raid" or "party" (nil = solo) and units keyed by
     -- token ("raid3", "party1", "player"), each { name, class, role, dead,
     -- stone }, stone being the sourceUnit C_UnitAuras.GetAuraDataBySpellName

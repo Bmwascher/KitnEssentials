@@ -3,16 +3,15 @@
 -- threshold; a slot whose aura expiry is secret paints no timer, no warning
 -- colour and no glow; the class check owns exactly the hands a row's
 -- requirements cover, gated on the spell being known and the hand holding
--- what the imbue needs, and clicks the shield instead once every imbue
--- rides on it while the icon stays the imbue; the class slot shows for a class with an entry whose
+-- what the imbue needs; the class slot shows for a class with an entry whose
 -- predicate holds and the off-hand slot shows for a shield the check owns;
 -- an owned hand is ready only on the imbue, never on an oil, and its click
 -- casts the imbue, or the shield under Instinctive Imbuements while the
 -- slot still names the imbue; the ready check's remaining time drives the
 -- countdown bar only when it is a safe positive number. Known spells, the
--- spec index, equipment and enchants are
--- plain loader seams; the slot button is a recording stub because the
--- paint is read back from its text and attributes.
+-- spec index, equipment and enchants are plain loader seams; the slot
+-- button is a recording stub because the paint is read back from its text
+-- and attributes.
 
 local L = require("dev.spec._ke_loader")
 

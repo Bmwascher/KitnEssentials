@@ -2011,9 +2011,8 @@ end
 RCC._TimerBarSeconds = TimerBarSeconds
 
 --- _BuildTimerBar
---- One countdown bar: fill, dark backdrop, pixel border, centred text in
---- the module's font. The real bar gets its duration binding in BuildFrame;
---- the preview's is painted static.
+--- The real bar gets its duration binding in BuildFrame; the preview's is
+--- painted static.
 function RCC:_BuildTimerBar(name, parent)
     local db = self.db
     local bar = CreateFrame("StatusBar", name, parent)
@@ -2041,10 +2040,8 @@ function RCC:_BuildTimerBar(name, parent)
 end
 
 --- _ShowTimerBar
---- Parents the bar to the popup the row's auto mode uses, so a respondent's
---- Ready click hides it with the popup in every position mode, anchors it
---- under ReadyCheckFrame at the popup's width, and starts the countdown.
---- No seconds, no popup or the setting off shows nothing.
+--- Parented to the popup rather than the row, so a respondent's Ready click
+--- hides it with the popup in every position mode.
 function RCC:_ShowTimerBar(popup, seconds)
     local bar = self.timerBar
     if not bar then return end
@@ -2135,12 +2132,10 @@ function RCC:ShowFrame(initiatorUnit, duration)
     -- Restore alpha in case a prior deferred hide set it to 0 (see HideFrame).
     self.frame:SetAlpha(1)
 
-    -- The Blizzard popup: the starter gets ReadyCheckFrame, an invisible
-    -- DIALOG-strata box at screen centre whose ReadyCheckListenerFrame child
-    -- is hidden (a row parked at UIParent CENTER sits under that box and
-    -- never receives the mouse); a respondent gets the visible listener.
-    -- The row anchors above it in auto mode; the timer bar hangs under it in
-    -- every mode.
+    -- The starter's ReadyCheckFrame is an invisible DIALOG-strata box at
+    -- screen centre; a row parked at UIParent CENTER sits under it and never
+    -- receives the mouse, so the starter parents to it too. Respondents get
+    -- the visible listener.
     local popup
     if isStarter then
         popup = ReadyCheckFrame
