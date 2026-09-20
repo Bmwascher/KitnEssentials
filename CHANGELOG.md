@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.4
+
+### Ready Check Consumables
+
+- Icons no longer stay dead after combat ends in the middle of a ready check;
+  the row hides and rebuilds cleanly on every path, and the preview box in the
+  settings panel is its own frame, separate from the live row
+
+---
+
 ## v4.7.3
 
 ### Profiles
