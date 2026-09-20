@@ -269,23 +269,31 @@ function LR:SyncMover()
     m:SetPoint(p.Point or "BOTTOM", UIParent, p.RelPoint or "CENTER", p.X or 0, p.Y or 0)
 end
 
--- Replace mode: put the BONUS ROLL prompt where the roll bars are.
+-- Bar 1's status backdrop extends one pixel below the bar frame
+-- (LootRollBars.lua); counted here so the visible gap equals Spacing.
+local BONUS_ROLL_GAP = 1
+
+-- Replace mode: the BONUS ROLL prompt takes the slot under bar 1.
 --
 -- Bonus rolls never become KE roll bars -- they arrive on
 -- SPELL_CONFIRMATION_PROMPT, not START_LOOT_ROLL, so SetupRollBars'
 -- unregister does not intercept them. Blizzard hands BonusRollFrame to
--- GroupLootContainer and anchors it there, which in Replace mode leaves it at
--- Blizzard's bottom-centre managed spot while every other roll obeys the
--- user's position.
+-- GroupLootContainer and anchors it at its bottom-centre managed spot while
+-- every other roll obeys the user's position.
 --
--- We re-anchor the FRAME rather than moving the container, which is what the
--- legacy branch does. That avoids the managed-frame system entirely:
--- BonusRollFrame is parented to UIParent and is a plain <Frame>
--- (Blizzard_UIPanels_Game/Mainline/GroupLootFrame.xml), so ClearAllPoints
--- and SetPoint on it are legal in combat and taint nothing. And it is
--- sufficient: GroupLootFrame.lua is the ONLY place any roll frame is
--- ever anchored, and both entry paths -- AddFrame and ReplaceFrame -- end in
--- GroupLootContainer_Update, the function we post-hook.
+-- Re-anchoring the FRAME, never the container, stays out of the
+-- managed-frame system: BonusRollFrame is parented to UIParent and is a
+-- plain <Frame> (Blizzard_UIPanels_Game/Mainline/GroupLootFrame.xml), so
+-- ClearAllPoints and SetPoint on it are legal in combat. Blizzard anchors
+-- it only from GroupLootContainer_Update, which both entry paths (AddFrame
+-- and ReplaceFrame) end in and which we post-hook.
+--
+-- Under bar 1, not on it: bar 1 is the bottom row and is occupied whenever a
+-- boss drops group loot beside the bonus roll. The stack grows upward from
+-- the saved position, so the slot below is always free and never moves as
+-- rolls resolve; a hidden bar keeps its anchor, so with no roll up the
+-- prompt sits just under the saved position. Hanging off the bar's frame
+-- rather than the saved table means an edit-mode move carries it along.
 --
 -- Only the PROMPT. BonusRollLootWonFrame / BonusRollMoneyWonFrame, which
 -- replace it once the roll resolves, are loot toasts: they set AlertFrame as
@@ -302,14 +310,12 @@ local function AnchorBonusRoll()
     local f = _G.BonusRollFrame
     if not f or not f:IsShown() then return end
 
-    -- Bar 1's own anchor and defaults (LootRollBars.lua), so the prompt
-    -- lands where a roll bar would. NOT the legacy branch's BOTTOM/0 pair, and
-    -- emphatically not its CENTER->BOTTOM conversion -- that exists because the
-    -- legacy container grows upward as rolls stack, and this is one fixed-size
-    -- frame anchored directly.
-    local p = db.Position or {}
+    -- SetupRollBars creates every bar before it sets _barsWired.
+    local bar = LR.RollBars and LR.RollBars[1]
+    if not bar then return end
+
     f:ClearAllPoints()
-    f:SetPoint(p.Point or "CENTER", UIParent, p.RelPoint or "CENTER", p.X or 0, p.Y or 250)
+    f:SetPoint("TOP", bar, "BOTTOM", 0, -((db.Spacing or 1) + BONUS_ROLL_GAP))
     LogState("AnchorBonusRoll")
 end
 LR.AnchorBonusRoll = AnchorBonusRoll

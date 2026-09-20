@@ -180,16 +180,18 @@ describe("LootRoll container OnShow hook", function()
     end)
 end)
 
--- Replace mode must place the BONUS ROLL prompt at the roll-bar position.
+-- Replace mode must place the BONUS ROLL prompt in the slot under bar 1.
 --
 -- Bonus rolls arrive on SPELL_CONFIRMATION_PROMPT, not START_LOOT_ROLL, so
 -- SetupRollBars' unregister never intercepts them and they stay Blizzard's
 -- frame at Blizzard's bottom-centre spot -- while every other roll obeys the
--- user's position. The fix re-anchors BonusRollFrame itself rather than moving
--- GroupLootContainer, so these specs pin the two things that make that choice
--- correct: it targets bar 1's defaults, and it leaves the reward toasts alone.
+-- user's position. Bar 1 is the bottom row and is occupied whenever group
+-- loot drops beside a bonus roll, so the prompt takes the slot below it. The
+-- fix re-anchors BonusRollFrame itself, so these specs pin the two things
+-- that make that choice correct: it hangs off bar 1's frame by the bar
+-- spacing, and it leaves the reward toasts alone.
 describe("LootRoll bonus roll anchoring", function()
-    local LR
+    local LR, bar1
 
     local function makeFrame()
         return {
@@ -199,7 +201,7 @@ describe("LootRoll bonus roll anchoring", function()
             ClearAllPoints = function(self) self._points = {} end,
             SetPoint = function(self, point, rel, relPoint, x, y)
                 self._points[#self._points + 1] =
-                    { point = point, relPoint = relPoint, x = x, y = y }
+                    { point = point, rel = rel, relPoint = relPoint, x = x, y = y }
             end,
         }
     end
@@ -208,34 +210,37 @@ describe("LootRoll bonus roll anchoring", function()
         LR = L.loadLootRoll()
         LR.IsEnabled = function() return true end
         LR._barsWired = true
+        bar1 = makeFrame()
+        LR.RollBars = { bar1 }
         _G.BonusRollFrame = makeFrame()
     end)
 
     after_each(function() _G.BonusRollFrame = nil end)
 
-    it("anchors the prompt to the roll bar position in Replace mode", function()
-        LR.db = { Enabled = true, Replace = true,
-            Position = { Point = "TOP", RelPoint = "TOP", X = 30, Y = -120 } }
-        LR.AnchorBonusRoll()
+    -- Bar 1 is the bottom row of the stack, so the slot under it is free
+    -- whatever rolls are up and never moves as they resolve. The offset is
+    -- the saved spacing plus one pixel for bar 1's border, so the visible
+    -- gap reads as Spacing.
+    it("anchors the prompt's TOP under bar 1's BOTTOM by the spacing plus the gap", function()
+        local cases = {
+            { spacing = 4,   y = -5 },
+            { spacing = nil, y = -2 },   -- Spacing defaults to 1
+        }
+        for _, c in ipairs(cases) do
+            _G.BonusRollFrame = makeFrame()
+            LR.db = { Enabled = true, Replace = true, Spacing = c.spacing,
+                Position = { Point = "TOP", RelPoint = "TOP", X = 30, Y = -120 } }
+            LR.AnchorBonusRoll()
 
-        local p = _G.BonusRollFrame._points[1]
-        assert.is_table(p)   -- positive control: it must anchor at all
-        assert.equal("TOP", p.point)
-        assert.equal(30, p.x)
-        assert.equal(-120, p.y)
-    end)
-
-    it("uses bar 1's defaults, not the legacy container's", function()
-        -- The legacy branch defaults to BOTTOM/0 and converts CENTER->BOTTOM
-        -- because that container grows upward as rolls stack. Reusing either
-        -- here would mis-place a single fixed-size frame.
-        LR.db = { Enabled = true, Replace = true, Position = {} }
-        LR.AnchorBonusRoll()
-
-        local p = _G.BonusRollFrame._points[1]
-        assert.equal("CENTER", p.point)
-        assert.equal("CENTER", p.relPoint)
-        assert.equal(250, p.y)
+            local p = _G.BonusRollFrame._points[1]
+            assert.is_table(p)   -- positive control: it must anchor at all
+            assert.equal("TOP", p.point)
+            assert.equal(bar1, p.rel)
+            assert.equal("BOTTOM", p.relPoint)
+            assert.equal(0, p.x)
+            assert.equal(c.y, p.y)
+            assert.equal(1, #_G.BonusRollFrame._points)
+        end
     end)
 
     it("does nothing in legacy mode", function()
