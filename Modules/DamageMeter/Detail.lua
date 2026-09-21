@@ -614,8 +614,11 @@ function DM:RenderBreakdown(W)
     -- maxAmount came from SelectSpellList alongside the list itself. Percent basis
     -- is the source's whole total (unchanged by either branch); gate it on
     -- issecretvalue + type -- in combat it is secret, so no percent is shown.
-    local canPercent = src.totalAmount and not issecretvalue(src.totalAmount) and type(src.totalAmount) == "number"
-    local total = canPercent and src.totalAmount or 0
+    local canPercent = src.totalAmount and canaccessvalue(src.totalAmount) and type(src.totalAmount) == "number"
+    local total = src.totalAmount
+    if not canPercent or not canaccessvalue(total) or type(total) ~= "number" then
+        total = 0
+    end
 
     -- DetailMaxRows (DB) caps the breakdown length; default 40 == pool size, so it is
     -- a no-op until a user lowers it. The recap timeline is deliberately NOT capped --
@@ -733,7 +736,7 @@ function DM:RenderEnemyBreakdown(W, src)
     -- % denominator: the enemy's whole damage-taken (sanitize defensively). Fill max is the
     -- top attacker's total so the leading bar reads full-width.
     local total = src and src.totalAmount
-    if issecretvalue(total) or type(total) ~= "number" then total = 0 end
+    if not canaccessvalue(total) or type(total) ~= "number" then total = 0 end
     local maxAmount = players[1].total
     if not (maxAmount and maxAmount > 0) then maxAmount = 1 end
 
@@ -1766,7 +1769,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
         -- % denominator: the enemy's whole damage-taken (guard defensively); fill max is the
         -- top attacker's total so the leading bar reads full-width.
         local total = src and src.totalAmount
-        if issecretvalue(total) or type(total) ~= "number" then total = 0 end
+        if not canaccessvalue(total) or type(total) ~= "number" then total = 0 end
         local maxAmount = players[1].total
         if not (maxAmount and maxAmount > 0) then maxAmount = 1 end
         local count = math_min(#players, HOVER_TIP_ROWS)
@@ -1888,8 +1891,11 @@ function DM:PopulateHoverTip(W, bar, isInitial)
 
         -- Fill max came from SelectSpellList with the list; percent basis stays
         -- the source's whole total, and is unavailable while it is secret.
-        local canPercent = src.totalAmount and not issecretvalue(src.totalAmount) and type(src.totalAmount) == "number"
-        local total = canPercent and src.totalAmount or 0
+        local canPercent = src.totalAmount and canaccessvalue(src.totalAmount) and type(src.totalAmount) == "number"
+        local total = src.totalAmount
+        if not canPercent or not canaccessvalue(total) or type(total) ~= "number" then
+            total = 0
+        end
         local count = math_min(#spells, HOVER_TIP_ROWS)
 
         for i = 1, HOVER_TIP_ROWS do

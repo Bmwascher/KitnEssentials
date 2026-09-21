@@ -129,7 +129,8 @@ function RC:ShouldShow()
     if not self.db.Enabled then return false end
     if self.isPreview then return true end
     if not UnitExists("target") then return false end
-    if UnitIsUnit("target", "player") then return false end
+    local isSelf = UnitIsUnit("target", "player")
+    if not canaccessvalue(isSelf) or isSelf then return false end
     if self.db.CombatOnly and not InCombatLockdown() then return false end
     return true
 end

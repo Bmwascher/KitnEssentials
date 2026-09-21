@@ -15,6 +15,8 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 ---@class ReadyCheckConsumables: AceModule, AceEvent-3.0
+---@field db table?
+---@field _refreshPending boolean?
 local RCC = KitnEssentials:NewModule("ReadyCheckConsumables", "AceEvent-3.0")
 
 local CreateFrame           = CreateFrame
@@ -950,7 +952,9 @@ local function HasPlayerSoulstone(unit)
     if not auraData then return false end
     local source = auraData.sourceUnit
     if not KE:IsSafeValue(source) then return false end
-    return source == "player" or UnitIsUnit(source, "player")
+    if source == "player" then return true end
+    local same = UnitIsUnit(source, "player")
+    return canaccessvalue(same) and same == true
 end
 
 --- _ScanSoulstoneRoster
@@ -970,7 +974,8 @@ function RCC:_ScanSoulstoneRoster()
     local function visit(unit)
         if not UnitExists(unit) or UnitIsDeadOrGhost(unit) then return end
         if not hidden and not recipient and not selfStoned and HasPlayerSoulstone(unit) then
-            if UnitIsUnit(unit, "player") then
+            local same = UnitIsUnit(unit, "player")
+            if not canaccessvalue(same) or same then
                 selfStoned = true
             else
                 local n = GetUnitName(unit, true)
@@ -1029,9 +1034,9 @@ function RCC:_GetSoulstonedTarget(live)
 end
 
 --- _BuildSoulstoneMacrotext
---- @target precedes the sticky name so targeting someone else overrides it
+--- `@target` precedes the sticky name so targeting someone else overrides it
 --- for one pull; the post-cast refresh then makes that person the sticky.
---- @mouseover is unreachable from the icon click and stays for macro
+--- `@mouseover` is unreachable from the icon click and stays for macro
 --- consistency. `,help,nodead` falls through past a dead name, so an
 --- out-of-combat refresh is enough.
 function RCC:_BuildSoulstoneMacrotext(stoned, healer)
@@ -1852,7 +1857,7 @@ end
 ---   2. Per-aura spellId / expirationTime guards via ScanPlayerAuras filter.
 ---   3. Per-API guards inside individual slot updaters (weapon enchant exp/ID,
 ---      spell cooldown start/duration, item names passed to macrotext).
---- @param force boolean  literal true skips the liveness test (ShowFrame's
+--- @param force boolean? literal true skips the liveness test (ShowFrame's
 ---   first paint, before the popup's visibility is known); the aura gate
 ---   still applies. Anything else, including an event name arriving in this
 ---   position, does not force.
@@ -2117,8 +2122,11 @@ function RCC:ShowFrame(initiatorUnit, duration)
     -- Lockdown (M+, rated PvP). Passing a secret string to UnitIsUnit crashes,
     -- so treat "unsafe initiator" as "not the starter" (false) rather than
     -- testing the predicate at all.
-    local isStarter = KE:IsSafeValue(initiatorUnit)
-        and UnitIsUnit(initiatorUnit, "player")
+    local isStarter = false
+    if KE:IsSafeValue(initiatorUnit) then
+        local same = UnitIsUnit(initiatorUnit, "player")
+        isStarter = canaccessvalue(same) and same == true
+    end
 
     -- HideForStarter: suppress display if we initiated the ready check.
     if db.HideForStarter and isStarter then

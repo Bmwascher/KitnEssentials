@@ -703,7 +703,7 @@ end
 local function isTankUnit(unit)
     if not (UnitExists(unit) and UnitGroupRolesAssigned) then return false end
     local ok, role = pcall(UnitGroupRolesAssigned, unit)
-    return ok and role == "TANK"
+    return ok and canaccessvalue(role) and role == "TANK"
 end
 
 -- The tank carrying the assist aura, if any. Player first, then party1-4.
@@ -1260,7 +1260,7 @@ function DTrash:BeginCast(unit, kind, castGUID, castBarID)
         -- targetIsTank (dormant fingerprint, mapped for future data): the
         -- mob's target is a PLAYER unit, whose role is plain — still guarded.
         local okRole, role = pcall(UnitGroupRolesAssigned, rt.unit .. "target")
-        if okRole and not (issecretvalue and issecretvalue(role)) and type(role) == "string" then
+        if okRole and canaccessvalue(role) and type(role) == "string" then
             r.fpTargetIsTank = (role == "TANK")
         end
         -- Scan the target rings ± the window around the ANCHORED start — the
