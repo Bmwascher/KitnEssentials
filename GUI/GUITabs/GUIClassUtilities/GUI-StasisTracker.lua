@@ -63,14 +63,12 @@ GUIFrame:RegisterContent("StasisTracker", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Preservation Evoker only.\n" ..
-        KE:ColorTextByTheme("-") .. " Shows stored spell icons and a 30-second countdown bar during Stasis.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
+    card1:AddLabel("|cffffd100Preservation Evoker only.|r Stasis banks your next three spells and plays " ..
+        "them back when you release it, but nothing tells you which three you have in there or how " ..
+        "long is left to spend them." ..
+        "\n\nThe icons fill in as you cast. Once the third lands, the bar counts down the 30 seconds " ..
+        "you have to release it." ..
+        "\n\nOn any other specialization it registers nothing at all.")
 
     yOffset = card1:GetNextOffset()
 

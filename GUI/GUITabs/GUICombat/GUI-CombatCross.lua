@@ -54,13 +54,8 @@ GUIFrame:RegisterContent("CombatCross", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " This is a static crosshair overlay and will not adjust with camera panning.",
-        Theme.rowHeight, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeight, 0)
+    card1:AddLabel("A crosshair drawn at the centre of your screen. It is a static overlay and does " ..
+        "not turn with the camera.")
 
     yOffset = card1:GetNextOffset()
 

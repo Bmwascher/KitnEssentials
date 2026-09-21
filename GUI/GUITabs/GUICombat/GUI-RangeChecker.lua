@@ -61,6 +61,10 @@ GUIFrame:RegisterContent("RangeChecker", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
+    card1:AddLabel("Shows the distance to your target as a text, in a warning colour when it is out " ..
+        "of range. Can be limited to combat.")
+    yOffset = card1:GetNextOffset()
+
     ----------------------------------------------------------------
     -- Card 2: General Settings
     ----------------------------------------------------------------

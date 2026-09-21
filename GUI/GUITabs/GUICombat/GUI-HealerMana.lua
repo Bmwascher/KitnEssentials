@@ -405,6 +405,12 @@ GUIFrame:RegisterTabbedContent("HealerMana", {
                 else KitnEssentials:DisableModule("HealerMana") end
             end
         end)
+        if db.Enabled == true then
+            card:AddLabel("Shows your healers' mana as a percentage. In a party or keystone it " ..
+                "follows the one healer (Party mode); with Enable in Raid on, a raid stacks every " ..
+                "healer (Raid mode). The mode switches with the group type, and each tab sets up " ..
+                "its own.")
+        end
         -- collapse = true suppresses the tab strip and all tab content.
         return card:GetNextOffset(), db.Enabled ~= true
     end,

@@ -785,6 +785,12 @@ GUIFrame:RegisterTabbedContent("Cursor", {
             ApplyModuleState(checked)
         end)
 
+        if db.Enabled ~= false then
+            card:AddLabel("Draws a ring at your cursor so it is never lost in a fight, with an " ..
+                "optional GCD ring, cast circle and trail. The Dispel and Taunt tabs put those " ..
+                "cooldowns at the cursor too.")
+        end
+
         -- collapse = true suppresses the tab strip and all tab content.
         return card:GetNextOffset(), db.Enabled == false
     end,

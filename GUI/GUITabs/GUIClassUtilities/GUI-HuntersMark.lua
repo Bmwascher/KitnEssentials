@@ -8,7 +8,6 @@
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
-local Theme = KE.Theme
 
 local function GetModule()
     if KitnEssentials then
@@ -48,13 +47,10 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
         ApplyState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " This module only works inside raid instances and while out of combat.",
-        40, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeight, 0)
+    card1:AddLabel("|cffffd100Hunter only.|r Warns when the boss you are targeting does not have your " ..
+        "Hunter's Mark on it." ..
+        "\n\nShows in raids, out of combat - for marking before a pull. The game hides a target's " ..
+        "debuffs from addons once combat starts, so a warning there could not be trusted.")
 
     yOffset = card1:GetNextOffset()
 
