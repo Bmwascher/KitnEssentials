@@ -64,7 +64,6 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
         else
             KitnEssentials:DisableModule("StanceText")
         end
-        GUIFrame:RefreshContent()
     end)
     card1:AddLabel("Shows an icon when your spec is not in the form, stance or aura it should be in.")
 

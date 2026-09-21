@@ -56,7 +56,6 @@ local function BuildPage(opts)
             else
                 KitnEssentials:DisableModule(opts.moduleName)
             end
-            GUIFrame:RefreshContent()
             -- Both directions need a reload: enabling has to hide Blizzard's
             -- frame before ours takes over, and disabling cannot revive it
             -- mid-session. Without this the user is left with no auras at all.

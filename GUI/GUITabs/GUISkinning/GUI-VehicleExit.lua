@@ -41,7 +41,6 @@ GUIFrame:RegisterContent("VehicleExit", function(scrollChild, yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
         db.Enabled = checked
         ApplyState(checked)
-        GUIFrame:RefreshContent()
     end)
 
     card1:AddLabel("Takes over where the vehicle exit button sits. Blizzard's Edit Mode and some " ..
