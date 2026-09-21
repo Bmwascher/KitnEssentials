@@ -302,7 +302,7 @@ end
 function DM:CreateWindow(winIdx)
     local W = { idx = winIdx, bars = {} }
 
-    -- Parent every window to the shared dock (Phase 2). EnsureDock is idempotent
+    -- Parent every window to the shared dock. EnsureDock is idempotent
     -- and creates the dock on first call; resolved at runtime since Dock.lua
     -- loads after Window.lua. Fall back to UIParent only if the dock helper is
     -- somehow unavailable (defensive; should never happen at enable time).
@@ -411,7 +411,7 @@ function DM:CreateWindow(winIdx)
     W.indexBadge.text:SetText(tostring((self._winDisplayPos and self._winDisplayPos[winIdx]) or winIdx))
     if self._badgesShown then W.indexBadge:Show() else W.indexBadge:Hide() end
 
-    -- Phase 4 header icons: settings / reset / segment / report, right-aligned,
+    -- Header icons: settings / reset / segment / report, right-aligned,
     -- stepping left from the frame's TOPRIGHT (report furthest left). Built once here
     -- (the pool-build below never re-runs); visibility is driven by db.ShowHeaderIcons.
     -- The frame level is bumped above the bars so the icons stay clickable over
@@ -627,7 +627,7 @@ end
 ---------------------------------------------------------------------------------
 -- Window layout
 --
--- Phase 2: the dock owns the window FRAME size and the content WIDTH (driven by
+-- The dock owns the window FRAME size and the content WIDTH (driven by
 -- the column geometry in DM:LayoutDock). This pass owns only the window's
 -- INTERNAL vertical layout: the fixed header band at the top, the body anchored
 -- immediately below it, and the content child's HEIGHT (VisibleBars rows). The
@@ -1462,7 +1462,7 @@ function DM:RenderWindow(W)
         self:ApplyHeaderColor(W)
     end
 
-    -- Phase 4 segment/history: W._curSessionID pins a specific stored session
+    -- Segment/history: W._curSessionID pins a specific stored session
     -- (set by the ⌚ menu, ToggleSegmentMenu). nil = live cfg.SessionType.
     -- ResolveRenderSession wraps CachedSession (per-Tick memo) and adds the
     -- "Current = last fight" fallback: out of combat, an unpinned Current window
@@ -2135,7 +2135,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         row.rank:Hide()
     end
 
-    -- Percent: secret in combat; left hidden for Phase 1 (ShowPercent defaults
-    -- false). An out-of-combat percent is a later phase -- do NOT compute one
+    -- Percent: secret in combat; left hidden (ShowPercent defaults
+    -- false). Do NOT compute an out-of-combat percent
     -- here (would require arithmetic on amounts that are secret in combat).
 end
