@@ -181,7 +181,7 @@ read_globals = {
     "CR_AVOIDANCE", "CR_SPEED", "CR_VERSATILITY_DAMAGE_DONE",
     "UnitClassification", "UnitSex", "UnitPowerType",
     "UnitPosition",
-    "InCombatLockdown",
+    "InCombatLockdown", "IsResting",
 
     -- Totem functions
     "GetTotemInfo", "GetTotemDuration", "GetNumTotemSlots", "MAX_TOTEMS", "STANDARD_TOTEM_PRIORITIES",
