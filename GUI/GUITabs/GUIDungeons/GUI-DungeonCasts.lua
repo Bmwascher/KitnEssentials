@@ -77,14 +77,9 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Displays enemy nameplate casts in a configurable stack.\n" ..
-        KE:ColorTextByTheme("-") .. " Only active in M+ dungeons.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
+    card1:AddLabel("Shows the casts of the enemies around you as a stack of cast bars you can place " ..
+        "and style, with the cast's target on the bar if you want it. Only active in 5-player " ..
+        "dungeons.")
 
     yOffset = card1:GetNextOffset()
 

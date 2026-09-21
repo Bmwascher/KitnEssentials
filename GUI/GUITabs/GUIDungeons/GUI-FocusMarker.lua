@@ -50,14 +50,12 @@ GUIFrame:RegisterContent("FocusMarker", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Auto-creates a macro for focus targeting + raid marker assignment.\n" ..
-        KE:ColorTextByTheme("-") .. " Drag the macro from /macro to your action bar.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
+    card1:AddLabel("Writes a macro that sets your focus and puts your marker on it in one press, so " ..
+        "a kick target can be called and taken together. Drag it from |cffffd100/macro|r onto a " ..
+        "bar; it is kept up to date as you change the settings below." ..
+        "\n\nIt goes for whatever is under your mouse, and falls back to your current target." ..
+        "\n\nTurning this off leaves the macro alone rather than deleting it, in case you have put " ..
+        "it on a bar.")
 
     yOffset = card1:GetNextOffset()
 

@@ -49,14 +49,8 @@ GUIFrame:RegisterContent("EnemyCounter", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Shows the number of attackable enemies currently visible on nameplates.\n" ..
-        KE:ColorTextByTheme("-") .. " Useful for pull sizing in M+ and group content.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
+    card1:AddLabel("Shows how many attackable enemies have a nameplate on screen, as a number you " ..
+        "can place and style - a quick read on the size of a pull.")
 
     yOffset = card1:GetNextOffset()
 

@@ -84,6 +84,9 @@ function KE.GUI.DungeonTimers.BuildHeaderCard(scrollChild, yOffset)
         HideAllPreviews()
         return card:GetNextOffset(), true
     end
+    card:AddLabel("Hand-tuned timers for the boss abilities in this season's dungeons, shown as bars " ..
+        "and texts you set up on the tabs below. |cffffd100BigWigs|r supplies the encounter timing, " ..
+        "so it must be loaded.")
     return card:GetNextOffset(), false
 end
 

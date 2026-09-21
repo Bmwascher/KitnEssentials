@@ -76,14 +76,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 65)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Teammates with kick-sync addons get live bars from the start; other kicks show as temporary class-colored records.\n" ..
-        KE:ColorTextByTheme("-") .. " Only active in 5-player dungeons.",
-        65, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 65, 0)
+    card1:AddLabel("Tracks your party's interrupts as cooldown bars. Teammates running a kick-sync " ..
+        "addon get live bars from the start; other kicks show as temporary class-coloured records " ..
+        "when they land. Only active in 5-player dungeons.")
 
     yOffset = card1:GetNextOffset()
 
