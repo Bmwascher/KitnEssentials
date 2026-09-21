@@ -365,6 +365,7 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
     -- which live in body rows.
     function card:AddHeaderToggle(initialState, onValueChanged)
         if not self.header then return nil end
+        local label = self.titleText:GetText()
         local TRACK_W, TRACK_H, KNOB = 34, 16, 12
 
         local btn = CreateFrame("Button", nil, self.header, "BackdropTemplate")
@@ -405,6 +406,8 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         btn:SetScript("OnClick", function(b)
             b:SetChecked(not b._checked)
             if onValueChanged then onValueChanged(b._checked) end
+            -- The chat line lives here so that no page prints its own.
+            KE:Print(label .. ": " .. (b._checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
             -- A disabled module renders as a lone header bar, so the page must
             -- rebuild here for that to apply immediately.
             GUIFrame:RefreshContent()
