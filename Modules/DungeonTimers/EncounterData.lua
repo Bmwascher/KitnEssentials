@@ -1,340 +1,341 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  EncounterData.lua                                       ║
--- ║  Curated cast-duration table for the new DungeonTimers   ║
--- ║  module. Keyed by encounterID, then BigWigs spellID.     ║
--- ║                                                          ║
--- ║  Schema:                                                 ║
--- ║    KE.EncounterData[encounterID] = {                     ║
--- ║        name    = "Boss display name",                    ║
--- ║        dungeon = "DungeonKey",                           ║
--- ║        spells  = {                                       ║
--- ║            [spellID] = {                                 ║
--- ║                name            = "Spell display name",   ║
--- ║                castType        = "begincast"|"cast"|     ║
--- ║                                  "channel",              ║
--- ║                castDuration    = <seconds>,  -- optional ║
--- ║                channelDuration = <seconds>,  -- optional ║
--- ║                role            = "tank"|"heal"|          ║
--- ║                                  "mechanic"|"other"|     ║
--- ║                                  "kick"|"move",          ║
--- ║                                  -- kick = TANK + DPS    ║
--- ║                                  --   (interrupt duty)   ║
--- ║                                  -- move = HEAL + DPS    ║
--- ║                                  --   (spread/movement;  ║
--- ║                                  --    tank anchored)    ║
--- ║                display         = "bar"|"text",           ║
--- ║                displayText     = "DODGE"|...,            ║
--- ║                                  -- short curated label  ║
--- ║                                  -- shown instead of the ║
--- ║                                  -- BigWigs spell name.  ║
--- ║                                  -- e.g. "TANK HIT",     ║
--- ║                                  -- "INTERRUPT",         ║
--- ║                                  -- "SPREAD". Fall back  ║
--- ║                                  -- to BigWigs name when ║
--- ║                                  -- absent.              ║
--- ║                castDisplayText = "AOE"|...,              ║
--- ║                                  -- optional cast-phase  ║
--- ║                                  -- label/color swap.    ║
--- ║                                  -- When set, the bar    ║
--- ║                                  -- swaps to this text + ║
--- ║                                  -- preset color when    ║
--- ║                                  -- the cast actually    ║
--- ║                                  -- starts. Lets a spell ║
--- ║                                  -- show two cues — e.g. ║
--- ║                                  -- "CC ADDS" during the ║
--- ║                                  -- countdown then "AOE" ║
--- ║                                  -- during the cast.     ║
--- ║                extendByChannel = true,                   ║
--- ║                                  -- opt-in: extend the   ║
--- ║                                  -- bar by channelDuration║
--- ║                                  -- on top of castDuration║
--- ║                                  -- so the bar hits 0 at ║
--- ║                                  -- end-of-channel. Use  ║
--- ║                                  -- for spells whose     ║
--- ║                                  -- effect lands at the  ║
--- ║                                  -- END of the channel   ║
--- ║                                  -- (e.g. adds spawn     ║
--- ║                                  -- after a 4s channel   ║
--- ║                                  -- finishes), NOT the   ║
--- ║                                  -- start. Default off — ║
--- ║                                  -- channels normally    ║
--- ║                                  -- damage at zero.      ║
--- ║                disabled        = true,                   ║
--- ║                                  -- curator-default      ║
--- ║                                  -- hard-disable. The    ║
--- ║                                  -- bar never renders    ║
--- ║                                  -- unless the user      ║
--- ║                                  -- explicitly enables   ║
--- ║                                  -- via the GUI (which   ║
--- ║                                  -- stores false in      ║
--- ║                                  -- db.SpellDisabled).   ║
--- ║                                  -- Use for spammable    ║
--- ║                                  -- abilities (kicks,    ║
--- ║                                  -- DoT-tick spells)     ║
--- ║                                  -- that would clutter   ║
--- ║                                  -- the screen by        ║
--- ║                                  -- default.             ║
--- ║                showAtSeconds   = <seconds>,              ║
--- ║                                  -- per-spell visibility ║
--- ║                                  -- override. Hides the  ║
--- ║                                  -- bar until last N sec ║
--- ║                                  -- of total lifetime.   ║
--- ║                                  -- Wins over the group  ║
--- ║                                  -- ShowAtSeconds slider.║
--- ║                                  -- 0 = force always     ║
--- ║                                  -- visible even when    ║
--- ║                                  -- group hides. Omit    ║
--- ║                                  -- to inherit group.    ║
--- ║                color           = { r, g, b },            ║
--- ║                                  -- curator-default RGB  ║
--- ║                                  -- color. Overrides the ║
--- ║                                  -- displayText preset   ║
--- ║                                  -- color. Use for bars  ║
--- ║                                  -- that need a specific ║
--- ║                                  -- hue not covered by   ║
--- ║                                  -- the preset palette.  ║
--- ║                                  -- User color override  ║
--- ║                                  -- still wins over this.║
--- ║                sortAtEnd      = true,                    ║
--- ║                                  -- push this entry to   ║
--- ║                                  -- the end of the spell ║
--- ║                                  -- list in the GUI      ║
--- ║                                  -- (before phase rules).║
--- ║                                  -- Used for vulnerability║
--- ║                                  -- phase entries that   ║
--- ║                                  -- belong with phases   ║
--- ║                                  -- conceptually rather  ║
--- ║                                  -- than mixed in with   ║
--- ║                                  -- regular cast warnings║
--- ║                iconOverride   = <textureID|path>,        ║
--- ║                                  -- replace BigWigs's    ║
--- ║                                  -- supplied icon. Useful║
--- ║                                  -- when the spell's     ║
--- ║                                  -- default icon is      ║
--- ║                                  -- ambiguous (e.g.      ║
--- ║                                  -- a generic shadow     ║
--- ║                                  -- texture) and a more  ║
--- ║                                  -- recognizable icon    ║
--- ║                                  -- aids identification. ║
--- ║                                  -- Accepts a texture    ║
--- ║                                  -- file ID or path.     ║
--- ║                forceDuration  = <seconds>,               ║
--- ║                                  -- override the BigWigs ║
--- ║                                  -- duration with a      ║
--- ║                                  -- known-correct value. ║
--- ║                                  -- Used for "amp" /     ║
--- ║                                  -- vulnerability bars   ║
--- ║                                  -- where LittleWigs's   ║
--- ║                                  -- hardcoded duration   ║
--- ║                                  -- doesn't match the    ║
--- ║                                  -- actual buff lifetime ║
--- ║                                  -- (e.g. Backlash 20s   ║
--- ║                                  -- vs LW's 12.5s). Bar  ║
--- ║                                  -- self-drains over     ║
--- ║                                  -- forceDuration; we    ║
--- ║                                  -- ignore BigWigs's     ║
--- ║                                  -- StopBar so its early ║
--- ║                                  -- end doesn't kill us. ║
--- ║                postCastBar    = {                        ║
--- ║                                    duration    = <s>,    ║
--- ║                                    display     = "bar"|  ║
--- ║                                                  "text", ║
--- ║                                    displayText = ...,    ║
--- ║                                    iconOverride= <tex>,  ║
--- ║                                  },                      ║
--- ║                                  -- follow-up bar that   ║
--- ║                                  -- spawns at a parent   ║
--- ║                                  -- bar's natural end.   ║
--- ║                                  -- Two trigger paths:   ║
--- ║                                  --  (a) parent has      ║
--- ║                                  --   castDuration → fires║
--- ║                                  --   when cast phase    ║
--- ║                                  --   ends (Nysarra Flare║
--- ║                                  --   → 17s BEAM).       ║
--- ║                                  --  (b) parent has no   ║
--- ║                                  --   castDuration →     ║
--- ║                                  --   fires on BigWigs's ║
--- ║                                  --   StopBar at natural ║
--- ║                                  --   countdown end (L'ura║
--- ║                                  --   Backlash → 19.5s   ║
--- ║                                  --   VULNERABILITY).    ║
--- ║                                  -- Use for buff/window  ║
--- ║                                  -- bars that follow a   ║
--- ║                                  -- cast when SPELL_AURA_║
--- ║                                  -- APPLIED is unreliable║
--- ║                                  -- (most boss-applied   ║
--- ║                                  -- auras in 12.0).      ║
--- ║                                  -- iconOverride wins    ║
--- ║                                  -- over the parent's    ║
--- ║                                  -- inherited icon when  ║
--- ║                                  -- set; useful when the ║
--- ║                                  -- follow-up represents ║
--- ║                                  -- a different visual   ║
--- ║                                  -- cue. Always shown to ║
--- ║                                  -- everyone (no role).  ║
--- ║                phantomFollowupOf =                       ║
--- ║                                  <parentSpellId>,        ║
--- ║                duration       = <s>,                     ║
--- ║                                  -- top-level GUI entry  ║
--- ║                                  -- that opts out of the ║
--- ║                                  -- BigWigs_Timer path   ║
--- ║                                  -- and instead spawns   ║
--- ║                                  -- when the parent's    ║
--- ║                                  -- BigWigs_StopBar fires║
--- ║                                  -- naturally (cast      ║
--- ║                                  -- finished = buff      ║
--- ║                                  -- applied). Use when   ║
--- ║                                  -- you want a follow-up ║
--- ║                                  -- bar to have its own  ║
--- ║                                  -- configurable row in  ║
--- ║                                  -- the GUI (vs nesting  ║
--- ║                                  -- as the parent's      ║
--- ║                                  -- postCastBar which    ║
--- ║                                  -- hides under one row).║
--- ║                                  -- L'ura's 247816       ║
--- ║                                  -- (VULNERABILITY)      ║
--- ║                                  -- follows 1266001      ║
--- ║                                  -- (Backlash KNOCK).    ║
--- ║                                  -- Pairs naturally with ║
--- ║                                  -- iconOverride/color/  ║
--- ║                                  -- displayText for the  ║
--- ║                                  -- follow-up's visuals. ║
--- ║                spawnOnMessage = true,                    ║
--- ║                duration       = <s>,                     ║
--- ║                leadDelay      = <s>,  -- optional        ║
--- ║                                  -- BigWigs_Message-     ║
--- ║                                  -- driven spawn. Used   ║
--- ║                                  -- for vulnerability    ║
--- ║                                  -- bars whose trigger   ║
--- ║                                  -- is a non-cast event  ║
--- ║                                  -- (widget update,      ║
--- ║                                  -- boss emote) that     ║
--- ║                                  -- LittleWigs surfaces  ║
--- ║                                  -- via self:Message(    ║
--- ║                                  -- spellId, ...). When  ║
--- ║                                  -- BigWigs_Message      ║
--- ║                                  -- fires with this      ║
--- ║                                  -- spellId, we spawn a  ║
--- ║                                  -- bar of `duration`    ║
--- ║                                  -- seconds (optionally  ║
--- ║                                  -- after `leadDelay`    ║
--- ║                                  -- seconds, a prepare   ║
--- ║                                  -- phase before the     ║
--- ║                                  -- active window).      ║
--- ║                                  -- Use this when        ║
--- ║                                  -- SPELL_AURA_APPLIED   ║
--- ║                                  -- doesn't fire in 12.0 ║
--- ║                                  -- (most boss-applied   ║
--- ║                                  -- auras). Entry skips  ║
--- ║                                  -- BigWigs_Timer path.  ║
--- ║                shieldBar      = {                        ║
--- ║                                    baseAmount = <number>,║
--- ║                                    displayText = ...,    ║
--- ║                                  },                      ║
--- ║                                  -- opt-in absorb-tracker║
--- ║                                  -- bar for boss shield  ║
--- ║                                  -- channels (e.g.       ║
--- ║                                  -- Vordaza's Necrotic   ║
--- ║                                  -- Convergence). Spawns ║
--- ║                                  -- on UNIT_SPELLCAST_   ║
--- ║                                  -- CHANNEL_START for the║
--- ║                                  -- parent spellID and   ║
--- ║                                  -- drains as the boss   ║
--- ║                                  -- takes damage. Max =  ║
--- ║                                  -- baseAmount × M+      ║
--- ║                                  -- multiplier. Inherits ║
--- ║                                  -- parent spell's       ║
--- ║                                  -- icon/color/font/     ║
--- ║                                  -- enable/role gate.    ║
--- ║                                  -- displayText is the   ║
--- ║                                  -- shield bar's label   ║
--- ║                                  -- (separate from the   ║
--- ║                                  -- parent's countdown   ║
--- ║                                  -- bar). Secret-safe —  ║
--- ║                                  -- absorb is read with  ║
--- ║                                  -- UnitGetTotalAbsorbs  ║
--- ║                                  -- (secret on hostile)  ║
--- ║                                  -- and passed only to   ║
--- ║                                  -- allowed-when-tainted ║
--- ║                                  -- formatters.          ║
--- ║                secondary       = {                       ║
--- ║                                    role = ...,           ║
--- ║                                    display = ...,        ║
--- ║                                    displayText = ...,    ║
--- ║                                    color = { r, g, b },  ║
--- ║                                  },                      ║
--- ║                                  -- optional second bar  ║
--- ║                                  -- spawned alongside    ║
--- ║                                  -- the primary on each  ║
--- ║                                  -- Timer event. Has its ║
--- ║                                  -- own role gate, mode, ║
--- ║                                  -- text, and color. Use ║
--- ║                                  -- for spells that need ║
--- ║                                  -- a tank-only bar AND  ║
--- ║                                  -- an everyone-text     ║
--- ║                                  -- (e.g. Orebreaker:    ║
--- ║                                  -- "TANK HIT" bar +     ║
--- ║                                  -- "FEET" text).        ║
--- ║                sound          = "<LSM sound key>",       ║
--- ║                                  -- curator-default      ║
--- ║                                  -- on-show audio cue.   ║
--- ║                                  -- LSM key for any      ║
--- ║                                  -- registered sound —   ║
--- ║                                  -- KitnEssentials's     ║
--- ║                                  -- bundled presets live ║
--- ║                                  -- in Media\Sounds\ and ║
--- ║                                  -- are registered in    ║
--- ║                                  -- Core\Globals.lua.    ║
--- ║                                  -- User override wins:  ║
--- ║                                  -- nil in db = play     ║
--- ║                                  -- this curated         ║
--- ║                                  -- default; "None" in   ║
--- ║                                  -- db = explicit mute;  ║
--- ║                                  -- other LSM key = user ║
--- ║                                  -- pick. soundOnHide is ║
--- ║                                  -- the analogous on-    ║
--- ║                                  -- hide field (rarely   ║
--- ║                                  -- used; on-show is the ║
--- ║                                  -- primary cue).        ║
--- ║            },                                            ║
--- ║            ...                                           ║
--- ║        },                                                ║
--- ║        phases  = {                                       ║
--- ║            {                                             ║
--- ║                unit      = "boss1",  -- default boss1    ║
--- ║                threshold = 75,       -- HP% phase fires  ║
--- ║                lead      = 5,        -- alert window     ║
--- ║                                       --   (HP between   ║
--- ║                                       --   threshold and ║
--- ║                                       --   threshold+lead║
--- ║                                       --   shows alert)  ║
--- ║                sound       = "...",  -- curator on-show  ║
--- ║                soundOnHide = "...",  -- curator on-hide  ║
--- ║                                       --   LSM keys; same║
--- ║                                       --   override rules║
--- ║                                       --   as spell.sound║
--- ║            },                                            ║
--- ║            ...                                           ║
--- ║        },                                                ║
--- ║                -- optional: HP%-driven "Phase Transition ║
--- ║                -- X%" text bar.                          ║
--- ║                -- Fires while unit HP is in              ║
--- ║                -- (threshold, threshold + lead]. Always  ║
--- ║                -- shown to everyone (no role filter).    ║
--- ║    }                                                     ║
--- ║                                                          ║
--- ║  Lookup at BigWigs_Timer time: O(1) by encounterID +     ║
--- ║  spellID. The BigWigs spellId we receive is the EVENT    ║
--- ║  spellId, NOT the hostile-cast spellId — they differ in  ║
--- ║  some cases (Barrage 1260643 vs. 1260648 cast).          ║
--- ║                                                          ║
--- ║  Optional `bossOrder` field on an encounter overrides    ║
--- ║  the default encounterID-ascending sort. Use when an     ║
--- ║  older dungeon's encounterIDs don't reflect in-dungeon   ║
--- ║  boss order (e.g. Pit of Saron: 1999/2001/2000 sorts to  ║
--- ║  Garfrost/Tyrannus/Ick&Krick but actual order is         ║
--- ║  Garfrost/Ick&Krick/Tyrannus).                           ║
+-- ║  Purpose: Curated cast-duration table for the Dungeon    ║
+-- ║           Timers module, keyed by encounter ID then      ║
+-- ║           spell ID.                                      ║
 -- ╚══════════════════════════════════════════════════════════╝
+
+-- Schema:
+--   KE.EncounterData[encounterID] = {
+--       name    = "Boss display name",
+--       dungeon = "DungeonKey",
+--       spells  = {
+--           [spellID] = {
+--               name            = "Spell display name",
+--               castType        = "begincast"|"cast"|
+--                                 "channel",
+--               castDuration    = <seconds>,  -- optional
+--               channelDuration = <seconds>,  -- optional
+--               role            = "tank"|"heal"|
+--                                 "mechanic"|"other"|
+--                                 "kick"|"move",
+--                                 -- kick = TANK + DPS
+--                                 --   (interrupt duty)
+--                                 -- move = HEAL + DPS
+--                                 --   (spread/movement;
+--                                 --    tank anchored)
+--               display         = "bar"|"text",
+--               displayText     = "DODGE"|...,
+--                                 -- short curated label
+--                                 -- shown instead of the
+--                                 -- BigWigs spell name.
+--                                 -- e.g. "TANK HIT",
+--                                 -- "INTERRUPT",
+--                                 -- "SPREAD". Fall back
+--                                 -- to BigWigs name when
+--                                 -- absent.
+--               castDisplayText = "AOE"|...,
+--                                 -- optional cast-phase
+--                                 -- label/color swap.
+--                                 -- When set, the bar
+--                                 -- swaps to this text +
+--                                 -- preset color when
+--                                 -- the cast actually
+--                                 -- starts. Lets a spell
+--                                 -- show two cues — e.g.
+--                                 -- "CC ADDS" during the
+--                                 -- countdown then "AOE"
+--                                 -- during the cast.
+--               extendByChannel = true,
+--                                 -- opt-in: extend the
+--                                 -- bar by channelDuration
+--                                 -- on top of castDuration
+--                                 -- so the bar hits 0 at
+--                                 -- end-of-channel. Use
+--                                 -- for spells whose
+--                                 -- effect lands at the
+--                                 -- END of the channel
+--                                 -- (e.g. adds spawn
+--                                 -- after a 4s channel
+--                                 -- finishes), NOT the
+--                                 -- start. Default off —
+--                                 -- channels normally
+--                                 -- damage at zero.
+--               disabled        = true,
+--                                 -- curator-default
+--                                 -- hard-disable. The
+--                                 -- bar never renders
+--                                 -- unless the user
+--                                 -- explicitly enables
+--                                 -- via the GUI (which
+--                                 -- stores false in
+--                                 -- db.SpellDisabled).
+--                                 -- Use for spammable
+--                                 -- abilities (kicks,
+--                                 -- DoT-tick spells)
+--                                 -- that would clutter
+--                                 -- the screen by
+--                                 -- default.
+--               showAtSeconds   = <seconds>,
+--                                 -- per-spell visibility
+--                                 -- override. Hides the
+--                                 -- bar until last N sec
+--                                 -- of total lifetime.
+--                                 -- Wins over the group
+--                                 -- ShowAtSeconds slider.
+--                                 -- 0 = force always
+--                                 -- visible even when
+--                                 -- group hides. Omit
+--                                 -- to inherit group.
+--               color           = { r, g, b },
+--                                 -- curator-default RGB
+--                                 -- color. Overrides the
+--                                 -- displayText preset
+--                                 -- color. Use for bars
+--                                 -- that need a specific
+--                                 -- hue not covered by
+--                                 -- the preset palette.
+--                                 -- User color override
+--                                 -- still wins over this.
+--               sortAtEnd      = true,
+--                                 -- push this entry to
+--                                 -- the end of the spell
+--                                 -- list in the GUI
+--                                 -- (before phase rules).
+--                                 -- Used for vulnerability
+--                                 -- phase entries that
+--                                 -- belong with phases
+--                                 -- conceptually rather
+--                                 -- than mixed in with
+--                                 -- regular cast warnings
+--               iconOverride   = <textureID|path>,
+--                                 -- replace BigWigs's
+--                                 -- supplied icon. Useful
+--                                 -- when the spell's
+--                                 -- default icon is
+--                                 -- ambiguous (e.g.
+--                                 -- a generic shadow
+--                                 -- texture) and a more
+--                                 -- recognizable icon
+--                                 -- aids identification.
+--                                 -- Accepts a texture
+--                                 -- file ID or path.
+--               forceDuration  = <seconds>,
+--                                 -- override the BigWigs
+--                                 -- duration with a
+--                                 -- known-correct value.
+--                                 -- Used for "amp" /
+--                                 -- vulnerability bars
+--                                 -- where LittleWigs's
+--                                 -- hardcoded duration
+--                                 -- doesn't match the
+--                                 -- actual buff lifetime
+--                                 -- (e.g. Backlash 20s
+--                                 -- vs LW's 12.5s). Bar
+--                                 -- self-drains over
+--                                 -- forceDuration; we
+--                                 -- ignore BigWigs's
+--                                 -- StopBar so its early
+--                                 -- end doesn't kill us.
+--               postCastBar    = {
+--                                   duration    = <s>,
+--                                   display     = "bar"|
+--                                                 "text",
+--                                   displayText = ...,
+--                                   iconOverride= <tex>,
+--                                 },
+--                                 -- follow-up bar that
+--                                 -- spawns at a parent
+--                                 -- bar's natural end.
+--                                 -- Two trigger paths:
+--                                 --  (a) parent has
+--                                 --   castDuration → fires
+--                                 --   when cast phase
+--                                 --   ends (Nysarra Flare
+--                                 --   → 17s BEAM).
+--                                 --  (b) parent has no
+--                                 --   castDuration →
+--                                 --   fires on BigWigs's
+--                                 --   StopBar at natural
+--                                 --   countdown end (L'ura
+--                                 --   Backlash → 19.5s
+--                                 --   VULNERABILITY).
+--                                 -- Use for buff/window
+--                                 -- bars that follow a
+--                                 -- cast when SPELL_AURA_
+--                                 -- APPLIED is unreliable
+--                                 -- (most boss-applied
+--                                 -- auras in 12.0).
+--                                 -- iconOverride wins
+--                                 -- over the parent's
+--                                 -- inherited icon when
+--                                 -- set; useful when the
+--                                 -- follow-up represents
+--                                 -- a different visual
+--                                 -- cue. Always shown to
+--                                 -- everyone (no role).
+--               phantomFollowupOf =
+--                                 <parentSpellId>,
+--               duration       = <s>,
+--                                 -- top-level GUI entry
+--                                 -- that opts out of the
+--                                 -- BigWigs_Timer path
+--                                 -- and instead spawns
+--                                 -- when the parent's
+--                                 -- BigWigs_StopBar fires
+--                                 -- naturally (cast
+--                                 -- finished = buff
+--                                 -- applied). Use when
+--                                 -- you want a follow-up
+--                                 -- bar to have its own
+--                                 -- configurable row in
+--                                 -- the GUI (vs nesting
+--                                 -- as the parent's
+--                                 -- postCastBar which
+--                                 -- hides under one row).
+--                                 -- L'ura's 247816
+--                                 -- (VULNERABILITY)
+--                                 -- follows 1266001
+--                                 -- (Backlash KNOCK).
+--                                 -- Pairs naturally with
+--                                 -- iconOverride/color/
+--                                 -- displayText for the
+--                                 -- follow-up's visuals.
+--               spawnOnMessage = true,
+--               duration       = <s>,
+--               leadDelay      = <s>,  -- optional
+--                                 -- BigWigs_Message-
+--                                 -- driven spawn. Used
+--                                 -- for vulnerability
+--                                 -- bars whose trigger
+--                                 -- is a non-cast event
+--                                 -- (widget update,
+--                                 -- boss emote) that
+--                                 -- LittleWigs surfaces
+--                                 -- via self:Message(
+--                                 -- spellId, ...). When
+--                                 -- BigWigs_Message
+--                                 -- fires with this
+--                                 -- spellId, we spawn a
+--                                 -- bar of `duration`
+--                                 -- seconds (optionally
+--                                 -- after `leadDelay`
+--                                 -- seconds, a prepare
+--                                 -- phase before the
+--                                 -- active window).
+--                                 -- Use this when
+--                                 -- SPELL_AURA_APPLIED
+--                                 -- doesn't fire in 12.0
+--                                 -- (most boss-applied
+--                                 -- auras). Entry skips
+--                                 -- BigWigs_Timer path.
+--               shieldBar      = {
+--                                   baseAmount = <number>,
+--                                   displayText = ...,
+--                                 },
+--                                 -- opt-in absorb-tracker
+--                                 -- bar for boss shield
+--                                 -- channels (e.g.
+--                                 -- Vordaza's Necrotic
+--                                 -- Convergence). Spawns
+--                                 -- on UNIT_SPELLCAST_
+--                                 -- CHANNEL_START for the
+--                                 -- parent spellID and
+--                                 -- drains as the boss
+--                                 -- takes damage. Max =
+--                                 -- baseAmount × M+
+--                                 -- multiplier. Inherits
+--                                 -- parent spell's
+--                                 -- icon/color/font/
+--                                 -- enable/role gate.
+--                                 -- displayText is the
+--                                 -- shield bar's label
+--                                 -- (separate from the
+--                                 -- parent's countdown
+--                                 -- bar). Secret-safe —
+--                                 -- absorb is read with
+--                                 -- UnitGetTotalAbsorbs
+--                                 -- (secret on hostile)
+--                                 -- and passed only to
+--                                 -- allowed-when-tainted
+--                                 -- formatters.
+--               secondary       = {
+--                                   role = ...,
+--                                   display = ...,
+--                                   displayText = ...,
+--                                   color = { r, g, b },
+--                                 },
+--                                 -- optional second bar
+--                                 -- spawned alongside
+--                                 -- the primary on each
+--                                 -- Timer event. Has its
+--                                 -- own role gate, mode,
+--                                 -- text, and color. Use
+--                                 -- for spells that need
+--                                 -- a tank-only bar AND
+--                                 -- an everyone-text
+--                                 -- (e.g. Orebreaker:
+--                                 -- "TANK HIT" bar +
+--                                 -- "FEET" text).
+--               sound          = "<LSM sound key>",
+--                                 -- curator-default
+--                                 -- on-show audio cue.
+--                                 -- LSM key for any
+--                                 -- registered sound —
+--                                 -- KitnEssentials's
+--                                 -- bundled presets live
+--                                 -- in Media\Sounds\ and
+--                                 -- are registered in
+--                                 -- Core\Globals.lua.
+--                                 -- User override wins:
+--                                 -- nil in db = play
+--                                 -- this curated
+--                                 -- default; "None" in
+--                                 -- db = explicit mute;
+--                                 -- other LSM key = user
+--                                 -- pick. soundOnHide is
+--                                 -- the analogous on-
+--                                 -- hide field (rarely
+--                                 -- used; on-show is the
+--                                 -- primary cue).
+--           },
+--           ...
+--       },
+--       phases  = {
+--           {
+--               unit      = "boss1",  -- default boss1
+--               threshold = 75,       -- HP% phase fires
+--               lead      = 5,        -- alert window
+--                                      --   (HP between
+--                                      --   threshold and
+--                                      --   threshold+lead
+--                                      --   shows alert)
+--               sound       = "...",  -- curator on-show
+--               soundOnHide = "...",  -- curator on-hide
+--                                      --   LSM keys; same
+--                                      --   override rules
+--                                      --   as spell.sound
+--           },
+--           ...
+--       },
+--               -- optional: HP%-driven "Phase Transition
+--               -- X%" text bar.
+--               -- Fires while unit HP is in
+--               -- (threshold, threshold + lead]. Always
+--               -- shown to everyone (no role filter).
+--   }
+--
+-- Lookup at BigWigs_Timer time: O(1) by encounterID +
+-- spellID. The BigWigs spellId we receive is the EVENT
+-- spellId, NOT the hostile-cast spellId — they differ in
+-- some cases (Barrage 1260643 vs. 1260648 cast).
+--
+-- Optional `bossOrder` field on an encounter overrides
+-- the default encounterID-ascending sort. Use when an
+-- older dungeon's encounterIDs don't reflect in-dungeon
+-- boss order (e.g. Pit of Saron: 1999/2001/2000 sorts to
+-- Garfrost/Tyrannus/Ick&Krick but actual order is
+-- Garfrost/Ick&Krick/Tyrannus).
 
 ---@class KE
 local KE = select(2, ...)
