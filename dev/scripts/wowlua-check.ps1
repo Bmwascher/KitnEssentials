@@ -14,8 +14,6 @@
 #
 # The binary ships inside the TradeSkillMaster VS Code extension; the newest
 # installed version is used unless WOWLUA_LS names one explicitly.
-# .wowluarc.json is local-only (gitignored): a worktree needs a copy from the
-# primary checkout before this can run there.
 
 [CmdletBinding()]
 param(
@@ -48,7 +46,7 @@ if (-not $exe) {
     exit 3
 }
 if (-not (Test-Path -LiteralPath (Join-Path $Root '.wowluarc.json'))) {
-    [Console]::Error.WriteLine("[wowlua-check] skipped: no .wowluarc.json in $Root (local-only; copy it from the primary checkout).")
+    [Console]::Error.WriteLine("[wowlua-check] skipped: no .wowluarc.json in $Root.")
     exit 3
 }
 

@@ -1,0 +1,73 @@
+{
+  "ignore": [
+    "Libs/",
+    ".wow-api-reference/",
+    "References/",
+    "Media/",
+    ".github/",
+    ".claude/",
+    "dev/docs/",
+    "dev/spec/",
+    "dev/scripts/",
+    "dev/githooks/",
+    "Core/Tags.lua"
+  ],
+  "flavors": ["retail"],
+  "framexml": true,
+
+  "globals": {
+    "read": [
+      "KitnEssentials", "KE",
+      "BigWigs", "BigWigsLoader",
+      "ElvUI", "ElvUI_SpellBookTooltip",
+      "LibStub",
+      "issecretvalue", "issecrettable", "canaccesstable", "canaccessvalue",
+      "GetRestrictedActionStatus",
+      "C_Secrets", "C_RestrictedActions",
+      "AuraContainerSortMethod", "AuraContainerSortDirection",
+      "AuraContainerItemEnchantmentSlot",
+      "GetNumClasses", "GetSpecializationInfoForClassID", "C_CreatureInfo",
+      "AbbreviateNumbers", "CreateAbbreviateConfig",
+      "MenuUtil",
+      "RAID_CLASS_COLORS",
+      "CharacterFrameTitleText",
+      "NUM_LE_FRAME_TUTORIALS",
+
+      "ERR_PARTY_LFG_BOOT_IN_COMBAT",
+
+      "Ayije_CastBar", "BCDM_CastBar", "UUF_Player_CastBar",
+
+      "WeakAuras"
+    ],
+    "write": [
+      "KitnEssentials",
+      "KitnEssentialsDB", "KitnEssentialsOptimizeDB",
+      "KitnCommands", "KitnEssentialsAPI", "KitnSlashLines",
+      "SLASH_KITNESSENTIALS1", "SLASH_KITNESSENTIALS2", "SLASH_KITNESSENTIALS3",
+      "SLASH_KE_CDM1", "SLASH_KE_CDM2",
+      "SLASH_KE_RL1",
+
+      "SetPITarget",
+
+      "KE_GUI_REFRESH_COUNT", "KE_GUI_REFRESH_ITEM", "KE_GUI_ORPHAN_COUNT"
+    ]
+  },
+
+  "diagnostics": {
+    "enable": [],
+    "disable": [
+      "inject-field",
+      "need-check-nil",
+      "undefined-field"
+    ],
+    "severity": {
+      "missing-parameter": "warning",
+      "unused-local": "hint",
+      "redefined-local": "hint",
+      "create-global": "warning",
+      "redundant-parameter": "hint",
+      "type-mismatch": "warning",
+      "assign-type-mismatch": "warning"
+    }
+  }
+}

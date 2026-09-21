@@ -240,8 +240,8 @@ else
 fi
 
 # wowlua-ls type and secret-value diagnostics (blocking; the warning
-# baseline is zero). Local-only: the binary ships with the VS Code extension
-# and .wowluarc.json is gitignored, so exit 3 (cannot run) skips with a note.
+# baseline is zero). The binary ships with the VS Code extension, so exit 3
+# (cannot run) skips with a note.
 if command -v pwsh >/dev/null 2>&1 && [ -f dev/scripts/wowlua-check.ps1 ]; then
     echo "[pre-push] wowlua-ls…"
     pwsh -NoProfile -NonInteractive -File dev/scripts/wowlua-check.ps1
