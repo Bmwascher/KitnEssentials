@@ -27,6 +27,9 @@ local DEBUG_HM = false
 
 local CreateFrame = CreateFrame
 local UnitExists = UnitExists
+-- Group-member reads stay plain under identity restriction; the typed
+-- aliases record that for the checker.
+---@type fun(unit: string): string?
 local UnitGUID = UnitGUID
 local UnitIsConnected = UnitIsConnected
 local UnitIsPlayer = UnitIsPlayer
@@ -34,6 +37,7 @@ local UnitClass = UnitClass
 local UnitName = UnitName
 local UnitPowerPercent = UnitPowerPercent
 local UnitPowerMax = UnitPowerMax
+---@type fun(unit: string): string
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
 local IsInRaid = IsInRaid

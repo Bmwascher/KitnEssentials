@@ -20,21 +20,31 @@ KE.GroupSort = GS
 local _G = _G
 local ipairs = ipairs
 local GetTime = GetTime
+-- Group-member reads stay plain under identity restriction; the typed
+-- aliases record that for the checker.
+---@type fun(unit: string): string?
 local UnitGUID = UnitGUID
+---@type fun(unit: string): string?, string?
 local UnitName = UnitName
+---@type fun(unit: string): string?, string?, number?
 local UnitClass = UnitClass
 local UnitExists = UnitExists
+---@type fun(unit: string): number?
 local UnitInRaid = UnitInRaid
+---@type fun(a: string, b: string): boolean
 local UnitIsUnit = UnitIsUnit
+---@type fun(unit: string): string?, string?
 local UnitFullName = UnitFullName
 local GetInstanceInfo = GetInstanceInfo
 local GetRaidRosterInfo = GetRaidRosterInfo
 local GetRaidDifficultyID = GetRaidDifficultyID
 local SetRaidSubgroup = _G.SetRaidSubgroup
 local SwapRaidSubgroup = _G.SwapRaidSubgroup
+---@type fun(unit: string): boolean
 local UnitIsGroupLeader = UnitIsGroupLeader
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitIsGroupAssistant = _G.UnitIsGroupAssistant
+---@type fun(unit: string): string
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 
 ---------------------------------------------------------------------------------

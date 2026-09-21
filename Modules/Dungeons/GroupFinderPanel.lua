@@ -128,6 +128,7 @@ local function GetPartyRoles()
         if r and roles[r] then roles[r] = roles[r] + 1 end
         for i = 1, GetNumGroupMembers() - 1 do
             r = UnitGroupRolesAssigned("party" .. i)
+            ---@cast r string
             if roles[r] then roles[r] = roles[r] + 1 end
         end
     else
