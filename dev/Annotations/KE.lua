@@ -342,6 +342,11 @@ function KE:MigrateModuleEnableDefaults() end
 --- ones. Reads the raw saved variables, so it MUST run before AceDB:New.
 function KE:MigrateCombatLoggerKeys() end
 
+--- Runs every saved-key rename on one profile table, ignoring the
+--- once-per-install record; an absent old key is skipped.
+---@param profile table
+function KE:MigrateProfileKeys(profile) end
+
 -- ─── Dungeon Timers registry (Modules/DungeonTimers/DungeonRegistry.lua) ─
 --- Distinct seasons present in `registry`, ascending.
 ---@param registry KE.DungeonTimerEntry[]
