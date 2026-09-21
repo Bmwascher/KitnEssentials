@@ -122,7 +122,6 @@ GUIFrame:RegisterContent("CombatLogger", function(scrollChild, yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         ApplyModuleState(checked)
-        KE:Print("Combat Logger: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     -- Lone header bar: a disabled module shows its switch and nothing else,

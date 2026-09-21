@@ -18,7 +18,6 @@ GUIFrame:RegisterContent("RaidControl", function(scrollChild, yOffset)
             -- the module hides it for the session, it cannot put it back.
             KE:CreateReloadPrompt("Turning off Raid Control hides its button now. A UI reload brings back Blizzard's own Raid Manager tab.")
         end
-        KE:Print("Raid Control: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     -- Lone header bar: a disabled module shows its switch and nothing else.

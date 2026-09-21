@@ -280,7 +280,6 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
             if checked then KitnEssentials:EnableModule("MapScale")
             else KitnEssentials:DisableModule("MapScale") end
             ApplyMapScale()
-            KE:Print("World Map Scale: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
         yOffset = card7:GetNextOffset()
 
