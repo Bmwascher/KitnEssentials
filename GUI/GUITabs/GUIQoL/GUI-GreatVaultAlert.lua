@@ -59,7 +59,9 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
 
     card1:AddLabel("Names your loot spec as you open the Great Vault, so a week's reward is not " ..
         "taken on the wrong one. The alert shows while the vault is opening and can also print the " ..
-        "spec to chat.")
+        "spec to chat." ..
+        "\n\nOnly active in a rested area, which is where the vault is; elsewhere it listens for " ..
+        "nothing at all.")
 
     yOffset = card1:GetNextOffset()
 

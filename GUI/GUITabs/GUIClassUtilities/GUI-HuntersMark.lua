@@ -47,8 +47,8 @@ GUIFrame:RegisterContent("HuntersMark", function(scrollChild, yOffset)
         ApplyState(checked)
     end)
 
-    card1:AddLabel("|cffffd100Hunter only.|r Warns when the boss you are targeting does not have your " ..
-        "Hunter's Mark on it." ..
+    card1:AddLabel("|cffffd100Hunter only.|r Warns when the boss you are targeting does not have " ..
+        "Hunter's Mark on it. Any hunter's mark counts, not just yours." ..
         "\n\nShows in raids, out of combat - for marking before a pull. The game hides a target's " ..
         "debuffs from addons once combat starts, so a warning there could not be trusted.")
 
