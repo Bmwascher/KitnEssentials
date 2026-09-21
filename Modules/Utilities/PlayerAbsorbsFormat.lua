@@ -1,3 +1,9 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  PlayerAbsorbsFormat.lua                                 ║
+-- ║  Purpose: Secret-safe number formatting for the Player   ║
+-- ║           Absorbs rows.                                  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end

@@ -1,3 +1,11 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  PlayerAbsorbs.lua                                       ║
+-- ║  Module: Player Absorbs                                  ║
+-- ║  Purpose: Shows the shield on you and any heal absorb as ║
+-- ║           icon-and-number rows anchored to the player    ║
+-- ║           frame.                                         ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end

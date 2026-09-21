@@ -1,3 +1,10 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  HousingDashboardFix.lua                                 ║
+-- ║  Purpose: Re-requests the owned-house list when the      ║
+-- ║           housing dashboard opens stuck on an empty or   ║
+-- ║           uninitialised house view.                      ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end
