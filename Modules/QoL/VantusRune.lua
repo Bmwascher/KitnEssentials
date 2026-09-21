@@ -10,6 +10,8 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 ---@class VantusRune: AceModule, AceEvent-3.0
+---@field _isActive boolean?
+---@field _baganatorCallbackRegistered boolean?
 local VR = KitnEssentials:NewModule("VantusRune", "AceEvent-3.0")
 
 local CreateFrame = CreateFrame

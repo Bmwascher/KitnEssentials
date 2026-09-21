@@ -188,6 +188,10 @@ local function NormalizeRetained(value, maximum, forceMarker)
     return normalized, truncated
 end
 
+---@param value any
+---@param rawMaximum number
+---@param retainedMaximum number
+---@return string?, boolean?
 local function BoundedString(value, rawMaximum, retainedMaximum)
     local prefix, rawTruncated = GuardedPrefix(value, rawMaximum)
     if not prefix then return nil end
@@ -323,6 +327,8 @@ local function ParseStack(stack)
 end
 
 local function ReadableStack()
+    -- The debugstack stub types the first argument as a thread; the start-level form is valid.
+    ---@diagnostic disable-next-line: type-mismatch
     local ok, stack = pcall(debugstack, 3, STACK_HEAD_LINES, STACK_TAIL_LINES)
     if not ok or not SafeCanAccess(stack) or type(stack) ~= "string" then
         return nil
