@@ -143,6 +143,7 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
         ----------------------------------------------------------------
         local cardHousing = GUIFrame:CreateCard(scrollChild, "Housing Item Auto-Roll", yOffset)
         manager:Register(cardHousing, "all")
+        cardHousing:AddLabel("Auto-rolls on Housing items based on your roll type selection. Useful in raids and dungeons where housing decor drops are not gear upgrades.")
 
         GUIFrame:CreatePairedRow(cardHousing, {
             height = Theme.rowHeightLast,
@@ -164,8 +165,6 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
                 callback = function(val) db.AutoPassHousingMode = val end,
             },
         })
-
-        cardHousing:AddLabel("|cff888888Auto-rolls on Housing items based on your roll type selection. Useful in raids/dungeons where housing decor drops aren't gear upgrades.|r")
 
         yOffset = cardHousing:GetNextOffset()
     end
@@ -196,6 +195,7 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
         yOffset = cardVR:GetNextOffset()
 
         if vrDB.Enabled ~= false then
+            cardVR:AddLabel("Adds a button to the Guild Bank to withdraw one Vantus Rune. The highest-quality current-tier rune is chosen first. You must be on the same realm as your guild to withdraw.")
             local rowVR1 = GUIFrame:CreateRow(cardVR.content, Theme.rowHeight)
             local vrChatCheck = GUIFrame:CreateCheckbox(rowVR1, "Show Chat Messages", {
                 value = vrDB.ShowChatMessages ~= false,
@@ -214,8 +214,6 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
             rowVR2:AddWidget(vrTimeoutSlider, 0.5)
             vrManager:Register(vrTimeoutSlider, "all")
             cardVR:AddRow(rowVR2, Theme.rowHeightLast, 0)
-
-            cardVR:AddLabel("|cff888888Adds a button to the Guild Bank to withdraw one Vantus Rune.\nThe highest-quality current-tier rune is chosen first.\nYou must be on the same realm as your guild to withdraw.|r")
 
             yOffset = cardVR:GetNextOffset()
         end
@@ -433,6 +431,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Quest Automation", yOffset)
     manager:Register(card1, "all")
+    card1:AddLabel("Hold the selected modifier key when talking to an NPC to pause auto-quest. Multiple rewards always prompt.\n\nAuto Voidcores accepts and completes the weekly quest from Decimus for gold even when general auto-accept and turn-in are off; the Hold to Pause modifier still applies.")
 
     local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local autoAcceptCheck = GUIFrame:CreateCheckbox(row1a, "Auto Accept Quests", {
@@ -481,8 +480,6 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     manager:Register(modDropdown, "all")
     card1:AddRow(row1c, Theme.rowHeightLast, 0)
 
-    card1:AddLabel("|cff888888Hold the selected modifier key when talking to an NPC to pause auto-quest. Multiple rewards will always prompt.\nAuto Voidcores: Automatically accepts and completes the weekly quest from Decimus for gold, even when general auto-accept/turn-in is off (Hold to Pause modifier is respected still).|r")
-
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -490,6 +487,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card2 = GUIFrame:CreateCard(scrollChild, "Group Finder", yOffset)
     manager:Register(card2, "all")
+    card2:AddLabel("Quick Signup: hold the selected key to keep the application window open, which is the only way to reach the note box while Quick Signup is on.")
 
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local autoRoleCheck = GUIFrame:CreateCheckbox(row2a, "Auto Accept Role Check", {
@@ -550,8 +548,6 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     manager:Register(signupModDropdown, "all")
     card2:AddRow(row2c, Theme.rowHeightLast, 0)
 
-    card2:AddLabel("|cff888888Quick Signup: hold the selected key to keep the application window open, which is the only way to reach the note box while Quick Signup is on.|r")
-
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -559,6 +555,7 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Social", yOffset)
     manager:Register(card3, "all")
+    card3:AddLabel("Combat res and Soulstone are never auto-accepted; you stay in control during encounters.")
 
     local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
     local autoDeclineDuelsCheck = GUIFrame:CreateCheckbox(row3a, "Auto Decline Duels", {
@@ -591,8 +588,6 @@ GUIFrame:RegisterContent("AutomationQuests", function(scrollChild, yOffset)
     row3b:AddWidget(autoAcceptResCheck, 1)
     manager:Register(autoAcceptResCheck, "all")
     card3:AddRow(row3b, Theme.rowHeightLast, 0)
-
-    card3:AddLabel("|cff888888Combat res / Soulstone are never auto-accepted; you stay in control during encounters.|r")
 
     yOffset = card3:GetNextOffset()
 
