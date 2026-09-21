@@ -1,7 +1,10 @@
--- One builder, two pages. Both drive aura engine displays
--- (Modules/Combat/AuraHeaders.lua), so the options are identical apart
--- from the debuff-only school-colour toggle.
---
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-AuraHeaders.lua                                     ║
+-- ║  GUI: Aura Headers                                       ║
+-- ║  Purpose: One builder for the Buffs and Debuffs pages of ║
+-- ║           the AuraHeaders modules.                       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 -- There are deliberately NO sorting options: this feature is skinning, and
 -- the header is fixed to Blizzard's own order. Spacing is the one layout
 -- control that earns its place.

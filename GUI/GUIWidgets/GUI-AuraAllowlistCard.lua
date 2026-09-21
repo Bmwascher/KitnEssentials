@@ -1,3 +1,9 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-AuraAllowlistCard.lua                               ║
+-- ║  Purpose: Shared Allowlist card: the per-entry editable  ║
+-- ║           spell list used by the aura pages.             ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
