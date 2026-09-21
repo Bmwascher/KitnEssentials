@@ -1941,7 +1941,7 @@ local Defaults = {
             -- trash position to configure. Only the
             -- on-nameplate icons below are trash-owned config.
 
-            -- On-nameplate cooldown icons (Phase 4 render surface).
+            -- On-nameplate cooldown icons.
             Nameplate = {
                 ShowIcons = true,
                 IconSize = 30,

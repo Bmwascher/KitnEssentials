@@ -874,9 +874,8 @@ function MPT:OnEnable()
     -- file in Dungeons.xml — guaranteed to exist at runtime (same guarantee as
     -- MigrateLegacyOverlayDB which is called from UpdateDB without a guard).
     self:InitOverlay()
-    -- Build the HUD if its file is loaded (BuildHUD lives there). Guard is
-    -- MANDATORY in Phase 1 — the HUD file does not exist yet; mirrors the
-    -- PurgeStaleSplits guard idiom below.
+    -- Build the HUD if its file is loaded (BuildHUD lives there); same guard
+    -- idiom as PurgeStaleSplits below.
     if self.BuildHUD then self:BuildHUD() end
     -- BuildHUD returns on an existing root, and ProfileManager skips
     -- ApplySettings for modules it just enabled: without this, a profile
@@ -1457,7 +1456,6 @@ function MPT:RepairRunInfo()
 end
 
 function MPT:StartRun()
-    -- preview teardown (ShowPreview/HidePreview); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
     local run = self.run
     if run.active then
@@ -1521,7 +1519,6 @@ function MPT:StartRun()
 end
 
 function MPT:CompleteRun()
-    -- preview teardown (ShowPreview/HidePreview); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
     local run = self.run
     if run.completed then
@@ -1596,7 +1593,6 @@ function MPT:CompleteRun()
 end
 
 function MPT:ResetRun(keepCaches)
-    -- preview teardown (ShowPreview/HidePreview); isPreview is nil until then, so this is inert in Phase 1
     if self.isPreview then self:HidePreview() end
     -- Recovery-cache lifecycle: the default (keepCaches falsy — the
     -- CHALLENGE_MODE_RESET path) wipes both persisted caches BEFORE the
