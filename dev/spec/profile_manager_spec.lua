@@ -258,3 +258,30 @@ describe("RefreshAllModules enabled-state sync", function()
         assert.equal(1, skinPrompts + generic)
     end)
 end)
+
+-- The renames run on the imported table before the copy (Core/Defaults.lua
+-- KE:MigrateProfileKeys, loaded onto the same KE). Two branches: an old key
+-- present is converted; an old key absent is left alone, because the login
+-- migration's convert(nil) would overwrite a value already under the new key.
+describe("ProfileManager:InstallProfile saved-key renames", function()
+    local helpers = require("dev.spec._helpers")
+
+    local function install(profile)
+        local PM, KE, db = L.loadProfileManager()
+        helpers.loadModule("Core/Defaults.lua", KE)
+        local ok, name = PM:InstallProfile(profile, "Imported")
+        assert.is_true(ok)
+        return db.profiles[name]
+    end
+
+    it("converts an old key so nothing un-renamed reaches the profile", function()
+        local out = install({ CombatLogger = { ScenarioTorghast = true } })
+        assert.is_true(out.CombatLogger.Scenario)
+        assert.is_nil(out.CombatLogger.ScenarioTorghast)
+    end)
+
+    it("leaves a profile already carrying the new key alone", function()
+        local out = install({ CombatLogger = { Scenario = true } })
+        assert.is_true(out.CombatLogger.Scenario)
+    end)
+end)

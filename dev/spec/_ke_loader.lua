@@ -349,7 +349,6 @@ end
 function L.loadProfileManager(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
-    _G.LibStub = function() return setmetatable({}, { __index = function() return function() end end }) end
     local callbacks = {}
     local db = {
         profiles = { Default = {} },

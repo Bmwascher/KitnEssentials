@@ -2,7 +2,6 @@
 -- ║  ProfileManager.lua                                      ║
 -- ║  Purpose: Profile import/export with compression,        ║
 -- ║           per-character and global profile management.   ║
--- ║  Note: Uses AceSerializer-3.0 and LibDeflate.            ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -10,10 +9,11 @@ local KE = select(2, ...)
 local ProfileManager = {}
 KE.ProfileManager = ProfileManager
 
-local AceSerializer = LibStub("AceSerializer-3.0")
-local LibDeflate = LibStub("LibDeflate")
-
-local EXPORT_PREFIX = "!KE1!"
+local EXPORT_PREFIX = "!KE2!"
+-- Nothing decodes the old prefix; refused with one message, shared with the
+-- nicknames import.
+local LEGACY_PREFIX = "!KE1!"
+KE.LEGACY_EXPORT_MESSAGE = "this string was exported by an older version; ask for a fresh export"
 local DEFAULT_PROFILE = "Default"
 
 local pairs = pairs
@@ -289,6 +289,45 @@ function ProfileManager:GetGlobalProfile()
 end
 
 ---------------------------------------------------------------------------------
+-- Export string codec
+---------------------------------------------------------------------------------
+-- CBOR, then Deflate, then Base64. Shared with the nicknames export. The
+-- compress, decompress and Base64 calls may return nothing, DeserializeCBOR may
+-- return nil, and SerializeCBOR raises on a value it cannot represent, so both
+-- directions run under pcall and answer nil.
+
+local function Encode(tbl)
+    local serialized = C_EncodingUtil.SerializeCBOR(tbl)
+    local compressed = serialized and C_EncodingUtil.CompressString(serialized,
+        Enum.CompressionMethod.Deflate, Enum.CompressionLevel.OptimizeForSize)
+    return compressed and C_EncodingUtil.EncodeBase64(compressed)
+end
+
+local function Decode(encoded)
+    local decoded = C_EncodingUtil.DecodeBase64(encoded)
+    local decompressed = decoded and C_EncodingUtil.DecompressString(decoded, Enum.CompressionMethod.Deflate)
+    return decompressed and C_EncodingUtil.DeserializeCBOR(decompressed)
+end
+
+--- Encode a table as a printable export string (no prefix)
+---@param tbl table
+---@return string|nil encoded
+function KE:EncodeForExport(tbl)
+    local ok, encoded = pcall(Encode, tbl)
+    if ok and type(encoded) == "string" and encoded ~= "" then return encoded end
+    return nil
+end
+
+--- Decode a printable export string (prefix already removed) to a table
+---@param encoded string
+---@return table|nil
+function KE:DecodeFromExport(encoded)
+    local ok, data = pcall(Decode, encoded)
+    if ok and type(data) == "table" then return data end
+    return nil
+end
+
+---------------------------------------------------------------------------------
 -- Import / Export
 ---------------------------------------------------------------------------------
 
@@ -304,83 +343,49 @@ function ProfileManager:ExportProfile(profileName)
     local profileData = KE.db.profiles[profileName]
     if not profileData then return nil, "Profile '" .. profileName .. "' not found" end
 
-    -- Create export package with metadata
-    local exportData = {
+    local encoded = KE:EncodeForExport({
         _v = 1,           -- Version
         _n = profileName, -- Original profile name
         _t = time(),      -- Timestamp
         d = profileData   -- Profile data
-    }
-
-    -- Serialize
-    local serialized = AceSerializer:Serialize(exportData)
-    if not serialized then return nil, "Serialization failed" end
-
-    -- Compress
-    local compressed = LibDeflate:CompressDeflate(serialized, { level = 9 })
-    if not compressed then return nil, "Compression failed" end
-
-    -- Encode for copy
-    local encoded = LibDeflate:EncodeForPrint(compressed)
+    })
     if not encoded then return nil, "Encoding failed" end
 
     return EXPORT_PREFIX .. encoded
 end
 
---- Import a profile from a string
----@param importString string The export string
----@param targetName string|nil Name for the imported profile (uses embedded name if nil)
+--- Decode an export string to its profile table
+---@param importString string
+---@return table|nil profileData
+---@return string|nil embeddedName
+---@return string|nil error
+function ProfileManager:DecodeImportString(importString)
+    if not importString or importString == "" then return nil, nil, "Import string is empty" end
+    if importString:sub(1, #LEGACY_PREFIX) == LEGACY_PREFIX then return nil, nil, KE.LEGACY_EXPORT_MESSAGE end
+    if importString:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then return nil, nil, "Invalid format (missing or wrong prefix)" end
+
+    local data = KE:DecodeFromExport(importString:sub(#EXPORT_PREFIX + 1))
+    if not data then return nil, nil, "Decoding failed" end
+
+    -- The user-facing export wraps the profile in an envelope; the Wago API
+    -- export is the raw profile table.
+    if type(data.d) == "table" then return data.d, data._n end
+    return data
+end
+
+--- Create a profile from a decoded table
+---@param profileData table
+---@param targetName string|nil Name for the new profile ("Imported" if nil)
 ---@return boolean success
----@return string|nil nameOrError
-function ProfileManager:ImportProfile(importString, targetName)
-    if not importString or importString == "" then return false, "Import string is empty" end
-    -- Validate prefix
-    if importString:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then return false, "Invalid format (missing or wrong prefix)" end
+---@return string nameOrError
+function ProfileManager:InstallProfile(profileData, targetName)
     if not KE.db then return false, "Database not initialized" end
 
-    -- Remove prefix
-    local encoded = importString:sub(#EXPORT_PREFIX + 1)
+    -- Before the copy, so a string exported before a rename lands converted
+    -- and no old key reaches KE.db.
+    KE:MigrateProfileKeys(profileData)
 
-    local profileData, embeddedName
-
-    -- Try internal format first (LibDeflate + AceSerializer)
-    local compressed = LibDeflate:DecodeForPrint(encoded)
-    if compressed then
-        local serialized = LibDeflate:DecompressDeflate(compressed)
-        if serialized then
-            local success, exportData = AceSerializer:Deserialize(serialized)
-            if success and type(exportData) == "table" and exportData.d then
-                profileData = exportData.d
-                embeddedName = exportData._n
-            end
-        end
-    end
-
-    -- Fallback: try Wago API format (C_EncodingUtil: Base64 + Deflate + CBOR)
-    if not profileData and C_EncodingUtil then
-        local decoded = C_EncodingUtil.DecodeBase64(encoded)
-        if decoded then
-            local decompressed = C_EncodingUtil.DecompressString(decoded, Enum.CompressionMethod.Deflate)
-            if decompressed then
-                local data = C_EncodingUtil.DeserializeCBOR(decompressed)
-                if data and type(data) == "table" then
-                    -- Check if it's an envelope with {d = ..., _n = ...}
-                    if data.d and type(data.d) == "table" then
-                        profileData = data.d
-                        embeddedName = data._n
-                    else
-                        -- Raw profile data (legacy or third-party export)
-                        profileData = data
-                    end
-                end
-            end
-        end
-    end
-
-    if not profileData then return false, "Decoding failed" end
-
-    -- Determine target profile name
-    local finalName = targetName or embeddedName or "Imported"
+    local finalName = targetName or "Imported"
 
     -- Check if profile exists and generate unique name if needed
     local profiles = self:GetProfiles()
@@ -421,6 +426,17 @@ function ProfileManager:ImportProfile(importString, targetName)
     end)
 
     return true, finalName
+end
+
+--- Import a profile from a string
+---@param importString string The export string
+---@param targetName string|nil Name for the imported profile (uses embedded name if nil)
+---@return boolean success
+---@return string|nil nameOrError
+function ProfileManager:ImportProfile(importString, targetName)
+    local profileData, embeddedName, err = self:DecodeImportString(importString)
+    if not profileData then return false, err end
+    return self:InstallProfile(profileData, targetName or embeddedName)
 end
 
 ---------------------------------------------------------------------------------
@@ -562,9 +578,7 @@ function KitnEssentialsAPI:ExportProfile(profileKey)
     if not profileData then return "" end
 
     -- Wago expects raw profile data, no envelope wrapper
-    local serialized = C_EncodingUtil.SerializeCBOR(profileData)
-    local compressed = C_EncodingUtil.CompressString(serialized, Enum.CompressionMethod.Deflate, Enum.CompressionLevel.OptimizeForSize)
-    local encoded = C_EncodingUtil.EncodeBase64(compressed)
+    local encoded = KE:EncodeForExport(profileData)
     return encoded and (EXPORT_PREFIX .. encoded) or ""
 end
 
@@ -572,10 +586,6 @@ end
 ---@param profileString string The encoded profile string
 ---@param profileKey string The name for the imported profile
 function KitnEssentialsAPI:ImportProfile(profileString, profileKey)
-    if not profileString or profileString == "" then return end
-    if not KE.db then return end
-
-    -- Use ProfileManager:ImportProfile which handles both LibDeflate and C_EncodingUtil formats
     local success, finalName = ProfileManager:ImportProfile(profileString, profileKey)
     if not success then return end
 
@@ -588,46 +598,7 @@ end
 ---@param profileString string The profile string to decode
 ---@return table The decoded profile data
 function KitnEssentialsAPI:DecodeProfileString(profileString)
-    if not profileString or profileString == "" then return {} end
-
-    -- Validate prefix
-    if profileString:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then return {} end
-
-    local encoded = profileString:sub(#EXPORT_PREFIX + 1)
-
-    -- Try internal format first (LibDeflate + AceSerializer)
-    local compressed = LibDeflate:DecodeForPrint(encoded)
-    if compressed then
-        local serialized = LibDeflate:DecompressDeflate(compressed)
-        if serialized then
-            local success, exportData = AceSerializer:Deserialize(serialized)
-            if success and type(exportData) == "table" then
-                if exportData.d and type(exportData.d) == "table" then
-                    return exportData.d
-                end
-                return exportData
-            end
-        end
-    end
-
-    -- Fallback: try C_EncodingUtil format (Base64 + Deflate + CBOR)
-    if C_EncodingUtil then
-        local decoded = C_EncodingUtil.DecodeBase64(encoded)
-        if decoded then
-            local ok, decompressed = pcall(C_EncodingUtil.DecompressString, decoded, Enum.CompressionMethod.Deflate)
-            if ok and decompressed then
-                local data = C_EncodingUtil.DeserializeCBOR(decompressed)
-                if data and type(data) == "table" then
-                    if data.d and type(data.d) == "table" then
-                        return data.d
-                    end
-                    return data
-                end
-            end
-        end
-    end
-
-    return {}
+    return ProfileManager:DecodeImportString(profileString) or {}
 end
 
 --- Set the active profile

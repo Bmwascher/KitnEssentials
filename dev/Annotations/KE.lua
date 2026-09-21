@@ -129,6 +129,7 @@ function KE_CombatState:OnEnteringWorld() end
 ---@field GUIFrame table
 ---@field EditMode table
 ---@field ProfileManager table
+---@field LEGACY_EXPORT_MESSAGE string
 ---@field GUI table
 ---@field FramePool KE.FramePool
 ---@field CombatState KE.CombatState
@@ -346,6 +347,15 @@ function KE:MigrateCombatLoggerKeys() end
 --- once-per-install record; an absent old key is skipped.
 ---@param profile table
 function KE:MigrateProfileKeys(profile) end
+
+-- Core/ProfileManager.lua export string codec
+---@param tbl table
+---@return string|nil encoded
+function KE:EncodeForExport(tbl) end
+
+---@param encoded string
+---@return table|nil
+function KE:DecodeFromExport(encoded) end
 
 -- ─── Dungeon Timers registry (Modules/DungeonTimers/DungeonRegistry.lua) ─
 --- Distinct seasons present in `registry`, ascending.
