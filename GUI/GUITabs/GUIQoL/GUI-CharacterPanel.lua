@@ -58,12 +58,9 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Adds optional decimal item level, Mythic+ score, faction indicator, item track letters, missing enchant/gem warnings, and a gem socket helper.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
+    card1:AddLabel("Adds to the character panel a decimal item level, your Mythic+ score, a faction " ..
+        "indicator, upgrade track letters on each slot, warnings for missing enchants and gems, and " ..
+        "a helper for socketing gems. The same per-slot readout can be drawn on the inspect window.")
 
     local row1Insp = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local inspectCheck = GUIFrame:CreateCheckbox(row1Insp, "Show on Inspect Frame", {
@@ -77,8 +74,6 @@ GUIFrame:RegisterContent("CharacterPanel", function(scrollChild, yOffset)
     row1Insp:AddWidget(inspectCheck, 1)
     manager:Register(inspectCheck, "all")
     card1:AddRow(row1Insp, Theme.rowHeight)
-
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
 
     yOffset = card1:GetNextOffset()
 

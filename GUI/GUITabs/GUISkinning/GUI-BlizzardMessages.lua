@@ -108,6 +108,11 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
         end
     end)
 
+    if db.Enabled ~= false then
+        card1:AddLabel("Restyles the game's own on-screen texts - the red error line, the yellow " ..
+            "action status, zone names and chat bubbles - with the font, size and outline you choose.")
+    end
+
     -- Full Blizzard font-object replacement (BlizzardFonts module): re-fonts
     -- the shared Blizzard font objects (tooltips, quest text, objective
     -- tracker, number fonts, mail...) to the brand font at Blizzard's stock

@@ -123,16 +123,10 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
         KE:CreateReloadPrompt("Toggling the custom chat panel requires a UI reload to fully apply.")
     end)
 
-    local noteHeight = 65
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("- ") ..
-        "Restyles chat frames and tabs into a movable custom panel with chat copy, short channel names, timestamps, message fading, and whisper sounds.\n" ..
-        KE:ColorTextByTheme("- ") .. "Whisper mode is forced to In-line to prevent taint from auto-opened whisper tabs.",
-        noteHeight, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight, 0)
+    card1:AddLabel("Restyles the chat frames and tabs into a movable panel, with chat copy, short " ..
+        "channel names, timestamps, message fading and whisper sounds." ..
+        "\n\nWhisper mode is forced to In-line, because the tabs the game opens on its own for " ..
+        "whispers taint the chat frame.")
 
     yOffset = card1:GetNextOffset()
 
