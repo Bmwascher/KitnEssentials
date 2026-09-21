@@ -52,7 +52,6 @@ GUIFrame:RegisterContent("PIAssist", function(scrollChild, yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
         db.Enabled = checked
         ApplyModuleState(checked)
-        KE:Print("Power Infusion Assist: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)

@@ -55,7 +55,6 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
             if checked then KitnEssentials:EnableModule("TotemTracker")
             else KitnEssentials:DisableModule("TotemTracker") end
         end
-        KE:Print("Totem Tracker: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     yOffset = card1:GetNextOffset()

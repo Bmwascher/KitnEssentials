@@ -404,8 +404,6 @@ GUIFrame:RegisterTabbedContent("HealerMana", {
                 if checked then KitnEssentials:EnableModule("HealerMana")
                 else KitnEssentials:DisableModule("HealerMana") end
             end
-            KE:Print("Healer Mana: " ..
-                (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
         -- collapse = true suppresses the tab strip and all tab content.
         return card:GetNextOffset(), db.Enabled ~= true

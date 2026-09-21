@@ -55,7 +55,6 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
     local card1 = GUIFrame:CreateCard(scrollChild, "Spell Alerts", yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         ApplyModuleState(checked)
-        KE:Print("Spell Alerts: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)

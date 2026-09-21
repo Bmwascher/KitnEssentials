@@ -60,7 +60,6 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     local card1 = GUIFrame:CreateCard(scrollChild, "Aura Debuffs", yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         ApplyModuleState(checked)
-        KE:Print("Aura Debuffs: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     yOffset = card1:GetNextOffset()
