@@ -444,7 +444,6 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         if not checked then
             KE:CreateReloadPrompt("Turning off the alert anchor requires a UI reload to give the toasts back to Blizzard.")
         end
-        KE:Print("Alert Frames: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     local noteHeight = 70

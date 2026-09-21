@@ -67,7 +67,6 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         ApplyModuleState(checked)
-        KE:Print("Player Absorbs: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     yOffset = card1:GetNextOffset()
