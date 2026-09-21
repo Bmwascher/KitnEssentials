@@ -101,7 +101,8 @@ local DEATHS_TOOLTIP_LIFT = 4
 ---------------------------------------------------------------------------------
 
 -- Skip SetText when the string is identical to the prior tick (safe here:
--- all strings derive from non-secret values per spec §8).
+-- every string derives from non-secret values; the timer, deaths, forces,
+-- key and step APIs this HUD reads return no secrets).
 -- _keLast is stamped AFTER SetText: if SetText throws (e.g. "Font not set"
 -- on a not-yet-fonted FontString), a pre-stamped cache would make every
 -- later render skip the retry and the text would stay blank for the session.
@@ -193,7 +194,7 @@ function MPT:BuildHUD()
     textOverlay:SetFrameLevel(root:GetFrameLevel() + 10)
     root.textOverlay = textOverlay
 
-    -- FontString factory: text lives on root (contract §Frames rule) except
+    -- FontString factory: text lives on root except
     -- the bar-adjacent strings, which take the overlay as an explicit parent.
     local function FS(layer, parent)
         local fs = (parent or root):CreateFontString(nil, layer or "ARTWORK")
@@ -422,9 +423,7 @@ end
 -- RenderTimer — format elapsed/limit into one of five display strings and
 -- recolor the FontString: white while running, TimerSuccessColor on timed
 -- completion, red when depleted (elapsed > limit or run completed past limit).
--- Design: uniform white (no separate gray "/ limit") per user direction.
--- FormatTime resolved lazily to be load-order-safe (Phase 1 assigns it after
--- this file parses).
+-- Design: uniform white (no separate gray "/ limit").
 ---------------------------------------------------------------------------------
 
 function MPT:RenderTimer()
@@ -892,8 +891,8 @@ end
 -- and re-anchored each tick so a run-change (different affix count) stays
 -- correct without a full rebuild.
 --
--- Affix IDs are non-secret (spec §8 "key/affix/map metadata APIs") — no
--- issecretvalue guard applied.
+-- Affix IDs are plain values (the key, affix and map metadata APIs return no
+-- secrets), so no issecretvalue guard is applied.
 ---------------------------------------------------------------------------------
 
 function MPT:RenderKey()
@@ -987,14 +986,13 @@ end
 
 ---------------------------------------------------------------------------------
 -- RenderDeaths — headline "N Deaths (+m:ss)" + hover tooltip.
--- Replaces the Phase-2 headline-only stub wholesale.
 --
--- Blank at 0 deaths (spec §7.1). Format: "N Deaths (+m:ss)" — penalty ADDS
+-- Blank at 0 deaths. Format: "N Deaths (+m:ss)" — penalty ADDS
 -- to elapsed time (deliberately no leading "-" sign).
 -- Hit-frame is sized to the actual text so the hover region matches exactly.
 -- Font/anchor owned by ApplyLayout (applyFont(f.deathsText, "Deaths") +
 -- row(f.deathsText)); this render must not duplicate them.
--- SetTextGated: safe — deathTimeLost is plain math (spec §8 "GetDeathCount").
+-- SetTextGated: safe — deathTimeLost comes from GetDeathCount, a plain number.
 ---------------------------------------------------------------------------------
 
 function MPT:RenderDeaths()
@@ -1030,7 +1028,7 @@ end
 -- RenderForces — forces StatusBar fill + percent/count/custom text.
 --
 -- run.forces = { total, current, percent, completed } (plain math — no
--- issecretvalue guard per spec §8 "aggregate GetCriteriaInfo").
+-- issecretvalue guard: the aggregate GetCriteriaInfo values are not secret).
 -- Fill = percent/100 via SetValueGated.
 --
 -- BAR color: db.ForcesColor, or the quintile palette when ForcesBandedColors
@@ -1231,7 +1229,7 @@ end
 -- Zero objectives or ShowObjectives=false: _objRowEndY = _objRowStartY (no height consumed).
 --
 -- Secret-value note: clearTime/pbTime come from UpdateObjectives which reads
--- GetStepInfo (plain math per contract §62); no issecretvalue guard applied.
+-- GetStepInfo, whose values are plain numbers; no issecretvalue guard applied.
 ---------------------------------------------------------------------------------
 
 function MPT:RenderObjectives()
@@ -1351,7 +1349,7 @@ function MPT:RenderObjectives()
 end
 
 ---------------------------------------------------------------------------------
--- RequestLayout — deferred 1/frame batching (spec §11 "Deferred layout batching")
+-- RequestLayout — deferred 1/frame batching
 -- Collapses repeated layout requests into one C_Timer.After(0) pass; mirrors
 -- KE's _RequestPositionUpdate pattern. A pending flag prevents stacking.
 ---------------------------------------------------------------------------------
@@ -1369,7 +1367,7 @@ function MPT:RequestLayout()
 end
 
 ---------------------------------------------------------------------------------
--- ApplyLayout — owns ALL positioning (Layout-cursor contract §46-47).
+-- ApplyLayout — owns ALL positioning.
 -- Step 1: apply fonts to every FontString (per-element + global default).
 -- Step 2: bar sizes, HUD anchor, scale, backdrop, straggler anchors.
 -- Step 3: length-gated vertical relayout + objectives handoff.
@@ -1700,14 +1698,14 @@ function MPT:ApplyLayout()
 end
 
 ---------------------------------------------------------------------------------
--- Render — orchestrator (CONTRACT §54 HUD function list).
+-- Render — orchestrator.
 -- Called by NotifyRefresh's debounced callback (_NotifyRefreshFire). Hides the
 -- HUD when there is no run or preview, else calls each Render* in order and
 -- requests a deferred (length-gated) layout pass.
 -- RenderObjectives is called from INSIDE ApplyLayout — it consumes
 -- the layout cursor published here. Do NOT call it here: the first render
 -- after a text-length change is one deferred-layout pass stale and converges
--- on the next tick (accepted behavior per spec §11).
+-- on the next tick (accepted).
 ---------------------------------------------------------------------------------
 
 function MPT:Render()
