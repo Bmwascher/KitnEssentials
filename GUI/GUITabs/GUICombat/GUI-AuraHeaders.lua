@@ -217,6 +217,27 @@ local function BuildPage(opts)
         yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
         --------------------------------------------------------------
+        -- Position
+        --------------------------------------------------------------
+        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                anchorFrameType = "anchorFrameType",
+                anchorFrameFrame = "ParentFrame",
+                selfPoint = "AnchorFrom",
+                anchorPoint = "AnchorTo",
+                xOffset = "XOffset",
+                yOffset = "YOffset",
+                strata = "Strata",
+            },
+            showAnchorFrameType = true,
+            showStrata = true,
+            onChangeCallback = ApplySettings,
+        })
+        table_insert(subCards, posCard)
+        yOffset = posOffset
+
+        --------------------------------------------------------------
         -- Card 4: Font
         --------------------------------------------------------------
         local card4 = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
@@ -269,27 +290,6 @@ local function BuildPage(opts)
         table_insert(allWidgets, countSize)
         card4:AddRow(rowH, 40)
         yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
-
-        --------------------------------------------------------------
-        -- Position
-        --------------------------------------------------------------
-        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-            db = db,
-            dbKeys = {
-                anchorFrameType = "anchorFrameType",
-                anchorFrameFrame = "ParentFrame",
-                selfPoint = "AnchorFrom",
-                anchorPoint = "AnchorTo",
-                xOffset = "XOffset",
-                yOffset = "YOffset",
-                strata = "Strata",
-            },
-            showAnchorFrameType = true,
-            showStrata = true,
-            onChangeCallback = ApplySettings,
-        })
-        table_insert(subCards, posCard)
-        yOffset = posOffset
 
         UpdateAllWidgetStates()
         return yOffset
