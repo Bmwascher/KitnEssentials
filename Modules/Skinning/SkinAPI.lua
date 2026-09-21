@@ -1,5 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  SkinAPI.lua                                             ║
+-- ║  Module: Blizzard Frames                                 ║
 -- ║  Purpose: Shared skinning helpers for Blizzard frames.   ║
 -- ║           The inline comments are the evidence trail     ║
 -- ║           and are kept deliberately.                     ║
