@@ -87,10 +87,7 @@ function KitnEssentials:OnInitialize()
         KE.db:SetProfile(profileName)
     end
 
-    -- One-time DungeonTimers DB migration runs BEFORE FillProfileDefaults
-    -- so it can detect "fresh saved data" vs "already-defaulted" states
-    -- (FillProfileDefaults would otherwise auto-populate the new top-level
-    -- DungeonTimers slot, defeating the promote-from-old-path branch).
+    -- Drops two legacy DungeonTimers profile keys; see MigrateLegacyDungeonTimers.
     if KE._MigrateDungeonTimersDB then KE._MigrateDungeonTimersDB() end
 
     -- Backfill missing nested defaults into the saved profile (AceDB's defaults

@@ -171,10 +171,8 @@ function HM:SetScanningActive(active)
         self.scannerFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
         self.scannerFrame:RegisterEvent("ENCOUNTER_START")
         self.scannerFrame:RegisterEvent("ENCOUNTER_END")
-        -- Plain RegisterEvent + manual unit filter on the handler (project rule:
-        -- avoid RegisterUnitEvent because of known interaction with AceEvent's
-        -- dispatcher). The handler already discriminates on `event`, so add
-        -- the unit filter alongside it.
+        -- UNIT_AURA is registered unfiltered; the handler keeps nameplate units
+        -- and the player's target.
         self.scannerFrame:RegisterEvent("UNIT_AURA")
     else
         self.scannerFrame:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
@@ -271,8 +269,7 @@ function HM:StartScanning()
         elseif event == "NAME_PLATE_UNIT_ADDED" then
             self:CheckUnitForMark(unit)
         elseif event == "UNIT_AURA" then
-            -- Manual unit filter (replaces RegisterUnitEvent's built-in filter):
-            -- only nameplate units and the player's target.
+            -- Only nameplate units and the player's target.
             if not unit then return end
             if unit ~= "target" and not unit:match("^nameplate%d+$") then return end
             -- Coalesce UNIT_AURA events per-unit to prevent redundant scans

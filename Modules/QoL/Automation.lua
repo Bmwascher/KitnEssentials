@@ -1924,8 +1924,7 @@ end
 -- Listens for START_LOOT_ROLL, filters by Enum.ItemClass.Housing, then calls
 -- RollOnLoot + ConfirmLootRoll with the configured mode (PASS or NEED).
 -- Item-load fallback handles the case where GetItemInfo's class fields aren't
--- cached yet on the first event. Adapted from Caboodle Utilities.lua "Roll
--- Away" feature, simplified — no instance-type gating, no loot-history hide.
+-- cached yet on the first event.
 
 local AUTO_ROLL_MAP = { PASS = 0, NEED = 1 }
 
@@ -1950,11 +1949,9 @@ local function SetupAutoPassHousing()
             local ok = pcall(RollOnLoot, rollID, mode)
             if not ok then return end
             if ConfirmLootRoll then pcall(ConfirmLootRoll, rollID, mode) end
-            -- Dismiss the secondary CONFIRM_LOOT_ROLL popup defensively (matches
-            -- Caboodle Utilities.lua). RollOnLoot+ConfirmLootRoll already
-            -- went through programmatically; the popup is just stale UI to clear.
-            -- This makes housing auto-roll work end-to-end without requiring the
-            -- separate Auto-Confirm Loot Roll Popup toggle.
+            -- Dismiss the secondary CONFIRM_LOOT_ROLL popup: the roll already went
+            -- through, so the popup is stale UI, and clearing it here means the
+            -- separate Auto-Confirm Loot Roll Popup toggle is not required.
             C_Timer.After(0.1, function()
                 if StaticPopup_FindVisible and StaticPopup_FindVisible("CONFIRM_LOOT_ROLL") then
                     StaticPopup_Hide("CONFIRM_LOOT_ROLL")
