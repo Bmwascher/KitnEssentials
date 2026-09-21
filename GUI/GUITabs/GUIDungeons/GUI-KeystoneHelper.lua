@@ -106,7 +106,6 @@ GUIFrame:RegisterContent("KeystoneHelperReminders", function(scrollChild, yOffse
     cardReroll:AddHeaderToggle(db.RerollEnabled ~= false, function(checked)
         db.RerollEnabled = checked
         ApplySettings()
-        KE:Print("Reroll Reminder: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
     cardReroll:AddLabel("Shown after you finish a keystone in time, while your own key can still be rerolled. Hides itself after five minutes.")
     yOffset = cardReroll:GetNextOffset()
@@ -115,7 +114,6 @@ GUIFrame:RegisterContent("KeystoneHelperReminders", function(scrollChild, yOffse
     cardYourKey:AddHeaderToggle(db.YourKeyEnabled ~= false, function(checked)
         db.YourKeyEnabled = checked
         ApplySettings()
-        KE:Print("Your Key Reminder: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
     cardYourKey:AddLabel("Shown while you stand in a Mythic 0 of the dungeon your own keystone points at, so you remember to slot it. Hides itself after five minutes.")
     yOffset = cardYourKey:GetNextOffset()

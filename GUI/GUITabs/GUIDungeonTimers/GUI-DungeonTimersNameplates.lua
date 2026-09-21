@@ -100,7 +100,6 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
                 KitnEssentials:DisableModule("DungeonTrash")
             end
         end
-        KE:Print("Trash Tracker: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     yOffset = card1:GetNextOffset()

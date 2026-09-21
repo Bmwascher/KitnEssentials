@@ -75,7 +75,6 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         ApplyModuleState(checked)
         ApplySettings()
         KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
-        KE:Print("Dungeon Casts: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
