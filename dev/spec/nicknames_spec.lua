@@ -1,7 +1,8 @@
--- Tier 2: Core/Nicknames.lua export/import through the REAL embedded
--- serialization stack (LibStub + CallbackHandler + AceSerializer + LibDeflate,
--- loaded by L.loadNicknames) — round-trips exercise real encoding, not a
--- mirror. Loader unit identity: player is "Bob" on "Realm" (key "Bob-Realm").
+-- Tier 2: Core/Nicknames.lua. The export string codec (KE:EncodeForExport /
+-- KE:DecodeFromExport, Core/ProfileManager.lua) is C_EncodingUtil and is not
+-- loaded here: the cases drive the payload collection and the store merge
+-- directly, and the import guards that return before any decode. Loader unit
+-- identity: player is "Bob" on "Realm" (key "Bob-Realm").
 local helpers = require("dev.spec._helpers")
 local L = require("dev.spec._ke_loader")
 
@@ -14,184 +15,100 @@ local function reloadWithUnitStubs(stubs)
         { db = { global = { Nicknames = {} } } })
 end
 
-describe("Nicknames.lua ExportNicknames", function()
+describe("Nicknames.lua CollectNicknamePayload", function()
     local KE, nicks
     before_each(function()
         KE = L.loadNicknames()
         nicks = KE.db.global.Nicknames
     end)
 
-    it("produces a !KEN1!-prefixed chat-safe string and the entry count", function()
-        nicks["Bob-Realm"] = "Bobby"
-        nicks["Alice-Realm"] = "Ally"
-        local encoded, err, count = KE:ExportNicknames()
-        assert.is_nil(err)
-        assert.equals("string", type(encoded))
-        assert.equals("!KEN1!", encoded:sub(1, 6))
-        assert.equals(2, count)
-        -- EncodeForPrint output must survive a chat paste: no whitespace/control.
-        assert.is_nil(encoded:find("[%c%s]"))
-    end)
-
-    it("counts only string-keyed, non-empty string nicknames", function()
+    it("keeps only string-keyed, non-empty string nicknames", function()
         nicks["Bob-Realm"] = "Bobby"
         nicks[42] = "numeric key"
         nicks["Bad-Realm"] = 7
         nicks["Empty-Realm"] = ""
-        local encoded, err, count = KE:ExportNicknames()
-        assert.is_nil(err)
+        local payload, count = KE:CollectNicknamePayload()
+        assert.same({ ["Bob-Realm"] = "Bobby" }, payload)
         assert.equals(1, count)
-        assert.equals("!KEN1!", encoded:sub(1, 6))
     end)
 
     it("errors when nothing is exportable", function()
-        local encoded, err = KE:ExportNicknames()
-        assert.is_nil(encoded)
+        local payload, err = KE:CollectNicknamePayload()
+        assert.is_nil(payload)
         assert.equals("No nicknames to export", err)
         -- invalid-only entries still count as nothing to export
         nicks[1] = "numeric key"
         nicks["Bob-Realm"] = ""
-        encoded, err = KE:ExportNicknames()
-        assert.is_nil(encoded)
+        payload, err = KE:CollectNicknamePayload()
+        assert.is_nil(payload)
         assert.equals("No nicknames to export", err)
     end)
 
     it("errors when the nickname store is missing", function()
         KE.db.global.Nicknames = nil
-        local encoded, err = KE:ExportNicknames()
-        assert.is_nil(encoded)
+        local payload, err = KE:CollectNicknamePayload()
+        assert.is_nil(payload)
         assert.equals("Nicknames database not available", err)
     end)
 end)
 
-describe("Nicknames.lua ImportNicknames — real-stack round-trips", function()
+describe("Nicknames.lua ApplyNicknamePayload", function()
     local KE, nicks
     before_each(function()
         KE = L.loadNicknames()
         nicks = KE.db.global.Nicknames
     end)
 
-    it("restores an identical table after export -> clear -> import", function()
-        local original = {
-            ["Bob-Realm"] = "Bobby",
-            ["Alice-OtherRealm"] = "Ally",
-            ["Chen-Realm"] = "Brewmaster",
-        }
-        for k, v in pairs(original) do nicks[k] = v end
-        local encoded = KE:ExportNicknames()
-        KE:ClearAllNicknames()
-        local ok, msg = KE:ImportNicknames(encoded)
-        assert.is_true(ok)
-        assert.equals("3 added", msg)
-        assert.same(original, nicks)
-    end)
-
-    it("round-trips serializer escape bytes, format delimiters, and non-ASCII", function()
-        -- "^"/"~" are AceSerializer's own delimiter/escape bytes; "!KEN1!" is
-        -- the wrapper prefix; "-" is the store's Name-Realm key delimiter.
-        local original = {
-            ["Bob-Realm"] = "^S~lit^^~`caret^",
-            ["Alice-Realm"] = "has !KEN1! inside",
-            ["Chen-Realm"] = "dash-y like Name-Realm",
-            ["Nora-Realm"] = "Bóbby ñ 日本",
-        }
-        for k, v in pairs(original) do nicks[k] = v end
-        local encoded = KE:ExportNicknames()
-        KE:ClearAllNicknames()
-        local ok, msg = KE:ImportNicknames(encoded)
-        assert.is_true(ok)
-        assert.equals("4 added", msg)
-        assert.same(original, nicks)
-    end)
-
-    it("merges additively: '1 added, 1 updated', untouched keys survive", function()
-        nicks["A-Realm"] = "new"
-        nicks["C-Realm"] = "fresh"
-        local encoded = KE:ExportNicknames()
-        wipe(nicks)
+    it("merges additively: one added, one updated, an untouched key survives", function()
         nicks["A-Realm"] = "old"   -- same key, different nick -> updated
-        nicks["B-Realm"] = "keep"  -- not in the import -> untouched
-        local ok, msg = KE:ImportNicknames(encoded)
-        assert.is_true(ok)
-        assert.equals("1 added, 1 updated", msg)
+        nicks["B-Realm"] = "keep"  -- not in the payload -> untouched
+        local added, updated, removed = KE:ApplyNicknamePayload({ ["A-Realm"] = "new", ["C-Realm"] = "fresh" })
+        assert.same({ 1, 1, 0 }, { added, updated, removed })
         assert.equals("new", nicks["A-Realm"])
         assert.equals("keep", nicks["B-Realm"])
         assert.equals("fresh", nicks["C-Realm"])
     end)
 
-    it("rejects an identical re-import as a no-op", function()
+    it("counts an identical payload as no change and leaves the store intact", function()
         nicks["A-Realm"] = "same"
-        local encoded = KE:ExportNicknames()
-        local ok, msg = KE:ImportNicknames(encoded)
-        assert.is_false(ok)
-        assert.equals("No nicknames were imported", msg)
-        assert.equals("same", nicks["A-Realm"]) -- store intact
+        local added, updated, removed = KE:ApplyNicknamePayload({ ["A-Realm"] = "same" })
+        assert.same({ 0, 0, 0 }, { added, updated, removed })
+        assert.equals("same", nicks["A-Realm"])
     end)
 
-    it("replaceAll wipes local-only entries: '2 added, 1 removed'", function()
-        nicks["A-Realm"] = "a"
-        nicks["B-Realm"] = "b"
-        local encoded = KE:ExportNicknames()
-        wipe(nicks)
-        nicks["X-Realm"] = "gone" -- absent from the import -> removed
-        local ok, msg = KE:ImportNicknames(encoded, true)
-        assert.is_true(ok)
-        assert.equals("2 added, 1 removed", msg)
+    it("replaceAll wipes local-only entries and counts them removed, an overlapping key added", function()
+        nicks["A-Realm"] = "stale" -- in the payload too: wiped then re-added
+        nicks["X-Realm"] = "gone"  -- absent from the payload -> removed
+        local added, updated, removed = KE:ApplyNicknamePayload({ ["A-Realm"] = "a", ["B-Realm"] = "b" }, true)
+        assert.same({ 2, 0, 1 }, { added, updated, removed })
         assert.is_nil(nicks["X-Realm"])
         assert.equals("a", nicks["A-Realm"])
         assert.equals("b", nicks["B-Realm"])
     end)
 
-    it("replaceAll counts overlapping keys as added, never removed", function()
-        -- Nicknames.lua: removed counts only keys absent from the
-        -- payload; a key present in both is wiped then re-added.
-        nicks["A-Realm"] = "a"
-        local encoded = KE:ExportNicknames()
-        nicks["A-Realm"] = "stale"
-        nicks["X-Realm"] = "gone"
-        local ok, msg = KE:ImportNicknames(encoded, true)
-        assert.is_true(ok)
-        assert.equals("1 added, 1 removed", msg)
-        assert.equals("a", nicks["A-Realm"])
-        assert.is_nil(nicks["X-Realm"])
-    end)
-
     it("applies only string-keyed, non-empty string payload entries", function()
-        -- Hand-built payload: the import loop re-filters entry types
-        -- (Nicknames.lua) even though export never emits these.
-        local Serializer = LibStub("AceSerializer-3.0")
-        local Deflate = LibStub("LibDeflate")
-        local serialized = Serializer:Serialize({
-            v = 1,
-            d = { ["Good-Realm"] = "G", [5] = "numeric", ["Bad-Realm"] = 7, ["Empty-Realm"] = "" },
-        })
-        local encoded = "!KEN1!" .. Deflate:EncodeForPrint(Deflate:CompressDeflate(serialized))
-        local ok, msg = KE:ImportNicknames(encoded)
-        assert.is_true(ok)
-        assert.equals("1 added", msg)
+        local added = KE:ApplyNicknamePayload({ ["Good-Realm"] = "G", [5] = "numeric", ["Bad-Realm"] = 7, ["Empty-Realm"] = "" })
+        assert.equals(1, added)
         assert.equals("G", nicks["Good-Realm"])
         assert.is_nil(nicks["Bad-Realm"])
         assert.is_nil(nicks["Empty-Realm"])
     end)
 
-    it("refreshes nickname tags on success only", function()
+    it("refreshes nickname tags on a change only", function()
         local refreshes = 0
         KE.RefreshNicknameTags = function() refreshes = refreshes + 1 end
         nicks["A-Realm"] = "a"
-        local encoded = KE:ExportNicknames()
-        KE:ImportNicknames("bogus") -- rejected before any write
+        KE:ApplyNicknamePayload({ ["A-Realm"] = "a" })
         assert.equals(0, refreshes)
-        wipe(nicks)
-        KE:ImportNicknames(encoded)
+        KE:ApplyNicknamePayload({ ["B-Realm"] = "b" })
         assert.equals(1, refreshes)
     end)
 end)
 
-describe("Nicknames.lua ImportNicknames rejection paths", function()
-    local KE, nicks
+describe("Nicknames.lua ImportNicknames guards", function()
+    local KE
     before_each(function()
         KE = L.loadNicknames()
-        nicks = KE.db.global.Nicknames
     end)
 
     it("rejects nil and empty import strings", function()
@@ -203,48 +120,33 @@ describe("Nicknames.lua ImportNicknames rejection paths", function()
         assert.equals("Import string is empty", msg)
     end)
 
-    it("rejects a version-bumped prefix on an otherwise-valid payload", function()
-        nicks["A-Realm"] = "a"
-        local encoded = KE:ExportNicknames()
-        local ok, msg = KE:ImportNicknames("!KEN2!" .. encoded:sub(7))
+    it("refuses an older-version string with the shared message", function()
+        KE.LEGACY_EXPORT_MESSAGE = "older"
+        local ok, msg = KE:ImportNicknames("!KEN1!anything")
+        assert.is_false(ok)
+        assert.equals("older", msg)
+    end)
+
+    it("rejects a wrong prefix", function()
+        local ok, msg = KE:ImportNicknames("!KEN3!anything")
         assert.is_false(ok)
         assert.is_not_nil(msg:find("Invalid format", 1, true))
     end)
 
-    it("rejects garbage at each real decode layer", function()
-        -- decode layer: "@" is outside LibDeflate's EncodeForPrint alphabet
-        local ok, msg = KE:ImportNicknames("!KEN1!@@@@")
-        assert.is_false(ok)
-        assert.equals("Failed to decode string", msg)
-        -- decompress layer: printable-encoded but not a deflate stream
-        local Deflate = LibStub("LibDeflate")
-        ok, msg = KE:ImportNicknames("!KEN1!" .. Deflate:EncodeForPrint("not deflate"))
-        assert.is_false(ok)
-        assert.equals("Failed to decompress", msg)
-        -- deserialize layer: valid deflate of a non-AceSerializer string
-        ok, msg = KE:ImportNicknames("!KEN1!" ..
-            Deflate:EncodeForPrint(Deflate:CompressDeflate("garbage")))
-        assert.is_false(ok)
-        assert.equals("Invalid export data", msg)
-    end)
-
-    it("rejects a well-formed serialization with the wrong shape", function()
-        local Serializer = LibStub("AceSerializer-3.0")
-        local Deflate = LibStub("LibDeflate")
-        local serialized = Serializer:Serialize({ v = 1 }) -- no .d table
-        local encoded = "!KEN1!" .. Deflate:EncodeForPrint(Deflate:CompressDeflate(serialized))
-        local ok, msg = KE:ImportNicknames(encoded)
-        assert.is_false(ok)
-        assert.equals("Invalid export data", msg)
-    end)
-
-    it("errors when the nickname store is missing", function()
-        nicks["A-Realm"] = "a"
-        local encoded = KE:ExportNicknames()
+    it("refuses a missing store before decoding", function()
+        -- KE.DecodeFromExport is nil here: reaching it would raise, so the
+        -- store guard is proven to run first.
         KE.db.global.Nicknames = nil
-        local ok, msg = KE:ImportNicknames(encoded)
+        local ok, msg = KE:ImportNicknames("!KEN2!anything")
         assert.is_false(ok)
         assert.equals("Nicknames database not available", msg)
+    end)
+
+    it("rejects a decoded payload without a d table", function()
+        KE.DecodeFromExport = function() return { v = 1 } end
+        local ok, msg = KE:ImportNicknames("!KEN2!anything")
+        assert.is_false(ok)
+        assert.equals("Invalid export data", msg)
     end)
 end)
 

@@ -1009,10 +1009,21 @@ function KE:GetNSRTNickname(subject) end
 ---@return string|nil nickname Resolved nickname, or nil when neither applies
 function KE:ResolveNicknamePrecedence(own, foreign, realName) end
 
+---@return table|nil payload
+---@return number|string countOrError
+function KE:CollectNicknamePayload() end
+
 ---@return string|nil encoded
 ---@return string|nil error
 ---@return number|nil count
 function KE:ExportNicknames() end
+
+---@param payload table
+---@param replaceAll boolean|nil
+---@return number|nil added
+---@return number|string updatedOrError
+---@return number|nil removed
+function KE:ApplyNicknamePayload(payload, replaceAll) end
 
 ---@param importString string
 ---@param replaceAll boolean|nil wipe local entries before applying the import
