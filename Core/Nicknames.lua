@@ -17,8 +17,8 @@ local UnitFullName = UnitFullName
 local UnitIsPlayer = UnitIsPlayer
 local GetNormalizedRealmName = GetNormalizedRealmName
 
--- Versioned prefix. Bump the digit if the payload shape ever changes so older
--- clients surface a clean error instead of decoding garbage.
+-- Versioned prefix. Bump the digit if the codec or the payload shape ever
+-- changes so older clients surface a clean error instead of decoding garbage.
 local EXPORT_PREFIX = "!KEN2!"
 -- Nothing decodes the old prefix; refused with KE.LEGACY_EXPORT_MESSAGE.
 local LEGACY_PREFIX = "!KEN1!"

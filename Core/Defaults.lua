@@ -2609,11 +2609,8 @@ local function ResolveRename(profile, entry)
     return profile[entry.block], entry.old, entry.new
 end
 
--- Written unconditionally. Where the converter maps an absent key to a
--- default, AceDB strips it again at logout; where it passes nil through, this
--- assigns nil and nothing changes. Either way cheaper than a second test. The
--- old key is cleared only when the two differ: an in-place conversion would
--- otherwise delete the value it just wrote.
+-- The old key is cleared only when the two differ: an in-place conversion
+-- would otherwise delete the value it just wrote.
 local function ApplyRename(block, oldKey, newKey, convert)
     block[newKey] = convert(block[oldKey])
     if oldKey ~= newKey then block[oldKey] = nil end
@@ -2662,6 +2659,11 @@ function KE:MigrateCombatLoggerKeys()
                 for _, profile in pairs(profiles) do
                     if type(profile) == "table" then
                         local block, oldKey, newKey = ResolveRename(profile, entry)
+                        -- Written whether or not the old key is present. Where
+                        -- the converter maps an absent key to a default, AceDB
+                        -- strips it again at logout; where it passes nil
+                        -- through, nothing changes. Either way cheaper than a
+                        -- second test.
                         if type(block) == "table" then
                             ApplyRename(block, oldKey, newKey, entry.convert)
                         end
