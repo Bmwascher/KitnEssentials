@@ -284,6 +284,8 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
         yOffset = card7:GetNextOffset()
 
         if mapDB.Enabled ~= false then
+            card7:AddLabel("Scales the world map window, with a separate scale for when it is maximized.")
+
             -- Not CVars: these drive WorldMapFrame:SetScale() directly, unlike
             -- every other slider on this page.
             local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeight)

@@ -57,13 +57,9 @@ GUIFrame:RegisterContent("GreatVaultAlert", function(scrollChild, yOffset)
         ApplyState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Shows your loot specialization when opening the Great Vault.",
-        40, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeight, 0)
+    card1:AddLabel("Names your loot spec as you open the Great Vault, so a week's reward is not " ..
+        "taken on the wrong one. The alert shows while the vault is opening and can also print the " ..
+        "spec to chat.")
 
     yOffset = card1:GetNextOffset()
 

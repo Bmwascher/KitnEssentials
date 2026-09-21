@@ -61,6 +61,12 @@ local function BuildHeader(scrollChild, yOffset)
         ApplyAutomationState(checked)
     end)
 
+    if db.Enabled ~= false then
+        card1:AddLabel("Small conveniences, each with its own switch on the tabs below: looting, " ..
+            "confirmation dialogs, cinematics, quest turn-ins, group sign-ups, repairs and selling, " ..
+            "and the vendor and auction house windows.")
+    end
+
     return card1:GetNextOffset(), false
 end
 
@@ -729,19 +735,10 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
             cardMP:AddRow(rowPages, Theme.rowHeight)
         end
 
-        local mpNoteHeight = 90
-        local mpNoteRow = GUIFrame:CreateRow(cardMP.content, mpNoteHeight)
-        local mpNoteText = GUIFrame:CreateText(mpNoteRow,
-            KE:ColorTextByTheme("Note"),
-            KE:ColorTextByTheme("-") ..
-            " Widens the vendor window to show several pages at once. This " ..
-            "changes Blizzard's own merchant frames, which can make some later " ..
-            "tooltips stop working until you reload. Turn it off and reload if " ..
-            "you see that. Skipped automatically if you run a dedicated vendor " ..
-            "addon. Turning it off needs a reload.",
-            mpNoteHeight, "hide")
-        mpNoteRow:AddWidget(mpNoteText, 1)
-        cardMP:AddRow(mpNoteRow, mpNoteHeight, 0)
+        cardMP:AddLabel("Widens the vendor window to show several pages at once. This changes " ..
+            "Blizzard's own merchant frames, which can make some later tooltips stop working until " ..
+            "you reload. Turn it off and reload if you see that. Skipped automatically if you run a " ..
+            "dedicated vendor addon. Turning it off needs a reload.")
 
         yOffset = cardMP:GetNextOffset()
 

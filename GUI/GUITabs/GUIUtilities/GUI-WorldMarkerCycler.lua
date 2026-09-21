@@ -66,14 +66,11 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Cycles through world markers at your cursor position.\n" ..
-        KE:ColorTextByTheme("-") .. " Requires raid assist or leader to place markers.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
+    card1:AddLabel("One key drops the next world marker at your cursor and another clears them all, " ..
+        "so you can walk a pull placing square, triangle, diamond without opening a marker bar." ..
+        "\n\nYou need to be leader or assist to place markers, and the game itself accepts about " ..
+        "three a second - pressing faster than that drops them." ..
+        "\n\nThe keys are stored in this profile and override whatever else they are bound to.")
 
     yOffset = card1:GetNextOffset()
 

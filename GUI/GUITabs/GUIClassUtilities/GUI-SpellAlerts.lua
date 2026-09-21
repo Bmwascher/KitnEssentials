@@ -57,13 +57,8 @@ GUIFrame:RegisterContent("SpellAlerts", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Toggles Blizzard's spell activation overlay (proc flashes) per spec.",
-        40, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeight, 0)
+    card1:AddLabel("Controls the spell activation overlay, the glow that frames your screen when a " ..
+        "proc lights up: set its opacity, and turn it off on the specs where you do not want it.")
 
     yOffset = card1:GetNextOffset()
 
