@@ -62,6 +62,11 @@ GUIFrame:RegisterContent("TotemTracker", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
+    card1:AddLabel("A bar of your active totems with a cooldown swipe and a timer, plus a Destroy " ..
+        "All Totems button. Not only for Shamans: an Augmentation Evoker's Future Self dupes take " ..
+        "totem slots and show here too.")
+    yOffset = card1:GetNextOffset()
+
     -- No manual preview card: the tracker previews itself whenever this page is
     -- open (SECTION_PREVIEW_MODULES' aura_section entry in
     -- Core/Globals.lua), and positioning is handled by /kes edit via the

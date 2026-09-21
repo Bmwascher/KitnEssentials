@@ -61,6 +61,10 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
+    card1:AddLabel("Shows your movement-speed buffs, Sprint and Dash and the like, as icons with a " ..
+        "cooldown swipe, so you can see how long the speed lasts.")
+    yOffset = card1:GetNextOffset()
+
     ----------------------------------------------------------------
     -- Card 2: Position Settings
     ----------------------------------------------------------------

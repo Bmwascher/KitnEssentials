@@ -67,6 +67,11 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
+    card1:AddLabel("Shows the debuffs on you that matter - the ones you can dispel, boss debuffs, " ..
+        "and anything you allowlist - as icons you can place and style. The filters and blocklist " ..
+        "below decide what stays hidden.")
+    yOffset = card1:GetNextOffset()
+
     ----------------------------------------------------------------
     -- Card 2: Position Settings
     ----------------------------------------------------------------

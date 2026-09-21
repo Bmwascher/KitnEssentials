@@ -61,6 +61,10 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
+    card1:AddLabel("Shows the external defensives other players put on you, Pain Suppression and " ..
+        "Ironbark and the like, as icons with a glow, and can include your own defensives too.")
+    yOffset = card1:GetNextOffset()
+
     local cardTracked = GUIFrame:CreateCard(scrollChild, "Tracked Auras", yOffset)
     manager:Register(cardTracked, "all")
 
