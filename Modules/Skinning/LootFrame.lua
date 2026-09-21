@@ -1,3 +1,10 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  LootFrame.lua                                           ║
+-- ║  Module: Loot Frame                                      ║
+-- ║  Purpose: Replaces the Blizzard loot window with a       ║
+-- ║           skinned list of the same items.                ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local S = KE.Skins

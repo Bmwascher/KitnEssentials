@@ -1,3 +1,10 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  ChatRecall.lua                                          ║
+-- ║  Purpose: Rules for the Up/Down typing-history recall:   ║
+-- ║           which lines may be planted back into the edit  ║
+-- ║           box.                                           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 local KE = select(2, ...)
 
 -- Rules for the Up/Down typing-history recall, kept apart from Chat.lua so a

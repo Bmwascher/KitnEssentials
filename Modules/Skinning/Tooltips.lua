@@ -1,8 +1,11 @@
--- KitnEssentials — Tooltips
---
--- the brief: high performance, more customization, and enough coverage
--- to replace a standalone tooltip-skinning addon.
---
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Tooltips.lua                                            ║
+-- ║  Module: Tooltips                                        ║
+-- ║  Purpose: Skins the game tooltips and adds the unit      ║
+-- ║           lines: class colours, target, guild, Mythic+   ║
+-- ║           and IDs.                                       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 -- Architecture:
 --   * Visual-only changes -- alpha/backdrop/font. No Hide/Show/SetParent on
 --     Blizzard frames, all post-hooks. Class recolor works on

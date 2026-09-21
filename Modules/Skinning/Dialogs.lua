@@ -1,3 +1,10 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  Dialogs.lua                                             ║
+-- ║  Purpose: Skins the nine-slice dialog layouts: strips    ║
+-- ║           the stock art and applies the shared backdrop  ║
+-- ║           and border.                                    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G
