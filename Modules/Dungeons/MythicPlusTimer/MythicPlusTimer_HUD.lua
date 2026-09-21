@@ -91,6 +91,12 @@ local TIMER_PB_GAP = 8
 -- Kept small so the label hugs the countdown.
 local RACE_VAL_GAP = 2
 
+-- Deaths list placement: GAP (px) between the list's right edge and the
+-- headline's left edge; LIFT (px) of the list's bottom edge above the
+-- headline's centre line, clear of the pointer.
+local DEATHS_TOOLTIP_GAP = 8
+local DEATHS_TOOLTIP_LIFT = 4
+
 ---------------------------------------------------------------------------------
 -- Gating helpers (module functions — not methods; take widget explicitly)
 ---------------------------------------------------------------------------------
@@ -315,15 +321,22 @@ function MPT:BuildHUD()
             GameTooltip:AddDoubleLine(Ambiguate(row.name or "", "short"), right, r, g, b, 1, 1, 1)
         end
 
-        -- Anchor LEFT of the cursor, because above the deaths line the list
-        -- covers the HUD. Placed once per OnEnter; GetCursorPosition returns
-        -- physical px and SetPoint offsets are in the tooltip's own scale, so
-        -- divide by the tooltip's effective scale.
-        local cx, cy = GetCursorPosition()
-        local s = GameTooltip:GetEffectiveScale()
+        -- Beside the headline, not at the cursor: the pointer (and any ring
+        -- drawn around it) rests on the headline, and a list placed there is
+        -- unreadable through it. The same spot whichever end the hover enters
+        -- from. Flipped to the headline's right only when the room to its left
+        -- is narrower than the list. GameTooltip is clamped to the screen, so
+        -- an off-screen placement reports a clamped rect, never a negative
+        -- one; the width it needs exists only after Show.
         GameTooltip:ClearAllPoints()
-        GameTooltip:SetPoint("RIGHT", UIParent, "BOTTOMLEFT", cx / s - 10, cy / s)
+        GameTooltip:SetPoint("BOTTOMRIGHT", hit, "LEFT", -DEATHS_TOOLTIP_GAP, DEATHS_TOOLTIP_LIFT)
         GameTooltip:Show()
+        local hitLeft = hit:GetLeft()
+        if hitLeft and hitLeft * hit:GetEffectiveScale()
+            < (GameTooltip:GetWidth() + DEATHS_TOOLTIP_GAP) * GameTooltip:GetEffectiveScale() then
+            GameTooltip:ClearAllPoints()
+            GameTooltip:SetPoint("BOTTOMLEFT", hit, "RIGHT", DEATHS_TOOLTIP_GAP, DEATHS_TOOLTIP_LIFT)
+        end
     end)
 
     MPT.frames.deathsHit:SetScript("OnLeave", function(hit)
