@@ -91,9 +91,8 @@ local TIMER_PB_GAP = 8
 -- Kept small so the label hugs the countdown.
 local RACE_VAL_GAP = 2
 
--- Deaths list placement: GAP (px) between the list's right edge and the
--- headline's left edge; LIFT (px) of the list's bottom edge above the
--- headline's centre line, clear of the pointer.
+-- Deaths list placement: GAP (px) between the headline and the list's near
+-- edge; LIFT (px) of the list's bottom edge above the headline's centre line.
 local DEATHS_TOOLTIP_GAP = 8
 local DEATHS_TOOLTIP_LIFT = 4
 
@@ -323,11 +322,10 @@ function MPT:BuildHUD()
 
         -- Beside the headline, not at the cursor: the pointer (and any ring
         -- drawn around it) rests on the headline, and a list placed there is
-        -- unreadable through it. The same spot whichever end the hover enters
-        -- from. Flipped to the headline's right only when the room to its left
-        -- is narrower than the list. GameTooltip is clamped to the screen, so
-        -- an off-screen placement reports a clamped rect, never a negative
-        -- one; the width it needs exists only after Show.
+        -- unreadable through it. GameTooltip is clamped to the screen, so an
+        -- off-screen placement reports a clamped rect, never a negative one;
+        -- the flip compares the room left of the headline with the width the
+        -- list has once shown.
         GameTooltip:ClearAllPoints()
         GameTooltip:SetPoint("BOTTOMRIGHT", hit, "LEFT", -DEATHS_TOOLTIP_GAP, DEATHS_TOOLTIP_LIFT)
         GameTooltip:Show()

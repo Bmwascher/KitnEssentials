@@ -30,10 +30,9 @@ local pcall = pcall
 ---------------------------------------------------------------------------------
 local VAULT_SPELL_ID = 1271478
 
--- Cast events and the method each dispatches to. Registered on a module-owned
--- frame with a "player" unit filter (AceEvent-3.0 has no RegisterUnitEvent),
--- and only while resting: the vault sits in a rested area, so elsewhere the
--- module holds no cast registrations at all.
+-- Registered on a module-owned frame with a "player" unit filter (AceEvent-3.0
+-- has no RegisterUnitEvent), and only while resting: the vault sits in a rested
+-- area, so elsewhere the module holds no cast registrations at all.
 local CAST_HANDLERS = {
     UNIT_SPELLCAST_START       = "OnSpellcastStart",
     UNIT_SPELLCAST_SUCCEEDED   = "OnSpellcastSucceeded",
