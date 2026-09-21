@@ -1,4 +1,5 @@
-# PostToolUse hook (Edit|Write): run luacheck on the edited .lua file.
+# PostToolUse hook (Edit|Write): run luacheck, then the wowlua-ls check, on
+# the edited .lua file.
 # Clean file -> exit 0 with zero output (costs no tokens).
 # Warnings/errors -> exit 2 with luacheck output on stderr, which Claude Code
 # feeds back to the model as blocking feedback so it fixes them immediately.
@@ -49,8 +50,26 @@ if (-not (Test-Path -LiteralPath $luacheck)) { exit 0 }  # tool missing: don't b
 # per-directory overrides in .luacheckrc match the same spelling.
 Set-Location -LiteralPath $rootNorm
 $out = & $luacheck $rel --config .luacheckrc --no-color 2>&1
-if ($LASTEXITCODE -eq 0) { exit 0 }
+$failed = $false
+if ($LASTEXITCODE -ne 0) {
+    $failed = $true
+    [Console]::Error.WriteLine((($out | Out-String).TrimEnd()))
+    [Console]::Error.WriteLine("luacheck reported issues in $rel - fix them now (config: .luacheckrc).")
+}
 
-[Console]::Error.WriteLine((($out | Out-String).TrimEnd()))
-[Console]::Error.WriteLine("luacheck reported issues in $rel - fix them now (config: .luacheckrc).")
-exit 2
+# wowlua-ls type and secret-value diagnostics for the same file. The whole
+# tree is checked (about a second) because the cross-file context is what
+# makes the secret tracking accurate; exit 3 means the tool is absent here
+# and the pre-push gate is the backstop.
+$wowlua = Join-Path $rootNorm 'dev\scripts\wowlua-check.ps1'
+if (Test-Path -LiteralPath $wowlua) {
+    $wl = & pwsh -NoProfile -NonInteractive -File $wowlua -Path $rel 2>&1
+    if ($LASTEXITCODE -eq 1) {
+        $failed = $true
+        [Console]::Error.WriteLine((($wl | Out-String).TrimEnd()))
+        [Console]::Error.WriteLine("wowlua-ls reported warnings in $rel - fix them now (rules: .claude/rules/wowlua-annotations.md).")
+    }
+}
+
+if ($failed) { exit 2 }
+exit 0
