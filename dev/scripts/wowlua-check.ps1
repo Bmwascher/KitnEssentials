@@ -13,8 +13,8 @@
 #      failed) - callers treat this as "skipped" with a note, the same way
 #      the pre-push hook treats a missing luacheck; the raw output is on stderr
 #
-# The binary ships inside the TradeSkillMaster VS Code extension; the newest
-# installed version is used unless WOWLUA_LS names one explicitly.
+# The binary is the standalone release in KitnDev\tools\wowlua-ls, installed
+# and kept current by dev/scripts/update-wowlua-ls.ps1; WOWLUA_LS overrides it.
 
 [CmdletBinding()]
 param(
@@ -31,19 +31,14 @@ $Root = $Root.TrimEnd('\', '/')
 
 function Resolve-WowluaLs {
     if ($env:WOWLUA_LS -and (Test-Path -LiteralPath $env:WOWLUA_LS)) { return $env:WOWLUA_LS }
-    $pattern = Join-Path $env:USERPROFILE '.vscode\extensions\tradeskillmaster.wowlua-ls-*\server\win32-x64\wowlua_ls.exe'
-    $candidates = @(Get-ChildItem -Path $pattern -ErrorAction SilentlyContinue)
-    if ($candidates.Count -eq 0) { return $null }
-    $sorted = $candidates | Sort-Object {
-        $v = [regex]::Match($_.FullName, 'wowlua-ls-(\d+)\.(\d+)\.(\d+)').Groups
-        [version]::new([int]$v[1].Value, [int]$v[2].Value, [int]$v[3].Value)
-    }
-    return ($sorted | Select-Object -Last 1).FullName
+    $tools = Join-Path $env:USERPROFILE 'Documents\KitnDev\tools\wowlua-ls\wowlua_ls.exe'
+    if (Test-Path -LiteralPath $tools) { return $tools }
+    return $null
 }
 
 $exe = Resolve-WowluaLs
 if (-not $exe) {
-    [Console]::Error.WriteLine('[wowlua-check] skipped: wowlua_ls.exe not found (install the TradeSkillMaster wowlua-ls VS Code extension or set WOWLUA_LS).')
+    [Console]::Error.WriteLine('[wowlua-check] skipped: wowlua_ls.exe not found (run pwsh dev/scripts/update-wowlua-ls.ps1, or set WOWLUA_LS).')
     exit 3
 }
 if (-not (Test-Path -LiteralPath (Join-Path $Root '.wowluarc.json'))) {
