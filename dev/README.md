@@ -54,11 +54,16 @@ by the scoop LuaRocks. Needs python and a C compiler (mingw gcc) on PATH.
 ```powershell
 scoop install luarocks
 python -m pip install hererocks
-python -m hererocks "$HOME\Documents\WoW-Dev\lua51" -l 5.1.5
-luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\WoW-Dev\lua51" --tree="$HOME\Documents\WoW-Dev\lua51" install busted 2.3.0-1
-luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\WoW-Dev\lua51" --tree="$HOME\Documents\WoW-Dev\lua51" install luacov 0.17.0-1
-luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\WoW-Dev\lua51" --tree="$HOME\Documents\WoW-Dev\lua51" install luacheck
+python -m hererocks "$HOME\Documents\KitnDev\tools\lua51" -l 5.1.5
+luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\KitnDev\tools\lua51" --tree="$HOME\Documents\KitnDev\tools\lua51" install busted 2.3.0-1
+luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\KitnDev\tools\lua51" --tree="$HOME\Documents\KitnDev\tools\lua51" install luacov 0.17.0-1
+luarocks --lua-version=5.1 --lua-dir="$HOME\Documents\KitnDev\tools\lua51" --tree="$HOME\Documents\KitnDev\tools\lua51" install luacheck
 ```
+
+The tree is not relocatable: hererocks writes its absolute path into the
+`bin\*.bat` launchers, `activate.ps1`, `luaconf.h` and the manifest, and
+compiles it into `lua51.dll` as the default `package.path`. After a folder
+move, rewrite the text files or rebuild with the commands above.
 
 luacheck must be the LuaRocks rock (runs through the tree's `lua.exe`), NOT
 the standalone `luacheck.exe` from scoop/GitHub releases: that binary is
@@ -75,7 +80,7 @@ Prepend the tree's `bin` to your **user PATH** so `lua`, `busted`, and
 
 ```powershell
 [Environment]::SetEnvironmentVariable(
-  "Path", "$HOME\Documents\WoW-Dev\lua51\bin;" + [Environment]::GetEnvironmentVariable("Path","User"), "User")
+  "Path", "$HOME\Documents\KitnDev\tools\lua51\bin;" + [Environment]::GetEnvironmentVariable("Path","User"), "User")
 ```
 
 ### Linux / WSL / the cloud
@@ -238,7 +243,8 @@ change since the last update that intersects KE's used surface — removed or
 changed functions/events/enums you use, C-side global/CVar changes, and
 notable additions. Exit 1 means something you use changed — read the
 report before coding. `--report-only` re-prints without fetching;
-`--seed` re-baselines. Snapshots live in `WoW-Dev\api-drift-snapshots\`.
+`--seed` re-baselines. Snapshots live in
+`KitnDev\tools\wow-reference\api-drift-snapshots\`, beside the two clones.
 
 ## Claude Code hooks (restore after a re-clone or PC reset)
 

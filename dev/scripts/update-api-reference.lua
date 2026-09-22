@@ -41,7 +41,7 @@ local function popenLine(cmd)
     return line
 end
 
--- resolve the real clone dir (git -C follows the symlink), then WoW-Dev
+-- resolve the real clone dir (git -C follows the link), then its parent
 local refReal = popenLine('git -C "' .. REF .. '" rev-parse --show-toplevel 2>nul')
 assert(refReal and #refReal > 0, ".wow-api-reference is not a git checkout — see the memory note for setup")
 refReal = refReal:gsub("/", "\\")

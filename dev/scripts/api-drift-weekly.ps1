@@ -54,7 +54,7 @@ if ($TestNotify) {
     exit 0
 }
 
-$Lua = "C:\Users\Brandon\Documents\WoW-Dev\lua51\bin\lua.exe"
+$Lua = "C:\Users\Brandon\Documents\KitnDev\tools\lua51\bin\lua.exe"
 if (-not (Test-Path $Lua)) {
     $cmd = Get-Command lua -ErrorAction SilentlyContinue
     if ($cmd) { $Lua = $cmd.Source }
