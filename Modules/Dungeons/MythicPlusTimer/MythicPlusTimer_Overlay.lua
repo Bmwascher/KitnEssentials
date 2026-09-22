@@ -66,7 +66,7 @@ local function SetupTooltip()
 
         local themeHex = KE:GetThemeColorHex()
         -- percentStr carries NO % sign ("0.87") — the %% literal supplies it.
-        tooltip:AddLine(format("|TInterface\\AddOns\\KitnEssentials\\Media\\Icon\\KitnUI:0:0|t|cff%sCount:|r |cffffffff+%d | %s%%|r",
+        tooltip:AddLine(format("|TInterface\\AddOns\\KitnEssentials\\Media\\Icon\\KES:0:0|t|cff%sCount:|r |cffffffff+%d | %s%%|r",
             themeHex, value, percentStr))
         tooltip:Show()
     end)

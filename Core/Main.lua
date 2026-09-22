@@ -142,7 +142,7 @@ function KE:SetupMinimapIcon()
     local MyLDB = LDB:NewDataObject("KitnEssentials", {
         type = "launcher",
         text = "KitnEssentials",
-        icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KitnUI",
+        icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES",
         OnClick = function(_, button)
             if button == "LeftButton" then
                 if KE.GUIFrame then KE.GUIFrame:Toggle() end
