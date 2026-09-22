@@ -28,6 +28,7 @@ local AceDB
 ---@field bgLight number[]
 ---@field bgMedium number[]
 ---@field bgDark number[]
+---@field bgButton number[]
 ---@field border number[]
 ---@field borderSize number
 ---@field textPrimary number[]
@@ -561,7 +562,7 @@ function KE:ApplyThemeFont(fontStr, size) end
 ---@param cancelText string?
 ---@param showSecondEditBox boolean?
 ---@param secondEditBoxLabel string?
----@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string? }?
+---@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string?, onSecondTextChanged: fun(text: string, dialog: Frame)? }?
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts) end

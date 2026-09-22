@@ -18,6 +18,8 @@ local C_Timer = C_Timer
 local REMOVE_COLOR = { 0.9, 0.2, 0.2, 1 }
 -- Middle dot between the status line's facts.
 local STATUS_SEP = " \194\183 "
+-- Height of the label slot a dropdown reserves above its box.
+local DROPDOWN_LABEL_SLOT = 14
 
 ---------------------------------------------------------------------------------
 -- Helpers
@@ -58,15 +60,29 @@ local function ErrorCard(scrollChild, yOffset)
     return card:GetNextOffset()
 end
 
+-- The name box follows the pasted string's embedded name until a name is
+-- typed by hand; lastAutoName tells the two apart.
+local lastAutoName
+
+local function AutoFillName(text, dialog)
+    local _, name = KE.ProfileManager:DecodeImportString(text)
+    if not name then return end
+    local current = dialog.editBox:GetText()
+    if current ~= "" and current ~= lastAutoName then return end
+    lastAutoName = name
+    dialog.editBox:SetText(name)
+end
+
 -- Shared by the Import button and the Import Failed dialog's Try again, so
 -- both open the same two-field prompt.
 local function OpenImportPrompt()
     local PM = KE.ProfileManager
+    lastAutoName = nil
     KE:CreatePrompt(
         "Import Profile",
         "",
         true,
-        "Profile Name (leave empty for default)",
+        "Profile Name",
         false, nil, nil, nil, nil,
         function(profileName, importString)
             if not importString or importString == "" then
@@ -104,7 +120,8 @@ local function OpenImportPrompt()
         "Import",
         "Cancel",
         true,
-        "Paste Import String"
+        "Paste Import String",
+        { onSecondTextChanged = AutoFillName }
     )
 end
 
@@ -125,12 +142,14 @@ GUIFrame:RegisterContent("ProfilesMain", function(scrollChild, yOffset)
     ---------------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Current", yOffset)
 
-    card1:AddLabel("Active profile: " .. currentProfile
-        .. STATUS_SEP .. "global mode " .. (useGlobal and "on" or "off")
-        .. STATUS_SEP .. #PM:GetProfiles() .. " profiles saved")
+    card1:AddLabel("Active Profile: |cff4dff4d" .. currentProfile .. "|r"
+        .. STATUS_SEP .. "Global Mode: " .. (useGlobal and "|cff4DCC66On|r" or "|cffE64D4DOff|r")
+        .. STATUS_SEP .. KE:ColorTextByTheme(tostring(#PM:GetProfiles())) .. " Profiles Saved")
 
-    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local profileDropdown = GUIFrame:CreateDropdown(row1a, "Active Profile", {
+    -- The status line is this control's label; the widget is lifted past its
+    -- own empty label slot so the box sits directly under the line.
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight - DROPDOWN_LABEL_SLOT)
+    local profileDropdown = GUIFrame:CreateDropdown(row1a, "", {
         options = profileOptions,
         value = currentProfile,
         callback = function(key)
@@ -144,8 +163,8 @@ GUIFrame:RegisterContent("ProfilesMain", function(scrollChild, yOffset)
             end
         end,
     })
-    row1a:AddWidget(profileDropdown, 1)
-    card1:AddRow(row1a, Theme.rowHeight)
+    row1a:AddWidget(profileDropdown, 1, nil, 0, DROPDOWN_LABEL_SLOT)
+    card1:AddRow(row1a, Theme.rowHeight - DROPDOWN_LABEL_SLOT)
     profileDropdown:SetEnabled(not useGlobal)
 
     local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
@@ -298,7 +317,7 @@ GUIFrame:RegisterContent("ProfilesSharing", function(scrollChild, yOffset)
         "their own page.")
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local exportBtn = GUIFrame:CreateButton(row1, "Export active profile", {
+    local exportBtn = GUIFrame:CreateButton(row1, "Export Active Profile", {
         callback = function()
             local exportString, err = PM:ExportProfile()
             if exportString then
@@ -328,7 +347,7 @@ GUIFrame:RegisterContent("ProfilesSharing", function(scrollChild, yOffset)
         "from before the current format are refused; ask the sender for a fresh export.")
 
     local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local importBtn = GUIFrame:CreateButton(row2, "Import from string", {
+    local importBtn = GUIFrame:CreateButton(row2, "Import From String", {
         callback = OpenImportPrompt,
     })
     row2:AddWidget(importBtn, 1)
@@ -407,7 +426,7 @@ GUIFrame:RegisterContent("ProfilesReset", function(scrollChild, yOffset)
         "Other profiles are untouched.")
 
     local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local resetBtn = GUIFrame:CreateButton(row2, "Reset to defaults", {
+    local resetBtn = GUIFrame:CreateButton(row2, "Reset To Defaults", {
         callback = function()
             local name = PM:GetCurrentProfile()
             KE:CreatePrompt(
