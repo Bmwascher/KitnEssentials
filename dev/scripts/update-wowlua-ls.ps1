@@ -12,7 +12,8 @@
 # Prints one status line and exits:
 #   0   already current
 #   10  updated (or -CheckOnly: an update is available)
-#   2   failed - the installed binary is untouched
+#   2   failed - the previous install is restored, or, if even that fails,
+#       the message names the manual rename
 
 param(
     [string]$ToolsDir = (Join-Path $env:USERPROFILE 'Documents\KitnDev\tools\wowlua-ls'),

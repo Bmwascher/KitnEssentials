@@ -59,7 +59,7 @@ if (-not $ReportOnly) {
         }
         Add-WeeklyNote ($wowluaLine -replace '^\[wowlua-ls\] UPDATED', 'wowlua-ls updated') $body
     } elseif ($wowluaCode -ne 0) {
-        Add-WeeklyNote "wowlua-ls update FAILED" "$wowluaLine`r`nThe installed checker is unchanged; rerun pwsh dev\scripts\update-wowlua-ls.ps1."
+        Add-WeeklyNote "wowlua-ls update FAILED" "$wowluaLine`r`nRerun pwsh dev\scripts\update-wowlua-ls.ps1 once the cause is fixed."
     }
 }
 
