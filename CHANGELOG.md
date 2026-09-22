@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.17
+
+### Profile Manager
+
+- **Changed:** profile strings are now written with the game's own encoder and
+  start with `!KE2!`. Strings exported before this version no longer import;
+  the import dialog says so and asks for a fresh export
+- Nickname strings use the same encoder
+- Two bundled libraries the old strings needed are gone
+
+---
+
 ## v4.7.16
 
 ### Mythic+ Timer
