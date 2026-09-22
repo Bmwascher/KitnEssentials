@@ -286,6 +286,8 @@ end
 -- shows the message AND an empty edit box under it and keeps the accept
 -- button disabled until the box equals the string exactly, then runs
 -- onAccept with no arguments. Single edit box with an onAccept only.
+-- onSecondTextChanged(text, dialog) runs on every text change in the second
+-- box of a two-field prompt, for that call only.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts)
@@ -452,6 +454,10 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
             local accept = ClosePrompt(d, false)
             if accept then accept(text1, text2) end
         end)
+        editBox2:SetScript("OnTextChanged", function(self)
+            local d = KE.promptDialog
+            if d._onSecondTextChanged then d._onSecondTextChanged(self:GetText(), d) end
+        end)
         editBox2:SetScript("OnTabPressed", function()
             local d = KE.promptDialog
             if d._showSecondEditBox and d.editBox then
@@ -521,6 +527,8 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     dialog._showEditBox = showEditBox and true or false
     dialog._showSecondEditBox = twoField
     dialog._requireTyped = requireTyped
+    dialog._onSecondTextChanged = (twoField and opts and type(opts.onSecondTextChanged) == "function")
+        and opts.onSecondTextChanged or nil
     -- Hover scripts read these (theme can change between prompts).
     dialog._accent = accent
     dialog._border = border
