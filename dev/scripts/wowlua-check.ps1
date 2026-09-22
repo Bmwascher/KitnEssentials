@@ -9,8 +9,9 @@
 #   0  no warnings in the filtered set
 #   1  warnings reported - fix them; the annotation and secret-value rules
 #      are in .claude/rules/wowlua-annotations.md
-#   3  cannot run (binary or .wowluarc.json missing) - callers treat this as
-#      "skipped", the same way the pre-push hook treats a missing luacheck
+#   3  cannot run (binary or .wowluarc.json missing, or the checker itself
+#      failed) - callers treat this as "skipped" with a note, the same way
+#      the pre-push hook treats a missing luacheck; the raw output is on stderr
 #
 # The binary ships inside the TradeSkillMaster VS Code extension; the newest
 # installed version is used unless WOWLUA_LS names one explicitly.
@@ -63,9 +64,15 @@ if ($Path) {
 
 Push-Location -LiteralPath $Root
 try {
-    $raw = & $exe check --severity $Severity . 2>&1 | ForEach-Object { "$_" }
+    $ErrorActionPreference = 'Continue'
+    $raw = @(& $exe check --severity $Severity . 2>&1 | ForEach-Object { "$_" })
+    $toolExit = $LASTEXITCODE
+} catch {
+    [Console]::Error.WriteLine("[wowlua-check] skipped: the checker could not be started: $($_.Exception.Message)")
+    exit 3
 } finally {
     Pop-Location
+    $ErrorActionPreference = 'Stop'
 }
 
 $diag = @($raw | Where-Object { $_ -match '^[^:\s][^:]*\.lua:\d+:\d+: ' })
@@ -73,6 +80,13 @@ if ($prefix) {
     $diag = @($diag | Where-Object { $_.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase) })
 }
 $summary = @($raw | Where-Object { $_ -match '^\s*Checked \d+ files' })
+# The checker prints its summary line on every completed run; without it the
+# run aborted, and an aborted run must never read as clean.
+if ($summary.Count -eq 0) {
+    $raw | ForEach-Object { [Console]::Error.WriteLine($_) }
+    [Console]::Error.WriteLine("[wowlua-check] skipped: the checker did not complete (exit $toolExit).")
+    exit 3
+}
 
 $diag | ForEach-Object { Write-Output $_ }
 if ($summary) { Write-Output $summary[0].Trim() }

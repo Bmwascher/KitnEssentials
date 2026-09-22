@@ -616,9 +616,7 @@ function DM:RenderBreakdown(W)
     -- issecretvalue + type -- in combat it is secret, so no percent is shown.
     local canPercent = src.totalAmount and canaccessvalue(src.totalAmount) and type(src.totalAmount) == "number"
     local total = src.totalAmount
-    if not canPercent or not canaccessvalue(total) or type(total) ~= "number" then
-        total = 0
-    end
+    if not canaccessvalue(total) or type(total) ~= "number" then total = 0 end
 
     -- DetailMaxRows (DB) caps the breakdown length; default 40 == pool size, so it is
     -- a no-op until a user lowers it. The recap timeline is deliberately NOT capped --
@@ -1893,9 +1891,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
         -- the source's whole total, and is unavailable while it is secret.
         local canPercent = src.totalAmount and canaccessvalue(src.totalAmount) and type(src.totalAmount) == "number"
         local total = src.totalAmount
-        if not canPercent or not canaccessvalue(total) or type(total) ~= "number" then
-            total = 0
-        end
+        if not canaccessvalue(total) or type(total) ~= "number" then total = 0 end
         local count = math_min(#spells, HOVER_TIP_ROWS)
 
         for i = 1, HOVER_TIP_ROWS do

@@ -27,8 +27,8 @@ local DEBUG_HM = false
 
 local CreateFrame = CreateFrame
 local UnitExists = UnitExists
--- Group-member reads stay plain under identity restriction; the typed
--- aliases record that for the checker.
+-- Group-member unit reads stay plain under addon restrictions (probed in
+-- game); the typed aliases record that for the checker.
 ---@type fun(unit: string): string?
 local UnitGUID = UnitGUID
 local UnitIsConnected = UnitIsConnected

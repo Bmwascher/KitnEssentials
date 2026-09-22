@@ -27,8 +27,8 @@ local ipairs                = ipairs
 local table_sort            = table.sort
 local GetTime               = GetTime
 local InCombatLockdown      = InCombatLockdown
--- Group-member reads stay plain under identity restriction; the typed
--- aliases record that for the checker.
+-- Group-member unit reads stay plain under addon restrictions (probed in
+-- game); the typed aliases record that for the checker.
 ---@type fun(unit: string): string?, string?, number?
 local UnitClass             = UnitClass
 local UnitIsUnit            = UnitIsUnit

@@ -1111,19 +1111,26 @@ function CHAT:ShortChannel()
     if not abbr then
         abbr = communityAbbrevCache[key]
         if abbr == nil then
-            local resolved = false
+            local resolved, hidden = false, false
             local chanName = select(2, _G.GetChannelName(gsub(name, "channel:", "")))
             if chanName then
                 local communityID = strmatch(chanName, "Community:(%d+):")
                 if communityID and _G.C_Club and _G.C_Club.GetClubInfo then
                     local clubInfo = _G.C_Club.GetClubInfo(communityID)
-                    if clubInfo and canaccessvalue(clubInfo.name) and clubInfo.name and clubInfo.name ~= "" then
-                        abbr = strupper(strsub(clubInfo.name, 1, 2))
-                        resolved = true
+                    local clubName = clubInfo and clubInfo.name
+                    if canaccessvalue(clubName) then
+                        if clubName and clubName ~= "" then
+                            abbr = strupper(strsub(clubName, 1, 2))
+                            resolved = true
+                        end
+                    else
+                        hidden = true
                     end
                 end
             end
-            communityAbbrevCache[key] = resolved and abbr or false
+            -- A name hidden by chat lockdown is not cached: it reads plain
+            -- again once the lockdown lifts.
+            if not hidden then communityAbbrevCache[key] = resolved and abbr or false end
         end
         if abbr == false then abbr = nil end
     end
