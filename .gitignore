@@ -21,7 +21,6 @@ dev/docs/
 
 # Editor settings & language-server config (machine-local)
 .vscode/
-.wowluarc.json
 
 # Symlink to the Blizzard UI source clone.
 .wow-api-reference

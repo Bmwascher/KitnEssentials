@@ -323,7 +323,10 @@ function CR:Update()
 
     local chargeTable = C_Spell.GetSpellCharges(SPELL_ID)
 
-    if not chargeTable or not chargeTable.currentCharges then
+    if not chargeTable or not chargeTable.currentCharges
+        or not canaccessvalue(chargeTable.currentCharges)
+        or not canaccessvalue(chargeTable.cooldownStartTime)
+        or not canaccessvalue(chargeTable.cooldownDuration) then
         if self.isPreview then
             -- Show preview with fake data
             self.frame:Show()

@@ -827,6 +827,7 @@ function NMA:Update()
                 -- Readable remaining time, so the gate drops the line outright
                 -- and the row goes with it. anyRunning above is what keeps the
                 -- ticker alive to bring it back when the countdown comes down.
+                ---@cast rem number
                 if not (threshold and rem > threshold) then
                     plainLine = self:ComposeLine(entry.customText or entry.name, FormatTime(rem))
                 end

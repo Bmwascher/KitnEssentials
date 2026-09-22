@@ -68,6 +68,9 @@ local SecureHandlerSetFrameRef = _G.SecureHandlerSetFrameRef
 local SetDungeonDifficultyID = _G.SetDungeonDifficultyID
 local UnitClass = UnitClass
 local UnitExists = UnitExists
+-- Group-member unit reads stay plain under addon restrictions (probed in
+-- game); the typed aliases record that for the checker.
+---@type fun(unit: string): string
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local UnitIsGroupAssistant = _G.UnitIsGroupAssistant
 local UnitIsGroupLeader = UnitIsGroupLeader

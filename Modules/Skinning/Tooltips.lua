@@ -674,9 +674,13 @@ function TT:OnTooltipSetUnit(tt, data)
     -- value with KE:IsSecretValue would be the over-guarding that has
     -- silently killed features in this project before.
     if UnitIsPlayer(unit) and CanReadIdentity(unit) then
+        -- CanReadIdentity is the predicate the checker cannot see through; the
+        -- casts record its answer.
         local name, realm = UnitName(unit)
+        ---@cast realm string?
         if name then
             local pvpName = UnitPVPName(unit)
+            ---@cast pvpName string?
             if pvpName and pvpName ~= "" then name = pvpName end
 
             -- AlwaysShowRealm spells the realm out in full; otherwise

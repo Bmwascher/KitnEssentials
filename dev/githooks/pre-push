@@ -239,6 +239,21 @@ else
     echo "[pre-push] (push allowed; CI will still run the suite.)" >&2
 fi
 
+# wowlua-ls type and secret-value diagnostics (blocking; the warning
+# baseline is zero). The binary ships with the VS Code extension, so exit 3
+# (cannot run) skips with a note.
+if command -v pwsh >/dev/null 2>&1 && [ -f dev/scripts/wowlua-check.ps1 ]; then
+    echo "[pre-push] wowlua-ls…"
+    pwsh -NoProfile -NonInteractive -File dev/scripts/wowlua-check.ps1
+    wl_rc=$?
+    if [ "$wl_rc" -eq 1 ]; then
+        echo "[pre-push] BLOCKED: wowlua-ls warnings. Fix them, or override with: git push --no-verify" >&2
+        exit 1
+    elif [ "$wl_rc" -eq 3 ]; then
+        echo "[pre-push] wowlua-ls unavailable here — skipping. (Install the wowlua-ls VS Code extension; the checker's own note is above.)" >&2
+    fi
+fi
+
 # .luacheckrc drift vs the local WoW API reference (non-blocking, quiet when
 # clean). Local-only by construction: CI never has the gitignored symlink.
 if command -v lua >/dev/null 2>&1 \

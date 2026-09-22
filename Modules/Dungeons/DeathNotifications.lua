@@ -502,7 +502,8 @@ function DN:OnUnitDied(_, deadGUID)
 
     local unitID = GetUnitFromGUID(deadGUID)
     if not unitID or KE:IsSecretValue(unitID) then return end
-    if UnitIsUnit(unitID, "player") then return end
+    local isSelf = UnitIsUnit(unitID, "player")
+    if not canaccessvalue(isSelf) or isSelf then return end
 
     local isDead = UnitIsDead(unitID)
     if KE:IsSecretValue(isDead) then isDead = true end

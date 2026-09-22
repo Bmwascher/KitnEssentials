@@ -147,7 +147,8 @@ local function UpdateWhirlingSurge(self)
     if not cd then return end
 
     local cdInfo = C_Spell.GetSpellCooldown(WHIRLING_SURGE_SPELL)
-    if cdInfo and cdInfo.startTime > 0 and cdInfo.duration > 1.5 then
+    if cdInfo and canaccessvalue(cdInfo.startTime) and canaccessvalue(cdInfo.duration)
+        and cdInfo.startTime > 0 and cdInfo.duration > 1.5 then
         cd:SetCooldown(cdInfo.startTime, cdInfo.duration)
     else
         cd:Clear()
@@ -156,7 +157,7 @@ end
 
 local function UpdateSecondWind(self)
     local charges = C_Spell.GetSpellCharges(SECOND_WIND_SPELL)
-    if not charges then return end
+    if not charges or not canaccessvalue(charges.currentCharges) then return end
 
     local db = self.db
     local r, g, b = KE:ResolveColor(db.Colors and db.Colors.SecondWind, { 0.3, 0.7, 1, 1 })
@@ -185,7 +186,7 @@ end
 
 local function UpdateVigor(self)
     local charges = C_Spell.GetSpellCharges(VIGOR_SPELL)
-    if not charges then return end
+    if not charges or not canaccessvalue(charges.currentCharges) then return end
 
     local db = self.db
     local spacing = db.Spacing or 1
@@ -286,7 +287,8 @@ local function UpdateSpeed(self)
     end
     if not shouldHide and db.HideWhenFull then
         local charges = C_Spell.GetSpellCharges(VIGOR_SPELL)
-        if charges and charges.currentCharges >= charges.maxCharges then
+        if charges and (not canaccessvalue(charges.currentCharges)
+            or charges.currentCharges >= charges.maxCharges) then
             shouldHide = true
         end
     end

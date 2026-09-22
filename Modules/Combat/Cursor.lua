@@ -338,6 +338,7 @@ local function _gcdOnEvent(self, event, unit, _, _)
         local ok, hasActive = pcall(function()
             local cdData = GetSpellCooldown(GCD_SPELL_ID)
             return cdData and cdData.duration and cdData.startTime
+                   and canaccessvalue(cdData.duration) and canaccessvalue(cdData.startTime)
                    and cdData.duration > 0 and cdData.startTime > 0
         end)
         if not ok or not hasActive then cd:Clear() end
@@ -351,7 +352,8 @@ local function _gcdOnEvent(self, event, unit, _, _)
     local ok, dur, start = pcall(function()
         local d = cdData.duration
         local s = cdData.startTime
-        if d and d > 0 and d <= 1.6 and s and s > 0 then
+        if d and s and canaccessvalue(d) and canaccessvalue(s)
+            and d > 0 and d <= 1.6 and s > 0 then
             return d, s
         end
     end)

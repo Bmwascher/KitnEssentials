@@ -422,7 +422,7 @@ function KE:CanReanchorNow(frame) end
 --- For modules that resolve the anchor and place the frame themselves; `fn` is
 --- that module's own reposition function (Core/Globals.lua anchor repair).
 ---@param frame Frame
----@param isPlayerFrame fun(): boolean # is this frame's CURRENT anchor type PLAYERFRAME
+---@param isPlayerFrame fun(): boolean? # is this frame's CURRENT anchor type PLAYERFRAME
 ---@param fn fun() # replays the module's own placement
 function KE:RegisterAnchorRepair(frame, isPlayerFrame, fn) end
 
@@ -1113,30 +1113,37 @@ function KE:DisableTextureSnap(tex) end
 function KE:ResnapAllBorders() end
 
 -- Core/Secret.lua
+---@secret-guard value is-secret
 ---@param value any
 ---@return boolean
 function KE:IsSecretValue(value) end
 
+---@secret-guard value accessible
 ---@param value any
 ---@return boolean
 function KE:NotSecretValue(value) end
 
+---@secret-guard value accessible
 ---@param value any
 ---@return boolean
 function KE:IsSafeValue(value) end
 
+---@secret-guard object is-secret
 ---@param object any
 ---@return boolean
 function KE:IsSecretTable(object) end
 
+---@secret-guard object accessible
 ---@param object any
 ---@return boolean
 function KE:NotSecretTable(object) end
 
+---@secret-guard value accessible
 ---@param value any
 ---@return boolean
 function KE:CanAccessValue(value) end
 
+---@secret-guard value is-secret
 ---@param value any
 ---@return boolean
 function KE:CanNotAccessValue(value) end

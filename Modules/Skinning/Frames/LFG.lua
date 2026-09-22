@@ -280,10 +280,13 @@ local function UpdateEnumerate(enumerate, numPlayers, _, disabled, iconOrder)
     for i = 1, num do
         local ok2, p = pcall(_G.C_LFGList.GetSearchResultPlayerInfo, resultID, i)
         if ok2 and p then
-            local entry = S.AcceptMember(p.assignedRole, p.classFilename, p.isLeader)
-            -- One skipped member never aborts the rest of the walk.
-            if entry and cache[p.assignedRole] then
-                local t = cache[p.assignedRole]
+            local role = p.assignedRole
+            local entry = S.AcceptMember(role, p.classFilename, p.isLeader)
+            -- One skipped member never aborts the rest of the walk; an entry
+            -- exists only when AcceptMember found the role plain.
+            ---@cast role string
+            if entry and cache[role] then
+                local t = cache[role]
                 t[#t + 1] = entry
             end
         end

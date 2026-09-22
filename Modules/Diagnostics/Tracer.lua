@@ -63,6 +63,8 @@ end
 -- Depth 4 skips this function, the hook body and the hook dispatcher; the
 -- debugstack call stays here so the offset holds.
 local function Caller()
+    -- The debugstack stub types the first argument as a thread; the start-level form is valid.
+    ---@diagnostic disable-next-line: type-mismatch
     local ok, stack = pcall(debugstack, 4, 20, 0)
     if not ok then return "?" end
     return Tracer.ParseCaller(stack)

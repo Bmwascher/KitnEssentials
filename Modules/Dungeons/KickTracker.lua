@@ -18,14 +18,20 @@ local KT = KitnEssentials:NewModule("KickTracker", "AceEvent-3.0", "AceTimer-3.0
 ---------------------------------------------------------------------------------
 local GetTime = GetTime
 local CreateFrame = CreateFrame
+-- Group-member unit reads stay plain under addon restrictions (probed in
+-- game); the typed aliases record that for the checker.
+---@type fun(unit: string): string?
 local UnitGUID = UnitGUID
+---@type fun(unit: string): string?, string?
 local UnitName = UnitName
+---@type fun(unit: string): string?, string?, number?
 local UnitClass = UnitClass
 local UnitExists = UnitExists
 local IsInInstance = IsInInstance
 local IsInGroup = IsInGroup
 local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
+---@type fun(unit: string): string
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 local C_Timer = C_Timer
 local C_ClassColor = C_ClassColor
