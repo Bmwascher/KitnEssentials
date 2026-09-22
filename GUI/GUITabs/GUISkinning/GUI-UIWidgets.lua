@@ -446,18 +446,10 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         end
     end)
 
-    local noteHeight = 70
-    local noteRow = GUIFrame:CreateRow(afCard1.content, noteHeight)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") ..
-        " Moves the whole Blizzard toast stack — loot, achievements, dungeon " ..
-        "completion — to a spot you choose. The stack grows upward when the " ..
-        "anchor is in the lower half of the screen and downward when it is in " ..
-        "the upper half. Use /kes edit to drag it. Turning it off needs a reload.",
-        noteHeight, "hide")
-    noteRow:AddWidget(noteText, 1)
-    afCard1:AddRow(noteRow, noteHeight, 0)
+    afCard1:AddLabel("Moves the whole Blizzard toast stack, loot, achievements, dungeon completion, " ..
+        "to a spot you choose. The stack grows upward when the anchor is in the lower half of the " ..
+        "screen and downward when it is in the upper half. Use |cffffd100/kes edit|r to drag it. " ..
+        "Turning it off needs a reload.")
 
     yOffset = afCard1:GetNextOffset()
 

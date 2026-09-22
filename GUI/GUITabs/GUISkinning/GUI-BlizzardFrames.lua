@@ -512,6 +512,8 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFrames", function(scrollChild, yOffs
         if needsReload then KE:FlagReloadNeeded() end
     end)
 
+    card:AddLabel("Untick a window to keep Blizzard's original look there. Changes apply after a /reload.")
+
     if AnySuppressed(FRAME_SKINS) then
         card:AddNote("Greyed windows are already skinned by EllesmereUI. Windows marked with * are partly covered, and their toggle still controls the rest. Hover either for detail.")
     end
@@ -563,7 +565,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesAddons", function(scrollChild, yOffs
         if needsReload then KE:FlagReloadNeeded() end
     end)
 
-    card:AddNote("Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
+    card:AddLabel("Skins for other addons, applied when that addon loads. Changes apply after a /reload.")
     BuildSoloRows(card, ADDON_SKINS, db.Skins)
     BuildCheckGrid(card, ADDON_SKINS, db.Skins, ADDON_PER_ROW)
     return card:GetNextOffset()
@@ -586,7 +588,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesFonts", function(scrollChild, yOffse
     local S = KE.Skins
 
     local card = GUIFrame:CreateCard(scrollChild, "Skin Font", yOffset)
-    card:AddNote("Controls text inside windows KitnEssentials skins. Elements with a deliberately larger size, such as window titles and big counters, keep the gap between them and move together.")
+    card:AddLabel("Controls text inside windows KitnEssentials skins. Elements with a deliberately larger size, such as window titles and big counters, keep the gap between them and move together.")
 
     local fontOptions = {}
     if LSM then
@@ -657,7 +659,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesColors", function(scrollChild, yOffs
     db.BorderColor = db.BorderColor or { 0, 0, 0, 1 }
 
     local card = GUIFrame:CreateCard(scrollChild, "Window Colors", yOffset)
-    card:AddNote("Both pickers repaint every skinned window that is already open. Frames that carry a colour of their own, such as controls and panels, keep it.")
+    card:AddLabel("Both pickers repaint every skinned window that is already open. Frames that carry a colour of their own, such as controls and panels, keep it.")
 
     local row = GUIFrame:CreateRow(card.content, Theme.rowHeight)
     row:AddWidget(GUIFrame:CreateColorPicker(row, "Background Color", {
@@ -829,8 +831,11 @@ end, {
         -- blanket "ElvUI does not touch these" here would be false.
         if KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
             card:AddNote("|cffffd100ElvUI is handling Blizzard frame skinning.|r KitnEssentials stands down so the two do not fight over the same windows, so the frame and addon skins are not applied right now. Your settings are kept and take effect again if you turn ElvUI off.")
-        elseif db.Enabled ~= true then
-            card:AddNote("Turn this on to configure frame and addon skins. The tabs below belong to modules that work with it off.")
+        else
+            card:AddLabel("Skins Blizzard's windows to match the theme. Each window is skinned the " ..
+                "first time you open it, so there is no idle cost. The Frame Skins tab picks the " ..
+                "windows and drops out of the tab row while this is off; Fonts and Elements work " ..
+                "either way. Changes apply after a /reload.")
         end
         local newOffset = yOffset + card:GetContentHeight() + Theme.paddingSmall
         -- Never collapse: the tab list above already drops the engine's own

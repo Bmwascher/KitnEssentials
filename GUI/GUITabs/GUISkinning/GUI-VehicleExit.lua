@@ -8,7 +8,6 @@
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
-local Theme = KE.Theme
 
 local function GetModule()
     if KitnEssentials then
@@ -45,15 +44,9 @@ GUIFrame:RegisterContent("VehicleExit", function(scrollChild, yOffset)
         GUIFrame:RefreshContent()
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Takes over where the vehicle exit button sits. Blizzard's Edit Mode " ..
-        "and some action bar addons both move this button, which is why it can jump back after a " ..
-        "reload. Applied a few seconds after you log in.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
+    card1:AddLabel("Takes over where the vehicle exit button sits. Blizzard's Edit Mode and some " ..
+        "action bar addons both move this button, which is why it can jump back after a reload. " ..
+        "Applied a few seconds after you log in.")
 
     yOffset = card1:GetNextOffset()
 

@@ -54,15 +54,10 @@ GUIFrame:RegisterContent("TargetedSpells", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 65)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Shows enemy casts aimed at YOU as icon + countdown + icon entries.\n" ..
-        KE:ColorTextByTheme("-") .. " Casts over 60 seconds (junk NPC channels) are hidden automatically.\n" ..
-        KE:ColorTextByTheme("-") .. " Off-screen casters need the nameplateShowOffscreen CVar (prompted on enable).",
-        65, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 65, 0)
+    card1:AddLabel("Shows the enemy casts aimed at you as an icon with a countdown, so you know what " ..
+        "is about to land." ..
+        "\n\nCasts longer than 60 seconds (junk NPC channels) are hidden. Casters off screen need " ..
+        "the nameplateShowOffscreen CVar, which you are asked about when you turn this on.")
 
     yOffset = card1:GetNextOffset()
 

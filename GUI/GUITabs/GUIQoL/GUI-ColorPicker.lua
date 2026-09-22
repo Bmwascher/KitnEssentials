@@ -29,8 +29,11 @@ GUIFrame:RegisterContent("ColorPicker", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return card:GetNextOffset() end
 
-    card:AddNote("Adds red, green, blue and transparency boxes to Blizzard's colour picker, plus copy and paste, a class-colour button, and a title bar you can drag. Turning it off needs a reload.")
-    card:AddNote("Skipped automatically if ElvUI or a dedicated colour-picker addon is loaded, since those change the same window.")
+    card:AddLabel("Adds red, green, blue and transparency boxes to Blizzard's colour picker, plus " ..
+        "copy and paste, a class-colour button, and a title bar you can drag. It applies " ..
+        "everywhere colours are picked, this window included. Turning it off needs a reload." ..
+        "\n\nSkipped automatically if |cffffd100ElvUI|r or a dedicated colour-picker addon is " ..
+        "loaded, since those change the same window.")
 
     return card:GetNextOffset()
 end)

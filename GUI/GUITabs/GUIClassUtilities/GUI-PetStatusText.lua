@@ -60,6 +60,11 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
+    card1:AddLabel("|cffffd100For Hunters, Warlocks, Death Knights and Mages.|r Shows a warning text " ..
+        "when your pet is missing, dead, on passive, or not the pet your spec wants. Each state has " ..
+        "its own text and colour below.")
+    yOffset = card1:GetNextOffset()
+
     ----------------------------------------------------------------
     -- Card 2: Position Settings
     ----------------------------------------------------------------

@@ -51,13 +51,8 @@ GUIFrame:RegisterContent("Recuperate", function(scrollChild, yOffset)
         ApplyState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Visible out of combat in selected group types. Fades based on missing health.",
-        Theme.rowHeight, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeight, 0)
+    card1:AddLabel("A one-click button for the Recuperate self-heal, shown out of combat in the " ..
+        "group types you pick and fading in as your health drops.")
 
     yOffset = card1:GetNextOffset()
 

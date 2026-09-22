@@ -26,10 +26,14 @@ GUIFrame:RegisterContent("MoveFrames", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled ~= true then return card:GetNextOffset() end
 
-    card:AddLabel("Left-click and drag almost any Blizzard window -- character panel, map, merchant, professions and most others -- to move it anywhere on screen.")
-    card:AddLabel("Positions are temporary unless Remember Positions is on: every window returns to its normal spot the next time it opens.")
-    card:AddLabel("Steps aside automatically if BlizzMove or MoveAnything is installed. Protected windows cannot be moved while you are in combat.")
-    card:AddLabel("Loot roll windows can be dragged but go back to their managed spot on the next roll, even with Remember Positions on.")
+    card:AddLabel("Left-click and drag almost any Blizzard window, the character panel, map, " ..
+        "merchant, professions and most others, to move it anywhere on screen." ..
+        "\n\nPositions are temporary unless Remember Positions is on: every window returns to its " ..
+        "normal spot the next time it opens." ..
+        "\n\nSteps aside automatically if |cffffd100BlizzMove|r or |cffffd100MoveAnything|r is " ..
+        "installed. Protected windows cannot be moved while you are in combat." ..
+        "\n\nLoot roll windows can be dragged but go back to their managed spot on the next roll, " ..
+        "even with Remember Positions on.")
 
     local moving = GUIFrame:CreateCard(scrollChild, "Moving", card:GetNextOffset())
 

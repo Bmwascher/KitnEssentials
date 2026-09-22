@@ -60,13 +60,9 @@ GUIFrame:RegisterContent("ReadyCheckConsumables", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 35)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Clickable consumable icons attached to the ready check popup.",
-        35, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 35, 0)
+    card1:AddLabel("Attaches a row of consumable icons to the ready check popup: food, flask, weapon " ..
+        "enhancements, augment rune, healthstone and, for Warlocks, Soulstone. Each shows whether it " ..
+        "is up and for how long; click one to use the matching item from your bags.")
 
     yOffset = card1:GetNextOffset()
 

@@ -60,13 +60,9 @@ GUIFrame:RegisterContent("CopyAnything", function(scrollChild, yOffset)
         ApplyState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Hover anything with a tooltip and press your copy key to open a small window with its ID ready to copy. Does nothing in combat or in a Mythic+ run.",
-        40, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeight, 0)
+    card1:AddLabel("Hover anything with a tooltip and press your copy key to open a small window " ..
+        "with its ID ready to copy: spells, items, auras, macros and unit names. Does nothing in " ..
+        "combat or in a Mythic+ run, where the game keeps those values secret.")
 
     yOffset = card1:GetNextOffset()
 

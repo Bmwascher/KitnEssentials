@@ -58,13 +58,8 @@ GUIFrame:RegisterContent("SecondaryStats", function(scrollChild, yOffset)
         ApplyState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Shows your secondary and tertiary stats on screen.",
-        40, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeight, 0)
+    card1:AddLabel("Shows your secondary stats (critical strike, haste, mastery, versatility) and " ..
+        "tertiary stats (leech, avoidance, speed) on screen, as a readout you can place and style.")
 
     yOffset = card1:GetNextOffset()
 

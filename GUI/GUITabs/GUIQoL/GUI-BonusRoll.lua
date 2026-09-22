@@ -72,14 +72,8 @@ GUIFrame:RegisterContent("BonusRoll", function(scrollChild, yOffset)
         manager:UpdateAll(checked)
     end)
 
-    local noteHeight = 50
-    local noteRow = GUIFrame:CreateRow(card1.content, noteHeight)
-    local noteText = GUIFrame:CreateText(noteRow, KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " A confirmation before a bonus roll coin is spent, and an automatic pass in the content you choose.\n"
-            .. KE:ColorTextByTheme("-") .. " Every decision it makes is printed in chat.",
-        noteHeight, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, noteHeight, 0)
+    card1:AddLabel("A confirmation before a bonus roll coin is spent, and an automatic pass in the " ..
+        "content you choose. Every decision it makes is printed in chat.")
     yOffset = card1:GetNextOffset()
 
     ---------------------------------------------------------------------------

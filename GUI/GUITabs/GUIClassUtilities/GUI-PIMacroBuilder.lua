@@ -76,14 +76,9 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Auto-creates a macro for Power Infusion with optional extras.\n" ..
-        KE:ColorTextByTheme("-") .. " Drag the macro from " .. KE:ColorTextByTheme("/macro") .. " to your action bar.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
+    card1:AddLabel("|cffffd100Priest only.|r Writes a Power Infusion macro aimed at the player you " ..
+        "pick, with optional extras such as trinkets or a racial in the same press, and rewrites it " ..
+        "as you change the settings below. Drag the macro from |cffffd100/macro|r onto your action bar.")
 
     yOffset = card1:GetNextOffset()
 

@@ -63,6 +63,12 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
+    card1:AddLabel("On-screen alerts for the moments a raid forgets: a usable Demonic Gateway, a " ..
+        "boss to reset while a lust debuff is still up, a boss left unlooted, a seat on the bench in " ..
+        "group 7 or 8 of a Mythic raid, and bonus roll currency still below its weekly cap. Each " ..
+        "alert has its own switch below.")
+    yOffset = card1:GetNextOffset()
+
     ----------------------------------------------------------------
     -- Card 2: Alert Settings
     ----------------------------------------------------------------

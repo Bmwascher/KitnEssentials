@@ -61,14 +61,8 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Works for all classes.\n" ..
-        KE:ColorTextByTheme("-") .. " Tracks when your movement ability is available for free use from the Time Spiral buff.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
+    card1:AddLabel("Shows when an Evoker's Time Spiral has given you a free use of your movement " ..
+        "ability, and how long you have to spend it. Works for every class.")
 
     yOffset = card1:GetNextOffset()
 

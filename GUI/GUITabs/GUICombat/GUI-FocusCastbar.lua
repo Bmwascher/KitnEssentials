@@ -106,6 +106,11 @@ GUIFrame:RegisterContent("FocusCastbar", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
+    card1:AddLabel("A cast bar for your focus target that you can move and style, with the caster's " ..
+        "name, a kick indicator that shows whether your interrupt is ready, and a sound when a cast " ..
+        "starts.")
+    yOffset = card1:GetNextOffset()
+
     ----------------------------------------------------------------
     -- Card 2: General Settings (Width, Height, Bar Texture)
     ----------------------------------------------------------------

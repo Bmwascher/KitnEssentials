@@ -64,14 +64,9 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Evoker only (Devastation / Preservation).\n" ..
-        KE:ColorTextByTheme("-") .. " Displays tick marks on your cast bar during Disintegrate channels.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
+    card1:AddLabel("|cffffd100Evoker only (Devastation and Preservation).|r Marks each tick of a " ..
+        "Disintegrate channel on your cast bar, so you can see when it is safe to chain the next " ..
+        "cast or clip the channel.")
 
     yOffset = card1:GetNextOffset()
 

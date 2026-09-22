@@ -114,14 +114,9 @@ local function BuildGeneralTab(scrollChild, yOffset, db, manager)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, 68)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " In-client meter on Blizzard's 12.0 data; replaces the built-in meter automatically while enabled.\n" ..
-        KE:ColorTextByTheme("-") .. " Switch type/segment on the meter itself; the GUI sets defaults & look.",
-        68, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, 68, 0)
+    card1:AddLabel("A damage meter built on the game's own combat data, standing in for the " ..
+        "built-in meter while it is on. Switch what it shows and which fight it shows on the meter " ..
+        "itself; the settings here set the defaults and the look.")
 
     yOffset = card1:GetNextOffset()
 

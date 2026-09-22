@@ -40,13 +40,8 @@ GUIFrame:RegisterContent("HavocTracker", function(scrollChild, yOffset)
         end
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        "|cffffd100Destruction Warlock only.|r Warns you when your Havoc is sitting on the target you are hitting, which wastes it.",
-        40, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeight, 0)
+    card1:AddLabel("|cffffd100Destruction Warlock only.|r Warns you when your Havoc is sitting on the " ..
+        "target you are hitting, which wastes it.")
 
     yOffset = card1:GetNextOffset()
 

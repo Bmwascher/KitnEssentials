@@ -54,14 +54,9 @@ GUIFrame:RegisterContent("PIAssist", function(scrollChild, yOffset)
         ApplyModuleState(checked)
     end)
 
-    local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)
-    local noteText = GUIFrame:CreateText(noteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Priest only. Glows the raid frame of the player your PI macro targets while their burst cooldown is running.\n" ..
-        KE:ColorTextByTheme("-") .. " The game matches the buff and draws the glow; nothing a fight hides is read.",
-        50, "hide")
-    noteRow:AddWidget(noteText, 1)
-    card1:AddRow(noteRow, Theme.rowHeightNote, 0)
+    card1:AddLabel("|cffffd100Priest only.|r Glows the raid frame of the player your PI macro targets " ..
+        "while their burst cooldown is running - the moment to give them Power Infusion." ..
+        "\n\nThe game matches the buff and draws the glow; nothing a fight hides is read.")
 
     yOffset = card1:GetNextOffset()
 

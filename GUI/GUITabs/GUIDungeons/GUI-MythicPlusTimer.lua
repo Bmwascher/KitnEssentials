@@ -214,6 +214,12 @@ BuildGeneralTab = function(scrollChild, yOffset, db, manager)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return yOffset end
 
+    card1:AddLabel("A keystone timer laid out as a HUD you style card by card below: the run timer " ..
+        "with its +3, +2 and +1 thresholds, forces, objectives and splits against your best time, " ..
+        "deaths with the time they cost, and the affixes and key level. An overlay can show each " ..
+        "enemy's forces on its nameplate and tooltip.")
+    yOffset = card1:GetNextOffset()
+
     -- Card 2: Position Settings
     local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",

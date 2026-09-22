@@ -63,6 +63,8 @@ GUIFrame:RegisterContent("KeystoneHelperReset", function(scrollChild, yOffset)
 
     local cardReset = GUIFrame:CreateCard(scrollChild, "Instance Reset Announcer", yOffset)
     manager:Register(cardReset, "all")
+    cardReset:AddLabel("Sends your reset message to the group when you reset the instance, so nobody " ..
+        "wonders whether it took.")
 
     local rowReset1 = GUIFrame:CreateRow(cardReset.content, Theme.rowHeight)
     local resetEnableCheck = GUIFrame:CreateCheckbox(rowReset1, "Announce on Instance Reset", {
