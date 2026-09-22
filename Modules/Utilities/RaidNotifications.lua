@@ -107,7 +107,7 @@ local SATED_DEBUFFS = {
 local ALERT_DEFS = {
     { key = "Gateway",    text = "GATE USABLE", icon = 607513,  enableKey = "GatewayEnabled" },
     { key = "ResetBoss",  text = "RESET BOSS",  icon = 136090,  enableKey = "ResetBossEnabled" },  -- Spell_Nature_Exhaustion
-    { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\Cat_Head.png", enableKey = "LootBossEnabled" },
+    { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES", enableKey = "LootBossEnabled", frameless = true },
     { key = "BenchAlert", text = "BENCHED",     icon = 134414, enableKey = "BenchEnabled" },  -- INV_Misc_Rune_01
     { key = "Voidcore",   text = "BONUS ROLLS MISSING", icon = 7658128, enableKey = "VoidcoreEnabled" },
 }
@@ -294,6 +294,21 @@ local function CreateIcon(parent, anchor, point, relPoint, xOff, iconSize)
     return holder
 end
 
+-- Blizzard spell icons are opaque squares and take the holder's dark
+-- backdrop and borders; art with its own transparent margin draws bare.
+local function SetIconFrame(holder, framed)
+    holder:SetBackdropColor(0, 0, 0, framed and 0.8 or 0)
+    holder:SetBackdropBorderColor(0, 0, 0, framed and 1 or 0)
+    for _, border in pairs(holder.borders) do
+        border:SetShown(framed)
+    end
+    if framed then
+        KE:ApplyIconZoom(holder.tex)
+    else
+        holder.tex:SetTexCoord(0, 1, 0, 1)
+    end
+end
+
 function RN:CreateAlertRow(index)
     local row = CreateFrame("Frame", "KE_RaidNotifRow" .. index, self.frame)
     row:SetSize(300, 40)
@@ -428,6 +443,8 @@ function RN:ApplyRowVisuals(row)
         local iconSize = db.FontSize or 16
         row.leftIcon:SetSize(iconSize, iconSize)
         row.rightIcon:SetSize(iconSize, iconSize)
+        SetIconFrame(row.leftIcon, not def.frameless)
+        SetIconFrame(row.rightIcon, not def.frameless)
     end
 end
 
