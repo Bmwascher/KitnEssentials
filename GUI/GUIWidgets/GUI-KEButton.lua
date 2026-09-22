@@ -54,7 +54,7 @@ function GUIFrame:CreateButton(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    button:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
+    button:SetBackdropColor(Theme.bgButton[1], Theme.bgButton[2], Theme.bgButton[3], Theme.bgButton[4])
     button:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
     -- Hover fade animation for border color
@@ -184,7 +184,7 @@ function GUIFrame:CreateButton(parent, labelText, config)
     -- Pool consumers call this when KE._themeVersion has advanced.
     function button:ApplyThemeColors()
         local TT = Theme
-        button:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], 1)
+        button:SetBackdropColor(TT.bgButton[1], TT.bgButton[2], TT.bgButton[3], TT.bgButton[4])
         button:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
         if textWidget then
             textWidget:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)

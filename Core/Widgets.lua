@@ -112,12 +112,12 @@ local function ThemeButton(btn, Theme, labelText, isPrimary)
         edgeSize = KE:GetPixelSize(),
     })
     local textColor = isPrimary and Theme.accent or Theme.textPrimary
-    btn._bgMedium = ValidateThemeColor(Theme.bgMedium, { 0.1, 0.1, 0.1, 1 })
+    btn._plate = ValidateThemeColor(Theme.bgButton, { 0, 0, 0, 0.5 })
     btn._bgLight = ValidateThemeColor(Theme.bgLight, { 0.15, 0.15, 0.15, 1 })
     btn._border = ValidateThemeColor(Theme.border, { 0.3, 0.3, 0.3, 1 })
     btn._accent = ValidateThemeColor(Theme.accent, { 1, 0.82, 0, 1 })
 
-    btn:SetBackdropColor(btn._bgMedium[1], btn._bgMedium[2], btn._bgMedium[3], 1)
+    btn:SetBackdropColor(btn._plate[1], btn._plate[2], btn._plate[3], btn._plate[4])
     btn:SetBackdropBorderColor(btn._border[1], btn._border[2], btn._border[3], 1)
 
     if KE.ApplyThemeFont then
@@ -175,7 +175,7 @@ local function CreateThemedButton(parent, Theme, labelText, isPrimary)
     end)
 
     btn:SetScript("OnLeave", function(self)
-        self:SetBackdropColor(self._bgMedium[1], self._bgMedium[2], self._bgMedium[3], 1)
+        self:SetBackdropColor(self._plate[1], self._plate[2], self._plate[3], self._plate[4])
         self:SetBackdropBorderColor(self._border[1], self._border[2], self._border[3], 1)
     end)
 

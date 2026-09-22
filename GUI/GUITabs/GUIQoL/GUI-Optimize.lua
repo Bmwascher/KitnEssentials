@@ -282,7 +282,7 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = 1,
         })
-        applyBtn:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
+        applyBtn:SetBackdropColor(Theme.bgButton[1], Theme.bgButton[2], Theme.bgButton[3], Theme.bgButton[4])
         applyBtn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
         local applyText = applyBtn:CreateFontString(nil, "OVERLAY")
         KE:ApplyThemeFont(applyText, "normal")
@@ -298,7 +298,7 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = 1,
         })
-        revertBtnSmall:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
+        revertBtnSmall:SetBackdropColor(Theme.bgButton[1], Theme.bgButton[2], Theme.bgButton[3], Theme.bgButton[4])
         revertBtnSmall:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
         local revertText = revertBtnSmall:CreateFontString(nil, "OVERLAY")
         KE:ApplyThemeFont(revertText, "normal")

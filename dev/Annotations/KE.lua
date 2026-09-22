@@ -28,6 +28,7 @@ local AceDB
 ---@field bgLight number[]
 ---@field bgMedium number[]
 ---@field bgDark number[]
+---@field bgButton number[]
 ---@field border number[]
 ---@field borderSize number
 ---@field textPrimary number[]
