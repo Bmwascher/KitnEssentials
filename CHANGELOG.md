@@ -1,6 +1,6 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.8.0
+## v4.7.23
 
 ### Profile Manager
 
