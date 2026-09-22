@@ -369,7 +369,7 @@ function ProfileManager:DecodeImportString(importString)
 
     -- The user-facing export wraps the profile in an envelope; the Wago API
     -- export is the raw profile table.
-    if type(data.d) == "table" then return data.d, data._n end
+    if type(data.d) == "table" then return data.d, type(data._n) == "string" and data._n or nil end
     return data
 end
 

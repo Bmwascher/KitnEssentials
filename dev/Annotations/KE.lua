@@ -561,10 +561,17 @@ function KE:ApplyThemeFont(fontStr, size) end
 ---@param cancelText string?
 ---@param showSecondEditBox boolean?
 ---@param secondEditBoxLabel string?
----@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean? }?
+---@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string? }?
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts) end
+
+--- True only when `typed` equals `required` exactly (Core/Widgets.lua): the
+--- gate behind a prompt's `opts.requireTyped`.
+---@param typed string?
+---@param required string?
+---@return boolean
+function KE.PromptTypedGateOpen(typed, required) end
 
 --- Wraps KE:CreatePrompt with the standard reload-required chrome
 --- (Core/Widgets.lua). Returns the singleton prompt dialog frame.

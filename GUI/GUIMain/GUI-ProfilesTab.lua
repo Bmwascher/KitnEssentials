@@ -1,7 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-ProfilesTab.lua                                     ║
--- ║  Purpose: Profile management — import, export, copy,     ║
--- ║  and reset.                                              ║
+-- ║  GUI: Profile Manager                                    ║
+-- ║  Purpose: The Profiles page as three sub-tabs: Profile   ║
+-- ║  (switch, create, copy, rename, global mode), Sharing    ║
+-- ║  (export, import) and Reset (delete, reset).             ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -9,58 +11,131 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
--- Localization
 local pairs = pairs
 local C_Timer = C_Timer
+
+-- Destructive-action red, as the Dungeon Timers and M+ Timer pages use it.
+local REMOVE_COLOR = { 0.9, 0.2, 0.2, 1 }
+-- Middle dot between the status line's facts.
+local STATUS_SEP = " \194\183 "
 
 ---------------------------------------------------------------------------------
 -- Helpers
 ---------------------------------------------------------------------------------
 
--- Build profile options for dropdowns
-local function BuildProfileOptions()
+local function BuildProfileOptions(exclude)
     local PM = KE.ProfileManager
     if not PM then return {} end
-
-    local profiles = PM:GetProfiles()
     local options = {}
-    for _, name in pairs(profiles) do
-        options[name] = name
+    for _, name in pairs(PM:GetProfiles()) do
+        if name ~= exclude then options[name] = name end
     end
     return options
 end
 
----------------------------------------------------------------------------------
--- Card Sections
----------------------------------------------------------------------------------
+-- One deferred rebuild per action, after the manager has finished its work.
+local function RefreshPageLater()
+    C_Timer.After(0.1, function()
+        if GUIFrame.mainFrame and GUIFrame.mainFrame:IsShown() then
+            GUIFrame:RefreshContent()
+        end
+    end)
+end
 
-GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
+local function AddSeparatorRow(card)
+    local row = GUIFrame:CreateRow(card.content, Theme.rowHeightSeparator)
+    row:AddWidget(GUIFrame:CreateSeparator(row), 1)
+    card:AddRow(row, Theme.rowHeightSeparator)
+end
+
+local function TintDestructive(button)
+    button.text:SetTextColor(REMOVE_COLOR[1], REMOVE_COLOR[2], REMOVE_COLOR[3], REMOVE_COLOR[4])
+end
+
+local function ErrorCard(scrollChild, yOffset)
+    local card = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
+    card:AddLabel("ProfileManager not initialized. Please reload UI.")
+    return card:GetNextOffset()
+end
+
+-- Shared by the Import button and the Import Failed dialog's Try again, so
+-- both open the same two-field prompt.
+local function OpenImportPrompt()
     local PM = KE.ProfileManager
-    if not PM then
-        local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
-        errorCard:AddLabel("ProfileManager not initialized. Please reload UI.")
-        return errorCard:GetNextOffset()
-    end
+    KE:CreatePrompt(
+        "Import Profile",
+        "",
+        true,
+        "Profile Name (leave empty for default)",
+        false, nil, nil, nil, nil,
+        function(profileName, importString)
+            if not importString or importString == "" then
+                KE:Print("Please paste an import string")
+                return
+            end
+            local targetName = profileName
+            if targetName == "" then targetName = nil end
 
-    ---------------------------------------------------------------------------------
-    -- Card 1: Current Profile
-    ---------------------------------------------------------------------------------
-    local card1 = GUIFrame:CreateCard(scrollChild, "Current Profile", yOffset)
+            local success, nameOrErr = PM:ImportProfile(importString, targetName)
+            if success then
+                KE:Print("Imported profile: " .. nameOrErr)
+                -- Before the switch: activating the profile rebuilds the page
+                -- at once, and that build must land on the Profile tab.
+                GUIFrame.tabbedPageState["Profiles"] = "ProfilesMain"
+                local switched, switchErr = PM:SetProfile(nameOrErr)
+                if not switched then
+                    KE:Print("Failed to switch profile: " .. (switchErr or "Unknown error"))
+                end
+                RefreshPageLater()
+            else
+                KE:Print("Import failed: " .. (nameOrErr or "Unknown error"))
+                KE:CreatePrompt(
+                    "Import Failed",
+                    nameOrErr or "Unknown error",
+                    false, nil, false, nil, nil, nil, nil,
+                    OpenImportPrompt,
+                    nil,
+                    "Try again",
+                    "Close"
+                )
+            end
+        end,
+        nil,
+        "Import",
+        "Cancel",
+        true,
+        "Paste Import String"
+    )
+end
+
+---------------------------------------------------------------------------------
+-- Profile tab
+---------------------------------------------------------------------------------
+
+GUIFrame:RegisterContent("ProfilesMain", function(scrollChild, yOffset)
+    local PM = KE.ProfileManager
+    if not PM then return ErrorCard(scrollChild, yOffset) end
 
     local useGlobal = PM:GetUseGlobalProfile()
     local currentProfile = PM:GetCurrentProfile()
     local profileOptions = BuildProfileOptions()
-    local noGlobal = useGlobal == false
 
-    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
-    local profileDropdown = GUIFrame:CreateDropdown(row1, "Active Profile", {
+    ---------------------------------------------------------------------------------
+    -- Card 1: Current
+    ---------------------------------------------------------------------------------
+    local card1 = GUIFrame:CreateCard(scrollChild, "Current", yOffset)
+
+    card1:AddLabel("Active profile: " .. currentProfile
+        .. STATUS_SEP .. "global mode " .. (useGlobal and "on" or "off")
+        .. STATUS_SEP .. #PM:GetProfiles() .. " profiles saved")
+
+    local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
+    local profileDropdown = GUIFrame:CreateDropdown(row1a, "Active Profile", {
         options = profileOptions,
         value = currentProfile,
-        labelWidth = 100,
         callback = function(key)
-            -- Live lookup, not the page-build capture: the closure's
-            -- `currentProfile` goes stale after the first switch, silently
-            -- swallowing A→B→A while the page stays open (pre-existing bug).
+            -- Live lookup: the page-build capture goes stale after the first
+            -- switch while the page stays open.
             if key == PM:GetCurrentProfile() then return end
 
             local success, err = PM:SetProfile(key)
@@ -69,308 +144,161 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
             end
         end,
     })
-    row1:AddWidget(profileDropdown, 1)
-    card1:AddRow(row1, Theme.rowHeightLast, 0)
+    row1a:AddWidget(profileDropdown, 1)
+    card1:AddRow(row1a, Theme.rowHeight)
+    profileDropdown:SetEnabled(not useGlobal)
 
-    profileDropdown:SetEnabled(noGlobal)
+    local row1b = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local newProfileInput = GUIFrame:CreateEditBox(row1b, "New Profile", {
+        value = "",
+        callback = function() end,
+    })
+    row1b:AddWidget(newProfileInput, 0.6)
 
-    local descLabel = card1:AddLabel("Select which profile to use for this character.")
-    descLabel:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3], 1)
+    local createBtn = GUIFrame:CreateButton(row1b, "Create", {
+        height = 24,
+        callback = function()
+            local name = newProfileInput:GetValue()
+            if not name or name == "" then
+                KE:Print("Please enter a profile name")
+                return
+            end
+            local success, err = PM:CreateProfile(name)
+            if success then
+                KE:Print("Created profile: " .. name)
+                newProfileInput:SetValue("")
+                RefreshPageLater()
+            else
+                KE:Print("Failed to create profile: " .. (err or "Unknown error"))
+            end
+        end,
+    })
+    row1b:AddWidget(createBtn, 0.4, nil, 0, -14)
+    card1:AddRow(row1b, Theme.rowHeightLast, 0)
 
     yOffset = card1:GetNextOffset()
 
     ---------------------------------------------------------------------------------
-    -- Card 2: Global Profile
+    -- Card 2: Edit
     ---------------------------------------------------------------------------------
-    local card2 = GUIFrame:CreateCard(scrollChild, "Global Profile", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Edit", yOffset)
 
-    local globalProfile = PM:GetGlobalProfile()
-
-    -- Toggle for global mode
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local globalToggle = GUIFrame:CreateCheckbox(row2a, "Use Global Profile", {
-        value = useGlobal,
-        callback = function(newState)
-            local success = PM:SetUseGlobalProfile(newState)
+    local copyDropdown = GUIFrame:CreateDropdown(row2a, "Copy From", {
+        options = profileOptions,
+        value = "",
+        callback = function() end,
+    })
+    row2a:AddWidget(copyDropdown, 0.6)
+
+    local copyBtn = GUIFrame:CreateButton(row2a, "Copy", {
+        height = 24,
+        callback = function()
+            local source = copyDropdown:GetValue()
+            if not source or source == "" then
+                KE:Print("Please select a source profile")
+                return
+            end
+            KE:CreatePrompt(
+                "Copy Profile",
+                "Copy all settings from '" ..
+                source .. "' to current profile?\nThis will overwrite your current settings.",
+                false, nil, false, nil, nil, nil, nil,
+                function()
+                    local success, err = PM:CopyProfile(source)
+                    if not success then
+                        KE:Print("Failed to copy profile: " .. (err or "Unknown error"))
+                    end
+                end,
+                nil,
+                "Copy",
+                "Cancel"
+            )
+        end,
+    })
+    row2a:AddWidget(copyBtn, 0.4, nil, 0, -14)
+    card2:AddRow(row2a, Theme.rowHeight)
+
+    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
+    local renameInput = GUIFrame:CreateEditBox(row2b, "Rename", {
+        value = currentProfile,
+        callback = function() end,
+    })
+    row2b:AddWidget(renameInput, 0.6)
+
+    local renameBtn = GUIFrame:CreateButton(row2b, "Rename", {
+        height = 24,
+        callback = function()
+            local oldName = PM:GetCurrentProfile()
+            local newName = renameInput:GetValue()
+            if not newName or newName == "" then
+                KE:Print("Please enter a new name")
+                return
+            end
+            local success, err = PM:RenameProfile(oldName, newName)
             if success then
-                if not newState then
-                    KE:Print("Global profile mode disabled")
-                    C_Timer.After(0.1, function()
-                        if GUIFrame.mainFrame and GUIFrame.mainFrame:IsShown() then
-                            GUIFrame:RefreshContent()
-                        end
-                    end)
-                end
+                KE:Print("Renamed '" .. oldName .. "' to '" .. newName .. "'")
+                RefreshPageLater()
+            else
+                KE:Print("Failed to rename: " .. (err or "Unknown error"))
             end
         end,
     })
-    row2a:AddWidget(globalToggle, 1)
-    card2:AddRow(row2a, Theme.rowHeight)
+    row2b:AddWidget(renameBtn, 0.4, nil, 0, -14)
+    card2:AddRow(row2b, Theme.rowHeight)
 
-    -- Global profile selection
-    local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local globalDropdown = GUIFrame:CreateDropdown(row2b, "Global Profile", {
+    AddSeparatorRow(card2)
+
+    local row2c = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local globalToggle = GUIFrame:CreateCheckbox(row2c, "Use Global Profile", {
+        value = useGlobal,
+        callback = function(newState)
+            if not PM:SetUseGlobalProfile(newState) then return end
+            if not newState then
+                KE:Print("Global profile mode disabled")
+            end
+            RefreshPageLater()
+        end,
+    })
+    row2c:AddWidget(globalToggle, 0.4)
+
+    local globalDropdown = GUIFrame:CreateDropdown(row2c, "Global Profile", {
         options = profileOptions,
-        value = globalProfile,
-        labelWidth = 100,
+        value = PM:GetGlobalProfile(),
         callback = function(key)
             local success, err = PM:SetGlobalProfile(key)
             if not success then
                 KE:Print("Failed to set global profile: " .. (err or "Unknown error"))
-            else
-                if not useGlobal then
-                    KE:Print("Global profile set to: " .. key)
-                end
+            elseif not useGlobal then
+                KE:Print("Global profile set to: " .. key)
             end
         end,
     })
-    row2b:AddWidget(globalDropdown, 1)
-    card2:AddRow(row2b, Theme.rowHeightLast, 0)
-
-    -- Enable/disable global dropdown based on toggle state
+    row2c:AddWidget(globalDropdown, 0.6)
+    card2:AddRow(row2c, Theme.rowHeightLast, 0)
     globalDropdown:SetEnabled(useGlobal)
 
-    card2:AddSpacing(Theme.paddingSmall)
-    local globalDesc = card2:AddLabel("When enabled, all characters will use the same profile.")
-    globalDesc:SetTextColor(Theme.textMuted[1], Theme.textMuted[2], Theme.textMuted[3], 1)
+    return card2:GetNextOffset()
+end)
 
-    yOffset = card2:GetNextOffset()
+---------------------------------------------------------------------------------
+-- Sharing tab
+---------------------------------------------------------------------------------
 
-    ---------------------------------------------------------------------------------
-    -- Card 3: Profile Actions
-    ---------------------------------------------------------------------------------
-    local card3 = GUIFrame:CreateCard(scrollChild, "Profile Actions", yOffset)
-
-    -- Create New Profile
-    card3:AddLabel("Create New Profile")
-
-    local row3a = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local newProfileInput = GUIFrame:CreateEditBox(row3a, "Profile Name", {
-        value = "",
-        callback = function() end,
-    })
-    row3a:AddWidget(newProfileInput, 0.65)
-
-    local createBtn = GUIFrame:CreateButton(row3a, "Create", {
-        width = 80,
-        height = 24,
-        callback = function()
-            local name = newProfileInput:GetValue()
-            if name and name ~= "" then
-                local success, err = PM:CreateProfile(name)
-                if success then
-                    KE:Print("Created profile: " .. name)
-                    newProfileInput:SetValue("")
-                    C_Timer.After(0.1, function()
-                        if GUIFrame.mainFrame and GUIFrame.mainFrame:IsShown() then
-                            GUIFrame:RefreshContent()
-                        end
-                    end)
-                else
-                    KE:Print("Failed to create profile: " .. (err or "Unknown error"))
-                end
-            else
-                KE:Print("Please enter a profile name")
-            end
-        end
-    })
-    row3a:AddWidget(createBtn, 0.35, nil, 0, -14)
-    card3:AddRow(row3a, Theme.rowHeight)
-
-    -- Separator
-    local row3asep = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
-    local seprow3a = GUIFrame:CreateSeparator(row3asep)
-    row3asep:AddWidget(seprow3a, 1)
-    card3:AddRow(row3asep, Theme.rowHeightSeparator)
-
-    -- Copy Profile
-    card3:AddLabel("Copy From Profile")
-
-    local row3b = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local copyDropdown = GUIFrame:CreateDropdown(row3b, "Source Profile", {
-        options = profileOptions,
-        value = "",
-        labelWidth = 100,
-        callback = function() end,
-    })
-    row3b:AddWidget(copyDropdown, 0.65)
-
-    local copyBtn = GUIFrame:CreateButton(row3b, "Copy", {
-        width = 80,
-        height = 24,
-        callback = function()
-            local source = copyDropdown:GetValue()
-            if source and source ~= "" then
-                KE:CreatePrompt(
-                    "Copy Profile",
-                    "Copy all settings from '" ..
-                    source .. "' to current profile?\nThis will overwrite your current settings.",
-                    false, nil, false, nil, nil, nil, nil,
-                    function()
-                        local success, err = PM:CopyProfile(source)
-                        if not success then
-                            KE:Print("Failed to copy profile: " .. (err or "Unknown error"))
-                        end
-                    end,
-                    nil,
-                    "Copy",
-                    "Cancel"
-                )
-            else
-                KE:Print("Please select a source profile")
-            end
-        end
-    })
-    row3b:AddWidget(copyBtn, 0.35, nil, 0, -14)
-    card3:AddRow(row3b, Theme.rowHeight)
-
-    -- Separator
-    local row3bsep = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
-    local seprow3b = GUIFrame:CreateSeparator(row3bsep)
-    row3bsep:AddWidget(seprow3b, 1)
-    card3:AddRow(row3bsep, Theme.rowHeightSeparator)
-
-    -- Delete Profile
-    card3:AddLabel("Delete Profile")
-
-    local row3c = GUIFrame:CreateRow(card3.content, Theme.rowHeight)
-    local deleteDropdown = GUIFrame:CreateDropdown(row3c, "Profile to Delete", {
-        options = profileOptions,
-        value = "",
-        labelWidth = 100,
-        callback = function() end,
-    })
-    row3c:AddWidget(deleteDropdown, 0.65)
-
-    local deleteBtn = GUIFrame:CreateButton(row3c, "Delete", {
-        width = 80,
-        height = 24,
-        callback = function()
-            local toDelete = deleteDropdown:GetValue()
-            if toDelete and toDelete ~= "" then
-                if toDelete == PM:GetCurrentProfile() then
-                    KE:Print("Cannot delete the active profile")
-                    return
-                end
-                KE:CreatePrompt(
-                    "Delete Profile",
-                    "Are you sure you want to delete '" .. toDelete .. "'?\nThis cannot be undone.",
-                    false, nil, false, nil, nil, nil, nil,
-                    function()
-                        local success, err = PM:DeleteProfile(toDelete)
-                        if success then
-                            KE:Print("Deleted profile: " .. toDelete)
-                            C_Timer.After(0.1, function()
-                                if GUIFrame.mainFrame and GUIFrame.mainFrame:IsShown() then
-                                    GUIFrame:RefreshContent()
-                                end
-                            end)
-                        else
-                            KE:Print("Failed to delete profile: " .. (err or "Unknown error"))
-                        end
-                    end,
-                    nil,
-                    "Delete",
-                    "Cancel"
-                )
-            else
-                KE:Print("Please select a profile to delete")
-            end
-        end
-    })
-    row3c:AddWidget(deleteBtn, 0.35, nil, 0, -14)
-    card3:AddRow(row3c, Theme.rowHeight)
-
-    -- Separator
-    local row3dsep = GUIFrame:CreateRow(card3.content, Theme.rowHeightSeparator)
-    local seprow3d = GUIFrame:CreateSeparator(row3dsep)
-    row3dsep:AddWidget(seprow3d, 1)
-    card3:AddRow(row3dsep, Theme.rowHeightSeparator)
-
-    -- Reset Profile
-    local row3d = GUIFrame:CreateRow(card3.content, Theme.rowHeightLast)
-    local resetBtn = GUIFrame:CreateButton(row3d, "Reset Current Profile to Defaults", {
-        callback = function()
-            KE:CreatePrompt(
-                "Reset Profile",
-                "Reset all settings in current profile to defaults?\nThis cannot be undone.",
-                false, nil, false, nil, nil, nil, nil,
-                function()
-                    local success = PM:ResetProfile()
-                    if not success then
-                        KE:Print("Failed to reset profile")
-                    end
-                end,
-                nil,
-                "Reset",
-                "Cancel"
-            )
-        end
-    })
-    row3d:AddWidget(resetBtn, 1)
-    card3:AddRow(row3d, Theme.rowHeightLast, 0)
-
-    yOffset = card3:GetNextOffset()
+GUIFrame:RegisterContent("ProfilesSharing", function(scrollChild, yOffset)
+    local PM = KE.ProfileManager
+    if not PM then return ErrorCard(scrollChild, yOffset) end
 
     ---------------------------------------------------------------------------------
-    -- Card 4: Import/Export
+    -- Card 1: Export
     ---------------------------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Import / Export", yOffset)
+    local card1 = GUIFrame:CreateCard(scrollChild, "Export", yOffset)
+    card1:AddLabel("Turns the active profile into a string you can paste to another player. " ..
+        "It carries every module setting in this profile; nicknames are exported from " ..
+        "their own page.")
 
-    -- Import section
-    card4:AddLabel("Import Profile")
-
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local importBtn = GUIFrame:CreateButton(row4a, "Import Profile from String", {
-        callback = function()
-            KE:CreatePrompt(
-                "Import Profile",
-                "",
-                true,
-                "Profile Name (leave empty for default)",
-                false, nil, nil, nil, nil,
-                function(profileName, importString)
-                    if importString and importString ~= "" then
-                        local targetName = profileName
-                        if targetName == "" then targetName = nil end
-
-                        local success, nameOrErr = PM:ImportProfile(importString, targetName)
-                        if success then
-                            KE:Print("Imported profile: " .. nameOrErr)
-                            C_Timer.After(0.1, function()
-                                if GUIFrame.mainFrame and GUIFrame.mainFrame:IsShown() then
-                                    GUIFrame:RefreshContent()
-                                end
-                            end)
-                        else
-                            KE:Print("Import failed: " .. (nameOrErr or "Unknown error"))
-                        end
-                    else
-                        KE:Print("Please paste an import string")
-                    end
-                end,
-                nil,
-                "Import",
-                "Cancel",
-                true,
-                "Paste Import String"
-            )
-        end
-    })
-    row4a:AddWidget(importBtn, 1)
-    card4:AddRow(row4a, Theme.rowHeight)
-
-    -- Separator
-    local row4asep = GUIFrame:CreateRow(card4.content, Theme.rowHeightSeparator)
-    local seprow4a = GUIFrame:CreateSeparator(row4asep)
-    row4asep:AddWidget(seprow4a, 1)
-    card4:AddRow(row4asep, Theme.rowHeightSeparator)
-
-    -- Export section
-    card4:AddLabel("Export Current Profile")
-
-    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
-    local exportBtn = GUIFrame:CreateButton(row4b, "Export Profile to String", {
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local exportBtn = GUIFrame:CreateButton(row1, "Export active profile", {
         callback = function()
             local exportString, err = PM:ExportProfile()
             if exportString then
@@ -385,71 +313,135 @@ GUIFrame:RegisterContent("Profiles", function(scrollChild, yOffset)
             else
                 KE:Print("Export failed: " .. (err or "Unknown error"))
             end
-        end
+        end,
     })
-    row4b:AddWidget(exportBtn, 1)
-    card4:AddRow(row4b, Theme.rowHeightLast, 0)
+    row1:AddWidget(exportBtn, 1)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
-    yOffset = card4:GetNextOffset()
+    yOffset = card1:GetNextOffset()
 
     ---------------------------------------------------------------------------------
-    -- Card 5: Rename Profile
+    -- Card 2: Import
     ---------------------------------------------------------------------------------
-    local card5 = GUIFrame:CreateCard(scrollChild, "Rename Profile", yOffset)
+    local card2 = GUIFrame:CreateCard(scrollChild, "Import", yOffset)
+    card2:AddLabel("Installs a pasted string as a new profile and switches to it. Strings " ..
+        "from before the current format are refused; ask the sender for a fresh export.")
 
-    local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-    local renameDropdown = GUIFrame:CreateDropdown(row5a, "Profile to Rename", {
-        options = profileOptions,
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local importBtn = GUIFrame:CreateButton(row2, "Import from string", {
+        callback = OpenImportPrompt,
+    })
+    row2:AddWidget(importBtn, 1)
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
+
+    return card2:GetNextOffset()
+end)
+
+---------------------------------------------------------------------------------
+-- Reset tab
+---------------------------------------------------------------------------------
+
+GUIFrame:RegisterContent("ProfilesReset", function(scrollChild, yOffset)
+    local PM = KE.ProfileManager
+    if not PM then return ErrorCard(scrollChild, yOffset) end
+
+    local currentProfile = PM:GetCurrentProfile()
+
+    ---------------------------------------------------------------------------------
+    -- Card 1: Delete a profile
+    ---------------------------------------------------------------------------------
+    local card1 = GUIFrame:CreateCard(scrollChild, "Delete a profile", yOffset)
+    card1:AddLabel("Removes the chosen profile and everything saved in it. The active " ..
+        "profile cannot be deleted; switch to another one first.")
+
+    local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local deleteDropdown = GUIFrame:CreateDropdown(row1, "Profile", {
+        options = BuildProfileOptions(currentProfile),
         value = "",
-        labelWidth = 100,
         callback = function() end,
     })
-    row5a:AddWidget(renameDropdown, 1)
-    card5:AddRow(row5a, Theme.rowHeight)
+    row1:AddWidget(deleteDropdown, 0.6)
 
-    local row5b = GUIFrame:CreateRow(card5.content, Theme.rowHeightLast)
-    local newNameInput = GUIFrame:CreateEditBox(row5b, "New Name", {
-        value = "",
-        callback = function() end,
-    })
-    row5b:AddWidget(newNameInput, 0.65)
-
-    local renameBtn = GUIFrame:CreateButton(row5b, "Rename", {
-        width = 80,
+    local deleteBtn = GUIFrame:CreateButton(row1, "Delete", {
         height = 24,
         callback = function()
-            local oldName = renameDropdown:GetValue()
-            local newName = newNameInput:GetValue()
-
-            if not oldName or oldName == "" then
-                KE:Print("Please select a profile to rename")
+            local toDelete = deleteDropdown:GetValue()
+            if not toDelete or toDelete == "" then
+                KE:Print("Please select a profile to delete")
                 return
             end
-
-            if not newName or newName == "" then
-                KE:Print("Please enter a new name")
-                return
-            end
-
-            local success, err = PM:RenameProfile(oldName, newName)
-            if success then
-                KE:Print("Renamed '" .. oldName .. "' to '" .. newName .. "'")
-                newNameInput:SetValue("")
-                C_Timer.After(0.1, function()
-                    if GUIFrame.mainFrame and GUIFrame.mainFrame:IsShown() then
-                        GUIFrame:RefreshContent()
+            KE:CreatePrompt(
+                "Delete profile",
+                "Type the profile's name to delete it: " .. toDelete,
+                true,
+                "Case-sensitive",
+                false, nil, nil, nil, nil,
+                function()
+                    local success, err = PM:DeleteProfile(toDelete)
+                    if success then
+                        KE:Print("Deleted profile: " .. toDelete)
+                        RefreshPageLater()
+                    else
+                        KE:Print("Failed to delete profile: " .. (err or "Unknown error"))
                     end
-                end)
-            else
-                KE:Print("Failed to rename: " .. (err or "Unknown error"))
-            end
-        end
+                end,
+                nil,
+                "Delete",
+                "Cancel",
+                nil, nil,
+                { requireTyped = toDelete, acceptColor = REMOVE_COLOR }
+            )
+        end,
     })
-    row5b:AddWidget(renameBtn, 0.35, nil, 0, -14)
-    card5:AddRow(row5b, Theme.rowHeightLast, 0)
+    TintDestructive(deleteBtn)
+    row1:AddWidget(deleteBtn, 0.4, nil, 0, -14)
+    card1:AddRow(row1, Theme.rowHeightLast, 0)
 
-    yOffset = card5:GetNextOffset()
+    yOffset = card1:GetNextOffset()
 
-    yOffset = yOffset - (Theme.paddingSmall * 2)
-    return yOffset
+    ---------------------------------------------------------------------------------
+    -- Card 2: Reset the active profile
+    ---------------------------------------------------------------------------------
+    local card2 = GUIFrame:CreateCard(scrollChild, "Reset the active profile", yOffset)
+    card2:AddLabel("Puts every setting in " .. currentProfile .. " back to its default. " ..
+        "Other profiles are untouched.")
+
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
+    local resetBtn = GUIFrame:CreateButton(row2, "Reset to defaults", {
+        callback = function()
+            local name = PM:GetCurrentProfile()
+            KE:CreatePrompt(
+                "Reset profile",
+                "Type the profile's name to reset every setting in it: " .. name,
+                true,
+                "Case-sensitive",
+                false, nil, nil, nil, nil,
+                function()
+                    if not PM:ResetProfile() then
+                        KE:Print("Failed to reset profile")
+                    end
+                end,
+                nil,
+                "Reset",
+                "Cancel",
+                nil, nil,
+                { requireTyped = name, acceptColor = REMOVE_COLOR }
+            )
+        end,
+    })
+    TintDestructive(resetBtn)
+    row2:AddWidget(resetBtn, 1)
+    card2:AddRow(row2, Theme.rowHeightLast, 0)
+
+    return card2:GetNextOffset()
 end)
+
+---------------------------------------------------------------------------------
+-- The sidebar entry
+---------------------------------------------------------------------------------
+
+GUIFrame:RegisterTabbedContent("Profiles", {
+    { id = "ProfilesMain",    label = "Profile" },
+    { id = "ProfilesSharing", label = "Sharing" },
+    { id = "ProfilesReset",   label = "Reset" },
+})

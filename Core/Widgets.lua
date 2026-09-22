@@ -147,6 +147,20 @@ local function TintPromptLabel(btn, color)
     btn.label:SetTextColor(color[1], color[2], color[3], 1)
 end
 
+-- The typed confirm gate behind opts.requireTyped: the name typed must equal
+-- the name shown, case and spacing included. Pure, so the spec needs no dialog.
+function KE.PromptTypedGateOpen(typed, required)
+    return type(required) == "string" and typed == required
+end
+
+-- Disabled look for the accept button, matching GUIFrame:CreateButton's.
+local function SetPromptAcceptEnabled(dialog, enabled)
+    local btn = dialog.acceptBtn
+    if not btn then return end
+    btn:SetEnabled(enabled)
+    btn:SetAlpha(enabled and 1 or 0.5)
+end
+
 local function CreateThemedButton(parent, Theme, labelText, isPrimary)
     local btn = CreateFrame("Button", nil, parent, "BackdropTemplate")
     btn:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
@@ -266,11 +280,12 @@ end
 -- Three strictly ordered passes: ENSURE-CREATE everything the current mode
 -- needs → CONFIGURE/anchor/theme → VISIBILITY (SetShown on every optional
 -- widget, shown or not — a widget left visible from the last mode is a bug).
--- NOTE: single-field-accept mode (showEditBox + onAccept, no second box)
--- currently has no live caller — untested API surface.
 -- opts (optional table): acceptColor / cancelColor tint the button labels;
 -- closeIsNeutral makes the X and ESC close without running onCancel, for a
--- dialog whose cancel button is itself an action.
+-- dialog whose cancel button is itself an action; requireTyped (a string)
+-- shows the message AND an empty edit box under it and keeps the accept
+-- button disabled until the box equals the string exactly, then runs
+-- onAccept with no arguments. Single edit box with an onAccept only.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts)
@@ -318,6 +333,8 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     -- than adding a second parameter for what is really one signal.
     local isCopyPrompt = showEditBox and not onAccept and cancelText and true or false
     local showButtons = (not showEditBox) or (onAccept ~= nil) or isCopyPrompt
+    local requireTyped = (showEditBox and not twoField and onAccept and opts
+        and type(opts.requireTyped) == "string") and opts.requireTyped or nil
 
     ------------------------------------------------------------------
     -- PASS 1: ensure-create every widget the current mode needs.
@@ -367,9 +384,20 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         editBox:SetScript("OnEnterPressed", function(self)
             local d = KE.promptDialog
             if not d._onAccept then return end
+            if d._requireTyped then
+                if not KE.PromptTypedGateOpen(self:GetText(), d._requireTyped) then return end
+                local accept = ClosePrompt(d, false)
+                if accept then accept() end
+                return
+            end
             local text1 = self:GetText()
             local accept = ClosePrompt(d, false)
             if accept then accept(text1) end
+        end)
+        editBox:SetScript("OnTextChanged", function(self)
+            local d = KE.promptDialog
+            if not d._requireTyped then return end
+            SetPromptAcceptEnabled(d, KE.PromptTypedGateOpen(self:GetText(), d._requireTyped))
         end)
         -- Gated on the per-call flag: a persistent editBox2 would otherwise
         -- steal Tab focus in copy-mode prompts and eat the Ctrl+C the label
@@ -457,11 +485,14 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
             -- mode must invoke with ZERO args.
             local wasEdit = d._showEditBox
             local wasSecond = d._showSecondEditBox
+            local wasTyped = d._requireTyped
             local text1 = d.editBox and d.editBox:GetText()
             local text2 = d.editBox2 and d.editBox2:GetText()
             local accept = ClosePrompt(d, false)
             if not accept then return end
-            if wasEdit then
+            if wasTyped then
+                accept()
+            elseif wasEdit then
                 if wasSecond then
                     accept(text1, text2)
                 else
@@ -489,6 +520,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     dialog._closeIsNeutral = (opts and opts.closeIsNeutral == true) or false
     dialog._showEditBox = showEditBox and true or false
     dialog._showSecondEditBox = twoField
+    dialog._requireTyped = requireTyped
     -- Hover scripts read these (theme can change between prompts).
     dialog._accent = accent
     dialog._border = border
@@ -578,6 +610,8 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         editBox:ClearAllPoints()
         if twoField then
             editBox:SetPoint("TOPLEFT", dialog.editBoxTopLabel, "BOTTOMLEFT", -12, -4)
+        elseif requireTyped then
+            editBox:SetPoint("TOPLEFT", dialog.messageLabel, "BOTTOMLEFT", 0, -8)
         else
             editBox:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 12, -12)
         end
@@ -598,7 +632,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         local editTextColor = isCopyPrompt and accent or textPrimary
         editBox:SetTextColor(editTextColor[1], editTextColor[2], editTextColor[3], 1)
         editBox:SetShadowColor(0, 0, 0, 0)
-        editBox:SetText(text or "")
+        editBox:SetText(requireTyped and "" or (text or ""))
         editBox:HighlightText()
         -- SetAutoFocus(true) re-grabs focus on Show; no pre-Show SetFocus.
         editBox:SetAutoFocus(true)
@@ -620,6 +654,9 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         -- labelHeight + bottomMargin(12) + buttons(30) + bottomMargin(12).
         local labelHeight = label:GetStringHeight() or 0
         local needed = 28 + 12 + 24 + 6 + labelHeight + 12 + 30 + 12
+        if requireTyped then
+            needed = needed + (dialog.messageLabel:GetStringHeight() or 0) + 8
+        end
         if needed > POPUP_HEIGHT then
             dialog:SetHeight(needed)
         end
@@ -674,6 +711,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         ThemeButton(dialog.cancelBtn, Theme, cancelText or "Cancel", false)
         TintPromptLabel(dialog.acceptBtn, opts and opts.acceptColor)
         TintPromptLabel(dialog.cancelBtn, opts and opts.cancelColor)
+        SetPromptAcceptEnabled(dialog, not requireTyped)
 
         -- ThemeButton grows a button to fit its label, so the pair can now
         -- outgrow the dialog. Two things follow, and the second is the one an
