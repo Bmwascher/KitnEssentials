@@ -17,19 +17,35 @@ local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local UnitClass = UnitClass
 local InCombatLockdown = InCombatLockdown
+local IsResting = IsResting
 local PlaySoundFile = PlaySoundFile
 local C_Timer = C_Timer
 local string_format = string.format
+local next = next
+local type = type
+local pcall = pcall
 
 ---------------------------------------------------------------------------------
 -- Constants
 ---------------------------------------------------------------------------------
 local VAULT_SPELL_ID = 1271478
 
+-- Registered on a module-owned frame with a "player" unit filter (AceEvent-3.0
+-- has no RegisterUnitEvent), and only while resting: the vault sits in a rested
+-- area, so elsewhere the module holds no cast registrations at all.
+local CAST_HANDLERS = {
+    UNIT_SPELLCAST_START       = "OnSpellcastStart",
+    UNIT_SPELLCAST_SUCCEEDED   = "OnSpellcastSucceeded",
+    UNIT_SPELLCAST_INTERRUPTED = "OnSpellcastInterrupted",
+    UNIT_SPELLCAST_STOP        = "OnSpellcastInterrupted",
+}
+
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
 GVA.alertFrame = nil
+GVA.castFrame = nil
+GVA._listening = false
 GVA.isPreview = false
 GVA.editModeRegistered = false
 
@@ -220,6 +236,44 @@ function GVA:HidePreview()
 end
 
 ---------------------------------------------------------------------------------
+-- Resting Gate
+---------------------------------------------------------------------------------
+-- Fails toward listening: a missing or erroring IsResting leaves the four
+-- player-only registrations up rather than silently switching the alert off.
+function GVA.ShouldListen(isResting)
+    if type(isResting) ~= "function" then return true end
+    local ok, resting = pcall(isResting)
+    if not ok then return true end
+    return resting and true or false
+end
+
+function GVA:CreateCastFrame()
+    if self.castFrame then return end
+
+    local frame = CreateFrame("Frame")
+    frame:SetScript("OnEvent", function(_, event, unit, castGUID, spellID)
+        local handler = CAST_HANDLERS[event]
+        if handler then self[handler](self, event, unit, castGUID, spellID) end
+    end)
+    self.castFrame = frame
+end
+
+function GVA:ApplyGate()
+    if not self.castFrame then return end
+    local want = GVA.ShouldListen(IsResting)
+    if want == self._listening then return end
+    self._listening = want
+
+    for event in next, CAST_HANDLERS do
+        if want then
+            self.castFrame:RegisterUnitEvent(event, "player")
+        else
+            self.castFrame:UnregisterEvent(event)
+        end
+    end
+end
+
+---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
 function GVA:OnInitialize()
@@ -231,18 +285,22 @@ function GVA:OnEnable()
     if not self.db.Enabled then return end
 
     self:CreateAlertFrame()
+    self:CreateCastFrame()
     self:RegWithEditMode()
 
-    self:RegisterEvent("UNIT_SPELLCAST_START", "OnSpellcastStart")
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
-    self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
-    self:RegisterEvent("UNIT_SPELLCAST_STOP", "OnSpellcastInterrupted")
+    -- The only registrations held outside a rested area.
+    self:RegisterEvent("PLAYER_UPDATE_RESTING", "ApplyGate")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "ApplyGate")
+    self._listening = false
+    self:ApplyGate()
 
     self:ApplySettings()
 end
 
 function GVA:OnDisable()
     self:UnregisterAllEvents()
+    if self.castFrame then self.castFrame:UnregisterAllEvents() end
+    self._listening = false
     self:HideAlert()
     self.isPreview = false
 end

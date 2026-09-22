@@ -136,13 +136,15 @@ function HM:CheckUnitForMark(unit)
     AuraUtil.ForEachAura(unit, "HARMFUL", nil, function(auraInfo)
         if not auraInfo then return end
 
-        -- If any aura field is secret, flag it and skip this aura
-        if KE:IsSecretValue(auraInfo.spellId) or KE:IsSecretValue(auraInfo.sourceUnit) then
+        -- A secret spell id cannot be matched; flag it and skip this aura
+        if KE:IsSecretValue(auraInfo.spellId) then
             hitSecret = true
             return
         end
 
-        if auraInfo.spellId == SPELL_ID and auraInfo.sourceUnit == "player" then
+        -- Any hunter's mark counts, not only the player's own: the debuff is
+        -- one per target.
+        if auraInfo.spellId == SPELL_ID then
             hasMarkNow = true
             return true
         end
