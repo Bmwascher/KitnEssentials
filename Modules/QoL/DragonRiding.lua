@@ -287,8 +287,8 @@ local function UpdateSpeed(self)
     end
     if not shouldHide and db.HideWhenFull then
         local charges = C_Spell.GetSpellCharges(VIGOR_SPELL)
-        if charges and canaccessvalue(charges.currentCharges)
-            and charges.currentCharges >= charges.maxCharges then
+        if charges and (not canaccessvalue(charges.currentCharges)
+            or charges.currentCharges >= charges.maxCharges) then
             shouldHide = true
         end
     end
