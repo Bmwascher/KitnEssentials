@@ -2596,6 +2596,44 @@ local KEY_RENAMES = {
     { id = "Dungeons.WarpDepleteForces.Delete", block = "Dungeons", old = "WarpDepleteForces", new = "WarpDepleteForces", convert = DeleteKey },
 }
 
+-- Resolves one entry against one profile: the table holding the key, the old
+-- key and the new key. `block` names a top-level table and renames a key
+-- inside it. `path` is the full path to a nested key and converts it where it
+-- sits, which is the only way to reach something like
+-- Cursor.GCD.VisibilityOverride -- `block` resolves one level and cannot see it.
+local function ResolveRename(profile, entry)
+    if entry.path then
+        local key = entry.path[#entry.path]
+        return ResolveParentTable(profile, entry.path), key, key
+    end
+    return profile[entry.block], entry.old, entry.new
+end
+
+-- The old key is cleared only when the two differ: an in-place conversion
+-- would otherwise delete the value it just wrote.
+local function ApplyRename(block, oldKey, newKey, convert)
+    block[newKey] = convert(block[oldKey])
+    if oldKey ~= newKey then block[oldKey] = nil end
+end
+
+--- Runs every rename on one profile table, ignoring the once-per-install
+--- record. For an imported profile, which may already carry the new keys. An
+--- absent old key is skipped, not converted: the new key may hold the user's
+--- value, and absence resolves to the new default either way (a rename's
+--- convert(nil) is the new default, an in-place or delete converter's is nil,
+--- and FillProfileDefaults supplies the rest).
+---@param profile table
+function KE:MigrateProfileKeys(profile)
+    if type(profile) ~= "table" then return end
+    for i = 1, #KEY_RENAMES do
+        local entry = KEY_RENAMES[i]
+        local block, oldKey, newKey = ResolveRename(profile, entry)
+        if type(block) == "table" and block[oldKey] ~= nil then
+            ApplyRename(block, oldKey, newKey, entry.convert)
+        end
+    end
+end
+
 function KE:MigrateCombatLoggerKeys()
     local sv = _G.KitnEssentialsDB
     if type(sv) ~= "table" then
@@ -2620,33 +2658,14 @@ function KE:MigrateCombatLoggerKeys()
             if type(profiles) == "table" then
                 for _, profile in pairs(profiles) do
                     if type(profile) == "table" then
-                        -- Two entry shapes. `block` names a top-level table and
-                        -- renames a key inside it. `path` is the full path to a
-                        -- nested key and converts it where it sits, which is the
-                        -- only way to reach something like
-                        -- Cursor.GCD.VisibilityOverride -- `block` resolves one
-                        -- level and cannot see it.
-                        local block, oldKey, newKey
-                        if entry.path then
-                            block = ResolveParentTable(profile, entry.path)
-                            oldKey = entry.path[#entry.path]
-                            newKey = oldKey
-                        else
-                            block = profile[entry.block]
-                            oldKey = entry.old
-                            newKey = entry.new
-                        end
+                        local block, oldKey, newKey = ResolveRename(profile, entry)
+                        -- Written whether or not the old key is present. Where
+                        -- the converter maps an absent key to a default, AceDB
+                        -- strips it again at logout; where it passes nil
+                        -- through, nothing changes. Either way cheaper than a
+                        -- second test.
                         if type(block) == "table" then
-                            -- Written unconditionally. Where the converter
-                            -- maps an absent key to a default, AceDB strips it
-                            -- again at logout; where it passes nil through,
-                            -- this assigns nil and nothing changes. Either way
-                            -- cheaper than a second test.
-                            block[newKey] = entry.convert(block[oldKey])
-                            -- Only when they differ. An in-place conversion
-                            -- writes and then deletes the same key, throwing
-                            -- away the value it just computed.
-                            if oldKey ~= newKey then block[oldKey] = nil end
+                            ApplyRename(block, oldKey, newKey, entry.convert)
                         end
                     end
                 end

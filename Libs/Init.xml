@@ -7,8 +7,6 @@
     <Include file="AceTimer-3.0/AceTimer-3.0.xml" />
     <Include file="AceHook-3.0/AceHook-3.0.xml" />
     <Include file="AceDB-3.0/AceDB-3.0.xml" />
-    <Include file="AceSerializer-3.0/AceSerializer-3.0.xml" />
-    <Script file="LibDeflate/LibDeflate.lua" />
     <Script file="LibSharedMedia-3.0/LibSharedMedia-3.0.lua" />
     <Script file="LibDataBroker-1.1/LibDataBroker-1.1.lua" />
     <Script file="LibDBIcon-1.0/LibDBIcon-1.0.lua" />

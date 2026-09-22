@@ -36,8 +36,6 @@ externals:
     url: https://repos.curseforge.com/wow/ace3/trunk/AceEvent-3.0
   Libs/AceHook-3.0:
     url: https://repos.curseforge.com/wow/ace3/trunk/AceHook-3.0
-  Libs/AceSerializer-3.0:
-    url: https://repos.curseforge.com/wow/ace3/trunk/AceSerializer-3.0
   Libs/AceTimer-3.0:
     url: https://repos.curseforge.com/wow/ace3/trunk/AceTimer-3.0
   Libs/CallbackHandler-1.0:
@@ -48,9 +46,6 @@ externals:
     url: https://repos.curseforge.com/wow/libdbicon-1-0/trunk/LibDBIcon-1.0
   Libs/LibDataBroker-1.1:
     url: https://github.com/tekkub/libdatabroker-1-1
-  Libs/LibDeflate:
-    url: https://github.com/SafeteeWoW/LibDeflate.git
-    tag: latest
   Libs/LibDualSpec-1.0:
     url: https://github.com/AdiAddons/LibDualSpec-1.0.git
     branch: master

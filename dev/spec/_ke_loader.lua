@@ -302,24 +302,13 @@ function L.loadPixelPerfect(opts, overrides)
     return helpers.loadModule("Core/PixelPerfect.lua")
 end
 
--- Core/Nicknames.lua against the REAL embedded serialization stack (LibStub,
--- CallbackHandler, AceSerializer, LibDeflate) so export/import round-trips
--- exercise real encoding, not a mirror. Nicknames.lua captures its globals
--- as file-scope upvalues, so every stub must exist BEFORE its loadModule.
--- Returns the KE table (nickname store: KE.db.global.Nicknames, read live).
+-- Core/Nicknames.lua. It captures its globals as file-scope upvalues, so
+-- every stub must exist BEFORE its loadModule. Returns the KE table (nickname
+-- store: KE.db.global.Nicknames, read live). The export codec
+-- (Core/ProfileManager.lua) is not loaded: no nicknames case reaches it.
 function L.loadNicknames(overrides)
     installMock(overrides, { UnitName = function() return "Bob" end })
     helpers.installAddonShim()
-    -- WoW string-global aliases the embedded libs expect.
-    _G.strmatch = string.match
-    _G.securecallfunction = function(fn, ...) return fn(...) end
-    -- Other loaders install fake LibStub FUNCTIONS; the real lib can only
-    -- version-upgrade over a table, so clear it before loading fresh.
-    _G.LibStub = nil
-    helpers.loadModule("Libs/LibStub/LibStub.lua", {})
-    helpers.loadModule("Libs/CallbackHandler-1.0/CallbackHandler-1.0.lua", {})
-    helpers.loadModule("Libs/AceSerializer-3.0/AceSerializer-3.0.lua", {})
-    helpers.loadModule("Libs/LibDeflate/LibDeflate.lua", {})
     -- Unit identity consistent with the mock UnitName ("Bob" on "Realm").
     _G.UnitFullName = function() return "Bob", "Realm" end
     _G.UnitIsPlayer = function() return true end
@@ -349,7 +338,6 @@ end
 function L.loadProfileManager(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     helpers.installAddonShim()
-    _G.LibStub = function() return setmetatable({}, { __index = function() return function() end end }) end
     local callbacks = {}
     local db = {
         profiles = { Default = {} },

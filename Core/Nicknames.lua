@@ -9,7 +9,6 @@
 ---@class KE
 local KE = select(2, ...)
 
-local LibStub = LibStub
 local type = type
 local pairs = pairs
 local wipe = wipe
@@ -18,17 +17,11 @@ local UnitFullName = UnitFullName
 local UnitIsPlayer = UnitIsPlayer
 local GetNormalizedRealmName = GetNormalizedRealmName
 
--- Versioned prefix. Bump the digit if the payload shape ever changes so older
--- clients surface a clean error instead of decoding garbage.
-local EXPORT_PREFIX = "!KEN1!"
-
-local function GetSerializer()
-    return LibStub and LibStub("AceSerializer-3.0", true)
-end
-
-local function GetDeflate()
-    return LibStub and LibStub("LibDeflate", true)
-end
+-- Versioned prefix. Bump the digit if the codec or the payload shape ever
+-- changes so older clients surface a clean error instead of decoding garbage.
+local EXPORT_PREFIX = "!KEN2!"
+-- Nothing decodes the old prefix; refused with KE.LEGACY_EXPORT_MESSAGE.
+local LEGACY_PREFIX = "!KEN1!"
 
 local function GetDB()
     return KE.db and KE.db.global and KE.db.global.Nicknames
@@ -161,14 +154,11 @@ end
 ---------------------------------------------------------------------------------
 -- Export
 ---------------------------------------------------------------------------------
--- Serializes the entire nickname table and returns an EncodeForPrint string
--- prefixed with EXPORT_PREFIX. Mirrors DungeonTimers' trigger export pipeline
--- (AceSerializer -> LibDeflate:CompressDeflate -> LibDeflate:EncodeForPrint).
 
----@return string|nil encoded
----@return string|nil error
----@return number|nil count
-function KE:ExportNicknames()
+--- The exportable slice of the store: string keys holding non-empty strings.
+---@return table|nil payload
+---@return number|string countOrError
+function KE:CollectNicknamePayload()
     local nicks = GetDB()
     if not nicks then return nil, "Nicknames database not available" end
 
@@ -181,18 +171,17 @@ function KE:ExportNicknames()
         end
     end
     if count == 0 then return nil, "No nicknames to export" end
+    return payload, count
+end
 
-    local Serializer = GetSerializer()
-    local Deflate = GetDeflate()
-    if not Serializer or not Deflate then return nil, "Missing libraries" end
+---@return string|nil encoded
+---@return string|nil error
+---@return number|nil count
+function KE:ExportNicknames()
+    local payload, count = self:CollectNicknamePayload()
+    if not payload then return nil, count end
 
-    local serialized = Serializer:Serialize({ v = 1, d = payload })
-    if not serialized then return nil, "Serialization failed" end
-
-    local compressed = Deflate:CompressDeflate(serialized, { level = 9 })
-    if not compressed then return nil, "Compression failed" end
-
-    local encoded = Deflate:EncodeForPrint(compressed)
+    local encoded = self:EncodeForExport({ v = 1, d = payload })
     if not encoded then return nil, "Encoding failed" end
 
     return EXPORT_PREFIX .. encoded, nil, count
@@ -201,59 +190,32 @@ end
 ---------------------------------------------------------------------------------
 -- Import
 ---------------------------------------------------------------------------------
--- Decodes an export string and applies its entries to the nickname table.
--- Default is additive merge: existing entries are overwritten only when the
--- import contains the same "Name-Realm" key, and entries not present in the
--- import are left alone. When `replaceAll` is true, the local table is wiped
--- first so the final state equals the import payload exactly — useful for
--- sync-from-leader workflows where the import is the source of truth.
 
----@param importString string
----@param replaceAll boolean|nil wipe local entries before applying the import
----@return boolean success
----@return string message
-function KE:ImportNicknames(importString, replaceAll)
-    if not importString or importString == "" then
-        return false, "Import string is empty"
-    end
-    if importString:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then
-        return false, "Invalid format — this doesn't look like a KE nicknames export"
-    end
-
+--- Applies a payload to the store and tells the readers when anything
+--- changed. Additive by default: a key in the payload overwrites, a key
+--- absent from it is left alone. With `replaceAll` the store is wiped first
+--- so it ends equal to the payload.
+---@param payload table
+---@param replaceAll boolean|nil
+---@return number|nil added
+---@return number|string updatedOrError
+---@return number|nil removed
+function KE:ApplyNicknamePayload(payload, replaceAll)
     local nicks = GetDB()
-    if not nicks then return false, "Nicknames database not available" end
+    if not nicks then return nil, "Nicknames database not available" end
 
-    local Serializer = GetSerializer()
-    local Deflate = GetDeflate()
-    if not Serializer or not Deflate then return false, "Missing libraries" end
-
-    local encoded = importString:sub(#EXPORT_PREFIX + 1)
-
-    local compressed = Deflate:DecodeForPrint(encoded)
-    if not compressed then return false, "Failed to decode string" end
-
-    local serialized = Deflate:DecompressDeflate(compressed)
-    if not serialized then return false, "Failed to decompress" end
-
-    local ok, data = Serializer:Deserialize(serialized)
-    if not ok or type(data) ~= "table" or type(data.d) ~= "table" then
-        return false, "Invalid export data"
-    end
-
-    -- Count removed entries under replaceAll BEFORE wiping so the summary
-    -- line reports how many local entries the import displaced. We only
-    -- count keys that aren't in the incoming payload (keys present in both
-    -- get counted as either "added" or "updated" below, never "removed").
+    -- Counted before the wipe. Only keys absent from the payload count as
+    -- removed; a key present in both is wiped then re-added.
     local removed = 0
     if replaceAll then
         for key in pairs(nicks) do
-            if data.d[key] == nil then removed = removed + 1 end
+            if payload[key] == nil then removed = removed + 1 end
         end
         wipe(nicks)
     end
 
     local added, updated = 0, 0
-    for key, nick in pairs(data.d) do
+    for key, nick in pairs(payload) do
         if type(key) == "string" and type(nick) == "string" and nick ~= "" then
             if nicks[key] == nil then
                 added = added + 1
@@ -264,11 +226,36 @@ function KE:ImportNicknames(importString, replaceAll)
         end
     end
 
+    if added > 0 or updated > 0 or removed > 0 then NotifyChange() end
+    return added, updated, removed
+end
+
+---@param importString string
+---@param replaceAll boolean|nil wipe local entries before applying the import
+---@return boolean success
+---@return string message
+function KE:ImportNicknames(importString, replaceAll)
+    if not importString or importString == "" then
+        return false, "Import string is empty"
+    end
+    if importString:sub(1, #LEGACY_PREFIX) == LEGACY_PREFIX then
+        return false, KE.LEGACY_EXPORT_MESSAGE
+    end
+    if importString:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then
+        return false, "Invalid format — this doesn't look like a KE nicknames export"
+    end
+    if not GetDB() then return false, "Nicknames database not available" end
+
+    local data = self:DecodeFromExport(importString:sub(#EXPORT_PREFIX + 1))
+    if not data or type(data.d) ~= "table" then
+        return false, "Invalid export data"
+    end
+
+    local added, updated, removed = self:ApplyNicknamePayload(data.d, replaceAll)
+    if not added then return false, updated end
     if added == 0 and updated == 0 and removed == 0 then
         return false, "No nicknames were imported"
     end
-
-    NotifyChange()
 
     local parts = {}
     if added > 0 then parts[#parts + 1] = added .. " added" end

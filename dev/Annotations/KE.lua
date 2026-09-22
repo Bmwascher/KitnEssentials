@@ -129,6 +129,7 @@ function KE_CombatState:OnEnteringWorld() end
 ---@field GUIFrame table
 ---@field EditMode table
 ---@field ProfileManager table
+---@field LEGACY_EXPORT_MESSAGE string
 ---@field GUI table
 ---@field FramePool KE.FramePool
 ---@field CombatState KE.CombatState
@@ -341,6 +342,20 @@ function KE:MigrateModuleEnableDefaults() end
 --- Renames the Combat Logger's two retired profile keys and clears the old
 --- ones. Reads the raw saved variables, so it MUST run before AceDB:New.
 function KE:MigrateCombatLoggerKeys() end
+
+--- Runs every saved-key rename on one profile table, ignoring the
+--- once-per-install record; an absent old key is skipped.
+---@param profile table
+function KE:MigrateProfileKeys(profile) end
+
+-- Core/ProfileManager.lua export string codec
+---@param tbl table
+---@return string|nil encoded
+function KE:EncodeForExport(tbl) end
+
+---@param encoded string
+---@return table|nil
+function KE:DecodeFromExport(encoded) end
 
 -- ─── Dungeon Timers registry (Modules/DungeonTimers/DungeonRegistry.lua) ─
 --- Distinct seasons present in `registry`, ascending.
@@ -994,10 +1009,21 @@ function KE:GetNSRTNickname(subject) end
 ---@return string|nil nickname Resolved nickname, or nil when neither applies
 function KE:ResolveNicknamePrecedence(own, foreign, realName) end
 
+---@return table|nil payload
+---@return number|string countOrError
+function KE:CollectNicknamePayload() end
+
 ---@return string|nil encoded
 ---@return string|nil error
 ---@return number|nil count
 function KE:ExportNicknames() end
+
+---@param payload table
+---@param replaceAll boolean|nil
+---@return number|nil added
+---@return number|string updatedOrError
+---@return number|nil removed
+function KE:ApplyNicknamePayload(payload, replaceAll) end
 
 ---@param importString string
 ---@param replaceAll boolean|nil wipe local entries before applying the import
