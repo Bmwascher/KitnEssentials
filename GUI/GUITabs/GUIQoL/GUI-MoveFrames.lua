@@ -21,7 +21,6 @@ GUIFrame:RegisterContent("MoveFrames", function(scrollChild, yOffset)
             -- reload, so offer one.
             KE:CreateReloadPrompt("Turning off Move Frames stops the dragging now. A UI reload fully restores Blizzard's own window behaviour.")
         end
-        KE:Print("Move Frames: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     -- Lone header bar: a disabled module shows its switch and nothing else.

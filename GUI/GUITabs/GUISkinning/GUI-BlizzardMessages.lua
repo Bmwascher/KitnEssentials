@@ -106,7 +106,6 @@ GUIFrame:RegisterContent("SkinMessages", function(scrollChild, yOffset)
             KitnEssentials:DisableModule("SkinBlizzardMessages")
             KE:FlagReloadNeeded()
         end
-        KE:Print("Blizzard Text Skinning: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     -- Full Blizzard font-object replacement (BlizzardFonts module): re-fonts

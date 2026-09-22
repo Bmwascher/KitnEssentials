@@ -39,7 +39,6 @@ GUIFrame:RegisterContent("GroupFinderPanel", function(scrollChild, yOffset)
         ApplyModuleState(checked)
         local GFP = GetModule()
         if GFP and GFP.Refresh then GFP:Refresh() end
-        KE:Print("Group Finder Panel: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     -- Lone header bar: a disabled module shows its switch and nothing else.

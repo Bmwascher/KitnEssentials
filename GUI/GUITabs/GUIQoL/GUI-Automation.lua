@@ -59,7 +59,6 @@ local function BuildHeader(scrollChild, yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         ApplyAutomationState(checked)
-        KE:Print("Automation: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     return card1:GetNextOffset(), false
@@ -187,7 +186,6 @@ GUIFrame:RegisterContent("AutomationGeneral", function(scrollChild, yOffset)
         local cardVR = GUIFrame:CreateCard(scrollChild, "Vantus Rune Withdrawer", yOffset)
         cardVR:AddHeaderToggle(vrDB.Enabled ~= false, function(checked)
             ApplyVRState(checked)
-            KE:Print("Vantus Rune Withdrawer: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
         yOffset = cardVR:GetNextOffset()
 
@@ -710,7 +708,6 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
             if not checked then
                 KE:CreateReloadPrompt("Turning off extended vendor pages requires a UI reload to restore Blizzard's window.")
             end
-            KE:Print("Merchant Pages: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
 
         -- Pages lives in this card, not its own: one module, one card.
@@ -771,7 +768,6 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
         local cardAHF = GUIFrame:CreateCard(scrollChild, "Auction House Filter", yOffset)
         cardAHF:AddHeaderToggle(ahfDB.Enabled ~= false, function(checked)
             ApplyAHFState(checked)
-            KE:Print("Auction House Filter: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
         yOffset = cardAHF:GetNextOffset()
 

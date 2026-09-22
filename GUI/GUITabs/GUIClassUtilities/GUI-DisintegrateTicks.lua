@@ -62,7 +62,6 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         ApplyModuleState(checked)
-        KE:Print("Disintegrate Ticks: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     local noteRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightNote)

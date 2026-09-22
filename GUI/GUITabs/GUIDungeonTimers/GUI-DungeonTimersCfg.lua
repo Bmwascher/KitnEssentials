@@ -77,7 +77,6 @@ function KE.GUI.DungeonTimers.BuildHeaderCard(scrollChild, yOffset)
         if not checked then HideAllPreviews() end
         ApplyModuleState(checked)
         KE:CreateReloadPrompt("Enabling/Disabling this module requires a reload to take full effect.")
-        KE:Print("Dungeon Timers: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
     if db.Enabled == false then
         -- Also covers arriving here already-disabled (e.g. a profile

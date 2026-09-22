@@ -42,7 +42,6 @@ GUIFrame:RegisterContent("VehicleExit", function(scrollChild, yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
         db.Enabled = checked
         ApplyState(checked)
-        KE:Print("Vehicle Exit Button: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         GUIFrame:RefreshContent()
     end)
 

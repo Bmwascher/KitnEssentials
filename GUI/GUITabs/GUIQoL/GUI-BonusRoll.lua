@@ -70,7 +70,6 @@ GUIFrame:RegisterContent("BonusRoll", function(scrollChild, yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
         ApplyModuleState(checked)
         manager:UpdateAll(checked)
-        KE:Print("Bonus Roll: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     local noteHeight = 50

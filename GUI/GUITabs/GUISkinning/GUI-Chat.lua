@@ -121,7 +121,6 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             KitnEssentials:DisableModule("Chat")
         end
         KE:CreateReloadPrompt("Toggling the custom chat panel requires a UI reload to fully apply.")
-        KE:Print("Chat Skinning: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
     end)
 
     local noteHeight = 65
@@ -686,7 +685,6 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             else
                 KitnEssentials:DisableModule("ChatLinks")
             end
-            KE:Print("Chat Link Decoration: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
 
         card11:AddLabel("Puts the icon in front of items, currencies, spells, achievements, keystones and PvP talents linked in chat, and makes web addresses clickable.")
@@ -806,7 +804,6 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
             else
                 KitnEssentials:DisableModule("ChatHistory")
             end
-            KE:Print("Chat History: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
 
         card13:AddLabel("Keeps your chat per character so it comes back after a reload, with the time each line arrived. Needs the chat skin above to be on. Messages received while you are inside a dungeon, raid or battleground are never saved.")

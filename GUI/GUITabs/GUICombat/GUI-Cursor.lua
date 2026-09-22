@@ -783,7 +783,6 @@ GUIFrame:RegisterTabbedContent("Cursor", {
         card:AddHeaderToggle(db.Enabled ~= false, function(checked)
             db.Enabled = checked
             ApplyModuleState(checked)
-            KE:Print("Cursor: " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
         end)
 
         -- collapse = true suppresses the tab strip and all tab content.
