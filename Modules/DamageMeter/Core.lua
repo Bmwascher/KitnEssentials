@@ -358,8 +358,6 @@ end
 ---------------------------------------------------------------------------------
 
 function DM:RegWithEditMode()
-    if not KE.EditMode then return end
-
     self:EnsureDock()
 
     if not self.editModeConfig then
@@ -398,10 +396,10 @@ function DM:RegWithEditMode()
     end
 
     if self.db and self.db.Locked then return end
-    if self.editModeRegistered then return end
-
-    KE.EditMode:RegisterElement(self.editModeConfig)
-    self.editModeRegistered = true
+    if KE.EditMode and not self.editModeRegistered then
+        KE.EditMode:RegisterElement(self.editModeConfig)
+        self.editModeRegistered = true
+    end
 end
 
 function DM:UnregisterEditMode()

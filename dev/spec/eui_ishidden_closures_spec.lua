@@ -54,11 +54,8 @@ local MODULES = {
         CHAT:RegisterEditMode()
         return KE.EUIUnlock.isHidden, CHAT.db
     end },
-    -- RegWithEditMode returns before the EUI registration unless KE.EditMode
-    -- exists.
     { "DamageMeter", function()
         local DM, KE = L.loadDMDock()
-        KE.EditMode = { RegisterElement = function() end }
         KE.EUIUnlock = recorder()
         DM.db = {}
         DM.dock = {}
