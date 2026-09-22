@@ -285,3 +285,26 @@ describe("ProfileManager:InstallProfile saved-key renames", function()
         assert.is_true(out.CombatLogger.Scenario)
     end)
 end)
+
+describe("ProfileManager:DecodeImportString embedded name", function()
+    -- The codec is replaced AFTER the load, not seeded before it: the file
+    -- defines KE:DecodeFromExport itself. The envelope is handed over as a
+    -- table so the case is about the name's type, not the encoding.
+    local function decode(envelope)
+        local PM, KE = L.loadProfileManager()
+        KE.DecodeFromExport = function() return envelope end
+        local _, name = PM:DecodeImportString("!KE2!x")
+        return name
+    end
+
+    it("passes a string name through and drops anything else", function()
+        local cases = {
+            { name = "Mine", want = "Mine", label = "string" },
+            { name = {},     want = nil,    label = "table" },
+            { name = nil,    want = nil,    label = "absent" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, decode({ d = {}, _n = c.name }), c.label)
+        end
+    end)
+end)
