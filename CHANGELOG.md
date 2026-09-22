@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.18
+
+### Settings
+
+- Every module switch in a card header prints its On/Off line in chat; ten
+  modules that used to flip silently now say so
+- The line always uses the card's own title, which renames six of them:
+  Healer Mana Tracker, Dungeon Trash Tracker, Reroll Key Reminder, Blizzard
+  Texts, Chat and Chat Links
+
+---
+
 ## v4.7.17
 
 ### Profile Manager
