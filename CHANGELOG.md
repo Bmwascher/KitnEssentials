@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.19
+
+### Settings
+
+- Every module page now opens with a short plain-English description under
+  its switch, with the addon and slash command names it depends on picked
+  out in gold. The old dash-bullet notes in that spot are gone; notes beside
+  individual settings are unchanged
+
+---
+
 ## v4.7.18
 
 ### Settings
