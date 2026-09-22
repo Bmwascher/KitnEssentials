@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.22
+
+### Raid Notifications
+
+- The LOOT BOSS alert shows the addon's cat head on either side, drawn bare
+  on the screen instead of inside a black framed square
+
+### Minimap and Mythic+ Timer
+
+- The minimap button and the forces tooltip's Count row use the same cat
+  head; seven unused image files are gone from the download
+
+---
+
 ## v4.7.21
 
 ### Settings
