@@ -1,5 +1,27 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.0
+
+### Profile Manager
+
+- **NEW:** the page is rebuilt as three tabs. Profile holds the status line,
+  the active profile, create, copy, rename and global mode; Sharing holds
+  export and import; Reset holds delete and reset to defaults, in red
+- **NEW:** deleting or resetting a profile asks you to type its name first
+- Importing a string switches to the new profile straight away; a string
+  from an older version opens an Import Failed dialog with a Try Again button
+- The import dialog fills the profile name from the pasted string unless you
+  typed one, and the status line colours the active profile, global mode and
+  the profile count
+- The sidebar search finds the page by rename, delete, global and sharing
+
+### Settings
+
+- Every button in the settings window and its dialogs sits on a darker plate,
+  so it stands out from the card behind it
+
+---
+
 ## v4.7.22
 
 ### Raid Notifications
