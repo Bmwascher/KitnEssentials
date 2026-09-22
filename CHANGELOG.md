@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.15
+
+### Bonus Roll
+
+- With Loot Roll in Replace mode the coin prompt now sits just under the
+  bottom roll bar instead of on top of the first one, so a roll and the
+  prompt never overlap. It follows the bars when you move them in edit mode
+
+---
+
 ## v4.7.14
 
 ### Ready Check Consumables
