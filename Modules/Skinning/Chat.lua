@@ -1117,7 +1117,7 @@ function CHAT:ShortChannel()
                 local communityID = strmatch(chanName, "Community:(%d+):")
                 if communityID and _G.C_Club and _G.C_Club.GetClubInfo then
                     local clubInfo = _G.C_Club.GetClubInfo(communityID)
-                    if clubInfo and clubInfo.name and clubInfo.name ~= "" then
+                    if clubInfo and canaccessvalue(clubInfo.name) and clubInfo.name and clubInfo.name ~= "" then
                         abbr = strupper(strsub(clubInfo.name, 1, 2))
                         resolved = true
                     end

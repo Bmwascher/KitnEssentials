@@ -179,12 +179,12 @@ end
 ---@return number|nil count
 function KE:ExportNicknames()
     local payload, count = self:CollectNicknamePayload()
-    if not payload then return nil, count end
+    if not payload then return nil, count --[[@as string]] end
 
     local encoded = self:EncodeForExport({ v = 1, d = payload })
     if not encoded then return nil, "Encoding failed" end
 
-    return EXPORT_PREFIX .. encoded, nil, count
+    return EXPORT_PREFIX .. encoded, nil, count --[[@as number]]
 end
 
 ---------------------------------------------------------------------------------
@@ -252,7 +252,7 @@ function KE:ImportNicknames(importString, replaceAll)
     end
 
     local added, updated, removed = self:ApplyNicknamePayload(data.d, replaceAll)
-    if not added then return false, updated end
+    if not added then return false, updated --[[@as string]] end
     if added == 0 and updated == 0 and removed == 0 then
         return false, "No nicknames were imported"
     end
