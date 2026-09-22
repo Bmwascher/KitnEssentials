@@ -1,5 +1,24 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.20
+
+### Great Vault Alert
+
+- Only listens for the vault opening while you are in a rested area, which
+  is where the vault is; elsewhere it watches nothing
+
+### Hunter's Mark Tracking
+
+- Any hunter's mark on the boss counts, not only your own
+
+### Mythic+ Timer
+
+- The deaths list opens beside its headline, up and to the left, instead of
+  under the mouse, and swaps to the right when the HUD sits at the left
+  screen edge
+
+---
+
 ## v4.7.19
 
 ### Settings
