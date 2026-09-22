@@ -48,6 +48,7 @@ if ($TestReport) {
 if (-not $ReportOnly) {
     $wowluaLine = [string](& (Join-Path $PSScriptRoot "update-wowlua-ls.ps1") 2>&1 | Select-Object -Last 1)
     $wowluaCode = $LASTEXITCODE
+    if (-not $wowluaLine) { $wowluaLine = "[wowlua-ls] FAILED: the updater stopped without a status line" }
     if ($wowluaCode -eq 10) {
         $checkOut = & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot "wowlua-check.ps1") 2>&1 | ForEach-Object { "$_" }
         $body = switch ($LASTEXITCODE) {

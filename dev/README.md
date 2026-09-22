@@ -265,14 +265,19 @@ replaced binary as `wowlua_ls.previous.exe`.
 (re-running the checker after an update), then runs the API drift watch.
 Nothing pops up; when anything happened, it appends to
 `KitnDev weekly check <date>.txt` on the Desktop. Register it after a PC
-reset:
+reset, from the primary checkout (a worktree path would register the
+worktree's copy):
 
 ```powershell
 $script = (Resolve-Path dev\scripts\api-drift-weekly.ps1).Path
 $action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless `"C:\Program Files\PowerShell\7\pwsh.exe`" -NoProfile -ExecutionPolicy Bypass -File `"$script`""
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Tuesday -At 13:07
-Register-ScheduledTask -TaskName "KitnEssentials API Drift Watch" -Action $action -Trigger $trigger -Force
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable
+Register-ScheduledTask -TaskName "KitnEssentials API Drift Watch" -Action $action -Trigger $trigger -Settings $settings -Force
 ```
+
+To change only the launch command of an existing task, keep its settings with
+`Set-ScheduledTask -TaskName "KitnEssentials API Drift Watch" -Action $action`.
 
 `-TestReport` writes a sample note to check the wiring.
 

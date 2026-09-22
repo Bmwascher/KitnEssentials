@@ -87,12 +87,18 @@ try {
 }
 if (-not $started) { Fail "$tag binary did not start" }
 
+$movedAside = $false
 try {
-    if (Test-Path -LiteralPath $Exe) { Move-Item -LiteralPath $Exe -Destination $Previous -Force }
+    if (Test-Path -LiteralPath $Exe) {
+        Move-Item -LiteralPath $Exe -Destination $Previous -Force
+        $movedAside = $true
+    }
     Move-Item -LiteralPath $Download -Destination $Exe -Force
     Set-Content -LiteralPath $VersionFile -Value $tag
 } catch {
-    if (-not (Test-Path -LiteralPath $Exe) -and (Test-Path -LiteralPath $Previous)) {
+    # Put the old binary back whatever step failed, so a failed run leaves
+    # the install exactly as it was.
+    if ($movedAside) {
         Move-Item -LiteralPath $Previous -Destination $Exe -Force -ErrorAction SilentlyContinue
     }
     Fail "install failed: $($_.Exception.Message)"
