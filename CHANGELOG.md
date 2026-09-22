@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.16
+
+### Mythic+ Timer
+
+- The deaths list keeps two players with the same name on different realms
+  apart instead of counting them as one
+
+---
+
 ## v4.7.15
 
 ### Bonus Roll
