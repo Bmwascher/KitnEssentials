@@ -26,12 +26,16 @@ $VersionFile = [IO.Path]::Combine($ToolsDir, 'version.txt')
 # Keeps the .exe extension: Windows will not start a file named *.download.
 $Download = [IO.Path]::Combine($ToolsDir, 'wowlua_ls.download.exe')
 $Previous = [IO.Path]::Combine($ToolsDir, 'wowlua_ls.previous.exe')
+$NewVersion = [IO.Path]::Combine($ToolsDir, 'version.txt.new')
 
 function Fail($msg) {
-    Remove-Item -LiteralPath $Download -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $Download, $NewVersion -Force -ErrorAction SilentlyContinue
     Write-Output "[wowlua-ls] FAILED: $msg"
     exit 2
 }
+
+# Any error no try below handles still ends in the exit-2 contract.
+trap { Fail "unexpected error: $($_.Exception.Message)" }
 
 try {
     $release = Invoke-RestMethod -Headers @{ 'User-Agent' = 'KitnEssentials-wowlua-update' } `
@@ -45,7 +49,8 @@ if (-not $tag) { Fail 'release lookup returned no tag' }
 
 $installed = $null
 if ((Test-Path -LiteralPath $Exe) -and (Test-Path -LiteralPath $VersionFile)) {
-    $installed = (Get-Content -LiteralPath $VersionFile -TotalCount 1).Trim()
+    $first = Get-Content -LiteralPath $VersionFile -TotalCount 1
+    if ($first) { $installed = ([string]$first).Trim() }
 }
 if ($installed -eq $tag) {
     Write-Output "[wowlua-ls] CURRENT $tag"
@@ -74,7 +79,11 @@ foreach ($line in ($sums -split "`n")) {
     $parts = $line.Trim() -split '\s+'
     if ($parts.Count -ge 2 -and $parts[1].TrimStart('*') -eq $Asset) { $expected = $parts[0].ToLower() }
 }
-$actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $Download).Hash.ToLower()
+try {
+    $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $Download).Hash.ToLower()
+} catch {
+    Fail "could not hash the download: $($_.Exception.Message)"
+}
 if (-not $expected -or $actual -ne $expected) {
     Fail "checksum mismatch for $tag (expected $expected, got $actual)"
 }
@@ -87,6 +96,14 @@ try {
 }
 if (-not $started) { Fail "$tag binary did not start" }
 
+# The new tag is staged beside version.txt and moved over it last, so the
+# old metadata is never truncated by a failed write.
+try {
+    Set-Content -LiteralPath $NewVersion -Value $tag
+} catch {
+    Fail "install failed: $($_.Exception.Message)"
+}
+
 $movedAside = $false
 try {
     if (Test-Path -LiteralPath $Exe) {
@@ -94,14 +111,17 @@ try {
         $movedAside = $true
     }
     Move-Item -LiteralPath $Download -Destination $Exe -Force
-    Set-Content -LiteralPath $VersionFile -Value $tag
+    Move-Item -LiteralPath $NewVersion -Destination $VersionFile -Force
 } catch {
-    # Put the old binary back whatever step failed, so a failed run leaves
-    # the install exactly as it was.
+    $err = $_.Exception.Message
     if ($movedAside) {
-        Move-Item -LiteralPath $Previous -Destination $Exe -Force -ErrorAction SilentlyContinue
+        try {
+            Move-Item -LiteralPath $Previous -Destination $Exe -Force
+        } catch {
+            Fail "install failed ($err) and restoring the old checker failed too - rename $Previous to wowlua_ls.exe by hand"
+        }
     }
-    Fail "install failed: $($_.Exception.Message)"
+    Fail "install failed: $err"
 }
 
 Write-Output "[wowlua-ls] UPDATED $from -> $tag"

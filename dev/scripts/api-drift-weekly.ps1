@@ -46,7 +46,8 @@ if ($TestReport) {
 }
 
 if (-not $ReportOnly) {
-    $wowluaLine = [string](& (Join-Path $PSScriptRoot "update-wowlua-ls.ps1") 2>&1 | Select-Object -Last 1)
+    # A child process, so an updater that throws cannot stop the drift watch.
+    $wowluaLine = [string](& (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot "update-wowlua-ls.ps1") 2>&1 | Select-Object -Last 1)
     $wowluaCode = $LASTEXITCODE
     if (-not $wowluaLine) { $wowluaLine = "[wowlua-ls] FAILED: the updater stopped without a status line" }
     if ($wowluaCode -eq 10) {
