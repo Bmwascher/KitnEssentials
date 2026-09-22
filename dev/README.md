@@ -246,6 +246,36 @@ report before coding. `--report-only` re-prints without fetching;
 `--seed` re-baselines. Snapshots live in
 `KitnDev\tools\wow-reference\api-drift-snapshots\`, beside the two clones.
 
+## wowlua-ls checker
+
+`dev/scripts/wowlua-check.ps1` runs the standalone wowlua-ls release in
+`KitnDev\tools\wowlua-ls\` (no VS Code needed; `WOWLUA_LS` overrides the
+path). Install it, or update it by hand, with:
+
+```powershell
+pwsh dev/scripts/update-wowlua-ls.ps1
+```
+
+It verifies the download against the release's `checksums.txt` and keeps the
+replaced binary as `wowlua_ls.previous.exe`.
+
+## Weekly checks (scheduled task)
+
+`dev/scripts/api-drift-weekly.ps1` runs every Tuesday: it updates wowlua-ls
+(re-running the checker after an update), then runs the API drift watch.
+Nothing pops up; when anything happened, it appends to
+`KitnDev weekly check <date>.txt` on the Desktop. Register it after a PC
+reset:
+
+```powershell
+$script = (Resolve-Path dev\scripts\api-drift-weekly.ps1).Path
+$action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument "--headless `"C:\Program Files\PowerShell\7\pwsh.exe`" -NoProfile -ExecutionPolicy Bypass -File `"$script`""
+$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Tuesday -At 13:07
+Register-ScheduledTask -TaskName "KitnEssentials API Drift Watch" -Action $action -Trigger $trigger -Force
+```
+
+`-TestReport` writes a sample note to check the wiring.
+
 ## Claude Code hooks (restore after a re-clone or PC reset)
 
 Everything under `.claude/` is gitignored, so the edit-time lint hook and the
