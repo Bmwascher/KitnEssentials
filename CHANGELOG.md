@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.21
+
+### Settings
+
+- Missing Forms, Vehicle Exit Button, No Movement Alert and Player Buffs
+  redraw their page once per switch click instead of twice
+- Dungeon Trash Tracker shows its description only while it is on, like every
+  other module
+- Position settings sit directly above Font on the Player Buffs, Player
+  Debuffs and Tooltips pages
+- The Automation sub-cards each describe themselves under their own switch,
+  in white text like the rest of the settings
+
+---
+
 ## v4.7.20
 
 ### Great Vault Alert
