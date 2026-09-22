@@ -1,3 +1,9 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-AuraApplicationSoundCard.lua                        ║
+-- ║  Purpose: Shared card for the sound played when an       ║
+-- ║           allowlisted aura lands on you.                 ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame

@@ -1,3 +1,10 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  ChatRoleIcons.lua                                       ║
+-- ║  Purpose: Role-icon lookup for chat sender names: the    ║
+-- ║           identity refusal and the per-member cache      ║
+-- ║           keys.                                          ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 local KE = select(2, ...)
 local format = string.format
 local gsub = string.gsub

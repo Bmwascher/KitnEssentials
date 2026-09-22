@@ -1,38 +1,15 @@
--- ===========================================================================
--- Group Sort
---
--- Raid-lead tool that rearranges the raid into subgroups. Three modes:
---   default  one sorted list: tanks, melee, ranged, healers
---   split    two balanced halves
---   odds     groups 1/3/5 against groups 2/4/6
---
--- The sorting engine is reimplemented here rather than driven: the established
--- implementation of it lives in a private namespace with no public API and no
--- slash entry, so calling it is impossible.
---
--- Spec data comes from LibSpecialization, BigWigs's broadcast lib, so the
--- raid-wide broadcast network already exists wherever BigWigs does. Unknown
--- specs sort last, at spec order 100.
---
--- Two deliberate departures from the established behaviour, both mechanical:
---   * A read of an undeclared `indextosubgroup` global in one ArrangeGroups
---     branch is an `indexlink` read here; indexlink carries the same data.
---   * SplitGroupInit's MythicFlex flag is passed all the way through to
---     GetSortedGroup rather than dropped at the SortGroup hop.
---
--- The only user surface is the three sort buttons inside the Raid Control
--- panel (Modules/QoL/RaidControl.lua), which look for KE.GroupSort before
--- drawing them. There is no separate setting and no config page.
---
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GroupSort.lua                                           ║
+-- ║  Module: Group Sort                                      ║
+-- ║  Purpose: Raid-lead tool that rearranges the raid into   ║
+-- ║           subgroups by role and spec; reached only       ║
+-- ║           through the Raid Control panel.                ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 -- Reconciliation: one SetRaidSubgroup or SwapRaidSubgroup per pass, then wait
 -- for the server's GROUP_ROSTER_UPDATE and recompute, repeating until the
 -- roster matches the goal. 15-second backstop, 5-second cooldown between runs,
 -- hard combat gate, lead/assist gate, and a chat-lockdown gate.
---
--- Performance: no OnUpdate anywhere, nothing registered at file scope.
--- The spec callback lives while Raid Control is enabled or a sort is in
--- flight; GROUP_ROSTER_UPDATE is registered only while a sort is in flight.
--- ===========================================================================
 
 ---@class KE
 local KE = select(2, ...)
@@ -60,7 +37,9 @@ local UnitAffectingCombat = UnitAffectingCombat
 local UnitIsGroupAssistant = _G.UnitIsGroupAssistant
 local UnitGroupRolesAssigned = UnitGroupRolesAssigned
 
--- --- Classification tables --------------------------------------------------
+---------------------------------------------------------------------------------
+-- Classification tables
+---------------------------------------------------------------------------------
 
 local MELEE = { -- ignoring tanks for this
     [263]  = true, -- Shaman: Enhancement
@@ -110,7 +89,9 @@ local SPEC_ORDER = {
 }
 setmetatable(SPEC_ORDER, { __index = function() return 100 end })
 
--- --- Spec data via LibSpecialization ----------------------------------------
+---------------------------------------------------------------------------------
+-- Spec data via LibSpecialization
+---------------------------------------------------------------------------------
 
 local specs = {} -- [GUID] = specID
 local libSpecRegistered = false
@@ -161,7 +142,9 @@ local function GetSpec(unit)
     return specs[G] or 0
 end
 
--- --- Engine state ------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Engine state
+---------------------------------------------------------------------------------
 
 local Groups = { Processing = false }
 
@@ -190,7 +173,9 @@ local function SetProcessing(on)
     end
 end
 
--- --- Sorting -----------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Sorting
+---------------------------------------------------------------------------------
 
 local function SpecCompare(a, b)
     if a.specid == b.specid then
@@ -335,7 +320,9 @@ function GS:SortGroup(Flex, default, odds, MythicFlex)
     self:ArrangeGroups(true)
 end
 
--- --- Server reconciliation ---------------------------------------------------
+---------------------------------------------------------------------------------
+-- Server reconciliation
+---------------------------------------------------------------------------------
 
 function GS:ArrangeGroups(firstcall, finalcheck)
     if not firstcall and not Groups.Processing then return end
@@ -490,7 +477,9 @@ function GS:ArrangeGroups(firstcall, finalcheck)
     end
 end
 
--- --- Public entry ------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Public entry
+---------------------------------------------------------------------------------
 
 local lastRun
 

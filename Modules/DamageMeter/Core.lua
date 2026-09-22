@@ -175,16 +175,16 @@ local DM_DEFAULTS = {
     -- Header bar: the meter-type glyph beside the title (ShowTypeIcon) and the
     -- settings / reset / segment action buttons (ShowHeaderIcons + its mouseover-
     -- reveal). Independent toggles -- the glyph is informational, the buttons are
-    -- the Phase 4 detail-surface controls.
+    -- the detail-surface controls.
     ShowTypeIcon = false,
     ShowHeaderIcons = true,
     HeaderIconsMouseover = true,
     ShowCombatClock = false,    -- fight-length clock "[M:SS]" on window 1's header
     DetailMaxRows = 40,
 
-    -- Hover quick-peek tooltip (Phase 4b) -- hover a bar -> floating breakdown/recap
+    -- Hover quick-peek tooltip -- hover a bar -> floating breakdown/recap
     HoverTooltip = true,
-    -- Phase 4c: "smart" (auto side, away from the nearer screen edge) | "bar"
+    -- "smart" (auto side, away from the nearer screen edge) | "bar"
     -- (above the hovered bar) | "left" / "right" (beside the meter) | "center".
     HoverTooltipAnchor = "smart",
 
@@ -331,7 +331,7 @@ end
 -- Unconditional (no DB toggle -- the vestigial ReplaceBlizzard default was
 -- dropped in the module-owned defaults move). Guarded + pcall'd: the CVar is
 -- settable in combat, but a future Blizzard rename must not throw. Confirmed
--- in the Phase 0 dry-run as the disable CVar.
+-- in game as the disable CVar.
 ---------------------------------------------------------------------------------
 
 function DM:ApplyReplaceBlizzard()
@@ -652,7 +652,7 @@ function DM:OnEnable()
     self:RegisterEvent("DAMAGE_METER_CURRENT_SESSION_UPDATED", "OnSessionUpdated")
     self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
 
-    -- Content-context auto-swap (Phase 3): re-resolve each window's per-context config
+    -- Content-context auto-swap: re-resolve each window's per-context config
     -- when the player changes content. PLAYER_ENTERING_WORLD (registered above for
     -- OnCombatForceStop) + ZONE_CHANGED_NEW_AREA go through the DEBOUNCED settle path (IsInInstance
     -- isn't reliable until the world loads). The CHALLENGE_MODE_* events catch the
@@ -798,7 +798,7 @@ function DM:OnDisable()
         self.dock:Hide()
     end
 
-    -- Hide every built runtime window (Phase 1: just window 1). The frame trees
+    -- Hide every built runtime window. The frame trees
     -- are kept for re-enable; only their visibility is cleared.
     if self.windows_rt then
         for _, W in pairs(self.windows_rt) do
@@ -1387,7 +1387,7 @@ function DM:OnMeterReset()
         if self.HistoryDropPending then self:HistoryDropPending() else self._pendingBundle = nil end
     end
     if DEBUG_DM then KE:Print("[DM] DAMAGE_METER_RESET -> Tick") end
-    -- Drop the hover-tip Targets cache (Phase 4c / Detail.lua) -- the EnemyDamageTaken
+    -- Drop the hover-tip Targets cache (Detail.lua) -- the EnemyDamageTaken
     -- cross-reference it was built from is now stale. Resolved at runtime (Detail.lua
     -- loads after Core.lua); guarded so a load-order or version skew can't throw.
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
@@ -2193,7 +2193,7 @@ function DM:ReportView(rest, winIdx)
 end
 
 ---------------------------------------------------------------------------------
--- Header-icon callbacks (Phase 4)
+-- Header-icon callbacks
 --
 -- Wired by the three header buttons built in Window.lua CreateWindow. The window
 -- handle is passed through (unused by Settings/Reset today, but kept so a future
@@ -2293,7 +2293,7 @@ function DM:OpenReportMenu(W)
 end
 
 ---------------------------------------------------------------------------------
--- Segment / history browser (Phase 4)
+-- Segment / history browser
 --
 -- W._curSessionID is the single per-window pinned-session field (NOT persisted --
 -- stored sessions are gone after a reload): nil = the live cfg.SessionType
@@ -2834,7 +2834,7 @@ function DM:Tick()
     -- a subsequent Tick (e.g. StopTicker -> Tick called synchronously while a
     -- prior tick's deferred closure is still pending) would wipe it out from under
     -- the pending closure, silently dropping those deferred renders. In the common
-    -- Phase 1 case (one window, always within budget) `deferred` stays nil and the
+    -- case (one window, always within budget) `deferred` stays nil and the
     -- hot path allocates zero tables -- matching the prior guarantee.
     local deferred = nil
 

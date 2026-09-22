@@ -1,3 +1,9 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  SecondaryStatsFormat.lua                                ║
+-- ║  Purpose: Text bodies and placeholder rules for the      ║
+-- ║           Secondary Stats display.                       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 if not KitnEssentials then return end

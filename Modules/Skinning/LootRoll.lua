@@ -1,3 +1,11 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  LootRoll.lua                                            ║
+-- ║  Module: Loot Roll                                       ║
+-- ║  Purpose: Skins the group loot roll frames; in Replace   ║
+-- ║           mode stacks its own roll bars and anchors the  ║
+-- ║           bonus roll prompt under them.                  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local S = KE.Skins

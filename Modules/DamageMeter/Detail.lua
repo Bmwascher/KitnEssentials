@@ -1165,10 +1165,10 @@ end
 -- ╚══════════════════════════════════════════════════════════╝
 
 local HOVER_TIP_ROWS = 15       -- top spells/events; the click-inline panel still shows the full list
-local TIP_WIDTH = 340           -- Phase 4c: holds the 3 numeric columns (Amount / DPS / %); the extra width over 300 is all name room (the columns anchor to the right edge, so the spell/enemy-name area grows) --
+local TIP_WIDTH = 340           -- holds the 3 numeric columns (Amount / DPS / %); the extra width over 300 is all name room (the columns anchor to the right edge, so the spell/enemy-name area grows) --
 local TIP_PAD = 4               -- inner inset for header / rows
 
--- Phase 4c column geometry: each numeric column is right-aligned at a fixed x-offset
+-- Column geometry: each numeric column is right-aligned at a fixed x-offset
 -- from the tip's right edge. Content-sized (no SetWidth) + SetWordWrap(false) so the
 -- text never truncates with an ellipsis at the user's font size; the label's RIGHT anchor
 -- stops at the amount column's LEFT so the three columns line up across every row + header.
@@ -1176,7 +1176,7 @@ local TIP_PCT_X   = -6          -- % column right edge
 local TIP_DPS_X   = -62         -- DPS column right edge (widened from -48 so content-sized columns don't collide)
 local TIP_AMT_X   = -124        -- Amount column right edge (widened from -96)
 local TIP_COL_HDR_H = 14        -- vertical space the column-header row occupies (breakdown path only)
-local TIP_TGT_ROWS = 3          -- Phase 4c: top enemies the source hit (DamageDone-only sub-section)
+local TIP_TGT_ROWS = 3          -- top enemies the source hit (DamageDone-only sub-section)
 local TIP_TGT_GAP = 4           -- vertical gap above the Targets divider
 local TIP_TGT_LABEL_H = 12      -- height the "Targets" label occupies before the target rows
 local _tip                      -- module-level singleton (shared by all windows)
@@ -1231,8 +1231,8 @@ local function MakeTipRow(parent, rowH)
     row.label:SetWordWrap(false)
     KE:ApplyFontToText(row.label, face, size, outline)
 
-    -- Phase 4c: three right-aligned numeric columns (Amount / DPS / %). row.value is the
-    -- Amount column (renamed-in-role from the old single value). For the Deaths recap path
+    -- Three right-aligned numeric columns (Amount / DPS / %). row.value is the
+    -- Amount column. For the Deaths recap path
     -- only row.value is used (dps/pct stay empty + hidden); the breakdown path fills all three.
     -- Content-sized (no SetWidth) + SetWordWrap(false): right-anchored, so each column
     -- sizes to its text and never truncates with an ellipsis at the user's font size.
@@ -1352,7 +1352,7 @@ function DM:EnsureHoverTip()
     f.header:SetWordWrap(false)
     KE:ApplyFontToText(f.header, face, size, outline)
 
-    -- Phase 4c: one-time column-header row (Spell · Amount · DPS · %) under the source
+    -- One-time column-header row (Spell · Amount · DPS · %) under the source
     -- name. The category labels are WHITE and one notch larger than the rows --
     -- the centered class-colored title frees them to be the prominent headers --
     -- right-aligned over the same fixed columns as the data rows. Shown for the breakdown
@@ -1652,11 +1652,11 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     local shown = 0
     local headerText = TipHeaderName(self, bar)
 
-    -- Phase 4c: the column-header row (Spell · Amount · DPS · %) is shown only for the
+    -- The column-header row (Spell · Amount · DPS · %) is shown only for the
     -- breakdown path; the Deaths recap keeps its single value column. bodyTop pushes the
     -- data rows down past the column header in the breakdown path (0 for recap).
     local bodyTop = 0
-    -- Phase 4c Targets sub-section extra height (0 unless a DamageDone breakdown renders it).
+    -- Targets sub-section extra height (0 unless a DamageDone breakdown renders it).
     local tgtExtraH = 0
 
     if isDeaths then
@@ -1962,7 +1962,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
                 end
                 row.label:SetText(nm or spell.creatureName or "Unknown")
 
-                -- Phase 4c columns: Amount, DPS, %. The two value columns take the
+                -- Columns: Amount, DPS, %. The two value columns take the
                 -- RAW figures -- FormatBarValue is AllowedWhenTainted end to end, and
                 -- feeding either one the sanitized copy would print 0 in combat. Only
                 -- the % column below runs plain-Lua arithmetic, on the sanitized copy.
@@ -2041,7 +2041,7 @@ function DM:ShowHoverTip(W, bar, isInitial)
 
     if self:PopulateHoverTip(W, bar, isInitial) then
         if isInitial then
-            -- Phase 4c smart positioning. Modes: smart | bar | left | right | center.
+            -- Smart positioning. Modes: smart | bar | left | right | center.
             -- "smart" places the tip on the meter's OPEN side (away from the nearer screen
             -- edge), re-evaluated each initial hover so a moved/redocked meter picks the
             -- right side next time. SetClampedToScreen (set in EnsureHoverTip) is the
@@ -2096,7 +2096,7 @@ function DM:ReapplyHoverTipVisuals()
 
     KE:ApplyFontToText(_tip.header, face, size, outline)
     if _tip.msg then KE:ApplyFontToText(_tip.msg, face, size, outline) end
-    -- Phase 4c: the column-header labels track the data font (white, one notch below data).
+    -- The column-header labels track the data font (white, one notch below data).
     if _tip.colHdr then
         local colSize = math.max(8, size - 1)
         KE:ApplyFontToText(_tip.colHdr.spell, face, colSize, outline)
@@ -2111,13 +2111,13 @@ function DM:ReapplyHoverTipVisuals()
                 tr.row.fill:SetStatusBarTexture(texPath)
                 KE:ApplyFontToText(tr.row.label, face, size, outline)
                 KE:ApplyFontToText(tr.row.value, face, size, outline)
-                -- Phase 4c numeric columns (DPS / %).
+                -- Numeric columns (DPS / %).
                 if tr.row.dps then KE:ApplyFontToText(tr.row.dps, face, size, outline) end
                 if tr.row.pct then KE:ApplyFontToText(tr.row.pct, face, size, outline) end
             end
         end
     end
-    -- Phase 4c Targets sub-section: label tracks the data font at the small size; rows
+    -- Targets sub-section: label tracks the data font at the small size; rows
     -- track the data font + statusbar texture. Lazy-built, so guard on existence.
     if _tip.tgtLabel then
         local lblSize = math.max(8, size - 1)   -- match the white column headers

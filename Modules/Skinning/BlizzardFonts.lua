@@ -1,3 +1,10 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  BlizzardFonts.lua                                       ║
+-- ║  Module: Blizzard Fonts                                  ║
+-- ║  Purpose: Restyles the named Blizzard font objects to    ║
+-- ║           the configured face, size and outline.         ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 local KE = select(2, ...)
 
 if not KitnEssentials then

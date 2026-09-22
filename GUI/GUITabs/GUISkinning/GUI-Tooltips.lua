@@ -219,7 +219,31 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 3: Font
+    -- Card 3: Position
+    ----------------------------------------------------------------
+    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        db = db.Position,
+        dbKeys = {
+            anchorFrameType = "AnchorFrameType",
+            anchorFrameFrame = "ParentFrame",
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = function() ApplySettings() end,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "all")
+    end
+    manager:Register(posCard, "all")
+    yOffset = posOffset
+
+    ----------------------------------------------------------------
+    -- Card 4: Font
     ----------------------------------------------------------------
     local card3 = GUIFrame:CreateCard(scrollChild, "Font Settings", yOffset)
     manager:Register(card3, "all")
@@ -245,7 +269,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 4: Colors
+    -- Card 5: Colors
     ----------------------------------------------------------------
     local card4 = GUIFrame:CreateCard(scrollChild, "Colors", yOffset)
     manager:Register(card4, "all")
@@ -261,7 +285,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     yOffset = card4:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Health Bar
+    -- Card 6: Health Bar
     ----------------------------------------------------------------
     local card5 = GUIFrame:CreateCard(scrollChild, "Health Bar", yOffset)
     manager:Register(card5, "all")
@@ -292,30 +316,6 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         -- reachable. See Modules/Skinning/Tooltips.lua StyleHealthBar.
     end
     yOffset = card5:GetNextOffset()
-
-    ----------------------------------------------------------------
-    -- Card 6: Position
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db.Position,
-        dbKeys = {
-            anchorFrameType = "AnchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = function() ApplySettings() end,
-    })
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
 
     manager:UpdateAll(db.Enabled == true)
     return yOffset

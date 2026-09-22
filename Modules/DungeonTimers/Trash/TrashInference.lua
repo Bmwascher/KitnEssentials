@@ -211,8 +211,7 @@ function TI.ScoreTraitRow(obs, trait, opts)
     -- surviving sibling (proven in-game). Rejecting only the below case
     -- keeps the discriminator where field evidence never
     -- contradicted it, keeps the proto-drake alive, and fails safe. Same
-    -- asymmetric shape as the level axis above; supersedes the all-soft
-    -- rationale in dev/docs/dungeon-trash-engine-port-spec.md §3.
+    -- asymmetric shape as the level axis above.
     if id.buffCount ~= nil and obs.buffCount ~= nil then
         strength = strength + 1
         local obsCount, idCount = tonumber(obs.buffCount), tonumber(id.buffCount)

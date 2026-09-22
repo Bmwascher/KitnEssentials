@@ -90,7 +90,6 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
     -- no reload is needed).
     ---------------------------------------------------------------------------
     local card1 = GUIFrame:CreateCard(scrollChild, "Dungeon Trash Tracker", yOffset)
-    card1:AddLabel("Watches enemy nameplates in 5-player dungeons and predicts when trash mobs will re-cast key abilities, shown as countdown alerts and on-plate cooldown icons.")
     card1:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         if KitnEssentials then
@@ -102,10 +101,11 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
         end
     end)
 
-    yOffset = card1:GetNextOffset()
-
     -- Lone header bar: a disabled module shows its switch and nothing else.
-    if db.Enabled == false then return yOffset end
+    if db.Enabled == false then return card1:GetNextOffset() end
+
+    card1:AddLabel("Watches enemy nameplates in 5-player dungeons and predicts when trash mobs will re-cast key abilities, shown as countdown alerts and on-plate cooldown icons.")
+    yOffset = card1:GetNextOffset()
 
     local manager = GUIFrame:CreateWidgetStateManager()
 

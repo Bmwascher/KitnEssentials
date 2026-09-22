@@ -1,3 +1,10 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GlobalFonts.lua                                         ║
+-- ║  Purpose: Applies the chosen font to the game-wide font  ║
+-- ║           objects, and stands down when another addon    ║
+-- ║           owns them.                                     ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 local KE = select(2, ...)
 local S = KE.Skins
 local unpack = unpack

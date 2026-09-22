@@ -1,3 +1,10 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-RaidControl.lua                                     ║
+-- ║  GUI: Raid Control                                       ║
+-- ║  Purpose: Configuration panel for the RaidControl        ║
+-- ║           module.                                        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame

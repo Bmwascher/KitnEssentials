@@ -54,7 +54,6 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     card1:AddHeaderToggle(db.Enabled == true, function(checked)
         db.Enabled = checked
         ApplySettings()
-        GUIFrame:RefreshContent()
     end)
     card1:AddLabel("Tracks your specialization's mobility cooldowns on screen, so you always know when your gap-closer or escape is back up. Spells with no cooldown are tracked by their buff instead.")
 

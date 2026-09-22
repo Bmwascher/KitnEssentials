@@ -59,7 +59,7 @@ end
 local DEBUG_DOCK_TEST = false
 
 -- Inter-window / inter-column gap, snapped to the pixel grid once at file load.
--- A local const (not a DB key) per the Phase 2 geometry model.
+-- A local const, not a DB key.
 local GAP = KE:PixelSnap(1)
 
 ---------------------------------------------------------------------------------
@@ -348,7 +348,9 @@ function DM:LayoutDock()
 
     self:EnsureDock()
 
-    -- ----- Display-position map (column-then-row = on-screen reading order) -----
+    -----------------------------------------------------------------------------
+    -- Display-position map (column-then-row = on-screen reading order)
+    -----------------------------------------------------------------------------
     -- Maps storage index -> its 1-based position walking columns left->right, then
     -- rows top->bottom. Both the in-world index badges (set below) and the GUI
     -- "Window N" rows read this so the number a window shows always matches its
@@ -361,7 +363,9 @@ function DM:LayoutDock()
     wipe(posMap)
     for i = 1, #order do posMap[order[i]] = i end
 
-    -- ----- Shared per-layout geometry (computed ONCE) -----
+    -----------------------------------------------------------------------------
+    -- Shared per-layout geometry (computed ONCE)
+    -----------------------------------------------------------------------------
     local headerH = KE:PixelSnap((db.FontSize or 12) + 6)
     local stride  = KE:PixelSnap(db.BarHeight or 16) + KE:PixelSnap(db.BarSpacing or 2)
     if stride <= 0 then stride = 1 end
@@ -402,7 +406,9 @@ function DM:LayoutDock()
     local colInfo = self._dockColInfo
     for i = #colInfo, 1, -1 do colInfo[i] = nil end
 
-    -- ----- Column x positions (left -> right) -----
+    -----------------------------------------------------------------------------
+    -- Column x positions (left -> right)
+    -----------------------------------------------------------------------------
     -- colX_c = sum(colW_1..colW_{c-1}) + (c-1)*GAP. Walk columns once, building
     -- the running x offset; colW is recomputed per column (no extra table).
     local runX = 0
@@ -550,7 +556,9 @@ function DM:LayoutDock()
         runX = runX + colW + GAP
     end
 
-    -- ----- COL boundaries -----
+    -----------------------------------------------------------------------------
+    -- COL boundaries
+    -----------------------------------------------------------------------------
     -- Emit one COL hit-zone between every pair of ADJACENT columns that BOTH
     -- placed at least one window. The gap left edge is the left column's right
     -- edge (content x); the strip spans the full dock content height.
@@ -568,7 +576,9 @@ function DM:LayoutDock()
         end
     end
 
-    -- ----- Total dock content extents -----
+    -----------------------------------------------------------------------------
+    -- Total dock content extents
+    -----------------------------------------------------------------------------
     -- dockW = sum(all colW) + (nCols-1)*GAP. runX accumulated colW + GAP per
     -- column, so subtract the trailing GAP. dockH = Hdock.
     local dockW = runX

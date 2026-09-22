@@ -1,3 +1,9 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-MoveFrames.lua                                      ║
+-- ║  GUI: Move Frames                                        ║
+-- ║  Purpose: Configuration panel for the MoveFrames module. ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 ---@class KE
 local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame

@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GroupFinderPanel.lua                                    ║
--- ║  Group Finder side panel                                 ║
+-- ║  Module: Group Finder Panel                              ║
 -- ║  Purpose: affixes, a M+ dungeon/role filter pane and a    ║
 -- ║           weekly runs footer, beside the M+ search.       ║
 -- ╚══════════════════════════════════════════════════════════╝

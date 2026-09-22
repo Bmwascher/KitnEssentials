@@ -1,18 +1,13 @@
--- ===========================================================================
--- Raid Control
---
--- A draggable "Raid Control" button pinned to the top (or bottom) edge of the
--- screen whenever you are in a group. Click it and a utility panel drops out:
---   Ready Check
---   10s / 20s Countdown  (shift-click either one cancels a running countdown)
---   Dungeon Difficulty dropdown + Everyone Assist checkbox
---   Group Sort row       (only when the Group Sort engine is present)
---   Shared Notes         (only when NorthernSkyRaidTools is loaded)
---   World-marker bar (secure) and role-count icons with a roster tooltip
---
--- The panel REPLACES Blizzard's Raid Manager flyout: enabling this module
--- hides that frame outright. Restoring it takes a /reload after disabling.
---
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  RaidControl.lua                                         ║
+-- ║  Module: Raid Control                                    ║
+-- ║  Purpose: A draggable button on the top or bottom screen ║
+-- ║           edge while grouped; it drops a panel with      ║
+-- ║           ready check, countdowns, difficulty, world     ║
+-- ║           markers and role counts, replacing the         ║
+-- ║           Blizzard Raid Manager flyout.                  ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 -- Taint/combat discipline: every secure attribute write and every Show/Hide
 -- of a secure frame is InCombatLockdown-guarded, and state changes asked for
 -- during combat are deferred to one PLAYER_REGEN_ENABLED handler,
@@ -27,11 +22,6 @@
 -- Disabling in combat therefore leaves the button up until a reload. Only a
 -- profile switch can reach that path -- the config window hides itself in
 -- combat -- so it is left alone.
---
--- Performance: fully event-driven (GROUP_ROSTER_UPDATE, PLAYER_ENTERING_WORLD,
--- PARTY_LEADER_CHANGED, PLAYER_DIFFICULTY_CHANGED and the combat events).
--- Zero OnUpdate, zero per-frame cost.
--- ===========================================================================
 
 ---@class KE
 local KE = select(2, ...)
@@ -162,7 +152,9 @@ function RC:OnInitialize()
     self:SetEnabledState(false)
 end
 
--- --- Predicates -------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Predicates
+---------------------------------------------------------------------------------
 local function NotInPVP()
     local _, instanceType = IsInInstance()
     return instanceType ~= "pvp" and instanceType ~= "arena"
@@ -188,7 +180,9 @@ local function ScreenPosition(frame)
     return (y or 0) < h / 2, (x or 0) < w / 2 -- bottom, left
 end
 
--- --- Widget factories -------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Widget factories
+---------------------------------------------------------------------------------
 -- Leader-gated buttons grey their label when the player lacks permission.
 local function SetButtonEnabled(button, enabled, isLeader)
     if button.SetChecked then
@@ -315,7 +309,9 @@ local function CreateCheckBox(name, parent, size, point, relativeto, point2, xOf
     return box
 end
 
--- --- Marker buttons ---------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Marker buttons
+---------------------------------------------------------------------------------
 local function TargetIcons_GetCoords(button)
     local index = button:GetID()
     local idx = (index - 1) * 0.25
@@ -415,7 +411,9 @@ function RC:CreateTargetIcons(panel)
     return TargetIcons
 end
 
--- --- Role icons ----------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Role icons
+---------------------------------------------------------------------------------
 local function RoleIcons_SortNames(a, b)
     return strsub(a, 11) < strsub(b, 11) -- skip the |cffxxxxxx prefix
 end
@@ -598,7 +596,9 @@ function RC:CreateRoleIcons(panel)
     return RoleIcons
 end
 
--- --- Raid buff strip --------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Raid buff strip
+---------------------------------------------------------------------------------
 --
 -- One cell per raid-wide buff: bright if somebody in the raid brings it,
 -- dimmed if nobody does.
@@ -771,7 +771,9 @@ function RC:UpdateBuffStrip()
     end
 end
 
--- --- Section anchoring ------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Section anchoring
+---------------------------------------------------------------------------------
 local function ReanchorSection(section, bottom, target)
     if section then
         -- Marker bar + role icons never rendered: some UI frameworks wrap
@@ -908,7 +910,9 @@ function RC:ApplyGroupContext()
     self:UpdateBuffStrip()
 end
 
--- --- Show/hide driver -------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Show/hide driver
+---------------------------------------------------------------------------------
 function RC:ToggleRaidControl()
     if InCombatLockdown() then
         self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
@@ -922,7 +926,9 @@ function RC:ToggleRaidControl()
     panel:SetShown(status and panel.toggled)
 end
 
--- --- Drag / position persistence --------------------------------------------
+---------------------------------------------------------------------------------
+-- Drag / position persistence
+---------------------------------------------------------------------------------
 local function DragStart_ShowButton(self)
     if InCombatLockdown() then return end
     self:StartMoving()
@@ -950,7 +956,9 @@ local function DragStop_ShowButton(self)
     RC:PositionSections()
 end
 
--- --- Click handlers ----------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Click handlers
+---------------------------------------------------------------------------------
 local function OnClick_ShowButton(self)
     RC.Panel.toggled = true
     RC:PositionSections()
@@ -998,7 +1006,9 @@ local function OnEvent_EveryoneAssist(self)
     SetButtonEnabled(self, IsEveryoneAssistant(), IsLeader())
 end
 
--- --- Dropdown menus (Midnight menu API) --------------------------------------
+---------------------------------------------------------------------------------
+-- Dropdown menus (Midnight menu API)
+---------------------------------------------------------------------------------
 -- The difficulty control follows the group you are actually in: a raid sets the
 -- RAID difficulty, anything else sets the DUNGEON difficulty. Blizzard's own
 -- raid manager branches the same way and on the same helpers
@@ -1078,9 +1088,13 @@ local function OnEvent_Difficulty(self)
     end
 end
 
--- --- Group Sort row (optional; the engine ships separately) ---------------
+---------------------------------------------------------------------------------
+-- Group Sort row (optional; the engine ships separately)
+---------------------------------------------------------------------------------
 
--- --- Setup -------------------------------------------------------------------
+---------------------------------------------------------------------------------
+-- Setup
+---------------------------------------------------------------------------------
 -- Frames parked here are hidden for the session: Hide, mouse off, events off,
 -- statehidden for secure templates, and reparented so nothing re-shows them.
 local hiddenParent = CreateFrame("Frame")

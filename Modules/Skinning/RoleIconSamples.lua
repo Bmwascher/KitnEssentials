@@ -1,3 +1,9 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  RoleIconSamples.lua                                     ║
+-- ║  Purpose: Builds the inline icon samples that label the  ║
+-- ║           role icon set dropdown.                        ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 local KE = select(2, ...)
 local format = string.format
 

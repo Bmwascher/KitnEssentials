@@ -1,7 +1,10 @@
--- One builder, two pages. Both drive aura engine displays
--- (Modules/Combat/AuraHeaders.lua), so the options are identical apart
--- from the debuff-only school-colour toggle.
---
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  GUI-AuraHeaders.lua                                     ║
+-- ║  GUI: Aura Headers                                       ║
+-- ║  Purpose: One builder for the Buffs and Debuffs pages of ║
+-- ║           the AuraHeaders modules.                       ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 -- There are deliberately NO sorting options: this feature is skinning, and
 -- the header is fixed to Blizzard's own order. Spacing is the one layout
 -- control that earns its place.
@@ -53,7 +56,6 @@ local function BuildPage(opts)
             else
                 KitnEssentials:DisableModule(opts.moduleName)
             end
-            GUIFrame:RefreshContent()
             -- Both directions need a reload: enabling has to hide Blizzard's
             -- frame before ours takes over, and disabling cannot revive it
             -- mid-session. Without this the user is left with no auras at all.
@@ -215,6 +217,27 @@ local function BuildPage(opts)
         yOffset = yOffset + card3:GetContentHeight() + Theme.paddingSmall
 
         --------------------------------------------------------------
+        -- Position
+        --------------------------------------------------------------
+        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                anchorFrameType = "anchorFrameType",
+                anchorFrameFrame = "ParentFrame",
+                selfPoint = "AnchorFrom",
+                anchorPoint = "AnchorTo",
+                xOffset = "XOffset",
+                yOffset = "YOffset",
+                strata = "Strata",
+            },
+            showAnchorFrameType = true,
+            showStrata = true,
+            onChangeCallback = ApplySettings,
+        })
+        table_insert(subCards, posCard)
+        yOffset = posOffset
+
+        --------------------------------------------------------------
         -- Card 4: Font
         --------------------------------------------------------------
         local card4 = GUIFrame:CreateCard(scrollChild, "Font", yOffset)
@@ -267,27 +290,6 @@ local function BuildPage(opts)
         table_insert(allWidgets, countSize)
         card4:AddRow(rowH, 40)
         yOffset = yOffset + card4:GetContentHeight() + Theme.paddingSmall
-
-        --------------------------------------------------------------
-        -- Position
-        --------------------------------------------------------------
-        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-            db = db,
-            dbKeys = {
-                anchorFrameType = "anchorFrameType",
-                anchorFrameFrame = "ParentFrame",
-                selfPoint = "AnchorFrom",
-                anchorPoint = "AnchorTo",
-                xOffset = "XOffset",
-                yOffset = "YOffset",
-                strata = "Strata",
-            },
-            showAnchorFrameType = true,
-            showStrata = true,
-            onChangeCallback = ApplySettings,
-        })
-        table_insert(subCards, posCard)
-        yOffset = posOffset
 
         UpdateAllWidgetStates()
         return yOffset

@@ -1,3 +1,11 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  UIWidgets.lua                                           ║
+-- ║  Module: UI Widgets                                      ║
+-- ║  Purpose: Restyles the widgets in the four owned UI      ║
+-- ║           widget containers: top-centre, centre-screen,  ║
+-- ║           power bar and below-minimap.                   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 local KE = select(2, ...)
 
 if not KitnEssentials then

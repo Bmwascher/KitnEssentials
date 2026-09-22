@@ -1,8 +1,15 @@
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  ChatRecall.lua                                          ║
+-- ║  Purpose: Rules for the Up/Down typing-history recall:   ║
+-- ║           which lines may be planted back into the edit  ║
+-- ║           box.                                           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
 local KE = select(2, ...)
 
--- Rules for the Up/Down typing-history recall, kept apart from Chat.lua so a
--- spec can load them without the chat skin. Recall plants the line with
--- SetText, and addon-planted edit-box text makes the send a tainted caller.
+-- Kept apart from Chat.lua so a spec can load these rules without the chat
+-- skin. Recall plants the line with SetText, and addon-planted edit-box text
+-- makes the send a tainted caller.
 
 -- Secure slash commands (/ping, /cast, ...) never enter the history: their
 -- re-send is a protected call and a planted line cannot make it.
