@@ -640,9 +640,9 @@ function DM:OnEnable()
     self:RegisterEvent("ENCOUNTER_START", "OnEncounterStart")
     self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatForceStop")
-    -- Feign-death filtering. Registered broad; the handler's first two lines
-    -- reject every other cast in the game.
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
+    -- Feign-death filtering, on the player's own casts only.
+    self:CreateCastFrame()
+    self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     self:RegisterEvent("PLAYER_DEAD", "OnPlayerDead")
     self:RegisterEvent("DAMAGE_METER_COMBAT_SESSION_UPDATED", "OnSessionUpdated")
     -- CURRENT_SESSION_UPDATED fires for the live segment during the post-combat
@@ -771,6 +771,7 @@ function DM:OnDisable()
     if self.ReleaseChatSize then self:ReleaseChatSize() end
 
     self:UnregisterAllEvents()
+    if self.castFrame then self.castFrame:UnregisterAllEvents() end
     KE.CombatState:UnregisterListener("DamageMeter")
     if LibSpec then LibSpec.UnregisterGroup(self) end
     wipe(self.specIconByGUID)
@@ -1121,10 +1122,20 @@ function DM:ArmFeignWatch()
     end, FEIGN_TICKS)
 end
 
+-- AceEvent-3.0 has no RegisterUnitEvent; a frame of its own lets the client
+-- filter by unit.
+function DM:CreateCastFrame()
+    if self.castFrame then return end
+    local frame = CreateFrame("Frame")
+    frame:SetScript("OnEvent", function(_, event, ...)
+        self:OnSpellcastSucceeded(event, ...)
+    end)
+    self.castFrame = frame
+end
+
 -- UNIT_SPELLCAST_SUCCEEDED is one of the highest-frequency events in the game,
 -- so the spell test is first and nothing may be added above it. The event is not
--- a restricted callback (no HasRestrictions, no CallbackEvent) and several other
--- KE modules already register it broad.
+-- a restricted callback (no HasRestrictions, no CallbackEvent).
 function DM:OnSpellcastSucceeded(_, unitTarget, _, spellID)
     if issecretvalue(spellID) then return end
     if spellID ~= FEIGN_SPELL_ID then return end
