@@ -1799,7 +1799,9 @@ local rosterScratch = {}
 -- The current group's plain GUIDs in a reused set, or nil when a unit that exists
 -- cannot be read: an unidentified member could be anyone. Given classes, it also
 -- adds each GUID not yet in it with its classFilename; the second return is false
--- when a class could not be read.
+-- when a class could not be read. The player is left out, as in BuildRosterIndex:
+-- a raid walk includes them, and a raid turned party would then mark their own
+-- class a leaver.
 function DM:GroupGUIDSet(classes)
     local units, n
     if IsInRaid() then
@@ -1811,6 +1813,13 @@ function DM:GroupGUIDSet(classes)
     end
     if type(n) ~= "number" then return nil end
     if n > #units then n = #units end
+    local playerGUID
+    if n > 0 then
+        -- issecretvalue FIRST, before the type test -- the guard is
+        -- AllowedWhenUntainted and a comparison ahead of it can taint the path.
+        playerGUID = UnitGUID("player")
+        if issecretvalue(playerGUID) or type(playerGUID) ~= "string" then return nil end
+    end
     wipe(rosterScratch)
     local classesRead = true
     for i = 1, n do
@@ -1818,13 +1827,15 @@ function DM:GroupGUIDSet(classes)
         if UnitExists(unit) then
             local guid = UnitGUID(unit)
             if issecretvalue(guid) or type(guid) ~= "string" then return nil end
-            rosterScratch[guid] = true
-            if classes and not classes[guid] then
-                local _, class = UnitClass(unit)
-                if issecretvalue(class) or type(class) ~= "string" or class == "" then
-                    classesRead = false
-                else
-                    classes[guid] = class
+            if guid ~= playerGUID then
+                rosterScratch[guid] = true
+                if classes and not classes[guid] then
+                    local _, class = UnitClass(unit)
+                    if issecretvalue(class) or type(class) ~= "string" or class == "" then
+                        classesRead = false
+                    else
+                        classes[guid] = class
+                    end
                 end
             end
         end
