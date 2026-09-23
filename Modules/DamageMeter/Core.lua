@@ -31,6 +31,10 @@ DM.editModeRegistered = false
 -- so the RenderBar read is issecretvalue-guarded before use as a key. Wiped on disable.
 DM.specIconByGUID = {}
 
+-- [deathRecapID] = seconds, or false when no read could vouch for the time.
+DM._deathStamps = {}
+DM._deathSeq = 0
+
 -- File-level upvalues for globals used in per-tick / per-bar render paths.
 local IsInInstance = IsInInstance
 local C_ChallengeMode = C_ChallengeMode
@@ -1936,6 +1940,150 @@ end
 DM.FormatBarValue = FormatBarValue
 DM.FormatDeathTime = FormatDeathTime
 DM.ClockText = ClockText
+
+---------------------------------------------------------------------------------
+-- Death-time stamps: in combat deathTimeSeconds is secret but the Current
+-- duration reads plain, so a death is stamped with that duration when it appears.
+---------------------------------------------------------------------------------
+
+-- Slack over the configured Combat Refresh for a tick that lands a little late.
+-- A later one leaves new rows unstamped.
+local STAMP_JITTER = 0.25
+
+-- Row text for a death time: a secret time with a stamp renders the
+-- stamp, anything else is FormatDeathTime's answer. Returns (text, isSecret).
+-- Callers pass nil stamps for any view but the live one: a recap id can name a
+-- different death in another session.
+local function DeathTimeText(value, recapID, stamps)
+    if issecretvalue(value) and not issecretvalue(recapID) and type(recapID) == "number"
+        and recapID > 0 then
+        local stamp = stamps and stamps[recapID]
+        if type(stamp) == "number" then return FormatDeathTime(stamp) end
+    end
+    return FormatDeathTime(value)
+end
+
+-- "stamp" only when this window's previous read is at most bound older in the
+-- same session. Otherwise the death may have happened any time since then. With
+-- no previous read, rows already listed were not seen arriving.
+local function DeathStampMode(prev, duration, bound)
+    if not prev or not duration or duration < prev or duration - prev > bound then
+        return "mark"
+    end
+    return "stamp"
+end
+
+-- Walks the raw source list, not the rendered rows: a row culled by the viewport
+-- or hidden by the feign filter would otherwise be stamped when it first shows,
+-- not when it happened.
+local function StampDeaths(sources, stamps, mode, duration)
+    if not mode or not sources then return end
+    for i = 1, #sources do
+        local s = sources[i]
+        local rid = s and s.deathRecapID
+        if not issecretvalue(rid) and type(rid) == "number" and rid > 0
+            and stamps[rid] == nil and issecretvalue(s.deathTimeSeconds) then
+            if mode == "stamp" and duration then
+                stamps[rid] = duration
+            else
+                stamps[rid] = false
+            end
+        end
+    end
+end
+
+-- The Current session's duration, or nil when the read fails or is secret.
+local function ReadCurrentDuration()
+    if not (C_DamageMeter and C_DamageMeter.GetSessionDurationSeconds) then return nil end
+    local ok, d = pcall(C_DamageMeter.GetSessionDurationSeconds, Enum.DamageMeterSessionType.Current)
+    if not ok or issecretvalue(d) or type(d) ~= "number" then return nil end
+    return d
+end
+
+DM.DeathTimeText = DeathTimeText
+DM.DeathStampMode = DeathStampMode
+DM.StampDeaths = StampDeaths
+
+-- The only view that writes or reads stamps: unpinned, no fallback session, and
+-- set to Current.
+function DM:IsLiveCurrent(W, cfg)
+    return not W._curSessionID and not W._fallbackSessionID
+        and cfg.SessionType == Enum.DamageMeterSessionType.Current
+end
+
+-- The Current duration with the roll check. A read below the last one means
+-- Current rolled without a start event this module sees; the stamps belong to
+-- the old session, where a recap id can name a different death. Inside a tick
+-- the tick's read is reused, so a render makes no second call.
+function DM:ReadDeathDuration()
+    if self._deathTickRead then return self._deathTickDur end
+    local duration = ReadCurrentDuration()
+    if next(self._deathStamps) ~= nil
+        and (not duration or (self._deathLastDur and duration < self._deathLastDur)) then
+        -- A failed read is treated as a roll: a silent roll during it could leave
+        -- the next read above the old one.
+        self:ResetDeathStamps()
+    end
+    if duration then self._deathLastDur = duration end
+    return duration
+end
+
+-- Tick's bracket around its renders. While any stamp exists every tick reads
+-- once, whatever the windows show, so a roll is caught within one tick.
+function DM:BeginDeathTick()
+    self._deathSeq = self._deathSeq + 1
+    self._deathTickRead, self._deathTickDur, self._deathTickOver = nil, nil, nil
+    if next(self._deathStamps) == nil then return end
+    self._deathTickDur = self:ReadDeathDuration()
+    self._deathTickRead = true
+end
+
+-- A render after this, deferred a frame or called outside a tick, stamps
+-- nothing and records no read: it carries the tick's sequence, so a roll in the
+-- gap could land within the bound of the window's old read.
+function DM:EndDeathTick()
+    self._deathTickRead, self._deathTickDur, self._deathTickOver = nil, nil, true
+end
+
+-- Called by RenderWindow with the raw list, before the Deaths filter and before
+-- the no-data early return, so every render keeps or ends the window's watch.
+function DM:UpdateDeathStamps(W, liveView, sources)
+    W._deathLiveView = liveView or nil
+    if not liveView then
+        W._deathPrevDur, W._deathPrevSeq = nil, nil
+        return
+    end
+    local duration = self:ReadDeathDuration()
+    if self._deathTickOver then return end
+    local seq = self._deathSeq
+    local prev = W._deathPrevDur
+    -- A read older than the previous tick does not vouch: the window missed a
+    -- tick, and Current may have rolled unseen meanwhile.
+    if not W._deathPrevSeq or seq - W._deathPrevSeq > 1 then prev = nil end
+    W._deathPrevDur, W._deathPrevSeq = duration, seq
+    -- One refresh interval, read as StartTicker reads it, plus the jitter.
+    local bound = ((self.db and self.db.RefreshRate) or 0.5) + STAMP_JITTER
+    StampDeaths(sources, self._deathStamps, DeathStampMode(prev, duration, bound), duration)
+end
+
+-- A Current-session boundary: forget every stamp, and every window's previous
+-- read, which belongs to the old session.
+function DM:ResetDeathStamps()
+    wipe(self._deathStamps)
+    if not self.windows_rt then return end
+    for _, W in pairs(self.windows_rt) do
+        W._deathPrevDur = nil
+    end
+end
+
+function DM:DropDeathStamps()
+    wipe(self._deathStamps)
+    self._deathLastDur = nil
+    if not self.windows_rt then return end
+    for _, W in pairs(self.windows_rt) do
+        W._deathPrevDur, W._deathPrevSeq, W._deathLiveView = nil, nil, nil
+    end
+end
 
 -- Marks a recap the client would not let us read, as opposed to one that simply
 -- is not there. The two look identical to a caller that only tests the events,
