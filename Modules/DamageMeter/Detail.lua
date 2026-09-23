@@ -1889,13 +1889,17 @@ function DM:PopulateHoverTip(W, bar, isInitial)
         -- Breakdown path: show the column-header row and push the data rows down past it.
         -- Reserve scales with the now-larger (size-1) white headers so big fonts can't overlap row 1.
         bodyTop = math_max(TIP_COL_HDR_H, (size or 12) + 2)
-        -- Count-type views (Interrupts / Dispels / Absorbs -- absent from RATE_METER_TYPES)
-        -- have no meaningful per-second: drop the DPS column entirely (parity with the main
-        -- bars, which drop the rate half of the value string). The Amount column slides
-        -- right into the vacated DPS slot so the two remaining columns stay packed and the
-        -- spell name gains the width.
+        -- Fill max came from SelectSpellList with the list; percent basis stays
+        -- the source's whole total, and is unavailable while it is secret.
+        local canPercent = src.totalAmount and canaccessvalue(src.totalAmount) and type(src.totalAmount) == "number"
+        -- The shown columns take the right-edge slots in order, so a dropped column
+        -- closes up and the spell name gains the width. % shows only while the
+        -- total can be read (in combat the own row's total is secret); DPS only on
+        -- rate types, since a rate on a count (Interrupts / Dispels) is noise.
         local isRate = (self.RATE_METER_TYPES and self.RATE_METER_TYPES[meterType]) == true
-        local amtX = isRate and TIP_AMT_X or TIP_DPS_X
+        local dpsX = canPercent and TIP_DPS_X or TIP_PCT_X
+        local amtX = dpsX
+        if isRate then amtX = canPercent and TIP_AMT_X or TIP_DPS_X end
         if _tip.colHdr then
             local hdrY = -(headerH)
             _tip.colHdr.spell:ClearAllPoints()
@@ -1906,18 +1910,16 @@ function DM:PopulateHoverTip(W, bar, isInitial)
             -- build-time TOPRIGHT) so it stays bounded by the Amount column's left edge.
             _tip.colHdr.spell:SetPoint("TOPRIGHT", _tip.colHdr.amount, "TOPLEFT", -3, 0)
             _tip.colHdr.dps:ClearAllPoints()
-            _tip.colHdr.dps:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_DPS_X, hdrY)
+            _tip.colHdr.dps:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", dpsX, hdrY)
             _tip.colHdr.pct:ClearAllPoints()
             _tip.colHdr.pct:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_PCT_X, hdrY)
             -- Reset the Spell label (the EnemyDamageTaken branch retitles it "Player").
             _tip.colHdr.spell:SetText("Spell")
-            _tip.colHdr.spell:Show(); _tip.colHdr.amount:Show(); _tip.colHdr.pct:Show()
+            _tip.colHdr.spell:Show(); _tip.colHdr.amount:Show()
             if isRate then _tip.colHdr.dps:Show() else _tip.colHdr.dps:Hide() end
+            if canPercent then _tip.colHdr.pct:Show() else _tip.colHdr.pct:Hide() end
         end
 
-        -- Fill max came from SelectSpellList with the list; percent basis stays
-        -- the source's whole total, and is unavailable while it is secret.
-        local canPercent = src.totalAmount and canaccessvalue(src.totalAmount) and type(src.totalAmount) == "number"
         local total = src.totalAmount
         if not canaccessvalue(total) or type(total) ~= "number" then total = 0 end
         local count = math_min(#spells, HOVER_TIP_ROWS)
@@ -1953,13 +1955,12 @@ function DM:PopulateHoverTip(W, bar, isInitial)
 
                 -- Per-path column anchors. The row pool is shared with the recap branch,
                 -- which re-anchors row.value to the full right edge (-TIP_PAD); re-pin the
-                -- numeric columns to their fixed offsets here so a breakdown render after
-                -- a recap render restores the aligned-column layout. Amount sits at amtX:
-                -- the usual slot on rate types, the DPS slot on count types (DPS dropped).
+                -- numeric columns here so a breakdown render after a recap render
+                -- restores the aligned-column layout. The slots match the column header.
                 row.value:ClearAllPoints()
                 row.value:SetPoint("RIGHT", row.fill, "RIGHT", amtX, 0)
                 row.dps:ClearAllPoints()
-                row.dps:SetPoint("RIGHT", row.fill, "RIGHT", TIP_DPS_X, 0)
+                row.dps:SetPoint("RIGHT", row.fill, "RIGHT", dpsX, 0)
                 row.pct:ClearAllPoints()
                 row.pct:SetPoint("RIGHT", row.fill, "RIGHT", TIP_PCT_X, 0)
 
