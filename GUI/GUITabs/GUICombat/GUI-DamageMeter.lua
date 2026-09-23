@@ -1569,8 +1569,8 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     cardSeg:AddRow(segNoteRow, 80, 0)
 
     cardSeg:AddNote(KE:ColorTextByTheme("Reset on Instance Entry") .. " clears the meter when you enter a different dungeon, raid, scenario or Delve, or a different difficulty; " ..
-        KE:ColorTextByTheme("Ask") .. " shows a prompt first. Running back after a death, a login and a /reload never reset. Key history is kept. " ..
-        KE:ColorTextByTheme("Reset on Logout") .. " clears it the next time you log in; /reload keeps it.")
+        KE:ColorTextByTheme("Ask") .. " shows a prompt first. Running back after a death, a login or a /reload is never an entry. Key history is kept. " ..
+        KE:ColorTextByTheme("Reset on Logout") .. " clears the meter the next time you log in; /reload keeps it.")
 
     yOffset = cardSeg:GetNextOffset()
 

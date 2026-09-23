@@ -1090,6 +1090,9 @@ function DM:ClearFeignTags(site)
     if self._feignTags then wipe(self._feignTags) else self._feignTags = {} end
     if self._feignSnapshot then wipe(self._feignSnapshot) else self._feignSnapshot = {} end
     if self._feignAmbig then wipe(self._feignAmbig) else self._feignAmbig = {} end
+    -- A real death tagged during a live watch must reappear when OnPlayerDead
+    -- clears it; no Deaths update is due to repaint it.
+    self:BumpDeathsSeq()
     -- The per-render session memo has to go with them. It is only cleared at the
     -- start of a render tick, and a mouse-wheel scroll renders directly without
     -- that clear -- so a tag earned now could otherwise be applied to the
@@ -1201,6 +1204,7 @@ function DM:ArmFeignWatch()
         local deadOk = not issecretvalue(dead) and dead == false
         if fdOk and deadOk then
             DM._feignTags[rid] = true
+            DM:BumpDeathsSeq()
             if DEBUG_DM then KE:Print("[DM] feign tagged: " .. rid) end
         elseif DEBUG_DM then
             KE:Print("[DM] feign tag refused: fd=" .. tostring(fdOk) .. " dead=" .. tostring(deadOk))
@@ -2479,13 +2483,20 @@ function DM:UpdateDeathStamps(W, liveView, sources)
     StampDeaths(sources, self._deathStamps, DeathStampMode(prev, duration, bound), duration)
 end
 
+-- Deaths rows changed with no session update to say so: the stamps were wiped,
+-- or a feign tag hid or restored a row. The combat ticker then repaints a
+-- Deaths window instead of skipping it as quiet.
+function DM:BumpDeathsSeq()
+    local deaths = Enum.DamageMeterType.Deaths
+    self._typeSeq[deaths] = (self._typeSeq[deaths] or 0) + 1
+end
+
 -- A Current-session boundary: forget every stamp, and every window's previous
 -- read, which belongs to the old session. A Deaths window then repaints on the
 -- next tick instead of keeping rows stamped from the old session.
 function DM:ResetDeathStamps()
     wipe(self._deathStamps)
-    local deaths = Enum.DamageMeterType.Deaths
-    self._typeSeq[deaths] = (self._typeSeq[deaths] or 0) + 1
+    self:BumpDeathsSeq()
     if not self.windows_rt then return end
     for _, W in pairs(self.windows_rt) do
         W._deathPrevDur = nil
@@ -3196,8 +3207,11 @@ function DM.InstanceScope(instanceType, delveActive)
 end
 
 -- What two entries are compared by: the instance and its difficulty, or nil
--- when either is unreadable, which counts as outside any instance.
+-- when either is secret or unreadable, which counts as outside any instance.
 function DM.InstanceEntryKey(instanceID, difficultyID)
+    -- issecretvalue first: a secret number passes the type test, and the
+    -- concatenation would throw.
+    if issecretvalue(instanceID) or issecretvalue(difficultyID) then return nil end
     if type(instanceID) ~= "number" or type(difficultyID) ~= "number" then return nil end
     return instanceID .. ":" .. difficultyID
 end
