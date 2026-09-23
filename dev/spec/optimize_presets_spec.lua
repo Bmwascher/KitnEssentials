@@ -4,6 +4,13 @@
 -- whether a stored preset still describes the live cvars.
 local L = require("dev.spec._ke_loader")
 
+-- Stacking nameplates is a packed bitfield read through its flags, so both
+-- presets' value (enemy only) is seeded as the client stores it.
+local function seedStacking(rec)
+    rec.cvars["nameplateStackingTypes"] = "\2A"
+    rec.stackBits[1] = true
+end
+
 -- Sets every cvar in every category to what `balanced` would write, so a test
 -- can then move exactly one and see the validation notice.
 local function seedBalanced(OPT, rec)
@@ -12,6 +19,7 @@ local function seedBalanced(OPT, rec)
             rec.cvars[entry.cvar] = entry.optimal
         end
     end
+    seedStacking(rec)
 end
 
 local function seedMaxFPS(OPT, rec)
@@ -21,6 +29,7 @@ local function seedMaxFPS(OPT, rec)
             rec.cvars[entry.cvar] = ov[entry.cvar] or entry.optimal
         end
     end
+    seedStacking(rec)
 end
 
 describe("Optimize presets", function()
