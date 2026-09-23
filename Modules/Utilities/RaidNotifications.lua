@@ -107,7 +107,8 @@ local SATED_DEBUFFS = {
 local ALERT_DEFS = {
     { key = "Gateway",    text = "GATE USABLE", icon = 607513,  enableKey = "GatewayEnabled" },
     { key = "ResetBoss",  text = "RESET BOSS",  icon = 136090,  enableKey = "ResetBossEnabled" },  -- Spell_Nature_Exhaustion
-    { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES", enableKey = "LootBossEnabled", frameless = true },
+    -- crop: the head's 105 px square in the 128 px texture; the rest is margin.
+    { key = "LootBoss",   text = "LOOT BOSS",   icon = "Interface\\AddOns\\KitnEssentials\\Media\\Icon\\KES", enableKey = "LootBossEnabled", frameless = true, crop = { 12 / 128, 117 / 128, 8 / 128, 113 / 128 } },
     { key = "BenchAlert", text = "BENCHED",     icon = 134414, enableKey = "BenchEnabled" },  -- INV_Misc_Rune_01
     { key = "Voidcore",   text = "BONUS ROLLS MISSING", icon = 7658128, enableKey = "VoidcoreEnabled" },
 }
@@ -295,17 +296,26 @@ local function CreateIcon(parent, anchor, point, relPoint, xOff, iconSize)
 end
 
 -- Blizzard spell icons are opaque squares and take the holder's dark
--- backdrop and borders; art with its own transparent margin draws bare.
-local function SetIconFrame(holder, framed)
+-- backdrop and borders; art with its own transparent margin draws bare and
+-- fills the holder, with no border to sit inside. Rows are pooled, so both
+-- states set the inset and the coords.
+local function SetIconFrame(holder, framed, crop)
     holder:SetBackdropColor(0, 0, 0, framed and 0.8 or 0)
     holder:SetBackdropBorderColor(0, 0, 0, framed and 1 or 0)
     for _, border in pairs(holder.borders) do
         border:SetShown(framed)
     end
+    local tex = holder.tex
+    local inset = framed and 1 or 0
+    tex:ClearAllPoints()
+    tex:SetPoint("TOPLEFT", inset, -inset)
+    tex:SetPoint("BOTTOMRIGHT", -inset, inset)
     if framed then
-        KE:ApplyIconZoom(holder.tex)
+        KE:ApplyIconZoom(tex)
+    elseif crop then
+        tex:SetTexCoord(crop[1], crop[2], crop[3], crop[4])
     else
-        holder.tex:SetTexCoord(0, 1, 0, 1)
+        tex:SetTexCoord(0, 1, 0, 1)
     end
 end
 
@@ -443,8 +453,8 @@ function RN:ApplyRowVisuals(row)
         local iconSize = db.FontSize or 16
         row.leftIcon:SetSize(iconSize, iconSize)
         row.rightIcon:SetSize(iconSize, iconSize)
-        SetIconFrame(row.leftIcon, not def.frameless)
-        SetIconFrame(row.rightIcon, not def.frameless)
+        SetIconFrame(row.leftIcon, not def.frameless, def.crop)
+        SetIconFrame(row.rightIcon, not def.frameless, def.crop)
     end
 end
 
