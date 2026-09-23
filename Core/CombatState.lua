@@ -73,7 +73,7 @@ local function dbgState(cs)
 end
 
 -- Same scan order as LiveGroupInCombat, but names the first unit in combat.
--- Raid and party flags can be secret: test before any branch.
+-- The checker treats raid and party flags as possibly secret: test before any branch.
 local function dbgCombatHolder()
     local flag = UnitAffectingCombat("player")
     if issecretvalue(flag) then return "player", "player secret" end
