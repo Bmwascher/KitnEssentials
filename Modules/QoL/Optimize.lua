@@ -310,8 +310,8 @@ local VALUE_LABELS = {
         local t = { [""] = "None", ["AA"] = "Enemy Units", ["BB"] = "Friendly Units", ["CC"] = "Both" }
         return t[v] or v
     end,
-    nameplateOverlapH = function(v) return tostring(v) end,
-    nameplateOverlapV = function(v) return tostring(v) end,
+    nameplateOverlapH = function(v) return tostring(tonumber(v) or v) end,
+    nameplateOverlapV = function(v) return tostring(tonumber(v) or v) end,
     WorldTextMinSize = function(v) return tostring(v) end,
     -- Cosmetic additions
     overrideScreenFlash = function(v) return v == "1" and "Enabled" or "Disabled" end,
