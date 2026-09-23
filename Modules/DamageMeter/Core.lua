@@ -1572,10 +1572,14 @@ local matchScratch = {}
 
 -- A spec icon that can discriminate. The client leaves specIconID nil for a
 -- player it has not resolved, which in a pug is commonly everyone, and reports 0
--- for a mob. Both mean "unknown" and neither narrows anything.
+-- for a mob. Both mean "unknown" and neither narrows anything. The field is
+-- NeverSecret; the secrecy test makes a wrong annotation cost the match instead
+-- of throwing on the compare.
 local function KnownSpec(v)
+    if issecretvalue(v) then return false end
     return type(v) == "number" and v ~= 0
 end
+DM.KnownSpec = KnownSpec
 
 -- Which group member does this row belong to? PURE over the roster index plus the
 -- row's two NeverSecret fields, so the whole decision is testable without the
@@ -1595,7 +1599,10 @@ end
 -- departed player's row that outlived their group membership -- and there is no
 -- way to tell which row is which. Equal counts are the ordinary case, including
 -- a legitimate two-members-two-rows tie-break, so this refuses only the surplus.
-function DM.MatchRowToRoster(members, classFilename, specIconID, rowsOfClass)
+--
+-- specRows is this class's spec -> row count from the same source list, with
+-- key 0 counting rows of unknown spec.
+function DM.MatchRowToRoster(members, classFilename, specIconID, rowsOfClass, specRows)
     if type(members) ~= "table" then return nil, "roster" end
     if type(classFilename) ~= "string" or classFilename == "" then return nil, "noclass" end
 
@@ -1633,6 +1640,14 @@ function DM.MatchRowToRoster(members, classFilename, specIconID, rowsOfClass)
         end
     end
     if not hit then return nil, "nomatch" end
+    -- The claim picks a row only if every member of the class had one row at the
+    -- last paint, every row's spec is known, and this spec has one row. A member
+    -- whose recorded spec is stale could otherwise hold this row's spec in a row
+    -- that is unknown, or that appeared after the counts were taken.
+    if type(specRows) ~= "table" then return nil, "ambiguous" end
+    if rowsOfClass < n then return nil, "rowless" end
+    if (specRows[0] or 0) > 0 then return nil, "specunknown" end
+    if specRows[specIconID] ~= 1 then return nil, "ambiguous" end
     return hit.guid
 end
 
@@ -1661,8 +1676,8 @@ end
 -- Resolve an ally row to a plain GUID. Reached ONLY for an ally row in combat.
 -- The own row keeps its own substitution and the Deaths view never consults
 -- identity, so neither runs any of this.
-function DM:ResolveAllyGUID(classFilename, specIconID, rowsOfClass)
-    return DM.MatchRowToRoster(self:RosterIndex(), classFilename, specIconID, rowsOfClass)
+function DM:ResolveAllyGUID(classFilename, specIconID, rowsOfClass, specRows)
+    return DM.MatchRowToRoster(self:RosterIndex(), classFilename, specIconID, rowsOfClass, specRows)
 end
 
 -- May a detail panel open, and stay open? The single gate every detail path

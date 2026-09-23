@@ -41,7 +41,7 @@ describe("MatchRowToRoster resolves only when exactly one member can be meant", 
         local members = {
             member("guid-fury", "WARRIOR", 11), member("guid-arms", "WARRIOR", 22),
         }
-        assert.equals("guid-arms", DM.MatchRowToRoster(members, "WARRIOR", 22, 2))
+        assert.equals("guid-arms", DM.MatchRowToRoster(members, "WARRIOR", 22, 2, { [11] = 1, [22] = 1 }))
     end)
 end)
 
@@ -200,5 +200,26 @@ describe("BuildRosterIndex fails closed on an unreadable member", function()
             IsInGroup = function() return false end,
         })
         assert.equals(0, #dm.BuildRosterIndex())
+    end)
+end)
+
+describe("MatchRowToRoster one-row guard", function()
+    it("refuses a known match unless every member has one row, every row's spec is known and this spec has one row", function()
+        -- A member whose recorded spec is out of date (or a departed player's row)
+        -- may hold the claimed spec, so the claim cannot say which row is whose.
+        local members = {
+            member("guid-stale", "SHAMAN", 11), member("guid-resto", "SHAMAN", 22),
+        }
+        local cases = {
+            { name = "two rows of the spec", rows = 2, specRows = { [22] = 2 }, why = "ambiguous" },
+            { name = "no per-spec row counts", rows = 2, specRows = nil, why = "ambiguous" },
+            { name = "another row's spec unknown", rows = 2, specRows = { [22] = 1, [0] = 1 }, why = "specunknown" },
+            { name = "a member with no row", rows = 1, specRows = { [22] = 1 }, why = "rowless" },
+        }
+        for _, c in ipairs(cases) do
+            local guid, why = DM.MatchRowToRoster(members, "SHAMAN", 22, c.rows, c.specRows)
+            assert.is_nil(guid, c.name)
+            assert.equals(c.why, why, c.name)
+        end
     end)
 end)
