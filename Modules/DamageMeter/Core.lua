@@ -3556,7 +3556,6 @@ function DM:VisibleWindows(context)
     return out
 end
 
--- A type's paint sequence: its own updates plus the updates that named no type.
 local function TypeSeq(meterType)
     return (DM._typeSeq[meterType] or 0) + DM._allSeq
 end
