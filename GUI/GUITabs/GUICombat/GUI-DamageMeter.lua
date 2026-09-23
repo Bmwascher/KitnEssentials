@@ -1492,7 +1492,6 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     manager:Register(keyResetChk, "all")
     cardSeg:AddRow(rowSeg, Theme.rowHeight)
 
-    -- Reset on Instance Entry and its mode; the mode greys while the toggle is off.
     manager:SetCondition("instancereset", function() return db.ResetOnInstanceEntry == true end)
     local rowInst = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
     local instResetChk = GUIFrame:CreateCheckbox(rowInst, "Reset on Instance Entry", {

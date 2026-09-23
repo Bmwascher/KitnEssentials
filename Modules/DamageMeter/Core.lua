@@ -67,6 +67,10 @@ DM._lastEntryScope = nil
 DM._resetGen = 0
 DM._wipeBoundary = false
 
+-- An instance reset decided while a capture would read secret amounts waits
+-- here, as its token, to be judged again at combat end.
+DM._deferredReset = nil
+
 -- Session updates per meter type, and the ones that named no type. A window
 -- records their sum for its type at each Tick paint; an unchanged sum means no
 -- new data for it.
@@ -859,6 +863,7 @@ function DM:OnDisable()
     self:ClearFeignTags("module disable")
     self._wipeBoundary = false
     self._lastEntryKey, self._lastEntryScope = nil, nil
+    self._deferredReset = nil
     self:CloseInstancePrompt()
     self._feignArmable = false
     -- The runtime windows survive a disable, so their cached clock text would
@@ -1321,7 +1326,8 @@ function DM:OnRegenDisabled()
     if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED") end
 end
 
--- Only the cache invalidation that a combat end marks the boundary of.
+-- The cache invalidation that a combat end marks the boundary of, and an
+-- instance reset held through combat.
 function DM:OnRegenEnabled()
     -- Combat ended for the player: a hover tip showing the in-combat "secret" message
     -- should re-populate with real (now-readable) data on the next poll -- mark dirty.
@@ -1330,6 +1336,9 @@ function DM:OnRegenEnabled()
     -- drop it so the post-fight hover rebuilds against THIS fight's enemies, not the stale
     -- constant-keyed map (wiped on both REGEN_DISABLED + ENABLED).
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
+    -- A Combat restriction still active here holds the reset again, and
+    -- OnRestrictionChanged runs it when the restriction lifts.
+    self:ResumeInstanceReset()
 end
 
 -- A hard segment boundary: segment and history bookkeeping only.
@@ -2027,12 +2036,14 @@ end
 
 -- GUIDs can stay secret for a while after combat ends; the Combat restriction
 -- lifting is when they read plain. Repaint once then, so the render path records
--- what the post-combat paint skipped under all its usual rules, and read Overall
--- while its rows' owners are not all known. Deferred a frame: nothing documents
--- the data as readable inside the dispatch.
+-- what the post-combat paint skipped under all its usual rules, read Overall
+-- while its rows' owners are not all known, and run an instance reset held
+-- through combat. Deferred a frame: nothing documents the data as readable
+-- inside the dispatch.
 function DM:OnRestrictionChanged(_, rType, state)
     local harvest, seed = self._specHarvestOpen, self._overallLeaverUnknown
-    if not harvest and not seed then return end
+    local held = self._deferredReset ~= nil
+    if not harvest and not seed and not held then return end
     if issecretvalue(rType) or issecretvalue(state) then return end
     local types, states = Enum.AddOnRestrictionType, Enum.AddOnRestrictionState
     if not types or not states or rType ~= types.Combat or state ~= states.Inactive then return end
@@ -2040,6 +2051,7 @@ function DM:OnRestrictionChanged(_, rType, state)
         if not DM.enabled or InCombatLockdown() then return end
         if seed then DM:SeedOverallMembers() end
         if harvest then DM:Tick() end
+        if held then DM:ResumeInstanceReset() end
     end)
 end
 
@@ -3247,12 +3259,21 @@ function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficu
     return newKey, newScope, "ask", moved
 end
 
--- An Ask prompt resets only for the entry it was raised for: the module and
--- the option still on, the player still there, and no meter reset or key start
--- since.
+-- An instance reset, asked or held for combat end, happens only for the entry
+-- it was decided for: the module and the option still on, the player still
+-- there, and no meter reset or key start since.
 function DM.InstanceAskValid(token, key, gen, enabled, optionOn)
     return enabled == true and optionOn == true and token ~= nil and key ~= nil
         and key == token.key and gen == token.gen
+end
+
+-- "wipe", "defer" while a capture would read secret amounts, or "none" when
+-- the reset is no longer valid. Validity comes first, so a stale reset is
+-- never held for combat end.
+function DM.InstanceResetAction(token, key, gen, enabled, optionOn, blocked)
+    if not DM.InstanceAskValid(token, key, gen, enabled, optionOn) then return "none" end
+    if blocked then return "defer" end
+    return "wipe"
 end
 
 -- The current scope, instance ID, difficulty ID and plain instance name. A
@@ -3288,18 +3309,49 @@ function DM:CloseInstancePrompt()
     end
 end
 
+-- True while a capture would store secret amounts: the meter's getters are
+-- SecretWhenInCombat, which follows the Combat restriction. The player's combat
+-- flag is asked too; the union can only hold a reset more often, the safe
+-- direction.
+local function CaptureBlocked()
+    if InCombatLockdown() then return true end
+    local kinds = Enum.AddOnRestrictionType
+    if not (kinds and C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive) then return false end
+    return C_RestrictedActions.IsAddOnRestrictionActive(kinds.Combat) == true
+end
+
+-- Resets for the entry the token pins while that is still true. A capture
+-- while blocked would keep secret amounts, which the breakdown later shows as
+-- zeros, and the wipe would leave no plain copy, so the reset is held for
+-- combat end and judged again then.
+function DM:ApplyInstanceReset(token)
+    local _, instanceID, difficultyID = ReadInstanceEntry()
+    local optionOn = self.db ~= nil and self.db.ResetOnInstanceEntry == true
+    local action = DM.InstanceResetAction(token, DM.InstanceEntryKey(instanceID, difficultyID),
+        self._resetGen, self.enabled, optionOn, CaptureBlocked())
+    if action == "defer" then
+        self._deferredReset = token
+    elseif action == "wipe" then
+        self:CaptureAndWipe()
+    end
+end
+
+-- Combat end (OnRegenEnabled, OnRestrictionChanged): a held reset is judged
+-- again, and held again if a capture is still blocked.
+function DM:ResumeInstanceReset()
+    local token = self._deferredReset
+    if not token then return end
+    self._deferredReset = nil
+    self:ApplyInstanceReset(token)
+end
+
 -- Asks before resetting. The token pins the entry the prompt was raised for.
 function DM:ShowInstancePrompt(key, name)
     local token = { key = key, gen = self._resetGen }
     local onAccept
     onAccept = function()
         if DM._instancePromptAccept == onAccept then DM._instancePromptAccept = nil end
-        local _, instanceID, difficultyID = ReadInstanceEntry()
-        local nowKey = DM.InstanceEntryKey(instanceID, difficultyID)
-        local optionOn = DM.db ~= nil and DM.db.ResetOnInstanceEntry == true
-        if DM.InstanceAskValid(token, nowKey, DM._resetGen, DM.enabled, optionOn) then
-            DM:CaptureAndWipe()
-        end
+        DM:ApplyInstanceReset(token)
     end
     local onCancel = function()
         if DM._instancePromptAccept == onAccept then DM._instancePromptAccept = nil end
@@ -3320,15 +3372,14 @@ function DM:CheckInstanceEntry(freshLoad)
         self._lastEntryKey, self._lastEntryScope, scope, instanceID, difficultyID, freshLoad,
         db and db.ResetOnInstanceEntry == true, db and db.InstanceResetMode)
     -- The key compare cannot see a way out and back in, or a Delve ending in
-    -- place; this bump refuses a prompt raised before either, and the close
-    -- takes the dead prompt off screen.
+    -- place; this bump refuses a prompt or a held reset from before either, and
+    -- the close takes the dead prompt off screen.
     if moved then
         self._resetGen = self._resetGen + 1
         self:CloseInstancePrompt()
     end
-    -- An entry that fires has just been recorded as the last key.
     if action == "auto" then
-        self:CaptureAndWipe()
+        self:ApplyInstanceReset({ key = self._lastEntryKey, gen = self._resetGen })
     elseif action == "ask" then
         self:ShowInstancePrompt(self._lastEntryKey, name)
     end

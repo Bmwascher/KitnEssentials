@@ -88,6 +88,22 @@ describe("InstanceAskValid", function()
     end)
 end)
 
+describe("InstanceResetAction", function()
+    it("holds a still-valid reset while a capture would read secret amounts", function()
+        -- InstanceAskValid's case covers every way the reset stops being valid;
+        -- these rows cover the combat gate and its order against validity.
+        local token = { key = "200:8", gen = 3 }
+        local cases = {
+            { name = "valid, not blocked", gen = 3, blocked = false, want = "wipe" },
+            { name = "valid, blocked", gen = 3, blocked = true, want = "defer" },
+            { name = "no longer valid, blocked", gen = 4, blocked = true, want = "none" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, DM.InstanceResetAction(token, "200:8", c.gen, true, true, c.blocked), c.name)
+        end
+    end)
+end)
+
 describe("PaintSkip", function()
     it("skips only a window whose view and data are unchanged since its last paint", function()
         local cases = {
