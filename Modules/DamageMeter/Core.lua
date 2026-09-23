@@ -72,7 +72,7 @@ DM._wipeBoundary = false
 DM._deferredReset = nil
 
 -- Reset on Logout, held the same way when the login came in combat. A meter
--- reset or key start since clears it.
+-- reset, key start or capture since clears it.
 DM._loginResetHeld = false
 
 -- Session updates per meter type, and the ones that named no type. A window
@@ -3181,6 +3181,9 @@ function DM:CaptureAndWipe()
     -- Cleared before the attempt so a failed wipe cannot leave an older boundary
     -- for a key start to trust.
     self._wipeBoundary = false
+    -- The store is captured, so a held Reset on Logout is served even if the
+    -- wipe fails: running it later would capture the same store again.
+    self._loginResetHeld = false
     local wiped = false
     if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
         -- One-shot: our own wipe fires DAMAGE_METER_RESET, whose handler must
@@ -3282,16 +3285,12 @@ local function ResetAction(valid, blocked)
     return "wipe"
 end
 
--- An instance reset's action, valid as InstanceAskValid judges it.
 function DM.InstanceResetAction(token, key, gen, enabled, optionOn, blocked)
     return ResetAction(DM.InstanceAskValid(token, key, gen, enabled, optionOn), blocked)
 end
 
--- Reset on Logout's action, valid while the module and the option are on and
--- the store is not empty since this module's own wipe: an instance reset held
--- through the same combat may already have captured and wiped it.
-function DM.LoginResetAction(enabled, optionOn, emptySinceWipe, blocked)
-    return ResetAction(enabled == true and optionOn == true and emptySinceWipe ~= true, blocked)
+function DM.LoginResetAction(enabled, optionOn, blocked)
+    return ResetAction(enabled == true and optionOn == true, blocked)
 end
 
 -- The current scope, instance ID, difficulty ID and plain instance name. A
@@ -3359,7 +3358,7 @@ end
 function DM:ApplyLoginReset()
     self._loginResetHeld = false
     local optionOn = self.db ~= nil and self.db.ResetOnLogout == true
-    local action = DM.LoginResetAction(self.enabled, optionOn, self._wipeBoundary, CaptureBlocked())
+    local action = DM.LoginResetAction(self.enabled, optionOn, CaptureBlocked())
     if action == "defer" then
         self._loginResetHeld = true
     elseif action == "wipe" then
@@ -3369,9 +3368,10 @@ end
 
 -- Combat end (OnRegenEnabled, OnRestrictionChanged): each held reset is judged
 -- again, and held again if a capture is still blocked. The instance reset goes
--- first: its wipe sets _wipeBoundary at once, which refuses the login reset,
--- while a login wipe refuses the instance reset only through the generation
--- bump DAMAGE_METER_RESET brings, which may arrive later.
+-- first: its capture clears the held login reset at once, wiped or not, while
+-- a login wipe refuses the instance reset only through the generation bump
+-- DAMAGE_METER_RESET brings, which may arrive later and never comes when the
+-- wipe fails.
 function DM:ResumeHeldResets()
     local token = self._deferredReset
     self._deferredReset = nil
