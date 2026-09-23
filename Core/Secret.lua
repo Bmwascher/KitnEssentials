@@ -81,8 +81,8 @@ end
 --
 -- The shape it actually handles is a plain `..` between TWO secrets, which is
 -- unverified. A secret used as the format STRING is a different matter: this
--- wrapper cannot parse one either, and nothing should try -- such a body is
--- printed as it arrived.
+-- wrapper cannot parse one, and it is unmeasured, so it is tried only under
+-- pcall with the body as it arrived as the fallback (CMH.ComposeBossBody).
 --
 -- The return may itself be secret, and nothing here needs to know: `ok` is a
 -- plain boolean from pcall, type() never throws whatever it is handed, and no

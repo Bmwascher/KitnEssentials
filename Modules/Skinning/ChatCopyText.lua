@@ -19,8 +19,7 @@ local tconcat = table.concat
 -- Reused across calls; the join reads only the first `count` entries.
 local parts = {}
 
--- Length of the valid UTF-8 sequence led by byte b at i, or nil. Called only
--- for leads C2-F4; ranges per RFC 3629.
+-- Called only for leads C2-F4, so a lead of DF or less is a 2-byte sequence.
 local function sequenceLength(text, i, b)
     local b2 = strbyte(text, i + 1)
     if not b2 then return nil end
@@ -47,8 +46,6 @@ local function sequenceLength(text, i, b)
     return 4
 end
 
--- Drops control bytes except LF, keeps valid UTF-8 whole, and writes one ?
--- for every byte that starts no valid sequence.
 function KE.SanitizeCopyLine(text)
     if not strfind(text, "[%z\1-\9\11-\31\127-\255]") then return text end
 
