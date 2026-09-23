@@ -766,11 +766,23 @@ end
 ---------------------------------------------------------------------------------
 -- Combat Event Registration
 ---------------------------------------------------------------------------------
+-- AceEvent-3.0 has no RegisterUnitEvent; a frame of its own lets the client
+-- filter by unit. Only the own-kick event lives here: the interrupt events
+-- stay on AceEvent because they must see every unit.
+function KT:CreateCastFrame()
+    if self.castFrame then return end
+    local frame = CreateFrame("Frame")
+    frame:SetScript("OnEvent", function(_, event, ...)
+        self:OnSpellcastSucceeded(event, ...)
+    end)
+    self.castFrame = frame
+end
+
 function KT:RegisterCombatEvents()
     if self.combatEventsRegistered then return end
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnSpellcastSucceeded")
+    self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
     self:RegisterEvent("CHAT_MSG_ADDON", "OnCommReceived")
     self.combatEventsRegistered = true
 end
@@ -779,7 +791,7 @@ function KT:UnregisterCombatEvents()
     if not self.combatEventsRegistered then return end
     self:UnregisterEvent("UNIT_SPELLCAST_INTERRUPTED")
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
-    self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    if self.castFrame then self.castFrame:UnregisterAllEvents() end
     self:UnregisterEvent("CHAT_MSG_ADDON")
     self.combatEventsRegistered = false
     self._lastHelloSent = nil
@@ -1699,6 +1711,7 @@ function KT:OnEnable()
     if not self.db.Enabled then return end
 
     self:CreateFrames()
+    self:CreateCastFrame()
     self:RegWithEditMode()
 
     -- Kick-sync comm prefixes (pcall: registration can fail at the prefix
@@ -1733,6 +1746,7 @@ end
 
 function KT:OnDisable()
     self:UnregisterAllEvents()
+    if self.castFrame then self.castFrame:UnregisterAllEvents() end
     if LibSpec then LibSpec.UnregisterGroup(self) end
     self.combatEventsRegistered = false
     self:CancelAllTimers()
