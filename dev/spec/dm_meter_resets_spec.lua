@@ -87,3 +87,19 @@ describe("InstanceAskValid", function()
         end
     end)
 end)
+
+describe("PaintSkip", function()
+    it("skips only a window whose view and data are unchanged since its last paint", function()
+        local cases = {
+            { name = "unchanged", pt = "DMG", ps = 5, nt = "DMG", ns = 5, open = false, want = true },
+            { name = "view changed", pt = "DMG", ps = 5, nt = "HEAL", ns = 5, open = false, want = false },
+            { name = "data updated", pt = "DMG", ps = 5, nt = "DMG", ns = 6, open = false, want = false },
+            { name = "detail panel open", pt = "DMG", ps = 5, nt = "DMG", ns = 5, open = true, want = false },
+            -- A deferred paint clears the type and leaves the old sequence.
+            { name = "no paint record", pt = nil, ps = 5, nt = nil, ns = 5, open = false, want = false },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, DM.PaintSkip(c.pt, c.ps, c.nt, c.ns, c.open), c.name)
+        end
+    end)
+end)

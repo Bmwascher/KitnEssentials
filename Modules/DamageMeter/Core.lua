@@ -67,6 +67,12 @@ DM._lastEntryScope = nil
 DM._resetGen = 0
 DM._wipeBoundary = false
 
+-- Session updates per meter type, and the ones that named no type. A window
+-- records their sum for its type at each Tick paint; an unchanged sum means no
+-- new data for it.
+DM._typeSeq = {}
+DM._allSeq = 0
+
 -- File-level upvalues for globals used in per-tick / per-bar render paths.
 local IsInInstance = IsInInstance
 local C_ChallengeMode = C_ChallengeMode
@@ -970,9 +976,11 @@ end
 
 -- DM:Tick lives in the render chunk and is resolved at runtime, so the guard
 -- keeps this lifecycle layer from throwing if combat starts before that chunk
--- loads (mirrors the DM.OpenDetail guard in Window.lua:MakeBar).
+-- loads (mirrors the DM.OpenDetail guard in Window.lua:MakeBar). Only this
+-- ticker path skips quiet windows; DM._paintSkipOff (runtime, nil by default)
+-- turns the skip off for a profiler A/B within one session.
 function DM:_RunTick()
-    if DM.Tick then DM:Tick() end
+    if DM.Tick then DM:Tick(not DM._paintSkipOff) end
 end
 
 -- Starts (or restarts) the shared refresh ticker. Cancel-before-start so a
@@ -1469,10 +1477,19 @@ end
 -- The damage-meter session changed. In combat the ticker already covers
 -- repaints, so only react out of combat. Debounce to one paint per 0.1s burst
 -- (the event can fire rapidly as the API finalizes a segment).
-function DM:OnSessionUpdated()
+function DM:OnSessionUpdated(event, meterType)
     -- Data may have arrived, in or out of combat, so the store is no longer
     -- empty since this module's own wipe: a key start must reset again.
     self._wipeBoundary = false
+    -- Counted in combat too: the ticker skips a window whose type saw none. The
+    -- payload type carries no secret annotation and is tested anyway before it
+    -- keys a table; CURRENT_SESSION_UPDATED names no type and counts for all.
+    if event == "DAMAGE_METER_COMBAT_SESSION_UPDATED" and not issecretvalue(meterType)
+        and type(meterType) == "number" then
+        self._typeSeq[meterType] = (self._typeSeq[meterType] or 0) + 1
+    else
+        self._allSeq = self._allSeq + 1
+    end
     if InCombatLockdown() then return end
     if self._sessionPending then return end
 
@@ -2443,6 +2460,7 @@ end
 
 -- Called by RenderWindow with the raw list, before the Deaths filter and before
 -- the no-data early return, so every render keeps or ends the window's watch.
+---@param sources table?
 function DM:UpdateDeathStamps(W, liveView, sources)
     W._deathLiveView = liveView or nil
     if not liveView then
@@ -2462,9 +2480,12 @@ function DM:UpdateDeathStamps(W, liveView, sources)
 end
 
 -- A Current-session boundary: forget every stamp, and every window's previous
--- read, which belongs to the old session.
+-- read, which belongs to the old session. A Deaths window then repaints on the
+-- next tick instead of keeping rows stamped from the old session.
 function DM:ResetDeathStamps()
     wipe(self._deathStamps)
+    local deaths = Enum.DamageMeterType.Deaths
+    self._typeSeq[deaths] = (self._typeSeq[deaths] or 0) + 1
     if not self.windows_rt then return end
     for _, W in pairs(self.windows_rt) do
         W._deathPrevDur = nil
@@ -3505,7 +3526,7 @@ end
 -- (e.g. Tick reached before CreateAllWindows finishes, or after a structural
 -- rebuild). Reuses the pre-allocated self._visibleWindows scratch table
 -- (wipe + refill) so no per-tick garbage is produced.
-function DM:VisibleWindows()
+function DM:VisibleWindows(context)
     self._visibleWindows = self._visibleWindows or {}
     local out = self._visibleWindows
     for i = #out, 1, -1 do out[i] = nil end
@@ -3515,9 +3536,9 @@ function DM:VisibleWindows()
     self._dockVisibleList = self._dockVisibleList or {}
     local indices = self:DockWindowIndices(self._dockVisibleList)
 
-    -- Active context resolved once for the whole tick; passed to each window's
-    -- ResolveWindowConfig to avoid recomputing it N times.
-    local context = self:GetActiveContext()
+    -- Tick resolves the active context once and passes it; each window's
+    -- ResolveWindowConfig reuses it.
+    context = context or self:GetActiveContext()
 
     self.windows_rt = self.windows_rt or {}
     for n = 1, #indices do
@@ -3535,12 +3556,25 @@ function DM:VisibleWindows()
     return out
 end
 
+-- A type's paint sequence: its own updates plus the updates that named no type.
+local function TypeSeq(meterType)
+    return (DM._typeSeq[meterType] or 0) + DM._allSeq
+end
+
+-- True when a window can keep its last paint: it painted before, shows the same
+-- effective view, its type saw no session update since, and no detail panel is
+-- open on it (an open panel re-judges itself every tick).
+function DM.PaintSkip(paintType, paintSeq, nowType, nowSeq, panelOpen)
+    return paintType ~= nil and nowType == paintType and nowSeq == paintSeq and not panelOpen
+end
+
 -- Repaints every visible window under a per-frame UI budget. Whole-window spill
 -- only: if rendering a window would push the elapsed frame time over the budget,
 -- that window (and every window after it) is deferred to the next frame rather
 -- than splitting a single window's bar loop across frames. The session cache is
--- wiped here so each Tick starts from fresh API reads.
-function DM:Tick()
+-- wiped here so each Tick starts from fresh API reads. skipQuiet (the combat
+-- ticker only) leaves a window whose view and data are unchanged as painted.
+function DM:Tick(skipQuiet)
     self._sessionCache = self._sessionCache or {}
     wipe(self._sessionCache)
 
@@ -3568,12 +3602,25 @@ function DM:Tick()
     -- hot path allocates zero tables -- matching the prior guarantee.
     local deferred = nil
 
-    for _, W in ipairs(self:VisibleWindows()) do
-        if (debugprofilestop() - frameStart) > budget then
+    -- Resolved once: VisibleWindows and the skip test both use it.
+    local context = self:GetActiveContext()
+
+    for _, W in ipairs(self:VisibleWindows(context)) do
+        local nowType = self:EffectiveMeterType(W.idx, self:ResolveWindowConfig(W.idx, context))
+        local nowSeq = TypeSeq(nowType)
+        if skipQuiet and DM.PaintSkip(W._paintType, W._paintSeq, nowType, nowSeq, W._detailOpen) then
+            -- A live Deaths window still takes this tick's duration read, or the
+            -- next death would find no read from the tick before and go unstamped.
+            if W._deathLiveView then self:UpdateDeathStamps(W, true, nil) end
+        elseif (debugprofilestop() - frameStart) > budget then
             if not deferred then deferred = {} end
             deferred[#deferred + 1] = W
+            -- Painted a frame later from this tick's cache: record no paint, so the
+            -- next tick paints it again.
+            W._paintType = nil
         else
             self:RenderWindowAndDetail(W)
+            W._paintType, W._paintSeq = nowType, nowSeq
         end
     end
 
