@@ -38,6 +38,12 @@ DM._meterSpecBlocked = {}
 DM._specHarvestOpen = false
 DM._specHarvestSet = {}
 
+-- The fight's members (plain GUID -> classFilename) and the classes of those
+-- who have left it. Unknown until a watched fight begins.
+DM._fightMembers = {}
+DM._leaverClass = {}
+DM._leaverUnknown = true
+
 -- [deathRecapID] = seconds, or false when no read could vouch for the time.
 DM._deathStamps = {}
 DM._deathSeq = 0
@@ -807,6 +813,9 @@ function DM:OnDisable()
     self._specHarvestOpen = false
     self._sawOutOfCombat = false
     self:DropDeathStamps()
+    wipe(self._fightMembers)
+    wipe(self._leaverClass)
+    self._leaverUnknown = true
     self:StopTicker()
     self._sessionPending = false
     self._activeContext = nil
@@ -863,6 +872,7 @@ function DM:_CombatStartBody()
     if self.BlankCombatClock then self:BlankCombatClock() end
     self:ClearFeignTags("combat start")
     self:ResetDeathStamps()
+    self:BeginLeaverWatch()
     self:StartTicker()
 end
 
@@ -1651,8 +1661,9 @@ DM.KnownSpec = KnownSpec
 -- a legitimate two-members-two-rows tie-break, so this refuses only the surplus.
 --
 -- specRows is this class's spec -> row count from the same source list, with
--- key 0 counting rows of unknown spec.
-function DM.MatchRowToRoster(members, classFilename, specIconID, rowsOfClass, specRows)
+-- key 0 counting rows of unknown spec. leaver is true when a member of this class
+-- has left since the fight began, or when that cannot be known.
+function DM.MatchRowToRoster(members, classFilename, specIconID, rowsOfClass, specRows, leaver)
     if type(members) ~= "table" then return nil, "roster" end
     if type(classFilename) ~= "string" or classFilename == "" then return nil, "noclass" end
 
@@ -1666,6 +1677,10 @@ function DM.MatchRowToRoster(members, classFilename, specIconID, rowsOfClass, sp
 
     local n = #matchScratch
     if n == 0 then return nil, "nomatch" end
+
+    -- A departed member's row stays in the session and can balance a same-class
+    -- member who has no row yet, so no count below can tell the two apart.
+    if leaver then return nil, "leaver" end
 
     -- Surplus rows: an entity the roster cannot account for. Tested BEFORE the
     -- lone-member fast path, because that path is the one a stale leaver row
@@ -1766,8 +1781,10 @@ end
 local rosterScratch = {}
 
 -- The current group's plain GUIDs in a reused set, or nil when a unit that exists
--- cannot be read: an unidentified member could be anyone.
-function DM:GroupGUIDSet()
+-- cannot be read: an unidentified member could be anyone. Given classes, it also
+-- adds each GUID not yet in it with its classFilename; the second return is false
+-- when a class could not be read.
+function DM:GroupGUIDSet(classes)
     local units, n
     if IsInRaid() then
         units, n = _raidUnits, GetNumGroupMembers()
@@ -1779,15 +1796,41 @@ function DM:GroupGUIDSet()
     if type(n) ~= "number" then return nil end
     if n > #units then n = #units end
     wipe(rosterScratch)
+    local classesRead = true
     for i = 1, n do
         local unit = units[i]
         if UnitExists(unit) then
             local guid = UnitGUID(unit)
             if issecretvalue(guid) or type(guid) ~= "string" then return nil end
             rosterScratch[guid] = true
+            if classes and not classes[guid] then
+                local _, class = UnitClass(unit)
+                if issecretvalue(class) or type(class) ~= "string" or class == "" then
+                    classesRead = false
+                else
+                    classes[guid] = class
+                end
+            end
         end
     end
-    return rosterScratch
+    return rosterScratch, classesRead
+end
+
+-- Marks the class of every fight member missing from members, a plain GUID set.
+function DM.MarkLeavers(fightMembers, members, leaverClass)
+    for guid, class in pairs(fightMembers) do
+        if not members[guid] then leaverClass[class] = true end
+    end
+end
+
+-- Records who is in the group as a fight begins. Unknown when a member cannot be
+-- read, or when this module did not see the fight begin: after a /reload or an
+-- enable mid-fight the session may hold rows of members who left before it.
+function DM:BeginLeaverWatch()
+    wipe(self._fightMembers)
+    wipe(self._leaverClass)
+    local members, classesRead = self:GroupGUIDSet(self._fightMembers)
+    self._leaverUnknown = not (self._sawOutOfCombat and members and classesRead)
 end
 
 -- A member who leaves, changes spec and rejoins was not a group unit when the
@@ -1795,8 +1838,18 @@ end
 -- ends the member's place in the harvestable set. A leaver who cannot be named
 -- could be anyone, so an unreadable roster closes recording.
 function DM:OnRosterChanged()
-    if next(self.meterSpecByGUID) == nil and next(self._specHarvestSet) == nil then return end
-    local members = self:GroupGUIDSet()
+    local recorded = next(self.meterSpecByGUID) ~= nil or next(self._specHarvestSet) ~= nil
+    -- Leavers are marked while an ally row can resolve: the service can stop
+    -- with the player still in combat. Outside both, the next entry starts a
+    -- fresh watch or promotes a watched fight.
+    local watch = KE.CombatState:IsLive() or DetailCombatActive()
+    if not recorded and not watch then return end
+    local members, classesRead = self:GroupGUIDSet(watch and self._fightMembers or nil)
+    if watch then
+        if members then DM.MarkLeavers(self._fightMembers, members, self._leaverClass) end
+        if not (members and classesRead) then self._leaverUnknown = true end
+    end
+    if not recorded then return end
     if not members then
         self:CloseSpecHarvest()
         return
@@ -1831,7 +1884,9 @@ end
 -- The own row keeps its own substitution and the Deaths view never consults
 -- identity, so neither runs any of this.
 function DM:ResolveAllyGUID(classFilename, specIconID, rowsOfClass, specRows)
-    return DM.MatchRowToRoster(self:RosterIndex(), classFilename, specIconID, rowsOfClass, specRows)
+    local leaver = self._leaverUnknown or (not issecretvalue(classFilename)
+        and type(classFilename) == "string" and self._leaverClass[classFilename] == true)
+    return DM.MatchRowToRoster(self:RosterIndex(), classFilename, specIconID, rowsOfClass, specRows, leaver)
 end
 
 -- May a detail panel open, and stay open? The single gate every detail path

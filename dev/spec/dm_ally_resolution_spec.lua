@@ -22,6 +22,9 @@ end
 before_each(function()
     DM = L.loadDMCore({})
     assert(DM and DM.MatchRowToRoster, "loadDMCore did not expose DM.MatchRowToRoster")
+    -- Not managed by the mock's defaults; OnRosterChanged reads it through
+    -- DetailCombatActive, so it only has to exist by the time a case calls that.
+    _G.UnitAffectingCombat = function() return false end
 end)
 
 describe("MatchRowToRoster resolves only when exactly one member can be meant", function()
@@ -282,5 +285,33 @@ describe("The harvestable set", function()
         dm:OnRosterChanged()
         assert.is_true(dm._specHarvestSet["guid-1"])
         assert.is_nil(dm._specHarvestSet["guid-left"])
+    end)
+end)
+
+describe("MatchRowToRoster leaver refusal", function()
+    it("refuses with 'leaver' on the lone-member path and the spec tie-break", function()
+        -- A departed member's row stays in the session and can balance a
+        -- same-class member who has no row yet.
+        local cases = {
+            { name = "lone member", spec = 11, rows = 1, specRows = { [11] = 1 },
+              members = { member("guid-war", "WARRIOR", 11) } },
+            { name = "spec tie-break", spec = 22, rows = 2, specRows = { [11] = 1, [22] = 1 },
+              members = { member("guid-fury", "WARRIOR", 11), member("guid-arms", "WARRIOR", 22) } },
+        }
+        for _, c in ipairs(cases) do
+            local guid, why = DM.MatchRowToRoster(c.members, "WARRIOR", c.spec, c.rows, c.specRows, true)
+            assert.is_nil(guid, c.name)
+            assert.equals("leaver", why, c.name)
+        end
+    end)
+end)
+
+describe("Leaver marking", function()
+    it("marks the class of a fight member no longer in the group, and only theirs", function()
+        local fightMembers = { ["guid-1"] = "SHAMAN", ["guid-2"] = "MAGE" }
+        local leaverClass = {}
+        DM.MarkLeavers(fightMembers, { ["guid-2"] = true }, leaverClass)
+        assert.is_true(leaverClass.SHAMAN)
+        assert.is_nil(leaverClass.MAGE)
     end)
 end)
