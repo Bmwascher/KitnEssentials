@@ -106,8 +106,8 @@ function Merge-HookSettings([string]$templatePath, [string]$settingsPath, [strin
 
 # 1. Hook scripts: template copies are canonical - always refresh; a copy
 #    left in the other scope is removed.
-# (the superpowers review-companion hook ships in the parallax plugin,
-# user-scope - not here, or it would double-fire.)
+# (parsec ships no hooks; the old review-companion hook came with the
+# retired parallax plugin, user-scope, never here.)
 foreach ($scope in $scopes) {
     $hooksDir = Join-Path $scope.dir 'hooks'
     New-Item -ItemType Directory -Force $hooksDir | Out-Null
