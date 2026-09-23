@@ -35,8 +35,8 @@ local function BuildProfileOptions(exclude)
     return options
 end
 
--- The rebuild for actions no profile callback rebuilds after. A profile switch
--- rebuilds the page itself through OnProfileChanged, so those paths skip this.
+-- The rebuild for actions that run no RefreshAllModules. Where one runs, from a
+-- profile switch or a manager call, it has already rebuilt the page.
 local function RefreshPageLater()
     C_Timer.After(0.1, function()
         if GUIFrame.mainFrame and GUIFrame.mainFrame:IsShown() then
