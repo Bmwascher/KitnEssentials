@@ -779,6 +779,7 @@ function DM:OnDisable()
     KE.CombatState:UnregisterListener("DamageMeter")
     if LibSpec then LibSpec.UnregisterGroup(self) end
     wipe(self.specIconByGUID)
+    self:DropDeathStamps()
     self:StopTicker()
     self._sessionPending = false
     self._activeContext = nil
@@ -834,6 +835,7 @@ function DM:_CombatStartBody()
     -- OnStart, which is exactly when the hold is wanted.
     if self.BlankCombatClock then self:BlankCombatClock() end
     self:ClearFeignTags("combat start")
+    self:ResetDeathStamps()
     self:StartTicker()
 end
 
@@ -1161,6 +1163,9 @@ end
 
 -- Only the UI teardown a fresh fight needs; liveness is the service's call.
 function DM:OnRegenDisabled()
+    -- The player re-entering combat inside a live group fight can start a new
+    -- Current session that no combat-state start marks.
+    self:ResetDeathStamps()
     -- A hover tip that persists into combat must flip to the "secret while in combat"
     -- message on the next poll: mark it dirty (the throttled poll only re-populates on
     -- a dirty signal). Resolved-at-runtime field on DM read by the Detail.lua poll.
@@ -1236,6 +1241,9 @@ function DM:OnEncounterStart()
     -- previous boss/trash clears ("until another raid boss starts").
     self:BumpSegment()
     self:ClearFeignTags("encounter start")
+    -- A boss pull starts a new Current session; a recap id from the last one may
+    -- name a different death in this one.
+    self:ResetDeathStamps()
     -- Stored-id snapshot for the kill/wipe tint: OnEncounterEnd tags only sessions
     -- stored SINCE this pull. "Tag the newest" mis-tagged a key-completing final
     -- kill -- Blizzard stores the run-level "+NN" session on top of the boss's own
@@ -2984,6 +2992,10 @@ function DM:Tick()
     -- re-judging itself against a roster walk from an earlier tick.
     self._rosterIndex = nil
 
+    -- One Current duration read per tick while stamps exist: the roll check runs
+    -- whatever the windows show, and the Deaths renders below reuse the read.
+    self:BeginDeathTick()
+
     local frameStart = debugprofilestop()
     local budget = (self.db and self.db.UIBudgetMs) or 1.2
 
@@ -3005,6 +3017,9 @@ function DM:Tick()
             self:RenderWindowAndDetail(W)
         end
     end
+
+    -- Renders deferred to a later frame stamp nothing (EndDeathTick).
+    self:EndDeathTick()
 
     if deferred then
         C_Timer.After(0, function()

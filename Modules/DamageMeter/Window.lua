@@ -1479,6 +1479,9 @@ function DM:RenderWindow(W)
     self:UpdateCombatClock(W, session)
 
     local sources = session and session.combatSources
+    -- Stamps read the raw list, before the Deaths filter below, and every render
+    -- must reach this, including one with no data.
+    self:UpdateDeathStamps(W, isDeaths and self:IsLiveCurrent(W, cfg), sources)
     -- Sources per class in the session, excluding the player's own. The roster
     -- side excludes the player too; counting one population against the other is
     -- what made a player and an ally of the same class refuse each other.
@@ -1511,10 +1514,7 @@ function DM:RenderWindow(W)
     -- the fight it belongs to. Anything the scope excludes simply shows the feign,
     -- which is the direction every refusal in this feature takes.
     if isDeaths then
-        local feignScope = not W._curSessionID
-            and not W._fallbackSessionID
-            and cfg.SessionType == Enum.DamageMeterSessionType.Current
-            and self:GroupInCombat()
+        local feignScope = self:IsLiveCurrent(W, cfg) and self:GroupInCombat()
         -- Must run before the loop: FeignTagged consults the result per row.
         if feignScope and self.ScanFeignAmbiguity then
             self.ScanFeignAmbiguity(sources, self._feignTags, self._feignAmbig)
@@ -2073,7 +2073,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- never touches the secret amountPerSecond.
     -- Deaths show the death time (M:SS) instead of amount|perSec, and Overall
     -- deaths show nothing (cumulative time across segments isn't meaningful).
-    -- FormatDeathTime / FormatBarValue both return
+    -- DeathTimeText / FormatBarValue both return
     -- (string, isSecret): a secret string is set unconditionally with the cache
     -- nulled; a plain one is dirty-checked.
     local v, vIsSecret
@@ -2081,7 +2081,8 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         if W._isOverall then
             v, vIsSecret = "", false
         else
-            v, vIsSecret = self.FormatDeathTime(src.deathTimeSeconds)
+            v, vIsSecret = self.DeathTimeText(src.deathTimeSeconds, src.deathRecapID,
+                W._deathLiveView and self._deathStamps or nil)
         end
     else
         -- Number Format: "Both" -> amount | dps, "PerSec" -> dps only, else amount only.
