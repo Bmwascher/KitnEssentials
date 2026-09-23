@@ -1492,6 +1492,32 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     manager:Register(keyResetChk, "all")
     cardSeg:AddRow(rowSeg, Theme.rowHeight)
 
+    -- Reset on Instance Entry and its mode; the mode greys while the toggle is off.
+    manager:SetCondition("instancereset", function() return db.ResetOnInstanceEntry == true end)
+    local rowInst = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
+    local instResetChk = GUIFrame:CreateCheckbox(rowInst, "Reset on Instance Entry", {
+        value = db.ResetOnInstanceEntry == true,
+        callback = function(checked)
+            db.ResetOnInstanceEntry = checked
+            if not checked and DM and DM.CloseInstancePrompt then DM:CloseInstancePrompt() end
+            manager:UpdateAll(db.Enabled ~= false)
+        end,
+    })
+    rowInst:AddWidget(instResetChk, 0.5)
+    manager:Register(instResetChk, "all")
+
+    local instModeDd = GUIFrame:CreateDropdown(rowInst, "Mode", {
+        options = {
+            { key = "auto", text = "Auto" },
+            { key = "ask",  text = "Ask" },
+        },
+        value = db.InstanceResetMode == "auto" and "auto" or "ask",
+        callback = function(key) db.InstanceResetMode = key end,
+    })
+    rowInst:AddWidget(instModeDd, 0.5)
+    manager:Register(instModeDd, "instancereset")
+    cardSeg:AddRow(rowInst, Theme.rowHeight)
+
     local rowRetain = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
     -- Display-only clamp mirroring History.lua evictOverCap's read semantics exactly
     -- (non-number -> 5; <1 -> 1; >5 -> 5): a legacy profile can hold a materialized
@@ -1532,6 +1558,9 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     segNoteRow:AddWidget(segNote, 1)
     manager:Register(segNote, "all")
     cardSeg:AddRow(segNoteRow, 80, 0)
+
+    cardSeg:AddNote(KE:ColorTextByTheme("Reset on Instance Entry") .. " clears the meter when you enter a different dungeon, raid, scenario or Delve, or a different difficulty; " ..
+        KE:ColorTextByTheme("Ask") .. " shows a prompt first. Running back after a death, a login and a /reload never reset. Key history is kept.")
 
     yOffset = cardSeg:GetNextOffset()
 

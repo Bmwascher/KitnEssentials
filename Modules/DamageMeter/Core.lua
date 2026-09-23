@@ -57,6 +57,16 @@ DM._deathSeq = 0
 -- Starts outside a tick, so a render before the first one records no read.
 DM._deathTickOver = true
 
+-- Instance-entry reset. The last entry's key and scope; a generation, bumped
+-- by every meter reset, key start and move the key compare cannot see, so an
+-- Ask prompt raised before any of them cannot reset; and whether the store has
+-- stayed empty since this module's own wipe, so a key start right after it
+-- only arms its label.
+DM._lastEntryKey = nil
+DM._lastEntryScope = nil
+DM._resetGen = 0
+DM._wipeBoundary = false
+
 -- File-level upvalues for globals used in per-tick / per-bar render paths.
 local IsInInstance = IsInInstance
 local C_ChallengeMode = C_ChallengeMode
@@ -159,6 +169,8 @@ local DM_DEFAULTS = {
     ResetOnKeyStart = true,     -- wipe all combat sessions when a keystone starts, so
                                 -- "Overall" (and the segment history) covers just that
                                 -- run; off = data accumulates until a manual reset
+    ResetOnInstanceEntry = false,  -- wipe on entering a different dungeon / raid / scenario / Delve
+    InstanceResetMode = "ask",     -- "auto" | "ask"; Ask by default, so turning the toggle on never wipes unasked
 
     -- Visibility conditions (independent; ALL enabled conditions must pass for the
     -- meter to show). GUI preview / EditMode always force-show regardless.
@@ -703,6 +715,10 @@ function DM:OnEnable()
     self:RegisterEvent("CHALLENGE_MODE_START", "OnChallengeEvent")
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnChallengeEvent")
     self:RegisterEvent("CHALLENGE_MODE_RESET", "OnChallengeEvent")
+    -- A Delve starts and ends with no loading screen.
+    self:RegisterEvent("ACTIVE_DELVE_DATA_UPDATE", "OnDelveDataUpdate")
+    -- Record where the player is, so enabling the module is not an entry.
+    self:CheckInstanceEntry(true)
 
     -- Reset the cached context so the first scheduled check always applies the live
     -- context once (a stale cache would make it think nothing changed).
@@ -834,6 +850,9 @@ function DM:OnDisable()
     self._activeContext = nil
     self._ctxCheckPending = false
     self:ClearFeignTags("module disable")
+    self._wipeBoundary = false
+    self._lastEntryKey, self._lastEntryScope = nil, nil
+    self:CloseInstancePrompt()
     self._feignArmable = false
     -- The runtime windows survive a disable, so their cached clock text would
     -- outlive the stamps above and could be re-shown by a bare visibility re-gate.
@@ -1412,8 +1431,9 @@ function DM:OnEncounterEnd(_, _, _, _, _, success)
     end)
 end
 
--- Zoning: feign teardown and the content-context recheck.
-function DM:OnCombatForceStop()
+-- Zoning: feign teardown, the content-context recheck and the instance-entry
+-- check. AceEvent passes the PLAYER_ENTERING_WORLD payload after the event name.
+function DM:OnCombatForceStop(_, isLogin, isReload)
     if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD") end
     self:ClearFeignTags("zone change")
     -- A load can leave Overall holding rows this module never saw arrive.
@@ -1435,12 +1455,17 @@ function DM:OnCombatForceStop()
     -- Zoning may change the content context (entered/left an instance) -- schedule a
     -- settled re-check (debounced; IsInInstance isn't reliable until the world loads).
     self:_ScheduleContextCheck()
+    -- A login or /reload only records where the player is.
+    self:CheckInstanceEntry(isLogin == true or isReload == true)
 end
 
 -- The damage-meter session changed. In combat the ticker already covers
 -- repaints, so only react out of combat. Debounce to one paint per 0.1s burst
 -- (the event can fire rapidly as the API finalizes a segment).
 function DM:OnSessionUpdated()
+    -- Data may have arrived, in or out of combat, so the store is no longer
+    -- empty since this module's own wipe: a key start must reset again.
+    self._wipeBoundary = false
     if InCombatLockdown() then return end
     if self._sessionPending then return end
 
@@ -1472,6 +1497,9 @@ function DM:OnMeterReset()
     -- about the game's internals, and each one can hide a real death when the
     -- inference is wrong.
     self._feignArmable = true
+    -- An Ask prompt raised before this reset must not reset again.
+    self._resetGen = self._resetGen + 1
+    self:CloseInstancePrompt()
     -- History bundles are already-captured data and survive every reset
     -- event (only eviction / HeaderReset / reload clear them). But pending
     -- PROVENANCE does not: an external reset empties the native store, so
@@ -3073,6 +3101,201 @@ function DM:OnContextEvent()
     self:_ScheduleContextCheck()
 end
 
+-- Snapshots the whole store into key history (History.lua), then wipes it. The
+-- key-start, instance-entry and login resets all go through here, so none of
+-- them erases history. Returns true when the wipe happened.
+function DM:CaptureAndWipe()
+    -- Snapshot the whole store BEFORE the wipe: seals the previous bundle,
+    -- reading _sessionOutcomes and the pending key metadata while both still
+    -- describe it. Resolved at runtime; guarded for load order.
+    if self.HistoryCapture then self:HistoryCapture() end
+    if self.windows_rt then
+        for _, W in pairs(self.windows_rt) do
+            -- ResetAllCombatSessions invalidates every sessionID, so a window still
+            -- pinned (W._curSessionID) to a prior session would read a dead id.
+            -- Drop the pin so it falls back to the live Current/Overall session.
+            -- Runtime-only field (not persisted), safe to clear unconditionally.
+            W._curSessionID = nil
+            -- Close a detail panel keyed to the about-to-be-wiped session (mirrors
+            -- HeaderReset's teardown). Resolved at runtime; guarded for load order.
+            if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+        end
+    end
+    -- Cleared before the attempt so a failed wipe cannot leave an older boundary
+    -- for a key start to trust.
+    self._wipeBoundary = false
+    local wiped = false
+    if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
+        -- One-shot: our own wipe fires DAMAGE_METER_RESET, whose handler must
+        -- not clear the pending record a key start arms after this returns.
+        -- Armed before the call (delivery can be synchronous), un-armed if the
+        -- call failed (a stale flag would eat the NEXT external reset's
+        -- provenance clear).
+        self._historyOwnReset = true
+        wiped = pcall(C_DamageMeter.ResetAllCombatSessions)
+        if not wiped then
+            self._historyOwnReset = nil
+        end
+    end
+    -- The hover-tip Targets cache cross-references the now-wiped data.
+    if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
+    -- Outcome tags reference the wiped session ids (mirrors OnMeterReset).
+    if self._sessionOutcomes then wipe(self._sessionOutcomes) end
+    -- Repaint the emptied bars now: a key RE-RUN keeps the content context, so
+    -- ApplyActiveContext cannot be relied on to paint after the reset.
+    if self.Tick then self:Tick() end
+    -- Until a session update clears it, nothing has arrived since this wipe.
+    if wiped then self._wipeBoundary = true end
+    return wiped
+end
+
+---------------------------------------------------------------------------------
+-- Reset on instance entry
+--
+-- Entering a different dungeon, raid, scenario or Delve, or a different
+-- difficulty, resets the meter or asks first. A login or /reload only records
+-- where the player is.
+---------------------------------------------------------------------------------
+
+-- The scope an entry counts in, or nil outside one. An active Delve is its own
+-- scope so that its end can be recognised.
+function DM.InstanceScope(instanceType, delveActive)
+    if delveActive then return "delve" end
+    if instanceType == "party" or instanceType == "raid" or instanceType == "scenario" then
+        return instanceType
+    end
+    return nil
+end
+
+-- What two entries are compared by: the instance and its difficulty, or nil
+-- when either is unreadable, which counts as outside any instance.
+function DM.InstanceEntryKey(instanceID, difficultyID)
+    if type(instanceID) ~= "number" or type(difficultyID) ~= "number" then return nil end
+    return instanceID .. ":" .. difficultyID
+end
+
+-- Returns the new last key and scope, the action ("none", "auto" or "ask"),
+-- and whether the player moved from the last entry's place, which ends any Ask
+-- prompt raised there. The last key survives the open world, so running back
+-- in after a death is not an entry. A Delve that ends in place is marked
+-- "delveover": repeated events there count nothing, and a new Delve counts. A
+-- Delve left behind is forgotten, so the next one counts. The key is tracked
+-- even with the option off, so turning it on inside an instance is not an entry.
+function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficultyID, freshLoad, enabled, mode)
+    local key = DM.InstanceEntryKey(instanceID, difficultyID)
+    local entered = scope ~= nil and key ~= nil
+        and (key ~= lastKey or (lastScope == "delveover" and scope == "delve"))
+    local newKey, newScope = lastKey, lastScope
+    if scope ~= nil and key ~= nil then
+        newKey, newScope = key, scope
+    end
+    if not entered and (lastScope == "delve" or lastScope == "delveover") and scope ~= "delve" then
+        if scope ~= nil and (key == nil or key == lastKey) then
+            newKey, newScope = lastKey, "delveover"
+        else
+            newKey, newScope = nil, nil
+        end
+    end
+    local moved = entered or scope == nil or newKey ~= lastKey
+        or (newScope == "delveover" and lastScope ~= "delveover")
+    if freshLoad or not enabled or not entered then
+        return newKey, newScope, "none", moved
+    end
+    if mode == "auto" then return newKey, newScope, "auto", moved end
+    return newKey, newScope, "ask", moved
+end
+
+-- An Ask prompt resets only for the entry it was raised for: the module and
+-- the option still on, the player still there, and no meter reset or key start
+-- since.
+function DM.InstanceAskValid(token, key, gen, enabled, optionOn)
+    return enabled == true and optionOn == true and token ~= nil and key ~= nil
+        and key == token.key and gen == token.gen
+end
+
+-- The current scope, instance ID, difficulty ID and plain instance name. A
+-- missing API or a secret type counts as outside any instance; an unreadable ID
+-- or difficulty is nil.
+local function ReadInstanceEntry()
+    if not GetInstanceInfo then return nil, nil, nil, nil end
+    local name, instanceType, difficultyID, _, _, _, _, instanceID = GetInstanceInfo()
+    if issecretvalue(instanceType) then return nil, nil, nil, nil end
+    if issecretvalue(instanceID) or type(instanceID) ~= "number" then instanceID = nil end
+    if issecretvalue(difficultyID) or type(difficultyID) ~= "number" then difficultyID = nil end
+    if issecretvalue(name) or type(name) ~= "string" or name == "" then name = nil end
+    local delveActive = false
+    if C_DelvesUI and C_DelvesUI.HasActiveDelve then
+        local active = C_DelvesUI.HasActiveDelve()
+        delveActive = not issecretvalue(active) and active == true
+    end
+    return DM.InstanceScope(instanceType, delveActive), instanceID, difficultyID, name
+end
+
+-- Closes this module's Ask prompt, only while the shared dialog still shows it
+-- (Core/Widgets.lua clears _onAccept on every close and replaces it on every
+-- new prompt), so another module's prompt is left alone.
+function DM:CloseInstancePrompt()
+    local accept = self._instancePromptAccept
+    self._instancePromptAccept = nil
+    if not accept then return end
+    local dialog = KE.activePrompt
+    if dialog and dialog._onAccept == accept then
+        dialog._onAccept, dialog._onCancel = nil, nil
+        dialog:Hide()
+        KE.activePrompt = nil
+    end
+end
+
+-- Asks before resetting. The token pins the entry the prompt was raised for.
+function DM:ShowInstancePrompt(key, name)
+    local token = { key = key, gen = self._resetGen }
+    local onAccept
+    onAccept = function()
+        if DM._instancePromptAccept == onAccept then DM._instancePromptAccept = nil end
+        local _, instanceID, difficultyID = ReadInstanceEntry()
+        local nowKey = DM.InstanceEntryKey(instanceID, difficultyID)
+        local optionOn = DM.db ~= nil and DM.db.ResetOnInstanceEntry == true
+        if DM.InstanceAskValid(token, nowKey, DM._resetGen, DM.enabled, optionOn) then
+            DM:CaptureAndWipe()
+        end
+    end
+    local onCancel = function()
+        if DM._instancePromptAccept == onAccept then DM._instancePromptAccept = nil end
+    end
+    self._instancePromptAccept = onAccept
+    KE:CreatePrompt("Damage Meter", "Reset the meter for " .. (name or "this instance") .. "?",
+        false, nil, false, nil, nil, nil, nil, onAccept, onCancel, "Reset", "Keep", nil, nil,
+        { closeIsNeutral = true })
+end
+
+-- PLAYER_ENTERING_WORLD (freshLoad on a login or /reload), a Delve starting or
+-- ending, and the module enabling (freshLoad).
+function DM:CheckInstanceEntry(freshLoad)
+    local scope, instanceID, difficultyID, name = ReadInstanceEntry()
+    local db = self.db
+    local action, moved
+    self._lastEntryKey, self._lastEntryScope, action, moved = DM.InstanceEntryDecision(
+        self._lastEntryKey, self._lastEntryScope, scope, instanceID, difficultyID, freshLoad,
+        db and db.ResetOnInstanceEntry == true, db and db.InstanceResetMode)
+    -- The key compare cannot see a way out and back in, or a Delve ending in
+    -- place; this bump refuses a prompt raised before either, and the close
+    -- takes the dead prompt off screen.
+    if moved then
+        self._resetGen = self._resetGen + 1
+        self:CloseInstancePrompt()
+    end
+    -- An entry that fires has just been recorded as the last key.
+    if action == "auto" then
+        self:CaptureAndWipe()
+    elseif action == "ask" then
+        self:ShowInstancePrompt(self._lastEntryKey, name)
+    end
+end
+
+function DM:OnDelveDataUpdate()
+    self:CheckInstanceEntry(false)
+end
+
 -- CHALLENGE_MODE_START / COMPLETED / RESET handler. The keystone flag is reliable the
 -- instant these fire, so apply immediately (no debounce) -- a delay would only lag the
 -- Dungeon<->Mythic+ swap, and routing through the debounce could let a pending zone
@@ -3104,48 +3327,20 @@ function DM:OnChallengeEvent(event)
     -- after the fact. A local snapshot store would give both at once --
     -- that's a feature (new data layer), not a different gate here.
     if event == "CHALLENGE_MODE_START" then
+        -- An Ask prompt from the instance entry must not reset the running key.
+        self._resetGen = self._resetGen + 1
+        self:CloseInstancePrompt()
         if self.db and self.db.ResetOnKeyStart then
-            -- Snapshot the whole store BEFORE the wipe (History.lua): seals
-            -- the previous key's bundle, reading _sessionOutcomes and the
-            -- pending key metadata while both still describe it. Resolved
-            -- at runtime; guarded for load order.
-            if self.HistoryCapture then self:HistoryCapture() end
-            if self.windows_rt then
-                for _, W in pairs(self.windows_rt) do
-                    -- ResetAllCombatSessions invalidates every sessionID, so a window still
-                    -- pinned (W._curSessionID) to a prior-key session would read a dead id.
-                    -- Drop the pin so it falls back to the live Current/Overall session.
-                    -- Runtime-only field (not persisted), safe to clear unconditionally.
-                    W._curSessionID = nil
-                    -- Close a detail panel keyed to the about-to-be-wiped session (mirrors
-                    -- HeaderReset's teardown). Resolved at runtime; guarded for load order.
-                    if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
-                end
+            if self._wipeBoundary then
+                -- This module already captured and wiped, and nothing has
+                -- arrived since: that wipe is this key's boundary.
+                if self.HistoryArmPending then self:HistoryArmPending() end
+            elseif self:CaptureAndWipe() and self.HistoryArmPending then
+                -- Arm the pending metadata for THIS key — only ever on a wipe
+                -- boundary that actually HAPPENED; arming after a failed reset
+                -- would label a store still spanning multiple keys [C2].
+                self:HistoryArmPending()
             end
-            local wiped = false
-            if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
-                -- One-shot: our own wipe fires DAMAGE_METER_RESET, whose handler must
-                -- not clear the pending record this handler arms below. Armed before
-                -- the call (delivery can be synchronous), un-armed if the call failed
-                -- (a stale flag would eat the NEXT external reset's provenance clear).
-                self._historyOwnReset = true
-                wiped = pcall(C_DamageMeter.ResetAllCombatSessions)
-                if not wiped then
-                    self._historyOwnReset = nil
-                end
-            end
-            -- The hover-tip Targets cache cross-references the now-wiped data.
-            if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
-            -- Outcome tags reference the wiped session ids (mirrors OnMeterReset).
-            if self._sessionOutcomes then wipe(self._sessionOutcomes) end
-            -- Repaint the emptied bars now: ApplyActiveContext below early-returns when the
-            -- content context is unchanged (a key RE-RUN stays "Mythic+"), so it can't be
-            -- relied on to paint after the reset. BumpSegment already closed selectors/menus.
-            if self.Tick then self:Tick() end
-            -- Arm the pending metadata for THIS key — only ever on a wipe
-            -- boundary that actually HAPPENED; arming after a failed reset
-            -- would label a store still spanning multiple keys [C2].
-            if wiped and self.HistoryArmPending then self:HistoryArmPending() end
         else
             -- Key boundary WITHOUT a wipe: the store now spans multiple
             -- keys, so an armed label no longer describes it. Clear it so a
