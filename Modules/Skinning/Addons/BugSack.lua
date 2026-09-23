@@ -64,7 +64,7 @@ local function OpenSack()
                 if not prev then
                     local _, _, _, x = tab:GetPoint(1)
                     tab:ClearAllPoints()
-                    tab:SetPoint("TOPLEFT", f, "BOTTOMLEFT", x or 0, 0)
+                    tab:SetPoint("TOPLEFT", f, "BOTTOMLEFT", x or 0, 1)
                 else
                     tab:ClearAllPoints()
                     tab:SetPoint("LEFT", prev, "RIGHT", -3, 0)
