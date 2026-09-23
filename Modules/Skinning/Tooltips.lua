@@ -393,7 +393,7 @@ end
 -- would have to work out, per call site, whether this particular value is safe
 -- to test; the object is always a plain table, so the test never touches a
 -- component and they reach nothing but sinks. Nothing returned means "leave
--- Blizzard's own colour alone", which is what puts hostile names back to red.
+-- Blizzard's own colour alone".
 local function UnitColor(unit, guid)
     -- Preferred: GetPlayerInfoByGUID is AllowedWhenTainted, so it resolves a
     -- class even over a raid frame, where the token is secret but the GUID is
@@ -413,8 +413,9 @@ local function UnitColor(unit, guid)
             local _, class = UnitClass(unit)
             return ClassColorFor(class) or WHITE_COLOR
         end
-        -- Not declared secret, but the tokens reaching here vary. A player
-        -- without a readable GUID gets nothing, not a reaction colour.
+        -- Not declared secret, but this unit's identity is restricted, so test
+        -- before branching. A player without a readable GUID gets nothing,
+        -- not a reaction colour.
         local isPlayer = UnitIsPlayer(unit)
         if KE:IsSecretValue(isPlayer) then return end
         if isPlayer then return end

@@ -34,8 +34,8 @@ end)
 
 -- The refusal rule. GetPlayerInfoByGUID answers with the FIRST class for a
 -- creature GUID rather than failing, so anything that asks it without checking
--- the GUID paints every hostile NPC in that class's colour instead of red.
--- Returning nothing is what leaves Blizzard's own hostile red in place.
+-- the GUID paints every hostile NPC in that class's colour instead of its
+-- reaction colour.
 describe("Tooltips UnitColor", function()
     local PLAYER_GUID = "Player-1234-DEADBEEF"
     local CREATURE_GUID = "Creature-0-1234-5-6-7890-000000"
@@ -103,7 +103,7 @@ describe("Tooltips UnitColor", function()
     end)
 
     it("class-colours a secret-named unit whose GUID says player", function()
-        local TT = L.loadTooltips(nil, {
+        local TT = L.loadTooltips({ GetPlayerInfoByGUID = function() return nil end }, {
             issecretvalue = function(v) return v == "SECRET" end,
             UnitName = function() return "SECRET" end,
         })
