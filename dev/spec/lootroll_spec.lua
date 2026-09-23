@@ -180,16 +180,13 @@ describe("LootRoll container OnShow hook", function()
     end)
 end)
 
--- Replace mode must place the BONUS ROLL prompt in the slot under bar 1.
+-- Replace mode places the BONUS ROLL prompt over the highest roll bar showing.
 --
 -- Bonus rolls arrive on SPELL_CONFIRMATION_PROMPT, not START_LOOT_ROLL, so
 -- SetupRollBars' unregister never intercepts them and they stay Blizzard's
 -- frame at Blizzard's bottom-centre spot -- while every other roll obeys the
--- user's position. Bar 1 is the bottom row and is occupied whenever group
--- loot drops beside a bonus roll, so the prompt takes the slot below it. The
--- fix re-anchors BonusRollFrame itself, so these specs pin the two things
--- that make that choice correct: it hangs off bar 1's frame by the bar
--- spacing, and it leaves the reward toasts alone.
+-- user's position. Hidden bars keep their slots, so the anchor is a scan for
+-- the highest shown index, not the last entry.
 describe("LootRoll bonus roll anchoring", function()
     local LR, bar1
 
@@ -198,6 +195,7 @@ describe("LootRoll bonus roll anchoring", function()
             _points = {},
             _shown = true,
             IsShown = function(self) return self._shown end,
+            GetHeight = function() return 22 end,
             ClearAllPoints = function(self) self._points = {} end,
             SetPoint = function(self, point, rel, relPoint, x, y)
                 self._points[#self._points + 1] =
@@ -206,38 +204,42 @@ describe("LootRoll bonus roll anchoring", function()
         }
     end
 
+    local function makeBars(shown)
+        local bars = {}
+        for i = 1, 4 do
+            bars[i] = makeFrame()
+            bars[i]._shown = shown[i] == true
+        end
+        return bars
+    end
+
     before_each(function()
         LR = L.loadLootRoll()
         LR.IsEnabled = function() return true end
         LR._barsWired = true
         bar1 = makeFrame()
+        bar1.button = { GetHeight = function() return 29 end }
         LR.RollBars = { bar1 }
         _G.BonusRollFrame = makeFrame()
     end)
 
     after_each(function() _G.BonusRollFrame = nil end)
 
-    -- The offset is the saved spacing plus one pixel for bar 1's border, so
-    -- the visible gap reads as Spacing.
-    it("anchors the prompt's TOP under bar 1's BOTTOM by the spacing plus the gap", function()
+    it("falls back to bar 1 when no bar is shown", function()
+        local bars = makeBars({})
+        assert.equal(bars[1], LR.BonusRollAnchorBar(bars))
+    end)
+
+    it("picks the highest shown bar, skipping hidden slots", function()
         local cases = {
-            { spacing = 4,   y = -5 },
-            { spacing = nil, y = -2 },   -- Spacing defaults to 1
+            { shown = { true },                   want = 1 },
+            { shown = { false, true },            want = 2 },
+            { shown = { true, false, true },      want = 3 },
+            { shown = { true, true, true, true }, want = 4 },
         }
         for _, c in ipairs(cases) do
-            _G.BonusRollFrame = makeFrame()
-            LR.db = { Enabled = true, Replace = true, Spacing = c.spacing,
-                Position = { Point = "TOP", RelPoint = "TOP", X = 30, Y = -120 } }
-            LR.AnchorBonusRoll()
-
-            local p = _G.BonusRollFrame._points[1]
-            assert.is_table(p)   -- positive control: it must anchor at all
-            assert.equal("TOP", p.point)
-            assert.equal(bar1, p.rel)
-            assert.equal("BOTTOM", p.relPoint)
-            assert.equal(0, p.x)
-            assert.equal(c.y, p.y)
-            assert.equal(1, #_G.BonusRollFrame._points)
+            local bars = makeBars(c.shown)
+            assert.equal(bars[c.want], LR.BonusRollAnchorBar(bars))
         end
     end)
 
@@ -278,6 +280,8 @@ describe("LootRoll bonus roll anchoring", function()
 
         LR.AnchorBonusRoll()
 
+        -- positive control: the prompt itself was anchored, to bar 1
+        assert.equal(bar1, _G.BonusRollFrame._points[1].rel)
         assert.equal(0, #_G.BonusRollLootWonFrame._points)
         assert.equal(0, #_G.BonusRollMoneyWonFrame._points)
         _G.BonusRollLootWonFrame, _G.BonusRollMoneyWonFrame = nil, nil

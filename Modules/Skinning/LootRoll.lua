@@ -3,7 +3,7 @@
 -- ║  Module: Loot Roll                                       ║
 -- ║  Purpose: Skins the group loot roll frames; in Replace   ║
 -- ║           mode stacks its own roll bars and anchors the  ║
--- ║           bonus roll prompt under them.                  ║
+-- ║           bonus roll prompt above them.                  ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -277,11 +277,7 @@ function LR:SyncMover()
     m:SetPoint(p.Point or "BOTTOM", UIParent, p.RelPoint or "CENTER", p.X or 0, p.Y or 0)
 end
 
--- Bar 1's status backdrop extends one pixel below the bar frame
--- (LootRollBars.lua); counted here so the visible gap equals Spacing.
-local BONUS_ROLL_GAP = 1
-
--- Replace mode: the BONUS ROLL prompt takes the slot under bar 1.
+-- Replace mode: the BONUS ROLL prompt sits over the highest roll bar showing.
 --
 -- Bonus rolls never become KE roll bars -- they arrive on
 -- SPELL_CONFIRMATION_PROMPT, not START_LOOT_ROLL, so SetupRollBars'
@@ -296,17 +292,24 @@ local BONUS_ROLL_GAP = 1
 -- it only from GroupLootContainer_Update, which both entry paths (AddFrame
 -- and ReplaceFrame) end in and which we post-hook.
 --
--- Under bar 1, not on it: bar 1 is the bottom row and is occupied whenever a
--- boss drops group loot beside the bonus roll. The stack grows upward from
--- the saved position, so the slot below is always free and never moves as
--- rolls resolve; a hidden bar keeps its anchor, so with no roll up the
--- prompt sits just under the saved position.
+-- A hidden bar keeps its slot, so the prompt drops as rolls resolve, and with
+-- no roll up it sits over bar 1's slot at the saved position. Blizzard's
+-- update does not run when a KE bar shows or hides, so LootRollBars.lua calls
+-- this from its own show and hide paths as well.
 --
 -- Only the PROMPT. BonusRollLootWonFrame / BonusRollMoneyWonFrame, which
 -- replace it once the roll resolves, are loot toasts: they set AlertFrame as
 -- their alert container (GroupLootFrame.lua) and are handed to
 -- AlertFrame:AddAlertFrame, so the alert chain owns their placement and
 -- re-anchoring them would just fight it.
+local function BonusRollAnchorBar(bars)
+    for i = #bars, 1, -1 do
+        if bars[i]:IsShown() then return bars[i] end
+    end
+    return bars[1]
+end
+LR.BonusRollAnchorBar = BonusRollAnchorBar
+
 local function AnchorBonusRoll()
     if not LR:IsEnabled() then return end
     local db = LR.db
@@ -318,11 +321,16 @@ local function AnchorBonusRoll()
     if not f or not f:IsShown() then return end
 
     -- SetupRollBars creates every bar before it sets _barsWired.
-    local bar = LR.RollBars and LR.RollBars[1]
+    local bar = LR.RollBars and BonusRollAnchorBar(LR.RollBars)
     if not bar then return end
 
+    -- The item icon spans the bar's full content, which rises above the bar
+    -- frame's top edge; counted so the visible gap equals Spacing.
+    local rise = bar.button:GetHeight() - bar:GetHeight()
+    if rise < 0 then rise = 0 end
+
     f:ClearAllPoints()
-    f:SetPoint("TOP", bar, "BOTTOM", 0, -((db.Spacing or 1) + BONUS_ROLL_GAP))
+    f:SetPoint("BOTTOM", bar, "TOP", 0, (db.Spacing or 1) + rise)
     LogState("AnchorBonusRoll")
 end
 LR.AnchorBonusRoll = AnchorBonusRoll

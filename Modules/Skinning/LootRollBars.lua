@@ -91,7 +91,9 @@ local function StatusUpdate(status, elapsed)
     local bar = status.parent
     local rollID = bar.rollID
     if not rollID then
+        -- Runs once per hide: OnUpdate stops with the bar that owns it.
         bar:Hide()
+        LR.AnchorBonusRoll()
         return
     end
     -- previews drain locally -- GetLootRollTimeLeft errors on
@@ -350,6 +352,7 @@ function LR:RollBars_Anchor()
         end
         lastBar = bar
     end
+    LR.AnchorBonusRoll()
 end
 
 function LR:RollBar_Clear(bar, event)
@@ -440,6 +443,7 @@ function LR:ShowPreview()
     bar.status:SetMinMaxValues(0, PREVIEW_SECONDS)
     bar.status:SetValue(PREVIEW_SECONDS)
     bar:Show()
+    LR.AnchorBonusRoll()
 
     self._previewBar = bar
     if self._previewTimer then self._previewTimer:Cancel() end
@@ -466,6 +470,7 @@ function LR:HidePreview()
     bar.isPreview = nil
     bar.rollID = nil -- genuinely free again, with working mouse
     bar:Hide()
+    LR.AnchorBonusRoll()
     if self.RollBar_Release then self:RollBar_Release(bar) end
 end
 
@@ -539,6 +544,7 @@ function LR:START_LOOT_ROLL(event, rollID, rollTime)
     bar.status:SetValue(rollTime)
 
     bar:Show()
+    LR.AnchorBonusRoll()
 end
 
 -- Blizzard's START_LOOT_ROLL handler does not sit on UIParent. It routes
