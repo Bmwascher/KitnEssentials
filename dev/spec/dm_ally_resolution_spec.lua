@@ -223,3 +223,43 @@ describe("MatchRowToRoster one-row guard", function()
         end
     end)
 end)
+
+describe("The meter's own spec as a roster source", function()
+    it("is read before the LibSpec spec", function()
+        local dm = L.loadDMCore({
+            IsInRaid = function() return false end,
+            IsInGroup = function() return true end,
+            GetNumGroupMembers = function() return 3 end,
+            UnitExists = function(u) return u == "party1" or u == "party2" end,
+            UnitGUID = function(u)
+                if u == "player" then return "guid-player" end
+                return ({ party1 = "guid-1", party2 = "guid-2" })[u]
+            end,
+            UnitClass = function() return "Localized", "SHAMAN" end,
+        })
+        dm.meterSpecByGUID["guid-1"] = 262
+        dm.specIconByGUID["guid-1"] = 999
+        dm.specIconByGUID["guid-2"] = 264
+        local members = dm.BuildRosterIndex()
+        assert.equals(262, members[1].spec)
+        assert.equals(264, members[2].spec)
+    end)
+
+    it("records neither a forgotten member nor someone outside the harvestable set", function()
+        local harvestable = { ["guid-1"] = true, ["guid-2"] = true }
+        DM:ForgetMeterSpec("guid-1")
+        local cases = {
+            { name = "a forgotten member", guid = "guid-1" },
+            { name = "not harvestable", guid = "guid-left" },
+        }
+        for _, c in ipairs(cases) do
+            DM.HarvestMeterSpec(DM.meterSpecByGUID, DM._meterSpecBlocked, harvestable,
+                { sourceGUID = c.guid, specIconID = 262 })
+            assert.is_nil(DM.meterSpecByGUID[c.guid], c.name)
+        end
+        -- Control: a harvestable member nobody forgot is recorded.
+        DM.HarvestMeterSpec(DM.meterSpecByGUID, DM._meterSpecBlocked, harvestable,
+            { sourceGUID = "guid-2", specIconID = 264 })
+        assert.equals(264, DM.meterSpecByGUID["guid-2"])
+    end)
+end)

@@ -31,6 +31,13 @@ DM.editModeRegistered = false
 -- so the RenderBar read is issecretvalue-guarded before use as a key. Wiped on disable.
 DM.specIconByGUID = {}
 
+-- The meter's own specIconID per plain GUID, read by the roster before the
+-- LibSpec table because it is the same field the row carries.
+DM.meterSpecByGUID = {}
+DM._meterSpecBlocked = {}
+DM._specHarvestOpen = false
+DM._specHarvestSet = {}
+
 -- [deathRecapID] = seconds, or false when no read could vouch for the time.
 DM._deathStamps = {}
 DM._deathSeq = 0
@@ -1556,9 +1563,9 @@ function DM.BuildRosterIndex()
                 members[#members + 1] = {
                     guid = guid,
                     class = class,
-                    -- nil when the comms have not landed; the matcher treats
-                    -- that as unknown and refuses to narrow on it.
-                    spec = DM.specIconByGUID[guid],
+                    -- nil when neither the meter nor the comms have reported
+                    -- it; the matcher treats that as unknown.
+                    spec = DM.meterSpecByGUID[guid] or DM.specIconByGUID[guid],
                 }
             end
         end
@@ -1667,6 +1674,27 @@ function DM:RosterIndex()
     end
     if idx == false then return nil end
     return idx
+end
+
+-- Records one source's spec. Keyed by GUID, so a later fight overwrites the
+-- member's earlier value instead of colliding with another member's. A source
+-- whose GUID is still secret after combat is simply skipped. harvestable is
+-- DM._specHarvestSet: someone who left since combat start is not recorded, since
+-- their leave has already been handled and nothing would forget them again.
+function DM.HarvestMeterSpec(harvest, blocked, harvestable, s)
+    if not s then return end
+    local guid, spec = s.sourceGUID, s.specIconID
+    if issecretvalue(guid) or type(guid) ~= "string" or guid == "" then return end
+    if not KnownSpec(spec) or blocked[guid] or not harvestable[guid] then return end
+    harvest[guid] = spec
+end
+
+-- The member's spec may have changed. Blocked as well as dropped: until the next
+-- combat start the live session still shows the fight before the change, and the
+-- next paint would record the old spec again.
+function DM:ForgetMeterSpec(guid)
+    self.meterSpecByGUID[guid] = nil
+    self._meterSpecBlocked[guid] = true
 end
 
 function DM:InvalidateRosterIndex()
