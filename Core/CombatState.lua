@@ -70,6 +70,7 @@ local function dbgState(cs)
     return "player=" .. dbgflag(cs.playerCombat) .. " group=" .. dbgflag(cs.groupOnly)
         .. " enc=" .. dbgflag(cs.inEncounter) .. " watch=" .. dbgflag(cs.watching)
         .. " fin=" .. dbgflag(cs.finalizePending) .. " frozen=" .. dbgflag(cs.frozen)
+        .. " pvp=" .. dbgflag(cs.pvpBlocked)
 end
 
 -- Same scan order as LiveGroupInCombat, but names the first unit in combat.
@@ -100,16 +101,18 @@ end
 
 local dbgLastHolder = nil
 
--- Keyed on the unit token, so a raid held for minutes prints one line.
+-- Prints only when the holder or its conn/vis changes, so a raid held for
+-- minutes by one unit prints one line.
 local function dbgNoteHolder(held)
-    local unit, detail
+    local detail
     if held then
+        local unit
         unit, detail = dbgCombatHolder()
-        if not unit then unit, detail = "unknown", "no unit found by the debug scan" end
+        if not unit then detail = "unknown (no unit found by the debug scan)" end
     end
-    if unit == dbgLastHolder then return end
-    dbgLastHolder = unit
-    KE:Print("[CS] " .. (unit and ("group held by " .. detail) or "group hold cleared"))
+    if detail == dbgLastHolder then return end
+    dbgLastHolder = detail
+    KE:Print("[CS] " .. (detail and ("group held by " .. detail) or "group hold cleared"))
 end
 
 ---@class KE.CombatState
