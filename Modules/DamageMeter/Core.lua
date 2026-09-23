@@ -44,6 +44,13 @@ DM._fightMembers = {}
 DM._leaverClass = {}
 DM._leaverUnknown = true
 
+-- Everyone in the group at any time since the last meter reset (plain GUID ->
+-- classFilename), and the classes of those no longer in it: an Overall row
+-- outlives its owner's membership. Unknown until Overall is read with plain GUIDs.
+DM._overallMembers = {}
+DM._overallLeaverClass = {}
+DM._overallLeaverUnknown = true
+
 -- [deathRecapID] = seconds, or false when no read could vouch for the time.
 DM._deathStamps = {}
 DM._deathSeq = 0
@@ -784,6 +791,9 @@ function DM:OnEnable()
     -- Nothing below raises it again: ClearFeignTags deliberately leaves it alone.
     self._feignArmable = false
 
+    -- Overall may already hold rows from before this enable.
+    self:SeedOverallMembers()
+
     -- Register with the shared combat-state service and seed a mid-fight enable
     -- (a module enabled while a fight is already running gets no OnStart otherwise).
     self:BindCombatState()
@@ -816,6 +826,9 @@ function DM:OnDisable()
     wipe(self._fightMembers)
     wipe(self._leaverClass)
     self._leaverUnknown = true
+    wipe(self._overallMembers)
+    wipe(self._overallLeaverClass)
+    self._overallLeaverUnknown = true
     self:StopTicker()
     self._sessionPending = false
     self._activeContext = nil
@@ -1403,6 +1416,8 @@ end
 function DM:OnCombatForceStop()
     if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD") end
     self:ClearFeignTags("zone change")
+    -- A load can leave Overall holding rows this module never saw arrive.
+    self:SeedOverallMembers()
     -- Nobody in combat as the world loads, so any later start is a fresh fight.
     -- Unit reads only: the combat service handles this event too, in no set order.
     if not InCombatLockdown() and not self:GroupInCombat() then
@@ -1448,6 +1463,7 @@ end
 -- guarded (resolved at runtime from the render chunk).
 function DM:OnMeterReset()
     self:ClearFeignTags("meter reset")
+    self:ResetOverallMembers()
     -- Current is emptied, so a recap id may next name a different death.
     self:ResetDeathStamps()
     -- The ONLY thing that enables feign filtering. A reset clears the data those
@@ -1833,20 +1849,100 @@ function DM:BeginLeaverWatch()
     self._leaverUnknown = not (self._sawOutOfCombat and members and classesRead)
 end
 
+-- Recomputes the classes of recorded Overall members missing from members, the
+-- current group's GUID set: a member back in the group owns their row again.
+-- known is false when Overall may hold a row of someone never recorded.
+function DM:MarkOverallLeavers(members, known)
+    wipe(self._overallLeaverClass)
+    if members then DM.MarkLeavers(self._overallMembers, members, self._overallLeaverClass) end
+    self._overallLeaverUnknown = not (known and members)
+end
+
+-- Records every class-bearing source of an Overall list except the player's own.
+-- Returns false when one has no plain GUID: its owner cannot be recorded, so
+-- their leaving could not be marked.
+function DM.AddOverallSources(sources, overallMembers)
+    local complete = true
+    for i = 1, #sources do
+        local s = sources[i]
+        local cf = s and s.classFilename
+        if not issecretvalue(cf) and type(cf) == "string" and cf ~= ""
+            and not DM.PlainOwnRow(s.isLocalPlayer) then
+            local guid = s.sourceGUID
+            if issecretvalue(guid) or type(guid) ~= "string" or guid == "" then
+                complete = false
+            else
+                overallMembers[guid] = cf
+            end
+        end
+    end
+    return complete
+end
+
+-- True while an ally row can resolve: the service can stop with the player
+-- still in combat.
+local function LeaverWatchActive()
+    return KE.CombatState:IsLive() or DetailCombatActive()
+end
+
+-- Records the group and recomputes the Overall leaver classes. While Overall's
+-- rows may predate what was recorded, it also reads Overall for every view an
+-- ally row resolves on: a window's view changes with its context and overrides,
+-- which fire nothing here. Deaths never resolves; Enemy Damage Taken lists
+-- enemies. The GUIDs are secret in combat, which keeps the set unknown.
+function DM:SeedOverallMembers()
+    local members, classesRead = self:GroupGUIDSet(self._overallMembers)
+    -- The tick re-judge reads only the fight's set, so an unreadable walk while
+    -- a row can resolve must reach that set too.
+    if not (members and classesRead) and LeaverWatchActive() then
+        self._leaverUnknown = true
+    end
+    local known = not self._overallLeaverUnknown
+    if not known then
+        known = true
+        local types = Enum.DamageMeterType
+        for meterType in pairs(self.METER_TYPE_NAMES) do
+            if meterType ~= types.Deaths and meterType ~= types.EnemyDamageTaken then
+                local session = self:GetSession(Enum.DamageMeterSessionType.Overall, meterType)
+                local sources = session and session.combatSources
+                if type(sources) ~= "table" or not DM.AddOverallSources(sources, self._overallMembers) then
+                    known = false
+                end
+            end
+        end
+    end
+    self:MarkOverallLeavers(members, known and classesRead)
+end
+
+-- A meter reset empties Overall, so only members from now on can hold a row.
+function DM:ResetOverallMembers()
+    wipe(self._overallMembers)
+    self._overallLeaverUnknown = false
+    self:SeedOverallMembers()
+end
+
 -- A member who leaves, changes spec and rejoins was not a group unit when the
 -- spec changed, so leaving counts as a change: it forgets a recorded spec and
 -- ends the member's place in the harvestable set. A leaver who cannot be named
 -- could be anyone, so an unreadable roster closes recording.
 function DM:OnRosterChanged()
     local recorded = next(self.meterSpecByGUID) ~= nil or next(self._specHarvestSet) ~= nil
-    -- Leavers are marked while an ally row can resolve: the service can stop
-    -- with the player still in combat. Outside both, the next entry starts a
-    -- fresh watch or promotes a watched fight.
-    local watch = KE.CombatState:IsLive() or DetailCombatActive()
-    if not recorded and not watch then return end
-    local members, classesRead = self:GroupGUIDSet(watch and self._fightMembers or nil)
+    -- Leavers are marked while an ally row can resolve. Outside that, the next
+    -- entry starts a fresh watch or promotes a watched fight.
+    local watch = LeaverWatchActive()
+    -- Overall's members are recorded in and out of combat: any member can gain
+    -- an Overall row at any time, and it stays until the next meter reset.
+    local members, classesRead = self:GroupGUIDSet(self._overallMembers)
+    self:MarkOverallLeavers(members, classesRead and not self._overallLeaverUnknown)
     if watch then
-        if members then DM.MarkLeavers(self._fightMembers, members, self._leaverClass) end
+        if members then
+            for guid in pairs(members) do
+                if self._fightMembers[guid] == nil then
+                    self._fightMembers[guid] = self._overallMembers[guid]
+                end
+            end
+            DM.MarkLeavers(self._fightMembers, members, self._leaverClass)
+        end
         if not (members and classesRead) then self._leaverUnknown = true end
     end
     if not recorded then return end
@@ -1864,15 +1960,19 @@ end
 
 -- GUIDs can stay secret for a while after combat ends; the Combat restriction
 -- lifting is when they read plain. Repaint once then, so the render path records
--- what the post-combat paint skipped under all its usual rules. Deferred a frame:
--- nothing documents the data as readable inside the dispatch.
+-- what the post-combat paint skipped under all its usual rules, and read Overall
+-- while its rows' owners are not all known. Deferred a frame: nothing documents
+-- the data as readable inside the dispatch.
 function DM:OnRestrictionChanged(_, rType, state)
-    if not self._specHarvestOpen then return end
+    local harvest, seed = self._specHarvestOpen, self._overallLeaverUnknown
+    if not harvest and not seed then return end
     if issecretvalue(rType) or issecretvalue(state) then return end
     local types, states = Enum.AddOnRestrictionType, Enum.AddOnRestrictionState
     if not types or not states or rType ~= types.Combat or state ~= states.Inactive then return end
     C_Timer.After(0, function()
-        if DM.enabled and not InCombatLockdown() then DM:Tick() end
+        if not DM.enabled or InCombatLockdown() then return end
+        if seed then DM:SeedOverallMembers() end
+        if harvest then DM:Tick() end
     end)
 end
 
@@ -1880,13 +1980,31 @@ function DM:InvalidateRosterIndex()
     self._rosterIndex = nil
 end
 
+-- True when this class's rows may include a member who has left: the fight's
+-- leavers on every view and, on Overall, whose rows outlive the fight, everyone
+-- who left since the last meter reset. Leavers that cannot be listed refuse
+-- every class.
+function DM:LeaverRefused(classFilename, overall)
+    local plain = not issecretvalue(classFilename) and type(classFilename) == "string"
+    if self._leaverUnknown or (plain and self._leaverClass[classFilename] == true) then return true end
+    if not overall then return false end
+    return self._overallLeaverUnknown or (plain and self._overallLeaverClass[classFilename] == true)
+end
+
+-- Overall and not pinned: the one view whose rows can predate the fight and
+-- still gain data between two paints.
+function DM:IsLiveOverall(W, cfg)
+    return not W._curSessionID and cfg.SessionType == Enum.DamageMeterSessionType.Overall
+end
+
 -- Resolve an ally row to a plain GUID. Reached ONLY for an ally row in combat.
 -- The own row keeps its own substitution and the Deaths view never consults
--- identity, so neither runs any of this.
-function DM:ResolveAllyGUID(classFilename, specIconID, rowsOfClass, specRows)
-    local leaver = self._leaverUnknown or (not issecretvalue(classFilename)
-        and type(classFilename) == "string" and self._leaverClass[classFilename] == true)
-    return DM.MatchRowToRoster(self:RosterIndex(), classFilename, specIconID, rowsOfClass, specRows, leaver)
+-- identity, so neither runs any of this. overall is IsLiveOverall's answer on a
+-- click or hover. The tick re-judge passes none: while a row can resolve, every
+-- change that would newly refuse on Overall also reaches the fight's set.
+function DM:ResolveAllyGUID(classFilename, specIconID, rowsOfClass, specRows, overall)
+    return DM.MatchRowToRoster(self:RosterIndex(), classFilename, specIconID, rowsOfClass, specRows,
+        self:LeaverRefused(classFilename, overall))
 end
 
 -- May a detail panel open, and stay open? The single gate every detail path
@@ -2601,8 +2719,9 @@ end
 -- Reset: clear all combat sessions, then repaint so the bars empty immediately.
 -- ResetAllCombatSessions is nil-guarded + pcall'd (12.0 API surface may shift).
 function DM:HeaderReset(_)
+    local wiped = false
     if C_DamageMeter and C_DamageMeter.ResetAllCombatSessions then
-        pcall(C_DamageMeter.ResetAllCombatSessions)
+        wiped = pcall(C_DamageMeter.ResetAllCombatSessions)
     end
     -- Drop the hover-tip Targets cache too: the EnemyDamageTaken cross-reference it
     -- was built from is wiped (DAMAGE_METER_RESET would also catch this, but the
@@ -2625,6 +2744,8 @@ function DM:HeaderReset(_)
     if self._sessionOutcomes then wipe(self._sessionOutcomes) end
     -- Death stamps too, before this function's own Tick below.
     self:ResetDeathStamps()
+    -- A reset that failed leaves Overall's rows, and their owners, in place.
+    if wiped then self:ResetOverallMembers() end
     -- Key history is part of a manual reset by design (the GUI note
     -- promises "one reset clears every window and the segment history
     -- together"). Resolved at runtime; guarded for load order. NOTE:

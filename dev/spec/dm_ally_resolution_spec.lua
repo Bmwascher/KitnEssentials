@@ -315,3 +315,38 @@ describe("Leaver marking", function()
         assert.is_nil(leaverClass.MAGE)
     end)
 end)
+
+describe("Leaver refusal on Overall", function()
+    it("refuses a class that lost a member since the meter reset, only on Overall", function()
+        -- An Overall row outlives its owner's membership, so a departed
+        -- member's row can balance a same-class member who has no row there.
+        DM._leaverUnknown = false
+        local cases = {
+            { name = "Overall, a leaver's class", classes = { SHAMAN = true }, overall = true, want = true },
+            { name = "Overall, leavers unknown", unknown = true, overall = true, want = true },
+            { name = "Overall, another class", classes = { MAGE = true }, overall = true, want = false },
+            { name = "not Overall", classes = { SHAMAN = true }, unknown = true, overall = false, want = false },
+        }
+        for _, c in ipairs(cases) do
+            DM._overallLeaverClass = c.classes or {}
+            DM._overallLeaverUnknown = c.unknown == true
+            assert.equals(c.want, DM:LeaverRefused("SHAMAN", c.overall), c.name)
+        end
+    end)
+end)
+
+describe("Recording Overall's rows", function()
+    it("records plain ally rows, skips the own row, and reports a secret GUID", function()
+        local SECRET = { __secret = true }
+        local overallMembers, leaverClass = {}, {}
+        local complete = DM.AddOverallSources({
+            { classFilename = "SHAMAN", sourceGUID = SECRET, isLocalPlayer = false },
+            { classFilename = "MAGE", sourceGUID = "guid-gone", isLocalPlayer = false },
+            { classFilename = "PRIEST", sourceGUID = "guid-me", isLocalPlayer = true },
+        }, overallMembers)
+        assert.is_false(complete)
+        assert.is_nil(overallMembers["guid-me"])
+        DM.MarkLeavers(overallMembers, { ["guid-here"] = true }, leaverClass)
+        assert.is_true(leaverClass.MAGE)
+    end)
+end)
