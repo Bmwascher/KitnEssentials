@@ -35,7 +35,8 @@ local function BuildProfileOptions(exclude)
     return options
 end
 
--- One deferred rebuild per action, after the manager has finished its work.
+-- The rebuild for actions no profile callback rebuilds after. A profile switch
+-- rebuilds the page itself through OnProfileChanged, so those paths skip this.
 local function RefreshPageLater()
     C_Timer.After(0.1, function()
         if GUIFrame.mainFrame and GUIFrame.mainFrame:IsShown() then
@@ -101,8 +102,8 @@ local function OpenImportPrompt()
                 local switched, switchErr = PM:SetProfile(nameOrErr)
                 if not switched then
                     KE:Print("Failed to switch profile: " .. (switchErr or "Unknown error"))
+                    RefreshPageLater()
                 end
-                RefreshPageLater()
             else
                 KE:Print("Import failed: " .. (nameOrErr or "Unknown error"))
                 KE:CreatePrompt(
@@ -257,7 +258,6 @@ GUIFrame:RegisterContent("ProfilesMain", function(scrollChild, yOffset)
             local success, err = PM:RenameProfile(oldName, newName)
             if success then
                 KE:Print("Renamed '" .. oldName .. "' to '" .. newName .. "'")
-                RefreshPageLater()
             else
                 KE:Print("Failed to rename: " .. (err or "Unknown error"))
             end
@@ -272,11 +272,16 @@ GUIFrame:RegisterContent("ProfilesMain", function(scrollChild, yOffset)
     local globalToggle = GUIFrame:CreateCheckbox(row2c, "Use Global Profile", {
         value = useGlobal,
         callback = function(newState)
+            local before = PM:GetCurrentProfile()
             if not PM:SetUseGlobalProfile(newState) then return end
             if not newState then
                 KE:Print("Global profile mode disabled")
             end
-            RefreshPageLater()
+            -- Enabling onto a different profile already rebuilt the page
+            -- through OnProfileChanged.
+            if not newState or PM:GetCurrentProfile() == before then
+                RefreshPageLater()
+            end
         end,
     })
     row2c:AddWidget(globalToggle, 0.4)
