@@ -483,3 +483,47 @@ describe("ChatMessageHandler body highlight", function()
         end)
     end)
 end)
+
+describe("ChatMessageHandler secret boss body", function()
+    -- The harness cannot make a secret. The composer takes the flag as an
+    -- argument, so its secret branches run on plain strings here.
+    local CMH, wrapCalls
+
+    before_each(function()
+        CMH = L.loadChatMessageHandler().ChatMessageHandler
+        wrapCalls = 0
+        _G.C_StringUtil = {
+            WrapString = function(body, prefix, suffix)
+                wrapCalls = wrapCalls + 1
+                return (prefix or "") .. body .. (suffix or "")
+            end,
+        }
+    end)
+
+    after_each(function()
+        _G.C_StringUtil = nil
+    end)
+
+    -- The plain path would substitute the body's %s, so a fall-through to it
+    -- fails this case.
+    it("joins a header-class body C-side behind the formatted header", function()
+        local body = CMH.ComposeBossBody("%s yells: ", "Kneel, %s!", "", "Boss", true)
+        assert.are.equal("Boss yells: Kneel, %s!", body)
+        assert.are.equal(1, wrapCalls)
+    end)
+
+    it("substitutes the name into an empty-header body", function()
+        local body = CMH.ComposeBossBody("", "%s begins to cast [Doom]!", "", "Boss", true)
+        assert.are.equal("Boss begins to cast [Doom]!", body)
+        assert.are.equal(0, wrapCalls)
+    end)
+
+    it("returns the raw empty-header body when its format throws", function()
+        assert.are.equal("%d stacks", CMH.ComposeBossBody("", "%d stacks", "", "Boss", true))
+    end)
+
+    it("returns the raw header-class body when the join is unavailable", function()
+        _G.C_StringUtil = nil
+        assert.are.equal("Die!", CMH.ComposeBossBody("%s yells: ", "Die!", "", "Boss", true))
+    end)
+end)
