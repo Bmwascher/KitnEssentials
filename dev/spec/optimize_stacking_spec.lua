@@ -22,7 +22,7 @@ end
 
 local function load(c)
     local OPT, rec = L.loadOptimize()
-    -- A version byte (2) then a flag byte, as the client stores it.
+    -- Any non-empty raw value: the engine decodes the flags, faked in stackBits.
     rec.cvars[STACKING] = "\2A"
     rec.stackBits[1] = c.enemy
     rec.stackBits[2] = c.friendly
