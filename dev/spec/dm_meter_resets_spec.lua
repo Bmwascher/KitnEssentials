@@ -104,6 +104,24 @@ describe("InstanceResetAction", function()
     end)
 end)
 
+describe("LoginResetAction", function()
+    it("holds Reset on Logout while a capture would read secret amounts", function()
+        -- InstanceResetAction's case covers the gate's order against validity;
+        -- these rows cover what keeps the login reset valid.
+        local cases = {
+            { name = "a login in combat", enabled = true, on = true, empty = false, blocked = true, want = "defer" },
+            { name = "a login or combat end, not blocked", enabled = true, on = true, empty = false, blocked = false, want = "wipe" },
+            { name = "Reset on Logout off by combat end", enabled = true, on = false, empty = false, blocked = false, want = "none" },
+            { name = "module disabled", enabled = false, on = true, empty = false, blocked = false, want = "none" },
+            { name = "an instance reset held through the same combat wiped first", enabled = true, on = true, empty = true,
+              blocked = false, want = "none" },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, DM.LoginResetAction(c.enabled, c.on, c.empty, c.blocked), c.name)
+        end
+    end)
+end)
+
 describe("PaintSkip", function()
     it("skips only a window whose view and data are unchanged since its last paint", function()
         local cases = {

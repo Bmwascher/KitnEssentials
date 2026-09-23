@@ -71,6 +71,10 @@ DM._wipeBoundary = false
 -- here, as its token, to be judged again at combat end.
 DM._deferredReset = nil
 
+-- Reset on Logout, held the same way when the login came in combat. A meter
+-- reset or key start since clears it.
+DM._loginResetHeld = false
+
 -- Session updates per meter type, and the ones that named no type. A window
 -- records their sum for its type at each Tick paint; an unchanged sum means no
 -- new data for it.
@@ -864,6 +868,7 @@ function DM:OnDisable()
     self._wipeBoundary = false
     self._lastEntryKey, self._lastEntryScope = nil, nil
     self._deferredReset = nil
+    self._loginResetHeld = false
     self:CloseInstancePrompt()
     self._feignArmable = false
     -- The runtime windows survive a disable, so their cached clock text would
@@ -1326,8 +1331,8 @@ function DM:OnRegenDisabled()
     if DEBUG_DM then KE:Print("[DM] PLAYER_REGEN_DISABLED") end
 end
 
--- The cache invalidation that a combat end marks the boundary of, and an
--- instance reset held through combat.
+-- The cache invalidation that a combat end marks the boundary of, and the
+-- resets held through combat.
 function DM:OnRegenEnabled()
     -- Combat ended for the player: a hover tip showing the in-combat "secret" message
     -- should re-populate with real (now-readable) data on the next poll -- mark dirty.
@@ -1336,9 +1341,9 @@ function DM:OnRegenEnabled()
     -- drop it so the post-fight hover rebuilds against THIS fight's enemies, not the stale
     -- constant-keyed map (wiped on both REGEN_DISABLED + ENABLED).
     if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
-    -- A Combat restriction still active here holds the reset again, and
+    -- A Combat restriction still active here holds a reset again, and
     -- OnRestrictionChanged runs it when the restriction lifts.
-    self:ResumeInstanceReset()
+    self:ResumeHeldResets()
 end
 
 -- A hard segment boundary: segment and history bookkeeping only.
@@ -1480,8 +1485,8 @@ function DM:OnCombatForceStop(_, isLogin, isReload)
     self:_ScheduleContextCheck()
     -- Reset on Logout acts at the next login: a /reload never matches, however
     -- it was called, and a crash or disconnect counts as leaving the game.
-    if isLogin == true and isReload ~= true and self.db and self.db.ResetOnLogout then
-        self:CaptureAndWipe()
+    if isLogin == true and isReload ~= true then
+        self:ApplyLoginReset()
     end
     -- A login or /reload only records where the player is.
     self:CheckInstanceEntry(isLogin == true or isReload == true)
@@ -1534,8 +1539,9 @@ function DM:OnMeterReset()
     -- about the game's internals, and each one can hide a real death when the
     -- inference is wrong.
     self._feignArmable = true
-    -- An Ask prompt raised before this reset must not reset again.
+    -- An Ask prompt or a held reset from before this reset must not reset again.
     self._resetGen = self._resetGen + 1
+    self._loginResetHeld = false
     self:CloseInstancePrompt()
     -- History bundles are already-captured data and survive every reset
     -- event (only eviction / HeaderReset / reload clear them). But pending
@@ -2037,12 +2043,12 @@ end
 -- GUIDs can stay secret for a while after combat ends; the Combat restriction
 -- lifting is when they read plain. Repaint once then, so the render path records
 -- what the post-combat paint skipped under all its usual rules, read Overall
--- while its rows' owners are not all known, and run an instance reset held
--- through combat. Deferred a frame: nothing documents the data as readable
--- inside the dispatch.
+-- while its rows' owners are not all known, and run the resets held through
+-- combat. Deferred a frame: nothing documents the data as readable inside the
+-- dispatch.
 function DM:OnRestrictionChanged(_, rType, state)
     local harvest, seed = self._specHarvestOpen, self._overallLeaverUnknown
-    local held = self._deferredReset ~= nil
+    local held = self._deferredReset ~= nil or self._loginResetHeld
     if not harvest and not seed and not held then return end
     if issecretvalue(rType) or issecretvalue(state) then return end
     local types, states = Enum.AddOnRestrictionType, Enum.AddOnRestrictionState
@@ -2051,7 +2057,7 @@ function DM:OnRestrictionChanged(_, rType, state)
         if not DM.enabled or InCombatLockdown() then return end
         if seed then DM:SeedOverallMembers() end
         if harvest then DM:Tick() end
-        if held then DM:ResumeInstanceReset() end
+        if held then DM:ResumeHeldResets() end
     end)
 end
 
@@ -3268,12 +3274,24 @@ function DM.InstanceAskValid(token, key, gen, enabled, optionOn)
 end
 
 -- "wipe", "defer" while a capture would read secret amounts, or "none" when
--- the reset is no longer valid. Validity comes first, so a stale reset is
+-- the reset no longer applies. Validity comes first, so a stale reset is
 -- never held for combat end.
-function DM.InstanceResetAction(token, key, gen, enabled, optionOn, blocked)
-    if not DM.InstanceAskValid(token, key, gen, enabled, optionOn) then return "none" end
+local function ResetAction(valid, blocked)
+    if not valid then return "none" end
     if blocked then return "defer" end
     return "wipe"
+end
+
+-- An instance reset's action, valid as InstanceAskValid judges it.
+function DM.InstanceResetAction(token, key, gen, enabled, optionOn, blocked)
+    return ResetAction(DM.InstanceAskValid(token, key, gen, enabled, optionOn), blocked)
+end
+
+-- Reset on Logout's action, valid while the module and the option are on and
+-- the store is not empty since this module's own wipe: an instance reset held
+-- through the same combat may already have captured and wiped it.
+function DM.LoginResetAction(enabled, optionOn, emptySinceWipe, blocked)
+    return ResetAction(enabled == true and optionOn == true and emptySinceWipe ~= true, blocked)
 end
 
 -- The current scope, instance ID, difficulty ID and plain instance name. A
@@ -3336,13 +3354,29 @@ function DM:ApplyInstanceReset(token)
     end
 end
 
--- Combat end (OnRegenEnabled, OnRestrictionChanged): a held reset is judged
--- again, and held again if a capture is still blocked.
-function DM:ResumeInstanceReset()
+-- Reset on Logout, at the login and again at combat end while it is held. A
+-- capture while blocked would keep secret amounts, as for an instance reset.
+function DM:ApplyLoginReset()
+    self._loginResetHeld = false
+    local optionOn = self.db ~= nil and self.db.ResetOnLogout == true
+    local action = DM.LoginResetAction(self.enabled, optionOn, self._wipeBoundary, CaptureBlocked())
+    if action == "defer" then
+        self._loginResetHeld = true
+    elseif action == "wipe" then
+        self:CaptureAndWipe()
+    end
+end
+
+-- Combat end (OnRegenEnabled, OnRestrictionChanged): each held reset is judged
+-- again, and held again if a capture is still blocked. The instance reset goes
+-- first: its wipe sets _wipeBoundary at once, which refuses the login reset,
+-- while a login wipe refuses the instance reset only through the generation
+-- bump DAMAGE_METER_RESET brings, which may arrive later.
+function DM:ResumeHeldResets()
     local token = self._deferredReset
-    if not token then return end
     self._deferredReset = nil
-    self:ApplyInstanceReset(token)
+    if token then self:ApplyInstanceReset(token) end
+    if self._loginResetHeld then self:ApplyLoginReset() end
 end
 
 -- Asks before resetting. The token pins the entry the prompt was raised for.
@@ -3420,8 +3454,9 @@ function DM:OnChallengeEvent(event)
     -- after the fact. A local snapshot store would give both at once --
     -- that's a feature (new data layer), not a different gate here.
     if event == "CHALLENGE_MODE_START" then
-        -- An Ask prompt from the instance entry must not reset the running key.
+        -- An Ask prompt or a held reset must not reset the running key.
         self._resetGen = self._resetGen + 1
+        self._loginResetHeld = false
         self:CloseInstancePrompt()
         if self.db and self.db.ResetOnKeyStart then
             if self._wipeBoundary then
