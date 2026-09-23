@@ -356,6 +356,8 @@ end
 
 local function ReactionColor(unit)
     local reaction = UnitReaction(unit, "player")
+    -- A secret used as a table key throws.
+    if KE:IsSecretValue(reaction) then return end
     local c = reaction and FACTION_BAR_COLORS and FACTION_BAR_COLORS[reaction]
     if c then return c.r, c.g, c.b end
     return 1, 1, 1
@@ -403,19 +405,20 @@ local function UnitColor(unit, guid)
     end
     if not unit then return end
 
-    -- Midnight secret units. UnitName returning a secret is the tell;
-    -- on that branch UnitIsPlayer and UnitReaction give secret
-    -- booleans and branching on them is the crash class.
-    --
-    -- Class-colour ONLY when the GUID says this is a player. Without that this
-    -- branch class-coloured every secret-named NPC too -- the same wrong-
-    -- Warrior bug by a second route.
+    -- Midnight secret units. Class-colour ONLY when the GUID says this is a
+    -- player: UnitClass answers for an NPC too, so without the GUID test a
+    -- secret-named NPC would wear a class colour.
     if KE:IsSecretValue(UnitName(unit)) then
-        if not IsPlayerGUID(guid) then return end
-        local _, class = UnitClass(unit)
-        return ClassColorFor(class) or WHITE_COLOR
-    end
-    if UnitIsPlayer(unit) then
+        if IsPlayerGUID(guid) then
+            local _, class = UnitClass(unit)
+            return ClassColorFor(class) or WHITE_COLOR
+        end
+        -- Not declared secret, but the tokens reaching here vary. A player
+        -- without a readable GUID gets nothing, not a reaction colour.
+        local isPlayer = UnitIsPlayer(unit)
+        if KE:IsSecretValue(isPlayer) then return end
+        if isPlayer then return end
+    elseif UnitIsPlayer(unit) then
         local _, class = UnitClass(unit)
         local c = ClassColorFor(class)
         if c then return c end
@@ -902,8 +905,9 @@ function TT:OnTooltipSetUnit(tt, data)
                 -- The target's own GUID is passed as well as its token, so a
                 -- player target still class-colours when the token is secret
                 -- but the GUID is not. UnitGUID is SecretWhenUnitIdentity-
-                -- Restricted, so under a restriction it degrades to white --
-                -- which is the honest answer, not a guess at the class.
+                -- Restricted, so under a restriction a player target degrades
+                -- to white -- the honest answer, not a guess at the class. An
+                -- NPC target still takes its reaction colour.
                 local c = UnitColor(unitTarget, UnitGUID(unitTarget))
                 tt:AddDoubleLine(format("%s:", _G.TARGET or "Target"),
                     name, 1, 1, 1, (c or WHITE_COLOR):GetRGB())

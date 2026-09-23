@@ -61,18 +61,45 @@ describe("Tooltips UnitColor", function()
         assert.same({ 0.37, 0.87, 0.37 }, { c:GetRGB() })
     end)
 
-    it("returns nothing for a secret-named unit that is not a player", function()
+    it("reaction-colours a secret-named unit that is not a player", function()
         local TT = L.loadTooltips(nil, {
-            issecretvalue = function() return true end,
+            issecretvalue = function(v) return v == "SECRET" end,
+            UnitName = function() return "SECRET" end,
+        })
+        local c = TT._UnitColor("target", CREATURE_GUID)
+        assert.same({ 0.37, 0.87, 0.37 }, { c:GetRGB() })
+    end)
+
+    it("returns nothing for a secret-named non-player whose reaction is secret", function()
+        local TT = L.loadTooltips({ UnitReaction = function() return "SECRET" end }, {
+            issecretvalue = function(v) return v == "SECRET" end,
+            UnitName = function() return "SECRET" end,
         })
         assert.is_nil(TT._UnitColor("target", CREATURE_GUID))
     end)
 
-    it("returns nothing for a secret-named unit with no GUID at all", function()
-        local TT = L.loadTooltips(nil, {
-            issecretvalue = function() return true end,
-        })
-        assert.is_nil(TT._UnitColor("target", nil))
+    -- The second row is a secret whose underlying value is false: read as a
+    -- plain boolean it would pass for "not a player".
+    it("returns nothing for a secret-named unit that is or may be a player", function()
+        local rows = {
+            {
+                name = "UnitIsPlayer true: the player refusal",
+                isPlayer = true,
+                secret = function(v) return v == "SECRET" end,
+            },
+            {
+                name = "UnitIsPlayer secret false: the secrecy test",
+                isPlayer = false,
+                secret = function(v) return v == "SECRET" or v == false end,
+            },
+        }
+        for _, row in ipairs(rows) do
+            local TT = L.loadTooltips({ UnitIsPlayer = function() return row.isPlayer end }, {
+                issecretvalue = row.secret,
+                UnitName = function() return "SECRET" end,
+            })
+            assert.is_nil(TT._UnitColor("target", nil), row.name)
+        end
     end)
 
     it("class-colours a secret-named unit whose GUID says player", function()
