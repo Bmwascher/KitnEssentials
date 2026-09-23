@@ -1089,6 +1089,15 @@ function L.loadChatRecall(isSecureCmd)
     return KE.ChatRecallStores, KE.ChatRecallRefused
 end
 
+-- Modules/Skinning/ChatCopyText.lua: one pure function, loaded without the
+-- chat skin.
+function L.loadChatCopyText()
+    local helpersLocal = require("dev.spec._helpers")
+    local KE = {}
+    helpersLocal.loadModule("Modules/Skinning/ChatCopyText.lua", KE)
+    return KE.SanitizeCopyLine
+end
+
 -- Modules/Skinning/RoleIconSamples.lua. Same reason as the chat builder above:
 -- the file holds one pure function and needs no KE.Skins and no frames, so it
 -- loads against a bare KE carrying only the art table.

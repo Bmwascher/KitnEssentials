@@ -25,6 +25,7 @@ local math_min = math.min
 local C_Timer = C_Timer
 local _G = _G
 local Theme = KE.Theme
+local SanitizeCopyLine = KE.SanitizeCopyLine
 
 local COPY_FRAME_WIDTH = 700
 local COPY_FRAME_HEIGHT = 300
@@ -79,6 +80,9 @@ function CHAT:GetChatLines(frame)
         local message, r, g, b = frame:GetMessageInfo(i)
         if message and not self:MessageIsProtected(message) then
             r, g, b = r or 1, g or 1, b or 1
+            -- Inside the protected-line check on purpose: the sanitiser reads
+            -- bytes, and a secret line must never reach it.
+            message = SanitizeCopyLine(message)
             message = removeIconFromLine(message)
             message = ColorizeLine(message, r, g, b)
             copyLines[index] = message
