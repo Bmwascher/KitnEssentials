@@ -26,6 +26,7 @@ local math_ceil = math.ceil
 local UnitChannelInfo = UnitChannelInfo
 local InCombatLockdown = InCombatLockdown
 local C_Timer = C_Timer
+local issecretvalue = issecretvalue
 
 
 ---------------------------------------------------------------------------------
@@ -837,7 +838,7 @@ function DT:OnEvent(event, unit, ...)
     if event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_STOP"
         or event == "UNIT_SPELLCAST_CHANNEL_UPDATE"
         or event == "UNIT_SPELLCAST_EMPOWER_STOP" or event == "UNIT_SPELLCAST_SUCCEEDED" then
-        if unit ~= "player" then return end
+        if issecretvalue(unit) or unit ~= "player" then return end
     end
 
     if event == "LOADING_SCREEN_DISABLED" then
@@ -864,6 +865,9 @@ function DT:OnEvent(event, unit, ...)
 
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         local _, spellId = ...  -- castGUID, spellID (unit already captured)
+        -- A spell can be secret for any unit, so the player filter does not
+        -- make spellID plain; a secret one is never ours.
+        if issecretvalue(spellId) then return end
         if self.hasTipTheScalesActive and IsEmpower(spellId) and KnowsMassDisintegrate() then
             self.hasTipTheScalesActive = false
             self.massDisintegrateStacks = self.massDisintegrateStacks + 1
@@ -876,6 +880,7 @@ function DT:OnEvent(event, unit, ...)
 
     elseif event == "UNIT_SPELLCAST_EMPOWER_STOP" then
         local _, spellId, complete = ...  -- castGUID, spellID, complete
+        if issecretvalue(spellId) or issecretvalue(complete) then return end
         if not complete or not IsEmpower(spellId) or not KnowsMassDisintegrate() then
             return
         end
@@ -884,6 +889,7 @@ function DT:OnEvent(event, unit, ...)
 
     elseif event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
         local _, spellId = ...
+        if issecretvalue(spellId) then return end
         if spellId ~= DISINTEGRATE then return end
 
         local endTimeMS = select(5, UnitChannelInfo("player"))
@@ -893,6 +899,7 @@ function DT:OnEvent(event, unit, ...)
 
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
         local _, spellId = ...
+        if issecretvalue(spellId) then return end
         if spellId ~= DISINTEGRATE then return end
 
         local _, _, _, startTimeMS, endTimeMS = UnitChannelInfo("player")
@@ -955,17 +962,20 @@ function DT:OnEvent(event, unit, ...)
 
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
         -- unit param captures spellId for non-unit events
+        if issecretvalue(unit) then return end
         if not self.hasTipTheScalesActive and IsEmpower(unit) then
             self.hasTipTheScalesActive = true
         end
 
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
+        if issecretvalue(unit) then return end
         if self.hasTipTheScalesActive and IsEmpower(unit) then
             self.hasTipTheScalesActive = false
         end
 
     elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
         local _, spellId = ...
+        if issecretvalue(spellId) then return end
         if spellId ~= DISINTEGRATE then return end
 
         self:HideWarning()
