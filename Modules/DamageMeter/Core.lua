@@ -41,6 +41,8 @@ DM._specHarvestSet = {}
 -- [deathRecapID] = seconds, or false when no read could vouch for the time.
 DM._deathStamps = {}
 DM._deathSeq = 0
+-- Starts outside a tick, so a render before the first one records no read.
+DM._deathTickOver = true
 
 -- File-level upvalues for globals used in per-tick / per-bar render paths.
 local IsInInstance = IsInInstance
@@ -853,7 +855,7 @@ end
 -- Shared by OnStart and BindCombatState's mid-fight seed so the two cannot
 -- drift: a seed that ran StartTicker alone would leave a raised _clockCleared
 -- in place, and the clock would stay hidden for the rest of that fight.
-function DM:_CombatStartBody(seeded)
+function DM:_CombatStartBody()
     self._clockCleared = nil
     -- A genuine start blanks the clock so the warm-up hold in UpdateCombatClock
     -- cannot keep the PREVIOUS fight's time on screen. A chain pull gets no
@@ -861,18 +863,6 @@ function DM:_CombatStartBody(seeded)
     if self.BlankCombatClock then self:BlankCombatClock() end
     self:ClearFeignTags("combat start")
     self:ResetDeathStamps()
-    -- Only a fight this module watched begin opens the spec harvest: not the
-    -- mid-fight seed, and not a fight already running at a /reload, whose spec
-    -- changes it never heard.
-    if not seeded and self._sawOutOfCombat then
-        wipe(self._meterSpecBlocked)
-        wipe(self._specHarvestSet)
-        local members = self:GroupGUIDSet()
-        if members then
-            for guid in pairs(members) do self._specHarvestSet[guid] = true end
-        end
-        self._specHarvestOpen = true
-    end
     self:StartTicker()
 end
 
@@ -921,7 +911,7 @@ function DM:BindCombatState()
     -- A module enabled mid-fight gets no OnStart from the service (it already
     -- fired before this module registered), so run the same body directly.
     if KE.CombatState:IsLive() then
-        self:_CombatStartBody(true)
+        self:_CombatStartBody()
     end
 end
 
@@ -1206,6 +1196,19 @@ function DM:OnRegenDisabled()
     -- The player re-entering combat inside a live group fight can start a new
     -- Current session that no combat-state start marks.
     self:ResetDeathStamps()
+    -- Only the player entering combat opens the spec harvest: Current follows the
+    -- player's combat, and a group-only start could lift a block while Current
+    -- still shows the fight before a respec. Not a fight already running at a
+    -- /reload either, whose spec changes this module never heard.
+    if self._sawOutOfCombat then
+        wipe(self._meterSpecBlocked)
+        wipe(self._specHarvestSet)
+        local members = self:GroupGUIDSet()
+        if members then
+            for guid in pairs(members) do self._specHarvestSet[guid] = true end
+        end
+        self._specHarvestOpen = true
+    end
     -- A hover tip that persists into combat must flip to the "secret while in combat"
     -- message on the next poll: mark it dirty (the throttled poll only re-populates on
     -- a dirty signal). Resolved-at-runtime field on DM read by the Detail.lua poll.
@@ -1435,6 +1438,8 @@ end
 -- guarded (resolved at runtime from the render chunk).
 function DM:OnMeterReset()
     self:ClearFeignTags("meter reset")
+    -- Current is emptied, so a recap id may next name a different death.
+    self:ResetDeathStamps()
     -- The ONLY thing that enables feign filtering. A reset clears the data those
     -- rows lived in, so nothing pending can be held against a later list. Every
     -- cheaper signal -- leaving combat, an empty list, a login -- is an inference
@@ -2563,6 +2568,8 @@ function DM:HeaderReset(_)
     -- Outcome tags reference the wiped session ids -- drop them with the data
     -- (mirrors OnMeterReset; covers a reset that doesn't fire the event).
     if self._sessionOutcomes then wipe(self._sessionOutcomes) end
+    -- Death stamps too, before this function's own Tick below.
+    self:ResetDeathStamps()
     -- Key history is part of a manual reset by design (the GUI note
     -- promises "one reset clears every window and the segment history
     -- together"). Resolved at runtime; guarded for load order. NOTE:
@@ -3181,7 +3188,6 @@ function DM:Tick()
         end
     end
 
-    -- Renders deferred to a later frame stamp nothing (EndDeathTick).
     self:EndDeathTick()
 
     if deferred then

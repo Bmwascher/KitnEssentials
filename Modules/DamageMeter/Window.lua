@@ -1479,8 +1479,6 @@ function DM:RenderWindow(W)
     self:UpdateCombatClock(W, session)
 
     local sources = session and session.combatSources
-    -- Stamps read the raw list, before the Deaths filter below, and every render
-    -- must reach this, including one with no data.
     self:UpdateDeathStamps(W, isDeaths and self:IsLiveCurrent(W, cfg), sources)
     -- Sources per class in the session, excluding the player's own. The roster
     -- side excludes the player too; counting one population against the other is

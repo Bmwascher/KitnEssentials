@@ -248,6 +248,7 @@ describe("Death-time stamps", function()
         local read = 10.3
         _G.C_DamageMeter = { GetSessionDurationSeconds = function() return read end }
         DM.db = { RefreshRate = 0.1 }
+        DM._deathTickOver = false   -- a render inside a tick's own loop
         local W = { _deathPrevDur = 10, _deathPrevSeq = 0 }
         DM.windows_rt = { W }
         DM:UpdateDeathStamps(W, true, { { deathRecapID = 7, deathTimeSeconds = t } })
@@ -276,6 +277,7 @@ describe("Death-time stamps", function()
         SECRET[t] = true
         SECRET[d] = true
         _G.C_DamageMeter = { GetSessionDurationSeconds = function() return d end }
+        DM._deathTickOver = false   -- a render inside a tick's own loop
         DM._deathStamps[5] = 40
         local W = { _deathPrevDur = 20, _deathPrevSeq = 0 }
         DM.windows_rt = { W }
