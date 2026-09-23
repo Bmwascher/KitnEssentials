@@ -594,6 +594,9 @@ function LR:SetupRollBars()
         end
         self._barsWired = true
     end
+    -- On first setup the layout pass's call ran before the wiring, so a
+    -- prompt already on screen is placed here.
+    LR.AnchorBonusRoll()
 end
 
 function LR:TeardownRollBars()
