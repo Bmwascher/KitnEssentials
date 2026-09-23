@@ -1518,6 +1518,15 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     manager:Register(instModeDd, "instancereset")
     cardSeg:AddRow(rowInst, Theme.rowHeight)
 
+    local rowLogout = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
+    local logoutResetChk = GUIFrame:CreateCheckbox(rowLogout, "Reset on Logout", {
+        value = db.ResetOnLogout == true,
+        callback = function(checked) db.ResetOnLogout = checked end,
+    })
+    rowLogout:AddWidget(logoutResetChk, 1)
+    manager:Register(logoutResetChk, "all")
+    cardSeg:AddRow(rowLogout, Theme.rowHeight)
+
     local rowRetain = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
     -- Display-only clamp mirroring History.lua evictOverCap's read semantics exactly
     -- (non-number -> 5; <1 -> 1; >5 -> 5): a legacy profile can hold a materialized
@@ -1560,7 +1569,8 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     cardSeg:AddRow(segNoteRow, 80, 0)
 
     cardSeg:AddNote(KE:ColorTextByTheme("Reset on Instance Entry") .. " clears the meter when you enter a different dungeon, raid, scenario or Delve, or a different difficulty; " ..
-        KE:ColorTextByTheme("Ask") .. " shows a prompt first. Running back after a death, a login and a /reload never reset. Key history is kept.")
+        KE:ColorTextByTheme("Ask") .. " shows a prompt first. Running back after a death, a login and a /reload never reset. Key history is kept. " ..
+        KE:ColorTextByTheme("Reset on Logout") .. " clears it the next time you log in; /reload keeps it.")
 
     yOffset = cardSeg:GetNextOffset()
 

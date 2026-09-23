@@ -171,6 +171,7 @@ local DM_DEFAULTS = {
                                 -- run; off = data accumulates until a manual reset
     ResetOnInstanceEntry = false,  -- wipe on entering a different dungeon / raid / scenario / Delve
     InstanceResetMode = "ask",     -- "auto" | "ask"; Ask by default, so turning the toggle on never wipes unasked
+    ResetOnLogout = false,         -- wipe at the next login after a logout (never after a /reload)
 
     -- Visibility conditions (independent; ALL enabled conditions must pass for the
     -- meter to show). GUI preview / EditMode always force-show regardless.
@@ -1431,8 +1432,9 @@ function DM:OnEncounterEnd(_, _, _, _, _, success)
     end)
 end
 
--- Zoning: feign teardown, the content-context recheck and the instance-entry
--- check. AceEvent passes the PLAYER_ENTERING_WORLD payload after the event name.
+-- Zoning: feign teardown, the content-context recheck, the login reset and the
+-- instance-entry check. AceEvent passes the PLAYER_ENTERING_WORLD payload after
+-- the event name.
 function DM:OnCombatForceStop(_, isLogin, isReload)
     if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD") end
     self:ClearFeignTags("zone change")
@@ -1455,6 +1457,11 @@ function DM:OnCombatForceStop(_, isLogin, isReload)
     -- Zoning may change the content context (entered/left an instance) -- schedule a
     -- settled re-check (debounced; IsInInstance isn't reliable until the world loads).
     self:_ScheduleContextCheck()
+    -- Reset on Logout acts at the next login: a /reload never matches, however
+    -- it was called, and a crash or disconnect counts as leaving the game.
+    if isLogin == true and isReload ~= true and self.db and self.db.ResetOnLogout then
+        self:CaptureAndWipe()
+    end
     -- A login or /reload only records where the player is.
     self:CheckInstanceEntry(isLogin == true or isReload == true)
 end
