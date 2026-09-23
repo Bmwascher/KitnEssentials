@@ -393,6 +393,12 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
                 return
             end
             local text1 = self:GetText()
+            if d._showSecondEditBox and d.editBox2 then
+                local text2 = d.editBox2:GetText()
+                local accept = ClosePrompt(d, false)
+                if accept then accept(text1, text2) end
+                return
+            end
             local accept = ClosePrompt(d, false)
             if accept then accept(text1) end
         end)
