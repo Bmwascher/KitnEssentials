@@ -861,11 +861,9 @@ function DM:_CombatStartBody(seeded)
     if self.BlankCombatClock then self:BlankCombatClock() end
     self:ClearFeignTags("combat start")
     self:ResetDeathStamps()
-    -- A member who stays in combat cannot change spec, so what this fight records
-    -- is current for them; one who drops out and changes is forgotten by the
-    -- spec-change event. A member who cannot be read leaves the set empty. Only a
-    -- fight this module watched begin opens it: not the mid-fight seed, and not
-    -- a fight already running at a /reload, whose spec changes it never heard.
+    -- Only a fight this module watched begin opens the spec harvest: not the
+    -- mid-fight seed, and not a fight already running at a /reload, whose spec
+    -- changes it never heard.
     if not seeded and self._sawOutOfCombat then
         wipe(self._meterSpecBlocked)
         wipe(self._specHarvestSet)
@@ -2206,7 +2204,7 @@ end
 -- once, whatever the windows show, so a roll is caught within one tick.
 function DM:BeginDeathTick()
     self._deathSeq = self._deathSeq + 1
-    self._deathTickRead, self._deathTickDur, self._deathTickOver = nil, nil, nil
+    self._deathTickRead, self._deathTickDur, self._deathTickOver = nil, nil, false
     if next(self._deathStamps) == nil then return end
     self._deathTickDur = self:ReadDeathDuration()
     self._deathTickRead = true
@@ -2235,7 +2233,6 @@ function DM:UpdateDeathStamps(W, liveView, sources)
     -- tick, and Current may have rolled unseen meanwhile.
     if not W._deathPrevSeq or seq - W._deathPrevSeq > 1 then prev = nil end
     W._deathPrevDur, W._deathPrevSeq = duration, seq
-    -- One refresh interval, read as StartTicker reads it, plus the jitter.
     local bound = ((self.db and self.db.RefreshRate) or 0.5) + STAMP_JITTER
     StampDeaths(sources, self._deathStamps, DeathStampMode(prev, duration, bound), duration)
 end
