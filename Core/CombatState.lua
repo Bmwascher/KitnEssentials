@@ -99,6 +99,12 @@ local function dbgCombatHolder()
     return nil, nil
 end
 
+local function dbgWedgeReset(cs, site)
+    if cs.clearTicks > 0 then
+        KE:Print("[CS] wedge count reset at " .. cs.clearTicks .. " by " .. site)
+    end
+end
+
 local dbgLastHolder = nil
 
 -- Prints only when the holder or its conn/vis changes, so a raid held for
@@ -243,6 +249,7 @@ function CombatState:Freeze(reason)
     self.frozen = true
     self.playerCombat = false
     self.groupOnly = false
+    if DEBUG_CS then dbgWedgeReset(self, "Freeze") end
     self.clearTicks = 0
     self.finalizePending = false
     self.pendingGen = nil
@@ -282,6 +289,7 @@ function CombatState:StartFight(which, span)
     self.pin = 0
     self.fineBase = nil
     self.fineAnchor = nil
+    if DEBUG_CS then dbgWedgeReset(self, "StartFight") end
     self.clearTicks = 0
     self.finalizePending = false
     self.pendingGen = nil
@@ -317,6 +325,7 @@ function CombatState:Promote()
     self.playerJoined = true
     -- The player entering combat disproves that the group stayed continuously
     -- clear, so a part-spent dwell must not carry over and cut the next drop short.
+    if DEBUG_CS then dbgWedgeReset(self, "Promote") end
     self.clearTicks = 0
     self:_CancelPoll()
     if DEBUG_CS then KE:Print("[CS] Promote gen=" .. self.generation) end
@@ -352,7 +361,8 @@ function CombatState:OnUnitFlags(unit)
     if not self.deps.groupInCombat() then return end   -- the up-to-41-unit scan, last
     if DEBUG_CS then
         local _, detail = dbgCombatHolder()
-        KE:Print("[CS] UNIT_FLAGS " .. unit .. " starts GROUP, held by " .. tostring(detail))
+        KE:Print("[CS] UNIT_FLAGS " .. unit .. " starts GROUP, held by " .. tostring(detail)
+            .. " " .. dbgState(self))
     end
     self:StartFight(GROUP)
 end
@@ -511,7 +521,7 @@ function CombatState:PollTick()
     end
     if self.deps.groupInCombat() then
         if DEBUG_CS then
-            if self.clearTicks > 0 then KE:Print("[CS] wedge count reset at " .. self.clearTicks) end
+            dbgWedgeReset(self, "group in combat")
             dbgNoteHolder(true)
         end
         self.clearTicks = 0
