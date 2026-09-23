@@ -127,21 +127,20 @@ end)
 describe("TipHeaderName", function()
     -- History.lua is not loaded here: DM.PlainNameFor is stubbed per test
     -- (fresh DM each before_each, so stubs never leak).
-    it("prefers the cached plain name and never consults the memo", function()
-        DM.PlainNameFor = function() error("memo must not be consulted when a cached name exists") end
-        local bar = { _cachedName = "Itsgg", _sourceGUID = "Player-1-A" }
-        assert.equals("Itsgg", DM.TipHeaderName(DM, bar))
-    end)
-
-    it("falls back to the identity memo when the cached name is nil (secret-named bar)", function()
-        DM.PlainNameFor = function(_, guid)
-            return guid == "Player-1-A" and "Unsub-BurningLegion" or nil
+    it("takes the cached name, then the memo by source GUID, then by resolved GUID, else nil", function()
+        local memo = { ["Player-1-A"] = "Unsub-BurningLegion", ["Player-1-R"] = "Resolved-Realm" }
+        DM.PlainNameFor = function(_, guid) return guid and memo[guid] end
+        local cases = {
+            { name = "cached name", bar = { _cachedName = "Itsgg", _sourceGUID = "Player-1-A" },
+              resolved = "Player-1-R", want = "Itsgg" },
+            { name = "memo by source GUID", bar = { _sourceGUID = "Player-1-A" },
+              resolved = "Player-1-R", want = "Unsub-BurningLegion" },
+            { name = "memo by resolved GUID", bar = { _sourceGUID = "Player-1-X" },
+              resolved = "Player-1-R", want = "Resolved-Realm" },
+            { name = "no name", bar = { _sourceGUID = "Player-1-X" }, want = nil },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, DM.TipHeaderName(DM, c.bar, c.resolved), c.name)
         end
-        assert.equals("Unsub-BurningLegion", DM.TipHeaderName(DM, { _sourceGUID = "Player-1-A" }))
-    end)
-
-    it("defaults to Breakdown when no memo is installed (load-order safety)", function()
-        assert.is_nil(DM.PlainNameFor)
-        assert.equals("Breakdown", DM.TipHeaderName(DM, {}))
     end)
 end)
