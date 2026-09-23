@@ -263,3 +263,24 @@ describe("The meter's own spec as a roster source", function()
         assert.equals(264, DM.meterSpecByGUID["guid-2"])
     end)
 end)
+
+describe("The harvestable set", function()
+    it("drops a member who left, even while nothing is recorded", function()
+        local dm = L.loadDMCore({
+            IsInRaid = function() return false end,
+            IsInGroup = function() return true end,
+            GetNumGroupMembers = function() return 2 end,
+            UnitExists = function(u) return u == "party1" end,
+            UnitGUID = function(u)
+                if u == "player" then return "guid-player" end
+                return ({ party1 = "guid-1" })[u]
+            end,
+            UnitClass = function() return "Localized", "SHAMAN" end,
+        })
+        dm._specHarvestSet["guid-1"] = true
+        dm._specHarvestSet["guid-left"] = true
+        dm:OnRosterChanged()
+        assert.is_true(dm._specHarvestSet["guid-1"])
+        assert.is_nil(dm._specHarvestSet["guid-left"])
+    end)
+end)

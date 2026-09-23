@@ -581,6 +581,10 @@ local function ResolveGroupGUID(playerName)
                     -- player unknown for exactly as long as the collision lasts.
                     DM.specIconByGUID[hit] = nil
                     DM.specIconByGUID[guid] = nil
+                    -- Either player's recorded meter spec may be stale for the
+                    -- same reason.
+                    DM:ForgetMeterSpec(hit)
+                    DM:ForgetMeterSpec(guid)
                     ambiguous = true
                 else
                     hit = guid
@@ -620,6 +624,8 @@ function DM:OnLibSpecGroupUpdate(specID, _, _, playerName)
     if not icon then return end
     local guid = ResolveGroupGUID(playerName)
     if guid then
+        -- A changed report means a spec change, so the recorded meter spec is stale.
+        if self.specIconByGUID[guid] ~= icon then self:ForgetMeterSpec(guid) end
         self.specIconByGUID[guid] = icon
     end
 end
@@ -662,6 +668,13 @@ function DM:OnEnable()
     -- owns repaints and OnSessionUpdated early-returns, so this adds no hot work).
     self:RegisterEvent("DAMAGE_METER_CURRENT_SESSION_UPDATED", "OnSessionUpdated")
     self:RegisterEvent("DAMAGE_METER_RESET", "OnMeterReset")
+    -- A spec change or a member leaving retires recorded meter specs; the Combat
+    -- restriction lifting records the ones still secret at the post-combat paint.
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterChanged")
+    self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
+    self._specHarvestOpen = false
+    self._sawOutOfCombat = false
 
     -- Content-context auto-swap: re-resolve each window's per-context config
     -- when the player changes content. PLAYER_ENTERING_WORLD (registered above for
@@ -786,6 +799,11 @@ function DM:OnDisable()
     KE.CombatState:UnregisterListener("DamageMeter")
     if LibSpec then LibSpec.UnregisterGroup(self) end
     wipe(self.specIconByGUID)
+    wipe(self.meterSpecByGUID)
+    wipe(self._meterSpecBlocked)
+    wipe(self._specHarvestSet)
+    self._specHarvestOpen = false
+    self._sawOutOfCombat = false
     self:DropDeathStamps()
     self:StopTicker()
     self._sessionPending = false
@@ -835,7 +853,7 @@ end
 -- Shared by OnStart and BindCombatState's mid-fight seed so the two cannot
 -- drift: a seed that ran StartTicker alone would leave a raised _clockCleared
 -- in place, and the clock would stay hidden for the rest of that fight.
-function DM:_CombatStartBody()
+function DM:_CombatStartBody(seeded)
     self._clockCleared = nil
     -- A genuine start blanks the clock so the warm-up hold in UpdateCombatClock
     -- cannot keep the PREVIOUS fight's time on screen. A chain pull gets no
@@ -843,6 +861,20 @@ function DM:_CombatStartBody()
     if self.BlankCombatClock then self:BlankCombatClock() end
     self:ClearFeignTags("combat start")
     self:ResetDeathStamps()
+    -- A member who stays in combat cannot change spec, so what this fight records
+    -- is current for them; one who drops out and changes is forgotten by the
+    -- spec-change event. A member who cannot be read leaves the set empty. Only a
+    -- fight this module watched begin opens it: not the mid-fight seed, and not
+    -- a fight already running at a /reload, whose spec changes it never heard.
+    if not seeded and self._sawOutOfCombat then
+        wipe(self._meterSpecBlocked)
+        wipe(self._specHarvestSet)
+        local members = self:GroupGUIDSet()
+        if members then
+            for guid in pairs(members) do self._specHarvestSet[guid] = true end
+        end
+        self._specHarvestOpen = true
+    end
     self:StartTicker()
 end
 
@@ -850,6 +882,9 @@ function DM:BindCombatState()
     KE.CombatState:RegisterListener("DamageMeter", {
         OnStart = function() DM:_CombatStartBody() end,
         OnStop = function(reason)
+            -- A fight ended while this module watched, so the next start begins a
+            -- fight it sees from the start.
+            DM._sawOutOfCombat = true
             -- A kill authorises a 0.5s delay on the PAINT only (Blizzard needs it to
             -- finalize the session totals); the clock itself already froze. Every
             -- other reason, "encounterEndDelayed" included, already spent that delay
@@ -888,7 +923,7 @@ function DM:BindCombatState()
     -- A module enabled mid-fight gets no OnStart from the service (it already
     -- fired before this module registered), so run the same body directly.
     if KE.CombatState:IsLive() then
-        self:_CombatStartBody()
+        self:_CombatStartBody(true)
     end
 end
 
@@ -1357,6 +1392,11 @@ end
 function DM:OnCombatForceStop()
     if DEBUG_DM then KE:Print("[DM] PLAYER_ENTERING_WORLD") end
     self:ClearFeignTags("zone change")
+    -- Nobody in combat as the world loads, so any later start is a fresh fight.
+    -- Unit reads only: the combat service handles this event too, in no set order.
+    if not InCombatLockdown() and not self:GroupInCombat() then
+        self._sawOutOfCombat = true
+    end
     -- An in-combat reload must leave the live clock alone. Two frames handle
     -- this event and the game promises no order between them, so the gate is
     -- written to be correct either way: reached first, the machine's own
@@ -1695,6 +1735,89 @@ end
 function DM:ForgetMeterSpec(guid)
     self.meterSpecByGUID[guid] = nil
     self._meterSpecBlocked[guid] = true
+end
+
+-- For a spec change or a leave whose member cannot be identified: drop every
+-- recorded spec and stop recording until the next combat start.
+function DM:CloseSpecHarvest()
+    wipe(self.meterSpecByGUID)
+    self._specHarvestOpen = false
+end
+
+-- PLAYER_SPECIALIZATION_CHANGED carries the unit whose spec changed. A unit that
+-- cannot be read could be anyone, so it closes recording.
+function DM:OnSpecChanged(_, unit)
+    if issecretvalue(unit) or type(unit) ~= "string" then
+        self:CloseSpecHarvest()
+        return
+    end
+    if unit == "player" then return end
+    local guid = UnitGUID(unit)
+    if issecretvalue(guid) or type(guid) ~= "string" or guid == "" then
+        self:CloseSpecHarvest()
+        return
+    end
+    self:ForgetMeterSpec(guid)
+end
+
+local rosterScratch = {}
+
+-- The current group's plain GUIDs in a reused set, or nil when a unit that exists
+-- cannot be read: an unidentified member could be anyone.
+function DM:GroupGUIDSet()
+    local units, n
+    if IsInRaid() then
+        units, n = _raidUnits, GetNumGroupMembers()
+    elseif IsInGroup() then
+        units, n = _partyUnits, (GetNumGroupMembers() or 0) - 1
+    else
+        units, n = _partyUnits, 0
+    end
+    if type(n) ~= "number" then return nil end
+    if n > #units then n = #units end
+    wipe(rosterScratch)
+    for i = 1, n do
+        local unit = units[i]
+        if UnitExists(unit) then
+            local guid = UnitGUID(unit)
+            if issecretvalue(guid) or type(guid) ~= "string" then return nil end
+            rosterScratch[guid] = true
+        end
+    end
+    return rosterScratch
+end
+
+-- A member who leaves, changes spec and rejoins was not a group unit when the
+-- spec changed, so leaving counts as a change: it forgets a recorded spec and
+-- ends the member's place in the harvestable set. A leaver who cannot be named
+-- could be anyone, so an unreadable roster closes recording.
+function DM:OnRosterChanged()
+    if next(self.meterSpecByGUID) == nil and next(self._specHarvestSet) == nil then return end
+    local members = self:GroupGUIDSet()
+    if not members then
+        self:CloseSpecHarvest()
+        return
+    end
+    for guid in pairs(self._specHarvestSet) do
+        if not members[guid] then self._specHarvestSet[guid] = nil end
+    end
+    for guid in pairs(self.meterSpecByGUID) do
+        if not members[guid] then self:ForgetMeterSpec(guid) end
+    end
+end
+
+-- GUIDs can stay secret for a while after combat ends; the Combat restriction
+-- lifting is when they read plain. Repaint once then, so the render path records
+-- what the post-combat paint skipped under all its usual rules. Deferred a frame:
+-- nothing documents the data as readable inside the dispatch.
+function DM:OnRestrictionChanged(_, rType, state)
+    if not self._specHarvestOpen then return end
+    if issecretvalue(rType) or issecretvalue(state) then return end
+    local types, states = Enum.AddOnRestrictionType, Enum.AddOnRestrictionState
+    if not types or not states or rType ~= types.Combat or state ~= states.Inactive then return end
+    C_Timer.After(0, function()
+        if DM.enabled and not InCombatLockdown() then DM:Tick() end
+    end)
 end
 
 function DM:InvalidateRosterIndex()
