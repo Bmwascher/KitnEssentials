@@ -107,7 +107,7 @@ KE.TrashCurated = {
         [122571] = {  -- Rift Warden
             [1264499] = { label = "AOE",         display = "bar",  castSound = "AoE" },       -- Rift Tear (→ yellow)
             [1280330] = { label = "DISPEL",      display = "text",     -- Rift Essence (→ CLEAR white)
-                          castSound = "Dispell",
+                          castSound = "Dispel",
                           roles = { tank = false, healer = true, dps = false } },  -- healer only
         },
         [124171] = {  -- Merciless Subjugator
@@ -180,7 +180,7 @@ KE.TrashCurated = {
             [473258]  = { label = "AOE",      display = "text", castSound = "AoE" },      -- Crowd Dispersal (→ yellow)
             [1282050] = { label = "SUCC",     display = "bar"  },                         -- Arcane Beam (→ AOE yellow; no cast sound)
             [1282055] = { label = "DISPEL",   display = "text",     -- Ethereal Shackles (→ CLEAR white)
-                          castSound = "Dispell",
+                          castSound = "Dispel",
                           roles = { tank = false, healer = true, dps = false } },  -- healer only
         },
         [234066] = {  -- Devouring Tyrant
@@ -215,7 +215,7 @@ KE.TrashCurated = {
         [249024] = {  -- Hollow Soulrender
             [1259677] = { label = "DODGE",    display = "bar"  },                              -- Rend Souls (→ orange; no cast sound)
             [1271623] = { label = "DISPEL",   display = "text",     -- Frost Nova (→ CLEAR white)
-                          castSound = "Dispell",
+                          castSound = "Dispel",
                           roles = { tank = false, healer = true, dps = false } },  -- healer only
         },
         [249025] = {  -- Bound Defender
@@ -229,7 +229,7 @@ KE.TrashCurated = {
         [253302] = {  -- Hex Guardian
             [1258475] = { label = "FRONTAL",  display = "text", castSound = "Frontal" },       -- Magma Surge (→ red)
             [1258806] = { label = "DISPEL",   display = "text",     -- Ritual Firebrand (→ CLEAR white)
-                          castSound = "Dispell",
+                          castSound = "Dispel",
                           roles = { tank = false, healer = true, dps = false } },  -- healer only
         },
         [253683] = {  -- Rokh'zal

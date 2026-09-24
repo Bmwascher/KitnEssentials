@@ -90,7 +90,7 @@ if KE.LSM then
     local sounds = {
         "Add", "Adds", "AoE", "Aoe And Dance",
         "Boss Buffed", "CC", "Clear", "Dance", "Defensive",
-        "Dispell", "Dmg Amp", "Dodge", "Drop", "Feet",
+        "Dispel", "Dmg Amp", "Dodge", "Drop", "Feet",
         "Fixate Incoming", "Frontal", "Gun1", "Hide",
         "Intermission", "Interrupt", "Kick", "Knockback", "Leap",
         "Move", "Phasing", "Pools", "Pull", "Soak", "Soaks", "Split",
