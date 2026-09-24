@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-AuraApplicationSoundCard.lua                        ║
--- ║  Purpose: Shared card for the sound played when an       ║
--- ║           allowlisted aura lands on you.                 ║
+-- ║  Purpose: Shared sound card: an enable toggle, an LSM    ║
+-- ║           sound picker and a Test button.                ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -12,11 +12,9 @@ local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)
 local PlaySoundFile = PlaySoundFile
 
 ----------------------------------------------------------------
--- Application sound card
+-- Sound card
 --
--- Plays the configured sound when any enabled allowlist row lands on
--- you. Blizzard's sound-trigger API takes a spell ID rather than a
--- filter, so the registry is one registration per enabled row.
+-- The calling module decides when the real sound plays; Test previews it.
 ----------------------------------------------------------------
 function GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, config)
     config = config or {}
@@ -63,7 +61,7 @@ function GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, config)
     soundList["None"] = "None"
 
     local row5b = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-    local soundDropdown = GUIFrame:CreateDropdown(row5b, "On Application Sound", {
+    local soundDropdown = GUIFrame:CreateDropdown(row5b, config.soundLabel or "On Application Sound", {
         options = soundList,
         value = db[nameKey] or "None",
         searchable = true,
@@ -83,8 +81,17 @@ function GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, config)
         callback = function()
             local name = db[nameKey]
             if not name or name == "None" or not LSM then return end
+            -- Fetch returns a global override or the default for a name no
+            -- longer registered, so Test would play some other sound.
+            if not LSM:IsValid("sound", name) then return end
             local soundPath = LSM:Fetch("sound", name)
-            if soundPath then PlaySoundFile(soundPath) end
+            if soundPath then
+                if config.testChannel then
+                    PlaySoundFile(soundPath, config.testChannel)
+                else
+                    PlaySoundFile(soundPath)
+                end
+            end
         end,
     })
     row5b:AddWidget(soundTestBtn, 0.5, nil, 0, -12)
