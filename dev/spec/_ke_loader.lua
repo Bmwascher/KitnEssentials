@@ -2909,8 +2909,9 @@ function L.loadWorldMarkerCycler(overrides)
 end
 
 -- Modules/ClassUtilities/DisintegrateTicks.lua, for the pure tick-marker
--- resolver only. The module builds frames and registers a cast-bar provider at
--- file scope, so the mock has to satisfy those before the resolver is reachable.
+-- resolver and the channel-start guard. The module builds frames and registers
+-- a cast-bar provider at file scope, so the mock has to satisfy those before
+-- either is reachable. overrides.UnitChannelInfo feeds the channel events.
 function L.loadDisintegrateTicks(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
@@ -2923,6 +2924,8 @@ function L.loadDisintegrateTicks(overrides)
     _G.EventRegistry = { RegisterCallback = function() end, UnregisterCallback = function() end }
     _G.hooksecurefunc = function() end
     _G.Constants = { UICharacterClasses = { Evoker = 13 } }
+    -- Captured at file scope, so a channel-event spec sets it before the load.
+    _G.UnitChannelInfo = overrides and overrides.UnitChannelInfo
     local KE = {
         Print = function() end,
         IsSafeValue = function() return true end,
