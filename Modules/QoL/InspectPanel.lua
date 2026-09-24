@@ -98,9 +98,12 @@ end
 -- over ≤3 sockets). Takes a pre-computed ScanItemSockets result so the caller
 -- can reuse the same scan for suspect detection — ScanItemSockets internally
 -- allocates a C_TooltipInfo table, so each call has real cost.
+-- One scratch table, wiped per call: this runs on every socketable render.
+local _gemHashParts = {}
 local function ComputeGemHash(result)
     if not result or not result.sockets then return "" end
-    local parts = {}
+    local parts = _gemHashParts
+    wipe(parts)
     for i, socket in ipairs(result.sockets) do
         parts[i] = (socket.filled and ("F1G" .. (socket.gemID or "0"))) or "F0"
     end
