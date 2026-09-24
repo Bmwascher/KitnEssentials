@@ -113,7 +113,7 @@ local MYTHIC_KEYSTONE_DIFFICULTY_ID = 8
 -- "key" while a keystone runs, "mythicIdle" in a Mythic dungeon with none
 -- running (before the key, between insert and start, after completion),
 -- "other" everywhere else. The ChallengeMode restriction spans exactly the
--- running key; the difficulty turns 8 at insert, before the run begins.
+-- running key.
 local function GetDemoPetContent()
     local kinds = Enum.AddOnRestrictionType
     local isActive = C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive
