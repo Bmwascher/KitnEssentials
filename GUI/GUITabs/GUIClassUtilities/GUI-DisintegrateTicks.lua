@@ -87,7 +87,7 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
 
     local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local tickColorPicker = GUIFrame:CreateColorPicker(row2, "Tick Color", {
-        color = db.TickColor or { 1, 1, 1, 0.8 },
+        color = db.TickColor,
         callback = function(r, g, b, a)
             db.TickColor = { r, g, b, a }
             ApplySettings()
@@ -121,7 +121,7 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
     manager:Register(lastTickCheck, "all")
 
     local lastTickColorPicker = GUIFrame:CreateColorPicker(row2a, "Last Tick Color", {
-        color = db.LastTickColor or { 1, 0.82, 0, 0.95 },
+        color = db.LastTickColor,
         callback = function(r, g, b, a)
             db.LastTickColor = { r, g, b, a }
             ApplySettings()
