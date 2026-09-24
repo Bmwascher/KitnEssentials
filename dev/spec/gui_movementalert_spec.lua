@@ -60,7 +60,6 @@ describe("GUI-NoMovementAlert tracked spells card", function()
                 specHeaders[#specHeaders + 1] = labelText
                 return {}
             end,
-            GetCurrentSpecID = function() return nil end,
             -- Hands back a class the stored pick disagrees with, which is the
             -- whole point of the case.
             CreateClassPickerRow = function() return noopRow(), "DRUID" end,
@@ -68,6 +67,7 @@ describe("GUI-NoMovementAlert tracked spells card", function()
 
         local KE = helpers.loadModule("GUI/GUITabs/GUIUtilities/GUI-NoMovementAlert.lua", {
             GUIFrame = GUIFrame,
+            GetPlayerSpecId = function() return nil end,
             Theme = { paddingSmall = 4, paddingMedium = 8 },
             db = { profile = { NoMovementAlert = db } },
             ColorTextByTheme = function(_, text) return text end,

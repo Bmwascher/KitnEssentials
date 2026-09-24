@@ -2285,6 +2285,8 @@ function L.loadMovementAlert(overrides)
         unregisterCalls = rec.editMode.unregisterCalls,
     }
 
+    -- overrides.specId is what KE:GetPlayerSpecId answers.
+    KE.GetPlayerSpecId = function() return overrides.specId end
     helpers.loadModule("Modules/Utilities/NoMovementAlert.lua", KE)
     return modules["NoMovementAlert"], KE, rec
 end

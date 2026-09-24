@@ -16,8 +16,6 @@ local SA = KitnEssentials:NewModule("SpellAlerts", "AceEvent-3.0")
 -- Prefer C_CVar.SetCVar (12.0 forward path); fall back to the global only
 -- if the namespaced version is missing.
 local SetCVar = (C_CVar and C_CVar.SetCVar) or SetCVar
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 
 function SA:UpdateDB()
     self.db = KE.db.profile.SpellAlerts
@@ -39,15 +37,13 @@ function SA:OnInitialize()
 end
 
 function SA:ApplyForCurrentSpec()
-    local specIndex = GetSpecialization()
-    if not specIndex or not self.db then return end
-
-    -- Per-spec opt-in for the activation overlay; default true for unconfigured specs.
-    -- Key by global specID (>=62), not the 1-4 spec index which collides across classes.
-    local specID = GetSpecializationInfo(specIndex)
+    if not self.db then return end
+    -- An unresolved spec leaves the CVar as it is.
+    local specID = KE:GetPlayerSpecId()
     if not specID then return end
-    local specs = self.db.EnabledSpecs
-    local shown = (specs == nil) or (specs[specID] ~= false)
+    -- Per-spec opt-in for the activation overlay, keyed by global specID (>=62),
+    -- not the 1-4 spec index which collides across classes.
+    local shown = KE:IsSpecEnabled(self.db.EnabledSpecs, specID)
     SetCVar("displaySpellActivationOverlays", shown and "1" or "0")
 end
 

@@ -24,8 +24,6 @@ local NMA = KitnEssentials:NewModule("NoMovementAlert", "AceEvent-3.0")
 -- shipped, so users self-correct without waiting on a build.
 
 local C_Spell = C_Spell
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local C_Timer = C_Timer
 local UnitClass, UnitAffectingCombat = UnitClass, UnitAffectingCombat
 
@@ -538,19 +536,11 @@ end
 ------------------------------------------------------------------------
 -- Tracked spell resolution
 ------------------------------------------------------------------------
-function NMA:ResolveSpecId()
-    if not GetSpecialization then return nil end
-    local idx = GetSpecialization()
-    if not idx or idx == 0 then return nil end
-    local id = GetSpecializationInfo and GetSpecializationInfo(idx)
-    return id
-end
-
 function NMA:BuildTracked()
     local db = self.db
     local out = {}
     local _, class = UnitClass("player")
-    local specId = self:ResolveSpecId()
+    local specId = KE:GetPlayerSpecId()
 
     local seen, seenName = {}, {}
     local function add(spellId)

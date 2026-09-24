@@ -273,7 +273,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     local mark
 
     local function DrawClass(classToken)
-        local currentSpecId = GUIFrame.GetCurrentSpecID()
+        local currentSpecId = KE:GetPlayerSpecId()
         local byClass = KE.MOVEMENT_ABILITIES and KE.MOVEMENT_ABILITIES[classToken]
 
         if byClass then
