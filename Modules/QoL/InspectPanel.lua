@@ -463,8 +463,9 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
     end
 
     -- Only a render that may have drawn a stand-in KE displays pays for the
-    -- ownership lookups and the predicates, which stay the rule; a complete
-    -- render, or one whose KE display is off, calls none of them.
+    -- ownership lookups and the predicates, which stay the rule. A render whose
+    -- KE display is off calls none of them, nor, once the grace window has
+    -- passed, does a complete one.
     local db = CP.db
     local w = wDetail or wCorner
     local enchantPending, trackPending
