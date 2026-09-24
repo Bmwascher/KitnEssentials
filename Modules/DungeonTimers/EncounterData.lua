@@ -403,7 +403,7 @@ KE.EncounterData[2565] = {
         [373326]  = { name = "Arcane Missiles", castType = "cast",                                           role = "other",                                       disabled = true },
         [1282251] = { name = "Astral Blast",    castType = "begincast", castDuration = 3,                    role = "tank",     display = "bar", displayText = "TANK HIT" },
         -- castDuration=1.5 assumed — live verification still pending (role=heal so filtered for DAMAGER logs, can't see in this run).
-        [374343]  = { name = "Energy Bomb",     castType = "begincast", castDuration = 1.5,                  role = "heal",                      displayText = "DISPEL",   sound = "Dispell" },
+        [374343]  = { name = "Energy Bomb",     castType = "begincast", castDuration = 1.5,                  role = "heal",                      displayText = "DISPEL",   sound = "Dispel" },
         -- The pull effect fires AT the end of BigWigs's predictive countdown (= start of the boss
         -- cast). No castDuration extension because the pull is instantaneous from the player's POV
         -- — we don't want the bar lingering past the moment of effect. No showAtSeconds either:
@@ -423,7 +423,7 @@ KE.EncounterData[3071] = {
     spells = {
         [474496]  = { name = "Repulsing Slam",     castType = "begincast", castDuration = 2.5,                     role = "tank",     display = "bar", displayText = "TANK HIT" },
         [1214081] = { name = "Arcane Expulsion",   castType = "begincast", castDuration = 3,                       role = "other",                displayText = "AOE",      sound = "Knockback" },
-        [1214032] = { name = "Ethereal Shackles",  castType = "cast",                                              role = "heal",                 displayText = "DISPEL",   sound = "Dispell" },
+        [1214032] = { name = "Ethereal Shackles",  castType = "cast",                                              role = "heal",                 displayText = "DISPEL",   sound = "Dispel" },
         [474345]  = { name = "Refueling Protocol", castType = "begincast", castDuration = 3,   channelDuration = 20, role = "other",                displayText = "AMP",      sound = "Dmg Amp" },
     },
 }
@@ -732,7 +732,7 @@ KE.EncounterData[3057] = {
     spells = {
         [472745] = { name = "Splattering Spew",    castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "SPREAD",  sound = "Spread" },
         [472888] = { name = "Bone Hack",           castType = "begincast", castDuration = 2,  channelDuration = 3, role = "tank",  display = "bar", displayText = "TANK HIT" },
-        [474105] = { name = "Curse of Darkness",   castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "ADDS",    sound = "Dispell" },
+        [474105] = { name = "Curse of Darkness",   castType = "begincast", castDuration = 4,                      role = "other",                  displayText = "ADDS",    sound = "Dispel" },
         -- castDuration=7 covers the follow-on Heaving Yank (BigWigs only fires Timer for Shriek).
         [472736] = { name = "Debilitating Shriek", castType = "begincast", castDuration = 7,                      role = "other",                  displayText = "HOOK",    showAtSeconds = 10 },
     },
