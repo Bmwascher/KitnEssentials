@@ -29,6 +29,8 @@
 -- ║      combat (deferred when a join lands mid-combat).     ║
 -- ║    * No Blizzard Group Finder frame is ever hooked or    ║
 -- ║      SetScript-ed.                                       ║
+-- ║    * The role reads are issecretvalue-guarded and the    ║
+-- ║      role row is only ever written out of combat.        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -57,6 +59,8 @@ local C_Spell = C_Spell
 -- Do NOT widen .luacheckrc instead.
 local C_LFGList = _G.C_LFGList
 local GameTooltip = GameTooltip
+local UnitGroupRolesAssigned = UnitGroupRolesAssigned
+local GetSpecializationRole = GetSpecializationRole
 -- Both secret predicates get the same fallback: an environment missing one
 -- would be missing both, and a bare call to either throws.
 local issecretvalue = issecretvalue or function() return false end
@@ -98,6 +102,24 @@ end
 -- has nothing to reach it through.
 LR._ResolveTeleportSpellByName = ResolveTeleportSpellByName
 
+-- Keyed by the role strings Blizzard's role APIs return; membership is what
+-- makes a read a usable role.
+local ROLE_LABEL = { TANK = "Tank", HEALER = "Healer", DAMAGER = "Damage" }
+
+-- Tested for secrecy before anything else: a secret cannot index a table.
+local function UsableRole(role)
+    if issecretvalue(role) or type(role) ~= "string" then return nil end
+    return ROLE_LABEL[role] and role or nil
+end
+
+-- The application role is the one the player was accepted as; the assigned
+-- role is the fallback, and the only source on the leader path.
+local function PickRole(applicationRole, assignedRole)
+    return UsableRole(applicationRole) or UsableRole(assignedRole)
+end
+
+LR._PickRole = PickRole
+
 -- The prompt IS a teleport button, so it is pointless once the teleport is
 -- on cooldown -- which it always is straight after using it.
 --
@@ -138,6 +160,8 @@ local BTN_H       = 56
 local DISABLE_TOP = BTN_TOP + BTN_H + 8
 local DISABLE_H   = 16
 local POPUP_H     = DISABLE_TOP + DISABLE_H + 10
+local ROLE_TOP    = BTN_TOP + BTN_H + 6
+local ROLE_H      = 20  -- role row plus its gap, added to the height while shown
 
 -- State (plain upvalues; never keyed by a possibly-secret resultID)
 local popup, secureBtn
@@ -147,11 +171,13 @@ local pendingAttrSpellID   -- spell attr stashed for out-of-combat write
 local pendingShow          -- join landed in combat; show on REGEN_ENABLED
 local pendingHide          -- hide requested in combat; flush on REGEN_ENABLED
 local combatHidden         -- the hide came from combat, not from the user
+local pendingRole          -- role captured with the prompt, or nil
+local shownRole            -- role the popup is drawing, or nil
 
 
 local BuildPopup, ShowPrompt, HidePrompt, ClearPending
 local UpdateButtonVisuals, ResolveDungeon
-local SavePosition, ApplySavedPosition, ApplyDisableVisibility
+local SavePosition, ApplySavedPosition, ApplyPopupLayout
 
 -- Read-only test seams. The pending state stays in the upvalues above --
 -- these expose it without creating a second source of truth that could
@@ -198,13 +224,31 @@ ApplySavedPosition = function()
     end
 end
 
--- Show/hide the "Disable Feature" text, trimming the window 20px when
--- hidden. Driven by db.ShowDisable (default ON).
-ApplyDisableVisibility = function()
+-- The one writer of the role row, the "Disable Feature" anchor and the popup
+-- height. The popup parents a secure button, so every caller runs out of
+-- combat. Hiding "Disable Feature" trims 20px; the role row adds ROLE_H.
+ApplyPopupLayout = function()
     if not popup then return end
-    local show = not LR.db or LR.db.ShowDisable ~= false
-    if popup._disableBtn then popup._disableBtn:SetShown(show) end
-    popup:SetHeight(show and POPUP_H or (POPUP_H - 20))
+    local showDisable = not LR.db or LR.db.ShowDisable ~= false
+    local showRole = shownRole ~= nil and (not LR.db or LR.db.ShowRole ~= false)
+    local roleFS = popup._role
+    if roleFS then
+        if showRole then
+            local set = KE.Skins and KE.Skins.GetRoleIconSet and KE.Skins.GetRoleIconSet() or "modern"
+            local icons = KE.BuildChatRoleIconStrings and KE.BuildChatRoleIconStrings(set)
+            local icon = icons and icons[shownRole]
+            local word = ROLE_LABEL[shownRole]
+            roleFS:SetText(icon and (icon .. " " .. word) or word)
+        end
+        roleFS:SetShown(showRole)
+    end
+    local roleH = showRole and ROLE_H or 0
+    if popup._disableBtn then
+        popup._disableBtn:ClearAllPoints()
+        popup._disableBtn:SetPoint("TOP", popup, "TOP", 0, -(DISABLE_TOP + roleH))
+        popup._disableBtn:SetShown(showDisable)
+    end
+    popup:SetHeight((showDisable and POPUP_H or (POPUP_H - 20)) + roleH)
 end
 
 -- Build the popup + secure button (once, out of combat)
@@ -318,6 +362,17 @@ BuildPopup = function()
     end)
     secureBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
+    -- A region of the popup, not of the secure button; ApplyPopupLayout is
+    -- its only writer.
+    local roleFS = popup:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(roleFS, 12, "") end
+    roleFS:SetPoint("TOPLEFT", popup, "TOPLEFT", PAD, -ROLE_TOP)
+    roleFS:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -PAD, -ROLE_TOP)
+    roleFS:SetJustifyH("CENTER")
+    roleFS:SetWordWrap(false)
+    roleFS:Hide()
+    popup._role = roleFS
+
     -- "Disable Feature" text: turns the whole feature off immediately
     local disableBtn = CreateFrame("Button", nil, popup)
     disableBtn:SetSize(POPUP_W - PAD * 2, DISABLE_H)
@@ -349,7 +404,7 @@ BuildPopup = function()
     -- entry, group leave, or disable.
     popup:SetScale((LR.db and LR.db.Scale) or 1.05)
     ApplySavedPosition()
-    ApplyDisableVisibility()
+    ApplyPopupLayout()
     popup:Hide()
     return popup
 end
@@ -389,6 +444,8 @@ end
 -- (LFGListInfoDocumentation.lua), so a secret resultID throws.
 ResolveDungeon = function(resultID)
     if not (C_LFGList and C_LFGList.GetSearchResultInfo) then return end
+    local wantRole = LR.db and LR.db.ShowRole ~= false
+    local applicationRole
     pcall(function()
         local info = C_LFGList.GetSearchResultInfo(resultID)
         if type(info) ~= "table" then return end
@@ -410,8 +467,16 @@ ResolveDungeon = function(resultID)
             pendingSpellID = spellID
             -- Name only, no trailing difficulty suffix
             pendingName = (fullName:gsub("%s*%b()%s*$", ""))
+            -- Last, so an error here can cost the role but never the prompt.
+            if wantRole and C_LFGList.GetApplicationInfo then
+                applicationRole = select(5, C_LFGList.GetApplicationInfo(resultID))
+            end
         end
     end)
+    if pendingSpellID and wantRole then
+        pendingRole = PickRole(applicationRole,
+            UnitGroupRolesAssigned and UnitGroupRolesAssigned("player"))
+    end
 end
 
 -- LFG_LIST_JOINED_GROUP only fires for someone who APPLIED, so the person
@@ -486,6 +551,8 @@ ShowPrompt = function()
     end
     BuildPopup()
     popup._name:SetText(pendingName or "")
+    shownRole = pendingRole
+    ApplyPopupLayout()
     secureBtn:SetAttribute("spell", pendingSpellID)  -- static integer
     pendingAttrSpellID = nil
     pendingHide = nil
@@ -507,6 +574,7 @@ end
 ClearPending = function()
     pendingSpellID     = nil
     pendingName        = nil
+    pendingRole        = nil
     pendingShow        = nil
     -- Whatever combat took away is no longer wanted either: this runs on
     -- group-leave and instance-entry, both of which invalidate the prompt.
@@ -519,11 +587,12 @@ ClearPending = function()
     pendingAttrSpellID = nil
 end
 
--- Live refresh for the GUI (scale + disable-text row)
+-- Live refresh for the GUI (scale, disable and role rows). The popup parents
+-- a secure button, so its scale and height are protected in combat.
 function LR:RefreshVisuals()
-    if not popup then return end
+    if not popup or InCombatLockdown() then return end
     popup:SetScale((self.db and self.db.Scale) or 1.05)
-    ApplyDisableVisibility()
+    ApplyPopupLayout()
 end
 
 -- BuildPopup returns an existing popup untouched, so a profile switch reaches
@@ -564,6 +633,10 @@ function LR:TryLeaderPrompt()
     if not (armedPending and armedSpellID) then return end
     if not GroupIsFull() then return end
     pendingSpellID, pendingName = armedSpellID, armedName
+    pendingRole = nil
+    if self.db and self.db.ShowRole ~= false then
+        pendingRole = PickRole(nil, UnitGroupRolesAssigned and UnitGroupRolesAssigned("player"))
+    end
     ClearArmed()
     ShowPrompt()
 end
@@ -626,7 +699,11 @@ function LR:PLAYER_REGEN_ENABLED()
     if wantShow then
         pendingShow = nil
         if not TeleportOnCooldown(pendingSpellID) then
-            if popup then popup._name:SetText(pendingName or "") end
+            if popup then
+                popup._name:SetText(pendingName or "")
+                shownRole = pendingRole
+                ApplyPopupLayout()
+            end
             UpdateButtonVisuals()
             if popup then ShowPopup() end
         end
@@ -645,6 +722,8 @@ function LR:PLAYER_REGEN_ENABLED()
         pendingHide = nil
         if keepShown and popup and popup:IsShown() then
             popup._name:SetText(pendingName or "")
+            shownRole = pendingRole
+            ApplyPopupLayout()
             UpdateButtonVisuals()
         elseif popup and popup:IsShown() then
             HidePopup()
@@ -722,6 +801,13 @@ function LR:ShowPreview()
     if not popup then return end
     if secureBtn then secureBtn:SetAttribute("spell", nil) end
     popup._name:SetText("Skyreach")
+    -- Read whether or not Show Role is on, so ticking it with the preview open
+    -- shows the row through the page's refresh.
+    local specIndex = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization()
+    local specRole = specIndex and specIndex > 0 and GetSpecializationRole
+        and GetSpecializationRole(specIndex)
+    shownRole = PickRole(specRole, nil) or "DAMAGER"
+    ApplyPopupLayout()
     if secureBtn and secureBtn._icon then
         local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(159898)
         if info and info.iconID then secureBtn._icon:SetTexture(info.iconID) end
@@ -744,8 +830,11 @@ function LR:HidePreview()
         -- to be re-armed too: ShowPreview cleared it.
         if secureBtn then secureBtn:SetAttribute("spell", pendingSpellID) end
         popup._name:SetText(pendingName or "")
+        shownRole = pendingRole
+        ApplyPopupLayout()
         UpdateButtonVisuals()
         return
     end
+    shownRole = nil
     HidePopup()
 end

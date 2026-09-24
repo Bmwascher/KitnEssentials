@@ -922,6 +922,7 @@ local Defaults = {
             Enabled     = false,
             Scale       = 1.05,
             ShowDisable = true,
+            ShowRole    = true,
         },
 
         PIMacroBuilder = {
