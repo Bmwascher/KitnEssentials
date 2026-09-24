@@ -1032,7 +1032,20 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
     local chatFormat = _G['CHAT_' .. chatType .. '_GET']
     if not chatFormat then return message end
 
-    if usingDifferentLanguage then
+    if usingDifferentLanguage and bossMonster and chatFormat == '' then
+        -- An empty-header boss line carries the name inside its body, which the
+        -- language pattern below would drop; build the boss body, then tag it.
+        -- A plain body is a format pattern there, and a % no digit precedes is
+        -- not escaped above, so the raw body stands in if it raises.
+        local ok, bossBody = pcall(CMH.ComposeBossBody, chatFormat, message, pflag, sender, isProtected)
+        if not ok then bossBody = message end
+        local tag = '[' .. (arg3 or '') .. '] '
+        if isProtected then
+            body = KE:WrapSecretText(bossBody, tag) or bossBody
+        else
+            body = tag .. bossBody
+        end
+    elseif usingDifferentLanguage then
         body = format(chatFormat .. '[%s] %s', pflag .. sender, arg3 or '', message)
     elseif chatType == 'TEXT_EMOTE' then
         body = message

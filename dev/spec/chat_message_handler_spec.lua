@@ -527,3 +527,20 @@ describe("ChatMessageHandler secret boss body", function()
         assert.are.equal("Die!", CMH.ComposeBossBody("%s yells: ", "Die!", "", "Boss", true))
     end)
 end)
+
+describe("ChatMessageHandler boss line in another language", function()
+    after_each(function()
+        _G.CHAT_RAID_BOSS_EMOTE_GET = nil
+    end)
+
+    -- The empty header leaves the boss name to the body's own %s, which a
+    -- language pattern would drop along with the body.
+    it("keeps an empty-header boss emote's body with the name substituted", function()
+        _G.CHAT_RAID_BOSS_EMOTE_GET = ""
+        local KE = L.loadChatMessageHandler()
+        local body = KE.ChatMessageHandler:MessageFormatter({ defaultLanguage = "Common" }, {},
+            "RAID_BOSS_EMOTE", "RAID_BOSS_EMOTE", nil, 0, "Boss",
+            "%s begins to cast [Doom]!", "Boss", "Thalassian")
+        assert.are.equal("[Thalassian] Boss begins to cast [Doom]!", body)
+    end)
+end)
