@@ -4,10 +4,10 @@
 -- and a manual scheduler whose handles record their own cancels. Specs read
 -- a handful of internal fields directly (playerCombat, groupOnly, watching,
 -- pvpBlocked, groupBlocked, inEncounter, finalizePending, pendingGen,
--- clearTicks, fineBase, fineAnchor), and the group bound's count-restart case
--- sets inEncounter and finalizePending for one tick: the class keeps no
--- closure privacy over them, and several design cases have no cheaper public
--- accessor.
+-- clearTicks, fineBase, fineAnchor); the group bound's count-restart case
+-- sets inEncounter and finalizePending for one tick, and its block case
+-- clears groupBlocked for one row: the class keeps no closure privacy over
+-- them, and several design cases have no cheaper public accessor.
 local L = require("dev.spec._ke_loader")
 
 local function newScheduler()
@@ -1203,6 +1203,18 @@ describe("CombatState machine", function()
                         cs:OnUnitFlags("party1")
                     end,
                     expectBlocked = false, expectLive = false, expectGroupClear = 1 },
+                { name = "the player's own UNIT_FLAGS reading the group clear",
+                    run = function(cs)
+                        deps.groupInCombat = function() return false end
+                        cs:OnUnitFlags("player")
+                    end,
+                    expectBlocked = false, expectLive = false, expectGroupClear = 1 },
+                { name = "the player's own UNIT_FLAGS with no block starts nothing",
+                    run = function(cs)
+                        cs.groupBlocked = false
+                        cs:OnUnitFlags("player")
+                    end,
+                    expectBlocked = false, expectLive = false, expectGroupClear = 0 },
                 { name = "PLAYER_REGEN_DISABLED",
                     run = function(cs) cs:OnRegenDisabled() end,
                     expectBlocked = false, expectLive = true, expectGroupClear = 0 },

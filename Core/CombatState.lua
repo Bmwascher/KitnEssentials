@@ -396,12 +396,15 @@ function CombatState:OnEncounterStart()
 end
 
 -- Cheap bails first; this fires constantly. While blocked, the instance bail is
--- skipped: a bound end can happen in the open world.
+-- skipped (a bound end can happen in the open world) and "player" passes: the
+-- scan reads the player's flag first, and in a party no other token reports it.
 function CombatState:OnUnitFlags(unit)
     if self:IsLive() then return end
     if self.pvpBlocked then return end
     if not self.groupBlocked and not self.deps.inInstance() then return end
-    if not unit or not (unit:match("^raid%d") or unit:match("^party%d")) then return end
+    if not unit then return end
+    if not (unit:match("^raid%d") or unit:match("^party%d")
+        or (self.groupBlocked and unit == "player")) then return end
     if self.groupBlocked then
         self:_ScanBlockedClear("group clear")
         return
