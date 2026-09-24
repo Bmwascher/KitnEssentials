@@ -2157,11 +2157,14 @@ function L.loadOptimize(overrides)
 
     _G.SetCVar = function(cvar, value) rec.cvars[cvar] = tostring(value) end
     _G.GetCVar = function(cvar) return rec.cvars[cvar] end
-    _G.C_CVar = { SetCVar = _G.SetCVar, GetCVar = _G.GetCVar }
     -- nameplateStackingTypes flags, keyed by Enum.NamePlateStackType index.
     rec.stackBits = {}
-    _G.GetCVarBitfield = function(_, index) return rec.stackBits[index] == true end
-    _G.SetCVarBitfield = function(_, index, value) rec.stackBits[index] = value; return true end
+    _G.C_CVar = {
+        SetCVar = _G.SetCVar,
+        GetCVar = _G.GetCVar,
+        GetCVarBitfield = function(_, index) return rec.stackBits[index] == true end,
+        SetCVarBitfield = function(_, index, value) rec.stackBits[index] = value; return true end,
+    }
     _G.Enum.NamePlateStackType = { None = 0, Enemy = 1, Friendly = 2 }
     _G.GetInstanceInfo = function() return "Mock", "party", rec.difficultyID end
     _G.StaticPopupDialogs = {}

@@ -240,7 +240,7 @@ read_globals = {
     "C_AddOns", "C_AddOnProfiler",
 
     -- CVar
-    "GetCVar", "SetCVar", "C_CVar", "GetCVarBitfield",
+    "GetCVar", "SetCVar", "C_CVar",
 
     -- Map / Waypoint
     "C_Map",
