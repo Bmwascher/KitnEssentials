@@ -186,17 +186,10 @@ function GUIFrame:CreateClassPickerRow(parent, config)
     local options = GUIFrame.BuildClassOptions(tokens, playerClass)
 
     local row = GUIFrame:CreateRow(parent, 36)
-    local dropdown
-    dropdown = GUIFrame:CreateDropdown(row, config.label or "Class", {
+    local dropdown = GUIFrame:CreateDropdown(row, config.label or "Class", {
         options = options,
         value = shownClass,
         callback = function(key)
-            -- Closed instantly before anything is redrawn: a list still
-            -- animating shut when its page is rebuilt is orphaned mid-close and
-            -- stays on screen.
-            if dropdown and dropdown._closeDropdown then
-                dropdown._closeDropdown(true)
-            end
             -- Re-picking the class already on screen draws nothing new. Left
             -- unstored so closing the window does not mark the page dirty.
             if key == shownClass then return end
