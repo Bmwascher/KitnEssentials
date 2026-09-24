@@ -87,12 +87,15 @@ describe("CombatState machine", function()
         sched = newScheduler()
         events = {}
         deps = {
+            -- The player's unit flag. The machine does not read it; the lockdown
+            -- follows it unless a case sets both, so a case that puts the player
+            -- in combat still gets its PLAYER start.
             playerInCombat = function() return false end,
             groupInCombat = function() return false end,
             inInstance = function() return false end,
             sessionDuration = function() return false, nil end,
             playerDead = function() return false end,
-            playerLockdown = function() return false end,
+            playerLockdown = function() return deps.playerInCombat() end,
             encounterLive = function() return true end,
             after = sched.after,
             ticker = sched.ticker,
@@ -753,6 +756,7 @@ describe("CombatState machine", function()
         local function flaggedHold()
             local cs = liveHold()
             deps.playerInCombat = function() return true end
+            deps.playerLockdown = function() return false end
             return cs
         end
 
@@ -1030,6 +1034,67 @@ describe("CombatState machine", function()
             assert.same({ true, false }, events)
             assert.is_nil(lastPoll(sched))
             assert.is_false(cs.watching)
+        end)
+    end)
+
+    describe("the player's own combat is the lockdown", function()
+        it("a unit flag set without lockdown starts no PLAYER fight at any site that picks one; the lockdown still does", function()
+            local sites = {
+                { name = "the first listener's derive", bound = true, run = function()
+                    local cs = KE.CombatState.New(deps)
+                    cs:RegisterListener("spec", {})
+                    return cs
+                end },
+                { name = "a loading screen on an idle machine", run = function()
+                    local cs = newCS()
+                    cs:OnEnteringWorld()
+                    return cs
+                end },
+                { name = "a loading screen on a live group fight", run = function()
+                    local lockdown = deps.playerLockdown
+                    deps.playerLockdown = function() return false end
+                    local cs = newCS()
+                    cs:OnEncounterStart()
+                    deps.playerLockdown = lockdown
+                    cs:OnEnteringWorld()
+                    return cs
+                end },
+                { name = "ENCOUNTER_START", run = function()
+                    local cs = newCS()
+                    cs:OnEncounterStart()
+                    return cs
+                end },
+                { name = "a non-kill end's deferred check", run = function()
+                    local cs = newCS()
+                    cs:OnRegenDisabled()
+                    cs:OnEncounterEnd(nil)
+                    lastAfter(sched).fn()
+                    return cs
+                end },
+            }
+            for _, site in ipairs(sites) do
+                for _, lockdown in ipairs({ false, true }) do
+                    local name = site.name .. (lockdown and ", in lockdown" or ", the flag alone")
+                    sched.tickers, sched.afters = {}, {}
+                    -- The flag is set in every row, and the group scan reads it first.
+                    deps.playerInCombat = function() return true end
+                    deps.groupInCombat = function() return true end
+                    deps.inInstance = function() return true end
+                    deps.encounterLive = function() return false end
+                    deps.playerLockdown = function() return lockdown end
+                    local cs = site.run()
+                    assert.equals(lockdown, cs.playerCombat, name)
+                    assert.equals(not lockdown, cs.groupOnly, name)
+                    if not lockdown then
+                        local poll = lastPoll(sched)
+                        assert.is_true(poll ~= nil and not poll.cancelled, name)
+                        if site.bound then
+                            for _ = 1, 20 do poll.fn() end
+                            assert.is_false(cs:IsLive(), name)
+                        end
+                    end
+                end
+            end
         end)
     end)
 end)

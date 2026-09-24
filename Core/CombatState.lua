@@ -125,12 +125,14 @@ local CombatState = {}
 CombatState.__index = CombatState
 
 --- deps:
----   playerInCombat()   boolean (UnitAffectingCombat("player"))
 ---   groupInCombat()    boolean
 ---   inInstance()       boolean (IsInInstance)
 ---   sessionDuration()  ok, raw -- the pcall'd C_DamageMeter read, unfiltered
 ---   playerDead()       boolean (UnitIsDeadOrGhost("player"))
----   playerLockdown()   boolean (InCombatLockdown)
+---   playerLockdown()   boolean (InCombatLockdown). The player's own combat at
+---                      every site that picks PLAYER: the unit flag can stay set
+---                      after a feign, and a PLAYER fight ends only at
+---                      PLAYER_REGEN_ENABLED
 ---   encounterLive()    boolean (C_InstanceEncounter.IsEncounterInProgress)
 ---   after(sec, fn)     one-shot handle with :Cancel()
 ---   ticker(sec, fn)    recurring handle with :Cancel()
@@ -377,7 +379,7 @@ end
 function CombatState:OnEncounterStart()
     self:_ClearGroupBlock("ENCOUNTER_START")
     self.inEncounter = true
-    self:StartFight(self.deps.playerInCombat() and PLAYER or GROUP)
+    self:StartFight(self.deps.playerLockdown() and PLAYER or GROUP)
 end
 
 -- Cheap bails first; this fires constantly. While blocked, the instance bail is
@@ -474,7 +476,7 @@ function CombatState:OnEncounterEnd(success)
         if self.deps.groupInCombat() then
             -- Do not demote a player who was rezzed and re-entered combat
             -- inside this 0.5s window back to groupOnly.
-            if self.deps.playerInCombat() then
+            if self.deps.playerLockdown() then
                 self.playerCombat, self.groupOnly = true, false
             else
                 self.playerCombat, self.groupOnly = false, true
@@ -500,10 +502,10 @@ function CombatState:OnPvPMatchComplete()
     end
 end
 
--- Starts the fight the game reports now, if any: the player's own combat, or
--- the group's inside an instance. Returns whether it started one.
+-- Starts the fight the game reports now, if any: the player's lockdown, or the
+-- group's combat inside an instance. Returns whether it started one.
 function CombatState:_StartFromGame()
-    if self.deps.playerInCombat() then
+    if self.deps.playerLockdown() then
         self:StartFight(PLAYER)
     elseif self.deps.groupInCombat() and self.deps.inInstance() then
         self:StartFight(GROUP)
@@ -519,7 +521,7 @@ function CombatState:OnEnteringWorld()
     self.finalizePending = false
     self.pendingGen = nil                      -- invalidate any pending callback
     self:_ClearGroupBlock("PLAYER_ENTERING_WORLD")
-    if self.groupOnly and self.deps.playerInCombat() then
+    if self.groupOnly and self.deps.playerLockdown() then
         -- The fight survives the loading screen, so the pin stands and the
         -- clock does not rewind past it.
         if DEBUG_CS then KE:Print("[CS] ENTERING_WORLD -> promote") end
@@ -643,10 +645,6 @@ end
 -- Live adapter
 ---------------------------------------------------------------------------------
 
-local function LivePlayerInCombat()
-    return UnitAffectingCombat("player")
-end
-
 -- The player fast-path uses UnitAffectingCombat("player") rather than
 -- InCombatLockdown(): InCombatLockdown() drops the moment the player dies or
 -- feign-deaths mid-pull, while the unit flag stays true while they are still
@@ -739,7 +737,6 @@ local function LiveSetEventsActive(on)
 end
 
 KE.CombatState = CombatState.New({
-    playerInCombat = LivePlayerInCombat,
     groupInCombat = LiveGroupInCombat,
     inInstance = LiveInInstance,
     sessionDuration = LiveSessionDuration,
