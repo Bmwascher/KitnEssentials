@@ -141,7 +141,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         tooltip = "Default-anchored tooltips follow the mouse cursor instead.",
         callback = function(checked)
             db.CursorAnchor = checked
-            -- Also decides whether the Tooltip mover deserves a box.
+            -- Also decides whether Edit Mode shows the Tooltip mover.
             if KE.EditMode then KE.EditMode:RefreshLiveState() end
             ApplySettings()
             RefreshStates()

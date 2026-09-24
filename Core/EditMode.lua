@@ -279,7 +279,7 @@ function EditMode:ElementMatchesCategory(element)
     return KE:GetSectionForItem(element.guiPath) == self.activeCategory
 end
 
--- Two reasons an element deserves no box even though it is still registered.
+-- Two reasons a registered element is not live, so Edit Mode draws no box for it.
 -- Its module was switched off: registration outlives the module, so without
 -- this the box outlives it too. Or the module is running but something else
 -- owns the position in the current mode.
@@ -464,11 +464,11 @@ function EditMode:UpdateOverlayPosition(overlay)
     overlay:Show()
 end
 
--- The one refresh entry point. Anything that can change whether an element
--- deserves a box calls this and nothing else. Three things follow from
--- liveness, and splitting them is how they drift: the boxes themselves, whether
--- the selected element is still one of them, and the per-category counts that
--- grey out an empty category button.
+-- The one refresh entry point. Anything that can change whether an element is
+-- live, and so has a box in Edit Mode, calls this and nothing else. Three
+-- things follow from liveness, and splitting them is how they drift: the boxes
+-- themselves, whether the selected element is still one of them, and the
+-- per-category counts that grey out an empty category button.
 function EditMode:RefreshLiveState()
     if not self.isActive then return end
 

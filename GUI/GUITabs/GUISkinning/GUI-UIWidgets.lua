@@ -494,7 +494,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             afDB.MoveEventToasts = checked
             if AF then AF:ApplySettings() end
             RefreshAFStates()
-            -- Decides whether the Event Toasts mover deserves a box.
+            -- Decides whether Edit Mode shows the Event Toasts mover.
             if KE.EditMode then KE.EditMode:RefreshLiveState() end
         end,
     })
