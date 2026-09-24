@@ -141,7 +141,31 @@ local MAX_PAINT_PASSES = 5
 local RETRY_DELAY = 0.5
 local INSPECT_PACKET_GRACE = 1.0  -- seconds; suspect-empty triggers retry within this window
 
-local _inspectReadyTime = {}  -- [guid] = GetTime() at last INSPECT_READY
+local _inspectReadyTime = {}  -- [guid] = GetTime() at the inspect start (frame show, matching INSPECT_READY, or first render)
+
+-- INSPECT_READY carries the GUID of whichever unit an inspect answered, and
+-- another addon's inspect request is answered too. Only the inspect frame's own
+-- unit counts; a secret payload is refused before it is compared.
+local function ReadyForFrame(guid, frameGUID)
+    if issecretvalue(guid) or issecretvalue(frameGUID) then return false end
+    if guid == nil or frameGUID == nil then return false end
+    return guid == frameGUID
+end
+InspectPanel._ReadyForFrame = ReadyForFrame
+
+local function InspectFrameGUID()
+    local unit = InspectFrame and InspectFrame.unit
+    return unit and KE:GetSafeUnitGUID(unit) or nil
+end
+
+-- The inspect frame shows from inside the first INSPECT_READY, and a handler
+-- registered during that dispatch does not receive it, so the frame's showing
+-- is where an inspect starts.
+local function StampInspectStart(guid)
+    if not guid then return end
+    _currentInspectGUID = guid
+    _inspectReadyTime[guid] = GetTime()
+end
 
 local function ScheduleSocketRetry(self, button, slotID, guid)
     local s = _inspectSlotState(guid, slotID)
@@ -248,6 +272,7 @@ function InspectPanel:OnEnable()
             self.eventFrame:RegisterEvent("INSPECT_READY")
             self.eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
             self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+            StampInspectStart(InspectFrameGUID())
             self:UpdateAllInspectSlots()
         end
     end
@@ -573,6 +598,7 @@ function InspectPanel:SetupInspectSupport()
                 -- teardown just removed.
                 if not _self:IsEnabled() then return end
                 for _, e in ipairs(INSPECT_DATA_EVENTS) do f:RegisterEvent(e) end
+                StampInspectStart(InspectFrameGUID())
             end
             local function unregData()
                 for _, e in ipairs(INSPECT_DATA_EVENTS) do f:UnregisterEvent(e) end
@@ -604,12 +630,11 @@ function InspectPanel:SetupInspectSupport()
         if event == "ADDON_LOADED" then
             if arg1 == "Blizzard_InspectUI" then installHooks() end
         elseif event == "INSPECT_READY" then
-            -- Track the inspected unit's GUID for dirty-cache scoping + retry guards.
-            -- INSPECT_READY's arg1 is the GUID of the inspected unit.
-            _currentInspectGUID = arg1
-            -- Stamp the time so the gem-race suspect window can gate on
-            -- "within INSPECT_PACKET_GRACE seconds of this event."
-            if arg1 then _inspectReadyTime[arg1] = GetTime() end
+            -- Any inspect reply arrives here, another addon's included; only the
+            -- inspect frame's own unit re-stamps the start and runs a pass.
+            local frameGUID = InspectFrameGUID()
+            if not ReadyForFrame(arg1, frameGUID) then return end
+            StampInspectStart(frameGUID)
             -- New inspect target: clear the per-slot pending queue so the new unit's
             -- gear gets requested fresh, then ensure the hooks exist and queue a pass.
             if _self._inspectQueue then wipe(_self._inspectQueue) end
