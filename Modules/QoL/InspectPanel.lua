@@ -209,9 +209,9 @@ local function InspectFrameGUID()
     return unit and KE:GetSafeUnitGUID(unit) or nil
 end
 
--- The inspect frame shows from inside the first INSPECT_READY, and a handler
--- registered during that dispatch does not receive it, so the frame's showing
--- is where an inspect starts.
+-- The inspect frame shows from inside the first INSPECT_READY, before this
+-- file's data events are registered, so the frame's showing is where an
+-- inspect starts.
 local function StampInspectStart(guid)
     if not guid then return end
     _currentInspectGUID = guid
@@ -489,8 +489,9 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
         trackPending = CP:InspectTrackPending(link, provisional, data, nil, euiOwnsIlvl, false)
     end
     -- Read before PendingStep, which clears the count once the slot resolves or
-    -- settles: the debug line must still say which sweep this render was.
-    local sweepNo = DEBUG_CP and fromSweep and ((s.pendingRetries or 0) + 1) or 0
+    -- settles: the debug line must still say which pending sweep this render
+    -- was. A sweep render of a slot that had not pended (a gem retry) counts 0.
+    local sweepNo = DEBUG_CP and fromSweep and s.pending and ((s.pendingRetries or 0) + 1) or 0
     if PendingStep(s, enchantPending or trackPending, _currentInspectGUID == guid, fromSweep) then
         ArmSlotRetry(s, guid)
     end

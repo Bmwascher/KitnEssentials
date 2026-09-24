@@ -33,6 +33,8 @@ describe("Inspect start: which INSPECT_READY counts", function()
             { name = "a secret payload, refused before any comparison", guid = secret(), frame = probe(), want = false },
             { name = "a secret frame GUID, refused before any comparison", guid = probe(), frame = secret(), want = false },
             { name = "no readable frame GUID", guid = "Player-1", want = false },
+            -- The only input the nil test decides: without it, nil == nil would pass.
+            { name = "no GUID on either side", want = false },
         }
         for _, c in ipairs(cases) do
             assert.equals(c.want, ready(c.guid, c.frame), c.name)
