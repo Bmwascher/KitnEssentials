@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.24
+
+### Sounds
+
+- Most voice callouts are re-recorded in one voice, so a pull's callouts
+  sound alike and start at the same moment
+- "Dispell" is now "Dispel". If you picked it by hand in a sound dropdown,
+  pick "Dispel" again
+
+---
+
 ## v4.7.23
 
 ### Profile Manager
