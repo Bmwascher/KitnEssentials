@@ -151,7 +151,7 @@ end)
 -- falsy, so it stores false on every tick and a spec turned off can never be
 -- turned back on. The box still looks ticked, so the failure is silent.
 describe("SpecEnableCard per-spec checkboxes", function()
-    local STUBBED = { "C_SpecializationInfo", "GetSpecializationInfoForSpecID" }
+    local STUBBED = { "C_SpecializationInfo", "GetSpecializationInfoForSpecID", "Mixin" }
     local GUIFrame, saved, checkboxes, changes
 
     before_each(function()
@@ -160,6 +160,13 @@ describe("SpecEnableCard per-spec checkboxes", function()
         _G.C_SpecializationInfo = {}
         _G.GetSpecializationInfoForSpecID = function(specID)
             return specID, "Spec " .. specID, nil, "icon"
+        end
+        -- Blizzard's Mixin copies fields; the real widget-state manager needs it.
+        _G.Mixin = function(object, ...)
+            for i = 1, select("#", ...) do
+                for key, value in pairs((select(i, ...))) do object[key] = value end
+            end
+            return object
         end
 
         checkboxes, changes = {}, 0
@@ -173,6 +180,7 @@ describe("SpecEnableCard per-spec checkboxes", function()
                     function card:AddRow() end
                     function card:AddLabel() end
                     function card:GetNextOffset() return 0 end
+                    function card:MarkBody() return {} end
                     return card
                 end,
                 CreateWidgetStateManager = function()
@@ -224,5 +232,50 @@ describe("SpecEnableCard per-spec checkboxes", function()
         -- Every write re-applies the gate, or the module would not react until
         -- the next spec change.
         assert.equals(2, changes)
+    end)
+
+    -- Runs the real widget-state manager, so the case pins which checkboxes a
+    -- later card:SetEnabled reaches after a pick, not a fake's idea of it.
+    it("applies the card's last enabled state to redrawn spec rows and stops driving the old ones", function()
+        helpers.loadModule("GUI/GUIMain/GUI-WidgetStateManager.lua", { GUIFrame = GUIFrame })
+        GUIFrame.GetClassSpecs = function() return { EVOKER = { 1467, 1473 }, MAGE = { 62 } } end
+        GUIFrame.ResizeCardInPlace = function() end
+        local onPick
+        GUIFrame.CreateClassPickerRow = function(_, _, config)
+            onPick = config.onPick
+            return { AddWidget = function() end }, "EVOKER"
+        end
+        GUIFrame.CreateCompactCheckbox = function(_, _, label)
+            local box = { label = label, states = {} }
+            function box:SetEnabled(enabled) self.states[#self.states + 1] = enabled end
+            checkboxes[#checkboxes + 1] = box
+            return box
+        end
+        GUIFrame.CreateCard = function()
+            local card = { content = {} }
+            function card:AddRow() end
+            function card:AddLabel() end
+            function card:MarkBody() return {} end
+            function card:TruncateBody() end
+            function card:GetContentHeight() return 0 end
+            function card:SetEnabled() end
+            function card:GetNextOffset() return 0 end
+            return card
+        end
+
+        local card = GUIFrame:CreateSpecEnableCard({}, 0, { db = {}, scope = "test" })
+        local old = { checkboxes[1], checkboxes[2] }
+        card:SetEnabled(false)
+        onPick("MAGE")
+
+        local new = checkboxes[3]
+        assert.truthy(new.label:find("Spec 62", 1, true))
+        assert.same({ false }, new.states, "the redrawn row takes the recorded state")
+
+        card:SetEnabled(true)
+        assert.same({ false, true }, new.states)
+        for _, box in ipairs(old) do
+            assert.same({ false }, box.states, "an old row is not driven after the redraw")
+        end
     end)
 end)

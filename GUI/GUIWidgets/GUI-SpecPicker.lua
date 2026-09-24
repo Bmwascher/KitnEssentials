@@ -76,9 +76,9 @@ end
 local classSpecs
 
 -- Class token -> spec ids, for every playable class. Built on first use and
--- cached for the session: the data is static, and the callers rebuild their
--- whole page on every tick. An empty read is never cached, so a call that
--- lands before the client can answer does not poison the cache.
+-- cached for the session: the data is static, and every build of a page with a
+-- spec card reads it. An empty read is never cached, so a call that lands
+-- before the client can answer does not poison the cache.
 --
 -- Counted with GetNumSpecializationsForClassID rather than a fixed 1-4 loop,
 -- which silently truncates a class that gains a fifth spec.
@@ -250,63 +250,83 @@ function GUIFrame:CreateSpecEnableCard(scrollChild, yOffset, config)
         classTokens[#classTokens + 1] = token
     end
 
+    -- Two managers: the class row outlives a pick, the spec rows do not.
+    local specManager = GUIFrame:CreateWidgetStateManager()
+    local lastEnabled, mark
+
+    local function DrawSpecs(classToken)
+        local currentSpecId = GUIFrame.GetCurrentSpecID()
+        local specs = specsByClass[classToken] or {}
+
+        if #specs == 0 then
+            card:AddLabel("No specializations available for this class.")
+        end
+
+        for index = 1, #specs do
+            local specID = specs[index]
+            -- ForSpecID, not ByID: only this one is a documented API.
+            local specName, specIcon = "Spec " .. specID, nil
+            if GetSpecializationInfoForSpecID then
+                local _, name, _, icon = GetSpecializationInfoForSpecID(specID)
+                if name then specName = name end
+                specIcon = icon
+            end
+
+            local label = specName
+            if specIcon then
+                label = "|T" .. specIcon .. ":16:16:0:0:64:64:5:59:5:59|t " .. specName
+            end
+            if specID == currentSpecId then
+                label = label .. "  " .. KE:ColorTextByTheme("(current)")
+            end
+
+            local isLast = index == #specs
+            local row = GUIFrame:CreateRow(card.content, SPEC_ROW_HEIGHT)
+            local specCheck = GUIFrame:CreateCompactCheckbox(row, label, {
+                value = db.EnabledSpecs[specID] ~= false,
+                callback = function(checked)
+                    -- WRITTEN AS AN IF, not `checked and nil or false`: nil and
+                    -- false are both falsy, so that idiom stores false on every
+                    -- tick and a spec turned off can never be turned back on.
+                    if checked then
+                        db.EnabledSpecs[specID] = nil
+                    else
+                        db.EnabledSpecs[specID] = false
+                    end
+                    if config.onChange then config.onChange() end
+                end,
+            })
+            row:AddWidget(specCheck, 1)
+            specManager:Register(specCheck, "all")
+            card:AddRow(row, SPEC_ROW_HEIGHT, isLast and 0 or nil)
+        end
+
+        if lastEnabled ~= nil then specManager:UpdateAll(lastEnabled) end
+    end
+
     local classRow, shownClass = GUIFrame:CreateClassPickerRow(card.content, {
         scope = config.scope,
         classTokens = classTokens,
+        onPick = function(key)
+            local oldHeight = card:GetContentHeight()
+            card:TruncateBody(mark)
+            specManager:Clear()
+            DrawSpecs(key)
+            GUIFrame:ResizeCardInPlace(card, oldHeight)
+        end,
     })
     innerManager:Register(classRow, "all")
     card:AddRow(classRow, 36)
+    mark = card:MarkBody()
 
-    local currentSpecId = GUIFrame.GetCurrentSpecID()
-    local specs = specsByClass[shownClass] or {}
-
-    if #specs == 0 then
-        card:AddLabel("No specializations available for this class.")
-    end
-
-    for index = 1, #specs do
-        local specID = specs[index]
-        -- ForSpecID, not ByID: only this one is a documented API.
-        local specName, specIcon = "Spec " .. specID, nil
-        if GetSpecializationInfoForSpecID then
-            local _, name, _, icon = GetSpecializationInfoForSpecID(specID)
-            if name then specName = name end
-            specIcon = icon
-        end
-
-        local label = specName
-        if specIcon then
-            label = "|T" .. specIcon .. ":16:16:0:0:64:64:5:59:5:59|t " .. specName
-        end
-        if specID == currentSpecId then
-            label = label .. "  " .. KE:ColorTextByTheme("(current)")
-        end
-
-        local isLast = index == #specs
-        local row = GUIFrame:CreateRow(card.content, SPEC_ROW_HEIGHT)
-        local specCheck = GUIFrame:CreateCompactCheckbox(row, label, {
-            value = db.EnabledSpecs[specID] ~= false,
-            callback = function(checked)
-                -- WRITTEN AS AN IF, not `checked and nil or false`: nil and
-                -- false are both falsy, so that idiom stores false on every
-                -- tick and a spec turned off can never be turned back on.
-                if checked then
-                    db.EnabledSpecs[specID] = nil
-                else
-                    db.EnabledSpecs[specID] = false
-                end
-                if config.onChange then config.onChange() end
-            end,
-        })
-        row:AddWidget(specCheck, 1)
-        innerManager:Register(specCheck, "all")
-        card:AddRow(row, SPEC_ROW_HEIGHT, isLast and 0 or nil)
-    end
+    DrawSpecs(shownClass)
 
     local baseSetEnabled = card.SetEnabled
     function card:SetEnabled(enabled)
         if baseSetEnabled then baseSetEnabled(self, enabled) end
+        lastEnabled = enabled
         innerManager:UpdateAll(enabled)
+        specManager:UpdateAll(enabled)
     end
 
     return card, card:GetNextOffset()
