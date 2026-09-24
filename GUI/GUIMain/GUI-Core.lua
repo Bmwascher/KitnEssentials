@@ -607,6 +607,9 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
             if row.SetParent then row:SetParent(nil) end
         end
         wipe(self.rows)
+        for _, region in ipairs(self.regions) do
+            region:Hide()
+        end
         wipe(self.regions)
         self.currentY = 0
         self.contentHeight = 0
@@ -620,26 +623,32 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
     return card
 end
 
+local function RebuildPageLater()
+    C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+end
+
 -- Applies a card's height change to the page without a rebuild. That is only
--- right while nothing is drawn below the card; otherwise the page is rebuilt a
--- frame later so the frames below move with it. Returns true when applied here.
+-- right while nothing is drawn below the card; otherwise, or when the card has
+-- no parent or position to measure, the page is rebuilt a frame later.
 function GUIFrame:ResizeCardInPlace(card, oldHeight)
     local delta = card:GetContentHeight() - oldHeight
-    if delta == 0 then return true end
+    if delta == 0 then return end
     local parent = card:GetParent()
-    if not parent then return false end
     local cardTop = card:GetTop()
+    if not parent or not cardTop then
+        RebuildPageLater()
+        return
+    end
     for _, child in ipairs({ parent:GetChildren() }) do
         if child ~= card and child:IsShown() then
             local top = child:GetTop()
-            if not cardTop or not top or top < cardTop then
-                C_Timer.After(0, function() GUIFrame:RefreshContent() end)
-                return false
+            if not top or top < cardTop then
+                RebuildPageLater()
+                return
             end
         end
     end
     parent:SetHeight(parent:GetHeight() + delta)
-    return true
 end
 
 ---------------------------------------------------------------------------------
