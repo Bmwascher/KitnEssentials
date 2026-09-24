@@ -1,6 +1,6 @@
 -- Tier 2: Core/CombatState.lua, the shared combat clock/liveness machine.
 -- Driven entirely through the public event entry points, plus Freeze itself
--- for the one case that is otherwise unreachable, with all ten deps faked
+-- for the one case that is otherwise unreachable, with every dep faked
 -- and a manual scheduler whose handles record their own cancels. Specs read
 -- a handful of internal fields directly (playerCombat, groupOnly, watching,
 -- pvpBlocked, groupBlocked, inEncounter, finalizePending, pendingGen,
@@ -80,11 +80,12 @@ local function newRecorder()
 end
 
 describe("CombatState machine", function()
-    local KE, sched, deps, declaredSecret
+    local KE, sched, deps, declaredSecret, events
 
     before_each(function()
         KE, declaredSecret = L.loadCombatState()
         sched = newScheduler()
+        events = {}
         deps = {
             now = function() return 0 end,
             playerInCombat = function() return false end,
@@ -96,11 +97,18 @@ describe("CombatState machine", function()
             encounterLive = function() return true end,
             after = sched.after,
             ticker = sched.ticker,
+            setEventsActive = function(on) events[#events + 1] = on end,
         }
     end)
 
+    -- In the game the meter is registered before any of these drives. Seeded
+    -- into the table, not through RegisterListener, whose first-listener derive
+    -- would read whatever deps a case set before calling this; a recorder
+    -- registered later is then a second key and derives nothing.
     local function newCS()
-        return KE.CombatState.New(deps)
+        local cs = KE.CombatState.New(deps)
+        cs.listeners.base = {}
+        return cs
     end
 
     describe("start and freeze basics", function()
@@ -1250,6 +1258,98 @@ describe("CombatState machine", function()
             assert.is_true(cs:IsLive())
             tick(1)
             assert.is_true(cs:IsFrozen())
+        end)
+    end)
+
+    describe("the event gate", function()
+        -- No listener seeded: these cases are about the first and the last one.
+        local function bareCS()
+            return KE.CombatState.New(deps)
+        end
+
+        it("the first listener turns the events on and starts the fight the game reports, with no OnStart or paint to it", function()
+            local cases = {
+                { name = "the player in combat", player = true, group = false,
+                    expectLive = true, expectGroupOnly = false },
+                { name = "only the group in combat, inside an instance", player = false, group = true,
+                    expectLive = true, expectGroupOnly = true },
+                { name = "nothing in combat", player = false, group = false,
+                    expectLive = false, expectGroupOnly = false },
+            }
+            for _, case in ipairs(cases) do
+                events = {}
+                sched.tickers = {}
+                deps.playerInCombat = function() return case.player end
+                deps.groupInCombat = function() return case.group end
+                deps.inInstance = function() return true end
+                local cs = bareCS()
+                assert.same({}, events, case.name)
+                assert.equals(0, #sched.tickers, case.name)
+                local rec = newRecorder()
+                cs:RegisterListener("spec", rec.callbacks)
+                assert.same({ true }, events, case.name)
+                assert.equals(case.expectLive, cs:IsLive(), case.name)
+                assert.equals(case.expectGroupOnly, cs.groupOnly, case.name)
+                assert.equals(case.expectLive, lastClock(sched) ~= nil, case.name)
+                assert.equals(0, rec.count("OnStart"), case.name)
+                assert.equals(0, rec.count("OnClockTick"), case.name)
+            end
+        end)
+
+        it("a later registration, a second key or the same key again, derives nothing and leaves the events alone", function()
+            for _, key in ipairs({ "spec", "other" }) do
+                events = {}
+                deps.playerInCombat = function() return true end
+                local cs = bareCS()
+                cs:RegisterListener("spec", {})
+                local gen, tickers = cs:Generation(), #sched.tickers
+                local rec = newRecorder()
+                cs:RegisterListener(key, rec.callbacks)
+                assert.same({ true }, events, key)
+                assert.equals(gen, cs:Generation(), key)
+                assert.equals(tickers, #sched.tickers, key)
+            end
+        end)
+
+        it("the last listener out turns the events off and drops to idle with no broadcast; one out of two changes nothing", function()
+            local cases = {
+                { name = "a group fight in an encounter",
+                    setup = function(cs) cs:OnEncounterStart() end,
+                    held = function(cs) return cs:IsLive() end },
+                { name = "a bound end's block",
+                    setup = function(cs)
+                        deps.groupInCombat = function() return true end
+                        cs:OnRegenDisabled()
+                        cs:OnRegenEnabled()
+                        local poll = lastPoll(sched)
+                        for _ = 1, 20 do poll.fn() end
+                    end,
+                    held = function(cs) return cs.groupBlocked end },
+            }
+            for _, case in ipairs(cases) do
+                events = {}
+                deps.groupInCombat = function() return false end
+                local cs = bareCS()
+                local rec = newRecorder()
+                cs:RegisterListener("spec", rec.callbacks)
+                cs:RegisterListener("other", {})
+                case.setup(cs)
+                cs:UnregisterListener("other")
+                assert.same({ true }, events, case.name)
+                assert.is_true(case.held(cs), case.name)
+                local stops = rec.count("OnStop")
+                cs:UnregisterListener("spec")
+                assert.same({ true, false }, events, case.name)
+                for _, h in ipairs(sched.tickers) do
+                    assert.is_true(h.cancelled, case.name)
+                end
+                assert.is_false(cs:IsLive(), case.name)
+                assert.is_false(cs:IsFrozen(), case.name)
+                assert.is_false(cs.watching, case.name)
+                assert.is_false(cs.inEncounter, case.name)
+                assert.is_false(cs.groupBlocked, case.name)
+                assert.equals(stops, rec.count("OnStop"), case.name)
+            end
         end)
     end)
 end)

@@ -142,6 +142,7 @@ CombatState.__index = CombatState
 ---   encounterLive()    boolean (C_InstanceEncounter.IsEncounterInProgress)
 ---   after(sec, fn)     one-shot handle with :Cancel()
 ---   ticker(sec, fn)    recurring handle with :Cancel()
+---   setEventsActive(on) registers (true) or unregisters (false) the machine's events
 function CombatState.New(deps)
     local self = setmetatable({}, CombatState)
     self.deps = deps
@@ -273,6 +274,25 @@ function CombatState:_ScanBlockedClear(site)
     if self.deps.groupInCombat() then return end
     self:_ClearGroupBlock(site)
     self:_Broadcast("OnGroupClear")
+end
+
+-- Not live, not frozen, not watching, every mark and block cleared, no
+-- broadcast. The pin is left alone: nothing reads it until the next start
+-- zeroes it.
+function CombatState:_ResetToIdle()
+    self:_CancelClock()
+    self:_CancelPoll()
+    self.playerCombat = false
+    self.groupOnly = false
+    self.inEncounter = false
+    self.frozen = false
+    self.watching = false
+    self.clearTicks = 0
+    self.boundTicks = 0
+    self.pvpBlocked = false
+    self.groupBlocked = false
+    self.finalizePending = false
+    self.pendingGen = nil                      -- invalidate any pending callback
 end
 
 ---------------------------------------------------------------------------------
@@ -515,36 +535,37 @@ function CombatState:OnPvPMatchComplete()
     end
 end
 
+-- Starts the fight the game reports now, if any: the player's own combat, or
+-- the group's inside an instance. Returns whether it started one.
+function CombatState:_StartFromGame()
+    if self.deps.playerInCombat() then
+        self:StartFight(PLAYER)
+    elseif self.deps.groupInCombat() and self.deps.inInstance() then
+        self:StartFight(GROUP)
+    else
+        return false
+    end
+    return true
+end
+
 -- Re-derives rather than blindly resetting: the game does not re-fire
 -- PLAYER_REGEN_DISABLED after a load screen.
 function CombatState:OnEnteringWorld()
     self.finalizePending = false
     self.pendingGen = nil                      -- invalidate any pending callback
     self:_ClearGroupBlock("PLAYER_ENTERING_WORLD")
-    if self.deps.playerInCombat() then
-        if self:IsLive() and self.groupOnly then
-            -- A world entry ends the engagement on BOTH arrival branches, not
-            -- just the one that starts a fight. The fight itself survives here,
-            -- so the pin stands and the clock does not rewind past it; what the
-            -- screen ends is everything before it.
-            if DEBUG_CS then KE:Print("[CS] ENTERING_WORLD -> promote") end
-            self.engagementBase = 0
-            self:Promote()
-        else
-            self:StartFight(PLAYER)
-        end
-    elseif self.deps.groupInCombat() and self.deps.inInstance() then
-        self:StartFight(GROUP)
-    else
+    if self.groupOnly and self.deps.playerInCombat() then
+        -- A world entry ends the engagement on BOTH arrival branches, not
+        -- just the one that starts a fight. The fight itself survives here,
+        -- so the pin stands and the clock does not rewind past it; what the
+        -- screen ends is everything before it.
+        if DEBUG_CS then KE:Print("[CS] ENTERING_WORLD -> promote") end
+        self.engagementBase = 0
+        self:Promote()
+    elseif not self:_StartFromGame() then
         if DEBUG_CS then KE:Print("[CS] ENTERING_WORLD -> reset") end
         if self:IsLive() then self:Freeze("reset") end
-        self.inEncounter = false
-        self.pvpBlocked = false
-        self.watching = false
-        self.frozen = false                    -- so a surviving pinned clock is not dimmed after a zone change
-        self:_CancelPoll()
-        self:_CancelClock()
-        -- pin left alone: nothing reads it until the next start zeroes it
+        self:_ResetToIdle()
     end
 end
 
@@ -682,15 +703,28 @@ function CombatState:SetFineCadence(key, wanted)
 end
 
 -- Keyed, so a module enabling and disabling repeatedly cannot stack
--- duplicates: registering an existing key replaces it.
+-- duplicates: registering an existing key replaces it. The first listener
+-- turns the events on and starts any fight already running before it joins
+-- the table, so no OnStart reaches it; it reads IsLive to seed itself.
 function CombatState:RegisterListener(key, callbacks)
+    if not next(self.listeners) then
+        if DEBUG_CS then KE:Print("[CS] first listener: events on") end
+        self.deps.setEventsActive(true)
+        self:_StartFromGame()
+    end
     self.listeners[key] = callbacks
 end
 
+-- The last listener out turns the events off and drops to idle with no
+-- broadcast; the next first listener re-derives from the game.
 function CombatState:UnregisterListener(key)
     self.listeners[key] = nil
     self.fineKeys[key] = nil
     self:_RestartClock()
+    if next(self.listeners) then return end
+    if DEBUG_CS then KE:Print("[CS] last listener gone: events off, idle") end
+    self.deps.setEventsActive(false)
+    self:_ResetToIdle()
 end
 
 ---------------------------------------------------------------------------------
@@ -772,6 +806,30 @@ local function LiveTicker(sec, fn)
     return C_Timer.NewTicker(sec, fn)
 end
 
+-- File scope: shared core infrastructure; events register with the first listener.
+local eventFrame = CreateFrame("Frame")
+
+local EVENTS = {
+    "PLAYER_REGEN_DISABLED",
+    "PLAYER_REGEN_ENABLED",
+    "ENCOUNTER_START",
+    "ENCOUNTER_END",
+    "UNIT_FLAGS",
+    "PVP_MATCH_COMPLETE",
+    "PLAYER_ENTERING_WORLD",
+    "GROUP_ROSTER_UPDATE",
+}
+
+local function LiveSetEventsActive(on)
+    for i = 1, #EVENTS do
+        if on then
+            eventFrame:RegisterEvent(EVENTS[i])
+        else
+            eventFrame:UnregisterEvent(EVENTS[i])
+        end
+    end
+end
+
 KE.CombatState = CombatState.New({
     now = LiveNow,
     playerInCombat = LivePlayerInCombat,
@@ -783,17 +841,8 @@ KE.CombatState = CombatState.New({
     encounterLive = LiveEncounterLive,
     after = LiveAfter,
     ticker = LiveTicker,
+    setEventsActive = LiveSetEventsActive,
 })
-
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-eventFrame:RegisterEvent("ENCOUNTER_START")
-eventFrame:RegisterEvent("ENCOUNTER_END")
-eventFrame:RegisterEvent("UNIT_FLAGS")
-eventFrame:RegisterEvent("PVP_MATCH_COMPLETE")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 
 -- UNIT_FLAGS and GROUP_ROSTER_UPDATE are skipped: both fire often, and their
 -- handlers log the cases that matter, a GROUP start and a block cleared.
