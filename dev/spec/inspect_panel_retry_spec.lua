@@ -54,6 +54,18 @@ describe("Inspect slot: the dirty-cache test", function()
     end)
 end)
 
+-- Clearing the dirty cache repaints every slot, but must not itself refill a
+-- pending slot's retry budget within the same stamp.
+describe("Inspect slot: a settings-driven cache clear", function()
+    it("drops the dirty keys and keeps the pending state and retry flags", function()
+        local clear = loadIP()._ClearDirtyKeys
+        local s = { itemLink = "L", enchantID = 7, ilvl = 250, gemHash = "F0",
+            pending = true, pendingRetries = 2, paintPasses = 1, retry = true }
+        clear({ ["Player-1"] = { [1] = s } })
+        assert.same({ pending = true, pendingRetries = 2, paintPasses = 1, retry = true }, s)
+    end)
+end)
+
 -- The retry bound. Only sweep renders spend a retry: a same-frame burst of
 -- event passes must not use up the budget before the data can land.
 describe("Inspect slot: the pending retry bound", function()

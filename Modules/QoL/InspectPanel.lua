@@ -120,6 +120,17 @@ local function SlotUnchanged(s, link, enchantID, ilvl, gemHash)
 end
 InspectPanel._SlotUnchanged = SlotUnchanged
 
+-- The dirty keys only. A repaint then redraws every slot, while the pending
+-- state and retry flags stay, so the clear itself refills no retry budget.
+local function ClearDirtyKeys(cache)
+    for _, slots in pairs(cache) do
+        for _, s in pairs(slots) do
+            s.itemLink, s.enchantID, s.ilvl, s.gemHash = nil, nil, nil, nil
+        end
+    end
+end
+InspectPanel._ClearDirtyKeys = ClearDirtyKeys
+
 ---------------------------------------------------------------------------------
 -- Gem-race fix (grace-period gated + hybrid retry)
 ---------------------------------------------------------------------------------
@@ -538,14 +549,14 @@ function InspectPanel:UpdateAllInspectSlots()
     end
 end
 
--- Drop the per-GUID dirty cache so the next render repaints a slot whose item
--- has not changed. CharacterPanel calls this whenever a setting hides the
--- inspect overlays: the hide leaves the cache describing a slot that IS drawn,
--- so re-enabling the setting would short-circuit and the overlay would stay
--- hidden until the inspect frame was closed and reopened.
+-- Drop the dirty keys so the next render repaints a slot whose item has not
+-- changed. CharacterPanel calls this whenever a setting hides the inspect
+-- overlays: the hide leaves the cache describing a slot that IS drawn, so
+-- re-enabling the setting would short-circuit and the overlay would stay
+-- hidden until the inspect frame was closed and reopened. The pending state
+-- and the armed sweep stay, so the clear itself refills no retry budget.
 function InspectPanel:InvalidateSlotCache()
-    wipe(_inspectCache)
-    CancelSweep()
+    ClearDirtyKeys(_inspectCache)
 end
 
 -- Returns the equipped average item level to 2 decimals, or nil if the inspect
