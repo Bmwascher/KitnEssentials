@@ -2365,7 +2365,8 @@ local function CreateQualityOverlay(parent, anchor)
 end
 
 -- data (optional): pre-fetched C_TooltipInfo.GetInventoryItem table shared by
--- the caller's render pass (UpdateSlotDetail / RenderInspectSlot).
+-- the caller's render pass (UpdateSlotDetail / RenderInspectSlot). false is a
+-- read that came back empty, and is not repeated.
 function CP:ScanItemSockets(unit, slotID, data)
     unit = unit or "player"
     local itemLink = GetInventoryItemLink(unit, slotID)

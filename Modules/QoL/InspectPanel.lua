@@ -120,8 +120,9 @@ local function SlotUnchanged(s, link, enchantID, ilvl, gemHash)
 end
 InspectPanel._SlotUnchanged = SlotUnchanged
 
--- The dirty keys only. A repaint then redraws every slot, while the pending
--- state and retry flags stay, so the clear itself refills no retry budget.
+-- The dirty keys only, so the next repaint redraws every slot. The pending
+-- state and retry flags stay, so a slot mid-count keeps its count; a slot
+-- that used up its retries and still draws a stand-in pends with a fresh one.
 local function ClearDirtyKeys(cache)
     for _, slots in pairs(cache) do
         for _, s in pairs(slots) do
@@ -558,8 +559,8 @@ end
 -- changed. CharacterPanel calls this whenever a setting hides the inspect
 -- overlays: the hide leaves the cache describing a slot that IS drawn, so
 -- re-enabling the setting would short-circuit and the overlay would stay
--- hidden until the inspect frame was closed and reopened. The pending state
--- and the armed sweep stay, so the clear itself refills no retry budget.
+-- hidden until the inspect frame was closed and reopened. ClearDirtyKeys
+-- says what the clear keeps.
 function InspectPanel:InvalidateSlotCache()
     ClearDirtyKeys(_inspectCache)
 end
@@ -755,8 +756,7 @@ function InspectPanel:SetupInspectSupport()
             if arg1 == "Blizzard_InspectUI" then installHooks() end
         elseif event == "INSPECT_READY" then
             -- Any inspect reply arrives here, another addon's included; only the
-            -- inspect frame's own unit runs a pass, and it re-stamps the start
-            -- only when ShouldRestamp says so.
+            -- inspect frame's own unit runs a pass.
             local frameGUID = InspectFrameGUID()
             if not ReadyForFrame(arg1, frameGUID) then return end
             local now = GetTime()

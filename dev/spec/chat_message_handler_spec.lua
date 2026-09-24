@@ -341,6 +341,8 @@ describe("ChatMessageHandler body highlight", function()
         it("refuses a hit splitting a percent pair, or a %s in a boss body", function()
             local cases = {
                 { name = "percent pair", keyword = "50%", text = "the boss is at 50%% health" },
+                { name = "percent pair in a boss body", keyword = "50%", text = "the boss is at 50%% health",
+                  boss = true },
                 { name = "%s in a boss body", keyword = "s", text = "%s gazes at you", boss = true },
                 { name = "%s in ordinary chat", keyword = "s", text = "%s gazes at you",
                   want = "%|cffff0000s|r gazes at you" },
