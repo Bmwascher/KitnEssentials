@@ -110,6 +110,12 @@ local function ComputeGemHash(result)
     return table.concat(parts, "_")
 end
 
+-- The dirty-cache test, shared by both short-circuit sites in RenderInspectSlot.
+local function SlotUnchanged(s, link, enchantID, ilvl, gemHash)
+    return s.itemLink == link and s.enchantID == enchantID
+        and s.ilvl == ilvl and s.gemHash == gemHash
+end
+
 ---------------------------------------------------------------------------------
 -- Gem-race fix (grace-period gated + hybrid retry)
 ---------------------------------------------------------------------------------
@@ -278,21 +284,25 @@ function InspectPanel:RenderInspectSlot(button)
     local link = GetInventoryItemLink(unit, slotID)
     local enchantID = link and CP:GetSlotEnchantID(unit, slotID) or nil
     local ilvl = link and CP:GetSlotItemLevel(unit, slotID) or nil
+    local s = _inspectSlotState(guid, slotID)
+    local socketable = CP:IsSocketableSlot(slotID)
+
+    -- A slot with no gem row keys only on link, enchant ID and item level, none
+    -- of which needs the tooltip, so an unchanged one returns before the read.
+    if not socketable and SlotUnchanged(s, link, enchantID, ilvl, "") then
+        return
+    end
+
     -- Single C_TooltipInfo read for the whole slot render: the gem scan here
     -- (dirty-hash via ComputeGemHash + suspect detection) AND the detail/track
     -- renders further down all reuse it. Each fetch allocates a fresh tooltip
     -- table, so this one read replaces what used to be up to four.
     local data = link and C_TooltipInfo.GetInventoryItem(unit, slotID)
     -- No gem row is drawn outside the socketable set, so no scan there either.
-    local result = link and CP:IsSocketableSlot(slotID) and CP:ScanItemSockets(unit, slotID, data)
+    local result = link and socketable and CP:ScanItemSockets(unit, slotID, data)
     local gemHash = ComputeGemHash(result)
 
-    local s = _inspectSlotState(guid, slotID)
-    if s.itemLink == link
-        and s.enchantID == enchantID
-        and s.ilvl == ilvl
-        and s.gemHash == gemHash
-    then
+    if socketable and SlotUnchanged(s, link, enchantID, ilvl, gemHash) then
         return  -- dirty-cache short-circuit
     end
 
