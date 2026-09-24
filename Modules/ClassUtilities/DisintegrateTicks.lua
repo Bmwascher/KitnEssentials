@@ -616,7 +616,7 @@ end
 local TICK_COLOR_DEFAULT = { 1, 1, 1, 0.8 }
 local LAST_TICK_COLOR_DEFAULT = { 1, 0.82, 0, 0.95 }
 
-function DT.TickTime(i, maxTicks, duration, interval, chaining, firstTick)
+local function TickTime(i, maxTicks, duration, interval, chaining, firstTick)
     if chaining then
         local step = (duration - firstTick) / (maxTicks - 1)
         return firstTick + (i - 1) * step
@@ -630,7 +630,7 @@ end
 
 function DT.LastShownTick(maxTicks, duration, interval, chaining, firstTick)
     for i = maxTicks, 1, -1 do
-        local tickTime = DT.TickTime(i, maxTicks, duration, interval, chaining, firstTick)
+        local tickTime = TickTime(i, maxTicks, duration, interval, chaining, firstTick)
         if IsTickShown(tickTime, duration) then
             return i
         end
@@ -701,7 +701,7 @@ function DT:UpdateHandleTicks(handle, duration)
         tick:SetColorTexture(KE:ResolveColor(DT.TickColorFor(i, lastTick, self.db)))
         tick:ClearAllPoints()
 
-        local tickTime = DT.TickTime(i, self.maxTicks, duration, hastedTickInterval,
+        local tickTime = TickTime(i, self.maxTicks, duration, hastedTickInterval,
             self.chaining, self.firstTick)
 
         tick:SetPoint("CENTER", handle.anchor, "LEFT", (duration - tickTime) * pixelsPerSecond, 0)
