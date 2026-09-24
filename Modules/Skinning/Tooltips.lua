@@ -420,9 +420,9 @@ local function UnitColor(unit, guid)
         if KE:IsSecretValue(isPlayer) then return end
         if isPlayer then return end
     elseif UnitIsPlayer(unit) then
+        -- Nothing when no class colour resolves, as for the secret branch.
         local _, class = UnitClass(unit)
-        local c = ClassColorFor(class)
-        if c then return c end
+        return ClassColorFor(class)
     end
     local r, g, b = ReactionColor(unit)
     if r then return CreateColor(r, g, b) end
