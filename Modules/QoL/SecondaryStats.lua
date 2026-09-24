@@ -443,13 +443,19 @@ function SS:OnSpecChanged(event, unit)
     -- so without this every party spec swap would rebuild this player's block.
     if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
     self:ApplySpecGate()
-    C_Timer.After(SPEC_SETTLE_DELAY, function()
-        if self:IsEnabled() then self:ApplySpecGate() end
+    if self.specTimer then self.specTimer:Cancel() end
+    self.specTimer = C_Timer.NewTimer(SPEC_SETTLE_DELAY, function()
+        self.specTimer = nil
+        self:ApplySpecGate()
     end)
 end
 
 function SS:OnDisable()
     self:UnregisterAllEvents()
+    if self.specTimer then
+        self.specTimer:Cancel()
+        self.specTimer = nil
+    end
     self.pending = false
     self.isPreview = false
     if self.frame then self.frame:Hide() end
