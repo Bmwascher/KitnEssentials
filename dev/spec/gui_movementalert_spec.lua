@@ -49,6 +49,7 @@ describe("GUI-NoMovementAlert tracked spells card", function()
                 function card:AddLabel() end
                 function card:AddHeaderToggle() end
                 function card:GetContentHeight() return 0 end
+                function card:MarkBody() return {} end
                 return card
             end,
             CreateRow = function() return noopRow() end,
