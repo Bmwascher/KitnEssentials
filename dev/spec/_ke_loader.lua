@@ -2932,6 +2932,18 @@ function L.loadDisintegrateTicks(overrides)
     return modules["DisintegrateTicks"], KE
 end
 
+-- Modules/Dungeons/KickTracker.lua, for the own-kick guard. Plain stubs only:
+-- the file reads C_SpecializationInfo (from the mock) and LibStub at load, and
+-- the spec drives OnSpellcastSucceeded directly. Returns KT.
+function L.loadKickTracker(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.LibStub = function() return nil end
+    helpers.loadModule("Modules/Dungeons/KickTracker.lua", { Print = function() end })
+    return modules["KickTracker"]
+end
+
 -- Modules/Utilities/ReadyCheckConsumables.lua. The module captures its API
 -- surface as upvalues at load, so every global below exists before
 -- loadModule and InCombatLockdown rides mock.install's override as a closure
