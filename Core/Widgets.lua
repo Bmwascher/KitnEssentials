@@ -165,7 +165,7 @@ local heldPrompt
 
 -- Runs the frame after a close, and at combat end. A prompt the closing
 -- prompt's own callback opened keeps the held one waiting for that prompt in
--- turn; an unasked question must not appear mid-fight.
+-- turn, and a held prompt also waits out combat.
 local function OpenHeldPrompt()
     if not heldPrompt or KE.activePrompt or InCombatLockdown() then return end
     local args = heldPrompt
