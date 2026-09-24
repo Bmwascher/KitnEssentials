@@ -960,7 +960,7 @@ function DM:BindCombatState()
             if DM.RefreshVisibility then DM:RefreshVisibility() end
         end,
         -- Repaints the clock ONLY -- never DM:Tick, which would repaint every bar
-        -- and total at up to 10 Hz while a tenths cadence is running.
+        -- and total on every clock tick.
         OnClockTick = function()
             -- Authoritative: this paint carries the service's own reading, so it
             -- overrides the warm-up hold and may blank the clock.

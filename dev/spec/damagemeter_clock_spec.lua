@@ -114,7 +114,7 @@ describe("the OnClockTick listener", function()
         DM.RepaintCombatClock = function() repaintCalls = repaintCalls + 1 end
 
         DM:BindCombatState()
-        KE.CombatState.listeners["DamageMeter"].OnClockTick(12, 0)
+        KE.CombatState.listeners["DamageMeter"].OnClockTick(12)
 
         assert.equals(1, repaintCalls)
         assert.equals(0, tickCalls)

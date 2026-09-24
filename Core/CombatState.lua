@@ -17,7 +17,6 @@ local KE = select(2, ...)
 -- would early-return and leave `KE.CombatState` nil for the whole session.
 
 local CreateFrame = CreateFrame
-local GetTime = GetTime
 local UnitAffectingCombat = UnitAffectingCombat
 local IsInInstance = IsInInstance
 local IsInRaid = IsInRaid
@@ -33,8 +32,6 @@ local pcall = pcall
 local tostring = tostring
 local UnitIsConnected = UnitIsConnected
 local UnitIsVisible = UnitIsVisible
-local math_max = math.max
-local math_min = math.min
 local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local InCombatLockdown = InCombatLockdown
 local IsEncounterInProgress = C_InstanceEncounter and C_InstanceEncounter.IsEncounterInProgress
@@ -50,10 +47,6 @@ for i = 1, 4 do PARTY_UNITS[i] = "party" .. i end
 
 -- StartFight sentinels. Internal only; never exposed on the public surface.
 local PLAYER, GROUP = "PLAYER", "GROUP"
-
--- StartFight span mode. Internal only; the one caller that begins a new
--- underlying session passes it.
-local SPAN_CARRY = "SPAN_CARRY"
 
 -- Poll ticks (0.25s each) before the group hold ends for a player who is
 -- alive and idle outside an encounter: 5 seconds.
@@ -132,7 +125,6 @@ local CombatState = {}
 CombatState.__index = CombatState
 
 --- deps:
----   now()              seconds (GetTime); tenths smoothing only
 ---   playerInCombat()   boolean (UnitAffectingCombat("player"))
 ---   groupInCombat()    boolean
 ---   inInstance()       boolean (IsInInstance)
@@ -147,13 +139,11 @@ function CombatState.New(deps)
     local self = setmetatable({}, CombatState)
     self.deps = deps
     self.listeners = {}
-    self.fineKeys = {}
 
     self.playerCombat = false
     self.groupOnly = false
     self.inEncounter = false
     self.pin = 0
-    self.engagementBase = 0
     self.frozen = false
     self.generation = 0
     self.watching = false
@@ -163,9 +153,6 @@ function CombatState.New(deps)
     self.groupBlocked = false
     self.finalizePending = false
     self.pendingGen = nil
-    self.playerJoined = false
-    self.fineBase = nil
-    self.fineAnchor = nil
 
     self.clockHandle = nil
     self.pollHandle = nil
@@ -206,17 +193,10 @@ function CombatState:_CancelClock()
     end
 end
 
-function CombatState:_ClockCadence()
-    if next(self.fineKeys) then return 0.1 end
-    return 0.5
-end
-
 -- Cancel-before-start, per the paint contract: neither ticker can be doubled.
 function CombatState:_StartClock()
     self:_CancelClock()
-    local cadence = self:_ClockCadence()
-    self.clockCadence = cadence
-    self.clockHandle = self.deps.ticker(cadence, function()
+    self.clockHandle = self.deps.ticker(0.5, function()
         self:ClockTick()
     end)
 end
@@ -316,7 +296,7 @@ function CombatState:Freeze(reason)
     self:_CancelClock()
     self:_CancelPoll()
     self.watching = false
-    self:_Broadcast("OnClockTick", self:Duration(), 0)    -- the clock lands on the final value
+    self:_Broadcast("OnClockTick", self:Duration())    -- the clock lands on the final value
     self:_Broadcast("OnStop", reason)
     -- A bound end re-armed here would poll the same stuck flags forever.
     if reason ~= "pvp" and reason ~= "groupBound" and self.deps.groupInCombat() then
@@ -333,23 +313,12 @@ end
 -- Start and promote
 ---------------------------------------------------------------------------------
 
-function CombatState:StartFight(which, span)
+function CombatState:StartFight(which)
     local wasLive = self:IsLive()
     self:_CancelPoll()
     self:_CancelClock()
     self.frozen = false
-    -- Only a start that begins a NEW session folds the outgoing fight in. A
-    -- live start that re-asserts the fight already running would double-count:
-    -- the pin is about to be re-sampled from the same session it was read from.
-    local carried = wasLive and span == SPAN_CARRY
-    if carried then
-        self.engagementBase = self.engagementBase + (self.pin or 0)
-    else
-        self.engagementBase = 0
-    end
     self.pin = 0
-    self.fineBase = nil
-    self.fineAnchor = nil
     if DEBUG_CS then dbgWedgeReset(self, "StartFight") end
     self.clearTicks = 0
     self.finalizePending = false
@@ -358,13 +327,8 @@ function CombatState:StartFight(which, span)
     self.generation = self.generation + 1
     self.playerCombat = (which == PLAYER)      -- both assigned, never one
     self.groupOnly = (which == GROUP)
-    -- Participation follows the span. A carried start continues one engagement,
-    -- so a player who fought the seconds before it has joined it even if the
-    -- boss opened as GROUP.
-    self.playerJoined = (which == PLAYER) or (carried and self.playerJoined) or false
     if DEBUG_CS then
-        KE:Print("[CS] StartFight " .. which .. " span=" .. tostring(span)
-            .. " wasLive=" .. dbgflag(wasLive) .. " gen=" .. self.generation)
+        KE:Print("[CS] StartFight " .. which .. " wasLive=" .. dbgflag(wasLive) .. " gen=" .. self.generation)
     end
     if self.groupOnly then self:_ArmPoll() end
     self:_StartClock()
@@ -375,7 +339,7 @@ function CombatState:StartFight(which, span)
     -- Both still land in this one dispatch, so nothing is drawn in between.
     if not wasLive then
         self:_Broadcast("OnStart")
-        self:_Broadcast("OnClockTick", nil, 0)
+        self:_Broadcast("OnClockTick", nil)
     end
 end
 
@@ -383,15 +347,14 @@ end
 function CombatState:Promote()
     self.groupOnly = false
     self.playerCombat = true
-    self.playerJoined = true
     -- The player entering combat disproves that the group stayed continuously
     -- clear, so a part-spent dwell must not carry over and cut the next drop short.
     if DEBUG_CS then dbgWedgeReset(self, "Promote") end
     self.clearTicks = 0
     self:_CancelPoll()
     if DEBUG_CS then KE:Print("[CS] Promote gen=" .. self.generation) end
-    -- pin, generation, fineBase and fineAnchor all SURVIVE: this is the same
-    -- fight, so resetting them would rewind a clock already on screen.
+    -- pin and generation SURVIVE: this is the same fight, so resetting them
+    -- would rewind a clock already on screen.
 end
 
 ---------------------------------------------------------------------------------
@@ -412,7 +375,7 @@ end
 function CombatState:OnEncounterStart()
     self:_ClearGroupBlock("ENCOUNTER_START")
     self.inEncounter = true
-    self:StartFight(self.deps.playerInCombat() and PLAYER or GROUP, SPAN_CARRY)
+    self:StartFight(self.deps.playerInCombat() and PLAYER or GROUP)
 end
 
 -- Cheap bails first; this fires constantly. While blocked, the instance bail is
@@ -555,12 +518,9 @@ function CombatState:OnEnteringWorld()
     self.pendingGen = nil                      -- invalidate any pending callback
     self:_ClearGroupBlock("PLAYER_ENTERING_WORLD")
     if self.groupOnly and self.deps.playerInCombat() then
-        -- A world entry ends the engagement on BOTH arrival branches, not
-        -- just the one that starts a fight. The fight itself survives here,
-        -- so the pin stands and the clock does not rewind past it; what the
-        -- screen ends is everything before it.
+        -- The fight survives the loading screen, so the pin stands and the
+        -- clock does not rewind past it.
         if DEBUG_CS then KE:Print("[CS] ENTERING_WORLD -> promote") end
-        self.engagementBase = 0
         self:Promote()
     elseif not self:_StartFromGame() then
         if DEBUG_CS then KE:Print("[CS] ENTERING_WORLD -> reset") end
@@ -573,23 +533,11 @@ end
 -- The two tickers
 ---------------------------------------------------------------------------------
 
--- 0.5s, or 0.1s while a fine cadence is wanted.
+-- 0.5s.
 function CombatState:ClockTick()
     local d = self:Sample()
-    if d then
-        self.pin = d
-        if d ~= self.fineBase then             -- re-anchor only on a CHANGE: the API
-            self.fineBase = d                  -- moves in whole seconds
-            self.fineAnchor = self.deps.now()
-        end
-    end
-    local frac = 0
-    if self.fineAnchor then
-        -- nil duration and frac 0 until the first usable sample: no anchor
-        -- arithmetic ever happens without an anchor.
-        frac = math_max(0, math_min(self.deps.now() - self.fineAnchor, 0.9))
-    end
-    self:_Broadcast("OnClockTick", self:Duration(), frac)
+    if d then self.pin = d end
+    self:_Broadcast("OnClockTick", self:Duration())
 end
 
 -- 0.25s.
@@ -655,51 +603,12 @@ function CombatState:GetDuration()
     return self:Duration()
 end
 
--- The engagement, not the fight. Non-nil where Duration() is nil once anything
--- has accumulated: the warm-up gap after a carry would otherwise blank a clock
--- that has a known span behind it.
-function CombatState:GetEngagementDuration()
-    if self.engagementBase > 0 then
-        return self.engagementBase + (self:Duration() or 0)
-    end
-    return self:Duration()
-end
-
--- True once playerCombat has been set at any point in the current engagement;
--- cleared at each start that opens a new one.
-function CombatState:PlayerJoined()
-    return self.playerJoined
-end
-
 function CombatState:GroupInCombat()
     return self.deps.groupInCombat()
 end
 
 function CombatState:Generation()
     return self.generation
-end
-
--- Replaces a running clock ticker and samples at once, so a cadence change
--- cannot leave the meter clock stale for the length of the old interval.
-function CombatState:_RestartClock()
-    if not self.clockHandle then return end
-    -- Idempotent: registering and dropping cadence keys happens in pairs around
-    -- a module's enable and disable, and a restart that changes nothing would
-    -- spend a session read and a repaint for each one.
-    if self:_ClockCadence() == self.clockCadence then return end
-    self:_StartClock()
-    self:ClockTick()
-end
-
--- Recording a preference must never start a ticker on an idle machine, or a
--- 10 Hz sampler runs forever between fights.
-function CombatState:SetFineCadence(key, wanted)
-    if wanted then
-        self.fineKeys[key] = true
-    else
-        self.fineKeys[key] = nil
-    end
-    self:_RestartClock()
 end
 
 -- Keyed, so a module enabling and disabling repeatedly cannot stack
@@ -719,8 +628,6 @@ end
 -- broadcast; the next first listener re-derives from the game.
 function CombatState:UnregisterListener(key)
     self.listeners[key] = nil
-    self.fineKeys[key] = nil
-    self:_RestartClock()
     if next(self.listeners) then return end
     if DEBUG_CS then KE:Print("[CS] last listener gone: events off, idle") end
     self.deps.setEventsActive(false)
@@ -730,10 +637,6 @@ end
 ---------------------------------------------------------------------------------
 -- Live adapter
 ---------------------------------------------------------------------------------
-
-local function LiveNow()
-    return GetTime()
-end
 
 local function LivePlayerInCombat()
     return UnitAffectingCombat("player")
@@ -831,7 +734,6 @@ local function LiveSetEventsActive(on)
 end
 
 KE.CombatState = CombatState.New({
-    now = LiveNow,
     playerInCombat = LivePlayerInCombat,
     groupInCombat = LiveGroupInCombat,
     inInstance = LiveInInstance,
