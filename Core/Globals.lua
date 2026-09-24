@@ -1810,6 +1810,27 @@ function KE:IsPlayerHealerSpec()
     return role == "HEALER"
 end
 
+---------------------------------------------------------------------------------
+-- Per-spec gate
+---------------------------------------------------------------------------------
+-- Absent means enabled. Only an explicit opt-out is ever stored, so a profile
+-- that has never touched a spec card stores nothing and behaves exactly as it
+-- did before the setting existed.
+--
+-- An unresolvable spec reads as enabled rather than disabled: failing closed
+-- would blank the module on a fresh character or mid-load, which looks like
+-- the module is broken, while failing open corrects itself on the next event.
+function KE:IsSpecEnabled(enabledSpecs, specId)
+    if not enabledSpecs or not specId then return true end
+    return enabledSpecs[specId] ~= false
+end
+
+function KE:GetPlayerSpecId()
+    local index = C_SpecializationInfo.GetSpecialization()
+    if not index or index == 0 then return nil end
+    return (C_SpecializationInfo.GetSpecializationInfo(index))
+end
+
 -- forceContext (optional): "HEALER" / "DEFAULT" overrides the live spec-driven
 -- resolution — used by the GUI to edit/preview a context regardless of the
 -- player's current spec. When nil, resolves live (UseHealerPosition + healer).

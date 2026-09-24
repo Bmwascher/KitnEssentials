@@ -2343,21 +2343,6 @@ function L.loadStanceText(overrides)
     return modules["StanceText"], KE
 end
 
--- Modules/QoL/SecondaryStats.lua. IsSpecEnabled reads only its own arguments,
--- so the loader exists solely to make the file loadable: the module indexes
--- C_SpecializationInfo at file scope, and the stat-read globals are captured as
--- locals but never called from the predicate. Returns SS, KE.
-function L.loadSecondaryStats(overrides)
-    overrides = overrides or {}
-    mock.installSpecInfo()
-    local modules = helpers.installAddonShim()
-    local KE = {
-        db = { profile = { SecondaryStats = overrides.db or {} } },
-    }
-    helpers.loadModule("Modules/QoL/SecondaryStats.lua", KE)
-    return modules["SecondaryStats"], KE
-end
-
 -- Modules/ClassUtilities/PetStatusText.lua. The branch under test lives inside
 -- the file-local CheckPetStatus, which is reached from outside only through
 -- PS:UpdatePetText -- so the spec drives that and asserts on what was painted.
