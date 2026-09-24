@@ -22,6 +22,7 @@ local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local GetTime = GetTime
 local pairs = pairs
 local next = next
+local issecretvalue = issecretvalue or function() return false end
 
 ---------------------------------------------------------------------------------
 -- Module State
@@ -481,7 +482,8 @@ function TSP:OnEnable()
 
     -- Register events
     self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", function(_, spellId)
-        if not spellId then return end
+        -- A secret spell ID cannot index the filter table.
+        if not spellId or issecretvalue(spellId) then return end
         local procIcon = MOVEMENT_SPELL_FILTER[spellId]
         if not procIcon then return end
         if self:FilterSpell(spellId) then return end
@@ -505,7 +507,7 @@ function TSP:OnEnable()
     end)
 
     self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", function(_, spellId)
-        if not spellId then return end
+        if not spellId or issecretvalue(spellId) then return end
         if not MOVEMENT_SPELL_FILTER[spellId] then return end
         self.activeProcs[spellId] = nil
         if not next(self.activeProcs) then
