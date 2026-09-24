@@ -115,3 +115,84 @@ describe("SpecPicker rebuild on pick", function()
         assert.same({ "DEATHKNIGHT", "WARRIOR" }, keys)
     end)
 end)
+
+-- The per-spec checkbox write is `if checked then nil else false`. The idiom it
+-- avoids, `checked and nil or false`, cannot yield nil: both branches are
+-- falsy, so it stores false on every tick and a spec turned off can never be
+-- turned back on. The box still looks ticked, so the failure is silent.
+describe("SpecEnableCard per-spec checkboxes", function()
+    local STUBBED = { "C_SpecializationInfo", "GetSpecializationInfoForSpecID" }
+    local GUIFrame, saved, checkboxes, changes
+
+    before_each(function()
+        saved = {}
+        for _, key in ipairs(STUBBED) do saved[key] = _G[key] end
+        _G.C_SpecializationInfo = {}
+        _G.GetSpecializationInfoForSpecID = function(specID)
+            return specID, "Spec " .. specID, nil, "icon"
+        end
+
+        checkboxes, changes = {}, 0
+        local function noopRow() return { AddWidget = function() end } end
+        local KE = helpers.loadModule("GUI/GUIWidgets/GUI-SpecPicker.lua", {
+            ColorTextByTheme = function(_, text) return text end,
+            GUIFrame = {
+                RegisterContentCleanup = function() end,
+                CreateCard = function()
+                    local card = { content = {} }
+                    function card:AddRow() end
+                    function card:AddLabel() end
+                    function card:GetNextOffset() return 0 end
+                    return card
+                end,
+                CreateWidgetStateManager = function()
+                    return { Register = function() end, UpdateAll = function() end }
+                end,
+                CreateRow = function() return noopRow() end,
+                -- Four parameters: the widget calls this with a colon.
+                CreateCompactCheckbox = function(_, _, label, config)
+                    local box = { label = label, value = config.value, callback = config.callback }
+                    checkboxes[#checkboxes + 1] = box
+                    return box
+                end,
+            },
+            Theme = {},
+        })
+        GUIFrame = KE.GUIFrame
+        -- Two specs of one class is enough to prove the callback keys by the
+        -- spec it was built for rather than by whichever one ran last.
+        GUIFrame.GetClassSpecs = function() return { EVOKER = { 1467, 1473 } } end
+        GUIFrame.GetCurrentSpecID = function() return 1467 end
+        GUIFrame.CreateClassPickerRow = function() return noopRow(), "EVOKER" end
+    end)
+
+    after_each(function()
+        for _, key in ipairs(STUBBED) do _G[key] = saved[key] end
+    end)
+
+    it("stores an opt-out only for the spec unticked, and removes it when re-ticked", function()
+        local db = {}
+        GUIFrame:CreateSpecEnableCard({}, 0, {
+            db = db,
+            scope = "test",
+            note = "note",
+            onChange = function() changes = changes + 1 end,
+        })
+        assert.equals(2, #checkboxes)
+        for _, box in ipairs(checkboxes) do
+            assert.is_true(box.value)
+        end
+
+        checkboxes[1].callback(false)
+        assert.is_false(db.EnabledSpecs[1467])
+        assert.is_nil(db.EnabledSpecs[1473])
+
+        checkboxes[1].callback(true)
+        assert.is_nil(db.EnabledSpecs[1467])
+        assert.is_nil(db.EnabledSpecs[1473])
+
+        -- Every write re-applies the gate, or the module would not react until
+        -- the next spec change.
+        assert.equals(2, changes)
+    end)
+end)
