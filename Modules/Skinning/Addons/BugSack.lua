@@ -56,6 +56,8 @@ local function OpenSack()
     end
     -- The row hangs from the window's bottom edge by the first tab's top,
     -- whatever anchor the tab was created with; only its x inset is kept.
+    -- y = 1 lifts the tab 1 into the window; S.Tab draws its box 2 inside the
+    -- tab, so the box starts 1 below the window's edge.
     local function RepositionTabs()
         local prev
         for i = 1, 3 do
