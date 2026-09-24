@@ -260,20 +260,13 @@ function BR:Press(opened, target)
     if btn and btn.Click then btn:Click("LeftButton") end
 end
 
--- Hides the dialog directly so neither button runs: a prompt timing out must
--- not turn into a pass. Only while the singleton still shows this module's
--- prompt (Core/Widgets.lua nils `_onAccept` on every close and overwrites it
--- on every new prompt), so a dismissed or replaced dialog is left alone.
+-- Closes this module's prompt without running either button: a prompt timing
+-- out must not turn into a pass. A dismissed or replaced dialog is left alone.
 function BR:ClosePrompt()
     local accept = self.pendingAccept
     self.pending, self.pendingAccept = nil, nil
     if not accept then return end
-    local dialog = KE.activePrompt
-    if dialog and dialog._onAccept == accept then
-        dialog._onAccept, dialog._onCancel = nil, nil
-        dialog:Hide()
-        KE.activePrompt = nil
-    end
+    KE:ClosePromptIfOwner(accept)
 end
 
 ---------------------------------------------------------------------------------

@@ -153,6 +153,26 @@ function KE.PromptTypedGateOpen(typed, required)
     return type(required) == "string" and typed == required
 end
 
+-- An unsolicited prompt (opts.waitIfBusy) never replaces an open one: it waits
+-- and opens once that prompt closes.
+function KE.PromptWaits(waitIfBusy, promptShowing)
+    return waitIfBusy == true and promptShowing == true
+end
+
+-- The one waiting prompt: its CreatePrompt arguments packed with their count.
+-- The latest to wait replaces an earlier one.
+local heldPrompt
+
+-- Runs the frame after a close, and at combat end. A prompt the closing
+-- prompt's own callback opened keeps the held one waiting for that prompt in
+-- turn; an unasked question must not appear mid-fight.
+local function OpenHeldPrompt()
+    if not heldPrompt or KE.activePrompt or InCombatLockdown() then return end
+    local args = heldPrompt
+    heldPrompt = nil
+    KE:CreatePrompt(unpack(args, 1, args.n))
+end
+
 -- Disabled look for the accept button, matching GUIFrame:CreateButton's.
 local function SetPromptAcceptEnabled(dialog, enabled)
     local btn = dialog.acceptBtn
@@ -195,8 +215,22 @@ local function ClosePrompt(dialog, runCancel)
     dialog._onCancel = nil
     dialog:Hide()
     KE.activePrompt = nil
+    if heldPrompt then C_Timer.After(0, OpenHeldPrompt) end
     if runCancel and onCancel then onCancel() end
     return onAccept
+end
+
+-- Closes the prompt whose accept is `accept`, shown or waiting, without
+-- running either callback. For a module taking down its own stale prompt;
+-- another module's prompt is left alone.
+function KE:ClosePromptIfOwner(accept)
+    -- A copy prompt carries no accept; nil must not match it.
+    if not accept then return end
+    if heldPrompt and heldPrompt.accept == accept then heldPrompt = nil end
+    local dialog = KE.activePrompt
+    if dialog and dialog._onAccept == accept then
+        ClosePrompt(dialog, false)
+    end
 end
 
 -- Build-once skeleton for the prompt singleton: dialog chrome + header +
@@ -287,7 +321,9 @@ end
 -- button disabled until the box equals the string exactly, then runs
 -- onAccept with no arguments. Single edit box with an onAccept only.
 -- onSecondTextChanged(text, dialog) runs on every text change in the second
--- box of a two-field prompt, for that call only.
+-- box of a two-field prompt, for that call only. waitIfBusy is for a prompt
+-- nobody asked for: with another prompt open it waits instead of replacing it,
+-- and opens the frame after that prompt closes. It then returns nil.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts)
@@ -308,6 +344,16 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     end
 
     if type(opts) ~= "table" then opts = nil end
+
+    if KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil) then
+        heldPrompt = {
+            title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
+            textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
+            showSecondEditBox, secondEditBoxLabel, opts,
+            n = 16, accept = onAccept,
+        }
+        return nil
+    end
 
     if KE.activePrompt then
         KE.activePrompt:Hide()
@@ -820,7 +866,8 @@ end
 -- Repair, at the end of a fight, a prompt that spent it swallowing keys. Both
 -- the builder and the show-time reset skip their keyboard setup in lockdown, so
 -- a prompt raised there inherits whatever the last one left; PLAYER_REGEN_ENABLED
--- is the first legal moment to correct it.
+-- is the first legal moment to correct it. A prompt that waited through the
+-- fight opens here, when no other prompt is open.
 --
 -- There is deliberately no combat-entry half: disarming would need
 -- EnableKeyboard, which is protected and throws in combat.
@@ -828,9 +875,11 @@ local promptCombatWatcher = CreateFrame("Frame")
 promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
 promptCombatWatcher:SetScript("OnEvent", function()
     local dialog = KE.activePrompt
-    if not dialog or not dialog.IsShown or not dialog:IsShown() then return end
-    dialog:EnableKeyboard(true)
-    dialog:SetPropagateKeyboardInput(true)
+    if dialog and dialog.IsShown and dialog:IsShown() then
+        dialog:EnableKeyboard(true)
+        dialog:SetPropagateKeyboardInput(true)
+    end
+    OpenHeldPrompt()
 end)
 
 -- Skinning toggles FLAG instead of prompting, so ticking eight windows gives one

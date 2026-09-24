@@ -553,7 +553,7 @@ function KE:ApplyThemeFont(fontStr, size) end
 ---@param cancelText string?
 ---@param showSecondEditBox boolean?
 ---@param secondEditBoxLabel string?
----@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string?, onSecondTextChanged: fun(text: string, dialog: Frame)? }?
+---@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string?, onSecondTextChanged: fun(text: string, dialog: Frame)?, waitIfBusy: boolean? }?
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts) end
@@ -564,6 +564,18 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
 ---@param required string?
 ---@return boolean
 function KE.PromptTypedGateOpen(typed, required) end
+
+--- True when a prompt raised with opts.waitIfBusy must wait because another
+--- prompt is showing (Core/Widgets.lua).
+---@param waitIfBusy boolean?
+---@param promptShowing boolean
+---@return boolean
+function KE.PromptWaits(waitIfBusy, promptShowing) end
+
+--- Closes the prompt, shown or waiting, whose accept callback is `accept`,
+--- running neither callback (Core/Widgets.lua).
+---@param accept function
+function KE:ClosePromptIfOwner(accept) end
 
 --- Wraps KE:CreatePrompt with the standard reload-required chrome
 --- (Core/Widgets.lua). Returns the singleton prompt dialog frame.

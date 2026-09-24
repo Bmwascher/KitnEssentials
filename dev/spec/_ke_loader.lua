@@ -2638,6 +2638,9 @@ function L.loadBonusRoll(overrides)
         ColorTextByTheme = function(_, text) return text end,
     }
     KE.Print = function(_, msg) KE.prints[#KE.prints + 1] = msg end
+    -- The real prompt helpers, so the close-my-prompt case runs through the
+    -- shared owner test rather than a copy of it.
+    helpers.loadModule("Core/Widgets.lua", KE)
     helpers.loadModule("Modules/QoL/BonusRoll.lua", KE)
     return modules["BonusRoll"], KE
 end
