@@ -574,7 +574,7 @@ function KE.PromptWaits(waitIfBusy, promptShowing) end
 
 --- Closes the prompt, shown or waiting, whose accept callback is `accept`,
 --- running neither callback (Core/Widgets.lua).
----@param accept function
+---@param accept function?
 function KE:ClosePromptIfOwner(accept) end
 
 --- Wraps KE:CreatePrompt with the standard reload-required chrome

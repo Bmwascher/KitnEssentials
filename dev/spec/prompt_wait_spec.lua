@@ -1,8 +1,8 @@
--- Tier 2: Core/Widgets.lua -- the wait rule behind KE:CreatePrompt's
--- opts.waitIfBusy. The refusal rule pinned here: an unsolicited prompt never
--- replaces an open one. The rule is a pure predicate (KE.PromptWaits) rather
--- than a fake dialog, for the reason prompt_typed_gate_spec.lua gives: a
--- stateful fake of the singleton would encode its layout, not the rule.
+-- Tier 2: Core/Widgets.lua -- KE.PromptWaits, the predicate KE:CreatePrompt
+-- consults for opts.waitIfBusy: an unsolicited prompt waits while another is
+-- open. The predicate is tested rather than a fake dialog, for the reason
+-- prompt_typed_gate_spec.lua gives: a stateful fake of the singleton would
+-- encode its layout, not the rule.
 local mock = require("dev.spec._wow_mock")
 local helpers = require("dev.spec._helpers")
 
