@@ -261,30 +261,53 @@ local function ResolveInspectSlot(button)
     return unit, slotID
 end
 
+-- The gates a deferred pass re-checks when it runs: the module may have been
+-- switched off, or the sheet closed, in between.
+local function InspectSheetLive()
+    return InspectPanel:IsEnabled()
+        and InspectPanel.CP and InspectPanel.CP.db and InspectPanel.CP.db.Enabled
+        and InspectFrame and InspectFrame:IsShown()
+end
+
 -- Debounced, next-frame batch of the full inspect refresh. A first inspect fires
 -- a burst (per-slot button updates + INSPECT_READY + UNIT_INVENTORY_CHANGED) on the
 -- same frame Blizzard loads + renders the inspect UI; collapsing it into ONE
 -- deferred pass keeps that heavy tooltip-scan work off the busy load frame.
 local function QueueInspectUpdate()
     if inspectUpdatePending then return end
-    if not InspectPanel:IsEnabled() then return end
-    if not (InspectPanel.CP and InspectPanel.CP.db and InspectPanel.CP.db.Enabled) then return end
-    if not (InspectFrame and InspectFrame:IsShown()) then return end
+    if not InspectSheetLive() then return end
     inspectUpdatePending = true
     -- 0.2s (not 0.05) collapses bursty late-data events into far fewer full re-scans.
     -- Each re-scan allocates a C_TooltipInfo table per socketable slot, so a higher
     -- debounce directly cuts the transient garbage generated while inspecting.
     C_Timer.After(0.2, function()
         inspectUpdatePending = false
-        -- Re-checked, not assumed: this fires 0.2s later and the module may have
-        -- been switched off in between.
-        if InspectPanel:IsEnabled()
-            and InspectPanel.CP and InspectPanel.CP.db and InspectPanel.CP.db.Enabled
-            and InspectFrame and InspectFrame:IsShown() then
+        if InspectSheetLive() then
             InspectPanel:UpdateAllInspectSlots()
         end
     end)
 end
+
+-- One whole-sheet pass on the next frame for any number of same-frame requests:
+-- INSPECT_READY arrives in bursts, and a synchronous pass per event re-requested
+-- and re-rendered the whole sheet each time. A one-shot per burst, never a
+-- continuation loop. The flag belongs to the callback: it clears the flag and
+-- re-checks the gates itself, so OnDisable does not reset it.
+local coalescedPassPending = false
+
+local function RunCoalescedPass()
+    coalescedPassPending = false
+    if InspectSheetLive() then
+        InspectPanel:UpdateAllInspectSlots()
+    end
+end
+
+local function ScheduleCoalescedPass()
+    if coalescedPassPending then return end
+    coalescedPassPending = true
+    C_Timer.After(0, RunCoalescedPass)
+end
+InspectPanel._ScheduleCoalescedPass = ScheduleCoalescedPass
 
 ---------------------------------------------------------------------------------
 -- Lifecycle
@@ -701,6 +724,7 @@ function InspectPanel:SetupInspectSupport()
                 if not _self:IsEnabled() then return end
                 for _, e in ipairs(INSPECT_DATA_EVENTS) do f:RegisterEvent(e) end
                 StampInspectStart(InspectFrameGUID())
+                ScheduleCoalescedPass()
             end
             local function unregData()
                 for _, e in ipairs(INSPECT_DATA_EVENTS) do f:UnregisterEvent(e) end
@@ -746,13 +770,11 @@ function InspectPanel:SetupInspectSupport()
             if _self.CP and _self.CP._cpDbg then wipe(_self.CP._cpDbg) end          -- debug: re-allow dumps
             if _self.CP and _self.CP._cpDbgFilled then wipe(_self.CP._cpDbgFilled) end
             installHooks()
-            -- Render SYNCHRONOUSLY on INSPECT_READY (not via QueueInspectUpdate's
-            -- 0.2s debounce). On target switch, A's stale overlay FontStrings/icons
-            -- stay visible on the reused frames until a render overwrites them; the
-            -- debounce adds 0.2s of perceived "old gear" lag. Data is ready now.
-            -- Follow-up burst events (UNIT_INVENTORY_CHANGED, per-slot hooks) still
-            -- go through the debounced path; dirty cache makes those near-free.
-            _self:UpdateAllInspectSlots()
+            -- Next frame, not QueueInspectUpdate's 0.2s debounce: on a target
+            -- switch the old target's overlays stay on the reused frames until a
+            -- render overwrites them. Follow-up burst events (UNIT_INVENTORY_CHANGED,
+            -- per-slot hooks) still go through the debounced path.
+            ScheduleCoalescedPass()
         elseif event == "UNIT_INVENTORY_CHANGED" then
             -- Inspected unit's gear changed mid-inspect — re-pass to pick up the new
             -- item(s). RequestInspectSlot handles changed-itemID per slot correctly.
