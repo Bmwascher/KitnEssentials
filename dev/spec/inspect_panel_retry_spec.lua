@@ -39,3 +39,54 @@ describe("Inspect start: which INSPECT_READY counts", function()
         end
     end)
 end)
+
+-- A pending slot must never match the dirty key: that is what makes the next
+-- pass redraw a stand-in instead of leaving it on screen.
+describe("Inspect slot: the dirty-cache test", function()
+    it("never short-circuits a slot whose last render pended", function()
+        local unchanged = loadIP()._SlotUnchanged
+        local s = { itemLink = "L", enchantID = 7, ilvl = 250, gemHash = "", pending = true }
+        assert.is_false(unchanged(s, "L", 7, 250, ""))
+        s.pending = nil
+        assert.is_true(unchanged(s, "L", 7, 250, ""))
+    end)
+end)
+
+-- The retry bound. Only sweep renders spend a retry: a same-frame burst of
+-- event passes must not use up the budget before the data can land.
+describe("Inspect slot: the pending retry bound", function()
+    it("keeps arming through sweep renders 1-3 and settles on the fourth", function()
+        local step = loadIP()._PendingStep
+        local s = {}
+        assert.is_true(step(s, true, true, false))
+        assert.is_true(step(s, true, true, true))
+        assert.is_true(step(s, true, true, true))
+        assert.is_true(step(s, true, true, true))
+        assert.is_false(step(s, true, true, true))
+        assert.is_nil(s.pending)
+    end)
+
+    it("arms on event renders without spending a retry", function()
+        local step = loadIP()._PendingStep
+        local s = {}
+        for _ = 1, 12 do assert.is_true(step(s, true, true, false)) end
+        assert.is_nil(s.pendingRetries)
+        assert.is_true(s.pending)
+    end)
+
+    it("stays pending and arms nothing before the inspect is stamped", function()
+        local step = loadIP()._PendingStep
+        local s = {}
+        assert.is_false(step(s, true, false, false))
+        assert.is_true(s.pending)
+        assert.is_nil(s.pendingRetries)
+    end)
+
+    it("clears the pending flag and the retry count once the slot resolves", function()
+        local step = loadIP()._PendingStep
+        local s = { pending = true, pendingRetries = 2 }
+        assert.is_false(step(s, nil, true, true))
+        assert.is_nil(s.pending)
+        assert.is_nil(s.pendingRetries)
+    end)
+end)
