@@ -593,10 +593,10 @@ function LR:SetupRollBars()
             KE:Print("Loot Roll: could not silence the default roll windows, so both stacks will show.")
         end
         self._barsWired = true
+        -- The layout pass's call ran before the wiring, so a prompt already on
+        -- screen is placed here. Later setups anchor through the layout pass.
+        LR.AnchorBonusRoll()
     end
-    -- On first setup the layout pass's call ran before the wiring, so a
-    -- prompt already on screen is placed here.
-    LR.AnchorBonusRoll()
 end
 
 function LR:TeardownRollBars()
