@@ -45,10 +45,10 @@ describe("SpecPicker class resolution", function()
     end)
 end)
 
--- A pick rebuilds the whole page, and that rebuild orphans every frame on the
--- page permanently and reads as a flash. Re-picking the class already on screen
--- has to refuse it. In game the refusal shows up only as the absence of a flash,
--- which is why it is pinned here rather than left to smoke.
+-- Re-picking the class already on screen has to draw nothing: every redraw
+-- orphans its frames permanently, and the fallback rebuilds the whole page. In
+-- game the refusal shows up only as the absence of a redraw, which is why it is
+-- pinned here rather than left to smoke.
 describe("SpecPicker rebuild on pick", function()
     local STUBBED = {
         "C_SpecializationInfo", "C_Timer", "UnitClass",
@@ -61,8 +61,8 @@ describe("SpecPicker rebuild on pick", function()
         for _, key in ipairs(STUBBED) do saved[key] = _G[key] end
 
         _G.C_SpecializationInfo = {}
-        -- Fires straight through: the picker defers its rebuild by a frame, and
-        -- the assertion below is on whether it happens at all, not when.
+        -- Fires straight through: the fallback defers its rebuild by a frame,
+        -- and the assertions are on whether it happens at all, not when.
         _G.C_Timer = { After = function(_, fn) fn() end }
         _G.UnitClass = function() return "Evoker", "EVOKER" end
         _G.LOCALIZED_CLASS_NAMES_MALE = { EVOKER = "Evoker", MAGE = "Mage" }
@@ -85,7 +85,37 @@ describe("SpecPicker rebuild on pick", function()
         for _, key in ipairs(STUBBED) do _G[key] = saved[key] end
     end)
 
-    it("rebuilds the page only when the pick changes the class on screen", function()
+    it("with onPick, hands a changed class to onPick and never rebuilds the page", function()
+        local handed = {}
+        GUIFrame:CreateClassPickerRow(nil, {
+            scope = "test", classTokens = { "EVOKER", "MAGE" },
+            onPick = function(key) handed[#handed + 1] = key end,
+        })
+
+        picked("EVOKER")
+        assert.same({}, handed, "re-picked the class already shown")
+
+        picked("MAGE")
+        assert.same({ "MAGE" }, handed, "picked a different class")
+        assert.equals(0, refreshes)
+    end)
+
+    it("with onPick, refuses the class the last pick put on screen, not the first one", function()
+        local handed = {}
+        GUIFrame:CreateClassPickerRow(nil, {
+            scope = "test", classTokens = { "EVOKER", "MAGE" },
+            onPick = function(key) handed[#handed + 1] = key end,
+        })
+
+        picked("MAGE")
+        picked("MAGE")
+        assert.same({ "MAGE" }, handed, "re-picked the class the pick put on screen")
+
+        picked("EVOKER")
+        assert.same({ "MAGE", "EVOKER" }, handed, "picked the class shown at build time")
+    end)
+
+    it("without onPick, rebuilds the page only when the pick changes the class on screen", function()
         local _, shown = GUIFrame:CreateClassPickerRow(nil, {
             scope = "test", classTokens = { "EVOKER", "MAGE" },
         })

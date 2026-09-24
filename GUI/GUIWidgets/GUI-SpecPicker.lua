@@ -148,8 +148,8 @@ local function ResetSessionClass()
     end
 end
 
--- Fires on a real sidebar item switch and on window close, but not on the
--- in-place rebuild the dropdown's own callback triggers, so the pick survives it.
+-- Fires on a real sidebar item switch and on window close, but not on a
+-- rebuild of the same page, so a pick survives one.
 GUIFrame:RegisterContentCleanup("SpecPickerClass", ResetSessionClass)
 
 function GUIFrame.ResolvePickerClass(sessionToken, playerToken, tokens)
@@ -178,8 +178,10 @@ function GUIFrame.BuildClassOptions(tokens, playerClass)
     return options
 end
 
--- Config: { scope, classTokens, label }. Returns the row and the class token the
--- caller should draw, so the caller never reads the picker's state itself.
+-- Config: { scope, classTokens, label, onPick }. Returns the row and the class
+-- token the caller should draw, so the caller never reads the picker's state
+-- itself. onPick(key) redraws the caller's own rows for a new class; without
+-- it, a new class rebuilds the whole page a frame later.
 function GUIFrame:CreateClassPickerRow(parent, config)
     if type(config) ~= "table" then config = {} end
 
@@ -199,18 +201,24 @@ function GUIFrame:CreateClassPickerRow(parent, config)
         options = options,
         value = shownClass,
         callback = function(key)
-            -- Close the list instantly, THEN rebuild a frame later: the animated
-            -- close was still running when the rebuild hit, and the orphaned list
-            -- frame flashed at the bottom of the screen.
+            -- Closed instantly before anything is redrawn: a list still
+            -- animating shut when its page is rebuilt is orphaned mid-close and
+            -- stays on screen.
             if dropdown and dropdown._closeDropdown then
                 dropdown._closeDropdown(true)
             end
-            -- Re-picking the class already on screen draws nothing new, and
-            -- RefreshContent is a whole-page teardown the player sees as a flash.
-            -- Left unstored so closing the window does not mark the page dirty.
+            -- Re-picking the class already on screen draws nothing new. Left
+            -- unstored so closing the window does not mark the page dirty.
             if key == shownClass then return end
             sessionClass[scope] = key
-            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+            if config.onPick then
+                -- The row survives the caller's redraw, so the refusal above
+                -- has to compare against the class it now shows.
+                shownClass = key
+                config.onPick(key)
+            else
+                C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+            end
         end,
     })
     row:AddWidget(dropdown, 1)
