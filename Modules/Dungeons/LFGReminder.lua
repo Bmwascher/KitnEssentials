@@ -226,7 +226,7 @@ end
 
 -- The one writer of the role row, the "Disable Feature" anchor and the popup
 -- height. The popup parents a secure button, so every caller runs out of
--- combat. Hiding "Disable Feature" trims 20px; the role row adds ROLE_H.
+-- combat.
 ApplyPopupLayout = function()
     if not popup then return end
     local showDisable = not LR.db or LR.db.ShowDisable ~= false

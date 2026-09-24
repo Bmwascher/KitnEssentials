@@ -228,7 +228,7 @@ local SPEC_ROW_HEIGHT = 26
 -- Config: { db, scope, note, onChange }. db holds EnabledSpecs; onChange runs
 -- after every write. Returns the card and the next offset.
 function GUIFrame:CreateSpecEnableCard(scrollChild, yOffset, config)
-    if type(config) ~= "table" then config = {} end
+    assert(type(config) == "table" and type(config.db) == "table", "CreateSpecEnableCard requires db")
     local db = config.db
     if not db.EnabledSpecs then db.EnabledSpecs = {} end
 
