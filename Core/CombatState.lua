@@ -298,8 +298,10 @@ function CombatState:Freeze(reason)
     self.watching = false
     self:_Broadcast("OnClockTick", self:Duration())    -- the clock lands on the final value
     self:_Broadcast("OnStop", reason)
-    -- A bound end re-armed here would poll the same stuck flags forever.
-    if reason ~= "pvp" and reason ~= "groupBound" and self.deps.groupInCombat() then
+    -- A bound end re-armed here would poll the same stuck flags forever. With
+    -- no listener left (the last one left during OnStop) the machine is idle.
+    if reason ~= "pvp" and reason ~= "groupBound" and next(self.listeners)
+        and self.deps.groupInCombat() then
         self.watching = true
         self:_ArmPoll()
     end
@@ -619,6 +621,9 @@ function CombatState:RegisterListener(key, callbacks)
     if not next(self.listeners) then
         if DEBUG_CS then KE:Print("[CS] first listener: events on") end
         self.deps.setEventsActive(true)
+        -- Any ENCOUNTER_START fired while the events were off. StartFight never
+        -- writes the mark, so the start below keeps it.
+        self.inEncounter = self.deps.encounterLive() == true
         self:_StartFromGame()
     end
     self.listeners[key] = callbacks

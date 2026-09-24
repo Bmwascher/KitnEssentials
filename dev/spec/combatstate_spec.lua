@@ -4,10 +4,10 @@
 -- and a manual scheduler whose handles record their own cancels. Specs read
 -- a handful of internal fields directly (playerCombat, groupOnly, watching,
 -- pvpBlocked, groupBlocked, inEncounter, finalizePending, pendingGen,
--- clearTicks); the group bound's count-restart case
--- sets inEncounter and finalizePending for one tick, and its block case
--- clears groupBlocked for one row: the class keeps no closure privacy over
--- them, and several design cases have no cheaper public accessor.
+-- clearTicks); the group bound's count-restart case sets inEncounter and
+-- finalizePending for one tick, and its block case clears groupBlocked for
+-- one row: the class keeps no closure privacy over them, and several design
+-- cases have no cheaper public accessor.
 local L = require("dev.spec._ke_loader")
 
 local function newScheduler()
@@ -516,6 +516,25 @@ describe("CombatState machine", function()
             assert.equals(0, rec.count("OnStop"))
             assert.is_false(idle:IsFrozen())
         end)
+
+        it("with the player in combat on a live group fight, promotes: the pin and generation stand and no OnStart", function()
+            local cs = newCS()
+            deps.playerInCombat = function() return false end
+            deps.sessionDuration = function() return true, 5 end
+            cs:OnEncounterStart()
+            lastClock(sched).fn()
+            assert.is_true(cs.groupOnly)
+            local gen = cs:Generation()
+            local rec = newRecorder()
+            cs:RegisterListener("spec", rec.callbacks)
+            deps.playerInCombat = function() return true end
+            cs:OnEnteringWorld()
+            assert.is_true(cs.playerCombat)
+            assert.is_false(cs.groupOnly)
+            assert.equals(5, cs:GetDuration())
+            assert.equals(gen, cs:Generation())
+            assert.equals(0, rec.count("OnStart"))
+        end)
     end)
 
     describe("listeners", function()
@@ -959,6 +978,8 @@ describe("CombatState machine", function()
             for _, case in ipairs(cases) do
                 events = {}
                 deps.groupInCombat = function() return false end
+                -- No boss up: a seeded mark would hold the bound row open.
+                deps.encounterLive = function() return false end
                 local cs = bareCS()
                 local rec = newRecorder()
                 cs:RegisterListener("spec", rec.callbacks)
@@ -980,6 +1001,35 @@ describe("CombatState machine", function()
                 assert.is_false(cs.groupBlocked, case.name)
                 assert.equals(stops, rec.count("OnStop"), case.name)
             end
+        end)
+
+        it("the first listener seeds the encounter mark from the game, so a group fight joined mid-boss is not bounded", function()
+            local cases = {
+                { name = "an encounter in progress", live = true, expectMark = true, expectLive = true },
+                { name = "no encounter in progress", live = false, expectMark = false, expectLive = false },
+            }
+            for _, case in ipairs(cases) do
+                deps.groupInCombat = function() return true end
+                deps.inInstance = function() return true end
+                deps.encounterLive = function() return case.live end
+                local cs = bareCS()
+                cs:RegisterListener("spec", {})
+                assert.equals(case.expectMark, cs.inEncounter, case.name)
+                local poll = lastPoll(sched)
+                for _ = 1, 20 do poll.fn() end
+                assert.equals(case.expectLive, cs:IsLive(), case.name)
+            end
+        end)
+
+        it("a freeze whose OnStop removes the last listener does not re-arm the watch", function()
+            local cs = bareCS()
+            cs:RegisterListener("spec", { OnStop = function() cs:UnregisterListener("spec") end })
+            cs:OnRegenDisabled()
+            deps.groupInCombat = function() return true end
+            cs:OnEncounterEnd(1)
+            assert.same({ true, false }, events)
+            assert.is_nil(lastPoll(sched))
+            assert.is_false(cs.watching)
         end)
     end)
 end)
