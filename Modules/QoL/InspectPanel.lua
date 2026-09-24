@@ -223,12 +223,22 @@ end
 -- The inspect frame shows from inside the first INSPECT_READY, before this
 -- file's data events are registered, so the frame's showing is where an
 -- inspect starts.
-local function StampInspectStart(guid)
+local function StampInspectStart(guid, now)
     if not guid then return end
     _currentInspectGUID = guid
-    _inspectReadyTime[guid] = GetTime()
+    _inspectReadyTime[guid] = now or GetTime()
     RestartArmedSweep()
 end
+
+-- A repeat INSPECT_READY for the target inside the grace window does not
+-- restart the inspect: every restamp restarts an armed sweep, so replies under
+-- RETRY_DELAY apart would hold it off. After a restamp the next is at least the
+-- window away, longer than RETRY_DELAY, so an armed sweep restarts at most once.
+local function ShouldRestamp(guid, currentGUID, stampedAt, now)
+    if guid ~= currentGUID or stampedAt == nil then return true end
+    return now - stampedAt >= INSPECT_PACKET_GRACE
+end
+InspectPanel._ShouldRestamp = ShouldRestamp
 
 -- Whether a render that drew a stand-in arms the sweep. Only sweep renders
 -- spend a retry, so a same-frame burst of event passes cannot use up the budget
@@ -750,10 +760,14 @@ function InspectPanel:SetupInspectSupport()
             if arg1 == "Blizzard_InspectUI" then installHooks() end
         elseif event == "INSPECT_READY" then
             -- Any inspect reply arrives here, another addon's included; only the
-            -- inspect frame's own unit re-stamps the start and runs a pass.
+            -- inspect frame's own unit runs a pass, and it re-stamps the start
+            -- only when ShouldRestamp says so.
             local frameGUID = InspectFrameGUID()
             if not ReadyForFrame(arg1, frameGUID) then return end
-            StampInspectStart(frameGUID)
+            local now = GetTime()
+            if ShouldRestamp(frameGUID, _currentInspectGUID, _inspectReadyTime[frameGUID], now) then
+                StampInspectStart(frameGUID, now)
+            end
             -- New inspect target: clear the per-slot pending queue so the new unit's
             -- gear gets requested fresh, then ensure the hooks exist and queue a pass.
             if _self._inspectQueue then wipe(_self._inspectQueue) end

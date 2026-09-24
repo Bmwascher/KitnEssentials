@@ -42,6 +42,25 @@ describe("Inspect start: which INSPECT_READY counts", function()
     end)
 end)
 
+-- Each restamp restarts an armed sweep, so a stream of replies for one target
+-- inside the grace window must not restamp, or the sweep never fires.
+describe("Inspect start: which INSPECT_READY restamps", function()
+    it("restamps a new target, or the same one with no stamp or past the window", function()
+        local restamp = loadIP()._ShouldRestamp
+        local cases = {
+            { name = "another target", guid = "Player-2", current = "Player-1", at = 10, now = 10.2, want = true },
+            { name = "same target, never stamped", guid = "Player-1", current = "Player-1", now = 10.2, want = true },
+            { name = "same target inside the window", guid = "Player-1", current = "Player-1",
+              at = 10, now = 10.9, want = false },
+            { name = "same target at the window's edge", guid = "Player-1", current = "Player-1",
+              at = 10, now = 11, want = true },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.want, restamp(c.guid, c.current, c.at, c.now), c.name)
+        end
+    end)
+end)
+
 -- A pending slot must never match the dirty key: that is what makes the next
 -- pass redraw a stand-in instead of leaving it on screen.
 describe("Inspect slot: the dirty-cache test", function()
