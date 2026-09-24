@@ -283,7 +283,8 @@ function InspectPanel:RenderInspectSlot(button)
     -- renders further down all reuse it. Each fetch allocates a fresh tooltip
     -- table, so this one read replaces what used to be up to four.
     local data = link and C_TooltipInfo.GetInventoryItem(unit, slotID)
-    local result = link and CP:ScanItemSockets(unit, slotID, data)
+    -- No gem row is drawn outside the socketable set, so no scan there either.
+    local result = link and CP:IsSocketableSlot(slotID) and CP:ScanItemSockets(unit, slotID, data)
     local gemHash = ComputeGemHash(result)
 
     local s = _inspectSlotState(guid, slotID)

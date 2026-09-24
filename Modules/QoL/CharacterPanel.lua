@@ -130,6 +130,12 @@ local socketableSlots = { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 }
 local socketableSlotSet = {}
 for _, slotID in ipairs(socketableSlots) do socketableSlotSet[slotID] = true end
 
+-- The inspect render skips its socket scan outside this set, so both sides
+-- read the one table the gem row gates on.
+function CP:IsSocketableSlot(slotID)
+    return socketableSlotSet[slotID] or false
+end
+
 -- Enchant label processing: map full effect names to short stat-based labels,
 -- strip the "Enchant <Slot> - " prefixes, then abbreviate stat words. Anything
 -- not in the tables falls through to a length-truncated raw name.
