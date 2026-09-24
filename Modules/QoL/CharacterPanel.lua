@@ -1664,29 +1664,35 @@ end
 CP._TrackPending = TrackPending
 
 -- Whether an inspect slot's render drew a stand-in that must be read again.
--- The ownership gates repeat the render functions' on purpose: this is the one
--- place that says what pends, so an element another addon draws never does.
+-- The one place that says what pends, ownership included, so an element
+-- another addon draws never does. The lookups come last, for a render that
+-- may have drawn a stand-in KE displays.
 -- `provisional`: the inspect data may not have landed yet, so an absent
 -- enchant ID or track may only mean it has not arrived.
-function CP:InspectEnchantPending(held, provisional, fellBack, enchantID, enchantable, euiOwnsEnchant)
+function CP:InspectEnchantPending(unit, slotID, held, provisional, fellBack, enchantID)
     local db = self.db
-    if not (held and db) or euiOwnsEnchant then return nil end
-    if fellBack and db.ShowEnchantNames then return true end
-    if provisional and not enchantID and enchantable
-        and (db.ShowEnchantNames or db.ShowEnchants ~= false) then
-        return true
-    end
-    return nil
+    if not (held and db) then return nil end
+    local byFallback = fellBack and db.ShowEnchantNames
+    local byWindow = provisional and not enchantID
+        and (db.ShowEnchantNames or db.ShowEnchants ~= false)
+    if not (byFallback or byWindow) then return nil end
+    if KE:EUIDrawsSlotElement(unit, "enchant") then return nil end
+    if byFallback then return true end
+    return self:IsEnchantableSlot(unit, slotID) and true or nil
 end
 
-function CP:InspectTrackPending(held, provisional, data, w, euiOwnsIlvl, euiOwnsTrack)
+function CP:InspectTrackPending(unit, held, provisional, data, w)
     local db = self.db
-    if not (held and db) or w or euiOwnsTrack then return nil end
-    local drawn = db.TrackIndicatorsEnabled
-        or (db.ShowUpgradeProgress and db.ShowSlotItemLevel and not euiOwnsIlvl)
-    if not drawn then return nil end
-    if TrackPending(held, data) then return true end
-    return provisional and true or nil
+    if not (held and db) or w then return nil end
+    local corner = db.TrackIndicatorsEnabled
+    local mergedOnly = not corner and db.ShowUpgradeProgress and db.ShowSlotItemLevel
+    if not (corner or mergedOnly) then return nil end
+    if not (provisional or TrackPending(held, data)) then return nil end
+    if KE:EUIDrawsSlotElement(unit, "track") then return nil end
+    -- Item-level ownership matters only when the merged span is KE's only
+    -- track display; the corner letter does not depend on it.
+    if mergedOnly and KE:EUIDrawsSlotElement(unit, "ilvl") then return nil end
+    return true
 end
 
 function CP:CreateTrackOverlay(slotFrame, slotID)

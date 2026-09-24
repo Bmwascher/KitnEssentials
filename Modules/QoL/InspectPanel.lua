@@ -462,33 +462,12 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
         wCorner = CP:UpdateSlotTrackIndicator(button, slotID, unit, data)
     end
 
-    -- Only a render that may have drawn a stand-in KE displays pays for the
-    -- ownership lookups and the predicates, which stay the rule. A render whose
-    -- KE display is off calls none of them, nor, once the grace window has
-    -- passed, does a complete one.
-    local db = CP.db
-    local w = wDetail or wCorner
-    local enchantPending, trackPending
-    if link and (fellBack or (provisional and not enchantID
-        and (db.ShowEnchantNames or db.ShowEnchants ~= false))) then
-        local euiOwnsEnchant = KE:EUIDrawsSlotElement(unit, "enchant")
-        if not euiOwnsEnchant then
-            local enchantable = provisional and not enchantID
-                and CP:IsEnchantableSlot(unit, slotID) or false
-            enchantPending = CP:InspectEnchantPending(link, provisional, fellBack, enchantID,
-                enchantable, false)
-        end
-    end
-    local corner = db.TrackIndicatorsEnabled
-    local mergedOnly = not corner and db.ShowUpgradeProgress and db.ShowSlotItemLevel
-    if link and not w and (corner or mergedOnly)
-        and (provisional or not (data and data.lines))
-        and not KE:EUIDrawsSlotElement(unit, "track") then
-        -- Item-level ownership matters only when the merged span is KE's only
-        -- track display; the corner letter does not depend on it.
-        local euiOwnsIlvl = mergedOnly and KE:EUIDrawsSlotElement(unit, "ilvl") or false
-        trackPending = CP:InspectTrackPending(link, provisional, data, nil, euiOwnsIlvl, false)
-    end
+    -- The predicates own the rule and the ownership lookups, which they make
+    -- only where a stand-in KE displays may have been drawn.
+    local enchantPending = CP:InspectEnchantPending(unit, slotID, link, provisional,
+        fellBack, enchantID)
+    local trackPending = CP:InspectTrackPending(unit, link, provisional, data,
+        wDetail or wCorner)
     -- Read before PendingStep, which clears the count once the slot resolves or
     -- settles: the debug line must still say which pending sweep this render
     -- was. A sweep render of a slot that had not pended (a gem retry) counts 0.
