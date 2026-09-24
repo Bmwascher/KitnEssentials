@@ -256,3 +256,113 @@ describe("Upgrade dirty key", function()
             CP._TrackDirtyKey({ track = M, cur = "6", max = "6" }))
     end)
 end)
+
+---------------------------------------------------------------------------------
+-- Inspect slot: what pends
+--
+-- The rule behind the inspect retry. A case that should pend and does not
+-- leaves a stand-in on screen; one that pends and should not re-reads the slot
+-- until the retry cap.
+---------------------------------------------------------------------------------
+describe("Inspect slot: what pends", function()
+    local LINK = "|cffa335ee|Hitem:1|h[x]|h|r"
+    local LINES = { lines = {} }
+    local W = { track = { letter = "M", color = { 1, 1, 1 } }, cur = "4", max = "6" }
+    local function withDb(over)
+        local CP = loadCP()
+        local d = { ShowEnchantNames = true, TrackIndicatorsEnabled = true }
+        for k, v in pairs(over or {}) do d[k] = v end
+        CP.db = d
+        return CP
+    end
+
+    it("pends an enchant fallback inside and outside the window, and not a resolved label", function()
+        local CP = withDb()
+        assert.is_true(CP:InspectEnchantPending(LINK, true, true, 7, true, false))
+        assert.is_true(CP:InspectEnchantPending(LINK, false, true, 7, true, false))
+        assert.is_nil(CP:InspectEnchantPending(LINK, true, nil, 7, true, false))
+    end)
+
+    -- Inside the window an absent piece may only mean the data has not landed;
+    -- outside it, only an unusable tooltip still says so.
+    it("pends a missing piece only inside the window, and an unusable tooltip in both", function()
+        local CP = withDb()
+        local cases = {
+            { name = "track found none",
+              fn = function(p) return CP:InspectTrackPending(LINK, p, LINES, nil, false, false) end,
+              inside = true },
+            { name = "track found",
+              fn = function(p) return CP:InspectTrackPending(LINK, p, LINES, W, false, false) end },
+            { name = "enchantable with no enchant ID",
+              fn = function(p) return CP:InspectEnchantPending(LINK, p, nil, nil, true, false) end,
+              inside = true },
+            { name = "unusable tooltip where KE draws a track",
+              fn = function(p) return CP:InspectTrackPending(LINK, p, nil, nil, false, false) end,
+              inside = true, outside = true },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.inside, c.fn(true), c.name .. ", inside")
+            assert.equals(c.outside, c.fn(false), c.name .. ", outside")
+        end
+    end)
+
+    it("pends a track only where KE draws one", function()
+        local MERGED_ONLY = { TrackIndicatorsEnabled = false, ShowUpgradeProgress = true, ShowSlotItemLevel = true }
+        local cases = {
+            { name = "corner on", db = {}, ilvl = false, track = false, want = true },
+            { name = "merged span only", db = MERGED_ONLY, ilvl = false, track = false, want = true },
+            { name = "track owned by another addon", db = {}, ilvl = false, track = true },
+            { name = "item level owned by another addon, corner off", db = MERGED_ONLY, ilvl = true, track = false },
+            { name = "both off", db = { TrackIndicatorsEnabled = false }, ilvl = false, track = false },
+        }
+        for _, c in ipairs(cases) do
+            local CP = withDb(c.db)
+            assert.equals(c.want, CP:InspectTrackPending(LINK, false, nil, nil, c.ilvl, c.track), c.name)
+        end
+    end)
+
+    it("pends nothing for an empty slot, whatever else is set", function()
+        local CP = withDb()
+        assert.is_nil(CP:InspectEnchantPending(nil, true, true, nil, true, false))
+        assert.is_nil(CP:InspectTrackPending(nil, true, nil, nil, false, false))
+    end)
+
+    it("never pends an enchant another addon draws", function()
+        local CP = withDb()
+        assert.is_nil(CP:InspectEnchantPending(LINK, true, true, 7, true, true))
+        assert.is_nil(CP:InspectEnchantPending(LINK, true, nil, nil, true, true))
+    end)
+end)
+
+-- The level goes straight into GetExpansionForLevel, and an inspected unit's
+-- level can be secret. A refusal rule, so it is specced.
+--
+-- UnitLevel answers from a queue, one value per read, so a second read inside
+-- the decision would hand GetExpansionForLevel the NEXT value (a secret) and
+-- the recorder would see it. What busted cannot show is a `== nil` test run on
+-- a secret before the secret check: Lua 5.1 calls __eq only when both operands
+-- are tables, so no stand-in can make a comparison with nil observable. That
+-- order is checked by reading the diff and by the api-validator gate.
+describe("Inspect slot: enchantable check", function()
+    local SECRET = {}
+    local function withLevels(levels)
+        local asked, reads = {}, 0
+        local CP = loadCP(nil, {
+            UnitLevel = function() reads = reads + 1; return levels[reads] end,
+            issecretvalue = function(v) return v == SECRET end,
+            GetExpansionForLevel = function(l) asked[#asked + 1] = l; return 11 end,
+        })
+        return CP, asked
+    end
+
+    it("refuses a secret or missing level, and decides on the one level it checked", function()
+        for _, c in ipairs({ { name = "secret level", levels = { SECRET } }, { name = "missing level", levels = {} } }) do
+            local CP, asked = withLevels(c.levels)
+            assert.is_false(CP:IsEnchantableSlot("target", 3), c.name)
+            assert.equals(0, #asked, c.name)
+        end
+        local CP, asked = withLevels({ 90, SECRET })
+        assert.is_true(CP:IsEnchantableSlot("target", 3))
+        assert.same({ 90 }, asked)
+    end)
+end)
