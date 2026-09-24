@@ -336,7 +336,6 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
                                 -- deleting it would reset them to the preset default.
                             end
                             ApplySettings()
-                            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
                         end,
                     }), 1 / PER_ROW)
 
