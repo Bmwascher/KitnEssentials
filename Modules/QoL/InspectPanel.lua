@@ -423,8 +423,9 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
     -- Single C_TooltipInfo read for the whole slot render: the gem scan here
     -- (dirty-hash via ComputeGemHash + suspect detection) AND the detail/track
     -- renders further down all reuse it. Each fetch allocates a fresh tooltip
-    -- table, so this one read replaces what used to be up to four.
-    local data = link and C_TooltipInfo.GetInventoryItem(unit, slotID)
+    -- table, so this one read replaces what used to be up to four. An empty
+    -- read is false, not nil, so no consumer reads it again.
+    local data = link and (C_TooltipInfo.GetInventoryItem(unit, slotID) or false)
     -- No gem row is drawn outside the socketable set, so no scan there either.
     local result = link and socketable and CP:ScanItemSockets(unit, slotID, data)
     local gemHash = ComputeGemHash(result)

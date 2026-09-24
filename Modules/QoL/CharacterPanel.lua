@@ -530,10 +530,11 @@ CP._ParseEnchantLine = ParseEnchantLine
 -- Effect name and rank from the tooltip's "Enchanted: ..." line, the text after
 -- the prefix as the tooltip gives it: ProcessEnchantText strips and maps it.
 -- data (optional): pre-fetched C_TooltipInfo.GetInventoryItem(unit, slot) table
--- shared by the caller's render pass, so one read serves every consumer.
+-- shared by the caller's render pass, so one read serves every consumer. false
+-- is a read that came back empty; only nil (nobody has read) reads here.
 local function GetSlotEnchantName(unit, slot, data)
     unit = unit or "player"
-    data = data or C_TooltipInfo.GetInventoryItem(unit, slot)
+    if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slot) end
     if not data or not data.lines then return nil end
     local prefix = ENCHANTED_TOOLTIP_LINE:gsub("%%s.*$", "")  -- "Enchanted: "
     for _, line in ipairs(data.lines) do
@@ -1542,7 +1543,7 @@ end
 -- every other slot of the same track.
 function CP:GetItemTrack(unit, slotID, data)
     unit = unit or "player"
-    data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
+    if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
     if not data or not data.lines then return nil end
 
     local isCrafted = false
@@ -2075,7 +2076,8 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
 
     -- Fetch after the dirty check so a short-circuited call allocates nothing;
     -- both tooltip consumers below (enchant label, gem scan) share this read.
-    data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
+    -- false is a read that came back empty, and is not repeated.
+    if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
 
     local detail = self:CreateSlotDetail(slotFrame, slotID)
     local fontFace    = self.db.FontFace
@@ -2375,7 +2377,7 @@ function CP:ScanItemSockets(unit, slotID, data)
     -- rendered. Socket lines come back in physical order, so the running counter IS
     -- each socket's true index for both filled and empty — no position reconciliation
     -- needed.
-    data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
+    if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
     local lines = data and data.lines
     if not lines then
         -- Inspect: no tooltip data means nothing to show. Player: fall through
