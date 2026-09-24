@@ -344,7 +344,9 @@ function InspectPanel:OnEnable()
             self.eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
             self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
             StampInspectStart(InspectFrameGUID())
-            self:UpdateAllInspectSlots()
+            -- Next frame: on a first enable regData has already asked for this
+            -- pass, and the two requests are one.
+            ScheduleCoalescedPass()
         end
     end
 end
