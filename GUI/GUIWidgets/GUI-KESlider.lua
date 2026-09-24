@@ -190,6 +190,19 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         thumbR, thumbG, thumbB, thumbA = borderColorTo.r, borderColorTo.g, borderColorTo.b, borderColorTo.a
     end)
 
+    local throttleDelay = 0.1 -- 100ms between updates
+    local lastUpdate = 0
+    -- Set when the throttle drops a change. Without the flush, the last step of
+    -- a fast drag, click run or typed value never reaches the callback, and the
+    -- db keeps the value before it.
+    local dropped = false
+    local function FlushDropped()
+        if not dropped or not row._callback then return end
+        dropped = false
+        lastUpdate = GetTime()
+        row._callback(slider:GetValue())
+    end
+
     -- Stepper buttons (left/right arrows)
     local stepperSize = 20
 
@@ -214,6 +227,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         local minVal = slider:GetMinMaxValues()
         local newVal = math_max(minVal, currentVal - step)
         slider:SetValue(newVal)
+        FlushDropped()
     end)
 
     -- Left stepper hover animation
@@ -288,6 +302,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         local _, maxVal = slider:GetMinMaxValues()
         local newVal = math_min(maxVal, currentVal + step)
         slider:SetValue(newVal)
+        FlushDropped()
     end)
 
     -- Right stepper hover animation
@@ -444,8 +459,6 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         end
     end
 
-    local throttleDelay = 0.1 -- 100ms between updates
-    local lastUpdate = 0
     slider:SetScript("OnValueChanged", function(self, val)
         UpdateFill()
         -- Silent SetValue (row:SetValue(v, true) — e.g. a neighbour-slider
@@ -456,9 +469,11 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         if not row._callback then return end
         local currentTime = GetTime()
         if currentTime - lastUpdate < throttleDelay then
+            dropped = true
             return
         end
         lastUpdate = currentTime
+        dropped = false
         row._callback(val)
     end)
 
@@ -541,6 +556,11 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         end
     end)
 
+    -- A typed value commits through the same throttled SetValue. These hooks
+    -- run after the commit handlers above.
+    valueEdit:HookScript("OnEnterPressed", FlushDropped)
+    valueEdit:HookScript("OnEditFocusLost", FlushDropped)
+
     -- Add hover animation for editbox
     valueEdit:SetScript("OnEnter", function(self)
         if not valueEdit:HasFocus() then
@@ -577,6 +597,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
                 -- Not hovering, animate to normal state (textSecondary alpha 0.6)
                 AnimateThumbColor(false, false)
             end
+            FlushDropped()
         end
     end)
 
@@ -604,6 +625,9 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     function row:SetValue(val, silent)
         if silent then
+            -- A silent value supersedes a dropped change; the flush must not
+            -- send it to the callback.
+            dropped = false
             local saved = row._callback
             row._callback = nil
             slider:SetValue(val)
@@ -625,6 +649,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         -- between modules with different ranges. silent=true suppresses by
         -- the same save/clear/restore pattern row:SetValue uses.
         if silent then
+            dropped = false
             local saved = row._callback
             row._callback = nil
             slider:SetMinMaxValues(minVal, maxVal)
