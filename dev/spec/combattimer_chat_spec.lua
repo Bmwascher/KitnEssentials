@@ -1,44 +1,40 @@
 -- Modules/Combat/CombatTimer.lua -- the chat-line refusal rule in CT:OnStop.
--- The frames, the OnUpdate ticker and the KE.CombatState event wiring are
--- verified in game; this is the one rule a later edit breaks silently.
+-- The frames, the paint ticker and the event wiring are verified in game;
+-- this is the one rule a later edit breaks silently.
 local L = require("dev.spec._ke_loader")
 
 describe("combat timer chat line", function()
-    local CT, KE, printed
+    local CT, KE, printed, lastLine
 
-    local function newCT(combatState)
-        CT, KE = L.loadCombatTimer({ CombatState = combatState })
-        printed = 0
-        KE.Print = function() printed = printed + 1 end
+    local function newCT()
+        CT, KE = L.loadCombatTimer()
+        printed, lastLine = 0, nil
+        KE.Print = function(_, msg)
+            printed = printed + 1
+            lastLine = msg
+        end
         CT.db = { Format = "MM:SS", ShowChatMessage = true }
+        CT.span = 12
         return CT
     end
 
-    it("prints no chat line on reset, on a fight the player never joined, or when disabled", function()
+    it("prints no chat line on a loading-screen reset or when disabled", function()
         local cases = {
-            { name = "reason is reset", reason = "reset", playerJoined = true, showChatMessage = true },
-            { name = "PlayerJoined is false", reason = "combat", playerJoined = false, showChatMessage = true },
-            { name = "ShowChatMessage is false", reason = "combat", playerJoined = true, showChatMessage = false },
+            { name = "reason is reset", reason = "reset", showChatMessage = true },
+            { name = "ShowChatMessage is false", reason = "stop", showChatMessage = false },
         }
         for _, case in ipairs(cases) do
-            newCT({
-                PlayerJoined = function() return case.playerJoined end,
-                GetDuration = function() return 12 end,
-                GetEngagementDuration = function() return 12 end,
-            })
+            newCT()
             CT.db.ShowChatMessage = case.showChatMessage
             CT:OnStop(case.reason)
             assert.equals(0, printed, case.name)
         end
     end)
 
-    it("prints a chat line on an ordinary combat end with all three conditions satisfied", function()
-        newCT({
-            PlayerJoined = function() return true end,
-            GetDuration = function() return 12 end,
-            GetEngagementDuration = function() return 12 end,
-        })
-        CT:OnStop("combat")
+    it("prints the stopped span on an ordinary stop", function()
+        newCT()
+        CT:OnStop("stop")
         assert.equals(1, printed)
+        assert.equals("Combat lasted [00:12]", lastLine)
     end)
 end)
