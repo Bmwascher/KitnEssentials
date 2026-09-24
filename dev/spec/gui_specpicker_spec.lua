@@ -49,7 +49,7 @@ end)
 -- orphans its frames permanently, and the fallback rebuilds the whole page. In
 -- game the refusal shows up only as the absence of a redraw, which is why it is
 -- pinned here rather than left to smoke.
-describe("SpecPicker rebuild on pick", function()
+describe("SpecPicker class picker: what a pick redraws, and the option order", function()
     local STUBBED = {
         "C_SpecializationInfo", "C_Timer", "UnitClass",
         "LOCALIZED_CLASS_NAMES_MALE", "CLASS_ICON_TCOORDS",
