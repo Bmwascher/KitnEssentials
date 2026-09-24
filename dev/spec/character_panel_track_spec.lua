@@ -379,3 +379,26 @@ describe("Inspect slot: enchantable check", function()
         assert.same({ 90 }, asked)
     end)
 end)
+
+-- The missing-enchant cue draws only at effective max level, so with enchant
+-- names off a lower target has nothing KE would redraw.
+describe("Inspect slot: enchant pend below max level", function()
+    it("pends below max level only while enchant names are shown", function()
+        local cases = {
+            { name = "below max, names off", level = 80, names = false },
+            { name = "below max, names on", level = 80, names = true, want = true },
+            { name = "at max, names off", level = 90, names = false, want = true },
+        }
+        for _, c in ipairs(cases) do
+            local CP = loadCP(nil, {
+                UnitLevel = function() return c.level end,
+                issecretvalue = function() return false end,
+                GetExpansionForLevel = function() return 11 end,
+                GameRulesUtil = { GetEffectiveMaxLevelForPlayer = function() return 90 end },
+            })
+            CP.db = { ShowEnchantNames = c.names, ShowEnchants = true }
+            assert.equals(c.want, CP:InspectEnchantPending("target", 3,
+                "|cffa335ee|Hitem:1|h[x]|h|r", true, nil, nil), c.name)
+        end
+    end)
+end)

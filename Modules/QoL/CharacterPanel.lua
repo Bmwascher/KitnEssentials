@@ -619,12 +619,15 @@ end
 
 -- An inspected unit's level can be secret, and the enchantable table is keyed
 -- by expansion: the secret test runs first, before any comparison, and the
--- decision uses that one checked read.
-function CP:IsEnchantableSlot(unit, slot)
+-- decision uses that one checked read. cueOnly: only where the missing-enchant
+-- cue can draw, which UpdateSlotWarning limits to effective max level.
+function CP:IsEnchantableSlot(unit, slot, cueOnly)
     local level = UnitLevel(unit)
     if issecretvalue and issecretvalue(level) then return false end
     if level == nil then return false end
-    return CanEnchantSlotAtLevel(unit, slot, level) and true or false
+    if not CanEnchantSlotAtLevel(unit, slot, level) then return false end
+    if cueOnly and not IsLevelAtEffectiveMaxLevel(level) then return false end
+    return true
 end
 
 ---------------------------------------------------------------------------------
@@ -1678,7 +1681,8 @@ function CP:InspectEnchantPending(unit, slotID, held, provisional, fellBack, enc
     if not (byFallback or byWindow) then return nil end
     if KE:EUIDrawsSlotElement(unit, "enchant") then return nil end
     if byFallback then return true end
-    return self:IsEnchantableSlot(unit, slotID) and true or nil
+    -- With names off only the missing-enchant cue is left to redraw.
+    return self:IsEnchantableSlot(unit, slotID, not db.ShowEnchantNames) and true or nil
 end
 
 function CP:InspectTrackPending(unit, held, provisional, data, w)
