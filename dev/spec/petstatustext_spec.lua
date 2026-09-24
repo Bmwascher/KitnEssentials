@@ -84,3 +84,25 @@ describe("pet status per-spell secrecy", function()
         assert.is_true(rec.shown)
     end)
 end)
+
+describe("Demonology expected pet", function()
+    it("expects the pet each context calls for", function()
+        local PS = L.loadPetStatusText()
+        local FELHUNTER, FELGUARD, IMP = 417, 17252, 416
+        local rows = {
+            { FELHUNTER, "key", true },
+            { FELGUARD, "key", false },
+            { FELGUARD, "other", true },
+            { FELHUNTER, "other", false },
+            { FELHUNTER, "mythicIdle", true },
+            { FELGUARD, "mythicIdle", true },
+            { IMP, "mythicIdle", false },
+            { nil, "key", nil },
+            { nil, "mythicIdle", nil },
+            { nil, "other", nil },
+        }
+        for _, r in ipairs(rows) do
+            assert.equals(r[3], PS.DemoPetExpected(r[1], r[2]), tostring(r[1]) .. " in " .. r[2])
+        end
+    end)
+end)
