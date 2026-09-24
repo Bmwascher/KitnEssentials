@@ -267,6 +267,20 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
     end
     yOffset = timerFontOffset
 
+    ----------------------------------------------------------------
+    -- Card 8: Sound
+    ----------------------------------------------------------------
+    local soundCard, soundOffset = GUIFrame:CreateAuraApplicationSoundCard(scrollChild, yOffset, {
+        title = "Sound",
+        db = db,
+        dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
+        soundLabel = "Proc Sound",
+        testChannel = "Master",
+        notes = { "Plays once when a proc starts, on the Master channel." },
+    })
+    manager:Register(soundCard, "all")
+    yOffset = soundOffset
+
     RefreshStates()
     return yOffset
 end)

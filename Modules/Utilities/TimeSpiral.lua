@@ -162,6 +162,15 @@ function TSP:GetDisplayIcon()
     return self.playerIconId or TIME_SPIRAL_ICON
 end
 
+-- Reads the enabled flag the way the sound card's checkbox does, so the two
+-- never disagree. windowOpen is true for a SHOW inside a proc already shown.
+function TSP.ShouldPlaySound(db, windowOpen)
+    if not db or db.SoundEnabled == false then return false end
+    local name = db.SoundName
+    if not name or name == "None" then return false end
+    return not windowOpen
+end
+
 function TSP:OnInitialize()
     self:UpdateDB()
     self:SetEnabledState(false)
@@ -502,8 +511,19 @@ function TSP:OnEnable()
             end
         end
 
+        -- Read before ShowProc sets it. activeProcs is no substitute: the
+        -- expiry timer does not clear it.
+        local windowOpen = self.procStartTime ~= nil
         self.activeProcs[spellId] = true
         self:ShowProc()
+        -- Fetch returns a global override or the default for a name no longer
+        -- registered, so a removed sound would play something else.
+        local name = self.db.SoundName
+        if TSP.ShouldPlaySound(self.db, windowOpen)
+            and KE.LSM and KE.LSM:IsValid("sound", name) then
+            local path = KE.LSM:Fetch("sound", name)
+            if path then PlaySoundFile(path, "Master") end
+        end
     end)
 
     self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", function(_, spellId)
@@ -539,6 +559,9 @@ function TSP:OnDisable()
     end
     self.isPreview = false
     self.activeProcs = {}
+    -- The hide timer is cancelled below, so a window left open here would
+    -- silence the first proc after re-enabling.
+    self.procStartTime = nil
     self.glowActive = false
     self.durationObject = nil
     if self.hideTimer then

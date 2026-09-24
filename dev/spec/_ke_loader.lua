@@ -2343,6 +2343,22 @@ function L.loadStanceText(overrides)
     return modules["StanceText"], KE
 end
 
+-- Modules/Utilities/TimeSpiral.lua. The file reads Enum.SpellBookSpellBank,
+-- C_SpecializationInfo and LibStub at file scope, so all three exist before
+-- the load; nothing creates a frame until OnEnable. Returns TSP, KE.
+function L.loadTimeSpiral(overrides)
+    overrides = overrides or {}
+    installMock(overrides, {
+        C_Timer = inertTimer(),
+        Enum = { SpellBookSpellBank = { Player = "Player" } },
+    })
+    local modules = helpers.installAddonShim()
+    _G.LibStub = function() return nil end
+    local KE = { db = { profile = { TimeSpiral = overrides.db or {} } } }
+    helpers.loadModule("Modules/Utilities/TimeSpiral.lua", KE)
+    return modules["TimeSpiral"], KE
+end
+
 -- Modules/ClassUtilities/PetStatusText.lua. The branch under test lives inside
 -- the file-local CheckPetStatus, which is reached from outside only through
 -- PS:UpdatePetText -- so the spec drives that and asserts on what was painted.
