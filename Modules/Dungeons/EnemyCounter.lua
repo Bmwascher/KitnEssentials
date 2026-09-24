@@ -22,6 +22,19 @@ local issecretvalue = issecretvalue or function() return false end
 local DEBUG_EC = false
 local lastDebugCount = -1
 
+-- Talent and spec state is not reliable immediately on a spec change event.
+local SPEC_SETTLE_DELAY = 2
+
+-- Registered while the current spec is enabled, unregistered when it is not.
+-- The two spec-watch events stay outside this list so the gate can reopen.
+local GATED_EVENTS = {
+    "NAME_PLATE_UNIT_ADDED",
+    "NAME_PLATE_UNIT_REMOVED",
+    "UNIT_FLAGS",
+    "PLAYER_REGEN_DISABLED",
+    "PLAYER_REGEN_ENABLED",
+}
+
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
@@ -128,7 +141,17 @@ end
 -- Settings
 ---------------------------------------------------------------------------------
 
+-- The public entry, and the one a profile switch calls, so it routes through
+-- the spec gate; the gate reaches the layout through ApplyLayout.
 function EC:ApplySettings()
+    if self.isPreview or not self:IsEnabled() then
+        self:ApplyLayout()
+        return
+    end
+    self:ApplySpecGate()
+end
+
+function EC:ApplyLayout()
     if not self.frame then return end
 
     local db = self.db
@@ -180,8 +203,14 @@ function EC:ShowPreview()
     self.frame:Show()
 end
 
+-- Closing the page on a spec just unticked must not leave the counter shown.
 function EC:HidePreview()
     self.isPreview = false
+    if not self.frame then return end
+    if not self.db.Enabled or not KE:IsSpecEnabled(self.db.EnabledSpecs, KE:GetPlayerSpecId()) then
+        self.frame:Hide()
+        return
+    end
     self:UpdateText()
 end
 
@@ -232,16 +261,50 @@ end
 function EC:OnEnable()
     if not self.db.Enabled then return end
 
+    -- Outside the gate: a disabled spec must still hear the switch away from it.
+    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnSpecChanged")
+
+    self:ApplySpecGate()
+end
+
+function EC:ApplySpecGate()
+    if KE:IsSpecEnabled(self.db.EnabledSpecs, KE:GetPlayerSpecId()) then
+        self:StartForSpec()
+    else
+        self:StopForSpec()
+    end
+end
+
+function EC:StartForSpec()
     self:CreateFrames()
     self:RegWithEditMode()
+    for index = 1, #GATED_EVENTS do
+        self:RegisterEvent(GATED_EVENTS[index])
+    end
+    self:ApplyLayout()
+end
 
-    self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-    self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-    self:RegisterEvent("UNIT_FLAGS")
-    self:RegisterEvent("PLAYER_REGEN_DISABLED")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+function EC:StopForSpec()
+    for index = 1, #GATED_EVENTS do
+        self:UnregisterEvent(GATED_EVENTS[index])
+    end
+    -- The preview owns the frame while the settings page is open.
+    if self.frame and not self.isPreview then self.frame:Hide() end
+end
 
-    self:ApplySettings()
+-- Applied now and again once the spec has settled: the immediate read can
+-- still report the previous spec. One pending pass at a time, cancelled on
+-- disable, so a burst of events leaves one timer and a disabled module none.
+function EC:OnSpecChanged(event, unit)
+    -- The spec event fires for group members too.
+    if event == "PLAYER_SPECIALIZATION_CHANGED" and unit ~= "player" then return end
+    self:ApplySpecGate()
+    if self.specTimer then self.specTimer:Cancel() end
+    self.specTimer = C_Timer.NewTimer(SPEC_SETTLE_DELAY, function()
+        self.specTimer = nil
+        self:ApplySpecGate()
+    end)
 end
 
 function EC:OnThemeChanged()
@@ -254,5 +317,9 @@ end
 
 function EC:OnDisable()
     self:UnregisterAllEvents()
+    if self.specTimer then
+        self.specTimer:Cancel()
+        self.specTimer = nil
+    end
     if self.frame then self.frame:Hide() end
 end

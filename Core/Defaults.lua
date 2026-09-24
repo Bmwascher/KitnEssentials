@@ -1669,6 +1669,7 @@ local Defaults = {
         Dungeons = {
             EnemyCounter = {
                 Enabled = false,
+                EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per global spec ID)
                 CombatOnly = false,
                 ShowPrefix = true,
                 Prefix = "Enemies:",
