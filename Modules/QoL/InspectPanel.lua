@@ -143,15 +143,12 @@ InspectPanel._ClearDirtyKeys = ClearDirtyKeys
 -- Discriminator: time since INSPECT_READY for this GUID. Inspect packets
 -- finish hydrating within ~1.5s of INSPECT_READY in normal conditions; if
 -- sockets are still empty after the grace period, treat as genuinely empty
--- and render the red cue. Within the grace period, treat as suspect:
+-- and render the red cue. Within the grace period, treat as suspect: draw no
+-- gems and let the shared retry sweep below (RETRY_DELAY = 0.5s) read the
+-- slot again.
 --
---   1. Primary path (event-driven): re-issue C_Item.RequestLoadItemDataByID
---      so ITEM_DATA_LOAD_RESULT re-fires when gem bytes hydrate.
---   2. Fallback path (timer): the shared retry sweep below, in case the event
---      chain stalls. RETRY_DELAY = 0.5s.
---
--- Per-slot paintPasses still caps the suppression within the grace window so
--- a pathological re-request loop can't suppress past MAX_PAINT_PASSES tries.
+-- Per-slot paintPasses caps the suppression within the grace window at
+-- MAX_PAINT_PASSES tries.
 local MAX_PAINT_PASSES = 5
 local RETRY_DELAY = 0.5
 local INSPECT_PACKET_GRACE = 1.0  -- seconds; suspect-empty triggers retry within this window
@@ -449,11 +446,8 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
     if suspect then
         s.paintPasses = (s.paintPasses or 0) + 1
         if s.paintPasses < MAX_PAINT_PASSES then
-            -- Re-request item data so ITEM_DATA_LOAD_RESULT re-fires with the
-            -- now-hydrated gem bytes.
-            local itemID = C_Item.GetItemInfoInstant(link)
-            if itemID then C_Item.RequestLoadItemDataByID(itemID) end
-            -- Timer fallback in case the event chain stalls.
+            -- The sweep is the retry: the gem bytes come with the inspect
+            -- packet, which no item-data request can hurry.
             ArmSlotRetry(s, guid)
             -- Render everything EXCEPT gems; suppressGems hides the icon row
             -- instead of flashing red empty-socket cues. Skip the cache write so
