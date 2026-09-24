@@ -2848,7 +2848,7 @@ end
 -- UNMANAGED (dev/spec/_wow_mock.lua), so they are assigned to _G directly
 -- rather than routed through installMock, which would silently drop them.
 -- Specs never drive the live singleton -- they build their own instances via
--- `KE.CombatState.New(deps)` with fake deps for all seven, which resolves
+-- `KE.CombatState.New(deps)` with fake deps for all ten, which resolves
 -- through the class metatable New sits on. Returns KE.
 function L.loadCombatState(overrides)
     overrides = overrides or {}

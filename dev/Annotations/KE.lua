@@ -121,6 +121,7 @@ function KE_CombatState:OnEncounterEnd(success) end
 function KE_CombatState:OnUnitFlags(unit) end
 function KE_CombatState:OnPvPMatchComplete() end
 function KE_CombatState:OnEnteringWorld() end
+function KE_CombatState:OnRosterUpdate() end
 
 ---@class KE
 ---@field db AceDB

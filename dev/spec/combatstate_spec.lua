@@ -1,11 +1,13 @@
 -- Tier 2: Core/CombatState.lua, the shared combat clock/liveness machine.
 -- Driven entirely through the public event entry points, plus Freeze itself
--- for the one case that is otherwise unreachable, with all seven deps faked
+-- for the one case that is otherwise unreachable, with all ten deps faked
 -- and a manual scheduler whose handles record their own cancels. Specs read
 -- a handful of internal fields directly (playerCombat, groupOnly, watching,
--- pvpBlocked, finalizePending, pendingGen, clearTicks, fineBase, fineAnchor):
--- the class keeps no closure privacy over them, and several design cases have
--- no cheaper public accessor.
+-- pvpBlocked, groupBlocked, inEncounter, finalizePending, pendingGen,
+-- clearTicks, fineBase, fineAnchor), and the group bound's count-restart case
+-- sets inEncounter and finalizePending for one tick: the class keeps no
+-- closure privacy over them, and several design cases have no cheaper public
+-- accessor.
 local L = require("dev.spec._ke_loader")
 
 local function newScheduler()
@@ -89,6 +91,9 @@ describe("CombatState machine", function()
             groupInCombat = function() return false end,
             inInstance = function() return false end,
             sessionDuration = function() return false, nil end,
+            playerDead = function() return false end,
+            playerLockdown = function() return false end,
+            encounterLive = function() return true end,
             after = sched.after,
             ticker = sched.ticker,
         }
@@ -588,7 +593,7 @@ describe("CombatState machine", function()
             assert.are_not.equal(before, after)
             assert.is_false(after.cancelled)
             -- Sampled by the change itself, without firing the new ticker:
-            -- waiting out its first interval leaves both surfaces stale.
+            -- waiting out its first interval leaves the meter clock stale.
             assert.equals(4, cs:GetDuration())
         end)
 
@@ -803,7 +808,7 @@ describe("CombatState machine", function()
     end)
 
     describe("the paint contract", function()
-        it("a start broadcasts OnClockTick(nil, 0) before any sample, so neither surface shows the previous fight's text", function()
+        it("a start broadcasts OnClockTick(nil, 0) before any sample, so the meter clock does not show the previous fight's text", function()
             local cs = newCS()
             local rec = newRecorder()
             cs:RegisterListener("spec", rec.callbacks)
@@ -833,8 +838,8 @@ describe("CombatState machine", function()
     end)
 
     describe("the engagement span", function()
-        -- The span the Combat Timer renders: the whole engagement, where the pin
-        -- is only the current fight.
+        -- The engagement span: the whole engagement, where the pin is only the
+        -- current fight.
         local function sampling(value)
             deps.sessionDuration = function() return true, value end
         end
@@ -1060,6 +1065,179 @@ describe("CombatState machine", function()
             cs:OnRegenDisabled()
             assert.equals(1, rec.count("OnStart"))
             assert.equals(1, rec.count("OnClockTick"))
+        end)
+    end)
+
+    describe("the group bound", function()
+        -- A live group hold: the player left combat, alive, outside an
+        -- encounter, with the group still reading in combat.
+        local function liveHold()
+            local cs = newCS()
+            cs:OnRegenDisabled()
+            deps.groupInCombat = function() return true end
+            cs:OnRegenEnabled()
+            return cs
+        end
+
+        -- A watch: the machine is not live and the group reads in combat.
+        local function watchHold()
+            local cs = newCS()
+            deps.groupInCombat = function() return true end
+            cs:OnRegenEnabled()
+            return cs
+        end
+
+        local function tick(n)
+            local poll = lastPoll(sched)
+            for _ = 1, n do poll.fn() end
+        end
+
+        -- A feign while tagged can leave the unit flag set outside lockdown.
+        local function flaggedHold()
+            local cs = liveHold()
+            deps.playerInCombat = function() return true end
+            return cs
+        end
+
+        it("ends a hold after 20 poll ticks with the player alive and out of lockdown outside an encounter, not after 19", function()
+            local cases = {
+                { name = "a live group fight freezes and is not re-watched", setup = liveHold,
+                    held = function(cs) return cs:IsLive() end,
+                    ended = function(cs) return cs:IsFrozen() and not cs.watching end },
+                { name = "a watch ends", setup = watchHold,
+                    held = function(cs) return cs.watching end,
+                    ended = function(cs) return not cs.watching and lastPoll(sched).cancelled end },
+                { name = "the player's unit flag stays set outside lockdown", setup = flaggedHold,
+                    held = function(cs) return cs:IsLive() end,
+                    ended = function(cs) return cs:IsFrozen() and not cs.watching end },
+            }
+            for _, case in ipairs(cases) do
+                deps.playerInCombat = function() return false end
+                local cs = case.setup()
+                tick(19)
+                assert.is_true(case.held(cs), case.name)
+                assert.is_false(cs.groupBlocked, case.name)
+                tick(1)
+                assert.is_true(case.ended(cs), case.name)
+                assert.is_true(cs.groupBlocked, case.name)
+            end
+        end)
+
+        -- A kill freezes at once, and the freeze re-arms a watch while the
+        -- player's own lockdown still lingers.
+        local function killWatch()
+            deps.playerLockdown = function() return true end
+            local cs = newCS()
+            cs:OnRegenDisabled()
+            deps.groupInCombat = function() return true end
+            cs:OnEncounterEnd(1)
+            return cs
+        end
+
+        local function noop() end
+
+        it("restarts the count on a tick with the player dead, in lockdown, the mark set or a non-kill end pending; a clear read ends the hold unblocked", function()
+            local cases = {
+                { name = "the player is dead", setup = liveHold,
+                    set = function() deps.playerDead = function() return true end end,
+                    unset = function() deps.playerDead = function() return false end end,
+                    expectLive = true, expectWatching = false },
+                { name = "the player is in lockdown", setup = liveHold,
+                    set = function() deps.playerLockdown = function() return true end end,
+                    unset = function() deps.playerLockdown = function() return false end end,
+                    expectLive = true, expectWatching = false },
+                { name = "the encounter mark is set", setup = liveHold,
+                    set = function(cs) cs.inEncounter = true end,
+                    unset = function(cs) cs.inEncounter = false end,
+                    expectLive = true, expectWatching = false },
+                { name = "a non-kill end is pending", setup = liveHold,
+                    set = function(cs) cs.finalizePending = true end,
+                    unset = function(cs) cs.finalizePending = false end,
+                    expectLive = true, expectWatching = false },
+                { name = "the group reads clear", setup = liveHold,
+                    set = function() deps.groupInCombat = function() return false end end,
+                    unset = function() deps.groupInCombat = function() return true end end,
+                    expectLive = false, expectWatching = false },
+                { name = "a kill's watch with the lockdown lingering", setup = killWatch,
+                    set = noop, unset = noop,
+                    expectLive = false, expectWatching = true },
+            }
+            for _, case in ipairs(cases) do
+                deps.playerLockdown = function() return false end
+                local cs = case.setup()
+                tick(19)
+                case.set(cs)
+                tick(1)
+                case.unset(cs)
+                tick(19)
+                assert.equals(case.expectLive, cs:IsLive(), case.name)
+                assert.equals(case.expectWatching, cs.watching, case.name)
+                assert.is_false(cs.groupBlocked, case.name)
+            end
+        end)
+
+        it("blocks a GROUP restart after a bound end until a clear read, a player start, an encounter start or a loading screen; a clear read reports OnGroupClear", function()
+            local cases = {
+                { name = "UNIT_FLAGS with the group still in combat",
+                    run = function(cs) cs:OnUnitFlags("raid1") end,
+                    expectBlocked = true, expectLive = false, expectGroupClear = 0 },
+                { name = "GROUP_ROSTER_UPDATE with the group still in combat",
+                    run = function(cs) cs:OnRosterUpdate() end,
+                    expectBlocked = true, expectLive = false, expectGroupClear = 0 },
+                { name = "GROUP_ROSTER_UPDATE reading the group clear",
+                    run = function(cs)
+                        deps.groupInCombat = function() return false end
+                        cs:OnRosterUpdate()
+                    end,
+                    expectBlocked = false, expectLive = false, expectGroupClear = 1 },
+                { name = "UNIT_FLAGS reading the group clear",
+                    run = function(cs)
+                        deps.groupInCombat = function() return false end
+                        cs:OnUnitFlags("raid1")
+                    end,
+                    expectBlocked = false, expectLive = false, expectGroupClear = 1 },
+                { name = "UNIT_FLAGS reading the group clear outside an instance",
+                    run = function(cs)
+                        deps.inInstance = function() return false end
+                        deps.groupInCombat = function() return false end
+                        cs:OnUnitFlags("party1")
+                    end,
+                    expectBlocked = false, expectLive = false, expectGroupClear = 1 },
+                { name = "PLAYER_REGEN_DISABLED",
+                    run = function(cs) cs:OnRegenDisabled() end,
+                    expectBlocked = false, expectLive = true, expectGroupClear = 0 },
+                { name = "ENCOUNTER_START",
+                    run = function(cs) cs:OnEncounterStart() end,
+                    expectBlocked = false, expectLive = true, expectGroupClear = 0 },
+                { name = "PLAYER_ENTERING_WORLD",
+                    run = function(cs) cs:OnEnteringWorld() end,
+                    expectBlocked = false, expectLive = true, expectGroupClear = 0 },
+            }
+            for _, case in ipairs(cases) do
+                deps.inInstance = function() return true end
+                local cs = liveHold()
+                tick(20)
+                assert.is_true(cs.groupBlocked, case.name)
+                local rec = newRecorder()
+                cs:RegisterListener("spec", rec.callbacks)
+                case.run(cs)
+                assert.equals(case.expectBlocked, cs.groupBlocked, case.name)
+                assert.equals(case.expectLive, cs:IsLive(), case.name)
+                assert.equals(case.expectGroupClear, rec.count("OnGroupClear"), case.name)
+            end
+        end)
+
+        it("clears an encounter mark the game no longer reports, then applies the bound", function()
+            local cs = newCS()
+            cs:OnEncounterStart()
+            deps.groupInCombat = function() return true end
+            deps.encounterLive = function() return false end
+            tick(1)
+            assert.is_false(cs.inEncounter)
+            tick(18)
+            assert.is_true(cs:IsLive())
+            tick(1)
+            assert.is_true(cs:IsFrozen())
         end)
     end)
 end)

@@ -1,10 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  CombatState.lua                                          ║
 -- ║  Module: KE.CombatState                                   ║
--- ║  Purpose: One shared combat clock/liveness machine, fed   ║
--- ║           by a private event frame, that the Combat Timer ║
--- ║           and the Damage Meter both read instead of each  ║
--- ║           keeping (and disagreeing on) their own state.   ║
+-- ║  Purpose: Combat clock/liveness machine, fed by a         ║
+-- ║           private event frame, that the Damage Meter      ║
+-- ║           reads; it follows the group's combat.           ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -36,6 +35,9 @@ local UnitIsConnected = UnitIsConnected
 local UnitIsVisible = UnitIsVisible
 local math_max = math.max
 local math_min = math.min
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
+local InCombatLockdown = InCombatLockdown
+local IsEncounterInProgress = C_InstanceEncounter and C_InstanceEncounter.IsEncounterInProgress
 
 local DEBUG_CS = false
 
@@ -52,6 +54,10 @@ local PLAYER, GROUP = "PLAYER", "GROUP"
 -- StartFight span mode. Internal only; the one caller that begins a new
 -- underlying session passes it.
 local SPAN_CARRY = "SPAN_CARRY"
+
+-- Poll ticks (0.25s each) before the group hold ends for a player who is
+-- alive and idle outside an encounter: 5 seconds.
+local GROUP_BOUND_TICKS = 20
 
 ---------------------------------------------------------------------------------
 -- Debug (DEBUG_CS): one chat line per state transition, never one per tick
@@ -70,7 +76,7 @@ local function dbgState(cs)
     return "player=" .. dbgflag(cs.playerCombat) .. " group=" .. dbgflag(cs.groupOnly)
         .. " enc=" .. dbgflag(cs.inEncounter) .. " watch=" .. dbgflag(cs.watching)
         .. " fin=" .. dbgflag(cs.finalizePending) .. " frozen=" .. dbgflag(cs.frozen)
-        .. " pvp=" .. dbgflag(cs.pvpBlocked)
+        .. " pvp=" .. dbgflag(cs.pvpBlocked) .. " block=" .. dbgflag(cs.groupBlocked)
 end
 
 -- Same scan order as LiveGroupInCombat, but names the first unit in combat.
@@ -131,6 +137,9 @@ CombatState.__index = CombatState
 ---   groupInCombat()    boolean
 ---   inInstance()       boolean (IsInInstance)
 ---   sessionDuration()  ok, raw -- the pcall'd C_DamageMeter read, unfiltered
+---   playerDead()       boolean (UnitIsDeadOrGhost("player"))
+---   playerLockdown()   boolean (InCombatLockdown)
+---   encounterLive()    boolean (C_InstanceEncounter.IsEncounterInProgress)
 ---   after(sec, fn)     one-shot handle with :Cancel()
 ---   ticker(sec, fn)    recurring handle with :Cancel()
 function CombatState.New(deps)
@@ -148,7 +157,9 @@ function CombatState.New(deps)
     self.generation = 0
     self.watching = false
     self.clearTicks = 0
+    self.boundTicks = 0
     self.pvpBlocked = false
+    self.groupBlocked = false
     self.finalizePending = false
     self.pendingGen = nil
     self.playerJoined = false
@@ -219,6 +230,7 @@ end
 
 function CombatState:_ArmPoll()
     self:_CancelPoll()
+    self.boundTicks = 0
     if DEBUG_CS then
         dbgLastHolder = nil
         KE:Print("[CS] poll start")
@@ -233,6 +245,34 @@ function CombatState:_Broadcast(event, a, b)
         local fn = callbacks[event]
         if fn then fn(a, b) end
     end
+end
+
+function CombatState:_ClearGroupBlock(site)
+    if not self.groupBlocked then return end
+    self.groupBlocked = false
+    if DEBUG_CS then KE:Print("[CS] group block cleared by " .. site) end
+end
+
+-- The block keeps a flag still set on a stuck member from starting a new
+-- GROUP fight on every UNIT_FLAGS, each ended again by the bound.
+function CombatState:_EndGroupHold()
+    self.boundTicks = 0
+    self.groupBlocked = true
+    if DEBUG_CS then KE:Print("[CS] group bound reached: block set, live=" .. dbgflag(self:IsLive())) end
+    if self:IsLive() then
+        self:Freeze("groupBound")
+    else
+        self:_CancelPoll()
+        self.watching = false
+    end
+end
+
+-- While blocked, a clear read lifts the block and reports the clear the ended
+-- watch would have sent.
+function CombatState:_ScanBlockedClear(site)
+    if self.deps.groupInCombat() then return end
+    self:_ClearGroupBlock(site)
+    self:_Broadcast("OnGroupClear")
 end
 
 ---------------------------------------------------------------------------------
@@ -256,9 +296,10 @@ function CombatState:Freeze(reason)
     self:_CancelClock()
     self:_CancelPoll()
     self.watching = false
-    self:_Broadcast("OnClockTick", self:Duration(), 0)    -- both surfaces land on the final value
+    self:_Broadcast("OnClockTick", self:Duration(), 0)    -- the clock lands on the final value
     self:_Broadcast("OnStop", reason)
-    if reason ~= "pvp" and self.deps.groupInCombat() then
+    -- A bound end re-armed here would poll the same stuck flags forever.
+    if reason ~= "pvp" and reason ~= "groupBound" and self.deps.groupInCombat() then
         self.watching = true
         self:_ArmPoll()
     end
@@ -298,8 +339,8 @@ function CombatState:StartFight(which, span)
     self.playerCombat = (which == PLAYER)      -- both assigned, never one
     self.groupOnly = (which == GROUP)
     -- Participation follows the span. A carried start continues one engagement,
-    -- and the chat line it will report covers the seconds before this start, so
-    -- a player who fought them has joined it even if the boss opened as GROUP.
+    -- so a player who fought the seconds before it has joined it even if the
+    -- boss opened as GROUP.
     self.playerJoined = (which == PLAYER) or (carried and self.playerJoined) or false
     if DEBUG_CS then
         KE:Print("[CS] StartFight " .. which .. " span=" .. tostring(span)
@@ -308,7 +349,7 @@ function CombatState:StartFight(which, span)
     if self.groupOnly then self:_ArmPoll() end
     self:_StartClock()
     -- Fired only on a fresh start (not a live-to-live chain pull): otherwise a
-    -- boss chain-pulled out of trash blanks both surfaces for up to 0.5s.
+    -- boss chain-pulled out of trash blanks the meter clock for up to 0.5s.
     -- OnStart first: it is where a consumer clears whatever it was holding, and
     -- a blank paint arriving before that can be routed by stale consumer state.
     -- Both still land in this one dispatch, so nothing is drawn in between.
@@ -339,6 +380,7 @@ end
 
 function CombatState:OnRegenDisabled()
     self.pvpBlocked = false
+    self:_ClearGroupBlock("PLAYER_REGEN_DISABLED")
     if self:IsLive() and self.groupOnly then
         self:Promote()
         return
@@ -348,16 +390,22 @@ end
 
 -- Always a segment boundary.
 function CombatState:OnEncounterStart()
+    self:_ClearGroupBlock("ENCOUNTER_START")
     self.inEncounter = true
     self:StartFight(self.deps.playerInCombat() and PLAYER or GROUP, SPAN_CARRY)
 end
 
--- Cheap bails first; this fires constantly.
+-- Cheap bails first; this fires constantly. While blocked, the instance bail is
+-- skipped: a bound end can happen in the open world.
 function CombatState:OnUnitFlags(unit)
     if self:IsLive() then return end
     if self.pvpBlocked then return end
-    if not self.deps.inInstance() then return end
+    if not self.groupBlocked and not self.deps.inInstance() then return end
     if not unit or not (unit:match("^raid%d") or unit:match("^party%d")) then return end
+    if self.groupBlocked then
+        self:_ScanBlockedClear("group clear")
+        return
+    end
     if not self.deps.groupInCombat() then return end   -- the up-to-41-unit scan, last
     if DEBUG_CS then
         local _, detail = dbgCombatHolder()
@@ -367,15 +415,21 @@ function CombatState:OnUnitFlags(unit)
     self:StartFight(GROUP)
 end
 
+-- A member who leaves while still flagged sends no UNIT_FLAGS the scan sees.
+function CombatState:OnRosterUpdate()
+    if not self.groupBlocked then return end
+    self:_ScanBlockedClear("GROUP_ROSTER_UPDATE")
+end
+
 function CombatState:OnRegenEnabled()
     -- Captured before anything clears a flag, and never cleared before Freeze:
     -- Freeze is inert on a machine that is not live and clears both flags
     -- itself, so clearing here makes an ordinary solo fight never stop.
     local wasLive = self:IsLive()
     if not wasLive then
-        -- pvpBlocked, or the 4 Hz scan restarts after a match on combat flags
-        -- that stay stuck, undoing the suppression the PvP freeze just applied.
-        if self.deps.groupInCombat() and not self.pvpBlocked then
+        -- Either block, or the 4 Hz scan restarts on combat flags that stay
+        -- stuck, undoing the suppression the freeze just applied.
+        if self.deps.groupInCombat() and not self.pvpBlocked and not self.groupBlocked then
             if DEBUG_CS then KE:Print("[CS] REGEN_ENABLED not live -> watch") end
             self.watching = true
             self:_ArmPoll()
@@ -463,6 +517,7 @@ end
 function CombatState:OnEnteringWorld()
     self.finalizePending = false
     self.pendingGen = nil                      -- invalidate any pending callback
+    self:_ClearGroupBlock("PLAYER_ENTERING_WORLD")
     if self.deps.playerInCombat() then
         if self:IsLive() and self.groupOnly then
             -- A world entry ends the engagement on BOTH arrival branches, not
@@ -486,7 +541,7 @@ function CombatState:OnEnteringWorld()
         self.frozen = false                    -- so a surviving pinned clock is not dimmed after a zone change
         self:_CancelPoll()
         self:_CancelClock()
-        -- pin SURVIVES: it is the Combat Timer's out-of-combat readout
+        -- pin left alone: nothing reads it until the next start zeroes it
     end
 end
 
@@ -525,6 +580,22 @@ function CombatState:PollTick()
             dbgNoteHolder(true)
         end
         self.clearTicks = 0
+        -- A reset with no ENCOUNTER_END leaves the mark set, and a stuck member
+        -- keeps the group from ever reading clear for the wedge guard.
+        if self.inEncounter and not self.deps.encounterLive() then
+            self.inEncounter = false
+            if DEBUG_CS then KE:Print("[CS] encounter mark cleared: no encounter in progress") end
+        end
+        -- No count while dead: the player cannot be fighting, and a cap would
+        -- stop the clock under a group still fighting while they wait for a rez.
+        -- None in lockdown: a kill's freeze re-arms the watch while it lingers.
+        -- Lockdown, not the unit flag, which can stay set after a feign.
+        if self.inEncounter or self.finalizePending or self.deps.playerDead() or self.deps.playerLockdown() then
+            self.boundTicks = 0
+            return
+        end
+        self.boundTicks = self.boundTicks + 1
+        if self.boundTicks >= GROUP_BOUND_TICKS then self:_EndGroupHold() end
         return
     end
     if DEBUG_CS then dbgNoteHolder(false) end
@@ -585,7 +656,7 @@ function CombatState:Generation()
 end
 
 -- Replaces a running clock ticker and samples at once, so a cadence change
--- cannot leave both surfaces stale for the length of the old interval.
+-- cannot leave the meter clock stale for the length of the old interval.
 function CombatState:_RestartClock()
     if not self.clockHandle then return end
     -- Idempotent: registering and dropping cadence keys happens in pairs around
@@ -659,6 +730,21 @@ local function LiveInInstance()
     return inInstance and true or false
 end
 
+local function LivePlayerDead()
+    return UnitIsDeadOrGhost("player")
+end
+
+local function LivePlayerLockdown()
+    return InCombatLockdown()
+end
+
+-- False when the namespace is absent: the mark then clears and the bound
+-- still ends the hold.
+local function LiveEncounterLive()
+    if not IsEncounterInProgress then return false end
+    return IsEncounterInProgress()
+end
+
 -- pcall'd: SecretArguments is AllowedWhenUntainted, so the call itself can
 -- reject. Returns the RAW result; every secrecy, type and range check lives
 -- in the machine's Sample().
@@ -689,6 +775,9 @@ KE.CombatState = CombatState.New({
     groupInCombat = LiveGroupInCombat,
     inInstance = LiveInInstance,
     sessionDuration = LiveSessionDuration,
+    playerDead = LivePlayerDead,
+    playerLockdown = LivePlayerLockdown,
+    encounterLive = LiveEncounterLive,
     after = LiveAfter,
     ticker = LiveTicker,
 })
@@ -701,9 +790,10 @@ eventFrame:RegisterEvent("ENCOUNTER_END")
 eventFrame:RegisterEvent("UNIT_FLAGS")
 eventFrame:RegisterEvent("PVP_MATCH_COMPLETE")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 
--- UNIT_FLAGS is skipped: it fires dozens of times a second in a pull, and
--- OnUnitFlags logs the one case that matters, a GROUP start.
+-- UNIT_FLAGS and GROUP_ROSTER_UPDATE are skipped: both fire often, and their
+-- handlers log the cases that matter, a GROUP start and a block cleared.
 local function dbgEvent(event, ...)
     local line = "[CS] " .. event
     if event == "ENCOUNTER_START" or event == "ENCOUNTER_END" then
@@ -716,7 +806,7 @@ local function dbgEvent(event, ...)
 end
 
 eventFrame:SetScript("OnEvent", function(_, event, ...)
-    if DEBUG_CS and event ~= "UNIT_FLAGS" then dbgEvent(event, ...) end
+    if DEBUG_CS and event ~= "UNIT_FLAGS" and event ~= "GROUP_ROSTER_UPDATE" then dbgEvent(event, ...) end
     if event == "PLAYER_REGEN_DISABLED" then
         KE.CombatState:OnRegenDisabled()
     elseif event == "PLAYER_REGEN_ENABLED" then
@@ -735,5 +825,7 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
         KE.CombatState:OnPvPMatchComplete()
     elseif event == "PLAYER_ENTERING_WORLD" then
         KE.CombatState:OnEnteringWorld()
+    elseif event == "GROUP_ROSTER_UPDATE" then
+        KE.CombatState:OnRosterUpdate()
     end
 end)
