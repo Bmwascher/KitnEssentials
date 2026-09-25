@@ -539,8 +539,10 @@ function ProfileManager:RefreshAllModules()
     -- Refresh theme
     if KE.RefreshTheme then KE:RefreshTheme() end
 
-    -- Refresh GUI frame if open
-    if KE.GUIFrame and KE.GUIFrame.ApplyThemeColors then KE.GUIFrame:ApplyThemeColors() end
+    -- RefreshTheme repaints a shown window; this repaints a hidden one.
+    if KE.GUIFrame and KE.GUIFrame.ApplyThemeColors and not KE.GUIFrame:IsShown() then
+        KE.GUIFrame:ApplyThemeColors()
+    end
 
     -- Re-evaluate previews based on current GUI / edit-mode state (this was
     -- historically a call to `StartAllPreviews`, which has never existed on
