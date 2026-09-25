@@ -384,3 +384,23 @@ describe("GroupGUIDSet leaves the player out", function()
         assert.is_nil(loadRaid(nil):GroupGUIDSet({}))
     end)
 end)
+
+describe("ResolveAllyGUID on a pinned window", function()
+    it("refuses an ally on a window pinned to a stored native session that the same roster resolves unpinned", function()
+        -- Only a native pin refuses: the fallback is not a pin, and a History
+        -- pin's rows are fetched by their own plain GUIDs.
+        DM.RosterIndex = function() return { member("guid-sham", "SHAMAN", 262) } end
+        DM._leaverUnknown = false
+        local cases = {
+            { name = "unpinned", W = {}, want = "guid-sham" },
+            { name = "Current-empty fallback only", W = { _fallbackSessionID = 3 }, want = "guid-sham" },
+            { name = "History pin", W = { _curSessionID = -1 }, want = "guid-sham" },
+            { name = "native pin", W = { _curSessionID = 3 }, why = "pinned" },
+        }
+        for _, c in ipairs(cases) do
+            local guid, why = DM:ResolveAllyGUID(c.W, "SHAMAN", 262, 1, { [262] = 1 }, false)
+            assert.equals(c.want, guid, c.name)
+            assert.equals(c.why, why, c.name)
+        end
+    end)
+end)

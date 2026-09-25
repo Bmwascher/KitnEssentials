@@ -342,7 +342,7 @@ function DM:OpenDetail(bar, button)
     local resolvedGUID
     if not ownRow and openType ~= Enum.DamageMeterType.Deaths and DM.DetailCombatActive() then
         self:InvalidateRosterIndex()
-        resolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,
+        resolvedGUID = self:ResolveAllyGUID(W, bar._classFilename, bar._specIconID,
             W._classRowCounts and W._classRowCounts[bar._classFilename],
             W._classSpecRowCounts and W._classSpecRowCounts[bar._classFilename],
             openCfg ~= nil and self:IsLiveOverall(W, openCfg))
@@ -460,7 +460,7 @@ function DM:RenderWindowAndDetail(W)
     -- no name on the panel to show it had changed. Both values are plain strings
     -- read from group unit tokens, so the comparison is legal.
     if W._detailResolvedGUID then
-        local fresh = self:ResolveAllyGUID(W._detailClass, W._detailSpecIconID,
+        local fresh = self:ResolveAllyGUID(W, W._detailClass, W._detailSpecIconID,
             W._classRowCounts and W._classRowCounts[W._detailClass],
             W._classSpecRowCounts and W._classSpecRowCounts[W._detailClass])
         if fresh ~= W._detailResolvedGUID then W._detailResolvedGUID = nil end
@@ -1656,7 +1656,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     -- this tick's walk is enough.
     local tipResolvedGUID
     if not ownRow and meterType ~= Enum.DamageMeterType.Deaths and DM.DetailCombatActive() then
-        tipResolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,
+        tipResolvedGUID = self:ResolveAllyGUID(W, bar._classFilename, bar._specIconID,
             W._classRowCounts and W._classRowCounts[bar._classFilename],
             W._classSpecRowCounts and W._classSpecRowCounts[bar._classFilename],
             self:IsLiveOverall(W, cfg))
