@@ -243,9 +243,9 @@ end
 -- Pure, so the stop rules can be driven without the game. Actions: "start",
 -- "restart" (a boss pulled mid-span), "stop", "reset" (a stop with no chat
 -- line) or nil. encounterLive is consulted out of combat with the mark set,
--- and at every PLAYER_ENTERING_WORLD, where it becomes the mark: a span
--- rebuilt after a reload has seen no ENCOUNTER_START. A caller that skips the
--- read may pass false.
+-- and at every PLAYER_ENTERING_WORLD: a span rebuilt after a reload has seen no
+-- ENCOUNTER_START. There it sets the mark, and clears one only out of combat.
+-- A caller that skips the read may pass false.
 ---@param running boolean
 ---@param inEncounter boolean
 ---@param event string
@@ -276,8 +276,8 @@ function CT.Transition(running, inEncounter, event, inCombat, encounterLive, suc
         return running, false, nil
     elseif event == "PLAYER_ENTERING_WORLD" then
         if inCombat then
-            if running then return true, encounterLive, nil end
-            return true, encounterLive, "start"
+            if running then return true, inEncounter or encounterLive, nil end
+            return true, inEncounter or encounterLive, "start"
         end
         if running then return false, encounterLive, "reset" end
         return false, encounterLive, nil

@@ -55,6 +55,8 @@ describe("combat timer stop rules", function()
                 inCombat = false, live = false, expRunning = false, expMark = false, expAction = "reset" },
             { name = "in combat, running", event = "PLAYER_ENTERING_WORLD", running = true, mark = false,
                 inCombat = true, live = false, expRunning = true, expMark = false },
+            { name = "in combat, running, a watched mark and a false reading", event = "PLAYER_ENTERING_WORLD",
+                running = true, mark = true, inCombat = true, live = false, expRunning = true, expMark = true },
             { name = "in combat, not running", event = "PLAYER_ENTERING_WORLD", running = false, mark = false,
                 inCombat = true, live = false, expRunning = true, expMark = false, expAction = "start" },
         })
