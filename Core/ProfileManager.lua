@@ -443,8 +443,13 @@ end
 -- Module Refresh
 ---------------------------------------------------------------------------------
 
+-- True while a profile refresh runs. The refresh rebuilds the shown settings
+-- page once near its end, so a module it enables, disables or re-applies need
+-- not rebuild it too.
+local refreshingModules = false
+
 --- Refresh all enabled modules to apply new settings
-function ProfileManager:RefreshAllModules()
+local function RefreshAll()
     local KitnEssentials = _G.KitnEssentials
     if not KitnEssentials then return end
 
@@ -561,6 +566,18 @@ function ProfileManager:RefreshAllModules()
     if KE.EditMode and KE.EditMode.RefreshLiveState then
         KE.EditMode:RefreshLiveState()
     end
+end
+
+-- A module error inside the refresh still clears the flag before it propagates.
+function ProfileManager:RefreshAllModules()
+    refreshingModules = true
+    local ok, err = pcall(RefreshAll)
+    refreshingModules = false
+    if not ok then error(err, 0) end
+end
+
+function ProfileManager:IsRefreshingModules()
+    return refreshingModules
 end
 
 ---------------------------------------------------------------------------------

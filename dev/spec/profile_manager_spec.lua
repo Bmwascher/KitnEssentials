@@ -257,6 +257,21 @@ describe("RefreshAllModules enabled-state sync", function()
         -- replace the first rather than queue. Never two.
         assert.equal(1, skinPrompts + generic)
     end)
+
+    -- A flag left set would stop the PI pages rebuilding until the next
+    -- profile operation.
+    it("reports a refresh only while one runs, and clears it when a module errors", function()
+        local PM, seen
+        local joining = fakeModule("A", { Enabled = true })
+        joining.OnEnable = function() seen = PM:IsRefreshingModules() end
+        local failing = fakeModule("B", { Enabled = true })
+        failing.enabled = true
+        failing.ApplySettings = function() error("boom") end
+        PM = harness({ joining, failing })
+        assert.has_error(function() PM:RefreshAllModules() end)
+        assert.is_true(seen)
+        assert.is_false(PM:IsRefreshingModules())
+    end)
 end)
 
 -- The renames run on the imported table before the copy (Core/Defaults.lua
