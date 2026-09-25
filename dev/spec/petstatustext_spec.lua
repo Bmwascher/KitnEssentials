@@ -100,6 +100,9 @@ describe("Demonology expected pet", function()
             { nil, "key", nil },
             { nil, "mythicIdle", nil },
             { nil, "other", nil },
+            { FELHUNTER, "world", nil },
+            { FELGUARD, "world", nil },
+            { IMP, "world", nil },
         }
         for _, r in ipairs(rows) do
             assert.equals(r[3], PS.DemoPetExpected(r[1], r[2]), tostring(r[1]) .. " in " .. r[2])
