@@ -131,10 +131,10 @@ end
 ---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
--- A spell can be secret for any unit, so the player-only registration does
--- not make spellID plain; a secret one is never the vault.
+-- A cast payload can be secret for any unit, so the player-only registration
+-- makes neither unit nor spellID plain; a secret one is never the vault.
 function GVA.IsVaultCast(unit, spellID)
-    if unit ~= "player" then return false end
+    if issecretvalue(unit) or unit ~= "player" then return false end
     if issecretvalue(spellID) then return false end
     return spellID == VAULT_SPELL_ID
 end

@@ -318,7 +318,7 @@ end
 ---------------------------------------------------------------------------------
 function ST:OnEvent(event, unit, ...)
     if event == "UNIT_SPELLCAST_SUCCEEDED" then
-        if unit ~= "player" then return end
+        if issecretvalue(unit) or unit ~= "player" then return end
         local _, spellId = ...
         if issecretvalue(spellId) then return end
 
@@ -342,7 +342,7 @@ function ST:OnEvent(event, unit, ...)
         end
 
     elseif event == "UNIT_SPELLCAST_EMPOWER_STOP" then
-        if unit ~= "player" then return end
+        if issecretvalue(unit) or unit ~= "player" then return end
         if not self.state.showing or self.state.storedSpells >= 3 then return end
         local _, spellId, success = ...
         if issecretvalue(spellId) then return end
