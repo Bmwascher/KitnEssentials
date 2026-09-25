@@ -276,7 +276,7 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
         dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
         soundLabel = "Proc Sound",
         testChannel = "Master",
-        notes = { "Plays once when a proc starts, on the Master channel." },
+        notes = { "Plays once when you receive the Time Spiral buff, on the Master channel." },
     })
     manager:Register(soundCard, "all")
     yOffset = soundOffset
