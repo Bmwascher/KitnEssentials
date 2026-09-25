@@ -242,8 +242,10 @@ end
 ---------------------------------------------------------------------------------
 -- Pure, so the stop rules can be driven without the game. Actions: "start",
 -- "restart" (a boss pulled mid-span), "stop", "reset" (a stop with no chat
--- line) or nil. encounterLive is consulted only out of combat with the mark
--- set, so a caller that skips the read may pass false.
+-- line) or nil. encounterLive is consulted out of combat with the mark set,
+-- and at every PLAYER_ENTERING_WORLD, where it becomes the mark: a span
+-- rebuilt after a reload has seen no ENCOUNTER_START. A caller that skips the
+-- read may pass false.
 ---@param running boolean
 ---@param inEncounter boolean
 ---@param event string
@@ -274,11 +276,11 @@ function CT.Transition(running, inEncounter, event, inCombat, encounterLive, suc
         return running, false, nil
     elseif event == "PLAYER_ENTERING_WORLD" then
         if inCombat then
-            if running then return true, inEncounter, nil end
-            return true, inEncounter, "start"
+            if running then return true, encounterLive, nil end
+            return true, encounterLive, "start"
         end
-        if running then return false, false, "reset" end
-        return false, false, nil
+        if running then return false, encounterLive, "reset" end
+        return false, encounterLive, nil
     end
     return running, inEncounter, nil
 end
@@ -309,7 +311,7 @@ end
 function CT:_Step(event, success)
     local inCombat = InCombatLockdown()
     local encounterLive = false
-    if not inCombat and self.inEncounter and IsEncounterInProgress then
+    if IsEncounterInProgress and (event == "PLAYER_ENTERING_WORLD" or (not inCombat and self.inEncounter)) then
         encounterLive = IsEncounterInProgress()
     end
     local wasEncounter = self.inEncounter
@@ -403,6 +405,10 @@ end
 ---------------------------------------------------------------------------------
 function CT:OnEnable()
     if not self.db.Enabled then return end
+    -- The events are off until here, so a boss pulled earlier sent this
+    -- module no ENCOUNTER_START.
+    self.inEncounter = false
+    if IsEncounterInProgress then self.inEncounter = IsEncounterInProgress() end
     self:CreateFrame()
     self:RegWithEditMode()
     self:ApplySettings()

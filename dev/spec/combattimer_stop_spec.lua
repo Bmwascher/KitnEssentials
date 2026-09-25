@@ -60,6 +60,24 @@ describe("combat timer stop rules", function()
         })
     end)
 
+    it("sets the mark from a live encounter at any loading screen, so a later drop from combat holds", function()
+        -- The TICK takes the mark the in-combat loading screen returned: a span
+        -- rebuilt by a reload mid-boss, then held through a death.
+        local running, mark, action = CT.Transition(false, false, "PLAYER_ENTERING_WORLD", true, true)
+        assert.is_true(running)
+        assert.is_true(mark)
+        assert.equals("start", action)
+        running, mark, action = CT.Transition(running, mark, "TICK", false, true)
+        assert.is_true(running, "TICK after the reload")
+        assert.is_true(mark, "TICK after the reload")
+        assert.is_nil(action, "TICK after the reload")
+        check({
+            { name = "out of combat, not running (a reload while dead)", event = "PLAYER_ENTERING_WORLD",
+                running = false, mark = false, inCombat = false, live = true,
+                expRunning = false, expMark = true },
+        })
+    end)
+
     it("holds when the player drops combat mid-encounter, and a re-entry continues the same span", function()
         check({
             { name = "PLAYER_REGEN_ENABLED", event = "PLAYER_REGEN_ENABLED", running = true, mark = true,
