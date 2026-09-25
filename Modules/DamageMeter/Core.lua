@@ -67,8 +67,16 @@ DM._lastEntryScope = nil
 DM._resetGen = 0
 DM._wipeBoundary = false
 
--- An instance reset decided while a capture would read secret amounts waits
--- here, as its token, to be judged again at combat end.
+-- A load's difficulty reads as the previous zone's until it settles, so it
+-- counts as unknown while settling. The window remembers whether a login,
+-- /reload or enable opened it; the generation voids a replaced fallback timer.
+DM._entrySettling = false
+DM._entrySettleFresh = false
+DM._entrySettleGen = 0
+
+-- An instance reset held as its token, to be judged again at combat end while
+-- a capture would read secret amounts, or at the settle while a load's
+-- difficulty is still settling.
 DM._deferredReset = nil
 
 -- Reset on Logout, held the same way when the login came in combat. A meter
@@ -732,8 +740,10 @@ function DM:OnEnable()
     self:RegisterEvent("CHALLENGE_MODE_RESET", "OnChallengeEvent")
     -- A Delve starts and ends with no loading screen.
     self:RegisterEvent("ACTIVE_DELVE_DATA_UPDATE", "OnDelveDataUpdate")
+    -- A load's difficulty settles after PLAYER_ENTERING_WORLD.
+    self:RegisterEvent("PLAYER_DIFFICULTY_CHANGED", "OnDifficultyChanged")
     -- Record where the player is, so enabling the module is not an entry.
-    self:CheckInstanceEntry(true)
+    self:OpenEntrySettle(true)
 
     -- Reset the cached context so the first scheduled check always applies the live
     -- context once (a stale cache would make it think nothing changed).
@@ -867,6 +877,8 @@ function DM:OnDisable()
     self:ClearFeignTags("module disable")
     self._wipeBoundary = false
     self._lastEntryKey, self._lastEntryScope = nil, nil
+    self._entrySettling, self._entrySettleFresh = false, false
+    self._entrySettleGen = self._entrySettleGen + 1
     self._deferredReset = nil
     self._loginResetHeld = false
     self:CloseInstancePrompt()
@@ -1489,7 +1501,7 @@ function DM:OnCombatForceStop(_, isLogin, isReload)
         self:ApplyLoginReset()
     end
     -- A login or /reload only records where the player is.
-    self:CheckInstanceEntry(isLogin == true or isReload == true)
+    self:OpenEntrySettle(isLogin == true or isReload == true)
 end
 
 -- The damage-meter session changed. In combat the ticker already covers
@@ -3245,6 +3257,22 @@ function DM.InstanceEntryKey(instanceID, difficultyID)
     return instanceID .. ":" .. difficultyID
 end
 
+local MYTHIC_DIFFICULTY_ID = 23
+local MYTHIC_KEYSTONE_DIFFICULTY_ID = 8
+
+-- True when the last key is this instance at Mythic and the difficulty is now
+-- Mythic Keystone, or the reverse. A keystone makes that move in place when it
+-- is slotted, and its activation load can repeat it; Reset on Key Start owns
+-- that boundary, so it is never an instance entry.
+function DM.InstanceKeystoneSwap(lastKey, instanceID, difficultyID)
+    if type(lastKey) ~= "string" then return false end
+    local lastID, lastDiff = lastKey:match("^(%d+):(%d+)$")
+    if not lastID or tonumber(lastID) ~= instanceID then return false end
+    lastDiff = tonumber(lastDiff)
+    return (lastDiff == MYTHIC_DIFFICULTY_ID and difficultyID == MYTHIC_KEYSTONE_DIFFICULTY_ID)
+        or (lastDiff == MYTHIC_KEYSTONE_DIFFICULTY_ID and difficultyID == MYTHIC_DIFFICULTY_ID)
+end
+
 -- Returns the new last key and scope, the action ("none", "auto" or "ask"),
 -- and whether the player moved from the last entry's place, which ends any Ask
 -- prompt raised there. The last key survives the open world, so running back
@@ -3256,6 +3284,7 @@ function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficu
     local key = DM.InstanceEntryKey(instanceID, difficultyID)
     local entered = scope ~= nil and key ~= nil
         and (key ~= lastKey or (lastScope == "delveover" and scope == "delve"))
+        and not DM.InstanceKeystoneSwap(lastKey, instanceID, difficultyID)
     local newKey, newScope = lastKey, lastScope
     if scope ~= nil and key ~= nil then
         newKey, newScope = key, scope
@@ -3338,15 +3367,18 @@ local function CaptureBlocked()
     return C_RestrictedActions.IsAddOnRestrictionActive(kinds.Combat) == true
 end
 
--- Resets for the entry the token pins while that is still true. A capture
--- while blocked would keep secret amounts, which the breakdown later shows as
--- zeros, and the wipe would leave no plain copy, so the reset is held for
--- combat end and judged again then.
+-- Resets for the entry the token pins while that is still true, or holds it.
+-- A capture while blocked would keep secret amounts, which the breakdown later
+-- shows as zeros, and the wipe would leave no plain copy, so the reset is held
+-- for combat end. While a load settles, the read here can carry the previous
+-- zone's difficulty, so the reset is held for the settle. Either way it is
+-- judged again then.
 function DM:ApplyInstanceReset(token)
     local _, instanceID, difficultyID = ReadInstanceEntry()
     local optionOn = self.db ~= nil and self.db.ResetOnInstanceEntry == true
+    local blocked = CaptureBlocked() or self._entrySettling == true
     local action = DM.InstanceResetAction(token, DM.InstanceEntryKey(instanceID, difficultyID),
-        self._resetGen, self.enabled, optionOn, CaptureBlocked())
+        self._resetGen, self.enabled, optionOn, blocked)
     if action == "defer" then
         self._deferredReset = token
     elseif action == "wipe" then
@@ -3400,10 +3432,12 @@ function DM:ShowInstancePrompt(key, name)
         { closeIsNeutral = true, waitIfBusy = true })
 end
 
--- PLAYER_ENTERING_WORLD (freshLoad on a login or /reload), a Delve starting or
--- ending, and the module enabling (freshLoad).
+-- Called at the settling window's open and close, on PLAYER_DIFFICULTY_CHANGED
+-- and when a Delve starts or ends. While a load settles its difficulty is the
+-- previous zone's, so it counts as unknown and no instance is keyed.
 function DM:CheckInstanceEntry(freshLoad)
     local scope, instanceID, difficultyID, name = ReadInstanceEntry()
+    if self._entrySettling then difficultyID = nil end
     local db = self.db
     local action, moved
     self._lastEntryKey, self._lastEntryScope, action, moved = DM.InstanceEntryDecision(
@@ -3425,6 +3459,52 @@ end
 
 function DM:OnDelveDataUpdate()
     self:CheckInstanceEntry(false)
+end
+
+-- Seconds a load waits for PLAYER_DIFFICULTY_CHANGED before its difficulty
+-- read is trusted anyway.
+local ENTRY_SETTLE_FALLBACK = 3
+
+-- PLAYER_ENTERING_WORLD and module enable. Opens the settling window, or
+-- restarts its fallback. freshLoad sticks until the close, so a load inside a
+-- login's window still only records.
+function DM:OpenEntrySettle(freshLoad)
+    self._entrySettling = true
+    self._entrySettleFresh = self._entrySettleFresh or freshLoad == true
+    self._entrySettleGen = self._entrySettleGen + 1
+    local gen = self._entrySettleGen
+    C_Timer.After(ENTRY_SETTLE_FALLBACK, function()
+        if not DM.enabled or DM._entrySettleGen ~= gen then return end
+        DM:CloseEntrySettle()
+    end)
+    self:CheckInstanceEntry(freshLoad)
+end
+
+-- A reset accepted or resumed inside the window was held because its read could
+-- carry the previous zone's difficulty; it is judged on the settled read before
+-- the settled entry decision can bump the generation.
+function DM:CloseEntrySettle()
+    if not self._entrySettling then return end
+    local fresh = self._entrySettleFresh
+    self._entrySettling, self._entrySettleFresh = false, false
+    self._entrySettleGen = self._entrySettleGen + 1
+    local held = self._deferredReset
+    if held then
+        self._deferredReset = nil
+        self:ApplyInstanceReset(held)
+    end
+    self:CheckInstanceEntry(fresh)
+end
+
+-- Inside a load the first one settles the difficulty. Outside one, the change
+-- came with no loading screen (a keystone slotted, for one), so it only
+-- re-keys: it is never an instance entry.
+function DM:OnDifficultyChanged()
+    if self._entrySettling then
+        self:CloseEntrySettle()
+    else
+        self:CheckInstanceEntry(true)
+    end
 end
 
 -- CHALLENGE_MODE_START / COMPLETED / RESET handler. The keystone flag is reliable the
