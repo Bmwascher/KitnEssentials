@@ -219,6 +219,7 @@ describe("LootRoll bonus roll anchoring", function()
         LR._barsWired = true
         bar1 = makeFrame()
         bar1.button = { GetHeight = function() return 29 end }
+        bar1.status = { GetHeight = function() return 22 / 3 end }
         LR.RollBars = { bar1 }
         _G.BonusRollFrame = makeFrame()
     end)

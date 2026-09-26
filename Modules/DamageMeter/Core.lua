@@ -3311,19 +3311,12 @@ local function ReadInstanceEntry()
     return DM.InstanceScope(instanceType, delveActive), instanceID, difficultyID, name
 end
 
--- Closes this module's Ask prompt, only while the shared dialog still shows it
--- (Core/Widgets.lua clears _onAccept on every close and replaces it on every
--- new prompt), so another module's prompt is left alone.
+-- Closes this module's Ask prompt, shown or waiting, and only that one.
 function DM:CloseInstancePrompt()
     local accept = self._instancePromptAccept
     self._instancePromptAccept = nil
     if not accept then return end
-    local dialog = KE.activePrompt
-    if dialog and dialog._onAccept == accept then
-        dialog._onAccept, dialog._onCancel = nil, nil
-        dialog:Hide()
-        KE.activePrompt = nil
-    end
+    KE:ClosePromptIfOwner(accept)
 end
 
 -- True while a capture would store secret amounts: the meter's getters are
@@ -3380,7 +3373,10 @@ function DM:ResumeHeldResets()
 end
 
 -- Asks before resetting. The token pins the entry the prompt was raised for.
+-- Nobody asked for it, so it waits behind an open prompt instead of replacing
+-- it, and the module's own older Ask is closed first so it never waits on that.
 function DM:ShowInstancePrompt(key, name)
+    self:CloseInstancePrompt()
     local token = { key = key, gen = self._resetGen }
     local onAccept
     onAccept = function()
@@ -3393,7 +3389,7 @@ function DM:ShowInstancePrompt(key, name)
     self._instancePromptAccept = onAccept
     KE:CreatePrompt("Damage Meter", "Reset the meter for " .. (name or "this instance") .. "?",
         false, nil, false, nil, nil, nil, nil, onAccept, onCancel, "Reset", "Keep", nil, nil,
-        { closeIsNeutral = true })
+        { closeIsNeutral = true, waitIfBusy = true })
 end
 
 -- PLAYER_ENTERING_WORLD (freshLoad on a login or /reload), a Delve starting or

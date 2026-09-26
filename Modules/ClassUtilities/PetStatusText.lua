@@ -88,13 +88,6 @@ local FELGUARD_NPC_IDS = {
 -- "Creature-". Position 6 is the NPC ID regardless, so the same extraction
 -- works for both prefixes.
 --
--- Tri-state return:
---   true  — pet GUID resolved to a known Felguard NPC ID
---   false — pet GUID resolved to a known non-Felguard NPC ID
---   nil   — cannot determine (no pet, GUID is a 12.0 secret value, or GUID
---           is malformed). The WRONG branch in CheckPetStatus only fires on
---           an explicit `false` so secret-GUID contexts don't false-positive.
---
 -- KE:GetSafeUnitGUID returns nil when UnitGUID returns a secret string —
 -- without this, calling strsplit on a secret value triggers
 -- "attempt to perform string conversion on a secret string value (tainted)."
@@ -105,12 +98,44 @@ local FELGUARD_NPC_IDS = {
 -- notation, the value coerces to infinity, and tonumber crashes with
 -- "integer overflow attempting to store inf." Assign to a local first to
 -- truncate to a single value.
-local function IsPetFelguard()
+local function GetPetNpcID()
     local guid = KE:GetSafeUnitGUID("pet")
     if not guid then return nil end
     local segment = select(6, strsplit("-", guid))
-    local npcID = tonumber(segment)
-    if not npcID then return nil end
+    return tonumber(segment)
+end
+
+local FELHUNTER_NPC_ID = 417
+-- A Mythic dungeon reads 23 before the key and 8 once it is inserted.
+local MYTHIC_DIFFICULTY_ID = 23
+local MYTHIC_KEYSTONE_DIFFICULTY_ID = 8
+
+-- "key" while a keystone runs, "mythicIdle" in a Mythic dungeon with none
+-- running (before the key, between insert and start, after completion),
+-- "other" everywhere else. The ChallengeMode restriction spans exactly the
+-- running key.
+local function GetDemoPetContent()
+    local kinds = Enum.AddOnRestrictionType
+    local isActive = C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive
+    if kinds and kinds.ChallengeMode and isActive and isActive(kinds.ChallengeMode) then
+        return "key"
+    end
+    local _, instanceType, difficultyID = GetInstanceInfo()
+    if instanceType == "party"
+        and (difficultyID == MYTHIC_DIFFICULTY_ID or difficultyID == MYTHIC_KEYSTONE_DIFFICULTY_ID) then
+        return "mythicIdle"
+    end
+    return "other"
+end
+
+-- Whether a Demonology pet is the one the content calls for. nil when the pet
+-- cannot be identified (secret or malformed GUID), which never shows WRONG.
+function PS.DemoPetExpected(npcID, content)
+    if npcID == nil then return nil end
+    if content == "key" then return npcID == FELHUNTER_NPC_ID end
+    if content == "mythicIdle" then
+        return npcID == FELHUNTER_NPC_ID or FELGUARD_NPC_IDS[npcID] == true
+    end
     return FELGUARD_NPC_IDS[npcID] == true
 end
 
@@ -158,13 +183,12 @@ local function CheckPetStatus()
 
     if not C_SpellBook.IsSpellKnown(petInfo.summonSpellId) then return PET_STATUS.NONE, nil, nil end
 
-    -- Demo Warlock with non-Felguard pet. Priority above DEAD because the
-    -- actionable fix is "dismiss + re-summon Felguard," not "revive."
-    -- IsPetFelguard returns nil when the pet GUID is a 12.0 secret value or
-    -- otherwise unresolvable — explicitly compare to false so an unknown
-    -- pet identity falls through to the existing DEAD/PASSIVE/MISSING chain
-    -- rather than false-positive a WRONG warning we can't actually verify.
-    if specID == 266 and UnitExists("pet") and IsPetFelguard() == false then
+    -- Demo Warlock with the wrong pet. Priority above DEAD because the
+    -- actionable fix is "dismiss + re-summon," not "revive." Compared to false
+    -- explicitly: an unidentified pet falls through to the DEAD/PASSIVE/MISSING
+    -- chain rather than raise a WRONG warning that cannot be verified.
+    if specID == 266 and UnitExists("pet")
+        and PS.DemoPetExpected(GetPetNpcID(), GetDemoPetContent()) == false then
         return PET_STATUS.WRONG, PS.db.PetWrong, PS.db.WrongColor
     end
 

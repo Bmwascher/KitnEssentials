@@ -310,6 +310,10 @@ local function BonusRollAnchorBar(bars)
 end
 LR.BonusRollAnchorBar = BonusRollAnchorBar
 
+-- The name's rise above the status bar. LootRollBars.lua anchors the name with
+-- it and AnchorBonusRoll counts it, so the two cannot drift apart.
+LR.NAME_Y_OFFSET = 3
+
 local function AnchorBonusRoll()
     if not LR:IsEnabled() then return end
     local db = LR.db
@@ -324,10 +328,12 @@ local function AnchorBonusRoll()
     local bar = LR.RollBars and BonusRollAnchorBar(LR.RollBars)
     if not bar then return end
 
-    -- The item icon spans the bar's full content, which rises above the bar
-    -- frame's top edge; counted so the visible gap equals Spacing.
-    local rise = bar.button:GetHeight() - bar:GetHeight()
-    if rise < 0 then rise = 0 end
+    -- Counted from the highest thing the bar draws, the item icon or the name
+    -- above the status bar, so the visible gap equals Spacing. Negative when
+    -- both sit below the frame's top edge.
+    local iconTop = bar.button:GetHeight()
+    local nameTop = bar.status:GetHeight() + LR.NAME_Y_OFFSET + (db.NameFontSize or 13)
+    local rise = math.max(iconTop, nameTop) - bar:GetHeight()
 
     f:ClearAllPoints()
     f:SetPoint("BOTTOM", bar, "TOP", 0, (db.Spacing or 1) + rise)

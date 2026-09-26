@@ -327,7 +327,7 @@ function LR:RollBars_Layout()
         bar.greed:SetPoint("RIGHT", bar.transmog, "LEFT", -3, 0)
         bar.need:SetPoint("RIGHT", bar.greed, "LEFT", -3, 0)
 
-        bar.name:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT", 1, 3)
+        bar.name:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT", 1, LR.NAME_Y_OFFSET)
         bar.name:SetPoint("RIGHT", bar.bind, "LEFT", -1, 0)
         bar.bind:SetPoint("RIGHT", bar.need, "LEFT", -1, 0)
 
@@ -593,10 +593,10 @@ function LR:SetupRollBars()
             KE:Print("Loot Roll: could not silence the default roll windows, so both stacks will show.")
         end
         self._barsWired = true
+        -- The layout pass's call ran before the wiring, so a prompt already on
+        -- screen is placed here. Later setups anchor through the layout pass.
+        LR.AnchorBonusRoll()
     end
-    -- On first setup the layout pass's call ran before the wiring, so a
-    -- prompt already on screen is placed here.
-    LR.AnchorBonusRoll()
 end
 
 function LR:TeardownRollBars()

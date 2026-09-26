@@ -921,7 +921,7 @@ function DT:OnEvent(event, unit, ...)
         if spellId ~= DISINTEGRATE then return end
 
         local endTimeMS = select(5, UnitChannelInfo("player"))
-        if endTimeMS ~= nil then
+        if not issecretvalue(endTimeMS) and endTimeMS ~= nil then
             self.prevEndTime = endTimeMS / 1000
         end
 
@@ -931,6 +931,10 @@ function DT:OnEvent(event, unit, ...)
         if spellId ~= DISINTEGRATE then return end
 
         local _, _, _, startTimeMS, endTimeMS = UnitChannelInfo("player")
+        -- Nothing comes back once the channel has ended, and the times are
+        -- secret while spellcasts are restricted.
+        if issecretvalue(startTimeMS) or issecretvalue(endTimeMS) then return end
+        if startTimeMS == nil or endTimeMS == nil then return end
         local startTime = startTimeMS / 1000
 
         -- Hover mid-Disintegrate triggers another CHANNEL_START — deduplicate

@@ -2638,6 +2638,9 @@ function L.loadBonusRoll(overrides)
         ColorTextByTheme = function(_, text) return text end,
     }
     KE.Print = function(_, msg) KE.prints[#KE.prints + 1] = msg end
+    -- The real prompt helpers, so the close-my-prompt case runs through the
+    -- shared owner test rather than a copy of it.
+    helpers.loadModule("Core/Widgets.lua", KE)
     helpers.loadModule("Modules/QoL/BonusRoll.lua", KE)
     return modules["BonusRoll"], KE
 end
@@ -2909,8 +2912,9 @@ function L.loadWorldMarkerCycler(overrides)
 end
 
 -- Modules/ClassUtilities/DisintegrateTicks.lua, for the pure tick-marker
--- resolver only. The module builds frames and registers a cast-bar provider at
--- file scope, so the mock has to satisfy those before the resolver is reachable.
+-- resolver and the channel-start guard. The module builds frames and registers
+-- a cast-bar provider at file scope, so the mock has to satisfy those before
+-- either is reachable. overrides.UnitChannelInfo feeds the channel events.
 function L.loadDisintegrateTicks(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
@@ -2923,6 +2927,8 @@ function L.loadDisintegrateTicks(overrides)
     _G.EventRegistry = { RegisterCallback = function() end, UnregisterCallback = function() end }
     _G.hooksecurefunc = function() end
     _G.Constants = { UICharacterClasses = { Evoker = 13 } }
+    -- Captured at file scope, so a channel-event spec sets it before the load.
+    _G.UnitChannelInfo = overrides and overrides.UnitChannelInfo
     local KE = {
         Print = function() end,
         IsSafeValue = function() return true end,
@@ -2930,6 +2936,18 @@ function L.loadDisintegrateTicks(overrides)
     }
     helpers.loadModule("Modules/ClassUtilities/DisintegrateTicks.lua", KE)
     return modules["DisintegrateTicks"], KE
+end
+
+-- Modules/Dungeons/KickTracker.lua, for the own-kick guard. Plain stubs only:
+-- the file reads C_SpecializationInfo (from the mock) and LibStub at load, and
+-- the spec drives OnSpellcastSucceeded directly. Returns KT.
+function L.loadKickTracker(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    _G.LibStub = function() return nil end
+    helpers.loadModule("Modules/Dungeons/KickTracker.lua", { Print = function() end })
+    return modules["KickTracker"]
 end
 
 -- Modules/Utilities/ReadyCheckConsumables.lua. The module captures its API

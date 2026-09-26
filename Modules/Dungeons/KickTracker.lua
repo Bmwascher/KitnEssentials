@@ -39,6 +39,7 @@ local C_Spell = C_Spell
 local UnitNameFromGUID = UnitNameFromGUID
 local UnitClassFromGUID = UnitClassFromGUID
 local UnitTokenFromGUID = UnitTokenFromGUID
+local issecretvalue = issecretvalue
 local string_find = string.find
 local string_format = string.format
 local math_floor = math.floor
@@ -746,11 +747,13 @@ end
 
 function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
+    -- The payload is secret while unit spellcasts are restricted, and a secret
+    -- is never compared or used as a table key.
+    if issecretvalue(unit) or issecretvalue(spellID) then return end
     if unit ~= "player" and unit ~= "pet" then return end
 
-    -- Own casts (player + own pet) deliver a PLAIN spellID in 12.0.5. Party
-    -- members' casts do not fire this event for kicks at all (probe-confirmed)
-    -- — teammate detection lives in HandleNameplateInterrupt.
+    -- Party members' casts do not fire this event for kicks at all —
+    -- teammate detection lives in HandleNameplateInterrupt.
     if not INTERRUPT_SPELL_IDS[spellID] then return end
     local guid = UnitGUID("player")
     if guid then

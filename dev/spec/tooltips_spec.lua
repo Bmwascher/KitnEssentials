@@ -112,6 +112,18 @@ describe("Tooltips UnitColor", function()
     end)
 end)
 
+describe("Tooltips UnitColor, plain-named player", function()
+    -- Nothing leaves Blizzard's own name colour in place. A reaction colour
+    -- here would paint a player in an NPC's green or red.
+    it("returns nothing for a plain-named player whose class has no colour", function()
+        local TT = L.loadTooltips({
+            UnitIsPlayer = function() return true end,
+            UnitClass = function() return "Monk", "MONK" end,
+        })
+        assert.is_nil(TT._UnitColor("target", nil))
+    end)
+end)
+
 describe("Tooltips ReactionColor", function()
     it("returns the faction bar colour for the unit's reaction", function()
         local TT = L.loadTooltips()
