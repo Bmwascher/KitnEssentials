@@ -513,6 +513,8 @@ function GUIFrame:CreateSlider(parent, labelText, config)
                 UpdateFill()
             end
         end
+        -- A typed value commits through the same throttled SetValue.
+        FlushDropped()
     end)
 
     valueEdit:SetScript("OnEditFocusGained", function(self)
@@ -554,12 +556,8 @@ function GUIFrame:CreateSlider(parent, labelText, config)
                 UpdateFill()
             end
         end
+        FlushDropped()
     end)
-
-    -- A typed value commits through the same throttled SetValue. These hooks
-    -- run after the commit handlers above.
-    valueEdit:HookScript("OnEnterPressed", FlushDropped)
-    valueEdit:HookScript("OnEditFocusLost", FlushDropped)
 
     -- Add hover animation for editbox
     valueEdit:SetScript("OnEnter", function(self)

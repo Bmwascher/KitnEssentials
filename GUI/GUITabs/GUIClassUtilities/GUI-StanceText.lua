@@ -185,7 +185,7 @@ GUIFrame:RegisterContent("StanceText", function(scrollChild, yOffset)
     -- One card per class, ALL classes -- settings can be prepared for an
     -- alt without logging into it.
     ------------------------------------------------------------------
-    local currentSpecId = GUIFrame.GetCurrentSpecID()
+    local currentSpecId = KE:GetPlayerSpecId()
 
     if mod and mod.CLASS_ORDER then
         for _, classKey in ipairs(mod.CLASS_ORDER) do

@@ -334,12 +334,23 @@ describe("ChatMessageHandler body highlight", function()
             assert.is_truthy(CMH.Highlight("|cff00ff00x|r Ana"):find("|cffff0000Ana|r", 1, true))
         end)
 
-        -- The boss-monster path concatenates the body into a format string, so
-        -- splitting an escaped pair there makes format throw.
-        it("refuses a hit overlapping an escaped percent pair", function()
-            setChat({ HighlightKeywords = "50%", HighlightColor = { 1, 0, 0 } })
-            local text = "the boss is at 50%% health"
-            assert.are.equal(text, CMH.Highlight(text))
+        -- A boss body becomes a format pattern after highlighting, where a
+        -- colour code inside a %% pair shows two percents and one inside a %s
+        -- shows the directive instead of the name. Ordinary chat passes the
+        -- body as a format argument, so its %s is text and still colours.
+        it("refuses a hit splitting a percent pair, or a %s in a boss body", function()
+            local cases = {
+                { name = "percent pair", keyword = "50%", text = "the boss is at 50%% health" },
+                { name = "percent pair in a boss body", keyword = "50%", text = "the boss is at 50%% health",
+                  boss = true },
+                { name = "%s in a boss body", keyword = "s", text = "%s gazes at you", boss = true },
+                { name = "%s in ordinary chat", keyword = "s", text = "%s gazes at you",
+                  want = "%|cffff0000s|r gazes at you" },
+            }
+            for _, c in ipairs(cases) do
+                setChat({ HighlightKeywords = c.keyword, HighlightColor = { 1, 0, 0 } })
+                assert.are.equal(c.want or c.text, CMH.Highlight(c.text, nil, c.boss), c.name)
+            end
         end)
     end)
 
@@ -525,6 +536,35 @@ describe("ChatMessageHandler secret boss body", function()
     it("returns the raw header-class body when the join is unavailable", function()
         _G.C_StringUtil = nil
         assert.are.equal("Die!", CMH.ComposeBossBody("%s yells: ", "Die!", "", "Boss", true))
+    end)
+end)
+
+describe("ChatMessageHandler plain boss body", function()
+    local CMH
+
+    before_each(function()
+        CMH = L.loadChatMessageHandler().ChatMessageHandler
+    end)
+
+    -- The body becomes part of the format pattern, so every row runs under
+    -- pcall: a row that raises fails with format's own message.
+    it("keeps the name directives it has arguments for and shows every other percent", function()
+        local cases = {
+            { name = "digit-led percent", header = "", body = "50% health", want = "50% health" },
+            { name = "undigited percent", header = "", body = "a % chance", want = "a % chance" },
+            { name = "trailing percent", header = "", body = "at 50%", want = "at 50%" },
+            { name = "authored pair", header = "", body = "100%% sure", want = "100% sure" },
+            { name = "name directive", header = "", body = "%s gazes at you", want = "Boss gazes at you" },
+            { name = "surplus directive, empty header", header = "",
+              body = "%s and %s and %s", want = "Boss and Boss and %s" },
+            { name = "surplus directive after a header", header = "%s yells: ",
+              body = "%s and %s", want = "Boss yells: Boss and %s" },
+        }
+        for _, c in ipairs(cases) do
+            local ok, body = pcall(CMH.ComposeBossBody, c.header, c.body, "", "Boss", false)
+            assert.is_true(ok, c.name .. ": " .. tostring(body))
+            assert.are.equal(c.want, body, c.name)
+        end
     end)
 end)
 

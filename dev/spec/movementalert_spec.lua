@@ -118,9 +118,8 @@ describe("movement alert spell resolution", function()
         local function mage()
             local M = L.loadMovementAlert({
                 UnitClass = function() return "Mage", "MAGE", 8 end,
+                specId = 62,
             })
-            _G.GetSpecialization = function() return 1 end
-            _G.GetSpecializationInfo = function() return 62 end
             _G.C_SpellBook.known = { [1953] = true, [212653] = true }
             M.db = {}
             -- Seeded by OnEnable, which never runs headlessly.

@@ -63,7 +63,16 @@ local function lint_block(block, index, plan)
     -- unused/undefined LOCALS are the defect classes this exists for, so
     -- global warnings (11x) are silenced — a misspelled global read is the
     -- accepted blind spot of that trade.
-    local cmd = string.format('luacheck "%s" --codes --no-color --ignore 11 2>&1', snippet)
+    -- A fence with no target path is a busted spec when it calls describe( or
+    -- it(, and gets busted's globals the way .luacheckrc gives them to dev/spec.
+    local std = ""
+    for line in (block.code .. "\n"):gmatch("([^\n]*)\n") do
+        if line:match("^%s*describe%s*%(") or line:match("^%s*it%s*%(") then
+            std = " --std lua51+busted"
+            break
+        end
+    end
+    local cmd = string.format('luacheck "%s" --codes --no-color --ignore 11%s 2>&1', snippet, std)
     local pipe = io.popen(cmd)
     local report = pipe:read("*a")
     pipe:close()

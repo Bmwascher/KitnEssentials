@@ -530,10 +530,11 @@ CP._ParseEnchantLine = ParseEnchantLine
 -- Effect name and rank from the tooltip's "Enchanted: ..." line, the text after
 -- the prefix as the tooltip gives it: ProcessEnchantText strips and maps it.
 -- data (optional): pre-fetched C_TooltipInfo.GetInventoryItem(unit, slot) table
--- shared by the caller's render pass, so one read serves every consumer.
+-- shared by the caller's render pass, so one read serves every consumer. false
+-- is a read that came back empty; only nil (nobody has read) reads here.
 local function GetSlotEnchantName(unit, slot, data)
     unit = unit or "player"
-    data = data or C_TooltipInfo.GetInventoryItem(unit, slot)
+    if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slot) end
     if not data or not data.lines then return nil end
     local prefix = ENCHANTED_TOOLTIP_LINE:gsub("%%s.*$", "")  -- "Enchanted: "
     for _, line in ipairs(data.lines) do
@@ -619,12 +620,15 @@ end
 
 -- An inspected unit's level can be secret, and the enchantable table is keyed
 -- by expansion: the secret test runs first, before any comparison, and the
--- decision uses that one checked read.
-function CP:IsEnchantableSlot(unit, slot)
+-- decision uses that one checked read. cueOnly: only where the missing-enchant
+-- cue can draw, which UpdateSlotWarning limits to effective max level.
+function CP:IsEnchantableSlot(unit, slot, cueOnly)
     local level = UnitLevel(unit)
     if issecretvalue and issecretvalue(level) then return false end
     if level == nil then return false end
-    return CanEnchantSlotAtLevel(unit, slot, level) and true or false
+    if not CanEnchantSlotAtLevel(unit, slot, level) then return false end
+    if cueOnly and not IsLevelAtEffectiveMaxLevel(level) then return false end
+    return true
 end
 
 ---------------------------------------------------------------------------------
@@ -1539,7 +1543,7 @@ end
 -- every other slot of the same track.
 function CP:GetItemTrack(unit, slotID, data)
     unit = unit or "player"
-    data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
+    if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
     if not data or not data.lines then return nil end
 
     local isCrafted = false
@@ -1664,29 +1668,36 @@ end
 CP._TrackPending = TrackPending
 
 -- Whether an inspect slot's render drew a stand-in that must be read again.
--- The ownership gates repeat the render functions' on purpose: this is the one
--- place that says what pends, so an element another addon draws never does.
+-- The one place that says what pends, ownership included, so an element
+-- another addon draws never does. The lookups come last, for a render that
+-- may have drawn a stand-in KE displays.
 -- `provisional`: the inspect data may not have landed yet, so an absent
 -- enchant ID or track may only mean it has not arrived.
-function CP:InspectEnchantPending(held, provisional, fellBack, enchantID, enchantable, euiOwnsEnchant)
+function CP:InspectEnchantPending(unit, slotID, held, provisional, fellBack, enchantID)
     local db = self.db
-    if not (held and db) or euiOwnsEnchant then return nil end
-    if fellBack and db.ShowEnchantNames then return true end
-    if provisional and not enchantID and enchantable
-        and (db.ShowEnchantNames or db.ShowEnchants ~= false) then
-        return true
-    end
-    return nil
+    if not (held and db) then return nil end
+    local byFallback = fellBack and db.ShowEnchantNames
+    local byWindow = provisional and not enchantID
+        and (db.ShowEnchantNames or db.ShowEnchants ~= false)
+    if not (byFallback or byWindow) then return nil end
+    if KE:EUIDrawsSlotElement(unit, "enchant") then return nil end
+    if byFallback then return true end
+    -- With names off only the missing-enchant cue is left to redraw.
+    return self:IsEnchantableSlot(unit, slotID, not db.ShowEnchantNames) and true or nil
 end
 
-function CP:InspectTrackPending(held, provisional, data, w, euiOwnsIlvl, euiOwnsTrack)
+function CP:InspectTrackPending(unit, held, provisional, data, w)
     local db = self.db
-    if not (held and db) or w or euiOwnsTrack then return nil end
-    local drawn = db.TrackIndicatorsEnabled
-        or (db.ShowUpgradeProgress and db.ShowSlotItemLevel and not euiOwnsIlvl)
-    if not drawn then return nil end
-    if TrackPending(held, data) then return true end
-    return provisional and true or nil
+    if not (held and db) or w then return nil end
+    local corner = db.TrackIndicatorsEnabled
+    local mergedOnly = not corner and db.ShowUpgradeProgress and db.ShowSlotItemLevel
+    if not (corner or mergedOnly) then return nil end
+    if not (provisional or TrackPending(held, data)) then return nil end
+    if KE:EUIDrawsSlotElement(unit, "track") then return nil end
+    -- Item-level ownership matters only when the merged span is KE's only
+    -- track display; the corner letter does not depend on it.
+    if mergedOnly and KE:EUIDrawsSlotElement(unit, "ilvl") then return nil end
+    return true
 end
 
 function CP:CreateTrackOverlay(slotFrame, slotID)
@@ -2065,7 +2076,8 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
 
     -- Fetch after the dirty check so a short-circuited call allocates nothing;
     -- both tooltip consumers below (enchant label, gem scan) share this read.
-    data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
+    -- false is a read that came back empty, and is not repeated.
+    if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
 
     local detail = self:CreateSlotDetail(slotFrame, slotID)
     local fontFace    = self.db.FontFace
@@ -2353,7 +2365,8 @@ local function CreateQualityOverlay(parent, anchor)
 end
 
 -- data (optional): pre-fetched C_TooltipInfo.GetInventoryItem table shared by
--- the caller's render pass (UpdateSlotDetail / RenderInspectSlot).
+-- the caller's render pass (UpdateSlotDetail / RenderInspectSlot). false is a
+-- read that came back empty, and is not repeated.
 function CP:ScanItemSockets(unit, slotID, data)
     unit = unit or "player"
     local itemLink = GetInventoryItemLink(unit, slotID)
@@ -2365,7 +2378,7 @@ function CP:ScanItemSockets(unit, slotID, data)
     -- rendered. Socket lines come back in physical order, so the running counter IS
     -- each socket's true index for both filled and empty — no position reconciliation
     -- needed.
-    data = data or C_TooltipInfo.GetInventoryItem(unit, slotID)
+    if data == nil then data = C_TooltipInfo.GetInventoryItem(unit, slotID) end
     local lines = data and data.lines
     if not lines then
         -- Inspect: no tooltip data means nothing to show. Player: fall through

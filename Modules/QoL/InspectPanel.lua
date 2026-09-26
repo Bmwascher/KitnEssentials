@@ -120,6 +120,18 @@ local function SlotUnchanged(s, link, enchantID, ilvl, gemHash)
 end
 InspectPanel._SlotUnchanged = SlotUnchanged
 
+-- The dirty keys only, so the next repaint redraws every slot. The pending
+-- state and retry flags stay, so a slot mid-count keeps its count; a slot
+-- that used up its retries and still draws a stand-in pends with a fresh one.
+local function ClearDirtyKeys(cache)
+    for _, slots in pairs(cache) do
+        for _, s in pairs(slots) do
+            s.itemLink, s.enchantID, s.ilvl, s.gemHash = nil, nil, nil, nil
+        end
+    end
+end
+InspectPanel._ClearDirtyKeys = ClearDirtyKeys
+
 ---------------------------------------------------------------------------------
 -- Gem-race fix (grace-period gated + hybrid retry)
 ---------------------------------------------------------------------------------
@@ -132,15 +144,12 @@ InspectPanel._SlotUnchanged = SlotUnchanged
 -- Discriminator: time since INSPECT_READY for this GUID. Inspect packets
 -- finish hydrating within ~1.5s of INSPECT_READY in normal conditions; if
 -- sockets are still empty after the grace period, treat as genuinely empty
--- and render the red cue. Within the grace period, treat as suspect:
+-- and render the red cue. Within the grace period, treat as suspect: draw no
+-- gems and let the shared retry sweep below (RETRY_DELAY = 0.5s) read the
+-- slot again.
 --
---   1. Primary path (event-driven): re-issue C_Item.RequestLoadItemDataByID
---      so ITEM_DATA_LOAD_RESULT re-fires when gem bytes hydrate.
---   2. Fallback path (timer): the shared retry sweep below, in case the event
---      chain stalls. RETRY_DELAY = 0.5s.
---
--- Per-slot paintPasses still caps the suppression within the grace window so
--- a pathological re-request loop can't suppress past MAX_PAINT_PASSES tries.
+-- Per-slot paintPasses caps the suppression within the grace window at
+-- MAX_PAINT_PASSES tries.
 local MAX_PAINT_PASSES = 5
 local RETRY_DELAY = 0.5
 local INSPECT_PACKET_GRACE = 1.0  -- seconds; suspect-empty triggers retry within this window
@@ -212,12 +221,22 @@ end
 -- The inspect frame shows from inside the first INSPECT_READY, before this
 -- file's data events are registered, so the frame's showing is where an
 -- inspect starts.
-local function StampInspectStart(guid)
+local function StampInspectStart(guid, now)
     if not guid then return end
     _currentInspectGUID = guid
-    _inspectReadyTime[guid] = GetTime()
+    _inspectReadyTime[guid] = now or GetTime()
     RestartArmedSweep()
 end
+
+-- A repeat INSPECT_READY for the target inside the grace window does not
+-- restart the inspect: every restamp restarts an armed sweep, so replies under
+-- RETRY_DELAY apart would hold it off. After a restamp the next is at least the
+-- window away, longer than RETRY_DELAY, so an armed sweep restarts at most once.
+local function ShouldRestamp(guid, currentGUID, stampedAt, now)
+    if guid ~= currentGUID or stampedAt == nil then return true end
+    return now - stampedAt >= INSPECT_PACKET_GRACE
+end
+InspectPanel._ShouldRestamp = ShouldRestamp
 
 -- Whether a render that drew a stand-in arms the sweep. Only sweep renders
 -- spend a retry, so a same-frame burst of event passes cannot use up the budget
@@ -344,7 +363,9 @@ function InspectPanel:OnEnable()
             self.eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
             self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
             StampInspectStart(InspectFrameGUID())
-            self:UpdateAllInspectSlots()
+            -- Next frame: on a first enable regData has already asked for this
+            -- pass, and the two requests are one.
+            ScheduleCoalescedPass()
         end
     end
 end
@@ -400,8 +421,9 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
     -- Single C_TooltipInfo read for the whole slot render: the gem scan here
     -- (dirty-hash via ComputeGemHash + suspect detection) AND the detail/track
     -- renders further down all reuse it. Each fetch allocates a fresh tooltip
-    -- table, so this one read replaces what used to be up to four.
-    local data = link and C_TooltipInfo.GetInventoryItem(unit, slotID)
+    -- table, so this one read replaces what used to be up to four. An empty
+    -- read is false, not nil, so no consumer reads it again.
+    local data = link and (C_TooltipInfo.GetInventoryItem(unit, slotID) or false)
     -- No gem row is drawn outside the socketable set, so no scan there either.
     local result = link and socketable and CP:ScanItemSockets(unit, slotID, data)
     local gemHash = ComputeGemHash(result)
@@ -425,11 +447,8 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
     if suspect then
         s.paintPasses = (s.paintPasses or 0) + 1
         if s.paintPasses < MAX_PAINT_PASSES then
-            -- Re-request item data so ITEM_DATA_LOAD_RESULT re-fires with the
-            -- now-hydrated gem bytes.
-            local itemID = C_Item.GetItemInfoInstant(link)
-            if itemID then C_Item.RequestLoadItemDataByID(itemID) end
-            -- Timer fallback in case the event chain stalls.
+            -- The sweep is the retry: the gem bytes come with the inspect
+            -- packet, which no item-data request can hurry.
             ArmSlotRetry(s, guid)
             -- Render everything EXCEPT gems; suppressGems hides the icon row
             -- instead of flashing red empty-socket cues. Skip the cache write so
@@ -462,33 +481,12 @@ function InspectPanel:RenderInspectSlot(button, fromSweep)
         wCorner = CP:UpdateSlotTrackIndicator(button, slotID, unit, data)
     end
 
-    -- Only a render that may have drawn a stand-in KE displays pays for the
-    -- ownership lookups and the predicates, which stay the rule. A render whose
-    -- KE display is off calls none of them, nor, once the grace window has
-    -- passed, does a complete one.
-    local db = CP.db
-    local w = wDetail or wCorner
-    local enchantPending, trackPending
-    if link and (fellBack or (provisional and not enchantID
-        and (db.ShowEnchantNames or db.ShowEnchants ~= false))) then
-        local euiOwnsEnchant = KE:EUIDrawsSlotElement(unit, "enchant")
-        if not euiOwnsEnchant then
-            local enchantable = provisional and not enchantID
-                and CP:IsEnchantableSlot(unit, slotID) or false
-            enchantPending = CP:InspectEnchantPending(link, provisional, fellBack, enchantID,
-                enchantable, false)
-        end
-    end
-    local corner = db.TrackIndicatorsEnabled
-    local mergedOnly = not corner and db.ShowUpgradeProgress and db.ShowSlotItemLevel
-    if link and not w and (corner or mergedOnly)
-        and (provisional or not (data and data.lines))
-        and not KE:EUIDrawsSlotElement(unit, "track") then
-        -- Item-level ownership matters only when the merged span is KE's only
-        -- track display; the corner letter does not depend on it.
-        local euiOwnsIlvl = mergedOnly and KE:EUIDrawsSlotElement(unit, "ilvl") or false
-        trackPending = CP:InspectTrackPending(link, provisional, data, nil, euiOwnsIlvl, false)
-    end
+    -- The predicates own the rule and the ownership lookups, which they make
+    -- only where a stand-in KE displays may have been drawn.
+    local enchantPending = CP:InspectEnchantPending(unit, slotID, link, provisional,
+        fellBack, enchantID)
+    local trackPending = CP:InspectTrackPending(unit, link, provisional, data,
+        wDetail or wCorner)
     -- Read before PendingStep, which clears the count once the slot resolves or
     -- settles: the debug line must still say which pending sweep this render
     -- was. A sweep render of a slot that had not pended (a gem retry) counts 0.
@@ -557,14 +555,14 @@ function InspectPanel:UpdateAllInspectSlots()
     end
 end
 
--- Drop the per-GUID dirty cache so the next render repaints a slot whose item
--- has not changed. CharacterPanel calls this whenever a setting hides the
--- inspect overlays: the hide leaves the cache describing a slot that IS drawn,
--- so re-enabling the setting would short-circuit and the overlay would stay
--- hidden until the inspect frame was closed and reopened.
+-- Drop the dirty keys so the next render repaints a slot whose item has not
+-- changed. CharacterPanel calls this whenever a setting hides the inspect
+-- overlays: the hide leaves the cache describing a slot that IS drawn, so
+-- re-enabling the setting would short-circuit and the overlay would stay
+-- hidden until the inspect frame was closed and reopened. ClearDirtyKeys
+-- says what the clear keeps.
 function InspectPanel:InvalidateSlotCache()
-    wipe(_inspectCache)
-    CancelSweep()
+    ClearDirtyKeys(_inspectCache)
 end
 
 -- Returns the equipped average item level to 2 decimals, or nil if the inspect
@@ -758,10 +756,13 @@ function InspectPanel:SetupInspectSupport()
             if arg1 == "Blizzard_InspectUI" then installHooks() end
         elseif event == "INSPECT_READY" then
             -- Any inspect reply arrives here, another addon's included; only the
-            -- inspect frame's own unit re-stamps the start and runs a pass.
+            -- inspect frame's own unit runs a pass.
             local frameGUID = InspectFrameGUID()
             if not ReadyForFrame(arg1, frameGUID) then return end
-            StampInspectStart(frameGUID)
+            local now = GetTime()
+            if ShouldRestamp(frameGUID, _currentInspectGUID, _inspectReadyTime[frameGUID], now) then
+                StampInspectStart(frameGUID, now)
+            end
             -- New inspect target: clear the per-slot pending queue so the new unit's
             -- gear gets requested fresh, then ensure the hooks exist and queue a pass.
             if _self._inspectQueue then wipe(_self._inspectQueue) end

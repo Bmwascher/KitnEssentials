@@ -1,10 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-SpecPicker.lua                                      ║
 -- ║  Purpose: Shared specialization controls — a spec header ║
--- ║           row, the live spec id, the playable class/spec ║
--- ║           map, and a class picker that opens on the      ║
--- ║           player's own class, and the per-specialization ║
--- ║           enable card.                                   ║
+-- ║           row, the playable class/spec map, and a class  ║
+-- ║           picker that opens on the player's own class,   ║
+-- ║           and the per-specialization enable card.        ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -17,8 +16,6 @@ local C_Timer = C_Timer
 local UnitClass = UnitClass
 local GetNumClasses = GetNumClasses
 local GetSpecializationInfoForClassID = GetSpecializationInfoForClassID
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local GetNumSpecializationsForClassID = C_SpecializationInfo.GetNumSpecializationsForClassID
 local table_sort = table.sort
 local string_format = string.format
@@ -66,13 +63,6 @@ end
 ---------------------------------------------------------------------------------
 -- Spec and class data
 ---------------------------------------------------------------------------------
-function GUIFrame.GetCurrentSpecID()
-    if not GetSpecialization then return nil end
-    local index = GetSpecialization()
-    if not index or index == 0 then return nil end
-    return GetSpecializationInfo and GetSpecializationInfo(index)
-end
-
 local classSpecs
 
 -- Class token -> spec ids, for every playable class. Built on first use and
@@ -196,17 +186,10 @@ function GUIFrame:CreateClassPickerRow(parent, config)
     local options = GUIFrame.BuildClassOptions(tokens, playerClass)
 
     local row = GUIFrame:CreateRow(parent, 36)
-    local dropdown
-    dropdown = GUIFrame:CreateDropdown(row, config.label or "Class", {
+    local dropdown = GUIFrame:CreateDropdown(row, config.label or "Class", {
         options = options,
         value = shownClass,
         callback = function(key)
-            -- Closed instantly before anything is redrawn: a list still
-            -- animating shut when its page is rebuilt is orphaned mid-close and
-            -- stays on screen.
-            if dropdown and dropdown._closeDropdown then
-                dropdown._closeDropdown(true)
-            end
             -- Re-picking the class already on screen draws nothing new. Left
             -- unstored so closing the window does not mark the page dirty.
             if key == shownClass then return end
@@ -255,7 +238,7 @@ function GUIFrame:CreateSpecEnableCard(scrollChild, yOffset, config)
     local lastEnabled, mark
 
     local function DrawSpecs(classToken)
-        local currentSpecId = GUIFrame.GetCurrentSpecID()
+        local currentSpecId = KE:GetPlayerSpecId()
         local specs = specsByClass[classToken] or {}
 
         if #specs == 0 then

@@ -581,7 +581,7 @@ end
 -- one. A colour span protects its CONTENT as well as its markers: colouring text
 -- that is already coloured inserts a |r that closes the OUTER colour early, so
 -- the rest of the original span silently loses its colour.
-function CMH.CollectProtected(text)
+function CMH.CollectProtected(text, bossBody)
     local count, pos = 0, 1
     local colorOpen, colorDepth = nil, 0
 
@@ -646,20 +646,23 @@ function CMH.CollectProtected(text)
         protectEnd[count] = #text
     end
 
-    -- Escaped percent pairs. On the boss-monster path the finished body is
-    -- concatenated INTO a format string rather than passed as an argument, and
-    -- the percent escaping that runs earlier in MessageFormatter leaves %%
-    -- pairs behind. A colour code inserted between the two bytes makes that
-    -- format call throw, so a hit overlapping a pair is refused. On every other
-    -- path the pairs are simply absent and this loop exits at once.
+    -- A %% pair on every line. On a boss body, which becomes a format pattern
+    -- after this rewrite, a %s too: a colour code inside it shows a literal %s
+    -- instead of the name. A lone % is escaped either way, so splitting it is
+    -- harmless. Elsewhere the body is a format argument and %s is plain text.
     local pp = 1
     while true do
-        local p = text:find("%%", pp, true)
+        local p = text:find(bossBody and "%" or "%%", pp, true)
         if not p then break end
-        count = count + 1
-        protectStart[count] = p
-        protectEnd[count] = p + 1
-        pp = p + 2
+        local nextByte = bossBody and text:byte(p + 1)
+        if not bossBody or nextByte == 37 or nextByte == 115 then  -- "%" or "s"
+            count = count + 1
+            protectStart[count] = p
+            protectEnd[count] = p + 1
+            pp = p + 2
+        else
+            pp = p + 1
+        end
     end
 
     return count
@@ -841,7 +844,8 @@ end
 
 ---@param text string
 ---@param author string?
-function CMH.Highlight(text, author)
+---@param bossBody boolean? the body becomes a boss-line format pattern
+function CMH.Highlight(text, author, bossBody)
     if not text or text == "" then return text end
 
     local db = KE.db and KE.db.profile.Skinning.Chat
@@ -857,7 +861,7 @@ function CMH.Highlight(text, author)
     if not (wantKeywords or wantMentions) then return text end
 
     local lowered = strlower(text)
-    local protectCount = CMH.CollectProtected(text)
+    local protectCount = CMH.CollectProtected(text, bossBody)
     local hitCount = 0
     local matchedKeyword = false
 
@@ -935,12 +939,57 @@ function CMH.ResetHighlight()
     chatModule = nil
 end
 
+-- The two arguments ComposeBossBody hands format: the flagged name, then the name.
+local BOSS_FORMAT_ARGS = 2
+
+-- A plain boss body becomes part of a format pattern whose own %s is the
+-- name. A %% pair stays, a %s stays while an argument is left for it after the
+-- header's own directives, and every other percent is doubled, so the format
+-- call cannot raise on what the body happens to contain.
+function CMH.BossBodyPattern(chatFormat, body)
+    if not body:find("%", 1, true) then return body end
+    local used, pos = 0, 1
+    while true do
+        local p = chatFormat:find("%", pos, true)
+        if not p then break end
+        if chatFormat:sub(p + 1, p + 1) ~= "%" then used = used + 1 end
+        pos = p + 2
+    end
+    local free = BOSS_FORMAT_ARGS - used
+
+    local out, n = {}, 0
+    pos = 1
+    while true do
+        local p = body:find("%", pos, true)
+        if not p then break end
+        local nextChar = body:sub(p + 1, p + 1)
+        n = n + 1
+        out[n] = body:sub(pos, p - 1)
+        n = n + 1
+        if nextChar == "%" then
+            out[n] = "%%"
+            pos = p + 2
+        elseif nextChar == "s" and free > 0 then
+            free = free - 1
+            out[n] = "%s"
+            pos = p + 2
+        else
+            out[n] = "%%"
+            pos = p + 1
+        end
+    end
+    n = n + 1
+    out[n] = body:sub(pos)
+    return tconcat(out)
+end
+
 -- A boss body is part of the format pattern, because an emote body carries
--- its own %s for the name. A secret body cannot be escaped first, so it only
--- becomes a pattern under pcall, with the raw body as the fallback.
+-- its own %s for the name. A plain body is made safe as a pattern first; a
+-- secret body cannot be, so it only becomes a pattern under pcall, with the
+-- raw body as the fallback.
 function CMH.ComposeBossBody(chatFormat, message, pflag, sender, secret)
     if not secret then
-        return format(chatFormat .. message, pflag .. sender, sender)
+        return format(chatFormat .. CMH.BossBodyPattern(chatFormat, message), pflag .. sender, sender)
     end
     if chatFormat ~= '' then
         local prefix = format(chatFormat, pflag .. sender, sender)
@@ -965,11 +1014,6 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
     local isProtected = KE:IsSecretValue(arg1)
     local bossMonster = strsub(chatType, 1, 9) == 'RAID_BOSS' or strsub(chatType, 1, 7) == 'MONSTER'
 
-    if bossMonster and not isProtected then
-        arg1 = gsub(arg1, '(%d%s?%%)([^%%%a])', '%1%%%2')
-        arg1 = gsub(arg1, '(%d%s?%%)$', '%1%%')
-    end
-
     if not isProtected then
         if RemoveExtraSpaces then arg1 = RemoveExtraSpaces(arg1) end
 
@@ -983,7 +1027,7 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
 
         -- Inside the existing secret guard on purpose: a plain string rewrite
         -- must never touch a protected body.
-        arg1 = CMH.Highlight(arg1, arg2)
+        arg1 = CMH.Highlight(arg1, arg2, bossMonster)
     end
 
     -- Player link, use fallbacks for nil values
@@ -1035,10 +1079,7 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
     if usingDifferentLanguage and bossMonster and chatFormat == '' then
         -- An empty-header boss line carries the name inside its body, which the
         -- language pattern below would drop; build the boss body, then tag it.
-        -- A plain body is a format pattern there, and a % no digit precedes is
-        -- not escaped above, so the raw body stands in if it raises.
-        local ok, bossBody = pcall(CMH.ComposeBossBody, chatFormat, message, pflag, sender, isProtected)
-        if not ok then bossBody = message end
+        local bossBody = CMH.ComposeBossBody(chatFormat, message, pflag, sender, isProtected)
         local tag = '[' .. (arg3 or '') .. '] '
         if isProtected then
             body = KE:WrapSecretText(bossBody, tag) or bossBody

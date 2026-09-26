@@ -7,6 +7,10 @@
 
 local helpers = require("dev.spec._helpers")
 
+-- The elements another addon draws, read at call time by the ownership stub in
+-- loadCP. A case sets it per row; it is reset after every case that sets it.
+local owned = {}
+
 -- The stub set is derived from `loadCP` in dev/spec/character_panel_enchant_spec.lua,
 -- the proven recipe for standing this module up headless -- every stub there was
 -- needed there. The structure around it differs: this one captures the module
@@ -61,7 +65,7 @@ local function loadCP(lines, overrides)
         Print = function() end,
         IsFullyRestricted = function() return false end,
         IsSafeValue = function(_, v) return v ~= nil end,
-        EUIDrawsSlotElement = function() return false end,
+        EUIDrawsSlotElement = function(_, _, element) return owned[element] == true end,
     })
     return modules["CharacterPanel"]
 end
@@ -268,19 +272,28 @@ describe("Inspect slot: what pends", function()
     local LINK = "|cffa335ee|Hitem:1|h[x]|h|r"
     local LINES = { lines = {} }
     local W = { track = { letter = "M", color = { 1, 1, 1 } }, cur = "4", max = "6" }
-    local function withDb(over)
+    -- owns: the elements another addon draws on this row, answered by the
+    -- predicates' own lookups. The slot check is stubbed so these cases test
+    -- the predicates' rule; the real check has its own cases below.
+    local function withDb(over, owns)
+        owned = owns or {}
         local CP = loadCP()
         local d = { ShowEnchantNames = true, TrackIndicatorsEnabled = true }
         for k, v in pairs(over or {}) do d[k] = v end
         CP.db = d
+        CP.IsEnchantableSlot = function() return true end
         return CP
     end
 
+    after_each(function()
+        owned = {}
+    end)
+
     it("pends an enchant fallback inside and outside the window, and not a resolved label", function()
         local CP = withDb()
-        assert.is_true(CP:InspectEnchantPending(LINK, true, true, 7, true, false))
-        assert.is_true(CP:InspectEnchantPending(LINK, false, true, 7, true, false))
-        assert.is_nil(CP:InspectEnchantPending(LINK, true, nil, 7, true, false))
+        assert.is_true(CP:InspectEnchantPending("target", 3, LINK, true, true, 7))
+        assert.is_true(CP:InspectEnchantPending("target", 3, LINK, false, true, 7))
+        assert.is_nil(CP:InspectEnchantPending("target", 3, LINK, true, nil, 7))
     end)
 
     -- Inside the window an absent piece may only mean the data has not landed;
@@ -289,15 +302,15 @@ describe("Inspect slot: what pends", function()
         local CP = withDb()
         local cases = {
             { name = "track found none",
-              fn = function(p) return CP:InspectTrackPending(LINK, p, LINES, nil, false, false) end,
+              fn = function(p) return CP:InspectTrackPending("target", LINK, p, LINES, nil) end,
               inside = true },
             { name = "track found",
-              fn = function(p) return CP:InspectTrackPending(LINK, p, LINES, W, false, false) end },
+              fn = function(p) return CP:InspectTrackPending("target", LINK, p, LINES, W) end },
             { name = "enchantable with no enchant ID",
-              fn = function(p) return CP:InspectEnchantPending(LINK, p, nil, nil, true, false) end,
+              fn = function(p) return CP:InspectEnchantPending("target", 3, LINK, p, nil, nil) end,
               inside = true },
             { name = "unusable tooltip where KE draws a track",
-              fn = function(p) return CP:InspectTrackPending(LINK, p, nil, nil, false, false) end,
+              fn = function(p) return CP:InspectTrackPending("target", LINK, p, nil, nil) end,
               inside = true, outside = true },
         }
         for _, c in ipairs(cases) do
@@ -309,28 +322,28 @@ describe("Inspect slot: what pends", function()
     it("pends a track only where KE draws one", function()
         local MERGED_ONLY = { TrackIndicatorsEnabled = false, ShowUpgradeProgress = true, ShowSlotItemLevel = true }
         local cases = {
-            { name = "corner on", db = {}, ilvl = false, track = false, want = true },
-            { name = "merged span only", db = MERGED_ONLY, ilvl = false, track = false, want = true },
-            { name = "track owned by another addon", db = {}, ilvl = false, track = true },
-            { name = "item level owned by another addon, corner off", db = MERGED_ONLY, ilvl = true, track = false },
-            { name = "both off", db = { TrackIndicatorsEnabled = false }, ilvl = false, track = false },
+            { name = "corner on", db = {}, want = true },
+            { name = "merged span only", db = MERGED_ONLY, want = true },
+            { name = "track owned by another addon", db = {}, owns = { track = true } },
+            { name = "item level owned by another addon, corner off", db = MERGED_ONLY, owns = { ilvl = true } },
+            { name = "both off", db = { TrackIndicatorsEnabled = false } },
         }
         for _, c in ipairs(cases) do
-            local CP = withDb(c.db)
-            assert.equals(c.want, CP:InspectTrackPending(LINK, false, nil, nil, c.ilvl, c.track), c.name)
+            local CP = withDb(c.db, c.owns)
+            assert.equals(c.want, CP:InspectTrackPending("target", LINK, false, nil, nil), c.name)
         end
     end)
 
     it("pends nothing for an empty slot, whatever else is set", function()
         local CP = withDb()
-        assert.is_nil(CP:InspectEnchantPending(nil, true, true, nil, true, false))
-        assert.is_nil(CP:InspectTrackPending(nil, true, nil, nil, false, false))
+        assert.is_nil(CP:InspectEnchantPending("target", 3, nil, true, true, nil))
+        assert.is_nil(CP:InspectTrackPending("target", nil, true, nil, nil))
     end)
 
     it("never pends an enchant another addon draws", function()
-        local CP = withDb()
-        assert.is_nil(CP:InspectEnchantPending(LINK, true, true, 7, true, true))
-        assert.is_nil(CP:InspectEnchantPending(LINK, true, nil, nil, true, true))
+        local CP = withDb(nil, { enchant = true })
+        assert.is_nil(CP:InspectEnchantPending("target", 3, LINK, true, true, 7))
+        assert.is_nil(CP:InspectEnchantPending("target", 3, LINK, true, nil, nil))
     end)
 end)
 
@@ -364,5 +377,28 @@ describe("Inspect slot: enchantable check", function()
         local CP, asked = withLevels({ 90, SECRET })
         assert.is_true(CP:IsEnchantableSlot("target", 3))
         assert.same({ 90 }, asked)
+    end)
+end)
+
+-- The missing-enchant cue draws only at effective max level, so with enchant
+-- names off a lower target has nothing KE would redraw.
+describe("Inspect slot: enchant pend below max level", function()
+    it("pends below max level only while enchant names are shown", function()
+        local cases = {
+            { name = "below max, names off", level = 80, names = false },
+            { name = "below max, names on", level = 80, names = true, want = true },
+            { name = "at max, names off", level = 90, names = false, want = true },
+        }
+        for _, c in ipairs(cases) do
+            local CP = loadCP(nil, {
+                UnitLevel = function() return c.level end,
+                issecretvalue = function() return false end,
+                GetExpansionForLevel = function() return 11 end,
+                GameRulesUtil = { GetEffectiveMaxLevelForPlayer = function() return 90 end },
+            })
+            CP.db = { ShowEnchantNames = c.names, ShowEnchants = true }
+            assert.equals(c.want, CP:InspectEnchantPending("target", 3,
+                "|cffa335ee|Hitem:1|h[x]|h|r", true, nil, nil), c.name)
+        end
     end)
 end)

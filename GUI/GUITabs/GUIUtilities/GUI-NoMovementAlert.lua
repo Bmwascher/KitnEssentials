@@ -255,8 +255,9 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     local card7 = GUIFrame:CreateCard(scrollChild, "Tracked Spells", yOffset)
     -- Every spec of the class, not just the active one -- you should be
     -- able to set up your off-specs without respeccing first. Overrides
-    -- are keyed by spellID, so a spell shared across specs (Roll on all
-    -- three Monk specs) is one setting shown in each place.
+    -- are keyed per spec ("specID:spellID"), so a spell shared across specs
+    -- (Roll on all three Monk specs) has its own setting in each; an older
+    -- bare spellID key is still read as the fallback.
     card7:AddLabel("All specializations for the selected class. Unticking a spell stops tracking it on that spec only; other specs keep their own setting.")
 
     db.Spells = db.Spells or {}
@@ -273,7 +274,7 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
     local mark
 
     local function DrawClass(classToken)
-        local currentSpecId = GUIFrame.GetCurrentSpecID()
+        local currentSpecId = KE:GetPlayerSpecId()
         local byClass = KE.MOVEMENT_ABILITIES and KE.MOVEMENT_ABILITIES[classToken]
 
         if byClass then

@@ -342,16 +342,16 @@ end
 
 local function ReadStackMask()
     local types = Enum.NamePlateStackType
-    local okE, enemy = pcall(GetCVarBitfield, STACKING_CVAR, types.Enemy)
-    local okF, friendly = pcall(GetCVarBitfield, STACKING_CVAR, types.Friendly)
+    local okE, enemy = pcall(C_CVar.GetCVarBitfield, STACKING_CVAR, types.Enemy)
+    local okF, friendly = pcall(C_CVar.GetCVarBitfield, STACKING_CVAR, types.Friendly)
     if not (okE and okF) then return nil end
     return (enemy and 1 or 0) + (friendly and 2 or 0)
 end
 
 local function WriteStackMask(mask)
     local types = Enum.NamePlateStackType
-    local okE, setE = pcall(SetCVarBitfield, STACKING_CVAR, types.Enemy, mask % 2 == 1)
-    local okF, setF = pcall(SetCVarBitfield, STACKING_CVAR, types.Friendly, mask >= 2)
+    local okE, setE = pcall(C_CVar.SetCVarBitfield, STACKING_CVAR, types.Enemy, mask % 2 == 1)
+    local okF, setF = pcall(C_CVar.SetCVarBitfield, STACKING_CVAR, types.Friendly, mask >= 2)
     return (okE and setE and okF and setF) and true or false
 end
 

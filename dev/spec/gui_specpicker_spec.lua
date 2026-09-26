@@ -49,7 +49,7 @@ end)
 -- orphans its frames permanently, and the fallback rebuilds the whole page. In
 -- game the refusal shows up only as the absence of a redraw, which is why it is
 -- pinned here rather than left to smoke.
-describe("SpecPicker rebuild on pick", function()
+describe("SpecPicker class picker: what a pick redraws, and the option order", function()
     local STUBBED = {
         "C_SpecializationInfo", "C_Timer", "UnitClass",
         "LOCALIZED_CLASS_NAMES_MALE", "CLASS_ICON_TCOORDS",
@@ -173,6 +173,7 @@ describe("SpecEnableCard per-spec checkboxes", function()
         local function noopRow() return { AddWidget = function() end } end
         local KE = helpers.loadModule("GUI/GUIWidgets/GUI-SpecPicker.lua", {
             ColorTextByTheme = function(_, text) return text end,
+            GetPlayerSpecId = function() return 1467 end,
             GUIFrame = {
                 RegisterContentCleanup = function() end,
                 CreateCard = function()
@@ -200,7 +201,6 @@ describe("SpecEnableCard per-spec checkboxes", function()
         -- Two specs of one class is enough to prove the callback keys by the
         -- spec it was built for rather than by whichever one ran last.
         GUIFrame.GetClassSpecs = function() return { EVOKER = { 1467, 1473 } } end
-        GUIFrame.GetCurrentSpecID = function() return 1467 end
         GUIFrame.CreateClassPickerRow = function() return noopRow(), "EVOKER" end
     end)
 

@@ -1,6 +1,6 @@
--- Tier 1: refusal rules. Whether an element deserves a box is decided in one
--- place; a later edit that loosens any branch here silently brings back boxes
--- for modules the user switched off.
+-- Tier 1: refusal rules. Whether Edit Mode draws an element's box is decided in
+-- one place; a later edit that loosens any branch here silently brings back
+-- boxes for modules the user switched off.
 local L = require("dev.spec._ke_loader")
 
 describe("EditMode eligibility", function()

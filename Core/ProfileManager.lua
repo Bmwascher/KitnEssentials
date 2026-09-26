@@ -553,7 +553,7 @@ function ProfileManager:RefreshAllModules()
     end
 
     -- Two profiles can keep the same modules enabled and still differ in a
-    -- setting Edit Mode reads to decide whether a mover deserves a box, so no
+    -- setting Edit Mode reads to decide whether it draws a mover's box, so no
     -- enable hook fires and the boxes would go stale. Guarded internally, so
     -- this costs nothing while the tool is closed.
     if KE.EditMode and KE.EditMode.RefreshLiveState then
