@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.27
+
+### Performance
+
+- Disintegrate Ticks, Stasis Tracker, Kick Tracker and the Damage Meter's
+  feign-death check receive only your own casts, so they do less work in
+  groups
+
+### Fixes
+
+- Great Vault Alert, the deaths tooltip and World Marker Cycler no longer
+  error when the game hides a value from addons
+- World Marker Cycler catches up on markers placed during chat lockdown once
+  it lifts
+
+---
+
 ## v4.7.26
 
 ### Loot Roll
