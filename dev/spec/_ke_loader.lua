@@ -218,7 +218,8 @@ function L.loadDMCore(overrides)
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
     _G.CreateAbbreviateConfig = function(cfg) return cfg end
-    _G.C_ChatInfo = { SendChatMessage = function() end }
+    -- Core.lua captures SendChatMessage at load, so a spy has to arrive here.
+    _G.C_ChatInfo = (overrides and overrides.C_ChatInfo) or { SendChatMessage = function() end }
     -- Core.lua reads Enum.* members at file scope. The real values never
     -- matter headlessly — any Enum.X.Y resolves to the stable string "X.Y",
     -- unique per member so comparisons against them still discriminate.
