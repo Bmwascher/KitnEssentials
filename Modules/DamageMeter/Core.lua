@@ -2082,12 +2082,20 @@ function DM:IsLiveOverall(W, cfg)
     return not W._curSessionID and cfg.SessionType == Enum.DamageMeterSessionType.Overall
 end
 
--- Resolve an ally row to a plain GUID. Reached ONLY for an ally row in combat.
--- The own row keeps its own substitution and the Deaths view never consults
--- identity, so neither runs any of this. overall is IsLiveOverall's answer on a
--- click or hover. The tick re-judge passes none: while a row can resolve, every
--- change that would newly refuse on Overall also reaches the fight's set.
-function DM:ResolveAllyGUID(classFilename, specIconID, rowsOfClass, specRows, overall)
+-- Resolve an ally row to a plain GUID: on a click or hover in combat, and on
+-- the tick re-judge of a panel such a click opened, which keeps running after
+-- combat ends. The own row keeps its own substitution and the Deaths view never
+-- consults identity, so neither runs any of this. overall is IsLiveOverall's
+-- answer on a click or hover. The tick re-judge passes none: while a row can
+-- resolve, every change that would newly refuse on Overall also reaches the
+-- fight's set.
+-- A native pin refuses: its rows carry that session's specs and the roster
+-- carries today's. Pinning closes any open panel, so the re-judge never meets
+-- a native pin. A History pin (negative id) is exempt: its rows carry plain
+-- captured GUIDs and the fetch never uses the join.
+function DM:ResolveAllyGUID(W, classFilename, specIconID, rowsOfClass, specRows, overall)
+    local pin = W._curSessionID
+    if pin ~= nil and pin >= 0 then return nil, "pinned" end
     return DM.MatchRowToRoster(self:RosterIndex(), classFilename, specIconID, rowsOfClass, specRows,
         self:LeaverRefused(classFilename, overall))
 end
