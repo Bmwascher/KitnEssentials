@@ -156,10 +156,11 @@ describe("SpellHistoryClassify: which casts show", function()
 end)
 
 describe("SpellHistoryClassify: channels", function()
-    it("shows a channel once and skips its ticks, whichever event comes first, through the pet's stop", function()
+    it("shows a channel once and skips its ticks, whichever event comes first, through a pet cast or the pet's stop", function()
         for _, row in ipairs({
             { first = CHANNEL_START, second = SUCCEEDED },
             { first = SUCCEEDED, second = CHANNEL_START },
+            { first = SUCCEEDED, second = CHANNEL_START, petCast = true },
             { first = CHANNEL_START, second = SUCCEEDED, petStop = true },
         }) do
             local state, api = newState(), newApi()
@@ -168,6 +169,8 @@ describe("SpellHistoryClassify: channels", function()
                 if classify(state, api, event, "player", 100, guid) then shown = shown + 1 end
             end
             fire(row.first, "c1")
+            -- A pet cast shown between the channel's two opening events.
+            if row.petCast then classify(state, api, SUCCEEDED, "pet", 300, "p1") end
             fire(row.second, "c1")
             fire(SUCCEEDED, "tick1")
             -- The pet's channel ending between the player's ticks.
@@ -177,16 +180,19 @@ describe("SpellHistoryClassify: channels", function()
         end
     end)
 
-    it("ends tick suppression at CHANNEL_STOP, even with a secret payload", function()
-        for _, stop in ipairs({
-            { spell = 100, guid = "c1" },
-            { spell = SECRET, guid = SECRET },
+    it("ends tick suppression at its channel's CHANNEL_STOP or a secret one, not an older channel's", function()
+        for _, row in ipairs({
+            { spell = 100, guid = "c1", want = "tex100" },
+            { spell = SECRET, guid = SECRET, want = "tex100" },
+            -- Recast as a new channel before the old one's stop arrives.
+            { spell = 100, guid = "c1", recast = true },
         }) do
             local state, api = newState(), newApi()
             classify(state, api, CHANNEL_START, "player", 100, "c1")
-            classify(state, api, CHANNEL_STOP, "player", stop.spell, stop.guid)
+            if row.recast then classify(state, api, CHANNEL_START, "player", 100, "c2") end
+            classify(state, api, CHANNEL_STOP, "player", row.spell, row.guid)
             local tex = classify(state, api, SUCCEEDED, "player", 100, "n1")
-            assert.equals("tex100", tex)
+            assert.equals(row.want, tex)
         end
     end)
 end)

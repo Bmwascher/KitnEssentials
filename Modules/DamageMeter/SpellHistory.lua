@@ -40,8 +40,16 @@ local function SetCurrent(state, isPet, castGUID)
     if isPet then state.curPet = castGUID else state.curPlayer = castGUID end
 end
 
-local function SetChannel(state, isPet, spellID)
-    if isPet then state.channelPet = spellID else state.channelPlayer = spellID end
+local function SetChannel(state, isPet, spellID, castGUID)
+    if isPet then
+        state.channelPet, state.channelPetGUID = spellID, castGUID
+    else
+        state.channelPlayer, state.channelPlayerGUID = spellID, castGUID
+    end
+end
+
+local function SetLast(state, isPet, castGUID)
+    if isPet then state.lastPet = castGUID else state.lastPlayer = castGUID end
 end
 
 -- Autocast pet basics would fill the strip, so a pet spell shows only while
@@ -73,7 +81,7 @@ end
 local function ShowCast(isPet, spellID, castGUID, state, api)
     local tex, kind = AcceptCast(isPet, spellID, state, api)
     if not tex then return nil end
-    state.lastGUID = castGUID
+    SetLast(state, isPet, castGUID)
     return tex, kind, STATUS_OK
 end
 
@@ -82,18 +90,23 @@ end
 local function Classify(event, unit, spellID, castGUID, state, api)
     local isPet = unit == "pet"
     -- Ahead of the secret test, so a secret payload cannot leave a channel
-    -- open.
+    -- open. An older channel's stop, arriving after the spell was recast,
+    -- leaves the new channel in place.
     if event == "UNIT_SPELLCAST_CHANNEL_STOP" then
-        SetChannel(state, isPet, nil)
+        local open = state.channelPlayerGUID
+        if isPet then open = state.channelPetGUID end
+        if api.isSecret(castGUID) or castGUID == open then
+            SetChannel(state, isPet, nil, nil)
+        end
         return nil
     end
     if api.isSecret(spellID) or api.isSecret(castGUID) then return nil end
 
-    local current, channel
+    local current, channel, last
     if isPet then
-        current, channel = state.curPet, state.channelPet
+        current, channel, last = state.curPet, state.channelPet, state.lastPet
     else
-        current, channel = state.curPlayer, state.channelPlayer
+        current, channel, last = state.curPlayer, state.channelPlayer, state.lastPlayer
     end
 
     if event == "UNIT_SPELLCAST_START" then
@@ -113,9 +126,9 @@ local function Classify(event, unit, spellID, castGUID, state, api)
     end
 
     if event == "UNIT_SPELLCAST_CHANNEL_START" then
-        SetChannel(state, isPet, spellID)
+        SetChannel(state, isPet, spellID, castGUID)
         -- Its SUCCEEDED may have arrived first and already shown it.
-        if castGUID == state.lastGUID then return nil end
+        if castGUID == last then return nil end
         return ShowCast(isPet, spellID, castGUID, state, api)
     end
 
@@ -127,7 +140,7 @@ local function Classify(event, unit, spellID, castGUID, state, api)
             return nil, nil, STATUS_RESTORE
         end
         -- A channel reports SUCCEEDED once per tick.
-        if spellID == channel or castGUID == state.lastGUID then return nil end
+        if spellID == channel or castGUID == last then return nil end
         return ShowCast(isPet, spellID, castGUID, state, api)
     end
 
@@ -395,7 +408,8 @@ local function OnStripEvent(_, event, ...)
         itemsStale = true
     elseif event == "UNIT_PET" then
         -- A pet dismissed or replaced mid-channel may never send its stop.
-        castState.curPet, castState.channelPet = nil, nil
+        castState.curPet = nil
+        SetChannel(castState, true, nil, nil)
     else
         local castGUID, spellID = select(2, ...)
         HandleCast("player", event, castGUID, spellID)
@@ -407,11 +421,28 @@ local function OnPetEvent(_, event, ...)
     HandleCast("pet", event, castGUID, spellID)
 end
 
--- Hidden with the meter: live icons never outlive the hide. A preview keeps
--- its placeholders.
+-- In a preview every empty slot shows a placeholder so the strip can be seen
+-- and placed; live icons are left alone.
+local function SyncPreview()
+    local previewing = DM._guiPreview == true
+    for slot = 1, #icons do
+        local icon = icons[slot]
+        if not icon.live then
+            if previewing and slot <= ringSize then
+                ShowPlaceholder(icon)
+            else
+                icon:Hide()
+            end
+        end
+    end
+    ReanchorShown()
+end
+
+-- Hidden with the meter: live icons never outlive the hide, in a preview
+-- too, where the placeholders come back.
 local function OnStripHide()
-    if DM._guiPreview then return end
     ClearRing()
+    if DM._guiPreview then SyncPreview() end
 end
 
 local function Build()
@@ -470,7 +501,8 @@ local function RegisterEvents(frame, pets, sh)
     castState.items = items
 
     if not withPet then
-        castState.curPet, castState.channelPet = nil, nil
+        castState.curPet, castState.lastPet = nil, nil
+        SetChannel(castState, true, nil, nil)
     end
     if not failed then
         castState.curPlayer, castState.curPet, castState.lastFailedGUID = nil, nil, nil
@@ -537,23 +569,6 @@ local function Place(db, sh)
     end
 end
 
--- In a preview every empty slot shows a placeholder so the strip can be seen
--- and placed; live icons are left alone.
-local function SyncPreview()
-    local previewing = DM._guiPreview == true
-    for slot = 1, #icons do
-        local icon = icons[slot]
-        if not icon.live then
-            if previewing and slot <= ringSize then
-                ShowPlaceholder(icon)
-            else
-                icon:Hide()
-            end
-        end
-    end
-    ReanchorShown()
-end
-
 ---------------------------------------------------------------------------------
 -- Edit Mode mover
 --
@@ -605,9 +620,10 @@ local function TearDown()
     if petFrame then petFrame:UnregisterAllEvents() end
     ClearRing()
     frame:Hide()
-    castState.channelPlayer, castState.channelPet = nil, nil
+    SetChannel(castState, false, nil, nil)
+    SetChannel(castState, true, nil, nil)
     castState.curPlayer, castState.curPet = nil, nil
-    castState.lastGUID, castState.lastFailedGUID = nil, nil
+    castState.lastPlayer, castState.lastPet, castState.lastFailedGUID = nil, nil, nil
 end
 
 ---------------------------------------------------------------------------------
