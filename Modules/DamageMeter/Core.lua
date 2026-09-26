@@ -2650,8 +2650,8 @@ DM.FormatRecapDelta = FormatRecapDelta
 -- and unlike FontString:SetText, SendChatMessage has no AllowedWhenTainted contract, so
 -- feeding it a secret string would taint. Every field that would be sent is issecretvalue-
 -- gated; if ANY is secret the report aborts BEFORE sending a single line (never a partial).
--- SendChatMessage is normal player chat (NOT the instance-blocked SendAddonMessage), so it
--- is allowed in dungeons/raids. Channel auto-picks RAID > PARTY > SAY; an explicit channel
+-- SendChatMessage is refused while the game locks chat messaging, so ReportView prints why
+-- instead of sending. Channel auto-picks RAID > PARTY > SAY; an explicit channel
 -- arg overrides. Count defaults to 5, clamped 1..25.
 ---------------------------------------------------------------------------------
 
@@ -2683,7 +2683,7 @@ function DM:ReportView(rest, winIdx)
     if not SendChat then return end
     -- SendChatMessage is refused under a chat lock; say why instead of sending.
     if KE:IsChatMessagingLocked() then
-        KE:Print("Damage Meter: report unavailable -- chat is restricted during a Mythic+ key or boss encounter.")
+        KE:Print("Damage Meter: report unavailable -- the game is restricting chat right now.")
         return
     end
     -- Parse "[count] [channel]" -- either/both optional, order-independent.
