@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.28
+
+### Disintegrate Ticks
+
+- **NEW:** Highlight Last Tick, with its own colour
+- No longer errors on a spell ID the game hides
+
+---
+
 ## v4.7.27
 
 ### Performance
