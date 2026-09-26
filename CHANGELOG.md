@@ -1,5 +1,41 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.38
+
+### Loot Roll
+
+- The bonus roll prompt keeps its spacing above the tallest roll bar content
+  at any size
+
+### Damage Meter
+
+- The Reset on Instance Entry prompt waits for another open prompt instead
+  of replacing it
+
+### Pet Status Text
+
+- Demonology expects the Felhunter in a running key and accepts either pet
+  in a Mythic dungeon before the key starts
+
+### Chat
+
+- A boss emote in another language keeps its text
+
+### Tooltips
+
+- A player with no class colour keeps the default name colour
+
+### Settings
+
+- Sliders keep the last value of a fast drag
+
+### Fixes
+
+- Kick Tracker and Disintegrate Ticks no longer error on values the game
+  hides
+
+---
+
 ## v4.7.37
 
 ### Combat Timer
