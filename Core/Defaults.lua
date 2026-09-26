@@ -439,8 +439,8 @@ local Defaults = {
 
         TimeSpiral = {
             Enabled = false,
-            SoundEnabled = false,  -- stored: the sound card reads nil as ON
-            SoundName = "None",
+            SoundEnabled = true,
+            SoundName = "Time Spiral",
             IconSize = 40,
             ShowText = true,
             TextLabel = "FREE",
