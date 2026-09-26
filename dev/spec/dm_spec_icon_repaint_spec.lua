@@ -29,13 +29,13 @@ before_each(function()
         return specID, "Spec", nil, specID * 10
     end
     -- Read at call time, so a case can rename a member after the load.
-    names = { player = "Me", party1 = "Ann", party2 = "Bob" }
-    guids = { player = "Player-1", party1 = "Player-A", party2 = "Player-B" }
+    names = { player = "Me", party1 = "Ann", party2 = "Bob", party3 = "Cid" }
+    guids = { player = "Player-1", party1 = "Player-A", party2 = "Player-B", party3 = "Player-C" }
     DM = L.loadDMCore({
         UnitName = function(unit) return names[unit] end,
         UnitGUID = function(unit) return guids[unit] end,
         IsInGroup = function() return true end,
-        GetNumGroupMembers = function() return 3 end,
+        GetNumGroupMembers = function() return 4 end,
     })
 end)
 
@@ -75,5 +75,16 @@ describe("OnLibSpecGroupUpdate", function()
             DM:OnLibSpecGroupUpdate(62, "DAMAGER", nil, "Ann")
             assert.equals(1, DM._allSeq - before, holder .. " repeated")
         end
+    end)
+
+    it("keeps a purge from an earlier collision when a later one in the same scan deletes nothing", function()
+        -- The scan meets Player-A, then collides with Player-B (which holds the
+        -- icon), then with Player-C (nothing left to delete).
+        names.party2 = "Ann"
+        names.party3 = "Ann"
+        DM.specIconByGUID["Player-B"] = 620
+        local before = DM._allSeq
+        DM:OnLibSpecGroupUpdate(62, "DAMAGER", nil, "Ann")
+        assert.equals(1, DM._allSeq - before)
     end)
 end)

@@ -612,7 +612,7 @@ local function ResolveGroupGUID(playerName)
     -- player while the row counts still agree, so nothing downstream catches it.
     -- An ambiguous name stores nothing and the tie-break refuses on the missing
     -- spec.
-    local hit, ambiguous, purged
+    local hit, ambiguous
 
     local function matchUnit(unit)
         -- UnitName's FIRST return is always the bare name (realm split into the
@@ -631,8 +631,13 @@ local function ResolveGroupGUID(playerName)
                     -- leaves a stale spec standing and the tie-break reads it as
                     -- current. Purging every colliding guid keeps a collided
                     -- player unknown for exactly as long as the collision lasts.
+                    -- ambiguous also records whether any collision deleted a stored
+                    -- icon ("purged", never reset to true): a separate flag would be
+                    -- one more captured upvalue, allocated on every call.
                     if DM.specIconByGUID[hit] or DM.specIconByGUID[guid] then
-                        purged = true
+                        ambiguous = "purged"
+                    elseif not ambiguous then
+                        ambiguous = true
                     end
                     DM.specIconByGUID[hit] = nil
                     DM.specIconByGUID[guid] = nil
@@ -640,7 +645,6 @@ local function ResolveGroupGUID(playerName)
                     -- same reason.
                     DM:ForgetMeterSpec(hit)
                     DM:ForgetMeterSpec(guid)
-                    ambiguous = true
                 else
                     hit = guid
                 end
@@ -664,7 +668,7 @@ local function ResolveGroupGUID(playerName)
         end
     end
 
-    if ambiguous then return nil, purged end
+    if ambiguous then return nil, ambiguous == "purged" end
     return hit
 end
 
