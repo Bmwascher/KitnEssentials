@@ -137,7 +137,7 @@ OPT.Categories = {
             { cvar = "cameraDistanceMaxZoomFactor", optimal = "2.6", name = "Max Camera Zoom", desc = "2.6x" },
             { cvar = "nameplateShowFriendlyClassColor", optimal = "1", name = "Class Color Names", desc = "Enabled" },
             { cvar = "UnitNameFriendlyPlayerName", optimal = "1", name = "Friendly Player Names", desc = "Show only player names" },
-            { cvar = "nameplateStackingTypes", optimal = "AA", name = "Stacking Nameplates", desc = "Enemy Units" },
+            { cvar = "nameplateStackingTypes", optimal = "1", name = "Stacking Nameplates", desc = "Enemy Units" },
             { cvar = "nameplateOverlapH", optimal = "0.8", name = "Nameplate Horizontal Overlap", desc = "0.8" },
             { cvar = "nameplateOverlapV", optimal = "1.4", name = "Nameplate Vertical Overlap", desc = "1.4" },
             { cvar = "WorldTextMinSize", optimal = "8", name = "Min Character Name Size", desc = "8" },
@@ -307,11 +307,11 @@ local VALUE_LABELS = {
     cameraFov = function(v) return v .. "\194\176" end,
     cameraDistanceMaxZoomFactor = function(v) return v .. "x" end,
     nameplateStackingTypes = function(v)
-        local t = { [""] = "None", ["AA"] = "Enemy Units", ["BB"] = "Friendly Units", ["CC"] = "Both" }
+        local t = { ["0"] = "None", ["1"] = "Enemy Units", ["2"] = "Friendly Units", ["3"] = "Both" }
         return t[v] or v
     end,
-    nameplateOverlapH = function(v) return tostring(v) end,
-    nameplateOverlapV = function(v) return tostring(v) end,
+    nameplateOverlapH = function(v) return tostring(tonumber(v) or v) end,
+    nameplateOverlapV = function(v) return tostring(tonumber(v) or v) end,
     WorldTextMinSize = function(v) return tostring(v) end,
     -- Cosmetic additions
     overrideScreenFlash = function(v) return v == "1" and "Enabled" or "Disabled" end,
@@ -328,10 +328,40 @@ function OPT:GetValueLabel(cvar, value)
     return tostring(value)
 end
 
-function OPT:GetCurrentValue(cvar)
+-- nameplateStackingTypes is a packed bitfield (a version byte, then flag
+-- bytes), so its raw string is unreadable and never equals a written literal.
+-- The page works in a stack-type mask instead: 0 None, 1 Enemy, 2 Friendly,
+-- 3 both. Backups keep the raw string, which SetCVar restores exactly.
+local STACKING_CVAR = "nameplateStackingTypes"
+
+local function GetRawValue(cvar)
     local ok, val = pcall(_GetCVar, cvar)
     if ok and val and val ~= "" then return val end
     return nil
+end
+
+local function ReadStackMask()
+    local types = Enum.NamePlateStackType
+    local okE, enemy = pcall(GetCVarBitfield, STACKING_CVAR, types.Enemy)
+    local okF, friendly = pcall(GetCVarBitfield, STACKING_CVAR, types.Friendly)
+    if not (okE and okF) then return nil end
+    return (enemy and 1 or 0) + (friendly and 2 or 0)
+end
+
+local function WriteStackMask(mask)
+    local types = Enum.NamePlateStackType
+    local okE, setE = pcall(SetCVarBitfield, STACKING_CVAR, types.Enemy, mask % 2 == 1)
+    local okF, setF = pcall(SetCVarBitfield, STACKING_CVAR, types.Friendly, mask >= 2)
+    return (okE and setE and okF and setF) and true or false
+end
+
+function OPT:GetCurrentValue(cvar)
+    local raw = GetRawValue(cvar)
+    if raw and cvar == STACKING_CVAR then
+        local mask = ReadStackMask()
+        return mask and tostring(mask) or nil
+    end
+    return raw
 end
 
 function OPT:IsOptimal(cvar, optimal)
@@ -347,10 +377,14 @@ end
 function OPT:ApplyCVar(cvar, value)
     local backup = GetBackupDB()
     if not backup.SavedSettings[cvar] then
-        local current = self:GetCurrentValue(cvar)
+        local current = GetRawValue(cvar)
         if current then
             backup.SavedSettings[cvar] = current
         end
+    end
+    if cvar == STACKING_CVAR then
+        local mask = tonumber(value)
+        return mask ~= nil and WriteStackMask(mask)
     end
     local ok = pcall(_SetCVar, cvar, tostring(value))
     return ok
@@ -490,8 +524,8 @@ function OPT:GetActivePreset()
         for _, entry in ipairs(cat.cvars) do
             if not (skipViewDistance and entry.cvar == "graphicsViewDistance") then
                 local want = (overrides and overrides[entry.cvar]) or entry.optimal
-                local ok, live = pcall(_GetCVar, entry.cvar)
-                if not ok or tostring(live) ~= tostring(want) then
+                local live = self:GetCurrentValue(entry.cvar)
+                if tostring(live) ~= tostring(want) then
                     matches = false
                     break
                 end
