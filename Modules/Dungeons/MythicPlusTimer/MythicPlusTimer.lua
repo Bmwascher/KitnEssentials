@@ -288,14 +288,16 @@ end
 -- PARTY). Called from the fresh-stamp arm of UpdateObjectives ONLY — the
 -- restoration arm (reload mid-run) must never re-post. Guard: ChatOutputSplits
 -- DB toggle, objective must be completed, not InCombatLockdown (avoids mid-pull
--- spam noise; SendChatMessage itself is fine in combat), and a channel must exist
--- (solo runs are silently dropped). Appends a "+/- vs PB" delta when pbTime is
--- available. Uses MPT.FormatTime (pure helper) for time formatting.
+-- spam noise), chat messaging not locked (a running key locks it between pulls
+-- and the send would be refused), and a channel must exist (solo runs are
+-- silently dropped). Appends a "+/- vs PB" delta when pbTime is available. Uses
+-- MPT.FormatTime (pure helper) for time formatting.
 function MPT:ChatOutputBossSplit(objective)
     if not SendChat then return end
     if not self.db.ChatOutputSplits then return end
     if not objective or not objective.completed then return end
     if InCombatLockdown() then return end  -- skip mid-pull spam noise
+    if KE:IsChatMessagingLocked() then return end
 
     local channel = ResolveGroupChannel()
     if not channel then return end
