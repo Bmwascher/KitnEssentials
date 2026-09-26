@@ -677,6 +677,10 @@ function KE.ChatRecallStores(text) end
 ---@return boolean
 function KE.ChatRecallRefused(text, restricted) end
 
+---@param text string
+---@return string
+function KE.SanitizeCopyLine(text) end
+
 --- Accepts or refuses one chat member by identity readability.
 ---@param role any
 ---@param name any

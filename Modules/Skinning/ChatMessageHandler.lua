@@ -935,6 +935,22 @@ function CMH.ResetHighlight()
     chatModule = nil
 end
 
+-- A boss body is part of the format pattern, because an emote body carries
+-- its own %s for the name. A secret body cannot be escaped first, so it only
+-- becomes a pattern under pcall, with the raw body as the fallback.
+function CMH.ComposeBossBody(chatFormat, message, pflag, sender, secret)
+    if not secret then
+        return format(chatFormat .. message, pflag .. sender, sender)
+    end
+    if chatFormat ~= '' then
+        local prefix = format(chatFormat, pflag .. sender, sender)
+        return KE:WrapSecretText(message, prefix) or message
+    end
+    local ok, body = pcall(format, message, pflag .. sender, sender)
+    if ok and type(body) ~= 'nil' then return body end
+    return message
+end
+
 -- Message formatter, formats the message body
 function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, channelLength, coloredName, arg1, arg2, arg3,
                               arg4, _, arg6, arg7, arg8, _, _, arg11, arg12, arg13, arg14, _, _, arg17)
@@ -948,9 +964,6 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
     -- Check if message content is protected
     local isProtected = KE:IsSecretValue(arg1)
     local bossMonster = strsub(chatType, 1, 9) == 'RAID_BOSS' or strsub(chatType, 1, 7) == 'MONSTER'
-
-    -- Protected boss messages can't be safely formatted, skip custom formatting
-    if isProtected and bossMonster then return end
 
     if bossMonster and not isProtected then
         arg1 = gsub(arg1, '(%d%s?%%)([^%%%a])', '%1%%%2')
@@ -1024,7 +1037,7 @@ function CMH:MessageFormatter(frame, info, chatType, chatGroup, chatTarget, chan
     elseif chatType == 'TEXT_EMOTE' then
         body = message
     elseif bossMonster then
-        body = format(chatFormat .. message, pflag .. sender, sender)
+        body = CMH.ComposeBossBody(chatFormat, message, pflag, sender, isProtected)
     else
         body = format(chatFormat .. '%s', pflag .. sender, message)
     end
