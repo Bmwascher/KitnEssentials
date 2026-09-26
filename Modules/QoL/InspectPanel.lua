@@ -82,7 +82,7 @@ local inspectUpdatePending = false
 -- Per-target per-slot cache. Frame-attributed state lives in CP's shared FFD
 -- (accessed via self.CP:GetFFD); this _inspectCache is dirty-cache state only.
 -- Wipes on InspectFrame:OnHide and on InspectPanel:OnDisable (bounded memory).
-local _inspectCache = {}  -- [guid] = { [slotID] = { itemLink, enchantID, ilvl, gemHash, paintPasses } }
+local _inspectCache = {}  -- [guid] = { [slotID] = { itemLink, enchantID, ilvl, gemHash, paintPasses, pending, pendingRetries, retry } }
 local _currentInspectGUID = nil
 
 local function _inspectSlotState(guid, slotID)
@@ -98,14 +98,27 @@ end
 -- over ≤3 sockets). Takes a pre-computed ScanItemSockets result so the caller
 -- can reuse the same scan for suspect detection — ScanItemSockets internally
 -- allocates a C_TooltipInfo table, so each call has real cost.
+-- One scratch table, wiped per call: this runs on every socketable render.
+local _gemHashParts = {}
 local function ComputeGemHash(result)
     if not result or not result.sockets then return "" end
-    local parts = {}
+    local parts = _gemHashParts
+    wipe(parts)
     for i, socket in ipairs(result.sockets) do
         parts[i] = (socket.filled and ("F1G" .. (socket.gemID or "0"))) or "F0"
     end
     return table.concat(parts, "_")
 end
+
+-- The dirty-cache test, shared by both short-circuit sites in RenderInspectSlot.
+-- A slot whose last render drew a stand-in is never unchanged: that is what
+-- makes the next pass redraw it.
+local function SlotUnchanged(s, link, enchantID, ilvl, gemHash)
+    return s.itemLink == link and s.enchantID == enchantID
+        and s.ilvl == ilvl and s.gemHash == gemHash
+        and not s.pending
+end
+InspectPanel._SlotUnchanged = SlotUnchanged
 
 ---------------------------------------------------------------------------------
 -- Gem-race fix (grace-period gated + hybrid retry)
@@ -123,8 +136,8 @@ end
 --
 --   1. Primary path (event-driven): re-issue C_Item.RequestLoadItemDataByID
 --      so ITEM_DATA_LOAD_RESULT re-fires when gem bytes hydrate.
---   2. Fallback path (timer): single dedup'd C_Timer per (guid, slotID) in
---      case the event chain stalls. RETRY_DELAY = 0.5s.
+--   2. Fallback path (timer): the shared retry sweep below, in case the event
+--      chain stalls. RETRY_DELAY = 0.5s.
 --
 -- Per-slot paintPasses still caps the suppression within the grace window so
 -- a pathological re-request loop can't suppress past MAX_PAINT_PASSES tries.
@@ -132,31 +145,99 @@ local MAX_PAINT_PASSES = 5
 local RETRY_DELAY = 0.5
 local INSPECT_PACKET_GRACE = 1.0  -- seconds; suspect-empty triggers retry within this window
 
-local _inspectReadyTime = {}  -- [guid] = GetTime() at last INSPECT_READY
+local _inspectReadyTime = {}  -- [guid] = GetTime() at the inspect start (frame show, matching INSPECT_READY, or first render)
 
-local function ScheduleSocketRetry(self, button, slotID, guid)
-    local s = _inspectSlotState(guid, slotID)
-    if s.retryPending then return end  -- dedup: one timer per (guid, slot) at a time
-    s.retryPending = true
-    C_Timer.After(RETRY_DELAY, function()
-        -- Read state fresh; the cache table is the same one OnHide may have
-        -- wiped, so a re-fetch yields a new sub-table after wipe + we'll
-        -- bail anyway on the guid mismatch below.
-        if not InspectFrame or not InspectFrame:IsShown() then
-            local st = _inspectCache[guid] and _inspectCache[guid][slotID]
-            if st then st.retryPending = false end
-            return
+-- One timer for the whole sheet, whatever a slot's reason (the gem race or a
+-- stand-in render): a slot sets its retry flag, and the sweep re-renders every
+-- flagged slot of the current target. The callback is one file-level function,
+-- so arming a retry builds no closure. The handle is kept so a new stamp can
+-- restart the timer: one armed before the stamp would land early in the new
+-- grace window and break the per-stamp sweep bound.
+local _sweepGUID = nil
+local _sweepTimer = nil
+
+local function SweepRetries()
+    local guid = _sweepGUID
+    _sweepGUID, _sweepTimer = nil, nil
+    if not guid then return end
+    if not InspectFrame or not InspectFrame:IsShown() then return end
+    if _currentInspectGUID ~= guid then return end
+    local g = _inspectCache[guid]
+    if not g then return end
+    for slotID, frameName in pairs(INSPECT_SLOT_FRAMES) do
+        local st = g[slotID]
+        if st and st.retry then
+            st.retry = nil
+            local b = _G[frameName]
+            if b then InspectPanel:RenderInspectSlot(b, true) end
         end
-        if _currentInspectGUID ~= guid then
-            local st = _inspectCache[guid] and _inspectCache[guid][slotID]
-            if st then st.retryPending = false end
-            return
-        end
-        local st = _inspectSlotState(guid, slotID)
-        st.retryPending = false
-        self:RenderInspectSlot(button)
-    end)
+    end
 end
+
+local function ArmSlotRetry(s, guid)
+    s.retry = true
+    _sweepGUID = guid
+    if _sweepTimer then return end
+    _sweepTimer = C_Timer.NewTimer(RETRY_DELAY, SweepRetries)
+end
+
+local function RestartArmedSweep()
+    if not _sweepTimer then return end
+    _sweepTimer:Cancel()
+    _sweepTimer = C_Timer.NewTimer(RETRY_DELAY, SweepRetries)
+end
+
+-- Wherever the slot cache is wiped the retry flags go with it, so a timer left
+-- armed would fire with nothing to sweep.
+local function CancelSweep()
+    if _sweepTimer then _sweepTimer:Cancel() end
+    _sweepTimer, _sweepGUID = nil, nil
+end
+
+-- INSPECT_READY carries the GUID of whichever unit an inspect answered, and
+-- another addon's inspect request is answered too. Only the inspect frame's own
+-- unit counts; a secret payload is refused before it is compared.
+local function ReadyForFrame(guid, frameGUID)
+    if issecretvalue(guid) or issecretvalue(frameGUID) then return false end
+    if guid == nil or frameGUID == nil then return false end
+    return guid == frameGUID
+end
+InspectPanel._ReadyForFrame = ReadyForFrame
+
+local function InspectFrameGUID()
+    local unit = InspectFrame and InspectFrame.unit
+    return unit and KE:GetSafeUnitGUID(unit) or nil
+end
+
+-- The inspect frame shows from inside the first INSPECT_READY, before this
+-- file's data events are registered, so the frame's showing is where an
+-- inspect starts.
+local function StampInspectStart(guid)
+    if not guid then return end
+    _currentInspectGUID = guid
+    _inspectReadyTime[guid] = GetTime()
+    RestartArmedSweep()
+end
+
+-- Whether a render that drew a stand-in arms the sweep. Only sweep renders
+-- spend a retry, so a same-frame burst of event passes cannot use up the budget
+-- before the data has had time to land. Before the inspect is stamped nothing
+-- arms (the sweep would bail); the slot stays pending so the next pass redraws it.
+local MAX_PENDING_RETRIES = MAX_PAINT_PASSES - 1
+
+local function PendingStep(s, pending, stamped, fromSweep)
+    if not pending then
+        s.pending, s.pendingRetries = nil, nil
+        return false
+    end
+    s.pending = true
+    if not stamped then return false end
+    if fromSweep then s.pendingRetries = (s.pendingRetries or 0) + 1 end
+    if (s.pendingRetries or 0) < MAX_PENDING_RETRIES then return true end
+    s.pending, s.pendingRetries = nil, nil
+    return false
+end
+InspectPanel._PendingStep = PendingStep
 
 -- Resolve the unit + slotID for an inspect button, applying the shared guards
 -- (db enabled, frame unit available, same-map). Returns (unit, slotID) or nil.
@@ -180,30 +261,53 @@ local function ResolveInspectSlot(button)
     return unit, slotID
 end
 
+-- The gates a deferred pass re-checks when it runs: the module may have been
+-- switched off, or the sheet closed, in between.
+local function InspectSheetLive()
+    return InspectPanel:IsEnabled()
+        and InspectPanel.CP and InspectPanel.CP.db and InspectPanel.CP.db.Enabled
+        and InspectFrame and InspectFrame:IsShown()
+end
+
 -- Debounced, next-frame batch of the full inspect refresh. A first inspect fires
 -- a burst (per-slot button updates + INSPECT_READY + UNIT_INVENTORY_CHANGED) on the
 -- same frame Blizzard loads + renders the inspect UI; collapsing it into ONE
 -- deferred pass keeps that heavy tooltip-scan work off the busy load frame.
 local function QueueInspectUpdate()
     if inspectUpdatePending then return end
-    if not InspectPanel:IsEnabled() then return end
-    if not (InspectPanel.CP and InspectPanel.CP.db and InspectPanel.CP.db.Enabled) then return end
-    if not (InspectFrame and InspectFrame:IsShown()) then return end
+    if not InspectSheetLive() then return end
     inspectUpdatePending = true
     -- 0.2s (not 0.05) collapses bursty late-data events into far fewer full re-scans.
     -- Each re-scan allocates a C_TooltipInfo table per socketable slot, so a higher
     -- debounce directly cuts the transient garbage generated while inspecting.
     C_Timer.After(0.2, function()
         inspectUpdatePending = false
-        -- Re-checked, not assumed: this fires 0.2s later and the module may have
-        -- been switched off in between.
-        if InspectPanel:IsEnabled()
-            and InspectPanel.CP and InspectPanel.CP.db and InspectPanel.CP.db.Enabled
-            and InspectFrame and InspectFrame:IsShown() then
+        if InspectSheetLive() then
             InspectPanel:UpdateAllInspectSlots()
         end
     end)
 end
+
+-- One whole-sheet pass on the next frame for any number of same-frame requests:
+-- INSPECT_READY arrives in bursts, and a synchronous pass per event re-requested
+-- and re-rendered the whole sheet each time. A one-shot per burst, never a
+-- continuation loop. The flag belongs to the callback: it clears the flag and
+-- re-checks the gates itself, so OnDisable does not reset it.
+local coalescedPassPending = false
+
+local function RunCoalescedPass()
+    coalescedPassPending = false
+    if InspectSheetLive() then
+        InspectPanel:UpdateAllInspectSlots()
+    end
+end
+
+local function ScheduleCoalescedPass()
+    if coalescedPassPending then return end
+    coalescedPassPending = true
+    C_Timer.After(0, RunCoalescedPass)
+end
+InspectPanel._ScheduleCoalescedPass = ScheduleCoalescedPass
 
 ---------------------------------------------------------------------------------
 -- Lifecycle
@@ -239,6 +343,7 @@ function InspectPanel:OnEnable()
             self.eventFrame:RegisterEvent("INSPECT_READY")
             self.eventFrame:RegisterEvent("UNIT_INVENTORY_CHANGED")
             self.eventFrame:RegisterEvent("ITEM_DATA_LOAD_RESULT")
+            StampInspectStart(InspectFrameGUID())
             self:UpdateAllInspectSlots()
         end
     end
@@ -250,6 +355,7 @@ function InspectPanel:OnDisable()
     wipe(_inspectReadyTime)
     _currentInspectGUID = nil
     inspectUpdatePending = false
+    CancelSweep()
     if self.eventFrame then self.eventFrame:UnregisterAllEvents() end
     self:HideAllInspectOverlays()
 end
@@ -261,8 +367,8 @@ end
 -- Render the overlays (warning + per-slot detail + track letter) for one inspect
 -- slot. Pure render: assumes the item's data is already cached. Driven by
 -- RequestInspectSlot synchronously (cached items) or by ITEM_DATA_LOAD_RESULT
--- (items that had to load).
-function InspectPanel:RenderInspectSlot(button)
+-- (items that had to load), and by the retry sweep with fromSweep set.
+function InspectPanel:RenderInspectSlot(button, fromSweep)
     local unit, slotID = ResolveInspectSlot(button)
     if not unit then return end
     -- 12.1 puts UnitGUID under identity restriction; a secret guid is truthy,
@@ -270,25 +376,37 @@ function InspectPanel:RenderInspectSlot(button)
     -- No clean guid, no overlays.
     local guid = KE:GetSafeUnitGUID(unit)
     if not guid then return end
+    -- The frame's unit is the current target by definition. A start this render
+    -- has not seen stamped (no readable GUID when the frame showed, or a return
+    -- to an earlier target) starts here, so the grace window always opens and
+    -- closes and a pending slot always reaches the sweep.
+    if _currentInspectGUID ~= guid and InspectFrame and InspectFrame:IsShown() then
+        StampInspectStart(guid)
+    end
 
     local CP = self.CP
     local link = GetInventoryItemLink(unit, slotID)
     local enchantID = link and CP:GetSlotEnchantID(unit, slotID) or nil
     local ilvl = link and CP:GetSlotItemLevel(unit, slotID) or nil
+    local s = _inspectSlotState(guid, slotID)
+    local socketable = CP:IsSocketableSlot(slotID)
+
+    -- A slot with no gem row keys only on link, enchant ID and item level, none
+    -- of which needs the tooltip, so an unchanged one returns before the read.
+    if not socketable and SlotUnchanged(s, link, enchantID, ilvl, "") then
+        return
+    end
+
     -- Single C_TooltipInfo read for the whole slot render: the gem scan here
     -- (dirty-hash via ComputeGemHash + suspect detection) AND the detail/track
     -- renders further down all reuse it. Each fetch allocates a fresh tooltip
     -- table, so this one read replaces what used to be up to four.
     local data = link and C_TooltipInfo.GetInventoryItem(unit, slotID)
-    local result = link and CP:ScanItemSockets(unit, slotID, data)
+    -- No gem row is drawn outside the socketable set, so no scan there either.
+    local result = link and socketable and CP:ScanItemSockets(unit, slotID, data)
     local gemHash = ComputeGemHash(result)
 
-    local s = _inspectSlotState(guid, slotID)
-    if s.itemLink == link
-        and s.enchantID == enchantID
-        and s.ilvl == ilvl
-        and s.gemHash == gemHash
-    then
+    if socketable and SlotUnchanged(s, link, enchantID, ilvl, gemHash) then
         return  -- dirty-cache short-circuit
     end
 
@@ -297,6 +415,9 @@ function InspectPanel:RenderInspectSlot(button)
     -- Outside the grace window, an empty socket is treated as genuinely empty
     -- (player chose not to gem — common on necks/rings).
     local readyAge = _inspectReadyTime[guid] and (GetTime() - _inspectReadyTime[guid])
+    -- Until the grace window has passed, an absent enchant ID or track may only
+    -- mean the inspect data has not landed yet.
+    local provisional = readyAge == nil or readyAge < INSPECT_PACKET_GRACE
     local suspect = result and result.totalCount and result.totalCount > 0
                     and result.filledCount == 0
                     and readyAge and readyAge < INSPECT_PACKET_GRACE
@@ -309,7 +430,7 @@ function InspectPanel:RenderInspectSlot(button)
             local itemID = C_Item.GetItemInfoInstant(link)
             if itemID then C_Item.RequestLoadItemDataByID(itemID) end
             -- Timer fallback in case the event chain stalls.
-            ScheduleSocketRetry(self, button, slotID, guid)
+            ArmSlotRetry(s, guid)
             -- Render everything EXCEPT gems; suppressGems hides the icon row
             -- instead of flashing red empty-socket cues. Skip the cache write so
             -- the next retry re-evaluates fresh.
@@ -332,12 +453,54 @@ function InspectPanel:RenderInspectSlot(button)
     s.itemLink, s.enchantID, s.ilvl, s.gemHash = link, enchantID, ilvl, gemHash
 
     CP:UpdateSlotWarning(button, unit, slotID)
+    local fellBack, wDetail, wCorner
     if CP.db.ShowSlotItemLevel or CP.db.ShowEnchantNames
         or CP.db.ShowSlotGems or CP.db.ShowMissingGems then
-        CP:UpdateSlotDetail(button, slotID, unit, nil, data)
+        fellBack, wDetail = CP:UpdateSlotDetail(button, slotID, unit, nil, data)
     end
     if CP.db.TrackIndicatorsEnabled then
-        CP:UpdateSlotTrackIndicator(button, slotID, unit, data)
+        wCorner = CP:UpdateSlotTrackIndicator(button, slotID, unit, data)
+    end
+
+    -- Only a render that may have drawn a stand-in KE displays pays for the
+    -- ownership lookups and the predicates, which stay the rule. A render whose
+    -- KE display is off calls none of them, nor, once the grace window has
+    -- passed, does a complete one.
+    local db = CP.db
+    local w = wDetail or wCorner
+    local enchantPending, trackPending
+    if link and (fellBack or (provisional and not enchantID
+        and (db.ShowEnchantNames or db.ShowEnchants ~= false))) then
+        local euiOwnsEnchant = KE:EUIDrawsSlotElement(unit, "enchant")
+        if not euiOwnsEnchant then
+            local enchantable = provisional and not enchantID
+                and CP:IsEnchantableSlot(unit, slotID) or false
+            enchantPending = CP:InspectEnchantPending(link, provisional, fellBack, enchantID,
+                enchantable, false)
+        end
+    end
+    local corner = db.TrackIndicatorsEnabled
+    local mergedOnly = not corner and db.ShowUpgradeProgress and db.ShowSlotItemLevel
+    if link and not w and (corner or mergedOnly)
+        and (provisional or not (data and data.lines))
+        and not KE:EUIDrawsSlotElement(unit, "track") then
+        -- Item-level ownership matters only when the merged span is KE's only
+        -- track display; the corner letter does not depend on it.
+        local euiOwnsIlvl = mergedOnly and KE:EUIDrawsSlotElement(unit, "ilvl") or false
+        trackPending = CP:InspectTrackPending(link, provisional, data, nil, euiOwnsIlvl, false)
+    end
+    -- Read before PendingStep, which clears the count once the slot resolves or
+    -- settles: the debug line must still say which pending sweep this render
+    -- was. A sweep render of a slot that had not pended (a gem retry) counts 0.
+    local sweepNo = DEBUG_CP and fromSweep and s.pending and ((s.pendingRetries or 0) + 1) or 0
+    if PendingStep(s, enchantPending or trackPending, _currentInspectGUID == guid, fromSweep) then
+        ArmSlotRetry(s, guid)
+    end
+    if DEBUG_CP then
+        KE:Print(string.format("[CP] paint slot %d sweep=%s n=%d age %s enchant=%s track=%s",
+            slotID, tostring(fromSweep == true), sweepNo,
+            readyAge and string.format("%.2f", readyAge) or "nil",
+            tostring(enchantPending), tostring(trackPending)))
     end
 end
 
@@ -401,6 +564,7 @@ end
 -- hidden until the inspect frame was closed and reopened.
 function InspectPanel:InvalidateSlotCache()
     wipe(_inspectCache)
+    CancelSweep()
 end
 
 -- Returns the equipped average item level to 2 decimals, or nil if the inspect
@@ -559,6 +723,8 @@ function InspectPanel:SetupInspectSupport()
                 -- teardown just removed.
                 if not _self:IsEnabled() then return end
                 for _, e in ipairs(INSPECT_DATA_EVENTS) do f:RegisterEvent(e) end
+                StampInspectStart(InspectFrameGUID())
+                ScheduleCoalescedPass()
             end
             local function unregData()
                 for _, e in ipairs(INSPECT_DATA_EVENTS) do f:UnregisterEvent(e) end
@@ -566,6 +732,7 @@ function InspectPanel:SetupInspectSupport()
                 wipe(_inspectCache)
                 wipe(_inspectReadyTime)
                 _currentInspectGUID = nil
+                CancelSweep()
             end
             InspectFrame:HookScript("OnShow", regData)
             InspectFrame:HookScript("OnHide", unregData)
@@ -590,12 +757,11 @@ function InspectPanel:SetupInspectSupport()
         if event == "ADDON_LOADED" then
             if arg1 == "Blizzard_InspectUI" then installHooks() end
         elseif event == "INSPECT_READY" then
-            -- Track the inspected unit's GUID for dirty-cache scoping + retry guards.
-            -- INSPECT_READY's arg1 is the GUID of the inspected unit.
-            _currentInspectGUID = arg1
-            -- Stamp the time so the gem-race suspect window can gate on
-            -- "within INSPECT_PACKET_GRACE seconds of this event."
-            if arg1 then _inspectReadyTime[arg1] = GetTime() end
+            -- Any inspect reply arrives here, another addon's included; only the
+            -- inspect frame's own unit re-stamps the start and runs a pass.
+            local frameGUID = InspectFrameGUID()
+            if not ReadyForFrame(arg1, frameGUID) then return end
+            StampInspectStart(frameGUID)
             -- New inspect target: clear the per-slot pending queue so the new unit's
             -- gear gets requested fresh, then ensure the hooks exist and queue a pass.
             if _self._inspectQueue then wipe(_self._inspectQueue) end
@@ -604,13 +770,11 @@ function InspectPanel:SetupInspectSupport()
             if _self.CP and _self.CP._cpDbg then wipe(_self.CP._cpDbg) end          -- debug: re-allow dumps
             if _self.CP and _self.CP._cpDbgFilled then wipe(_self.CP._cpDbgFilled) end
             installHooks()
-            -- Render SYNCHRONOUSLY on INSPECT_READY (not via QueueInspectUpdate's
-            -- 0.2s debounce). On target switch, A's stale overlay FontStrings/icons
-            -- stay visible on the reused frames until a render overwrites them; the
-            -- debounce adds 0.2s of perceived "old gear" lag. Data is ready now.
-            -- Follow-up burst events (UNIT_INVENTORY_CHANGED, per-slot hooks) still
-            -- go through the debounced path; dirty cache makes those near-free.
-            _self:UpdateAllInspectSlots()
+            -- Next frame, not QueueInspectUpdate's 0.2s debounce: on a target
+            -- switch the old target's overlays stay on the reused frames until a
+            -- render overwrites them. Follow-up burst events (UNIT_INVENTORY_CHANGED,
+            -- per-slot hooks) still go through the debounced path.
+            ScheduleCoalescedPass()
         elseif event == "UNIT_INVENTORY_CHANGED" then
             -- Inspected unit's gear changed mid-inspect — re-pass to pick up the new
             -- item(s). RequestInspectSlot handles changed-itemID per slot correctly.

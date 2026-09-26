@@ -130,6 +130,12 @@ local socketableSlots = { 1, 2, 5, 6, 9, 10, 11, 12, 13, 14, 15 }
 local socketableSlotSet = {}
 for _, slotID in ipairs(socketableSlots) do socketableSlotSet[slotID] = true end
 
+-- The inspect render skips its socket scan outside this set, so both sides
+-- read the one table the gem row gates on.
+function CP:IsSocketableSlot(slotID)
+    return socketableSlotSet[slotID] or false
+end
+
 -- Enchant label processing: map full effect names to short stat-based labels,
 -- strip the "Enchant <Slot> - " prefixes, then abbreviate stat words. Anything
 -- not in the tables falls through to a length-truncated raw name.
@@ -558,7 +564,9 @@ function CP:ResolveEnchantLabel(unit, slot, data)
     -- label comes from the tooltip + ProcessEnchantText.
     if not self:GetSlotEnchantID(unit, slot) then return nil end
     local name, rank = GetSlotEnchantName(unit, slot, data)
-    if not name then return "Enchanted" end
+    -- The second return marks the label as a stand-in, so the inspect path
+    -- knows to read the slot again.
+    if not name then return "Enchanted", true end
     name = ProcessEnchantText(name, self.db.EnchantNameStyle)
     return FinishEnchantLabel(name, rank, self.db.ShowEnchantRank)
 end
@@ -585,9 +593,10 @@ function CP:GetSlotItemLevel(unit, slot)
     return effective
 end
 
-local function CanEnchantSlot(unit, slot)
-    unit = unit or "player"
-    local expansion = GetExpansionForLevel(UnitLevel(unit))
+-- The level is a parameter so a caller that has already checked it for
+-- secrecy decides on that same value, not on a second read.
+local function CanEnchantSlotAtLevel(unit, slot, level)
+    local expansion = GetExpansionForLevel(level)
     local slots = expansion and expansionEnchantableSlots[expansion]
     if not slots then return false end
     if slots[slot] then return true end
@@ -601,6 +610,21 @@ local function CanEnchantSlot(unit, slot)
         return false
     end
     return false
+end
+
+local function CanEnchantSlot(unit, slot)
+    unit = unit or "player"
+    return CanEnchantSlotAtLevel(unit, slot, UnitLevel(unit))
+end
+
+-- An inspected unit's level can be secret, and the enchantable table is keyed
+-- by expansion: the secret test runs first, before any comparison, and the
+-- decision uses that one checked read.
+function CP:IsEnchantableSlot(unit, slot)
+    local level = UnitLevel(unit)
+    if issecretvalue and issecretvalue(level) then return false end
+    if level == nil then return false end
+    return CanEnchantSlotAtLevel(unit, slot, level) and true or false
 end
 
 ---------------------------------------------------------------------------------
@@ -1639,6 +1663,32 @@ local function TrackPending(held, data)
 end
 CP._TrackPending = TrackPending
 
+-- Whether an inspect slot's render drew a stand-in that must be read again.
+-- The ownership gates repeat the render functions' on purpose: this is the one
+-- place that says what pends, so an element another addon draws never does.
+-- `provisional`: the inspect data may not have landed yet, so an absent
+-- enchant ID or track may only mean it has not arrived.
+function CP:InspectEnchantPending(held, provisional, fellBack, enchantID, enchantable, euiOwnsEnchant)
+    local db = self.db
+    if not (held and db) or euiOwnsEnchant then return nil end
+    if fellBack and db.ShowEnchantNames then return true end
+    if provisional and not enchantID and enchantable
+        and (db.ShowEnchantNames or db.ShowEnchants ~= false) then
+        return true
+    end
+    return nil
+end
+
+function CP:InspectTrackPending(held, provisional, data, w, euiOwnsIlvl, euiOwnsTrack)
+    local db = self.db
+    if not (held and db) or w or euiOwnsTrack then return nil end
+    local drawn = db.TrackIndicatorsEnabled
+        or (db.ShowUpgradeProgress and db.ShowSlotItemLevel and not euiOwnsIlvl)
+    if not drawn then return nil end
+    if TrackPending(held, data) then return true end
+    return provisional and true or nil
+end
+
 function CP:CreateTrackOverlay(slotFrame, slotID)
     local ffd = self:GetFFD(slotFrame)
     if ffd.track then return ffd.track end
@@ -1742,6 +1792,8 @@ function CP:UpdateSlotTrackIndicator(slotFrame, slotID, unit, data)
     else
         overlay:Hide()
     end
+    -- The inspect path asks whether a track was found without a second read.
+    return w
 end
 
 -- The inspect half of every All-level function below. Its dirty state lives in
@@ -2024,9 +2076,14 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
     KE:ApplyFont(detail.enchantText, fontFace, fontSize, fontOutline)
     KE:ApplyFont(detail.ilvlText, fontFace, fontSize, fontOutline)
 
+    -- Returned for the inspect retry: whether the enchant label is a stand-in,
+    -- and the track this render found.
+    local fellBack, w
+
     -- Enchant label (green). "No Enchant" stays with the warning feature.
     if self.db.ShowEnchantNames and not euiOwnsEnchant then
-        local label = self:ResolveEnchantLabel(unit, slotID, data)
+        local label
+        label, fellBack = self:ResolveEnchantLabel(unit, slotID, data)
         detail.enchantText:SetText(label or "")
         detail.enchantText:SetShown(label ~= nil)
     else
@@ -2041,7 +2098,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
         local lvl = self:GetSlotItemLevel(unit, slotID)
 
         local span
-        local w = self:GetItemTrack(unit, slotID, data)
+        w = self:GetItemTrack(unit, slotID, data)
         if MergeTrackIntoIlvl(self.db, w, euiOwnsIlvl, euiOwnsTrack) then
             span = UpgradeSpan(w, self.db.TrackIndicatorsEnabled, true)
         end
@@ -2123,6 +2180,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
 
     -- Transparent container — element visibility controls what's drawn.
     detail:Show()
+    return fellBack, w
 end
 
 -- Event-driven single-slot refresh. Resolves the slot frame from the slotID,
