@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.35
+
+### Enemy Counter
+
+- **NEW:** switch it off per specialization
+
+### LFG Reminder
+
+- The popup shows the role you were accepted as
+
+### Time Spiral
+
+- **NEW:** an optional sound when you receive the Time Spiral buff
+- No longer errors on a spell ID the game hides
+
+---
+
 ## v4.7.34
 
 ### Inspect Panel
