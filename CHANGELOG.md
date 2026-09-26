@@ -1,5 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.40
+
+### Combat Timer
+
+- Keeps its boss hold after a /reload or a loading screen mid-encounter
+
+### Damage Meter
+
+- An ally row on a pinned window is refused in combat instead of opening a
+  breakdown that may be wrong
+
+### Fixes
+
+- Great Vault Alert and Stasis Tracker no longer error on a cast unit the
+  game hides
+
+---
+
 ## v4.7.39
 
 ### Chat
