@@ -46,24 +46,25 @@ local function OpenSack()
         S.Button(nextB); S.Button(prevB); S.Button(sendB)
     end
 
-    local tabs = { _G.BugSackTabAll, _G.BugSackTabLast, _G.BugSackTabSession }
-    for _, tab in pairs(tabs) do
-        if tab then S.Tab(tab) end
+    local tabs = { _G.BugSackTabAll, _G.BugSackTabSession, _G.BugSackTabLast }
+    for i = 1, 3 do
+        if tabs[i] then S.Tab(tabs[i]) end
     end
 
-    for _, tab in pairs(tabs) do
-        if tab then S.TabSetSelected(tab) end
+    for i = 1, 3 do
+        if tabs[i] then S.TabSetSelected(tabs[i]) end
     end
+    -- The row hangs from the window's bottom edge by the first tab's top,
+    -- whatever anchor the tab was created with; only its x inset is kept.
     local function RepositionTabs()
         local prev
-        for _, tab in pairs(tabs) do
+        for i = 1, 3 do
+            local tab = tabs[i]
             if tab and tab:IsShown() then
                 if not prev then
-                    local point, relativeTo, relativePoint, x = tab:GetPoint(1)
-                    if point then
-                        tab:ClearAllPoints()
-                        tab:SetPoint(point, relativeTo, relativePoint, x or 0, 1)
-                    end
+                    local _, _, _, x = tab:GetPoint(1)
+                    tab:ClearAllPoints()
+                    tab:SetPoint("TOPLEFT", f, "BOTTOMLEFT", x or 0, 1)
                 else
                     tab:ClearAllPoints()
                     tab:SetPoint("LEFT", prev, "RIGHT", -3, 0)
@@ -74,7 +75,8 @@ local function OpenSack()
     end
     RepositionTabs()
 
-    for _, tab in pairs(tabs) do
+    for i = 1, 3 do
+        local tab = tabs[i]
         if tab and tab.HookScript then
             tab:HookScript("OnClick", RepositionTabs)
         end

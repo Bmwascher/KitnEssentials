@@ -842,6 +842,15 @@ local function LoadedState(identifier)
     return loaded
 end
 
+-- BugGrabber installs as !BugGrabber; the plain name covers any other packaging.
+local function BugGrabberName()
+    local ok, exists = SafeAPICall(C_AddOns and C_AddOns.DoesAddOnExist, "!BugGrabber")
+    if ok and SafeCanAccess(exists) and exists == true then
+        return "!BugGrabber"
+    end
+    return "BugGrabber"
+end
+
 local function EnvironmentSnapshot()
     local environment = {
         rows = {},
@@ -896,7 +905,7 @@ local function EnvironmentSnapshot()
     end
 
     environment.bugSack = LoadedState("BugSack")
-    environment.bugGrabber = LoadedState("BugGrabber")
+    environment.bugGrabber = LoadedState(BugGrabberName())
     table_sort(environment.rows, function(a, b)
         if a.sortName ~= b.sortName then return a.sortName < b.sortName end
         return a.name < b.name
