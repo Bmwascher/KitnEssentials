@@ -331,7 +331,7 @@ function MPT:BuildHUD()
         GameTooltip:SetPoint("BOTTOMRIGHT", hit, "LEFT", -DEATHS_TOOLTIP_GAP, DEATHS_TOOLTIP_LIFT)
         GameTooltip:Show()
         local hitLeft = hit:GetLeft()
-        if hitLeft and hitLeft * hit:GetEffectiveScale()
+        if hitLeft and not issecretvalue(hitLeft) and hitLeft * hit:GetEffectiveScale()
             < (GameTooltip:GetWidth() + DEATHS_TOOLTIP_GAP) * GameTooltip:GetEffectiveScale() then
             GameTooltip:ClearAllPoints()
             GameTooltip:SetPoint("BOTTOMLEFT", hit, "RIGHT", DEATHS_TOOLTIP_GAP, DEATHS_TOOLTIP_LIFT)

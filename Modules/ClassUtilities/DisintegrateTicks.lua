@@ -976,24 +976,33 @@ function DT:OnEvent(event, unit, ...)
     end
 end
 
+-- AceEvent-3.0 has no RegisterUnitEvent; a frame of its own lets the client
+-- filter by unit.
+function DT:CreateCastFrame()
+    if self.castFrame then return end
+    local frame = CreateFrame("Frame")
+    frame:SetScript("OnEvent", function(_, event, ...)
+        self:OnEvent(event, ...)
+    end)
+    self.castFrame = frame
+end
+
 function DT:RegisterSpecEvents()
-    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START", "OnEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", "OnEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP", "OnEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnEvent")
+    local castFrame = self.castFrame
+    castFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
+    castFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_UPDATE", "player")
+    castFrame:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
+    castFrame:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_STOP", "player")
+    castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnEvent")
     self:RegisterEvent("PLAYER_DEAD", "OnEvent")
     self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW", "OnEvent")
     self:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE", "OnEvent")
 end
 
+-- Also reached from OnDisable when OnEnable returned before making the frame.
 function DT:UnregisterSpecEvents()
-    self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_START")
-    self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_UPDATE")
-    self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
-    self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
-    self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+    if self.castFrame then self.castFrame:UnregisterAllEvents() end
     self:UnregisterEvent("TRAIT_CONFIG_UPDATED")
     self:UnregisterEvent("PLAYER_DEAD")
     self:UnregisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_SHOW")
@@ -1242,6 +1251,7 @@ function DT:OnEnable()
 
     self:UpdateDB()
     self:CreateWarningFrame()
+    self:CreateCastFrame()
     self:ApplySettings()
     self:HideWarning()
 

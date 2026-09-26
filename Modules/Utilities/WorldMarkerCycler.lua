@@ -87,29 +87,56 @@ function WMC:BuildOrderTable()
 
     local db = self.db
     local body = "last=0;order=newtable() "
+    local seed = "avail=newtable() "
     if db and db.OrderList then
-        for _, id in ipairs(db.OrderList) do
+        for pos, id in ipairs(db.OrderList) do
             body = body .. string_format("tinsert(order,%d) ", id)
+            seed = seed .. string_format("avail[%d]=true ", pos)
         end
     end
-    SecureHandlerExecute(cycleBtn, body)
+    -- Seeded all free: when the board reads secret the prime below is skipped,
+    -- and the click body must still find an avail sized to this order.
+    SecureHandlerExecute(cycleBtn, body .. seed)
     self.pendingOrderBuild = false
     self:PrimeAvailability()
+end
+
+-- Believed-free flag per order position, one read each. Nil as soon as any read
+-- is secret: chat messaging lockdown makes IsRaidMarkerActive secret. A missing
+-- isActive means every position is free.
+function WMC.ReadBoard(list, isActive)
+    local free = {}
+    for pos, id in ipairs(list) do
+        if isActive then
+            local active = isActive(id)
+            if issecretvalue(active) then return nil end
+            free[pos] = not active
+        else
+            free[pos] = true
+        end
+    end
+    return free
 end
 
 -- Rebuilds the believed-free list from the board, so a marker anyone placed or
 -- cleared is eventually accounted for. Always sized to the list BuildOrderTable
 -- used, which is why the snippets index avail unguarded. Refused in combat:
--- running a snippet from ordinary code errors there.
+-- running a snippet from ordinary code errors there. A secret board runs no
+-- snippet and leaves the prime owed until a read comes back plain.
 function WMC:PrimeAvailability()
     if InCombatLockdown() then return end
 
     local db = self.db
-    local list = (db and db.OrderList) or {}
+    local free = WMC.ReadBoard((db and db.OrderList) or {}, IsRaidMarkerActive)
+    if not free then
+        self.primeOwed = true
+        return
+    end
+    self.primeOwed = false
+
     local body = "avail=newtable() "
-    for pos, id in ipairs(list) do
-        local free = not IsRaidMarkerActive or not IsRaidMarkerActive(id)
-        body = body .. string_format("avail[%d]=%s ", pos, free and "true" or "false")
+    for pos = 1, #free do
+        body = body .. string_format("avail[%d]=%s ", pos, free[pos] and "true" or "false")
     end
     SecureHandlerExecute(cycleBtn, body)
 end
@@ -169,6 +196,18 @@ function WMC:OnEnable()
     self:RegisterEvent("RAID_TARGET_UPDATE", function()
         self:PrimeAvailability()
     end)
+
+    -- Pays an owed prime once any addon restriction lifts; a board still secret
+    -- owes it again. Deferred a frame: the event is dispatched synchronously and
+    -- nothing documents the board as readable inside it.
+    self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", function(_, _, state)
+        if not self.primeOwed then return end
+        local states = Enum and Enum.AddOnRestrictionState
+        if not states or state ~= states.Inactive then return end
+        C_Timer.After(0, function()
+            if self.primeOwed then self:PrimeAvailability() end
+        end)
+    end)
 end
 
 function WMC:OnDisable()
@@ -184,4 +223,5 @@ function WMC:OnDisable()
         ClearOverrideBindings(bindingsFrame)
     end)
     self:UnregisterAllEvents()
+    self.primeOwed = false
 end

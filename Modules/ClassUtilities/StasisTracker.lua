@@ -360,14 +360,24 @@ function ST:OnEvent(event, unit, ...)
     end
 end
 
+-- AceEvent-3.0 has no RegisterUnitEvent; a frame of its own lets the client
+-- filter by unit.
+function ST:CreateCastFrame()
+    if self.castFrame then return end
+    local frame = CreateFrame("Frame")
+    frame:SetScript("OnEvent", function(_, event, ...)
+        self:OnEvent(event, ...)
+    end)
+    self.castFrame = frame
+end
+
 function ST:RegisterSpellEvents()
-    self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED", "OnEvent")
-    self:RegisterEvent("UNIT_SPELLCAST_EMPOWER_STOP", "OnEvent")
+    self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+    self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_EMPOWER_STOP", "player")
 end
 
 function ST:UnregisterSpellEvents()
-    self:UnregisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-    self:UnregisterEvent("UNIT_SPELLCAST_EMPOWER_STOP")
+    if self.castFrame then self.castFrame:UnregisterAllEvents() end
 end
 
 ---------------------------------------------------------------------------------
@@ -433,6 +443,7 @@ function ST:OnEnable()
     end
 
     self:CreateFrames()
+    self:CreateCastFrame()
     self:RegWithEditMode()
     self:ApplySettings()
     self:ReleaseStasis()
@@ -456,4 +467,5 @@ function ST:OnDisable()
     self:ReleaseStasis()
     self.isPreview = false
     self:UnregisterAllEvents()
+    self:UnregisterSpellEvents()
 end

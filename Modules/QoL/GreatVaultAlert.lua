@@ -131,8 +131,16 @@ end
 ---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
+-- A spell can be secret for any unit, so the player-only registration does
+-- not make spellID plain; a secret one is never the vault.
+function GVA.IsVaultCast(unit, spellID)
+    if unit ~= "player" then return false end
+    if issecretvalue(spellID) then return false end
+    return spellID == VAULT_SPELL_ID
+end
+
 function GVA:OnSpellcastStart(_, unit, _, spellID)
-    if unit ~= "player" or spellID ~= VAULT_SPELL_ID then return end
+    if not GVA.IsVaultCast(unit, spellID) then return end
     if InCombatLockdown() then return end
 
     local specName, specIcon, classColorStr = self:GetLootSpecInfo()
@@ -155,7 +163,7 @@ function GVA:OnSpellcastStart(_, unit, _, spellID)
 end
 
 function GVA:OnSpellcastSucceeded(_, unit, _, spellID)
-    if unit ~= "player" or spellID ~= VAULT_SPELL_ID then return end
+    if not GVA.IsVaultCast(unit, spellID) then return end
 
     if self.db.ShowChatMessage then
         local specName, specIcon, classColorStr = self:GetLootSpecInfo()
@@ -170,7 +178,7 @@ function GVA:OnSpellcastSucceeded(_, unit, _, spellID)
 end
 
 function GVA:OnSpellcastInterrupted(_, unit, _, spellID)
-    if unit ~= "player" or spellID ~= VAULT_SPELL_ID then return end
+    if not GVA.IsVaultCast(unit, spellID) then return end
     self:HideAlert()
 end
 

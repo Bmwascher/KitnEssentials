@@ -17,11 +17,11 @@
 
 local L = require("dev.spec._ke_loader")
 
--- Runs an emitted "avail=newtable() avail[1]=true ..." body and returns the
--- table it built.
+-- Runs an emitted body that builds avail (a prime, or the order build with its
+-- seed) and returns the table it built.
 local function runAvailBody(body)
     local chunk = assert(loadstring(body))
-    local env = { newtable = function() return {} end }
+    local env = { newtable = function() return {} end, tinsert = table.insert }
     setfenv(chunk, env)
     chunk()
     return env.avail
@@ -215,5 +215,74 @@ describe("WorldMarkerCycler availability priming", function()
         WMC:PrimeAvailability()
 
         assert.equals(before, #executed)
+    end)
+end)
+
+describe("WorldMarkerCycler priming while the board reads secret", function()
+    -- A table is never a boolean: a read of it that slipped past the guard
+    -- would become a false flag, not nil, so only the guard can produce nil.
+    local SECRET = {}
+    local function isSecret(v) return v == SECRET end
+
+    it("reads the board by position, or answers nil when any read is secret", function()
+        local WMC = L.loadWorldMarkerCycler({ issecretvalue = isSecret })
+        local order = { 5, 3, 8, 1 }
+        local cases = {
+            {
+                name = "plain board",
+                read = function(id) return id == 3 or id == 1 end,
+                want = { true, false, true, false },
+            },
+            {
+                name = "secret at the last position",
+                read = function(id)
+                    if id == 1 then return SECRET end
+                    return false
+                end,
+                want = nil,
+            },
+        }
+        for _, c in ipairs(cases) do
+            assert.same(c.want, WMC.ReadBoard(order, c.read), c.name)
+        end
+    end)
+
+    it("skips the prime and owes it on a secret board, then pays it on a plain one", function()
+        local secretBoard = true
+        local WMC, _, executed = L.loadWorldMarkerCycler({
+            issecretvalue = isSecret,
+            IsRaidMarkerActive = function()
+                if secretBoard then return SECRET end
+                return false
+            end,
+        })
+        WMC.db = { OrderList = { 1, 2, 3 } }
+        local before = #executed
+
+        WMC:PrimeAvailability()
+
+        assert.equals(before, #executed)
+        assert.is_true(WMC.primeOwed)
+
+        secretBoard = false
+        WMC:PrimeAvailability()
+
+        assert.equals(before + 1, #executed)
+        assert.same({ true, true, true }, runAvailBody(executed[#executed].body))
+        assert.is_false(WMC.primeOwed)
+    end)
+
+    it("seeds every order position free when the prime after the build is skipped", function()
+        local WMC, _, executed = L.loadWorldMarkerCycler({
+            issecretvalue = isSecret,
+            IsRaidMarkerActive = function() return SECRET end,
+        })
+        WMC.db = { OrderList = { 5, 3, 8 } }
+        local before = #executed
+
+        WMC:BuildOrderTable()
+
+        assert.equals(before + 1, #executed)
+        assert.same({ true, true, true }, runAvailBody(executed[#executed].body))
     end)
 end)
