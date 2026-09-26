@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.30
+
+### Damage Meter
+
+- Death times in combat show as minutes and seconds
+- An ally's breakdown opens in combat when their spec is the only one of its
+  kind in their class; otherwise it is refused rather than shown wrong
+
+---
+
 ## v4.7.29
 
 ### Optimize
