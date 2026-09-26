@@ -227,18 +227,31 @@ describe("SpellHistoryClassify: failed casts", function()
         assert.is_nil(status)
     end)
 
-    it("restores a failed icon when the same cast then succeeds, then carries on", function()
-        local state, api = newState(), newApi()
-        classify(state, api, START, "player", 100, "f1")
-        classify(state, api, FAILED, "player", 100, "f1")
-        local tex, kind, status = classify(state, api, SUCCEEDED, "player", 100, "f1")
-        assert.is_nil(tex)
-        assert.is_nil(kind)
-        assert.equals("restore", status)
-        tex, kind, status = classify(state, api, SUCCEEDED, "player", 100, "n2")
-        assert.equals("tex100", tex)
-        assert.equals("spell", kind)
-        assert.equals("ok", status)
+    it("restores a failed icon when the same cast then succeeds, through a pet failure between, then carries on", function()
+        for _, petFail in ipairs({ false, true }) do
+            local state, api = newState(), newApi()
+            classify(state, api, START, "player", 100, "f1")
+            classify(state, api, FAILED, "player", 100, "f1")
+            -- A pet cast failing before the player's success arrives.
+            if petFail then
+                classify(state, api, START, "pet", 300, "p1")
+                classify(state, api, FAILED, "pet", 300, "p1")
+            end
+            local tex, kind, status = classify(state, api, SUCCEEDED, "player", 100, "f1")
+            assert.equals("restore", status)
+            assert.is_nil(tex)
+            assert.is_nil(kind)
+            if petFail then
+                tex, kind, status = classify(state, api, SUCCEEDED, "pet", 300, "p1")
+                assert.equals("restore", status)
+                assert.is_nil(tex)
+                assert.is_nil(kind)
+            end
+            tex, kind, status = classify(state, api, SUCCEEDED, "player", 100, "n2")
+            assert.equals("tex100", tex)
+            assert.equals("spell", kind)
+            assert.equals("ok", status)
+        end
     end)
 end)
 

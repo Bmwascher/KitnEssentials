@@ -52,6 +52,10 @@ local function SetLast(state, isPet, castGUID)
     if isPet then state.lastPet = castGUID else state.lastPlayer = castGUID end
 end
 
+local function SetFailed(state, isPet, castGUID)
+    if isPet then state.failedPet = castGUID else state.failedPlayer = castGUID end
+end
+
 -- Autocast pet basics would fill the strip, so a pet spell shows only while
 -- its autocast flag reads plainly false; secret or missing counts as on.
 local function AcceptCast(isPet, spellID, state, api)
@@ -102,11 +106,11 @@ local function Classify(event, unit, spellID, castGUID, state, api)
     end
     if api.isSecret(spellID) or api.isSecret(castGUID) then return nil end
 
-    local current, channel, last
+    local current, channel, last, failedGUID
     if isPet then
-        current, channel, last = state.curPet, state.channelPet, state.lastPet
+        current, channel, last, failedGUID = state.curPet, state.channelPet, state.lastPet, state.failedPet
     else
-        current, channel, last = state.curPlayer, state.channelPlayer, state.lastPlayer
+        current, channel, last, failedGUID = state.curPlayer, state.channelPlayer, state.lastPlayer, state.failedPlayer
     end
 
     if event == "UNIT_SPELLCAST_START" then
@@ -121,7 +125,7 @@ local function Classify(event, unit, spellID, castGUID, state, api)
         SetCurrent(state, isPet, nil)
         local tex, kind = AcceptCast(isPet, spellID, state, api)
         if not tex then return nil end
-        state.lastFailedGUID = castGUID
+        SetFailed(state, isPet, castGUID)
         return tex, kind, STATUS_FAILED
     end
 
@@ -135,8 +139,8 @@ local function Classify(event, unit, spellID, castGUID, state, api)
     if event == "UNIT_SPELLCAST_SUCCEEDED" then
         if castGUID == current then SetCurrent(state, isPet, nil) end
         -- A failure reported ahead of the success the cast turned out to be.
-        if castGUID == state.lastFailedGUID then
-            state.lastFailedGUID = nil
+        if castGUID == failedGUID then
+            SetFailed(state, isPet, nil)
             return nil, nil, STATUS_RESTORE
         end
         -- A channel reports SUCCEEDED once per tick.
@@ -268,7 +272,6 @@ local petFrame
 local icons = {}
 local ringSize = 0
 local head = 0
-local lastFailedSlot
 local fadeDelay = 0
 local growPoint, stepX, stepY = "TOPRIGHT", 0, 0
 
@@ -324,7 +327,6 @@ local function ClearRing()
         icon:Hide()
     end
     head = 0
-    lastFailedSlot = nil
 end
 
 local function CreateIcon(parent)
@@ -356,12 +358,14 @@ local function CreateIcon(parent)
     return icon
 end
 
-local function Push(tex, kind, status)
+local function Push(tex, kind, status, castGUID)
     if ringSize < 1 then return end
     head = NextHead(head, ringSize)
-    if lastFailedSlot == head then lastFailedSlot = nil end
     local icon = icons[head]
     local failed = status == STATUS_FAILED
+    -- Written on every push, so a failed icon a newer cast overwrote no
+    -- longer matches a restore.
+    icon.failedGUID = failed and castGUID or nil
     icon.tex:SetTexture(tex)
     icon.tex:SetDesaturated(failed)
     icon.mark:SetShown(failed)
@@ -375,29 +379,30 @@ local function Push(tex, kind, status)
         icon.fade:SetStartDelay(fadeDelay)
         icon.group:Play()
     end
-    if failed then lastFailedSlot = head end
     ReanchorShown()
 end
 
 -- The cast a failure report greyed out succeeded after all: undo the grey in
 -- place. Its fade keeps running from the failed push.
-local function Restore()
-    local slot = lastFailedSlot
-    lastFailedSlot = nil
-    if not slot then return end
-    local icon = icons[slot]
-    if not icon.live then return end
-    icon.tex:SetDesaturated(false)
-    icon.mark:Hide()
+local function Restore(castGUID)
+    for slot = 1, #icons do
+        local icon = icons[slot]
+        if icon.live and icon.failedGUID == castGUID then
+            icon.failedGUID = nil
+            icon.tex:SetDesaturated(false)
+            icon.mark:Hide()
+            return
+        end
+    end
 end
 
 -- Classified even while hidden, so channel and cast state stay right.
 local function HandleCast(unit, event, castGUID, spellID)
     local tex, kind, status = Classify(event, unit, spellID, castGUID, castState, GAME_API)
     if status == STATUS_RESTORE then
-        Restore()
+        Restore(castGUID)
     elseif tex and strip and strip:IsVisible() then
-        Push(tex, kind, status)
+        Push(tex, kind, status, castGUID)
     end
 end
 
@@ -501,12 +506,12 @@ local function RegisterEvents(frame, pets, sh)
     castState.items = items
 
     if not withPet then
-        castState.curPet, castState.lastPet = nil, nil
+        castState.curPet, castState.lastPet, castState.failedPet = nil, nil, nil
         SetChannel(castState, true, nil, nil)
     end
     if not failed then
-        castState.curPlayer, castState.curPet, castState.lastFailedGUID = nil, nil, nil
-        lastFailedSlot = nil
+        castState.curPlayer, castState.curPet = nil, nil
+        castState.failedPlayer, castState.failedPet = nil, nil
     end
 end
 
@@ -618,12 +623,15 @@ local function TearDown()
     frame:UnregisterAllEvents()
     SyncMover(false)
     if petFrame then petFrame:UnregisterAllEvents() end
-    ClearRing()
+    -- Hidden before the clear: in a preview, OnStripHide shows the
+    -- placeholders again.
     frame:Hide()
+    ClearRing()
     SetChannel(castState, false, nil, nil)
     SetChannel(castState, true, nil, nil)
     castState.curPlayer, castState.curPet = nil, nil
-    castState.lastPlayer, castState.lastPet, castState.lastFailedGUID = nil, nil, nil
+    castState.lastPlayer, castState.lastPet = nil, nil
+    castState.failedPlayer, castState.failedPet = nil, nil
 end
 
 ---------------------------------------------------------------------------------
