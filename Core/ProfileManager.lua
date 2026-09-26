@@ -443,8 +443,13 @@ end
 -- Module Refresh
 ---------------------------------------------------------------------------------
 
+-- True while a profile refresh runs. The refresh rebuilds the shown settings
+-- page once near its end, so a module it enables, disables or re-applies need
+-- not rebuild it too.
+local refreshingModules = false
+
 --- Refresh all enabled modules to apply new settings
-function ProfileManager:RefreshAllModules()
+local function RefreshAll()
     local KitnEssentials = _G.KitnEssentials
     if not KitnEssentials then return end
 
@@ -539,8 +544,10 @@ function ProfileManager:RefreshAllModules()
     -- Refresh theme
     if KE.RefreshTheme then KE:RefreshTheme() end
 
-    -- Refresh GUI frame if open
-    if KE.GUIFrame and KE.GUIFrame.ApplyThemeColors then KE.GUIFrame:ApplyThemeColors() end
+    -- RefreshTheme repaints a shown window; this repaints a hidden one.
+    if KE.GUIFrame and KE.GUIFrame.ApplyThemeColors and not KE.GUIFrame:IsShown() then
+        KE.GUIFrame:ApplyThemeColors()
+    end
 
     -- Re-evaluate previews based on current GUI / edit-mode state (this was
     -- historically a call to `StartAllPreviews`, which has never existed on
@@ -559,6 +566,18 @@ function ProfileManager:RefreshAllModules()
     if KE.EditMode and KE.EditMode.RefreshLiveState then
         KE.EditMode:RefreshLiveState()
     end
+end
+
+-- A module error inside the refresh still clears the flag before it propagates.
+function ProfileManager:RefreshAllModules()
+    refreshingModules = true
+    local ok, err = pcall(RefreshAll)
+    refreshingModules = false
+    if not ok then error(err, 0) end
+end
+
+function ProfileManager:IsRefreshingModules()
+    return refreshingModules
 end
 
 ---------------------------------------------------------------------------------

@@ -55,6 +55,18 @@ describe("InstanceEntryDecision", function()
               fresh = true, enabled = true, mode = "auto", want = { "200:8", "party", "none", true } },
             { name = "option off still tracks", last = "100:1", lastScope = "party",
               scope = "party", id = 200, diff = 8, enabled = false, mode = "auto", want = { "200:8", "party", "none", true } },
+            { name = "a load whose difficulty is withheld keeps the last key and scope", last = "200:23", lastScope = "party",
+              scope = "raid", id = 300, enabled = true, mode = "auto", want = { "200:23", "party", "none", false } },
+            { name = "a keystone slotted, seen at a load", last = "200:23", lastScope = "party",
+              scope = "party", id = 200, diff = 8, enabled = true, mode = "auto", want = { "200:8", "party", "none", true } },
+            { name = "a keystone ended, seen at a load", last = "200:8", lastScope = "party",
+              scope = "party", id = 200, diff = 23, enabled = true, mode = "auto", want = { "200:23", "party", "none", true } },
+            { name = "a keystone slotted in place only records", last = "200:23", lastScope = "party",
+              scope = "party", id = 200, diff = 8, fresh = true, enabled = true, mode = "auto", want = { "200:8", "party", "none", true } },
+            { name = "a keystone ended in place only records", last = "200:8", lastScope = "party",
+              scope = "party", id = 200, diff = 23, fresh = true, enabled = true, mode = "auto", want = { "200:23", "party", "none", true } },
+            { name = "Mythic to Mythic Keystone in another instance is an entry", last = "200:23", lastScope = "party",
+              scope = "party", id = 300, diff = 8, enabled = true, mode = "auto", want = { "300:8", "party", "auto", true } },
         }
         for _, c in ipairs(cases) do
             local key, scope, action, moved = DM.InstanceEntryDecision(c.last, c.lastScope, c.scope, c.id, c.diff,

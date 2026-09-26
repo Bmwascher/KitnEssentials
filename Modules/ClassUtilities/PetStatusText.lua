@@ -110,10 +110,10 @@ local FELHUNTER_NPC_ID = 417
 local MYTHIC_DIFFICULTY_ID = 23
 local MYTHIC_KEYSTONE_DIFFICULTY_ID = 8
 
--- "key" while a keystone runs, "mythicIdle" in a Mythic dungeon with none
--- running (before the key, between insert and start, after completion),
--- "other" everywhere else. The ChallengeMode restriction spans exactly the
--- running key.
+-- "key" while a keystone runs; "world" outside any instance, player housing
+-- included; "mythicIdle" in a Mythic dungeon with none running (before the
+-- key, between insert and start, after completion); "other" in every other
+-- instance. The ChallengeMode restriction spans exactly the running key.
 local function GetDemoPetContent()
     local kinds = Enum.AddOnRestrictionType
     local isActive = C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive
@@ -121,6 +121,9 @@ local function GetDemoPetContent()
         return "key"
     end
     local _, instanceType, difficultyID = GetInstanceInfo()
+    if instanceType == "none" or instanceType == "neighborhood" or instanceType == "interior" then
+        return "world"
+    end
     if instanceType == "party"
         and (difficultyID == MYTHIC_DIFFICULTY_ID or difficultyID == MYTHIC_KEYSTONE_DIFFICULTY_ID) then
         return "mythicIdle"
@@ -129,9 +132,11 @@ local function GetDemoPetContent()
 end
 
 -- Whether a Demonology pet is the one the content calls for. nil when the pet
--- cannot be identified (secret or malformed GUID), which never shows WRONG.
+-- cannot be identified (secret or malformed GUID) or in the open world, which
+-- never shows WRONG.
 function PS.DemoPetExpected(npcID, content)
     if npcID == nil then return nil end
+    if content == "world" then return nil end
     if content == "key" then return npcID == FELHUNTER_NPC_ID end
     if content == "mythicIdle" then
         return npcID == FELHUNTER_NPC_ID or FELGUARD_NPC_IDS[npcID] == true

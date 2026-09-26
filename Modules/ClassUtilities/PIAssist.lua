@@ -203,10 +203,18 @@ function PA:ResolveTarget()
 end
 
 -- Reached on every change to the name the glow follows, this module active
--- or not, so the settings page's Watching line is refreshed from here.
+-- or not. Only the PI Assist and PI Macro Builder pages show that name, and a
+-- profile refresh rebuilds the shown page itself once it has run.
 function PA:OnTargetChanged()
     if self.active then self:ResolveTarget() end
-    if KE.GUIFrame and KE.GUIFrame.RefreshContent then KE.GUIFrame:RefreshContent() end
+    local gui = KE.GUIFrame
+    if not gui then return end
+    local pm = KE.ProfileManager
+    if pm and pm:IsRefreshingModules() then return end
+    local page = gui.selectedSidebarItem
+    if (page == "PIAssist" or page == "PIMacroBuilder") and gui.RefreshContent then
+        gui:RefreshContent()
+    end
 end
 
 ---------------------------------------------------------------------------------
