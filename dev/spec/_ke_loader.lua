@@ -287,6 +287,16 @@ function L.loadDMClock(overrides)
     return DM, KE
 end
 
+-- Modules/DamageMeter/SpellHistory.lua on top of a loaded DM Core. Specs reach
+-- only the pure classifier and ring helpers, and every game lookup those use
+-- is injected, so no spell, item or container stub is needed. The file's
+-- runtime reads the game only when called. Returns DM, KE.
+function L.loadDMSpellHistory(overrides)
+    local DM, KE = L.loadDMCore(overrides)
+    helpers.loadModule("Modules/DamageMeter/SpellHistory.lua", KE)
+    return DM, KE
+end
+
 -- Core/PixelPerfect.lua. Defaults model a PERFECT UI scale (768/1440 at
 -- 1440p → pixelSize exactly 1). The stubs read opts live: mutate
 -- opts.effectiveScale (or physicalHeight) and call KE:UpdatePixelCache() to
