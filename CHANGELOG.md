@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.33
+
+### Tooltips
+
+- **NEW:** cursor offset sliders
+- The settings page is regrouped
+- An NPC whose name the game hides gets its reaction colour
+
+---
+
 ## v4.7.32
 
 ### Chat
