@@ -1,5 +1,22 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.39
+
+### Chat
+
+- A boss line with a stray percent sign no longer errors
+
+### Inspect Panel
+
+- Retries and the missing-enchant marker behave correctly with enchant names
+  off and after a settings change
+
+### Settings
+
+- A value typed into a slider's box is saved straight away
+
+---
+
 ## v4.7.38
 
 ### Loot Roll
