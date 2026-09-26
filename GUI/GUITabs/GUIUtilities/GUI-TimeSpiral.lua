@@ -274,7 +274,7 @@ GUIFrame:RegisterContent("TimeSpiral", function(scrollChild, yOffset)
         title = "Sound",
         db = db,
         dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
-        soundLabel = "Proc Sound",
+        soundLabel = "Buff Sound",
         testChannel = "Master",
         notes = { "Plays once when you receive the Time Spiral buff, on the Master channel." },
     })
