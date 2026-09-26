@@ -22,6 +22,9 @@ end
 before_each(function()
     DM = L.loadDMCore({})
     assert(DM and DM.MatchRowToRoster, "loadDMCore did not expose DM.MatchRowToRoster")
+    -- Not managed by the mock's defaults; OnRosterChanged reads it through
+    -- DetailCombatActive, so it only has to exist by the time a case calls that.
+    _G.UnitAffectingCombat = function() return false end
 end)
 
 describe("MatchRowToRoster resolves only when exactly one member can be meant", function()
@@ -41,7 +44,7 @@ describe("MatchRowToRoster resolves only when exactly one member can be meant", 
         local members = {
             member("guid-fury", "WARRIOR", 11), member("guid-arms", "WARRIOR", 22),
         }
-        assert.equals("guid-arms", DM.MatchRowToRoster(members, "WARRIOR", 22, 2))
+        assert.equals("guid-arms", DM.MatchRowToRoster(members, "WARRIOR", 22, 2, { [11] = 1, [22] = 1 }))
     end)
 end)
 
@@ -200,5 +203,150 @@ describe("BuildRosterIndex fails closed on an unreadable member", function()
             IsInGroup = function() return false end,
         })
         assert.equals(0, #dm.BuildRosterIndex())
+    end)
+end)
+
+describe("MatchRowToRoster one-row guard", function()
+    it("refuses a known match unless every member has one row, every row's spec is known and this spec has one row", function()
+        -- A member whose recorded spec is out of date (or a departed player's row)
+        -- may hold the claimed spec, so the claim cannot say which row is whose.
+        local members = {
+            member("guid-stale", "SHAMAN", 11), member("guid-resto", "SHAMAN", 22),
+        }
+        local cases = {
+            { name = "two rows of the spec", rows = 2, specRows = { [22] = 2 }, why = "ambiguous" },
+            { name = "no per-spec row counts", rows = 2, specRows = nil, why = "ambiguous" },
+            { name = "another row's spec unknown", rows = 2, specRows = { [22] = 1, [0] = 1 }, why = "specunknown" },
+            { name = "a member with no row", rows = 1, specRows = { [22] = 1 }, why = "rowless" },
+        }
+        for _, c in ipairs(cases) do
+            local guid, why = DM.MatchRowToRoster(members, "SHAMAN", 22, c.rows, c.specRows)
+            assert.is_nil(guid, c.name)
+            assert.equals(c.why, why, c.name)
+        end
+    end)
+end)
+
+describe("The meter's own spec as a roster source", function()
+    it("is read before the LibSpec spec", function()
+        local dm = L.loadDMCore({
+            IsInRaid = function() return false end,
+            IsInGroup = function() return true end,
+            GetNumGroupMembers = function() return 3 end,
+            UnitExists = function(u) return u == "party1" or u == "party2" end,
+            UnitGUID = function(u)
+                if u == "player" then return "guid-player" end
+                return ({ party1 = "guid-1", party2 = "guid-2" })[u]
+            end,
+            UnitClass = function() return "Localized", "SHAMAN" end,
+        })
+        dm.meterSpecByGUID["guid-1"] = 262
+        dm.specIconByGUID["guid-1"] = 999
+        dm.specIconByGUID["guid-2"] = 264
+        local members = dm.BuildRosterIndex()
+        assert.equals(262, members[1].spec)
+        assert.equals(264, members[2].spec)
+    end)
+
+    it("records neither a forgotten member nor someone outside the harvestable set", function()
+        local harvestable = { ["guid-1"] = true, ["guid-2"] = true }
+        DM:ForgetMeterSpec("guid-1")
+        local cases = {
+            { name = "a forgotten member", guid = "guid-1" },
+            { name = "not harvestable", guid = "guid-left" },
+        }
+        for _, c in ipairs(cases) do
+            DM.HarvestMeterSpec(DM.meterSpecByGUID, DM._meterSpecBlocked, harvestable,
+                { sourceGUID = c.guid, specIconID = 262 })
+            assert.is_nil(DM.meterSpecByGUID[c.guid], c.name)
+        end
+        -- Control: a harvestable member nobody forgot is recorded.
+        DM.HarvestMeterSpec(DM.meterSpecByGUID, DM._meterSpecBlocked, harvestable,
+            { sourceGUID = "guid-2", specIconID = 264 })
+        assert.equals(264, DM.meterSpecByGUID["guid-2"])
+    end)
+end)
+
+describe("The harvestable set", function()
+    it("drops a member who left, even while nothing is recorded", function()
+        local dm = L.loadDMCore({
+            IsInRaid = function() return false end,
+            IsInGroup = function() return true end,
+            GetNumGroupMembers = function() return 2 end,
+            UnitExists = function(u) return u == "party1" end,
+            UnitGUID = function(u)
+                if u == "player" then return "guid-player" end
+                return ({ party1 = "guid-1" })[u]
+            end,
+            UnitClass = function() return "Localized", "SHAMAN" end,
+        })
+        dm._specHarvestSet["guid-1"] = true
+        dm._specHarvestSet["guid-left"] = true
+        dm:OnRosterChanged()
+        assert.is_true(dm._specHarvestSet["guid-1"])
+        assert.is_nil(dm._specHarvestSet["guid-left"])
+    end)
+end)
+
+describe("MatchRowToRoster leaver refusal", function()
+    it("refuses with 'leaver' on the lone-member path and the spec tie-break", function()
+        -- A departed member's row stays in the session and can balance a
+        -- same-class member who has no row yet.
+        local cases = {
+            { name = "lone member", spec = 11, rows = 1, specRows = { [11] = 1 },
+              members = { member("guid-war", "WARRIOR", 11) } },
+            { name = "spec tie-break", spec = 22, rows = 2, specRows = { [11] = 1, [22] = 1 },
+              members = { member("guid-fury", "WARRIOR", 11), member("guid-arms", "WARRIOR", 22) } },
+        }
+        for _, c in ipairs(cases) do
+            local guid, why = DM.MatchRowToRoster(c.members, "WARRIOR", c.spec, c.rows, c.specRows, true)
+            assert.is_nil(guid, c.name)
+            assert.equals("leaver", why, c.name)
+        end
+    end)
+end)
+
+describe("Leaver marking", function()
+    it("marks the class of a fight member no longer in the group, and only theirs", function()
+        local fightMembers = { ["guid-1"] = "SHAMAN", ["guid-2"] = "MAGE" }
+        local leaverClass = {}
+        DM.MarkLeavers(fightMembers, { ["guid-2"] = true }, leaverClass)
+        assert.is_true(leaverClass.SHAMAN)
+        assert.is_nil(leaverClass.MAGE)
+    end)
+end)
+
+describe("Leaver refusal on Overall", function()
+    it("refuses a class that lost a member since the meter reset, only on Overall", function()
+        -- An Overall row outlives its owner's membership, so a departed
+        -- member's row can balance a same-class member who has no row there.
+        DM._leaverUnknown = false
+        local cases = {
+            { name = "Overall, a leaver's class", classes = { SHAMAN = true }, overall = true, want = true },
+            { name = "Overall, leavers unknown", unknown = true, overall = true, want = true },
+            { name = "Overall, another class", classes = { MAGE = true }, overall = true, want = false },
+            { name = "not Overall", classes = { SHAMAN = true }, unknown = true, overall = false, want = false },
+        }
+        for _, c in ipairs(cases) do
+            DM._overallLeaverClass = c.classes or {}
+            DM._overallLeaverUnknown = c.unknown == true
+            assert.equals(c.want, DM:LeaverRefused("SHAMAN", c.overall), c.name)
+        end
+    end)
+end)
+
+describe("Recording Overall's rows", function()
+    it("records plain ally rows, skips the own row, and reports a secret GUID", function()
+        local SECRET = { __secret = true }
+        local overallMembers, leaverClass = {}, {}
+        local complete = DM.AddOverallSources({
+            { classFilename = "SHAMAN", sourceGUID = SECRET, isLocalPlayer = false },
+            { classFilename = "MAGE", sourceGUID = "guid-gone", isLocalPlayer = false },
+            { classFilename = "PRIEST", sourceGUID = "guid-me", isLocalPlayer = true },
+        }, overallMembers)
+        assert.is_false(complete)
+        assert.is_nil(overallMembers["guid-me"])
+        DM.MarkLeavers(overallMembers, { ["guid-here"] = true }, leaverClass)
+        assert.is_true(leaverClass.MAGE)
     end)
 end)

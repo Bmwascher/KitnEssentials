@@ -343,7 +343,9 @@ function DM:OpenDetail(bar, button)
     if not ownRow and openType ~= Enum.DamageMeterType.Deaths and DM.DetailCombatActive() then
         self:InvalidateRosterIndex()
         resolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,
-            W._classRowCounts and W._classRowCounts[bar._classFilename])
+            W._classRowCounts and W._classRowCounts[bar._classFilename],
+            W._classSpecRowCounts and W._classSpecRowCounts[bar._classFilename],
+            openCfg ~= nil and self:IsLiveOverall(W, openCfg))
     end
     if not self:DetailEligible(bar._isLocalPlayer, openType, resolvedGUID) then
         self:ShowDetailMessage(W, REFUSAL_MSG)
@@ -459,7 +461,8 @@ function DM:RenderWindowAndDetail(W)
     -- read from group unit tokens, so the comparison is legal.
     if W._detailResolvedGUID then
         local fresh = self:ResolveAllyGUID(W._detailClass, W._detailSpecIconID,
-            W._classRowCounts and W._classRowCounts[W._detailClass])
+            W._classRowCounts and W._classRowCounts[W._detailClass],
+            W._classSpecRowCounts and W._classSpecRowCounts[W._detailClass])
         if fresh ~= W._detailResolvedGUID then W._detailResolvedGUID = nil end
     end
     if not self:DetailEligible(W._detailOwnRow, nowType, W._detailResolvedGUID) then
@@ -1633,7 +1636,9 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     local tipResolvedGUID
     if not ownRow and meterType ~= Enum.DamageMeterType.Deaths and DM.DetailCombatActive() then
         tipResolvedGUID = self:ResolveAllyGUID(bar._classFilename, bar._specIconID,
-            W._classRowCounts and W._classRowCounts[bar._classFilename])
+            W._classRowCounts and W._classRowCounts[bar._classFilename],
+            W._classSpecRowCounts and W._classSpecRowCounts[bar._classFilename],
+            self:IsLiveOverall(W, cfg))
     end
 
     -- REFUSED: another player's row in combat, or a view whose renderer cannot

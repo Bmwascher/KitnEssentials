@@ -1479,11 +1479,16 @@ function DM:RenderWindow(W)
     self:UpdateCombatClock(W, session)
 
     local sources = session and session.combatSources
+    self:UpdateDeathStamps(W, isDeaths and self:IsLiveCurrent(W, cfg), sources)
     -- Sources per class in the session, excluding the player's own. The roster
     -- side excludes the player too; counting one population against the other is
     -- what made a player and an ally of the same class refuse each other.
     W._classRowCounts = W._classRowCounts or {}
     wipe(W._classRowCounts)
+    -- Per class, spec -> row count (key 0: unknown spec). The inner tables are
+    -- kept and emptied, so a steady render allocates nothing.
+    W._classSpecRowCounts = W._classSpecRowCounts or {}
+    for _, bySpec in pairs(W._classSpecRowCounts) do wipe(bySpec) end
     if not sources then
         -- No session/data this segment: hide every pooled row so stale bars from
         -- a prior segment don't linger. Gate on IsShown so already-hidden rows
@@ -1511,10 +1516,7 @@ function DM:RenderWindow(W)
     -- the fight it belongs to. Anything the scope excludes simply shows the feign,
     -- which is the direction every refusal in this feature takes.
     if isDeaths then
-        local feignScope = not W._curSessionID
-            and not W._fallbackSessionID
-            and cfg.SessionType == Enum.DamageMeterSessionType.Current
-            and self:GroupInCombat()
+        local feignScope = self:IsLiveCurrent(W, cfg) and self:GroupInCombat()
         -- Must run before the loop: FeignTagged consults the result per row.
         if feignScope and self.ScanFeignAmbiguity then
             self.ScanFeignAmbiguity(sources, self._feignTags, self._feignAmbig)
@@ -1547,11 +1549,29 @@ function DM:RenderWindow(W)
     -- for every class-bearing entity in the session, which is not a question
     -- about which rows happen to be drawable -- a member ranked past the pool
     -- still exists, still deals damage, and still has to be accounted for.
+    -- Out of combat, on the live Current session only, the walk also records
+    -- specs for the roster: pins, Overall, history and the fallback may predate
+    -- a respec.
+    local harvest = self._specHarvestOpen and self:IsLiveCurrent(W, cfg)
+        and not self.DetailCombatActive() and not KE.CombatState:IsLive() and IsInGroup()
     for i = 1, #sources do
         local s = sources[i]
         local cf = s and s.classFilename
         if type(cf) == "string" and cf ~= "" and not DM.PlainOwnRow(s.isLocalPlayer) then
             W._classRowCounts[cf] = (W._classRowCounts[cf] or 0) + 1
+            local bySpec = W._classSpecRowCounts[cf]
+            if not bySpec then
+                bySpec = {}
+                W._classSpecRowCounts[cf] = bySpec
+            end
+            -- Key 0 counts rows of unknown spec; the matcher refuses the class on it.
+            local spec = s.specIconID
+            if not DM.KnownSpec(spec) then spec = 0 end
+            bySpec[spec] = (bySpec[spec] or 0) + 1
+            if harvest then
+                self.HarvestMeterSpec(self.meterSpecByGUID, self._meterSpecBlocked,
+                    self._specHarvestSet, s)
+            end
         end
     end
 
@@ -2073,7 +2093,7 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
     -- never touches the secret amountPerSecond.
     -- Deaths show the death time (M:SS) instead of amount|perSec, and Overall
     -- deaths show nothing (cumulative time across segments isn't meaningful).
-    -- FormatDeathTime / FormatBarValue both return
+    -- DeathTimeText / FormatBarValue both return
     -- (string, isSecret): a secret string is set unconditionally with the cache
     -- nulled; a plain one is dirty-checked.
     local v, vIsSecret
@@ -2081,7 +2101,8 @@ function DM:RenderBar(W, bar, i, src, maxAmount)
         if W._isOverall then
             v, vIsSecret = "", false
         else
-            v, vIsSecret = self.FormatDeathTime(src.deathTimeSeconds)
+            v, vIsSecret = self.DeathTimeText(src.deathTimeSeconds, src.deathRecapID,
+                W._deathLiveView and self._deathStamps or nil)
         end
     else
         -- Number Format: "Both" -> amount | dps, "PerSec" -> dps only, else amount only.
