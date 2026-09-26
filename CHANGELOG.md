@@ -1,5 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.25
+
+### Settings
+
+- Pressing Enter in the first box of a two-field dialog accepts both fields
+- Switching profiles no longer rebuilds the Profiles page a second time
+
+### Taint Report
+
+- The report finds BugGrabber when it is installed as !BugGrabber
+
+### BugSack
+
+- The skinned tabs sit below the window in BugSack's own order, their border
+  meeting the window
+
+---
+
 ## v4.7.24
 
 ### Sounds
