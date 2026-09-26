@@ -554,10 +554,54 @@ local function SyncPreview()
     ReanchorShown()
 end
 
+---------------------------------------------------------------------------------
+-- Edit Mode mover
+--
+-- Free-standing only: attached, the strip follows the dock. The dock's lock
+-- does not apply to it.
+---------------------------------------------------------------------------------
+
+local EDIT_KEY = "DamageMeterSpellHistory"
+local editConfig
+local editRegistered = false
+
+local function SyncMover(want)
+    local editMode = KE.EditMode
+    local frame = strip
+    if not (editMode and frame) then return end
+    if want and not editRegistered then
+        if not editConfig then
+            editConfig = {
+                key = EDIT_KEY,
+                module = DM,
+                displayName = "Spell History",
+                frame = frame,
+                getPosition = function()
+                    local sh = DM.db and DM.db.SpellHistory
+                    return sh and sh.Position
+                end,
+                setPosition = function(pos)
+                    local sh = DM.db and DM.db.SpellHistory
+                    if not sh then return end
+                    sh.Position = pos
+                    KE:ApplyFramePosition(frame, sh.Position, sh)
+                end,
+                guiPath = "DamageMeter",
+            }
+        end
+        editMode:RegisterElement(editConfig)
+        editRegistered = true
+    elseif not want and editRegistered then
+        editMode:UnregisterElement(EDIT_KEY)
+        editRegistered = false
+    end
+end
+
 local function TearDown()
     local frame = strip
     if not frame then return end
     frame:UnregisterAllEvents()
+    SyncMover(false)
     if petFrame then petFrame:UnregisterAllEvents() end
     ClearRing()
     frame:Hide()
@@ -584,6 +628,7 @@ function DM:ApplySpellHistory()
     RegisterEvents(frame, pets, sh)
     Layout(sh)
     Place(db, sh)
+    SyncMover(sh.Attach ~= true)
     frame:Show()
     SyncPreview()
 end
