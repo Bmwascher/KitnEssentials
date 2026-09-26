@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.36
+
+### Settings
+
+- Picking a class on a per-specialization card or in No Movement Alert
+  redraws only that card instead of the whole page
+- The No Movement Alert page no longer rebuilds on every spell tick
+
+---
+
 ## v4.7.35
 
 ### Enemy Counter
