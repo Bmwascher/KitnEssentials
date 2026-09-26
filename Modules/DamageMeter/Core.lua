@@ -290,6 +290,30 @@ local DM_DEFAULTS = {
     -- clamped to [1,5] at read, never migrated.
     HistoryRetain = 5,
     DeathCap = 50,
+
+    -- Spell history strip (SpellHistory.lua). Nested so its Position and Strata
+    -- stay apart from the dock's root keys.
+    SpellHistory = {
+        Enabled = false,
+        IncludeItems = true,
+        IncludePet = true,
+        ShowFailed = true,
+        Count = 5,
+        IconSize = 32,
+        Spacing = 2,
+        Grow = "LEFT",          -- the direction older icons move
+        FadeDelay = 5,          -- seconds; 0 = never fade
+        Attach = false,
+        AttachEdge = "TOP",
+        AttachGap = 2,
+        Strata = "MEDIUM",
+        Position = {
+            AnchorFrom = "BOTTOMRIGHT",
+            AnchorTo = "BOTTOMRIGHT",
+            XOffset = -3,
+            YOffset = 243,
+        },
+    },
 }
 
 ---------------------------------------------------------------------------------
@@ -371,6 +395,7 @@ function DM:ApplySettings()
     self:LayoutDock()
     self:UpdateBackdrop()
     if self.Tick then self:Tick() end
+    if self.ApplySpellHistory then self:ApplySpellHistory() end
 end
 
 -- Live theme-preset change: KE:NotifyThemeChange (AddonTheme.lua) calls this on
@@ -524,6 +549,7 @@ function DM:ShowPreview()
     self:SetWindowBadges(true)
     self:RefreshDock()
     if self.Tick then self:Tick() end
+    if self.ApplySpellHistory then self:ApplySpellHistory() end
 end
 
 function DM:HidePreview()
@@ -535,6 +561,7 @@ function DM:HidePreview()
     -- (Dock.lua) is resolved at runtime; guard for load order.
     self._guiPreview = false
     if self.UpdateBackdrop then self:UpdateBackdrop() end
+    if self.ApplySpellHistory then self:ApplySpellHistory() end
 end
 
 ---------------------------------------------------------------------------------
@@ -855,6 +882,10 @@ function DM:OnEnable()
     -- (a module enabled while a fight is already running gets no OnStart otherwise).
     self:BindCombatState()
 
+    -- After EnsureDock above: the strip is the dock's child. Guarded for load
+    -- order (SpellHistory.lua).
+    if self.ApplySpellHistory then self:ApplySpellHistory() end
+
     if DEBUG_DM then
         KE:Print("[DM] OnEnable: module active")
     end
@@ -912,6 +943,8 @@ function DM:OnDisable()
     -- Hand the meter back to Blizzard and drop the EditMode mover.
     self:RestoreBlizzardMeter()
     self:UnregisterEditMode()
+    -- self.enabled is already false, so this tears the strip down.
+    if self.ApplySpellHistory then self:ApplySpellHistory() end
 
     if self.dock then
         self.dock:Hide()
