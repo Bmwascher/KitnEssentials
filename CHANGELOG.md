@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.42
+
+### Time Spiral
+
+- **NEW:** a "Time Spiral" voice callout, in every sound dropdown
+- Buff Sound is on by default and plays the "Time Spiral" callout
+
+---
+
 ## v4.7.41
 
 ### Damage Meter
