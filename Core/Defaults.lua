@@ -439,6 +439,8 @@ local Defaults = {
 
         TimeSpiral = {
             Enabled = false,
+            SoundEnabled = false,  -- stored: the sound card reads nil as ON
+            SoundName = "None",
             IconSize = 40,
             ShowText = true,
             TextLabel = "FREE",
@@ -922,6 +924,7 @@ local Defaults = {
             Enabled     = false,
             Scale       = 1.05,
             ShowDisable = true,
+            ShowRole    = true,
         },
 
         PIMacroBuilder = {
@@ -1669,6 +1672,7 @@ local Defaults = {
         Dungeons = {
             EnemyCounter = {
                 Enabled = false,
+                EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per global spec ID)
                 CombatOnly = false,
                 ShowPrefix = true,
                 Prefix = "Enemies:",

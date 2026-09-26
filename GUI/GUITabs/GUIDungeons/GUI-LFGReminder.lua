@@ -58,7 +58,7 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
     -- Lone header bar: a disabled module shows its switch and nothing else.
     if db.Enabled == false then return card1:GetNextOffset() end
 
-    card1:AddLabel("Shown when you join a Group Finder group for a dungeon whose teleport you know. Drag the popup to move it; it hides when you enter the dungeon, leave the group, or enter combat. Also prompts the group leader once their own listing fills.")
+    card1:AddLabel("Shown when you join a Group Finder group for a dungeon whose teleport you know. Drag the popup to move it; it hides when you enter the dungeon, leave the group, or enter combat. Also prompts the group leader once their own listing fills. With Show Role on, the popup also shows the role you were accepted as, in the Role Icon Style set on the Group Finder card under Skinning > Blizzard Frames.")
 
     local row1 = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
     local scale = GUIFrame:CreateSlider(row1, "Scale", {
@@ -75,8 +75,15 @@ GUIFrame:RegisterContent("LFGReminder", function(scrollChild, yOffset)
         value = db.ShowDisable ~= false,
         callback = function(checked) db.ShowDisable = checked; RefreshModule() end,
     })
-    row2:AddWidget(showDisable, 1)
+    row2:AddWidget(showDisable, 0.5)
     manager:Register(showDisable, "all")
+
+    local showRole = GUIFrame:CreateCheckbox(row2, "Show Role", {
+        value = db.ShowRole ~= false,
+        callback = function(checked) db.ShowRole = checked; RefreshModule() end,
+    })
+    row2:AddWidget(showRole, 0.5)
+    manager:Register(showRole, "all")
     card1:AddRow(row2, Theme.rowHeightLast, 0)
 
     yOffset = card1:GetNextOffset()

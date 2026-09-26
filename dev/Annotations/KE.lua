@@ -976,6 +976,14 @@ function KE:EUIDrawsSlotElement(unit, element) end
 ---@return boolean
 function KE:IsPlayerHealerSpec() end
 
+---@param enabledSpecs table<number, boolean>?
+---@param specId number?
+---@return boolean
+function KE:IsSpecEnabled(enabledSpecs, specId) end
+
+---@return number?
+function KE:GetPlayerSpecId() end
+
 --- forceContext (optional): "HEALER" / "DEFAULT" overrides the live spec-driven
 --- resolution; nil resolves live (UseHealerPosition + current spec).
 ---@param db table

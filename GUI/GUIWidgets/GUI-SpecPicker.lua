@@ -3,7 +3,8 @@
 -- ║  Purpose: Shared specialization controls — a spec header ║
 -- ║           row, the live spec id, the playable class/spec ║
 -- ║           map, and a class picker that opens on the      ║
--- ║           player's own class.                            ║
+-- ║           player's own class, and the per-specialization ║
+-- ║           enable card.                                   ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -215,4 +216,90 @@ function GUIFrame:CreateClassPickerRow(parent, config)
     row:AddWidget(dropdown, 1)
 
     return row, shownClass
+end
+
+---------------------------------------------------------------------------------
+-- Enable per Specialization card
+---------------------------------------------------------------------------------
+-- The compact checkbox is a 22px cell. Four extra pixels keep the spec icons
+-- from touching each other without turning the list back into a stack of cards.
+local SPEC_ROW_HEIGHT = 26
+
+-- Config: { db, scope, note, onChange }. db holds EnabledSpecs; onChange runs
+-- after every write. Returns the card and the next offset.
+function GUIFrame:CreateSpecEnableCard(scrollChild, yOffset, config)
+    assert(type(config) == "table" and type(config.db) == "table", "CreateSpecEnableCard requires db")
+    local db = config.db
+    if not db.EnabledSpecs then db.EnabledSpecs = {} end
+
+    local card = GUIFrame:CreateCard(scrollChild, "Enable per Specialization", yOffset)
+    local innerManager = GUIFrame:CreateWidgetStateManager()
+    if config.note then card:AddLabel(config.note) end
+
+    local specsByClass = GUIFrame.GetClassSpecs()
+    local classTokens = {}
+    for token in pairs(specsByClass) do
+        classTokens[#classTokens + 1] = token
+    end
+
+    local classRow, shownClass = GUIFrame:CreateClassPickerRow(card.content, {
+        scope = config.scope,
+        classTokens = classTokens,
+    })
+    innerManager:Register(classRow, "all")
+    card:AddRow(classRow, 36)
+
+    local currentSpecId = GUIFrame.GetCurrentSpecID()
+    local specs = specsByClass[shownClass] or {}
+
+    if #specs == 0 then
+        card:AddLabel("No specializations available for this class.")
+    end
+
+    for index = 1, #specs do
+        local specID = specs[index]
+        -- ForSpecID, not ByID: only this one is a documented API.
+        local specName, specIcon = "Spec " .. specID, nil
+        if GetSpecializationInfoForSpecID then
+            local _, name, _, icon = GetSpecializationInfoForSpecID(specID)
+            if name then specName = name end
+            specIcon = icon
+        end
+
+        local label = specName
+        if specIcon then
+            label = "|T" .. specIcon .. ":16:16:0:0:64:64:5:59:5:59|t " .. specName
+        end
+        if specID == currentSpecId then
+            label = label .. "  " .. KE:ColorTextByTheme("(current)")
+        end
+
+        local isLast = index == #specs
+        local row = GUIFrame:CreateRow(card.content, SPEC_ROW_HEIGHT)
+        local specCheck = GUIFrame:CreateCompactCheckbox(row, label, {
+            value = db.EnabledSpecs[specID] ~= false,
+            callback = function(checked)
+                -- WRITTEN AS AN IF, not `checked and nil or false`: nil and
+                -- false are both falsy, so that idiom stores false on every
+                -- tick and a spec turned off can never be turned back on.
+                if checked then
+                    db.EnabledSpecs[specID] = nil
+                else
+                    db.EnabledSpecs[specID] = false
+                end
+                if config.onChange then config.onChange() end
+            end,
+        })
+        row:AddWidget(specCheck, 1)
+        innerManager:Register(specCheck, "all")
+        card:AddRow(row, SPEC_ROW_HEIGHT, isLast and 0 or nil)
+    end
+
+    local baseSetEnabled = card.SetEnabled
+    function card:SetEnabled(enabled)
+        if baseSetEnabled then baseSetEnabled(self, enabled) end
+        innerManager:UpdateAll(enabled)
+    end
+
+    return card, card:GetNextOffset()
 end

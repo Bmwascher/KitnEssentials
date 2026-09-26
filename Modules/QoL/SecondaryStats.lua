@@ -25,8 +25,6 @@ local GetLifesteal = GetLifesteal
 local GetAvoidance = GetAvoidance
 local GetSpeed = GetSpeed
 local issecretvalue = issecretvalue
-local GetSpecialization = C_SpecializationInfo.GetSpecialization
-local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
 local string_format = string.format
 local math_floor = math.floor
 local unpack = unpack
@@ -119,29 +117,6 @@ SS.pending = false
 ---------------------------------------------------------------------------------
 function SS:UpdateDB()
     self.db = KE.db.profile.SecondaryStats
-end
-
----------------------------------------------------------------------------------
--- Per-spec gate
----------------------------------------------------------------------------------
--- Absent means enabled. Only an explicit opt-out is ever stored, so a profile
--- that has never touched the card stores nothing and behaves exactly as it did
--- before the setting existed.
---
--- An unresolvable spec reads as enabled rather than disabled: failing closed
--- would blank the readout on a fresh character or mid-load, which looks like
--- the module is broken, while failing open corrects itself on the next event.
-function SS:IsSpecEnabled(db, specId)
-    local specs = db and db.EnabledSpecs
-    if not specs or not specId then return true end
-    return specs[specId] ~= false
-end
-
-function SS:ResolveSpecId()
-    if not GetSpecialization then return nil end
-    local index = GetSpecialization()
-    if not index or index == 0 then return nil end
-    return GetSpecializationInfo and GetSpecializationInfo(index)
 end
 
 ---------------------------------------------------------------------------------
@@ -401,7 +376,7 @@ end
 function SS:HidePreview()
     self.isPreview = false
     if not self.frame then return end
-    if not self.db.Enabled or not self:IsSpecEnabled(self.db, self:ResolveSpecId()) then
+    if not self.db.Enabled or not KE:IsSpecEnabled(self.db.EnabledSpecs, KE:GetPlayerSpecId()) then
         self.frame:Hide()
     end
 end
@@ -427,7 +402,7 @@ function SS:OnEnable()
 end
 
 function SS:ApplySpecGate()
-    if self:IsSpecEnabled(self.db, self:ResolveSpecId()) then
+    if KE:IsSpecEnabled(self.db.EnabledSpecs, KE:GetPlayerSpecId()) then
         self:StartForSpec()
     else
         self:StopForSpec()
