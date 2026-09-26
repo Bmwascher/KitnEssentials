@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.31
+
+### Damage Meter
+
+- **NEW:** Reset on Instance Entry, off by default, in Auto or Ask mode
+- **NEW:** Reset on Logout, off by default, applied at your next login
+- The breakdown tooltip header names the meter type, and the in-combat
+  breakdown closes up its empty percent column
+- Windows whose meter type saw no update are no longer repainted
+- The Deaths window updates when a feign-death tag changes
+
+---
+
 ## v4.7.30
 
 ### Damage Meter
