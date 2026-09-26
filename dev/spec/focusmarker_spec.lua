@@ -109,6 +109,7 @@ describe("FocusMarker marker and kick macro rules", function()
         local isKnown = knownSet({ 78675, 11 })
         assert.are.equal(78675, FM.PickKickSpell(102, nil, isKnown), "no shared list")
         assert.are.equal(78675, FM.PickKickSpell(102, { { id = 11 } }, isKnown), "shared list ignored")
+        assert.is_nil(FM.PickKickSpell(102, { { id = 11 } }, knownSet({ 11 })), "no fallback to the shared list")
     end)
 
     it("returns nil when there is nothing to cast", function()

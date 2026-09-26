@@ -92,9 +92,11 @@ local function BuildHeader(scrollChild, yOffset)
     -- label would give the card a body, and collapse only hides the tabs.
     local disabled = db.Enabled == false
     if not disabled then
+        local FM = GetModule()
+        local kickName = FM and (", " .. FM.KICK_MACRO_NAME .. ",") or ""
         card:AddLabel("Writes a macro that sets your focus and puts your marker on it in one press, so " ..
-            "a kick target can be called and taken together. The Focus Kick tab can add a second macro, " ..
-            "!FocusKick, that casts your interrupt at that focus. Drag either from |cffffd100/macro|r onto " ..
+            "a kick target can be called and taken together. The Focus Kick tab can add a second macro" ..
+            kickName .. " that casts your interrupt at that focus. Drag either from |cffffd100/macro|r onto " ..
             "a bar; both are kept up to date as you change the settings below." ..
             "\n\nThe marker macro goes for whatever is under your mouse, and falls back to your current " ..
             "target." ..
