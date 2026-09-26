@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.32
+
+### Chat
+
+- Chat Copy stays readable when a line holds control characters or broken
+  text
+- Boss and monster lines the game hides from addons show in chat instead of
+  being dropped
+
+---
+
 ## v4.7.31
 
 ### Damage Meter
