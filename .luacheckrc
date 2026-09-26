@@ -365,6 +365,7 @@ read_globals = {
     -- Macro
     "CreateMacro", "EditMacro", "GetMacroIndexByName",
     "GetMacroSpell", "GetNumMacros",
+    "GetMacroInfo",
 
     -- Keybinding
     "GetBindingKey", "SetBinding", "SaveBindings", "GetCurrentBindingSet",
