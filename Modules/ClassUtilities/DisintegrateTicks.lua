@@ -26,6 +26,7 @@ local math_ceil = math.ceil
 local UnitChannelInfo = UnitChannelInfo
 local InCombatLockdown = InCombatLockdown
 local C_Timer = C_Timer
+local issecretvalue = issecretvalue
 
 
 ---------------------------------------------------------------------------------
@@ -612,14 +613,43 @@ function DT:GetTickInterval()
     return base
 end
 
+local TICK_COLOR_DEFAULT = { 1, 1, 1, 0.8 }
+local LAST_TICK_COLOR_DEFAULT = { 1, 0.82, 0, 0.95 }
+
+function DT.TickTime(i, maxTicks, duration, interval, chaining, firstTick)
+    if chaining then
+        local step = (duration - firstTick) / (maxTicks - 1)
+        return firstTick + (i - 1) * step
+    end
+    return i * interval
+end
+
+local function IsTickShown(tickTime, duration)
+    return tickTime < duration * 0.99
+end
+
+function DT.LastShownTick(maxTicks, duration, interval, chaining, firstTick)
+    for i = maxTicks, 1, -1 do
+        local tickTime = DT.TickTime(i, maxTicks, duration, interval, chaining, firstTick)
+        if IsTickShown(tickTime, duration) then
+            return i
+        end
+    end
+    return 0
+end
+
+function DT.TickColorFor(i, lastTick, db)
+    if db.LastTickEnabled == true and i == lastTick then
+        return db.LastTickColor, LAST_TICK_COLOR_DEFAULT
+    end
+    return db.TickColor, TICK_COLOR_DEFAULT
+end
+
 ---------------------------------------------------------------------------------
 -- Tick Management
 ---------------------------------------------------------------------------------
 function DT:CreateTick(handle)
-    local db = self.db
-    local r, g, b, a = KE:ResolveColor(db.TickColor, { 1, 1, 1, 0.8 })
     local tick = handle.anchor:CreateTexture(nil, "OVERLAY")
-    tick:SetColorTexture(r, g, b, a)
     tick:Hide()
     return tick
 end
@@ -647,6 +677,9 @@ function DT:UpdateHandleTicks(handle, duration)
 
     local hastedTickInterval = self:GetTickInterval() / self:GetHaste()
     local pixelsPerSecond = handle.width / duration
+    local lastTick = DT.LastShownTick(self.maxTicks, duration, hastedTickInterval,
+        self.chaining, self.firstTick)
+    handle.lastTick = lastTick
 
     for i = 1, self.maxTicks do
         local tick = handle.ticks[i]
@@ -665,18 +698,15 @@ function DT:UpdateHandleTicks(handle, duration)
 
         local tickWidth = (self.db.TickWidth or 2) * KE:GetPixelSize()
         tick:SetSize(tickWidth, handle.height * 0.95)
+        tick:SetColorTexture(KE:ResolveColor(DT.TickColorFor(i, lastTick, self.db)))
         tick:ClearAllPoints()
 
-        local tickTime = i * hastedTickInterval
-
-        if self.chaining then
-            local interval = (duration - self.firstTick) / (self.maxTicks - 1)
-            tickTime = self.firstTick + (i - 1) * interval
-        end
+        local tickTime = DT.TickTime(i, self.maxTicks, duration, hastedTickInterval,
+            self.chaining, self.firstTick)
 
         tick:SetPoint("CENTER", handle.anchor, "LEFT", (duration - tickTime) * pixelsPerSecond, 0)
 
-        if tickTime < duration * 0.99 then
+        if IsTickShown(tickTime, duration) then
             tick:Show()
         else
             tick:Hide()
@@ -700,10 +730,9 @@ end
 
 function DT:ApplyTickColor()
     local db = self.db
-    local r, g, b, a = KE:ResolveColor(db.TickColor, { 1, 1, 1, 0.8 })
     for _, handle in pairs(CastBarRegistry.handles) do
-        for _, tick in next, handle.ticks do
-            tick:SetColorTexture(r, g, b, a)
+        for i, tick in next, handle.ticks do
+            tick:SetColorTexture(KE:ResolveColor(DT.TickColorFor(i, handle.lastTick, db)))
         end
     end
 end
@@ -837,7 +866,7 @@ function DT:OnEvent(event, unit, ...)
     if event == "UNIT_SPELLCAST_CHANNEL_START" or event == "UNIT_SPELLCAST_CHANNEL_STOP"
         or event == "UNIT_SPELLCAST_CHANNEL_UPDATE"
         or event == "UNIT_SPELLCAST_EMPOWER_STOP" or event == "UNIT_SPELLCAST_SUCCEEDED" then
-        if unit ~= "player" then return end
+        if issecretvalue(unit) or unit ~= "player" then return end
     end
 
     if event == "LOADING_SCREEN_DISABLED" then
@@ -864,6 +893,9 @@ function DT:OnEvent(event, unit, ...)
 
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         local _, spellId = ...  -- castGUID, spellID (unit already captured)
+        -- A spell can be secret for any unit, so the player filter does not
+        -- make spellID plain; a secret one is never ours.
+        if issecretvalue(spellId) then return end
         if self.hasTipTheScalesActive and IsEmpower(spellId) and KnowsMassDisintegrate() then
             self.hasTipTheScalesActive = false
             self.massDisintegrateStacks = self.massDisintegrateStacks + 1
@@ -876,6 +908,7 @@ function DT:OnEvent(event, unit, ...)
 
     elseif event == "UNIT_SPELLCAST_EMPOWER_STOP" then
         local _, spellId, complete = ...  -- castGUID, spellID, complete
+        if issecretvalue(spellId) or issecretvalue(complete) then return end
         if not complete or not IsEmpower(spellId) or not KnowsMassDisintegrate() then
             return
         end
@@ -884,6 +917,7 @@ function DT:OnEvent(event, unit, ...)
 
     elseif event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
         local _, spellId = ...
+        if issecretvalue(spellId) then return end
         if spellId ~= DISINTEGRATE then return end
 
         local endTimeMS = select(5, UnitChannelInfo("player"))
@@ -893,6 +927,7 @@ function DT:OnEvent(event, unit, ...)
 
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
         local _, spellId = ...
+        if issecretvalue(spellId) then return end
         if spellId ~= DISINTEGRATE then return end
 
         local _, _, _, startTimeMS, endTimeMS = UnitChannelInfo("player")
@@ -955,17 +990,20 @@ function DT:OnEvent(event, unit, ...)
 
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_SHOW" then
         -- unit param captures spellId for non-unit events
+        if issecretvalue(unit) then return end
         if not self.hasTipTheScalesActive and IsEmpower(unit) then
             self.hasTipTheScalesActive = true
         end
 
     elseif event == "SPELL_ACTIVATION_OVERLAY_GLOW_HIDE" then
+        if issecretvalue(unit) then return end
         if self.hasTipTheScalesActive and IsEmpower(unit) then
             self.hasTipTheScalesActive = false
         end
 
     elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
         local _, spellId = ...
+        if issecretvalue(spellId) then return end
         if spellId ~= DISINTEGRATE then return end
 
         self:HideWarning()

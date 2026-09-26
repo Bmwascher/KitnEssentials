@@ -32,6 +32,9 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
     manager:SetCondition("clip", function()
         return db.ClipWarning and db.ClipWarning.Enabled ~= false
     end)
+    manager:SetCondition("lastTick", function()
+        return db.LastTickEnabled == true
+    end)
 
     local function ApplySettings()
         if DT and DT.ApplySettings then DT:ApplySettings() end
@@ -82,8 +85,7 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
     local euiLoaded = C_AddOns and C_AddOns.IsAddOnLoaded
         and C_AddOns.IsAddOnLoaded("EllesmereUIResourceBars")
 
-    local row2 = GUIFrame:CreateRow(card2.content,
-        euiLoaded and Theme.rowHeight or Theme.rowHeightLast)
+    local row2 = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local tickColorPicker = GUIFrame:CreateColorPicker(row2, "Tick Color", {
         color = db.TickColor or { 1, 1, 1, 0.8 },
         callback = function(r, g, b, a)
@@ -101,10 +103,36 @@ GUIFrame:RegisterContent("DisintegrateTicks", function(scrollChild, yOffset)
     })
     row2:AddWidget(tickWidthSlider, 0.5)
     manager:Register(tickWidthSlider, "all")
+    card2:AddRow(row2, Theme.rowHeight)
+
+    local row2a = GUIFrame:CreateRow(card2.content,
+        euiLoaded and Theme.rowHeight or Theme.rowHeightLast)
+    local lastTickCheck = GUIFrame:CreateCheckbox(row2a, "Highlight Last Tick", {
+        value = db.LastTickEnabled == true,
+        tooltip = "Draws the last tick mark of each Disintegrate channel in the "
+            .. "Last Tick Color. The other ticks keep the Tick Color.",
+        callback = function(checked)
+            db.LastTickEnabled = checked
+            ApplySettings()
+            RefreshStates()
+        end,
+    })
+    row2a:AddWidget(lastTickCheck, 0.5)
+    manager:Register(lastTickCheck, "all")
+
+    local lastTickColorPicker = GUIFrame:CreateColorPicker(row2a, "Last Tick Color", {
+        color = db.LastTickColor or { 1, 0.82, 0, 0.95 },
+        callback = function(r, g, b, a)
+            db.LastTickColor = { r, g, b, a }
+            ApplySettings()
+        end,
+    })
+    row2a:AddWidget(lastTickColorPicker, 0.5)
+    manager:Register(lastTickColorPicker, "lastTick")
     if euiLoaded then
-        card2:AddRow(row2, Theme.rowHeight)
+        card2:AddRow(row2a, Theme.rowHeight)
     else
-        card2:AddRow(row2, Theme.rowHeightLast, 0)
+        card2:AddRow(row2a, Theme.rowHeightLast, 0)
     end
 
     -- Only offered when EllesmereUI's resource bars are loaded: with them
