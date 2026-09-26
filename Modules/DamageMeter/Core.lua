@@ -83,9 +83,10 @@ DM._deferredReset = nil
 -- reset, key start or capture since clears it.
 DM._loginResetHeld = false
 
--- Session updates per meter type, and the ones that named no type. A window
--- records their sum for its type at each Tick paint; an unchanged sum means no
--- new data for it.
+-- Session updates per meter type, and the changes every window repaints for:
+-- session updates that named no type, and changed spec icons. A window records
+-- their sum for its type at each Tick paint; an unchanged sum means nothing new
+-- for it.
 DM._typeSeq = {}
 DM._allSeq = 0
 
@@ -596,7 +597,8 @@ end
 -- "short") and match against the live roster. Player names from group units are
 -- non-secret in 12.0 (only NON-player unit names are secret), but the roster read is
 -- issecretvalue-guarded so a secret name simply skips instead of tainting the ==.
--- Cold path (fires only when comms land), so a <=40-unit scan is fine.
+-- Cold path (fires only when comms land), so a <=40-unit scan is fine. An
+-- ambiguous name returns nil plus whether the purge deleted a stored icon.
 local function ResolveGroupGUID(playerName)
     if not playerName then return nil end
     local target = Ambiguate(playerName, "short")
@@ -610,7 +612,7 @@ local function ResolveGroupGUID(playerName)
     -- player while the row counts still agree, so nothing downstream catches it.
     -- An ambiguous name stores nothing and the tie-break refuses on the missing
     -- spec.
-    local hit, ambiguous
+    local hit, ambiguous, purged
 
     local function matchUnit(unit)
         -- UnitName's FIRST return is always the bare name (realm split into the
@@ -629,6 +631,9 @@ local function ResolveGroupGUID(playerName)
                     -- leaves a stale spec standing and the tie-break reads it as
                     -- current. Purging every colliding guid keeps a collided
                     -- player unknown for exactly as long as the collision lasts.
+                    if DM.specIconByGUID[hit] or DM.specIconByGUID[guid] then
+                        purged = true
+                    end
                     DM.specIconByGUID[hit] = nil
                     DM.specIconByGUID[guid] = nil
                     -- Either player's recorded meter spec may be stale for the
@@ -659,7 +664,7 @@ local function ResolveGroupGUID(playerName)
         end
     end
 
-    if ambiguous then return nil end
+    if ambiguous then return nil, purged end
     return hit
 end
 
@@ -672,11 +677,18 @@ end
 function DM:OnLibSpecGroupUpdate(specID, _, _, playerName)
     local icon = GetSpecIcon(specID)
     if not icon then return end
-    local guid = ResolveGroupGUID(playerName)
+    local guid, purged = ResolveGroupGUID(playerName)
+    -- The combat ticker skips a window whose sum has not moved, so a changed icon
+    -- moves the untyped count and every window repaints once.
     if guid then
         -- A changed report means a spec change, so the recorded meter spec is stale.
-        if self.specIconByGUID[guid] ~= icon then self:ForgetMeterSpec(guid) end
+        if self.specIconByGUID[guid] ~= icon then
+            self:ForgetMeterSpec(guid)
+            self._allSeq = self._allSeq + 1
+        end
         self.specIconByGUID[guid] = icon
+    elseif purged then
+        self._allSeq = self._allSeq + 1
     end
 end
 
@@ -3751,7 +3763,7 @@ local function TypeSeq(meterType)
 end
 
 -- True when a window can keep its last paint: it painted before, shows the same
--- effective view, its type saw no session update since, and no detail panel is
+-- effective view, its TypeSeq sum has not moved since, and no detail panel is
 -- open on it (an open panel re-judges itself every tick).
 function DM.PaintSkip(paintType, paintSeq, nowType, nowSeq, panelOpen)
     return paintType ~= nil and nowType == paintType and nowSeq == paintSeq and not panelOpen
