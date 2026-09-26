@@ -1079,10 +1079,8 @@ end
 --
 -- Fight length "[M:SS]" at the right end of the display-position-1 window's
 -- header band (db.ShowCombatClock, default off). Painted from KE.CombatState's
--- OnClockTick, the same dedicated clock ticker the Combat Timer reads -- but not
--- the same value: this clock renders the FIGHT and restarts at a boss pull with
--- the bars below it, while the Combat Timer renders the whole engagement. They
--- differ across a chain pull by design.
+-- OnClockTick; it renders the FIGHT and restarts at a boss pull with the bars
+-- below it.
 --
 -- TWO SOURCES, chosen by what the window is showing. A window on a STORED
 -- session -- pinned from the segment menu, or fallen back to the newest stored
@@ -1193,15 +1191,14 @@ function DM:UpdateCombatClock(W, session, authoritative)
         duration = session and session.durationSeconds
     elseif not self._clockCleared and (KE.CombatState:IsLive() or KE.CombatState:IsFrozen()) then
         -- Warm-up hold: a new fight resets the pin, so an ordinary bar repaint
-        -- landing in the gap before the first reading would blank this clock
-        -- while the Combat Timer still shows the old value. BlankCombatClock
-        -- clears the text at a genuine start, so the hold cannot carry a
-        -- finished fight into a new one.
+        -- landing in the gap before the first reading would blank this clock.
+        -- BlankCombatClock clears the text at a genuine start, so the hold
+        -- cannot carry a finished fight into a new one.
         if not authoritative and KE.CombatState:GetDuration() == nil and W._clockHasText then return end
         -- The branch condition is LIVENESS, not a non-nil duration: splitting on
         -- the duration would drop into the fallback below before the pin is
-        -- warm, and that fallback accepts a secret string the Combat Timer
-        -- cannot -- the exact disagreement this design exists to remove.
+        -- warm and paint a raw session read, possibly secret, in place of the
+        -- machine's own reading.
         duration = KE.CombatState:GetDuration()
     else
         -- No live or frozen fight at all, which after a /reload mid-session is the normal
@@ -1269,12 +1266,12 @@ function DM:BlankCombatClock()
 end
 
 -- The clock, and nothing else. Calling Tick here would repaint every bar and
--- total at up to 10 Hz while a tenths cadence runs; the split is what lets the
--- clock track the Combat Timer while the totals keep a kill's finalize delay.
+-- total on every clock tick; the split also lets the totals keep a kill's
+-- finalize delay while the clock lands at once.
 -- _winDisplayPos holds at most db.MaxWindows entries, so the scan is cheap.
 function DM:RepaintCombatClock(authoritative)
     -- The same gate ClockGateOpen tests first, hoisted ahead of the resolve
-    -- chain: the clock is off by default, and this runs at up to 10 Hz.
+    -- chain: the clock is off by default, and this runs on every clock tick.
     if not (self.db and self.db.ShowCombatClock) then return end
     if not (self.windows_rt and self._winDisplayPos) then return end
     for idx, W in pairs(self.windows_rt) do

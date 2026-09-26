@@ -2180,12 +2180,11 @@ function L.loadOptimize(overrides)
     return OPT, rec, KE
 end
 
--- Modules/Combat/CombatTimer.lua. Only the chat-line refusal rule (CT:OnStop)
--- is reachable headlessly: everything else in that module is frames, the
--- KE.CombatState listener wiring and event timing, which this project
--- verifies in game. KE.CombatState is a bare fake carrying only what OnStop
--- reads; overrides.CombatState replaces it wholesale. Callers set CT.db
--- directly, the same way a real OnInitialize would via KE.db.profile.CombatTimer.
+-- Modules/Combat/CombatTimer.lua. Two layers are reachable headlessly: the
+-- pure stop rules (CT.Transition) and the chat-line refusal rule (CT:OnStop).
+-- Frames, the paint ticker and the event wiring are verified in game. Callers
+-- set CT.db directly, the same way a real OnInitialize would via
+-- KE.db.profile.CombatTimer.
 function L.loadCombatTimer(overrides)
     overrides = overrides or {}
     installMock(overrides, { C_Timer = inertTimer() })
@@ -2193,13 +2192,7 @@ function L.loadCombatTimer(overrides)
 
     _G.UIParent = noopFrame()
 
-    local KE = {
-        Print = function() end,
-        CombatState = overrides.CombatState or {
-            PlayerJoined = function() return true end,
-            GetDuration = function() return 12 end,
-        },
-    }
+    local KE = { Print = function() end }
     helpers.loadModule("Modules/Combat/CombatTimer.lua", KE)
     return modules["CombatTimer"], KE
 end
@@ -2855,7 +2848,7 @@ end
 -- UNMANAGED (dev/spec/_wow_mock.lua), so they are assigned to _G directly
 -- rather than routed through installMock, which would silently drop them.
 -- Specs never drive the live singleton -- they build their own instances via
--- `KE.CombatState.New(deps)` with fake deps for all seven, which resolves
+-- `KE.CombatState.New(deps)` with every dep faked, which resolves
 -- through the class metatable New sits on. Returns KE.
 function L.loadCombatState(overrides)
     overrides = overrides or {}

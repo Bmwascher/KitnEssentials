@@ -89,12 +89,6 @@ function KE_CombatState:IsFrozen() end
 ---@return number? seconds
 function KE_CombatState:GetDuration() end
 
----@return number? seconds
-function KE_CombatState:GetEngagementDuration() end
-
----@return boolean
-function KE_CombatState:PlayerJoined() end
-
 ---@return boolean
 function KE_CombatState:GroupInCombat() end
 
@@ -102,11 +96,7 @@ function KE_CombatState:GroupInCombat() end
 function KE_CombatState:Generation() end
 
 ---@param key string
----@param wanted boolean
-function KE_CombatState:SetFineCadence(key, wanted) end
-
----@param key string
----@param callbacks { OnStart: fun()?, OnStop: fun(reason: string)?, OnGroupClear: fun()?, OnClockTick: fun(seconds: number?, frac: number)? }
+---@param callbacks { OnStart: fun()?, OnStop: fun(reason: string)?, OnGroupClear: fun()?, OnClockTick: fun(seconds: number?)? }
 function KE_CombatState:RegisterListener(key, callbacks) end
 
 ---@param key string
@@ -121,6 +111,7 @@ function KE_CombatState:OnEncounterEnd(success) end
 function KE_CombatState:OnUnitFlags(unit) end
 function KE_CombatState:OnPvPMatchComplete() end
 function KE_CombatState:OnEnteringWorld() end
+function KE_CombatState:OnRosterUpdate() end
 
 ---@class KE
 ---@field db AceDB

@@ -1,11 +1,13 @@
 -- Tier 2: Core/CombatState.lua, the shared combat clock/liveness machine.
 -- Driven entirely through the public event entry points, plus Freeze itself
--- for the one case that is otherwise unreachable, with all seven deps faked
+-- for the one case that is otherwise unreachable, with every dep faked
 -- and a manual scheduler whose handles record their own cancels. Specs read
 -- a handful of internal fields directly (playerCombat, groupOnly, watching,
--- pvpBlocked, finalizePending, pendingGen, clearTicks, fineBase, fineAnchor):
--- the class keeps no closure privacy over them, and several design cases have
--- no cheaper public accessor.
+-- pvpBlocked, groupBlocked, inEncounter, finalizePending, pendingGen,
+-- clearTicks); the group bound's count-restart case sets inEncounter and
+-- finalizePending for one tick, and its block case clears groupBlocked for
+-- one row: the class keeps no closure privacy over them, and several design
+-- cases have no cheaper public accessor.
 local L = require("dev.spec._ke_loader")
 
 local function newScheduler()
@@ -27,8 +29,8 @@ local function lastWithSec(list, sec)
     end
 end
 
--- The poll ticker is always armed at 0.25s; the clock ticker is always 0.5s
--- (coarse) or 0.1s (fine), so the two are distinguishable by interval alone.
+-- The poll ticker is always armed at 0.25s and the clock ticker at 0.5s, so
+-- the two are distinguishable by interval alone.
 local function lastPoll(sched) return lastWithSec(sched.tickers, 0.25) end
 local function lastClock(sched)
     for i = #sched.tickers, 1, -1 do
@@ -78,24 +80,37 @@ local function newRecorder()
 end
 
 describe("CombatState machine", function()
-    local KE, sched, deps, declaredSecret
+    local KE, sched, deps, declaredSecret, events
 
     before_each(function()
         KE, declaredSecret = L.loadCombatState()
         sched = newScheduler()
+        events = {}
         deps = {
-            now = function() return 0 end,
+            -- The player's unit flag. The machine does not read it; the lockdown
+            -- follows it unless a case sets both, so a case that puts the player
+            -- in combat still gets its PLAYER start.
             playerInCombat = function() return false end,
             groupInCombat = function() return false end,
             inInstance = function() return false end,
             sessionDuration = function() return false, nil end,
+            playerDead = function() return false end,
+            playerLockdown = function() return deps.playerInCombat() end,
+            encounterLive = function() return true end,
             after = sched.after,
             ticker = sched.ticker,
+            setEventsActive = function(on) events[#events + 1] = on end,
         }
     end)
 
+    -- In the game the meter is registered before any of these drives. Seeded
+    -- into the table, not through RegisterListener, whose first-listener derive
+    -- would read whatever deps a case set before calling this; a recorder
+    -- registered later is then a second key and derives nothing.
     local function newCS()
-        return KE.CombatState.New(deps)
+        local cs = KE.CombatState.New(deps)
+        cs.listeners.base = {}
+        return cs
     end
 
     describe("start and freeze basics", function()
@@ -504,34 +519,24 @@ describe("CombatState machine", function()
             assert.equals(0, rec.count("OnStop"))
             assert.is_false(idle:IsFrozen())
         end)
-    end)
 
-    describe("PlayerJoined", function()
-        it("is false for a group-flag fight with the player out of combat, and true once the player enters it", function()
+        it("with the player in combat on a live group fight, promotes: the pin and generation stand and no OnStart", function()
             local cs = newCS()
             deps.playerInCombat = function() return false end
+            deps.sessionDuration = function() return true, 5 end
             cs:OnEncounterStart()
-            assert.is_false(cs:PlayerJoined())
+            lastClock(sched).fn()
+            assert.is_true(cs.groupOnly)
+            local gen = cs:Generation()
+            local rec = newRecorder()
+            cs:RegisterListener("spec", rec.callbacks)
             deps.playerInCombat = function() return true end
-            cs:OnRegenDisabled()
-            assert.is_true(cs:PlayerJoined())
-        end)
-
-        it("resets at the next start, so a group-only fight following a joined one is not credited", function()
-            local cs = newCS()
-            deps.playerInCombat = function() return false end
-            cs:OnEncounterStart()
-            deps.playerInCombat = function() return true end
-            cs:OnRegenDisabled()
-            assert.is_true(cs:PlayerJoined())
-            cs:OnEncounterEnd(1)
-            assert.is_false(cs:IsLive())
-            deps.playerInCombat = function() return false end
-            deps.inInstance = function() return true end
-            deps.groupInCombat = function() return true end
-            cs:OnUnitFlags("raid1")
-            assert.is_true(cs:IsLive())
-            assert.is_false(cs:PlayerJoined())
+            cs:OnEnteringWorld()
+            assert.is_true(cs.playerCombat)
+            assert.is_false(cs.groupOnly)
+            assert.equals(5, cs:GetDuration())
+            assert.equals(gen, cs:Generation())
+            assert.equals(0, rec.count("OnStart"))
         end)
     end)
 
@@ -547,7 +552,7 @@ describe("CombatState machine", function()
         end)
     end)
 
-    describe("clock ticker and cadence", function()
+    describe("the clock ticker", function()
         it("a clock tick samples once, updates the pin, and fires OnClockTick", function()
             local cs = newCS()
             local calls = 0
@@ -558,59 +563,8 @@ describe("CombatState machine", function()
             lastClock(sched).fn()
             assert.equals(1, calls)
             assert.equals(6, cs:GetDuration())
-            local d, frac = rec.nth("OnClockTick", 1)
+            local d = rec.nth("OnClockTick", 1)
             assert.equals(6, d)
-            assert.is_number(frac)
-        end)
-
-        it("the cadence is fine while any key wants it and coarse when none does, across two keys", function()
-            local cs = newCS()
-            cs:OnRegenDisabled()
-            assert.equals(0.5, lastClock(sched).sec)
-            cs:SetFineCadence("A", true)
-            assert.equals(0.1, lastClock(sched).sec)
-            cs:SetFineCadence("B", true)
-            assert.equals(0.1, lastClock(sched).sec)
-            cs:SetFineCadence("A", false)
-            assert.equals(0.1, lastClock(sched).sec)
-            cs:SetFineCadence("B", false)
-            assert.equals(0.5, lastClock(sched).sec)
-        end)
-
-        it("a cadence change replaces the ticker and samples at once", function()
-            local cs = newCS()
-            cs:OnRegenDisabled()
-            local before = lastClock(sched)
-            deps.sessionDuration = function() return true, 4 end
-            cs:SetFineCadence("A", true)
-            assert.is_true(before.cancelled)
-            local after = lastClock(sched)
-            assert.are_not.equal(before, after)
-            assert.is_false(after.cancelled)
-            -- Sampled by the change itself, without firing the new ticker:
-            -- waiting out its first interval leaves both surfaces stale.
-            assert.equals(4, cs:GetDuration())
-        end)
-
-        it("a cadence call that changes nothing neither replaces the ticker nor samples", function()
-            local cs = newCS()
-            cs:OnRegenDisabled()
-            local before = lastClock(sched)
-            deps.sessionDuration = function() return true, 9 end
-            cs:SetFineCadence("A", false)
-            assert.is_false(before.cancelled)
-            assert.equals(before, lastClock(sched))
-            assert.is_nil(cs:GetDuration())
-        end)
-
-        it("UnregisterListener drops that key's cadence request", function()
-            local cs = newCS()
-            cs:OnRegenDisabled()
-            cs:RegisterListener("mod", {})
-            cs:SetFineCadence("mod", true)
-            assert.equals(0.1, lastClock(sched).sec)
-            cs:UnregisterListener("mod")
-            assert.equals(0.5, lastClock(sched).sec)
         end)
 
         it("a freeze and a hard reset each cancel the clock ticker", function()
@@ -638,73 +592,6 @@ describe("CombatState machine", function()
             cs:OnPvPMatchComplete()
             local order = rec.order({ OnClockTick = true, OnStop = true })
             assert.same({ "OnClockTick", "OnStop" }, order)
-        end)
-    end)
-
-    describe("the tenths fraction", function()
-        it("re-anchors when the sampled second changes and clamps at 0.9 within a second", function()
-            local cs = newCS()
-            local nowValue = 100
-            deps.now = function() return nowValue end
-            deps.sessionDuration = function() return true, 5 end
-            cs:OnRegenDisabled()
-            local clock = lastClock(sched)
-            local rec = newRecorder()
-            cs:RegisterListener("spec", rec.callbacks)
-
-            clock.fn()
-            local _, frac1 = rec.nth("OnClockTick", 1)
-            assert.equals(0, frac1)
-
-            nowValue = 100.95
-            clock.fn()
-            local _, frac2 = rec.nth("OnClockTick", 2)
-            assert.equals(0.9, frac2)
-
-            nowValue = 101.0
-            deps.sessionDuration = function() return true, 6 end
-            clock.fn()
-            local d3, frac3 = rec.nth("OnClockTick", 3)
-            assert.equals(6, d3)
-            assert.equals(0, frac3)
-        end)
-
-        it("the anchor resets at every start, so a fight opening on the previous fight's last value starts at a zero fraction", function()
-            local cs = newCS()
-            local nowValue = 100
-            deps.now = function() return nowValue end
-            deps.sessionDuration = function() return true, 5 end
-            cs:OnRegenDisabled()
-            lastClock(sched).fn()
-            nowValue = 100.9
-            lastClock(sched).fn()
-
-            cs:OnEncounterEnd(1)
-            deps.inInstance = function() return true end
-            deps.groupInCombat = function() return true end
-            cs:OnUnitFlags("raid1")
-
-            local rec = newRecorder()
-            cs:RegisterListener("spec", rec.callbacks)
-            nowValue = 200
-            deps.sessionDuration = function() return true, 5 end
-            lastClock(sched).fn()
-            local _, frac = rec.nth("OnClockTick", 1)
-            assert.equals(0, frac)
-        end)
-
-        it("the fraction never mutates the pin: GetDuration() stays whole-second across ticks inside one sampled second", function()
-            local cs = newCS()
-            local nowValue = 100
-            deps.now = function() return nowValue end
-            deps.sessionDuration = function() return true, 7 end
-            cs:OnRegenDisabled()
-            local clock = lastClock(sched)
-            for _, t in ipairs({ 100, 100.2, 100.5, 100.8, 100.95 }) do
-                nowValue = t
-                clock.fn()
-                assert.equals(7, cs:GetDuration())
-            end
         end)
     end)
 
@@ -771,10 +658,8 @@ describe("CombatState machine", function()
     end)
 
     describe("Promote, and the pvp/watch interplay", function()
-        it("Promote preserves pin, generation, the tenths anchor, and resets clearTicks", function()
+        it("Promote preserves pin and generation, and resets clearTicks", function()
             local cs = newCS()
-            local nowValue = 50
-            deps.now = function() return nowValue end
             deps.playerInCombat = function() return false end
             cs:OnEncounterStart()
             deps.sessionDuration = function() return true, 4 end
@@ -788,8 +673,6 @@ describe("CombatState machine", function()
             cs:OnRegenDisabled()
             assert.equals(4, cs:GetDuration())
             assert.equals(genBefore, cs:Generation())
-            assert.equals(4, cs.fineBase)
-            assert.equals(50, cs.fineAnchor)
             assert.equals(0, cs.clearTicks)
         end)
 
@@ -803,16 +686,15 @@ describe("CombatState machine", function()
     end)
 
     describe("the paint contract", function()
-        it("a start broadcasts OnClockTick(nil, 0) before any sample, so neither surface shows the previous fight's text", function()
+        it("a start broadcasts OnClockTick(nil) before any sample, so the meter clock does not show the previous fight's text", function()
             local cs = newCS()
             local rec = newRecorder()
             cs:RegisterListener("spec", rec.callbacks)
             local sampled = false
             deps.sessionDuration = function() sampled = true; return true, 99 end
             cs:OnRegenDisabled()
-            local d, frac = rec.nth("OnClockTick", 1)
+            local d = rec.nth("OnClockTick", 1)
             assert.is_nil(d)
-            assert.equals(0, frac)
             assert.is_false(sampled)
             -- OnStart first: a consumer clears its held state there, and a blank
             -- paint arriving before that can be routed by the stale state.
@@ -832,224 +714,7 @@ describe("CombatState machine", function()
         end)
     end)
 
-    describe("the engagement span", function()
-        -- The span the Combat Timer renders: the whole engagement, where the pin
-        -- is only the current fight.
-        local function sampling(value)
-            deps.sessionDuration = function() return true, value end
-        end
-
-        it("reports the fight itself while nothing has accumulated", function()
-            local cs = newCS()
-            sampling(12)
-            cs:OnRegenDisabled()
-            lastClock(sched).fn()
-            assert.equals(12, cs:GetDuration())
-            assert.equals(12, cs:GetEngagementDuration())
-        end)
-
-        it("keeps the trash time when an encounter starts mid-engagement", function()
-            local cs = newCS()
-            sampling(60)
-            cs:OnRegenDisabled()
-            lastClock(sched).fn()
-            cs:OnEncounterStart()
-            sampling(5)
-            lastClock(sched).fn()
-            assert.equals(5, cs:GetDuration())
-            assert.equals(65, cs:GetEngagementDuration())
-        end)
-
-        -- The warm-up gap: an encounter start zeroes the pin, so Duration() is
-        -- nil until the next usable sample. The span must still be a number, or
-        -- the clock blanks at the exact moment the boss engages.
-        it("reports the accumulated span while the new fight has no reading yet", function()
-            local cs = newCS()
-            sampling(60)
-            cs:OnRegenDisabled()
-            lastClock(sched).fn()
-            cs:OnEncounterStart()
-            assert.is_nil(cs:GetDuration())
-            assert.equals(60, cs:GetEngagementDuration())
-        end)
-
-        -- OnEncounterEnd(1) is the freeze route, NOT a combat drop: the
-        -- encounter start above leaves inEncounter raised, and
-        -- PLAYER_REGEN_ENABLED then demotes to groupOnly and arms the poll
-        -- instead of freezing.
-        it("opens a fresh engagement on the next fight after a freeze", function()
-            local cs = newCS()
-            sampling(60)
-            cs:OnRegenDisabled()
-            lastClock(sched).fn()
-            cs:OnEncounterStart()
-            sampling(5)
-            lastClock(sched).fn()
-            assert.equals(65, cs:GetEngagementDuration())
-
-            cs:OnEncounterEnd(1)
-            assert.is_false(cs:IsLive())
-
-            sampling(3)
-            cs:OnRegenDisabled()
-            lastClock(sched).fn()
-            assert.equals(3, cs:GetEngagementDuration())
-        end)
-
-        -- A live start that is not a boss pull re-asserts the fight already
-        -- running. The session it is about to re-sample is the SAME one, so
-        -- folding the pin in would count those seconds twice.
-        it("does not fold the pin in twice on a live start that is not an encounter", function()
-            local cases = {
-                {
-                    name = "a second PLAYER_REGEN_DISABLED while playerCombat",
-                    groupOnly = false,
-                    fire = function(cs) cs:OnRegenDisabled() end,
-                },
-                {
-                    name = "PLAYER_ENTERING_WORLD with the player in combat",
-                    groupOnly = false,
-                    fire = function(cs)
-                        deps.playerInCombat = function() return true end
-                        cs:OnEnteringWorld()
-                    end,
-                },
-                {
-                    name = "PLAYER_ENTERING_WORLD with the group in combat in an instance",
-                    groupOnly = true,
-                    fire = function(cs)
-                        deps.groupInCombat = function() return true end
-                        deps.inInstance = function() return true end
-                        cs:OnEnteringWorld()
-                    end,
-                },
-            }
-            for _, case in ipairs(cases) do
-                -- deps is shared across rows: reset what a row's fire may set,
-                -- or row 2's playerInCombat leaks into row 3 and sends it down
-                -- the PLAYER branch instead of the GROUP one it exists for.
-                deps.playerInCombat = function() return false end
-                deps.groupInCombat = function() return false end
-                deps.inInstance = function() return false end
-                local cs = newCS()
-                sampling(9)
-                cs:OnRegenDisabled()
-                lastClock(sched).fn()
-                assert.equals(9, cs:GetEngagementDuration(), case.name)
-                case.fire(cs)
-                -- The row reached the branch it names, rather than some other
-                -- one that happens to give the same span.
-                assert.equals(case.groupOnly, cs.groupOnly, case.name)
-                lastClock(sched).fn()
-                assert.equals(9, cs:GetEngagementDuration(), case.name)
-            end
-        end)
-
-        -- The case above cannot tell the modes apart: with nothing accumulated
-        -- they all give the same answer. Here the accumulator is 60 first.
-        --
-        -- playerInCombat MUST stay true throughout. With it false
-        -- OnEncounterStart asserts groupOnly, the second OnRegenDisabled returns
-        -- from Promote before reaching StartFight, the OnEnteringWorld row
-        -- misses its branch, and the case passes whatever the modes are.
-        it("ends the accumulated engagement on a live start that is not an encounter", function()
-            local cases = {
-                {
-                    name = "a second PLAYER_REGEN_DISABLED while playerCombat",
-                    fire = function(cs) cs:OnRegenDisabled() end,
-                },
-                {
-                    name = "PLAYER_ENTERING_WORLD with the player in combat",
-                    fire = function(cs) cs:OnEnteringWorld() end,
-                },
-            }
-            for _, case in ipairs(cases) do
-                deps.playerInCombat = function() return true end
-                local cs = newCS()
-                sampling(60)
-                cs:OnRegenDisabled()
-                lastClock(sched).fn()
-                cs:OnEncounterStart()
-                sampling(5)
-                lastClock(sched).fn()
-                assert.equals(65, cs:GetEngagementDuration(), case.name)
-
-                case.fire(cs)
-                lastClock(sched).fn()
-                assert.equals(5, cs:GetEngagementDuration(), case.name)
-            end
-        end)
-
-        -- Both arrival branches end the engagement. The one that starts a fight
-        -- is covered by the live-start case above; this is the other one, where
-        -- the fight survives the loading screen and only the span before it goes.
-        it("ends the engagement on a combat-flagged arrival that promotes", function()
-            local cs = newCS()
-            sampling(60)
-            cs:OnRegenDisabled()
-            lastClock(sched).fn()
-            deps.playerInCombat = function() return false end
-            cs:OnEncounterStart()
-            sampling(5)
-            lastClock(sched).fn()
-            assert.is_true(cs.groupOnly)
-            assert.equals(65, cs:GetEngagementDuration())
-
-            deps.playerInCombat = function() return true end
-            cs:OnEnteringWorld()
-            assert.is_true(cs.playerCombat)
-            -- The pin survives the promote, so the fight's own 5 stands alone.
-            assert.equals(5, cs:GetEngagementDuration())
-        end)
-
-        -- A carry needs a fight to carry FROM. Starting an encounter on a frozen
-        -- machine must not fold the last fight's pin into the new engagement.
-        it("does not carry into an encounter started from a frozen machine", function()
-            local cs = newCS()
-            sampling(60)
-            cs:OnRegenDisabled()
-            lastClock(sched).fn()
-            cs:Freeze("combat")
-            assert.equals(60, cs:GetEngagementDuration())
-
-            sampling(7)
-            cs:OnEncounterStart()
-            lastClock(sched).fn()
-            assert.equals(7, cs:GetEngagementDuration())
-        end)
-
-        -- The chat line reports the engagement, so the gate that suppresses it
-        -- has to span the engagement too. A player who fought the trash and was
-        -- unflagged at the boss pull still fought this engagement.
-        it("carries participation across a carrying start and drops it otherwise", function()
-            local cs = newCS()
-            sampling(60)
-            cs:OnRegenDisabled()
-            lastClock(sched).fn()
-            assert.is_true(cs:PlayerJoined())
-
-            deps.playerInCombat = function() return false end
-            cs:OnEncounterStart()
-            assert.is_true(cs.groupOnly)
-            assert.is_true(cs:PlayerJoined())
-
-            -- A fresh engagement re-derives it: this start carries nothing.
-            cs:Freeze("combat")
-            deps.groupInCombat = function() return true end
-            deps.inInstance = function() return true end
-            cs:OnUnitFlags("party1")
-            assert.is_true(cs.groupOnly)
-            assert.is_false(cs:PlayerJoined())
-        end)
-    end)
-
     describe("cases the design's budget lacks", function()
-        it("SetFineCadence on an idle machine starts no ticker", function()
-            local cs = newCS()
-            cs:SetFineCadence("mod", true)
-            assert.equals(0, #sched.tickers)
-        end)
-
         it("a live-to-live start does not broadcast the nil paint", function()
             local cs = newCS()
             local rec = newRecorder()
@@ -1060,6 +725,376 @@ describe("CombatState machine", function()
             cs:OnRegenDisabled()
             assert.equals(1, rec.count("OnStart"))
             assert.equals(1, rec.count("OnClockTick"))
+        end)
+    end)
+
+    describe("the group bound", function()
+        -- A live group hold: the player left combat, alive, outside an
+        -- encounter, with the group still reading in combat.
+        local function liveHold()
+            local cs = newCS()
+            cs:OnRegenDisabled()
+            deps.groupInCombat = function() return true end
+            cs:OnRegenEnabled()
+            return cs
+        end
+
+        -- A watch: the machine is not live and the group reads in combat.
+        local function watchHold()
+            local cs = newCS()
+            deps.groupInCombat = function() return true end
+            cs:OnRegenEnabled()
+            return cs
+        end
+
+        local function tick(n)
+            local poll = lastPoll(sched)
+            for _ = 1, n do poll.fn() end
+        end
+
+        -- A feign while tagged can leave the unit flag set outside lockdown.
+        local function flaggedHold()
+            local cs = liveHold()
+            deps.playerInCombat = function() return true end
+            deps.playerLockdown = function() return false end
+            return cs
+        end
+
+        it("ends a hold after 20 poll ticks with the player alive and out of lockdown outside an encounter, not after 19", function()
+            local cases = {
+                { name = "a live group fight freezes and is not re-watched", setup = liveHold,
+                    held = function(cs) return cs:IsLive() end,
+                    ended = function(cs) return cs:IsFrozen() and not cs.watching end },
+                { name = "a watch ends", setup = watchHold,
+                    held = function(cs) return cs.watching end,
+                    ended = function(cs) return not cs.watching and lastPoll(sched).cancelled end },
+                { name = "the player's unit flag stays set outside lockdown", setup = flaggedHold,
+                    held = function(cs) return cs:IsLive() end,
+                    ended = function(cs) return cs:IsFrozen() and not cs.watching end },
+            }
+            for _, case in ipairs(cases) do
+                deps.playerInCombat = function() return false end
+                local cs = case.setup()
+                tick(19)
+                assert.is_true(case.held(cs), case.name)
+                assert.is_false(cs.groupBlocked, case.name)
+                tick(1)
+                assert.is_true(case.ended(cs), case.name)
+                assert.is_true(cs.groupBlocked, case.name)
+            end
+        end)
+
+        -- A kill freezes at once, and the freeze re-arms a watch while the
+        -- player's own lockdown still lingers.
+        local function killWatch()
+            deps.playerLockdown = function() return true end
+            local cs = newCS()
+            cs:OnRegenDisabled()
+            deps.groupInCombat = function() return true end
+            cs:OnEncounterEnd(1)
+            return cs
+        end
+
+        local function noop() end
+
+        it("restarts the count on a tick with the player dead, in lockdown, the mark set or a non-kill end pending; a clear read ends the hold unblocked", function()
+            local cases = {
+                { name = "the player is dead", setup = liveHold,
+                    set = function() deps.playerDead = function() return true end end,
+                    unset = function() deps.playerDead = function() return false end end,
+                    expectLive = true, expectWatching = false },
+                { name = "the player is in lockdown", setup = liveHold,
+                    set = function() deps.playerLockdown = function() return true end end,
+                    unset = function() deps.playerLockdown = function() return false end end,
+                    expectLive = true, expectWatching = false },
+                { name = "the encounter mark is set", setup = liveHold,
+                    set = function(cs) cs.inEncounter = true end,
+                    unset = function(cs) cs.inEncounter = false end,
+                    expectLive = true, expectWatching = false },
+                { name = "a non-kill end is pending", setup = liveHold,
+                    set = function(cs) cs.finalizePending = true end,
+                    unset = function(cs) cs.finalizePending = false end,
+                    expectLive = true, expectWatching = false },
+                { name = "the group reads clear", setup = liveHold,
+                    set = function() deps.groupInCombat = function() return false end end,
+                    unset = function() deps.groupInCombat = function() return true end end,
+                    expectLive = false, expectWatching = false },
+                { name = "a kill's watch with the lockdown lingering", setup = killWatch,
+                    set = noop, unset = noop,
+                    expectLive = false, expectWatching = true },
+            }
+            for _, case in ipairs(cases) do
+                deps.playerLockdown = function() return false end
+                local cs = case.setup()
+                tick(19)
+                case.set(cs)
+                tick(1)
+                case.unset(cs)
+                tick(19)
+                assert.equals(case.expectLive, cs:IsLive(), case.name)
+                assert.equals(case.expectWatching, cs.watching, case.name)
+                assert.is_false(cs.groupBlocked, case.name)
+            end
+        end)
+
+        it("blocks a GROUP restart after a bound end until a clear read, a player start, an encounter start or a loading screen; a clear read reports OnGroupClear", function()
+            local cases = {
+                { name = "UNIT_FLAGS with the group still in combat",
+                    run = function(cs) cs:OnUnitFlags("raid1") end,
+                    expectBlocked = true, expectLive = false, expectGroupClear = 0 },
+                { name = "GROUP_ROSTER_UPDATE with the group still in combat",
+                    run = function(cs) cs:OnRosterUpdate() end,
+                    expectBlocked = true, expectLive = false, expectGroupClear = 0 },
+                { name = "GROUP_ROSTER_UPDATE reading the group clear",
+                    run = function(cs)
+                        deps.groupInCombat = function() return false end
+                        cs:OnRosterUpdate()
+                    end,
+                    expectBlocked = false, expectLive = false, expectGroupClear = 1 },
+                { name = "UNIT_FLAGS reading the group clear",
+                    run = function(cs)
+                        deps.groupInCombat = function() return false end
+                        cs:OnUnitFlags("raid1")
+                    end,
+                    expectBlocked = false, expectLive = false, expectGroupClear = 1 },
+                { name = "UNIT_FLAGS reading the group clear outside an instance",
+                    run = function(cs)
+                        deps.inInstance = function() return false end
+                        deps.groupInCombat = function() return false end
+                        cs:OnUnitFlags("party1")
+                    end,
+                    expectBlocked = false, expectLive = false, expectGroupClear = 1 },
+                { name = "the player's own UNIT_FLAGS reading the group clear",
+                    run = function(cs)
+                        deps.groupInCombat = function() return false end
+                        cs:OnUnitFlags("player")
+                    end,
+                    expectBlocked = false, expectLive = false, expectGroupClear = 1 },
+                { name = "the player's own UNIT_FLAGS with no block starts nothing",
+                    run = function(cs)
+                        cs.groupBlocked = false
+                        cs:OnUnitFlags("player")
+                    end,
+                    expectBlocked = false, expectLive = false, expectGroupClear = 0 },
+                { name = "PLAYER_REGEN_DISABLED",
+                    run = function(cs) cs:OnRegenDisabled() end,
+                    expectBlocked = false, expectLive = true, expectGroupClear = 0 },
+                { name = "ENCOUNTER_START",
+                    run = function(cs) cs:OnEncounterStart() end,
+                    expectBlocked = false, expectLive = true, expectGroupClear = 0 },
+                { name = "PLAYER_ENTERING_WORLD",
+                    run = function(cs) cs:OnEnteringWorld() end,
+                    expectBlocked = false, expectLive = true, expectGroupClear = 0 },
+            }
+            for _, case in ipairs(cases) do
+                deps.inInstance = function() return true end
+                local cs = liveHold()
+                tick(20)
+                assert.is_true(cs.groupBlocked, case.name)
+                local rec = newRecorder()
+                cs:RegisterListener("spec", rec.callbacks)
+                case.run(cs)
+                assert.equals(case.expectBlocked, cs.groupBlocked, case.name)
+                assert.equals(case.expectLive, cs:IsLive(), case.name)
+                assert.equals(case.expectGroupClear, rec.count("OnGroupClear"), case.name)
+            end
+        end)
+
+        it("clears an encounter mark the game no longer reports, then applies the bound", function()
+            local cs = newCS()
+            cs:OnEncounterStart()
+            deps.groupInCombat = function() return true end
+            deps.encounterLive = function() return false end
+            tick(1)
+            assert.is_false(cs.inEncounter)
+            tick(18)
+            assert.is_true(cs:IsLive())
+            tick(1)
+            assert.is_true(cs:IsFrozen())
+        end)
+    end)
+
+    describe("the event gate", function()
+        -- No listener seeded: these cases are about the first and the last one.
+        local function bareCS()
+            return KE.CombatState.New(deps)
+        end
+
+        it("the first listener turns the events on and starts the fight the game reports, with no OnStart or paint to it", function()
+            local cases = {
+                { name = "the player in combat", player = true, group = false,
+                    expectLive = true, expectGroupOnly = false },
+                { name = "only the group in combat, inside an instance", player = false, group = true,
+                    expectLive = true, expectGroupOnly = true },
+                { name = "nothing in combat", player = false, group = false,
+                    expectLive = false, expectGroupOnly = false },
+            }
+            for _, case in ipairs(cases) do
+                events = {}
+                sched.tickers = {}
+                deps.playerInCombat = function() return case.player end
+                deps.groupInCombat = function() return case.group end
+                deps.inInstance = function() return true end
+                local cs = bareCS()
+                assert.same({}, events, case.name)
+                assert.equals(0, #sched.tickers, case.name)
+                local rec = newRecorder()
+                cs:RegisterListener("spec", rec.callbacks)
+                assert.same({ true }, events, case.name)
+                assert.equals(case.expectLive, cs:IsLive(), case.name)
+                assert.equals(case.expectGroupOnly, cs.groupOnly, case.name)
+                assert.equals(case.expectLive, lastClock(sched) ~= nil, case.name)
+                assert.equals(0, rec.count("OnStart"), case.name)
+                assert.equals(0, rec.count("OnClockTick"), case.name)
+            end
+        end)
+
+        it("a later registration, a second key or the same key again, derives nothing and leaves the events alone", function()
+            for _, key in ipairs({ "spec", "other" }) do
+                events = {}
+                deps.playerInCombat = function() return true end
+                local cs = bareCS()
+                cs:RegisterListener("spec", {})
+                local gen, tickers = cs:Generation(), #sched.tickers
+                local rec = newRecorder()
+                cs:RegisterListener(key, rec.callbacks)
+                assert.same({ true }, events, key)
+                assert.equals(gen, cs:Generation(), key)
+                assert.equals(tickers, #sched.tickers, key)
+            end
+        end)
+
+        it("the last listener out turns the events off and drops to idle with no broadcast; one out of two changes nothing", function()
+            local cases = {
+                { name = "a group fight in an encounter",
+                    setup = function(cs) cs:OnEncounterStart() end,
+                    held = function(cs) return cs:IsLive() end },
+                { name = "a bound end's block",
+                    setup = function(cs)
+                        deps.groupInCombat = function() return true end
+                        cs:OnRegenDisabled()
+                        cs:OnRegenEnabled()
+                        local poll = lastPoll(sched)
+                        for _ = 1, 20 do poll.fn() end
+                    end,
+                    held = function(cs) return cs.groupBlocked end },
+            }
+            for _, case in ipairs(cases) do
+                events = {}
+                deps.groupInCombat = function() return false end
+                -- No boss up: a seeded mark would hold the bound row open.
+                deps.encounterLive = function() return false end
+                local cs = bareCS()
+                local rec = newRecorder()
+                cs:RegisterListener("spec", rec.callbacks)
+                cs:RegisterListener("other", {})
+                case.setup(cs)
+                cs:UnregisterListener("other")
+                assert.same({ true }, events, case.name)
+                assert.is_true(case.held(cs), case.name)
+                local stops = rec.count("OnStop")
+                cs:UnregisterListener("spec")
+                assert.same({ true, false }, events, case.name)
+                for _, h in ipairs(sched.tickers) do
+                    assert.is_true(h.cancelled, case.name)
+                end
+                assert.is_false(cs:IsLive(), case.name)
+                assert.is_false(cs:IsFrozen(), case.name)
+                assert.is_false(cs.watching, case.name)
+                assert.is_false(cs.inEncounter, case.name)
+                assert.is_false(cs.groupBlocked, case.name)
+                assert.equals(stops, rec.count("OnStop"), case.name)
+            end
+        end)
+
+        it("the first listener seeds the encounter mark from the game, so a group fight joined mid-boss is not bounded", function()
+            local cases = {
+                { name = "an encounter in progress", live = true, expectMark = true, expectLive = true },
+                { name = "no encounter in progress", live = false, expectMark = false, expectLive = false },
+            }
+            for _, case in ipairs(cases) do
+                deps.groupInCombat = function() return true end
+                deps.inInstance = function() return true end
+                deps.encounterLive = function() return case.live end
+                local cs = bareCS()
+                cs:RegisterListener("spec", {})
+                assert.equals(case.expectMark, cs.inEncounter, case.name)
+                local poll = lastPoll(sched)
+                for _ = 1, 20 do poll.fn() end
+                assert.equals(case.expectLive, cs:IsLive(), case.name)
+            end
+        end)
+
+        it("a freeze whose OnStop removes the last listener does not re-arm the watch", function()
+            local cs = bareCS()
+            cs:RegisterListener("spec", { OnStop = function() cs:UnregisterListener("spec") end })
+            cs:OnRegenDisabled()
+            deps.groupInCombat = function() return true end
+            cs:OnEncounterEnd(1)
+            assert.same({ true, false }, events)
+            assert.is_nil(lastPoll(sched))
+            assert.is_false(cs.watching)
+        end)
+    end)
+
+    describe("the player's own combat is the lockdown", function()
+        it("a unit flag set without lockdown starts no PLAYER fight at any site that picks one; the lockdown still does", function()
+            local sites = {
+                { name = "the first listener's derive", bound = true, run = function()
+                    local cs = KE.CombatState.New(deps)
+                    cs:RegisterListener("spec", {})
+                    return cs
+                end },
+                { name = "a loading screen on an idle machine", run = function()
+                    local cs = newCS()
+                    cs:OnEnteringWorld()
+                    return cs
+                end },
+                { name = "a loading screen on a live group fight", run = function()
+                    local lockdown = deps.playerLockdown
+                    deps.playerLockdown = function() return false end
+                    local cs = newCS()
+                    cs:OnEncounterStart()
+                    deps.playerLockdown = lockdown
+                    cs:OnEnteringWorld()
+                    return cs
+                end },
+                { name = "ENCOUNTER_START", run = function()
+                    local cs = newCS()
+                    cs:OnEncounterStart()
+                    return cs
+                end },
+                { name = "a non-kill end's deferred check", run = function()
+                    local cs = newCS()
+                    cs:OnRegenDisabled()
+                    cs:OnEncounterEnd(nil)
+                    lastAfter(sched).fn()
+                    return cs
+                end },
+            }
+            for _, site in ipairs(sites) do
+                for _, lockdown in ipairs({ false, true }) do
+                    local name = site.name .. (lockdown and ", in lockdown" or ", the flag alone")
+                    sched.tickers, sched.afters = {}, {}
+                    -- The flag is set in every row, and the group scan reads it first.
+                    deps.playerInCombat = function() return true end
+                    deps.groupInCombat = function() return true end
+                    deps.inInstance = function() return true end
+                    deps.encounterLive = function() return false end
+                    deps.playerLockdown = function() return lockdown end
+                    local cs = site.run()
+                    assert.equals(lockdown, cs.playerCombat, name)
+                    assert.equals(not lockdown, cs.groupOnly, name)
+                    if not lockdown then
+                        local poll = lastPoll(sched)
+                        assert.is_true(poll ~= nil and not poll.cancelled, name)
+                        if site.bound then
+                            for _ = 1, 20 do poll.fn() end
+                            assert.is_false(cs:IsLive(), name)
+                        end
+                    end
+                end
+            end
         end)
     end)
 end)
