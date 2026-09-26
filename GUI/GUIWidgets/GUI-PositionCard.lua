@@ -405,6 +405,7 @@ local function CreatePositionCardKit(holder)
     -- AnchorButtonWidgets as card-level fields used by WidgetStateManager.
     card.positionWidgets = kit.allWidgets
     card.AnchorButtonWidgets = kit.anchorButtonWidgets
+    card.strataWidget = strataOnlyDropdown
 
     function card:SetPositionWidgetsEnabled(enabled) self:SetEnabled(enabled) end
     function card:SetAnchorsOnlyEnabled(enabled)
@@ -496,6 +497,10 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     if kit.anchorPointWidget and kit.anchorPointWidget.label then
         kit.anchorPointWidget.label:SetText(anchorPointLabel)
     end
+
+    -- The kit is pooled across pages: without this, a card one page greyed
+    -- comes back greyed on a page that has no grey-out of its own.
+    card:SetEnabled(true)
 
     -- Set widget values. CreateDropdown.SetValue accepts (val, silent),
     -- CreateSlider.SetValue accepts (val, silent), CreateCheckbox.toggle
