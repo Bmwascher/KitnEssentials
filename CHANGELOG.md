@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.34
+
+### Inspect Panel
+
+- An enchant name or item track label that is not ready on the first read is
+  retried, so it fills in instead of staying blank
+- Inspecting does less work: slots that never show gems are skipped, and
+  bursts of inspect events are handled in one pass
+
+---
+
 ## v4.7.33
 
 ### Tooltips
