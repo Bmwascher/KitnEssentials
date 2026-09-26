@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.37
+
+### Combat Timer
+
+- Follows your own combat and always stops when you leave it
+
+### Damage Meter
+
+- The group-fight hold ends 5 seconds after you are alive and idle outside
+  an encounter
+- The shared combat tracker runs only while a module uses it
+
+---
+
 ## v4.7.36
 
 ### Settings
