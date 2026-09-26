@@ -1560,17 +1560,44 @@ local function RenderTipTargets(self, bar, cfg, sessionID, topY, stride, barH)
     return TIP_TGT_GAP + 1 + TIP_TGT_LABEL_H + shownTargets * stride
 end
 
--- Tip title: the last plain name RenderBar cached, else the identity memo
--- (History.lua PlainNameFor, keyed on the bar's GUID) — restores the name for
--- sources frozen with a secret name (member left the group before the
--- snapshot capture). Always returns a PLAIN string: the tip measures text
--- widths for layout, so a secret must never reach this FontString.
-local function TipHeaderName(self, bar)
+-- Tip title name: the last plain name RenderBar cached, else the identity memo
+-- (History.lua PlainNameFor) by the bar's GUID, which restores a source frozen
+-- with a secret name, else the memo by the GUID the roster matcher resolved.
+-- Plain or nil: a secret name reaches the header only by SetTipHeader's
+-- passthrough.
+local function TipHeaderName(self, bar, resolvedGUID)
     local nm = bar._cachedName
     if not nm and self.PlainNameFor then
         nm = self:PlainNameFor(bar._sourceGUID)
+        if not nm and resolvedGUID then
+            nm = self:PlainNameFor(resolvedGUID)
+        end
     end
-    return nm or "Breakdown"
+    return nm
+end
+
+-- "<name> <view label>". With no plain name, the bar's own name text is passed
+-- through: SetFormattedText accepts a secret argument, and the text is never
+-- compared or measured here. No name at all leaves the label alone.
+local function SetTipHeader(self, bar, label, resolvedGUID, face, size, outline)
+    local nm = TipHeaderName(self, bar, resolvedGUID)
+    if nm then
+        _tip.header:SetFormattedText("%s %s", nm, label)
+    else
+        local shown = bar.row and bar.row.name and bar.row.name:GetText()
+        if issecretvalue(shown) or (type(shown) == "string" and shown ~= "") then
+            _tip.header:SetFormattedText("%s %s", shown, label)
+        else
+            _tip.header:SetText(label)
+        end
+    end
+    -- Class-tint the title (bar._classFilename is NeverSecret). White fallback for
+    -- an unknown/enemy class so the centered title is always legible.
+    local chc = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
+    if chc then _tip.header:SetTextColor(chc.r, chc.g, chc.b) else _tip.header:SetTextColor(1, 1, 1) end
+    -- Re-apply the live font: a hover before the first ReapplyBarVisuals still
+    -- wants current fonts.
+    KE:ApplyFontToText(_tip.header, face, size, outline)
 end
 
 -- Put the tip into a MESSAGE state and size it for the message alone. Three
@@ -1580,22 +1607,16 @@ end
 -- behind. One of them used to only raise the message, so a tip already carrying
 -- rows, column headers and a Targets block kept all of it under a three-line frame.
 --
--- Everything a data render can turn on is turned off here. The header is re-set
--- from the hovered bar because the tip is a shared singleton: without it the
--- message would carry the previous bar's name.
+-- Everything a data render can turn on is turned off here. PopulateHoverTip set
+-- the header before any branch.
 --
 -- msg defaults to the in-combat refusal, which is what two of the three callers want.
-local function ShowTipRefusal(self, bar, headerH, size, msg)
+local function ShowTipRefusal(headerH, size, msg)
     for i = 1, HOVER_TIP_ROWS do _tip.rows[i].row:Hide() end
     if _tip.colHdr then
         _tip.colHdr.spell:Hide(); _tip.colHdr.amount:Hide(); _tip.colHdr.dps:Hide(); _tip.colHdr.pct:Hide()
     end
     HideTipTargets()
-    _tip.header:SetText(TipHeaderName(self, bar))
-    -- Class-tint the title (bar._classFilename is NeverSecret). White fallback for
-    -- an unknown/enemy class so the centered title is always legible.
-    local chc = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
-    if chc then _tip.header:SetTextColor(chc.r, chc.g, chc.b) else _tip.header:SetTextColor(1, 1, 1) end
     _tip.msg:SetText(msg or REFUSAL_MSG)
     _tip.msg:Show()
     -- header + the two-line gray message; generous fixed height (no row math).
@@ -1641,12 +1662,15 @@ function DM:PopulateHoverTip(W, bar, isInitial)
             self:IsLiveOverall(W, cfg))
     end
 
+    -- Set before any branch so every message path carries it too: the tip is a
+    -- shared singleton and would otherwise keep the previous bar's title.
+    SetTipHeader(self, bar, self:FormatWindowLabel(meterType, cfg.SessionType), tipResolvedGUID,
+        face, size, outline)
+
     -- REFUSED: another player's row in combat, or a view whose renderer cannot
-    -- survive secret values. bar._cachedName is the last PLAIN (non-secret) name
-    -- RenderBar set (nil while the name was secret) -- safe to display, never a
-    -- secret string.
+    -- survive secret values.
     if not self:DetailEligible(bar._isLocalPlayer, meterType, tipResolvedGUID) then
-        return ShowTipRefusal(self, bar, headerH, size)
+        return ShowTipRefusal(headerH, size)
     end
     _tip.msg:Hide()
 
@@ -1656,7 +1680,6 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     local barH = math_max(8, (W._snapHeight or 16) - 2)
     local stride = barH + (W._snapSpacing or 2)
     local shown = 0
-    local headerText = TipHeaderName(self, bar)
 
     -- The column-header row (Spell · Amount · DPS · %) is shown only for the
     -- breakdown path; the Deaths recap keeps its single value column. bodyTop pushes the
@@ -1697,7 +1720,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
             -- hover left behind have to be cleared the same way every other message
             -- path clears them.
             if sinkMax == DM.RECAP_UNREADABLE then
-                return ShowTipRefusal(self, bar, headerH, size, RECAP_UNREADABLE_MSG)
+                return ShowTipRefusal(headerH, size, RECAP_UNREADABLE_MSG)
             end
             return false
         end
@@ -1856,7 +1879,7 @@ function DM:PopulateHoverTip(W, bar, isInitial)
         -- A refused fetch is not an empty one: show the refusal rather than an
         -- empty tip, matching the click path.
         if refused then
-            return ShowTipRefusal(self, bar, headerH, size)
+            return ShowTipRefusal(headerH, size)
         end
         -- List + fill max together (parity with the click-inline breakdown, and
         -- the same function so the two can never diverge). See SelectSpellList.
@@ -1866,13 +1889,17 @@ function DM:PopulateHoverTip(W, bar, isInitial)
         -- Breakdown path: show the column-header row and push the data rows down past it.
         -- Reserve scales with the now-larger (size-1) white headers so big fonts can't overlap row 1.
         bodyTop = math_max(TIP_COL_HDR_H, (size or 12) + 2)
-        -- Count-type views (Interrupts / Dispels / Absorbs -- absent from RATE_METER_TYPES)
-        -- have no meaningful per-second: drop the DPS column entirely (parity with the main
-        -- bars, which drop the rate half of the value string). The Amount column slides
-        -- right into the vacated DPS slot so the two remaining columns stay packed and the
-        -- spell name gains the width.
+        -- Fill max came from SelectSpellList with the list; percent basis stays
+        -- the source's whole total, and is unavailable while it is secret.
+        local canPercent = src.totalAmount and canaccessvalue(src.totalAmount) and type(src.totalAmount) == "number"
+        -- The shown columns take the right-edge slots in order, so a dropped column
+        -- closes up and the spell name gains the width. % shows only while the
+        -- total can be read (in combat the own row's total is secret); DPS only on
+        -- rate types, since a rate on a count (Interrupts / Dispels) is noise.
         local isRate = (self.RATE_METER_TYPES and self.RATE_METER_TYPES[meterType]) == true
-        local amtX = isRate and TIP_AMT_X or TIP_DPS_X
+        local dpsX = canPercent and TIP_DPS_X or TIP_PCT_X
+        local amtX = dpsX
+        if isRate then amtX = canPercent and TIP_AMT_X or TIP_DPS_X end
         if _tip.colHdr then
             local hdrY = -(headerH)
             _tip.colHdr.spell:ClearAllPoints()
@@ -1883,18 +1910,16 @@ function DM:PopulateHoverTip(W, bar, isInitial)
             -- build-time TOPRIGHT) so it stays bounded by the Amount column's left edge.
             _tip.colHdr.spell:SetPoint("TOPRIGHT", _tip.colHdr.amount, "TOPLEFT", -3, 0)
             _tip.colHdr.dps:ClearAllPoints()
-            _tip.colHdr.dps:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_DPS_X, hdrY)
+            _tip.colHdr.dps:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", dpsX, hdrY)
             _tip.colHdr.pct:ClearAllPoints()
             _tip.colHdr.pct:SetPoint("TOPRIGHT", _tip, "TOPRIGHT", TIP_PCT_X, hdrY)
             -- Reset the Spell label (the EnemyDamageTaken branch retitles it "Player").
             _tip.colHdr.spell:SetText("Spell")
-            _tip.colHdr.spell:Show(); _tip.colHdr.amount:Show(); _tip.colHdr.pct:Show()
+            _tip.colHdr.spell:Show(); _tip.colHdr.amount:Show()
             if isRate then _tip.colHdr.dps:Show() else _tip.colHdr.dps:Hide() end
+            if canPercent then _tip.colHdr.pct:Show() else _tip.colHdr.pct:Hide() end
         end
 
-        -- Fill max came from SelectSpellList with the list; percent basis stays
-        -- the source's whole total, and is unavailable while it is secret.
-        local canPercent = src.totalAmount and canaccessvalue(src.totalAmount) and type(src.totalAmount) == "number"
         local total = src.totalAmount
         if not canaccessvalue(total) or type(total) ~= "number" then total = 0 end
         local count = math_min(#spells, HOVER_TIP_ROWS)
@@ -1930,13 +1955,12 @@ function DM:PopulateHoverTip(W, bar, isInitial)
 
                 -- Per-path column anchors. The row pool is shared with the recap branch,
                 -- which re-anchors row.value to the full right edge (-TIP_PAD); re-pin the
-                -- numeric columns to their fixed offsets here so a breakdown render after
-                -- a recap render restores the aligned-column layout. Amount sits at amtX:
-                -- the usual slot on rate types, the DPS slot on count types (DPS dropped).
+                -- numeric columns here so a breakdown render after a recap render
+                -- restores the aligned-column layout. The slots match the column header.
                 row.value:ClearAllPoints()
                 row.value:SetPoint("RIGHT", row.fill, "RIGHT", amtX, 0)
                 row.dps:ClearAllPoints()
-                row.dps:SetPoint("RIGHT", row.fill, "RIGHT", TIP_DPS_X, 0)
+                row.dps:SetPoint("RIGHT", row.fill, "RIGHT", dpsX, 0)
                 row.pct:ClearAllPoints()
                 row.pct:SetPoint("RIGHT", row.fill, "RIGHT", TIP_PCT_X, 0)
 
@@ -2020,13 +2044,6 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     end
 
     if shown == 0 then HideTipTargets(); return false end
-    _tip.header:SetText(headerText)
-    -- Class-tint the centered title from the NeverSecret class filename (white fallback).
-    local hdrClass = bar._classFilename and RAID_CLASS_COLORS[bar._classFilename]
-    if hdrClass then _tip.header:SetTextColor(hdrClass.r, hdrClass.g, hdrClass.b) else _tip.header:SetTextColor(1, 1, 1) end
-    -- Re-apply the live font in case a GUI change happened (ReapplyBarVisuals also
-    -- handles this, but a hover before the first reapply still wants current fonts).
-    KE:ApplyFontToText(_tip.header, face, size, outline)
     -- bodyTop reserves the column-header band (breakdown path; 0 for the recap path);
     -- tgtExtraH reserves the Targets sub-section (DamageDone breakdown only, else 0).
     _tip:SetHeight(headerH + bodyTop + TIP_PAD + shown * stride + tgtExtraH)

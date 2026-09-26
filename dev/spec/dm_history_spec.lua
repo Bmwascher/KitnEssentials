@@ -638,6 +638,22 @@ describe("OnChallengeEvent wiring", function()
         assert.same({ "capture" }, calls)
         assert.is_nil(DM._historyOwnReset)
     end)
+
+    it("key start right after this module's own wipe only arms the label", function()
+        -- Nothing has arrived since that wipe, so a second one would only
+        -- capture an empty store.
+        DM.db = { ResetOnKeyStart = true, HistoryRetain = 5 }
+        DM._wipeBoundary = true
+        DM:OnChallengeEvent("CHALLENGE_MODE_START")
+        assert.same({ "arm" }, calls)
+    end)
+
+    it("a failed wipe leaves no wipe boundary for a later key start to trust", function()
+        DM._wipeBoundary = true
+        _G.C_DamageMeter = { ResetAllCombatSessions = function() error("boom") end }
+        DM:CaptureAndWipe()
+        assert.is_false(DM._wipeBoundary)
+    end)
 end)
 
 describe("OnDisable provenance", function()

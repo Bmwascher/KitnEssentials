@@ -350,3 +350,37 @@ describe("Recording Overall's rows", function()
         assert.is_true(leaverClass.MAGE)
     end)
 end)
+
+describe("GroupGUIDSet leaves the player out", function()
+    -- A two-member raid whose first raid token is the player.
+    local function loadRaid(playerGUID)
+        return L.loadDMCore({
+            IsInRaid = function() return true end,
+            IsInGroup = function() return true end,
+            GetNumGroupMembers = function() return 2 end,
+            UnitExists = function(u) return u == "raid1" or u == "raid2" end,
+            UnitGUID = function(u)
+                if u == "player" then return playerGUID end
+                return ({ raid1 = "guid-player", raid2 = "guid-2" })[u]
+            end,
+            UnitClass = function(u) return "Localized", ({ raid1 = "PRIEST", raid2 = "MAGE" })[u] end,
+        })
+    end
+
+    it("drops the player's GUID from a raid's set and classes", function()
+        -- Raid tokens include the player. Recorded, the player's class would be
+        -- marked a leaver when the raid becomes a party.
+        local classes = {}
+        local set = loadRaid("guid-player"):GroupGUIDSet(classes)
+        assert.is_nil(set["guid-player"])
+        assert.is_nil(classes["guid-player"])
+        assert.is_true(set["guid-2"])
+        assert.equals("MAGE", classes["guid-2"])
+    end)
+
+    it("returns nil when the player's GUID cannot be read", function()
+        -- Unknown, as for an unreadable member: the walk cannot tell the player
+        -- from anyone else.
+        assert.is_nil(loadRaid(nil):GroupGUIDSet({}))
+    end)
+end)

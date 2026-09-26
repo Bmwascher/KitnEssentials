@@ -350,6 +350,7 @@ read_globals = {
 
     -- Mythic+ / Challenges
     "C_ChallengeMode", "C_MythicPlus", "C_ScenarioInfo", "C_Scenario", "C_LFGList",
+    "C_DelvesUI",
 
     -- PvP
     "C_PvP",
