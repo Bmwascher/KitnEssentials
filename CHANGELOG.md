@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.41
+
+### Damage Meter
+
+- Reset on Instance Entry reads the dungeon's real difficulty, so Auto and
+  Ask fire on entry, and starting a keystone never counts as a new entry
+
+### Pet Status Text
+
+- Demonology no longer shows WRONG PET in the open world
+
+### Profile Manager
+
+- Switching, renaming or importing a profile rebuilds the settings page once
+
+### Time Spiral
+
+- The sound option is labelled Buff Sound and its note names the buff
+
+---
+
 ## v4.7.40
 
 ### Combat Timer
