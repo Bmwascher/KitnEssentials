@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.26
+
+### Loot Roll
+
+- The bonus roll prompt sits above the highest shown roll bar and moves when
+  a bar shows or hides, including a prompt that is already up
+
+### Raid Notifications
+
+- The LOOT BOSS cat heads are cropped to their art and fill their space, so
+  they draw larger
+
+---
+
 ## v4.7.25
 
 ### Settings
