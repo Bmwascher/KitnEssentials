@@ -87,7 +87,7 @@ end
 
 -- The name lookup answers the common case in one call. Only a hit in the other
 -- range means a same-named macro may still sit in ours, and only that pays for
--- a scan, bounded by the range's macro count and run only when writing.
+-- a scan, bounded by the range's macro count.
 local function FindMacroInRange(name, characterRange)
     local first = characterRange and MAX_ACCOUNT_MACROS + 1 or 1
     local capacity = characterRange and MAX_CHARACTER_MACROS or MAX_ACCOUNT_MACROS
