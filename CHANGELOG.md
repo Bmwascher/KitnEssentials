@@ -1,281 +1,6 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
-## v4.7.42
-
-### Time Spiral
-
-- **NEW:** a "Time Spiral" voice callout, in every sound dropdown
-- Buff Sound is on by default and plays the "Time Spiral" callout
-
----
-
-## v4.7.41
-
-### Damage Meter
-
-- Reset on Instance Entry reads the dungeon's real difficulty, so Auto and
-  Ask fire on entry, and starting a keystone never counts as a new entry
-
-### Pet Status Text
-
-- Demonology no longer shows WRONG PET in the open world
-
-### Profile Manager
-
-- Switching, renaming or importing a profile rebuilds the settings page once
-
-### Time Spiral
-
-- The sound option is labelled Buff Sound and its note names the buff
-
----
-
-## v4.7.40
-
-### Combat Timer
-
-- Keeps its boss hold after a /reload or a loading screen mid-encounter
-
-### Damage Meter
-
-- An ally row on a pinned window is refused in combat instead of opening a
-  breakdown that may be wrong
-
-### Fixes
-
-- Great Vault Alert and Stasis Tracker no longer error on a cast unit the
-  game hides
-
----
-
-## v4.7.39
-
-### Chat
-
-- A boss line with a stray percent sign no longer errors
-
-### Inspect Panel
-
-- Retries and the missing-enchant marker behave correctly with enchant names
-  off and after a settings change
-
-### Settings
-
-- A value typed into a slider's box is saved straight away
-
----
-
-## v4.7.38
-
-### Loot Roll
-
-- The bonus roll prompt keeps its spacing above the tallest roll bar content
-  at any size
-
-### Damage Meter
-
-- The Reset on Instance Entry prompt waits for another open prompt instead
-  of replacing it
-
-### Pet Status Text
-
-- Demonology expects the Felhunter in a running key and accepts either pet
-  in a Mythic dungeon before the key starts
-
-### Chat
-
-- A boss emote in another language keeps its text
-
-### Tooltips
-
-- A player with no class colour keeps the default name colour
-
-### Settings
-
-- Sliders keep the last value of a fast drag
-
-### Fixes
-
-- Kick Tracker and Disintegrate Ticks no longer error on values the game
-  hides
-
----
-
-## v4.7.37
-
-### Combat Timer
-
-- Follows your own combat and always stops when you leave it
-
-### Damage Meter
-
-- The group-fight hold ends 5 seconds after you are alive and idle outside
-  an encounter
-- The shared combat tracker runs only while a module uses it
-
----
-
-## v4.7.36
-
-### Settings
-
-- Picking a class on a per-specialization card or in No Movement Alert
-  redraws only that card instead of the whole page
-- The No Movement Alert page no longer rebuilds on every spell tick
-
----
-
-## v4.7.35
-
-### Enemy Counter
-
-- **NEW:** switch it off per specialization
-
-### LFG Reminder
-
-- The popup shows the role you were accepted as
-
-### Time Spiral
-
-- **NEW:** an optional sound when you receive the Time Spiral buff
-- No longer errors on a spell ID the game hides
-
----
-
-## v4.7.34
-
-### Inspect Panel
-
-- An enchant name or item track label that is not ready on the first read is
-  retried, so it fills in instead of staying blank
-- Inspecting does less work: slots that never show gems are skipped, and
-  bursts of inspect events are handled in one pass
-
----
-
-## v4.7.33
-
-### Tooltips
-
-- **NEW:** cursor offset sliders
-- The settings page is regrouped
-- An NPC whose name the game hides gets its reaction colour
-
----
-
-## v4.7.32
-
-### Chat
-
-- Chat Copy stays readable when a line holds control characters or broken
-  text
-- Boss and monster lines the game hides from addons show in chat instead of
-  being dropped
-
----
-
-## v4.7.31
-
-### Damage Meter
-
-- **NEW:** Reset on Instance Entry, off by default, in Auto or Ask mode
-- **NEW:** Reset on Logout, off by default, applied at your next login
-- The breakdown tooltip header names the meter type, and the in-combat
-  breakdown closes up its empty percent column
-- Windows whose meter type saw no update are no longer repainted
-- The Deaths window updates when a feign-death tag changes
-
----
-
-## v4.7.30
-
-### Damage Meter
-
-- Death times in combat show as minutes and seconds
-- An ally's breakdown opens in combat when their spec is the only one of its
-  kind in their class; otherwise it is refused rather than shown wrong
-
----
-
-## v4.7.29
-
-### Optimize
-
-- The Stacking Nameplates row no longer reports a false difference
-- The nameplate overlap values show as plain numbers
-
----
-
-## v4.7.28
-
-### Disintegrate Ticks
-
-- **NEW:** Highlight Last Tick, with its own colour
-- No longer errors on a spell ID the game hides
-
----
-
-## v4.7.27
-
-### Performance
-
-- Disintegrate Ticks, Stasis Tracker, Kick Tracker and the Damage Meter's
-  feign-death check receive only your own casts, so they do less work in
-  groups
-
-### Fixes
-
-- Great Vault Alert, the deaths tooltip and World Marker Cycler no longer
-  error when the game hides a value from addons
-- World Marker Cycler catches up on markers placed during chat lockdown once
-  it lifts
-
----
-
-## v4.7.26
-
-### Loot Roll
-
-- The bonus roll prompt sits above the highest shown roll bar and moves when
-  a bar shows or hides, including a prompt that is already up
-
-### Raid Notifications
-
-- The LOOT BOSS cat heads are cropped to their art and fill their space, so
-  they draw larger
-
----
-
-## v4.7.25
-
-### Settings
-
-- Pressing Enter in the first box of a two-field dialog accepts both fields
-- Switching profiles no longer rebuilds the Profiles page a second time
-
-### Taint Report
-
-- The report finds BugGrabber when it is installed as !BugGrabber
-
-### BugSack
-
-- The skinned tabs sit below the window in BugSack's own order, their border
-  meeting the window
-
----
-
-## v4.7.24
-
-### Sounds
-
-- Most voice callouts are re-recorded in one voice, so a pull's callouts
-  sound alike and start at the same moment
-- "Dispell" is now "Dispel". If you picked it by hand in a sound dropdown,
-  pick "Dispel" again
-
----
-
-## v4.7.23
+## v4.8.0
 
 ### Profile Manager
 
@@ -283,50 +8,186 @@
   the active profile, create, copy, rename and global mode; Sharing holds
   export and import; Reset holds delete and reset to defaults, in red
 - **NEW:** deleting or resetting a profile asks you to type its name first
+- **Changed:** profile strings are now written with the game's own encoder
+  and start with `!KE2!`. Strings exported before this version no longer
+  import; the import dialog says so and asks for a fresh export
+- Nickname strings use the same encoder
 - Importing a string switches to the new profile straight away; a string
-  from an older version opens an Import Failed dialog with a Try Again button
+  from an older version opens an Import Failed dialog with a Try Again
+  button
 - The import dialog fills the profile name from the pasted string unless you
   typed one, and the status line colours the active profile, global mode and
   the profile count
+- Switching, renaming or importing a profile rebuilds the settings page once
 - The sidebar search finds the page by rename, delete, global and sharing
+- Settings left behind by modules removed in earlier versions are cleared
+  from every saved profile on the next login, so exported profiles carry
+  only live settings. Nothing you use changes; a profile created or reset
+  from now on opens Raid Notifications at its own defaults
+- Two bundled libraries the old strings needed are gone
 
-### Settings
+### Ready Check Consumables
 
-- Every button in the settings window and its dialogs sits on a darker plate,
-  so it stands out from the card behind it
+- **NEW:** a timer bar under the ready check popup counts the check down; on
+  by default, with a toggle on the settings page
+- **NEW:** Warn when a buff runs low: a food, flask, rune or weapon enchant
+  with less time left than your threshold turns its timer red and glows. On
+  by default; the threshold slider is on the settings page
+- **NEW:** Shaman weapon imbues and shields, and Paladin Lightsmith rites,
+  are checked alongside the other consumables. On by default. A Shaman's
+  weapon slots show the imbue that belongs on that hand; the click still
+  casts the shield that applies them
+- Icons show the actual item or spell you have, and hovering an icon shows
+  its tooltip (togglable)
+- The Warlock Soulstone slot tells three states apart: someone is confirmed
+  protected, the stone is on cooldown so someone probably is, and nobody is
+  (click to cast). In a raid, a stone you put on yourself no longer aims the
+  next click back at you instead of the healer
+- A Warlock carrying both Healthstones sees the Demonic one's tooltip
+- Clicking the flask or weapon enchant icon uses the item the icon shows,
+  with ties between equal flasks settled the same way every time. Main hand
+  and off hand remember their last enchant separately, and a remembered item
+  you no longer carry falls back to a compatible one you do
+- The flask stat each specialization prefers is updated across every class,
+  so the flask a click offers when you carry several matches current stat
+  priorities
+- Counts and icons refresh when your bags, cooldowns, group or
+  specialization change while a check is open, and a burst of changes
+  repaints the row once instead of once per change. Categories you have
+  hidden do no work at all
+- Weapon enchant detection reads the current game data directly, so oils and
+  imbues show correctly again, and characters carrying more than forty buffs
+  no longer have their food, flask or rune missed
+- When you start the check yourself the row sits above the ready check popup
+  and takes clicks
+- The row and the popup close together the moment the countdown reaches
+  zero. A player who never answered no longer gets the "you were away" chat
+  line
+- The first click of a session works even before the game has loaded the
+  item's data
+- Icons no longer stay dead after combat ends in the middle of a ready
+  check; the row hides and rebuilds cleanly on every path, and the preview
+  box in the settings panel is its own frame, separate from the live row
+- The settings page is regrouped: sizing, then the low-buff warning and the
+  flask and rune filters, then the popup behaviour, with shorter labels. The
+  Warlock requirement moved from a note to the Healthstone toggle's tooltip,
+  and the three text colours sit in one row with a note that no longer cuts
+  off
 
----
+### Conflicts
 
-## v4.7.22
+- **NEW:** Northern Sky Raid Tools' own consumables bar can be switched off
+  from KitnEssentials so only one bar shows at a ready check. While both
+  bars are on you are asked which to keep; nothing changes until you answer
+
+### Damage Meter
+
+- **NEW:** Reset on Instance Entry, off by default, in Auto or Ask mode. It
+  reads the dungeon's real difficulty, waits for another open prompt instead
+  of replacing it, and starting a keystone never counts as a new entry
+- **NEW:** Reset on Logout, off by default, applied at your next login
+- Death times in combat show as minutes and seconds
+- An ally's breakdown opens in combat when their spec is the only one of its
+  kind in their class; otherwise, or on a pinned window, it is refused
+  rather than shown wrong
+- The breakdown tooltip header names the meter type, and the in-combat
+  breakdown closes up its empty percent column
+- The Deaths window updates when a feign-death tag changes
+- The group-fight hold ends 5 seconds after you are alive and idle outside
+  an encounter
+- Windows whose meter type saw no update are no longer repainted, and the
+  shared combat tracker runs only while a module uses it
+
+### Combat Timer
+
+- Follows your own combat and always stops when you leave it
+- Keeps its boss hold after a /reload or a loading screen mid-encounter
+
+### Mythic+ Timer
+
+- **NEW:** Hover Log Style on the Deaths card: Each Death (with time), the
+  existing list, or Deaths per Player, one row per player with a count
+- The death list you get by hovering the deaths count draws in the game
+  tooltip, so it takes your tooltip skin and font; names and times render at
+  full strength
+- The deaths list opens beside its headline, up and to the left, instead of
+  under the mouse, and swaps to the right when the HUD sits at the left
+  screen edge
+- The deaths list keeps two players with the same name on different realms
+  apart instead of counting them as one
+- The forces tooltip's Count row uses the addon's cat head
+
+### Sounds
+
+- **NEW:** a "Time Spiral" voice callout, in every sound dropdown
+- Most voice callouts are re-recorded in one voice, so a pull's callouts
+  sound alike and start at the same moment
+- "Dispell" is now "Dispel". If you picked it by hand in a sound dropdown,
+  pick "Dispel" again
+
+### Time Spiral
+
+- **NEW:** Buff Sound plays once when you receive the Time Spiral buff. On
+  by default, playing the "Time Spiral" callout
+- No longer errors on a spell ID the game hides
+
+### Tooltips
+
+- **NEW:** cursor offset sliders
+- The settings page is regrouped
+- An NPC whose name the game hides gets its reaction colour, and a player
+  with no class colour keeps the default name colour
+
+### Disintegrate Ticks
+
+- **NEW:** Highlight Last Tick, with its own colour
+- No longer errors on values the game hides
+
+### Enemy Counter
+
+- **NEW:** switch it off per specialization
+
+### Loot Roll
+
+- With Loot Roll in Replace mode the bonus roll coin prompt sits above the
+  highest shown roll bar, keeping its spacing above the tallest roll bar
+  content at any size, so a roll and the prompt never overlap
+- The prompt moves when a bar shows or hides, including a prompt that is
+  already up, and follows the bars when you move them in edit mode
 
 ### Raid Notifications
 
 - The LOOT BOSS alert shows the addon's cat head on either side, drawn bare
-  on the screen instead of inside a black framed square
+  on the screen instead of inside a black framed square, cropped to its art
+  so it fills its space and draws larger
 
-### Minimap and Mythic+ Timer
+### Minimap
 
-- The minimap button and the forces tooltip's Count row use the same cat
-  head; seven unused image files are gone from the download
+- The minimap button uses the same cat head; seven unused image files are
+  gone from the download
 
----
+### Chat
 
-## v4.7.21
+- Boss and monster lines the game hides from addons show in chat instead of
+  being dropped; a boss emote in another language keeps its text, and a boss
+  line with a stray percent sign no longer errors
+- Chat Copy stays readable when a line holds control characters or broken
+  text
 
-### Settings
+### Inspect Panel
 
-- Missing Forms, Vehicle Exit Button, No Movement Alert and Player Buffs
-  redraw their page once per switch click instead of twice
-- Dungeon Trash Tracker shows its description only while it is on, like every
-  other module
-- Position settings sit directly above Font on the Player Buffs, Player
-  Debuffs and Tooltips pages
-- The Automation sub-cards each describe themselves under their own switch,
-  in white text like the rest of the settings
+- An enchant name or item track label that is not ready on the first read is
+  retried, so it fills in instead of staying blank; retries and the
+  missing-enchant marker behave correctly with enchant names off and after a
+  settings change
+- Inspecting does less work: slots that never show gems are skipped, and
+  bursts of inspect events are handled in one pass
 
----
+### Pet Status Text
 
-## v4.7.20
+- Demonology expects the Felhunter in a running key, accepts either pet in a
+  Mythic dungeon before the key starts, and no longer shows WRONG PET in the
+  open world
 
 ### Great Vault Alert
 
@@ -337,223 +198,64 @@
 
 - Any hunter's mark on the boss counts, not only your own
 
-### Mythic+ Timer
+### LFG Reminder
 
-- The deaths list opens beside its headline, up and to the left, instead of
-  under the mouse, and swaps to the right when the HUD sits at the left
-  screen edge
+- The popup shows the role you were accepted as
 
----
+### Optimize
 
-## v4.7.19
-
-### Settings
-
-- Every module page now opens with a short plain-English description under
-  its switch, with the addon and slash command names it depends on picked
-  out in gold. The old dash-bullet notes in that spot are gone; notes beside
-  individual settings are unchanged
-
----
-
-## v4.7.18
-
-### Settings
-
-- Every module switch in a card header prints its On/Off line in chat; ten
-  modules that used to flip silently now say so
-- The line always uses the card's own title, which renames six of them:
-  Healer Mana Tracker, Dungeon Trash Tracker, Reroll Key Reminder, Blizzard
-  Texts, Chat and Chat Links
-
----
-
-## v4.7.17
-
-### Profile Manager
-
-- **Changed:** profile strings are now written with the game's own encoder and
-  start with `!KE2!`. Strings exported before this version no longer import;
-  the import dialog says so and asks for a fresh export
-- Nickname strings use the same encoder
-- Two bundled libraries the old strings needed are gone
-
----
-
-## v4.7.16
-
-### Mythic+ Timer
-
-- The deaths list keeps two players with the same name on different realms
-  apart instead of counting them as one
-
----
-
-## v4.7.15
-
-### Bonus Roll
-
-- With Loot Roll in Replace mode the coin prompt now sits just under the
-  bottom roll bar instead of on top of the first one, so a roll and the
-  prompt never overlap. It follows the bars when you move them in edit mode
-
----
-
-## v4.7.14
-
-### Ready Check Consumables
-
-- The flask stat each specialization prefers has been updated across every
-  class, so the flask a click offers when you carry several matches current
-  stat priorities
-
----
-
-## v4.7.13
-
-### Ready Check Consumables
-
-- The settings page is regrouped: sizing, then the low-buff warning and the
-  flask and rune filters, then the popup behaviour, with shorter labels. The
-  Warlock requirement moved from a note to the Healthstone toggle's tooltip,
-  and the three text colours sit in one row with a note that no longer cuts
-  off
-
----
-
-## v4.7.12
-
-### Ready Check Consumables
-
-- **NEW:** A timer bar under the ready check popup counts the check down; on
-  by default, with a toggle on the settings page
-- The row and the popup close together the moment the countdown reaches zero
-  instead of a second or two later. A player who never answered no longer gets
-  the "you were away" chat line
-- A Shaman's weapon slots show the imbue that belongs on that hand instead of
-  the shield icon; the click still casts the shield that applies them
-- The first click of a session works even before the game has loaded the
-  item's data
-
----
-
-## v4.7.11
-
-### Ready Check Consumables
-
-- When you start the check yourself the row sits above the ready check popup
-  and takes clicks again
-- A Warlock carrying both Healthstones sees the Demonic one's tooltip
-
----
-
-## v4.7.10
-
-### Ready Check Consumables
-
-- **NEW:** Warn when a buff runs low: a food, flask, rune or weapon enchant
-  with less time left than your threshold turns its timer red and glows. On by
-  default; the threshold slider is on the settings page
-- **NEW:** Shaman weapon imbues and shields, and Paladin Lightsmith rites, are
-  checked alongside the other consumables. On by default
-- Icons show the actual item or spell you have, and hovering an icon shows its
-  tooltip (togglable)
-
----
-
-## v4.7.9
-
-### Ready Check Consumables
-
-- The Warlock Soulstone slot now tells three states apart: someone is
-  confirmed protected, the stone is on cooldown so someone probably is, and
-  nobody is (click to cast). In a raid, a stone you put on yourself no longer
-  aims the next click back at you instead of the healer
-
----
-
-## v4.7.8
-
-### Ready Check Consumables
-
-- Clicking the flask or weapon enchant icon uses the item the icon shows, with
-  ties between equal flasks settled the same way every time. Main hand and off
-  hand remember their last enchant separately, and a remembered item you no
-  longer carry falls back to a compatible one you do
-
----
-
-## v4.7.7
-
-### Ready Check Consumables
-
-- Counts and icons now refresh when your bags, cooldowns, group or
-  specialization change while a check is open, and a burst of changes repaints
-  the row once instead of once per change. Categories you have hidden do no
-  work at all
-
----
-
-## v4.7.6
-
-### Ready Check Consumables
-
-- Weapon enchant detection reads the current game data directly, so oils and
-  imbues show correctly again, and characters carrying more than forty buffs
-  no longer have their food, flask or rune missed
-
----
-
-## v4.7.5
-
-### Conflicts
-
-- **NEW:** Northern Sky Raid Tools' own consumables bar can be switched off
-  from KitnEssentials so only one bar shows at a ready check. While both bars
-  are on you are asked which to keep; nothing changes until you answer
-
----
-
-## v4.7.4
-
-### Ready Check Consumables
-
-- Icons no longer stay dead after combat ends in the middle of a ready check;
-  the row hides and rebuilds cleanly on every path, and the preview box in the
-  settings panel is its own frame, separate from the live row
-
----
-
-## v4.7.3
-
-### Profiles
-
-- Settings left behind by modules removed in earlier versions are cleared from
-  every saved profile on the next login, so exported profiles carry only live
-  settings. Nothing you use changes; a profile created or reset from now on
-  opens Raid Notifications at its own defaults
-
----
-
-## v4.7.2
+- The Stacking Nameplates row no longer reports a false difference, and the
+  nameplate overlap values show as plain numbers
 
 ### Skinning
 
-- The one-time "text outlines are missing" notice now names the addon that is
+- The one-time "text outlines are missing" notice names the addon that is
   blocking outlines at the moment it prints, not the one found a few seconds
   earlier
+- The skinned BugSack tabs sit below the window in BugSack's own order,
+  their border meeting the window
 
----
+### Taint Report
 
-## v4.7.1
+- The report finds BugGrabber when it is installed as !BugGrabber
 
-### Mythic+ Timer
+### Settings
 
-- The death list you get by hovering the deaths count now draws in the game
-  tooltip, so it takes your tooltip skin and font instead of its own look
-- **NEW:** Hover Log Style on the Deaths card: Each Death (with time), the
-  existing list, or Deaths per Player, one row per player with a count
-- Names and times in the list render at full strength; nothing is dimmed
+- Every module page opens with a short plain-English description under its
+  switch, with the addon and slash command names it depends on picked out in
+  gold. The old dash-bullet notes in that spot are gone; notes beside
+  individual settings are unchanged
+- Every module switch in a card header prints its On/Off line in chat, using
+  the card's own title; ten modules that used to flip silently now say so,
+  and six are renamed: Healer Mana Tracker, Dungeon Trash Tracker, Reroll
+  Key Reminder, Blizzard Texts, Chat and Chat Links
+- Every button in the settings window and its dialogs sits on a darker
+  plate, so it stands out from the card behind it
+- Missing Forms, Vehicle Exit Button, No Movement Alert and Player Buffs
+  redraw their page once per switch click; picking a class on a
+  per-specialization card or in No Movement Alert redraws only that card;
+  the No Movement Alert page no longer rebuilds on every spell tick
+- Dungeon Trash Tracker shows its description only while it is on, like
+  every other module
+- Position settings sit directly above Font on the Player Buffs, Player
+  Debuffs and Tooltips pages
+- The Automation sub-cards each describe themselves under their own switch,
+  in white text like the rest of the settings
+- Sliders keep the last value of a fast drag, and a value typed into a
+  slider's box is saved straight away
+- Pressing Enter in the first box of a two-field dialog accepts both fields
+
+### Fixes and Performance
+
+- Disintegrate Ticks, Stasis Tracker, Kick Tracker and the Damage Meter's
+  feign-death check receive only your own casts, so they do less work in
+  groups
+- Great Vault Alert, Kick Tracker, World Marker Cycler and the deaths
+  tooltip no longer error when the game hides a value from addons, and Great
+  Vault Alert and Stasis Tracker no longer error on a cast unit the game
+  hides
+- World Marker Cycler catches up on markers placed during chat lockdown once
+  it lifts
 
 ---
 
