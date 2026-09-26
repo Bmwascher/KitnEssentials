@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.7.29
+
+### Optimize
+
+- The Stacking Nameplates row no longer reports a false difference
+- The nameplate overlap values show as plain numbers
+
+---
+
 ## v4.7.28
 
 ### Disintegrate Ticks
