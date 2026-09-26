@@ -331,6 +331,7 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
 
     card.contentHeight = 0
     card.rows = {}
+    card.regions = {}
     card._yOffset = yOffset or 0
 
     -- Header
@@ -461,6 +462,7 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         self.currentY = self.currentY + height + T.paddingSmall
         self.content:SetHeight(self.currentY)
         self:UpdateHeight()
+        table_insert(self.regions, label)
         return label
     end
 
@@ -479,12 +481,40 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         self.currentY = self.currentY + T.borderSize + T.paddingSmall * 2
         self.content:SetHeight(self.currentY)
         self:UpdateHeight()
+        table_insert(self.regions, sep)
         return sep
     end
 
     function card:AddSpacing(amount)
         amount = amount or T.paddingMedium
         self.currentY = self.currentY + amount
+        self.content:SetHeight(self.currentY)
+        self:UpdateHeight()
+    end
+
+    -- A mark lets a card redraw everything below one point without a page
+    -- rebuild. Labels and separators are regions, not frames, so they can only
+    -- be hidden, never orphaned.
+    function card:MarkBody()
+        return { y = self.currentY, rows = #self.rows, regions = #self.regions }
+    end
+
+    function card:TruncateBody(mark)
+        local orphaned = 0
+        for i = #self.rows, mark.rows + 1, -1 do
+            local row = self.rows[i]
+            if row.Hide then row:Hide() end
+            if row.SetParent then row:SetParent(nil) end
+            self.rows[i] = nil
+            orphaned = orphaned + 1
+        end
+        -- Orphaned frames are never collected; RefreshContent's leak tracer counts them.
+        KE_GUI_ORPHAN_COUNT = (KE_GUI_ORPHAN_COUNT or 0) + orphaned
+        for i = #self.regions, mark.regions + 1, -1 do
+            self.regions[i]:Hide()
+            self.regions[i] = nil
+        end
+        self.currentY = mark.y
         self.content:SetHeight(self.currentY)
         self:UpdateHeight()
     end
@@ -577,6 +607,10 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
             if row.SetParent then row:SetParent(nil) end
         end
         wipe(self.rows)
+        for _, region in ipairs(self.regions) do
+            region:Hide()
+        end
+        wipe(self.regions)
         self.currentY = 0
         self.contentHeight = 0
         self.content:SetHeight(1)
@@ -587,6 +621,34 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
 
     card:UpdateHeight()
     return card
+end
+
+local function RebuildPageLater()
+    C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+end
+
+-- Applies a card's height change to the page without a rebuild. That is only
+-- right while nothing is drawn below the card; otherwise, or when the card has
+-- no parent or position to measure, the page is rebuilt a frame later.
+function GUIFrame:ResizeCardInPlace(card, oldHeight)
+    local delta = card:GetContentHeight() - oldHeight
+    if delta == 0 then return end
+    local parent = card:GetParent()
+    local cardTop = card:GetTop()
+    if not parent or not cardTop then
+        RebuildPageLater()
+        return
+    end
+    for _, child in ipairs({ parent:GetChildren() }) do
+        if child ~= card and child:IsShown() then
+            local top = child:GetTop()
+            if not top or top < cardTop then
+                RebuildPageLater()
+                return
+            end
+        end
+    end
+    parent:SetHeight(parent:GetHeight() + delta)
 end
 
 ---------------------------------------------------------------------------------
