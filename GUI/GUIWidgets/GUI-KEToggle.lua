@@ -10,46 +10,31 @@ local Theme = KE.Theme
 
 -- Localization Setup
 local CreateFrame = CreateFrame
-local C_Timer = C_Timer
 local select = select
 
 ---------------------------------------------------------------------------------
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- Checkbox Widget — config-table API: { value, callback, msgPopup, msgText, msgOn, msgOff, tooltip }
-function GUIFrame:CreateCheckbox(parent, labelText, config)
-    config = config or {}
-    local initialState = config.value
-    local msgPopup = config.msgPopup
-    local msgText = config.msgText
-    local msgOn = config.msgOn
-    local msgOff = config.msgOff
-    local tooltip = config.tooltip
-    local immediateCallback = config.immediateCallback
-    local customHeight = nil
-    local TOGGLE_WIDTH = 48
-    local TOGGLE_HEIGHT = 24
-    local KNOB_SIZE = 22
-    local KNOB_CROSS = 22
-    local KNOB_PADDING = 1
-    local ANIMATION_DURATION = 0.18
-    local checkText = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\ok-iconBlack.png"
-    local crossText = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\cross-small.png"
+local TOGGLE_WIDTH = 48
+local TOGGLE_HEIGHT = 24
+local KNOB_SIZE = 22
+local KNOB_CROSS = 22
+local KNOB_PADDING = 1
+local ANIMATION_DURATION = 0.18
+local CHECK_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\ok-iconBlack.png"
+local CROSS_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\cross-small.png"
+local OFF_POSITION = KNOB_PADDING
+local ON_POSITION = TOGGLE_WIDTH - KNOB_SIZE - KNOB_PADDING
 
-    local OFF_POSITION = KNOB_PADDING
-    local ON_POSITION = TOGGLE_WIDTH - KNOB_SIZE - KNOB_PADDING
-
+-- Builds one sliding toggle. Label, value and bindings are applied by
+-- ConfigureCheckbox, so a pooled toggle can serve any setting.
+local function ConstructCheckbox(parent)
     local row = CreateFrame("Frame", nil, parent)
-    local rowHeight = customHeight or 36
-    row:SetHeight(rowHeight)
 
     local label = row:CreateFontString(nil, "OVERLAY")
     label:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 1)
     label:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(label, "small")
-    label:SetText(labelText or "")
-    label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
     row.label = label
 
     local toggle = CreateFrame("Frame", nil, row, "BackdropTemplate")
@@ -84,7 +69,7 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
     local checkmark = knob:CreateTexture(nil, "OVERLAY")
     checkmark:SetSize(KNOB_SIZE, KNOB_SIZE)
     checkmark:SetPoint("CENTER", knob, "CENTER", 0, 0)
-    checkmark:SetTexture(checkText)
+    checkmark:SetTexture(CHECK_TEXTURE)
     checkmark:SetVertexColor(1, 1, 1, 1)
     checkmark:SetTexelSnappingBias(0)
     checkmark:SetSnapToPixelGrid(false)
@@ -93,7 +78,7 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
     local crossmark = knob:CreateTexture(nil, "OVERLAY")
     crossmark:SetSize(KNOB_CROSS, KNOB_CROSS)
     crossmark:SetPoint("CENTER", knob, "CENTER", 0, 0)
-    crossmark:SetTexture(crossText)
+    crossmark:SetTexture(CROSS_TEXTURE)
     crossmark:SetVertexColor(1, 1, 1, 0.8)
     crossmark:SetTexelSnappingBias(0)
     crossmark:SetSnapToPixelGrid(false)
@@ -108,7 +93,7 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
     slideAnim:SetDuration(ANIMATION_DURATION)
     slideAnim:SetSmoothing("OUT")
 
-    local state = initialState or false
+    local state = false
     local isAnimating = false
     local knobR, knobG, knobB, knobA = Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.6
 
@@ -224,16 +209,20 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
     button:SetScript("OnClick", function()
         if AnyAnimating() then return end
         local newState = not state
+        -- Read before any callback runs: a callback can rebuild the page and
+        -- hand this toggle to another setting.
+        local callback, immediate = row._callback, row._immediate
+        local msgPopup, msgText, msgOn, msgOff = row._msgPopup, row._msgText, row._msgOn, row._msgOff
+        local gen = row._keGen
         AnimateToState(newState, false)
-        if row._callback then
+        if callback then
             local function Fire()
-                if row._callback then
-                    row._callback(newState, function(revert)
-                        if revert then
-                            AnimateToState(not newState, false)
-                        end
-                    end)
-                end
+                callback(newState, function(revert)
+                    -- A revert only moves the toggle that was clicked.
+                    if revert and row._keGen == gen then
+                        AnimateToState(not newState, false)
+                    end
+                end)
             end
             -- The callback normally waits for the knob so an expensive one does
             -- not stutter the animation. A caller whose callback must be
@@ -241,10 +230,10 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
             -- wait: the window's OnHide runs first and its work is lost.
             -- An immediate callback cannot use its revert argument: the click's
             -- own slide is still playing, so AnimateToState refuses it.
-            if immediateCallback then
+            if immediate then
                 Fire()
             else
-                C_Timer.After(ANIMATION_DURATION, Fire)
+                GUIFrame:DeferWidgetCallback(ANIMATION_DURATION, Fire)
             end
         end
         if msgPopup then
@@ -272,6 +261,7 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
             Theme.accent[2] * hoverBrightness,
             Theme.accent[3] * hoverBrightness,
             baseA
+        local tooltip = row._tooltip
         if tooltip then
             -- ANCHOR_CURSOR_RIGHT positions the tooltip top-right of the
             -- cursor — keeps the description next to the pointer instead of
@@ -298,10 +288,9 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
     toggle.SetValue = function(_, value, instant)
         if value ~= state then
             AnimateToState(value, instant)
-            if row._callback and not instant then
-                C_Timer.After(ANIMATION_DURATION, function()
-                    if row._callback then row._callback(value) end
-                end)
+            local callback = row._callback
+            if callback and not instant then
+                GUIFrame:DeferWidgetCallback(ANIMATION_DURATION, function() callback(value) end)
             end
         end
     end
@@ -335,18 +324,62 @@ function GUIFrame:CreateCheckbox(parent, labelText, config)
         UpdateColors(state, true)
     end
 
+    -- Straight into a state, with no animation and no callback: how a pooled
+    -- toggle starts each use.
+    function row:_setStateNow(value)
+        animGroup:Stop()
+        colorAnimGroup:Stop()
+        isAnimating = false
+        AnimateToState(value and true or false, true)
+    end
+
     row.toggle = toggle
 
     -- Pool-friendly callback slot. Internal scripts read row._callback at
-    -- click time (late-bound), so consumers can swap the callback after
-    -- creation by calling row:SetCallback(fn). Required for widget pooling
-    -- where one widget instance is reused across renders bound to different
-    -- data sources.
-    row._callback = config.callback
+    -- click time, so consumers can swap the callback after creation by
+    -- calling row:SetCallback(fn).
     function row:SetCallback(fn)
         self._callback = fn
     end
 
+    row._keOwned = { row, toggle, knob, button }
+    return row
+end
+
+local function ConfigureCheckbox(row, labelText, config)
+    -- Every use: row:AddWidget sizes a widget to its row.
+    row:SetHeight(36)
+    local label = row.label
+    KE:ApplyThemeFont(label, "small")
+    label:SetText(labelText or "")
+    row._tooltip = config.tooltip
+    row._msgPopup = config.msgPopup
+    row._msgText = config.msgText
+    row._msgOn = config.msgOn
+    row._msgOff = config.msgOff
+    row._immediate = config.immediateCallback
+    row:SetAlpha(1)
+    row:SetEnabled(true)
+    row:_setStateNow(config.value)
+    row:ApplyThemeColors()
+    row._callback = config.callback
+end
+
+local checkboxPool = GUIFrame:NewWidgetPool("checkbox", ConstructCheckbox, function(row)
+    row:_setStateNow(false)
+end)
+
+-- Checkbox Widget — config-table API: { value, callback, msgPopup, msgText, msgOn, msgOff, tooltip,
+-- immediateCallback }
+function GUIFrame:CreateCheckbox(parent, labelText, config)
+    config = config or {}
+    local row
+    if self:IsPoolParent(parent) then
+        row = checkboxPool:Acquire(parent)
+    else
+        row = ConstructCheckbox(parent)
+    end
+    ConfigureCheckbox(row, labelText, config)
     return row
 end
 
@@ -361,13 +394,11 @@ end
 -- The disabled state belongs to the widget, not the caller: it owns the alpha
 -- and the click refusal so no call site has to remember both. The fill is
 -- Theme.accent so it tracks the user's chosen theme.
-function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
-    config = config or {}
-    local BOX = 16
-    local CELL = 22
+local BOX = 16
+local CELL = 22
 
+local function ConstructCompactCheckbox(parent)
     local cell = CreateFrame("Button", nil, parent)
-    cell:SetHeight(CELL)
     -- Tells row:AddWidget to leave the height alone; without it the cell
     -- stretches to the row height and the box floats.
     cell.explicitHeight = CELL
@@ -380,14 +411,11 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    box:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
-    box:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
     -- Inset 2, not 3: at 3 the fill reads as a floating dot rather than a check.
     local fill = box:CreateTexture(nil, "ARTWORK")
     fill:SetPoint("TOPLEFT", box, "TOPLEFT", 2, -2)
     fill:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -2, 2)
-    fill:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.9)
 
     local label = cell:CreateFontString(nil, "OVERLAY")
     label:SetPoint("LEFT", box, "RIGHT", 8, 0)
@@ -397,16 +425,10 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
     -- A name too long for its column clips instead, which is why the three-column
     -- list carries no per-row suffixes.
     label:SetWordWrap(false)
-    -- One point above "small". These grids pack three columns at 22px a row and
-    -- the small size reads thin there. Derived from the theme's own small size
-    -- rather than the "normal" step, which is not guaranteed to be one point up.
-    KE:ApplyThemeFont(label, (Theme.fontSizeSmall or 11) + 1)
-    label:SetText(labelText or "")
-    label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.9)
+    cell._label = label
 
-    cell._checked = config.value and true or false
+    cell._checked = false
     cell._enabled = true
-    fill:SetShown(cell._checked)
 
     function cell:SetChecked(state)
         self._checked = state and true or false
@@ -436,7 +458,8 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
         -- enabled again.
         if not self._enabled then return end
         self:SetChecked(not self._checked)
-        if config.callback then config.callback(self._checked) end
+        local callback = self._callback
+        if callback then callback(self._checked) end
     end)
 
     cell:SetScript("OnEnter", function(self)
@@ -447,11 +470,12 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
             label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
             box:SetBackdropBorderColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 0.8)
         end
-        if config.tooltip then
+        local tooltip = self._tooltip
+        if tooltip then
             -- ANCHOR_CURSOR_RIGHT with a 10/10 offset, matching CreateCheckbox
             -- above so both widgets tip identically.
             GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
-            GameTooltip:SetText(config.tooltip, 1, 1, 1, 1, true)
+            GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
             GameTooltip:Show()
         end
     end)
@@ -474,7 +498,35 @@ function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
         label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 0.9)
     end
 
-    if config.disabled then cell:SetEnabled(false) end
+    cell._keOwned = { cell, box }
+    return cell
+end
 
+local function ConfigureCompactCheckbox(cell, labelText, config)
+    cell:SetHeight(CELL)
+    local label = cell._label
+    -- One point above "small". These grids pack three columns at 22px a row and
+    -- the small size reads thin there. Derived from the theme's own small size
+    -- rather than the "normal" step, which is not guaranteed to be one point up.
+    KE:ApplyThemeFont(label, (Theme.fontSizeSmall or 11) + 1)
+    label:SetText(labelText or "")
+    cell._tooltip = config.tooltip
+    cell._callback = config.callback
+    cell:ApplyThemeColors()
+    cell:SetChecked(config.value)
+    cell:SetEnabled(not config.disabled)
+end
+
+local compactPool = GUIFrame:NewWidgetPool("checkbox:compact", ConstructCompactCheckbox, function() end)
+
+function GUIFrame:CreateCompactCheckbox(parent, labelText, config)
+    config = config or {}
+    local cell
+    if self:IsPoolParent(parent) then
+        cell = compactPool:Acquire(parent)
+    else
+        cell = ConstructCompactCheckbox(parent)
+    end
+    ConfigureCompactCheckbox(cell, labelText, config)
     return cell
 end
