@@ -3363,13 +3363,8 @@ function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficu
     end
     local idKnown = not issecretvalue(instanceID) and type(instanceID) == "number"
     local matches = idKnown and scope ~= nil and pendingID ~= nil and instanceID == pendingID
-    -- An in-place change in the instance the last key already holds only
-    -- re-keys, even after a read at difficulty 0 there; a finished Delve is not
-    -- held, so a new one in that place still counts.
-    local keyedHere = matches and lastScope ~= "delveover" and type(lastKey) == "string"
-        and tonumber(lastKey:match("^(%d+):")) == instanceID
     local recordOnly
-    if key ~= nil and matches and not (inPlace and keyedHere) then
+    if key ~= nil and matches then
         recordOnly = freshLoad or pendingFresh
     else
         recordOnly = freshLoad or inPlace
@@ -3390,8 +3385,13 @@ function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficu
     end
     local moved = entered or scope == nil or newKey ~= incomingKey
         or (newScope == "delveover" and incomingScope ~= "delveover")
+    -- A read at difficulty 0 with no load, in the instance the last key already
+    -- holds, is a flicker in place: it starts no pending, so the next in-place
+    -- change only re-keys. A load's read, or one where a Delve ended, starts one.
+    local heldHere = idKnown and not atLoad and not matches and lastScope ~= "delveover"
+        and type(lastKey) == "string" and tonumber(lastKey:match("^(%d+):")) == instanceID
     local newPendingID, newPendingFresh = pendingID, pendingFresh == true
-    if scope == nil then
+    if scope == nil or (key == nil and heldHere) then
         newPendingID, newPendingFresh = nil, false
     elseif idKnown and key == nil then
         newPendingID, newPendingFresh = instanceID,
