@@ -15,7 +15,6 @@ local pcall = pcall
 local pairs = pairs
 local ipairs = ipairs
 local tostring = tostring
-local wipe = wipe
 local CreateFrame = CreateFrame
 local table_insert = table.insert
 
@@ -521,39 +520,323 @@ end
 ---------------------------------------------------------------------------------
 -- Card System
 ---------------------------------------------------------------------------------
-function GUIFrame:CreateCard(parent, title, yOffset, width)
+-- Every card carries one shared method set, copied on at construction, so the
+-- pool's sweep can put back any method a page replaced.
+local CardMethods = {}
+
+local HEADER_HEIGHT = 32
+local TOGGLE_W, TOGGLE_H, TOGGLE_KNOB = 34, 16, 12
+
+local function PaintHeaderToggle(btn)
+    local T = Theme
+    local knob = btn._knob
+    knob:ClearAllPoints()
+    if btn._checked then
+        btn:SetBackdropColor(T.accent[1] * 0.5, T.accent[2] * 0.5, T.accent[3] * 0.5, 1)
+        knob:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
+        knob:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 0.8)
+    else
+        btn:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
+        knob:SetPoint("LEFT", btn, "LEFT", 2, 0)
+        knob:SetColorTexture(0.45, 0.45, 0.45, 1)
+    end
+end
+
+local function HeaderToggleSetChecked(btn, on)
+    btn._checked = on and true or false
+    PaintHeaderToggle(btn)
+end
+
+local function HeaderToggleGetChecked(btn)
+    return btn._checked
+end
+
+-- The edge is one physical pixel, so it is re-applied when the UI scale has
+-- changed since the button was last used.
+local function ApplyHeaderToggleBackdrop(btn)
+    local edge = KE:GetPixelSize()
+    if btn._edge == edge then return end
+    btn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = edge,
+    })
+    btn._edge = edge
+end
+
+-- One per card, made on first use; every AddHeaderToggle call rebinds it.
+local function NewHeaderToggle(card)
+    local btn = CreateFrame("Button", nil, card.header, "BackdropTemplate")
+    btn:SetSize(TOGGLE_W, TOGGLE_H)
+    ApplyHeaderToggleBackdrop(btn)
+    local knob = btn:CreateTexture(nil, "ARTWORK")
+    knob:SetSize(TOGGLE_KNOB, TOGGLE_KNOB)
+    btn._knob = knob
+    btn.SetChecked = HeaderToggleSetChecked
+    btn.GetChecked = HeaderToggleGetChecked
+
+    btn:SetScript("OnClick", function(b)
+        -- Read before the callback runs: the rebuild below can hand this
+        -- button to another card.
+        local label, onValueChanged = b._label, b._onValueChanged
+        b:SetChecked(not b._checked)
+        local checked = b._checked
+        if onValueChanged then onValueChanged(checked) end
+        -- The chat line lives here so that no page prints its own.
+        KE:Print(label .. ": " .. (checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
+        -- A disabled module renders as a lone header bar, so the page must
+        -- rebuild here for that to apply immediately.
+        GUIFrame:RefreshContent()
+        GUIFrame:RefreshSidebar()
+    end)
+    btn:SetScript("OnEnter", function(b)
+        GameTooltip:SetOwner(b, "ANCHOR_TOP")
+        GameTooltip:SetText(b._checked and "Enabled" or "Disabled", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    card._keHeaderToggle = btn
+    GUIFrame:PoolGrow(card, card.header, 1, 0)
+    GUIFrame:PoolOwn(card, btn)
+    return btn
+end
+
+-- Header toggle: the MODULE-ENABLE control. A switch in the card's title
+-- bar reads as "this feature on/off"; everything in the body below is
+-- settings. Keeps enables visually distinct from ordinary option toggles,
+-- which live in body rows.
+function CardMethods:AddHeaderToggle(initialState, onValueChanged)
+    if not self.header then return nil end
+    local btn = self._keHeaderToggle or NewHeaderToggle(self)
+    ApplyHeaderToggleBackdrop(btn)
+    btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    btn:ClearAllPoints()
+    btn:SetPoint("LEFT", self.titleText, "RIGHT", 12, 0)
+    btn._label = self.titleText:GetText()
+    btn._onValueChanged = onValueChanged
+    btn:SetChecked(initialState)
+    btn:Show()
+    self.headerToggle = btn
+    return btn
+end
+
+function CardMethods:AddRow(widget, height, spacing)
+    height = height or widget:GetHeight() or 24
+    spacing = spacing or Theme.paddingSmall
+    widget:SetParent(self.content)
+    widget:ClearAllPoints()
+    widget:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, -self.currentY)
+    widget:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", 0, -self.currentY)
+    self.currentY = self.currentY + height + spacing
+    table_insert(self.rows, widget)
+    self.content:SetHeight(self.currentY)
+    self:UpdateHeight()
+    return widget
+end
+
+-- Labels and separators are regions, which cannot be orphaned; a card keeps
+-- the ones it has made and hands them out again.
+local function TakeRegion(card, kind)
+    local free = kind == "label" and card._keLabelFree or card._keSepFree
+    local region = free[#free]
+    if region then
+        free[#free] = nil
+    else
+        if kind == "label" then
+            region = card.content:CreateFontString(nil, "OVERLAY")
+        else
+            region = card.content:CreateTexture(nil, "ARTWORK")
+        end
+        region._keKind = kind
+        GUIFrame:PoolGrow(card, card.content, 0, 1)
+    end
+    region:ClearAllPoints()
+    region:Show()
+    return region
+end
+
+local function ReturnRegion(card, region)
+    region:Hide()
+    local free = region._keKind == "label" and card._keLabelFree or card._keSepFree
+    free[#free + 1] = region
+end
+
+function CardMethods:AddLabel(text)
+    local T = Theme
+    local label = TakeRegion(self, "label")
+    label:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, -self.currentY)
+    label:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", 0, -self.currentY)
+    label:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(label, "normal")
+    label:SetText(text)
+    label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+    local height = label:GetStringHeight() or 14
+    self.currentY = self.currentY + height + T.paddingSmall
+    self.content:SetHeight(self.currentY)
+    self:UpdateHeight()
+    table_insert(self.regions, label)
+    return label
+end
+
+-- A label with the accent-coloured lead-in the GUI uses for explanatory
+-- text. Resolved per call, not captured, so it follows a theme change.
+function CardMethods:AddNote(text)
+    return self:AddLabel(KE:ColorTextByTheme("-") .. " " .. text)
+end
+
+function CardMethods:AddSeparator()
+    local T = Theme
+    local sep = TakeRegion(self, "sep")
+    sep:SetHeight(T.borderSize)
+    sep:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, -self.currentY - T.paddingSmall)
+    sep:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", 0, -self.currentY - T.paddingSmall)
+    sep:SetColorTexture(T.border[1], T.border[2], T.border[3], 0.5)
+    self.currentY = self.currentY + T.borderSize + T.paddingSmall * 2
+    self.content:SetHeight(self.currentY)
+    self:UpdateHeight()
+    table_insert(self.regions, sep)
+    return sep
+end
+
+function CardMethods:AddSpacing(amount)
+    amount = amount or Theme.paddingMedium
+    self.currentY = self.currentY + amount
+    self.content:SetHeight(self.currentY)
+    self:UpdateHeight()
+end
+
+-- A mark lets a card redraw everything below one point without a page
+-- rebuild.
+function CardMethods:MarkBody()
+    return { y = self.currentY, rows = #self.rows, regions = #self.regions }
+end
+
+function CardMethods:TruncateBody(mark)
+    for i = #self.rows, mark.rows + 1, -1 do
+        GUIFrame:ReleaseTracked(self.rows[i], self.content)
+        self.rows[i] = nil
+    end
+    for i = #self.regions, mark.regions + 1, -1 do
+        ReturnRegion(self, self.regions[i])
+        self.regions[i] = nil
+    end
+    self.currentY = mark.y
+    self.content:SetHeight(self.currentY)
+    self:UpdateHeight()
+end
+
+-- Header-only collapse: a card with no body rows or labels — a module whose
+-- only control is its header toggle, or any module rendered as a lone header
+-- bar while disabled — is just its title bar. Without this branch the card
+-- still reserves paddingMedium*2 of empty body beneath the header, which
+-- reads as a stray gap between it and the next card.
+function CardMethods:UpdateHeight()
+    local totalHeight
+    if self.currentY == 0 and self.headerHeight > 0 then
+        -- Exactly the header, so the header plate covers the card entirely
+        -- and the bar is one solid colour. No borderSize*2 allowance: the
+        -- header is flush at (0,0) with its own edge, so that allowance
+        -- would expose two pixels of card backdrop under the header.
+        totalHeight = self.headerHeight
+        self.content:Hide()
+    else
+        totalHeight = self.headerHeight + self.currentY + Theme.paddingMedium * 2
+        self.content:Show()
+    end
+    self:SetHeight(totalHeight)
+    self.contentHeight = totalHeight
+end
+
+function CardMethods:GetContentHeight()
+    return self.contentHeight
+end
+
+function CardMethods:GetNextOffset()
+    return self._yOffset + self:GetContentHeight() + Theme.paddingSmall
+end
+
+-- Lazy-create a transparent click-blocker overlay above the card content.
+-- Shown when the card is disabled to make widget interactions non-functional
+-- without recursively walking row.widgets / kit subframes (which would need
+-- per-widget knowledge of how each card type lays out its children).
+local function GetMouseBlocker(card)
+    local blocker = card._keBlocker
+    if not blocker then
+        blocker = CreateFrame("Frame", nil, card)
+        blocker:SetAllPoints(card)
+        blocker:EnableMouse(true)
+        -- Don't capture mouse wheel — let scroll events bubble up to the
+        -- scrollFrame so the user can still scroll past a disabled card.
+        blocker:Hide()
+        card._keBlocker = blocker
+        GUIFrame:PoolGrow(card, card, 1, 0)
+        GUIFrame:PoolOwn(card, blocker)
+    end
+    -- +100 above the card's own frame level should cover all default-level
+    -- descendants. Re-levelled on every use: a reused card can sit at a
+    -- different level than when the blocker was made.
+    blocker:SetFrameLevel(card:GetFrameLevel() + 100)
+    return blocker
+end
+
+function CardMethods:SetEnabled(enabled)
+    if enabled then
+        self:SetAlpha(1)
+        if self.header then self.header:SetAlpha(1) end
+        if self.titleText then self.titleText:SetAlpha(1) end
+        if self._keBlocker then self._keBlocker:Hide() end
+    else
+        self:SetAlpha(0.5)
+        if self.header then self.header:SetAlpha(0.5) end
+        if self.titleText then self.titleText:SetAlpha(0.5) end
+        GetMouseBlocker(self):Show()
+    end
+end
+
+-- Re-apply theme-tied colors. KE:RefreshTheme replaces Theme.bgLight /
+-- accent / border tables via CopyColor; values copied at construction
+-- (SetBackdropColor, SetTextColor) become stale. Every acquire calls this.
+function CardMethods:ApplyThemeColors()
+    local TT = Theme
+    self:SetBackdropColor(TT.bgLight[1], TT.bgLight[2], TT.bgLight[3], TT.bgLight[4])
+    self:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], TT.border[4])
+    if self.header then
+        self.header:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], TT.bgMedium[4])
+        self.header:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], TT.border[4])
+    end
+    if self.titleText then
+        self.titleText:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+    end
+end
+
+function CardMethods:Reset()
+    self:TruncateBody({ y = 0, rows = 0, regions = 0 })
+    self.contentHeight = 0
+    self.content:SetHeight(1)
+    -- One source of truth for card height; a reset card has no rows, so this
+    -- resolves to the header-only collapse above.
+    self:UpdateHeight()
+end
+
+local function NewCard(parent, titled)
     local T = Theme
     local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    card:EnableMouse(false)
-
-    if width then
-        card:SetWidth(width)
-        card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
-    else
-        card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
-        card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
-    end
-
     card:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = T.borderSize,
     })
-    card:SetBackdropColor(T.bgLight[1], T.bgLight[2], T.bgLight[3], T.bgLight[4])
-    card:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], T.border[4])
-
-    card.contentHeight = 0
     card.rows = {}
     card.regions = {}
-    card._yOffset = yOffset or 0
+    card._keLabelFree = {}
+    card._keSepFree = {}
+    card.headerHeight = 0
 
-    -- Header
-    local headerHeight = 0
-    if title and title ~= "" then
-        headerHeight = 32
-
+    if titled then
+        card.headerHeight = HEADER_HEIGHT
         local header = CreateFrame("Frame", nil, card, "BackdropTemplate")
-        header:SetHeight(headerHeight)
+        header:SetHeight(HEADER_HEIGHT)
         header:SetPoint("TOPLEFT", card, "TOPLEFT", 0, 0)
         header:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, 0)
         header:SetBackdrop({
@@ -561,278 +844,95 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = T.borderSize,
         })
-        header:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4])
-        header:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], T.border[4])
         card.header = header
 
         local titleText = header:CreateFontString(nil, "OVERLAY")
         titleText:SetPoint("LEFT", header, "LEFT", T.paddingMedium, 0)
-        KE:ApplyThemeFont(titleText, "large")
-        titleText:SetText(title)
-        titleText:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
         card.titleText = titleText
     end
 
-    -- Header toggle: the MODULE-ENABLE control. A switch in the card's title
-    -- bar reads as "this feature on/off"; everything in the body below is
-    -- settings. Keeps enables visually distinct from ordinary option toggles,
-    -- which live in body rows.
-    function card:AddHeaderToggle(initialState, onValueChanged)
-        if not self.header then return nil end
-        local label = self.titleText:GetText()
-        local TRACK_W, TRACK_H, KNOB = 34, 16, 12
-
-        local btn = CreateFrame("Button", nil, self.header, "BackdropTemplate")
-        btn:SetSize(TRACK_W, TRACK_H)
-        btn:SetPoint("LEFT", self.titleText, "RIGHT", 12, 0)
-        btn:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = KE:GetPixelSize(),
-        })
-        btn:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
-
-        local knob = btn:CreateTexture(nil, "ARTWORK")
-        knob:SetSize(KNOB, KNOB)
-
-        local function Paint(on)
-            knob:ClearAllPoints()
-            if on then
-                btn:SetBackdropColor(T.accent[1] * 0.5, T.accent[2] * 0.5, T.accent[3] * 0.5, 1)
-                knob:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
-                knob:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 0.8)
-            else
-                btn:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
-                knob:SetPoint("LEFT", btn, "LEFT", 2, 0)
-                knob:SetColorTexture(0.45, 0.45, 0.45, 1)
-            end
-        end
-
-        btn._checked = initialState and true or false
-        Paint(btn._checked)
-
-        function btn:SetChecked(on)
-            self._checked = on and true or false
-            Paint(self._checked)
-        end
-        function btn:GetChecked() return self._checked end
-
-        btn:SetScript("OnClick", function(b)
-            b:SetChecked(not b._checked)
-            if onValueChanged then onValueChanged(b._checked) end
-            -- The chat line lives here so that no page prints its own.
-            KE:Print(label .. ": " .. (b._checked and "|cff4DCC66On|r" or "|cffE64D4DOff|r"))
-            -- A disabled module renders as a lone header bar, so the page must
-            -- rebuild here for that to apply immediately.
-            GUIFrame:RefreshContent()
-            GUIFrame:RefreshSidebar()
-        end)
-        btn:SetScript("OnEnter", function(b)
-            GameTooltip:SetOwner(b, "ANCHOR_TOP")
-            GameTooltip:SetText(b._checked and "Enabled" or "Disabled", 1, 1, 1)
-            GameTooltip:Show()
-        end)
-        btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-        self.headerToggle = btn
-        return btn
-    end
-
-    card.headerHeight = headerHeight
-
-    -- Content container
     local content = CreateFrame("Frame", nil, card)
-    content:SetPoint("TOPLEFT", card, "TOPLEFT", T.paddingMedium, -headerHeight - T.paddingMedium)
-    content:SetPoint("TOPRIGHT", card, "TOPRIGHT", -T.paddingMedium, -headerHeight - T.paddingMedium)
-    content:SetHeight(1)
+    content:SetPoint("TOPLEFT", card, "TOPLEFT", T.paddingMedium, -card.headerHeight - T.paddingMedium)
+    content:SetPoint("TOPRIGHT", card, "TOPRIGHT", -T.paddingMedium, -card.headerHeight - T.paddingMedium)
     content:EnableMouse(false)
+    content._kePoolOwner = card
     card.content = content
+
+    for name, fn in pairs(CardMethods) do
+        card[name] = fn
+    end
+    card._keOwned = card.header and { card, card.header, content } or { card, content }
+    return card
+end
+
+local function ConfigureCard(card, parent, title, yOffset, width)
+    local T = Theme
+    card:ClearAllPoints()
+    card:SetPoint("TOPLEFT", parent, "TOPLEFT", T.paddingSmall, -(yOffset or 0) + T.paddingSmall)
+    if width then
+        card:SetWidth(width)
+    else
+        card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
+    end
+    card:EnableMouse(false)
+    card:SetAlpha(1)
+    if card.titleText then
+        card.header:SetAlpha(1)
+        card.titleText:SetAlpha(1)
+        KE:ApplyThemeFont(card.titleText, "large")
+        card.titleText:SetText(title)
+    end
+    if card._keBlocker then card._keBlocker:Hide() end
+    card:ApplyThemeColors()
+    card.contentHeight = 0
     card.currentY = 0
-
-    function card:AddRow(widget, height, spacing)
-        height = height or widget:GetHeight() or 24
-        spacing = spacing or T.paddingSmall
-        widget:SetParent(self.content)
-        widget:ClearAllPoints()
-        widget:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, -self.currentY)
-        widget:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", 0, -self.currentY)
-        self.currentY = self.currentY + height + spacing
-        table_insert(self.rows, widget)
-        self.content:SetHeight(self.currentY)
-        self:UpdateHeight()
-        return widget
-    end
-
-    function card:AddLabel(text)
-        local label = self.content:CreateFontString(nil, "OVERLAY")
-        label:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, -self.currentY)
-        label:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", 0, -self.currentY)
-        label:SetJustifyH("LEFT")
-        KE:ApplyThemeFont(label, "normal")
-        label:SetText(text)
-        label:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-        local height = label:GetStringHeight() or 14
-        self.currentY = self.currentY + height + T.paddingSmall
-        self.content:SetHeight(self.currentY)
-        self:UpdateHeight()
-        table_insert(self.regions, label)
-        return label
-    end
-
-    -- A label with the accent-coloured lead-in the GUI uses for explanatory
-    -- text. Resolved per call, not captured, so it follows a theme change.
-    function card:AddNote(text)
-        return self:AddLabel(KE:ColorTextByTheme("-") .. " " .. text)
-    end
-
-    function card:AddSeparator()
-        local sep = self.content:CreateTexture(nil, "ARTWORK")
-        sep:SetHeight(T.borderSize)
-        sep:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, -self.currentY - T.paddingSmall)
-        sep:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", 0, -self.currentY - T.paddingSmall)
-        sep:SetColorTexture(T.border[1], T.border[2], T.border[3], 0.5)
-        self.currentY = self.currentY + T.borderSize + T.paddingSmall * 2
-        self.content:SetHeight(self.currentY)
-        self:UpdateHeight()
-        table_insert(self.regions, sep)
-        return sep
-    end
-
-    function card:AddSpacing(amount)
-        amount = amount or T.paddingMedium
-        self.currentY = self.currentY + amount
-        self.content:SetHeight(self.currentY)
-        self:UpdateHeight()
-    end
-
-    -- A mark lets a card redraw everything below one point without a page
-    -- rebuild. Labels and separators are regions, not frames, so they can only
-    -- be hidden, never orphaned.
-    function card:MarkBody()
-        return { y = self.currentY, rows = #self.rows, regions = #self.regions }
-    end
-
-    function card:TruncateBody(mark)
-        local orphaned = 0
-        for i = #self.rows, mark.rows + 1, -1 do
-            local row = self.rows[i]
-            if row.Hide then row:Hide() end
-            if row.SetParent then row:SetParent(nil) end
-            self.rows[i] = nil
-            orphaned = orphaned + 1
-        end
-        -- Orphaned frames are never collected; RefreshContent's leak tracer counts them.
-        KE_GUI_ORPHAN_COUNT = (KE_GUI_ORPHAN_COUNT or 0) + orphaned
-        for i = #self.regions, mark.regions + 1, -1 do
-            self.regions[i]:Hide()
-            self.regions[i] = nil
-        end
-        self.currentY = mark.y
-        self.content:SetHeight(self.currentY)
-        self:UpdateHeight()
-    end
-
-    -- Header-only collapse: a card with no body rows or labels — a module whose
-    -- only control is its header toggle, or any module rendered as a lone header
-    -- bar while disabled — is just its title bar. Without this branch the card
-    -- still reserves paddingMedium*2 of empty body beneath the header, which
-    -- reads as a stray gap between it and the next card.
-    function card:UpdateHeight()
-        local totalHeight
-        if self.currentY == 0 and self.headerHeight > 0 then
-            -- Exactly the header, so the header plate covers the card entirely
-            -- and the bar is one solid colour. No borderSize*2 allowance: the
-            -- header is flush at (0,0) with its own edge, so that allowance
-            -- would expose two pixels of card backdrop under the header.
-            totalHeight = self.headerHeight
-            self.content:Hide()
-        else
-            totalHeight = self.headerHeight + self.currentY + T.paddingMedium * 2
-            self.content:Show()
-        end
-        self:SetHeight(totalHeight)
-        self.contentHeight = totalHeight
-    end
-
-    function card:GetContentHeight()
-        return self.contentHeight
-    end
-
-    function card:GetNextOffset()
-        return self._yOffset + self:GetContentHeight() + Theme.paddingSmall
-    end
-
-    -- Lazy-create a transparent click-blocker overlay above the card content.
-    -- Shown when the card is disabled to make widget interactions non-functional
-    -- without recursively walking row.widgets / kit subframes (which would need
-    -- per-widget knowledge of how each card type lays out its children).
-    local function GetMouseBlocker(c)
-        if c._mouseBlocker then return c._mouseBlocker end
-        local blocker = CreateFrame("Frame", nil, c)
-        blocker:SetAllPoints(c)
-        -- +100 above the card's own frame level should cover all default-level
-        -- descendants. Cards don't generally bump child frame levels.
-        blocker:SetFrameLevel(c:GetFrameLevel() + 100)
-        blocker:EnableMouse(true)
-        -- Don't capture mouse wheel — let scroll events bubble up to the
-        -- scrollFrame so the user can still scroll past a disabled card.
-        blocker:Hide()
-        c._mouseBlocker = blocker
-        return blocker
-    end
-
-    function card:SetEnabled(enabled)
-        if enabled then
-            self:SetAlpha(1)
-            if self.header then self.header:SetAlpha(1) end
-            if self.titleText then self.titleText:SetAlpha(1) end
-            if self._mouseBlocker then self._mouseBlocker:Hide() end
-        else
-            self:SetAlpha(0.5)
-            if self.header then self.header:SetAlpha(0.5) end
-            if self.titleText then self.titleText:SetAlpha(0.5) end
-            GetMouseBlocker(self):Show()
-        end
-    end
-
-    -- Re-apply theme-tied colors. KE:RefreshTheme replaces Theme.bgLight /
-    -- accent / border tables via CopyColor; values copied at construction
-    -- (SetBackdropColor, SetTextColor) become stale. Pool-reused cards keep
-    -- the old palette across renders unless this is called. Pool Configures
-    -- invoke this; non-pooled callers (which rebuild the card per render)
-    -- pick up the new palette implicitly so calling here is harmless.
-    function card:ApplyThemeColors()
-        local TT = Theme
-        self:SetBackdropColor(TT.bgLight[1], TT.bgLight[2], TT.bgLight[3], TT.bgLight[4])
-        self:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], TT.border[4])
-        if self.header then
-            self.header:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], TT.bgMedium[4])
-            self.header:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], TT.border[4])
-        end
-        if self.titleText then
-            self.titleText:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
-        end
-    end
-
-    function card:Reset()
-        for _, row in ipairs(self.rows) do
-            if row.Hide then row:Hide() end
-            if row.SetParent then row:SetParent(nil) end
-        end
-        wipe(self.rows)
-        for _, region in ipairs(self.regions) do
-            region:Hide()
-        end
-        wipe(self.regions)
-        self.currentY = 0
-        self.contentHeight = 0
-        self.content:SetHeight(1)
-        -- One source of truth for card height; a reset card has no rows, so this
-        -- resolves to the header-only collapse above.
-        self:UpdateHeight()
-    end
-
+    card._yOffset = yOffset or 0
+    card.content:SetHeight(1)
     card:UpdateHeight()
+end
+
+local function ReleaseCard(card)
+    local rows, content = card.rows, card.content
+    for i = #rows, 1, -1 do
+        GUIFrame:ReleaseTracked(rows[i], content)
+        rows[i] = nil
+    end
+    -- A pooled row built on this card but never added to it.
+    if content:GetNumChildren() > 0 then
+        for _, child in ipairs({ content:GetChildren() }) do
+            if child._kePool then GUIFrame:ReleaseTracked(child, content) end
+        end
+    end
+    local regions = card.regions
+    for i = #regions, 1, -1 do
+        ReturnRegion(card, regions[i])
+        regions[i] = nil
+    end
+    local toggle = card._keHeaderToggle
+    if toggle then
+        toggle:Hide()
+        toggle._label = nil
+        toggle._onValueChanged = nil
+    end
+    if card._keBlocker then card._keBlocker:Hide() end
+end
+
+local function NewTitledCard(holder) return NewCard(holder, true) end
+local function NewPlainCard(holder) return NewCard(holder, false) end
+
+-- The header exists only on titled cards, so each shape has its own pool.
+local cardPool = GUIFrame:NewWidgetPool("card", NewTitledCard, ReleaseCard)
+local plainCardPool = GUIFrame:NewWidgetPool("card:plain", NewPlainCard, ReleaseCard)
+
+function GUIFrame:CreateCard(parent, title, yOffset, width)
+    local titled = title ~= nil and title ~= ""
+    local card
+    if self:IsPoolParent(parent) then
+        card = (titled and cardPool or plainCardPool):Acquire(parent)
+    else
+        card = NewCard(parent, titled)
+    end
+    ConfigureCard(card, parent, title, yOffset, width)
     return card
 end
 
@@ -867,45 +967,79 @@ end
 ---------------------------------------------------------------------------------
 -- Row System
 ---------------------------------------------------------------------------------
-function GUIFrame:CreateRow(parent, height)
-    local T = Theme
-    height = height or 24
+local RowMethods = {}
+
+function RowMethods:AddWidget(widget, widthPct, spacing, xOffset, yOffset)
+    widthPct = widthPct or 0.5
+    spacing = spacing or Theme.paddingSmall
+    xOffset = xOffset or 0
+    yOffset = yOffset or 0
+    widget:SetParent(self)
+    widget:ClearAllPoints()
+    widget:SetPoint("TOPLEFT", self, "TOPLEFT", self.nextX + xOffset, yOffset)
+    if not widget.explicitHeight then
+        widget:SetHeight(self._rowHeight)
+    end
+    widget._widthPct = widthPct
+    widget._spacing = spacing
+    widget._xOffset = xOffset
+    widget._yOffset = yOffset
+    table_insert(self.widgets, widget)
+    self.nextX = self.nextX + 10
+end
+
+local function RowOnSizeChanged(row, width)
+    local x = 0
+    for _, widget in ipairs(row.widgets) do
+        local widgetWidth = width * widget._widthPct - (widget._spacing or 0)
+        widget:ClearAllPoints()
+        widget:SetPoint("TOPLEFT", row, "TOPLEFT", x + (widget._xOffset or 0), widget._yOffset or 0)
+        widget:SetWidth(widgetWidth)
+        x = x + widgetWidth + (widget._spacing or Theme.paddingSmall)
+    end
+end
+
+local function NewRow(parent)
     local row = CreateFrame("Frame", nil, parent)
+    row.widgets = {}
+    for name, fn in pairs(RowMethods) do
+        row[name] = fn
+    end
+    row:SetScript("OnSizeChanged", RowOnSizeChanged)
+    row._keOwned = { row }
+    return row
+end
+
+local function ReleaseRow(row)
+    local widgets = row.widgets
+    for i = #widgets, 1, -1 do
+        GUIFrame:ReleaseTracked(widgets[i], row)
+        widgets[i] = nil
+    end
+    -- A pooled widget built on this row but never added to it.
+    if row:GetNumChildren() > 0 then
+        for _, child in ipairs({ row:GetChildren() }) do
+            if child._kePool then GUIFrame:ReleaseTracked(child, row) end
+        end
+    end
+end
+
+-- Rows are the one pooled kind other pooled widgets may be built under.
+local rowPool = GUIFrame:NewWidgetPool("row", NewRow, ReleaseRow, true)
+
+function GUIFrame:CreateRow(parent, height)
+    height = height or 24
+    local row
+    if self:IsPoolParent(parent) then
+        row = rowPool:Acquire(parent)
+    else
+        row = NewRow(parent)
+    end
     row:SetHeight(height)
     row:EnableMouse(false)
-    row.widgets = {}
+    row:SetAlpha(1)
+    row._rowHeight = height
     row.nextX = 0
-
-    function row:AddWidget(widget, widthPct, spacing, xOffset, yOffset)
-        widthPct = widthPct or 0.5
-        spacing = spacing or T.paddingSmall
-        xOffset = xOffset or 0
-        yOffset = yOffset or 0
-        widget:SetParent(self)
-        widget:ClearAllPoints()
-        widget:SetPoint("TOPLEFT", self, "TOPLEFT", self.nextX + xOffset, yOffset)
-        if not widget.explicitHeight then
-            widget:SetHeight(height)
-        end
-        widget._widthPct = widthPct
-        widget._spacing = spacing
-        widget._xOffset = xOffset
-        widget._yOffset = yOffset
-        table_insert(self.widgets, widget)
-        self.nextX = self.nextX + 10
-    end
-
-    row:SetScript("OnSizeChanged", function(self, width)
-        local x = 0
-        for _, widget in ipairs(self.widgets) do
-            local widgetWidth = width * widget._widthPct - (widget._spacing or 0)
-            widget:ClearAllPoints()
-            widget:SetPoint("TOPLEFT", self, "TOPLEFT", x + (widget._xOffset or 0), widget._yOffset or 0)
-            widget:SetWidth(widgetWidth)
-            x = x + widgetWidth + (widget._spacing or T.paddingSmall)
-        end
-    end)
-
     return row
 end
 
@@ -958,6 +1092,9 @@ function GUIFrame:RefreshContent()
     -- keystroke. Cleared at the end of this function before the next call.
     local itemId = self.selectedSidebarItem or "HomePage"
     local sameItem = (self.contentArea._lastItemId == itemId)
+    -- Anything released or retired during the teardown below is counted
+    -- against the page being torn down, not the one being built.
+    self._releasingPage = self.contentArea._lastItemId or itemId
     self.contentArea._inPlaceRefresh = sameItem
 
     -- Clean up custom panel if exists (e.g. sub-tab panel)
@@ -995,13 +1132,12 @@ function GUIFrame:RefreshContent()
             region:Hide()
         end
     end
+    -- Pooled objects go back to their pools; anything else is orphaned and
+    -- counted in KE_GUI_ORPHAN_COUNT, the leak's ground truth.
     for _, child in ipairs({ scrollChild:GetChildren() }) do
-        -- DEBUG_LEAK tracer: orphaned widget trees are permanent (frames never
-        -- GC); this count is the leak's ground-truth denominator.
-        KE_GUI_ORPHAN_COUNT = (KE_GUI_ORPHAN_COUNT or 0) + 1
-        child:Hide()
-        child:SetParent(nil)
+        self:ReleaseTracked(child, scrollChild)
     end
+    self._releasingPage = nil
 
     local T = Theme
     local yOffset = T.paddingMedium
