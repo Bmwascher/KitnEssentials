@@ -1062,6 +1062,17 @@ function KE:GetInterruptKickSpellSet() end
 ---@return { talent: number, seconds: number?, multiplier: number? }[]?
 function KE:GetFlatKickTalents(kickSpellID) end
 
+--- The spell ID a cooldown tracker keys a kick on (aliases collapsed).
+---@param spellID number
+---@return number
+function KE:GetCanonicalKickSpell(spellID) end
+
+--- One kick's cooldown for a spec, alias-aware; nil when the spec lacks it.
+---@param specID number?
+---@param kickID number
+---@return number?
+function KE:GetKickCooldownForSpec(specID, kickID) end
+
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end
 

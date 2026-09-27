@@ -292,3 +292,37 @@ describe("KickTracker record marker", function()
         end
     end)
 end)
+
+describe("KickTracker own kick from the demon", function()
+    it("takes the first candidate the player or the demon knows", function()
+        local KT = L.loadKickTrackerRules()
+        local candidates = {
+            { id = 19647, cd = 24 }, { id = 89766, cd = 30 },
+            { id = 119910, cd = 24 }, { id = 119914, cd = 30 },
+        }
+        local rows = {
+            { name = "Felguard out", known = { [89766] = true }, want = 89766 },
+            { name = "Felhunter out", known = { [19647] = true }, want = 19647 },
+            { name = "both known: the first wins", known = { [19647] = true, [89766] = true }, want = 19647 },
+            { name = "no kick known", known = {}, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            local kick = KT.PickOwnKick(candidates, function(id) return row.known[id] == true end)
+            assert.equals(row.want, kick and kick.id, row.name)
+        end
+    end)
+
+    it("takes the kick the player cast while its mark is set, else the check's pick", function()
+        local KT = L.loadKickTrackerRules()
+        local axeToss, spellLock = { id = 89766, cd = 30 }, { id = 19647, cd = 24 }
+        local rows = {
+            { name = "the cast mark wins over a picked kick", picked = axeToss, cast = spellLock, want = 19647 },
+            { name = "no cast mark: the picked kick", picked = axeToss, cast = nil, want = 89766 },
+            { name = "neither: no kick", picked = nil, cast = nil, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            local kick = KT.OwnKickFallback(row.picked, row.cast)
+            assert.equals(row.want, kick and kick.id, row.name)
+        end
+    end)
+end)

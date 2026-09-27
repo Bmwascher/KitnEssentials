@@ -110,6 +110,14 @@ local INTERRUPTS = {
     [1473] = { primary = { id = 351338, cd = 18 } },
 }
 
+-- One kick can report under more than one spell ID (a player command and the
+-- pet's own spell). Each maps to the ID a cooldown tracker keys that kick on.
+local KICK_ALIASES = {
+    [119910] = 19647,   -- Command Demon: Spell Lock
+    [132409] = 19647,   -- Spell Lock (sacrificed Felhunter)
+    [119914] = 89766,   -- Command Demon: Axe Toss
+}
+
 -- Precompute per-spec:
 --   entry.candidateList: normalized list of { id, cd } (primary becomes 1-entry list).
 --   entry.announceSet:   { [spellID] = true } union of all candidate IDs + announceExtras.
@@ -203,4 +211,19 @@ local FLAT_KICK_TALENTS = {
 
 function KE:GetFlatKickTalents(kickSpellID)
     return FLAT_KICK_TALENTS[kickSpellID]
+end
+
+function KE:GetCanonicalKickSpell(spellID)
+    return KICK_ALIASES[spellID] or spellID
+end
+
+-- One kick's cooldown for a spec, alias-aware; nil when the spec lacks it.
+function KE:GetKickCooldownForSpec(specID, kickID)
+    local d = INTERRUPTS[specID]
+    local list = d and d.candidateList
+    if not list then return nil end
+    for _, c in ipairs(list) do
+        if (KICK_ALIASES[c.id] or c.id) == kickID then return c.cd end
+    end
+    return nil
 end

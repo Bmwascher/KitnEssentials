@@ -235,5 +235,22 @@ function KT.MarkerFor(isRecord, showName)
     return ""
 end
 
+---------------------------------------------------------------------------------
+-- The player's own kick
+---------------------------------------------------------------------------------
+-- The first candidate the player or the active demon knows.
+function KT.PickOwnKick(candidates, isKnown)
+    for i = 1, #candidates do
+        if isKnown(candidates[i].id) then return candidates[i] end
+    end
+    return nil
+end
+
+-- A kick the player actually cast wins while its mark is set (until the demon
+-- or the spec changes); the spellbook check decides only without one.
+function KT.OwnKickFallback(picked, castKick)
+    return castKick or picked
+end
+
 
 

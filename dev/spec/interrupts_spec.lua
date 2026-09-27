@@ -42,4 +42,16 @@ describe("Interrupts (Core/Interrupts.lua)", function()
         end
         assert.is_nil(KE:GetTrackedKickForSpec(105))            -- no kick
     end)
+
+    it("finds a kick's cooldown for a spec, and nil for a kick it lacks", function()
+        -- The expected cd is read from the spec's own Axe Toss entry, so no
+        -- data cell is pinned.
+        local axeToss
+        for _, c in ipairs(KE:GetInterruptCandidatesForSpec(266)) do
+            if c.id == 89766 then axeToss = c end
+        end
+        assert.is_not_nil(axeToss)
+        assert.equals(axeToss.cd, KE:GetKickCooldownForSpec(266, 89766))
+        assert.is_nil(KE:GetKickCooldownForSpec(71, 19647))       -- a warrior has no Spell Lock
+    end)
 end)

@@ -191,6 +191,49 @@ function KT:OwnKickCooldown(data)
     return KT.TalentedCooldown(data.cd, KE:GetFlatKickTalents(data.id), isTalentKnown)
 end
 
+local function isOwnKickKnown(id)
+    return C_SpellBook.IsSpellKnownOrInSpellBook(id)
+        or C_SpellBook.IsSpellKnownOrInSpellBook(id, Enum.SpellBookSpellBank.Pet)
+end
+
+-- The player's main kick. A spec with several candidates (a warlock) uses the
+-- kick the player cast with this demon (castKick) while it is set; without it,
+-- the first candidate the player or the active demon knows, so the row
+-- follows the demon. With neither there is no own row.
+function KT:GetOwnInterruptData(specID, castKick)
+    local candidates = KE:GetInterruptCandidatesForSpec(specID)
+    if not candidates or #candidates < 2 then return self:GetInterruptDataForSpec(specID) end
+    local kick = KT.OwnKickFallback(KT.PickOwnKick(candidates, isOwnKickKnown), castKick)
+    if not kick then return nil end
+    local _, _, _, _, role = GetSpecializationInfoByID(specID)
+    return { id = KE:GetCanonicalKickSpell(kick.id), cd = kick.cd, role = role or "DAMAGER" }
+end
+
+-- Every refresh that sets the player's main kick comes here (roster, spec,
+-- pet or spellbook change), so a change is handled once whichever runs first.
+-- A new spec ends the cast mark. A new kick has not been used, so its cooldown
+-- starts clear. Either way synced teammates hear the kick, or spell 0 for
+-- none, at once. Returns whether the main kick changed, then whether anything
+-- the row shows changed.
+function KT:ApplyOwnKicks(member, specID)
+    local specChanged = member.ownKickSpec ~= specID
+    if specChanged then
+        member.ownKickSpec = specID
+        member.castKick = nil
+    end
+    local data = self:GetOwnInterruptData(specID, member.castKick)
+    local oldID = member.interruptData and member.interruptData.id
+    member.interruptData = data
+    local mainChanged = oldID ~= (data and data.id)
+    if mainChanged then
+        member.kickStart, member.kickDuration = nil, nil
+    end
+    if mainChanged or specChanged then
+        self:BroadcastHello(true)
+    end
+    return mainChanged, mainChanged or specChanged
+end
+
 -- Spec unknown (teammate without a LibSpec-carrying addon): the
 -- safe-optimistic rule — assign the class-default kick only when it can't
 -- be wrong (every spec of the class kicks, or a DPS/TANK role proves a
@@ -277,7 +320,12 @@ function KT:RefreshPartyRoster()
                 end
 
                 if specID > 0 then
-                    self:ApplySpecKick(member, specID)
+                    if unit == "player" then
+                        member.specID = specID
+                        self:ApplyOwnKicks(member, specID)
+                    else
+                        self:ApplySpecKick(member, specID)
+                    end
                 elseif unit ~= "player" and not member.interruptData and not member.kickFromMessage then
                     -- No spec data yet — class-default fallback so the bar
                     -- exists at all (LibSpec/comm refinement overwrites it)
@@ -306,7 +354,12 @@ function KT:ApplySpecData(guid, unit, specID)
     local member = self.partyMembers[guid]
     if member then
         member.classToken = classToken
-        self:ApplySpecKick(member, specID)
+        if unit == "player" then
+            member.specID = specID
+            self:ApplyOwnKicks(member, specID)
+        else
+            self:ApplySpecKick(member, specID)
+        end
         self:UpdateBars()
         self:LayoutBars()
     end
@@ -377,15 +430,19 @@ function KT:ConfirmKick(guid, durationOverride, remaining)
     self:LayoutBars()
 end
 
+function KT:RefreshMemberRow(guid)
+    local bar = self.activeBars[guid]
+    if bar then self:UpdateBarVisuals(bar, self.partyMembers[guid]) end
+    self:LayoutBars()
+end
+
 -- The member's kick is ready again (a message said so).
 function KT:ClearKick(guid)
     local member = self.partyMembers[guid]
     if not member then return end
     member.kickStart = nil
     member.kickDuration = nil
-    local bar = self.activeBars[guid]
-    if bar then self:UpdateBarVisuals(bar, member) end
-    self:LayoutBars()
+    self:RefreshMemberRow(guid)
 end
 
 ---------------------------------------------------------------------------------
@@ -758,8 +815,31 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     if not INTERRUPT_SPELL_IDS[spellID] then return end
     local guid = UnitGUID("player")
     if not guid then return end
+    local kickID = KE:GetCanonicalKickSpell(spellID)
     local member = self.partyMembers[guid]
     local data = member and member.interruptData
+    local kickCd = member and KE:GetKickCooldownForSpec(member.specID, kickID)
+    if member and kickCd then
+        -- A kick the player cast stays known until the demon or the spec
+        -- changes; the spellbook check cannot undo it (KT.OwnKickFallback).
+        if not (member.castKick and member.castKick.id == kickID) then
+            member.castKick = { id = kickID, cd = kickCd }
+        end
+        -- A demon swap the events have not shown yet, or a demon kick the
+        -- spellbook check missed: the kick just cast is the kick, and a
+        -- missing row appears. The KICK below announces it.
+        if not data or data.id ~= kickID then
+            local role = data and data.role
+            if not role then
+                local _, _, _, _, specRole = GetSpecializationInfoByID(member.specID)
+                role = specRole or "DAMAGER"
+            end
+            data = { id = kickID, cd = kickCd, role = role }
+            member.interruptData = data
+            self:UpdateBars()  -- creates or redraws the own row
+            self:LayoutBars()
+        end
+    end
     local cd = data and self:OwnKickCooldown(data)
     self:ConfirmKick(guid, cd)
     -- Tell party KE users so they can flip our roster bar with the real CD
@@ -776,7 +856,15 @@ function KT:CreateCastFrame()
     if self.castFrame then return end
     local frame = CreateFrame("Frame")
     frame:SetScript("OnEvent", function(_, event, ...)
-        self:OnSpellcastSucceeded(event, ...)
+        if event == "UNIT_PET" then
+            -- A new demon: the kick cast with the old one is no longer known.
+            local guid = UnitGUID("player")
+            local member = guid and self.partyMembers[guid]
+            if member then member.castKick = nil end
+            self:OnOwnKicksChanged()
+        else
+            self:OnSpellcastSucceeded(event, ...)
+        end
     end)
     self.castFrame = frame
 end
@@ -786,6 +874,8 @@ function KT:RegisterCombatEvents()
     self:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED", "OnSpellcastInterrupted")
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
     self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
+    self.castFrame:RegisterUnitEvent("UNIT_PET", "player")
+    self:RegisterEvent("SPELLS_CHANGED", "OnOwnKicksChanged")
     self:RegisterEvent("CHAT_MSG_ADDON", "OnCommReceived")
     self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
     self.combatEventsRegistered = true
@@ -798,6 +888,7 @@ function KT:UnregisterCombatEvents()
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
     self:UnregisterEvent("CHAT_MSG_ADDON")
     self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
+    self:UnregisterEvent("SPELLS_CHANGED")
     self.combatEventsRegistered = false
     self.commMode = nil
     self._lastHelloSent = nil
@@ -888,6 +979,34 @@ function KT:OnRestrictionChanged()
     C_Timer.After(0, function()
         self._modeCheckPending = false
         if self.isActive then self:UpdateCommMode() end
+    end)
+end
+
+-- A demon swap, a talent change or a respec can change the player's kick
+-- (KT:ApplyOwnKicks clears and announces it). The live spec is read, so a
+-- respec is applied here if this runs before OnPlayerSpecChanged. Most
+-- SPELLS_CHANGED events change nothing and redraw nothing.
+function KT:RefreshOwnKicks()
+    local guid = UnitGUID("player")
+    local member = guid and self.partyMembers[guid]
+    if not member then return end
+    local specID = GetPlayerSpecID()
+    if not specID or specID == 0 then return end
+    member.specID = specID
+    local _, anyChanged = self:ApplyOwnKicks(member, specID)
+    if not anyChanged then return end
+    self:UpdateBars()
+    self:LayoutBars()
+end
+
+-- UNIT_PET and SPELLS_CHANGED can arrive together; one check a frame later
+-- reads the settled spellbook. The payloads are not read.
+function KT:OnOwnKicksChanged()
+    if self._ownKickCheckPending then return end
+    self._ownKickCheckPending = true
+    C_Timer.After(0, function()
+        self._ownKickCheckPending = false
+        if self.isActive then self:RefreshOwnKicks() end
     end)
 end
 
