@@ -1047,6 +1047,20 @@ function RowMethods:AddWidget(widget, widthPct, spacing, xOffset, yOffset)
     self.nextX = self.nextX + 10
 end
 
+-- A row owns at most one chevron texture, made on first use, so a caller that
+-- needs one never adds a region the row's pool would reject.
+function RowMethods:GetChevron()
+    local chevron = self._keChevron
+    if not chevron then
+        chevron = self:CreateTexture(nil, "OVERLAY")
+        self._keChevron = chevron
+        GUIFrame:PoolGrow(self, self, 0, 1)
+    end
+    chevron:ClearAllPoints()
+    chevron:Show()
+    return chevron
+end
+
 local function NewRow(parent)
     local row = CreateFrame("Frame", nil, parent)
     row.widgets = {}
@@ -1064,6 +1078,7 @@ local function ReleaseRow(row)
         GUIFrame:ReleaseTracked(widgets[i], row)
         widgets[i] = nil
     end
+    if row._keChevron then row._keChevron:Hide() end
     -- A pooled widget built on this row but never added to it.
     if row:GetNumChildren() > 0 then
         for _, child in ipairs({ row:GetChildren() }) do
