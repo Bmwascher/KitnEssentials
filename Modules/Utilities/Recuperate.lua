@@ -204,8 +204,8 @@ function REC:RegWithEditMode()
             setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.button, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
             -- Recuperate has no sidebar row of its own -- guiTab opens
-            -- straight to its tab on the Utilities page.
-            guiPath = "Utilities",
+            -- straight to its tab under Class Tools.
+            guiPath = "ClassTools",
             guiTab = "Recuperate",
         })
         self.editModeRegistered = true

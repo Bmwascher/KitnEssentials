@@ -1478,7 +1478,8 @@ function DC:OnEnable()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.Frame.anchorFrameType, self.db.Frame.ParentFrame)
             end,
-            guiPath = "DungeonCasts",
+            guiPath = "KicksCasts",
+            guiTab = "DungeonCasts",
         })
         self.editModeRegistered = true
     end

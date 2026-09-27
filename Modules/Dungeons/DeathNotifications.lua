@@ -639,7 +639,8 @@ function DN:OnEnable()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "DeathNotifications",
+            guiPath = "DungeonAlerts",
+            guiTab = "DeathNotifications",
         })
         self.editModeRegistered = true
     end

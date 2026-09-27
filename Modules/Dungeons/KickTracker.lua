@@ -1696,7 +1696,8 @@ function KT:RegWithEditMode()
                 local _, aft, pf = self:ResolvePositionConfig()
                 return KE:ResolveAnchorFrame(aft, pf)
             end,
-            guiPath = "KickTracker",
+            guiPath = "KicksCasts",
+            guiTab = "KickTracker",
         })
         self.editModeRegistered = true
     end

@@ -927,6 +927,7 @@ local SECTION_PREVIEW_MODULES = {
         "NoMovementAlert", "PlayerAbsorbs", "PotionReady",
         "PetStatusText", "StanceText", "HuntersMark", "HavocTracker",
         "DisintegrateTicks", "StasisTracker",
+        "Recuperate", "TimeSpiral", "PIAssist",
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",
@@ -935,10 +936,8 @@ local SECTION_PREVIEW_MODULES = {
     },
     qol_section = {
         "GreatVaultAlert",
-        "RaidNotifications", "Recuperate",
-        "TimeSpiral", "ReadyCheckConsumables",
+        "RaidNotifications", "ReadyCheckConsumables",
         "SecondaryStats",
-        "PIAssist",
     },
     -- Skyriding UI moved here from Quality of Life. Without this entry the
     -- module stays in PREVIEW_MODULES but no section reaches it, so opening its
