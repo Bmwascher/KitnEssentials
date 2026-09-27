@@ -18,7 +18,9 @@ local abs, floor = math.abs, math.floor
 -- Sidebar Data
 ---------------------------------------------------------------------------------
 
--- Sidebar configuration
+-- Search matches the whole query as ONE literal substring of the title or of
+-- a single keyword, so a row hosting tabs spells out each tab label and every
+-- keyword of each page it absorbed, as a phrase, apostrophe variants included.
 GUIFrame.sidebarConfig = {
     {
         id = "settings_section",
@@ -28,6 +30,7 @@ GUIFrame.sidebarConfig = {
         items = {
             { id = "HomePage", text = "Home Page", keywords = { "home", "home page", "start", "welcome", "overview", "about", "changelog", "theme", "color", "accent", "appearance", "skin", "preset", "tint" } },
             { id = "Profiles", text = "Profile Manager", keywords = { "profile", "profiles", "import", "export", "copy", "reset", "rename", "delete", "global", "sharing" } },
+            { id = "CVars", text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "world map scale", "map", "map scale", "scale", "maximized", "maximised", "fullscreen", "maximized map" } },
             { id = "Optimize", text = "System Optimization", keywords = { "optimize", "performance", "fps", "cpu", "memory", "latency", "cvar" } },
         },
     },
@@ -37,11 +40,7 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Combat",
         defaultExpanded = false,
         items = {
-            -- Search matches the whole query as ONE literal substring of the
-            -- title or of a single keyword, so a tab label has to appear here
-            -- as a phrase. Both merged pages spell out every tab label they
-            -- absorbed, apostrophe variants included.
-            { id = "ClassTools",    text = "Class Tools", keywords = { "class", "class tools", "tools", "evoker", "dragon", "empower", "disintegrate", "disintegrate ticks", "ticks", "augmentation", "devastation", "preservation", "stasis", "havoc", "havoc tracker", "havoc warning", "havoc target", "target has havoc", "demon hunter", "destruction", "destro", "destruction warlock", "warlock havoc", "hunter", "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "paladin", "priest", "presence", "aura" } },
+            { id = "ClassTools",    text = "Class Tools", keywords = { "class", "class tools", "tools", "all classes", "evoker", "dragon", "empower", "disintegrate", "disintegrate ticks", "ticks", "augmentation", "devastation", "preservation", "stasis", "havoc", "havoc tracker", "havoc warning", "havoc target", "target has havoc", "warlock", "destruction", "destro", "destruction warlock", "warlock havoc", "hunter", "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "paladin", "priest", "presence", "aura", "utilities", "general", "priest: pi macro", "pi macro", "priest: pi assist", "pi assist", "power infusion", "power infusion assist", "pi", "assist", "burst", "glow", "raid frame", "macro", "builder", "trinket", "racial", "recuperate", "heal", "button", "time spiral", "tracker" } },
             { id = "CombatRes",     text = "Combat Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "CombatTexts",   text = "Combat Texts", keywords = { "combat text", "scrolling", "no target", "interrupt", "durability" } },
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },
@@ -72,14 +71,11 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 QoL",
         defaultExpanded = false,
         items = {
-            { id = "Automation",        text = "Automation", keywords = { "automation", "auto", "role", "quest", "repair", "sell", "accept", "group", "duel", "delete", "ah", "auction house", "house", "housing", "vantus rune", "merchant", "vendor", "pages", "shop", "buy", "buyback", "extend", "wide" } },
+            { id = "Automation",        text = "Automation", keywords = { "automation", "auto", "role", "quest", "repair", "sell", "accept", "group", "duel", "delete", "ah", "auction house", "house", "housing", "vantus rune", "merchant", "vendor", "pages", "shop", "buy", "buyback", "extend", "wide", "combat logger", "combat log", "logging", "advanced logging", "warcraftlogs", "raid", "scenario", "scenarios", "delve", "delves", "torghast", "warcraft recorder", "recorder", "preset" } },
             { id = "BonusRoll",         text = "Bonus Roll", keywords = { "bonus roll", "bonus", "coin", "roll", "pass", "auto pass", "auto-pass", "loot spec", "confirm", "seal" } },
-            { id = "CombatLogger",      text = "Combat Logger", keywords = { "combat log", "logging", "advanced logging", "warcraftlogs", "raid", "scenario", "scenarios", "delve", "delves", "torghast", "warcraft recorder", "recorder", "preset" } },
-            { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "world map scale", "map", "map scale", "scale", "maximized", "maximised", "fullscreen", "maximized map" } },
-            { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
-            { id = "QualityOfLife",     text = "Quality of Life", keywords = { "quality of life", "qol", "spell alert opacity", "spell alert", "opacity", "proc", "alert", "glow", "overlay", "copy anything", "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip", "move frames", "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock", "slash", "slash command", "command", "commands", "shortcut", "reload" } },
+            { id = "GroupTools",        text = "Group Tools", keywords = { "group", "raid tools", "utilities", "general", "raid", "raid notifications", "notification", "notifications", "alert", "gateway", "soulwell", "feast", "repair", "portal", "ready check", "consumables", "flask", "food", "rune", "missing", "world marker", "world markers", "marker", "raid marker", "cycle", "cycler" } },
+            { id = "QualityOfLife",     text = "Quality of Life", keywords = { "quality of life", "qol", "spell alert opacity", "spell alert", "opacity", "proc", "alert", "glow", "overlay", "great vault alert", "great vault", "vault", "weekly", "reward", "chest", "copy anything", "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip", "move frames", "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock", "slash", "slash command", "command", "commands", "shortcut", "reload" } },
             { id = "SecondaryStats",    text = "Secondary Stats Display", keywords = { "secondary stats", "stats", "stat", "crit", "critical strike", "haste", "mastery", "versatility", "vers", "leech", "lifesteal", "avoidance", "speed", "rating", "percent", "readout", "display" } },
-            { id = "Utilities",         text = "Utilities", keywords = { "utilities", "general", "priest", "priest: pi macro", "pi macro", "priest: pi assist", "pi assist", "power infusion assist", "assist", "burst", "glow", "raid frame", "power infusion", "pi", "macro", "builder", "trinket", "racial", "raid", "raid notifications", "notification", "notifications", "alert", "gateway", "soulwell", "feast", "repair", "portal", "ready check", "consumables", "flask", "food", "rune", "missing", "recuperate", "heal", "button", "time spiral", "tracker", "evoker", "world marker", "world markers", "marker", "raid marker", "cycle", "cycler" } },
         },
     },
     {
@@ -89,13 +85,9 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         items = {
             { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "instance reset", "reroll", "key", "announcer", "mythic", "m+", "group finder", "lfg", "premade", "affix", "filter", "sort", "dungeon", "raider io", "quick create", "list group", "playstyle", "teleport", "dungeon teleport", "reminder", "popup", "portal" } },
-            { id = "DeathNotifications",          text = "Death Notifications", keywords = { "death", "notification", "died", "dead", "party", "m+", "mythic" } },
-            { id = "DungeonCasts",                text = "Dungeon Casts", keywords = { "dungeon cast", "cast", "interrupt", "mob", "enemy", "castbar", "m+" } },
+            { id = "DungeonAlerts",               text = "Dungeon Alerts", keywords = { "death notifications", "death", "notification", "died", "dead", "party", "m+", "mythic", "enemy counter", "enemy", "counter", "count", "mobs", "pull", "nameplate", "targeted spells", "targeted", "spells", "cast", "incoming", "self", "target", "warning" } },
             { id = "DTimers_Main", text = "Dungeon Timers", keywords = { "dungeon timers", "timer", "timers", "bigwigs", "boss", "season", "enable", "general", "bar", "bars", "color", "texture", "size", "text", "font", "label", "nameplate", "trash", "mob", "icon", "cooldown", "predict", "dungeon", "algethar", "aa", "mgt", "pos", "sott" } },
-            { id = "EnemyCounter",                text = "Enemy Counter", keywords = { "enemy", "counter", "count", "mobs", "pull", "nameplate", "m+" } },
-            { id = "FocusMarker",                 text = "Focus Marker", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker", "kick", "interrupt", "focus kick" } },
-            { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
-            { id = "TargetedSpells",              text = "Targeted Spells", keywords = { "targeted", "spells", "cast", "incoming", "self", "target", "warning", "m+" } },
+            { id = "KicksCasts",                  text = "Kicks & Casts", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker", "kick", "interrupt", "focus kick", "interrupt tracker", "tracker", "cc", "stop", "party", "m+", "dungeon casts", "dungeon cast", "cast", "mob", "enemy", "castbar" } },
         },
     },
     {
