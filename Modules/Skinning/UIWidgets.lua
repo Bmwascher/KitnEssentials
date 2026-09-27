@@ -164,6 +164,59 @@ local function ApplyFont(fs, role)
     end
 end
 
+local function HideFill(record)
+    if record.fill then record.fill:Hide() end
+end
+
+-- A released bar is hidden with the last widget's fill still on it, and the
+-- next Setup shows it again before KE's sweep has seen the new kit. The fill
+-- goes down with the bar; the sweep its return queues puts it back.
+local function RestyleOnShow()
+    UIW:OnWidgetEvent()
+end
+
+-- KE's fill sits in ARTWORK on Blizzard's bar: above its fill (BACKGROUND),
+-- below its text (OVERLAY). Anchored to the fill texture, it follows the
+-- value and the smooth fill with no Lua of its own. Some widgets name a
+-- plain Frame .Bar; only a StatusBar has a fill texture.
+local function UpdateFill(bar, record, barDB)
+    local fillTex = bar:IsObjectType("StatusBar") and bar:GetStatusBarTexture()
+    if not fillTex then
+        HideFill(record)
+        return
+    end
+
+    local r, g, b = UIW.ResolveFillColor(bar.frameTextureKit, bar.textureKit, bar:GetStatusBarColor())
+    if not r then
+        HideFill(record)
+        return
+    end
+
+    local fill = record.fill
+    if not fill then
+        fill = bar:CreateTexture(nil, "ARTWORK")
+        record.fill = fill
+        record:SetScript("OnHide", HideFill)
+        record:SetScript("OnShow", RestyleOnShow)
+    end
+
+    if record.fillAnchor ~= fillTex then
+        fill:ClearAllPoints()
+        fill:SetPoint("TOPLEFT", fillTex, "TOPLEFT")
+        fill:SetPoint("BOTTOMRIGHT", fillTex, "BOTTOMRIGHT")
+        record.fillAnchor = fillTex
+    end
+
+    local path = KE:GetStatusbarPath(barDB.BarTexture)
+    if record.fillPath ~= path then
+        fill:SetTexture(path)
+        record.fillPath = path
+    end
+
+    fill:SetVertexColor(r, g, b)
+    fill:Show()
+end
+
 -- Text widgets KE centres. Setup justifies from the widget's own alignment
 -- inside a fixed width, which leaves a short string off-centre; the hook
 -- turns it back to CENTER, and its own re-entrant call passes CENTER.
@@ -273,6 +326,15 @@ function UIW:StyleStatusBarWidget(widget)
 
                 backdrop.borderFrame = borderFrame
                 backdrops[bar] = backdrop
+            end
+        end
+
+        local record = backdrops[bar]
+        if record then
+            if barDB.StripTextures then
+                UpdateFill(bar, record, barDB)
+            else
+                HideFill(record)
             end
         end
     end
