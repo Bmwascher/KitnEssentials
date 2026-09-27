@@ -48,6 +48,48 @@ local ignoreWidget = {
 -- whatever shows it next.
 local backdrops = setmetatable({}, { __mode = "k" })
 
+-- Fill colour per Blizzard fill kit. Only the plain "widgetstatusbar" frame
+-- kit gets one; themed frame kits keep their own art.
+local FILL_COLORS = {
+    green  = { 0.30, 0.78, 0.30 },
+    yellow = { 0.95, 0.77, 0.20 },
+    red    = { 0.85, 0.22, 0.22 },
+    orange = { 0.95, 0.55, 0.20 },
+    blue   = { 0.25, 0.55, 0.90 },
+    purple = { 0.64, 0.35, 0.90 },
+}
+
+-- A "white" fill takes the bar's own tint. nil leaves Blizzard's fill.
+function UIW.ResolveFillColor(frameKit, fillKit, r, g, b)
+    if frameKit ~= "widgetstatusbar" or type(fillKit) ~= "string" then return nil end
+    local kit = fillKit:lower()
+    if kit == "white" then return r, g, b end
+    local c = FILL_COLORS[kit]
+    if not c then return nil end
+    return c[1], c[2], c[3]
+end
+
+local FONT_ROLES = {
+    Label   = { group = "StatusBar",  flag = "StyleLabel",   size = "LabelSize" },
+    BarText = { group = "StatusBar",  flag = "StyleBarText", size = "BarTextSize" },
+    Text    = { group = "TextWidget", flag = "StyleText",    size = "Size" },
+}
+
+-- The sweep and the SetFontObject hook share this rule: nil leaves
+-- Blizzard's font, and is the only off switch a hook that cannot be
+-- removed has.
+function UIW.FontSizeForRole(db, role)
+    local spec = FONT_ROLES[role]
+    if not (spec and db and db.Enabled) then return nil end
+    local group = db[spec.group]
+    if not (group and group.Enabled and group[spec.flag]) then return nil end
+    return group[spec.size]
+end
+
+function UIW.ShouldCenterText(db)
+    return UIW.FontSizeForRole(db, "Text") ~= nil and db.TextWidget.CenterText == true
+end
+
 function UIW:UpdateDB()
     self.db = KE.db.profile.Skinning.UIWidgets
 
