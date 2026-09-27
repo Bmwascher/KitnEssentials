@@ -250,6 +250,17 @@ function LR:_GetPendingSpellID()     return pendingSpellID end
 function LR:_GetPendingName()        return pendingName end
 function LR:_GetPendingAttrSpellID() return pendingAttrSpellID end
 
+-- The X close. It ends the prompt rather than hiding it, so nothing that
+-- brings a hidden prompt back (the combat re-show, a preview closing) can
+-- show or re-arm it. HidePrompt alone serves the combat, cooldown and
+-- group paths, which must not drop the prompt this way.
+local function ClosePrompt()
+    ClearPending()
+    HidePrompt()
+end
+
+LR._ClosePrompt = ClosePrompt
+
 function LR:UpdateDB()
     if KE.db and KE.db.profile then
         self.db = KE.db.profile.LFGReminder
@@ -405,7 +416,7 @@ BuildPopup = function()
     xBtn:SetSize(16, 16)
     xBtn:SetPoint("RIGHT", hdrBg, "RIGHT", -6, 0)
     if S and S.CloseButton then S.CloseButton(xBtn, 12) end
-    xBtn:SetScript("OnClick", function() HidePrompt() end)
+    xBtn:SetScript("OnClick", ClosePrompt)
 
     -- Secure teleport button (once; type + clicks set here and NEVER
     -- touched again; only "spell" is rewritten, out of combat).

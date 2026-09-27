@@ -311,3 +311,25 @@ describe("LFGReminder combat re-show", function()
         assert.equals(1286809, btn:GetAttribute("spell"))
     end)
 end)
+
+describe("LFGReminder close with X", function()
+    -- X ends the prompt. A plain hide would leave the pending teleport, which
+    -- HidePreview re-arms and leaves on screen.
+    it("keeps a prompt closed with X closed through a preview", function()
+        local LR, _, seams = loader.loadLFGReminder({
+            C_LFGList = {
+                GetSearchResultInfo = function() return { activityIDs = { 7 } } end,
+                GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        LR:LFG_LIST_JOINED_GROUP(nil, 1)
+        local popup = seams.frames["KE_LFGReminderPopup"]
+        local btn   = seams.frames["KE_LFGReminderTeleport"]
+        LR._ClosePrompt()
+        LR:ShowPreview()
+        LR:HidePreview()
+        assert.is_false(popup:IsShown())
+        assert.is_nil(btn:GetAttribute("spell"))
+    end)
+end)
