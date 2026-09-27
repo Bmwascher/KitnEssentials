@@ -61,7 +61,7 @@ function GUIFrame:CreateButton(parent, labelText, config)
     end
     PaintRest()
 
-    -- Hover fade animation for border color
+    -- Hover fade animation for border and plate color
     local hoverAnimGroup = button:CreateAnimationGroup()
     local hoverAnim = hoverAnimGroup:CreateAnimation("Animation")
     hoverAnim:SetDuration(0.15)
