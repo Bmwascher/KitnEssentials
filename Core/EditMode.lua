@@ -1099,6 +1099,15 @@ end
 -- Enter / Exit / Toggle
 ---------------------------------------------------------------------------------
 
+-- The settings window may never have been opened, so its header button may
+-- not exist yet.
+function EditMode:PaintHeaderButton()
+    local gui = KE.GUIFrame
+    if gui and gui.PaintEditModeButton then
+        gui.PaintEditModeButton()
+    end
+end
+
 function EditMode:Enter()
     if self.isActive then return end
     if InCombatLockdown() then
@@ -1142,6 +1151,7 @@ function EditMode:Enter()
     self:SetupShiftHandler()
     self:SetupCombatHandler()
     self:StartDeselectChecker()
+    self:PaintHeaderButton()
 
     local EnterMsg =
     "Edit Mode |cff00ff00enabled|r.\nDrag to move. Arrows or wheel nudge, Ctrl for 10.\nRight-click a box for settings, Shift to hide it, Ctrl to revert it.\nHold Shift to see through. ESC or /kes edit to exit."
@@ -1187,6 +1197,7 @@ function EditMode:Exit()
     self:RemoveShiftHandler()
     self:RemoveCombatHandler()
     self:StopDeselectChecker()
+    self:PaintHeaderButton()
 
     local ExitMsg =
     "Edit Mode |cffff0000disabled|r."

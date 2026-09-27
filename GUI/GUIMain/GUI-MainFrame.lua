@@ -429,15 +429,27 @@ function GUIFrame:CreateMainFrame()
     editModeIcon:SetSnapToPixelGrid(true)
     editModeBtn.icon = editModeIcon
 
+    -- Accent while hovered and while edit mode is on, so the header shows the
+    -- mode is running. Exposed for EditMode's Enter/Exit and theme changes.
+    local editModeHovered = false
+    local function PaintEditModeButton()
+        local lit = editModeHovered or (KE.EditMode and KE.EditMode:IsActive())
+        local c = lit and T.accent or T.textSecondary
+        editModeIcon:SetVertexColor(c[1], c[2], c[3], 1)
+    end
+    GUIFrame.PaintEditModeButton = PaintEditModeButton
+
     editModeBtn:SetScript("OnEnter", function(self)
-        editModeIcon:SetVertexColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        editModeHovered = true
+        PaintEditModeButton()
         if GameTooltip:IsForbidden() then return end
         GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
         GameTooltip:SetText("Toggle Anchors")
         GameTooltip:Show()
     end)
     editModeBtn:SetScript("OnLeave", function(self)
-        editModeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+        editModeHovered = false
+        PaintEditModeButton()
         if not GameTooltip:IsForbidden() and GameTooltip:IsOwned(self) then
             GameTooltip:Hide()
         end
