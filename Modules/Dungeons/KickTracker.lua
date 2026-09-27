@@ -39,6 +39,7 @@ local C_Spell = C_Spell
 local UnitNameFromGUID = UnitNameFromGUID
 local UnitClassFromGUID = UnitClassFromGUID
 local UnitTokenFromGUID = UnitTokenFromGUID
+local GetRaidTargetIndex = GetRaidTargetIndex
 local GetSpecializationInfoByID = GetSpecializationInfoByID
 local issecretvalue = issecretvalue
 local GetNormalizedRealmName = GetNormalizedRealmName
@@ -96,6 +97,7 @@ local KICK_RECORD_GRACE = 0.4  -- records stay invisible this long so a comm
 local HELLO_THROTTLE = 10
 local KICK_PAIR_WINDOW = 1.5
 local HELLO_REPLY_JITTER = 0.6
+local RAID_MARK_SHEET = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 
 -- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence,
 -- container OnUpdate ticks, and nameplate-interrupt token resolution.
@@ -402,10 +404,17 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     end
     if ok and KE:IsSafeValue(token) then return end
 
-    self:ProcessTeammateKick(interruptedBy, spellID)
+    -- Snapshot the mob's raid marker now; the nameplate token is never kept.
+    -- The index may be secret: presence is tested without a truth test.
+    local raidMark, hasRaidMark
+    local okMark, markIndex = pcall(GetRaidTargetIndex, unit)
+    if okMark and (issecretvalue(markIndex) or markIndex ~= nil) then
+        raidMark, hasRaidMark = markIndex, true
+    end
+    self:ProcessTeammateKick(interruptedBy, spellID, raidMark, hasRaidMark)
 end
 
-function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
+function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID, raidMark, hasRaidMark)
     -- What the game lets us see about the kicker, for display only: the name
     -- and class may be secret, so neither is compared.
     local ok, name = pcall(UnitNameFromGUID, interrupterGuid)
@@ -458,6 +467,8 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
         colorB = colorB,
         startTime = GetTime(),
         duration = self.db.KickRecordDuration or KICK_RECORD_FALLBACK_DURATION,
+        raidMark = raidMark,  -- possibly secret; SetSpriteSheetCell-only
+        hasRaidMark = hasRaidMark,
     }
     table_insert(self.kickRecords, record)
 
@@ -910,25 +921,64 @@ function KT:CreateBar()
     iconBg:SetColorTexture(0, 0, 0, 1)
     barFrame.iconBg = iconBg
 
-    local iconTex = iconFrame:CreateTexture(nil, "ARTWORK")
-    iconTex:SetPoint("TOPLEFT", 1, -1)
-    iconTex:SetPoint("BOTTOMRIGHT", -1, 1)
-    iconTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    barFrame.iconTex = iconTex
-
-    -- Name text (offset right of icon when icon is on the left)
-    local nameText = statusBar:CreateFontString(nil, "OVERLAY")
-    nameText:SetJustifyH("LEFT")
-    barFrame.nameText = nameText
-
-    -- Timer text
-    local timerText = statusBar:CreateFontString(nil, "OVERLAY")
-    timerText:SetPoint("RIGHT", statusBar, "RIGHT", -2, 0)
-    timerText:SetJustifyH("RIGHT")
-    barFrame.timerText = timerText
+    barFrame.iconTex = iconFrame:CreateTexture(nil, "ARTWORK")
+    barFrame.nameText = statusBar:CreateFontString(nil, "OVERLAY")
+    barFrame.markerText = statusBar:CreateFontString(nil, "OVERLAY")
+    barFrame.timerText = statusBar:CreateFontString(nil, "OVERLAY")
+    barFrame.raidMarkTex = statusBar:CreateTexture(nil, "OVERLAY")
+    self:ApplyRegionDefaults(barFrame)
 
     barFrame:Hide()
     return barFrame
+end
+
+-- Every property CreateBar sets on a region once.
+function KT:ApplyRegionDefaults(bar)
+    local iconTex = bar.iconTex
+    iconTex:SetDrawLayer("ARTWORK")
+    iconTex:ClearAllPoints()
+    iconTex:SetPoint("TOPLEFT", bar.iconFrame, "TOPLEFT", 1, -1)
+    iconTex:SetPoint("BOTTOMRIGHT", bar.iconFrame, "BOTTOMRIGHT", -1, 1)
+    iconTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    bar.nameText:SetDrawLayer("OVERLAY")
+    bar.nameText:SetJustifyH("LEFT")
+
+    bar.markerText:SetDrawLayer("OVERLAY")
+    bar.markerText:SetJustifyH("LEFT")
+    bar.markerText:ClearAllPoints()
+    bar.markerText:SetPoint("LEFT", bar.nameText, "RIGHT", 1, 0)
+
+    bar.timerText:SetDrawLayer("OVERLAY")
+    bar.timerText:SetJustifyH("RIGHT")
+    bar.timerText:ClearAllPoints()
+    bar.timerText:SetPoint("RIGHT", bar.statusBar, "RIGHT", -2, 0)
+
+    bar.raidMarkTex:SetDrawLayer("OVERLAY")
+    bar.raidMarkTex:ClearAllPoints()
+    bar.raidMarkTex:SetPoint("LEFT", bar.markerText, "RIGHT", 2, 0)
+    bar.raidMarkTex:SetTexture(RAID_MARK_SHEET)
+    bar.raidMarkTex:Hide()
+end
+
+-- The trailing "*" and the raid marker sit in the name's slot, so both
+-- follow ShowName. The marker index may be secret: it is only handed to the
+-- C-side sprite-sheet call, shown when that call succeeds.
+function KT:ApplyNameMarks(bar, record)
+    local db = self.db
+    local marker = KT.MarkerFor(record ~= nil, db.ShowName)
+    KE:ApplyFont(bar.markerText, db.FontFace, db.FontSize, db.FontOutline)
+    bar.markerText:SetTextColor(1, 1, 1, 1)
+    bar.markerText:SetText(marker)
+    bar.markerText:SetShown(marker ~= "")
+
+    local markShown = false
+    if record and record.hasRaidMark and db.ShowName then
+        bar.raidMarkTex:SetSize(db.FontSize, db.FontSize)
+        bar.raidMarkTex:SetTexture(RAID_MARK_SHEET)
+        markShown = pcall(bar.raidMarkTex.SetSpriteSheetCell, bar.raidMarkTex, record.raidMark, 4, 4)
+    end
+    bar.raidMarkTex:SetShown(markShown)
 end
 
 function KT:GetOrCreateBar(guid)
@@ -1039,11 +1089,9 @@ function KT:UpdateRecordBarVisuals(bar, record)
 
     KE:ApplyFont(bar.nameText, db.FontFace, db.FontSize, db.FontOutline)
     bar.nameText:SetShown(db.ShowName)
-    -- "> " prefix marks this as an event entry, not a member row. Concat
-    -- with a secret string is legal in 12.0 (yields a secret string).
-    local nameOk = pcall(function() bar.nameText:SetText("> " .. record.name) end)
-    if not nameOk then bar.nameText:SetText(">") end
+    pcall(bar.nameText.SetText, bar.nameText, record.name)
     bar.nameText:SetTextColor(1, 1, 1, 1)
+    self:ApplyNameMarks(bar, record)
 
     KE:ApplyFont(bar.timerText, db.FontFace, db.FontSize, db.FontOutline)
     bar.timerText:SetShown(db.ShowTimer)
@@ -1093,6 +1141,8 @@ function KT:UpdateBarVisuals(bar, member)
             bar.nameText:SetTextColor(1, 1, 1, 1)
         end
     end
+
+    self:ApplyNameMarks(bar, nil)
 
     -- Timer text
     KE:ApplyFont(bar.timerText, db.FontFace, db.FontSize, db.FontOutline)

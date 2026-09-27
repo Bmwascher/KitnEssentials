@@ -225,5 +225,15 @@ function KT.HelloReplyMode(replyFlag)
     return "throttled"
 end
 
+---------------------------------------------------------------------------------
+-- Record marker
+---------------------------------------------------------------------------------
+-- A record is a kick no synced teammate claimed. The mark is its own text
+-- after the name, so no string is built from a name that may be secret.
+function KT.MarkerFor(isRecord, showName)
+    if isRecord and showName then return "*" end
+    return ""
+end
+
 
 

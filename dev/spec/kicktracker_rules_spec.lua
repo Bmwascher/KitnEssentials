@@ -278,3 +278,17 @@ describe("KickTracker HELLO answer", function()
         end
     end)
 end)
+
+describe("KickTracker record marker", function()
+    it("marks a record only while names are shown", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "record, names shown", isRecord = true, showName = true, want = "*" },
+            { name = "record, names hidden", isRecord = true, showName = false, want = "" },
+            { name = "member row", isRecord = false, showName = true, want = "" },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.MarkerFor(row.isRecord, row.showName), row.name)
+        end
+    end)
+end)
