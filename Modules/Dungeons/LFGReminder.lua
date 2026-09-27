@@ -132,10 +132,9 @@ local function MeasuredWidth(measure, s)
     return type(w) == "number" and w or 0
 end
 
--- A word wider than the column breaks between whole glyphs, so width / column
--- undercounts: 8 glyphs of 15 px fit in 128 px, and 17 of them need 3 lines,
--- not 2. Returns the lines the word spans and the text on its last line.
--- The pattern steps UTF-8 characters, never splitting one.
+-- A word wider than the column breaks between whole UTF-8 characters, so
+-- width / column undercounts its lines. Returns the lines the word spans and
+-- the text on its last line.
 local function PackGlyphs(word, width, measure)
     local lines, current = 1, ""
     for glyph in word:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
