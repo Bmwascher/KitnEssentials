@@ -190,11 +190,16 @@ function KT.ParseHelloRemaining(field, cd)
 end
 
 -- "start" the full cooldown, "set" a remaining time, "ready", or "keep".
-function KT.CooldownFromMessage(verb, remaining)
-    if verb == "KICK" then return "start" end
-    if remaining == nil then return "keep" end
-    if remaining <= 0 then return "ready" end
-    return "set"
+-- The second return is true when an R moved the row: that stamp makes a KICK
+-- inside the window keep the shorter time instead of restarting it.
+function KT.CooldownFromMessage(verb, remaining, reducedAt, now, window)
+    if verb == "KICK" then
+        if reducedAt and now - reducedAt <= window then return "keep", false end
+        return "start", false
+    end
+    if remaining == nil then return "keep", false end
+    local action = remaining <= 0 and "ready" or "set"
+    return action, verb == "R"
 end
 
 -- Once a message has set or cleared a teammate's kick, their kick comes only
@@ -342,4 +347,25 @@ function KT.WireCooldownCap(cd, tableCap)
     local limit = tableCap or 60
     if cd > limit then return limit end
     return cd
+end
+
+---------------------------------------------------------------------------------
+-- Own-kick success
+---------------------------------------------------------------------------------
+function KT.OwnKickMatched(kickAt, landedAt, window)
+    if not kickAt or not landedAt then return false end
+    local gap = kickAt - landedAt
+    if gap < 0 then gap = -gap end
+    return gap <= window
+end
+
+-- The own row's remaining time after a success reduction; nil when the row
+-- is not cooling.
+function KT.ReducedRemaining(kickStart, kickDuration, now, seconds)
+    if not kickStart or not kickDuration then return nil end
+    local remaining = kickStart + kickDuration - now
+    if remaining <= 0 then return nil end
+    remaining = remaining - seconds
+    if remaining < 0 then remaining = 0 end
+    return remaining
 end

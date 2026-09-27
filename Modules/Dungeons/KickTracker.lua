@@ -98,6 +98,7 @@ local HELLO_THROTTLE = 10
 local KICK_PAIR_WINDOW = 1.5
 local HELLO_REPLY_JITTER = 0.6
 local RAID_MARK_SHEET = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
+local OWN_KICK_MATCH_WINDOW = 0.5
 
 local function FormatRemaining(remaining)
     if remaining > 6 then return string_format("%d", math_floor(remaining)) end
@@ -479,7 +480,11 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
             tostring(unit), tostring(ok), tostring(token),
             tostring(not KE:IsSafeValue(interruptedBy))))
     end
-    if ok and KE:IsSafeValue(token) then return end
+    if ok and KE:IsSafeValue(token) then
+        self._ownLandedAt = GetTime()
+        self:TryOwnReduction()
+        return
+    end
 
     -- Snapshot the mob's raid marker now; the nameplate token is never kept.
     -- The index may be secret: presence is tested without a truth test.
@@ -690,6 +695,37 @@ function KT:BroadcastHello(force, isReply)
     -- (kick-data-only participation, established interop posture).
 end
 
+-- R: the sender's own corrected remaining time after a talent shortened its
+-- kick. Sync mode only; the mirror carries nothing for it.
+function KT:BroadcastReduction(spellID, cd, remaining)
+    if not self.db.KickSync or self.commMode ~= "sync" or not IsInGroup() then return end
+    self:Transmit(COMM_PREFIX, "1;R;" .. spellID .. ";" .. cd .. ";" .. string_format("%.1f", remaining))
+end
+
+-- A kick the player cast and a nameplate interrupt credited to the player
+-- are one success when they land within the window, in either order. The
+-- shorter cooldown is the own row's arithmetic, never a cooldown read.
+function KT:TryOwnReduction()
+    if not KT.OwnKickMatched(self._ownKickAt, self._ownLandedAt, OWN_KICK_MATCH_WINDOW) then return end
+    local spellID = self._ownKickSpell
+    self._ownKickAt, self._ownLandedAt, self._ownKickSpell = nil, nil, nil
+
+    local talentID, seconds = KE:GetInterruptSuccessReduction(spellID)
+    if not talentID or not isTalentKnown(talentID) then return end
+    local guid = UnitGUID("player")
+    local member = guid and self.partyMembers[guid]
+    if not member or not member.interruptData then return end
+    local duration = member.kickDuration
+    local remaining = KT.ReducedRemaining(member.kickStart, duration, GetTime(), seconds)
+    if not remaining then return end
+    if remaining > 0 then
+        self:ConfirmKick(guid, duration, remaining)
+    else
+        self:ClearKick(guid)
+    end
+    self:BroadcastReduction(member.interruptData.id, duration, remaining)
+end
+
 function KT:OnCommReceived(_, prefix, message, _, sender)
     local isKE = prefix == COMM_PREFIX
     if not isKE and prefix ~= BLIZZI_PREFIX then return end
@@ -712,6 +748,7 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         end
 
         --   KE:     "1;KICK;spellID;cd"  "1;HELLO;spellID;cd;remaining;replyFlag"
+        --           "1;R;spellID;cd;remaining"
         --   BliZzi: "B1;KICK;spellID;cd" "B1;HELLO;class;spellID;cd"
         local verb, sid, cd, remField, replyFlag
         if isKE then
@@ -727,8 +764,8 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
                 verb, sid, cd = "HELLO", tonumber(a4), tonumber(a5)  -- a3 = class
             end
         end
-        if verb ~= "KICK" and verb ~= "HELLO" then return end
-        if verb == "KICK" and (not cd or cd <= 0) then return end
+        if verb ~= "KICK" and verb ~= "HELLO" and verb ~= "R" then return end
+        if verb ~= "HELLO" and (not cd or cd <= 0) then return end
         -- Wire cd is untrusted external input: cap it at the kick's table cd
         -- so a bad client can't wedge a bar for hours.
         local kickID = (sid and sid > 0) and KE:GetCanonicalKickSpell(sid) or nil
@@ -784,7 +821,9 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         end
 
         local remaining = KT.ParseHelloRemaining(remField, member.interruptData.cd)
-        local action = KT.CooldownFromMessage(verb, remaining)
+        -- Only an R that moved the row stamps it; a malformed R changes nothing.
+        local action, stamp = KT.CooldownFromMessage(verb, remaining, member.reducedAt, now, KICK_PAIR_WINDOW)
+        if stamp then member.reducedAt = now end
         if action == "start" then
             self:ConfirmKick(guid, cd)
         elseif action == "set" then
@@ -862,6 +901,7 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
         return
     end
     local kickID = KE:GetCanonicalKickSpell(spellID)
+    self._ownKickAt, self._ownKickSpell = GetTime(), kickID
     local member = self.partyMembers[guid]
     local data = member and member.interruptData
     local kickCd = member and KE:GetKickCooldownForSpec(member.specID, kickID)
@@ -890,6 +930,7 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     self:ConfirmKick(guid, cd)
     -- Tell party KE users so they can flip our roster bar with the real CD
     if data then self:BroadcastKick(data.id, cd) end
+    self:TryOwnReduction()
 end
 
 ---------------------------------------------------------------------------------
@@ -1004,6 +1045,7 @@ function KT:UpdateCommMode()
                 member.kickStart = nil
                 member.kickDuration = nil
                 member.extraKicks = nil
+                member.reducedAt = nil
             end
         end
         self:ClearPairing()

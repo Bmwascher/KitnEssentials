@@ -1088,6 +1088,13 @@ function KE:GetExtraKick(spellID) end
 ---@return number?
 function KE:GetKickCooldownCap(kickID) end
 
+--- The talent that shortens a kick after a successful interrupt, and by how
+--- many seconds; nil when none.
+---@param kickSpellID number
+---@return number? talentSpellID
+---@return number? seconds
+function KE:GetInterruptSuccessReduction(kickSpellID) end
+
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end
 

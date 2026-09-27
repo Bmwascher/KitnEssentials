@@ -217,16 +217,23 @@ describe("KickTracker remaining-time field", function()
 end)
 
 describe("KickTracker message to row state", function()
-    it("starts, sets, readies or keeps a teammate's row", function()
+    it("starts, sets, readies or keeps a teammate's row, and stamps only a valid R", function()
         local KT = L.loadKickTrackerRules()
         local rows = {
-            { name = "KICK starts", verb = "KICK", remaining = nil, want = "start" },
-            { name = "HELLO without a remaining time keeps", verb = "HELLO", remaining = nil, want = "keep" },
-            { name = "HELLO at zero readies", verb = "HELLO", remaining = 0, want = "ready" },
-            { name = "HELLO with a remaining time sets", verb = "HELLO", remaining = 4, want = "set" },
+            { name = "KICK starts", verb = "KICK", want = "start", stamp = false },
+            { name = "HELLO without a remaining time keeps", verb = "HELLO", want = "keep", stamp = false },
+            { name = "HELLO at zero readies", verb = "HELLO", remaining = 0, want = "ready", stamp = false },
+            { name = "HELLO with a remaining time sets", verb = "HELLO", remaining = 4, want = "set", stamp = false },
+            { name = "R sets and stamps", verb = "R", remaining = 4, want = "set", stamp = true },
+            { name = "R at zero readies and stamps", verb = "R", remaining = 0, want = "ready", stamp = true },
+            { name = "an absent or unreadable R keeps without a stamp", verb = "R", want = "keep", stamp = false },
+            { name = "KICK inside the window after R keeps", verb = "KICK", reducedAt = 9, want = "keep", stamp = false },
+            { name = "KICK after the window starts", verb = "KICK", reducedAt = 8, want = "start", stamp = false },
         }
         for _, row in ipairs(rows) do
-            assert.equals(row.want, KT.CooldownFromMessage(row.verb, row.remaining), row.name)
+            local action, stamp = KT.CooldownFromMessage(row.verb, row.remaining, row.reducedAt, 10, 1.5)
+            assert.equals(row.want, action, row.name)
+            assert.equals(row.stamp, stamp, row.name)
         end
     end)
 end)
@@ -401,6 +408,37 @@ describe("KickTracker two-kick row", function()
             local entry, ready = KT.PickRowKick(row.member, 10)
             assert.equals(row.id, entry and entry.id, row.name)
             assert.equals(row.ready, ready, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker own-kick success match", function()
+    it("matches a kick and a landing inside the window in either order", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "kick then landing", kick = 10, landed = 10.3, want = true },
+            { name = "landing then kick", kick = 10.3, landed = 10, want = true },
+            { name = "outside the window", kick = 10, landed = 10.6, want = false },
+            { name = "no kick", kick = nil, landed = 10, want = false },
+            { name = "no landing", kick = 10, landed = nil, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.OwnKickMatched(row.kick, row.landed, 0.5), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker success reduction", function()
+    it("subtracts from a cooling row, clamps at zero, and skips a ready row", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "cooling", start = 0, duration = 12, now = 4, want = 5 },
+            { name = "clamped at zero", start = 0, duration = 12, now = 10, want = 0 },
+            { name = "already expired", start = 0, duration = 12, now = 13, want = nil },
+            { name = "not cooling", start = nil, duration = nil, now = 4, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.ReducedRemaining(row.start, row.duration, row.now, 3), row.name)
         end
     end)
 end)

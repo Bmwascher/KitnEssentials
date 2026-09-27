@@ -265,3 +265,15 @@ end
 function KE:GetKickCooldownCap(kickID)
     return KICK_CD_CAP[kickID]
 end
+
+-- Talents that shorten a kick after it interrupts something, keyed by kick
+-- spell ID.
+local SUCCESS_REDUCTIONS = {
+    [47528] = { talent = 378848, seconds = 3 },  -- Mind Freeze: Coldthirst
+}
+
+function KE:GetInterruptSuccessReduction(kickSpellID)
+    local reduction = SUCCESS_REDUCTIONS[kickSpellID]
+    if not reduction then return nil end
+    return reduction.talent, reduction.seconds
+end
