@@ -267,3 +267,23 @@ describe("LFGReminder module", function()
         end)
     end)
 end)
+
+describe("LFGReminder preview", function()
+    -- The preview must draw a dungeon the live teleport table knows, so a
+    -- season update that drops it from the table fails here.
+    it("draws the teleport the live table gives its dungeon", function()
+        local asked
+        local LR, _, seams = loader.loadLFGReminder({
+            C_Spell = {
+                GetSpellInfo = function(id) asked = id; return nil end,
+                GetSpellCooldown = function() return nil end,
+                GetSpellCooldownDuration = function() return nil end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        LR:ShowPreview()
+        local want = seams.resolveByName("Ruby Life Pools")
+        assert.is_not_nil(want)
+        assert.equals(want, asked)
+    end)
+end)

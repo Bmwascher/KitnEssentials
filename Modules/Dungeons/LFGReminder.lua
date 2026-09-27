@@ -800,7 +800,10 @@ function LR:ShowPreview()
     BuildPopup()
     if not popup then return end
     if secureBtn then secureBtn:SetAttribute("spell", nil) end
-    popup._name:SetText("Skyreach")
+    -- A current-season dungeon: it must stay a key of TELEPORT_BY_NAME, so
+    -- the preview draws the live table's teleport.
+    local dungeon = "Ruby Life Pools"
+    popup._name:SetText(dungeon)
     -- Read whether or not Show Role is on, so ticking it with the preview open
     -- shows the row through the page's refresh.
     local specIndex = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization()
@@ -809,7 +812,8 @@ function LR:ShowPreview()
     shownRole = PickRole(specRole, nil) or "DAMAGER"
     ApplyPopupLayout()
     if secureBtn and secureBtn._icon then
-        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(159898)
+        local sid = ResolveTeleportSpellByName(dungeon)
+        local info = sid and C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(sid)
         if info and info.iconID then secureBtn._icon:SetTexture(info.iconID) end
         secureBtn._icon:SetDesaturated(false)
         secureBtn._icon:SetAlpha(1)
