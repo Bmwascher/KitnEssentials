@@ -3346,16 +3346,13 @@ end
 -- whether the player moved from the last entry's place, which ends any Ask
 -- prompt raised there, and the new pending entry. The last key survives the
 -- open world, so walking back in is not an entry; after an instance group
--- leave, a read outside or any load forgets it and any pending entry, so
--- re-queuing the same dungeon is. A known instance whose difficulty is not
--- known yet keys nothing and becomes the pending entry; its first known
--- difficulty is judged with the freshness of the check that saw it, so a
--- zone-in counts even at an in-place change while a login, or a zone-in with
--- the option off, only records. A Delve that ends in place is
--- marked "delveover": repeated events there count nothing, and a new Delve
--- counts. A Delve left behind is forgotten, so the next one counts. The key
--- is tracked even with the option off, so turning it on inside an instance
--- is not an entry.
+-- leave, a read outside or a load forgets it, so a re-queue is. A known
+-- instance at an unknown difficulty keys nothing and becomes the pending
+-- entry, judged at its first known difficulty with the freshness of the
+-- check that saw it. A Delve that ends in place is marked "delveover":
+-- repeated events there count nothing, and a new Delve counts. A Delve left
+-- behind is forgotten. The key is tracked even with the option off, so
+-- turning it on inside an instance is not an entry.
 function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficultyID, freshLoad, enabled, mode,
                                   inPlace, pendingID, pendingFresh, groupLeft, atLoad)
     local key = DM.InstanceEntryKey(instanceID, difficultyID)
@@ -3534,8 +3531,8 @@ end
 -- Called at the settling window's open and close, on PLAYER_DIFFICULTY_CHANGED,
 -- when a Delve starts or ends, and when the instance group is left outside an
 -- instance. While a load settles its difficulty is the previous zone's, so it
--- counts as unknown and no instance is keyed. inPlace
--- marks a difficulty change with no load, atLoad a load's opening read.
+-- counts as unknown and no instance is keyed. inPlace marks a difficulty
+-- change with no load, atLoad a load's opening read.
 function DM:CheckInstanceEntry(freshLoad, inPlace, atLoad)
     local scope, instanceID, difficultyID, name = ReadInstanceEntry()
     if self._entrySettling then difficultyID = nil end
@@ -3545,7 +3542,6 @@ function DM:CheckInstanceEntry(freshLoad, inPlace, atLoad)
         DM.InstanceEntryDecision(self._lastEntryKey, self._lastEntryScope, scope, instanceID, difficultyID,
             freshLoad, db and db.ResetOnInstanceEntry == true, db and db.InstanceResetMode, inPlace == true,
             self._entryPendingID, self._entryPendingFresh, self._entryGroupLeft, atLoad == true)
-    -- A group leave is spent once a read outside or a load has forgotten the key.
     if scope == nil or atLoad == true then self._entryGroupLeft = false end
     -- The key compare cannot see a way out and back in, or a Delve ending in
     -- place; this bump refuses a prompt or a held reset from before either, and
