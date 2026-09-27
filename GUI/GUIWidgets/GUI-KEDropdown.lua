@@ -163,8 +163,8 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     dropdownButton:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -14)
     dropdownButton:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -14)
     dropdownButton:SetBackdrop(DROPDOWN_BACKDROP)
-    dropdownButton:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
-    dropdownButton:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    dropdownButton:SetBackdropColor(Theme.controlBg[1], Theme.controlBg[2], Theme.controlBg[3], Theme.controlBg[4])
+    dropdownButton:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
 
     -- Selected text
     local selectedText = dropdownButton:CreateFontString(nil, "OVERLAY")
@@ -227,8 +227,8 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     local dropdownList = CreateFrame("Frame", nil, row, "BackdropTemplate")
     dropdownList:SetHeight(1)
     dropdownList:SetBackdrop(DROPDOWN_BACKDROP)
-    dropdownList:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
-    dropdownList:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    dropdownList:SetBackdropColor(Theme.listBg[1], Theme.listBg[2], Theme.listBg[3], Theme.listBg[4])
+    dropdownList:SetBackdropBorderColor(Theme.listBorder[1], Theme.listBorder[2], Theme.listBorder[3], 1)
     dropdownList:SetFrameStrata("TOOLTIP")
     dropdownList:SetClipsChildren(true)
     dropdownList:Hide()
@@ -248,8 +248,8 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
         searchContainer:SetPoint("TOPLEFT", dropdownList, "TOPLEFT", 0, 0)
         searchContainer:SetPoint("TOPRIGHT", dropdownList, "TOPRIGHT", 0, 0)
         searchContainer:SetBackdrop(DROPDOWN_BACKDROP)
-        searchContainer:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-        searchContainer:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        searchContainer:SetBackdropColor(Theme.fieldBg[1], Theme.fieldBg[2], Theme.fieldBg[3], Theme.fieldBg[4])
+        searchContainer:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
 
         searchBox = CreateFrame("EditBox", nil, searchContainer)
         searchBox:SetAutoFocus(false)
@@ -344,8 +344,8 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
 
     -- Border hover animation
     local hoverAnimGroup, hoverAnim
-    local borderColorFrom = { r = Theme.border[1], g = Theme.border[2], b = Theme.border[3] }
-    local borderColorTo = { r = Theme.border[1], g = Theme.border[2], b = Theme.border[3] }
+    local borderColorFrom = { r = Theme.controlBorder[1], g = Theme.controlBorder[2], b = Theme.controlBorder[3] }
+    local borderColorTo = { r = Theme.controlBorder[1], g = Theme.controlBorder[2], b = Theme.controlBorder[3] }
 
     if ENABLE_ANIMATIONS then
         hoverAnimGroup = dropdownButton:CreateAnimationGroup()
@@ -379,9 +379,9 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
                 borderColorTo.g = Theme.accent[2]
                 borderColorTo.b = Theme.accent[3]
             else
-                borderColorTo.r = Theme.border[1]
-                borderColorTo.g = Theme.border[2]
-                borderColorTo.b = Theme.border[3]
+                borderColorTo.r = Theme.controlBorder[1]
+                borderColorTo.g = Theme.controlBorder[2]
+                borderColorTo.b = Theme.controlBorder[3]
             end
 
             hoverAnimGroup:Play()
@@ -390,7 +390,7 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
             if hovered then
                 dropdownButton:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
             else
-                dropdownButton:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+                dropdownButton:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
             end
         end
     end
@@ -834,8 +834,8 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     function row:ApplyThemeColors()
         local TT = Theme
         label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
-        dropdownButton:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], 1)
-        dropdownButton:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        dropdownButton:SetBackdropColor(TT.controlBg[1], TT.controlBg[2], TT.controlBg[3], TT.controlBg[4])
+        dropdownButton:SetBackdropBorderColor(TT.controlBorder[1], TT.controlBorder[2], TT.controlBorder[3], 1)
         selectedText:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
         arrow:SetVertexColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
     end

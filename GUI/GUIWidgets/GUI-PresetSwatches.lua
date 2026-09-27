@@ -60,13 +60,13 @@ function GUIFrame:CreatePresetSwatches(parent, config)
         local function UpdateVisuals()
             local isSelected = currentPreset == btn.presetName
             if btn.disabled then
-                btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 0.6)
+                btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 0.6)
             elseif isSelected then
                 btn:SetBackdropBorderColor(1, 1, 1, 1)
             elseif btn.hover then
                 btn:SetBackdropBorderColor(Theme.accentDim[1], Theme.accentDim[2], Theme.accentDim[3], 1)
             else
-                btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+                btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
             end
         end
         btn.UpdateVisuals = UpdateVisuals

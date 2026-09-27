@@ -55,7 +55,7 @@ function GUIFrame:CreateColorPicker(parent, labelText, config)
     })
     color = color or { 1, 1, 1, 1 }
     swatch:SetBackdropColor(color[1], color[2], color[3], color[4] or 1)
-    swatch:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    swatch:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
     swatch.r, swatch.g, swatch.b, swatch.a = color[1], color[2], color[3], color[4] or 1
 
     -- Hex code display
@@ -107,9 +107,9 @@ function GUIFrame:CreateColorPicker(parent, labelText, config)
             borderColorTo.g = Theme.accent[2]
             borderColorTo.b = Theme.accent[3]
         else
-            borderColorTo.r = Theme.border[1]
-            borderColorTo.g = Theme.border[2]
-            borderColorTo.b = Theme.border[3]
+            borderColorTo.r = Theme.controlBorder[1]
+            borderColorTo.g = Theme.controlBorder[2]
+            borderColorTo.b = Theme.controlBorder[3]
         end
 
         hoverAnimGroup:Play()
