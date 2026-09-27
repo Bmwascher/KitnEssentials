@@ -279,8 +279,8 @@ function GUIFrame:ApplyThemeColors()
 
     -- Search bar
     if self.searchContainer then
-        self.searchContainer:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], T.bgDark[4])
-        self.searchContainer:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+        self.searchContainer:SetBackdropColor(T.fieldBg[1], T.fieldBg[2], T.fieldBg[3], T.fieldBg[4])
+        self.searchContainer:SetBackdropBorderColor(T.fieldBorder[1], T.fieldBorder[2], T.fieldBorder[3], 1)
     end
     if self.searchEditBox then
         self.searchEditBox:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
@@ -385,7 +385,7 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = KE:GetPixelSize(),
         })
-        btn:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+        btn:SetBackdropBorderColor(T.fieldBorder[1], T.fieldBorder[2], T.fieldBorder[3], 1)
 
         local knob = btn:CreateTexture(nil, "ARTWORK")
         knob:SetSize(KNOB, KNOB)
@@ -397,9 +397,9 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
                 knob:SetPoint("RIGHT", btn, "RIGHT", -2, 0)
                 knob:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 0.8)
             else
-                btn:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], 1)
+                btn:SetBackdropColor(T.fieldBg[1], T.fieldBg[2], T.fieldBg[3], T.fieldBg[4])
                 knob:SetPoint("LEFT", btn, "LEFT", 2, 0)
-                knob:SetColorTexture(0.45, 0.45, 0.45, 1)
+                knob:SetColorTexture(T.knobOff[1], T.knobOff[2], T.knobOff[3], T.knobOff[4])
             end
         end
 
@@ -485,7 +485,7 @@ function GUIFrame:CreateCard(parent, title, yOffset, width)
         sep:SetHeight(T.borderSize)
         sep:SetPoint("TOPLEFT", self.content, "TOPLEFT", 0, -self.currentY - T.paddingSmall)
         sep:SetPoint("TOPRIGHT", self.content, "TOPRIGHT", 0, -self.currentY - T.paddingSmall)
-        sep:SetColorTexture(T.border[1], T.border[2], T.border[3], 0.5)
+        sep:SetColorTexture(T.divider[1], T.divider[2], T.divider[3], T.divider[4])
         self.currentY = self.currentY + T.borderSize + T.paddingSmall * 2
         self.content:SetHeight(self.currentY)
         self:UpdateHeight()
