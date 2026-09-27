@@ -99,6 +99,19 @@ local KICK_PAIR_WINDOW = 1.5
 local HELLO_REPLY_JITTER = 0.6
 local RAID_MARK_SHEET = "Interface\\TargetingFrame\\UI-RaidTargetingIcons"
 
+local function FormatRemaining(remaining)
+    if remaining > 6 then return string_format("%d", math_floor(remaining)) end
+    return string_format("%.1f", remaining)
+end
+
+-- The countdown is KE's own plain arithmetic, so an unchanged string is skipped.
+local function SetTimerText(bar, text)
+    if bar.lastTimerText ~= text then
+        bar.timerText:SetText(text)
+        bar.lastTimerText = text
+    end
+end
+
 -- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence,
 -- container OnUpdate ticks, and nameplate-interrupt token resolution.
 -- Default false; revert after diagnosis.
@@ -349,9 +362,7 @@ function KT:ConfirmKick(guid, durationOverride, remaining)
     local bar = self.activeBars[guid]
     if bar then
         local isDark = self.db.ColorMode == "dark"
-        -- Dark mode: starts full (class color drains to empty)
-        -- Class mode: starts empty (fills up with class color as CD recovers)
-        bar.statusBar:SetValue(isDark and 1 or 0)
+        self:StartBarTimer(bar, member.kickStart, member.kickDuration)
         self:ApplyBarColor(bar, member, true)
         bar.iconTex:SetDesaturated(true)
         -- Dark mode: white name while cooling
@@ -359,7 +370,7 @@ function KT:ConfirmKick(guid, durationOverride, remaining)
             bar.nameText:SetTextColor(1, 1, 1, 1)
         end
         if self.db.ShowTimer and bar.timerText then
-            bar.timerText:SetText(string_format("%d", remaining or member.kickDuration))
+            SetTimerText(bar, FormatRemaining(remaining or member.kickDuration))
         end
     end
 
@@ -1029,6 +1040,27 @@ local function GetClassColor(classToken)
     return C_ClassColor.GetClassColor(classToken)
 end
 
+local zeroDuration
+
+-- The engine drains (dark) or fills (class colour) the bar from a plain start
+-- and duration; no Lua runs per frame for the fill.
+function KT:StartBarTimer(bar, startTime, duration)
+    local d = C_DurationUtil.CreateDuration()
+    d:SetTimeFromStart(startTime, duration)
+    local direction = (self.db.ColorMode == "dark") and Enum.StatusBarTimerDirection.RemainingTime
+        or Enum.StatusBarTimerDirection.ElapsedTime
+    bar.statusBar:SetTimerDuration(d, Enum.StatusBarInterpolation.Immediate, direction)
+end
+
+-- A zero duration stops the engine drive; the bar then holds `value`.
+function KT:StopBarTimer(bar, value)
+    if not zeroDuration then zeroDuration = C_DurationUtil.CreateDuration() end
+    bar.statusBar:SetTimerDuration(zeroDuration, Enum.StatusBarInterpolation.Immediate,
+        Enum.StatusBarTimerDirection.ElapsedTime)
+    bar.statusBar:SetMinMaxValues(0, 1)
+    bar.statusBar:SetValue(value or 0)
+end
+
 -- Geometry + textures that depend only on db (shared by member and record bars).
 function KT:ApplyBarGeometry(bar)
     local db = self.db
@@ -1104,6 +1136,7 @@ function KT:UpdateRecordBarVisuals(bar, record)
     else
         bar.statusBar:SetStatusBarColor(unpack(db.CoolingColor))
     end
+    self:StartBarTimer(bar, record.startTime, record.duration)
 end
 
 function KT:UpdateBarVisuals(bar, member)
@@ -1156,20 +1189,24 @@ function KT:UpdateBarVisuals(bar, member)
     if isReady then
         self:ApplyBarColor(bar, member, false)
         -- Dark mode: no fill visible (just dark background). Class mode: full bar.
-        bar.statusBar:SetValue(isDarkMode and 0 or 1)
+        self:StopBarTimer(bar, isDarkMode and 0 or 1)
         if db.ShowTimer then
             -- "Ready" is a claim — only bars we can actually track make it
-            -- (self, comm-verified, or attribution-verified members).
+            -- (self and comm-verified members).
             -- Unverified members' timer area stays blank: 12.0.5 hides
             -- their kicks, so Ready would be a guess.
             if db.ShowReadyText and member and member.kickVerified then
-                bar.timerText:SetText(db.ReadyText or "Ready")
+                SetTimerText(bar, db.ReadyText or "Ready")
             else
-                bar.timerText:SetText("")
+                SetTimerText(bar, "")
             end
         end
     else
         self:ApplyBarColor(bar, member, true)
+        -- The preview animates its own mock bars.
+        if member.kickDuration and not self.isPreview then
+            self:StartBarTimer(bar, member.kickStart, member.kickDuration)
+        end
     end
 
 end
@@ -1466,44 +1503,25 @@ function KT:OnUpdateBars(elapsed)
         end
     end
 
+    -- The engine draws every fill; this pass only expires cooldowns and
+    -- records and writes the countdown text when it changes. All arithmetic
+    -- here is our own GetTime() math: plain values, no secrets.
     for guid, bar in pairs(self.activeBars) do
         local member = self.partyMembers[guid]
         if member and member.kickStart and member.kickDuration then
-            local elapsedTime = now - member.kickStart
-            local remaining = member.kickDuration - elapsedTime
-
+            local remaining = member.kickDuration - (now - member.kickStart)
             if remaining <= 0 then
-                -- CD expired — restore ready state
                 member.kickStart = nil
                 member.kickDuration = nil
                 self:UpdateBarVisuals(bar, member)
                 needsRelayout = true
             else
                 anyCooling = true
-                local isDark = db.ColorMode == "dark"
-                -- Dark mode: drain from full to empty (remaining/duration)
-                -- Class mode: fill from empty to full (elapsed/duration)
-                if isDark then
-                    bar.statusBar:SetValue(remaining / member.kickDuration)
-                else
-                    bar.statusBar:SetValue(elapsedTime / member.kickDuration)
-                end
-
-                if db.ShowTimer and bar.timerText then
-                    if remaining > 6 then
-                        local displayVal = math_floor(remaining)
-                        bar.timerText:SetText(string_format("%d", displayVal))
-                    else
-                        bar.timerText:SetText(string_format("%.1f", remaining))
-                    end
-                end
+                if db.ShowTimer then SetTimerText(bar, FormatRemaining(remaining)) end
             end
         end
     end
 
-    -- Drain + expire teammate kick records under the same 0.05s accumulator.
-    -- All arithmetic here is our own GetTime() math — plain values, no secrets.
-    local isDark = db.ColorMode == "dark"
     for i = #self.kickRecords, 1, -1 do
         local record = self.kickRecords[i]
         local key = "record" .. record.id
@@ -1516,18 +1534,7 @@ function KT:OnUpdateBars(elapsed)
             needsRelayout = true
         elseif bar then
             anyCooling = true
-            if isDark then
-                bar.statusBar:SetValue(remaining / record.duration)
-            else
-                bar.statusBar:SetValue((now - record.startTime) / record.duration)
-            end
-            if db.ShowTimer and bar.timerText then
-                if remaining > 6 then
-                    bar.timerText:SetText(string_format("%d", math_floor(remaining)))
-                else
-                    bar.timerText:SetText(string_format("%.1f", remaining))
-                end
-            end
+            if db.ShowTimer then SetTimerText(bar, FormatRemaining(remaining)) end
         end
     end
 
