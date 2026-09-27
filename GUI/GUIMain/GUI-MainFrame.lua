@@ -429,8 +429,7 @@ function GUIFrame:CreateMainFrame()
     editModeIcon:SetSnapToPixelGrid(true)
     editModeBtn.icon = editModeIcon
 
-    -- Accent while hovered and while edit mode is on, so the header shows the
-    -- mode is running. Exposed for EditMode's Enter/Exit and theme changes.
+    -- Exposed so EditMode's Enter/Exit and theme changes can repaint it.
     local editModeHovered = false
     local function PaintEditModeButton()
         local lit = editModeHovered or (KE.EditMode and KE.EditMode:IsActive())

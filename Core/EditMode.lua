@@ -843,8 +843,8 @@ function EditMode:SetupDragHandlers(overlay)
 
         local targetFrame = EditMode:GetElementFrame(element)
         if not targetFrame then
-            -- Nothing is committed. The box has lost its frame, so it is hidden
-            -- and the tooltip with it; the boxes return to the stored position.
+            -- Nothing is committed. The drag's OnUpdate never hid this
+            -- frameless box, so it and its tooltip are hidden here.
             EditMode:UpdateOverlayPosition(self)
             EditMode:UpdateNudgeFrameInfo()
             return
@@ -2332,7 +2332,6 @@ function EditMode:HideSelectionTooltip()
     end
 end
 
--- x and y are the offsets to show, nil when the element reports no position.
 ---@param x number?
 ---@param y number?
 function EditMode:ShowSelectionTooltip(x, y)
