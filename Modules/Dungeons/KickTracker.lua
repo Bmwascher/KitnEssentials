@@ -922,7 +922,7 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
             end
             data = { id = kickID, cd = kickCd, role = role }
             member.interruptData = data
-            self:UpdateBars()  -- creates or redraws the own row
+            self:UpdateBars()
             self:LayoutBars()
         end
     end
