@@ -581,10 +581,12 @@ local function ConstructSlider(parent)
             -- A silent value supersedes a dropped change; the flush must not
             -- send it to the callback.
             dropped = false
-            local saved = row._callback
+            -- onValueChanged still runs and can rebind this slider to another
+            -- setting; the old callback must not overwrite the new one.
+            local saved, gen = row._callback, row._keGen
             row._callback = nil
             slider:SetValue(val)
-            row._callback = saved
+            if row._keGen == gen then row._callback = saved end
         else
             slider:SetValue(val)
         end
@@ -601,16 +603,18 @@ local function ConstructSlider(parent)
         -- value — surfacing as "font size resets to max" when navigating
         -- between modules with different ranges. silent=true suppresses by
         -- the same save/clear/restore pattern row:SetValue uses.
+        local gen = row._keGen
         if silent then
             dropped = false
             local saved = row._callback
             row._callback = nil
             slider:SetMinMaxValues(minVal, maxVal)
-            row._callback = saved
+            if row._keGen == gen then row._callback = saved end
         else
             slider:SetMinMaxValues(minVal, maxVal)
         end
-        UpdateFill()
+        -- A rebound slider was already drawn by its configure.
+        if row._keGen == gen then UpdateFill() end
     end
 
     function row:SetEnabled(enabled)
