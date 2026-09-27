@@ -75,9 +75,9 @@ local FONT_ROLES = {
     Text    = { group = "TextWidget", flag = "StyleText",    size = "Size" },
 }
 
--- The sweep and the SetFontObject hook share this rule: nil leaves
--- Blizzard's font, and is the only off switch a hook that cannot be
--- removed has.
+-- The sweep and the SetFontObject hook share this rule. nil leaves
+-- Blizzard's font; it is also the hook's off switch, since a hook cannot be
+-- removed.
 function UIW.FontSizeForRole(db, role)
     local spec = FONT_ROLES[role]
     if not (spec and db and db.Enabled) then return nil end
@@ -169,8 +169,8 @@ local function HideFill(record)
 end
 
 -- A released bar is hidden with the last widget's fill still on it, and the
--- next Setup shows it again before KE's sweep has seen the new kit. The fill
--- goes down with the bar; the sweep its return queues puts it back.
+-- next Setup shows it again before KE's sweep has seen the new kit. Hiding
+-- the fill with the bar and re-sweeping on show keeps the old fill off it.
 local function RestyleOnShow()
     UIW:OnWidgetEvent()
 end
