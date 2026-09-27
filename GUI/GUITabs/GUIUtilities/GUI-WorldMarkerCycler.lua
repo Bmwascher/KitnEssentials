@@ -103,8 +103,8 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = 1,
         })
-        btn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-        btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        btn:SetBackdropColor(Theme.controlBg[1], Theme.controlBg[2], Theme.controlBg[3], Theme.controlBg[4])
+        btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
 
         local btnText = btn:CreateFontString(nil, "OVERLAY")
         btnText:SetPoint("CENTER")
@@ -117,7 +117,7 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
         end)
         btn:SetScript("OnLeave", function()
             if activeCapture ~= btn then
-                btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+                btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
             end
         end)
 
@@ -136,7 +136,7 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
             activeCapture = nil
             btnText:SetText(FormatKeybind(modifier, key))
             btnText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-            btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+            btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
         end
 
         captureFrame:SetScript("OnHide", function()
@@ -165,7 +165,7 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
 
             btnText:SetText(FormatKeybind(mod, capturedKey))
             btnText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-            btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+            btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
 
             self:Hide()
             activeCapture = nil
@@ -195,7 +195,7 @@ GUIFrame:RegisterContent("WorldMarkerCycler", function(scrollChild, yOffset)
                 onBind("", "")
                 btnText:SetText("Not Set")
                 btnText:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-                btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+                btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
             end
         end)
 

@@ -59,7 +59,7 @@ local function CreateTextureSelector(parent, textures, textureOrder, currentText
             if getColorFunc then r, g, b, a = getColorFunc() end
 
             if btn.disabled then
-                btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 0.6)
+                btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 0.6)
                 tex:SetVertexColor(r * 0.3, g * 0.3, b * 0.3)
                 tex:SetAlpha(0.5)
             elseif isSelected then
@@ -71,7 +71,7 @@ local function CreateTextureSelector(parent, textures, textureOrder, currentText
                 tex:SetVertexColor(r * 0.8, g * 0.8, b * 0.8)
                 tex:SetAlpha(a * 0.9)
             else
-                btn:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+                btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
                 tex:SetVertexColor(r * 0.6, g * 0.6, b * 0.6)
                 tex:SetAlpha(a * 0.8)
             end
