@@ -386,6 +386,7 @@ DM.FillMissingDefaults = FillMissing
 function DM:ApplySettings()
     if not self.db then self:UpdateDB() end
     if not self.enabled then return end
+    self:UpdateInstanceEntryEvents()
 
     self.windows_rt = self.windows_rt or {}
     -- The clock cache survives a plain re-gate, so it has to be dropped wherever
@@ -793,6 +794,7 @@ function DM:OnEnable()
     self:RegisterEvent("ACTIVE_DELVE_DATA_UPDATE", "OnDelveDataUpdate")
     -- A load's difficulty settles after PLAYER_ENTERING_WORLD.
     self:RegisterEvent("PLAYER_DIFFICULTY_CHANGED", "OnDifficultyChanged")
+    self:UpdateInstanceEntryEvents()
     -- Record where the player is, so enabling the module is not an entry.
     self:OpenEntrySettle(true)
 
@@ -3529,9 +3531,10 @@ function DM:ShowInstancePrompt(key, name)
         { closeIsNeutral = true, waitIfBusy = true })
 end
 
--- Called at the settling window's open and close, on PLAYER_DIFFICULTY_CHANGED
--- and when a Delve starts or ends. While a load settles its difficulty is the
--- previous zone's, so it counts as unknown and no instance is keyed. inPlace
+-- Called at the settling window's open and close, on PLAYER_DIFFICULTY_CHANGED,
+-- when a Delve starts or ends, and when the instance group is left outside an
+-- instance. While a load settles its difficulty is the previous zone's, so it
+-- counts as unknown and no instance is keyed. inPlace
 -- marks a difficulty change with no load, atLoad a load's opening read.
 function DM:CheckInstanceEntry(freshLoad, inPlace, atLoad)
     local scope, instanceID, difficultyID, name = ReadInstanceEntry()
@@ -3560,6 +3563,31 @@ end
 
 function DM:OnDelveDataUpdate()
     self:CheckInstanceEntry(false)
+end
+
+-- Leaving the instance group ends the last entry, so re-queuing the same
+-- dungeon counts; walking out and back in fires no group event. Outside an
+-- instance the key is forgotten now, otherwise at the next read outside or
+-- the next load. A premade group's leave is not an instance queue.
+function DM:OnGroupLeft(_, category)
+    if issecretvalue(category) or type(category) ~= "number" then return end
+    if category ~= LE_PARTY_CATEGORY_INSTANCE then return end
+    self._entryGroupLeft = true
+    local scope = ReadInstanceEntry()
+    if scope == nil then self:CheckInstanceEntry(false) end
+end
+
+-- The group-leave listener exists only while the module and Reset on Instance
+-- Entry are both on. An open pending that saw the option off only records,
+-- so ticking it again before the difficulty arrives is not an entry.
+function DM:UpdateInstanceEntryEvents()
+    if self.enabled and self.db and self.db.ResetOnInstanceEntry == true then
+        self:RegisterEvent("GROUP_LEFT", "OnGroupLeft")
+    else
+        self:UnregisterEvent("GROUP_LEFT")
+        self._entryGroupLeft = false
+        if self._entryPendingID ~= nil then self._entryPendingFresh = true end
+    end
 end
 
 -- Seconds a load waits for PLAYER_DIFFICULTY_CHANGED before its difficulty
