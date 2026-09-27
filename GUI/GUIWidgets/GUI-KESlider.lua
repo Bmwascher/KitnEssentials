@@ -461,12 +461,26 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     slider:SetScript("OnValueChanged", function(self, val)
         UpdateFill()
+        -- Read before either callback runs: one can rebuild the page and hand
+        -- this slider to another setting.
+        local callback, onValueChanged, gen = row._callback, row._onValueChanged, row._keGen
+        -- Every change, silent ones included: a caller that mirrors the
+        -- value, such as a live label, must follow neighbour cross-updates.
+        if onValueChanged then
+            onValueChanged(val)
+            if row._keGen ~= gen then
+                -- The throttle state now belongs to the new setting; the
+                -- change itself still belongs to the old one.
+                if callback then callback(val) end
+                return
+            end
+        end
         -- Silent SetValue (row:SetValue(v, true) — e.g. a neighbour-slider
         -- cross-update) nils row._callback: refresh the fill/editbox but do NOT
         -- touch the throttle clock. Otherwise the silent call would reset
         -- lastUpdate and the slider's next REAL drag would swallow its first
         -- callback for up to throttleDelay.
-        if not row._callback then return end
+        if not callback then return end
         local currentTime = GetTime()
         if currentTime - lastUpdate < throttleDelay then
             dropped = true
@@ -474,7 +488,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         end
         lastUpdate = currentTime
         dropped = false
-        row._callback(val)
+        callback(val)
     end)
 
     slider:SetScript("OnSizeChanged", UpdateFill)
@@ -702,6 +716,11 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     row._callback = config.callback
     function row:SetCallback(fn)
         self._callback = fn
+    end
+
+    row._onValueChanged = config.onValueChanged
+    function row:SetOnValueChanged(fn)
+        self._onValueChanged = fn
     end
 
     return row
