@@ -16,46 +16,16 @@ local type = type
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- Button widgt
-function GUIFrame:CreateButton(parent, labelText, config)
-    local customHeight = nil
-    -- Ensure config is a table
-    if type(config) ~= "table" then
-        config = {}
-    end
-    local label = labelText or "Button"
-    local tooltip = config.tooltip
-    local callback = config.callback
-    local image = config.image
-    local imageSize = config.imageSize or 16
-    local explicitWidth = config.width
-    local height = config.height or 24
-
-    -- CREATE ROW CONTAINER
-    local rowHeight = customHeight or 34
-    local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(rowHeight)
-
-    local button = CreateFrame("Button", nil, row, "BackdropTemplate")
-    button:SetHeight(height)
-    if config.height then
-        button.explicitHeight = true
-    end
-
-    if explicitWidth then
-        button:SetWidth(explicitWidth)
-    else
-        button:SetWidth(120)
-    end
-
-
+-- Builds one button, parented straight to the caller's frame: the container it
+-- once sat in was never returned and only left an empty frame on every call.
+-- Label, image, size and bindings are applied by ConfigureButton.
+local function ConstructButton(parent)
+    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
     button:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    button:SetBackdropColor(Theme.bgButton[1], Theme.bgButton[2], Theme.bgButton[3], Theme.bgButton[4])
-    button:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
     -- Hover fade animation for border color
     local hoverAnimGroup = button:CreateAnimationGroup()
@@ -98,37 +68,14 @@ function GUIFrame:CreateButton(parent, labelText, config)
         hoverAnimGroup:Play()
     end
 
-    local contentWidth = 0
-    local iconWidget, textWidget
-
-    if image then
-        iconWidget = button:CreateTexture(nil, "ARTWORK")
-        iconWidget:SetSize(imageSize, imageSize)
-        iconWidget:SetTexture(image)
-        contentWidth = contentWidth + imageSize
-    end
-
-    textWidget = button:CreateFontString(nil, "OVERLAY")
-    KE:ApplyThemeFont(textWidget, "normal")
-    textWidget:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-    textWidget:SetText(label)
-    contentWidth = contentWidth + textWidget:GetStringWidth()
-
-    if image and label and label ~= "" then
-        contentWidth = contentWidth + 6
-    end
-
-    if iconWidget and textWidget then
-        iconWidget:SetPoint("LEFT", button, "CENTER", -contentWidth / 2, 0)
-        textWidget:SetPoint("LEFT", iconWidget, "RIGHT", 6, 0)
-    elseif iconWidget then
-        iconWidget:SetPoint("CENTER")
-    else
-        textWidget:SetPoint("CENTER")
-    end
+    -- Built once and shown only while the caller passes an image.
+    local iconWidget = button:CreateTexture(nil, "ARTWORK")
+    iconWidget:Hide()
+    local textWidget = button:CreateFontString(nil, "OVERLAY")
 
     button:SetScript("OnEnter", function(self)
         AnimateBorderColor(true)
+        local tooltip = self._tooltip
         if tooltip then
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
@@ -142,7 +89,7 @@ function GUIFrame:CreateButton(parent, labelText, config)
     end)
 
     button:SetScript("OnClick", function(self)
-        callback()
+        self._callback()
     end)
 
     function button:SetLabel(newLabel)
@@ -150,7 +97,7 @@ function GUIFrame:CreateButton(parent, labelText, config)
     end
 
     function button:SetImage(newImage)
-        if iconWidget then
+        if self._hasImage then
             iconWidget:SetTexture(newImage)
         end
     end
@@ -160,38 +107,98 @@ function GUIFrame:CreateButton(parent, labelText, config)
             button:Enable()
             button:SetAlpha(1)
             button:EnableMouse(true)
-            if textWidget then
-                textWidget:SetAlpha(1)
-            end
-            if iconWidget then
-                iconWidget:SetAlpha(1)
-            end
+            textWidget:SetAlpha(1)
+            iconWidget:SetAlpha(1)
         else
             button:Disable()
             button:SetAlpha(0.5)
             button:EnableMouse(false)
-            if textWidget then
-                textWidget:SetAlpha(0.5)
-            end
-            if iconWidget then
-                iconWidget:SetAlpha(0.5)
-            end
+            textWidget:SetAlpha(0.5)
+            iconWidget:SetAlpha(0.5)
         end
     end
 
     -- Re-apply theme-tied state after KE:RefreshTheme replaces Theme color
     -- tables. Hover animation handlers read live values so they self-recover.
-    -- Pool consumers call this when KE._themeVersion has advanced.
+    -- Every configure calls this.
     function button:ApplyThemeColors()
         local TT = Theme
         button:SetBackdropColor(TT.bgButton[1], TT.bgButton[2], TT.bgButton[3], TT.bgButton[4])
         button:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
-        if textWidget then
-            textWidget:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
-        end
+        textWidget:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
     end
 
-    button.icon = iconWidget
+    button._iconWidget = iconWidget
+    button._hoverAnimGroup = hoverAnimGroup
     button.text = textWidget
+    button._keOwned = { button }
+    return button
+end
+
+local function ConfigureButton(button, labelText, config)
+    local label = labelText or "Button"
+    local image = config.image
+    local imageSize = config.imageSize or 16
+
+    button:SetWidth(config.width or 120)
+    button:SetHeight(config.height or 24)
+    if config.height then
+        button.explicitHeight = true
+    end
+    button._tooltip = config.tooltip
+    button._callback = config.callback
+    button._hasImage = image ~= nil
+
+    local iconWidget, textWidget = button._iconWidget, button.text
+    iconWidget:ClearAllPoints()
+    textWidget:ClearAllPoints()
+
+    local contentWidth = 0
+    if image then
+        iconWidget:SetSize(imageSize, imageSize)
+        iconWidget:SetTexture(image)
+        iconWidget:Show()
+        contentWidth = contentWidth + imageSize
+        button.icon = iconWidget
+    else
+        iconWidget:Hide()
+    end
+
+    KE:ApplyThemeFont(textWidget, "normal")
+    textWidget:SetText(label)
+    contentWidth = contentWidth + textWidget:GetStringWidth()
+
+    if image and label ~= "" then
+        contentWidth = contentWidth + 6
+    end
+
+    if image then
+        iconWidget:SetPoint("LEFT", button, "CENTER", -contentWidth / 2, 0)
+        textWidget:SetPoint("LEFT", iconWidget, "RIGHT", 6, 0)
+    else
+        textWidget:SetPoint("CENTER")
+    end
+
+    button:SetEnabled(true)
+    button:ApplyThemeColors()
+end
+
+local buttonPool = GUIFrame:NewWidgetPool("button", ConstructButton, function(button)
+    button._hoverAnimGroup:Stop()
+end)
+
+-- Button widgt
+function GUIFrame:CreateButton(parent, labelText, config)
+    -- Ensure config is a table
+    if type(config) ~= "table" then
+        config = {}
+    end
+    local button
+    if self:IsPoolParent(parent) then
+        button = buttonPool:Acquire(parent)
+    else
+        button = ConstructButton(parent)
+    end
+    ConfigureButton(button, labelText, config)
     return button
 end
