@@ -198,3 +198,83 @@ describe("KickTracker true cooldown", function()
         end
     end)
 end)
+
+describe("KickTracker remaining-time field", function()
+    it("keeps on absent or unreadable, readies at zero, and caps at the cooldown", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "absent", field = nil, cd = 30, want = nil },
+            { name = "unreadable", field = "abc", cd = 30, want = nil },
+            { name = "zero", field = "0", cd = 30, want = 0 },
+            { name = "negative", field = "-3", cd = 30, want = 0 },
+            { name = "above the cooldown", field = "45", cd = 30, want = 30 },
+            { name = "in range", field = "12.5", cd = 30, want = 12.5 },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.ParseHelloRemaining(row.field, row.cd), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker message to row state", function()
+    it("starts, sets, readies or keeps a teammate's row", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "KICK starts", verb = "KICK", remaining = nil, want = "start" },
+            { name = "HELLO without a remaining time keeps", verb = "HELLO", remaining = nil, want = "keep" },
+            { name = "HELLO at zero readies", verb = "HELLO", remaining = 0, want = "ready" },
+            { name = "HELLO with a remaining time sets", verb = "HELLO", remaining = 4, want = "set" },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.CooldownFromMessage(row.verb, row.remaining), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker message-named kick across a refresh", function()
+    it("keeps a heard teammate's message kick through any refresh, a respec included", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "never heard from: the spec default", member = { specID = 266 }, want = false },
+            { name = "heard from: their message kick, a respec included",
+              member = { kickFromMessage = true, specID = 266 }, want = true },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.KeepsMessageKick(row.member), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker message to main kick", function()
+    it("sets on a named kick, clears only on a KE HELLO naming spell 0, and keeps otherwise", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "KE HELLO naming 0 clears", verb = "HELLO", isKE = true, sid = 0, cd = 0, want = "clear" },
+            { name = "BliZzi HELLO naming 0 keeps", verb = "HELLO", isKE = false, sid = 0, cd = 0, want = nil },
+            { name = "KE KICK naming 0 keeps", verb = "KICK", isKE = true, sid = 0, cd = 0, want = nil },
+            { name = "a positive spell and cooldown sets", verb = "KICK", isKE = true, sid = 1766, cd = 15, want = "set" },
+            { name = "a talent-added kick keeps", verb = "KICK", isKE = true, sid = 384110, cd = 45,
+              extra = true, want = nil },
+            { name = "a malformed KE HELLO (no readable spell) keeps", verb = "HELLO", isKE = true,
+              sid = nil, cd = nil, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.KickFromMessage(row.verb, row.isKE, row.sid, row.cd, row.extra), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker HELLO answer", function()
+    it("answers an asking HELLO past the throttle, never a reply, and an old client's under it", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "asks for an answer: sent even inside the throttle", flag = "0", want = "force" },
+            { name = "a reply: no answer", flag = "1", want = nil },
+            { name = "no flag (older client): answered under the throttle", flag = nil, want = "throttled" },
+            { name = "an unknown flag is read as an older client", flag = "x", want = "throttled" },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.HelloReplyMode(row.flag), row.name)
+        end
+    end)
+end)

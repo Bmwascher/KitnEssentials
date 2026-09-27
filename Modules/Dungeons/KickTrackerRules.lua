@@ -175,4 +175,55 @@ function KT.TalentedCooldown(baseCd, mods, isKnown)
     return cd
 end
 
+---------------------------------------------------------------------------------
+-- Messages to row state
+---------------------------------------------------------------------------------
+-- The remaining-time field of HELLO: nil when absent or unreadable (the row
+-- keeps its state), 0 when ready, otherwise capped at the cooldown.
+function KT.ParseHelloRemaining(field, cd)
+    if field == nil then return nil end
+    local remaining = tonumber(field)
+    if remaining == nil or remaining ~= remaining then return nil end
+    if remaining <= 0 then return 0 end
+    if cd and remaining > cd then return cd end
+    return remaining
+end
+
+-- "start" the full cooldown, "set" a remaining time, "ready", or "keep".
+function KT.CooldownFromMessage(verb, remaining)
+    if verb == "KICK" then return "start" end
+    if remaining == nil then return "keep" end
+    if remaining <= 0 then return "ready" end
+    return "set"
+end
+
+-- Once a message has set or cleared a teammate's kick, their kick comes only
+-- from their messages; spec data never re-guesses it, a respec included.
+function KT.KeepsMessageKick(member)
+    return member.kickFromMessage == true
+end
+
+-- What a message does to the sender's main kick: "set" when it names one (a
+-- positive spell and cooldown that is not a talent-added kick), "clear" for a
+-- KE HELLO naming spell 0 (the sender has no kick now), nil to keep it. A
+-- BliZzi HELLO or a KICK carrying 0 never clears.
+function KT.KickFromMessage(verb, isKE, sid, cd, extra)
+    if extra then return nil end
+    if sid and sid > 0 and cd and cd > 0 then return "set" end
+    if verb == "HELLO" and isKE and sid == 0 then return "clear" end
+    return nil
+end
+
+-- How to answer a KE HELLO, from its reply flag (field 6): "0" asks for an
+-- answer, sent even inside the throttle; "1" is a reply and gets none. A
+-- HELLO without the flag comes from an older client, which cannot mark its
+-- own replies, so it is answered only under the throttle: answering it at once
+-- would let two clients answer each other every throttle period.
+function KT.HelloReplyMode(replyFlag)
+    if replyFlag == "0" then return "force" end
+    if replyFlag == "1" then return nil end
+    return "throttled"
+end
+
+
 

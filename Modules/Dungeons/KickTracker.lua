@@ -47,6 +47,7 @@ local string_format = string.format
 local math_floor = math.floor
 local math_abs = math.abs
 local math_max = math.max
+local math_random = math.random
 local pairs = pairs
 local ipairs = ipairs
 local wipe = wipe
@@ -94,6 +95,7 @@ local KICK_RECORD_GRACE = 0.4  -- records stay invisible this long so a comm
                                -- claim can discard them before they render
 local HELLO_THROTTLE = 10
 local KICK_PAIR_WINDOW = 1.5
+local HELLO_REPLY_JITTER = 0.6
 
 -- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence,
 -- container OnUpdate ticks, and nameplate-interrupt token resolution.
@@ -154,6 +156,14 @@ function KT:GetInterruptDataForSpec(specID)
     if not kick then return nil end
     local _, _, _, _, role = GetSpecializationInfoByID(specID)
     return { id = kick.id, cd = kick.cd, role = role or "DAMAGER" }
+end
+
+-- The spec's default kick, until a message has set or cleared the member's kick.
+function KT:ApplySpecKick(member, specID)
+    if not KT.KeepsMessageKick(member) then
+        member.interruptData = self:GetInterruptDataForSpec(specID)
+    end
+    member.specID = specID
 end
 
 local function isTalentKnown(talentID)
@@ -252,9 +262,8 @@ function KT:RefreshPartyRoster()
                 end
 
                 if specID > 0 then
-                    member.specID = specID
-                    member.interruptData = self:GetInterruptDataForSpec(specID)
-                elseif unit ~= "player" and not member.interruptData then
+                    self:ApplySpecKick(member, specID)
+                elseif unit ~= "player" and not member.interruptData and not member.kickFromMessage then
                     -- No spec data yet — class-default fallback so the bar
                     -- exists at all (LibSpec/comm refinement overwrites it)
                     member.interruptData = self:GuessClassInterrupt(unit, classToken)
@@ -281,9 +290,8 @@ function KT:ApplySpecData(guid, unit, specID)
     local _, classToken = UnitClass(unit)
     local member = self.partyMembers[guid]
     if member then
-        member.specID = specID
         member.classToken = classToken
-        member.interruptData = self:GetInterruptDataForSpec(specID)
+        self:ApplySpecKick(member, specID)
         self:UpdateBars()
         self:LayoutBars()
     end
@@ -326,12 +334,14 @@ end
 -- Self Kick Confirmation
 ---------------------------------------------------------------------------------
 -- durationOverride: comm-synced kicks carry the sender's exact CD; nil = spec CD.
-function KT:ConfirmKick(guid, durationOverride)
+-- remaining: a cooldown already under way (a HELLO's remaining time).
+function KT:ConfirmKick(guid, durationOverride, remaining)
     local member = self.partyMembers[guid]
     if not member or not member.interruptData then return end
 
-    member.kickStart = GetTime()
-    member.kickDuration = durationOverride or member.interruptData.cd
+    local duration = durationOverride or member.interruptData.cd
+    member.kickDuration = duration
+    member.kickStart = GetTime() - (remaining and (duration - remaining) or 0)
 
     -- Immediately update bar visuals so the transition from ready→cooling is instant
     local bar = self.activeBars[guid]
@@ -347,10 +357,21 @@ function KT:ConfirmKick(guid, durationOverride)
             bar.nameText:SetTextColor(1, 1, 1, 1)
         end
         if self.db.ShowTimer and bar.timerText then
-            bar.timerText:SetText(string_format("%d", member.kickDuration))
+            bar.timerText:SetText(string_format("%d", remaining or member.kickDuration))
         end
     end
 
+    self:LayoutBars()
+end
+
+-- The member's kick is ready again (a message said so).
+function KT:ClearKick(guid)
+    local member = self.partyMembers[guid]
+    if not member then return end
+    member.kickStart = nil
+    member.kickDuration = nil
+    local bar = self.activeBars[guid]
+    if bar then self:UpdateBarVisuals(bar, member) end
     self:LayoutBars()
 end
 
@@ -541,17 +562,18 @@ function KT:BroadcastKick(spellID, cd)
 end
 
 -- Presence announce: lets other KE users verify us (and show our bar at
--- Ready) from dungeon start instead of on our first kick. Sent on
--- activation, roster changes and as a throttled reply to received hellos,
--- and forced once when the chat lock lifts.
-function KT:BroadcastHello(force)
+-- Ready) from dungeon start instead of on our first kick. Sent on activation
+-- and roster changes (throttled), as a reply to a HELLO (forced when it
+-- asked), and forced when the chat lock lifts or the own kick changes.
+-- isReply marks an answer, which is never answered in turn.
+function KT:BroadcastHello(force, isReply)
     if not self.db.KickSync then return end
     if not self.isActive or not IsInGroup() then return end
 
     local guid = UnitGUID("player")
     local member = guid and self.partyMembers[guid]
     local data = member and member.interruptData
-    if not data then return end  -- current spec has no kick; nothing to announce
+    if not member then return end
 
     local now = GetTime()
     if not KT.HelloAllowed(KE:IsChatMessagingLocked(), self._lastHelloSent, now, force, HELLO_THROTTLE) then
@@ -559,7 +581,18 @@ function KT:BroadcastHello(force)
     end
     self._lastHelloSent = now
 
-    self:Transmit(COMM_PREFIX, "1;HELLO;" .. data.id .. ";" .. self:OwnKickCooldown(data))
+    -- Spell 0 says the player has no kick now (a demon without one), so
+    -- teammates drop the row instead of keeping the last kick they heard.
+    local id, cd, remaining = 0, 0, 0
+    if data then
+        id, cd = data.id, self:OwnKickCooldown(data)
+        if member.kickStart and member.kickDuration then
+            remaining = math_max(0, member.kickStart + member.kickDuration - now)
+        end
+    end
+    -- Field 6: "1" marks a reply, which is never answered; "0" asks for one.
+    self:Transmit(COMM_PREFIX, "1;HELLO;" .. id .. ";" .. cd
+        .. ";" .. string_format("%.1f", remaining) .. ";" .. (isReply and "1" or "0"))
     -- Deliberately NO BliZzi-format hello: we stay out of their handshake
     -- (kick-data-only participation, established interop posture).
 end
@@ -569,23 +602,29 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
     if not isKE and prefix ~= BLIZZI_PREFIX then return end
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     if not self.db.KickSync then return end
+    if not KE:IsSafeValue(sender) then return end
 
-    -- Wire input is untrusted (and could be secret in odd contexts); one
-    -- pcall wraps parse + attribution so bad input is dropped, not thrown.
+    -- Wire input is untrusted; one pcall wraps parse + attribution so bad
+    -- input is dropped, not thrown.
     local ok = pcall(function()
         local shortSender = Ambiguate(sender, "short")
-        if shortSender == UnitName("player") then return end  -- own echo
+        local senderKey = KE:BuildNicknameKey(sender, GetNormalizedRealmName())
+        -- Own echo, compared through the plain identity fields only.
+        local playerGuid = UnitGUID("player")
+        local own = playerGuid and self.partyMembers[playerGuid]
+        if not own then return end
+        if (own.fullKey and senderKey == own.fullKey)
+            or (not own.fullKey and own.shortName and shortSender == own.shortName) then
+            return
+        end
 
-        -- Both protocols carry a verb + the sender's kick spellID and cd:
-        --   KE:     "1;KICK;spellID;cd"   /  "1;HELLO;spellID;cd"
-        --   BliZzi: "B1;KICK;spellID;cd"  /  "B1;HELLO;class;spellID;cd"
-        local verb, sid, cd
+        --   KE:     "1;KICK;spellID;cd"  "1;HELLO;spellID;cd;remaining;replyFlag"
+        --   BliZzi: "B1;KICK;spellID;cd" "B1;HELLO;class;spellID;cd"
+        local verb, sid, cd, remField, replyFlag
         if isKE then
-            local ver, v, sidStr, cdStr = strsplit(";", message)
+            local ver, v, sidStr, cdStr, remStr, flagStr = strsplit(";", message)
             if ver ~= "1" then return end  -- version-gate our own wire
-            verb = v
-            sid = tonumber(sidStr)
-            cd = tonumber(cdStr)
+            verb, sid, cd, remField, replyFlag = v, tonumber(sidStr), tonumber(cdStr), remStr, flagStr
         else
             local hdr, cmd, a3, a4, a5 = strsplit(";", message)
             if hdr ~= "B1" then return end
@@ -601,29 +640,51 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         -- 30s — clamp so a bad client can't wedge a bar for hours.
         if cd and cd > 60 then cd = 60 end
 
-        for guid, member in pairs(self.partyMembers) do
-            if member.unit ~= "player" and member.name == shortSender then
-                member.kickVerified = true  -- comm user: bar is tracked for real
-                -- The sender knows their own kick best — refine our data
-                -- (also fills members our spec logic had to defer).
-                if sid and sid > 0 and cd and cd > 0 then
-                    local role = member.interruptData and member.interruptData.role or "DAMAGER"
-                    member.interruptData = { id = sid, cd = cd, role = role }
-                end
-                if not member.interruptData then return end
-                self:UpdateBars()           -- materialize the bar (verified-only roster)
-                if verb == "KICK" then
-                    self:ConfirmKick(guid, cd or member.interruptData.cd)
-                    -- The nameplate event usually stashed a record for this
-                    -- same kick moments ago — claim it (see the ambiguity
-                    -- rule in RemoveRecentKickRecord).
-                    self:RemoveRecentKickRecord(1.5)
-                elseif isKE then
-                    -- Reply-hello (throttled) so the sender learns us too
-                    self:BroadcastHello()
-                end
-                return
-            end
+        local guid, member = KT.MemberForSender(self.partyMembers, senderKey, shortSender)
+        if not guid then return end
+        member.kickVerified = true  -- comm user: bar is tracked for real
+        if verb == "HELLO" and isKE then
+            local mode = KT.HelloReplyMode(replyFlag)
+            if mode then self:ScheduleHelloReply(mode == "force") end
+        end
+        -- The sender knows their own kick best (also fills members our spec
+        -- logic had to defer). Once a message sets or clears it, only their
+        -- messages do (KT:ApplySpecKick never re-guesses it); a cleared kick
+        -- drops their row until a message names one.
+        local change = KT.KickFromMessage(verb, isKE, sid, cd, nil)
+        if change == "set" then
+            member.kickFromMessage = true
+            local role = member.interruptData and member.interruptData.role or "DAMAGER"
+            member.interruptData = { id = sid, cd = cd, role = role }
+        elseif change == "clear" then
+            member.kickFromMessage = true
+            member.interruptData = nil
+            member.kickStart, member.kickDuration = nil, nil
+            self:UpdateBars()
+            self:LayoutBars()
+            return
+        end
+        if not member.interruptData then return end
+        self:UpdateBars()  -- materialize the bar (verified-only roster)
+
+        local now = GetTime()
+        if verb == "KICK" and self.commMode ~= "feed" then
+            -- Keyed by teammate and kick: a mirror or repeat is one kick, a
+            -- second, different kick is not.
+            local result, index = KT.PairComm(self.kickPairing, self.kickRecords,
+                guid .. ":" .. (sid or 0), now, KICK_PAIR_WINDOW)
+            if result == "duplicate" then return end
+            if result == "claimed" then self:RemoveKickRecordAt(index) end
+        end
+
+        local remaining = KT.ParseHelloRemaining(remField, member.interruptData.cd)
+        local action = KT.CooldownFromMessage(verb, remaining)
+        if action == "start" then
+            self:ConfirmKick(guid, cd)
+        elseif action == "set" then
+            self:ConfirmKick(guid, cd or member.interruptData.cd, remaining)
+        elseif action == "ready" then
+            self:ClearKick(guid)
         end
     end)
     if not ok and DEBUG_KT then
@@ -632,28 +693,18 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
     end
 end
 
--- Claim the record a comm attribution just superseded. Record names may be
--- secret, so identity matching is impossible — remove ONLY when exactly one
--- record sits in the window. With two or more we can't tell whose is whose;
--- removing the wrong one would erase a non-comm teammate's only
--- representation, so we keep both (worst case: a brief duplicate for the
--- comm user — preferable to losing a real event). This also makes duplicate
--- comm delivery a safe no-op.
-function KT:RemoveRecentKickRecord(window)
-    local now = GetTime()
-    local found
-    for i = #self.kickRecords, 1, -1 do
-        local record = self.kickRecords[i]
-        if now - record.startTime <= window then
-            if found then return end  -- ambiguous: two candidates, remove none
-            found = i
-        end
-    end
-    if found then
-        local record = table.remove(self.kickRecords, found)
-        self:ReleaseBar("record" .. record.id)
-        self:LayoutBars()
-    end
+-- One reply per burst of HELLOs, spread so a party does not answer at once.
+-- force: the burst held a HELLO asking for an answer, which the throttle does
+-- not hold back; the reply itself is flagged, so it is never answered.
+function KT:ScheduleHelloReply(force)
+    if force then self._helloReplyForce = true end
+    if self._helloReplyPending then return end
+    self._helloReplyPending = true
+    C_Timer.After(math_random() * HELLO_REPLY_JITTER, function()
+        local forceReply = self._helloReplyForce
+        self._helloReplyPending, self._helloReplyForce = false, false
+        if self.isActive then self:BroadcastHello(forceReply, true) end
+    end)
 end
 
 ---------------------------------------------------------------------------------
