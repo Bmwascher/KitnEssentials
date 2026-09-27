@@ -192,3 +192,43 @@ describe("GUI-Core widget pools", function()
         end
     end)
 end)
+
+describe("GUI-Core deferred widget callbacks", function()
+    local GUIFrame, timers, rebuilt
+
+    before_each(function()
+        timers = {}
+        mock.install({ C_Timer = { After = function(_, fn) timers[#timers + 1] = fn end } })
+        local KE = { Theme = { headerHeight = 32, borderSize = 1 }, Print = function() end }
+        helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
+        GUIFrame = KE.GUIFrame
+        rebuilt = 0
+        GUIFrame.contentRebuildCallbacks = { function() rebuilt = rebuilt + 1 end }
+        GUIFrame.contentArea = {}
+        GUIFrame.mainFrame = { IsShown = function() return true end }
+    end)
+
+    after_each(function() mock.reset() end)
+
+    it("runs every pending call once, in order, at a rebuild, absorbs the rebuild they ask for, and leaves the timers idle", function()
+        local ran = {}
+        local function commit() ran[#ran + 1] = "commit" end
+        GUIFrame:DeferWidgetCallback(0.18, function()
+            ran[#ran + 1] = "clicked"
+            GUIFrame:DeferWidgetCallback(0.18, function() ran[#ran + 1] = "queued while draining" end)
+            GUIFrame:RefreshContent()
+        end)
+        -- The same function twice: two calls, two commits.
+        GUIFrame:DeferWidgetCallback(0.18, commit)
+        GUIFrame:DeferWidgetCallback(0.18, commit)
+
+        -- Everything past the rebuild callbacks is real frame work and throws
+        -- against these stubs, as in gui_minimize_refresh_spec.
+        pcall(GUIFrame.RefreshContent, GUIFrame)
+
+        assert.same({ "clicked", "commit", "commit", "queued while draining" }, ran)
+        assert.equals(1, rebuilt, "only the outer rebuild ran")
+        for _, fire in ipairs(timers) do fire() end
+        assert.equals(4, #ran, "the timers found nothing left to run")
+    end)
+end)

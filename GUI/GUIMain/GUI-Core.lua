@@ -78,6 +78,46 @@ function GUIFrame:UnregisterContentRebuildCallback(key)
     if key then self.contentRebuildCallbacks[key] = nil end
 end
 
+-- Toggle and edit-box callbacks wait out a short delay. A page rebuild inside
+-- that delay runs them first, while the page they belong to is still whole,
+-- instead of letting them reach widgets another page has since taken.
+-- One entry per call, in the order scheduled; whichever of its timer or a
+-- drain reaches an entry first runs it.
+GUIFrame._deferred = {}
+
+function GUIFrame:DeferWidgetCallback(delay, fn)
+    local queue = self._deferred
+    local entry = { fn = fn }
+    queue[#queue + 1] = entry
+    C_Timer.After(delay, function()
+        if entry.done then return end
+        entry.done = true
+        for i = 1, #queue do
+            if queue[i] == entry then
+                table.remove(queue, i)
+                break
+            end
+        end
+        fn()
+    end)
+end
+
+function GUIFrame:DrainDeferredWidgetCallbacks()
+    local queue = self._deferred
+    if #queue == 0 then return end
+    self._drainingDeferred = true
+    while #queue > 0 do
+        local entry = table.remove(queue, 1)
+        entry.done = true
+        -- A failing callback must not leave the flag set: every later
+        -- refresh would be swallowed.
+        local ok, err = pcall(entry.fn)
+        if not ok then geterrorhandler()(err) end
+    end
+    self._drainingDeferred = nil
+end
+
+
 -- Refresh a pool kit's theme-tied colors lazily — only on the first Configure
 -- after KE:RefreshTheme bumped the theme version. Each kit caches the version
 -- it was last refreshed at; mismatch triggers card-level + widget-level
@@ -1064,6 +1104,10 @@ function GUIFrame:RefreshContent()
     KE_GUI_REFRESH_COUNT = (KE_GUI_REFRESH_COUNT or 0) + 1
     KE_GUI_REFRESH_ITEM = self.selectedSidebarItem or "HomePage"
 
+    -- A callback drained below may ask for a rebuild; the rebuild already
+    -- under way is the one it wants.
+    if self._drainingDeferred then return end
+
     if not self.contentArea then return end
 
     -- NEVER rebuild while the GUI is hidden. The clear pass below orphans a full
@@ -1082,6 +1126,10 @@ function GUIFrame:RefreshContent()
         return
     end
     self._contentDirtyWhileHidden = nil
+
+    -- A toggle or edit box still waiting to fire its callback fires it now,
+    -- while the page it belongs to is whole.
+    self:DrainDeferredWidgetCallbacks()
 
     -- Fire rebuild callbacks FIRST so widget pools can ReleaseAll their
     -- kits back to their hidden holders before the SetParent(nil) loop
