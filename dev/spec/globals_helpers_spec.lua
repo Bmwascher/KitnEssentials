@@ -752,3 +752,54 @@ describe("KE:AbbreviateDungeonName", function()
         _G.C_ChallengeMode = nil
     end)
 end)
+
+-- The lookup the LFG Reminder row uses to find a dungeon's art. Callers spell
+-- names as the LFG activity does, so case must not decide a match, and the
+-- client's map table can be empty before its data loads.
+describe("KE:GetChallengeMapIDByName", function()
+    local KE
+    before_each(function()
+        KE = L.loadGlobals()
+    end)
+    after_each(function()
+        _G.C_ChallengeMode = nil
+    end)
+
+    -- ids is read on every call, so a test can fill it between calls.
+    local function useMaps(ids)
+        _G.C_ChallengeMode = {
+            GetMapTable = function() return ids end,
+            GetMapUIInfo = function(id)
+                if id == 399 then return "Ruby Life Pools" end
+            end,
+        }
+    end
+
+    it("matches the map name regardless of case", function()
+        useMaps({ 399 })
+        for _, name in ipairs({ "Ruby Life Pools", "ruby life pools", "RUBY LIFE POOLS" }) do
+            assert.equals(399, KE:GetChallengeMapIDByName(name), name)
+        end
+    end)
+
+    it("does not keep an index built from an empty map table", function()
+        local ids = {}
+        useMaps(ids)
+        assert.is_nil(KE:GetChallengeMapIDByName("Ruby Life Pools"))
+        ids[1] = 399
+        assert.equals(399, KE:GetChallengeMapIDByName("Ruby Life Pools"))
+    end)
+
+    it("returns nil for an unknown name or a non-string", function()
+        useMaps({ 399 })
+        local cases = {
+            { label = "unknown name", name = "Not A Dungeon" },
+            { label = "number",       name = 42 },
+            { label = "nil",          name = nil },
+        }
+        for _, c in ipairs(cases) do
+            assert.is_nil(KE:GetChallengeMapIDByName(c.name), c.label)
+        end
+    end)
+end)
+
