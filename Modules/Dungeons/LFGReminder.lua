@@ -18,8 +18,8 @@
 -- ║      phase secrecy is lifted once joined). Every field   ║
 -- ║      is still issecretvalue-guarded and the whole lookup ║
 -- ║      pcall'd: a secret can only skip the prompt, never   ║
--- ║      error. The dungeon name is only ever SetText'd,     ║
--- ║      which accepts secrets.                              ║
+-- ║      error. So the dungeon name is always plain, and the ║
+-- ║      row may measure it (the measure takes no secrets).  ║
 -- ║    * The secure button is created ONCE and ALWAYS out of ║
 -- ║      combat: normally at enable, else on the next        ║
 -- ║      PLAYER_REGEN_ENABLED. NOTHING may call BuildPopup   ║
@@ -225,20 +225,6 @@ local function TeleportOnCooldown(spellID)
     return type(dur) == "number" and dur > 1.5
 end
 
--- Layout constants
-local POPUP_W     = 210
-local TITLE_H     = 27
-local PAD         = 10
-local NAME_TOP    = TITLE_H + 9
-local NAME_H      = 24
-local BTN_TOP     = NAME_TOP + NAME_H
-local BTN_H       = 56
-local DISABLE_TOP = BTN_TOP + BTN_H + 8
-local DISABLE_H   = 16
-local POPUP_H     = DISABLE_TOP + DISABLE_H + 10
-local ROLE_TOP    = BTN_TOP + BTN_H + 6
-local ROLE_H      = 20  -- role row plus its gap, added to the height while shown
-
 -- State (plain upvalues; never keyed by a possibly-secret resultID)
 local popup, secureBtn
 local pendingSpellID       -- resolved teleport spell (static integer)
@@ -300,31 +286,87 @@ ApplySavedPosition = function()
     end
 end
 
--- The one writer of the role row, the "Disable Feature" anchor and the popup
--- height. The popup parents a secure button, so every caller runs out of
--- combat.
+-- Popup geometry. The row sits below the header; the footer line under it
+-- holds "Disable Feature" and the watermark.
+local POPUP_W     = 210
+local TITLE_H     = 27
+local PAD         = 10
+local BTN_TOP     = TITLE_H + 11
+local ART_SIZE    = 40
+local ART_PAD     = 8
+local TEXT_LEFT   = ART_PAD + ART_SIZE + ART_PAD
+local TEXT_RIGHT  = 6
+local TEXT_W      = POPUP_W - PAD * 2 - TEXT_LEFT - TEXT_RIGHT
+local NAME_LINE_H = 17  -- used when the font reports no line height
+local FOOT_GAP    = 8
+local FOOT_H      = 16
+local FOOT_PAD    = 8
+local DISABLE_W   = 90  -- used when the label reports no width
+
+-- Dungeon name the popup is drawing; every show path sets it before layout.
+---@type string?
+local shownName = nil
+
+local function MeasureName(s)
+    return secureBtn._name:GetUnboundedStringWidthForText(s)
+end
+
+-- The one writer of the popup's geometry: the row height, the text inside the
+-- secure button, the footer and the popup height. The popup parents a secure
+-- button, so every caller runs out of combat.
 ApplyPopupLayout = function()
     if not popup then return end
     local showDisable = not LR.db or LR.db.ShowDisable ~= false
     local showRole = shownRole ~= nil and (not LR.db or LR.db.ShowRole ~= false)
-    local roleFS = popup._role
-    if roleFS then
-        if showRole then
-            local set = KE.Skins and KE.Skins.GetRoleIconSet and KE.Skins.GetRoleIconSet() or "modern"
-            local icons = KE.BuildChatRoleIconStrings and KE.BuildChatRoleIconStrings(set)
-            local icon = icons and icons[shownRole]
-            local word = ROLE_LABEL[shownRole]
-            roleFS:SetText(icon and (icon .. " " .. word) or word)
-        end
-        roleFS:SetShown(showRole)
+
+    local nameFS = secureBtn._name
+    nameFS:SetText(shownName or "")
+    local lineH = nameFS:GetLineHeight()
+    lineH = (type(lineH) == "number" and lineH > 0) and math.ceil(lineH) or NAME_LINE_H
+    local lines = NameLineCount(shownName, TEXT_W, MeasureName)
+    local rowH, nameTop = RowLayout(lines, lineH)
+    local line2Y = -(nameTop + lines * lineH + LINE_GAP + LINE2_H / 2)
+
+    secureBtn:SetHeight(rowH)
+    nameFS:ClearAllPoints()
+    nameFS:SetPoint("TOPLEFT", secureBtn, "TOPLEFT", TEXT_LEFT, -nameTop)
+    nameFS:SetPoint("TOPRIGHT", secureBtn, "TOPRIGHT", -TEXT_RIGHT, -nameTop)
+
+    local roleFS = secureBtn._role
+    if showRole then
+        local set = KE.Skins and KE.Skins.GetRoleIconSet and KE.Skins.GetRoleIconSet() or "modern"
+        local icons = KE.BuildChatRoleIconStrings and KE.BuildChatRoleIconStrings(set)
+        local icon = icons and icons[shownRole]
+        local word = ROLE_LABEL[shownRole]
+        roleFS:SetText(icon and (icon .. " " .. word) or word)
     end
-    local roleH = showRole and ROLE_H or 0
-    if popup._disableBtn then
-        popup._disableBtn:ClearAllPoints()
-        popup._disableBtn:SetPoint("TOP", popup, "TOP", 0, -(DISABLE_TOP + roleH))
-        popup._disableBtn:SetShown(showDisable)
+    roleFS:ClearAllPoints()
+    roleFS:SetPoint("LEFT", secureBtn, "TOPLEFT", TEXT_LEFT, line2Y)
+    roleFS:SetShown(showRole)
+
+    -- "Teleport" ends the role line, or starts it when no role shows.
+    local label = secureBtn._label
+    label:ClearAllPoints()
+    if showRole then
+        label:SetPoint("RIGHT", secureBtn, "TOPRIGHT", -TEXT_RIGHT, line2Y)
+        label:SetJustifyH("RIGHT")
+    else
+        label:SetPoint("LEFT", secureBtn, "TOPLEFT", TEXT_LEFT, line2Y)
+        label:SetJustifyH("LEFT")
     end
-    popup:SetHeight((showDisable and POPUP_H or (POPUP_H - 20)) + roleH)
+
+    local footTop = BTN_TOP + rowH + FOOT_GAP
+    local disableBtn = popup._disableBtn
+    local disableW = disableBtn._label:GetUnboundedStringWidth()
+    disableW = (type(disableW) == "number" and disableW > 0) and math.ceil(disableW) or DISABLE_W
+    disableBtn:SetSize(disableW, FOOT_H)
+    disableBtn:ClearAllPoints()
+    disableBtn:SetPoint("TOPLEFT", popup, "TOPLEFT", PAD, -footTop)
+    disableBtn:SetShown(showDisable)
+    popup._mark:ClearAllPoints()
+    popup._mark:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -PAD, -footTop)
+
+    popup:SetHeight(footTop + FOOT_H + FOOT_PAD)
 end
 
 -- Build the popup + secure button (once, out of combat)
@@ -336,7 +378,7 @@ BuildPopup = function()
     local S = KE.Skins
 
     popup = CreateFrame("Frame", "KE_LFGReminderPopup", UIParent)
-    popup:SetSize(POPUP_W, POPUP_H)
+    popup:SetWidth(POPUP_W)
     popup:SetFrameStrata("DIALOG")
     popup:SetMovable(true)
     popup:EnableMouse(true)
@@ -359,15 +401,6 @@ BuildPopup = function()
     title:SetWordWrap(false)
     title:SetText("LFG Reminder")
 
-    -- Joined dungeon's full name (SetText accepts secret strings)
-    local nameFS = popup:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(nameFS, 13, "") end
-    nameFS:SetPoint("TOPLEFT", popup, "TOPLEFT", PAD, -NAME_TOP)
-    nameFS:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -PAD, -NAME_TOP)
-    nameFS:SetJustifyH("CENTER")
-    nameFS:SetWordWrap(true)
-    popup._name = nameFS
-
     -- Close (X) in the header
     local xBtn = CreateFrame("Button", nil, popup)
     xBtn:SetSize(16, 16)
@@ -378,9 +411,10 @@ BuildPopup = function()
     -- Secure teleport button (once; type + clicks set here and NEVER
     -- touched again; only "spell" is rewritten, out of combat).
     secureBtn = CreateFrame("Button", "KE_LFGReminderTeleport", popup, "SecureActionButtonTemplate")
-    secureBtn:SetSize(POPUP_W - PAD * 2, BTN_H)
+    -- ApplyPopupLayout sets the height: the row grows with the name.
+    secureBtn:SetWidth(POPUP_W - PAD * 2)
     -- A protected frame can only be anchored to another FRAME, never a
-    -- region -- anchor to the popup, below the name text.
+    -- region -- anchor to the popup, below the header.
     secureBtn:SetPoint("TOP", popup, "TOP", 0, -BTN_TOP)
     secureBtn:RegisterForClicks("AnyUp", "AnyDown")
     secureBtn:SetAttribute("type", "spell")
@@ -396,16 +430,29 @@ BuildPopup = function()
     end
 
     local icon = secureBtn:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(40, 40)
-    icon:SetPoint("LEFT", 8, 0)
+    icon:SetSize(ART_SIZE, ART_SIZE)
+    icon:SetPoint("LEFT", ART_PAD, 0)
     if S and S.Icon then S.Icon(icon, true) else icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
     secureBtn._icon = icon
 
+    -- Anchored top-left and top-right only, with no height and no line limit,
+    -- so a long name wraps instead of truncating.
+    local nameFS = secureBtn:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(nameFS, 14, "") end
+    nameFS:SetJustifyH("LEFT")
+    nameFS:SetWordWrap(true)
+    nameFS:SetNonSpaceWrap(true)
+    secureBtn._name = nameFS
+
+    local roleFS = secureBtn:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(roleFS, 12, "") end
+    roleFS:SetJustifyH("LEFT")
+    roleFS:SetWordWrap(false)
+    roleFS:Hide()
+    secureBtn._role = roleFS
+
     local btnLabel = secureBtn:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(btnLabel, 12, "") end
-    btnLabel:SetPoint("LEFT", icon, "RIGHT", 8, 0)
-    btnLabel:SetPoint("RIGHT", -6, 0)
-    btnLabel:SetJustifyH("LEFT")
+    if S and S.SetFont then S.SetFont(btnLabel, 10, "") end
     btnLabel:SetWordWrap(false)
     btnLabel:SetText("Teleport")
     secureBtn._label = btnLabel
@@ -417,8 +464,8 @@ BuildPopup = function()
     -- Cooldown inherits the button's protection: anchor to the button
     -- FRAME matching the icon's rect, never to the icon texture.
     local cd = CreateFrame("Cooldown", nil, secureBtn, "CooldownFrameTemplate")
-    cd:SetPoint("LEFT", secureBtn, "LEFT", 8, 0)
-    cd:SetSize(40, 40)
+    cd:SetPoint("LEFT", secureBtn, "LEFT", ART_PAD, 0)
+    cd:SetSize(ART_SIZE, ART_SIZE)
     cd:SetHideCountdownNumbers(true)
     cd:SetDrawSwipe(true); cd:SetDrawBling(false); cd:SetDrawEdge(false)
     secureBtn._cd = cd
@@ -438,29 +485,17 @@ BuildPopup = function()
     end)
     secureBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- A region of the popup, not of the secure button; ApplyPopupLayout is
-    -- its only writer.
-    local roleFS = popup:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(roleFS, 12, "") end
-    roleFS:SetPoint("TOPLEFT", popup, "TOPLEFT", PAD, -ROLE_TOP)
-    roleFS:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -PAD, -ROLE_TOP)
-    roleFS:SetJustifyH("CENTER")
-    roleFS:SetWordWrap(false)
-    roleFS:Hide()
-    popup._role = roleFS
-
     -- "Disable Feature" text: turns the whole feature off immediately
     local disableBtn = CreateFrame("Button", nil, popup)
-    disableBtn:SetSize(POPUP_W - PAD * 2, DISABLE_H)
-    disableBtn:SetPoint("TOP", popup, "TOP", 0, -DISABLE_TOP)
     local disableLbl = disableBtn:CreateFontString(nil, "OVERLAY")
     if S and S.SetFont then S.SetFont(disableLbl, 10, "") end
     disableLbl:SetAllPoints()
-    disableLbl:SetJustifyH("CENTER")
+    disableLbl:SetJustifyH("LEFT")
     disableLbl:SetText("Disable Feature")
     disableLbl:SetTextColor(0.6, 0.6, 0.6, 1)
     disableBtn:SetScript("OnEnter", function() disableLbl:SetTextColor(1, 0.3, 0.3, 1) end)
     disableBtn:SetScript("OnLeave", function() disableLbl:SetTextColor(0.6, 0.6, 0.6, 1) end)
+    disableBtn._label = disableLbl
     disableBtn:SetScript("OnClick", function()
         if LR.db then LR.db.Enabled = false end
         KitnEssentials:DisableModule("LFGReminder")
@@ -476,6 +511,12 @@ BuildPopup = function()
     end)
     popup._disableBtn = disableBtn
 
+    local mark = popup:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(mark, 10, "") end
+    mark:SetText("KitnEssentials")
+    mark:SetTextColor(1, 1, 1, 0.22)
+    popup._mark = mark
+
     -- Intentionally NOT Escape-closable: stays until teleport, dungeon
     -- entry, group leave, or disable.
     popup:SetScale((LR.db and LR.db.Scale) or 1.05)
@@ -485,16 +526,34 @@ BuildPopup = function()
     return popup
 end
 
+-- GetSpellInfo may return nothing; the slot then shows this, never an empty box.
+local FALLBACK_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+
+-- Dungeon art when the map has some and it loads, else the teleport's icon.
+-- Always writes, so one dungeon's image never carries over to the next.
+local function SetRowIcon(name, spellID)
+    local icon = secureBtn._icon
+    local art = ResolveDungeonArt(name)
+    if art and icon:SetTexture(art) then return end
+    local info = spellID and C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+    icon:SetTexture(info and info.iconID or FALLBACK_ICON)
+end
+
+local function SetRowKnown(known)
+    local icon = secureBtn._icon
+    icon:SetDesaturated(not known)
+    icon:SetAlpha(known and 1 or 0.4)
+    local nc = known and 1 or 0.5
+    secureBtn._name:SetTextColor(nc, nc, nc, 1)
+    secureBtn._label:SetTextColor(0.55, 0.55, 0.55, known and 1 or 0.5)
+end
+
 UpdateButtonVisuals = function()
     if not secureBtn or not pendingSpellID then return end
     local sid = pendingSpellID
-    local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(sid)
-    if info and info.iconID then secureBtn._icon:SetTexture(info.iconID) end
+    SetRowIcon(pendingName, sid)
     local known = C_SpellBook.IsSpellKnown(sid, SpellBookBank_Player)
-    secureBtn._icon:SetDesaturated(not known)
-    secureBtn._icon:SetAlpha(known and 1 or 0.4)
-    local lc = known and 1 or 0.5
-    secureBtn._label:SetTextColor(lc, lc, lc, 1)
+    SetRowKnown(known)
     if known then
         -- Duration object, not the startTime/duration pair: those two carry no
         -- NeverSecret flag, so under SecretWhenCooldownsRestricted the
@@ -626,7 +685,7 @@ ShowPrompt = function()
         return
     end
     BuildPopup()
-    popup._name:SetText(pendingName or "")
+    shownName = pendingName
     shownRole = pendingRole
     ApplyPopupLayout()
     secureBtn:SetAttribute("spell", pendingSpellID)  -- static integer
@@ -776,7 +835,7 @@ function LR:PLAYER_REGEN_ENABLED()
         pendingShow = nil
         if not TeleportOnCooldown(pendingSpellID) then
             if popup then
-                popup._name:SetText(pendingName or "")
+                shownName = pendingName
                 shownRole = pendingRole
                 ApplyPopupLayout()
             end
@@ -797,7 +856,7 @@ function LR:PLAYER_REGEN_ENABLED()
     if pendingHide then
         pendingHide = nil
         if keepShown and popup and popup:IsShown() then
-            popup._name:SetText(pendingName or "")
+            shownName = pendingName
             shownRole = pendingRole
             ApplyPopupLayout()
             UpdateButtonVisuals()
@@ -879,7 +938,7 @@ function LR:ShowPreview()
     -- A current-season dungeon: it must stay a key of TELEPORT_BY_NAME, so
     -- the preview draws the live table's teleport.
     local dungeon = "Ruby Life Pools"
-    popup._name:SetText(dungeon)
+    shownName = dungeon
     -- Read whether or not Show Role is on, so ticking it with the preview open
     -- shows the row through the page's refresh.
     local specIndex = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization()
@@ -887,16 +946,8 @@ function LR:ShowPreview()
         and GetSpecializationRole(specIndex)
     shownRole = PickRole(specRole, nil) or "DAMAGER"
     ApplyPopupLayout()
-    if secureBtn and secureBtn._icon then
-        local sid = ResolveTeleportSpellByName(dungeon)
-        local info = sid and C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(sid)
-        if info and info.iconID then secureBtn._icon:SetTexture(info.iconID) end
-        secureBtn._icon:SetDesaturated(false)
-        secureBtn._icon:SetAlpha(1)
-    end
-    if secureBtn and secureBtn._label then
-        secureBtn._label:SetTextColor(1, 1, 1, 1)
-    end
+    SetRowIcon(dungeon, ResolveTeleportSpellByName(dungeon))
+    SetRowKnown(true)
     ShowPopup()
 end
 
@@ -909,12 +960,13 @@ function LR:HidePreview()
         -- rather than hiding the user's actual teleport. The attribute has
         -- to be re-armed too: ShowPreview cleared it.
         if secureBtn then secureBtn:SetAttribute("spell", pendingSpellID) end
-        popup._name:SetText(pendingName or "")
+        shownName = pendingName
         shownRole = pendingRole
         ApplyPopupLayout()
         UpdateButtonVisuals()
         return
     end
+    shownName = nil
     shownRole = nil
     HidePopup()
 end
