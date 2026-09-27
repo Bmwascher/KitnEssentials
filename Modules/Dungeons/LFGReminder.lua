@@ -120,6 +120,82 @@ end
 
 LR._PickRole = PickRole
 
+-- Row geometry: the name block and a 14 px role line, centred in a row at
+-- least 56 px tall.
+local ROW_MIN_H = 56
+local ROW_PAD   = 8
+local LINE_GAP  = 4
+local LINE2_H   = 14
+
+local function MeasuredWidth(measure, s)
+    local w = measure(s)
+    return type(w) == "number" and w or 0
+end
+
+-- A word wider than the column breaks between whole glyphs, so width / column
+-- undercounts: 8 glyphs of 15 px fit in 128 px, and 17 of them need 3 lines,
+-- not 2. Returns the lines the word spans and the text on its last line.
+-- The pattern steps UTF-8 characters, never splitting one.
+local function PackGlyphs(word, width, measure)
+    local lines, current = 1, ""
+    for glyph in word:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        local candidate = current .. glyph
+        if current ~= "" and MeasuredWidth(measure, candidate) > width then
+            lines = lines + 1
+            current = glyph
+        else
+            current = candidate
+        end
+    end
+    return lines, current
+end
+
+-- Lines a word-wrapping FontString gives text in a column `width` wide;
+-- measure(s) is the unbounded width of s. Words pack greedily at spaces; the
+-- next word may continue on the last line of a broken one.
+local function NameLineCount(text, width, measure)
+    if type(text) ~= "string" then return 1 end
+    local lines, current = 0, nil
+    for word in text:gmatch("%S+") do
+        local candidate = current and (current .. " " .. word) or word
+        if MeasuredWidth(measure, candidate) <= width then
+            current = candidate
+        else
+            if current then lines = lines + 1 end
+            if MeasuredWidth(measure, word) > width then
+                local wordLines, rest = PackGlyphs(word, width, measure)
+                lines = lines + wordLines - 1
+                current = rest
+            else
+                current = word
+            end
+        end
+    end
+    if current then lines = lines + 1 end
+    return math.max(lines, 1)
+end
+
+-- Row height and the name's top offset for a name of `lines` lines.
+local function RowLayout(lines, lineH)
+    local textH = lines * lineH + LINE_GAP + LINE2_H
+    local rowH = math.max(ROW_MIN_H, textH + ROW_PAD * 2)
+    return rowH, math.floor((rowH - textH) / 2)
+end
+
+-- Challenge-mode art for a dungeon name, or nil: no map for the name, or a
+-- map without art (the client's own dungeon list treats 0 as none).
+local function ResolveDungeonArt(name)
+    local mapID = KE:GetChallengeMapIDByName(name)
+    if not (mapID and C_ChallengeMode and C_ChallengeMode.GetMapUIInfo) then return nil end
+    local ok, _, _, _, texture = pcall(C_ChallengeMode.GetMapUIInfo, mapID)
+    if not ok or type(texture) ~= "number" or texture == 0 then return nil end
+    return texture
+end
+
+LR._NameLineCount = NameLineCount
+LR._RowLayout = RowLayout
+LR._ResolveDungeonArt = ResolveDungeonArt
+
 -- The prompt IS a teleport button, so it is pointless once the teleport is
 -- on cooldown -- which it always is straight after using it.
 --
