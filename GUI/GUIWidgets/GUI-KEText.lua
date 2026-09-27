@@ -47,14 +47,12 @@ local function ConstructText(parent)
         edgeSize = 1,
     })
 
-    -- Label
     local title = container:CreateFontString(nil, "OVERLAY")
     title:SetPoint("TOPLEFT", container, "TOPLEFT", 1, -1)
     title:SetPoint("TOPRIGHT", container, "TOPRIGHT", -1, -1)
     title:SetHeight(18)
     title:SetJustifyH("LEFT")
 
-    -- Label
     local label = container:CreateFontString(nil, "OVERLAY")
     label:SetJustifyH("LEFT")
     label:SetSpacing(4)
@@ -123,7 +121,6 @@ end
 
 local textPool = GUIFrame:NewWidgetPool("text", ConstructText, function() end)
 
--- Text widget
 function GUIFrame:CreateText(parent, titleTex, labelText, customRowHeight, bgShow, wrapOn)
     local row
     if self:IsPoolParent(parent) then

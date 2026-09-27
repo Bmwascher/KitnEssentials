@@ -463,7 +463,6 @@ local function ConstructSlider(parent)
     -- throttled SetValue.
     local function CommitTyped(text)
         if row._isPercent then
-            -- Handle percentage input (strip % and divide by 100)
             text = text:gsub("%%", "")
             local num = tonumber(text)
             if num then

@@ -46,10 +46,9 @@ local function PaintTab(btn, active)
     else
         btn:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4] or 0.6)
         btn:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], T.border[4] or 0.4)
-        -- Full white for inactive tabs — accent-on-active vs
-        -- white-on-inactive gives clearer contrast than the previous
-        -- gray (0.6 alpha) which read as washed-out on dark
-        -- backdrops. Hover state uses the backdrop tint for
+        -- Full white for inactive tabs: a dim gray reads as washed-out on
+        -- dark backdrops, and accent-on-active vs white-on-inactive gives
+        -- clearer contrast. Hover state uses the backdrop tint for
         -- differentiation, not text alpha.
         btn.label:SetTextColor(1, 1, 1, 1)
     end
@@ -83,8 +82,7 @@ end
 
 -- The row's remaining width is left empty. Measured at layout time rather
 -- than at creation: a FontString can report short before its first layout
--- pass, and there is no longer any distributed slack to absorb a bad
--- measurement.
+-- pass, and there is no distributed slack to absorb a bad measurement.
 local function SizeTabsToText(strip)
     if not strip._fill then return end
     local tabPadding = Theme.paddingLarge * 2

@@ -527,7 +527,8 @@ end
 -- Pooling follows the page down from its root: the live scroll child, the
 -- content of a card in use, or a row in use. Those are the containers whose
 -- release walks their pooled children. Anything made elsewhere (kit holders,
--- the theme popup, a page's own frames, another widget) is built as before.
+-- the theme popup, a page's own frames, another widget) is built directly,
+-- with no pooling.
 function GUIFrame:IsPoolParent(parent)
     if not parent then return false end
     local area = self.contentArea
@@ -541,8 +542,8 @@ function GUIFrame:IsPoolParent(parent)
 end
 
 -- One child a container tracks or holds. A pooled object still here goes back
--- to its pool; any other frame still here is orphaned as a rebuild always did;
--- a child something else has since taken is left alone. Regions are never
+-- to its pool; any other frame still here is orphaned, as a rebuild always
+-- does; a child something else has since taken is left alone. Regions are never
 -- reparented: they stay and fail their container's check.
 function GUIFrame:ReleaseTracked(child, container)
     if child:GetParent() ~= container then return end

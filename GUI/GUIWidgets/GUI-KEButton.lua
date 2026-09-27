@@ -16,8 +16,9 @@ local type = type
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- Builds one button, parented straight to the caller's frame: the container it
--- once sat in was never returned and only left an empty frame on every call.
+-- Builds one button, parented straight to the caller's frame: a wrapping
+-- container is never returned to the caller, so parenting through one would
+-- just leave an empty frame behind on every call.
 -- Label, image, size and bindings are applied by ConfigureButton.
 local function ConstructButton(parent)
     local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
@@ -187,9 +188,7 @@ local buttonPool = GUIFrame:NewWidgetPool("button", ConstructButton, function(bu
     button._hoverAnimGroup:Stop()
 end)
 
--- Button widgt
 function GUIFrame:CreateButton(parent, labelText, config)
-    -- Ensure config is a table
     if type(config) ~= "table" then
         config = {}
     end
