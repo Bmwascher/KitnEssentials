@@ -228,7 +228,6 @@ end
 local popup, secureBtn
 local pendingSpellID       -- resolved teleport spell (static integer)
 local pendingName          -- dungeon display name (clean)
-local pendingAttrSpellID   -- spell attr stashed for out-of-combat write
 local pendingShow          -- join landed in combat; show on REGEN_ENABLED
 local pendingHide          -- hide requested in combat; flush on REGEN_ENABLED
 local combatHidden         -- the hide came from combat, not from the user
@@ -243,13 +242,9 @@ local SavePosition, ApplySavedPosition, ApplyPopupLayout
 
 -- Read-only test seams. The pending state stays in the upvalues above --
 -- these expose it without creating a second source of truth that could
--- drift from it. _GetPendingAttrSpellID exists specifically so the
--- cancellation spec can observe the deferred ATTRIBUTE write: asserting on
--- pendingSpellID alone would pass even without ClearPending's
--- pendingAttrSpellID line, making that test a false gate.
+-- drift from it.
 function LR:_GetPendingSpellID()     return pendingSpellID end
 function LR:_GetPendingName()        return pendingName end
-function LR:_GetPendingAttrSpellID() return pendingAttrSpellID end
 
 -- The X close. It ends the prompt rather than hiding it, so nothing that
 -- brings a hidden prompt back (the combat re-show, a preview closing) can
@@ -693,7 +688,6 @@ ShowPrompt = function()
         -- combat, so this path IS reachable with no popup at all: enable or
         -- /reload during combat, then join a group before it ends.
         -- PLAYER_REGEN_ENABLED builds it and finishes the show.
-        pendingAttrSpellID = pendingSpellID
         pendingShow = true
         pendingHide = nil  -- a deferred show supersedes a deferred hide
         return
@@ -708,8 +702,9 @@ ShowPrompt = function()
     shownName = pendingName
     shownRole = pendingRole
     ApplyPopupLayout()
+    -- The only write that arms the button, so the preview hold above covers
+    -- every path that arms it.
     secureBtn:SetAttribute("spell", pendingSpellID)  -- static integer
-    pendingAttrSpellID = nil
     pendingHide = nil
     UpdateButtonVisuals()
     ShowPopup()
@@ -730,16 +725,12 @@ ClearPending = function()
     pendingSpellID     = nil
     pendingName        = nil
     pendingRole        = nil
+    -- A combat join sets pendingShow; a group that breaks before combat ends
+    -- must leave PLAYER_REGEN_ENABLED nothing to build or arm.
     pendingShow        = nil
     -- Whatever combat took away is no longer wanted either: this runs on
     -- group-leave and instance-entry, both of which invalidate the prompt.
     combatHidden       = nil
-    -- Also clear the deferred attribute write. A combat join sets BOTH
-    -- pendingAttrSpellID and pendingShow; if the group breaks before combat
-    -- ends, clearing only pendingShow would leave PLAYER_REGEN_ENABLED to
-    -- build a popup nobody asked for and arm it with the cancelled
-    -- dungeon's teleport.
-    pendingAttrSpellID = nil
 end
 
 -- Live refresh for the GUI (scale, disable and role rows). The popup parents
@@ -796,15 +787,26 @@ function LR:TryLeaderPrompt()
     ShowPrompt()
 end
 
+-- The live prompt is no longer wanted. While the settings preview is up the
+-- popup is the preview's and the page still shows it, so only the prompt
+-- waiting behind it is dropped.
+local function DropPrompt()
+    if previewState then
+        previewState = "empty"
+        return
+    end
+    HidePrompt()
+end
+
 function LR:SPELL_UPDATE_COOLDOWN()
     if not (popup and popup:IsShown()) then return end
-    if TeleportOnCooldown(pendingSpellID) then HidePrompt() end
+    if TeleportOnCooldown(pendingSpellID) then DropPrompt() end
 end
 
 function LR:GROUP_ROSTER_UPDATE()
     if not IsInGroup() then
         ClearArmed()
-        ClearPending(); HidePrompt()
+        ClearPending(); DropPrompt()
         return
     end
     self:TryLeaderPrompt()
@@ -813,7 +815,7 @@ end
 function LR:CheckInstance()
     local inInstance, instanceType = IsInInstance()
     if inInstance and instanceType == "party" then
-        ClearPending(); HidePrompt()
+        ClearPending(); DropPrompt()
     end
 end
 
@@ -830,17 +832,12 @@ function LR:PLAYER_REGEN_DISABLED()
 end
 
 function LR:PLAYER_REGEN_ENABLED()
-    -- Flush a secure attribute write blocked during combat
-    if pendingAttrSpellID and secureBtn then
-        secureBtn:SetAttribute("spell", pendingAttrSpellID)
-        pendingAttrSpellID = nil
-    end
     -- Bring the prompt back if it is still wanted: a join that landed in
     -- combat, or a shown prompt combat hid. Leaving the group or entering the
     -- dungeon ran ClearPending, which clears pendingSpellID and both flags,
     -- so a stale prompt never gets here. ShowPrompt refuses a disabled module
     -- or a teleport on cooldown, builds the popup if combat kept it from being
-    -- built, and re-arms the spell a preview may have cleared.
+    -- built, waits behind a settings preview, and otherwise arms the spell.
     local wantShow = pendingShow or combatHidden
     pendingShow, combatHidden = nil, nil
     if wantShow then ShowPrompt() end
