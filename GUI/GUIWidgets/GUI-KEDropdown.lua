@@ -27,6 +27,7 @@ local pairs = pairs
 ---------------------------------------------------------------------------------
 
 -- Configuration constants
+local ROW_HEIGHT = 34
 local DROPDOWN_HEIGHT = 24
 local ITEM_HEIGHT = 24
 local MAX_DROPDOWN_HEIGHT = 400
@@ -130,31 +131,49 @@ local function ReleaseItemButton(btn)
     table_insert(itemButtonPool, btn)
 end
 
--- Dropdown Widget — config-table API: { options, value, callback, tooltip,
--- searchable }
--- TODO: `labelWidth` and `isFontPreview` are accepted in the API but not
--- yet wired into the widget body. Config keys pass silently.
-function GUIFrame:CreateDropdown(parent, labelText, config)
-    config = config or {}
-    local options = config.options
-    local selected = config.value or config.selected
-    local tooltip = config.tooltip
-    local searchable = config.searchable == true
-    local sorting = nil
-    local customHeight = nil
+-- An options list comes in three shapes: an ordered list of { value or key,
+-- text } entries, a plain list of strings, or a key -> text map. For the first
+-- shape the options a dropdown is created with read value first, while
+-- UpdateOptions reads key first.
+local function NormalizeOptions(options, valueFirst)
+    local normalized, ordered = {}, nil
+    if type(options) == "table" then
+        local first = options[1]
+        if first and type(first) == "table" and (first.value or first.key) then
+            ordered = {}
+            for _, opt in ipairs(options) do
+                local optKey
+                if valueFirst then
+                    optKey = opt.value or opt.key
+                else
+                    optKey = opt.key or opt.value
+                end
+                normalized[optKey] = opt.text
+                table_insert(ordered, optKey)
+            end
+        elseif first ~= nil and type(first) == "string" then
+            for _, v in ipairs(options) do
+                normalized[v] = v
+            end
+        else
+            for k, v in pairs(options) do
+                normalized[k] = v
+            end
+        end
+    end
+    return normalized, ordered
+end
 
-    -- CREATE ROW CONTAINER
-    local rowHeight = customHeight or 34
+-- Builds one dropdown. The search box exists only on searchable dropdowns, so
+-- those have their own pool. Label, options, value and bindings are applied
+-- by ConfigureDropdown.
+local function ConstructDropdown(parent, searchable)
     local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(rowHeight)
 
     -- Label
     local label = row:CreateFontString(nil, "OVERLAY")
     label:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 1)
     label:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(label, "small")
-    label:SetText(labelText or "")
-    label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
     row.label = label
 
     -- Main dropdown button
@@ -163,16 +182,12 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     dropdownButton:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -14)
     dropdownButton:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -14)
     dropdownButton:SetBackdrop(DROPDOWN_BACKDROP)
-    dropdownButton:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
-    dropdownButton:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
     -- Selected text
     local selectedText = dropdownButton:CreateFontString(nil, "OVERLAY")
     selectedText:SetPoint("LEFT", dropdownButton, "LEFT", Theme.paddingSmall, 0)
     selectedText:SetPoint("RIGHT", dropdownButton, "RIGHT", -24, 0)
     selectedText:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(selectedText, "normal")
-    selectedText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     dropdownButton.selectedText = selectedText
 
     -- Arrow icon
@@ -180,42 +195,15 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     arrow:SetSize(ARROW_SIZE, ARROW_SIZE)
     arrow:SetPoint("RIGHT", dropdownButton, "RIGHT", -Theme.paddingSmall, 0)
     arrow:SetTexture(ARROW_TEX)
-    arrow:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     arrow:SetTexelSnappingBias(0)
     arrow:SetSnapToPixelGrid(false)
     arrow:SetRotation(-math.pi / 2)
 
-    -- Normalize options and preserve order if provided as array
-    local normalizedOptions = {}
-    local orderedKeys = nil
-    if type(options) == "table" then
-        if options[1] and type(options[1]) == "table" and (options[1].value or options[1].key) then
-            orderedKeys = {}
-            for _, opt in ipairs(options) do
-                local optKey = opt.value or opt.key
-                normalizedOptions[optKey] = opt.text
-                table_insert(orderedKeys, optKey)
-            end
-        else
-            local isSequentialArray = options[1] ~= nil and type(options[1]) == "string"
-            if isSequentialArray then
-                for _, v in ipairs(options) do
-                    normalizedOptions[v] = v
-                end
-            else
-                for k, v in pairs(options) do
-                    normalizedOptions[k] = v
-                end
-            end
-        end
-    end
-    if sorting and type(sorting) == "table" then
-        orderedKeys = sorting
-    end
-
     -- State variables
+    local normalizedOptions = {}
+    local orderedKeys
     local isOpen = false
-    local currentValue = selected
+    local currentValue
     local itemButtons = {}
     local itemsCreated = false
     local startHeight = 0
@@ -227,8 +215,6 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     local dropdownList = CreateFrame("Frame", nil, row, "BackdropTemplate")
     dropdownList:SetHeight(1)
     dropdownList:SetBackdrop(DROPDOWN_BACKDROP)
-    dropdownList:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
-    dropdownList:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
     dropdownList:SetFrameStrata("TOOLTIP")
     dropdownList:SetClipsChildren(true)
     dropdownList:Hide()
@@ -241,37 +227,33 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
     local scrollChild = CreateFrame("Frame", nil, scrollFrame)
     scrollFrame:SetScrollChild(scrollChild)
 
-    local searchBox, searchEmptyLabel
+    local searchContainer, searchBox, searchEmptyLabel
     if searchable then
-        local searchContainer = CreateFrame("Frame", nil, dropdownList, "BackdropTemplate")
+        searchContainer = CreateFrame("Frame", nil, dropdownList, "BackdropTemplate")
         searchContainer:SetHeight(SEARCH_BOX_HEIGHT)
         searchContainer:SetPoint("TOPLEFT", dropdownList, "TOPLEFT", 0, 0)
         searchContainer:SetPoint("TOPRIGHT", dropdownList, "TOPRIGHT", 0, 0)
         searchContainer:SetBackdrop(DROPDOWN_BACKDROP)
-        searchContainer:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-        searchContainer:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
         searchBox = CreateFrame("EditBox", nil, searchContainer)
         searchBox:SetAutoFocus(false)
         searchBox:SetPoint("TOPLEFT", searchContainer, "TOPLEFT", 8, 0)
         searchBox:SetPoint("BOTTOMRIGHT", searchContainer, "BOTTOMRIGHT", -8, 0)
         KE:ApplyThemeFont(searchBox, "normal")
-        searchBox:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 1)
 
         searchEmptyLabel = dropdownList:CreateFontString(nil, "OVERLAY")
         KE:ApplyThemeFont(searchEmptyLabel, "normal")
         searchEmptyLabel:SetPoint("TOP", searchContainer, "BOTTOM", 0, -(SEARCH_PADDING + 6))
         searchEmptyLabel:SetText("No matches found")
-        searchEmptyLabel:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
         searchEmptyLabel:Hide()
 
         scrollFrame:SetPoint("TOPLEFT", dropdownList, "TOPLEFT", 0, -(SEARCH_BOX_HEIGHT + SEARCH_PADDING))
     end
 
     -- Scrollbar components
-    local scrollbar = nil
-    local thumb = nil
-    local thumbBorder = nil
+    local scrollbar
+    local thumb
+    local thumbBorder
 
     local function EnsureScrollbar()
         if scrollbar then return end
@@ -321,6 +303,9 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
 
         thumb:HookScript("OnShow", function() thumbBorder:Show() end)
         thumb:HookScript("OnHide", function() thumbBorder:Hide() end)
+
+        -- The list's own part, made on first need, not something a page added.
+        GUIFrame:PoolGrow(row, dropdownList, 1, 0)
     end
 
     -- Animation groups
@@ -737,6 +722,7 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
 
     dropdownButton:SetScript("OnEnter", function()
         SetBorderHover(true)
+        local tooltip = row._tooltip
         if tooltip then
             GameTooltip:SetOwner(dropdownButton, "ANCHOR_TOP")
             GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
@@ -748,18 +734,6 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
         SetBorderHover(false)
         GameTooltip:Hide()
     end)
-
-    -- Set initial selected text
-    if selected and normalizedOptions[selected] then
-        selectedText:SetText(normalizedOptions[selected])
-        currentValue = selected
-    elseif selected ~= nil then
-        selectedText:SetText(tostring(selected))
-        currentValue = selected
-    else
-        selectedText:SetText("Select...")
-        currentValue = nil
-    end
 
     -- Hide handlers
     dropdownList:SetScript("OnHide", function()
@@ -827,10 +801,8 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
 
     -- Re-apply theme-tied state after KE:RefreshTheme replaces Theme color
     -- tables. Hover/animation handlers read live values via Theme.accent[1]
-    -- indexing each call so they self-recover. Pool consumers call this
-    -- when KE._themeVersion has advanced. Dropdown list, item buttons, and
-    -- scrollbar thumb are recreated on next open via UpdateOptions →
-    -- CreateItemButtons, so we only need the always-visible chrome here.
+    -- indexing each call so they self-recover. Item buttons are recreated on
+    -- the next open; the list chrome is repainted by ConfigureDropdown.
     function row:ApplyThemeColors()
         local TT = Theme
         label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
@@ -840,30 +812,8 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
         arrow:SetVertexColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
     end
 
-    function row:UpdateOptions(newOptions)
-        normalizedOptions = {}
-        orderedKeys = nil
-        if type(newOptions) == "table" then
-            if newOptions[1] and type(newOptions[1]) == "table" and (newOptions[1].key or newOptions[1].value) then
-                orderedKeys = {}
-                for _, opt in ipairs(newOptions) do
-                    local optKey = opt.key or opt.value
-                    normalizedOptions[optKey] = opt.text
-                    table_insert(orderedKeys, optKey)
-                end
-            else
-                local isSequentialArray = newOptions[1] ~= nil and type(newOptions[1]) == "string"
-                if isSequentialArray then
-                    for _, v in ipairs(newOptions) do
-                        normalizedOptions[v] = v
-                    end
-                else
-                    for k, v in pairs(newOptions) do
-                        normalizedOptions[k] = v
-                    end
-                end
-            end
-        end
+    local function ApplyOptions(newOptions, valueFirst)
+        normalizedOptions, orderedKeys = NormalizeOptions(newOptions, valueFirst)
 
         -- Recreate items if they were already created
         if itemsCreated then
@@ -878,19 +828,118 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
             end
         end
     end
+    row._applyOptions = ApplyOptions
+
+    function row:UpdateOptions(newOptions)
+        ApplyOptions(newOptions, false)
+    end
 
     function row:SetOptions(newOptions)
         return row:UpdateOptions(newOptions)
+    end
+
+    -- The value a dropdown shows before anything is picked.
+    row._showSelected = function(value)
+        if value and normalizedOptions[value] then
+            selectedText:SetText(normalizedOptions[value])
+            currentValue = value
+        elseif value ~= nil then
+            selectedText:SetText(tostring(value))
+            currentValue = value
+        else
+            selectedText:SetText("Select...")
+            currentValue = nil
+        end
+    end
+
+    -- Colours of the parts only seen while the list is open. A fresh dropdown
+    -- took them from the theme when it was built; a reused one takes them here.
+    row._paintList = function()
+        local TT = Theme
+        dropdownList:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], 1)
+        dropdownList:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        -- The scrollbar is made on first need and then kept.
+        if scrollbar then
+            scrollbar:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
+            scrollbar:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+            thumb:SetColorTexture(TT.accent[1], TT.accent[2], TT.accent[3], 0.8)
+            thumbBorder:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        end
+        if searchable then
+            searchContainer:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
+            searchContainer:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+            KE:ApplyThemeFont(searchBox, "normal")
+            searchBox:SetTextColor(TT.textPrimary[1], TT.textPrimary[2], TT.textPrimary[3], 1)
+            KE:ApplyThemeFont(searchEmptyLabel, "normal")
+            searchEmptyLabel:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
+        end
+    end
+
+    -- Back to rest: list closed, no item buttons, no search, no hover fade.
+    row._resetForPool = function()
+        CloseDropdown(true)
+        for _, btn in ipairs(itemButtons) do
+            ReleaseItemButton(btn)
+        end
+        wipe(itemButtons)
+        itemsCreated = false
+        scrollHold = false
+        if hoverAnimGroup then hoverAnimGroup:Stop() end
     end
 
     dropdownButton.closeDropdown = CloseDropdown
     row.dropdown = dropdownButton
 
     -- Pool-friendly callback slot; item OnClick + row:SetValue read late-bound.
-    row._callback = config.callback
     function row:SetCallback(fn)
         self._callback = fn
     end
 
+    row._keOwned = { row, dropdownButton, dropdownList, scrollChild }
+    return row
+end
+
+local function ConfigureDropdown(row, labelText, config)
+    -- Every use: row:AddWidget sizes a widget to its row.
+    row:SetHeight(ROW_HEIGHT)
+    local label = row.label
+    KE:ApplyThemeFont(label, "small")
+    label:SetText(labelText or "")
+    KE:ApplyThemeFont(row.dropdown.selectedText, "normal")
+    row._tooltip = config.tooltip
+    row._applyOptions(config.options, true)
+    row._showSelected(config.value or config.selected)
+    row:SetEnabled(true)
+    row:ApplyThemeColors()
+    row._paintList()
+    row._callback = config.callback
+end
+
+local function ResetDropdown(row)
+    row._resetForPool()
+end
+
+local dropdownPool = GUIFrame:NewWidgetPool("dropdown", function(holder)
+    return ConstructDropdown(holder, false)
+end, ResetDropdown)
+
+local searchDropdownPool = GUIFrame:NewWidgetPool("dropdown:search", function(holder)
+    return ConstructDropdown(holder, true)
+end, ResetDropdown)
+
+-- Dropdown Widget — config-table API: { options, value, callback, tooltip,
+-- searchable }
+-- TODO: `labelWidth` and `isFontPreview` are accepted in the API but not
+-- yet wired into the widget body. Config keys pass silently.
+function GUIFrame:CreateDropdown(parent, labelText, config)
+    config = config or {}
+    local searchable = config.searchable == true
+    local row
+    if self:IsPoolParent(parent) then
+        row = (searchable and searchDropdownPool or dropdownPool):Acquire(parent)
+    else
+        row = ConstructDropdown(parent, searchable)
+    end
+    ConfigureDropdown(row, labelText, config)
     return row
 end
