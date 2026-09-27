@@ -312,8 +312,8 @@ describe("LFGReminder combat re-show", function()
 end)
 
 describe("LFGReminder close with X", function()
-    -- X ends the prompt. A plain hide would leave the pending teleport, which
-    -- HidePreview re-arms and leaves on screen.
+    -- X ends the prompt: a preview opened and closed afterwards must not
+    -- bring it back.
     it("keeps a prompt closed with X closed through a preview", function()
         local LR, _, seams = loader.loadLFGReminder({
             C_LFGList = {
@@ -330,6 +330,24 @@ describe("LFGReminder close with X", function()
         LR:HidePreview()
         assert.is_false(popup:IsShown())
         assert.is_nil(btn:GetAttribute("spell"))
+    end)
+
+    -- X on the preview popup also ends the preview's hold; otherwise the next
+    -- join would wait behind a preview that is no longer on screen.
+    it("lets the next join show after X closes the preview", function()
+        local LR, _, seams = loader.loadLFGReminder({
+            C_LFGList = {
+                GetSearchResultInfo = function() return { activityIDs = { 7 } } end,
+                GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        LR:LFG_LIST_JOINED_GROUP(nil, 1)
+        LR:ShowPreview()
+        LR._ClosePrompt()
+        LR:LFG_LIST_JOINED_GROUP(nil, 2)
+        assert.is_true(seams.frames["KE_LFGReminderPopup"]:IsShown())
+        assert.equals(1286809, seams.frames["KE_LFGReminderTeleport"]:GetAttribute("spell"))
     end)
 end)
 
