@@ -92,6 +92,7 @@ local KICK_RECORD_FALLBACK_DURATION = 15
 local KICK_RECORD_GRACE = 0.4  -- records stay invisible this long so a comm
                                -- claim can discard them before they render
 local HELLO_THROTTLE = 10
+local KICK_PAIR_WINDOW = 1.5
 
 -- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence,
 -- container OnUpdate ticks, and nameplate-interrupt token resolution.
@@ -126,6 +127,7 @@ KT._readyList = {}        -- reusable temp table for LayoutBars
 KT.isActive = false
 KT.combatEventsRegistered = false
 KT.commState = {}  -- commBlocked: a lockdown refusal since the last successful send
+KT.kickPairing = { claims = {}, paired = {} }  -- keyed guid..":"..kickID; see KT.PairComm
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -418,6 +420,12 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
         return
     end
 
+    -- A synced teammate's KICK that arrived first claims this record.
+    if self.commMode ~= "feed"
+        and KT.PairRecord(self.kickPairing, GetTime(), KICK_PAIR_WINDOW) then
+        return
+    end
+
     -- Class color for the record: pass the (possibly secret) token to the
     -- C-side GetClassColor and apply r/g/b VERBATIM — storing/applying
     -- secrets is legal, any math or comparison on them is not.
@@ -485,6 +493,20 @@ function KT:ClearKickRecords()
         self:ReleaseBar("record" .. record.id)
     end
     wipe(self.kickRecords)
+    self:ClearPairing()
+end
+
+function KT:ClearPairing()
+    wipe(self.kickPairing.claims)
+    wipe(self.kickPairing.paired)
+end
+
+-- Drops the record a KICK message just claimed.
+function KT:RemoveKickRecordAt(index)
+    local record = table.remove(self.kickRecords, index)
+    if not record then return end
+    self:ReleaseBar("record" .. record.id)
+    self:LayoutBars()
 end
 
 ---------------------------------------------------------------------------------

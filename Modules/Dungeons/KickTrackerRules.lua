@@ -59,3 +59,56 @@ function KT.HelloAllowed(locked, lastSent, now, force, throttle)
     if force or lastSent == nil then return true end
     return now - lastSent >= throttle
 end
+
+---------------------------------------------------------------------------------
+-- Pairing a KICK message with a nameplate record
+---------------------------------------------------------------------------------
+-- Records are anonymous (the kicker's name may be secret), so a pairing is
+-- made only when exactly one candidate sits on the other side of the window.
+-- Both tables are keyed by teammate and kick, so a mirrored or repeated
+-- message pairs once while a teammate's second, different kick still pairs.
+local function dropOlder(map, now, window)
+    for key, at in pairs(map) do
+        if now - at > window then map[key] = nil end
+    end
+end
+
+function KT.PairComm(pairing, records, key, now, window)
+    dropOlder(pairing.claims, now, window)
+    dropOlder(pairing.paired, now, window)
+    if pairing.claims[key] or pairing.paired[key] then return "duplicate" end
+
+    local found, count = nil, 0
+    for i = 1, #records do
+        if now - records[i].startTime <= window then
+            count = count + 1
+            found = i
+        end
+    end
+    if count == 1 then
+        pairing.paired[key] = now
+        return "claimed", found
+    end
+    if count == 0 then
+        pairing.claims[key] = now
+        return "opened"
+    end
+    pairing.paired[key] = now
+    return "ambiguous"
+end
+
+-- True when the record about to be created is the kick an open claim
+-- announced; the claim is used up.
+function KT.PairRecord(pairing, now, window)
+    dropOlder(pairing.claims, now, window)
+    dropOlder(pairing.paired, now, window)
+    local only, count = nil, 0
+    for key in pairs(pairing.claims) do
+        count = count + 1
+        only = key
+    end
+    if count ~= 1 then return false end
+    pairing.paired[only] = pairing.claims[only]
+    pairing.claims[only] = nil
+    return true
+end
