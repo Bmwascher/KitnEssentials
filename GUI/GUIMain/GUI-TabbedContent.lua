@@ -15,9 +15,10 @@ local ipairs = ipairs
 GUIFrame.tabbedPageState = GUIFrame.tabbedPageState or {}
 
 -- Edit Mode can only hand over one id, so a nested id has to be translated to
--- its owning outer tab and then passed down. A nested page registered below
--- takes its pending id in its own build; a plain row (Dark Theme's Elements)
--- keeps its own active id and takes its own.
+-- its owning outer tab and then passed down. A nested page built with
+-- RegisterTabbedContent reads its pendingNestedTab entry in its own build; a
+-- nested page built with plain RegisterContent (Dark Theme's Elements) reads
+-- its entry itself.
 GUIFrame.nestedTabOwner = GUIFrame.nestedTabOwner or {}
 GUIFrame.pendingNestedTab = GUIFrame.pendingNestedTab or {}
 
