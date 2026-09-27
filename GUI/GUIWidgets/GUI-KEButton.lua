@@ -54,8 +54,12 @@ function GUIFrame:CreateButton(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    button:SetBackdropColor(Theme.bgButton[1], Theme.bgButton[2], Theme.bgButton[3], Theme.bgButton[4])
-    button:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    local function PaintRest()
+        local c, e = Theme.controlBg, Theme.controlBorder
+        button:SetBackdropColor(c[1], c[2], c[3], c[4])
+        button:SetBackdropBorderColor(e[1], e[2], e[3], 1)
+    end
+    PaintRest()
 
     -- Hover fade animation for border color
     local hoverAnimGroup = button:CreateAnimationGroup()
@@ -64,6 +68,8 @@ function GUIFrame:CreateButton(parent, labelText, config)
 
     local borderColorFrom = {}
     local borderColorTo = {}
+    local plateFrom = {}
+    local plateTo = {}
 
     hoverAnimGroup:SetScript("OnUpdate", function(self)
         local progress = self:GetProgress() or 0
@@ -71,10 +77,15 @@ function GUIFrame:CreateButton(parent, labelText, config)
         local g = borderColorFrom.g + (borderColorTo.g - borderColorFrom.g) * progress
         local b = borderColorFrom.b + (borderColorTo.b - borderColorFrom.b) * progress
         button:SetBackdropBorderColor(r, g, b, 1)
+        button:SetBackdropColor(
+            plateFrom.r + (plateTo.r - plateFrom.r) * progress,
+            plateFrom.g + (plateTo.g - plateFrom.g) * progress,
+            plateFrom.b + (plateTo.b - plateFrom.b) * progress, 1)
     end)
 
     hoverAnimGroup:SetScript("OnFinished", function()
         button:SetBackdropBorderColor(borderColorTo.r, borderColorTo.g, borderColorTo.b, 1)
+        button:SetBackdropColor(plateTo.r, plateTo.g, plateTo.b, 1)
     end)
 
     local function AnimateBorderColor(toAccent)
@@ -84,15 +95,18 @@ function GUIFrame:CreateButton(parent, labelText, config)
         borderColorFrom.r = currentR
         borderColorFrom.g = currentG
         borderColorFrom.b = currentB
+        plateFrom.r, plateFrom.g, plateFrom.b = button:GetBackdropColor()
+        local plate = toAccent and Theme.controlHover or Theme.controlBg
+        plateTo.r, plateTo.g, plateTo.b = plate[1], plate[2], plate[3]
 
         if toAccent then
             borderColorTo.r = Theme.accent[1]
             borderColorTo.g = Theme.accent[2]
             borderColorTo.b = Theme.accent[3]
         else
-            borderColorTo.r = Theme.border[1]
-            borderColorTo.g = Theme.border[2]
-            borderColorTo.b = Theme.border[3]
+            borderColorTo.r = Theme.controlBorder[1]
+            borderColorTo.g = Theme.controlBorder[2]
+            borderColorTo.b = Theme.controlBorder[3]
         end
 
         hoverAnimGroup:Play()
@@ -118,14 +132,21 @@ function GUIFrame:CreateButton(parent, labelText, config)
         contentWidth = contentWidth + 6
     end
 
-    if iconWidget and textWidget then
-        iconWidget:SetPoint("LEFT", button, "CENTER", -contentWidth / 2, 0)
-        textWidget:SetPoint("LEFT", iconWidget, "RIGHT", 6, 0)
-    elseif iconWidget then
-        iconWidget:SetPoint("CENTER")
-    else
-        textWidget:SetPoint("CENTER")
+    -- The label anchors to the icon when there is one, so only the lead
+    -- element moves while the button is held down.
+    local function PlaceContent(dy)
+        if iconWidget then
+            iconWidget:ClearAllPoints()
+            iconWidget:SetPoint("LEFT", button, "CENTER", -contentWidth / 2, dy)
+        else
+            textWidget:ClearAllPoints()
+            textWidget:SetPoint("CENTER", button, "CENTER", 0, dy)
+        end
     end
+    if iconWidget then
+        textWidget:SetPoint("LEFT", iconWidget, "RIGHT", 6, 0)
+    end
+    PlaceContent(0)
 
     button:SetScript("OnEnter", function(self)
         AnimateBorderColor(true)
@@ -136,9 +157,48 @@ function GUIFrame:CreateButton(parent, labelText, config)
         end
     end)
 
+    local pressed = false
+
+    local function Release()
+        if not pressed then return end
+        pressed = false
+        PlaceContent(0)
+    end
+
     button:SetScript("OnLeave", function(self)
+        Release()
         AnimateBorderColor(false)
         GameTooltip:Hide()
+    end)
+
+    button:SetScript("OnMouseDown", function(self, mouseButton)
+        if mouseButton ~= "LeftButton" or not self:IsEnabled() then return end
+        hoverAnimGroup:Stop()
+        pressed = true
+        local p = Theme.controlPressed
+        self:SetBackdropColor(p[1], p[2], p[3], p[4])
+        self:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        PlaceContent(-1)
+    end)
+
+    button:SetScript("OnMouseUp", function(self, mouseButton)
+        if mouseButton ~= "LeftButton" or not pressed then return end
+        Release()
+        if self:IsMouseOver() then
+            local h = Theme.controlHover
+            self:SetBackdropColor(h[1], h[2], h[3], h[4])
+            self:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        else
+            AnimateBorderColor(false)
+        end
+    end)
+
+    -- Pools reuse a hidden button without repainting it, so a press, hover or
+    -- fade still in flight at hide time is dropped here.
+    button:SetScript("OnHide", function()
+        hoverAnimGroup:Stop()
+        Release()
+        PaintRest()
     end)
 
     button:SetScript("OnClick", function(self)
@@ -167,6 +227,9 @@ function GUIFrame:CreateButton(parent, labelText, config)
                 iconWidget:SetAlpha(1)
             end
         else
+            hoverAnimGroup:Stop()
+            Release()
+            PaintRest()
             button:Disable()
             button:SetAlpha(0.5)
             button:EnableMouse(false)
@@ -183,11 +246,9 @@ function GUIFrame:CreateButton(parent, labelText, config)
     -- tables. Hover animation handlers read live values so they self-recover.
     -- Pool consumers call this when KE._themeVersion has advanced.
     function button:ApplyThemeColors()
-        local TT = Theme
-        button:SetBackdropColor(TT.bgButton[1], TT.bgButton[2], TT.bgButton[3], TT.bgButton[4])
-        button:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        PaintRest()
         if textWidget then
-            textWidget:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+            textWidget:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
         end
     end
 
