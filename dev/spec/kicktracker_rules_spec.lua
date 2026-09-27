@@ -114,3 +114,47 @@ describe("KickTracker pairing, either order", function()
         assert.equals(1, index)
     end)
 end)
+
+describe("KickTracker mode choice", function()
+    it("follows the chat lock and names the switch", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "first evaluation, unlocked", old = nil, locked = false, mode = "sync", action = "start" },
+            { name = "first evaluation, locked", old = nil, locked = true, mode = "feed", action = "start" },
+            { name = "lock begins", old = "sync", locked = true, mode = "feed", action = "enter-feed" },
+            { name = "lock lifts", old = "feed", locked = false, mode = "sync", action = "enter-sync" },
+            { name = "still unlocked", old = "sync", locked = false, mode = "sync", action = nil },
+            { name = "still locked", old = "feed", locked = true, mode = "feed", action = nil },
+        }
+        for _, row in ipairs(rows) do
+            local mode, action = KT.CommModeStep(row.old, row.locked)
+            assert.equals(row.mode, mode, row.name)
+            assert.equals(row.action, action, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker row visibility", function()
+    it("keeps the own row in both modes and teammate rows in sync mode only", function()
+        local KT = L.loadKickTrackerRules()
+        local kick = { id = 1766, cd = 15 }
+        local rows = {
+            { name = "own row, feed", mode = "feed", shown = true,
+              member = { unit = "player", interruptData = kick, kickVerified = true } },
+            { name = "verified teammate, sync", mode = "sync", shown = true,
+              member = { unit = "party1", interruptData = kick, kickVerified = true } },
+            { name = "verified teammate, before the first evaluation", mode = nil, shown = true,
+              member = { unit = "party1", interruptData = kick, kickVerified = true } },
+            { name = "verified teammate, feed", mode = "feed", shown = false,
+              member = { unit = "party1", interruptData = kick, kickVerified = true } },
+            { name = "unverified teammate, sync", mode = "sync", shown = false,
+              member = { unit = "party1", interruptData = kick } },
+            { name = "no kick", mode = "sync", shown = false,
+              member = { unit = "player", kickVerified = true } },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.shown, KT.RowShown(row.member, row.mode), row.name)
+        end
+    end)
+end)
+

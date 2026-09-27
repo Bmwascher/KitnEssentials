@@ -361,63 +361,21 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
 end
 
 function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
-    -- Resolve what the game lets us see about the kicker. The name may be
-    -- secret (SecretWhenUnitIdentityRestricted); classFilename is documented
-    -- plain (no secret flag in UnitDocumentation) — IsSafeValue-check both
-    -- anyway before using either as a comparison value.
+    -- What the game lets us see about the kicker, for display only: the name
+    -- and class may be secret, so neither is compared.
     local ok, name = pcall(UnitNameFromGUID, interrupterGuid)
     if not ok or name == nil then return end
 
-    -- classToken may be SECRET: still usable for class COLOR (C-side
-    -- GetClassColor is AllowedWhenTainted); only a PLAIN
-    -- token may be used for attribution comparisons below.
+    -- classToken may be SECRET: it is only handed to the C-side GetClassColor
+    -- (AllowedWhenTainted) for the record's colour.
     local okClass, _, cf = pcall(UnitClassFromGUID, interrupterGuid)
     local classToken = (okClass and cf ~= nil) and cf or nil
-    local plainClassToken = (classToken ~= nil and KE:IsSafeValue(classToken)) and classToken or nil
 
-    -- Deterministic attribution — flip the real roster bar when identity
-    -- data is readable: (1) plain name -> exact member; (2) plain class ->
-    -- the ONLY kick-capable member of that class. No guessing beyond that
-    -- (roster heuristics produce false attributions).
-    -- In-game: name AND classFilename are BOTH secret in live
-    -- dungeon combat (classFilename's missing secret flag in the generated
-    -- docs is an annotation gap) — so this waterfall never fires in
-    -- restricted content today. Kept: two pcalls per interrupt, and it
-    -- self-activates wherever Blizzard relaxes identity restrictions.
-    local target
-    if KE:IsSafeValue(name) then
-        for guid, member in pairs(self.partyMembers) do
-            if member.unit ~= "player" and member.name == name
-                and member.interruptData then
-                target = guid
-                break
-            end
-        end
-    end
-    if not target and plainClassToken then
-        local matches, candidate = 0, nil
-        for guid, member in pairs(self.partyMembers) do
-            if member.unit ~= "player" and member.classToken == plainClassToken
-                and member.interruptData then
-                matches = matches + 1
-                candidate = guid
-            end
-        end
-        if matches == 1 then target = candidate end
-    end
-
+    -- A teammate row comes only from that teammate's own messages; every
+    -- other kick is a record, even when the kicker's identity is readable.
     if DEBUG_KT then
-        KE:Print(string_format("[KT] teammate kick nameSafe=%s classSafe=%s attributed=%s",
-            tostring(KE:IsSafeValue(name)), tostring(plainClassToken ~= nil), tostring(target ~= nil)))
-    end
-
-    if target then
-        -- We can see this member's kicks — their bar state is tracked from
-        -- here on: it materializes (verified-only roster) and may claim Ready.
-        self.partyMembers[target].kickVerified = true
-        self:UpdateBars()
-        self:ConfirmKick(target)
-        return
+        KE:Print(string_format("[KT] teammate kick nameSafe=%s classSafe=%s",
+            tostring(KE:IsSafeValue(name)), tostring(KE:IsSafeValue(classToken))))
     end
 
     -- A synced teammate's KICK that arrived first claims this record.
@@ -732,6 +690,7 @@ function KT:RegisterCombatEvents()
     self:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP", "OnChannelStop")
     self.castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
     self:RegisterEvent("CHAT_MSG_ADDON", "OnCommReceived")
+    self:RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", "OnRestrictionChanged")
     self.combatEventsRegistered = true
 end
 
@@ -741,7 +700,9 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
     if self.castFrame then self.castFrame:UnregisterAllEvents() end
     self:UnregisterEvent("CHAT_MSG_ADDON")
+    self:UnregisterEvent("ADDON_RESTRICTION_STATE_CHANGED")
     self.combatEventsRegistered = false
+    self.commMode = nil
     self._lastHelloSent = nil
     self.commState.commBlocked = nil
 
@@ -771,6 +732,7 @@ function KT:CheckActivation()
         end
         self:RefreshPartyRoster()
         self.commState.commBlocked = nil  -- new instance: re-probe the comm channel
+        self:UpdateCommMode()
         self:BroadcastHello()  -- announce presence to party KE users
     elseif not shouldBeActive and self.isActive then
         self.isActive = false
@@ -794,6 +756,42 @@ function KT:OnRosterUpdate()
     else
         self:CheckActivation()
     end
+end
+
+-- Locked chat means teammates' messages cannot arrive, so their rows cannot
+-- stay true: feed mode drops them and shows every teammate kick as a record.
+function KT:UpdateCommMode()
+    local mode, action = KT.CommModeStep(self.commMode, KE:IsChatMessagingLocked())
+    self.commMode = mode
+    if action == "enter-feed" then
+        for _, member in pairs(self.partyMembers) do
+            if member.unit ~= "player" then
+                member.kickVerified = nil
+                member.kickStart = nil
+                member.kickDuration = nil
+            end
+        end
+        self:ClearPairing()
+        self:UpdateBars()
+        self:LayoutBars()
+    elseif action == "enter-sync" then
+        self.commState.commBlocked = nil
+        self:ClearPairing()
+        self:UpdateBars()
+        self:LayoutBars()
+        self:BroadcastHello(true)
+    end
+end
+
+-- The payload is not read: Core/Secret.lua records the change in its own
+-- handler, so the lock check waits a frame for it.
+function KT:OnRestrictionChanged()
+    if self._modeCheckPending then return end
+    self._modeCheckPending = true
+    C_Timer.After(0, function()
+        self._modeCheckPending = false
+        if self.isActive then self:UpdateCommMode() end
+    end)
 end
 
 ---------------------------------------------------------------------------------
@@ -1103,12 +1101,10 @@ function KT:UpdateBars()
     if self.isPreview then return end
 
     -- Collect eligible members: has a kick AND we can actually track it
-    -- (self, comm users, attribution-verified). Unverified members get no
-    -- bar — their kicks surface as feed records instead, choosing clarity over
-    -- composition info.
+    -- (self and comm users; KT.RowShown). Everyone else's kicks are records.
     local needsBars = {}
     for guid, member in pairs(self.partyMembers) do
-        if member.interruptData and member.kickVerified then
+        if KT.RowShown(member, self.commMode) then
             needsBars[guid] = true
         end
     end
@@ -1708,6 +1704,7 @@ function KT:OnDisable()
 
     self.isActive = false
     self.isPreview = false
+    self.commMode = nil
 
     if self.containerFrame then self.containerFrame:Hide() end
 end

@@ -112,3 +112,23 @@ function KT.PairRecord(pairing, now, window)
     pairing.claims[only] = nil
     return true
 end
+
+---------------------------------------------------------------------------------
+-- Sync or feed mode
+---------------------------------------------------------------------------------
+-- The new mode and what the switch requires: "start" on the first
+-- evaluation, "enter-feed" / "enter-sync" on a switch, nil when unchanged.
+function KT.CommModeStep(oldMode, locked)
+    local mode = locked and "feed" or "sync"
+    if oldMode == nil then return mode, "start" end
+    if oldMode == mode then return mode, nil end
+    return mode, (mode == "feed") and "enter-feed" or "enter-sync"
+end
+
+-- A teammate row needs messages to stay true, so feed mode keeps only the
+-- player's own row.
+function KT.RowShown(member, mode)
+    if not member.interruptData or not member.kickVerified then return false end
+    return member.unit == "player" or mode ~= "feed"
+end
+
