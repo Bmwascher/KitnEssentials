@@ -2283,6 +2283,24 @@ function EditMode:UpdateGuideControls()
         tostring(self:GetGuideSetting("Spacing") or 32))
 end
 
+-- Selection tooltip. The position goes through RoundOffset as the nudge box's
+-- does: %d truncates a fraction, and the two would show different numbers.
+local SELECTION_TOOLTIP_HINT = "Arrows or wheel: 1 px, Ctrl: 10 px"
+
+---@param displayName string
+---@param x number?
+---@param y number?
+---@return string title
+---@return string? position nil when the element reports no position
+---@return string hint
+function EditMode.SelectionTooltipLines(displayName, x, y)
+    if x == nil then
+        return displayName, nil, SELECTION_TOOLTIP_HINT
+    end
+    local position = string.format("Position: %d, %d", KE:RoundOffset(x), KE:RoundOffset(y))
+    return displayName, position, SELECTION_TOOLTIP_HINT
+end
+
 function EditMode:UpdateNudgeFrameInfo()
     if not self.nudgeFrame then return end
 
