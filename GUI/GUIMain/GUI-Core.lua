@@ -969,6 +969,21 @@ end
 ---------------------------------------------------------------------------------
 local RowMethods = {}
 
+-- Lays the widgets out across the row by their width shares. The width is
+-- kept because OnSizeChanged fires only when the size differs from the one
+-- last reported, so a reused row the same size as on its last use gets none.
+local function RowOnSizeChanged(row, width)
+    row._keLastWidth = width
+    local x = 0
+    for _, widget in ipairs(row.widgets) do
+        local widgetWidth = width * widget._widthPct - (widget._spacing or 0)
+        widget:ClearAllPoints()
+        widget:SetPoint("TOPLEFT", row, "TOPLEFT", x + (widget._xOffset or 0), widget._yOffset or 0)
+        widget:SetWidth(widgetWidth)
+        x = x + widgetWidth + (widget._spacing or Theme.paddingSmall)
+    end
+end
+
 function RowMethods:AddWidget(widget, widthPct, spacing, xOffset, yOffset)
     widthPct = widthPct or 0.5
     spacing = spacing or Theme.paddingSmall
@@ -985,18 +1000,11 @@ function RowMethods:AddWidget(widget, widthPct, spacing, xOffset, yOffset)
     widget._xOffset = xOffset
     widget._yOffset = yOffset
     table_insert(self.widgets, widget)
+    -- Laid out at once at the last reported width. A row that ends up a
+    -- different size still gets OnSizeChanged, which lays it out again.
+    local width = self._keLastWidth
+    if width and width > 0 then RowOnSizeChanged(self, width) end
     self.nextX = self.nextX + 10
-end
-
-local function RowOnSizeChanged(row, width)
-    local x = 0
-    for _, widget in ipairs(row.widgets) do
-        local widgetWidth = width * widget._widthPct - (widget._spacing or 0)
-        widget:ClearAllPoints()
-        widget:SetPoint("TOPLEFT", row, "TOPLEFT", x + (widget._xOffset or 0), widget._yOffset or 0)
-        widget:SetWidth(widgetWidth)
-        x = x + widgetWidth + (widget._spacing or Theme.paddingSmall)
-    end
 end
 
 local function NewRow(parent)
