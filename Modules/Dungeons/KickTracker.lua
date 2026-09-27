@@ -39,6 +39,7 @@ local C_Spell = C_Spell
 local UnitNameFromGUID = UnitNameFromGUID
 local UnitClassFromGUID = UnitClassFromGUID
 local UnitTokenFromGUID = UnitTokenFromGUID
+local GetSpecializationInfoByID = GetSpecializationInfoByID
 local issecretvalue = issecretvalue
 local string_find = string.find
 local string_format = string.format
@@ -61,76 +62,13 @@ local LibSpec = LibStub("LibSpecialization", true)
 ---------------------------------------------------------------------------------
 -- Interrupt Database
 ---------------------------------------------------------------------------------
--- Verified values. Specs without a kick have id = 0.
-local INTERRUPT_DATA = {
-    -- Death Knight: Mind Freeze 12s
-    [250]  = { id = 47528,  cd = 12, role = "TANK" },
-    [251]  = { id = 47528,  cd = 12, role = "DAMAGER" },
-    [252]  = { id = 47528,  cd = 12, role = "DAMAGER" },
-    -- Demon Hunter: Disrupt 15s
-    [577]  = { id = 183752, cd = 15, role = "DAMAGER" },
-    [581]  = { id = 183752, cd = 15, role = "TANK" },
-    [1480] = { id = 183752, cd = 15, role = "DAMAGER" },
-    -- Druid: Skull Bash 15s (Feral/Guardian only)
-    [102]  = { id = 0, cd = 0 },
-    [103]  = { id = 106839, cd = 15, role = "DAMAGER" },
-    [104]  = { id = 106839, cd = 15, role = "TANK" },
-    [105]  = { id = 0, cd = 0 },
-    -- Evoker: Quell 20/18s (Devastation/Augmentation only)
-    [1467] = { id = 351338, cd = 20, role = "DAMAGER" },
-    [1468] = { id = 0, cd = 0 },
-    [1473] = { id = 351338, cd = 18, role = "DAMAGER" },
-    -- Hunter: Counter Shot 24s / Muzzle 15s
-    [253]  = { id = 147362, cd = 24, role = "DAMAGER" },
-    [254]  = { id = 147362, cd = 24, role = "DAMAGER" },
-    [255]  = { id = 187707, cd = 15, role = "DAMAGER" },
-    -- Mage: Counterspell 20s
-    [62]   = { id = 2139,   cd = 20, role = "DAMAGER" },
-    [63]   = { id = 2139,   cd = 20, role = "DAMAGER" },
-    [64]   = { id = 2139,   cd = 20, role = "DAMAGER" },
-    -- Monk: Spear Hand Strike 15s (Brewmaster/Windwalker only)
-    [268]  = { id = 116705, cd = 15, role = "TANK" },
-    [269]  = { id = 116705, cd = 15, role = "DAMAGER" },
-    [270]  = { id = 0, cd = 0 },
-    -- Paladin: Rebuke 15s (Protection/Retribution only)
-    [65]   = { id = 0, cd = 0 },
-    [66]   = { id = 96231,  cd = 15, role = "TANK" },
-    [70]   = { id = 96231,  cd = 15, role = "DAMAGER" },
-    -- Priest: Silence 30s (Shadow only)
-    [256]  = { id = 0, cd = 0 },
-    [257]  = { id = 0, cd = 0 },
-    [258]  = { id = 15487,  cd = 30, role = "DAMAGER" },
-    -- Rogue: Kick 15s
-    [259]  = { id = 1766,   cd = 15, role = "DAMAGER" },
-    [260]  = { id = 1766,   cd = 15, role = "DAMAGER" },
-    [261]  = { id = 1766,   cd = 15, role = "DAMAGER" },
-    -- Shaman: Wind Shear 12s (Ele/Enh), 30s (Resto)
-    [262]  = { id = 57994,  cd = 12, role = "DAMAGER" },
-    [263]  = { id = 57994,  cd = 12, role = "DAMAGER" },
-    [264]  = { id = 57994,  cd = 30, role = "HEALER" },
-    -- Warlock: Spell Lock 24/30/24s
-    [265]  = { id = 19647,  cd = 24, role = "DAMAGER" },
-    [266]  = { id = 19647,  cd = 30, role = "DAMAGER" },
-    [267]  = { id = 19647,  cd = 24, role = "DAMAGER" },
-    -- Warrior: Pummel 15s
-    [71]   = { id = 6552,   cd = 15, role = "DAMAGER" },
-    [72]   = { id = 6552,   cd = 15, role = "DAMAGER" },
-    [73]   = { id = 6552,   cd = 15, role = "TANK" },
-}
-
-local INTERRUPT_SPELL_IDS = {}
-for _, data in pairs(INTERRUPT_DATA) do
-    if data.id and data.id > 0 then
-        INTERRUPT_SPELL_IDS[data.id] = true
-    end
-end
-INTERRUPT_SPELL_IDS[119910] = true  -- Command Demon: Spell Lock
-INTERRUPT_SPELL_IDS[89766]  = true  -- Axe Toss (Felguard pet actual)
-INTERRUPT_SPELL_IDS[119914] = true  -- Command Demon: Axe Toss
+-- Spec kicks live in Core/Interrupts.lua. An own cast of any of these starts
+-- the player's kick cooldown.
+local INTERRUPT_SPELL_IDS = KE:GetInterruptKickSpellSet()
 
 -- Class-default kicks for members whose spec is still unknown (teammates
 -- without a LibSpec-carrying addon never broadcast their spec). Values match
--- INTERRUPT_DATA; where specs differ the lowest CD wins.
+-- Core/Interrupts.lua; where specs differ the lowest CD wins.
 -- allRoles = every spec of the class has this kick; otherwise only a
 -- DAMAGER/TANK role assignment proves a kicking spec. Healer shamans keep
 -- Wind Shear at its 30s CD.
@@ -207,11 +145,10 @@ end
 
 function KT:GetInterruptDataForSpec(specID)
     if not specID or specID == 0 then return nil end
-    local data = INTERRUPT_DATA[specID]
-    if data and data.id and data.id > 0 then
-        return data
-    end
-    return nil
+    local kick = KE:GetTrackedKickForSpec(specID)
+    if not kick then return nil end
+    local _, _, _, _, role = GetSpecializationInfoByID(specID)
+    return { id = kick.id, cd = kick.cd, role = role or "DAMAGER" }
 end
 
 -- Spec unknown (teammate without a LibSpec-carrying addon): the
