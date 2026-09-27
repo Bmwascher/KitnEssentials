@@ -32,6 +32,7 @@ local pairs = pairs
 
 local INTERRUPT_ANNOUNCE_SET = {}
 local KICK_SPELL_SET = {}
+local KICK_CD_CAP = {}
 
 local INTERRUPTS = {
     -- Warrior: Pummel 15s
@@ -118,6 +119,26 @@ local KICK_ALIASES = {
     [119914] = 89766,   -- Command Demon: Axe Toss
 }
 
+-- Kicks a talent adds beside a spec's main kick. `requires` is the talent
+-- that makes the spell interrupt; without it the spell is not a kick.
+local JAVELINEER = 1271948
+local WARRIOR_THROWS = {
+    { id = 384110, cd = 45,  requires = JAVELINEER },  -- Wrecking Throw
+    { id = 64382,  cd = 180, requires = JAVELINEER },  -- Shattering Throw
+}
+local EXTRA_KICKS_BY_SPEC = {
+    [71] = WARRIOR_THROWS,
+    [72] = WARRIOR_THROWS,
+    [73] = WARRIOR_THROWS,
+}
+local EXTRA_KICK_BY_ID = {}
+for _, list in pairs(EXTRA_KICKS_BY_SPEC) do
+    for _, e in ipairs(list) do
+        EXTRA_KICK_BY_ID[e.id] = e
+        KICK_CD_CAP[e.id] = e.cd
+    end
+end
+
 -- Precompute per-spec:
 --   entry.candidateList: normalized list of { id, cd } (primary becomes 1-entry list).
 --   entry.announceSet:   { [spellID] = true } union of all candidate IDs + announceExtras.
@@ -138,6 +159,8 @@ for _, entry in pairs(INTERRUPTS) do
             set[c.id] = true
             INTERRUPT_ANNOUNCE_SET[c.id] = true
             KICK_SPELL_SET[c.id] = true
+            local canon = KICK_ALIASES[c.id] or c.id
+            if (KICK_CD_CAP[canon] or 0) < c.cd then KICK_CD_CAP[canon] = c.cd end
         end
     end
     if entry.announceExtras then
@@ -226,4 +249,19 @@ function KE:GetKickCooldownForSpec(specID, kickID)
         if (KICK_ALIASES[c.id] or c.id) == kickID then return c.cd end
     end
     return nil
+end
+
+-- A spec's talent-added kicks as { id, cd, requires }, or nil.
+function KE:GetExtraKicksForSpec(specID)
+    return EXTRA_KICKS_BY_SPEC[specID]
+end
+
+-- The { id, cd, requires } entry for a talent-added kick, or nil.
+function KE:GetExtraKick(spellID)
+    return EXTRA_KICK_BY_ID[spellID]
+end
+
+-- The largest table cooldown of a canonical kick ID, or nil when unknown.
+function KE:GetKickCooldownCap(kickID)
+    return KICK_CD_CAP[kickID]
 end

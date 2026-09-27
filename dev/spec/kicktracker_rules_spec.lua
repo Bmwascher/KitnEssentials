@@ -326,3 +326,96 @@ describe("KickTracker own kick from the demon", function()
         end
     end)
 end)
+
+describe("KickTracker extra kick entries", function()
+    it("creates an extra entry once and then updates it in place", function()
+        local KT = L.loadKickTrackerRules()
+        local member = {}
+        local first = KT.ExtraKick(member, 384110, 45)
+        local second = KT.ExtraKick(member, 384110, 40)
+        assert.equals(first, second)
+        assert.equals(1, #member.extraKicks)
+        assert.equals(40, second.cd)
+    end)
+
+    it("keeps a known kick's timer, drops an unknown one, and adds a new one ready", function()
+        local KT = L.loadKickTrackerRules()
+        local running = { id = 384110, cd = 45, kickStart = 5, kickDuration = 45 }
+        local list, changed = KT.SyncExtraKicks({ running, { id = 64382, cd = 180 } },
+            { { id = 384110, cd = 45 }, { id = 999, cd = 20 } })
+        assert.equals(2, #list)
+        assert.equals(running, list[1])
+        assert.equals(5, list[1].kickStart)
+        assert.equals(999, list[2].id)
+        assert.is_nil(list[2].kickStart)
+        assert.is_true(changed)
+    end)
+
+    it("gives no list when no extra kick is wanted", function()
+        local KT = L.loadKickTrackerRules()
+        assert.is_nil((KT.SyncExtraKicks({ { id = 384110, cd = 45 } }, nil)))
+    end)
+
+    it("reports no change when the same kicks, or none, are wanted again", function()
+        local KT = L.loadKickTrackerRules()
+        local running = { id = 384110, cd = 45, kickStart = 5, kickDuration = 45 }
+        local _, same = KT.SyncExtraKicks({ running }, { { id = 384110, cd = 45 } })
+        assert.is_false(same)
+        local _, none = KT.SyncExtraKicks(nil, nil)
+        assert.is_false(none)
+    end)
+
+    it("wants a throw only when the throw and its required talent are both known", function()
+        local KT = L.loadKickTrackerRules()
+        local list = { { id = 10, cd = 45, requires = 1 }, { id = 20, cd = 180, requires = 1 } }
+        local rows = {
+            { name = "talent and throw known", known = { [1] = true, [10] = true }, want = { 10 } },
+            { name = "throw known, talent not", known = { [10] = true, [20] = true }, want = {} },
+            { name = "talent known, no throw", known = { [1] = true }, want = {} },
+        }
+        for _, row in ipairs(rows) do
+            local got = {}
+            local wanted = KT.WantedExtraKicks(list, function(id) return row.known[id] == true end)
+            for _, e in ipairs(wanted or {}) do got[#got + 1] = e.id end
+            assert.same(row.want, got, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker two-kick row", function()
+    it("reads Ready while any kick is up, else counts the kick back soonest", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "main ready", member = {}, id = nil, ready = true },
+            { name = "main cooling alone", member = { kickStart = 5, kickDuration = 15 }, id = nil, ready = false },
+            { name = "extra ready", id = 384110, ready = true,
+              member = { kickStart = 5, kickDuration = 15, extraKicks = { { id = 384110 } } } },
+            { name = "extra back sooner", id = 384110, ready = false,
+              member = { kickStart = 5, kickDuration = 30, extraKicks = { { id = 384110, kickStart = 8, kickDuration = 24 } } } },
+            { name = "main back sooner", id = nil, ready = false,
+              member = { kickStart = 5, kickDuration = 15, extraKicks = { { id = 384110, kickStart = 8, kickDuration = 45 } } } },
+            { name = "main expired", member = { kickStart = 0, kickDuration = 5 }, id = nil, ready = true },
+            { name = "a start without a duration", member = { kickStart = 9 }, id = nil, ready = false },
+        }
+        for _, row in ipairs(rows) do
+            local entry, ready = KT.PickRowKick(row.member, 10)
+            assert.equals(row.id, entry and entry.id, row.name)
+            assert.equals(row.ready, ready, row.name)
+        end
+    end)
+end)
+
+describe("KickTracker message cooldown cap", function()
+    it("caps at the kick's table cooldown, or 60 for an unknown kick", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "at the cap passes", cd = 180, cap = 180, want = 180 },
+            { name = "above the table cd", cd = 200, cap = 180, want = 180 },
+            { name = "unknown kick above 60", cd = 70, cap = nil, want = 60 },
+            { name = "unknown kick below 60", cd = 20, cap = nil, want = 20 },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.WireCooldownCap(row.cd, row.cap), row.name)
+        end
+    end)
+end)

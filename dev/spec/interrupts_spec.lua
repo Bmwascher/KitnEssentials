@@ -54,4 +54,19 @@ describe("Interrupts (Core/Interrupts.lua)", function()
         assert.equals(axeToss.cd, KE:GetKickCooldownForSpec(266, 89766))
         assert.is_nil(KE:GetKickCooldownForSpec(71, 19647))       -- a warrior has no Spell Lock
     end)
+
+    it("caps a kick at its largest table cooldown, extra kicks included", function()
+        -- Expected values are read through the accessors, so no data cell is
+        -- pinned. Wind Shear's cd differs by shaman spec, so "largest" is tested.
+        local windShearMax = 0
+        for _, specID in ipairs({ 262, 263, 264 }) do
+            for _, c in ipairs(KE:GetInterruptCandidatesForSpec(specID) or {}) do
+                if c.id == 57994 and c.cd > windShearMax then windShearMax = c.cd end
+            end
+        end
+        assert.is_true(windShearMax > 0)
+        assert.equals(windShearMax, KE:GetKickCooldownCap(57994))
+        assert.equals(KE:GetExtraKick(64382).cd, KE:GetKickCooldownCap(64382))  -- Shattering Throw
+        assert.is_nil(KE:GetKickCooldownCap(1))
+    end)
 end)

@@ -1073,6 +1073,21 @@ function KE:GetCanonicalKickSpell(spellID) end
 ---@return number?
 function KE:GetKickCooldownForSpec(specID, kickID) end
 
+--- A spec's talent-added kicks, or nil.
+---@param specID number
+---@return { id: number, cd: number, requires: number }[]?
+function KE:GetExtraKicksForSpec(specID) end
+
+--- The entry for a talent-added kick, or nil.
+---@param spellID number
+---@return { id: number, cd: number, requires: number }?
+function KE:GetExtraKick(spellID) end
+
+--- The largest table cooldown of a canonical kick ID, or nil when unknown.
+---@param kickID number
+---@return number?
+function KE:GetKickCooldownCap(kickID) end
+
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end
 

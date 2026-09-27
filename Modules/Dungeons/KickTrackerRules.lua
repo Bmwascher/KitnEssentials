@@ -252,5 +252,94 @@ function KT.OwnKickFallback(picked, castKick)
     return castKick or picked
 end
 
+---------------------------------------------------------------------------------
+-- Two-kick rows
+---------------------------------------------------------------------------------
+-- The main kick is member.interruptData with member.kickStart/kickDuration;
+-- a talent-added kick is an entry in member.extraKicks.
+function KT.ExtraKick(member, kickID, cd)
+    local list = member.extraKicks
+    if not list then
+        list = {}
+        member.extraKicks = list
+    end
+    for i = 1, #list do
+        if list[i].id == kickID then
+            list[i].cd = cd
+            return list[i]
+        end
+    end
+    local entry = { id = kickID, cd = cd }
+    list[#list + 1] = entry
+    return entry
+end
 
+-- The player's extra kicks after a talent check: a kick still wanted keeps
+-- its entry and timer, a new one starts ready. The second return is true
+-- when a kick was added or dropped.
+function KT.SyncExtraKicks(current, wanted)
+    local had = current and #current or 0
+    if not wanted or #wanted == 0 then return nil, had > 0 end
+    local list, kept = {}, 0
+    for i = 1, #wanted do
+        local w = wanted[i]
+        local entry
+        if current then
+            for j = 1, #current do
+                if current[j].id == w.id then
+                    entry = current[j]
+                    break
+                end
+            end
+        end
+        if entry then
+            kept = kept + 1
+        else
+            entry = { id = w.id }
+        end
+        entry.cd = w.cd
+        list[#list + 1] = entry
+    end
+    return list, kept ~= had or kept ~= #list
+end
 
+-- The spec's extra kicks the talents make real: the spell and its required
+-- talent must both be known; without its talent the spell is not a kick.
+function KT.WantedExtraKicks(list, isKnown)
+    if not list then return nil end
+    local wanted
+    for i = 1, #list do
+        local e = list[i]
+        if isKnown(e.requires) and isKnown(e.id) then
+            wanted = wanted or {}
+            wanted[#wanted + 1] = e
+        end
+    end
+    return wanted
+end
+
+-- The kick that drives the row, and whether the row reads Ready: the first
+-- ready kick (main first), else the kick back soonest. nil means the main
+-- kick. A start without a duration (the preview's mocks) counts as cooling.
+function KT.PickRowKick(member, now)
+    local start, duration = member.kickStart, member.kickDuration
+    if not start or (duration and now - start >= duration) then return nil, true end
+    local list = member.extraKicks
+    if not list or not duration then return nil, false end
+    local soonest, soonestRemaining = nil, start + duration - now
+    for i = 1, #list do
+        local e = list[i]
+        if not e.kickStart or now - e.kickStart >= e.kickDuration then return e, true end
+        local r = e.kickStart + e.kickDuration - now
+        if r < soonestRemaining then soonest, soonestRemaining = e, r end
+    end
+    return soonest, false
+end
+
+-- A talented cooldown is never above the table cooldown, so the cap removes
+-- only bad input; an unknown kick gets a flat 60 s.
+function KT.WireCooldownCap(cd, tableCap)
+    local limit = tableCap or 60
+    if cd > limit then return limit end
+    return cd
+end

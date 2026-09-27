@@ -209,6 +209,11 @@ function KT:GetOwnInterruptData(specID, castKick)
     return { id = KE:GetCanonicalKickSpell(kick.id), cd = kick.cd, role = role or "DAMAGER" }
 end
 
+-- The spec's talent-added kicks the player's talents make real.
+function KT:GetOwnExtraKicks(specID)
+    return KT.WantedExtraKicks(KE:GetExtraKicksForSpec(specID), isTalentKnown)
+end
+
 -- Every refresh that sets the player's main kick comes here (roster, spec,
 -- pet or spellbook change), so a change is handled once whichever runs first.
 -- A new spec ends the cast mark. A new kick has not been used, so its cooldown
@@ -224,6 +229,8 @@ function KT:ApplyOwnKicks(member, specID)
     local data = self:GetOwnInterruptData(specID, member.castKick)
     local oldID = member.interruptData and member.interruptData.id
     member.interruptData = data
+    local extrasChanged
+    member.extraKicks, extrasChanged = KT.SyncExtraKicks(member.extraKicks, self:GetOwnExtraKicks(specID))
     local mainChanged = oldID ~= (data and data.id)
     if mainChanged then
         member.kickStart, member.kickDuration = nil, nil
@@ -231,7 +238,7 @@ function KT:ApplyOwnKicks(member, specID)
     if mainChanged or specChanged then
         self:BroadcastHello(true)
     end
-    return mainChanged, mainChanged or specChanged
+    return mainChanged, mainChanged or specChanged or extrasChanged
 end
 
 -- Spec unknown (teammate without a LibSpec-carrying addon): the
@@ -416,6 +423,8 @@ function KT:ConfirmKick(guid, durationOverride, remaining)
     if bar then
         local isDark = self.db.ColorMode == "dark"
         self:StartBarTimer(bar, member.kickStart, member.kickDuration)
+        -- Drawn as cooling; the next pass redraws it if an extra kick is up.
+        bar.rowKick, bar.rowReady = nil, false
         self:ApplyBarColor(bar, member, true)
         bar.iconTex:SetDesaturated(true)
         -- Dark mode: white name while cooling
@@ -635,11 +644,13 @@ function KT:Transmit(prefix, msg)
         prefix, msg, IsInGroup(LE_PARTY_CATEGORY_INSTANCE), whisperTargets)
 end
 
-function KT:BroadcastKick(spellID, cd)
+-- skipMirror: a talent-added kick, which the mirror's receivers may take for
+-- the sender's main kick.
+function KT:BroadcastKick(spellID, cd, skipMirror)
     if not self.db.KickSync then return end
     if not IsInGroup() then return end
 
-    if self:Transmit(COMM_PREFIX, "1;KICK;" .. spellID .. ";" .. cd) == "refused" then return end
+    if self:Transmit(COMM_PREFIX, "1;KICK;" .. spellID .. ";" .. cd) == "refused" or skipMirror then return end
     self:Transmit(BLIZZI_PREFIX, "B1;KICK;" .. spellID .. ";" .. cd)
 end
 
@@ -718,9 +729,11 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         end
         if verb ~= "KICK" and verb ~= "HELLO" then return end
         if verb == "KICK" and (not cd or cd <= 0) then return end
-        -- Wire cd is untrusted external input: real kick CDs top out at
-        -- 30s — clamp so a bad client can't wedge a bar for hours.
-        if cd and cd > 60 then cd = 60 end
+        -- Wire cd is untrusted external input: cap it at the kick's table cd
+        -- so a bad client can't wedge a bar for hours.
+        local kickID = (sid and sid > 0) and KE:GetCanonicalKickSpell(sid) or nil
+        if cd then cd = KT.WireCooldownCap(cd, kickID and KE:GetKickCooldownCap(kickID)) end
+        local extra = kickID and KE:GetExtraKick(kickID)
 
         local guid, member = KT.MemberForSender(self.partyMembers, senderKey, shortSender)
         if not guid then return end
@@ -729,19 +742,21 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
             local mode = KT.HelloReplyMode(replyFlag)
             if mode then self:ScheduleHelloReply(mode == "force") end
         end
-        -- The sender knows their own kick best (also fills members our spec
-        -- logic had to defer). Once a message sets or clears it, only their
-        -- messages do (KT:ApplySpecKick never re-guesses it); a cleared kick
-        -- drops their row until a message names one.
-        local change = KT.KickFromMessage(verb, isKE, sid, cd, nil)
+        -- The sender knows their own main kick best (also fills members our
+        -- spec logic had to defer); a talent-added kick has its own entry and
+        -- never replaces it. Once a message sets or clears the main kick, only
+        -- their messages do (KT:ApplySpecKick never re-guesses it); a cleared
+        -- kick drops their row until a message names one.
+        local change = KT.KickFromMessage(verb, isKE, sid, cd, extra)
         if change == "set" then
             member.kickFromMessage = true
             local role = member.interruptData and member.interruptData.role or "DAMAGER"
-            member.interruptData = { id = sid, cd = cd, role = role }
+            member.interruptData = { id = kickID, cd = cd, role = role }
         elseif change == "clear" then
             member.kickFromMessage = true
             member.interruptData = nil
             member.kickStart, member.kickDuration = nil, nil
+            member.extraKicks = nil
             self:UpdateBars()
             self:LayoutBars()
             return
@@ -751,12 +766,21 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
 
         local now = GetTime()
         if verb == "KICK" and self.commMode ~= "feed" then
-            -- Keyed by teammate and kick: a mirror or repeat is one kick, a
-            -- second, different kick is not.
+            -- Keyed by teammate and canonical kick: Pummel then a throw inside
+            -- the window are two kicks, and each pairs with its own record.
             local result, index = KT.PairComm(self.kickPairing, self.kickRecords,
-                guid .. ":" .. (sid or 0), now, KICK_PAIR_WINDOW)
+                guid .. ":" .. (kickID or 0), now, KICK_PAIR_WINDOW)
             if result == "duplicate" then return end
             if result == "claimed" then self:RemoveKickRecordAt(index) end
+        end
+
+        if extra then
+            if verb == "KICK" then
+                local entry = KT.ExtraKick(member, kickID, cd)
+                entry.kickStart, entry.kickDuration = now, entry.cd
+                self:RefreshMemberRow(guid)
+            end
+            return
         end
 
         local remaining = KT.ParseHelloRemaining(remField, member.interruptData.cd)
@@ -803,6 +827,23 @@ function KT:OnChannelStop(_, unit, _, spellID, interruptedBy)
     self:HandleNameplateInterrupt(unit, spellID, interruptedBy)
 end
 
+-- A talent-added kick starts only when KT:GetOwnExtraKicks listed it; the
+-- same spell without its talent is not a kick.
+function KT:StartOwnExtraKick(guid, spellID)
+    local member = self.partyMembers[guid]
+    local list = member and member.extraKicks
+    if not list then return end
+    for i = 1, #list do
+        local entry = list[i]
+        if entry.id == spellID then
+            entry.kickStart, entry.kickDuration = GetTime(), entry.cd
+            self:RefreshMemberRow(guid)
+            self:BroadcastKick(spellID, entry.cd, true)
+            return
+        end
+    end
+end
+
 function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
     -- The payload is secret while unit spellcasts are restricted, and a secret
@@ -812,9 +853,14 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
 
     -- Party members' casts do not fire this event for kicks at all —
     -- teammate detection lives in HandleNameplateInterrupt.
-    if not INTERRUPT_SPELL_IDS[spellID] then return end
+    local extra = KE:GetExtraKick(spellID)
+    if not INTERRUPT_SPELL_IDS[spellID] and not extra then return end
     local guid = UnitGUID("player")
     if not guid then return end
+    if extra then
+        self:StartOwnExtraKick(guid, spellID)
+        return
+    end
     local kickID = KE:GetCanonicalKickSpell(spellID)
     local member = self.partyMembers[guid]
     local data = member and member.interruptData
@@ -957,6 +1003,7 @@ function KT:UpdateCommMode()
                 member.kickVerified = nil
                 member.kickStart = nil
                 member.kickDuration = nil
+                member.extraKicks = nil
             end
         end
         self:ClearPairing()
@@ -1104,6 +1151,7 @@ function KT:ResetBarRegions(bar)
     self:StopBarTimer(bar, 0)
     bar.statusBar:SetStatusBarColor(1, 1, 1, 1)
     bar.lastTimerText = nil
+    bar.rowKick, bar.rowReady = nil, false
     self:ApplyRegionDefaults(bar)
 end
 
@@ -1281,18 +1329,19 @@ function KT:UpdateBarVisuals(bar, member)
 
     self:ApplyBarGeometry(bar)
 
-    -- Set icon texture
+    -- The kick that drives the row (KT.PickRowKick); nil is the main kick.
+    local rowKick, isReady = nil, true
+    if member then rowKick, isReady = KT.PickRowKick(member, GetTime()) end
+    bar.rowKick, bar.rowReady = rowKick, isReady
+
     if member and member.interruptData then
-        local spellInfo = C_Spell.GetSpellInfo(member.interruptData.id)
+        local spellInfo = C_Spell.GetSpellInfo(rowKick and rowKick.id or member.interruptData.id)
         if spellInfo then
             bar.iconTex:SetTexture(spellInfo.iconID)
         else
             bar.iconTex:SetTexture(134400)
         end
     end
-
-    -- Ready state: no active kick cooldown
-    local isReady = not member or not member.kickStart
 
     -- Name text
     KE:ApplyFont(bar.nameText, db.FontFace, db.FontSize, db.FontOutline)
@@ -1340,8 +1389,9 @@ function KT:UpdateBarVisuals(bar, member)
     else
         self:ApplyBarColor(bar, member, true)
         -- The preview animates its own mock bars.
-        if member.kickDuration and not self.isPreview then
-            self:StartBarTimer(bar, member.kickStart, member.kickDuration)
+        local src = rowKick or member
+        if src.kickDuration and not self.isPreview then
+            self:StartBarTimer(bar, src.kickStart, src.kickDuration)
         end
     end
 
@@ -1512,14 +1562,16 @@ function KT:LayoutBars()
     for guid, bar in pairs(self.activeBars) do
         local member = self.partyMembers[guid]
         if member then
-            local isCooling = member.kickStart and member.kickDuration
-                and (now - member.kickStart) < member.kickDuration
-            if isCooling then
-                local remaining = member.kickDuration - (now - member.kickStart)
+            local rowKick, isReady = KT.PickRowKick(member, now)
+            local src = rowKick or member
+            if not isReady and src.kickDuration then
+                local remaining = src.kickDuration - (now - src.kickStart)
                 table_insert(coolingList, { guid = guid, bar = bar, member = member, remaining = remaining })
             else
-                -- Clear expired cooldowns
-                if member.kickStart then
+                -- Clear an expired main cooldown; a main kick still cooling
+                -- behind a ready extra kick keeps its time.
+                if member.kickStart and member.kickDuration
+                    and now - member.kickStart >= member.kickDuration then
                     member.kickStart = nil
                     member.kickDuration = nil
                 end
@@ -1644,16 +1696,18 @@ function KT:OnUpdateBars(elapsed)
     -- here is our own GetTime() math: plain values, no secrets.
     for guid, bar in pairs(self.activeBars) do
         local member = self.partyMembers[guid]
-        if member and member.kickStart and member.kickDuration then
-            local remaining = member.kickDuration - (now - member.kickStart)
-            if remaining <= 0 then
-                member.kickStart = nil
-                member.kickDuration = nil
+        if member and member.interruptData then
+            local rowKick, isReady = KT.PickRowKick(member, now)
+            if isReady ~= bar.rowReady or rowKick ~= bar.rowKick then
                 self:UpdateBarVisuals(bar, member)
                 needsRelayout = true
-            else
+            end
+            local src = rowKick or member
+            if not isReady and src.kickDuration then
                 anyCooling = true
-                if db.ShowTimer then SetTimerText(bar, FormatRemaining(remaining)) end
+                if db.ShowTimer then
+                    SetTimerText(bar, FormatRemaining(src.kickDuration - (now - src.kickStart)))
+                end
             end
         end
     end
