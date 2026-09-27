@@ -93,7 +93,7 @@ GUIFrame:RegisterContent("PIAssist", function(scrollChild, yOffset)
     local targetNote = GUIFrame:CreateText(targetNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " Use " .. KE:ColorTextByTheme("/kitn pi") .. " while hovering or targeting a player. It rewrites the PI macro and points the glow at the same person.\n" ..
-        KE:ColorTextByTheme("-") .. " Both need the " .. KE:ColorTextByTheme("Priest: PI Macro") .. " tab switched on; the name can also be typed there.",
+        KE:ColorTextByTheme("-") .. " Both need the " .. KE:ColorTextByTheme("PI Macro") .. " tab switched on; the name can also be typed there.",
         50, "hide")
     targetNoteRow:AddWidget(targetNote, 1)
     card2:AddRow(targetNoteRow, Theme.rowHeightNote)
