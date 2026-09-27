@@ -457,3 +457,18 @@ describe("KickTracker message cooldown cap", function()
         end
     end)
 end)
+
+describe("KickTracker own-kick token", function()
+    it("takes only the player's own units as an own kick", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "the player", token = "player", want = true },
+            { name = "the player's pet", token = "pet", want = true },
+            { name = "a teammate with a plain token", token = "party1", want = false },
+            { name = "a teammate's pet", token = "partypet1", want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.IsOwnKickToken(row.token), row.name)
+        end
+    end)
+end)

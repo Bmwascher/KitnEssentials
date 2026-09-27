@@ -369,3 +369,9 @@ function KT.ReducedRemaining(kickStart, kickDuration, now, seconds)
     if remaining < 0 then remaining = 0 end
     return remaining
 end
+
+-- Only the player's own units are an own kick. A teammate's token can be
+-- plain too ("party1"), and that kick belongs on the record path.
+function KT.IsOwnKickToken(token)
+    return token == "player" or token == "pet"
+end

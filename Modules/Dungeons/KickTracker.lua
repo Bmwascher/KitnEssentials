@@ -471,16 +471,17 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if issecretvalue(unit) or not unit or not string_find(unit, "^nameplate") then return end
     if not (issecretvalue(interruptedBy) or interruptedBy ~= nil) then return end  -- channel ended naturally, not kicked
 
-    -- Self/teammate split without touching the (possibly secret) GUID:
-    -- UnitTokenFromGUID returns a plain token for the player's own units,
-    -- nil for anyone else. Self CD is owned by OnSpellcastSucceeded.
+    -- Self/teammate split without touching the (possibly secret) GUID: the
+    -- token is secret or nil for most teammates but can be plain ("party1"),
+    -- so only the player's own units count. Self CD is owned by
+    -- OnSpellcastSucceeded.
     local ok, token = pcall(UnitTokenFromGUID, interruptedBy)
     if DEBUG_KT then
         KE:Print(string_format("[KT] nameplate interrupt unit=%s tokenOk=%s token=%s guidSecret=%s",
             tostring(unit), tostring(ok), tostring(token),
             tostring(not KE:IsSafeValue(interruptedBy))))
     end
-    if ok and KE:IsSafeValue(token) then
+    if ok and KE:IsSafeValue(token) and KT.IsOwnKickToken(token) then
         self._ownLandedAt = GetTime()
         self:TryOwnReduction()
         return
@@ -1182,8 +1183,8 @@ end
 
 -- Record bars draw secret names, icons, colours and marks. SetToDefaults
 -- clears a text or texture region's secret state before the bar serves another
--- row; the status bar gets explicit clears, since resetting the frame would
--- drop its layout.
+-- row. Resetting the status bar would drop its layout, so it is only stopped
+-- and re-coloured; its colour may stay secret, and nothing reads it back.
 function KT:ResetBarRegions(bar)
     bar.nameText:SetToDefaults()
     bar.markerText:SetToDefaults()
