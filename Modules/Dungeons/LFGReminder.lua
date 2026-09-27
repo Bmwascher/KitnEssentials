@@ -234,6 +234,7 @@ local pendingHide          -- hide requested in combat; flush on REGEN_ENABLED
 local combatHidden         -- the hide came from combat, not from the user
 local pendingRole          -- role captured with the prompt, or nil
 local shownRole            -- role the popup is drawing, or nil
+local previewState         -- settings preview: nil, "empty", or "prompt" (a live prompt waits behind it)
 
 
 local BuildPopup, ShowPrompt, HidePrompt, ClearPending
@@ -256,6 +257,9 @@ function LR:_GetPendingAttrSpellID() return pendingAttrSpellID end
 -- group paths, which must not drop the prompt this way.
 local function ClosePrompt()
     ClearPending()
+    -- On the preview, X also ends the preview's hold, so a later prompt is
+    -- not kept behind a preview that is no longer on screen.
+    previewState = nil
     HidePrompt()
 end
 
@@ -694,6 +698,12 @@ ShowPrompt = function()
         pendingHide = nil  -- a deferred show supersedes a deferred hide
         return
     end
+    if previewState then
+        -- The settings preview owns the popup and keeps the button unarmed;
+        -- HidePreview shows the prompt when the preview closes.
+        previewState = "prompt"
+        return
+    end
     BuildPopup()
     shownName = pendingName
     shownRole = pendingRole
@@ -811,8 +821,11 @@ function LR:PLAYER_REGEN_DISABLED()
     -- Teleports cannot be cast in combat, so the prompt goes, and
     -- PLAYER_REGEN_ENABLED brings it back while it is still live. Lockdown
     -- has not begun when this event fires, so the hide normally lands at
-    -- once; HidePrompt defers it if lockdown has begun.
-    combatHidden = (popup and popup:IsShown()) or nil
+    -- once; HidePrompt defers it if lockdown has begun. A prompt waiting
+    -- behind the settings preview passes to that same re-show.
+    combatHidden = previewState == "prompt"
+        or (popup and popup:IsShown() and not previewState) or nil
+    if previewState then previewState = "empty" end
     HidePrompt()
 end
 
@@ -906,6 +919,12 @@ function LR:ShowPreview()
     if InCombatLockdown() then return end
     BuildPopup()
     if not popup then return end
+    -- Whether a live prompt was on screen decides what closing the preview
+    -- brings back.
+    if not previewState then
+        previewState = (popup:IsShown() and pendingSpellID) and "prompt" or "empty"
+    end
+    pendingHide = nil  -- the preview supersedes a deferred hide
     if secureBtn then secureBtn:SetAttribute("spell", nil) end
     -- A current-season dungeon: it must stay a key of TELEPORT_BY_NAME, so
     -- the preview draws the live table's teleport.
@@ -924,21 +943,19 @@ function LR:ShowPreview()
 end
 
 function LR:HidePreview()
-    if not popup then return end
-    -- Same protection as HidePrompt: the popup parents a secure button.
-    if InCombatLockdown() then return end
-    if pendingSpellID then
-        -- A real prompt is live underneath the preview -- restore it
-        -- rather than hiding the user's actual teleport. The attribute has
-        -- to be re-armed too: ShowPreview cleared it.
-        if secureBtn then secureBtn:SetAttribute("spell", pendingSpellID) end
-        shownName = pendingName
-        shownRole = pendingRole
-        ApplyPopupLayout()
-        UpdateButtonVisuals()
+    if not previewState then return end
+    local restore = previewState == "prompt"
+    previewState = nil
+    shownName, shownRole = nil, nil
+    if InCombatLockdown() then
+        -- The popup parents a secure button: hide it when combat ends, and
+        -- let the combat re-show bring back a prompt that was waiting.
+        pendingHide = true
+        if restore then combatHidden = true end
         return
     end
-    shownName = nil
-    shownRole = nil
     HidePopup()
+    -- ShowPrompt re-arms the live prompt, or refuses one that has since gone
+    -- on cooldown, been closed with X, or ended with the group.
+    if restore then ShowPrompt() end
 end

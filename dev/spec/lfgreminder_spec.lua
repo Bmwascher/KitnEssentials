@@ -305,6 +305,7 @@ describe("LFGReminder combat re-show", function()
         local popup = seams.frames["KE_LFGReminderPopup"]
         local btn   = seams.frames["KE_LFGReminderTeleport"]
         LR:PLAYER_REGEN_DISABLED()
+        LR:HidePreview()  -- the settings window closes as combat starts
         assert.is_false(popup:IsShown())
         LR:PLAYER_REGEN_ENABLED()
         assert.is_true(popup:IsShown())
@@ -331,5 +332,35 @@ describe("LFGReminder close with X", function()
         LR:HidePreview()
         assert.is_false(popup:IsShown())
         assert.is_nil(btn:GetAttribute("spell"))
+    end)
+end)
+
+describe("LFGReminder preview hold", function()
+    -- While the settings preview is up it owns the popup and the button stays
+    -- unarmed; a show of the live prompt waits until the preview closes.
+    -- Combat models the order in game: the settings window closes as combat
+    -- starts and reopens, showing the preview, before this module's handler
+    -- runs at combat end.
+    it("keeps the preview unarmed until it closes, then restores the armed prompt", function()
+        local LR, _, seams = loader.loadLFGReminder({
+            C_LFGList = {
+                GetSearchResultInfo = function() return { activityIDs = { 7 } } end,
+                GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        LR:LFG_LIST_JOINED_GROUP(nil, 1)
+        LR:ShowPreview()
+        local popup = seams.frames["KE_LFGReminderPopup"]
+        local btn   = seams.frames["KE_LFGReminderTeleport"]
+        LR:PLAYER_REGEN_DISABLED()
+        LR:HidePreview()
+        LR:ShowPreview()
+        LR:PLAYER_REGEN_ENABLED()
+        assert.is_true(popup:IsShown())
+        assert.is_nil(btn:GetAttribute("spell"))
+        LR:HidePreview()
+        assert.is_true(popup:IsShown())
+        assert.equals(1286809, btn:GetAttribute("spell"))
     end)
 end)
