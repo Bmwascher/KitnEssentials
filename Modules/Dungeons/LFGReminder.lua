@@ -856,6 +856,9 @@ function LR:PLAYER_REGEN_ENABLED()
     if pendingHide then
         pendingHide = nil
         if keepShown and popup and popup:IsShown() then
+            -- A preview closed in combat could not re-arm the button it
+            -- disarmed; this is the first moment it can.
+            secureBtn:SetAttribute("spell", pendingSpellID)
             shownName = pendingName
             shownRole = pendingRole
             ApplyPopupLayout()

@@ -287,3 +287,32 @@ describe("LFGReminder preview", function()
         assert.equals(want, asked)
     end)
 end)
+
+describe("LFGReminder preview over a live prompt", function()
+    -- The preview disarms the shared secure button. Closed in combat it
+    -- cannot re-arm it, so the end of combat must, or the live row casts
+    -- nothing.
+    it("re-arms the teleport when combat ends after the preview closed in combat", function()
+        local inCombat = false
+        local LR, _, seams = loader.loadLFGReminder({
+            inCombatFn = function() return inCombat end,
+            C_LFGList = {
+                GetSearchResultInfo = function() return { activityIDs = { 7 } } end,
+                GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        LR:LFG_LIST_JOINED_GROUP(nil, 1)
+        LR:ShowPreview()
+        local popup = seams.frames["KE_LFGReminderPopup"]
+        local btn   = seams.frames["KE_LFGReminderTeleport"]
+        assert.is_nil(btn:GetAttribute("spell"))
+        inCombat = true
+        LR:PLAYER_REGEN_DISABLED()
+        LR:HidePreview()
+        inCombat = false
+        LR:PLAYER_REGEN_ENABLED()
+        assert.is_true(popup:IsShown())
+        assert.equals(1286809, btn:GetAttribute("spell"))
+    end)
+end)
