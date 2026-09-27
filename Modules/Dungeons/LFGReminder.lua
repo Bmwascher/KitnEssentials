@@ -248,8 +248,8 @@ function LR:_GetPendingName()        return pendingName end
 
 -- The X close. It ends the prompt rather than hiding it, so nothing that
 -- brings a hidden prompt back (the combat re-show, a preview closing) can
--- show or re-arm it. HidePrompt alone serves the combat, cooldown and
--- group paths, which must not drop the prompt this way.
+-- show or re-arm it. The combat hide calls HidePrompt alone, because the
+-- end of combat must bring the prompt back.
 local function ClosePrompt()
     ClearPending()
     -- On the preview, X also ends the preview's hold, so a later prompt is

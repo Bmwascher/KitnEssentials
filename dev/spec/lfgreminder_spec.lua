@@ -149,9 +149,9 @@ describe("LFGReminder module", function()
             inCombat = false
             LR:PLAYER_REGEN_ENABLED()
             assert.is_true(builds > 0)    -- built once combat ended
-            -- Assert the OUTCOME, not just that a build happened. Without
-            -- these two, deleting PLAYER_REGEN_ENABLED's attribute-flush
-            -- block or its show block leaves every spec passing.
+            -- Assert the OUTCOME, not just that a build happened: without
+            -- these two, a show that builds but never arms or shows the
+            -- popup leaves every spec passing.
             local popup = seams.frames["KE_LFGReminderPopup"]
             local btn   = seams.frames["KE_LFGReminderTeleport"]
             assert.is_true(popup:IsShown())
