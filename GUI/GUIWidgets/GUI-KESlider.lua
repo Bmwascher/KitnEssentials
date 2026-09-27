@@ -58,8 +58,8 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    sliderBG:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-    sliderBG:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    sliderBG:SetBackdropColor(Theme.fieldBg[1], Theme.fieldBg[2], Theme.fieldBg[3], Theme.fieldBg[4])
+    sliderBG:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
     sliderBG:EnableMouse(false)
 
     -- Slider
@@ -110,7 +110,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    thumbFrame:SetBackdropColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.6)
+    thumbFrame:SetBackdropColor(Theme.thumbRest[1], Theme.thumbRest[2], Theme.thumbRest[3], 1)
     thumbFrame:SetBackdropBorderColor(0, 0, 0, 1) -- Black border
 
     -- Use a transparent texture for the actual thumb
@@ -139,7 +139,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     local borderColorTo = {}
 
     -- Track current thumb color (including alpha)
-    local thumbR, thumbG, thumbB, thumbA = Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.6
+    local thumbR, thumbG, thumbB, thumbA = Theme.thumbRest[1], Theme.thumbRest[2], Theme.thumbRest[3], 1
 
     local function AnimateThumbColor(toHover, toDrag)
         hoverAnimGroup:Stop()
@@ -157,17 +157,15 @@ function GUIFrame:CreateSlider(parent, labelText, config)
             borderColorTo.b = Theme.accent[3]
             borderColorTo.a = 1
         elseif toHover then
-            -- Hover = textSecondary with alpha 1
-            borderColorTo.r = Theme.textSecondary[1]
-            borderColorTo.g = Theme.textSecondary[2]
-            borderColorTo.b = Theme.textSecondary[3]
+            borderColorTo.r = Theme.thumbHover[1]
+            borderColorTo.g = Theme.thumbHover[2]
+            borderColorTo.b = Theme.thumbHover[3]
             borderColorTo.a = 1
         else
-            -- Normal = textSecondary with alpha 0.6
-            borderColorTo.r = Theme.textSecondary[1]
-            borderColorTo.g = Theme.textSecondary[2]
-            borderColorTo.b = Theme.textSecondary[3]
-            borderColorTo.a = 0.6
+            borderColorTo.r = Theme.thumbRest[1]
+            borderColorTo.g = Theme.thumbRest[2]
+            borderColorTo.b = Theme.thumbRest[3]
+            borderColorTo.a = 1
         end
 
         hoverAnimGroup:Play()
@@ -373,8 +371,8 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    valueContainer:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-    valueContainer:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    valueContainer:SetBackdropColor(Theme.fieldBg[1], Theme.fieldBg[2], Theme.fieldBg[3], Theme.fieldBg[4])
+    valueContainer:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
 
     -- EditBox border hover animation
     local editBoxAnimGroup = valueContainer:CreateAnimationGroup()
@@ -383,7 +381,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     local editBoxColorFrom = {}
     local editBoxColorTo = {}
-    local editBoxR, editBoxG, editBoxB = Theme.border[1], Theme.border[2], Theme.border[3]
+    local editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
 
     local function AnimateEditBoxBorder(toAccent)
         editBoxAnimGroup:Stop()
@@ -396,9 +394,9 @@ function GUIFrame:CreateSlider(parent, labelText, config)
             editBoxColorTo.g = Theme.accent[2]
             editBoxColorTo.b = Theme.accent[3]
         else
-            editBoxColorTo.r = Theme.border[1]
-            editBoxColorTo.g = Theme.border[2]
-            editBoxColorTo.b = Theme.border[3]
+            editBoxColorTo.r = Theme.fieldBorder[1]
+            editBoxColorTo.g = Theme.fieldBorder[2]
+            editBoxColorTo.b = Theme.fieldBorder[3]
         end
         editBoxAnimGroup:Play()
     end
@@ -526,8 +524,8 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     valueEdit:SetScript("OnEditFocusLost", function(self)
         editBoxAnimGroup:Stop()
-        valueContainer:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
-        editBoxR, editBoxG, editBoxB = Theme.border[1], Theme.border[2], Theme.border[3]
+        valueContainer:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
+        editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
         self:HighlightText(0, 0)
         local text = self:GetText()
         -- Handle percentage input (strip % and divide by 100)
@@ -580,6 +578,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
             hoverAnimGroup:Stop()
             thumbFrame:SetBackdropColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
             thumbR, thumbG, thumbB, thumbA = Theme.accent[1], Theme.accent[2], Theme.accent[3], 1
+            thumbFrame:SetBackdropBorderColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 1)
             curDrag = true
         end
     end)
@@ -587,12 +586,10 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     slider:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" then
             curDrag = false
-            -- Check if mouse is still over the slider
+            thumbFrame:SetBackdropBorderColor(0, 0, 0, 1)
             if self:IsMouseOver() then
-                -- Still hovering, animate to hover state (textSecondary alpha 1)
                 AnimateThumbColor(true, false)
             else
-                -- Not hovering, animate to normal state (textSecondary alpha 0.6)
                 AnimateThumbColor(false, false)
             end
             FlushDropped()
@@ -601,7 +598,6 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     slider:SetScript("OnEnter", function(self)
         if not curDrag then
-            -- Hover state (textSecondary alpha 1)
             AnimateThumbColor(true, false)
         end
         if tooltip then
@@ -613,10 +609,20 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     slider:SetScript("OnLeave", function(self)
         if not curDrag then
-            -- Normal state (textSecondary alpha 0.6)
             AnimateThumbColor(false, false)
         end
         GameTooltip:Hide()
+    end)
+
+    -- A hide can swallow the mouse-up or cut a fade short, and a pooled slider
+    -- is reused without repainting its thumb.
+    slider:SetScript("OnHide", function()
+        curDrag = false
+        hoverAnimGroup:Stop()
+        local c = Theme.thumbRest
+        thumbFrame:SetBackdropColor(c[1], c[2], c[3], 1)
+        thumbFrame:SetBackdropBorderColor(0, 0, 0, 1)
+        thumbR, thumbG, thumbB, thumbA = c[1], c[2], c[3], 1
     end)
 
     C_Timer.After(0, UpdateFill)
@@ -684,12 +690,12 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     function row:ApplyThemeColors()
         local TT = Theme
         label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
-        sliderBG:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
-        sliderBG:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        sliderBG:SetBackdropColor(TT.fieldBg[1], TT.fieldBg[2], TT.fieldBg[3], TT.fieldBg[4])
+        sliderBG:SetBackdropBorderColor(TT.fieldBorder[1], TT.fieldBorder[2], TT.fieldBorder[3], 1)
         fill:SetColorTexture(TT.accent[1], TT.accent[2], TT.accent[3], 1)
         thumbFrameBG:SetBackdropColor(TT.bgLight[1], TT.bgLight[2], TT.bgLight[3], 1)
-        valueContainer:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
-        valueContainer:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        valueContainer:SetBackdropColor(TT.fieldBg[1], TT.fieldBg[2], TT.fieldBg[3], TT.fieldBg[4])
+        valueContainer:SetBackdropBorderColor(TT.fieldBorder[1], TT.fieldBorder[2], TT.fieldBorder[3], 1)
         valueEdit:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
         leftIcon:SetVertexColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
         rightIcon:SetVertexColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
