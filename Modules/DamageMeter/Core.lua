@@ -3349,10 +3349,11 @@ end
 -- leave, a read outside or a load forgets it, so a re-queue is. A known
 -- instance at an unknown difficulty keys nothing and becomes the pending
 -- entry (not a flicker with no load in the keyed instance), judged at its
--- first known difficulty with the freshness of the check that saw it. A Delve that ends in place is marked "delveover":
--- repeated events there count nothing, and a new Delve counts. A Delve left
--- behind is forgotten. The key is tracked even with the option off, so
--- turning it on inside an instance is not an entry.
+-- first known difficulty with the freshness of the check that saw it. A
+-- Delve that ends in place is marked "delveover": repeated events there count
+-- nothing, and a new Delve counts. A Delve left behind is forgotten. The key
+-- is tracked even with the option off, so turning it on inside an instance is
+-- not an entry.
 function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficultyID, freshLoad, enabled, mode,
                                   inPlace, pendingID, pendingFresh, groupLeft, atLoad)
     local key = DM.InstanceEntryKey(instanceID, difficultyID)
