@@ -2,13 +2,14 @@
 -- ║  GUI-Automation.lua                                      ║
 -- ║  GUI: Automation                                         ║
 -- ║  Purpose: Configuration panel for the Automation module, ║
--- ║           split across four tabs (General, Interface,    ║
+-- ║           four tabs of its own (General, Interface,      ║
 -- ║           Quests & Social, Vendors & Bags) behind a      ║
--- ║           shared header toggle. Three independent        ║
--- ║           modules with their own switches live here and  ║
--- ║           have no other route: Vantus Rune Withdrawer on ║
--- ║           General, Auction House Filter and Merchant     ║
--- ║           Pages on Vendors & Bags. Those two tabs are    ║
+-- ║           shared header toggle, plus a Combat Logger tab.║
+-- ║           Four independent modules with their own        ║
+-- ║           switches live here and have no other route:    ║
+-- ║           Vantus Rune Withdrawer on General, Auction     ║
+-- ║           House Filter and Merchant Pages on Vendors &   ║
+-- ║           Bags, and Combat Logger. Those three tabs are  ║
 -- ║           therefore offered even while the master is off.║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -36,9 +37,9 @@ local function ApplySettings()
 end
 
 -- Renders above the tab strip. Never collapses: the tab list already drops
--- to Vendors & Bags alone while the master is off, and collapsing here as
--- well would take Auction House Filter, Vantus Rune Withdrawer and Merchant
--- Pages down with a table this page alone owns.
+-- the master's own tabs while it is off, and collapsing here as well would
+-- take Auction House Filter, Vantus Rune Withdrawer, Merchant Pages and
+-- Combat Logger down with a table this page alone owns.
 --
 -- Hide Helptips lives here, not on a gated tab, because it is
 -- master-independent (still applies while Automation itself is off) and this
@@ -836,10 +837,10 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
     return yOffset
 end)
 
--- Three cards here are separate modules with their own switches, and this page
--- is the only route to them: Vantus Rune Withdrawer on General, Auction House
--- Filter and Merchant Pages on Vendors & Bags. Turning Automation off must not
--- take them away, so both of those tabs survive it.
+-- Four modules on this page have their own switches and no other route to
+-- them: Vantus Rune Withdrawer on General, Auction House Filter and Merchant
+-- Pages on Vendors & Bags, and Combat Logger on its own tab. Turning
+-- Automation off must not take them away, so those three tabs survive it.
 GUIFrame:RegisterTabbedContent("Automation", function()
     local db = KE.db and KE.db.profile.Automation
 
@@ -847,10 +848,11 @@ GUIFrame:RegisterTabbedContent("Automation", function()
     local INTERFACE = { id = "AutomationInterface", label = "Interface" }
     local QUESTS    = { id = "AutomationQuests",    label = "Quests & Social" }
     local VENDORS   = { id = "AutomationVendors",   label = "Vendors & Bags" }
+    local LOGGER    = { id = "CombatLogger",        label = "Combat Logger" }
 
     if not db or db.Enabled == false then
-        return { GENERAL, VENDORS }
+        return { GENERAL, VENDORS, LOGGER }
     end
 
-    return { GENERAL, INTERFACE, QUESTS, VENDORS }
+    return { GENERAL, INTERFACE, QUESTS, VENDORS, LOGGER }
 end, { headerBuilder = BuildHeader })
