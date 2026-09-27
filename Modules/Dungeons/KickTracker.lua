@@ -156,6 +156,16 @@ function KT:GetInterruptDataForSpec(specID)
     return { id = kick.id, cd = kick.cd, role = role or "DAMAGER" }
 end
 
+local function isTalentKnown(talentID)
+    return C_SpellBook.IsSpellKnown(talentID) == true
+end
+
+-- The player's own kick cooldown with flat talent changes applied. KICK and
+-- HELLO carry it, so receivers see the true cooldown.
+function KT:OwnKickCooldown(data)
+    return KT.TalentedCooldown(data.cd, KE:GetFlatKickTalents(data.id), isTalentKnown)
+end
+
 -- Spec unknown (teammate without a LibSpec-carrying addon): the
 -- safe-optimistic rule — assign the class-default kick only when it can't
 -- be wrong (every spec of the class kicks, or a DPS/TANK role proves a
@@ -549,7 +559,7 @@ function KT:BroadcastHello(force)
     end
     self._lastHelloSent = now
 
-    self:Transmit(COMM_PREFIX, "1;HELLO;" .. data.id .. ";" .. data.cd)
+    self:Transmit(COMM_PREFIX, "1;HELLO;" .. data.id .. ";" .. self:OwnKickCooldown(data))
     -- Deliberately NO BliZzi-format hello: we stay out of their handshake
     -- (kick-data-only participation, established interop posture).
 end
@@ -671,14 +681,13 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     -- teammate detection lives in HandleNameplateInterrupt.
     if not INTERRUPT_SPELL_IDS[spellID] then return end
     local guid = UnitGUID("player")
-    if guid then
-        self:ConfirmKick(guid)
-        -- Tell party KE users so they can flip our roster bar with the real CD
-        local member = self.partyMembers[guid]
-        if member and member.interruptData then
-            self:BroadcastKick(member.interruptData.id, member.interruptData.cd)
-        end
-    end
+    if not guid then return end
+    local member = self.partyMembers[guid]
+    local data = member and member.interruptData
+    local cd = data and self:OwnKickCooldown(data)
+    self:ConfirmKick(guid, cd)
+    -- Tell party KE users so they can flip our roster bar with the real CD
+    if data then self:BroadcastKick(data.id, cd) end
 end
 
 ---------------------------------------------------------------------------------

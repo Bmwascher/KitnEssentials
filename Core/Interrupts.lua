@@ -192,3 +192,15 @@ end
 function KE:GetInterruptKickSpellSet()
     return KICK_SPELL_SET
 end
+
+-- Talents that change a kick's cooldown outright, keyed by kick spell ID.
+-- Each entry names its talent and one change: `seconds` off the cooldown, or
+-- `multiplier`, the share of the cooldown kept (10% off is 0.9).
+local FLAT_KICK_TALENTS = {
+    [2139] = { { talent = 382297, seconds = 5 } },       -- Counterspell: Quick Witted
+    [6552] = { { talent = 391271, multiplier = 0.9 } },  -- Pummel: Honed Reflexes
+}
+
+function KE:GetFlatKickTalents(kickSpellID)
+    return FLAT_KICK_TALENTS[kickSpellID]
+end

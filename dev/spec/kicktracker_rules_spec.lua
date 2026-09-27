@@ -179,4 +179,22 @@ describe("KickTracker sender identity", function()
     end)
 end)
 
-
+describe("KickTracker true cooldown", function()
+    it("applies known flat talents, then multipliers, clamped at zero", function()
+        local KT = L.loadKickTrackerRules()
+        local known = { [1] = true, [2] = true }
+        local function isKnown(id) return known[id] == true end
+        local rows = {
+            { name = "no entries", base = 20, mods = nil, want = 20 },
+            { name = "a known flat talent", base = 24, mods = { { talent = 1, seconds = 5 } }, want = 19 },
+            { name = "a known multiplier", base = 15, mods = { { talent = 2, multiplier = 0.9 } }, want = 13.5 },
+            { name = "an unknown talent", base = 24, mods = { { talent = 3, seconds = 5 } }, want = 24 },
+            { name = "flat before multiplier", base = 20,
+              mods = { { talent = 2, multiplier = 0.5 }, { talent = 1, seconds = 5 } }, want = 7.5 },
+            { name = "clamped at zero", base = 20, mods = { { talent = 1, seconds = 30 } }, want = 0 },
+        }
+        for _, row in ipairs(rows) do
+            assert.near(row.want, KT.TalentedCooldown(row.base, row.mods, isKnown), 1e-9, row.name)
+        end
+    end)
+end)

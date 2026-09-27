@@ -156,4 +156,23 @@ function KT.MemberForSender(members, senderKey, shortName)
     return nil
 end
 
+---------------------------------------------------------------------------------
+-- The player's true cooldown
+---------------------------------------------------------------------------------
+-- Flat seconds come off first, then multipliers apply; never below zero.
+function KT.TalentedCooldown(baseCd, mods, isKnown)
+    if not mods then return baseCd end
+    local cd, mult = baseCd, 1
+    for i = 1, #mods do
+        local m = mods[i]
+        if isKnown(m.talent) then
+            if m.seconds then cd = cd - m.seconds end
+            if m.multiplier then mult = mult * m.multiplier end
+        end
+    end
+    cd = cd * mult
+    if cd < 0 then cd = 0 end
+    return cd
+end
+
 

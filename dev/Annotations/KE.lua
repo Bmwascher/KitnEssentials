@@ -1057,6 +1057,11 @@ function KE:GetTrackedKickForSpec(specID) end
 ---@return table<number, true>
 function KE:GetInterruptKickSpellSet() end
 
+--- Flat talent changes to one kick's cooldown, or nil.
+---@param kickSpellID number
+---@return { talent: number, seconds: number?, multiplier: number? }[]?
+function KE:GetFlatKickTalents(kickSpellID) end
+
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end
 
