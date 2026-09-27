@@ -158,3 +158,25 @@ describe("KickTracker row visibility", function()
     end)
 end)
 
+describe("KickTracker sender identity", function()
+    it("matches by Name-Realm and falls back to a unique short name", function()
+        local KT = L.loadKickTrackerRules()
+        local members = {
+            me = { unit = "player", shortName = "Bob", fullKey = "Bob-Home" },
+            ann = { unit = "party1", shortName = "Ann", fullKey = "Ann-Home" },
+            calAway = { unit = "party2", shortName = "Cal", fullKey = "Cal-Away" },
+            calHome = { unit = "party3", shortName = "Cal", fullKey = "Cal-Home" },
+        }
+        local rows = {
+            { name = "the full key picks one of two same-name teammates", key = "Cal-Home", short = "Cal", want = "calHome" },
+            { name = "a key miss falls back to a unique short name", key = "Ann-Other", short = "Ann", want = "ann" },
+            { name = "a key miss with two same-name teammates finds nothing", key = "Cal-Other", short = "Cal", want = nil },
+            { name = "the player is never returned", key = "Bob-Home", short = "Bob", want = nil },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, (KT.MemberForSender(members, row.key, row.short)), row.name)
+        end
+    end)
+end)
+
+

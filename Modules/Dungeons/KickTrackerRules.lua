@@ -132,3 +132,28 @@ function KT.RowShown(member, mode)
     return member.unit == "player" or mode ~= "feed"
 end
 
+---------------------------------------------------------------------------------
+-- Sender identity
+---------------------------------------------------------------------------------
+-- The teammate an addon message came from. The realm-qualified key decides;
+-- the short name is used only when exactly one teammate carries it, which
+-- covers a realm whose display name and message name normalize differently.
+-- fullKey and shortName are stored only when plain (RefreshPartyRoster).
+function KT.MemberForSender(members, senderKey, shortName)
+    local byShort, shortCount = nil, 0
+    for guid, member in pairs(members) do
+        if member.unit ~= "player" then
+            if senderKey and member.fullKey == senderKey then
+                return guid, member
+            end
+            if shortName and member.shortName == shortName then
+                shortCount = shortCount + 1
+                byShort = guid
+            end
+        end
+    end
+    if shortCount == 1 then return byShort, members[byShort] end
+    return nil
+end
+
+

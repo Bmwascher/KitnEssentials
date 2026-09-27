@@ -41,6 +41,7 @@ local UnitClassFromGUID = UnitClassFromGUID
 local UnitTokenFromGUID = UnitTokenFromGUID
 local GetSpecializationInfoByID = GetSpecializationInfoByID
 local issecretvalue = issecretvalue
+local GetNormalizedRealmName = GetNormalizedRealmName
 local string_find = string.find
 local string_format = string.format
 local math_floor = math.floor
@@ -201,7 +202,7 @@ function KT:RefreshPartyRoster()
             local guid = UnitGUID(unit)
             if guid then
                 currentGuids[guid] = unit
-                local name = UnitName(unit)
+                local name, realm = UnitName(unit)
                 local _, classToken = UnitClass(unit)
 
                 if not self.partyMembers[guid] then
@@ -211,6 +212,17 @@ function KT:RefreshPartyRoster()
                 member.unit = unit
                 member.name = name
                 member.classToken = classToken
+                -- Identity is compared only through these plain fields;
+                -- member.name is for display. The realm-qualified key keeps two
+                -- teammates sharing a name apart when messages are matched.
+                if KE:IsSafeValue(name) and not issecretvalue(realm) then
+                    local raw = (realm and realm ~= "") and (name .. "-" .. realm) or name
+                    member.fullKey = KE:BuildNicknameKey(raw, GetNormalizedRealmName())
+                    member.shortName = name
+                else
+                    member.fullKey = nil
+                    member.shortName = nil
+                end
 
                 -- Spec lookup: player via GetSpecialization (always reliable for
                 -- self), party via the LibSpec name cache. If the cache hasn't
@@ -277,7 +289,7 @@ function KT:OnLibSpecGroupUpdate(specID, _, _, playerName)
 
     if not self.isActive then return end
     for guid, member in pairs(self.partyMembers) do
-        if member.name == playerName and member.unit ~= "player" then
+        if member.shortName == playerName and member.unit ~= "player" then
             self:ApplySpecData(guid, member.unit, specID)
             return
         end
