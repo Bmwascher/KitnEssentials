@@ -22,8 +22,22 @@ local type = type
 
 local KEWidgetStateManagerMixin = {}
 
+-- Each widget's pool generation is recorded when it registers. A pooled
+-- widget released since then belongs to another page now, and a manager that
+-- outlived its own page must leave it alone. Unpooled widgets carry no
+-- generation, so nil matches nil and they are always driven.
+local function Drive(manager, widget, enabled)
+    if widget._keGen ~= manager.gens[widget] then return end
+    if widget.SetEnabled then
+        widget:SetEnabled(enabled)
+    elseif widget.SetDisabled then
+        widget:SetDisabled(not enabled)
+    end
+end
+
 function KEWidgetStateManagerMixin:Register(widget, ...)
     if not widget then return end
+    self.gens[widget] = widget._keGen
     local groupNames = { ... }
     for _, groupName in ipairs(groupNames) do
         self.groups[groupName] = self.groups[groupName] or {}
@@ -35,6 +49,7 @@ function KEWidgetStateManagerMixin:RegisterGroup(widgets, groupName)
     if not widgets or not groupName then return end
     self.groups[groupName] = self.groups[groupName] or {}
     for _, widget in ipairs(widgets) do
+        self.gens[widget] = widget._keGen
         self.groups[groupName][#self.groups[groupName] + 1] = widget
     end
 end
@@ -55,11 +70,7 @@ function KEWidgetStateManagerMixin:UpdateAll(mainEnabled)
         end
 
         for _, widget in ipairs(widgets) do
-            if widget.SetEnabled then
-                widget:SetEnabled(groupEnabled)
-            elseif widget.SetDisabled then
-                widget:SetDisabled(not groupEnabled)
-            end
+            Drive(self, widget, groupEnabled)
         end
     end
 end
@@ -69,11 +80,7 @@ function KEWidgetStateManagerMixin:UpdateGroup(groupName, enabled)
     if not widgets then return end
 
     for _, widget in ipairs(widgets) do
-        if widget.SetEnabled then
-            widget:SetEnabled(enabled)
-        elseif widget.SetDisabled then
-            widget:SetDisabled(not enabled)
-        end
+        Drive(self, widget, enabled)
     end
 end
 
@@ -84,12 +91,14 @@ end
 function KEWidgetStateManagerMixin:Clear()
     self.groups = {}
     self.conditions = {}
+    self.gens = {}
 end
 
 function GUIFrame:CreateWidgetStateManager()
     local manager = {
         groups = {},
         conditions = {},
+        gens = {},
     }
 
     Mixin(manager, KEWidgetStateManagerMixin)
