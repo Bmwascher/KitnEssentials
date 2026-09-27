@@ -797,74 +797,33 @@ function LR:CheckInstance()
 end
 
 function LR:PLAYER_REGEN_DISABLED()
-    -- Remember that COMBAT is what took the prompt away, so REGEN_ENABLED can
-    -- put it back. HidePrompt clears pendingShow unconditionally, so by the time
-    -- combat ends there is no flag left saying a prompt was wanted. Re-showing
-    -- is deliberate: the group and dungeon are unchanged, and the end of the
-    -- fight is exactly when the teleport becomes useful.
+    -- Teleports cannot be cast in combat, so the prompt goes, and
+    -- PLAYER_REGEN_ENABLED brings it back while it is still live. Lockdown
+    -- has not begun when this event fires, so the hide normally lands at
+    -- once; HidePrompt defers it if lockdown has begun.
     combatHidden = (popup and popup:IsShown()) or nil
-    HidePrompt()  -- teleports can't be cast in combat
+    HidePrompt()
 end
 
 function LR:PLAYER_REGEN_ENABLED()
-    -- Build now if combat prevented it. Both OnEnable and ShowPrompt skip
-    -- BuildPopup during combat, so a join that landed mid-combat can arrive
-    -- here with no popup at all. Out of combat now, so the secure frame and
-    -- its "type" attribute are safe to create.
-    --
-    -- Gated on a COHERENT live show -- pending show AND pending spell AND
-    -- still enabled -- so a cancelled or disabled join never materialises a
-    -- popup here.
-    local wantShow = pendingShow and pendingSpellID
-        and self.db and self.db.Enabled ~= false
-    if wantShow and not popup then
-        BuildPopup()
-    end
     -- Flush a secure attribute write blocked during combat
     if pendingAttrSpellID and secureBtn then
         secureBtn:SetAttribute("spell", pendingAttrSpellID)
         pendingAttrSpellID = nil
     end
-    -- Surface a prompt whose join landed mid-combat. The name is set here
-    -- rather than in ShowPrompt: that path returned before touching the
-    -- popup, which may not have existed yet. Consumes pendingShow either
-    -- way -- a teleport already on cooldown by the time combat ends is not
-    -- retried later, same as ShowPrompt's own gate.
-    if wantShow then
-        pendingShow = nil
-        if not TeleportOnCooldown(pendingSpellID) then
-            if popup then
-                shownName = pendingName
-                shownRole = pendingRole
-                ApplyPopupLayout()
-            end
-            UpdateButtonVisuals()
-            if popup then ShowPopup() end
-        end
-    end
-    -- Flush a hide blocked during combat -- UNLESS combat is what caused it
-    -- and the prompt is still live. The popup is still on screen at this
-    -- point (HidePrompt deferred rather than hid), so "re-showing" is really
-    -- just cancelling the pending hide. Anything that invalidated the prompt
-    -- during the fight -- leaving the group, entering the dungeon -- ran
-    -- ClearPending, which nils pendingSpellID and combatHidden, so the hide
-    -- proceeds normally in those cases.
-    local keepShown = combatHidden and pendingSpellID
-        and self.db and self.db.Enabled ~= false
-    combatHidden = nil
+    -- Bring the prompt back if it is still wanted: a join that landed in
+    -- combat, or a shown prompt combat hid. Leaving the group or entering the
+    -- dungeon ran ClearPending, which clears pendingSpellID and both flags,
+    -- so a stale prompt never gets here. ShowPrompt refuses a disabled module
+    -- or a teleport on cooldown, builds the popup if combat kept it from being
+    -- built, and re-arms the spell a preview may have cleared.
+    local wantShow = pendingShow or combatHidden
+    pendingShow, combatHidden = nil, nil
+    if wantShow then ShowPrompt() end
+    -- A hide requested during lockdown that no show superseded.
     if pendingHide then
         pendingHide = nil
-        if keepShown and popup and popup:IsShown() then
-            -- A preview closed in combat could not re-arm the button it
-            -- disarmed; this is the first moment it can.
-            secureBtn:SetAttribute("spell", pendingSpellID)
-            shownName = pendingName
-            shownRole = pendingRole
-            ApplyPopupLayout()
-            UpdateButtonVisuals()
-        elseif popup and popup:IsShown() then
-            HidePopup()
-        end
+        if popup and popup:IsShown() then HidePopup() end
     end
 end
 
