@@ -2968,6 +2968,16 @@ function L.loadKickTracker(overrides)
     _G.LibStub = function() return nil end
     local KE = helpers.loadModule("Core/Interrupts.lua", { Print = function() end })
     helpers.loadModule("Modules/Dungeons/KickTracker.lua", KE)
+    helpers.loadModule("Modules/Dungeons/KickTrackerRules.lua", KE)
+    return modules["KickTracker"]
+end
+
+-- Modules/Dungeons/KickTrackerRules.lua alone: the tracker's pure decisions
+-- call no WoW API, so only the module table the shim hands back is needed.
+-- Returns KT.
+function L.loadKickTrackerRules()
+    local modules = helpers.installAddonShim()
+    helpers.loadModule("Modules/Dungeons/KickTrackerRules.lua", {})
     return modules["KickTracker"]
 end
 

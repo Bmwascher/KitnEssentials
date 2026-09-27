@@ -91,6 +91,7 @@ local CLASS_FALLBACK_INTERRUPTS = {
 local KICK_RECORD_FALLBACK_DURATION = 15
 local KICK_RECORD_GRACE = 0.4  -- records stay invisible this long so a comm
                                -- claim can discard them before they render
+local HELLO_THROTTLE = 10
 
 -- Flip true to trace preview lifecycle, cooling-bar OnUpdate cadence,
 -- container OnUpdate ticks, and nameplate-interrupt token resolution.
@@ -124,6 +125,7 @@ KT._readyList = {}        -- reusable temp table for LayoutBars
 
 KT.isActive = false
 KT.combatEventsRegistered = false
+KT.commState = {}  -- commBlocked: a lockdown refusal since the last successful send
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -501,77 +503,61 @@ local COMM_PREFIX = "KEKick"
 -- "B1;KICK;spellID;cd". Format drift on their side degrades to ignored
 -- messages, never errors.
 local BLIZZI_PREFIX = "BliZziIT"
-local COMM_SUCCESS = Enum and Enum.SendAddonMessageResult
-    and Enum.SendAddonMessageResult.Success or 0
 
-local function transmitKick(prefix, msg)
-    local inInstanceGroup = IsInGroup(LE_PARTY_CATEGORY_INSTANCE)
-    local channel = inInstanceGroup and "INSTANCE_CHAT" or "PARTY"
-    local ok, ret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, channel)
-    if ok and ret == COMM_SUCCESS then
-        KT._commBlocked = nil
-        return
-    end
+local whisperTargets = {}
 
-    -- Result 11 = Enum.SendAddonMessageResult.AddOnMessageLockdown (timed
-    -- M+): ALL addon channels including whispers are blocked. Remember the
-    -- state and skip the futile fan-out — the single broadcast above stays
-    -- as the probe that clears the flag once the lockdown lifts.
-    if ok and ret == 11 then KT._commBlocked = true end
-    if KT._commBlocked then return end
+local function sendAddonMessage(prefix, msg, channel, target)
+    return pcall(C_ChatInfo.SendAddonMessage, prefix, msg, channel, target)
+end
 
-    -- Non-lockdown failure: try PARTY (premade groups inside instances),
-    -- then whisper each member.
-    if inInstanceGroup then
-        ok, ret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, "PARTY")
-        if ok and ret == COMM_SUCCESS then return end
-        if ok and ret == 11 then
-            KT._commBlocked = true
-            return
-        end
-    end
-    for i = 1, 4 do
-        local unit = "party" .. i
-        if UnitExists(unit) then
-            local n, r = UnitName(unit)
-            if n then
-                local target = (r and r ~= "") and (n .. "-" .. r) or n
-                local wok, wret = pcall(C_ChatInfo.SendAddonMessage, prefix, msg, "WHISPER", target)
-                if wok and wret == 11 then
-                    KT._commBlocked = true
-                    return
+-- Every send checks the chat lock first (KT.TransmitComm); while locked no
+-- roster name is read. A whisper target is built only from plain values.
+function KT:Transmit(prefix, msg)
+    local locked = KE:IsChatMessagingLocked()
+    wipe(whisperTargets)
+    if not locked then
+        for i = 1, 4 do
+            local unit = "party" .. i
+            if UnitExists(unit) then
+                local n, r = UnitName(unit)
+                if KE:IsSafeValue(n) and not issecretvalue(r) then
+                    whisperTargets[#whisperTargets + 1] = (r and r ~= "") and (n .. "-" .. r) or n
                 end
             end
         end
     end
+    return KT.TransmitComm(self.commState, locked, sendAddonMessage,
+        prefix, msg, IsInGroup(LE_PARTY_CATEGORY_INSTANCE), whisperTargets)
 end
 
 function KT:BroadcastKick(spellID, cd)
     if not self.db.KickSync then return end
     if not IsInGroup() then return end
 
-    transmitKick(COMM_PREFIX, "1;KICK;" .. spellID .. ";" .. cd)
-    transmitKick(BLIZZI_PREFIX, "B1;KICK;" .. spellID .. ";" .. cd)
+    if self:Transmit(COMM_PREFIX, "1;KICK;" .. spellID .. ";" .. cd) == "refused" then return end
+    self:Transmit(BLIZZI_PREFIX, "B1;KICK;" .. spellID .. ";" .. cd)
 end
 
 -- Presence announce: lets other KE users verify us (and show our bar at
 -- Ready) from dungeon start instead of on our first kick. Sent on
--- activation, roster changes, and as a throttled reply to received hellos
--- (the throttle also dampens hello reply loops).
-function KT:BroadcastHello()
+-- activation, roster changes and as a throttled reply to received hellos,
+-- and forced once when the chat lock lifts.
+function KT:BroadcastHello(force)
     if not self.db.KickSync then return end
     if not self.isActive or not IsInGroup() then return end
-
-    local now = GetTime()
-    if self._lastHelloSent and (now - self._lastHelloSent) < 10 then return end
 
     local guid = UnitGUID("player")
     local member = guid and self.partyMembers[guid]
     local data = member and member.interruptData
     if not data then return end  -- current spec has no kick; nothing to announce
+
+    local now = GetTime()
+    if not KT.HelloAllowed(KE:IsChatMessagingLocked(), self._lastHelloSent, now, force, HELLO_THROTTLE) then
+        return
+    end
     self._lastHelloSent = now
 
-    transmitKick(COMM_PREFIX, "1;HELLO;" .. data.id .. ";" .. data.cd)
+    self:Transmit(COMM_PREFIX, "1;HELLO;" .. data.id .. ";" .. data.cd)
     -- Deliberately NO BliZzi-format hello: we stay out of their handshake
     -- (kick-data-only participation, established interop posture).
 end
@@ -735,7 +721,7 @@ function KT:UnregisterCombatEvents()
     self:UnregisterEvent("CHAT_MSG_ADDON")
     self.combatEventsRegistered = false
     self._lastHelloSent = nil
-    self._commBlocked = nil
+    self.commState.commBlocked = nil
 
     self:ClearKickRecords()
 end
@@ -762,7 +748,7 @@ function KT:CheckActivation()
             self.containerFrame:Show()
         end
         self:RefreshPartyRoster()
-        self._commBlocked = nil  -- new instance: re-probe the comm channel
+        self.commState.commBlocked = nil  -- new instance: re-probe the comm channel
         self:BroadcastHello()  -- announce presence to party KE users
     elseif not shouldBeActive and self.isActive then
         self.isActive = false
