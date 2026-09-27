@@ -306,6 +306,219 @@ function GUIFrame:ApplyThemeColors()
 end
 
 ---------------------------------------------------------------------------------
+-- Widget Pools
+---------------------------------------------------------------------------------
+-- WoW never frees a frame, so a page rebuild that orphans its cards leaks
+-- them for the session. Cards, rows and widgets made under the live page come
+-- from these pools and go back when the page is torn down. An object that
+-- something else has added a frame or region to is retired, orphaned rather
+-- than reused, because those additions cannot be taken off again.
+local DEBUG_GUIPOOL = false
+
+GUIFrame._pools = {}
+GUIFrame._poolStats = { retired = 0, failed = 0, retiredByPage = {} }
+
+-- base and measured hold two numbers per owned frame: its child count, then
+-- its region count.
+function GUIFrame.PoolIsClean(base, measured, busy)
+    if busy then return false end
+    for i = 1, #base do
+        if base[i] ~= measured[i] then return false end
+    end
+    return true
+end
+
+-- Deletes every key added since construction and puts back every method that
+-- was replaced or removed. Keys starting with _ke belong to the pool and stay.
+function GUIFrame.PoolSweepKeys(obj, snapshot)
+    for k in pairs(obj) do
+        if snapshot[k] == nil and not (type(k) == "string" and string.sub(k, 1, 3) == "_ke") then
+            obj[k] = nil
+        end
+    end
+    for k, v in pairs(snapshot) do
+        if type(v) == "function" and obj[k] ~= v then
+            obj[k] = v
+        end
+    end
+end
+
+local WidgetPool = {}
+WidgetPool.__index = WidgetPool
+
+-- Shared by every release, so checking an object allocates nothing.
+local measured = {}
+
+local function Snapshot(obj)
+    local snapshot = {}
+    for k, v in pairs(obj) do
+        snapshot[k] = type(v) == "function" and v or true
+    end
+    return snapshot
+end
+
+local function RecordBaseline(obj)
+    local base = {}
+    for i, frame in ipairs(obj._keOwned) do
+        base[i * 2 - 1] = frame:GetNumChildren()
+        base[i * 2] = frame:GetNumRegions()
+    end
+    obj._keBase = base
+end
+
+-- Everything a release does to the object, run under one pcall by Release.
+-- Returns true once the object is parked on the holder, false when the guard
+-- refuses it.
+local function ReleaseSteps(pool, obj)
+    -- Hidden first, so whatever the hide sets off (focus loss, a list
+    -- closing) still runs against the old binding.
+    obj:Hide()
+    pool.reset(obj)
+    local owned = obj._keOwned
+    for i = 1, #owned do
+        measured[i * 2 - 1] = owned[i]:GetNumChildren()
+        measured[i * 2] = owned[i]:GetNumRegions()
+    end
+    local busy = obj._keIsBusy ~= nil and obj:_keIsBusy()
+    if not GUIFrame.PoolIsClean(obj._keBase, measured, busy) then return false end
+    GUIFrame.PoolSweepKeys(obj, obj._keSnapshot)
+    obj:ClearAllPoints()
+    obj:SetParent(pool:GetHolder())
+    return true
+end
+
+function WidgetPool:GetHolder()
+    local holder = self.holder
+    if not holder then
+        holder = CreateFrame("Frame", nil, UIParent)
+        holder:Hide()
+        self.holder = holder
+    end
+    return holder
+end
+
+function WidgetPool:Acquire(parent)
+    local free = self.free
+    local obj = free[#free]
+    if obj then
+        free[#free] = nil
+    else
+        obj = self.construct(self:GetHolder())
+        self.created = self.created + 1
+        obj._kePool = self
+        obj._keGen = 0
+        RecordBaseline(obj)
+        obj._keSnapshot = Snapshot(obj)
+    end
+    obj._keState = "used"
+    obj:SetParent(parent)
+    -- A page may have dimmed the object's root; a fresh one starts opaque.
+    obj:SetAlpha(1)
+    obj:Show()
+    return obj
+end
+
+function WidgetPool:Release(obj)
+    if obj._kePool ~= self or obj._keState ~= "used" then return end
+    obj._keState = "releasing"
+    local ok, clean = pcall(ReleaseSteps, self, obj)
+    obj._keGen = obj._keGen + 1
+    if ok and clean then
+        obj._keState = "free"
+        local free = self.free
+        free[#free + 1] = obj
+        return
+    end
+    obj._keState = "retired"
+    -- Protected as well: a release that already failed once must not raise
+    -- into the page rebuild.
+    pcall(obj.Hide, obj)
+    pcall(obj.SetParent, obj, nil)
+    KE_GUI_ORPHAN_COUNT = (KE_GUI_ORPHAN_COUNT or 0) + 1
+    local stats = GUIFrame._poolStats
+    -- A page rebuild names the page being torn down; any other release
+    -- happens on the page still showing.
+    local page = GUIFrame._releasingPage or GUIFrame.selectedSidebarItem or "HomePage"
+    if ok then
+        stats.retired = stats.retired + 1
+        stats.retiredByPage[page] = (stats.retiredByPage[page] or 0) + 1
+    else
+        stats.failed = stats.failed + 1
+    end
+    if DEBUG_GUIPOOL then
+        KE:Print("pool " .. self.kind .. (ok and " retired on " or " failed on ") .. page
+            .. (ok and "" or (": " .. tostring(clean))))
+    end
+end
+
+-- holdsWidgets marks a pool whose objects are containers other pooled objects
+-- may be made under (rows); a leaf widget is never one.
+function GUIFrame:NewWidgetPool(kind, construct, reset, holdsWidgets)
+    local pool = setmetatable({
+        kind = kind, construct = construct, reset = reset, free = {}, created = 0,
+        holdsWidgets = holdsWidgets == true,
+    }, WidgetPool)
+    self._pools[kind] = pool
+    return pool
+end
+
+-- Parts a pooled object makes for itself after construction raise its
+-- baseline, so they are never taken for something a page added. Both do
+-- nothing on an unpooled object.
+function GUIFrame:PoolGrow(obj, frame, children, regions)
+    local owned, base = obj._keOwned, obj._keBase
+    if not (owned and base) then return end
+    for i = 1, #owned do
+        if owned[i] == frame then
+            base[i * 2 - 1] = base[i * 2 - 1] + children
+            base[i * 2] = base[i * 2] + regions
+            return
+        end
+    end
+end
+
+function GUIFrame:PoolOwn(obj, frame)
+    local owned, base = obj._keOwned, obj._keBase
+    if not (owned and base) then return end
+    owned[#owned + 1] = frame
+    base[#base + 1] = frame:GetNumChildren()
+    base[#base + 1] = frame:GetNumRegions()
+end
+
+-- Pooling follows the page down from its root: the live scroll child, the
+-- content of a card in use, or a row in use. Those are the containers whose
+-- release walks their pooled children. Anything made elsewhere (kit holders,
+-- the theme popup, a page's own frames, another widget) is built as before.
+function GUIFrame:IsPoolParent(parent)
+    if not parent then return false end
+    local area = self.contentArea
+    if area and parent == area.scrollChild then return true end
+    local owner = parent._kePoolOwner
+    if owner then
+        return owner._kePool ~= nil and owner._keState == "used"
+    end
+    local pool = parent._kePool
+    return pool ~= nil and pool.holdsWidgets and parent._keState == "used" or false
+end
+
+-- One child a container tracks or holds. A pooled object still here goes back
+-- to its pool; any other frame still here is orphaned as a rebuild always did;
+-- a child something else has since taken is left alone. Regions are never
+-- reparented: they stay and fail their container's check.
+function GUIFrame:ReleaseTracked(child, container)
+    if child:GetParent() ~= container then return end
+    local pool = child._kePool
+    if pool then
+        if child._keState == "used" then pool:Release(child) end
+        return
+    end
+    if not child:IsObjectType("Frame") then return end
+    KE_GUI_ORPHAN_COUNT = (KE_GUI_ORPHAN_COUNT or 0) + 1
+    child:Hide()
+    child:SetParent(nil)
+end
+
+---------------------------------------------------------------------------------
 -- Card System
 ---------------------------------------------------------------------------------
 function GUIFrame:CreateCard(parent, title, yOffset, width)
