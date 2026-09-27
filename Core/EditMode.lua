@@ -32,6 +32,7 @@ EditMode.selectedElementKey = nil
 EditMode.nudgeFrame = nil
 EditMode.isShiftFaded = false
 EditMode.activeCategory = nil
+EditMode.tooltipOwner = nil
 
 -- Session view state, both of them, cleared when the tool closes. Keyed by
 -- element key: boxes the user hid for this session, and where each element sat
@@ -435,15 +436,14 @@ function EditMode:UpdateOverlayPosition(overlay)
     -- Three callers reach here from a next-frame timer, so the tool can have
     -- closed in between: a combat auto-exit hides every overlay, and without
     -- this a late timer would show a pooled one back over a closed tool.
-    if not self.isActive or not targetFrame then
-        overlay:Hide()
-        return
-    end
-
     -- A drag in flight always finishes. Hiding the overlay mid-drag would strand
     -- the target re-anchored to the screen corner with no OnDragStop to undo it.
-    if not overlay.isDragging and not self:ElementShouldShow(element) then
+    if not self.isActive or not targetFrame
+        or (not overlay.isDragging and not self:ElementShouldShow(element)) then
         overlay:Hide()
+        -- A box whose frame stopped resolving keeps its selection, so the
+        -- tooltip has to go with the box here.
+        if overlay == self.tooltipOwner then self:HideSelectionTooltip() end
         return
     end
 
@@ -842,7 +842,13 @@ function EditMode:SetupDragHandlers(overlay)
         if not element then return end
 
         local targetFrame = EditMode:GetElementFrame(element)
-        if not targetFrame then return end
+        if not targetFrame then
+            -- Nothing is committed. The box has lost its frame, so it is hidden
+            -- and the tooltip with it; the boxes return to the stored position.
+            EditMode:UpdateOverlayPosition(self)
+            EditMode:UpdateNudgeFrameInfo()
+            return
+        end
 
         -- Commit exactly what the last update displayed, UNLESS that answer
         -- leaned on a neighbour that has since moved or gone. Everything else
@@ -871,6 +877,9 @@ function EditMode:SetupDragHandlers(overlay)
         end
 
         element.setPosition(newPos)
+        -- The boxes and the tooltip showed the proposal. Reread what the setter
+        -- stored, which a setter may have adjusted.
+        EditMode:UpdateNudgeFrameInfo()
         C_Timer.After(0, function()
             -- A frame's worth of delay is enough for the tool to close, the
             -- element to be unregistered, or its category or eligibility to
@@ -2301,6 +2310,45 @@ function EditMode.SelectionTooltipLines(displayName, x, y)
     return displayName, position, SELECTION_TOOLTIP_HINT
 end
 
+-- GameTooltip is shared, so KE hides it only while the box it made the owner
+-- still owns it; a tooltip another frame has taken since is left alone.
+function EditMode:HideSelectionTooltip()
+    local owner = self.tooltipOwner
+    self.tooltipOwner = nil
+    if not owner or not GameTooltip or GameTooltip:IsForbidden() then return end
+    if GameTooltip:IsOwned(owner) then
+        GameTooltip:Hide()
+    end
+end
+
+-- x and y are the offsets to show, nil when the element reports no position.
+---@param x number?
+---@param y number?
+function EditMode:ShowSelectionTooltip(x, y)
+    local key = self.selectedElementKey
+    local element = key and self.registeredElements[key]
+    local overlay = key and self.overlayFrames[key]
+    if not self.isActive or not element or not overlay or not overlay:IsShown() then
+        self:HideSelectionTooltip()
+        return
+    end
+    if not GameTooltip or GameTooltip:IsForbidden() then return end
+
+    if not GameTooltip:IsOwned(overlay) then
+        GameTooltip:SetOwner(overlay, "ANCHOR_TOPRIGHT")
+    end
+    self.tooltipOwner = overlay
+
+    local title, position, hint = EditMode.SelectionTooltipLines(element.displayName, x, y)
+    GameTooltip:ClearLines()
+    GameTooltip:AddLine(title, 1, 1, 1)
+    if position then
+        GameTooltip:AddLine(position, 0.7, 0.7, 0.7)
+    end
+    GameTooltip:AddLine(hint, Theme.accent[1], Theme.accent[2], Theme.accent[3])
+    GameTooltip:Show()
+end
+
 function EditMode:UpdateNudgeFrameInfo()
     if not self.nudgeFrame then return end
 
@@ -2319,11 +2367,15 @@ function EditMode:UpdateNudgeFrameInfo()
         frame.yEditBox:SetEnabled(false)
         frame.settingsBtn:SetEnabled(false)
         frame.settingsBtn:SetAlpha(0.4)
+        self:HideSelectionTooltip()
         return
     end
 
     local element = self.registeredElements[self.selectedElementKey]
-    if not element then return end
+    if not element then
+        self:HideSelectionTooltip()
+        return
+    end
 
     frame.selectedText:SetText(element.displayName)
     frame.selectedText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
@@ -2339,6 +2391,9 @@ function EditMode:UpdateNudgeFrameInfo()
         -- would read one point off from what a nudge would round it to.
         frame.xEditBox:SetText(string.format("%d", KE:RoundOffset(pos.XOffset)))
         frame.yEditBox:SetText(string.format("%d", KE:RoundOffset(pos.YOffset)))
+        self:ShowSelectionTooltip(pos.XOffset or 0, pos.YOffset or 0)
+    else
+        self:ShowSelectionTooltip(nil, nil)
     end
 end
 
@@ -2366,16 +2421,25 @@ end
 function EditMode:ShowDraggedOffsets(offsetX, offsetY)
     if not self.nudgeFrame then return end
 
+    local changed = false
     local textX = string.format("%d", offsetX)
     if textX ~= lastReadoutX then
         self.nudgeFrame.xEditBox:SetText(textX)
         lastReadoutX = textX
+        changed = true
     end
 
     local textY = string.format("%d", offsetY)
     if textY ~= lastReadoutY then
         self.nudgeFrame.yEditBox:SetText(textY)
         lastReadoutY = textY
+        changed = true
+    end
+
+    -- Behind the boxes' gate: a drag update that crossed no whole pixel
+    -- rebuilds nothing.
+    if changed then
+        self:ShowSelectionTooltip(offsetX, offsetY)
     end
 end
 
@@ -2713,6 +2777,9 @@ function EditMode:ShowNudgeFrame()
 end
 
 function EditMode:HideNudgeFrame()
+    -- Exit clears the selection here without going through
+    -- UpdateNudgeFrameInfo, so the tooltip needs its own hide.
+    self:HideSelectionTooltip()
     if self.nudgeFrame then
         -- Hiding the tool hides both dropdowns with it, but a child keeps its
         -- own shown state, so without this whichever was open reopens still
