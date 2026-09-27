@@ -12,7 +12,7 @@
 -- popup's anchors are protected through its secure child.
 --
 -- Loads the REAL Modules/Dungeons/LFGReminder.lua through _ke_loader. The
--- popup is the loader's lfgFrame stub; the spec replaces the three setters
+-- popup is the loader's lfgFrame stub; the spec replaces the setters
 -- it cares about with recorders AFTER the first build, so the assertions are
 -- about which db values the module pushes, never about the stub's own
 -- behavior.

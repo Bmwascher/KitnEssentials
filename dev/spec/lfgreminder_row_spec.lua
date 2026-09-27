@@ -20,6 +20,9 @@ describe("LFGReminder row", function()
             local cases = {
                 { text = "Murder Row",               want = 1 },
                 { text = "Ara-Kara, City of Echoes", want = 2 },
+                -- 224 px in total, two columns' worth, but no two words fit
+                -- on one line.
+                { text = "Abcdefghij Klmnopqrst Uvwxyzabcd", want = 3 },
             }
             for _, c in ipairs(cases) do
                 assert.equals(c.want, count(c.text, 128, measure), c.text)
