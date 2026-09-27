@@ -22,6 +22,10 @@ describe("InstanceEntryDecision", function()
         -- open world. Keys are "instanceID:difficultyID".
         -- want = { new key, new scope, action, moved }. "moved" ends any Ask
         -- prompt raised at the last entry.
+        -- inPlace is a difficulty change with no load, atLoad a load's opening
+        -- read; pendingID and pendingFresh carry an instance whose difficulty
+        -- was not known yet, groupLeft a left instance group.
+        -- wantPending = { new pending ID, its freshness }, checked where given.
         local cases = {
             { name = "a different instance, Auto", last = "100:1", lastScope = "party",
               scope = "party", id = 200, diff = 1, enabled = true, mode = "auto", want = { "200:1", "party", "auto", true } },
@@ -67,14 +71,57 @@ describe("InstanceEntryDecision", function()
               scope = "party", id = 200, diff = 23, fresh = true, enabled = true, mode = "auto", want = { "200:23", "party", "none", true } },
             { name = "Mythic to Mythic Keystone in another instance is an entry", last = "200:23", lastScope = "party",
               scope = "party", id = 300, diff = 8, enabled = true, mode = "auto", want = { "300:8", "party", "auto", true } },
+            { name = "difficulty 0 keys nothing and leaves a pending", last = "100:1", lastScope = "party",
+              scope = "delve", id = 400, diff = 0, enabled = true, mode = "ask",
+              want = { "100:1", "party", "none", false }, wantPending = { 400, false } },
+            { name = "a difficulty change in place resolving a zone-in's pending", last = "100:1", lastScope = "party",
+              scope = "delve", id = 400, diff = 208, inPlace = true, pendingID = 400, enabled = true, mode = "ask",
+              want = { "400:208", "delve", "ask", true }, wantPending = { nil, false } },
+            { name = "a difficulty change in place resolving a login's pending only records", last = "100:1",
+              lastScope = "party", scope = "delve", id = 400, diff = 208, inPlace = true, pendingID = 400,
+              pendingFresh = true, enabled = true, mode = "ask",
+              want = { "400:208", "delve", "none", true }, wantPending = { nil, false } },
+            { name = "the open world clears a pending", last = "100:1", lastScope = "party",
+              id = 2552, diff = 0, pendingID = 400, enabled = true, mode = "auto",
+              want = { "100:1", "party", "none", true }, wantPending = { nil, false } },
+            { name = "the open world after leaving the instance group forgets the key", last = "200:8",
+              lastScope = "party", id = 2552, diff = 0, groupLeft = true, enabled = true, mode = "auto",
+              want = { nil, nil, "none", true } },
+            { name = "inside with no load after leaving the instance group keeps the key", last = "200:8",
+              lastScope = "party", scope = "party", id = 200, diff = 8, groupLeft = true, enabled = true,
+              mode = "auto", want = { "200:8", "party", "none", false } },
+            { name = "a load after leaving the instance group forgets the key and the old pending", last = "200:8",
+              lastScope = "party", scope = "party", id = 200, atLoad = true, groupLeft = true, pendingID = 200,
+              pendingFresh = true, enabled = true, mode = "auto",
+              want = { nil, nil, "none", true }, wantPending = { 200, false } },
+            { name = "a difficulty change in place with no pending only re-keys", last = "200:1", lastScope = "party",
+              scope = "party", id = 200, diff = 2, inPlace = true, enabled = true, mode = "auto",
+              want = { "200:2", "party", "none", true } },
+            { name = "a pending's freshness stays with its own instance", last = "100:1", lastScope = "party",
+              scope = "party", id = 200, diff = 1, pendingID = 400, pendingFresh = true, enabled = true,
+              mode = "auto", want = { "200:1", "party", "auto", true }, wantPending = { nil, false } },
+            { name = "a login's pending stays fresh through a later unknown read", last = "100:1", lastScope = "party",
+              scope = "delve", id = 400, diff = 0, pendingID = 400, pendingFresh = true, enabled = true,
+              mode = "ask", want = { "100:1", "party", "none", false }, wantPending = { 400, true } },
+            { name = "a login's read at difficulty 0 leaves a fresh pending", last = "100:1", lastScope = "party",
+              scope = "party", id = 200, diff = 0, fresh = true, enabled = true, mode = "auto",
+              want = { "100:1", "party", "none", false }, wantPending = { 200, true } },
+            { name = "a read at difficulty 0 with the option off leaves a fresh pending", last = "100:1",
+              lastScope = "party", scope = "party", id = 200, diff = 0, enabled = false, mode = "auto",
+              want = { "100:1", "party", "none", false }, wantPending = { 200, true } },
         }
         for _, c in ipairs(cases) do
-            local key, scope, action, moved = DM.InstanceEntryDecision(c.last, c.lastScope, c.scope, c.id, c.diff,
-                c.fresh == true, c.enabled, c.mode)
+            local key, scope, action, moved, pendingID, pendingFresh = DM.InstanceEntryDecision(c.last,
+                c.lastScope, c.scope, c.id, c.diff, c.fresh == true, c.enabled, c.mode, c.inPlace == true,
+                c.pendingID, c.pendingFresh == true, c.groupLeft == true, c.atLoad == true)
             assert.equals(c.want[1], key, c.name)
             assert.equals(c.want[2], scope, c.name)
             assert.equals(c.want[3], action, c.name)
             assert.equals(c.want[4], moved, c.name)
+            if c.wantPending then
+                assert.equals(c.wantPending[1], pendingID, c.name)
+                assert.equals(c.wantPending[2], pendingFresh, c.name)
+            end
         end
     end)
 end)
