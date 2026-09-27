@@ -386,8 +386,10 @@ end
 -- probe-confirmed).
 function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if not self.db.Enabled or self.isPreview or not self.isActive then return end
-    if not unit or not string_find(unit, "^nameplate") then return end
-    if interruptedBy == nil then return end  -- channel ended naturally, not kicked
+    -- The payload may be secret while unit spellcasts are restricted; a
+    -- secret unit is never tested.
+    if issecretvalue(unit) or not unit or not string_find(unit, "^nameplate") then return end
+    if not (issecretvalue(interruptedBy) or interruptedBy ~= nil) then return end  -- channel ended naturally, not kicked
 
     -- Self/teammate split without touching the (possibly secret) GUID:
     -- UnitTokenFromGUID returns a plain token for the player's own units,
@@ -398,7 +400,7 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
             tostring(unit), tostring(ok), tostring(token),
             tostring(not KE:IsSafeValue(interruptedBy))))
     end
-    if ok and token then return end
+    if ok and KE:IsSafeValue(token) then return end
 
     self:ProcessTeammateKick(interruptedBy, spellID)
 end
@@ -407,12 +409,13 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
     -- What the game lets us see about the kicker, for display only: the name
     -- and class may be secret, so neither is compared.
     local ok, name = pcall(UnitNameFromGUID, interrupterGuid)
-    if not ok or name == nil then return end
+    if not ok or not (issecretvalue(name) or name ~= nil) then return end
 
     -- classToken may be SECRET: it is only handed to the C-side GetClassColor
     -- (AllowedWhenTainted) for the record's colour.
     local okClass, _, cf = pcall(UnitClassFromGUID, interrupterGuid)
-    local classToken = (okClass and cf ~= nil) and cf or nil
+    local classToken
+    if okClass and (issecretvalue(cf) or cf ~= nil) then classToken = cf end
 
     -- A teammate row comes only from that teammate's own messages; every
     -- other kick is a record, even when the kicker's identity is readable.
@@ -431,7 +434,7 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
     -- C-side GetClassColor and apply r/g/b VERBATIM — storing/applying
     -- secrets is legal, any math or comparison on them is not.
     local colorR, colorG, colorB
-    if classToken ~= nil then
+    if issecretvalue(classToken) or classToken ~= nil then
         local okColor, col = pcall(C_ClassColor.GetClassColor, classToken)
         if okColor and col then
             colorR, colorG, colorB = col.r, col.g, col.b
@@ -440,7 +443,7 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID)
 
     -- Interrupted spell's icon (display-only; both id and texture may be secret).
     local iconID
-    if interruptedSpellID ~= nil then
+    if issecretvalue(interruptedSpellID) or interruptedSpellID ~= nil then
         local okTex, tex = pcall(C_Spell.GetSpellTexture, interruptedSpellID)
         if okTex then iconID = tex end
     end
@@ -1027,7 +1030,7 @@ function KT:UpdateRecordBarVisuals(bar, record)
     local db = self.db
     self:ApplyBarGeometry(bar)
 
-    if record.iconID ~= nil then
+    if issecretvalue(record.iconID) or record.iconID ~= nil then
         pcall(bar.iconTex.SetTexture, bar.iconTex, record.iconID)
     else
         bar.iconTex:SetTexture(134400)
@@ -1048,7 +1051,7 @@ function KT:UpdateRecordBarVisuals(bar, record)
 
     -- Kicker's class color when the game resolved one (r/g/b may be secret —
     -- applied verbatim, the game paints it); CoolingColor fallback otherwise.
-    if record.colorR ~= nil then
+    if issecretvalue(record.colorR) or record.colorR ~= nil then
         bar.statusBar:SetStatusBarColor(record.colorR, record.colorG, record.colorB, 1)
     else
         bar.statusBar:SetStatusBarColor(unpack(db.CoolingColor))
