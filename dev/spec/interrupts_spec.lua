@@ -20,4 +20,26 @@ describe("Interrupts (Core/Interrupts.lua)", function()
         local set = KE:GetInterruptSpellSet(102)
         assert.is_true(set[78675])
     end)
+
+    it("builds the kick set from candidates only", function()
+        local kicks = KE:GetInterruptKickSpellSet()
+        assert.is_true(kicks[96231])   -- Rebuke, a candidate
+        assert.is_nil(kicks[31935])    -- Avenger's Shield, an announce extra
+    end)
+
+    it("picks the named tracked candidate, else the first, and nil for a spec without a kick", function()
+        -- A fixture list, so no data cell is pinned; naming the second and the
+        -- third candidate tells the tracked branch from any fixed position.
+        local list = { { id = 1, cd = 10 }, { id = 2, cd = 20 }, { id = 3, cd = 30 } }
+        local rows = {
+            { name = "tracked names the second", tracked = 2, want = 2 },
+            { name = "tracked names the third", tracked = 3, want = 3 },
+            { name = "no tracked kick", tracked = nil, want = 1 },
+            { name = "tracked kick not in the list", tracked = 9, want = 1 },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KE:PickTrackedKick(list, row.tracked).id, row.name)
+        end
+        assert.is_nil(KE:GetTrackedKickForSpec(105))            -- no kick
+    end)
 end)

@@ -14,11 +14,15 @@
 --                    that is actually known in the player or pet spellbook.
 --   announceExtras - optional array of additional spell IDs that count as
 --                    interrupts for announce purposes but not CD tracking.
+--   tracked        - optional candidate id a cooldown tracker shows for a
+--                    teammate, whose pet it cannot see.
 --
 -- Accessors:
 --   KE:GetInterruptCandidatesForSpec(specID) -> list of { id, cd } in priority
 --                                              order, or nil.
 --   KE:GetInterruptSpellSet(specID) -> { [id]=true, ... } or nil.
+--   KE:GetTrackedKickForSpec(specID) -> { id, cd } or nil.
+--   KE:GetInterruptKickSpellSet() -> { [id]=true, ... } of every candidate.
 
 ---@class KE
 local KE = select(2, ...)
@@ -27,6 +31,7 @@ local ipairs = ipairs
 local pairs = pairs
 
 local INTERRUPT_ANNOUNCE_SET = {}
+local KICK_SPELL_SET = {}
 
 local INTERRUPTS = {
     -- Warrior: Pummel 15s
@@ -60,8 +65,9 @@ local INTERRUPTS = {
     [63]   = { primary = { id = 2139, cd = 20 } },
     [64]   = { primary = { id = 2139, cd = 20 } },
     -- Warlock: interrupt depends on active pet. Candidates in priority order:
-    --   19647 Spell Lock (Felhunter), 89766 Axe Toss (Felguard),
+    --   19647 Spell Lock (Felhunter) 24s, 89766 Axe Toss (Felguard) 30s,
     --   119910 Command Demon (player-cast meta), 132409 pet variant.
+    --   With any other demon out there is no kick.
     [265]  = {
         candidates = {
             { id = 19647,  cd = 24 },
@@ -72,11 +78,12 @@ local INTERRUPTS = {
     },
     [266]  = {
         candidates = {
-            { id = 19647,  cd = 30 },
+            { id = 19647,  cd = 24 },
             { id = 89766,  cd = 30 },
             { id = 119910, cd = 24 },
             { id = 119914, cd = 30 },
         },
+        tracked = 89766,  -- the Felguard is the usual Demonology demon
     },
     [267]  = {
         candidates = {
@@ -122,6 +129,7 @@ for _, entry in pairs(INTERRUPTS) do
         if c.id then
             set[c.id] = true
             INTERRUPT_ANNOUNCE_SET[c.id] = true
+            KICK_SPELL_SET[c.id] = true
         end
     end
     if entry.announceExtras then
@@ -158,4 +166,29 @@ end
 
 function KE:GetInterruptAnnounceSpellSet()
     return INTERRUPT_ANNOUNCE_SET
+end
+
+-- The candidate named by trackedID, else the first candidate.
+function KE:PickTrackedKick(candidates, trackedID)
+    if trackedID then
+        for _, c in ipairs(candidates) do
+            if c.id == trackedID then return c end
+        end
+    end
+    return candidates[1]
+end
+
+-- The kick a cooldown tracker shows for a spec when it cannot see the pet.
+function KE:GetTrackedKickForSpec(specID)
+    local d = INTERRUPTS[specID]
+    if not d then return nil end
+    local list = d.candidateList
+    if not list or #list == 0 then return nil end
+    return self:PickTrackedKick(list, d.tracked)
+end
+
+-- Every spell that starts a kick cooldown: candidate ids only, never the
+-- announce extras, which are not kicks.
+function KE:GetInterruptKickSpellSet()
+    return KICK_SPELL_SET
 end

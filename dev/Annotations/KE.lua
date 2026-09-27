@@ -1040,6 +1040,23 @@ function KE:GetInterruptCandidatesForSpec(specID) end
 ---@return table<number, true>?
 function KE:GetInterruptSpellSet(specID) end
 
+--- The candidate whose id is trackedID, else the first candidate.
+---@param candidates { id: number, cd: number }[]
+---@param trackedID number?
+---@return { id: number, cd: number }?
+function KE:PickTrackedKick(candidates, trackedID) end
+
+--- The kick a cooldown tracker shows for a spec whose pet it cannot see: the
+--- `tracked` candidate, else the first; nil when the spec has no kick.
+---@param specID number
+---@return { id: number, cd: number }?
+function KE:GetTrackedKickForSpec(specID) end
+
+--- Every candidate kick ID across specs (announce extras excluded).
+--- Callers treat the returned table as read-only.
+---@return table<number, true>
+function KE:GetInterruptKickSpellSet() end
+
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end
 
