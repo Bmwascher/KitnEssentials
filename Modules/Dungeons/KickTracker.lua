@@ -972,6 +972,22 @@ function KT:ApplyRegionDefaults(bar)
     bar.raidMarkTex:Hide()
 end
 
+-- Record bars draw secret names, icons, colours and marks. SetToDefaults
+-- clears a text or texture region's secret state before the bar serves another
+-- row; the status bar gets explicit clears, since resetting the frame would
+-- drop its layout.
+function KT:ResetBarRegions(bar)
+    bar.nameText:SetToDefaults()
+    bar.markerText:SetToDefaults()
+    bar.timerText:SetToDefaults()
+    bar.iconTex:SetToDefaults()
+    bar.raidMarkTex:SetToDefaults()
+    self:StopBarTimer(bar, 0)
+    bar.statusBar:SetStatusBarColor(1, 1, 1, 1)
+    bar.lastTimerText = nil
+    self:ApplyRegionDefaults(bar)
+end
+
 -- The trailing "*" and the raid marker sit in the name's slot, so both
 -- follow ShowName. The marker index may be secret: it is only handed to the
 -- C-side sprite-sheet call, shown when that call succeeds.
@@ -1014,6 +1030,7 @@ function KT:ReleaseBar(guid)
 
     bar:Hide()
     bar:SetScript("OnUpdate", nil)
+    self:ResetBarRegions(bar)
 
     self.activeBars[guid] = nil
     table_insert(self.barPool, bar)
