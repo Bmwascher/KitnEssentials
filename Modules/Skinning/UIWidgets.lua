@@ -188,6 +188,24 @@ local function ApplyCentre(fs)
     end
 end
 
+-- Setup re-sets the icon's texture, size and mask shown-state and the
+-- Border's atlas and shown-state on every update, but never the texcoords,
+-- either border's alpha or which masks the icon carries: one pass holds.
+local skinnedIcons = setmetatable({}, { __mode = "k" })
+
+local function StyleSpellIcon(spell)
+    local icon = spell and spell.Icon
+    local S = KE.Skins
+    if not (icon and S) or skinnedIcons[icon] then return end
+    skinnedIcons[icon] = true
+
+    if spell.IconMask then icon:RemoveMaskTexture(spell.IconMask) end
+    if spell.CircleMask then icon:RemoveMaskTexture(spell.CircleMask) end
+    if spell.Border then spell.Border:SetAlpha(0) end
+    if spell.DebuffBorder then spell.DebuffBorder:SetAlpha(0) end
+    S.Icon(icon, true)
+end
+
 function UIW:StyleStatusBarWidget(widget)
     if not widget or widget:IsForbidden() then return end
 
@@ -282,6 +300,8 @@ function UIW:StyleWidgetByType(widget)
         self:StyleStatusBarWidget(widget)
     elseif widget.Text and not widget.Bar and self.db.TextWidget.Enabled then
         self:StyleTextWidget(widget)
+    elseif widget.Spell and self.db.SkinIcons then
+        StyleSpellIcon(widget.Spell)
     end
 end
 

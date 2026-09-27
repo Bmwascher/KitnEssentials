@@ -2248,6 +2248,7 @@ local Defaults = {
             UIWidgets = {
                 Enabled = false,
                 FontOutline = "OUTLINE",
+                SkinIcons = true,     -- Crop and border spell display icons
                 -- Status bar widgets (M+ timer, power bars)
                 StatusBar = {
                     Enabled = true,
