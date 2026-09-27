@@ -353,6 +353,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
 
         yOffset = card4:GetNextOffset()
 
+        ----------------------------------------------------------------
+        -- Card 5: Widget Icons
+        ----------------------------------------------------------------
         local cardIcons = GUIFrame:CreateCard(scrollChild, "Widget Icons", yOffset)
         manager:Register(cardIcons, "all")
 
@@ -372,7 +375,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         yOffset = cardIcons:GetNextOffset()
 
         ----------------------------------------------------------------
-        -- Card 5: Top-Centre Widgets (container control)
+        -- Card 6: Top-Centre Widgets (container control)
         ----------------------------------------------------------------
         local tcDB = db.TopCenter
         manager:SetCondition("topcenter", function()
@@ -429,7 +432,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         yOffset = card5:GetNextOffset()
 
         ----------------------------------------------------------------
-        -- Card 6: Top-Centre Widget Position
+        -- Card 7: Top-Centre Widget Position
         ----------------------------------------------------------------
         -- db is the TopCenter sub-table, so the card's root keys
         -- (anchorFrameType/ParentFrame/Strata) land there and cannot touch
