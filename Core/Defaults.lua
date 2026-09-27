@@ -2265,6 +2265,7 @@ local Defaults = {
                     Enabled = true,
                     StyleText = true,
                     Size = 17,
+                    CenterText = true,    -- Centre the fixed-width text Blizzard left-aligns
                 },
                 -- Blizzard's top-centre widget container (M+ objective line,
                 -- delve and event bars). Off = Blizzard's own placement.
