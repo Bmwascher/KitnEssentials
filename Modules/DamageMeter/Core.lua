@@ -3363,8 +3363,13 @@ function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficu
     end
     local idKnown = not issecretvalue(instanceID) and type(instanceID) == "number"
     local matches = idKnown and scope ~= nil and pendingID ~= nil and instanceID == pendingID
+    -- An in-place change in the instance the last key already holds only
+    -- re-keys, even after a read at difficulty 0 there; a finished Delve is not
+    -- held, so a new one in that place still counts.
+    local keyedHere = matches and lastScope ~= "delveover" and type(lastKey) == "string"
+        and tonumber(lastKey:match("^(%d+):")) == instanceID
     local recordOnly
-    if key ~= nil and matches then
+    if key ~= nil and matches and not (inPlace and keyedHere) then
         recordOnly = freshLoad or pendingFresh
     else
         recordOnly = freshLoad or inPlace
