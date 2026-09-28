@@ -171,7 +171,6 @@ function KE.PromptQueueRemove(queue, accept)
     end
 end
 
--- One entry per owner: a re-raise replaces its entry, at the back.
 function KE.PromptQueueAdd(queue, entry, cap)
     KE.PromptQueueRemove(queue, entry.accept)
     if #queue >= cap then return false end
