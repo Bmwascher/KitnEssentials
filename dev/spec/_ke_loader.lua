@@ -620,6 +620,17 @@ function L.loadAuraGlowRules(overrides)
     return KE.AuraGlowRules, KE
 end
 
+-- Modules/Combat/PartyBuffsRules.lua. Pure decision logic that builds on
+-- KE.AuraRules, so Rules.lua loads first onto the same KE table. Returns
+-- KE.PartyBuffsRules, KE.
+function L.loadPartyBuffsRules(overrides)
+    installMock(overrides, {})
+    local KE = {}
+    helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua", KE)
+    helpers.loadModule("Modules/Combat/PartyBuffsRules.lua", KE)
+    return KE.PartyBuffsRules, KE
+end
+
 -- Modules/Combat/AuraEngine/Restriction.lua. The predicate is INJECTED
 -- (opts.isHidden), so the load needs only a KE table to hang
 -- KE.AuraRestriction on -- no C_Secrets/C_RestrictedActions stub. Returns
