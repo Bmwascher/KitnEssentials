@@ -26,7 +26,7 @@ The sections below mirror the settings panel, so anything listed here is where y
 | Home Page | Welcome page and the general settings below |
 | Profile Manager | Import, export, copy, and reset profiles, with per-character and global support |
 | Addon Theme | 8 WoW-themed color presets, class color mode, fully custom colors, and an optional tint for skinned Blizzard frames — opens as a popup from the title bar |
-| CVars | One-click console variable panel that reads its values live from your client, including separate scale sliders for the windowed and maximized world map, and a Dev tab of addon-restriction variables for testing |
+| CVars | One-click console variable panel that reads its values live from your client; a UI Scaling tab that scales Blizzard windows such as the character, professions and auction house panels, with an optional scale per category, and holds the windowed and maximized world map scale; and a Dev tab of addon-restriction variables for testing |
 | System Optimization | One-click performance pass covering frame rate, memory, latency, and related console variables |
 
 The home page also carries the general settings: minimap button, login message, Global Font, and Slug font rendering. Slug is Blizzard's GPU glyph renderer — it gives sharper text but is unavailable in some locales, so it can be turned off for everything at once.
