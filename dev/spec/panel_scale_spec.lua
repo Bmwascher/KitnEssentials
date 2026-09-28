@@ -4,10 +4,10 @@
 --
 -- The runtime cases drive a stateful fake of Blizzard frames and of the regen
 -- watcher. The rules under test are orderings across calls (a release lands
--- before re-adoption, the latest queued intent wins, one reposition per
--- transition, a deferral outlives the AceEvent teardown), which no single
--- pure predicate holds. Frame layout, the real fit seam, taint and real
--- secret values stay with the in-game probe and smoke.
+-- before re-adoption, only an adoption supersedes a queued release, one
+-- reposition per transition, a deferral outlives the AceEvent teardown),
+-- which no single pure predicate holds. Frame layout, the real fit seam,
+-- taint and real secret values stay with the in-game probe and smoke.
 --
 -- SECRET stands in for a secret value: arithmetic on it raises, as a real
 -- secret does, so a missing guard fails loudly.
@@ -361,6 +361,22 @@ describe("PanelScale ownership", function()
         local new = fakeFrame("CharacterFrame", 1)
         PS:ReconcileAll()
         assert.equals(1, old._scale)
+        assert.is_nil(PS.frameState[old])
+        assert.equals(0.8, new._scale)
+    end)
+
+    it("keeps a queued release when a fit reaches the frame before regen", function()
+        local PS, c = load({ Scale = 0.8 })
+        local old = fakeFrame("CharacterFrame", 0.9, { protected = true })
+        c.enable()
+        c.startCombat()
+        local new = fakeFrame("CharacterFrame", 1)
+        PS:ReconcileAll()
+        old._scale = 1
+        c.fit(old)
+        c.endCombat()
+        c.fireRegen()
+        assert.equals(0.9, old._scale)
         assert.is_nil(PS.frameState[old])
         assert.equals(0.8, new._scale)
     end)

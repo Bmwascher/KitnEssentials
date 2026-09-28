@@ -172,9 +172,13 @@ function PS:DesiredScale(frame)
 end
 
 -- The queue holds intent, never a scale: the drain re-derives every value
--- from the settings current when combat ends, and the latest intent wins.
+-- from the settings current when combat ends. A queued release yields only
+-- to an adoption, which clears the entry; a hook's reconcile must not hand a
+-- replaced or swapped-out frame the configured scale instead of its own.
 function PS:QueueFrame(frame, intent)
-    self.pendingFrames[frame] = intent or RECONCILE
+    intent = intent or RECONCILE
+    if intent == RECONCILE and self.pendingFrames[frame] == RELEASE then return end
+    self.pendingFrames[frame] = intent
     ArmRegen()
 end
 
