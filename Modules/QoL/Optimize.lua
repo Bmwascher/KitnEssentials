@@ -668,8 +668,7 @@ end
 -- Its own function, so ClosePromptIfOwner matches this prompt alone.
 local function ReloadNow() ReloadUI() end
 
--- Raised from the settings window's close; waits behind the reload prompt
--- that close may already have opened.
+-- Raised from the settings window's close.
 function OPT:PromptReload()
     KE:ClosePromptIfOwner(ReloadNow)
     KE:CreatePrompt("Reload Required",
