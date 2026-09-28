@@ -45,8 +45,7 @@ local type = type
 local unpack = unpack
 local table_remove = table.remove
 
--- Flip to true, /reload, repro, read the log. Each group build is timed, and
--- each visible frame logs the facts behind the own-frame decision.
+-- Times each group build and logs the facts behind each own-frame decision.
 local DEBUG_PB = false
 
 local MAX_SLOTS = 5
@@ -326,10 +325,8 @@ end
 
 -- The one place bindings are made: BindSlot and BuildSlot act only on a
 -- binding set here. While a roster change settles, a token can still name a
--- frame's previous occupant, so nothing binds or queues and every slot stays
--- dropped; the settle timer resolves when it ends. Otherwise a slot whose
--- container and tracked groups exist binds at once, and any other slot with a
--- teammate waits on the build queue.
+-- frame's previous occupant, so every slot stays dropped until the settle
+-- timer resolves.
 function PB:ResolveAll()
     if self._rosterTimer then
         for k = 1, MAX_SLOTS do
@@ -547,9 +544,8 @@ end
 -- Events
 ---------------------------------------------------------------------------------
 -- Frames re-sort after a roster change and a token can name someone else, so
--- every icon drops at once and the scan waits for the roster to settle.
--- Queued builds are for the old roster, so they are dropped too. Each update
--- restarts the full settle delay, and while it runs ResolveAll binds nothing.
+-- every icon and queued build drops at once and the scan waits for the roster
+-- to settle. Each update restarts the full delay.
 function PB:OnRoster()
     self:ClearQueue()
     for k = 1, MAX_SLOTS do
@@ -672,8 +668,7 @@ end
 
 -- Retained containers are brought up to the current settings on every apply,
 -- including a re-enable, which the profile manager does not follow with an
--- ApplySettings call. EvaluateGate re-resolves and re-anchors, and queues any
--- group a newly tracked category is missing.
+-- ApplySettings call.
 function PB:ApplySettings()
     if not self:IsEnabled() then return end
     self:UpdateDB()
