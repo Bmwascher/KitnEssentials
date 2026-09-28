@@ -273,7 +273,11 @@ local function ConstructCVarLine(parent)
     line:EnableMouse(true)
     line:SetScript("OnEnter", function(self)
         local OPT, entry = self._opt, self._entry
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        -- In the gap between the Recommended column and the buttons, so it
+        -- stays inside the window wherever the window sits.
+        GameTooltip:SetOwner(self, "ANCHOR_NONE")
+        GameTooltip:ClearAllPoints()
+        GameTooltip:SetPoint("LEFT", optimalLabel, "RIGHT", 10, 0)
         GameTooltip:SetText(entry.name, 1, 0.82, 0, 1)
         GameTooltip:AddLine(" ")
         local cur = OPT:GetCurrentValue(entry.cvar) or "?"
@@ -287,7 +291,7 @@ local function ConstructCVarLine(parent)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("CVar: " .. entry.cvar, 0.5, 0.5, 0.5)
         if entry.desc then
-            GameTooltip:AddLine(entry.desc, 0.5, 0.5, 0.5)
+            GameTooltip:AddLine(entry.desc, 0.5, 0.5, 0.5, true)
         end
         GameTooltip:Show()
     end)
