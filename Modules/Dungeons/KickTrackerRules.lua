@@ -62,7 +62,7 @@ end
 
 -- Fields 7-8 carry the player's talent-added kick (0 for none) and its
 -- remaining time after the reply flag, so older clients, which split a fixed
--- number of fields, never read them. noAnswer sets the flag to "1".
+-- number of fields, never read them.
 function KT.EncodeHello(id, cd, remaining, noAnswer, extra, now)
     local extraID, extraRemaining = 0, 0
     if extra then
@@ -253,10 +253,11 @@ function KT.KickFromMessage(verb, isKE, sid, cd, extra)
 end
 
 -- How to answer a KE HELLO, from its reply flag (field 6): "0" asks for an
--- answer, sent even inside the throttle; "1" is a reply and gets none. A
--- HELLO without the flag comes from an older client, which cannot mark its
--- own replies, so it is answered only under the throttle: answering it at once
--- would let two clients answer each other every throttle period.
+-- answer, sent even inside the throttle; "1" (a reply, or a change to the
+-- talent-added kick alone) gets none. A HELLO without the flag comes from an
+-- older client, which cannot mark its own replies, so it is answered only
+-- under the throttle: answering it at once would let two clients answer each
+-- other every throttle period.
 function KT.HelloReplyMode(replyFlag)
     if replyFlag == "0" then return "force" end
     if replyFlag == "1" then return nil end
