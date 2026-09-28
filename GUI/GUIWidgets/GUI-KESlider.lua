@@ -616,7 +616,12 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     -- A hide can swallow the mouse-up or cut a fade short, and a pooled slider
     -- is reused without repainting its thumb.
+    --
+    -- A step the throttle dropped is sent now, not later: a pooled card's
+    -- callback finds its settings through kit fields that the next page's
+    -- configure replaces, so a later send would write into that page.
     slider:SetScript("OnHide", function()
+        FlushDropped()
         curDrag = false
         hoverAnimGroup:Stop()
         local c = Theme.thumbRest
