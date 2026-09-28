@@ -1045,6 +1045,25 @@ describe("Automation fishing outfit cancel gate", function()
             assert.equals(c.refused, AU.FishingCancelRefused(c.combat, c.hidden, c.spell), c.name)
         end
     end)
+
+    it("the closure passes the broad answer: identities hidden with the spell readable cancels nothing", function()
+        local fx = installedFixture()
+        local applyTransforms = findUpvalue(fx.AU.ApplySettings, "ApplyHideTransforms")
+        local fishFrame = findUpvalue(applyTransforms, "transformFishFrame")
+        local before = #fx.timers
+        fishFrame:Fire("UNIT_SPELLCAST_CHANNEL_STOP", nil, nil, findUpvalue(applyTransforms, "FISHING_CHANNEL_ID"))
+        local closure
+        for i = before + 1, #fx.timers do
+            if fx.timers[i].delay == 0.3 then closure = fx.timers[i].fn end
+        end
+        assert.is_not_nil(closure)
+        local cancelled = false
+        _G.C_UnitAuras.CancelAuraByInstanceID = function() cancelled = true end
+        fx.KE.AreAuraIdentitiesHidden = function() return true end
+        fx.setSecrets({ ShouldSpellAuraBeSecret = function() return false end })
+        closure()
+        assert.is_false(cancelled)
+    end)
 end)
 
 ---------------------------------------------------------------------------------
