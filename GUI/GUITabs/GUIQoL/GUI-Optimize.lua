@@ -36,6 +36,9 @@ local function InstallCloseHook()
         local frame = GUIFrame.mainFrame
         if not frame then return end
         frame:HookScript("OnHide", function()
+            -- A combat close keeps the flag: the window reopens after the
+            -- fight, and its next ordinary close prompts.
+            if GUIFrame.reopenAfterCombat then return end
             if optimizeDirty then
                 optimizeDirty = false
                 local OPT = GetModule()
