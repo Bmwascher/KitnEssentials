@@ -73,6 +73,11 @@ local function ConstructButton(parent)
     local iconWidget = button:CreateTexture(nil, "ARTWORK")
     iconWidget:Hide()
     local textWidget = button:CreateFontString(nil, "OVERLAY")
+    -- Inside the border, under an image.
+    local selectedFill = button:CreateTexture(nil, "ARTWORK", nil, -1)
+    selectedFill:SetPoint("TOPLEFT", 1, -1)
+    selectedFill:SetPoint("BOTTOMRIGHT", -1, 1)
+    selectedFill:Hide()
 
     button:SetScript("OnEnter", function(self)
         AnimateBorderColor(true)
@@ -103,6 +108,10 @@ local function ConstructButton(parent)
         end
     end
 
+    function button:SetSelected(selected)
+        selectedFill:SetShown(selected)
+    end
+
     function button:SetEnabled(enabled)
         if enabled then
             button:Enable()
@@ -127,6 +136,7 @@ local function ConstructButton(parent)
         button:SetBackdropColor(TT.bgButton[1], TT.bgButton[2], TT.bgButton[3], TT.bgButton[4])
         button:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
         textWidget:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+        selectedFill:SetColorTexture(TT.selectedBg[1], TT.selectedBg[2], TT.selectedBg[3], TT.selectedBg[4])
     end
 
     button._iconWidget = iconWidget
@@ -181,6 +191,7 @@ local function ConfigureButton(button, labelText, config)
     end
 
     button:SetEnabled(true)
+    button:SetSelected(false)
     button:ApplyThemeColors()
 end
 
