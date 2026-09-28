@@ -40,7 +40,7 @@ local UnitNameFromGUID = UnitNameFromGUID
 local UnitClassFromGUID = UnitClassFromGUID
 local UnitTokenFromGUID = UnitTokenFromGUID
 local GetRaidTargetIndex = GetRaidTargetIndex
-local GetSpecializationInfoByID = GetSpecializationInfoByID
+local GetSpecializationInfoForSpecID = GetSpecializationInfoForSpecID
 local issecretvalue = issecretvalue
 local GetNormalizedRealmName = GetNormalizedRealmName
 local string_find = string.find
@@ -167,12 +167,21 @@ local function GetPlayerSpecID()
     return 0
 end
 
+local function SpecRole(specID)
+    if type(specID) ~= "number" or specID <= 0 or not GetSpecializationInfoForSpecID then return "DAMAGER" end
+    local _, _, _, _, role = GetSpecializationInfoForSpecID(specID)
+    return role or "DAMAGER"
+end
+
+local function KickRow(id, cd, specID, role)
+    return { id = id, cd = cd, role = role or SpecRole(specID) }
+end
+
 function KT:GetInterruptDataForSpec(specID)
     if not specID or specID == 0 then return nil end
     local kick = KE:GetTrackedKickForSpec(specID)
     if not kick then return nil end
-    local _, _, _, _, role = GetSpecializationInfoByID(specID)
-    return { id = kick.id, cd = kick.cd, role = role or "DAMAGER" }
+    return KickRow(kick.id, kick.cd, specID)
 end
 
 -- The spec's default kick, until a message has set or cleared the member's kick.
@@ -207,8 +216,7 @@ function KT:GetOwnInterruptData(specID, castKick)
     if not candidates or #candidates < 2 then return self:GetInterruptDataForSpec(specID) end
     local kick = KT.OwnKickFallback(KT.PickOwnKick(candidates, isOwnKickKnown), castKick)
     if not kick then return nil end
-    local _, _, _, _, role = GetSpecializationInfoByID(specID)
-    return { id = KE:GetCanonicalKickSpell(kick.id), cd = kick.cd, role = role or "DAMAGER" }
+    return KickRow(KE:GetCanonicalKickSpell(kick.id), kick.cd, specID)
 end
 
 -- The spec's talent-added kicks the player's talents make real.
@@ -921,12 +929,7 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
         -- spellbook check missed: the kick just cast is the kick, and a
         -- missing row appears. The KICK below announces it.
         if not data or data.id ~= kickID then
-            local role = data and data.role
-            if not role then
-                local _, _, _, _, specRole = GetSpecializationInfoByID(member.specID)
-                role = specRole or "DAMAGER"
-            end
-            data = { id = kickID, cd = kickCd, role = role }
+            data = KickRow(kickID, kickCd, member.specID, data and data.role)
             member.interruptData = data
             self:UpdateBars()
             self:LayoutBars()
