@@ -129,6 +129,13 @@ function GUIFrame:CreateColorPicker(parent, labelText, config)
         GameTooltip:Hide()
     end)
 
+    -- Pools reuse a hidden swatch without repainting it, so a hover fade
+    -- still in flight at hide time is dropped here.
+    swatch:SetScript("OnHide", function(self)
+        hoverAnimGroup:Stop()
+        self:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
+    end)
+
     ---------------------------------------------------------------------------------
     -- Color Logic
     ---------------------------------------------------------------------------------

@@ -157,6 +157,14 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
         GameTooltip:Hide()
     end)
 
+    -- Pools reuse a hidden box without repainting it, so a hover fade still
+    -- in flight at hide time is dropped here.
+    container:SetScript("OnHide", function()
+        editBoxAnimGroup:Stop()
+        container:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
+        editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
+    end)
+
     -- silent: suppress the OnTextChanged debounce + pool-bound _onTextChanged
     -- callback. EditBox:SetText fires OnTextChanged with userInput=false, but
     -- we already gate on userInput so silent only matters if a future change
