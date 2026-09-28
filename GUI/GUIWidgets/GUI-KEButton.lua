@@ -250,10 +250,11 @@ function GUIFrame:CreateButton(parent, labelText, config)
     -- tables. Hover animation handlers read live values so they self-recover.
     -- Pool consumers call this when KE._themeVersion has advanced.
     function button:ApplyThemeColors()
-        -- A repaint under the pointer (a click whose callback changes the
-        -- theme) keeps the hover look instead of dropping to rest.
+        -- A repaint while this button holds the pointer (a click whose
+        -- callback changes the theme) keeps the hover look. Motion focus, not
+        -- a rectangle test: a button rebuilt under the theme popup must rest.
         hoverAnimGroup:Stop()
-        if button:IsEnabled() and button:IsVisible() and button:IsMouseOver() then
+        if button:IsEnabled() and button:IsVisible() and button:IsMouseMotionFocus() then
             PaintHover()
         else
             PaintRest()
