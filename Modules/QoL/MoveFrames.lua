@@ -520,10 +520,10 @@ local function GetFrame(frameOrName)
 end
 
 -- Secure drag ------------------------------------------------------------------
--- Insecure SetMovable / EnableMouse / StartMoving / SetPoint on a protected
--- frame taint its tree; PVEFrame is protected once its result list is up,
--- and that list compares secret values. A protected frame is moved only by
--- a secure snippet, which taints nothing, and never in combat.
+-- Dragging a protected frame with insecure SetMovable / EnableMouse /
+-- StartMoving / SetPoint taints its tree; PVEFrame is protected once its
+-- result list is up, and that list compares secret values. A protected frame
+-- is dragged only by a secure snippet, which taints nothing, and never in combat.
 
 -- IsProtected can return a secret; a secret counts as protected.
 local function IsProtectedFrame(frame)
