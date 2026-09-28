@@ -202,6 +202,15 @@ local function CreateThemedButton(parent, Theme, labelText, isPrimary)
     return btn
 end
 
+-- Keyboard on, every key passing through to the game. EnableKeyboard is
+-- protected and SetPropagateKeyboardInput restricted in combat, so this does
+-- nothing in lockdown; the combat watcher runs it at both combat edges.
+local function ResetPromptKeyboard(dialog)
+    if not dialog or InCombatLockdown() then return end
+    dialog:EnableKeyboard(true)
+    dialog:SetPropagateKeyboardInput(true)
+end
+
 -- Closes the singleton prompt. Snapshots and NILS the callback fields
 -- before invoking — the immortal dialog would otherwise pin multi-KB
 -- export-string closures, and the close-then-invoke order lets a chained
@@ -260,6 +269,10 @@ local function EnsurePromptDialog()
         if key == "ESCAPE" then
             if not InCombatLockdown() then self:SetPropagateKeyboardInput(false) end
             ClosePrompt(self, not self._closeIsNeutral)
+            -- Left off, the next prompt raised in combat would swallow every
+            -- key. Restoring it inside this handler would pass this Escape on
+            -- to the game menu, so it waits a frame.
+            C_Timer.After(0, function() ResetPromptKeyboard(self) end)
         else
             if not InCombatLockdown() then self:SetPropagateKeyboardInput(true) end
         end
@@ -814,18 +827,10 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     if dialog.acceptBtn then dialog.acceptBtn:SetShown(showButtons and not isCopyPrompt) end
     if dialog.cancelBtn then dialog.cancelBtn:SetShown(showButtons and not acceptOnly) end
 
-    -- Reset the keyboard state on every show, out of combat only. The reset is
-    -- what matters: an ESCAPE close leaves propagation off, and the next prompt
-    -- would inherit that and swallow every key.
-    --
-    -- Nothing is touched in combat because nothing can be -- EnableKeyboard is
-    -- protected and SetPropagateKeyboardInput is restricted, so both throw in
-    -- lockdown. A prompt raised mid-fight keeps whatever it inherited until the
-    -- combat watcher below repairs it.
-    if not InCombatLockdown() then
-        dialog:EnableKeyboard(true)
-        dialog:SetPropagateKeyboardInput(true)
-    end
+    -- Every show resets the keyboard out of combat. A prompt raised mid-fight
+    -- keeps what it inherited: propagation on (an Escape close restores it the
+    -- next frame), or no keyboard at all when the dialog was built in combat.
+    ResetPromptKeyboard(dialog)
 
     dialog:Show()
     KE.activePrompt = dialog
@@ -856,23 +861,17 @@ function KE:SkinningReloadPrompt()
     return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect.")
 end
 
--- Repair, at the end of a fight, a prompt that spent it swallowing keys. Both
--- the builder and the show-time reset skip their keyboard setup in lockdown, so
--- a prompt raised there inherits whatever the last one left; PLAYER_REGEN_ENABLED
--- is the first legal moment to correct it. A prompt that waited through the
--- fight opens here, when no other prompt is open.
---
--- There is deliberately no combat-entry half: disarming would need
--- EnableKeyboard, which is protected and throws in combat.
+-- Both combat edges restore the dialog's keyboard, shown or hidden. Entry
+-- catches an Escape close in the frame a fight starts, when it still runs
+-- before lockdown; end arms a dialog built in combat and repairs the rest.
+-- Neither edge disarms: that needs EnableKeyboard(false), which is protected.
+-- A prompt that waited through the fight opens at the end.
 local promptCombatWatcher = CreateFrame("Frame")
+promptCombatWatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
 promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-promptCombatWatcher:SetScript("OnEvent", function()
-    local dialog = KE.activePrompt
-    if dialog and dialog.IsShown and dialog:IsShown() then
-        dialog:EnableKeyboard(true)
-        dialog:SetPropagateKeyboardInput(true)
-    end
-    OpenHeldPrompt()
+promptCombatWatcher:SetScript("OnEvent", function(_, event)
+    ResetPromptKeyboard(KE.promptDialog)
+    if event == "PLAYER_REGEN_ENABLED" then OpenHeldPrompt() end
 end)
 
 -- Skinning toggles FLAG instead of prompting, so ticking eight windows gives one
