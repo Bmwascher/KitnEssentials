@@ -156,7 +156,7 @@ describe("SpellHistoryClassify: which casts show", function()
 end)
 
 describe("SpellHistoryClassify: channels", function()
-    it("shows each of two channels once and skips their ticks, whichever event comes first, with or without channel GUIDs", function()
+    it("shows each of two channels once and skips their ticks, in either event order with channel GUIDs and in the live order without them", function()
         for _, row in ipairs({
             { first = CHANNEL_START, second = SUCCEEDED },
             { first = SUCCEEDED, second = CHANNEL_START },
