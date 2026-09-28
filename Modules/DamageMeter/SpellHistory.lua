@@ -131,8 +131,9 @@ local function Classify(event, unit, spellID, castGUID, state, api)
 
     if event == "UNIT_SPELLCAST_CHANNEL_START" then
         SetChannel(state, isPet, spellID, castGUID)
-        -- Its SUCCEEDED may have arrived first and already shown it.
-        if castGUID == last then return nil end
+        -- Its SUCCEEDED may have arrived first and already shown it. Channel
+        -- events can carry a nil castGUID, which must not match a nil last.
+        if castGUID ~= nil and castGUID == last then return nil end
         return ShowCast(isPet, spellID, castGUID, state, api)
     end
 

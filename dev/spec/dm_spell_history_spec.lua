@@ -156,39 +156,48 @@ describe("SpellHistoryClassify: which casts show", function()
 end)
 
 describe("SpellHistoryClassify: channels", function()
-    it("shows a channel once and skips its ticks, whichever event comes first, through a pet cast or the pet's stop", function()
+    it("shows each of two channels once and skips their ticks, whichever event comes first, with or without channel GUIDs", function()
         for _, row in ipairs({
             { first = CHANNEL_START, second = SUCCEEDED },
             { first = SUCCEEDED, second = CHANNEL_START },
             { first = SUCCEEDED, second = CHANNEL_START, petCast = true },
             { first = CHANNEL_START, second = SUCCEEDED, petStop = true },
+            -- The live shape: channel events carry no castGUID, SUCCEEDED does.
+            { first = CHANNEL_START, second = SUCCEEDED, noChannelGUID = true },
+            { first = CHANNEL_START, second = SUCCEEDED, noChannelGUID = true, clip = true },
         }) do
             local state, api = newState(), newApi()
             local shown = 0
             local function fire(event, guid)
+                if row.noChannelGUID and event ~= SUCCEEDED then guid = nil end
                 if classify(state, api, event, "player", 100, guid) then shown = shown + 1 end
             end
-            fire(row.first, "c1")
-            -- A pet cast shown between the channel's two opening events.
-            if row.petCast then classify(state, api, SUCCEEDED, "pet", 300, "p1") end
-            fire(row.second, "c1")
-            fire(SUCCEEDED, "tick1")
-            -- The pet's channel ending between the player's ticks.
-            if row.petStop then classify(state, api, CHANNEL_STOP, "pet", 300, "p1") end
-            fire(SUCCEEDED, "tick2")
-            assert.equals(1, shown)
+            for n = 1, 2 do
+                fire(row.first, "c" .. n)
+                -- A pet cast shown between the channel's two opening events.
+                if row.petCast then classify(state, api, SUCCEEDED, "pet", 300, "p" .. n) end
+                fire(row.second, "c" .. n)
+                fire(SUCCEEDED, "tick" .. n)
+                -- The pet's channel ending between the player's ticks.
+                if row.petStop then classify(state, api, CHANNEL_STOP, "pet", 300, "p1") end
+                -- A clipped channel is recast before its stop arrives.
+                if not row.clip then fire(CHANNEL_STOP, "c" .. n) end
+            end
+            assert.equals(2, shown)
         end
     end)
 
-    it("ends tick suppression at its channel's CHANNEL_STOP or a secret one, not an older channel's", function()
+    it("ends tick suppression at its channel's CHANNEL_STOP, a secret one or a GUID-less channel's, not an older channel's", function()
         for _, row in ipairs({
-            { spell = 100, guid = "c1", want = "tex100" },
-            { spell = SECRET, guid = SECRET, want = "tex100" },
+            { start = "c1", spell = 100, guid = "c1", want = "tex100" },
+            { start = "c1", spell = SECRET, guid = SECRET, want = "tex100" },
             -- Recast as a new channel before the old one's stop arrives.
-            { spell = 100, guid = "c1", recast = true },
+            { start = "c1", spell = 100, guid = "c1", recast = true },
+            -- The live shape: start and stop both carry no castGUID.
+            { spell = 100, want = "tex100" },
         }) do
             local state, api = newState(), newApi()
-            classify(state, api, CHANNEL_START, "player", 100, "c1")
+            classify(state, api, CHANNEL_START, "player", 100, row.start)
             if row.recast then classify(state, api, CHANNEL_START, "player", 100, "c2") end
             classify(state, api, CHANNEL_STOP, "player", row.spell, row.guid)
             local tex = classify(state, api, SUCCEEDED, "player", 100, "n1")
