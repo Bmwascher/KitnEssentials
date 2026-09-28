@@ -663,7 +663,7 @@ function OPT:HasAnySavedSettings()
 end
 
 ---------------------------------------------------------------------------------
--- Frame Creation
+-- Reload Prompt
 ---------------------------------------------------------------------------------
 -- Its own function, so ClosePromptIfOwner matches this prompt alone.
 local function ReloadNow() ReloadUI() end

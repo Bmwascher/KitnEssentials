@@ -44,7 +44,7 @@ function CL:OnInitialize()
 end
 
 ---------------------------------------------------------------------------------
--- Frame Creation
+-- Advanced Combat Logging Prompt
 ---------------------------------------------------------------------------------
 -- No reload. Blizzard's own control for this is a plain SetupCVarCheckbox
 -- (Blizzard_SettingsDefinitions_Shared/Network.lua) whose only commit flag is
