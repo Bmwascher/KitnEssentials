@@ -1200,7 +1200,7 @@ local Defaults = {
         },
 
         -- Blizzard panel scaling. The category keys matter only while Enabled
-        -- is on; each override stays off until its category is overridden.
+        -- is on.
         PanelScale = {
             Enabled = false,
             Scale = 1,
