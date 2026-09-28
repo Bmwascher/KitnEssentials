@@ -21,7 +21,7 @@ local function loadProfiler(options)
 
     local lifecycle = {}
     local eventFrames = {}
-    local popupShows = {}
+    local prompts = {}
     local scriptProfile = tostring(options.scriptProfile == nil and 1 or options.scriptProfile)
     local inCombat = options.inCombat == true
     local fps = options.fps
@@ -94,20 +94,6 @@ local function loadProfiler(options)
 
         eventFrames[#eventFrames + 1] = subject
         return subject
-    end
-
-    local popupDialogs
-    if options.popupAPIsAvailable ~= false then
-        popupDialogs = {}
-    end
-    _G.StaticPopupDialogs = popupDialogs
-    if popupDialogs then
-        _G.StaticPopup_Show = function(key)
-            popupShows[#popupShows + 1] = key
-            lifecycle[#lifecycle + 1] = "popup:" .. key
-        end
-    else
-        _G.StaticPopup_Show = nil
     end
 
     _G.GetTime = function()
@@ -197,6 +183,16 @@ local function loadProfiler(options)
         db = {
             global = {},
         },
+        -- SEVEN placeholders between text and onAccept, matching the real
+        -- signature (Core/Widgets.lua).
+        CreatePrompt = function(_, title, text, _, _, _, _, _, _, _,
+                                onAccept, onCancel, acceptText, cancelText, _, _, opts)
+            prompts[#prompts + 1] = {
+                title = title, text = text, onAccept = onAccept, onCancel = onCancel,
+                acceptText = acceptText, cancelText = cancelText, opts = opts,
+            }
+            lifecycle[#lifecycle + 1] = "prompt:" .. title
+        end,
     }
     helpers.loadModule("Modules/Diagnostics/Profiler.lua", KE)
 
@@ -206,7 +202,7 @@ local function loadProfiler(options)
         printed = printed,
         calls = calls,
         lifecycle = lifecycle,
-        popupShows = popupShows,
+        prompts = prompts,
         setNow = function(value)
             now = value
         end,
@@ -242,9 +238,6 @@ local function loadProfiler(options)
         end,
         setScriptProfile = function(value)
             scriptProfile = tostring(value)
-        end,
-        getPopup = function(key)
-            return popupDialogs and popupDialogs[key]
         end,
         clearLifecycle = function()
             for index = #lifecycle, 1, -1 do
@@ -1157,7 +1150,7 @@ describe("Profiler reload warning", function()
         state.fireEvent("PLAYER_LOGIN")
 
         assert.are.equal(0, #state.printed)
-        assert.are.equal(0, #state.popupShows)
+        assert.are.equal(0, #state.prompts)
         assert.is_false(state.isEventRegistered("PLAYER_LOGIN"))
     end)
 
@@ -1168,29 +1161,21 @@ describe("Profiler reload warning", function()
         state.fireEvent("PLAYER_LOGIN")
 
         assert.are.equal(1, countContaining(state.printed, "CPU profiling is enabled and reduces FPS."))
-        assert.same({ "KE_PROFILER_ENABLED" }, state.popupShows)
+        assert.are.equal(1, #state.prompts)
+        assert.are.equal("CPU Profiler", state.prompts[1].title)
         assert.is_false(state.isEventRegistered("PLAYER_LOGIN"))
-    end)
-
-    it("keeps the chat warning as the fallback when popup APIs are unavailable", function()
-        local state = loadProfiler({ scriptProfile = 1, popupAPIsAvailable = false })
-        state.clearLifecycle()
-        state.fireEvent("PLAYER_LOGIN")
-
-        assert.are.equal(1, countContaining(state.printed, "CPU profiling is enabled and reduces FPS."))
-        assert.are.equal(0, #state.popupShows)
     end)
 
     it("sets scriptProfile to zero before reloading from Disable and Reload", function()
         local state = loadProfiler({ scriptProfile = 1 })
         state.fireEvent("PLAYER_LOGIN")
-        local popup = state.getPopup("KE_PROFILER_ENABLED")
-        assert.is_table(popup)
-        assert.are.equal("Disable & Reload", popup.button1)
-        assert.are.equal("Keep Enabled", popup.button2)
+        local prompt = state.prompts[1]
+        assert.is_table(prompt)
+        assert.are.equal("Disable & Reload", prompt.acceptText)
+        assert.are.equal("Keep Enabled", prompt.cancelText)
 
         state.clearLifecycle()
-        popup.OnAccept()
+        prompt.onAccept()
 
         local cvarIndex = indexOf(state.lifecycle, "cvar:scriptProfile=0")
         local reloadIndex = indexOf(state.lifecycle, "reload")
@@ -1205,7 +1190,7 @@ describe("Profiler reload warning", function()
         state.fireEvent("PLAYER_LOGIN")
 
         assert.are.equal(1, countContaining(state.printed, "CPU profiling is enabled and reduces FPS."))
-        assert.are.equal(0, #state.popupShows)
+        assert.are.equal(0, #state.prompts)
         assert.is_true(state.isEventRegistered("PLAYER_REGEN_ENABLED"))
 
         state.setCombat(false)
@@ -1214,24 +1199,24 @@ describe("Profiler reload warning", function()
 
         local unregisterIndex = indexOf(state.lifecycle, "unregister:PLAYER_REGEN_ENABLED")
         local cvarReadIndex = indexOf(state.lifecycle, "cvar-read:scriptProfile")
-        local popupIndex = indexOf(state.lifecycle, "popup:KE_PROFILER_ENABLED")
+        local popupIndex = indexOf(state.lifecycle, "prompt:CPU Profiler")
         assert.is_number(unregisterIndex)
         assert.is_number(cvarReadIndex)
         assert.is_number(popupIndex)
         assert.is_true(unregisterIndex < cvarReadIndex)
         assert.is_true(cvarReadIndex < popupIndex)
         assert.is_false(state.isEventRegistered("PLAYER_REGEN_ENABLED"))
-        assert.are.equal(1, #state.popupShows)
+        assert.are.equal(1, #state.prompts)
         assert.are.equal(1, countContaining(state.printed, "CPU profiling is enabled and reduces FPS."))
 
         state.fireEvent("PLAYER_REGEN_ENABLED")
-        assert.are.equal(1, #state.popupShows)
+        assert.are.equal(1, #state.prompts)
 
         -- Raw delivery bypasses the unregister, so this is the only assertion
         -- that can fail when the handler forgets to clear its pending latch:
         -- a still-true latch re-enters the regen path and shows a second popup.
         state.fireEventRaw("PLAYER_REGEN_ENABLED")
-        assert.are.equal(1, #state.popupShows)
+        assert.are.equal(1, #state.prompts)
     end)
 
     it("tears down and suppresses a deferred popup when the CVar was turned off", function()
@@ -1246,9 +1231,9 @@ describe("Profiler reload warning", function()
         -- the CVar read, and nothing else may run on this path.
         assert.same({ "unregister:PLAYER_REGEN_ENABLED", "cvar-read:scriptProfile" }, state.lifecycle)
         assert.is_false(state.isEventRegistered("PLAYER_REGEN_ENABLED"))
-        assert.are.equal(0, #state.popupShows)
+        assert.are.equal(0, #state.prompts)
 
         state.fireEvent("PLAYER_REGEN_ENABLED")
-        assert.are.equal(0, #state.popupShows)
+        assert.are.equal(0, #state.prompts)
     end)
 end)

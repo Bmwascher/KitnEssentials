@@ -399,31 +399,22 @@ local function ToggleProfile(state)
     end
 end
 
-local PROFILER_POPUP_KEY = "KE_PROFILER_ENABLED"
 local PROFILER_WARNING_TEXT = "CPU profiling is enabled and reduces FPS. Disable it when testing is finished with /kes profiler off, then /reload."
 local profilerWarningFrame = CreateFrame("Frame")
 local profilerPopupPending = false
 
+local function DisableProfilingAndReload()
+    C_CVar_SetCVar("scriptProfile", "0")
+    ReloadUI()
+end
+
+-- A Blizzard popup shown from addon code taints the popup list that secure
+-- code walks at login, so this uses KE's own prompt.
 local function ShowProfilerWarningPopup()
-    if type(StaticPopupDialogs) ~= "table" or type(StaticPopup_Show) ~= "function" then
-        return
-    end
-    if not StaticPopupDialogs[PROFILER_POPUP_KEY] then
-        StaticPopupDialogs[PROFILER_POPUP_KEY] = {
-            text = "|cffFF008CKitn|r|cffffffffEssentials|r CPU profiling is enabled. It adds measurable overhead and should stay on only while testing. Disable it and reload now?",
-            button1 = "Disable & Reload",
-            button2 = "Keep Enabled",
-            OnAccept = function()
-                C_CVar_SetCVar("scriptProfile", "0")
-                ReloadUI()
-            end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = false,
-            preferredIndex = 3,
-        }
-    end
-    StaticPopup_Show(PROFILER_POPUP_KEY)
+    KE:CreatePrompt("CPU Profiler",
+        "|cffFF008CKitn|r|cffffffffEssentials|r CPU profiling is enabled. It adds measurable overhead and should stay on only while testing. Disable it and reload now?",
+        false, nil, false, nil, nil, nil, nil, DisableProfilingAndReload, nil,
+        "Disable & Reload", "Keep Enabled", nil, nil, { waitIfBusy = true })
 end
 
 local function HandleProfilerLogin()
