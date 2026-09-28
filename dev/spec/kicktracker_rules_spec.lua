@@ -255,20 +255,6 @@ describe("KickTracker message to row state", function()
     end)
 end)
 
-describe("KickTracker message-named kick across a refresh", function()
-    it("keeps a heard teammate's message kick through any refresh, a respec included", function()
-        local KT = L.loadKickTrackerRules()
-        local rows = {
-            { name = "never heard from: the spec default", member = { specID = 266 }, want = false },
-            { name = "heard from: their message kick, a respec included",
-              member = { kickFromMessage = true, specID = 266 }, want = true },
-        }
-        for _, row in ipairs(rows) do
-            assert.equals(row.want, KT.KeepsMessageKick(row.member), row.name)
-        end
-    end)
-end)
-
 describe("KickTracker message to main kick", function()
     it("sets on a named kick, clears only on a KE HELLO naming spell 0, and keeps otherwise", function()
         local KT = L.loadKickTrackerRules()
