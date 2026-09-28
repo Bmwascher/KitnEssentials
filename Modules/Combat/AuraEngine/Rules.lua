@@ -55,10 +55,11 @@ local math_ceil = math.ceil
 local math_floor = math.floor
 
 -- Applied unconditionally to every group, regardless of the user's own
--- blocklist. These are never-secret nuisance auras. The container matches
--- spell IDs only for helpful auras on assistable units and harmful auras on
--- non-assistable units, so this list cannot be opened up to boss debuffs on
--- the player.
+-- blocklist. The container matches spell IDs only for helpful auras on
+-- assistable units and harmful auras on non-assistable units, except for
+-- never-secret spells, which match anywhere. Every entry here is a
+-- never-secret nuisance aura, so it matches on friendly units; a boss debuff
+-- on the player would not, which is why the list cannot be opened up to them.
 Rules.HARDCODED_BLOCKLIST = {
     57723,   -- Exhaustion
     390435,  -- Exhaustion

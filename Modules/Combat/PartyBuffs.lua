@@ -267,7 +267,7 @@ local function ContainersAvailable()
 end
 
 local function RowWidth(db)
-    local count = db.MaxPerMember
+    local count = KE.PartyBuffsRules.IconCount(db)
     return count * db.IconSize + (count - 1) * db.IconSpacing
 end
 
@@ -406,13 +406,22 @@ function PB:AddGroup(k, slot, d)
             if not pcall(KE.AuraStyle.InitializeButton, button, nil, d, PB.styleSettings) then
                 Debug("slot %d group %s: button dressing failed", k, d.key)
             end
-            pcall(button.SetMouseClickEnabled, button, false)
+            if not pcall(button.SetMouseClickEnabled, button, false) then
+                Debug("slot %d group %s: click-through failed", k, d.key)
+            end
         end,
         layout           = self:GroupLayout(index),
     })
     if started then
         Debug("slot %d group %s %.2f ms t=%.3f%s", k, d.key, debugprofilestop() - started, GetTime(),
             ok and "" or " FAILED")
+    end
+    -- The group is registered, with its settings, before the call's last
+    -- steps, so a late failure leaves it in place and adding it again would
+    -- assert.
+    if not ok then
+        local okHas, has = pcall(container.HasAuraGroup, container, d.key)
+        ok = okHas and has == true
     end
     if ok then slot.groups[d.key] = true else self.buildPending = true end
 end
@@ -469,12 +478,14 @@ function PB:BuildSlot(k)
             self.buildPending = true
             return
         end
-        -- Pinned before any group exists, the one point where a pin is
-        -- certainly allowed.
-        pcall(container.SetPoint, container, corner, slot.holder, corner, 0, 0)
+        -- Pinned before any group exists, when a pin is expected to be
+        -- allowed. A refused pin records no corner, so the layout pass below
+        -- pins it again.
+        local pinned = pcall(container.SetPoint, container, corner, slot.holder, corner, 0, 0)
         pcall(container.EnableMouse, container, false)
         pcall(container.SetEnabled, container, false)
-        slot.container, slot.corner = container, corner
+        slot.container = container
+        slot.corner = pinned and corner or nil
     end
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
@@ -516,12 +527,15 @@ function PB:PlaceHolder(holder, frame)
     return strata, level
 end
 
+-- Every refused call leaves buildPending set for the drain. Without its unit,
+-- anchor or enable the slot is dropped until then.
 function PB:BindSlot(k, binding)
     local slot = self.slots[k]
     local container = slot.container
     if slot.unit ~= binding.token then
         if not pcall(container.SetUnit, container, binding.token) then
             Debug("slot %d: SetUnit %s refused", k, binding.token)
+            self.buildPending = true
             return self:DropSlot(k)
         end
         slot.unit = binding.token
@@ -529,14 +543,23 @@ function PB:BindSlot(k, binding)
     local strata, level = self:PlaceHolder(slot.holder, binding.frame)
     if not strata then
         Debug("slot %d: anchor refused", k)
+        self.buildPending = true
         return self:DropSlot(k)
     end
-    pcall(container.SetFrameStrata, container, strata)
-    if level then pcall(container.SetFrameLevel, container, level + 1) end
+    local clean = pcall(container.SetFrameStrata, container, strata)
+    if level then clean = pcall(container.SetFrameLevel, container, level + 1) and clean end
     self:WatchCell(binding.frame)
-    pcall(container.SetEnabled, container, true)
+    if not pcall(container.SetEnabled, container, true) then
+        Debug("slot %d: enable refused", k)
+        self.buildPending = true
+        return self:DropSlot(k)
+    end
     slot.holder:Show()
-    pcall(container.UpdateAllAuras, container)
+    clean = pcall(container.UpdateAllAuras, container) and clean
+    if not clean then
+        Debug("slot %d: strata, level or refresh refused", k)
+        self.buildPending = true
+    end
     Debug("slot %d -> %s (%s)", k, binding.token, binding.family)
 end
 
@@ -580,7 +603,6 @@ end
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
--- Built in place, because every group's initializeFrame reads it live.
 function PB:BuildStyleSettings()
     local db = self.db
     local settings = self.styleSettings or {}
@@ -737,11 +759,11 @@ function PB:DrawPreviewRow(k, frame)
     end
     local side = SIDES[db.Side] or SIDES.LEFT
     local step = (db.IconSize + db.IconSpacing) * (side.left and -1 or 1)
-    local now, shown = GetTime(), 0
+    local now, shown, limit = GetTime(), 0, KE.PartyBuffsRules.IconCount(db)
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
         local icon = row.icons[i]
-        if db[d.category.trackKey] == true and shown < db.MaxPerMember then
+        if db[d.category.trackKey] == true and shown < limit then
             if icon then
                 KE.AuraStyle.StyleAuraFrame(icon, settings, d.capabilities)
             else

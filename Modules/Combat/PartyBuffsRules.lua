@@ -8,6 +8,7 @@
 local KE = select(2, ...)
 
 local ipairs = ipairs
+local math_floor = math.floor
 local pairs = pairs
 local type = type
 
@@ -70,6 +71,14 @@ local function CopySet(source)
     return copy
 end
 
+-- The container rejects a fractional frame count, and a value typed into the
+-- slider may reach the profile unrounded.
+function Rules.IconCount(db)
+    local count = type(db) == "table" and db.MaxPerMember
+    if type(count) ~= "number" then return 0 end
+    return math_floor(count + 0.5)
+end
+
 -- The only producer of a group's container settings, for creation and for
 -- every reconfiguration. While Externals are tracked, a spell that is both
 -- tagged and listed shows once, under External.
@@ -92,7 +101,7 @@ function Rules.BuildGroupConfig(category, db)
         candidates.excludeSpellIDs = exclude
     end
     local maxFrames = 0
-    if db[category.trackKey] == true then maxFrames = db.MaxPerMember or 0 end
+    if db[category.trackKey] == true then maxFrames = Rules.IconCount(db) end
     return category.filter, candidates, maxFrames, category.index
 end
 

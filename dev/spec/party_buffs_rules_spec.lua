@@ -132,13 +132,16 @@ describe("PartyBuffsRules.BuildGroupConfig", function()
         assert.is_nil(KE.AuraRules.HARDCODED_BLOCKLIST_SET[33206])
     end)
 
-    it("caps each group at MaxPerMember while tracked and at 0 while not", function()
+    it("caps each group at MaxPerMember, rounded, while tracked and at 0 while not", function()
         local R = L.loadPartyBuffsRules()
+        local caps = { { set = 6, want = 6 }, { set = 4.4, want = 4 }, { set = 4.6, want = 5 } }
         for _, category in ipairs(R.CATEGORIES) do
-            local tracked = select(3, R.BuildGroupConfig(category, makeDb({ MaxPerMember = 6 })))
+            for _, cap in ipairs(caps) do
+                local tracked = select(3, R.BuildGroupConfig(category, makeDb({ MaxPerMember = cap.set })))
+                assert.are.equal(cap.want, tracked, category.key .. " " .. cap.set)
+            end
             local untracked = select(3, R.BuildGroupConfig(category,
                 makeDb({ MaxPerMember = 6, [category.trackKey] = false })))
-            assert.are.equal(6, tracked, category.key)
             assert.are.equal(0, untracked, category.key)
         end
     end)
