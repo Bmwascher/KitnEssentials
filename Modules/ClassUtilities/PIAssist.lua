@@ -203,9 +203,11 @@ function PA:ResolveTarget()
 end
 
 -- Reached on every change to the name the glow follows, this module active
--- or not. Only the PI Assist and PI Macro Builder pages show that name, both
--- under Class Tools' Priest tab, and a profile refresh rebuilds the shown page
--- itself once it has run.
+-- or not. The PI Assist page shows state derived from that name and is
+-- rebuilt. The PI Macro page shows only the name, in its PI Target box, which
+-- is re-seeded in place: a rebuild would tear down a control the player just
+-- clicked before its delayed callback lands. A profile refresh rebuilds the
+-- shown page itself once it has run.
 function PA:OnTargetChanged()
     if self.active then self:ResolveTarget() end
     local gui = KE.GUIFrame
@@ -213,9 +215,18 @@ function PA:OnTargetChanged()
     local pm = KE.ProfileManager
     if pm and pm:IsRefreshingModules() then return end
     local state = gui.tabbedPageState
-    if gui.selectedSidebarItem == "ClassTools" and state and state.ClassTools == "ClassToolsPriest"
-        and gui.RefreshContent then
-        gui:RefreshContent()
+    if not (gui.selectedSidebarItem == "ClassTools" and state and state.ClassTools == "ClassToolsPriest") then
+        return
+    end
+    if state.ClassToolsPriest == "PIAssist" then
+        if gui.RefreshContent then gui:RefreshContent() end
+        return
+    end
+    local box = gui.piMacroTargetBox
+    local macroDb = KE.db and KE.db.profile and KE.db.profile.PIMacroBuilder
+    if box and box.SetValue and macroDb then
+        local stored = macroDb.Target
+        box:SetValue(type(stored) == "string" and stored or "", true)
     end
 end
 
