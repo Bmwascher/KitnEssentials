@@ -1199,6 +1199,25 @@ local Defaults = {
             MaximizedScale = 1,
         },
 
+        -- Blizzard panel scaling. The category keys matter only while Enabled
+        -- is on; each override stays off until its category is overridden.
+        PanelScale = {
+            Enabled = false,
+            Scale = 1,
+            CoreEnabled = true,
+            CoreOverride = false,
+            CoreScale = 1,
+            ServicesEnabled = true,
+            ServicesOverride = false,
+            ServicesScale = 1,
+            HousingEnabled = true,
+            HousingOverride = false,
+            HousingScale = 1,
+            LegacyEnabled = true,
+            LegacyOverride = false,
+            LegacyScale = 1,
+        },
+
         SpellAlerts = {
             Enabled = false,
             EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per spec index)
