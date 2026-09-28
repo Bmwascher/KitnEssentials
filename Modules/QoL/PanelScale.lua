@@ -43,6 +43,7 @@ local DEBUG_PS = false
 -- GetScale reads back the client's single-precision value, not the number
 -- written, so an exact compare would rewrite every root on every pass.
 local SCALE_EPSILON = 0.001
+local SCALE_MIN, SCALE_MAX = 0.5, 2.0
 local RELEASE, RECONCILE = "RELEASE", "RECONCILE"
 local WEAK_KEYS = { __mode = "k" }
 
@@ -68,13 +69,22 @@ function PS:IsCategoryActive(category)
     return db.Enabled == true and db[keys.enabled] ~= false
 end
 
+-- An imported or hand-edited profile can hold what no slider writes, and a bad
+-- value would raise in the middle of a batch.
+local function SliderRange(value)
+    if type(value) ~= "number" or value ~= value then return 1 end
+    if value < SCALE_MIN then return SCALE_MIN end
+    if value > SCALE_MAX then return SCALE_MAX end
+    return value
+end
+
 function PS:GetCategoryScale(category)
     local keys, db = KEYS[category], self.db
     if not db then return 1 end
     if keys and db[keys.override] == true then
-        return db[keys.scale] or 1
+        return SliderRange(db[keys.scale])
     end
-    return db.Scale or 1
+    return SliderRange(db.Scale)
 end
 
 -- The combat refusal rule, stated once: a write in combat waits only when

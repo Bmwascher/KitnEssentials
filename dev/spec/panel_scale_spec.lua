@@ -139,6 +139,17 @@ describe("PanelScale policy", function()
         end
     end)
 
+    it("clamps a stored scale the sliders cannot produce", function()
+        for _, case in ipairs({
+            { scale = 0, want = 0.5 },
+            { scale = 5, want = 2 },
+            { scale = "0.8", want = 1 },
+        }) do
+            local PS = load({ Scale = case.scale })
+            assert.equals(case.want, PS:GetCategoryScale("Core"))
+        end
+    end)
+
     it("treats a category as active only with the master and the category both on", function()
         for _, case in ipairs({
             { master = false, category = true, want = false },
