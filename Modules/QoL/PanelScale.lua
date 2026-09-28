@@ -371,7 +371,8 @@ end
 function PS:HandleRegisteredPanel(frame)
     if not self:IsEnabled() or type(frame) ~= "table" or type(frame.GetName) ~= "function" then return end
     local name = frame:GetName()
-    local entry = type(name) == "string" and self.registry.byName[name]
+    if issecretvalue(name) or type(name) ~= "string" then return end
+    local entry = self.registry.byName[name]
     if entry then self:ResolveEntry(entry) end
 end
 
