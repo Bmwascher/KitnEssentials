@@ -150,10 +150,12 @@ function KE.PromptTypedGateOpen(typed, required)
     return type(required) == "string" and typed == required
 end
 
--- An unsolicited prompt (opts.waitIfBusy) never replaces an open one: it waits
--- and opens once that prompt closes.
-function KE.PromptWaits(waitIfBusy, promptShowing)
-    return waitIfBusy == true and promptShowing == true
+-- An unsolicited prompt (opts.waitIfBusy) never replaces an open one, and never
+-- opens in combat: the keyboard reset cannot run there, and a prompt left with
+-- propagation off by an earlier Escape would eat every key. It waits and opens
+-- once that prompt closes or the fight ends.
+function KE.PromptWaits(waitIfBusy, promptShowing, inCombat)
+    return waitIfBusy == true and (promptShowing == true or inCombat == true)
 end
 
 -- The one waiting prompt: its CreatePrompt arguments packed with their count.
@@ -319,8 +321,8 @@ end
 -- onAccept with no arguments. Single edit box with an onAccept only.
 -- onSecondTextChanged(text, dialog) runs on every text change in the second
 -- box of a two-field prompt, for that call only. waitIfBusy is for a prompt
--- nobody asked for: with another prompt open it waits instead of replacing it,
--- and opens the frame after that prompt closes. It then returns nil.
+-- nobody asked for: with another prompt open, or in combat, it waits and opens
+-- the frame after that prompt closes or the fight ends. It then returns nil.
 -- acceptOnly (confirm mode only) shows the accept button alone, centred.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
@@ -328,7 +330,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     local Theme = KE.Theme
     if type(opts) ~= "table" then opts = nil end
 
-    if KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil) then
+    if KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil, InCombatLockdown()) then
         heldPrompt = {
             title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
             textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
