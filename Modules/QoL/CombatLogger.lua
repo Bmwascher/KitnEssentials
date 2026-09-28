@@ -52,19 +52,10 @@ end
 -- log that is already running, because whether it is an advanced log was
 -- decided when it opened; cycling it costs one file boundary, which every log
 -- watcher already handles from an ordinary /combatlog toggle.
-StaticPopupDialogs["KE_COMBATLOGGER_ACL_PROMPT"] = {
-    text = "|cffFF008CKitnEssentials|r\n\nAdvanced Combat Logging is disabled. This is required for detailed log analysis on Warcraft Logs.\n\nEnable it now?",
-    button1 = _G.ENABLE or "Enable",
-    button2 = _G.CANCEL or "Cancel",
-    OnAccept = function()
-        local mod = KitnEssentials:GetModule("CombatLogger", true)
-        if mod then mod:EnableAdvanced() end
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+local function AcceptAdvanced()
+    local mod = KitnEssentials:GetModule("CombatLogger", true)
+    if mod then mod:EnableAdvanced() end
+end
 
 ---------------------------------------------------------------------------------
 -- Core Logic
@@ -104,7 +95,12 @@ end
 function CL:CheckACL()
     if self:IsAdvanced() then return true end
     if self:_ShouldPromptAdvanced() then
-        StaticPopup_Show("KE_COMBATLOGGER_ACL_PROMPT")
+        -- Login and instance entry can both ask; one copy at a time.
+        KE:ClosePromptIfOwner(AcceptAdvanced)
+        KE:CreatePrompt("Combat Logger",
+            "|cffFF008CKitnEssentials|r\n\nAdvanced Combat Logging is disabled. This is required for detailed log analysis on Warcraft Logs.\n\nEnable it now?",
+            false, nil, false, nil, nil, nil, nil, AcceptAdvanced, nil,
+            _G.ENABLE or "Enable", _G.CANCEL or "Cancel", nil, nil, { waitIfBusy = true })
     end
     return true
 end

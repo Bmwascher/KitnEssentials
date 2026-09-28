@@ -2594,7 +2594,8 @@ end
 -- holds IsArenaSkirmish and IsWargame as upvalues, so reassigning them on _G
 -- after the load would not reach it; routing every predicate through one table
 -- lets a single load serve every branch. C_PvP deliberately carries only the
--- members the module is supposed to use.
+-- members the module is supposed to use. rec.prompts records every
+-- KE:CreatePrompt call.
 -- Returns CL, rec.
 function L.loadCombatLogger(overrides)
     overrides = overrides or {}
@@ -2604,7 +2605,7 @@ function L.loadCombatLogger(overrides)
     local rec = {
         logging = false,
         prints = {},
-        popups = {},
+        prompts = {},
         pvp = {
             ratedArena = false,
             skirmish = false,
@@ -2614,8 +2615,6 @@ function L.loadCombatLogger(overrides)
         },
     }
 
-    _G.StaticPopupDialogs = {}
-    _G.StaticPopup_Show = function(which) rec.popups[#rec.popups + 1] = which end
     _G.ReloadUI = function() end
     _G.GetInstanceInfo = overrides.GetInstanceInfo
         or function() return "Test", "none", 0, "", 0 end
@@ -2635,7 +2634,19 @@ function L.loadCombatLogger(overrides)
         IsRatedBattleground = function() return rec.pvp.ratedBG end,
     }
 
-    local KE = { Print = function(_, msg) rec.prints[#rec.prints + 1] = msg end }
+    local KE = {
+        Print = function(_, msg) rec.prints[#rec.prints + 1] = msg end,
+        ClosePromptIfOwner = function() end,
+        -- SEVEN placeholders between text and onAccept, matching the real
+        -- signature (Core/Widgets.lua).
+        CreatePrompt = function(_, title, text, _, _, _, _, _, _, _,
+                                onAccept, onCancel, acceptText, cancelText, _, _, opts)
+            rec.prompts[#rec.prompts + 1] = {
+                title = title, text = text, onAccept = onAccept, onCancel = onCancel,
+                acceptText = acceptText, cancelText = cancelText, opts = opts,
+            }
+        end,
+    }
     helpers.loadModule("Modules/QoL/CombatLogger.lua", KE)
 
     local CL = modules["CombatLogger"]
