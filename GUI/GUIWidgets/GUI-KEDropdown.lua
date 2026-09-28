@@ -88,32 +88,31 @@ local function AcquireItemButton(parent)
     if btn then
         btn:SetParent(parent)
         btn:Show()
-        return btn
+    else
+        btn = CreateFrame("Button", nil, parent)
+        btn:SetHeight(ITEM_HEIGHT)
+
+        local hoverBg = btn:CreateTexture(nil, "BACKGROUND")
+        hoverBg:SetAllPoints()
+        hoverBg:Hide()
+        btn._hoverBg = hoverBg
+
+        local btnText = btn:CreateFontString(nil, "OVERLAY")
+        btnText:SetPoint("LEFT", btn, "LEFT", 8, 0)
+        btnText:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
+        btnText:SetJustifyH("LEFT")
+        btn._text = btnText
     end
 
-    -- Create new button with hover texture
-    btn = CreateFrame("Button", nil, parent)
-    btn:SetHeight(ITEM_HEIGHT)
-
-    -- Hover background texture
-    local hoverBg = btn:CreateTexture(nil, "BACKGROUND")
-    hoverBg:SetAllPoints()
-    hoverBg:SetColorTexture(
+    -- Every dropdown shares these buttons, and the theme can change while one
+    -- waits in the pool.
+    btn._hoverBg:SetColorTexture(
         Theme.accentHover[1],
         Theme.accentHover[2],
         Theme.accentHover[3],
         Theme.accentHover[4] or 0.25
     )
-    hoverBg:Hide()
-    btn._hoverBg = hoverBg
-
-    -- Text
-    local btnText = btn:CreateFontString(nil, "OVERLAY")
-    btnText:SetPoint("LEFT", btn, "LEFT", 8, 0)
-    btnText:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
-    btnText:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(btnText, "normal")
-    btn._text = btnText
+    KE:ApplyThemeFont(btn._text, "normal")
 
     return btn
 end
