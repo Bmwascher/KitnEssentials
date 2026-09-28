@@ -766,7 +766,9 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
             end
         end
         if verb ~= "KICK" and verb ~= "HELLO" and verb ~= "R" then return end
-        if verb ~= "HELLO" and (not cd or cd <= 0) then return end
+        local valid
+        valid, sid, cd = KT.CleanWireKick(verb, sid, cd)
+        if not valid then return end
         -- Wire cd is untrusted external input: cap it at the kick's table cd
         -- so a bad client can't wedge a bar for hours.
         local kickID = (sid and sid > 0) and KE:GetCanonicalKickSpell(sid) or nil

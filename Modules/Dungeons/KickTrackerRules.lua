@@ -349,6 +349,17 @@ function KT.WireCooldownCap(cd, tableCap)
     return cd
 end
 
+-- Wire numbers are untrusted. A spell ID must be a whole number (x % 1 is NaN
+-- for NaN and infinity) and a cooldown above zero, or the field reads as
+-- absent. A KICK or R needs both or is dropped; a HELLO is kept, since spell 0
+-- is its "no kick" and a bad cooldown falls back to the row's own.
+function KT.CleanWireKick(verb, sid, cd)
+    if sid and sid % 1 ~= 0 then sid = nil end
+    if cd and (cd ~= cd or cd <= 0) then cd = nil end
+    if verb ~= "HELLO" and not (sid and sid > 0 and cd) then return false end
+    return true, sid, cd
+end
+
 ---------------------------------------------------------------------------------
 -- Own-kick success
 ---------------------------------------------------------------------------------

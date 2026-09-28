@@ -472,3 +472,33 @@ describe("KickTracker own-kick token", function()
         end
     end)
 end)
+
+describe("KickTracker wire kick numbers", function()
+    it("drops a KICK or R without a real spell and cooldown, and blanks bad HELLO fields", function()
+        local KT = L.loadKickTrackerRules()
+        local nan = 0 / 0
+        local rows = {
+            { name = "a real KICK passes", verb = "KICK", sid = 1766, cd = 15,
+              valid = true, wantSid = 1766, wantCd = 15 },
+            { name = "a KICK naming spell 0 is dropped", verb = "KICK", sid = 0, cd = 15, valid = false },
+            { name = "a KICK with no spell is dropped", verb = "KICK", sid = nil, cd = 15, valid = false },
+            { name = "a KICK with an infinite spell is dropped", verb = "KICK", sid = math.huge, cd = 15, valid = false },
+            { name = "a KICK with a NaN cooldown is dropped", verb = "KICK", sid = 1766, cd = nan, valid = false },
+            { name = "an R with a zero cooldown is dropped", verb = "R", sid = 47528, cd = 0, valid = false },
+            { name = "a HELLO naming spell 0 passes with no cooldown", verb = "HELLO", sid = 0, cd = 0,
+              valid = true, wantSid = 0, wantCd = nil },
+            { name = "a HELLO with a zero cooldown passes without it", verb = "HELLO", sid = 1766, cd = 0,
+              valid = true, wantSid = 1766, wantCd = nil },
+            { name = "a HELLO with a NaN spell passes without it", verb = "HELLO", sid = nan, cd = 15,
+              valid = true, wantSid = nil, wantCd = 15 },
+        }
+        for _, row in ipairs(rows) do
+            local valid, sid, cd = KT.CleanWireKick(row.verb, row.sid, row.cd)
+            assert.equals(row.valid, valid, row.name)
+            if row.valid then
+                assert.equals(row.wantSid, sid, row.name)
+                assert.equals(row.wantCd, cd, row.name)
+            end
+        end
+    end)
+end)
