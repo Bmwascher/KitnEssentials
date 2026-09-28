@@ -150,25 +150,51 @@ function KE.PromptTypedGateOpen(typed, required)
     return type(required) == "string" and typed == required
 end
 
--- An unsolicited prompt (opts.waitIfBusy) never replaces an open one, and never
--- opens in combat: the keyboard reset cannot run there, and a prompt left with
--- propagation off by an earlier Escape would eat every key. It waits and opens
--- once that prompt closes or the fight ends.
-function KE.PromptWaits(waitIfBusy, promptShowing, inCombat)
-    return waitIfBusy == true and (promptShowing == true or inCombat == true)
+-- An unsolicited prompt (opts.waitIfBusy) never replaces an open one, never
+-- opens in combat, where its keyboard reset cannot run, and never jumps ahead
+-- of prompts already waiting. It waits and opens in its turn.
+function KE.PromptWaits(waitIfBusy, promptShowing, inCombat, queued)
+    return waitIfBusy == true and (promptShowing == true or inCombat == true or queued == true)
 end
 
--- The one waiting prompt: its CreatePrompt arguments packed with their count.
--- The latest to wait replaces an earlier one.
-local heldPrompt
+-- Waiting prompts, oldest first: each its CreatePrompt arguments packed with
+-- their count, plus its accept as the owner. At the cap a new owner is
+-- refused, so a later prompt never drops an earlier one.
+local PROMPT_QUEUE_CAP = 8
+local promptQueue = {}
 
--- Runs the frame after a close, and at combat end. A prompt the closing
--- prompt's own callback opened keeps the held one waiting for that prompt in
--- turn, and a held prompt also waits out combat.
-local function OpenHeldPrompt()
-    if not heldPrompt or KE.activePrompt or InCombatLockdown() then return end
-    local args = heldPrompt
-    heldPrompt = nil
+-- A nil accept owns nothing: two ownerless prompts are two entries.
+function KE.PromptQueueRemove(queue, accept)
+    if accept == nil then return end
+    for i = #queue, 1, -1 do
+        if queue[i].accept == accept then table.remove(queue, i) end
+    end
+end
+
+-- One entry per owner: a re-raise replaces its entry, at the back.
+function KE.PromptQueueAdd(queue, entry, cap)
+    KE.PromptQueueRemove(queue, entry.accept)
+    if #queue >= cap then return false end
+    queue[#queue + 1] = entry
+    return true
+end
+
+function KE.PromptQueueTake(queue)
+    return table.remove(queue, 1)
+end
+
+-- Set by the drain for the one prompt it opens. KE:CreatePrompt reads and
+-- clears it first thing; without it the taken prompt would see the entries
+-- still waiting, rejoin the back, and schedule another drain every frame.
+local openingQueued = false
+
+-- Runs the frame after a close, after a raise that waited only for the queue,
+-- and at combat end. Opens one prompt; a prompt the closing prompt's own
+-- callback opened keeps the queue waiting for that one in turn.
+local function OpenQueuedPrompt()
+    if #promptQueue == 0 or KE.activePrompt or InCombatLockdown() then return end
+    local args = KE.PromptQueueTake(promptQueue)
+    openingQueued = true
     KE:CreatePrompt(unpack(args, 1, args.n))
 end
 
@@ -223,7 +249,7 @@ local function ClosePrompt(dialog, runCancel)
     dialog._onCancel = nil
     dialog:Hide()
     KE.activePrompt = nil
-    if heldPrompt then C_Timer.After(0, OpenHeldPrompt) end
+    if #promptQueue > 0 then C_Timer.After(0, OpenQueuedPrompt) end
     if runCancel and onCancel then onCancel() end
     return onAccept
 end
@@ -234,7 +260,7 @@ end
 function KE:ClosePromptIfOwner(accept)
     -- A copy prompt carries no accept; nil must not match it.
     if not accept then return end
-    if heldPrompt and heldPrompt.accept == accept then heldPrompt = nil end
+    KE.PromptQueueRemove(promptQueue, accept)
     local dialog = KE.activePrompt
     if dialog and dialog._onAccept == accept then
         ClosePrompt(dialog, false)
@@ -334,22 +360,29 @@ end
 -- onAccept with no arguments. Single edit box with an onAccept only.
 -- onSecondTextChanged(text, dialog) runs on every text change in the second
 -- box of a two-field prompt, for that call only. waitIfBusy is for a prompt
--- nobody asked for: with another prompt open, or in combat, it waits and opens
--- the frame after that prompt closes or the fight ends. It then returns nil.
+-- nobody asked for: with another prompt open, in combat, or others waiting, it
+-- joins the queue and opens in its turn. It then returns nil.
 -- acceptOnly (confirm mode only) shows the accept button alone, centred.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts)
+    -- First, so no raise below can leave the flag set.
+    local fromQueue = openingQueued
+    openingQueued = false
     local Theme = KE.Theme
     if type(opts) ~= "table" then opts = nil end
 
-    if KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil, InCombatLockdown()) then
-        heldPrompt = {
+    if KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil, InCombatLockdown(),
+        #promptQueue > 0 and not fromQueue) then
+        KE.PromptQueueAdd(promptQueue, {
             title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
             textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
             showSecondEditBox, secondEditBoxLabel, opts,
             n = 16, accept = onAccept,
-        }
+        }, PROMPT_QUEUE_CAP)
+        -- Waiting only behind the queue: no close or combat end is coming to
+        -- drain it.
+        if not KE.activePrompt and not InCombatLockdown() then C_Timer.After(0, OpenQueuedPrompt) end
         return nil
     end
 
@@ -871,7 +904,7 @@ promptCombatWatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
 promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
 promptCombatWatcher:SetScript("OnEvent", function(_, event)
     ResetPromptKeyboard(KE.promptDialog)
-    if event == "PLAYER_REGEN_ENABLED" then OpenHeldPrompt() end
+    if event == "PLAYER_REGEN_ENABLED" then OpenQueuedPrompt() end
 end)
 
 -- Skinning toggles FLAG instead of prompting, so ticking eight windows gives one
