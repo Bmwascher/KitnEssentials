@@ -22,6 +22,8 @@
 -- ║  gains it with its result list), so the drag handlers    ║
 -- ║  re-check it per drag. The three InCombatLockdown        ║
 -- ║  guards are load-bearing, never remove one.              ║
+-- ║  One exception: the talent window's open-time move       ║
+-- ║  reset runs insecurely, out of combat only.              ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -613,6 +615,12 @@ local function DragPath(button, modifierHeld, protected, inCombat, isDisabled)
     return "native"
 end
 
+-- Out of combat the talent-window move reset reaches the protected talent
+-- window too: resetting the hero picker alone breaks the picker's anchors.
+local function MoveResetAllowed(initialized, inCombat, protected)
+    return initialized == true and not (inCombat and protected)
+end
+
 -- Remembered positions ---------------------------------------------------------
 -- One saved point per window, put back from the window's OnShow and again
 -- whenever Blizzard re-points it: the panel manager writes the default spot
@@ -812,7 +820,7 @@ function MF:HandleAddon(_, addon)
             end)
         elseif addon == "Blizzard_PlayerSpells" and _G.HeroTalentsSelectionDialog and _G.PlayerSpellsFrame then
             local function startStopMoving(frame)
-                if not MF.initialized or IsProtectedFrame(frame) then
+                if not MoveResetAllowed(MF.initialized, InCombatLockdown(), IsProtectedFrame(frame)) then
                     return
                 end
                 local backup = frame:IsMovable()

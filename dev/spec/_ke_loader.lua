@@ -1907,7 +1907,8 @@ end
 -- delimiter-first) rather than adding a second local of the same name.
 -- Returns MF, KE, seams (seams.getFrame, seams.blizzardFrames,
 -- seams.blizzardFramesOnDemand, seams.disabled, seams.modifierHeld,
--- seams.dragPath, seams.secureDrag, seams.canRemember, seams.framePaths).
+-- seams.dragPath, seams.secureDrag, seams.canRemember, seams.framePaths,
+-- seams.moveResetAllowed).
 function L.loadMoveFrames(overrides)
     overrides = overrides or {}
     local modules = helpers.installAddonShim()
@@ -1936,6 +1937,7 @@ function L.loadMoveFrames(overrides)
         dragPath = findUpvalue(MF.Frame_StartMoving, "DragPath"),
         secureDrag = findUpvalue(MF.SetMovable, "secureDrag"),
         canRemember = findUpvalue(MF.Remember, "CanRemember"),
+        moveResetAllowed = findUpvalue(MF.HandleAddon, "MoveResetAllowed"),
     }
     seams.framePaths = findUpvalue(seams.canRemember, "framePaths")
     return MF, KE, seams
