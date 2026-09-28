@@ -968,7 +968,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- state for this spell so toggles return to curated default values.
     -- Uses GUIFrame:CreateButton (KE button factory) so hover styling
     -- matches the rest of the addon (Reset All Triggers and friends).
-    -- Red text + StaticPopup confirmation signal destructive intent.
+    -- Red text + a confirmation prompt signal destructive intent.
     --
     -- Anchored TOP-down (under the time-offset caption) instead of
     -- bottom-up. The rightCol's min height is sized for the tallest tab
