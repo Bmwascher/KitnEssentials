@@ -130,7 +130,7 @@ OPT.Categories = {
     },
     {
         id = "cvar",
-        name = "CVars",
+        name = "Gameplay & Interface",
         cvars = {
             { cvar = "AutoPushSpellToActionBar", optimal = "0", name = "Auto Push Spells to Action Bar", desc = "Disabled" },
             { cvar = "cameraFov", optimal = "90", name = "Camera FOV", desc = "90 degrees" },
