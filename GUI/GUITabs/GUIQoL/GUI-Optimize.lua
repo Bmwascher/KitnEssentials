@@ -38,7 +38,8 @@ local function InstallCloseHook()
         frame:HookScript("OnHide", function()
             if optimizeDirty then
                 optimizeDirty = false
-                StaticPopup_Show("KE_OPTIMIZE_RELOAD")
+                local OPT = GetModule()
+                if OPT then OPT:PromptReload() end
             end
         end)
         hookInstalled = true

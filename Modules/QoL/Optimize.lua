@@ -665,13 +665,15 @@ end
 ---------------------------------------------------------------------------------
 -- Frame Creation
 ---------------------------------------------------------------------------------
-StaticPopupDialogs["KE_OPTIMIZE_RELOAD"] = {
-    text = "Settings applied. Some changes require a reload to take effect.\n\nReload now?",
-    button1 = "Reload",
-    button2 = "Later",
-    OnAccept = function() ReloadUI() end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+-- Its own function, so ClosePromptIfOwner matches this prompt alone.
+local function ReloadNow() ReloadUI() end
+
+-- Raised from the settings window's close; waits behind the reload prompt
+-- that close may already have opened.
+function OPT:PromptReload()
+    KE:ClosePromptIfOwner(ReloadNow)
+    KE:CreatePrompt("Reload Required",
+        "Settings applied. Some changes require a reload to take effect.\n\nReload now?",
+        false, nil, false, nil, nil, nil, nil, ReloadNow, nil,
+        "Reload", "Later", nil, nil, { waitIfBusy = true })
+end

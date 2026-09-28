@@ -653,37 +653,24 @@ end
 -- timers fire wrong or not at all, so scan the tanks and tell the player to
 -- turn it off at the NPC. Detection needs readable auras
 -- (C_Secrets.ShouldAurasBeSecret() == false). Warn once per detection; the
--- aura clearing re-arms the warning. Warns via StaticPopup, with a chat print
--- as the no-popup-API fallback.
+-- aura clearing re-arms the warning.
 
 local GUIDANCE_AURA_ID = 1295927
 local GUIDANCE_CHECK_DELAY = 5   -- world-enter settle
 local GUIDANCE_ROSTER_DELAY = 1  -- roster/role churn coalesce
-local GUIDANCE_POPUP_KEY = "KE_DTRASH_LINDORMI_GUIDANCE"
 local GUIDANCE_WARNING_TEXT = "Dungeon Trash Tracker: a tank in your group has"
     .. " Lindormi's Guidance active - it breaks the trash cast timers."
     .. " Have them disable it at the keystone NPC."
 
--- Warning popup: StaticPopup first, chat print as the fallback. Registered
--- lazily, and as a FIELD write only --
--- never reassign the StaticPopupDialogs global itself (that taints the _G
--- slot; see TargetedSpells' CVar prompt).
+-- The prompt's accept. It does nothing; it gives the warning an owner, so a
+-- re-detection closes the copy on screen instead of queueing a second.
+local function acknowledgeGuidance() end
+
 local function showGuidanceWarning()
-    if type(StaticPopupDialogs) == "table" and type(StaticPopup_Show) == "function" then
-        if not StaticPopupDialogs[GUIDANCE_POPUP_KEY] then
-            StaticPopupDialogs[GUIDANCE_POPUP_KEY] = {
-                text = GUIDANCE_WARNING_TEXT,
-                button1 = "Okay",
-                timeout = 0,
-                whileDead = true,
-                hideOnEscape = false,
-                preferredIndex = 3,
-            }
-        end
-        StaticPopup_Show(GUIDANCE_POPUP_KEY)
-        return
-    end
-    KE:Print("|cffff3333" .. GUIDANCE_WARNING_TEXT .. "|r")
+    KE:ClosePromptIfOwner(acknowledgeGuidance)
+    KE:CreatePrompt("Dungeon Trash Tracker", GUIDANCE_WARNING_TEXT,
+        false, nil, false, nil, nil, nil, nil, acknowledgeGuidance, nil,
+        "Okay", nil, nil, nil, { acceptOnly = true, waitIfBusy = true })
 end
 
 -- Existence-probed + pcall'd aura presence, read by spellID. The player unit
@@ -726,12 +713,7 @@ function DTrash:CheckGuidanceWarning()
     end
     if self._guidanceWarned then return end
     self._guidanceWarned = true
-    -- Don't re-show over an already-visible copy. StaticPopup_FindVisible is
-    -- the allowlisted way to ask.
-    if type(StaticPopup_FindVisible) ~= "function"
-        or not StaticPopup_FindVisible(GUIDANCE_POPUP_KEY) then
-        showGuidanceWarning()
-    end
+    showGuidanceWarning()
 end
 
 -- Token-guarded deferred check: every schedule

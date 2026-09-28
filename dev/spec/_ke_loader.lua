@@ -334,7 +334,6 @@ function L.loadTargetedSpells(overrides)
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
-    _G.StaticPopupDialogs = {}  -- in-game Blizzard defines it; module must never assign the global
     local KE = { Print = function() end, curves = {} }
     helpers.loadModule("Modules/Dungeons/TargetedSpells.lua", KE)
     return modules["TargetedSpells"], KE
@@ -2180,7 +2179,6 @@ function L.loadOptimize(overrides)
     }
     _G.Enum.NamePlateStackType = { None = 0, Enemy = 1, Friendly = 2 }
     _G.GetInstanceInfo = function() return "Mock", "party", rec.difficultyID end
-    _G.StaticPopupDialogs = {}
     _G.ReloadUI = function() end
     -- Wiped per load: this is the module's own SavedVariables and busted
     -- insulates _G per FILE, not per test.
