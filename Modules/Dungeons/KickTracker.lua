@@ -832,14 +832,14 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
             return
         end
 
-        local remaining = KT.ParseHelloRemaining(remField, member.interruptData.cd)
+        local duration, remaining = KT.MessageBarTimes(remField, cd, member.interruptData.cd)
         -- Only an R that moved the row stamps it; a malformed R changes nothing.
         local action, stamp = KT.CooldownFromMessage(verb, remaining, member.reducedAt, now, KICK_PAIR_WINDOW)
         if stamp then member.reducedAt = now end
         if action == "start" then
             self:ConfirmKick(guid, cd)
         elseif action == "set" then
-            self:ConfirmKick(guid, cd or member.interruptData.cd, remaining)
+            self:ConfirmKick(guid, duration, remaining)
         elseif action == "ready" then
             self:ClearKick(guid)
         end

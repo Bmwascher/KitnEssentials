@@ -216,6 +216,23 @@ describe("KickTracker remaining-time field", function()
     end)
 end)
 
+describe("KickTracker message bar times", function()
+    it("caps the remaining time at the cooldown the bar is sized by", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "a message cooldown below the row's caps at the message's",
+              field = "15", cd = 10, rowCd = 15, duration = 10, remaining = 10 },
+            { name = "no message cooldown sizes and caps at the row's",
+              field = "20", cd = nil, rowCd = 15, duration = 15, remaining = 15 },
+        }
+        for _, row in ipairs(rows) do
+            local duration, remaining = KT.MessageBarTimes(row.field, row.cd, row.rowCd)
+            assert.equals(row.duration, duration, row.name)
+            assert.equals(row.remaining, remaining, row.name)
+        end
+    end)
+end)
+
 describe("KickTracker message to row state", function()
     it("starts, sets, readies or keeps a teammate's row, and stamps only a valid R", function()
         local KT = L.loadKickTrackerRules()
