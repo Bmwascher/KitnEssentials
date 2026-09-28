@@ -487,7 +487,7 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     local ok, token = pcall(UnitTokenFromGUID, interruptedBy)
     if DEBUG_KT then
         KE:Print(string_format("[KT] nameplate interrupt unit=%s tokenOk=%s token=%s guidSecret=%s",
-            tostring(unit), tostring(ok), tostring(token),
+            tostring(unit), tostring(ok), issecretvalue(token) and "secret" or tostring(token),
             tostring(not KE:IsSafeValue(interruptedBy))))
     end
     if ok and KE:IsSafeValue(token) and KT.IsOwnKickToken(token) then
