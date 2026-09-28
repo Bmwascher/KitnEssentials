@@ -604,3 +604,23 @@ describe("KickTracker own-kick announce", function()
         end
     end)
 end)
+
+describe("KickTracker own-kick duplicate", function()
+    it("skips only the same kick inside the window", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "the same kick at the same moment (one press, two events)",
+              lastID = 19647, lastAt = 10, kickID = 19647, now = 10, want = true },
+            { name = "the same kick after the window (a recast)",
+              lastID = 19647, lastAt = 10, kickID = 19647, now = 34, want = false },
+            { name = "a different kick inside the window",
+              lastID = 89766, lastAt = 10, kickID = 19647, now = 10.2, want = false },
+            { name = "no memory: the first event sends",
+              lastID = nil, lastAt = nil, kickID = 19647, now = 10, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.DuplicateOwnKick(row.lastID, row.lastAt, row.kickID, row.now, 0.5), row.name)
+        end
+    end)
+end)
+

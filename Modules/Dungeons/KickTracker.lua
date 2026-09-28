@@ -925,7 +925,13 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
         return
     end
     local kickID = KE:GetCanonicalKickSpell(spellID)
-    self._ownKickAt, self._ownKickSpell = GetTime(), kickID
+    local now = GetTime()
+    -- Command Demon fires for both the player and the pet: one press, one kick.
+    if KT.DuplicateOwnKick(self._lastOwnKickID, self._lastOwnKickAt, kickID, now, OWN_KICK_MATCH_WINDOW) then
+        return
+    end
+    self._lastOwnKickID, self._lastOwnKickAt = kickID, now
+    self._ownKickAt, self._ownKickSpell = now, kickID
     local member = self.partyMembers[guid]
     local data = member and member.interruptData
     local kickCd = member and KE:GetKickCooldownForSpec(member.specID, kickID)

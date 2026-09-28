@@ -423,6 +423,12 @@ function KT.OwnKickMatched(kickAt, landedAt, window)
     return gap <= window
 end
 
+-- Every kick cooldown is far longer than the window, so the same kick again
+-- inside it is one press reported twice, not a recast.
+function KT.DuplicateOwnKick(lastID, lastAt, kickID, now, window)
+    return lastID == kickID and lastAt ~= nil and now - lastAt <= window
+end
+
 -- The own row's remaining time after a success reduction; nil when the row
 -- is not cooling.
 function KT.ReducedRemaining(kickStart, kickDuration, now, seconds)
