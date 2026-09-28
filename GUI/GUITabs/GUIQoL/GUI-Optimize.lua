@@ -96,7 +96,6 @@ local function ConstructHeaderLine(parent)
 
     local headers = { settingHeader, currentHeader, recHeader }
     function container:Configure()
-        self:SetAllPoints()
         KE:ApplyThemeFont(spacer, "normal")
         local c = Theme.textSecondary
         for _, header in ipairs(headers) do
@@ -235,10 +234,8 @@ local function ConstructCVarLine(parent)
             end
         end
 
-        -- Revert now depends on the backup alone. It used to be hidden
-        -- outright on an optimal row with no backup, but "optimal" is a
-        -- per-preset answer since this change, so that rule would flick the
-        -- button in and out of existence as the user compares presets.
+        -- Revert shows whenever a backup exists, so it does not flicker as
+        -- presets are compared.
         revertBtnSmall:Show()
         if OPT:HasBackup(entry.cvar) then
             revertBtnSmall:SetAlpha(1)
@@ -249,25 +246,27 @@ local function ConstructCVarLine(parent)
         end
     end
 
-    -- A line released and reused before the timer fires skips the refresh.
-    local function RefreshSoon()
-        local gen = line._keGen
+    -- gen is read before the cvar write: a line released and reused since
+    -- then skips the refresh.
+    local function RefreshSoon(gen)
         C_Timer.After(0.1, function()
             if line._keGen == gen then line:Refresh() end
         end)
     end
 
     applyBtn:SetScript("OnClick", function()
-        local rec = PreviewValue(line._opt, line._entry)
+        local OPT, entry, gen = line._opt, line._entry, line._keGen
+        local rec = PreviewValue(OPT, entry)
         if rec == nil then return end
-        line._opt:ApplyCVar(line._entry.cvar, rec)
-        RefreshSoon()
+        OPT:ApplyCVar(entry.cvar, rec)
+        RefreshSoon(gen)
         MarkDirty()
     end)
 
     revertBtnSmall:SetScript("OnClick", function()
-        line._opt:RevertCVar(line._entry.cvar)
-        RefreshSoon()
+        local OPT, entry, gen = line._opt, line._entry, line._keGen
+        OPT:RevertCVar(entry.cvar)
+        RefreshSoon(gen)
         MarkDirty()
     end)
 
@@ -297,7 +296,6 @@ local function ConstructCVarLine(parent)
     function line:Configure(OPT, entry)
         self._opt = OPT
         self._entry = entry
-        self:SetAllPoints()
         local TT = Theme
         KE:ApplyThemeFont(nameLabel, "normal")
         KE:ApplyThemeFont(currentLabel, "normal")
@@ -323,11 +321,11 @@ local cvarLinePool = GUIFrame:NewWidgetPool("optimize:cvar", ConstructCVarLine, 
     if GameTooltip:IsOwned(line) then GameTooltip:Hide() end
 end)
 
-local function AcquireLine(pool, construct, row)
+local function AcquireLine(pool, row)
     if GUIFrame:IsPoolParent(row) then
         return pool:Acquire(row)
     end
-    return construct(row)
+    return pool.construct(row)
 end
 
 GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
@@ -454,7 +452,7 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
 
     local function AddColumnHeaders(card)
         local row = GUIFrame:CreateRow(card.content, 20)
-        local header = AcquireLine(headerPool, ConstructHeaderLine, row)
+        local header = AcquireLine(headerPool, row)
         header:Configure()
         row:AddWidget(header, 1)
         card:AddRow(row, 20)
@@ -462,7 +460,7 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
 
     local function AddCVarRow(card, entry)
         local row = GUIFrame:CreateRow(card.content, 32)
-        local line = AcquireLine(cvarLinePool, ConstructCVarLine, row)
+        local line = AcquireLine(cvarLinePool, row)
         line:Configure(OPT, entry)
         row:AddWidget(line, 1)
         card:AddRow(row, 32)
