@@ -144,6 +144,7 @@ KT._coolingList = {}      -- reusable temp table for LayoutBars
 KT._readyList = {}        -- reusable temp table for LayoutBars
 
 KT.isActive = false
+KT.activationID = 0       -- bumped on each activation; deferred callbacks check it
 KT.combatEventsRegistered = false
 KT.commState = {}  -- commBlocked: a lockdown refusal since the last successful send
 KT.kickPairing = { claims = {}, paired = {} }  -- keyed guid..":"..kickID; see KT.PairComm
@@ -848,7 +849,9 @@ function KT:ScheduleHelloReply(force)
     if force then self._helloReplyForce = true end
     if self._helloReplyPending then return end
     self._helloReplyPending = true
+    local activation = self.activationID
     C_Timer.After(math_random() * HELLO_REPLY_JITTER, function()
+        if self.activationID ~= activation then return end
         local forceReply = self._helloReplyForce
         self._helloReplyPending, self._helloReplyForce = false, false
         if self.isActive then self:BroadcastHello(forceReply, true) end
@@ -1003,6 +1006,10 @@ function KT:CheckActivation()
 
     if shouldBeActive and not self.isActive then
         self.isActive = true
+        -- A callback scheduled before a disable must not act in this activation.
+        self.activationID = self.activationID + 1
+        self._helloReplyPending, self._helloReplyForce = false, false
+        self._modeCheckPending, self._ownKickCheckPending = false, false
         self:RegisterCombatEvents()
         if self.containerFrame then
             self:ApplyContainerPosition()
@@ -1068,7 +1075,9 @@ end
 function KT:OnRestrictionChanged()
     if self._modeCheckPending then return end
     self._modeCheckPending = true
+    local activation = self.activationID
     C_Timer.After(0, function()
+        if self.activationID ~= activation then return end
         self._modeCheckPending = false
         if self.isActive then self:UpdateCommMode() end
     end)
@@ -1096,7 +1105,9 @@ end
 function KT:OnOwnKicksChanged()
     if self._ownKickCheckPending then return end
     self._ownKickCheckPending = true
+    local activation = self.activationID
     C_Timer.After(0, function()
+        if self.activationID ~= activation then return end
         self._ownKickCheckPending = false
         if self.isActive then self:RefreshOwnKicks() end
     end)

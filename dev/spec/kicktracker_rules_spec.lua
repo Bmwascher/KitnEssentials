@@ -264,6 +264,8 @@ describe("KickTracker message to main kick", function()
               extra = true, want = nil },
             { name = "a malformed KE HELLO (no readable spell) keeps", verb = "HELLO", isKE = true,
               sid = nil, cd = nil, want = nil },
+            { name = "an R naming a kick keeps (it moves only the timer)", verb = "R", isKE = true,
+              sid = 47528, cd = 15, want = nil },
         }
         for _, row in ipairs(rows) do
             assert.equals(row.want, KT.KickFromMessage(row.verb, row.isKE, row.sid, row.cd, row.extra), row.name)
@@ -335,7 +337,7 @@ describe("KickTracker own kick from the demon", function()
 end)
 
 describe("KickTracker extra kick entries", function()
-    it("creates an extra entry once and then updates it in place", function()
+    it("creates an extra entry once, updates it in place, and a different kick replaces it", function()
         local KT = L.loadKickTrackerRules()
         local member = {}
         local first = KT.ExtraKick(member, 384110, 45)
@@ -343,6 +345,10 @@ describe("KickTracker extra kick entries", function()
         assert.equals(first, second)
         assert.equals(1, #member.extraKicks)
         assert.equals(40, second.cd)
+        local swapped = KT.ExtraKick(member, 64382, 180)
+        assert.equals(1, #member.extraKicks)
+        assert.equals(swapped, member.extraKicks[1])
+        assert.equals(64382, swapped.id)
     end)
 
     it("keeps a known kick's timer, drops an unknown one, and adds a new one ready", function()

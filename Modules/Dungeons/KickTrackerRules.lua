@@ -211,9 +211,10 @@ end
 -- What a message does to the sender's main kick: "set" when it names one (a
 -- positive spell and cooldown that is not a talent-added kick), "clear" for a
 -- KE HELLO naming spell 0 (the sender has no kick now), nil to keep it. A
--- BliZzi HELLO or a KICK carrying 0 never clears.
+-- BliZzi HELLO or a KICK carrying 0 never clears. An R only moves the timer of
+-- the kick the row has; the KICK before it named that kick.
 function KT.KickFromMessage(verb, isKE, sid, cd, extra)
-    if extra then return nil end
+    if extra or verb == "R" then return nil end
     if sid and sid > 0 and cd and cd > 0 then return "set" end
     if verb == "HELLO" and isKE and sid == 0 then return "clear" end
     return nil
@@ -261,21 +262,17 @@ end
 -- Two-kick rows
 ---------------------------------------------------------------------------------
 -- The main kick is member.interruptData with member.kickStart/kickDuration;
--- a talent-added kick is an entry in member.extraKicks.
+-- a talent-added kick is an entry in member.extraKicks. A teammate has at most
+-- one: no spec has two talent-added kicks at once (the warrior throws are an
+-- exclusive choice), so a different kick replaces the entry.
 function KT.ExtraKick(member, kickID, cd)
     local list = member.extraKicks
-    if not list then
-        list = {}
-        member.extraKicks = list
-    end
-    for i = 1, #list do
-        if list[i].id == kickID then
-            list[i].cd = cd
-            return list[i]
-        end
+    if list and list[1] and list[1].id == kickID then
+        list[1].cd = cd
+        return list[1]
     end
     local entry = { id = kickID, cd = cd }
-    list[#list + 1] = entry
+    member.extraKicks = { entry }
     return entry
 end
 
