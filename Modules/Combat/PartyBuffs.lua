@@ -722,7 +722,7 @@ end
 function PB:PreviewIcon(d)
     local listKey = d.category.listKey
     if not listKey then return BIG_PREVIEW_ICON end
-    local spellID = KE.AuraRules.BuildSoundSpellIDs(self.db[listKey])[1]
+    local spellID = KE.AuraRules.FirstIncludeSpellID(self.db[listKey])
     return spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON
 end
 

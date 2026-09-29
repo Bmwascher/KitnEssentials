@@ -216,6 +216,21 @@ function Rules.BuildSoundSpellIDs(saved)
     return ids
 end
 
+-- BuildSoundSpellIDs(saved)[1] without building either table: a preview reads
+-- one icon per list on every settings change.
+function Rules.FirstIncludeSpellID(saved)
+    local first
+    if saved then
+        for spellID, record in pairs(saved) do
+            if IsPositiveInteger(spellID) and type(record) == "table" and record.enabled ~= false
+                and (first == nil or spellID < first) then
+                first = spellID
+            end
+        end
+    end
+    return first
+end
+
 -- maxFrameCount is per group and unused capacity cannot cross a group
 -- boundary, so the limit is divided rather than shared. The remainder goes to
 -- externals: they are the reason the module exists, and a single slot showing
