@@ -210,6 +210,33 @@ end
 DM.SpellHistoryFitsOutside = FitsOutside
 DM.SpellHistoryAttachPoints = AttachPoints
 
+-- The end the newest icon sits at, and the end older icons step towards.
+local GROW_START = { LEFT = "RIGHT", RIGHT = "LEFT", UP = "BOTTOM", DOWN = "TOP" }
+local GROW_FAR = { LEFT = "LEFT", RIGHT = "RIGHT", UP = "TOP", DOWN = "BOTTOM" }
+
+-- How far to move a free strip's saved offset when its length changes, so the
+-- growth-start end stays put. The anchor's place along the growth axis is read
+-- from its name; one naming neither end sits on the centre line.
+local function GrowthShift(anchorFrom, grow, oldLength, newLength)
+    if not GROW_START[grow] then grow = "LEFT" end
+    anchorFrom = anchorFrom or "CENTER"
+    local d = newLength - oldLength
+    local shift
+    if anchorFrom:find(GROW_START[grow], 1, true) then
+        shift = 0
+    elseif anchorFrom:find(GROW_FAR[grow], 1, true) then
+        shift = d
+    else
+        shift = d / 2
+    end
+    if grow == "LEFT" then return -shift, 0 end
+    if grow == "RIGHT" then return shift, 0 end
+    if grow == "UP" then return 0, shift end
+    return 0, -shift
+end
+
+DM.SpellHistoryGrowthShift = GrowthShift
+
 ---------------------------------------------------------------------------------
 -- Game lookups
 --
@@ -559,15 +586,24 @@ local function RegisterEvents(frame, pets, sh)
     end
 end
 
-local function Layout(sh)
-    local frame = strip
-    if not frame then return end
+-- The strip's length along its growth axis, with the clamped count, icon size
+-- and step it comes from.
+local function StripLength(sh)
     local count = floor(tonumber(sh.Count) or 5)
     if count < 1 then
         count = 1
     elseif count > MAX_ICONS then
         count = MAX_ICONS
     end
+    local size = KE:PixelSnap(tonumber(sh.IconSize) or 32)
+    local step = size + KE:PixelSnap(tonumber(sh.Spacing) or 2)
+    return count * step - (step - size), count, size, step
+end
+
+local function Layout(sh)
+    local frame = strip
+    if not frame then return end
+    local length, count, size, step = StripLength(sh)
     if count ~= ringSize then
         -- The slot arithmetic is per ring size, so a new size starts empty.
         ClearRing()
@@ -575,12 +611,9 @@ local function Layout(sh)
     end
 
     local grow = GROW_POINT[sh.Grow] and sh.Grow or "LEFT"
-    local size = KE:PixelSnap(tonumber(sh.IconSize) or 32)
-    local step = size + KE:PixelSnap(tonumber(sh.Spacing) or 2)
     growPoint = GROW_POINT[grow]
     stepX, stepY = GROW_X[grow] * step, GROW_Y[grow] * step
 
-    local length = count * step - (step - size)
     if GROW_Y[grow] == 0 then
         stripW, stripH = length, size
     else
@@ -727,4 +760,23 @@ function DM:PlaceSpellHistory()
     local sh = self.db and self.db.SpellHistory
     if not (strip and sh and sh.Attach == true and strip:IsShown()) then return end
     Place(self.db, sh)
+end
+
+-- The settings page's Count, Icon Size and Spacing. A free strip's saved
+-- offset moves by the length change, so its growth-start end stays put to
+-- within the whole-number rounding and the pixel snap; a Grow change, a drag
+-- or a profile switch never shifts it.
+function DM:ResizeSpellHistory(key, value)
+    local sh = self.db and self.db.SpellHistory
+    if not sh then return end
+    local oldLength = StripLength(sh)
+    sh[key] = value
+    local newLength = StripLength(sh)
+    local pos = sh.Position
+    if sh.Attach ~= true and pos and newLength ~= oldLength then
+        local dx, dy = GrowthShift(pos.AnchorFrom, sh.Grow, oldLength, newLength)
+        pos.XOffset = KE:RoundOffset((pos.XOffset or 0) + dx)
+        pos.YOffset = KE:RoundOffset((pos.YOffset or 0) + dy)
+    end
+    self:ApplySpellHistory()
 end

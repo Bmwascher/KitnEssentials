@@ -340,3 +340,42 @@ describe("SpellHistory attach placement", function()
         end
     end)
 end)
+
+describe("SpellHistory growth shift", function()
+    -- The strip grows from 100 to 134 long.
+    it("leaves an anchor at the growth-start end where it is", function()
+        for _, row in ipairs({
+            { grow = "LEFT",  anchor = "TOPRIGHT" },
+            { grow = "RIGHT", anchor = "BOTTOMLEFT" },
+            { grow = "UP",    anchor = "BOTTOMRIGHT" },
+            { grow = "DOWN",  anchor = "TOPLEFT" },
+        }) do
+            assert.same({ 0, 0 }, { DM.SpellHistoryGrowthShift(row.anchor, row.grow, 100, 134) }, row.grow)
+        end
+    end)
+
+    it("moves an anchor at the far end by the whole change along the growth axis", function()
+        for _, row in ipairs({
+            { grow = "LEFT",  anchor = "LEFT",        want = { -34, 0 } },
+            { grow = "RIGHT", anchor = "TOPRIGHT",    want = { 34, 0 } },
+            { grow = "UP",    anchor = "TOPLEFT",     want = { 0, 34 } },
+            { grow = "DOWN",  anchor = "BOTTOMRIGHT", want = { 0, -34 } },
+        }) do
+            assert.same(row.want, { DM.SpellHistoryGrowthShift(row.anchor, row.grow, 100, 134) }, row.grow)
+        end
+    end)
+
+    it("moves an anchor on the centre line by half the change, an odd change included, and reads no anchor as CENTER", function()
+        for _, row in ipairs({
+            { grow = "LEFT",  anchor = "CENTER", want = { -17, 0 } },
+            { grow = "RIGHT", anchor = "TOP",    want = { 17, 0 } },
+            { grow = "UP",    anchor = "RIGHT",  want = { 0, 17 } },
+            { grow = "DOWN",                     want = { 0, -17 } },
+            -- Size 32, spacing 1, Count 5 to 6: the exact half, before any rounding.
+            { grow = "LEFT",  anchor = "CENTER", old = 164, new = 197, want = { -16.5, 0 } },
+        }) do
+            assert.same(row.want, { DM.SpellHistoryGrowthShift(row.anchor, row.grow, row.old or 100, row.new or 134) },
+                row.grow .. " " .. tostring(row.anchor))
+        end
+    end)
+end)

@@ -1630,6 +1630,20 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
         if DM and DM.ApplySpellHistory then DM:ApplySpellHistory() end
     end
 
+    -- Count, Icon Size and Spacing change the strip's length; a free strip
+    -- keeps its growth-start end in place, which rewrites its saved offsets,
+    -- so the Position card's sliders are re-read without a page rebuild (a
+    -- rebuild would drop the slider being dragged).
+    local posCard
+    local function ResizeStrip(key, value)
+        if DM and DM.ResizeSpellHistory then
+            DM:ResizeSpellHistory(key, value)
+        else
+            sh[key] = value
+        end
+        if posCard then posCard:RefreshOffsets() end
+    end
+
     -- Edge and Gap apply only while attached; the Position card only while free.
     manager:SetCondition("shattached", function() return sh.Attach == true end)
     manager:SetCondition("shfree", function() return sh.Attach ~= true end)
@@ -1697,7 +1711,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     local countSlider = GUIFrame:CreateSlider(rowCount, "Icon Count", {
         min = 1, max = 10, step = 1,
         value = sh.Count or 5,
-        callback = function(val) sh.Count = val; ApplyStrip() end,
+        callback = function(val) ResizeStrip("Count", val) end,
     })
     rowCount:AddWidget(countSlider, 1)
     manager:Register(countSlider, "all")
@@ -1707,7 +1721,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     local sizeSlider = GUIFrame:CreateSlider(rowSize, "Icon Size", {
         min = 16, max = 64, step = 1,
         value = sh.IconSize or 32,
-        callback = function(val) sh.IconSize = val; ApplyStrip() end,
+        callback = function(val) ResizeStrip("IconSize", val) end,
     })
     rowSize:AddWidget(sizeSlider, 1)
     manager:Register(sizeSlider, "all")
@@ -1717,7 +1731,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     local spacingSlider = GUIFrame:CreateSlider(rowSpacing, "Spacing", {
         min = 0, max = 10, step = 1,
         value = sh.Spacing or 2,
-        callback = function(val) sh.Spacing = val; ApplyStrip() end,
+        callback = function(val) ResizeStrip("Spacing", val) end,
     })
     rowSpacing:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "all")
@@ -1806,7 +1820,8 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     ----------------------------------------------------------------
     -- Card 6: Position Settings (free-standing only)
     ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    local posOffset
+    posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",
         db = sh,
         positionKey = "Position",
