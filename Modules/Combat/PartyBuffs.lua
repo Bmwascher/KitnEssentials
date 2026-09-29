@@ -294,18 +294,20 @@ function PB:ClearQueue()
     self.queued = {}
 end
 
--- The one every-frame path: one queued slot per frame, rescheduled only while
--- the queue holds more, so at most five frames in a row and then nothing.
+-- The one every-frame path: one group per frame, since a single group build
+-- costs about 3 ms. A slot stays at the head of the queue until BuildSlot
+-- reports it finished, so its teammate shows before the next slot starts.
+-- Rescheduled only while the queue holds more, then nothing.
 local function PumpBuild()
     PB.pumping = false
     if not (PB:IsEnabled() and PB.active) then
         PB:ClearQueue()
         return
     end
-    local k = table_remove(PB.queue, 1)
-    if k then
+    local k = PB.queue[1]
+    if k and PB:BuildSlot(k) then
+        table_remove(PB.queue, 1)
         PB.queued[k] = nil
-        PB:BuildSlot(k)
     end
     if #PB.queue > 0 then
         PB.pumping = true
@@ -450,15 +452,18 @@ function PB:ApplySlotLayout(slot)
     return clean
 end
 
--- A slot whose teammate went away while it waited builds nothing: the build
--- follows a current binding only.
+-- Adds at most one group per call. Returns false while the slot still has a
+-- group to add, true once it is bound or cannot progress; a failure leaves
+-- buildPending for the drain rather than retrying every frame. A slot whose
+-- teammate went away while it waited builds nothing: the build follows a
+-- current binding only.
 function PB:BuildSlot(k)
     local binding = self.bindings[k]
-    if not binding then return end
+    if not binding then return true end
     if not ContainersAvailable() then
         Debug("slot %d: aura containers unavailable", k)
         self.buildPending = true
-        return
+        return true
     end
     local slot = self.slots[k]
     if not slot then
@@ -476,7 +481,7 @@ function PB:BuildSlot(k)
         if not (ok and container) then
             Debug("slot %d: container failed", k)
             self.buildPending = true
-            return
+            return true
         end
         -- Pinned before any group exists, when a pin is expected to be
         -- allowed. A refused pin records no corner, so the layout pass below
@@ -491,10 +496,14 @@ function PB:BuildSlot(k)
         local d = DESCRIPTORS[i]
         if self.db[d.category.trackKey] == true and not slot.groups[d.key] then
             self:AddGroup(k, slot, d)
+            if not slot.groups[d.key] then return true end
+            if not self:SlotComplete(k) then return false end
+            break
         end
     end
     if not self:ApplySlotLayout(slot) then self.reconfigurePending = true end
     self:BindSlot(k, binding)
+    return true
 end
 
 -- Anchored, never parented: a child of a party frame inherits its protection
