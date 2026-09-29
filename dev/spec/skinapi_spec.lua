@@ -1434,3 +1434,64 @@ describe("SkinAPI IconBorder", function()
         assert.are.same({ 0.6, 0.2, 0.9, 1 }, bd.border)
     end)
 end)
+
+-- A refresh that stops part-way, in the re-layout or in the snap and re-fit
+-- after it, must be redone by the next refresh even where the stored size
+-- already matches the target: the same target again, or a return to the old
+-- one. The rule is an ordering of writes around a failing call, so no pure
+-- predicate holds it; the backdrop is a plain table with the methods
+-- RefreshEdge calls, and its SetBackdrop runs ApplyBackdrop as Blizzard's does.
+describe("SkinAPI edge refresh", function()
+    local UNIT = 768 / 1440
+
+    local function backdrop(stopAt)
+        local bd = {
+            backdropInfo = { edgeSize = UNIT }, scale = 1, layouts = 0, failing = true,
+            bg = { 0.1, 0.2, 0.3, 0.4 }, border = { 0.5, 0.6, 0.7, 0.8 },
+        }
+        function bd:GetEffectiveScale() return self.scale end
+        -- The reads return what was last set, so a refresh that read the
+        -- colours after the layout whitened them would write white back.
+        function bd:GetBackdropColor() return unpack(self.bg) end
+        function bd:GetBackdropBorderColor() return unpack(self.border) end
+        function bd:SetBackdropColor(r, g, b, a) self.bg = { r, g, b, a } end
+        function bd:SetBackdropBorderColor(r, g, b, a) self.border = { r, g, b, a } end
+        function bd:ApplyBackdrop()
+            self.layouts = self.layouts + 1
+            self:SetBackdropColor(1, 1, 1, 1)
+            self:SetBackdropBorderColor(1, 1, 1, 1)
+            if self.failing and stopAt == "layout" then error("layout refused") end
+        end
+        function bd:SetBackdrop(info)
+            self.backdropInfo = info
+            self:ApplyBackdrop()
+        end
+        function bd:GetRegions()
+            if self.failing and stopAt == "finish" then error("regions refused") end
+        end
+        return bd
+    end
+
+    it("redoes a refresh that stopped in its re-layout or its finish, at the same target or back at the old one, then rests", function()
+        for _, stopAt in ipairs({ "layout", "finish" }) do
+            for _, nextScale in ipairs({ 1.1, 1 }) do
+                local S = L.loadSkinAPI().Skins
+                local bd = backdrop(stopAt)
+                S._RegisterBackdropForTest(bd)
+                bd.scale = 1.1
+                S.RefreshFrameEdge(bd)
+                assert.equals(1, bd.layouts)
+                assert.same({ 0.1, 0.2, 0.3, 0.4 }, bd.bg)
+                assert.same({ 0.5, 0.6, 0.7, 0.8 }, bd.border)
+                bd.failing = false
+                bd.scale = nextScale
+                S.RefreshFrameEdge(bd)
+                assert.equals(2, bd.layouts)
+                assert.same({ 0.1, 0.2, 0.3, 0.4 }, bd.bg)
+                assert.same({ 0.5, 0.6, 0.7, 0.8 }, bd.border)
+                S.RefreshFrameEdge(bd)
+                assert.equals(2, bd.layouts)
+            end
+        end
+    end)
+end)
