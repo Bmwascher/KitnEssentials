@@ -818,8 +818,9 @@ function PB:DrawPreviewRow(k, frame)
             cooldown:SetShown(settings.Swipe or settings.ShowTimer)
             cooldown:SetDrawSwipe(settings.Swipe)
             -- A preview frame registers no engine text, so the widget's own
-            -- numbers stand in for it, in the timer's font.
+            -- numbers stand in for it, in the timer's font and number format.
             cooldown:SetHideCountdownNumbers(not settings.ShowTimer)
+            cooldown:SetCountdownFormatter(KE.AuraStyle.GetDurationFormatter(settings))
             KE:ApplyFontToText(cooldown:GetCountdownFontString(), settings.FontFace, settings.TimerFontSize,
                 settings.FontOutline)
             cooldown:SetCooldown(now - offset, duration)

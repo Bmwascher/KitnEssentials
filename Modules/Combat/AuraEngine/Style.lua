@@ -99,6 +99,7 @@ local function GetDurationFormatter(settings)
     }
     return formatter
 end
+Style.GetDurationFormatter = GetDurationFormatter
 
 ---------------------------------------------------------------------------------
 -- Host creation -- called once, from initializeFrame.
