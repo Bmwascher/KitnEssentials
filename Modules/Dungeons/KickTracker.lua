@@ -493,11 +493,12 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
             tostring(unit), tostring(ok), issecretvalue(token) and "secret" or tostring(token),
             tostring(not KE:IsSafeValue(interruptedBy))))
     end
-    -- A hidden kicker (secret or no token, as in a running key) is the
-    -- player's own kick when the player just cast one (KT:ClaimOwnKick).
+    -- A hidden kicker (as in a running key) is the player's own kick when the
+    -- player just cast one (KT:ClaimOwnKick). No token with a plain GUID is a
+    -- kicker outside the group, such as a totem, and is not hidden.
     local now = GetTime()
     local own = ok and KE:IsSafeValue(token) and KT.IsOwnKickToken(token)
-    local hidden = not (ok and KE:IsSafeValue(token))
+    local hidden = not ok or issecretvalue(token) or (token == nil and issecretvalue(interruptedBy))
     if own or (hidden and KT.TakeOwnClaim(self.ownClaim, now, OWN_KICK_MATCH_WINDOW)) then
         self.ownClaim.at = nil
         self._ownLandedAt = now
@@ -904,6 +905,11 @@ end
 -- kicker. The interrupt can arrive first: its record, still unseen in its
 -- grace, is then the player's and goes. Returns that record's time.
 function KT:ClaimOwnKick(now)
+    -- The player's readable interrupt already arrived: nothing left to claim.
+    if KT.OwnKickMatched(now, self._ownLandedAt, OWN_KICK_MATCH_WINDOW) then
+        self.ownClaim.at = nil
+        return nil
+    end
     local index = KT.OwnRecordIndex(self.kickRecords, now, KICK_RECORD_GRACE)
     if not index then
         self.ownClaim.at = now

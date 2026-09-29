@@ -624,7 +624,6 @@ describe("KickTracker own-kick duplicate", function()
     end)
 end)
 
-
 describe("KickTracker own kick with a hidden kicker", function()
     it("claims one hidden interrupt inside the window after the own cast, once", function()
         local KT = L.loadKickTrackerRules()
