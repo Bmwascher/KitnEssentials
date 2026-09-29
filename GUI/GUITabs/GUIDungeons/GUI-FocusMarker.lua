@@ -486,20 +486,26 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
     yOffset = cardOptions:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Macro Preview
+    -- Macro Preview: the body written now, then the longest one the
+    -- options can make
     ----------------------------------------------------------------
     local cardPreview = GUIFrame:CreateCard(scrollChild, "Macro Preview", yOffset)
     manager:Register(cardPreview, "all")
 
+    local function AddSection(heading, text)
+        cardPreview:AddLabel(KE:ColorTextByTheme(heading))
+        cardPreview:AddLabel("|cff888888" .. #text .. " of " .. bodyMax .. " characters, read-only|r")
+        cardPreview:AddLabel(text)
+    end
+
     if body then
-        cardPreview:AddLabel("What KE writes to " .. kickName .. " with the options above. Read-only.  |cff888888" ..
-            #body .. " of " .. bodyMax .. " characters|r")
-        cardPreview:AddLabel(body)
+        AddSection("What KE writes to " .. kickName, body)
         local fullBody = spellName and FM.BuildKickBody(spellName, KICK_ALL_ON, markerIdx)
         if fullBody then
-            cardPreview:AddLabel("With every option on:  |cff888888" .. #fullBody .. " of " .. bodyMax ..
-                " characters|r")
-            cardPreview:AddLabel(fullBody)
+            local sepRow = GUIFrame:CreateRow(cardPreview.content, Theme.rowHeightSeparator)
+            sepRow:AddWidget(GUIFrame:CreateSeparator(sepRow), 1)
+            cardPreview:AddRow(sepRow, Theme.rowHeightSeparator)
+            AddSection("With every option on", fullBody)
         end
     else
         cardPreview:AddLabel("Nothing to preview for this spec.")
