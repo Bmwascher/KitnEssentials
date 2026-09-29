@@ -1412,7 +1412,7 @@ local Defaults = {
                 [1236998] = { enabled = true, default = true }, -- Draught of Rampant Abandon
                 [1239479] = { enabled = true, default = true }, -- Potion of Devoured Dreams
                 [1236551] = { enabled = true, default = true }, -- Void-Shrouded Tincture
-                [1295147] = { enabled = true, default = true }, -- Liquid Luster
+                [1295132] = { enabled = true, default = true }, -- Liquid Luster
                 [1295015] = { enabled = true, default = true }, -- Alluring Nostrum
             },
             -- One list for the current season. Kitn Defaults writes these rows
