@@ -110,7 +110,7 @@ local function BuildHeader(scrollChild, yOffset)
         local kickName = FM and (", " .. Gold(FM.KICK_MACRO_NAME) .. ",") or ""
         card:AddLabel("Writes a macro that sets your focus and puts your marker on it in one press, so " ..
             "a kick target can be called and taken together. The Focus Kick tab can add a second macro" ..
-            kickName .. " that casts your interrupt at that focus. Drag either from |cffffd100/macro|r onto " ..
+            kickName .. " that casts your interrupt at that focus. Drag either from " .. Gold("/macro") .. " onto " ..
             "a bar; both are kept up to date as you change the settings below." ..
             "\n\nThe marker macro goes for whatever is under your mouse, and falls back to your current " ..
             "target." ..
@@ -447,7 +447,8 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
         elseif FM:GetPlayerClass() == "WARLOCK" then
             status = kickName .. " written for " .. spellText .. ". Summoning a different demon rewrites it."
         else
-            status = kickName .. " is up to date. Drag it from |cffffd100/macro|r (character tab) onto a bar."
+            status = kickName .. " is up to date. Drag it from " .. Gold("/macro") ..
+                " (character tab) onto a bar."
         end
     end
     cardSpec:AddLabel(status)

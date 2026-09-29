@@ -848,9 +848,9 @@ local Defaults = {
             NoOverwrite = true,
             AnnounceReadyCheck = true,
 
+            MarkerFromClass = true,
             -- Keyed by the class token UnitClass returns. A saved entry that
             -- differs from its default here is the player's override.
-            MarkerFromClass = true,
             ClassMarkers = {
                 DEATHKNIGHT = "Cross",
                 DEMONHUNTER = "Diamond",
