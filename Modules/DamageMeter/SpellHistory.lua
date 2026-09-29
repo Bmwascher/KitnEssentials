@@ -237,6 +237,34 @@ end
 
 DM.SpellHistoryGrowthShift = GrowthShift
 
+-- Attached, a strip is pinned at its newest icon's end, so it only lengthens
+-- away from the edge it hugs: outward while outside the dock, inward while
+-- inside it. A direction across the edge reads as that one whichever of the
+-- two was saved, and the saved Grow is never rewritten.
+local INWARD = { TOP = "DOWN", BOTTOM = "UP", LEFT = "RIGHT", RIGHT = "LEFT" }
+local OPPOSITE = { LEFT = "RIGHT", RIGHT = "LEFT", UP = "DOWN", DOWN = "UP" }
+
+local function EffectiveGrow(attach, edge, grow, inside)
+    if not OPPOSITE[grow] then grow = "LEFT" end
+    if attach ~= true then return grow end
+    local inward = INWARD[edge] or INWARD.TOP
+    if inside then
+        if grow == OPPOSITE[inward] then return inward end
+    elseif grow == inward then
+        return OPPOSITE[inward]
+    end
+    return grow
+end
+
+-- The growth in effect and the anchor for an attached strip.
+local function AttachedPlacement(edge, grow, gap, inside)
+    local effective = EffectiveGrow(true, edge, grow, inside)
+    return effective, AttachPoints(edge, effective, gap, inside)
+end
+
+DM.SpellHistoryEffectiveGrow = EffectiveGrow
+DM.SpellHistoryAttachedPlacement = AttachedPlacement
+
 ---------------------------------------------------------------------------------
 -- Game lookups
 --
@@ -343,7 +371,7 @@ local fadeDelay = 0
 local growPoint, stepX, stepY = "TOPRIGHT", 0, 0
 -- The strip's size from the last Layout, and the attached anchor last applied,
 -- so a dock layout that changes nothing re-anchors nothing.
-local stripW, stripH = 0, 0
+local stripW, stripH, stripStep = 0, 0, 0
 local placedPoint, placedRel, placedX, placedY, placedStrata
 
 -- SetColorTexture turns the pixel-grid snap back on; borders stay unsnapped.
@@ -586,6 +614,16 @@ local function RegisterEvents(frame, pets, sh)
     end
 end
 
+-- Sets the growth corner and step, and moves the shown icons only when either
+-- changed: an attached strip's growth flips when it moves inside the dock.
+local function ApplyGrowth(grow)
+    local point = GROW_POINT[grow]
+    local x, y = GROW_X[grow] * stripStep, GROW_Y[grow] * stripStep
+    if point == growPoint and x == stepX and y == stepY then return end
+    growPoint, stepX, stepY = point, x, y
+    ReanchorShown()
+end
+
 -- The strip's length along its growth axis, with the clamped count, icon size
 -- and step it comes from.
 local function StripLength(sh)
@@ -610,9 +648,11 @@ local function Layout(sh)
         ringSize = count
     end
 
-    local grow = GROW_POINT[sh.Grow] and sh.Grow or "LEFT"
-    growPoint = GROW_POINT[grow]
-    stepX, stepY = GROW_X[grow] * step, GROW_Y[grow] * step
+    -- The outside reading: both readings share an axis, so the size is right
+    -- either way, and Place sets the attached growth once it knows which.
+    local grow = EffectiveGrow(sh.Attach, sh.AttachEdge, sh.Grow, false)
+    stripStep = step
+    ApplyGrowth(grow)
 
     if GROW_Y[grow] == 0 then
         stripW, stripH = length, size
@@ -646,7 +686,8 @@ local function Place(db, sh)
         if secret then left = nil end
         local fits = FitsOutside(sh.AttachEdge, gap, left, bottom, width, height, stripW, stripH,
             UIParent:GetWidth(), UIParent:GetHeight())
-        local point, rel, x, y = AttachPoints(sh.AttachEdge, sh.Grow, gap, not fits)
+        local grow, point, rel, x, y = AttachedPlacement(sh.AttachEdge, sh.Grow, gap, not fits)
+        ApplyGrowth(grow)
         local strata = db.Strata or "MEDIUM"
         if point == placedPoint and rel == placedRel and x == placedX and y == placedY
             and strata == placedStrata then

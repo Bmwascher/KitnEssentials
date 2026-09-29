@@ -379,3 +379,38 @@ describe("SpellHistory growth shift", function()
         end
     end)
 end)
+
+describe("SpellHistory attached growth", function()
+    it("reads a direction across the edge as outward outside and inward inside, along-edge ones as themselves, and every direction as itself when free", function()
+        for _, row in ipairs({
+            { edge = "TOP",    inward = "DOWN",  outward = "UP" },
+            { edge = "BOTTOM", inward = "UP",    outward = "DOWN" },
+            { edge = "LEFT",   inward = "RIGHT", outward = "LEFT" },
+            { edge = "RIGHT",  inward = "LEFT",  outward = "RIGHT" },
+        }) do
+            for _, grow in ipairs({ "LEFT", "RIGHT", "UP", "DOWN" }) do
+                local across = grow == row.inward or grow == row.outward
+                local name = row.edge .. " " .. grow
+                assert.equals(across and row.outward or grow, DM.SpellHistoryEffectiveGrow(true, row.edge, grow, false),
+                    name .. " outside")
+                assert.equals(across and row.inward or grow, DM.SpellHistoryEffectiveGrow(true, row.edge, grow, true),
+                    name .. " inside")
+                assert.equals(grow, DM.SpellHistoryEffectiveGrow(false, row.edge, grow, true), name .. " free")
+            end
+        end
+    end)
+
+    it("pins an attached strip at its newest icon's end, outside or inside, for every edge and direction", function()
+        -- The strip's end the newest icon sits at, per growth in effect.
+        local START_END = { LEFT = "RIGHT", RIGHT = "LEFT", UP = "BOTTOM", DOWN = "TOP" }
+        for _, edge in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+            for _, saved in ipairs({ "LEFT", "RIGHT", "UP", "DOWN" }) do
+                for _, inside in ipairs({ false, true }) do
+                    local grow, point = DM.SpellHistoryAttachedPlacement(edge, saved, 2, inside)
+                    local name = edge .. " " .. saved .. (inside and " inside" or " outside")
+                    assert.truthy(point:find(START_END[grow], 1, true), name .. ": " .. point .. " for " .. grow)
+                end
+            end
+        end
+    end)
+end)

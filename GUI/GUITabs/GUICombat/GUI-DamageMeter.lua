@@ -1736,14 +1736,26 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     rowSpacing:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "all")
 
+    -- Attached, the direction that grows into the meter is not offered, and
+    -- the value shown is the outside reading; a strip that sits inside the
+    -- meter steps that way into it instead.
+    local effectiveGrow = DM and DM.SpellHistoryEffectiveGrow
+    local growOptions = {}
+    for _, option in ipairs({
+        { key = "LEFT",  text = "Left" },
+        { key = "RIGHT", text = "Right" },
+        { key = "UP",    text = "Up" },
+        { key = "DOWN",  text = "Down" },
+    }) do
+        if not effectiveGrow or effectiveGrow(sh.Attach, sh.AttachEdge, option.key) == option.key then
+            growOptions[#growOptions + 1] = option
+        end
+    end
+    local growValue = sh.Grow or "LEFT"
+    if effectiveGrow then growValue = effectiveGrow(sh.Attach, sh.AttachEdge, growValue) end
     local growDd = GUIFrame:CreateDropdown(rowSpacing, "Grow Direction", {
-        options = {
-            { key = "LEFT",  text = "Left" },
-            { key = "RIGHT", text = "Right" },
-            { key = "UP",    text = "Up" },
-            { key = "DOWN",  text = "Down" },
-        },
-        value = sh.Grow or "LEFT",
+        options = growOptions,
+        value = growValue,
         callback = function(key) sh.Grow = key; ApplyStrip() end,
     })
     rowSpacing:AddWidget(growDd, 0.5)
@@ -1784,6 +1796,9 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
             sh.Attach = checked
             ApplyStrip()
             manager:UpdateAll(db.Enabled ~= false)
+            -- A frame late, so the Grow options follow and this widget is not
+            -- torn down mid-call.
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
         end,
     })
     rowAttach:AddWidget(attachChk, 1)
@@ -1799,7 +1814,11 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
             { key = "RIGHT",  text = "Right" },
         },
         value = sh.AttachEdge or "TOP",
-        callback = function(key) sh.AttachEdge = key; ApplyStrip() end,
+        callback = function(key)
+            sh.AttachEdge = key
+            ApplyStrip()
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end,
     })
     rowEdge:AddWidget(edgeDd, 0.5)
     manager:Register(edgeDd, "shattached")
@@ -1813,7 +1832,8 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     manager:Register(gapSlider, "shattached")
     cardPlace:AddRow(rowEdge, Theme.rowHeight)
     cardPlace:AddNote("Free, the strip moves in " .. KE:ColorTextByTheme("/kes edit") ..
-        "; attached, it follows the meter.")
+        "; attached, it follows the meter. For any other spot, such as inside the meter, turn Attach " ..
+        "off and use Anchored To in Position Settings.")
 
     yOffset = cardPlace:GetNextOffset()
 
