@@ -28,7 +28,7 @@ local C_Timer = C_Timer
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 local unpack = unpack
-local math_max = math.max
+local math_max, math_min = math.max, math.min
 
 -- The four containers this module restyles. Widgets are pooled and drawn by
 -- many owners (tooltips, nameplates, the objective tracker); everything
@@ -175,10 +175,11 @@ local function RestyleOnShow()
     UIW:OnWidgetEvent()
 end
 
--- KE's fill sits in ARTWORK on Blizzard's bar: above its fill (BACKGROUND),
--- below its text (OVERLAY). Anchored to the fill texture, it follows the
--- value and the smooth fill with no Lua of its own. Some widgets name a
--- plain Frame .Bar; only a StatusBar has a fill texture.
+-- KE's fill sits one sublevel above Blizzard's fill, which is in ARTWORK:
+-- regions sharing a layer and sublevel draw in no fixed order. The text is
+-- in OVERLAY, above both. Anchored to the fill texture, it follows the value
+-- and the smooth fill with no Lua of its own. Some widgets name a plain
+-- Frame .Bar; only a StatusBar has a fill texture.
 local function UpdateFill(bar, record, barDB)
     local fillTex = bar:IsObjectType("StatusBar") and bar:GetStatusBarTexture()
     if not fillTex then
@@ -199,6 +200,9 @@ local function UpdateFill(bar, record, barDB)
         record:SetScript("OnHide", HideFill)
         record:SetScript("OnShow", RestyleOnShow)
     end
+
+    local layer, sublevel = fillTex:GetDrawLayer()
+    fill:SetDrawLayer(layer, math_min((sublevel or 0) + 1, 7))
 
     if record.fillAnchor ~= fillTex then
         fill:ClearAllPoints()
