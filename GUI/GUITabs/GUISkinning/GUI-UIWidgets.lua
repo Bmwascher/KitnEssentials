@@ -235,6 +235,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             value = barDB.StripTextures ~= false,
             callback = function(checked)
                 barDB.StripTextures = checked
+                if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
                 ApplySettings()
                 RefreshStates()
             end,
