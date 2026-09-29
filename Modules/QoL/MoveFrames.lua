@@ -615,10 +615,16 @@ local function DragPath(button, modifierHeld, protected, inCombat, isDisabled)
     return "native"
 end
 
--- Out of combat the talent-window move reset reaches the protected talent
--- window too: resetting the hero picker alone breaks the picker's anchors.
-local function MoveResetAllowed(initialized, inCombat, protected)
-    return initialized == true and not (inCombat and protected)
+-- The talent window and the hero picker are move-reset as a pair or not at
+-- all: one reset without the other breaks the picker's anchors. The talent
+-- window cannot be moved in combat, so there a closed picker goes back to its
+-- default anchor instead; an open one holds the talent window's buttons and
+-- is protected.
+function MF.PairResetAction(initialized, inCombat, pickerProtected)
+    if initialized ~= true then return "none" end
+    if not inCombat then return "reset" end
+    if pickerProtected then return "none" end
+    return "restore"
 end
 
 -- Remembered positions ---------------------------------------------------------
@@ -819,8 +825,11 @@ function MF:HandleAddon(_, addon)
                 end
             end)
         elseif addon == "Blizzard_PlayerSpells" and _G.HeroTalentsSelectionDialog and _G.PlayerSpellsFrame then
+            local picker = _G.HeroTalentsSelectionDialog
+            -- Whether the pair was reset on the talent window's current show.
+            local pairReset = false
             local function startStopMoving(frame)
-                if not MoveResetAllowed(MF.initialized, InCombatLockdown(), IsProtectedFrame(frame)) then
+                if MF.PairResetAction(MF.initialized, InCombatLockdown(), false) ~= "reset" then
                     return
                 end
                 local backup = frame:IsMovable()
@@ -829,20 +838,38 @@ function MF:HandleAddon(_, addon)
                 frame:StopMovingOrSizing()
                 frame:SetMovable(backup)
             end
-            local function onShow(frame)
+            -- The picker is closed whenever the talent window shows, so the
+            -- pair is decided here. The rerun never restores: a pull one frame
+            -- later must not split a pair that was just reset.
+            local function onTalentsShow(frame)
+                local action = MF.PairResetAction(MF.initialized, InCombatLockdown(), IsProtectedFrame(picker))
+                pairReset = action == "reset"
+                if pairReset then
+                    startStopMoving(frame)
+                    startStopMoving(picker)
+                    RunNextFrame(GenerateFlatClosure(startStopMoving, frame))
+                elseif action == "restore" then
+                    -- The anchor Blizzard_HeroTalentsSelectionDialog.xml gives it.
+                    picker:ClearAllPoints()
+                    picker:SetPoint("TOP", UIParent, "TOP", 0, -70)
+                    picker:SetUserPlaced(false)
+                end
+            end
+            local function onPickerShow(frame)
+                if not pairReset then return end
                 startStopMoving(frame)
                 RunNextFrame(GenerateFlatClosure(startStopMoving, frame))
             end
 
-            startStopMoving(_G.HeroTalentsSelectionDialog)
             -- Both frames already carry the Frame_OnShow hook, and AceHook
             -- refuses a second one, so the fix rides that handler.
-            for _, frame in pairs({ _G.PlayerSpellsFrame, _G.HeroTalentsSelectionDialog }) do
+            for _, frame in pairs({ _G.PlayerSpellsFrame, picker }) do
                 if not self:IsHooked(frame, "OnShow") then
                     self:SecureHookScript(frame, "OnShow", "Frame_OnShow")
                 end
-                onShowExtra[frame] = onShow
             end
+            onShowExtra[_G.PlayerSpellsFrame] = onTalentsShow
+            onShowExtra[picker] = onPickerShow
         end
     end)
 end
