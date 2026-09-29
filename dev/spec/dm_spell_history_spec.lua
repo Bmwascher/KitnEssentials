@@ -278,3 +278,65 @@ describe("SpellHistory ring", function()
         end
     end)
 end)
+
+describe("SpellHistory attach placement", function()
+    -- A 100x40 dock, a 20x60 strip, gap 2, a 1000x800 screen.
+    it("fits outside when the strip touches the screen edge and not one unit past it", function()
+        for _, row in ipairs({
+            { edge = "TOP",    left = 400, bottom = 698, want = true },
+            { edge = "TOP",    left = 400, bottom = 699, want = false },
+            { edge = "BOTTOM", left = 400, bottom = 62,  want = true },
+            { edge = "BOTTOM", left = 400, bottom = 61,  want = false },
+            { edge = "LEFT",   left = 22,  bottom = 300, want = true },
+            { edge = "LEFT",   left = 21,  bottom = 300, want = false },
+            { edge = "RIGHT",  left = 878, bottom = 300, want = true },
+            { edge = "RIGHT",  left = 879, bottom = 300, want = false },
+        }) do
+            local fits = DM.SpellHistoryFitsOutside(row.edge, 2, row.left, row.bottom, 100, 40, 20, 60, 1000, 800)
+            assert.equals(row.want, fits, row.edge .. " " .. row.left .. "," .. row.bottom)
+        end
+    end)
+
+    it("counts a dock it cannot measure as fitting", function()
+        -- Measured, every row would not fit below a dock at the screen bottom.
+        for _, row in ipairs({
+            { name = "left",   bottom = 0,  width = 100, height = 40 },
+            { name = "bottom", left = 0,    width = 100, height = 40 },
+            { name = "width",  left = 0,    bottom = 0,  height = 40 },
+            { name = "height", left = 0,    bottom = 0,  width = 100 },
+        }) do
+            assert.is_true(DM.SpellHistoryFitsOutside("BOTTOM", 2, row.left, row.bottom, row.width, row.height,
+                20, 60, 1000, 800), row.name)
+        end
+    end)
+
+    it("anchors outside or inside each edge at the gap", function()
+        for _, row in ipairs({
+            { edge = "TOP",    inside = false, want = { "BOTTOMRIGHT", "TOPRIGHT", 0, 2 } },
+            { edge = "TOP",    inside = true,  want = { "TOPRIGHT", "TOPRIGHT", 0, -2 } },
+            { edge = "BOTTOM", inside = false, want = { "TOPRIGHT", "BOTTOMRIGHT", 0, -2 } },
+            { edge = "BOTTOM", inside = true,  want = { "BOTTOMRIGHT", "BOTTOMRIGHT", 0, 2 } },
+            { edge = "LEFT",   inside = false, want = { "TOPRIGHT", "TOPLEFT", -2, 0 } },
+            { edge = "LEFT",   inside = true,  want = { "TOPLEFT", "TOPLEFT", 2, 0 } },
+            { edge = "RIGHT",  inside = false, want = { "TOPLEFT", "TOPRIGHT", 2, 0 } },
+            { edge = "RIGHT",  inside = true,  want = { "TOPRIGHT", "TOPRIGHT", -2, 0 } },
+        }) do
+            assert.same(row.want, { DM.SpellHistoryAttachPoints(row.edge, "LEFT", 2, row.inside) },
+                row.edge .. (row.inside and " inside" or " outside"))
+        end
+    end)
+
+    it("takes the corner from Grow: LEFT only for Right on Top and Bottom, BOTTOM only for Up on Left and Right", function()
+        for _, row in ipairs({
+            { edge = "TOP",    grow = "RIGHT", point = "BOTTOMLEFT" },
+            { edge = "TOP",    grow = "UP",    point = "BOTTOMRIGHT" },
+            { edge = "BOTTOM", grow = "RIGHT", point = "TOPLEFT" },
+            { edge = "LEFT",   grow = "UP",    point = "BOTTOMRIGHT" },
+            { edge = "LEFT",   grow = "DOWN",  point = "TOPRIGHT" },
+            { edge = "RIGHT",  grow = "UP",    point = "BOTTOMLEFT" },
+        }) do
+            local point = DM.SpellHistoryAttachPoints(row.edge, row.grow, 2, false)
+            assert.equals(row.point, point, row.edge .. " " .. row.grow)
+        end
+    end)
+end)

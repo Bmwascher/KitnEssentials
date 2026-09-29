@@ -1781,6 +1781,8 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
         options = {
             { key = "TOP",    text = "Top" },
             { key = "BOTTOM", text = "Bottom" },
+            { key = "LEFT",   text = "Left" },
+            { key = "RIGHT",  text = "Right" },
         },
         value = sh.AttachEdge or "TOP",
         callback = function(key) sh.AttachEdge = key; ApplyStrip() end,

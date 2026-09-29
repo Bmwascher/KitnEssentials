@@ -19,6 +19,7 @@ local floor = math.floor
 local wipe = wipe
 local issecretvalue = issecretvalue
 local CreateFrame = CreateFrame
+local UIParent = UIParent
 local GetInventoryItemID = GetInventoryItemID
 local C_Spell = C_Spell
 local C_SpellBook = C_SpellBook
@@ -172,6 +173,44 @@ DM.SpellHistoryNextHead = NextHead
 DM.SpellHistorySlotPosition = SlotPosition
 
 ---------------------------------------------------------------------------------
+-- Attached placement
+---------------------------------------------------------------------------------
+
+-- The dock's rect arrives in GetRect order. A nil value, which the caller
+-- passes for a secret one, keeps the outside placement. Touching the screen
+-- edge counts as fitting.
+local function FitsOutside(edge, gap, left, bottom, width, height, stripW, stripH, screenW, screenH)
+    if left == nil or bottom == nil or width == nil or height == nil then return true end
+    if edge == "BOTTOM" then return bottom - gap - stripH >= 0 end
+    if edge == "LEFT" then return left - gap - stripW >= 0 end
+    if edge == "RIGHT" then return left + width + gap + stripW <= screenW end
+    return bottom + height + gap + stripH <= screenH
+end
+
+-- The strip's point, the dock's point and the offset, outside the edge or
+-- inside the dock at the gap. Top and Bottom take the corner on the newest
+-- icon's side; Left and Right align to the top unless the strip grows up. An
+-- unknown edge reads as Top.
+local function AttachPoints(edge, grow, gap, inside)
+    if edge == "LEFT" or edge == "RIGHT" then
+        local v = grow == "UP" and "BOTTOM" or "TOP"
+        local sign = edge == "LEFT" and -1 or 1
+        if inside then return v .. edge, v .. edge, -sign * gap, 0 end
+        local far = edge == "LEFT" and "RIGHT" or "LEFT"
+        return v .. far, v .. edge, sign * gap, 0
+    end
+    local s = grow == "RIGHT" and "LEFT" or "RIGHT"
+    if edge ~= "BOTTOM" then edge = "TOP" end
+    local sign = edge == "BOTTOM" and -1 or 1
+    if inside then return edge .. s, edge .. s, 0, -sign * gap end
+    local far = edge == "BOTTOM" and "TOP" or "BOTTOM"
+    return far .. s, edge .. s, 0, sign * gap
+end
+
+DM.SpellHistoryFitsOutside = FitsOutside
+DM.SpellHistoryAttachPoints = AttachPoints
+
+---------------------------------------------------------------------------------
 -- Game lookups
 --
 -- The classifier's live `api`. Each function reads the game only when called,
@@ -275,6 +314,10 @@ local ringSize = 0
 local head = 0
 local fadeDelay = 0
 local growPoint, stepX, stepY = "TOPRIGHT", 0, 0
+-- The strip's size from the last Layout, and the attached anchor last applied,
+-- so a dock layout that changes nothing re-anchors nothing.
+local stripW, stripH = 0, 0
+local placedPoint, placedRel, placedX, placedY, placedStrata
 
 -- SetColorTexture turns the pixel-grid snap back on; borders stay unsnapped.
 local function SetBorderPet(icon, pet)
@@ -539,10 +582,11 @@ local function Layout(sh)
 
     local length = count * step - (step - size)
     if GROW_Y[grow] == 0 then
-        frame:SetSize(length, size)
+        stripW, stripH = length, size
     else
-        frame:SetSize(size, length)
+        stripW, stripH = size, length
     end
+    frame:SetSize(stripW, stripH)
 
     local markSize = KE:PixelSnap(size * FAILED_MARK_SCALE)
     for slot = 1, #icons do
@@ -553,24 +597,37 @@ local function Layout(sh)
     fadeDelay = tonumber(sh.FadeDelay) or 5
 end
 
--- Attached, the strip sits outside the dock's chosen edge, at the corner on
--- the newest icon's side (the right corner for vertical growth).
+-- Attached, the strip sits outside the dock's chosen edge when it fits on
+-- screen, and inside the dock at the gap when it does not. The dock is a
+-- UIParent child with no scale of its own, so its rect and the screen size
+-- share units.
 local function Place(db, sh)
     local frame = strip
     if not frame then return end
     local dock = DM.dock
     if sh.Attach == true and dock then
-        local side = sh.Grow == "RIGHT" and "LEFT" or "RIGHT"
         local gap = KE:PixelSnap(tonumber(sh.AttachGap) or 2)
-        frame:ClearAllPoints()
-        if sh.AttachEdge == "BOTTOM" then
-            frame:SetPoint("TOP" .. side, dock, "BOTTOM" .. side, 0, -gap)
-        else
-            frame:SetPoint("BOTTOM" .. side, dock, "TOP" .. side, 0, gap)
+        local left, bottom, width, height = dock:GetRect()
+        local secret = issecretvalue(left) or issecretvalue(bottom) or issecretvalue(width)
+            or issecretvalue(height)
+        if secret then left = nil end
+        local fits = FitsOutside(sh.AttachEdge, gap, left, bottom, width, height, stripW, stripH,
+            UIParent:GetWidth(), UIParent:GetHeight())
+        local point, rel, x, y = AttachPoints(sh.AttachEdge, sh.Grow, gap, not fits)
+        local strata = db.Strata or "MEDIUM"
+        if point == placedPoint and rel == placedRel and x == placedX and y == placedY
+            and strata == placedStrata then
+            return
         end
-        frame:SetFrameStrata(db.Strata or "MEDIUM")
-        KE:SnapFrameToPixels(frame)
+        frame:ClearAllPoints()
+        frame:SetPoint(point, dock, rel, x, y)
+        frame:SetFrameStrata(strata)
+        -- The snap reads and tests the strip's own left and bottom, which are
+        -- secret whenever the dock's rect is.
+        if not secret then KE:SnapFrameToPixels(frame) end
+        placedPoint, placedRel, placedX, placedY, placedStrata = point, rel, x, y, strata
     else
+        placedPoint = nil
         KE:ApplyFramePosition(frame, sh.Position, sh)
     end
 end
@@ -656,8 +713,18 @@ function DM:ApplySpellHistory()
     if not (frame and pets) then return end
     RegisterEvents(frame, pets, sh)
     Layout(sh)
+    -- Layout may have resized the strip, which needs a fresh snap.
+    placedPoint = nil
     Place(db, sh)
     SyncMover(sh.Attach ~= true)
     frame:Show()
     SyncPreview()
+end
+
+-- Called at the end of the dock's layout, where its size and place are final,
+-- so a move, a resize or a chat-size match re-decides inside or outside.
+function DM:PlaceSpellHistory()
+    local sh = self.db and self.db.SpellHistory
+    if not (strip and sh and sh.Attach == true and strip:IsShown()) then return end
+    Place(self.db, sh)
 end

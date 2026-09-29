@@ -769,6 +769,7 @@ function DM:UpdateBackdrop()
     -- The early returns above hide without recomputing it, so there is nothing
     -- new to push from any of them.
     self:PushSizeToChat()
+    self:PlaceSpellHistory()
 end
 
 ---------------------------------------------------------------------------------
