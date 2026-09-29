@@ -122,7 +122,6 @@ read_globals = {
     "WorldFrame",
     "GetMouseFoci", "GetMouseFocus",
     "GetPhysicalScreenSize", "GetCursorPosition", "GetScreenWidth", "GetScreenHeight",
-    "RunNextFrame",
     "IsModifierKeyDown",
     "IsSecureCmd",
     "EventUtil",
