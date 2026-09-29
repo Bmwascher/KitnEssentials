@@ -1815,7 +1815,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
             yOffset = "YOffset",
             strata = "Strata",
         },
-        showAnchorFrameType = false,
+        showAnchorFrameType = true,
         showStrata = true,
         onChangeCallback = ApplyStrip,
     })

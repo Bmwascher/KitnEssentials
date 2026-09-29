@@ -597,6 +597,10 @@ local function SyncMover(want)
                 module = DM,
                 displayName = "Spell History",
                 frame = frame,
+                getParentFrame = function()
+                    local sh = DM.db and DM.db.SpellHistory
+                    return KE:ResolveAnchorFrame(sh and sh.anchorFrameType, sh and sh.ParentFrame)
+                end,
                 getPosition = function()
                     local sh = DM.db and DM.db.SpellHistory
                     return sh and sh.Position
