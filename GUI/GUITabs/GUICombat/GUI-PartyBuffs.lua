@@ -211,8 +211,11 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
 
     local rowD3 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     AddCheck(rowD3, "Time-Left Swipe", "Swipe")
-    AddCheck(rowD3, "Border Colour by Category", "CategoryColors", nil, RefreshStates)
+    AddCheck(rowD3, "Timer Text", "ShowTimer")
     cardDisplay:AddRow(rowD3, Theme.rowHeight)
+    local rowD3b = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
+    AddCheck(rowD3b, "Border Colour by Category", "CategoryColors", nil, RefreshStates)
+    cardDisplay:AddRow(rowD3b, Theme.rowHeight)
     local rowD4 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     for i = 1, 3 do AddColor(rowD4, COLOR_PICKERS[i]) end
     cardDisplay:AddRow(rowD4, Theme.rowHeight)
@@ -222,7 +225,37 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     yOffset = cardDisplay:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Position
+    -- Card 5: Font Settings (the timer text; the stack count shares the
+    -- font and outline)
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Font Settings",
+        db = db,
+        dbKeys = {
+            fontFace    = "FontFace",
+            fontOutline = "FontOutline",
+        },
+        fontSizes = {
+            { label = "Timer Size", dbKey = "TimerFontSize", default = 12 },
+        },
+        fontSizeRange = { 8, 48 },
+        extraSlider = {
+            label = "Show Decimals Below (sec)",
+            dbKey = "DecimalThreshold",
+            min = 0, max = 10, step = 1,
+            value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
+        },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+
+    yOffset = fontOffset
+
+    ----------------------------------------------------------------
+    -- Card 6: Position
     ----------------------------------------------------------------
     local cardPosition = GUIFrame:CreateCard(scrollChild, "Position", yOffset)
     local rowX1 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
