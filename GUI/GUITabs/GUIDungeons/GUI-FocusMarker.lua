@@ -319,7 +319,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
         { key = "NoToggle", label = "No Toggle",
           desc = "Prevent marker from toggling off on repeated clicks.", default = true },
         { key = "NoOverwrite", label = "No Overwrite",
-          desc = "Skip marking targets that are already marked (Patch 12.0.7+).", default = true },
+          desc = "Skip marking targets that are already marked.", default = true },
         { key = "AnnounceReadyCheck", label = "Ready Check Announce",
           desc = "Announce your marker in party chat on ready check.", default = true },
     }
