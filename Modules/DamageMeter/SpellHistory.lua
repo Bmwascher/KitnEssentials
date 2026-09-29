@@ -858,6 +858,24 @@ function DM:PlaceSpellHistory()
     Place(self.db, sh)
 end
 
+-- The unrounded offsets the last resize moved to, and the placement it left.
+-- While the strip is still placed exactly so, the next resize goes on from
+-- them, so a run of resizes rounds once rather than once per step; any other
+-- change to the placement starts again from the saved offsets.
+local carry = { exactX = 0, exactY = 0 }
+
+local function CarriedOffset(sh, pos, length)
+    if carry.length == length and carry.x == pos.XOffset and carry.y == pos.YOffset
+        and carry.from == pos.AnchorFrom and carry.to == pos.AnchorTo and carry.grow == sh.Grow
+        and carry.frameType == sh.anchorFrameType and carry.parent == sh.ParentFrame then
+        return carry.exactX, carry.exactY
+    end
+    return pos.XOffset or 0, pos.YOffset or 0
+end
+
+-- Read by the smoke's load check: the carry is otherwise file-local.
+DM.SpellHistoryCarriedOffset = CarriedOffset
+
 -- The settings page's Count, Icon Size and Spacing. A free strip's saved
 -- offset moves by the length change, so its growth-start end stays put to
 -- within the whole-number rounding and the pixel snap; a Grow change, a drag
@@ -870,9 +888,13 @@ function DM:ResizeSpellHistory(key, value)
     local newLength = StripLength(sh)
     local pos = sh.Position
     if sh.Attach ~= true and pos and newLength ~= oldLength then
+        local x, y = CarriedOffset(sh, pos, oldLength)
         local dx, dy = GrowthShift(pos.AnchorFrom, sh.Grow, oldLength, newLength)
-        pos.XOffset = KE:RoundOffset((pos.XOffset or 0) + dx)
-        pos.YOffset = KE:RoundOffset((pos.YOffset or 0) + dy)
+        x, y = x + dx, y + dy
+        pos.XOffset, pos.YOffset = KE:RoundOffset(x), KE:RoundOffset(y)
+        carry.exactX, carry.exactY, carry.x, carry.y = x, y, pos.XOffset, pos.YOffset
+        carry.length, carry.from, carry.to, carry.grow = newLength, pos.AnchorFrom, pos.AnchorTo, sh.Grow
+        carry.frameType, carry.parent = sh.anchorFrameType, sh.ParentFrame
     end
     self:ApplySpellHistory()
 end

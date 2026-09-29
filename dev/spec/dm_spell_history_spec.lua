@@ -446,3 +446,52 @@ describe("SpellHistoryClassify: casts pressed outside the spellbook", function()
         assert.is_nil(status)
     end)
 end)
+
+describe("SpellHistory resize offset", function()
+    -- Free, anchored at CENTER, Grow Left, Icon Size 32, Spacing 1: each Count
+    -- step changes the length by 33, so every exact shift ends in a half. The
+    -- rounding is the real KE:RoundOffset; PixelSnap is the identity, as at a
+    -- pixel size of 1. Each row reloads the file, so no carry leaks between rows.
+    it("rounds a run of resizes once, and starts from the saved offset after any other placement change", function()
+        local round = L.loadGlobals().RoundOffset
+        for _, row in ipairs({
+            { name = "up then down", counts = { 6, 5 }, want = 0 },
+            { name = "four steps as one", counts = { 6, 7, 8, 9 }, want = -66 },
+            { name = "X offset", counts = { 6, 5 }, want = 57,
+              between = function(sh) sh.Position.XOffset = 40 end },
+            { name = "Y offset", counts = { 6, 5 }, want = 1,
+              between = function(sh) sh.Position.YOffset = 7 end },
+            { name = "Anchor From", counts = { 6, 5 }, want = 1,
+              between = function(sh) sh.Position.AnchorFrom = "TOP" end },
+            { name = "relative point", counts = { 6, 5 }, want = 1,
+              between = function(sh) sh.Position.AnchorTo = "TOP" end },
+            { name = "Anchored To", counts = { 6, 5 }, want = 1,
+              between = function(sh) sh.anchorFrameType = "SELECTFRAME" end },
+            { name = "Anchored To frame", counts = { 6, 5 }, want = 1,
+              between = function(sh) sh.ParentFrame = "PlayerFrame" end },
+            { name = "Grow", counts = { 6, 5 }, want = -32,
+              between = function(sh) sh.Grow = "RIGHT" end },
+            -- Attached, the resize shifts nothing, so the length no longer matches.
+            { name = "length changed while attached", counts = { 6, 6 }, want = 1,
+              between = function(sh, dm)
+                  sh.Attach = true
+                  dm:ResizeSpellHistory("Count", 7)
+                  sh.Attach = false
+              end },
+        }) do
+            local dm, KE = L.loadDMSpellHistory()
+            KE.RoundOffset = round
+            KE.PixelSnap = function(_, v) return v end
+            local sh = {
+                Count = 5, IconSize = 32, Spacing = 1, Grow = "LEFT",
+                Position = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
+            }
+            dm.db = { SpellHistory = sh }
+            for i, count in ipairs(row.counts) do
+                if i == 2 and row.between then row.between(sh, dm) end
+                dm:ResizeSpellHistory("Count", count)
+            end
+            assert.equals(row.want, sh.Position.XOffset, row.name)
+        end
+    end)
+end)
