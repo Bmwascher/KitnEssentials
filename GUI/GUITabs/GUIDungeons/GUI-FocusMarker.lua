@@ -65,9 +65,15 @@ local function ClassName(token)
     return token
 end
 
--- Both preview cards: a heading, the length against the macro limit, then the body.
-local function AddPreviewSection(card, heading, body, bodyMax)
-    card:AddLabel(KE:ColorTextByTheme(heading))
+-- Macro names, like addon names and slash commands, read in gold.
+local function Gold(text)
+    return "|cffffd100" .. text .. "|r"
+end
+
+-- Both preview cards: a heading, the length against the macro limit, then the
+-- body. A macro name closing the heading keeps its gold.
+local function AddPreviewSection(card, heading, body, bodyMax, macroName)
+    card:AddLabel(KE:ColorTextByTheme(heading) .. (macroName or ""))
     card:AddLabel("|cff888888" .. #body .. " of " .. bodyMax .. " characters, read-only|r")
     card:AddLabel(body)
 end
@@ -101,7 +107,7 @@ local function BuildHeader(scrollChild, yOffset)
     local disabled = db.Enabled == false
     if not disabled then
         local FM = GetModule()
-        local kickName = FM and (", " .. FM.KICK_MACRO_NAME .. ",") or ""
+        local kickName = FM and (", " .. Gold(FM.KICK_MACRO_NAME) .. ",") or ""
         card:AddLabel("Writes a macro that sets your focus and puts your marker on it in one press, so " ..
             "a kick target can be called and taken together. The Focus Kick tab can add a second macro" ..
             kickName .. " that casts your interrupt at that focus. Drag either from |cffffd100/macro|r onto " ..
@@ -360,8 +366,8 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     manager:Register(cardMarker, "all")
     local markerBody = FM and FM:BuildMacroBody()
     if markerBody then
-        AddPreviewSection(cardMarker, "What KE writes to " .. (db.MacroName or "!FocusMarker"), markerBody,
-            FM.MACRO_BODY_MAX)
+        AddPreviewSection(cardMarker, "What KE writes to ", markerBody, FM.MACRO_BODY_MAX,
+            Gold(db.MacroName or "!FocusMarker"))
     else
         cardMarker:AddLabel("Nothing to preview.")
     end
@@ -380,7 +386,7 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
     local FM = GetModule()
     if not db or not FM then return Unavailable(scrollChild, yOffset) end
 
-    local kickName = FM.KICK_MACRO_NAME
+    local kickName = Gold(FM.KICK_MACRO_NAME)
     local bodyMax = FM.MACRO_BODY_MAX
 
     -- Writes before the page rebuilds, so the status below reads the result
@@ -499,7 +505,7 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
     manager:Register(cardPreview, "all")
 
     if body then
-        AddPreviewSection(cardPreview, "What KE writes to " .. kickName, body, bodyMax)
+        AddPreviewSection(cardPreview, "What KE writes to ", body, bodyMax, kickName)
         local fullBody = spellName and FM.BuildKickBody(spellName, KICK_ALL_ON, markerIdx)
         if fullBody then
             local sepRow = GUIFrame:CreateRow(cardPreview.content, Theme.rowHeightSeparator)
