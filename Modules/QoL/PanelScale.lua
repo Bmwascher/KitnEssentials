@@ -132,10 +132,9 @@ local function Track(frame, result)
     PS.edgeRoots[frame] = true
 end
 
--- Most managed roots are hidden while the slider moves, and re-laying their
--- borders on every step is the cost this avoids: a hidden root waits for its
--- next show instead. Visibility is read here, not in Track, because the state
--- at the end of the batch is the one the borders have to match.
+-- A hidden root is not re-laid on every slider step; it waits for its next
+-- show. Visibility is read here, not in Track: the borders match the state
+-- at the end of the batch.
 local function FlushSkinEdges()
     local roots, dirty = PS.edgeRoots, PS.edgeDirty
     if not (roots and dirty and next(roots)) then return end

@@ -597,9 +597,8 @@ local function RefreshIfUnder(bd, root, roots, refresh)
 end
 
 -- True only when every backdrop visited was placed outside the roots or
--- settled. Nothing is charged to a single root: a raise before any match, or
--- roots nested inside each other, would make that charge wrong, so an owed
--- walk is owed by every root it covered.
+-- settled. A raise before any match, or nested roots, leave no single root to
+-- charge, so an owed walk is owed by every root it covered.
 local function WalkEdges(root, roots, refresh)
     local settled = true
     for _, bd in pairs(backdropCache) do
