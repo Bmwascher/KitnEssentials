@@ -722,11 +722,14 @@ end
 function PB:PreviewIcon(d)
     local listKey = d.category.listKey
     if not listKey then return BIG_PREVIEW_ICON end
-    local spellID = KE.AuraRules.BuildSoundSpellIDs(self.db[listKey])[1]
+    local spellID = KE.AuraRules.FirstIncludeSpellID(self.db[listKey])
     return spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON
 end
 
 local STAND_IN_WIDTH, STAND_IN_HEIGHT = 220, 52
+-- The top of a party container whose mover reads -674,-63: the mover names
+-- the centre of a box sized for five rows, which fill it from the top.
+local STAND_IN_TOP_X, STAND_IN_TOP_Y = -674, 69
 local STAND_IN_ROWS = {
     { token = "WARRIOR", percent = 100 },
     { token = "PRIEST",  percent = 85 },
@@ -741,7 +744,7 @@ function PB:EnsurePreviewCells()
     local count = #STAND_IN_ROWS
     local block = CreateFrame("Frame", "KE_PartyBuffsPreviewBlock", UIParent)
     block:SetSize(STAND_IN_WIDTH, count * STAND_IN_HEIGHT + (count - 1) * px)
-    block:SetPoint("CENTER", UIParent, "CENTER", -674, -63)
+    block:SetPoint("TOP", UIParent, "CENTER", STAND_IN_TOP_X, STAND_IN_TOP_Y)
     block:SetFrameStrata("HIGH")
     block:EnableMouse(false)
     local cells = {}
@@ -761,7 +764,7 @@ function PB:EnsurePreviewCells()
         fill:SetPoint("TOPLEFT", missing, "TOPLEFT", 0, 0)
         fill:SetPoint("BOTTOMLEFT", missing, "BOTTOMLEFT", 0, 0)
         fill:SetWidth((STAND_IN_WIDTH - 2 * px) * sample.percent / 100)
-        fill:SetColorTexture(0.1, 0.1, 0.1, 1)
+        fill:SetColorTexture(8 / 255, 12 / 255, 16 / 255, 1)
         local names = _G.LOCALIZED_CLASS_NAMES_MALE
         local name = cell:CreateFontString(nil, "OVERLAY")
         KE:ApplyFontToText(name, nil, 12, "OUTLINE")
@@ -818,8 +821,9 @@ function PB:DrawPreviewRow(k, frame)
             cooldown:SetShown(settings.Swipe or settings.ShowTimer)
             cooldown:SetDrawSwipe(settings.Swipe)
             -- A preview frame registers no engine text, so the widget's own
-            -- numbers stand in for it, in the timer's font.
+            -- numbers stand in for it, in the timer's font and number format.
             cooldown:SetHideCountdownNumbers(not settings.ShowTimer)
+            cooldown:SetCountdownFormatter(KE.AuraStyle.GetDurationFormatter(settings))
             KE:ApplyFontToText(cooldown:GetCountdownFontString(), settings.FontFace, settings.TimerFontSize,
                 settings.FontOutline)
             cooldown:SetCooldown(now - offset, duration)
@@ -850,9 +854,8 @@ function PB:ShowPreview()
         local cells = self:EnsurePreviewCells()
         for k = 1, #cells do frames[k] = cells[k] end
         self.previewBlock:Show()
-        -- Four rows and three 1 px lines make an odd height, so the centre
-        -- anchor leaves the edges on a half pixel. The snap needs the rect,
-        -- which a shown frame has; once on the grid it changes nothing.
+        -- The screen centre can fall on a half pixel. The snap needs the
+        -- rect, which a shown frame has; once on the grid it changes nothing.
         KE:SnapFrameToPixels(self.previewBlock)
     elseif self.previewBlock then
         self.previewBlock:Hide()

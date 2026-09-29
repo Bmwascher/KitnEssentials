@@ -120,6 +120,10 @@ end
 
 -- Saved allowlist entries are RECORDS with an enabled flag, matching the
 -- blocklist's shape, so a disabled row must not admit its spell.
+local function IsIncluded(spellID, record)
+    return IsPositiveInteger(spellID) and type(record) == "table" and record.enabled ~= false
+end
+
 --
 -- ALWAYS A TABLE, never nil. A nil includeSpellIDs means "no whitelist", and a
 -- group filtering plain HELPFUL with no whitelist shows every buff on the
@@ -133,8 +137,7 @@ function Rules.BuildIncludeSpellIDs(saved)
 
     if saved then
         for spellID, record in pairs(saved) do
-            if IsPositiveInteger(spellID)
-                and type(record) == "table" and record.enabled ~= false then
+            if IsIncluded(spellID, record) then
                 set[spellID] = true
             end
         end
@@ -214,6 +217,20 @@ function Rules.BuildSoundSpellIDs(saved)
     table_sort(ids)
 
     return ids
+end
+
+-- BuildSoundSpellIDs(saved)[1] without building either table: a preview reads
+-- one icon per list on every settings change.
+function Rules.FirstIncludeSpellID(saved)
+    local first
+    if saved then
+        for spellID, record in pairs(saved) do
+            if IsIncluded(spellID, record) and (first == nil or spellID < first) then
+                first = spellID
+            end
+        end
+    end
+    return first
 end
 
 -- maxFrameCount is per group and unused capacity cannot cross a group

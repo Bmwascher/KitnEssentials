@@ -456,3 +456,28 @@ describe("sound spell id array placeholder handling", function()
         assert.same({ 47788 }, ids)
     end)
 end)
+
+describe("first include spell id", function()
+    it("matches the first id of the sorted sound array for every row shape", function()
+        local R = L.loadAuraRules()
+        for name, saved in pairs({
+            mixed = {
+                [47788]   = { enabled = true },
+                [1022]    = { enabled = false },
+                [33206]   = {},
+                [-1]      = { enabled = true },
+                ["6940"]  = { enabled = true },
+                [102342]  = "not a record",
+            },
+            many = {
+                [357170] = {}, [6940] = {}, [102342] = {}, [47788] = {}, [33206] = {},
+                [1022] = {}, [642] = {}, [31821] = {}, [98008] = {}, [116849] = {},
+            },
+            disabled = { [1022] = { enabled = false } },
+            empty = {},
+        }) do
+            assert.equals(R.BuildSoundSpellIDs(saved)[1], R.FirstIncludeSpellID(saved), name)
+        end
+        assert.is_nil(R.FirstIncludeSpellID(nil))
+    end)
+end)
