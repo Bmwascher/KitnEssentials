@@ -70,8 +70,7 @@ local function Gold(text)
     return "|cffffd100" .. text .. "|r"
 end
 
--- Both preview cards: a heading, the length against the macro limit, then the
--- body. A macro name closing the heading keeps its gold.
+-- Shared so the two preview cards open the same way.
 local function AddPreviewSection(card, heading, body, bodyMax, macroName)
     card:AddLabel(KE:ColorTextByTheme(heading) .. (macroName or ""))
     card:AddLabel("|cff888888" .. #body .. " of " .. bodyMax .. " characters, read-only|r")
