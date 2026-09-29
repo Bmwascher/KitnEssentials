@@ -812,7 +812,11 @@ function MF:HandleAddon(_, addon)
             -- and put it back on its XML anchor.
             local picker = _G.HeroTalentsSelectionDialog
             if picker:IsUserPlaced() and not picker:IsShown() and not IsProtectedFrame(picker) then
+                -- SetUserPlaced may refuse a frame that is not movable.
+                local movable = picker:IsMovable()
+                picker:SetMovable(true)
                 picker:SetUserPlaced(false)
+                picker:SetMovable(movable)
                 picker:ClearAllPoints()
                 picker:SetPoint("TOP", UIParent, "TOP", 0, -70)
             end
