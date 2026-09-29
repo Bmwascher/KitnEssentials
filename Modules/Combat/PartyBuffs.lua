@@ -710,8 +710,8 @@ end
 
 ---------------------------------------------------------------------------------
 -- Preview: plain KE frames beside each resolved party frame (an engine button
--- cannot be made to show an absent aura), or beside a stand-in cell when no
--- party frame is on screen.
+-- cannot be made to show an absent aura), or beside four stand-in party rows
+-- when no party frame is on screen.
 ---------------------------------------------------------------------------------
 local function RearmPreview(cooldown)
     if cooldown.keDuration then cooldown:SetCooldown(GetTime(), cooldown.keDuration) end
@@ -724,29 +724,58 @@ function PB:PreviewIcon(d)
     return spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON
 end
 
-function PB:EnsurePreviewCell()
-    if self.previewCell then return self.previewCell end
-    local cell = CreateFrame("Frame", "KE_PartyBuffsPreviewCell", UIParent)
-    cell:SetSize(72, 46)
-    cell:SetPoint("CENTER", UIParent, "CENTER", 0, -160)
-    cell:SetFrameStrata("HIGH")
-    cell:EnableMouse(false)
-    local bg = cell:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints(cell)
-    bg:SetColorTexture(0.08, 0.08, 0.08, 0.95)
-    local hp = cell:CreateTexture(nil, "ARTWORK")
-    hp:SetPoint("TOPLEFT", cell, "TOPLEFT", 1, -1)
-    hp:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -1, 1)
-    hp:SetColorTexture(0.25, 0.25, 0.25, 0.9)
-    local name = cell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    name:SetPoint("CENTER", cell, "CENTER", 0, 4)
-    name:SetText("Party Frame")
-    local sub = cell:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    sub:SetPoint("CENTER", cell, "CENTER", 0, -8)
-    sub:SetText("preview")
-    cell:Hide()
-    self.previewCell = cell
-    return cell
+local STAND_IN_WIDTH, STAND_IN_HEIGHT = 220, 52
+local STAND_IN_ROWS = {
+    { token = "WARRIOR", percent = 100 },
+    { token = "PRIEST",  percent = 85 },
+    { token = "MAGE",    percent = 60 },
+    { token = "ROGUE",   percent = 35 },
+}
+
+-- Built once, on the first solo preview. Each row is a black edge, a grey
+-- missing-health area and a dark health fill from the left.
+function PB:EnsurePreviewCells()
+    if self.previewCells then return self.previewCells end
+    local px = KE:GetPixelSize()
+    local count = #STAND_IN_ROWS
+    local block = CreateFrame("Frame", "KE_PartyBuffsPreviewBlock", UIParent)
+    block:SetSize(STAND_IN_WIDTH, count * STAND_IN_HEIGHT + (count - 1) * px)
+    block:SetPoint("CENTER", UIParent, "CENTER", -674, -63)
+    block:SetFrameStrata("HIGH")
+    block:EnableMouse(false)
+    local cells = {}
+    for i, sample in ipairs(STAND_IN_ROWS) do
+        local cell = CreateFrame("Frame", "KE_PartyBuffsPreviewCell" .. i, block)
+        cell:SetSize(STAND_IN_WIDTH, STAND_IN_HEIGHT)
+        cell:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -(i - 1) * (STAND_IN_HEIGHT + px))
+        cell:EnableMouse(false)
+        local edge = cell:CreateTexture(nil, "BACKGROUND")
+        edge:SetAllPoints(cell)
+        edge:SetColorTexture(0, 0, 0, 1)
+        local missing = cell:CreateTexture(nil, "BORDER")
+        missing:SetPoint("TOPLEFT", cell, "TOPLEFT", px, -px)
+        missing:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -px, px)
+        missing:SetColorTexture(0.3, 0.3, 0.3, 1)
+        local fill = cell:CreateTexture(nil, "ARTWORK")
+        fill:SetPoint("TOPLEFT", missing, "TOPLEFT", 0, 0)
+        fill:SetPoint("BOTTOMLEFT", missing, "BOTTOMLEFT", 0, 0)
+        fill:SetWidth((STAND_IN_WIDTH - 2 * px) * sample.percent / 100)
+        fill:SetColorTexture(0.1, 0.1, 0.1, 1)
+        local names = _G.LOCALIZED_CLASS_NAMES_MALE
+        local name = cell:CreateFontString(nil, "OVERLAY")
+        KE:ApplyFontToText(name, nil, 12, "OUTLINE")
+        name:SetPoint("TOPLEFT", cell, "TOPLEFT", 4, -4)
+        name:SetText(KE:ColorTextByClass((names and names[sample.token]) or sample.token, sample.token))
+        local health = cell:CreateFontString(nil, "OVERLAY")
+        KE:ApplyFontToText(health, nil, 12, "OUTLINE")
+        health:SetPoint("TOPRIGHT", cell, "TOPRIGHT", -4, -4)
+        health:SetText(sample.percent .. "%")
+        cells[i] = cell
+    end
+    block:Hide()
+    self.previewBlock = block
+    self.previewCells = cells
+    return cells
 end
 
 function PB:DrawPreviewRow(k, frame)
@@ -807,11 +836,18 @@ function PB:ShowPreview()
     local bindings = self:FindFrames()
     local frames = {}
     for i = 1, #bindings do frames[i] = bindings[i].frame end
-    if #frames == 0 then
-        frames[1] = self:EnsurePreviewCell()
-        frames[1]:Show()
-    elseif self.previewCell then
-        self.previewCell:Hide()
+    -- Solo only: grouped with no party frame found, rows beside stand-ins
+    -- would stand for teammates the player cannot see.
+    if #frames == 0 and not IsInGroup() then
+        local cells = self:EnsurePreviewCells()
+        for k = 1, #cells do frames[k] = cells[k] end
+        self.previewBlock:Show()
+        -- Four rows and three 1 px lines make an odd height, so the centre
+        -- anchor leaves the edges on a half pixel. The snap needs the rect,
+        -- which a shown frame has; once on the grid it changes nothing.
+        KE:SnapFrameToPixels(self.previewBlock)
+    elseif self.previewBlock then
+        self.previewBlock:Hide()
     end
     for k = 1, MAX_SLOTS do
         if frames[k] then
@@ -835,7 +871,7 @@ function PB:HidePreviewFrames()
             row.holder:Hide()
         end
     end
-    if self.previewCell then self.previewCell:Hide() end
+    if self.previewBlock then self.previewBlock:Hide() end
 end
 
 function PB:HidePreview()
