@@ -65,6 +65,13 @@ local function ClassName(token)
     return token
 end
 
+-- Both preview cards: a heading, the length against the macro limit, then the body.
+local function AddPreviewSection(card, heading, body, bodyMax)
+    card:AddLabel(KE:ColorTextByTheme(heading))
+    card:AddLabel("|cff888888" .. #body .. " of " .. bodyMax .. " characters, read-only|r")
+    card:AddLabel(body)
+end
+
 local function Unavailable(scrollChild, yOffset)
     local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
     errorCard:AddLabel("Focus Macros is not available.")
@@ -353,9 +360,8 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     manager:Register(cardMarker, "all")
     local markerBody = FM and FM:BuildMacroBody()
     if markerBody then
-        cardMarker:AddLabel("|cff888888What KE writes to " .. (db.MacroName or "!FocusMarker") ..
-            ". Read-only.  " .. #markerBody .. " of " .. FM.MACRO_BODY_MAX .. " characters|r")
-        cardMarker:AddLabel(markerBody)
+        AddPreviewSection(cardMarker, "What KE writes to " .. (db.MacroName or "!FocusMarker"), markerBody,
+            FM.MACRO_BODY_MAX)
     else
         cardMarker:AddLabel("Nothing to preview.")
     end
@@ -492,20 +498,14 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
     local cardPreview = GUIFrame:CreateCard(scrollChild, "Macro Preview", yOffset)
     manager:Register(cardPreview, "all")
 
-    local function AddSection(heading, text)
-        cardPreview:AddLabel(KE:ColorTextByTheme(heading))
-        cardPreview:AddLabel("|cff888888" .. #text .. " of " .. bodyMax .. " characters, read-only|r")
-        cardPreview:AddLabel(text)
-    end
-
     if body then
-        AddSection("What KE writes to " .. kickName, body)
+        AddPreviewSection(cardPreview, "What KE writes to " .. kickName, body, bodyMax)
         local fullBody = spellName and FM.BuildKickBody(spellName, KICK_ALL_ON, markerIdx)
         if fullBody then
             local sepRow = GUIFrame:CreateRow(cardPreview.content, Theme.rowHeightSeparator)
             sepRow:AddWidget(GUIFrame:CreateSeparator(sepRow), 1)
             cardPreview:AddRow(sepRow, Theme.rowHeightSeparator)
-            AddSection("With every option on", fullBody)
+            AddPreviewSection(cardPreview, "With every option on", fullBody, bodyMax)
         end
     else
         cardPreview:AddLabel("Nothing to preview for this spec.")
