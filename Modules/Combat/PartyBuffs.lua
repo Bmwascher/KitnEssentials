@@ -98,7 +98,6 @@ PB.resolvePending = false
 PB.restylePending = false
 PB.reconfigurePending = false
 PB.buildPending = false
-PB.settlePending = false
 PB.slots = {}
 PB.bindings = {}
 PB.queue = {}
@@ -622,13 +621,13 @@ end
 
 -- Nothing announces that a unit-frame addon has finished building its party
 -- frames, and a frame already shown before the first resolve found it has no
--- show left to hook. One more resolve after each loading screen catches it.
+-- show left to hook. One more resolve after each loading screen catches it,
+-- timed from the latest entry.
 function PB:OnWorldEntry()
     self:EvaluateGate()
-    if self.settlePending then return end
-    self.settlePending = true
-    C_Timer.After(WORLD_SETTLE, function()
-        self.settlePending = false
+    if self._worldTimer then self._worldTimer:Cancel() end
+    self._worldTimer = C_Timer.NewTimer(WORLD_SETTLE, function()
+        self._worldTimer = nil
         if not (self:IsEnabled() and self.active) then return end
         Debug("world settle")
         self:QueueResolve()
@@ -951,6 +950,7 @@ end
 
 function PB:OnDisable()
     if self._rosterTimer then self._rosterTimer:Cancel(); self._rosterTimer = nil end
+    if self._worldTimer then self._worldTimer:Cancel(); self._worldTimer = nil end
     self:Deactivate()
     self:UnregisterAllEvents()
     self:HidePreview()
