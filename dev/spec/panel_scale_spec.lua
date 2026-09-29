@@ -343,7 +343,7 @@ describe("PanelScale ownership", function()
     it("reapplies any managed root at Blizzard's fit, ignores other frames, and never repositions", function()
         local _, c = load({ Scale = 0.8 })
         local managed = fakeFrame("CharacterFrame", 1)
-        local other = fakeFrame("HeroTalentsSelectionDialog", 1)
+        local other = fakeFrame("GameMenuFrame", 1)
         c.enable()
         c.resetRepositions()
         managed._scale = 1

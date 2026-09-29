@@ -19,6 +19,7 @@ local ENTRIES = {
     -- Core Panels
     { name = "CharacterFrame",                 category = "Core", label = "Character" },
     { name = "PlayerSpellsFrame",              category = "Core", label = "Spellbook and Talents",     addon = "Blizzard_PlayerSpells" },
+    { name = "HeroTalentsSelectionDialog",     category = "Core", label = "Hero Talents",              addon = "Blizzard_PlayerSpells" },
     { name = "ProfessionsBookFrame",           category = "Core", label = "Professions Book",          addon = "Blizzard_ProfessionsBook" },
     { name = "ProfessionsFrame",               category = "Core", label = "Professions",               addon = "Blizzard_Professions" },
     { name = "ProfessionsCustomerOrdersFrame", category = "Core", label = "Crafting Orders",           addon = "Blizzard_ProfessionsCustomerOrders" },
