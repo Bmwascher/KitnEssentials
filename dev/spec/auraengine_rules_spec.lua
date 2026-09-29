@@ -469,6 +469,10 @@ describe("first include spell id", function()
                 ["6940"]  = { enabled = true },
                 [102342]  = "not a record",
             },
+            many = {
+                [357170] = {}, [6940] = {}, [102342] = {}, [47788] = {}, [33206] = {},
+                [1022] = {}, [642] = {}, [31821] = {}, [98008] = {}, [116849] = {},
+            },
             disabled = { [1022] = { enabled = false } },
             empty = {},
         }) do

@@ -120,6 +120,10 @@ end
 
 -- Saved allowlist entries are RECORDS with an enabled flag, matching the
 -- blocklist's shape, so a disabled row must not admit its spell.
+local function IsIncluded(spellID, record)
+    return IsPositiveInteger(spellID) and type(record) == "table" and record.enabled ~= false
+end
+
 --
 -- ALWAYS A TABLE, never nil. A nil includeSpellIDs means "no whitelist", and a
 -- group filtering plain HELPFUL with no whitelist shows every buff on the
@@ -133,8 +137,7 @@ function Rules.BuildIncludeSpellIDs(saved)
 
     if saved then
         for spellID, record in pairs(saved) do
-            if IsPositiveInteger(spellID)
-                and type(record) == "table" and record.enabled ~= false then
+            if IsIncluded(spellID, record) then
                 set[spellID] = true
             end
         end
@@ -222,8 +225,7 @@ function Rules.FirstIncludeSpellID(saved)
     local first
     if saved then
         for spellID, record in pairs(saved) do
-            if IsPositiveInteger(spellID) and type(record) == "table" and record.enabled ~= false
-                and (first == nil or spellID < first) then
+            if IsIncluded(spellID, record) and (first == nil or spellID < first) then
                 first = spellID
             end
         end
