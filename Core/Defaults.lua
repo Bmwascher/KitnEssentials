@@ -850,7 +850,7 @@ local Defaults = {
 
             -- Keyed by the class token UnitClass returns. A saved entry that
             -- differs from its default here is the player's override.
-            MarkerFromClass = false,
+            MarkerFromClass = true,
             ClassMarkers = {
                 DEATHKNIGHT = "Cross",
                 DEMONHUNTER = "Diamond",
