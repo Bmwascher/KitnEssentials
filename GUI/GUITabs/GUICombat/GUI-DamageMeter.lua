@@ -1713,18 +1713,16 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     manager:Register(sizeSlider, "all")
     cardIcons:AddRow(rowSize, Theme.rowHeight)
 
-    local rowSpacing = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeight)
+    local rowSpacing = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeightLast)
     local spacingSlider = GUIFrame:CreateSlider(rowSpacing, "Spacing", {
         min = 0, max = 10, step = 1,
         value = sh.Spacing or 2,
         callback = function(val) sh.Spacing = val; ApplyStrip() end,
     })
-    rowSpacing:AddWidget(spacingSlider, 1)
+    rowSpacing:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "all")
-    cardIcons:AddRow(rowSpacing, Theme.rowHeight)
 
-    local rowGrow = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeightLast)
-    local growDd = GUIFrame:CreateDropdown(rowGrow, "Grow Direction", {
+    local growDd = GUIFrame:CreateDropdown(rowSpacing, "Grow Direction", {
         options = {
             { key = "LEFT",  text = "Left" },
             { key = "RIGHT", text = "Right" },
@@ -1734,9 +1732,9 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
         value = sh.Grow or "LEFT",
         callback = function(key) sh.Grow = key; ApplyStrip() end,
     })
-    rowGrow:AddWidget(growDd, 0.5)
+    rowSpacing:AddWidget(growDd, 0.5)
     manager:Register(growDd, "all")
-    cardIcons:AddRow(rowGrow, Theme.rowHeightLast, 0)
+    cardIcons:AddRow(rowSpacing, Theme.rowHeightLast, 0)
 
     yOffset = cardIcons:GetNextOffset()
 
