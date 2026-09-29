@@ -849,7 +849,7 @@ function MF:HandleAddon(_, addon)
                     startStopMoving(picker)
                     RunNextFrame(GenerateFlatClosure(startStopMoving, frame))
                 elseif action == "restore" then
-                    -- The anchor Blizzard_HeroTalentsSelectionDialog.xml gives it.
+                    -- Its XML anchor; the SetPoint hook then re-applies a remembered spot.
                     picker:ClearAllPoints()
                     picker:SetPoint("TOP", UIParent, "TOP", 0, -70)
                     picker:SetUserPlaced(false)
