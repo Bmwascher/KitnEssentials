@@ -727,6 +727,9 @@ function PB:PreviewIcon(d)
 end
 
 local STAND_IN_WIDTH, STAND_IN_HEIGHT = 220, 52
+-- The top of an EllesmereUI party container moved to -674,-63: the mover
+-- names the centre of a box sized for five rows, filled from the top.
+local STAND_IN_TOP_X, STAND_IN_TOP_Y = -674, 69
 local STAND_IN_ROWS = {
     { token = "WARRIOR", percent = 100 },
     { token = "PRIEST",  percent = 85 },
@@ -741,7 +744,7 @@ function PB:EnsurePreviewCells()
     local count = #STAND_IN_ROWS
     local block = CreateFrame("Frame", "KE_PartyBuffsPreviewBlock", UIParent)
     block:SetSize(STAND_IN_WIDTH, count * STAND_IN_HEIGHT + (count - 1) * px)
-    block:SetPoint("CENTER", UIParent, "CENTER", -674, -63)
+    block:SetPoint("TOP", UIParent, "CENTER", STAND_IN_TOP_X, STAND_IN_TOP_Y)
     block:SetFrameStrata("HIGH")
     block:EnableMouse(false)
     local cells = {}
@@ -851,9 +854,8 @@ function PB:ShowPreview()
         local cells = self:EnsurePreviewCells()
         for k = 1, #cells do frames[k] = cells[k] end
         self.previewBlock:Show()
-        -- Four rows and three 1 px lines make an odd height, so the centre
-        -- anchor leaves the edges on a half pixel. The snap needs the rect,
-        -- which a shown frame has; once on the grid it changes nothing.
+        -- The screen centre can fall on a half pixel. The snap needs the
+        -- rect, which a shown frame has; once on the grid it changes nothing.
         KE:SnapFrameToPixels(self.previewBlock)
     elseif self.previewBlock then
         self.previewBlock:Hide()
