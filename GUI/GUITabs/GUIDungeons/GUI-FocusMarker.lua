@@ -109,7 +109,7 @@ local function BuildHeader(scrollChild, yOffset)
 end
 
 ----------------------------------------------------------------
--- Marker tab
+-- Focus Marker tab
 ----------------------------------------------------------------
 GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     local db = GetDB()
@@ -518,10 +518,10 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
 end)
 
 ----------------------------------------------------------------
--- Host: the module switch above a Marker | Focus Kick strip
+-- Host: the module switch above a Focus Marker | Focus Kick strip
 ----------------------------------------------------------------
 GUIFrame:RegisterTabbedContent("FocusMarker", {
-    { id = "FocusMarkerMarker", label = "Marker" },
+    { id = "FocusMarkerMarker", label = "Focus Marker" },
     { id = "FocusMarkerKick",   label = "Focus Kick" },
 }, {
     headerBuilder = BuildHeader,
