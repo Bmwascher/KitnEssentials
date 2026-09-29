@@ -148,6 +148,7 @@ KT.activationID = 0       -- bumped on each activation; deferred callbacks check
 KT.combatEventsRegistered = false
 KT.commState = {}  -- commBlocked: a lockdown refusal since the last successful send
 KT.kickPairing = { claims = {}, paired = {} }  -- keyed guid..":"..kickID; see KT.PairComm
+KT.ownClaim = {}  -- at: the player's last kick cast; see KT:ClaimOwnKick
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -492,8 +493,14 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
             tostring(unit), tostring(ok), issecretvalue(token) and "secret" or tostring(token),
             tostring(not KE:IsSafeValue(interruptedBy))))
     end
-    if ok and KE:IsSafeValue(token) and KT.IsOwnKickToken(token) then
-        self._ownLandedAt = GetTime()
+    -- A hidden kicker (secret or no token, as in a running key) is the
+    -- player's own kick when the player just cast one (KT:ClaimOwnKick).
+    local now = GetTime()
+    local own = ok and KE:IsSafeValue(token) and KT.IsOwnKickToken(token)
+    local hidden = not (ok and KE:IsSafeValue(token))
+    if own or (hidden and KT.TakeOwnClaim(self.ownClaim, now, OWN_KICK_MATCH_WINDOW)) then
+        self.ownClaim.at = nil
+        self._ownLandedAt = now
         self:TryOwnReduction()
         return
     end
@@ -505,10 +512,12 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     if okMark and (issecretvalue(markIndex) or markIndex ~= nil) then
         raidMark, hasRaidMark = markIndex, true
     end
-    self:ProcessTeammateKick(interruptedBy, spellID, raidMark, hasRaidMark)
+    self:ProcessTeammateKick(interruptedBy, spellID, raidMark, hasRaidMark, hidden)
 end
 
-function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID, raidMark, hasRaidMark)
+-- hiddenKicker: the game hid who kicked, so the player's own cast arriving
+-- just after may still claim the record (KT:ClaimOwnKick).
+function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID, raidMark, hasRaidMark, hiddenKicker)
     -- What the game lets us see about the kicker, for display only: the name
     -- and class may be secret, so neither is compared.
     local ok, name = pcall(UnitNameFromGUID, interrupterGuid)
@@ -563,6 +572,7 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID, raidMark, h
         duration = self.db.KickRecordDuration or KICK_RECORD_FALLBACK_DURATION,
         raidMark = raidMark,  -- possibly secret; SetSpriteSheetCell-only
         hasRaidMark = hasRaidMark,
+        hiddenKicker = hiddenKicker,
     }
     table_insert(self.kickRecords, record)
 
@@ -890,6 +900,21 @@ function KT:OnChannelStop(_, unit, _, spellID, interruptedBy)
     self:HandleNameplateInterrupt(unit, spellID, interruptedBy)
 end
 
+-- The player's kick claims the interrupt it causes when the game hides the
+-- kicker. The interrupt can arrive first: its record, still unseen in its
+-- grace, is then the player's and goes. Returns that record's time.
+function KT:ClaimOwnKick(now)
+    local index = KT.OwnRecordIndex(self.kickRecords, now, KICK_RECORD_GRACE)
+    if not index then
+        self.ownClaim.at = now
+        return nil
+    end
+    self.ownClaim.at = nil
+    local landedAt = self.kickRecords[index].startTime
+    self:RemoveKickRecordAt(index)
+    return landedAt
+end
+
 -- A talent-added kick starts only when KT:GetOwnExtraKicks listed it; the
 -- same spell without its talent is not a kick.
 function KT:StartOwnExtraKick(guid, spellID)
@@ -900,6 +925,7 @@ function KT:StartOwnExtraKick(guid, spellID)
         local entry = list[i]
         if entry.id == spellID then
             entry.kickStart, entry.kickDuration = GetTime(), entry.cd
+            self:ClaimOwnKick(entry.kickStart)
             self:RefreshMemberRow(guid)
             self:BroadcastKick(spellID, entry.cd, true)
             return
@@ -932,6 +958,8 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     end
     self._lastOwnKickID, self._lastOwnKickAt = kickID, now
     self._ownKickAt, self._ownKickSpell = now, kickID
+    local landedAt = self:ClaimOwnKick(now)
+    if landedAt then self._ownLandedAt = landedAt end
     local member = self.partyMembers[guid]
     local data = member and member.interruptData
     local kickCd = member and KE:GetKickCooldownForSpec(member.specID, kickID)

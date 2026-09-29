@@ -624,3 +624,36 @@ describe("KickTracker own-kick duplicate", function()
     end)
 end)
 
+
+describe("KickTracker own kick with a hidden kicker", function()
+    it("claims one hidden interrupt inside the window after the own cast, once", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "no own cast", at = nil, now = 10, want = false },
+            { name = "an interrupt inside the window", at = 10, now = 10.3, want = true },
+            { name = "an interrupt after the window", at = 10, now = 10.6, want = false },
+        }
+        for _, row in ipairs(rows) do
+            local claim = { at = row.at }
+            assert.equals(row.want, KT.TakeOwnClaim(claim, row.now, 0.5), row.name)
+            assert.is_nil(claim.at, row.name)
+        end
+    end)
+
+    it("takes the newest hidden-kicker record inside the window when the interrupt came first", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "no records", records = {}, want = nil },
+            { name = "the newest hidden record inside the window",
+              records = { { startTime = 9.9, hiddenKicker = true }, { startTime = 9.95, hiddenKicker = true } },
+              want = 2 },
+            { name = "a readable kicker's record is never taken",
+              records = { { startTime = 9.8, hiddenKicker = true }, { startTime = 9.9 } }, want = 1 },
+            { name = "a record older than the window is not the cast's",
+              records = { { startTime = 9.5, hiddenKicker = true } }, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.OwnRecordIndex(row.records, 10, 0.4), row.name)
+        end
+    end)
+end)

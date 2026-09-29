@@ -424,6 +424,27 @@ function KT.OwnKickMatched(kickAt, landedAt, window)
     return gap <= window
 end
 
+-- The player's kick cast and an interrupt whose kicker the game hid are one
+-- kick when the interrupt lands inside the window. The claim is used up either
+-- way, so one cast never hides two records.
+function KT.TakeOwnClaim(claim, now, window)
+    local at = claim.at
+    if not at then return false end
+    claim.at = nil
+    return now - at <= window
+end
+
+-- The interrupt came first: the newest record with a hidden kicker made
+-- inside the window is the player's own kick. Records are in time order.
+function KT.OwnRecordIndex(records, now, window)
+    for i = #records, 1, -1 do
+        local record = records[i]
+        if now - record.startTime > window then return nil end
+        if record.hiddenKicker then return i end
+    end
+    return nil
+end
+
 -- Every kick cooldown is far longer than the window, so the same kick again
 -- inside it is one press reported twice, not a recast.
 function KT.DuplicateOwnKick(lastID, lastAt, kickID, now, window)
