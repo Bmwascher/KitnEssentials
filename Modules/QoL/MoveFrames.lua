@@ -22,8 +22,6 @@
 -- ║  gains it with its result list), so the drag handlers    ║
 -- ║  re-check it per drag. The three InCombatLockdown        ║
 -- ║  guards are load-bearing, never remove one.              ║
--- ║  One exception: the talent window's open-time move       ║
--- ║  reset runs insecurely, out of combat only.              ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -39,15 +37,14 @@ local pairs, type = pairs, type
 local strsplit, wipe = strsplit, wipe
 local table_insert = table.insert
 
-local InCombatLockdown, RunNextFrame = InCombatLockdown, RunNextFrame
+local InCombatLockdown = InCombatLockdown
 local IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown = IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown
 local GetCursorPosition, GetScreenWidth, GetScreenHeight = GetCursorPosition, GetScreenWidth, GetScreenHeight
 local CreateFrame, UIParent = CreateFrame, UIParent
 
--- tDeleteItem and GenerateFlatClosure are not in the project's luacheck
--- read_globals allowlist; reach them through _G rather than widen it.
+-- tDeleteItem is not in the project's luacheck read_globals allowlist;
+-- reach it through _G rather than widen it.
 local tDeleteItem = _G.tDeleteItem
-local GenerateFlatClosure = _G.GenerateFlatClosure
 
 local C_AddOns_IsAddOnLoaded = C_AddOns.IsAddOnLoaded
 
@@ -363,7 +360,6 @@ local BlizzardFramesOnDemand = {
         "OrderHallTalentFrame",
     },
     ["Blizzard_PlayerSpells"] = {
-        "HeroTalentsSelectionDialog",
         ["PlayerSpellsFrame"] = {
             "PlayerSpellsFrame.TalentsFrame.ButtonsParent",
         },
@@ -459,7 +455,6 @@ local secureDrag = {}  -- .frame plus press-time cursor and centre while a prote
 
 local framePaths = {}  -- [frame] = dotted path it was registered under; keys the saved positions
 local applying = {}    -- [frame] = true while our own SetPoint is in flight
-local onShowExtra = {} -- [frame] = work Frame_OnShow runs after the saved point is applied
 
 -- Put back where it was dragged, the choice dialog opens off its own layout,
 -- the bonus roll prompt off the anchor Alert Frames gives it, and the loot
@@ -615,18 +610,6 @@ local function DragPath(button, modifierHeld, protected, inCombat, isDisabled)
     return "native"
 end
 
--- The talent window and the hero picker are move-reset as a pair or not at
--- all: one reset without the other breaks the picker's anchors. The talent
--- window cannot be moved in combat, so there a closed picker goes back to its
--- default anchor instead; an open one holds the talent window's buttons and
--- is protected.
-function MF.PairResetAction(initialized, inCombat, pickerProtected)
-    if initialized ~= true then return "none" end
-    if not inCombat then return "reset" end
-    if pickerProtected then return "none" end
-    return "restore"
-end
-
 -- Remembered positions ---------------------------------------------------------
 -- One saved point per window, put back from the window's OnShow and again
 -- whenever Blizzard re-points it: the panel manager writes the default spot
@@ -685,8 +668,6 @@ end
 
 function MF:Frame_OnShow(frame)
     self:ApplySaved(frame)
-    local extra = onShowExtra[frame]
-    if extra then extra(frame) end
 end
 
 -- Windows return to Blizzard's layout the next time they open; one that is
@@ -824,52 +805,17 @@ function MF:HandleAddon(_, addon)
                     _G.PlayerChoiceFrame:ClearAllPoints()
                 end
             end)
-        elseif addon == "Blizzard_PlayerSpells" and _G.HeroTalentsSelectionDialog and _G.PlayerSpellsFrame then
+        elseif addon == "Blizzard_PlayerSpells" and _G.HeroTalentsSelectionDialog then
+            -- The hero picker is not movable: moving it breaks the anchors of
+            -- the talent buttons it borrows while open. A spot it was dragged
+            -- to earlier survives in the client's layout cache, so clear that
+            -- and put it back on its XML anchor.
             local picker = _G.HeroTalentsSelectionDialog
-            -- Whether the pair was reset on the talent window's current show.
-            local pairReset = false
-            local function startStopMoving(frame)
-                if MF.PairResetAction(MF.initialized, InCombatLockdown(), false) ~= "reset" then
-                    return
-                end
-                local backup = frame:IsMovable()
-                frame:SetMovable(true)
-                frame:StartMoving()
-                frame:StopMovingOrSizing()
-                frame:SetMovable(backup)
+            if picker:IsUserPlaced() and not picker:IsShown() and not IsProtectedFrame(picker) then
+                picker:SetUserPlaced(false)
+                picker:ClearAllPoints()
+                picker:SetPoint("TOP", UIParent, "TOP", 0, -70)
             end
-            -- The picker is closed whenever the talent window shows, so the
-            -- pair is decided here. The rerun never restores: a pull one frame
-            -- later must not split a pair that was just reset.
-            local function onTalentsShow(frame)
-                local action = MF.PairResetAction(MF.initialized, InCombatLockdown(), IsProtectedFrame(picker))
-                pairReset = action == "reset"
-                if pairReset then
-                    startStopMoving(frame)
-                    startStopMoving(picker)
-                    RunNextFrame(GenerateFlatClosure(startStopMoving, frame))
-                elseif action == "restore" then
-                    -- Its XML anchor; the SetPoint hook then re-applies a remembered spot.
-                    picker:ClearAllPoints()
-                    picker:SetPoint("TOP", UIParent, "TOP", 0, -70)
-                    picker:SetUserPlaced(false)
-                end
-            end
-            local function onPickerShow(frame)
-                if not pairReset then return end
-                startStopMoving(frame)
-                RunNextFrame(GenerateFlatClosure(startStopMoving, frame))
-            end
-
-            -- Both frames already carry the Frame_OnShow hook, and AceHook
-            -- refuses a second one, so the fix rides that handler.
-            for _, frame in pairs({ _G.PlayerSpellsFrame, picker }) do
-                if not self:IsHooked(frame, "OnShow") then
-                    self:SecureHookScript(frame, "OnShow", "Frame_OnShow")
-                end
-            end
-            onShowExtra[_G.PlayerSpellsFrame] = onTalentsShow
-            onShowExtra[picker] = onPickerShow
         end
     end)
 end
@@ -976,7 +922,6 @@ function MF:OnDisable()
     wipe(combatQueue)
     wipe(framePaths)
     wipe(applying)
-    wipe(onShowExtra)
     self.initialized = nil
     self.StopRunning = nil
 end

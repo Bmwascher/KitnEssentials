@@ -7,8 +7,7 @@
 -- that routes a press to the secure snippet, the native drag, or nothing;
 -- MF:SetMovable is also checked for the yield guard that stops a live
 -- secure drag on a frame it disables. CanRemember is the refusal rule
--- gating Remember Positions (opt-in). PairResetAction decides whether the
--- talent window and hero picker are reset together, restored, or left alone.
+-- gating Remember Positions (opt-in).
 local L = require("dev.spec._ke_loader")
 
 describe("MoveFrames.lua", function()
@@ -173,23 +172,6 @@ describe("MoveFrames.lua", function()
                 assert.equal(c.expect, ok, c.name)
                 if c.expect then assert.equal("MerchantFrame", path, c.name) end
                 seams.framePaths[frame] = "MerchantFrame"
-            end
-        end)
-    end)
-
-    describe("PairResetAction", function()
-        it("resets the pair out of combat, restores a closed picker in combat, else nothing", function()
-            local cases = {
-                -- initialized, inCombat, pickerProtected, expect
-                { false, false, false, "none",    "not initialized" },
-                { false, true,  false, "none",    "not initialized, in combat" },
-                { true,  false, false, "reset",   "out of combat" },
-                { true,  false, true,  "reset",   "out of combat, picker open" },
-                { true,  true,  false, "restore", "in combat, picker closed" },
-                { true,  true,  true,  "none",    "in combat, picker open" },
-            }
-            for _, c in ipairs(cases) do
-                assert.equal(c[4], MF.PairResetAction(c[1], c[2], c[3]), c[5])
             end
         end)
     end)

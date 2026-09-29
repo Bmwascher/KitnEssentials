@@ -1924,8 +1924,6 @@ function L.loadMoveFrames(overrides)
     _G.strsplit = overrides.strsplit or wowStrsplit
     _G.wipe = overrides.wipe or function(t) for k in pairs(t) do t[k] = nil end return t end
     _G.tDeleteItem = overrides.tDeleteItem or function() end
-    _G.RunNextFrame = overrides.RunNextFrame or function() end
-    _G.GenerateFlatClosure = overrides.GenerateFlatClosure or function(f) return f end
     _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
     -- Captured into MODIFIER_DOWN at load time, so a spec's fake key state
     -- must be on _G before loadModule runs.
