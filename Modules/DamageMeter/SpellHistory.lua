@@ -34,7 +34,8 @@ local STATUS_OK, STATUS_FAILED, STATUS_RESTORE = "ok", "failed", "restore"
 --
 -- Pure: every game lookup arrives through `api` and all memory lives in
 -- `state`, so dev/spec/dm_spell_history_spec.lua drives it headlessly.
--- Returns texture, kind, status as plain values; nothing is allocated.
+-- Returns texture, kind, status as plain values. The only allocation is the
+-- SENT ring, once, on the first press.
 ---------------------------------------------------------------------------------
 
 local function SetCurrent(state, isPet, castGUID)
@@ -57,9 +58,39 @@ local function SetFailed(state, isPet, castGUID)
     if isPet then state.failedPet = castGUID else state.failedPlayer = castGUID end
 end
 
+-- The slot the next cast writes; 0 is an empty ring.
+local function NextHead(head, size)
+    return head % size + 1
+end
+
+-- The castGUIDs of the player's last few UNIT_SPELLCAST_SENT, the presses. A
+-- queued press can send before the previous cast succeeds, so one slot is not
+-- enough. Made on the first press and never grown.
+local SENT_SLOTS = 4
+
+local function RecordSent(state, castGUID)
+    local sent = state.sent
+    if not sent then
+        sent = {}
+        state.sent = sent
+    end
+    local slot = NextHead(state.sentHead or 0, SENT_SLOTS)
+    sent[slot] = castGUID
+    state.sentHead = slot
+end
+
+local function WasSent(state, castGUID)
+    local sent = state.sent
+    if castGUID == nil or not sent then return false end
+    for i = 1, SENT_SLOTS do
+        if sent[i] == castGUID then return true end
+    end
+    return false
+end
+
 -- Autocast pet basics would fill the strip, so a pet spell shows only while
 -- its autocast flag reads plainly false; secret or missing counts as on.
-local function AcceptCast(isPet, spellID, state, api)
+local function AcceptCast(isPet, spellID, state, api, castGUID)
     if isPet then
         if not api.isPetKnown(spellID) then return nil end
         local auto = api.autoCast(spellID)
@@ -77,14 +108,21 @@ local function AcceptCast(isPet, spellID, state, api)
     end
     if not state.items then return nil end
     local item = api.itemFor(spellID)
-    if not item then return nil end
-    local tex = api.getItemIcon(item)
+    if item then
+        local tex = api.getItemIcon(item)
+        if not tex then return nil end
+        return tex, KIND_ITEM
+    end
+    -- A toy or another ability outside the spellbook shows only when the
+    -- player pressed it; an effect the game casts on its own had no SENT.
+    if not WasSent(state, castGUID) then return nil end
+    local tex = api.getTexture(spellID)
     if not tex then return nil end
-    return tex, KIND_ITEM
+    return tex, KIND_SPELL
 end
 
 local function ShowCast(isPet, spellID, castGUID, state, api)
-    local tex, kind = AcceptCast(isPet, spellID, state, api)
+    local tex, kind = AcceptCast(isPet, spellID, state, api, castGUID)
     if not tex then return nil end
     SetLast(state, isPet, castGUID)
     return tex, kind, STATUS_OK
@@ -106,6 +144,11 @@ local function Classify(event, unit, spellID, castGUID, state, api)
         return nil
     end
     if api.isSecret(spellID) or api.isSecret(castGUID) then return nil end
+
+    if event == "UNIT_SPELLCAST_SENT" then
+        if not isPet and castGUID ~= nil then RecordSent(state, castGUID) end
+        return nil
+    end
 
     local current, channel, last, failedGUID
     if isPet then
@@ -156,11 +199,6 @@ end
 ---------------------------------------------------------------------------------
 -- Ring arithmetic
 ---------------------------------------------------------------------------------
-
--- The slot the next cast writes; 0 is an empty ring.
-local function NextHead(head, size)
-    return head % size + 1
-end
 
 -- 0 is the newest position, size - 1 the oldest.
 local function SlotPosition(slot, head, size)
@@ -514,6 +552,10 @@ local function OnStripEvent(_, event, ...)
         -- A pet dismissed or replaced mid-channel may never send its stop.
         castState.curPet = nil
         SetChannel(castState, true, nil, nil)
+    elseif event == "UNIT_SPELLCAST_SENT" then
+        -- unitTarget, target, castGUID, spellID: the target is never read.
+        local castGUID, spellID = select(3, ...)
+        HandleCast("player", event, castGUID, spellID)
     else
         local castGUID, spellID = select(2, ...)
         HandleCast("player", event, castGUID, spellID)
@@ -592,6 +634,14 @@ local function RegisterEvents(frame, pets, sh)
     end
 
     local items = sh.IncludeItems ~= false
+    -- Without Include Items the press record would let a bag potion through
+    -- by its spell, so it lives and dies with the item events.
+    if items then
+        frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
+    else
+        frame:UnregisterEvent("UNIT_SPELLCAST_SENT")
+        castState.sent, castState.sentHead = nil, nil
+    end
     for i = 1, #ITEM_EVENTS do
         local event = ITEM_EVENTS[i]
         if not items then
@@ -768,6 +818,7 @@ local function TearDown()
     castState.curPlayer, castState.curPet = nil, nil
     castState.lastPlayer, castState.lastPet = nil, nil
     castState.failedPlayer, castState.failedPet = nil, nil
+    castState.sent, castState.sentHead = nil, nil
 end
 
 ---------------------------------------------------------------------------------

@@ -24,17 +24,20 @@ local FAILED = "UNIT_SPELLCAST_FAILED"
 local INTERRUPTED = "UNIT_SPELLCAST_INTERRUPTED"
 local CHANNEL_START = "UNIT_SPELLCAST_CHANNEL_START"
 local CHANNEL_STOP = "UNIT_SPELLCAST_CHANNEL_STOP"
+local SENT = "UNIT_SPELLCAST_SENT"
 
 -- The one value the fake api reports as secret.
 local SECRET = { secret = true }
 
 -- 100 plain, 101 overridden by 150, 103 whose override reads 0, 102 known
 -- with no texture. 300-303 are pet spells: autocast off, on, secret, missing.
+-- 400 is in neither the spellbook nor the item map, and has a texture.
 local KNOWN = { [100] = true, [101] = true, [102] = true, [103] = true }
 local OVERRIDE = { [101] = 150, [103] = 0 }
 local TEXTURE = {
     [100] = "tex100", [103] = "tex103", [150] = "tex150",
     [300] = "tex300", [301] = "tex301", [302] = "tex302", [303] = "tex303",
+    [400] = "tex400",
 }
 local PET_KNOWN = { [300] = true, [301] = true, [302] = true, [303] = true }
 local AUTOCAST = { [300] = false, [301] = true, [302] = SECRET }
@@ -412,5 +415,34 @@ describe("SpellHistory attached growth", function()
                 end
             end
         end
+    end)
+end)
+
+describe("SpellHistoryClassify: casts pressed outside the spellbook", function()
+    it("shows a cast outside the spellbook and the item map only when its castGUID had a SENT", function()
+        for _, row in ipairs({
+            { name = "pressed", sent = { "t1" }, tex = "tex400", kind = "spell" },
+            { name = "not pressed", sent = {} },
+            { name = "items off", sent = { "t1" }, items = false },
+            { name = "pushed out by four newer presses", sent = { "t1", "t2", "t3", "t4", "t5" } },
+            { name = "pet cast", sent = { "t1" }, unit = "pet" },
+        }) do
+            local state, api = newState(row.items), newApi()
+            for _, guid in ipairs(row.sent) do
+                assert.is_nil(classify(state, api, SENT, "player", 400, guid), row.name)
+            end
+            local tex, kind = classify(state, api, SUCCEEDED, row.unit or "player", 400, "t1")
+            assert.equals(row.tex, tex, row.name)
+            assert.equals(row.kind, kind, row.name)
+        end
+    end)
+
+    it("shows nothing for a pressed cast outside the spellbook that starts and then fails", function()
+        local state, api = newState(), newApi()
+        classify(state, api, SENT, "player", 400, "t1")
+        classify(state, api, START, "player", 400, "t1")
+        local tex, _, status = classify(state, api, FAILED, "player", 400, "t1")
+        assert.is_nil(tex)
+        assert.is_nil(status)
     end)
 end)

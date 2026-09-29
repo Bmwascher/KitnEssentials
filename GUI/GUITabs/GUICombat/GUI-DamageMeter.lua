@@ -1661,9 +1661,11 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     card1:AddLabel("Shows your recent casts as a row of icons, newest first, each fading a few " ..
         "seconds after the cast. It shows only while the Damage Meter shows.\n\n" ..
         "What shows: your spellbook spells and racials; potions, trinkets and other items used " ..
-        "from your bags or equipped gear; your pet's spells (except those on autocast, green " ..
-        "border); and casts that were interrupted or failed after they started, greyed with a " ..
-        "red X. Toys, instant presses that fail, and spells outside your spellbook do not show.")
+        "from your bags or equipped gear, plus toys and other abilities you press that are outside " ..
+        "your spellbook (with Include Items and Toys on); your pet's spells (except those on " ..
+        "autocast, green border); and casts that were interrupted or failed after they started, " ..
+        "greyed with a red X. Instant presses that fail, and effects the game casts for you " ..
+        "without a press, do not show.")
 
     yOffset = card1:GetNextOffset()
 
@@ -1677,7 +1679,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     manager:Register(cardCasts, "all")
 
     local rowCasts = GUIFrame:CreateRow(cardCasts.content, Theme.rowHeightLast)
-    local itemsChk = GUIFrame:CreateCheckbox(rowCasts, "Include Items", {
+    local itemsChk = GUIFrame:CreateCheckbox(rowCasts, "Include Items and Toys", {
         value = sh.IncludeItems ~= false,
         callback = function(checked) sh.IncludeItems = checked; ApplyStrip() end,
     })
