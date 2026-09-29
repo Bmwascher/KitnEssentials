@@ -12,6 +12,7 @@ local Theme = KE.Theme
 local MARKER_TEX = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_"
 local MARKER_ORDER = { "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull", "None" }
 local MARKER_INDEX = { Star=1, Circle=2, Diamond=3, Triangle=4, Moon=5, Square=6, Cross=7, Skull=8 }
+local MARKER_NONE_TEX = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 
 local CLASS_ORDER = {
     { token = "DEATHKNIGHT", name = "Death Knight" },
@@ -146,7 +147,8 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
 
     if editsClass then
         local className = ClassName(classFile)
-        card2:AddLabel("Your class: " .. KE:ColorTextByClass(className, classFile) ..
+        card2:AddLabel("Your class: " .. GUIFrame.ClassIconText(classFile) ..
+            KE:ColorTextByClass(className, classFile) ..
             "  |cff888888- click a marker to change " .. className .. "'s marker.|r")
     end
 
@@ -195,7 +197,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
         if MARKER_INDEX[name] then
             icon:SetTexture(MARKER_TEX .. MARKER_INDEX[name])
         else
-            icon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+            icon:SetTexture(MARKER_NONE_TEX)
         end
 
         local borderFrame = CreateFrame("Frame", nil, btn, "BackdropTemplate")
@@ -238,7 +240,8 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Class Markers: one row per class, only while the class option is on
+    -- Class Markers: a class picker and that class's marker, only while the
+    -- class option is on
     ----------------------------------------------------------------
     if classMode and db.ClassMarkers then
         local root = KE.GetDefaultDB and KE:GetDefaultDB()
@@ -247,60 +250,57 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
 
         local markerOptions = {}
         for _, name in ipairs(MARKER_ORDER) do
-            markerOptions[#markerOptions + 1] = { value = name, text = name }
+            local tex = MARKER_INDEX[name] and (MARKER_TEX .. MARKER_INDEX[name]) or MARKER_NONE_TEX
+            markerOptions[#markerOptions + 1] = { value = name, text = "|T" .. tex .. ":16:16|t " .. name }
         end
+
+        local classTokens = {}
+        for i, info in ipairs(CLASS_ORDER) do classTokens[i] = info.token end
 
         local cardClass = GUIFrame:CreateCard(scrollChild, "Class Markers", yOffset)
         manager:Register(cardClass, "all")
-        cardClass:AddLabel("Each character uses its class's marker. Clicking the grid above changes your own " ..
-            "class's entry.")
+        cardClass:AddLabel("Each character uses its class's marker. Pick a class to see or change its marker; " ..
+            "clicking the grid above changes your own class's.")
 
-        for i, info in ipairs(CLASS_ORDER) do
-            local token = info.token
-            local current = db.ClassMarkers[token]
-            local default = shipped[token]
-            local isOverride = default ~= nil and current ~= default
+        local pickerRow, token = GUIFrame:CreateClassPickerRow(cardClass.content, {
+            scope = "FocusMarkerClass",
+            classTokens = classTokens,
+            label = "Class",
+        })
+        cardClass:AddRow(pickerRow, 36)
 
-            local label = KE:ColorTextByClass(info.name, token)
-            if token == classFile then
-                label = label .. "  |cff888888(your class)|r"
-            end
-            if isOverride then
-                label = label .. "  |cff888888override, default: " .. default .. "|r"
-            end
+        local current = db.ClassMarkers[token]
+        local default = shipped[token]
+        local isOverride = default ~= nil and current ~= default
+        local label = KE:ColorTextByClass(ClassName(token), token) .. " Marker"
+        if isOverride then
+            label = label .. "  |cff888888override, default: " .. default .. "|r"
+        end
 
-            local isLast = i == #CLASS_ORDER
-            local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
-            local row = GUIFrame:CreateRow(cardClass.content, rowHeight)
-            local dropdown = GUIFrame:CreateDropdown(row, label, {
-                options = markerOptions,
-                value = current,
-                callback = function(val)
-                    db.ClassMarkers[token] = val
+        local row = GUIFrame:CreateRow(cardClass.content, Theme.rowHeightLast)
+        local dropdown = GUIFrame:CreateDropdown(row, label, {
+            options = markerOptions,
+            value = current,
+            callback = function(val)
+                db.ClassMarkers[token] = val
+                ApplySettings()
+                RefreshSoon()
+            end,
+        })
+        row:AddWidget(dropdown, isOverride and 0.75 or 1)
+        manager:Register(dropdown, "all")
+
+        if isOverride then
+            local resetButton = GUIFrame:CreateButton(row, "Reset", {
+                callback = function()
+                    db.ClassMarkers[token] = default
                     ApplySettings()
                     RefreshSoon()
                 end,
             })
-            row:AddWidget(dropdown, isOverride and 0.75 or 1)
-            manager:Register(dropdown, "all")
-
-            if isOverride then
-                local resetButton = GUIFrame:CreateButton(row, "Reset", {
-                    callback = function()
-                        db.ClassMarkers[token] = default
-                        ApplySettings()
-                        RefreshSoon()
-                    end,
-                })
-                row:AddWidget(resetButton, 0.25)
-            end
-
-            if isLast then
-                cardClass:AddRow(row, rowHeight, 0)
-            else
-                cardClass:AddRow(row, rowHeight)
-            end
+            row:AddWidget(resetButton, 0.25)
         end
+        cardClass:AddRow(row, Theme.rowHeightLast, 0)
 
         yOffset = cardClass:GetNextOffset()
     end
