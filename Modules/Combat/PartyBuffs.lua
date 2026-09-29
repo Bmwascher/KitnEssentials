@@ -761,7 +761,7 @@ function PB:EnsurePreviewCells()
         fill:SetPoint("TOPLEFT", missing, "TOPLEFT", 0, 0)
         fill:SetPoint("BOTTOMLEFT", missing, "BOTTOMLEFT", 0, 0)
         fill:SetWidth((STAND_IN_WIDTH - 2 * px) * sample.percent / 100)
-        fill:SetColorTexture(0.1, 0.1, 0.1, 1)
+        fill:SetColorTexture(8 / 255, 12 / 255, 16 / 255, 1)
         local names = _G.LOCALIZED_CLASS_NAMES_MALE
         local name = cell:CreateFontString(nil, "OVERLAY")
         KE:ApplyFontToText(name, nil, 12, "OUTLINE")
