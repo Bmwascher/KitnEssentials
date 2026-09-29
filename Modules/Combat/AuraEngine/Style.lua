@@ -427,6 +427,14 @@ end
 -- button; shared by the live and preview paths.
 ---------------------------------------------------------------------------------
 
+-- The ring's flat colour outside "dispel" mode, for StyleAuraFrame and the
+-- preview's stand-in repaint alike. A display with one ring colour per group
+-- names its key in the capabilities, as the border does.
+function Style.FlatRingColor(settings, caps)
+    local key = caps and caps.ringColorKey
+    return KE:ResolveColor(key and settings[key] or settings.BorderColor, { 0.8, 0, 0, 1 })
+end
+
 function Style.StyleAuraFrame(frame, settings, capabilities)
     local caps = capabilities or {}
 
@@ -554,7 +562,7 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         if settings.BorderColorMode == "dispel" then
             r, g, b, a = 1, 1, 1, 1
         else
-            r, g, b, a = KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
+            r, g, b, a = Style.FlatRingColor(settings, caps)
         end
         ring.top:SetColorTexture(r, g, b, a);    ring.top:SetSnapToPixelGrid(false)
         ring.bottom:SetColorTexture(r, g, b, a); ring.bottom:SetSnapToPixelGrid(false)

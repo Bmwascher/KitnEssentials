@@ -52,7 +52,9 @@ local MAX_SLOTS = 5
 local ROSTER_SETTLE = 0.5
 local PLACEHOLDER_ICON = 134400
 local BIG_PREVIEW_ICON = 136097
-local BLACK = { 0, 0, 0, 1 }
+-- The ring colour while Border Colour by Category is off. Every button has the
+-- ring from creation, so off paints it clear rather than removing it.
+local CLEAR = { 0, 0, 0, 0 }
 
 local GATE_EVENTS = {
     "PLAYER_ENTERING_WORLD",
@@ -73,19 +75,17 @@ local SIDES = {
     INSIDE = { point = "BOTTOMRIGHT", rel = "BOTTOMRIGHT", dx = -1, dy = 1,  corner = "BOTTOMRIGHT", left = true,  up = true },
 }
 
--- One per category, in on-screen order. The border host reads the colour key
--- from the group and the dressing reads it from the capabilities, so both
--- carry it.
+-- One per category, in on-screen order. The border stays black; the category
+-- colour is the inner ring's, whose key the dressing reads from the
+-- capabilities.
 local DESCRIPTORS = {}
 for i, category in ipairs(KE.PartyBuffsRules.CATEGORIES) do
-    local borderKey = "Border" .. category.colorKey:sub(6)
     DESCRIPTORS[i] = {
         key = category.key,
         category = category,
-        borderColorKey = borderKey,
         capabilities = {
-            hasBorder = true, hasGlow = false, hasDispelBadge = false, hasDispelRing = false,
-            borderColorKey = borderKey,
+            hasBorder = true, hasGlow = false, hasDispelBadge = false, hasDispelRing = true,
+            ringColorKey = "Ring" .. category.colorKey:sub(6),
         },
     }
 end
@@ -626,7 +626,7 @@ function PB:BuildStyleSettings()
     local colored = db.CategoryColors == true
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
-        settings[d.borderColorKey] = colored and db[d.category.colorKey] or BLACK
+        settings[d.capabilities.ringColorKey] = colored and db[d.category.colorKey] or CLEAR
     end
     self.styleSettings = settings
 end

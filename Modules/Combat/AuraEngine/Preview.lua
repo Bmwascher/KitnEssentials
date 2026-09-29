@@ -180,7 +180,7 @@ local function RepaintDispelRing(frame, group, settings, dispelType)
         r, g, b, a = group.getDispelPreviewColor(settings, dispelType)
     end
     if not r then
-        r, g, b, a = KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
+        r, g, b, a = KE.AuraStyle.FlatRingColor(settings, group.capabilities)
     end
 
     ring.top:SetColorTexture(r, g, b, a);    ring.top:SetSnapToPixelGrid(false)

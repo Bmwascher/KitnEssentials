@@ -1396,7 +1396,7 @@ local Defaults = {
             -- FRAME follows the party frame's own strata.
             Strata            = "FRAME",
             Swipe             = true,
-            CategoryColors    = true,
+            CategoryColors    = false,
             ColorExternal     = { 0.949, 0.757, 0.306, 1 },
             ColorBigDefensive = { 0.310, 0.639, 1, 1 },
             ColorBurst        = { 1, 0.353, 0.353, 1 },
