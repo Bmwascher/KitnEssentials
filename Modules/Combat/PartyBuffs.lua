@@ -45,7 +45,8 @@ local type = type
 local unpack = unpack
 local table_remove = table.remove
 
--- Times each group build and logs the facts behind each own-frame decision.
+-- Times each group build and logs every candidate frame, binding and watched
+-- show or hide.
 local DEBUG_PB = false
 
 local MAX_SLOTS = 5
@@ -198,6 +199,19 @@ local function PlainString(value)
     return value
 end
 
+local function DebugName(frame)
+    local ok, name = pcall(frame.GetName, frame)
+    return ok and PlainString(name) or tostring(frame)
+end
+
+local function DebugPos(frame)
+    local okLeft, left = pcall(frame.GetLeft, frame)
+    local okTop, top = pcall(frame.GetTop, frame)
+    if not (okLeft and okTop) or issecretvalue(left) or issecretvalue(top) then return "?" end
+    if not (left and top) then return "none" end
+    return ("%d,%d"):format(left, top)
+end
+
 -- The unit comparison runs only for a visible frame with a token, and its
 -- result is copied only when readable.
 local function AddCandidate(list, frame, family, raidIndex)
@@ -220,11 +234,15 @@ local function AddCandidate(list, frame, family, raidIndex)
                 candidate.compareResult = same
             end
         end
-        if DEBUG_PB then
-            Debug("cand %s %s raid=%s cmp=%s/%s/%s -> %s", family, candidate.token, raidIndex,
-                candidate.compareOk, candidate.compareSecret, candidate.compareResult,
-                KE.PartyBuffsRules.IsPlayerCandidate(candidate) and "skip" or "track")
+    end
+    if DEBUG_PB then
+        local verdict = "-"
+        if candidate.visible and candidate.token then
+            verdict = KE.PartyBuffsRules.IsPlayerCandidate(candidate) and "skip" or "track"
         end
+        Debug("cand %s %s %s vis=%s at %s raid=%s cmp=%s/%s/%s -> %s", family, DebugName(frame),
+            candidate.token, candidate.visible, DebugPos(frame), raidIndex,
+            candidate.compareOk, candidate.compareSecret, candidate.compareResult, verdict)
     end
     list[#list + 1] = candidate
 end
@@ -365,9 +383,14 @@ function PB:QueueResolve()
     end)
 end
 
-local function OnCellChanged()
-    if PB:IsEnabled() and PB.active then PB:QueueResolve() end
+local function OnCellChanged(frame, change)
+    if not (PB:IsEnabled() and PB.active) then return end
+    if DEBUG_PB then Debug("cell %s %s", DebugName(frame), change) end
+    PB:QueueResolve()
 end
+
+local function OnCellHidden(frame) OnCellChanged(frame, "hidden") end
+local function OnCellShown(frame) OnCellChanged(frame, "shown") end
 
 -- A frame can hide or come back without a roster event (another addon swaps
 -- its party header, Blizzard rebuilds its frames, the whole interface is
@@ -376,8 +399,8 @@ end
 function PB:WatchCell(frame)
     if self.watchedCells[frame] then return end
     self.watchedCells[frame] = true
-    pcall(frame.HookScript, frame, "OnHide", OnCellChanged)
-    pcall(frame.HookScript, frame, "OnShow", OnCellChanged)
+    pcall(frame.HookScript, frame, "OnHide", OnCellHidden)
+    pcall(frame.HookScript, frame, "OnShow", OnCellShown)
 end
 
 -- The layout options are replaced whole on every set, so the category's
@@ -567,7 +590,10 @@ function PB:BindSlot(k, binding)
         Debug("slot %d: strata, level or refresh refused", k)
         self.buildPending = true
     end
-    Debug("slot %d -> %s (%s)", k, binding.token, binding.family)
+    if DEBUG_PB then
+        Debug("slot %d -> %s (%s) %s at %s", k, binding.token, binding.family,
+            DebugName(binding.frame), DebugPos(binding.frame))
+    end
 end
 
 ---------------------------------------------------------------------------------
