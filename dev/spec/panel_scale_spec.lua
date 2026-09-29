@@ -54,7 +54,28 @@ local function load(overrides, opts)
     for k, v in pairs(overrides or {}) do db[k] = v end
 
     local modules = helpers.installAddonShim()
+    local walks, shows, owing = {}, {}, {}
     local KE = { db = { profile = { PanelScale = db } } }
+    -- opts.edges installs a skin layer that records each walk's root set and
+    -- each single-root refresh, and reports a root in `owing` as not settled;
+    -- without it KE.Skins stays nil, as when the skinning module is absent.
+    if opts.edges then
+        KE.Skins = {
+            RefreshEdgesUnderRoots = function(roots)
+                local seen, settled = {}, true
+                for root in pairs(roots) do
+                    seen[root] = true
+                    if owing[root] then settled = false end
+                end
+                walks[#walks + 1] = seen
+                return settled
+            end,
+            RefreshEdgesUnder = function(root)
+                shows[#shows + 1] = root
+                return not owing[root]
+            end,
+        }
+    end
     helpers.loadModule("Modules/QoL/PanelScaleRegistry.lua", KE)
     -- busted keeps _G across the cases of one file, so no earlier case's fake
     -- frame may still answer to a registry name.
@@ -101,6 +122,19 @@ local function load(overrides, opts)
     function c.fit(frame) hooks.UpdateScaleForFitSpecific(frame) end
     function c.repositions() return repositions end
     function c.resetRepositions() repositions = 0 end
+    function c.walks() return walks end
+    function c.shows() return shows end
+    function c.resetEdges()
+        for i = #walks, 1, -1 do walks[i] = nil end
+        for i = #shows, 1, -1 do shows[i] = nil end
+    end
+    -- Shown, then the OnShow hook the module installed, as the client does.
+    function c.show(frame)
+        frame._shown = true
+        frame._scripts.OnShow(frame)
+    end
+    function c.hide(frame) frame._shown = false end
+    function c.owe(frame, on) owing[frame] = on or nil end
     return PS, c
 end
 
@@ -379,5 +413,135 @@ describe("PanelScale ownership", function()
         assert.equals(0.9, old._scale)
         assert.is_nil(PS.frameState[old])
         assert.equals(0.8, new._scale)
+    end)
+end)
+
+-- Which roots a batch's skin-edge refresh reaches, and the refresh a hidden
+-- root is owed on its next show. The recorder at KE.Skins logs each walk's
+-- root set and each single-root refresh; c.show fires the module's OnShow.
+describe("PanelScale skin edges", function()
+    it("walks a shown or unreadable root at the batch end and leaves a hidden one to one refresh on its next show", function()
+        for _, case in ipairs({
+            { shown = true, walked = true },
+            { shown = SECRET, walked = true },
+            { shown = false, walked = false },
+        }) do
+            local PS, c = load({ Scale = 0.8 }, { edges = true })
+            local frame = fakeFrame("CharacterFrame", 1, { shown = case.shown })
+            c.enable()
+            -- Adoption already marked a hidden root; spend that mark so only
+            -- the batch below can earn the refresh asserted at the end.
+            if not case.walked then
+                c.show(frame)
+                c.hide(frame)
+                assert.is_nil(PS.edgeDirty[frame])
+            end
+            c.resetEdges()
+            PS.db.Scale = 0.9
+            PS:ApplySettings()
+            assert.same(case.walked and { { [frame] = true } } or {}, c.walks())
+            c.resetEdges()
+            c.show(frame)
+            c.show(frame)
+            assert.same(case.walked and {} or { frame }, c.shows())
+        end
+    end)
+
+    it("drops a root's mark when a later batch walks it while shown", function()
+        local PS, c = load({ Scale = 0.8 }, { edges = true })
+        local frame = fakeFrame("CharacterFrame", 1)
+        c.enable()
+        assert.is_true(PS.edgeDirty[frame])
+        frame._shown = true
+        PS.db.Scale = 0.9
+        PS:ApplySettings()
+        assert.same({ { [frame] = true } }, c.walks())
+        c.resetEdges()
+        c.show(frame)
+        assert.same({}, c.shows())
+    end)
+
+    it("refreshes a root released while hidden on its next show, with the module off", function()
+        local PS, c = load({ Scale = 0.8 }, { edges = true })
+        local frame = fakeFrame("CharacterFrame", 1)
+        c.enable()
+        c.show(frame)
+        c.hide(frame)
+        assert.is_nil(PS.edgeDirty[frame])
+        c.disable()
+        c.resetEdges()
+        c.show(frame)
+        assert.equals(1, frame._scale)
+        assert.same({ frame }, c.shows())
+    end)
+
+    it("clears the changed roots at depth 0, so a later batch that changes nothing walks nothing", function()
+        local PS, c = load({ Scale = 0.8 }, { edges = true })
+        fakeFrame("CharacterFrame", 1, { shown = true })
+        c.enable()
+        c.resetEdges()
+        PS.db.Scale = 0.9
+        PS:ApplySettings()
+        assert.equals(1, #c.walks())
+        PS:ApplySettings()
+        assert.equals(1, #c.walks())
+    end)
+
+    it("walks a batch's shown roots on the combat return, before the reposition waits for regen", function()
+        local PS, c = load({ Scale = 0.8 }, { edges = true })
+        local frame = fakeFrame("CharacterFrame", 1, { shown = true })
+        c.enable()
+        c.resetEdges()
+        c.resetRepositions()
+        c.startCombat()
+        PS.db.Scale = 0.9
+        PS:ApplySettings()
+        assert.same({ { [frame] = true } }, c.walks())
+        assert.equals(0, c.repositions())
+        assert.equals(1, c.regenLive())
+    end)
+
+    it("walks once per outermost batch across a profile swap, holding every changed shown root", function()
+        local PS, c = load({ Scale = 0.8 }, { edges = true })
+        local a = fakeFrame("CharacterFrame", 1, { shown = true })
+        local b = fakeFrame("PVEFrame", 1, { shown = true })
+        c.enable()
+        c.resetEdges()
+        local other = copy(PS.db)
+        other.Scale = 0.9
+        c.switchProfile(other)
+        assert.same({ { [a] = true, [b] = true } }, c.walks())
+    end)
+
+    it("keeps a mark whose show-time refresh does not settle, retries on the next show, and rests once settled", function()
+        local _, c = load({ Scale = 0.8 }, { edges = true })
+        local frame = fakeFrame("CharacterFrame", 1)
+        c.enable()
+        c.resetEdges()
+        c.owe(frame, true)
+        c.show(frame)
+        c.hide(frame)
+        c.owe(frame, false)
+        c.show(frame)
+        c.hide(frame)
+        c.show(frame)
+        assert.same({ frame, frame }, c.shows())
+    end)
+
+    it("marks every root of a batch walk left owed, and refreshes each on its next show", function()
+        local PS, c = load({ Scale = 0.8 }, { edges = true })
+        local a = fakeFrame("CharacterFrame", 1, { shown = true })
+        local b = fakeFrame("PVEFrame", 1, { shown = true })
+        c.enable()
+        c.owe(a, true)
+        PS.db.Scale = 0.9
+        PS:ApplySettings()
+        c.owe(a, false)
+        c.hide(a)
+        c.hide(b)
+        c.resetEdges()
+        c.show(a)
+        c.show(b)
+        assert.same({ a, b }, c.shows())
     end)
 end)

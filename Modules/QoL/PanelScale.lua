@@ -24,6 +24,8 @@ if not KitnEssentials then return end
 ---@field batchDepth number?
 ---@field changedVisible boolean?
 ---@field repositionPending boolean?
+---@field edgeRoots table?
+---@field edgeDirty table?
 local PS = KitnEssentials:NewModule("PanelScale", "AceEvent-3.0")
 
 local CreateFrame = CreateFrame
@@ -32,8 +34,8 @@ local hooksecurefunc = hooksecurefunc
 local issecretvalue = issecretvalue
 local math_abs = math.abs
 local ipairs = ipairs
+local next = next
 local pairs = pairs
-local pcall = pcall
 local setmetatable = setmetatable
 local type = type
 local _G = _G
@@ -115,22 +117,48 @@ end
 
 local function RefreshSkinEdges(frame)
     local skins = KE.Skins
-    if skins and skins.RefreshEdgesUnder then
-        -- RefreshEdgesUnder calls RefreshEdge bare where SkinAPI's own sweeper
-        -- wraps it, so a raise there must not abort this batch.
-        pcall(skins.RefreshEdgesUnder, frame)
-    end
+    if not (skins and skins.RefreshEdgesUnder) then return true end
+    return skins.RefreshEdgesUnder(frame)
 end
 
 -- The hooks run with no batch open, so opening a panel never repositions the
--- panel manager and never walks the skin cache. Unreadable visibility counts
--- as visible: repositioning a hidden panel is harmless, skipping a shown one
--- leaves its anchor computed for the old scale.
+-- panel manager, and walks the skin cache only for a root a flush marked.
+-- Unreadable visibility counts as visible: repositioning a hidden panel is
+-- harmless, skipping a shown one leaves its anchor computed for the old scale.
 local function Track(frame, result)
     if not PS.batchDepth then return end
     if result ~= "APPLIED" and result ~= "RESTORED" then return end
     if PS:IsVisiblePlain(frame) ~= false then PS.changedVisible = true end
-    RefreshSkinEdges(frame)
+    PS.edgeRoots[frame] = true
+end
+
+-- Most managed roots are hidden while the slider moves, and re-laying their
+-- borders on every step is the cost this avoids: a hidden root waits for its
+-- next show instead. Visibility is read here, not in Track, because the state
+-- at the end of the batch is the one the borders have to match.
+local function FlushSkinEdges()
+    local roots, dirty = PS.edgeRoots, PS.edgeDirty
+    if not (roots and dirty and next(roots)) then return end
+    local anyShown = false
+    for root in pairs(roots) do
+        if PS:IsVisiblePlain(root) == false then
+            dirty[root] = true
+            roots[root] = nil
+        else
+            anyShown = true
+        end
+    end
+    local settled = true
+    local skins = KE.Skins
+    if anyShown and skins and skins.RefreshEdgesUnderRoots then
+        settled = skins.RefreshEdgesUnderRoots(roots)
+    end
+    -- An owed walk cannot say which root the unfinished work sits under, so
+    -- every root it covered keeps a mark and tries again on its next show.
+    for root in pairs(roots) do
+        dirty[root] = (not settled) or nil
+        roots[root] = nil
+    end
 end
 
 -- A plain frame, not AceEvent: AceAddon unregisters every AceEvent handler
@@ -154,6 +182,8 @@ local function EnsureState()
     PS.frameState = setmetatable({}, WEAK_KEYS)
     PS.hookedFrames = setmetatable({}, WEAK_KEYS)
     PS.pendingFrames = setmetatable({}, WEAK_KEYS)
+    PS.edgeRoots = setmetatable({}, WEAK_KEYS)
+    PS.edgeDirty = setmetatable({}, WEAK_KEYS)
 end
 
 -- IsShown returns the Shown aspect, and a secret boolean raises on any test.
@@ -244,8 +274,15 @@ local function Reassert(frame, reason)
     PS:ReconcileFrame(frame, reason)
 end
 
+-- Outside Reassert's gate: a root released while hidden, by a disable
+-- included, still needs its borders re-measured on its next show. The mark
+-- comes off only once that refresh settles.
 local function ManagedFrameOnShow(frame)
     Reassert(frame, "show")
+    local dirty = PS.edgeDirty
+    if dirty and dirty[frame] and RefreshSkinEdges(frame) then
+        dirty[frame] = nil
+    end
 end
 
 function PS:AdoptFrame(entry, frame)
@@ -297,6 +334,7 @@ function PS:EndBatch()
         return
     end
     self.batchDepth = nil
+    FlushSkinEdges()
     if not self.changedVisible then return end
     self.changedVisible = nil
     if InCombatLockdown() then
