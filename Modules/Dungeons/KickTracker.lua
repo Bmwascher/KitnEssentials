@@ -499,8 +499,11 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
     local now = GetTime()
     local own = ok and KE:IsSafeValue(token) and KT.IsOwnKickToken(token)
     local hidden = not ok or issecretvalue(token) or (token == nil and issecretvalue(interruptedBy))
-    if own or (hidden and KT.TakeOwnClaim(self.ownClaim, now, OWN_KICK_MATCH_WINDOW)) then
-        self.ownClaim.at = nil
+    local claimed = (own or hidden) and KT.TakeOwnClaim(self.ownClaim, now, OWN_KICK_MATCH_WINDOW)
+    if own or claimed then
+        -- A readable own interrupt with no cast before it belongs to the cast
+        -- still to come, which then has nothing to claim.
+        if not claimed then self._ownEarlyLandingAt = now end
         self._ownLandedAt = now
         self:TryOwnReduction()
         return
@@ -905,8 +908,10 @@ end
 -- kicker. The interrupt can arrive first: its record, still unseen in its
 -- grace, is then the player's and goes. Returns that record's time.
 function KT:ClaimOwnKick(now)
-    -- The player's readable interrupt already arrived: nothing left to claim.
-    if KT.OwnKickMatched(now, self._ownLandedAt, OWN_KICK_MATCH_WINDOW) then
+    -- This cast's readable interrupt already arrived: nothing left to claim.
+    local early = self._ownEarlyLandingAt
+    self._ownEarlyLandingAt = nil
+    if KT.OwnKickMatched(now, early, OWN_KICK_MATCH_WINDOW) then
         self.ownClaim.at = nil
         return nil
     end
