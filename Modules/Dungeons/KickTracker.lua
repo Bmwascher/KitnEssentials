@@ -901,12 +901,12 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
         if stamp then member.reducedAt = now end
         if action == "start" then
             self:ConfirmKick(guid, cd)
-            self:RedrawKicked(guid)
         elseif action == "set" then
             self:ConfirmKick(guid, duration, remaining)
         elseif action == "ready" then
             self:ClearKick(guid)
         end
+        if verb == "KICK" then self:RedrawKicked(guid) end
     end)
     if not ok and DEBUG_KT then
         local okS, senderStr = pcall(tostring, sender)
