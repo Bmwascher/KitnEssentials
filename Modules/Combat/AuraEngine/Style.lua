@@ -12,6 +12,10 @@ local math_floor = math.floor
 local Style = {}
 KE.AuraStyle = Style
 
+-- Fallback colours, shared because KE:ResolveColor only reads them.
+local BLACK = { 0, 0, 0, 1 }
+local DEFAULT_RING = { 0.8, 0, 0, 1 }
+
 -- The dispel badge is a fixed fraction of the icon, not a setting -- ported
 -- from the modules this engine replaces. A field rather than a local so the
 -- Edit Mode hitbox math can share this one definition instead of copying it.
@@ -116,7 +120,7 @@ end
 function Style.CreateBorderHost(button, settings, color)
     local px   = KE:GetPixelSize()
     local size = settings.IconSize or 0
-    local r, g, b, a = KE:ResolveColor(color, { 0, 0, 0, 1 })
+    local r, g, b, a = KE:ResolveColor(color, BLACK)
 
     local function MakeEdge(width, height)
         local tex = button:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -432,7 +436,7 @@ end
 -- names its key in the capabilities, as the border does.
 function Style.FlatRingColor(settings, caps)
     local key = caps and caps.ringColorKey
-    return KE:ResolveColor(key and settings[key] or settings.BorderColor, { 0.8, 0, 0, 1 })
+    return KE:ResolveColor(key and settings[key] or settings.BorderColor, DEFAULT_RING)
 end
 
 function Style.StyleAuraFrame(frame, settings, capabilities)
@@ -490,8 +494,7 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         local size = settings.IconSize or 0
         local host = frame.keBorder
         local r, g, b, a = KE:ResolveColor(
-            caps.borderColorKey and settings[caps.borderColorKey] or nil,
-            { 0, 0, 0, 1 })
+            caps.borderColorKey and settings[caps.borderColorKey] or nil, BLACK)
 
         host.top:SetColorTexture(r, g, b, a)
         host.bottom:SetColorTexture(r, g, b, a)
