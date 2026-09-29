@@ -470,6 +470,21 @@ end
 ---------------------------------------------------------------------------------
 -- Teammate Kick Records (12.0.5 secret-safe)
 ---------------------------------------------------------------------------------
+-- Display-only values of a kicked cast; each may be secret.
+local function InterruptedSpellIcon(spellID)
+    if not (issecretvalue(spellID) or spellID ~= nil) then return nil end
+    local ok, tex = pcall(C_Spell.GetSpellTexture, spellID)
+    if ok then return tex end
+    return nil
+end
+
+-- The mob's raid marker now; the nameplate token is never kept.
+local function RaidMarkOf(unit)
+    local ok, index = pcall(GetRaidTargetIndex, unit)
+    if ok and (issecretvalue(index) or index ~= nil) then return index, true end
+    return nil, false
+end
+
 -- A nameplate UNIT_SPELLCAST_INTERRUPTED with a non-nil interruptedBy is ground
 -- truth that someone's kick landed. The GUID is secret for teammates: the game
 -- will render the name/icon we derive from it, but our code can never read or
@@ -504,19 +519,25 @@ function KT:HandleNameplateInterrupt(unit, spellID, interruptedBy)
         -- A readable own interrupt with no cast before it belongs to the cast
         -- still to come, which then has nothing to claim.
         if not claimed then self._ownEarlyLandingAt = now end
+        if claimed and hidden then self:ShowOwnKicked(unit, spellID) end
         self._ownLandedAt = now
         self:TryOwnReduction()
         return
     end
 
-    -- Snapshot the mob's raid marker now; the nameplate token is never kept.
-    -- The index may be secret: presence is tested without a truth test.
-    local raidMark, hasRaidMark
-    local okMark, markIndex = pcall(GetRaidTargetIndex, unit)
-    if okMark and (issecretvalue(markIndex) or markIndex ~= nil) then
-        raidMark, hasRaidMark = markIndex, true
-    end
+    local raidMark, hasRaidMark = RaidMarkOf(unit)
     self:ProcessTeammateKick(interruptedBy, spellID, raidMark, hasRaidMark, hidden)
+end
+
+-- The own row shows the spell the player's kick interrupted, and its marker,
+-- while the kick cools (KT:UpdateBarVisuals). A new own kick clears them.
+function KT:ShowOwnKicked(unit, spellID)
+    local guid = UnitGUID("player")
+    local member = guid and self.partyMembers[guid]
+    if not member then return end
+    local mark, hasMark = RaidMarkOf(unit)
+    member.kicked = { icon = InterruptedSpellIcon(spellID), mark = mark, hasMark = hasMark }
+    self:RefreshMemberRow(guid)
 end
 
 -- hiddenKicker: the game hid who kicked, so the player's own cast arriving
@@ -557,12 +578,7 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID, raidMark, h
         end
     end
 
-    -- Interrupted spell's icon (display-only; both id and texture may be secret).
-    local iconID
-    if issecretvalue(interruptedSpellID) or interruptedSpellID ~= nil then
-        local okTex, tex = pcall(C_Spell.GetSpellTexture, interruptedSpellID)
-        if okTex then iconID = tex end
-    end
+    local iconID = InterruptedSpellIcon(interruptedSpellID)
 
     self.nextRecordID = self.nextRecordID + 1
     local record = {
@@ -906,8 +922,10 @@ end
 
 -- The player's kick claims the interrupt it causes when the game hides the
 -- kicker. The interrupt can arrive first: its record, still unseen in its
--- grace, is then the player's and goes. Returns that record's time.
-function KT:ClaimOwnKick(now)
+-- grace, is then the player's and goes, its kicked spell onto the own row.
+-- Returns that record's time.
+function KT:ClaimOwnKick(now, member)
+    if member then member.kicked = nil end
     -- This cast's readable interrupt already arrived: nothing left to claim.
     local early = self._ownEarlyLandingAt
     self._ownEarlyLandingAt = nil
@@ -921,9 +939,12 @@ function KT:ClaimOwnKick(now)
         return nil
     end
     self.ownClaim.at = nil
-    local landedAt = self.kickRecords[index].startTime
+    local record = self.kickRecords[index]
+    if member then
+        member.kicked = { icon = record.iconID, mark = record.raidMark, hasMark = record.hasRaidMark }
+    end
     self:RemoveKickRecordAt(index)
-    return landedAt
+    return record.startTime
 end
 
 -- A talent-added kick starts only when KT:GetOwnExtraKicks listed it; the
@@ -936,7 +957,7 @@ function KT:StartOwnExtraKick(guid, spellID)
         local entry = list[i]
         if entry.id == spellID then
             entry.kickStart, entry.kickDuration = GetTime(), entry.cd
-            self:ClaimOwnKick(entry.kickStart)
+            self:ClaimOwnKick(entry.kickStart, member)
             self:RefreshMemberRow(guid)
             self:BroadcastKick(spellID, entry.cd, true)
             return
@@ -969,9 +990,9 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     end
     self._lastOwnKickID, self._lastOwnKickAt = kickID, now
     self._ownKickAt, self._ownKickSpell = now, kickID
-    local landedAt = self:ClaimOwnKick(now)
-    if landedAt then self._ownLandedAt = landedAt end
     local member = self.partyMembers[guid]
+    local landedAt = self:ClaimOwnKick(now, member)
+    if landedAt then self._ownLandedAt = landedAt end
     local data = member and member.interruptData
     local kickCd = member and KE:GetKickCooldownForSpec(member.specID, kickID)
     if member and kickCd then
@@ -992,6 +1013,9 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
     end
     local cd = data and self:OwnKickCooldown(data)
     self:ConfirmKick(guid, cd)
+    -- ConfirmKick redraws only the cooling state, not the icon or the marker.
+    local bar = self.activeBars[guid]
+    if member and (member.kicked or (bar and bar.kickedShown)) then self:RefreshMemberRow(guid) end
     -- Tell party KE users so they can flip our roster bar with the real CD
     if data then self:BroadcastKick(data.id, cd) end
     self:TryOwnReduction()
@@ -1252,7 +1276,8 @@ function KT:ApplyRegionDefaults(bar)
     bar.raidMarkTex:Hide()
 end
 
--- Record bars draw secret names, icons, colours and marks. SetToDefaults
+-- Record bars draw secret names, icons, colours and marks, and the own row a
+-- kicked spell's icon and mark (KT:ShowOwnKicked). SetToDefaults
 -- clears a text or texture region's secret state before the bar serves another
 -- row. Resetting the status bar would drop its layout, so it is only stopped
 -- and re-coloured; its colour may stay secret, and nothing reads it back.
@@ -1266,25 +1291,26 @@ function KT:ResetBarRegions(bar)
     bar.statusBar:SetStatusBarColor(1, 1, 1, 1)
     bar.lastTimerText = nil
     bar.rowKick, bar.rowReady = nil, false
+    bar.kickedShown = nil
     self:ApplyRegionDefaults(bar)
 end
 
 -- The trailing "*" and the raid marker sit in the name's slot, so both
 -- follow ShowName. The marker index may be secret: it is only handed to the
 -- C-side sprite-sheet call, shown when that call succeeds.
-function KT:ApplyNameMarks(bar, record)
+function KT:ApplyNameMarks(bar, isRecord, raidMark, hasRaidMark)
     local db = self.db
-    local marker = KT.MarkerFor(record ~= nil, db.ShowName)
+    local marker = KT.MarkerFor(isRecord, db.ShowName)
     KE:ApplyFont(bar.markerText, db.FontFace, db.FontSize, db.FontOutline)
     bar.markerText:SetTextColor(1, 1, 1, 1)
     bar.markerText:SetText(marker)
     bar.markerText:SetShown(marker ~= "")
 
     local markShown = false
-    if record and record.hasRaidMark and db.ShowName then
+    if hasRaidMark and db.ShowName then
         bar.raidMarkTex:SetSize(db.FontSize, db.FontSize)
         bar.raidMarkTex:SetTexture(RAID_MARK_SHEET)
-        markShown = pcall(bar.raidMarkTex.SetSpriteSheetCell, bar.raidMarkTex, record.raidMark, 4, 4)
+        markShown = pcall(bar.raidMarkTex.SetSpriteSheetCell, bar.raidMarkTex, raidMark, 4, 4)
     end
     bar.raidMarkTex:SetShown(markShown)
 end
@@ -1421,7 +1447,7 @@ function KT:UpdateRecordBarVisuals(bar, record)
     bar.nameText:SetShown(db.ShowName)
     pcall(bar.nameText.SetText, bar.nameText, record.name)
     bar.nameText:SetTextColor(1, 1, 1, 1)
-    self:ApplyNameMarks(bar, record)
+    self:ApplyNameMarks(bar, true, record.raidMark, record.hasRaidMark)
 
     KE:ApplyFont(bar.timerText, db.FontFace, db.FontSize, db.FontOutline)
     bar.timerText:SetShown(db.ShowTimer)
@@ -1441,6 +1467,14 @@ function KT:UpdateBarVisuals(bar, member)
     local db = self.db
     local isDarkMode = db.ColorMode == "dark"
 
+    -- A kicked spell's icon and marker may be secret: both regions start
+    -- clean before the row draws again.
+    if bar.kickedShown then
+        bar.iconTex:SetToDefaults()
+        bar.raidMarkTex:SetToDefaults()
+        self:ApplyRegionDefaults(bar)
+    end
+
     self:ApplyBarGeometry(bar)
 
     -- The kick that drives the row (KT.PickRowKick); nil is the main kick.
@@ -1448,12 +1482,21 @@ function KT:UpdateBarVisuals(bar, member)
     if member then rowKick, isReady = KT.PickRowKick(member, GetTime()) end
     bar.rowKick, bar.rowReady = rowKick, isReady
 
+    -- While the kick cools, the spell it interrupted (KT:ShowOwnKicked).
+    local kicked
+    if member and not isReady then kicked = member.kicked end
+    bar.kickedShown = kicked ~= nil
+
     if member and member.interruptData then
-        local spellInfo = C_Spell.GetSpellInfo(rowKick and rowKick.id or member.interruptData.id)
-        if spellInfo then
-            bar.iconTex:SetTexture(spellInfo.iconID)
+        if kicked and (issecretvalue(kicked.icon) or kicked.icon ~= nil) then
+            pcall(bar.iconTex.SetTexture, bar.iconTex, kicked.icon)
         else
-            bar.iconTex:SetTexture(134400)
+            local spellInfo = C_Spell.GetSpellInfo(rowKick and rowKick.id or member.interruptData.id)
+            if spellInfo then
+                bar.iconTex:SetTexture(spellInfo.iconID)
+            else
+                bar.iconTex:SetTexture(134400)
+            end
         end
     end
 
@@ -1474,7 +1517,11 @@ function KT:UpdateBarVisuals(bar, member)
         end
     end
 
-    self:ApplyNameMarks(bar, nil)
+    if kicked then
+        self:ApplyNameMarks(bar, false, kicked.mark, kicked.hasMark)
+    else
+        self:ApplyNameMarks(bar, false)
+    end
 
     -- Timer text
     KE:ApplyFont(bar.timerText, db.FontFace, db.FontSize, db.FontOutline)
