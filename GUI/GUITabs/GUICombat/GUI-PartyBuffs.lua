@@ -11,7 +11,7 @@ local GUIFrame = KE.GUIFrame
 local Theme    = KE.Theme
 
 local LIST_TABS = {
-    { id = "ListBurst",     label = "Offensive Burst" },
+    { id = "ListBurst",     label = "Offensive CDs" },
     { id = "ListPotions",   label = "Potions" },
     { id = "ListTrinkets",  label = "Trinkets" },
     { id = "ListExternals", label = "Externals" },
@@ -34,9 +34,9 @@ local STRATA_OPTIONS = {
 }
 
 local COLOR_PICKERS = {
-    { key = "ColorExternal",     label = "External" },
+    { key = "ColorExternal",     label = "Externals" },
     { key = "ColorBigDefensive", label = "Big Defensive" },
-    { key = "ColorBurst",        label = "Burst" },
+    { key = "ColorBurst",        label = "Offensive CDs" },
     { key = "ColorPotion",       label = "Potion" },
     { key = "ColorTrinket",      label = "Trinket" },
 }
@@ -152,8 +152,8 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     if db.Enabled ~= true then return yOffset end
 
     card1:AddLabel("Shows your party members' big cooldown buffs as icons beside their party frames while each " ..
-        "buff is up: externals, defensives, burst, potions and trinkets. Works on Blizzard's party frames and " ..
-        "on EllesmereUI frames. Where it shows is chosen below.")
+        "buff is up: externals, defensives, offensive cooldowns, potions and trinkets. Works on Blizzard's " ..
+        "party frames and on EllesmereUI frames. Where it shows is chosen below.")
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -161,12 +161,12 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local cardTracked = GUIFrame:CreateCard(scrollChild, "Tracked Buffs", yOffset)
     local rowT1 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeight)
-    AddCheck(rowT1, "Externals on the Member", "TrackExternal")
+    AddCheck(rowT1, "Externals", "TrackExternal")
     AddCheck(rowT1, "Big Defensives", "TrackBigDefensive",
         "Blizzard's and EllesmereUI's party frames already show these in the frame centre.")
     cardTracked:AddRow(rowT1, Theme.rowHeight)
     local rowT2 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeight)
-    AddCheck(rowT2, "Offensive Burst", "TrackBurst")
+    AddCheck(rowT2, "Offensive CDs", "TrackBurst")
     AddCheck(rowT2, "Potions", "TrackPotion")
     cardTracked:AddRow(rowT2, Theme.rowHeight)
     local rowT3 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightLast)
@@ -180,8 +180,8 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     local cardPlaces = GUIFrame:CreateCard(scrollChild, "Where It Shows", yOffset)
     cardPlaces:AddLabel("Not shown in raids, battlegrounds or other raid groups.")
     local rowP1 = GUIFrame:CreateRow(cardPlaces.content, Theme.rowHeight)
-    AddCheck(rowP1, "Mythic+ Keys (Running)", "ShowInKeys")
-    AddCheck(rowP1, "Other Dungeons", "ShowInDungeons")
+    AddCheck(rowP1, "Mythic+", "ShowInKeys")
+    AddCheck(rowP1, "All Other Dungeon Types", "ShowInDungeons")
     cardPlaces:AddRow(rowP1, Theme.rowHeight)
     local rowP2 = GUIFrame:CreateRow(cardPlaces.content, Theme.rowHeight)
     AddCheck(rowP2, "Delves", "ShowInDelves")
