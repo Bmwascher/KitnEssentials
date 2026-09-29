@@ -315,9 +315,10 @@ local function PumpBuild()
 end
 
 function PB:Enqueue(k)
-    if self.queued[k] then return end
-    self.queued[k] = true
-    self.queue[#self.queue + 1] = k
+    if not self.queued[k] then
+        self.queued[k] = true
+        self.queue[#self.queue + 1] = k
+    end
     if not self.pumping then
         self.pumping = true
         C_Timer.After(0, PumpBuild)
@@ -452,9 +453,9 @@ function PB:ApplySlotLayout(slot)
 end
 
 -- Adds at most one group per call and returns false while one is still
--- missing. A failure returns true and leaves buildPending for the drain, so it
--- is not retried every frame. A slot whose teammate went away while it waited
--- builds nothing.
+-- missing. A failed group leaves buildPending for the drain rather than a
+-- retry every frame, and the slot is bound with the groups it has. A slot
+-- whose teammate went away while it waited builds nothing.
 function PB:BuildSlot(k)
     local binding = self.bindings[k]
     if not binding then return true end
@@ -494,8 +495,7 @@ function PB:BuildSlot(k)
         local d = DESCRIPTORS[i]
         if self.db[d.category.trackKey] == true and not slot.groups[d.key] then
             self:AddGroup(k, slot, d)
-            if not slot.groups[d.key] then return true end
-            if not self:SlotComplete(k) then return false end
+            if slot.groups[d.key] and not self:SlotComplete(k) then return false end
             break
         end
     end
