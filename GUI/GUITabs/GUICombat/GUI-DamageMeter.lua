@@ -1630,10 +1630,8 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
         if DM and DM.ApplySpellHistory then DM:ApplySpellHistory() end
     end
 
-    -- Count, Icon Size and Spacing change the strip's length; a free strip
-    -- keeps its growth-start end in place, which rewrites its saved offsets,
-    -- so the Position card's sliders are re-read without a page rebuild (a
-    -- rebuild would drop the slider being dragged).
+    -- A resize can rewrite the saved offsets; the sliders are re-read in place
+    -- because a page rebuild would drop the slider being dragged.
     local posCard
     local function ResizeStrip(key, value)
         if DM and DM.ResizeSpellHistory then

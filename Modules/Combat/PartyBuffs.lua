@@ -734,8 +734,7 @@ local STAND_IN_ROWS = {
     { token = "ROGUE",   percent = 35 },
 }
 
--- Built once, on the first solo preview. Each row is a black edge, a grey
--- missing-health area and a dark health fill from the left.
+-- Built once, on the first solo preview.
 function PB:EnsurePreviewCells()
     if self.previewCells then return self.previewCells end
     local px = KE:GetPixelSize()
