@@ -227,7 +227,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
             end
             UpdateMarkerSelection()
             ApplySettings()
-            if editsClass then RefreshSoon() end
+            RefreshSoon()
         end)
 
         table.insert(markerButtons, btn)
@@ -333,7 +333,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
         local row = GUIFrame:CreateRow(card3.content, rowHeight)
         local checkbox = GUIFrame:CreateCheckbox(row, label, {
             value = checked,
-            callback = function(val) db[def.key] = val; ApplySettings() end,
+            callback = function(val) db[def.key] = val; ApplySettings(); RefreshSoon() end,
         })
         row:AddWidget(checkbox, 1)
         manager:Register(checkbox, "all")
@@ -347,60 +347,20 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Advanced
+    -- Marker Preview
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Advanced", yOffset)
-    manager:Register(card4, "all")
+    local cardMarker = GUIFrame:CreateCard(scrollChild, "Marker Preview", yOffset)
+    manager:Register(cardMarker, "all")
+    local markerBody = FM and FM:BuildMacroBody()
+    if markerBody then
+        cardMarker:AddLabel("|cff888888What KE writes to " .. (db.MacroName or "!FocusMarker") ..
+            ". Read-only.  " .. #markerBody .. " of " .. FM.MACRO_BODY_MAX .. " characters|r")
+        cardMarker:AddLabel(markerBody)
+    else
+        cardMarker:AddLabel("Nothing to preview.")
+    end
 
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local nameEditBox = GUIFrame:CreateEditBox(row4a, "Macro Name", {
-        value = db.MacroName or "!FocusMarker",
-        callback = function(val)
-            if val and val ~= "" then
-                db.MacroName = val
-            else
-                db.MacroName = "!FocusMarker"
-            end
-            ApplySettings()
-        end,
-    })
-    row4a:AddWidget(nameEditBox, 0.5)
-    manager:Register(nameEditBox, "all")
-
-    local iconEditBox = GUIFrame:CreateEditBox(row4a, "Macro Icon ID", {
-        value = tostring(db.MacroIcon or 1033497),
-        callback = function(val)
-            local num = tonumber(val)
-            if num then
-                db.MacroIcon = num
-                ApplySettings()
-            end
-        end,
-    })
-    row4a:AddWidget(iconEditBox, 0.5)
-    manager:Register(iconEditBox, "all")
-    card4:AddRow(row4a, Theme.rowHeight)
-
-    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local condEditBox = GUIFrame:CreateEditBox(row4b, "Macro Conditionals (empty = default)", {
-        value = db.MacroConditionals or "",
-        callback = function(val) db.MacroConditionals = val or ""; ApplySettings() end,
-    })
-    row4b:AddWidget(condEditBox, 1)
-    manager:Register(condEditBox, "all")
-    card4:AddRow(row4b, Theme.rowHeight)
-
-    local advNoteRow = GUIFrame:CreateRow(card4.content, 75)
-    local advNoteText = GUIFrame:CreateText(advNoteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Leave conditionals empty to use default: [@mouseover,exists,nodead][]\n" ..
-        KE:ColorTextByTheme("-") .. " Macro icon accepts numeric icon IDs.\n   " ..
-        KE:ColorTextByTheme(">") .. " Find IDs by clicking any spell or item icon on Wowhead.",
-        75, "hide")
-    advNoteRow:AddWidget(advNoteText, 1)
-    card4:AddRow(advNoteRow, 75, 0)
-
-    yOffset = card4:GetNextOffset()
+    yOffset = cardMarker:GetNextOffset()
 
     manager:UpdateAll(db.Enabled ~= false)
     return yOffset
