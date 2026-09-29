@@ -51,6 +51,7 @@ local DEBUG_PB = false
 
 local MAX_SLOTS = 5
 local ROSTER_SETTLE = 0.5
+local WORLD_SETTLE = 1
 local PLACEHOLDER_ICON = 134400
 local BIG_PREVIEW_ICON = 136097
 -- The ring colour while Border Colour by Category is off. Every button has the
@@ -58,7 +59,6 @@ local BIG_PREVIEW_ICON = 136097
 local CLEAR = { 0, 0, 0, 0 }
 
 local GATE_EVENTS = {
-    "PLAYER_ENTERING_WORLD",
     "ZONE_CHANGED_NEW_AREA",
     "CHALLENGE_MODE_START",
     "CHALLENGE_MODE_COMPLETED",
@@ -98,6 +98,7 @@ PB.resolvePending = false
 PB.restylePending = false
 PB.reconfigurePending = false
 PB.buildPending = false
+PB.settlePending = false
 PB.slots = {}
 PB.bindings = {}
 PB.queue = {}
@@ -213,9 +214,11 @@ local function DebugPos(frame)
 end
 
 -- The unit comparison runs only for a visible frame with a token, and its
--- result is copied only when readable.
+-- result is copied only when readable. Every candidate is watched, shown or
+-- not: the right frame can appear after a resolve with no roster event.
 local function AddCandidate(list, frame, family, raidIndex)
     if type(frame) ~= "table" then return end
+    if PB.active then PB:WatchCell(frame) end
     local candidate = { frame = frame, family = family, raidIndex = raidIndex }
     local okVisible, visible = pcall(frame.IsVisible, frame)
     candidate.visible = okVisible and not issecretvalue(visible) and visible == true
@@ -394,7 +397,7 @@ local function OnCellShown(frame) OnCellChanged(frame, "shown") end
 
 -- A frame can hide or come back without a roster event (another addon swaps
 -- its party header, Blizzard rebuilds its frames, the whole interface is
--- hidden and shown), so each bound frame is hooked once both ways and the
+-- hidden and shown), so each frame is hooked once both ways and the
 -- re-resolve waits a frame for the replacement to exist.
 function PB:WatchCell(frame)
     if self.watchedCells[frame] then return end
@@ -578,7 +581,6 @@ function PB:BindSlot(k, binding)
     end
     local clean = pcall(container.SetFrameStrata, container, strata)
     if level then clean = pcall(container.SetFrameLevel, container, level + 1) and clean end
-    self:WatchCell(binding.frame)
     if not pcall(container.SetEnabled, container, true) then
         Debug("slot %d: enable refused", k)
         self.buildPending = true
@@ -616,6 +618,21 @@ function PB:OnRoster()
         if self.previewing then self:ShowPreview() end
     end)
     if self.previewing then self:ShowPreview() end
+end
+
+-- Nothing announces that a unit-frame addon has finished building its party
+-- frames, and a frame already shown before the first resolve found it has no
+-- show left to hook. One more resolve after each loading screen catches it.
+function PB:OnWorldEntry()
+    self:EvaluateGate()
+    if self.settlePending then return end
+    self.settlePending = true
+    C_Timer.After(WORLD_SETTLE, function()
+        self.settlePending = false
+        if not (self:IsEnabled() and self.active) then return end
+        Debug("world settle")
+        self:QueueResolve()
+    end)
 end
 
 -- Drains whatever a refusal or a failed build left pending. Also run on every
@@ -927,6 +944,7 @@ function PB:OnEnable()
     for i = 1, #GATE_EVENTS do
         self:RegisterEvent(GATE_EVENTS[i], "EvaluateGate")
     end
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnWorldEntry")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRoster")
     self:ApplySettings()
 end
