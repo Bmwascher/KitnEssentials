@@ -410,7 +410,7 @@ local growPoint, stepX, stepY = "TOPRIGHT", 0, 0
 -- The strip's size from the last Layout, and the attached anchor last applied,
 -- so a dock layout that changes nothing re-anchors nothing.
 local stripW, stripH, stripStep = 0, 0, 0
-local placedPoint, placedRel, placedX, placedY, placedStrata
+local placedPoint, placedRel, placedX, placedY, placedStrata, placedSnapped
 
 -- SetColorTexture turns the pixel-grid snap back on; borders stay unsnapped.
 local function SetBorderPet(icon, pet)
@@ -739,8 +739,11 @@ local function Place(db, sh)
         local grow, point, rel, x, y = AttachedPlacement(sh.AttachEdge, sh.Grow, gap, not fits)
         ApplyGrowth(grow)
         local strata = db.Strata or "MEDIUM"
+        -- A placement made while the dock's rect was secret or missing went
+        -- unsnapped, so the first layout that can measure the dock makes it again.
+        local unmeasured = issecretvalue(left) or not left
         if point == placedPoint and rel == placedRel and x == placedX and y == placedY
-            and strata == placedStrata then
+            and strata == placedStrata and (placedSnapped or unmeasured) then
             return
         end
         frame:ClearAllPoints()
@@ -750,6 +753,7 @@ local function Place(db, sh)
         -- secret whenever the dock's rect is.
         if not secret then KE:SnapFrameToPixels(frame) end
         placedPoint, placedRel, placedX, placedY, placedStrata = point, rel, x, y, strata
+        placedSnapped = not unmeasured
     else
         placedPoint = nil
         KE:ApplyFramePosition(frame, sh.Position, sh)
