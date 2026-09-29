@@ -613,14 +613,16 @@ end
 function PB:BuildStyleSettings()
     local db = self.db
     local settings = self.styleSettings or {}
-    settings.IconSize      = db.IconSize
-    settings.IconSpacing   = db.IconSpacing
-    settings.Swipe         = db.Swipe == true
-    settings.Reverse       = true
-    settings.ShowTimer     = false
-    settings.FontSize      = db.FontSize
-    settings.TimerFontSize = db.FontSize
-    settings.FontOutline   = db.FontOutline
+    settings.IconSize         = db.IconSize
+    settings.IconSpacing      = db.IconSpacing
+    settings.Swipe            = db.Swipe == true
+    settings.Reverse          = true
+    settings.ShowTimer        = db.ShowTimer == true
+    settings.FontFace         = db.FontFace
+    settings.FontSize         = db.FontSize
+    settings.TimerFontSize    = db.TimerFontSize
+    settings.FontOutline      = db.FontOutline
+    settings.DecimalThreshold = db.DecimalThreshold
     local colored = db.CategoryColors == true
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
@@ -812,9 +814,16 @@ function PB:DrawPreviewRow(k, frame)
             icon:SetPoint(side.corner, holder, side.corner, shown * step, 0)
             icon.keIcon:SetTexture(self:PreviewIcon(d))
             local duration, offset = KE.AuraRules.PreviewTiming(i)
-            icon.keCooldown.keDuration = duration
-            icon.keCooldown:SetShown(settings.Swipe)
-            icon.keCooldown:SetCooldown(now - offset, duration)
+            local cooldown = icon.keCooldown
+            cooldown.keDuration = duration
+            cooldown:SetShown(settings.Swipe or settings.ShowTimer)
+            cooldown:SetDrawSwipe(settings.Swipe)
+            -- A preview frame registers no engine text, so the widget's own
+            -- numbers stand in for it, in the timer's font.
+            cooldown:SetHideCountdownNumbers(not settings.ShowTimer)
+            KE:ApplyFontToText(cooldown:GetCountdownFontString(), settings.FontFace, settings.TimerFontSize,
+                settings.FontOutline)
+            cooldown:SetCooldown(now - offset, duration)
             icon:Show()
             shown = shown + 1
         elseif icon then

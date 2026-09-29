@@ -1404,6 +1404,9 @@ local Defaults = {
             ColorTrinket      = { 0.718, 0.482, 1, 1 },
             FontSize          = 10,
             FontOutline       = "OUTLINE",
+            ShowTimer         = true,
+            TimerFontSize     = 12,
+            DecimalThreshold  = 0, -- seconds; below this the timer shows one decimal (0 = off)
             -- ListExternals and ListBurst are row copies of the External
             -- Tracker and PI Assist lists, made below this table.
             ListPotions = {
