@@ -383,20 +383,24 @@ function S.Template(frame, kind, inset)
     return bd
 end
 
+-- GetRegions can return a secret region, and indexing one throws.
+local function SnapRegions(...)
+    for i = 1, select("#", ...) do
+        local r = select(i, ...)
+        if not issecretvalue(r) and r.SetSnapToPixelGrid then
+            r:SetSnapToPixelGrid(false)
+            r:SetTexelSnappingBias(0)
+        end
+    end
+end
+
 function S.PixelSnap(obj)
     if not obj then return end
     if obj.SetSnapToPixelGrid then
         obj:SetSnapToPixelGrid(false)
         obj:SetTexelSnappingBias(0)
     end
-    if obj.GetRegions then
-        for _, r in ipairs({ obj:GetRegions() }) do
-            if r.SetSnapToPixelGrid then
-                r:SetSnapToPixelGrid(false)
-                r:SetTexelSnappingBias(0)
-            end
-        end
-    end
+    if obj.GetRegions then SnapRegions(obj:GetRegions()) end
 end
 
 -- crops a baked decorative border off an atlas texture in
