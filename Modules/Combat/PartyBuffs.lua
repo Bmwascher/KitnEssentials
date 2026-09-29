@@ -294,10 +294,9 @@ function PB:ClearQueue()
     self.queued = {}
 end
 
--- The one every-frame path: one group per frame, since a single group build
--- costs about 3 ms. A slot stays at the head of the queue until BuildSlot
--- reports it finished, so its teammate shows before the next slot starts.
--- Rescheduled only while the queue holds more, then nothing.
+-- The one every-frame path: at most one group build (about 3 ms) per frame.
+-- A slot stays at the head of the queue until BuildSlot reports it finished,
+-- so its teammate shows before the next slot starts.
 local function PumpBuild()
     PB.pumping = false
     if not (PB:IsEnabled() and PB.active) then
@@ -452,11 +451,10 @@ function PB:ApplySlotLayout(slot)
     return clean
 end
 
--- Adds at most one group per call. Returns false while the slot still has a
--- group to add, true once it is bound or cannot progress; a failure leaves
--- buildPending for the drain rather than retrying every frame. A slot whose
--- teammate went away while it waited builds nothing: the build follows a
--- current binding only.
+-- Adds at most one group per call and returns false while one is still
+-- missing. A failure returns true and leaves buildPending for the drain, so it
+-- is not retried every frame. A slot whose teammate went away while it waited
+-- builds nothing.
 function PB:BuildSlot(k)
     local binding = self.bindings[k]
     if not binding then return true end
