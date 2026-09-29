@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-FocusMarker.lua                                     ║
--- ║  GUI: Focus Marker                                       ║
+-- ║  GUI: Focus Macros                                       ║
 -- ║  Purpose: Configuration panel for the FocusMarker module.║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -66,7 +66,7 @@ end
 
 local function Unavailable(scrollChild, yOffset)
     local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
-    errorCard:AddLabel("Focus Marker is not available.")
+    errorCard:AddLabel("Focus Macros is not available.")
     return errorCard:GetNextOffset()
 end
 
@@ -77,7 +77,7 @@ local function BuildHeader(scrollChild, yOffset)
     local db = GetDB()
     if not db then return Unavailable(scrollChild, yOffset), true end
 
-    local card = GUIFrame:CreateCard(scrollChild, "Focus Marker", yOffset)
+    local card = GUIFrame:CreateCard(scrollChild, "Focus Macros", yOffset)
     card:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         if not GetModule() then return end
