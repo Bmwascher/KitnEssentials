@@ -73,8 +73,21 @@ describe("KickTracker pairing, either order", function()
         local KT = L.loadKickTrackerRules()
         local pairing = fresh()
         assert.equals("opened", (KT.PairComm(pairing, {}, "A", 10, W)))
-        assert.is_true(KT.PairRecord(pairing, 10.5, W))
+        local paired, key = KT.PairRecord(pairing, 10.5, W)
+        assert.is_true(paired)
+        assert.equals("A", key)
         assert.is_false(KT.PairRecord(pairing, 10.6, W))
+    end)
+
+    it("a pairing key gives back the teammate's GUID", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { key = "Player-1305-0A1B2C3D:6552", guid = "Player-1305-0A1B2C3D" },
+            { key = "Player-1305-0A1B2C3D:0", guid = "Player-1305-0A1B2C3D" },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.guid, KT.PairKeyGuid(row.key), row.key)
+        end
     end)
 
     it("a record with two open claims is shown", function()

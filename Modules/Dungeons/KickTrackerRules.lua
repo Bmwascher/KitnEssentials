@@ -121,8 +121,8 @@ function KT.PairComm(pairing, records, key, now, window)
     return "ambiguous"
 end
 
--- True when the record about to be created is the kick an open claim
--- announced; the claim is used up.
+-- True, and the claim's key, when the record about to be created is the kick
+-- an open claim announced; the claim is used up.
 function KT.PairRecord(pairing, now, window)
     dropOlder(pairing.claims, now, window)
     dropOlder(pairing.paired, now, window)
@@ -134,7 +134,12 @@ function KT.PairRecord(pairing, now, window)
     if count ~= 1 then return false end
     pairing.paired[only] = pairing.claims[only]
     pairing.claims[only] = nil
-    return true
+    return true, only
+end
+
+-- Keys are guid..":"..kickID.
+function KT.PairKeyGuid(key)
+    return key:match("^(.*):[^:]*$")
 end
 
 ---------------------------------------------------------------------------------
