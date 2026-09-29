@@ -580,18 +580,50 @@ edgeRefresher:SetScript("OnEvent", function()
     for _, bd in pairs(backdropCache) do pcall(RefreshEdge, bd) end
 end)
 
+-- True when this backdrop owes nothing to the roots. The climb shares the
+-- pcall with the refresh, so a parent read that raises costs this backdrop,
+-- not the rest of the walk. A parent that reads secret cannot be placed, so
+-- the backdrop is refreshed anyway and its own size check decides.
+local function RefreshIfUnder(bd, root, roots, refresh)
+    local p = bd
+    while p do
+        if p == root or (roots and roots[p]) then return refresh(bd) end
+        if not p.GetParent then return true end
+        local parent = p:GetParent()
+        if issecretvalue(parent) then return refresh(bd) end
+        p = parent
+    end
+    return true
+end
+
+-- True only when every backdrop visited was placed outside the roots or
+-- settled. Nothing is charged to a single root: a raise before any match, or
+-- roots nested inside each other, would make that charge wrong, so an owed
+-- walk is owed by every root it covered.
+local function WalkEdges(root, roots, refresh)
+    local settled = true
+    for _, bd in pairs(backdropCache) do
+        local ok, done = pcall(RefreshIfUnder, bd, root, roots, refresh)
+        if not (ok and done) then settled = false end
+    end
+    return settled
+end
+
+-- Test seam: the walk's membership, raise isolation and settled report,
+-- driven with a recording refresh instead of real backdrops.
+S._WalkEdges = WalkEdges
+
 -- re-check every backdrop under a root whose scale changed
 -- (world map min/max toggles 1.1 <-> 1.0; scale changes fire no
 -- OnSizeChanged on descendants, so callers hook the root's resize).
 function S.RefreshEdgesUnder(root)
-    if not root then return end
-    for frame, bd in pairs(backdropCache) do -- luacheck: ignore 213/frame
-        local p = bd
-        while p do
-            if p == root then RefreshEdge(bd) break end
-            p = p.GetParent and p:GetParent() or nil
-        end
-    end
+    if not root then return true end
+    return WalkEdges(root, nil, RefreshEdge)
+end
+
+function S.RefreshEdgesUnderRoots(roots)
+    if not roots then return true end
+    return WalkEdges(nil, roots, RefreshEdge)
 end
 
 -- Re-measure ONE frame's border. For hosts that scale each element

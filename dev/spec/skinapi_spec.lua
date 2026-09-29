@@ -1495,3 +1495,109 @@ describe("SkinAPI edge refresh", function()
         end
     end)
 end)
+
+-- The walk's membership and its per-backdrop raise isolation, through the
+-- seam with a recording refresh. The backdrops are plain tables carrying only
+-- a parent chain.
+describe("SkinAPI edge walk", function()
+    local function node(parent)
+        return { GetParent = function() return parent end }
+    end
+
+    it("refreshes a backdrop under nested roots once and one under no root never, for a root set or a single root", function()
+        for _, form in ipairs({ "set", "single" }) do
+            local S = L.loadSkinAPI().Skins
+            local outer = node(nil)
+            local inner = node(outer)
+            local nested = node(inner)
+            local stray = node(node(nil))
+            S._RegisterBackdropForTest(nested)
+            S._RegisterBackdropForTest(stray)
+            local seen = {}
+            local function refresh(bd) seen[bd] = (seen[bd] or 0) + 1 end
+            if form == "set" then
+                S._WalkEdges(nil, { [outer] = true, [inner] = true }, refresh)
+            else
+                S._WalkEdges(outer, nil, refresh)
+            end
+            assert.same({ [nested] = 1 }, seen)
+        end
+    end)
+
+    -- Two backdrops raise, so a walk that stopped at its first raise would
+    -- miss one of them whatever order pairs visits the cache in.
+    it("keeps walking past every backdrop whose parent climb or refresh raises", function()
+        for _, point in ipairs({ "climb", "refresh" }) do
+            local S = L.loadSkinAPI().Skins
+            local root = node(nil)
+            local visited, refreshed = {}, {}
+            local bad = { node(root), node(root) }
+            local isBad = { [bad[1]] = true, [bad[2]] = true }
+            for _, bd in ipairs(bad) do
+                if point == "climb" then
+                    bd.GetParent = function(self)
+                        visited[self] = true
+                        error("parent read refused")
+                    end
+                end
+                S._RegisterBackdropForTest(bd)
+            end
+            local good = { node(root), node(root) }
+            for _, bd in ipairs(good) do S._RegisterBackdropForTest(bd) end
+            S._WalkEdges(root, nil, function(bd)
+                if isBad[bd] then
+                    visited[bd] = true
+                    error("refresh refused")
+                end
+                refreshed[bd] = true
+            end)
+            assert.same(isBad, visited)
+            assert.same({ [good[1]] = true, [good[2]] = true }, refreshed)
+        end
+    end)
+
+    -- SECRET_PARENT stands in for a parent read that comes back secret; the
+    -- rule under test is the walk's branch, not how a real secret behaves.
+    it("reports settled only when every backdrop it visits is placed and settles, under nested roots", function()
+        local SECRET_PARENT = {}
+        for _, case in ipairs({
+            { parent = "plain", result = "true", settled = true, refreshed = true },
+            { parent = "plain", result = "false", settled = false, refreshed = true },
+            { parent = "plain", result = "raise", settled = false, refreshed = true },
+            { parent = "raise", result = "true", settled = false, refreshed = false },
+            { parent = "secret", result = "true", settled = true, refreshed = true },
+            { parent = "secret", result = "false", settled = false, refreshed = true },
+        }) do
+            local S = L.loadSkinAPI({
+                issecretvalue = function(v) return v == SECRET_PARENT end,
+            }).Skins
+            local outer = node(nil)
+            local inner = node(outer)
+            local bd = node(inner)
+            if case.parent == "raise" then
+                bd.GetParent = function() error("parent read refused") end
+            elseif case.parent == "secret" then
+                bd.GetParent = function() return SECRET_PARENT end
+            end
+            -- The stray backdrop sits under neither root and would report owed
+            -- if refreshed, so a walk that refreshed it could not read settled.
+            local stray = node(node(nil))
+            S._RegisterBackdropForTest(bd)
+            S._RegisterBackdropForTest(stray)
+            local refreshed, strayRefreshed = false, false
+            local function refresh(b)
+                if b == stray then
+                    strayRefreshed = true
+                    return false
+                end
+                refreshed = true
+                if case.result == "raise" then error("refresh refused") end
+                return case.result == "true"
+            end
+            assert.equals(case.settled, S._WalkEdges(nil, { [outer] = true, [inner] = true }, refresh))
+            assert.equals(case.settled, S._WalkEdges(outer, nil, refresh))
+            assert.equals(case.refreshed, refreshed)
+            assert.is_false(strayRefreshed)
+        end
+    end)
+end)
