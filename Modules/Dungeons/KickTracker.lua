@@ -1277,9 +1277,9 @@ function KT:ApplyRegionDefaults(bar)
 end
 
 -- Record bars draw secret names, icons, colours and marks, and the own row a
--- kicked spell's icon and mark (KT:ShowOwnKicked). SetToDefaults
--- clears a text or texture region's secret state before the bar serves another
--- row. Resetting the status bar would drop its layout, so it is only stopped
+-- kicked spell's icon and mark (KT:ShowOwnKicked, KT:ClaimOwnKick).
+-- SetToDefaults clears a text or texture region's secret state before the bar
+-- serves another row. Resetting the status bar would drop its layout, so it is only stopped
 -- and re-coloured; its colour may stay secret, and nothing reads it back.
 function KT:ResetBarRegions(bar)
     bar.nameText:SetToDefaults()
@@ -1482,7 +1482,8 @@ function KT:UpdateBarVisuals(bar, member)
     if member then rowKick, isReady = KT.PickRowKick(member, GetTime()) end
     bar.rowKick, bar.rowReady = rowKick, isReady
 
-    -- While the kick cools, the spell it interrupted (KT:ShowOwnKicked).
+    -- While the kick cools, the spell it interrupted (KT:ShowOwnKicked,
+    -- KT:ClaimOwnKick).
     local kicked
     if member and not isReady then kicked = member.kicked end
     bar.kickedShown = kicked ~= nil
