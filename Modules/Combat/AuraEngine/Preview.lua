@@ -131,8 +131,8 @@ local function PositionEntryFrame(frame, index, display, settings)
 end
 
 -- Mirrors the live formatter's breakpoints (Style.lua's GetDurationFormatter)
--- without going through C_StringUtil: that formatter only drives text via
--- SetDurationText, a registration call plain preview frames cannot accept.
+-- without going through C_StringUtil: that formatter reaches a FontString
+-- only through SetDurationText, a registration plain preview frames cannot take.
 -- Floors throughout, tenths included -- string.format rounds, which would show
 -- a value the live display never shows.
 local function FormatRemaining(seconds, decimalThreshold)

@@ -727,8 +727,8 @@ function PB:PreviewIcon(d)
 end
 
 local STAND_IN_WIDTH, STAND_IN_HEIGHT = 220, 52
--- The top of an EllesmereUI party container moved to -674,-63: the mover
--- names the centre of a box sized for five rows, filled from the top.
+-- The top of a party container whose mover reads -674,-63: the mover names
+-- the centre of a box sized for five rows, which fill it from the top.
 local STAND_IN_TOP_X, STAND_IN_TOP_Y = -674, 69
 local STAND_IN_ROWS = {
     { token = "WARRIOR", percent = 100 },
