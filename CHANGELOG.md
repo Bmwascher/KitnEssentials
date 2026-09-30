@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.6
+
+### UI Widgets
+
+- **NEW:** bar texture, text centring and icon skin controls
+- Widget text keeps KE's font through the game's refreshes, and text widgets
+  are centred
+- Spell icons in widget containers are cropped and bordered
+- Inspected recipes show the profession art
+
+---
+
 ## v4.8.5
 
 ### LFG Reminder
