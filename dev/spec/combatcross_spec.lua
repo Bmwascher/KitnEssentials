@@ -111,6 +111,8 @@ describe("CombatCross visibility", function()
         CC.db.RangeColorMeleeEnabled = true
         CC:ResolveRangeAbility()
         withFrame(CC)
+        CC.RegisterEvent = function() end
+        CC.UnregisterEvent = function() end
         CC:UpdateVisibility(false)
         assert.is_false(CC.onUpdateActive)
 
