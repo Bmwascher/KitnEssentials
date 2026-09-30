@@ -43,6 +43,9 @@ CR.lastChargeText = ""
 CR.lastChargeColor = nil
 CR.isPreview = false
 CR._onUpdateActive = false
+CR.inCombat = false
+CR.inEncounter = false
+CR._chargeListening = false
 
 local DEFAULT_CHARGE_AVAILABLE = { 0.3, 1, 0.3, 1 }
 local DEFAULT_CHARGE_UNAVAILABLE = { 1, 0.3, 0.3, 1 }
@@ -318,6 +321,28 @@ end
 ---------------------------------------------------------------------------------
 -- Update Logic
 ---------------------------------------------------------------------------------
+-- A brez pool exists in combat, from a key start, from an encounter pull or
+-- inside an instance, and a count on screen keeps the event so its changes and
+-- its end are still seen.
+function CR.ShouldListen(shown, inCombat, inInstance, inEncounter)
+    return (shown or inCombat or inInstance or inEncounter) and true or false
+end
+
+-- Returns true when this call turned the charge event on.
+function CR:SyncChargeEvent()
+    local shown = self.frame ~= nil and self.frame:IsShown()
+    local want = self:IsEnabled()
+        and CR.ShouldListen(shown, self.inCombat, KE.Context:IsActive("CombatRes"), self.inEncounter)
+    if want == self._chargeListening then return false end
+    self._chargeListening = want
+    if want then
+        self:RegisterEvent("SPELL_UPDATE_CHARGES", "OnCombatEvent")
+    else
+        self:UnregisterEvent("SPELL_UPDATE_CHARGES")
+    end
+    return want
+end
+
 function CR:Update()
     if not self.frame then return end
 
@@ -351,6 +376,7 @@ function CR:Update()
         end
         -- No live brez pool (or static preview): nothing to count down.
         self:_SetOnUpdateActive(false)
+        self:SyncChargeEvent()
         return
     end
 
@@ -412,6 +438,7 @@ function CR:Update()
     -- counting down. Full charges / no active recharge = static display, so
     -- detach; SPELL_UPDATE_CHARGES re-wakes us on the next brez consumption.
     self:_SetOnUpdateActive(currentCd > 0)
+    self:SyncChargeEvent()
 end
 
 -- Attach/detach the per-frame timer script. Mirrors CombatTimer's
@@ -509,13 +536,55 @@ end
 ---------------------------------------------------------------------------------
 -- Event Handlers
 ---------------------------------------------------------------------------------
-function CR:OnCombatEvent()
+function CR:OnCombatEvent(event)
+    if event == "PLAYER_REGEN_DISABLED" then self.inCombat = true end
     if not self.db.Enabled then return end
     if not self.frame then return end
     -- Update() self-manages show/hide and attaches the OnUpdate only when a
     -- cooldown is actively counting down, so a single call covers every event.
     self:Update()
 end
+
+function CR:OnRegenEnabled()
+    self.inCombat = false
+    self:SyncChargeEvent()
+end
+
+-- A pull can come before this player is in combat. The one read picks up a
+-- pool the pull created before the charge event was on.
+function CR:OnEncounterStart()
+    self.inEncounter = true
+    self:SyncChargeEvent()
+    if self.db.Enabled and self.frame then self:Update() end
+end
+
+function CR:OnEncounterEnd()
+    self.inEncounter = false
+    self:SyncChargeEvent()
+end
+
+local function InInstance(facts)
+    return facts.inInstance
+end
+
+-- Charge events missed while off are made up with one read. Not while
+-- OnEnable subscribes: the first paint stays with the delayed ApplySettings.
+local function OnContextEnter()
+    if CR:SyncChargeEvent() and not CR._subscribing then CR:Update() end
+end
+
+local function OnContextLeave()
+    CR:SyncChargeEvent()
+end
+
+-- An unreadable zone counts as inside, so the charge event stays on.
+local CONTEXT_OPTIONS = {
+    needs = { "zone" },
+    predicate = InInstance,
+    onEnter = OnContextEnter,
+    onLeave = OnContextLeave,
+    onUnknown = "open",
+}
 
 ---------------------------------------------------------------------------------
 -- Lifecycle
@@ -534,20 +603,36 @@ function CR:OnEnable()
 
     -- No unconditional OnUpdate: Update() attaches the timer script only while
     -- a cooldown is counting down (see _SetOnUpdateActive). ApplySettings ->
-    -- Update does the first paint; the charge events below wake it thereafter.
+    -- Update does the first paint; the charge events wake it thereafter.
 
-    -- Register events to detect when battle res charges become available
-    self:RegisterEvent("SPELL_UPDATE_CHARGES", "OnCombatEvent")
+    -- SPELL_UPDATE_CHARGES goes through SyncChargeEvent, on only while a pool
+    -- can exist.
     self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatEvent")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
+    self:RegisterEvent("ENCOUNTER_START", "OnEncounterStart")
+    self:RegisterEvent("ENCOUNTER_END", "OnEncounterEnd")
     self:RegisterEvent("CHALLENGE_MODE_START", "OnCombatEvent")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnCombatEvent")
+
+    -- A fight or pull already under way fired its start event before this.
+    self.inCombat = UnitAffectingCombat("player") and true or false
+    local inProgress = C_InstanceEncounter and C_InstanceEncounter.IsEncounterInProgress
+    self.inEncounter = (inProgress and inProgress()) == true
+    self._subscribing = true
+    KE.Context:Subscribe("CombatRes", CONTEXT_OPTIONS)
+    self._subscribing = false
+    self:SyncChargeEvent()
 end
 
 function CR:OnDisable()
+    KE.Context:Unsubscribe("CombatRes")
     if self.frame then
         self:_SetOnUpdateActive(false)
         self.frame:Hide()
     end
     self.isPreview = false
     self:UnregisterAllEvents()
+    self._chargeListening = false
+    self.inCombat = false
+    self.inEncounter = false
 end
