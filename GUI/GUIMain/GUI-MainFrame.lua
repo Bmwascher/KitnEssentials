@@ -93,7 +93,7 @@ GUIFrame.sidebarConfig = {
             { id = "DungeonCasts",                text = "Dungeon Casts", keywords = { "dungeon cast", "cast", "interrupt", "mob", "enemy", "castbar", "m+" } },
             { id = "DTimers_Main", text = "Dungeon Timers", keywords = { "dungeon timers", "timer", "timers", "bigwigs", "boss", "season", "enable", "general", "bar", "bars", "color", "texture", "size", "text", "font", "label", "nameplate", "trash", "mob", "icon", "cooldown", "predict", "dungeon", "algethar", "aa", "mgt", "pos", "sott" } },
             { id = "EnemyCounter",                text = "Enemy Counter", keywords = { "enemy", "counter", "count", "mobs", "pull", "nameplate", "m+" } },
-            { id = "FocusMarker",                 text = "Focus Marker", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker" } },
+            { id = "FocusMarker",                 text = "Focus Marker", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker", "kick", "interrupt", "focus kick" } },
             { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
             { id = "TargetedSpells",              text = "Targeted Spells", keywords = { "targeted", "spells", "cast", "incoming", "self", "target", "warning", "m+" } },
         },

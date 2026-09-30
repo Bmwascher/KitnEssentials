@@ -847,6 +847,31 @@ local Defaults = {
             NoToggle = true,
             NoOverwrite = true,
             AnnounceReadyCheck = true,
+
+            -- Keyed by the class token UnitClass returns. A saved entry that
+            -- differs from its default here is the player's override.
+            MarkerFromClass = false,
+            ClassMarkers = {
+                DEATHKNIGHT = "Cross",
+                DEMONHUNTER = "Diamond",
+                DRUID = "Circle",
+                EVOKER = "Triangle",
+                HUNTER = "Triangle",
+                MAGE = "Square",
+                MONK = "Triangle",
+                PALADIN = "Diamond",
+                PRIEST = "Moon",
+                ROGUE = "Star",
+                SHAMAN = "Square",
+                WARLOCK = "Diamond",
+                WARRIOR = "Cross",
+            },
+
+            KickMacroEnabled = false,
+            KickMouseover = false,
+            KickTargetFallback = true,
+            KickStopCasting = false,
+            KickMarkFocus = false,
         },
 
         KeystoneHelper = {
