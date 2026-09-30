@@ -30,7 +30,7 @@ GUIFrame.sidebarConfig = {
         items = {
             { id = "HomePage", text = "Home Page", keywords = { "home", "home page", "start", "welcome", "overview", "about", "changelog", "theme", "color", "accent", "appearance", "skin", "preset", "tint" } },
             { id = "Profiles", text = "Profile Manager", keywords = { "profile", "profiles", "import", "export", "copy", "reset", "rename", "delete", "global", "sharing" } },
-            { id = "CVars", text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "world map scale", "map", "map scale", "scale", "maximized", "maximised", "fullscreen", "maximized map" } },
+            { id = "CVars", text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "world map scale", "map", "map scale", "scale", "maximized", "maximised", "fullscreen", "maximized map", "ui scaling", "core panels", "services", "housing", "legacy / optional", "legacy", "panel scale", "panel scaling", "blizzard panels", "character frame", "professions scale", "group finder scale", "housing scale", "service panels", "legacy panels" } },
             { id = "Optimize", text = "System Optimization", keywords = { "optimize", "performance", "fps", "cpu", "memory", "latency", "cvar" } },
         },
     },
