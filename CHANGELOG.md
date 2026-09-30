@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.16
+
+### Kick Tracker
+
+- A talent-added kick is shared with teammates, and changes to it are announced
+- Command Demon's Spell Lock sends one kick message
+
+---
+
 ## v4.8.15
 
 ### Kick Tracker
