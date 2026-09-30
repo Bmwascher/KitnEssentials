@@ -1220,7 +1220,7 @@ local Defaults = {
 
         SpellAlerts = {
             Enabled = false,
-            EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per spec index)
+            EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per global spec ID)
         },
 
         ReadyCheckConsumables = {
