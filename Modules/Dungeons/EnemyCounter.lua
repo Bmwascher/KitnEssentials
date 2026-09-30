@@ -56,30 +56,59 @@ end
 -- Core Logic
 ---------------------------------------------------------------------------------
 
-local function GetEnemyCount()
-    local count = 0
-    local debugLines = DEBUG_EC and {} or nil
-    for i = 1, 40 do
-        local unit = "nameplate" .. i
-        if UnitExists(unit) then
-            local combat = UnitAffectingCombat(unit)
-            local dead = UnitIsDead(unit)
-            local hostile = UnitCanAttack("player", unit)
-            if debugLines then
-                debugLines[#debugLines + 1] = ("[EC] %s cmb=%s dead=%s hostile=%s"):format(
-                    unit, tostring(combat), tostring(dead), tostring(hostile))
-            end
-            if combat and not dead and hostile then
-                count = count + 1
-            end
-        end
+-- The token range the count has always covered. Counting plates above it
+-- would change the number shown.
+local MAX_COUNTED_TOKENS = 40
+
+-- Nameplate tokens currently up, kept by the added/removed events and seeded
+-- when counting starts, so a recount visits only plates that exist.
+EC.liveTokens = {}
+local liveTokens = EC.liveTokens
+
+-- Pure (no WoW API), so the set's rules are spec-covered.
+function EC.TrackToken(set, unit, present)
+    if type(unit) ~= "string" then return end
+    local index = tonumber(unit:match("^nameplate(%d+)$"))
+    if present and index and index >= 1 and index <= MAX_COUNTED_TOKENS then
+        set[unit] = true
+    else
+        set[unit] = nil
     end
+end
+
+function EC.CountLive(set, isCounted)
+    local count = 0
+    for unit in pairs(set) do
+        if isCounted(unit) then count = count + 1 end
+    end
+    return count
+end
+
+local debugLines
+
+local function IsCountedEnemy(unit)
+    if not UnitExists(unit) then return false end
+    local combat = UnitAffectingCombat(unit)
+    local dead = UnitIsDead(unit)
+    local hostile = UnitCanAttack("player", unit)
+    if debugLines then
+        debugLines[#debugLines + 1] = ("[EC] %s cmb=%s dead=%s hostile=%s"):format(
+            unit, tostring(combat), tostring(dead), tostring(hostile))
+    end
+    if combat and not dead and hostile then return true end
+    return false
+end
+
+local function GetEnemyCount()
+    debugLines = DEBUG_EC and {} or nil
+    local count = EC.CountLive(liveTokens, IsCountedEnemy)
     -- Only print when count changes
     if DEBUG_EC and count ~= lastDebugCount then
         for _, line in ipairs(debugLines --[[@as table]]) do KE:Print(line) end
         KE:Print(("[EC] count=%d (was %d)"):format(count, lastDebugCount))
         lastDebugCount = count
     end
+    debugLines = nil
     return count
 end
 
@@ -221,16 +250,20 @@ end
 
 function EC:NAME_PLATE_UNIT_ADDED(_, unit)
     if DEBUG_EC then KE:Print("[EC] event=NP_ADDED " .. tostring(unit)) end
+    EC.TrackToken(liveTokens, unit, true)
     self:UpdateText()
 end
 
 function EC:NAME_PLATE_UNIT_REMOVED(_, unit)
     if DEBUG_EC then KE:Print("[EC] event=NP_REMOVED " .. tostring(unit)) end
+    -- Recount first, then untrack: the count on this event then matches a scan
+    -- of every token whether or not the plate still answers.
     self:UpdateText()
+    EC.TrackToken(liveTokens, unit, false)
 end
 
 function EC:UNIT_FLAGS(_, unit)
-    if unit and unit:find("nameplate", 1, true) then
+    if unit and liveTokens[unit] then
         if DEBUG_EC then KE:Print("[EC] event=UNIT_FLAGS " .. tostring(unit)) end
         self:UpdateText()
     end
@@ -280,6 +313,12 @@ end
 function EC:StartForSpec()
     self:CreateFrames()
     self:RegWithEditMode()
+    -- Plates already up fired their added events before the gate opened.
+    wipe(liveTokens)
+    for i = 1, MAX_COUNTED_TOKENS do
+        local unit = "nameplate" .. i
+        EC.TrackToken(liveTokens, unit, UnitExists(unit))
+    end
     for index = 1, #GATED_EVENTS do
         self:RegisterEvent(GATED_EVENTS[index])
     end
@@ -290,6 +329,7 @@ function EC:StopForSpec()
     for index = 1, #GATED_EVENTS do
         self:UnregisterEvent(GATED_EVENTS[index])
     end
+    wipe(liveTokens)
     -- The preview owns the frame while the settings page is open.
     if self.frame and not self.isPreview then self.frame:Hide() end
 end

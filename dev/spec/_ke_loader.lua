@@ -339,6 +339,16 @@ function L.loadTargetedSpells(overrides)
     return modules["TargetedSpells"], KE
 end
 
+-- Modules/Dungeons/EnemyCounter.lua pure live-token helpers. Returns EC, KE.
+function L.loadEnemyCounter(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    local KE = { Print = function() end }
+    helpers.loadModule("Modules/Dungeons/EnemyCounter.lua", KE)
+    return modules["EnemyCounter"], KE
+end
+
 -- Core/ProfileManager.lua over a fake AceDB-shaped KE.db. Mirrors the AceDB
 -- semantics the manager depends on: SetProfile early-returns when already on
 -- that profile, and OnProfileChanged/OnProfileCopied/OnProfileReset fire
