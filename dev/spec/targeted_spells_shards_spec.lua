@@ -177,10 +177,9 @@ describe("TargetedSpells shard dispatch", function()
 end)
 
 describe("TargetedSpells enable lifecycle", function()
-    -- RebuildEntries and CheckContentGate stay REAL here. They are the call
-    -- chain the defect lives in: with either stubbed, OnEnable's own closing
-    -- CheckContentGate registers the shards and this passes with shard creation
-    -- moved back after SyncStructure.
+    -- RebuildEntries and CheckContentGate stay REAL here. They are the chain
+    -- that builds and registers the shards on enable; with either stubbed the
+    -- case would pass without running the code it is here for.
     local function enableModule()
         _G.IsInInstance = function() return true, "party" end
         _G.GetInstanceInfo = function() return "d", "party", 0 end
@@ -372,6 +371,7 @@ describe("TargetedSpells drain queue", function()
             TS.ShouldBeActive = function() return false end
             TS.ReleaseAllEntries = function() end
             TS.UnregisterShardEvents = function() end
+            TS.UnregisterEvent = function() end
 
             TS:CheckContentGate()
 
@@ -417,6 +417,8 @@ describe("TargetedSpells drain queue", function()
         TS.ReleaseAllEntries = function() end
         TS.UnregisterShardEvents = function() end
         TS.RegisterShardEvents = function() end
+        TS.RegisterEvent = function() end
+        TS.UnregisterEvent = function() end
         TS.ScanExistingNameplates = function() end
         TS.contentActive = true
         TS.isPreview = false

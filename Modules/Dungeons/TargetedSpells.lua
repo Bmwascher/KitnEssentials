@@ -344,6 +344,9 @@ function TS:CreateShards()
 end
 
 function TS:RegisterShardEvents()
+    -- Built on first use so nothing exists outside the content gate, and before
+    -- the loop: an empty list would register nothing while the gate reads active.
+    self:CreateShards()
     for _, shard in ipairs(self.shards) do
         for _, event in ipairs(SHARD_EVENTS) do
             shard:RegisterUnitEvent(event, unpack(shard.tokens))
@@ -361,10 +364,6 @@ function TS:OnEnable()
     self:UpdateDB()
     if not self.db or not self.db.Enabled then return end
 
-    -- Before SyncStructure, which reaches CheckContentGate: registering an
-    -- empty shard list is a silent no-op that then marks the gate active, after
-    -- which nothing registers again.
-    self:CreateShards()
     self:CreateAnchorFrame()
     -- Before anything can acquire an entry. A re-enable under a different
     -- profile finds the pool still holding the previous profile's frames, and
@@ -377,8 +376,6 @@ function TS:OnEnable()
     -- parented to a hidden frame until a preview fires or /reload.
     self.anchorFrame:Show()
 
-    self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnNameplateAdded")
-    self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnNameplateRemoved")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "CheckContentGate")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CheckContentGate")
 
@@ -423,10 +420,16 @@ function TS:CheckContentGate()
         self.contentActive = true
         dbg("gate ON")
         self:RegisterShardEvents()
+        -- The nameplate pair follows the shard events: with the gate off the
+        -- added handler bails and the removed one finds no entry.
+        self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnNameplateAdded")
+        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnNameplateRemoved")
         self:ScanExistingNameplates()
     elseif not shouldBeActive and self.contentActive then
         self.contentActive = false
         self:UnregisterShardEvents()
+        self:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
+        self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
         self:DiscardPendingCasts()
         dbg("gate OFF")
         if not self.isPreview then
