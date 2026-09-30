@@ -35,6 +35,18 @@ local AceDB
 ---@field textSecondary number[]
 ---@field sidebarWidth number
 ---@field contentWidth number
+---@field fieldBg number[]
+---@field fieldBorder number[]
+---@field controlBg number[]
+---@field controlHover number[]
+---@field controlPressed number[]
+---@field controlBorder number[]
+---@field listBg number[]
+---@field listBorder number[]
+---@field thumbRest number[]
+---@field thumbHover number[]
+---@field knobOff number[]
+---@field divider number[]
 local KETheme
 
 -- Animation curves created via C_CurveUtil.CreateCurve() in Core/Curves.lua.
@@ -173,6 +185,16 @@ function KE:GetInterruptAnnounceSpellSet() end
 ---@param query string|number|nil
 ---@return boolean
 function KE.DropdownSearchMatches(displayText, key, query) end
+
+--- The opaque colour of `top` drawn at `alpha` over `base`
+--- (Core/AddonTheme.lua). Both inputs' own alpha is ignored.
+---@param top number[]
+---@param alpha number
+---@param base number[]
+---@return number r
+---@return number g
+---@return number b
+function KE.BlendColor(top, alpha, base) end
 
 -- ─── Module utilities ─────────────────────────────────────
 --- True when ElvUI is loaded AND the user has opted into ElvUI handling
@@ -553,7 +575,7 @@ function KE:ApplyThemeFont(fontStr, size) end
 ---@param cancelText string?
 ---@param showSecondEditBox boolean?
 ---@param secondEditBoxLabel string?
----@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string?, onSecondTextChanged: fun(text: string, dialog: Frame)?, waitIfBusy: boolean? }?
+---@param opts { acceptColor: number[]?, cancelColor: number[]?, closeIsNeutral: boolean?, requireTyped: string?, onSecondTextChanged: fun(text: string, dialog: Frame)?, waitIfBusy: boolean?, acceptOnly: boolean? }?
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts) end
@@ -566,11 +588,33 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
 function KE.PromptTypedGateOpen(typed, required) end
 
 --- True when a prompt raised with opts.waitIfBusy must wait because another
---- prompt is showing (Core/Widgets.lua).
+--- prompt is showing, combat is on, or others already wait (Core/Widgets.lua).
 ---@param waitIfBusy boolean?
 ---@param promptShowing boolean
+---@param inCombat boolean?
+---@param queued boolean?
 ---@return boolean
-function KE.PromptWaits(waitIfBusy, promptShowing) end
+function KE.PromptWaits(waitIfBusy, promptShowing, inCombat, queued) end
+
+--- Appends a waiting prompt's packed arguments after removing any entry with
+--- the same non-nil `accept`; false, with nothing added, when the queue holds
+--- `cap` entries (Core/Widgets.lua).
+---@param queue table[]
+---@param entry table
+---@param cap integer
+---@return boolean
+function KE.PromptQueueAdd(queue, entry, cap) end
+
+--- Removes the entry whose `accept` is `accept`, keeping the order of the
+--- rest; a nil `accept` removes nothing (Core/Widgets.lua).
+---@param queue table[]
+---@param accept function?
+function KE.PromptQueueRemove(queue, accept) end
+
+--- Removes and returns the oldest waiting entry, or nil (Core/Widgets.lua).
+---@param queue table[]
+---@return table?
+function KE.PromptQueueTake(queue) end
 
 --- Closes the prompt, shown or waiting, whose accept callback is `accept`,
 --- running neither callback (Core/Widgets.lua).
@@ -923,6 +967,10 @@ function KE:GetPointFromAnchor(anchor) end
 ---@return string?
 function KE:AbbreviateDungeonName(name, mapID) end
 
+---@param name string?
+---@return number?
+function KE:GetChallengeMapIDByName(name) end
+
 ---@param itemId string?
 ---@return string? sectionId
 function KE:GetSectionForItem(itemId) end
@@ -1013,6 +1061,61 @@ function KE:GetInterruptCandidatesForSpec(specID) end
 ---@param specID number
 ---@return table<number, true>?
 function KE:GetInterruptSpellSet(specID) end
+
+--- The candidate whose id is trackedID, else the first candidate.
+---@param candidates { id: number, cd: number }[]
+---@param trackedID number?
+---@return { id: number, cd: number }?
+function KE:PickTrackedKick(candidates, trackedID) end
+
+--- The kick a cooldown tracker shows for a spec whose pet it cannot see: the
+--- `tracked` candidate, else the first; nil when the spec has no kick.
+---@param specID number
+---@return { id: number, cd: number }?
+function KE:GetTrackedKickForSpec(specID) end
+
+--- Every candidate kick ID across specs (announce extras excluded).
+--- Callers treat the returned table as read-only.
+---@return table<number, true>
+function KE:GetInterruptKickSpellSet() end
+
+--- Flat talent changes to one kick's cooldown, or nil.
+---@param kickSpellID number
+---@return { talent: number, seconds: number?, multiplier: number? }[]?
+function KE:GetFlatKickTalents(kickSpellID) end
+
+--- The spell ID a cooldown tracker keys a kick on (aliases collapsed).
+---@param spellID number
+---@return number
+function KE:GetCanonicalKickSpell(spellID) end
+
+--- One kick's cooldown for a spec, alias-aware; nil when the spec lacks it.
+---@param specID number?
+---@param kickID number
+---@return number?
+function KE:GetKickCooldownForSpec(specID, kickID) end
+
+--- A spec's talent-added kicks, or nil.
+---@param specID number
+---@return { id: number, cd: number, requires: number }[]?
+function KE:GetExtraKicksForSpec(specID) end
+
+--- The entry for a talent-added kick, or nil.
+---@param spellID number
+---@return { id: number, cd: number, requires: number }?
+function KE:GetExtraKick(spellID) end
+
+--- The largest table cooldown of a canonical kick ID, or nil when unknown.
+---@param kickID number
+---@return number?
+function KE:GetKickCooldownCap(kickID) end
+
+--- The talent that shortens a kick after a successful interrupt, and by how
+--- many seconds; nil when none.
+---@param kickSpellID number
+---@return number? talentSpellID
+---@return number? seconds
+function KE:GetInterruptSuccessReduction(kickSpellID) end
 
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end
@@ -1220,6 +1323,17 @@ function KE:CanMakeProtectedCalls() end
 ---@param targetState number
 ---@param callback fun()?
 function KE:DeferUntilUnrestricted(targetState, callback) end
+
+-- True while a chat send would be refused: chat lockdown, or a Chat, keystone
+-- or encounter restriction.
+---@return boolean
+function KE:IsChatMessagingLocked() end
+
+---@param callback fun(newState: number, oldState: number)?
+function KE:RegisterRestrictionListener(callback) end
+
+---@param callback fun(newState: number, oldState: number)?
+function KE:UnregisterRestrictionListener(callback) end
 
 -- Core/TextureSnap.lua
 ---@param obj Frame|Texture?

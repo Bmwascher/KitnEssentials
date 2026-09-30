@@ -218,7 +218,8 @@ function L.loadDMCore(overrides)
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
     _G.CreateAbbreviateConfig = function(cfg) return cfg end
-    _G.C_ChatInfo = { SendChatMessage = function() end }
+    -- Core.lua captures SendChatMessage at load, so a spy has to arrive here.
+    _G.C_ChatInfo = (overrides and overrides.C_ChatInfo) or { SendChatMessage = function() end }
     -- Core.lua reads Enum.* members at file scope. The real values never
     -- matter headlessly — any Enum.X.Y resolves to the stable string "X.Y",
     -- unique per member so comparisons against them still discriminate.
@@ -286,6 +287,16 @@ function L.loadDMClock(overrides)
     return DM, KE
 end
 
+-- Modules/DamageMeter/SpellHistory.lua on top of a loaded DM Core. Specs reach
+-- only the pure classifier and ring helpers, and every game lookup those use
+-- is injected, so no spell, item or container stub is needed. The file's
+-- runtime reads the game only when called. Returns DM, KE.
+function L.loadDMSpellHistory(overrides)
+    local DM, KE = L.loadDMCore(overrides)
+    helpers.loadModule("Modules/DamageMeter/SpellHistory.lua", KE)
+    return DM, KE
+end
+
 -- Core/PixelPerfect.lua. Defaults model a PERFECT UI scale (768/1440 at
 -- 1440p → pixelSize exactly 1). The stubs read opts live: mutate
 -- opts.effectiveScale (or physicalHeight) and call KE:UpdatePixelCache() to
@@ -323,7 +334,6 @@ function L.loadTargetedSpells(overrides)
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
-    _G.StaticPopupDialogs = {}  -- in-game Blizzard defines it; module must never assign the global
     local KE = { Print = function() end, curves = {} }
     helpers.loadModule("Modules/Dungeons/TargetedSpells.lua", KE)
     return modules["TargetedSpells"], KE
@@ -610,6 +620,17 @@ function L.loadAuraGlowRules(overrides)
     return KE.AuraGlowRules, KE
 end
 
+-- Modules/Combat/PartyBuffsRules.lua. Pure decision logic that builds on
+-- KE.AuraRules, so Rules.lua loads first onto the same KE table. Returns
+-- KE.PartyBuffsRules, KE.
+function L.loadPartyBuffsRules(overrides)
+    installMock(overrides, {})
+    local KE = {}
+    helpers.loadModule("Modules/Combat/AuraEngine/Rules.lua", KE)
+    helpers.loadModule("Modules/Combat/PartyBuffsRules.lua", KE)
+    return KE.PartyBuffsRules, KE
+end
+
 -- Modules/Combat/AuraEngine/Restriction.lua. The predicate is INJECTED
 -- (opts.isHidden), so the load needs only a KE table to hang
 -- KE.AuraRestriction on -- no C_Secrets/C_RestrictedActions stub. Returns
@@ -762,18 +783,16 @@ function L.loadCommunitiesSkin(overrides)
     return findUpvalue(captured, "ChatPaneFontSize"), KE
 end
 
--- Modules/Skinning/UIWidgets.lua. StyleWidgetByType is a module METHOD, so
--- it's reachable straight off the returned UIW table -- no seam needed.
--- SetFontIfChanged is a file-local FUNCTION value, so it is an upvalue of
--- any stored method that calls it directly (StyleStatusBarWidget);
--- findUpvalue recovers the function object straight off that upvalue slot
--- without ever running StyleStatusBarWidget itself. The module's event
--- registration is never run: the addon shim's module has no RegisterEvent.
--- Returns UIW, KE, seams (seams.SetFontIfChanged).
+-- Modules/Skinning/UIWidgets.lua. Its methods and the pure lookups are
+-- fields on the returned UIW table. Styling a font string installs hooks,
+-- so hooksecurefunc is a no-op here. The module's event registration is
+-- never run: the addon shim's module has no RegisterEvent.
+-- Returns UIW, KE.
 function L.loadUIWidgets(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
+    _G.hooksecurefunc = function() end
     local KE = {
         db = { profile = { Skinning = { UIWidgets = {} } } },
         ShouldNotLoadModule = function() return false end,
@@ -783,12 +802,7 @@ function L.loadUIWidgets(overrides)
         AddBorders = function() end,
     }
     helpers.loadModule("Modules/Skinning/UIWidgets.lua", KE)
-    local UIW = modules["UIWidgets"]
-
-    local seams = {
-        SetFontIfChanged = findUpvalue(UIW.StyleStatusBarWidget, "SetFontIfChanged"),
-    }
-    return UIW, KE, seams
+    return modules["UIWidgets"], KE
 end
 
 -- Modules/Skinning/LootRoll.lua. LR:UpdateDB/OnInitialize/OnEnable are never
@@ -1412,6 +1426,10 @@ function L.loadLFGReminder(overrides)
         GetSearchResultInfo = function() return nil end,
         GetActivityInfoTable = function() return nil end,
     }
+    -- Read at call time by the row's art lookup; the default has no art.
+    _G.C_ChallengeMode = overrides.C_ChallengeMode or {
+        GetMapUIInfo = function() return nil end,
+    }
     -- LFGReminder.lua reads Enum.SpellBookSpellBank.Player at file scope, so the
     -- stub must exist BEFORE helpers.loadModule runs.
     _G.Enum = overrides.Enum or { SpellBookSpellBank = { Player = "Player" } }
@@ -1448,6 +1466,9 @@ function L.loadLFGReminder(overrides)
         -- loader's onCreateFrame spy (used to count BuildPopup's frames).
         IsSecretValue = function(_, v) return _G.issecretvalue and _G.issecretvalue(v) end,
     }
+    -- Core/Globals.lua's lookup; the default knows no map, so the row falls
+    -- back to the teleport icon.
+    KE.GetChallengeMapIDByName = overrides.GetChallengeMapIDByName or function() return nil end
     helpers.loadModule("Modules/Dungeons/LFGReminder.lua", KE)
     local LR = modules["LFGReminder"]
     -- ShowPopup/HidePopup (the leader/cooldown-gate work) register and
@@ -1903,8 +1924,6 @@ function L.loadMoveFrames(overrides)
     _G.strsplit = overrides.strsplit or wowStrsplit
     _G.wipe = overrides.wipe or function(t) for k in pairs(t) do t[k] = nil end return t end
     _G.tDeleteItem = overrides.tDeleteItem or function() end
-    _G.RunNextFrame = overrides.RunNextFrame or function() end
-    _G.GenerateFlatClosure = overrides.GenerateFlatClosure or function(f) return f end
     _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
     -- Captured into MODIFIER_DOWN at load time, so a spec's fake key state
     -- must be on _G before loadModule runs.
@@ -2167,7 +2186,6 @@ function L.loadOptimize(overrides)
     }
     _G.Enum.NamePlateStackType = { None = 0, Enemy = 1, Friendly = 2 }
     _G.GetInstanceInfo = function() return "Mock", "party", rec.difficultyID end
-    _G.StaticPopupDialogs = {}
     _G.ReloadUI = function() end
     -- Wiped per load: this is the module's own SavedVariables and busted
     -- insulates _G per FILE, not per test.
@@ -2479,7 +2497,8 @@ end
 -- spec role string ("HEALER" / "DAMAGER"); overrides.db is the PIAssist block;
 -- overrides.builder = { enabled = bool, applied = name } stands in for the
 -- PIMacroBuilder module TargetName consults (off with nothing applied by
--- default); overrides.target is the stored PIMacroBuilder.Target.
+-- default); overrides.target is the stored PIMacroBuilder.Target;
+-- overrides.gui becomes KE.GUIFrame, for the page-refresh rule.
 function L.loadPIAssist(overrides)
     overrides = overrides or {}
     local rec = { activate = 0, deactivate = 0, resolve = 0, filters = 0, glow = 0, events = {} }
@@ -2506,6 +2525,7 @@ function L.loadPIAssist(overrides)
             PIAssist = overrides.db or { Enabled = true, HealersOnly = true },
             PIMacroBuilder = { Target = overrides.target or "" },
         } },
+        GUIFrame = overrides.gui,
         Print = function() end,
         IsSecretValue = function() return false end,
         IsSafeValue = function(_, v) return v ~= nil end,
@@ -2579,7 +2599,8 @@ end
 -- holds IsArenaSkirmish and IsWargame as upvalues, so reassigning them on _G
 -- after the load would not reach it; routing every predicate through one table
 -- lets a single load serve every branch. C_PvP deliberately carries only the
--- members the module is supposed to use.
+-- members the module is supposed to use. rec.prompts records every
+-- KE:CreatePrompt call.
 -- Returns CL, rec.
 function L.loadCombatLogger(overrides)
     overrides = overrides or {}
@@ -2589,7 +2610,7 @@ function L.loadCombatLogger(overrides)
     local rec = {
         logging = false,
         prints = {},
-        popups = {},
+        prompts = {},
         pvp = {
             ratedArena = false,
             skirmish = false,
@@ -2599,8 +2620,6 @@ function L.loadCombatLogger(overrides)
         },
     }
 
-    _G.StaticPopupDialogs = {}
-    _G.StaticPopup_Show = function(which) rec.popups[#rec.popups + 1] = which end
     _G.ReloadUI = function() end
     _G.GetInstanceInfo = overrides.GetInstanceInfo
         or function() return "Test", "none", 0, "", 0 end
@@ -2620,7 +2639,19 @@ function L.loadCombatLogger(overrides)
         IsRatedBattleground = function() return rec.pvp.ratedBG end,
     }
 
-    local KE = { Print = function(_, msg) rec.prints[#rec.prints + 1] = msg end }
+    local KE = {
+        Print = function(_, msg) rec.prints[#rec.prints + 1] = msg end,
+        ClosePromptIfOwner = function() end,
+        -- SEVEN placeholders between text and onAccept, matching the real
+        -- signature (Core/Widgets.lua).
+        CreatePrompt = function(_, title, text, _, _, _, _, _, _, _,
+                                onAccept, onCancel, acceptText, cancelText, _, _, opts)
+            rec.prompts[#rec.prompts + 1] = {
+                title = title, text = text, onAccept = onAccept, onCancel = onCancel,
+                acceptText = acceptText, cancelText = cancelText, opts = opts,
+            }
+        end,
+    }
     helpers.loadModule("Modules/QoL/CombatLogger.lua", KE)
 
     local CL = modules["CombatLogger"]
@@ -2945,13 +2976,26 @@ end
 
 -- Modules/Dungeons/KickTracker.lua, for the own-kick guard. Plain stubs only:
 -- the file reads C_SpecializationInfo (from the mock) and LibStub at load, and
--- the spec drives OnSpellcastSucceeded directly. Returns KT.
+-- the spec drives OnSpellcastSucceeded directly. Core/Interrupts.lua loads
+-- first into the same KE: the module takes its kick set from it at load.
+-- Returns KT.
 function L.loadKickTracker(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
-    helpers.loadModule("Modules/Dungeons/KickTracker.lua", { Print = function() end })
+    local KE = helpers.loadModule("Core/Interrupts.lua", { Print = function() end })
+    helpers.loadModule("Modules/Dungeons/KickTracker.lua", KE)
+    helpers.loadModule("Modules/Dungeons/KickTrackerRules.lua", KE)
+    return modules["KickTracker"]
+end
+
+-- Modules/Dungeons/KickTrackerRules.lua alone: the tracker's pure decisions
+-- call no WoW API, so only the module table the shim hands back is needed.
+-- Returns KT.
+function L.loadKickTrackerRules()
+    local modules = helpers.installAddonShim()
+    helpers.loadModule("Modules/Dungeons/KickTrackerRules.lua", {})
     return modules["KickTracker"]
 end
 

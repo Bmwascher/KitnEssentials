@@ -139,7 +139,7 @@ function M.reset()
         "AbbreviateNumbers", "BreakUpLargeNumbers", "CreateColor",
         "UnitIsPlayer", "GetPlayerInfoByGUID", "C_ClassColor",
         "C_Secrets", "C_UnitAuras", "C_Spell", "UnitCastingInfo", "UnitChannelInfo",
-        "UnitClass", "PlaySoundFile", "StopSound", "PlayerUtil", "RunNextFrame",
+        "UnitClass", "PlaySoundFile", "StopSound", "PlayerUtil",
         "GetUnitEmpowerMinHoldTime", "LibStub",
         "GetNumGroupMembers", "IsInRaid", "IsInGroup", "UnitGroupRolesAssigned",
         "GetSpecialization", "GetSpecializationInfo", "C_SpecializationInfo", "UIParent",

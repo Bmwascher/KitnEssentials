@@ -20,4 +20,53 @@ describe("Interrupts (Core/Interrupts.lua)", function()
         local set = KE:GetInterruptSpellSet(102)
         assert.is_true(set[78675])
     end)
+
+    it("builds the kick set from candidates only", function()
+        local kicks = KE:GetInterruptKickSpellSet()
+        assert.is_true(kicks[96231])   -- Rebuke, a candidate
+        assert.is_nil(kicks[31935])    -- Avenger's Shield, an announce extra
+    end)
+
+    it("picks the named tracked candidate, else the first, and nil for a spec without a kick", function()
+        -- A fixture list, so no data cell is pinned; naming the second and the
+        -- third candidate tells the tracked branch from any fixed position.
+        local list = { { id = 1, cd = 10 }, { id = 2, cd = 20 }, { id = 3, cd = 30 } }
+        local rows = {
+            { name = "tracked names the second", tracked = 2, want = 2 },
+            { name = "tracked names the third", tracked = 3, want = 3 },
+            { name = "no tracked kick", tracked = nil, want = 1 },
+            { name = "tracked kick not in the list", tracked = 9, want = 1 },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KE:PickTrackedKick(list, row.tracked).id, row.name)
+        end
+        assert.is_nil(KE:GetTrackedKickForSpec(105))            -- no kick
+    end)
+
+    it("finds a kick's cooldown for a spec, and nil for a kick it lacks", function()
+        -- The expected cd is read from the spec's own Axe Toss entry, so no
+        -- data cell is pinned.
+        local axeToss
+        for _, c in ipairs(KE:GetInterruptCandidatesForSpec(266)) do
+            if c.id == 89766 then axeToss = c end
+        end
+        assert.is_not_nil(axeToss)
+        assert.equals(axeToss.cd, KE:GetKickCooldownForSpec(266, 89766))
+        assert.is_nil(KE:GetKickCooldownForSpec(71, 19647))       -- a warrior has no Spell Lock
+    end)
+
+    it("caps a kick at its largest table cooldown, extra kicks included", function()
+        -- Expected values are read through the accessors, so no data cell is
+        -- pinned. Wind Shear's cd differs by shaman spec, so "largest" is tested.
+        local windShearMax = 0
+        for _, specID in ipairs({ 262, 263, 264 }) do
+            for _, c in ipairs(KE:GetInterruptCandidatesForSpec(specID) or {}) do
+                if c.id == 57994 and c.cd > windShearMax then windShearMax = c.cd end
+            end
+        end
+        assert.is_true(windShearMax > 0)
+        assert.equals(windShearMax, KE:GetKickCooldownCap(57994))
+        assert.equals(KE:GetExtraKick(64382).cd, KE:GetKickCooldownCap(64382))  -- Shattering Throw
+        assert.is_nil(KE:GetKickCooldownCap(1))
+    end)
 end)

@@ -2,7 +2,7 @@
 -- ║  GUI-CVars.lua                                           ║
 -- ║  GUI: CVars                                              ║
 -- ║  Purpose: Configuration panel for the CVars module, and  ║
--- ║  the host page for the World Map Scale card.             ║
+-- ║  the tab strip that also hosts UI Scaling.               ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -17,10 +17,6 @@ local function GetAutomationModule()
         return KitnEssentials:GetModule("Automation", true)
     end
     return nil
-end
-
-local function GetMapScaleModule()
-    return KitnEssentials and KitnEssentials:GetModule("MapScale", true)
 end
 
 -- Both tabs draw CVar checkboxes and both grey out under the same master
@@ -115,10 +111,6 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
     local ctx = NewContext()
     if not ctx then return yOffset end
     local db, AU, manager = ctx.db, ctx.AU, ctx.manager
-
-    -- Map scale lives in its own profile block (KE.db.profile.MapScale), not
-    -- in `db` above — a separate module keeps its own enable lifecycle.
-    local mapDB = KE.db and KE.db.profile.MapScale
 
     ----------------------------------------------------------------
     -- Card 1: CVars Enable
@@ -261,63 +253,6 @@ GUIFrame:RegisterContent("CVarsGeneral", function(scrollChild, yOffset)
         yOffset = card6:GetNextOffset()
     end
 
-    ----------------------------------------------------------------
-    -- Card 7: World Map Scale
-    ----------------------------------------------------------------
-    if mapDB then
-        -- Not registered with `manager` — MapScale has its own independent
-        -- enable lifecycle (see the module-vs-Automation note above), so this
-        -- card must not grey out when "Apply CVars on Login" is off.
-        local card7 = GUIFrame:CreateCard(scrollChild, "World Map Scale", yOffset)
-
-        local function ApplyMapScale()
-            local MS = GetMapScaleModule()
-            if MS and MS.ApplySettings then MS:ApplySettings() end
-        end
-
-        card7:AddHeaderToggle(mapDB.Enabled ~= false, function(checked)
-            mapDB.Enabled = checked
-            if checked then KitnEssentials:EnableModule("MapScale")
-            else KitnEssentials:DisableModule("MapScale") end
-            ApplyMapScale()
-        end)
-        yOffset = card7:GetNextOffset()
-
-        if mapDB.Enabled ~= false then
-            card7:AddLabel("Scales the world map window, with a separate scale for when it is maximized.")
-
-            -- Not CVars: these drive WorldMapFrame:SetScale() directly, unlike
-            -- every other slider on this page.
-            local row7b = GUIFrame:CreateRow(card7.content, Theme.rowHeight)
-            local mapScaleSlider = GUIFrame:CreateSlider(row7b, "Scale", {
-                min = 0.5, max = 2.0, step = 0.05,
-                value = mapDB.Scale or 1.2,
-                callback = function(val)
-                    mapDB.Scale = val
-                    ApplyMapScale()
-                end,
-            })
-            row7b:AddWidget(mapScaleSlider, 1)
-            card7:AddRow(row7b, Theme.rowHeight)
-
-            local row7c = GUIFrame:CreateRow(card7.content, Theme.rowHeightLast)
-            local maxScaleSlider = GUIFrame:CreateSlider(row7c, "Maximized Scale", {
-                min = 0.5, max = 1.0, step = 0.05,
-                value = mapDB.MaximizedScale or 1,
-                callback = function(val)
-                    mapDB.MaximizedScale = val
-                    ApplyMapScale()
-                end,
-            })
-            row7c:AddWidget(maxScaleSlider, 1)
-            card7:AddRow(row7c, Theme.rowHeightLast, 0)
-
-            card7:AddLabel("Changes apply the next time you open the map.")
-
-            yOffset = card7:GetNextOffset()
-        end
-    end
-
     RefreshStates(ctx)
     return yOffset
 end)
@@ -361,11 +296,12 @@ end)
 -- the first tab when the remembered id is gone.
 GUIFrame:RegisterTabbedContent("CVars", function()
     local GENERAL = { id = "CVarsGeneral", label = "General" }
+    local SCALING = { id = "UIScaling",    label = "UI Scaling" }
     local DEV     = { id = "CVarsDev",     label = "Dev" }
 
     local AU = GetAutomationModule()
     if AU and AU:HasLiveDevCVars() then
-        return { GENERAL, DEV }
+        return { GENERAL, SCALING, DEV }
     end
-    return { GENERAL }
+    return { GENERAL, SCALING }
 end)

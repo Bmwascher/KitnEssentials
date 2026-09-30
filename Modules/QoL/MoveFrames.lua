@@ -37,15 +37,14 @@ local pairs, type = pairs, type
 local strsplit, wipe = strsplit, wipe
 local table_insert = table.insert
 
-local InCombatLockdown, RunNextFrame = InCombatLockdown, RunNextFrame
+local InCombatLockdown = InCombatLockdown
 local IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown = IsShiftKeyDown, IsControlKeyDown, IsAltKeyDown
 local GetCursorPosition, GetScreenWidth, GetScreenHeight = GetCursorPosition, GetScreenWidth, GetScreenHeight
 local CreateFrame, UIParent = CreateFrame, UIParent
 
--- tDeleteItem and GenerateFlatClosure are not in the project's luacheck
--- read_globals allowlist; reach them through _G rather than widen it.
+-- tDeleteItem is not in the project's luacheck read_globals allowlist;
+-- reach it through _G rather than widen it.
 local tDeleteItem = _G.tDeleteItem
-local GenerateFlatClosure = _G.GenerateFlatClosure
 
 local C_AddOns_IsAddOnLoaded = C_AddOns.IsAddOnLoaded
 
@@ -361,7 +360,6 @@ local BlizzardFramesOnDemand = {
         "OrderHallTalentFrame",
     },
     ["Blizzard_PlayerSpells"] = {
-        "HeroTalentsSelectionDialog",
         ["PlayerSpellsFrame"] = {
             "PlayerSpellsFrame.TalentsFrame.ButtonsParent",
         },
@@ -457,7 +455,6 @@ local secureDrag = {}  -- .frame plus press-time cursor and centre while a prote
 
 local framePaths = {}  -- [frame] = dotted path it was registered under; keys the saved positions
 local applying = {}    -- [frame] = true while our own SetPoint is in flight
-local onShowExtra = {} -- [frame] = work Frame_OnShow runs after the saved point is applied
 
 -- Put back where it was dragged, the choice dialog opens off its own layout,
 -- the bonus roll prompt off the anchor Alert Frames gives it, and the loot
@@ -518,10 +515,10 @@ local function GetFrame(frameOrName)
 end
 
 -- Secure drag ------------------------------------------------------------------
--- Insecure SetMovable / EnableMouse / StartMoving / SetPoint on a protected
--- frame taint its tree; PVEFrame is protected once its result list is up,
--- and that list compares secret values. A protected frame is moved only by
--- a secure snippet, which taints nothing, and never in combat.
+-- Dragging a protected frame with insecure SetMovable / EnableMouse /
+-- StartMoving / SetPoint taints its tree; PVEFrame is protected once its
+-- result list is up, and that list compares secret values. A protected frame
+-- is dragged only by a secure snippet, which taints nothing, and never in combat.
 
 -- IsProtected can return a secret; a secret counts as protected.
 local function IsProtectedFrame(frame)
@@ -671,8 +668,6 @@ end
 
 function MF:Frame_OnShow(frame)
     self:ApplySaved(frame)
-    local extra = onShowExtra[frame]
-    if extra then extra(frame) end
 end
 
 -- Windows return to Blizzard's layout the next time they open; one that is
@@ -810,30 +805,20 @@ function MF:HandleAddon(_, addon)
                     _G.PlayerChoiceFrame:ClearAllPoints()
                 end
             end)
-        elseif addon == "Blizzard_PlayerSpells" and _G.HeroTalentsSelectionDialog and _G.PlayerSpellsFrame then
-            local function startStopMoving(frame)
-                if not MF.initialized or IsProtectedFrame(frame) then
-                    return
-                end
-                local backup = frame:IsMovable()
-                frame:SetMovable(true)
-                frame:StartMoving()
-                frame:StopMovingOrSizing()
-                frame:SetMovable(backup)
-            end
-            local function onShow(frame)
-                startStopMoving(frame)
-                RunNextFrame(GenerateFlatClosure(startStopMoving, frame))
-            end
-
-            startStopMoving(_G.HeroTalentsSelectionDialog)
-            -- Both frames already carry the Frame_OnShow hook, and AceHook
-            -- refuses a second one, so the fix rides that handler.
-            for _, frame in pairs({ _G.PlayerSpellsFrame, _G.HeroTalentsSelectionDialog }) do
-                if not self:IsHooked(frame, "OnShow") then
-                    self:SecureHookScript(frame, "OnShow", "Frame_OnShow")
-                end
-                onShowExtra[frame] = onShow
+        elseif addon == "Blizzard_PlayerSpells" and _G.HeroTalentsSelectionDialog then
+            -- The hero picker is not movable: moving it breaks the anchors of
+            -- the talent buttons it borrows while open. A spot it was dragged
+            -- to earlier survives in the client's layout cache, so clear that
+            -- and put it back on its XML anchor.
+            local picker = _G.HeroTalentsSelectionDialog
+            if picker:IsUserPlaced() and not picker:IsShown() and not IsProtectedFrame(picker) then
+                -- SetUserPlaced may refuse a frame that is not movable.
+                local movable = picker:IsMovable()
+                picker:SetMovable(true)
+                picker:SetUserPlaced(false)
+                picker:SetMovable(movable)
+                picker:ClearAllPoints()
+                picker:SetPoint("TOP", UIParent, "TOP", 0, -70)
             end
         end
     end)
@@ -941,7 +926,6 @@ function MF:OnDisable()
     wipe(combatQueue)
     wipe(framePaths)
     wipe(applying)
-    wipe(onShowExtra)
     self.initialized = nil
     self.StopRunning = nil
 end

@@ -130,7 +130,7 @@ OPT.Categories = {
     },
     {
         id = "cvar",
-        name = "CVars",
+        name = "Gameplay & Interface",
         cvars = {
             { cvar = "AutoPushSpellToActionBar", optimal = "0", name = "Auto Push Spells to Action Bar", desc = "Disabled" },
             { cvar = "cameraFov", optimal = "90", name = "Camera FOV", desc = "90 degrees" },
@@ -663,15 +663,16 @@ function OPT:HasAnySavedSettings()
 end
 
 ---------------------------------------------------------------------------------
--- Frame Creation
+-- Reload Prompt
 ---------------------------------------------------------------------------------
-StaticPopupDialogs["KE_OPTIMIZE_RELOAD"] = {
-    text = "Settings applied. Some changes require a reload to take effect.\n\nReload now?",
-    button1 = "Reload",
-    button2 = "Later",
-    OnAccept = function() ReloadUI() end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
+-- Its own function, so ClosePromptIfOwner matches this prompt alone.
+local function ReloadNow() ReloadUI() end
+
+-- Raised from the settings window's close.
+function OPT:PromptReload()
+    KE:ClosePromptIfOwner(ReloadNow)
+    KE:CreatePrompt("Reload Required",
+        "Settings applied. Some changes require a reload to take effect.\n\nReload now?",
+        false, nil, false, nil, nil, nil, nil, ReloadNow, nil,
+        "Reload", "Later", nil, nil, { waitIfBusy = true })
+end

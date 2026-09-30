@@ -14,10 +14,7 @@ local UIParent = UIParent
 local type = type
 local IsControlKeyDown = IsControlKeyDown
 local IsMetaKeyDown = IsMetaKeyDown
-local StaticPopup_Show = StaticPopup_Show
 local ReloadUI = ReloadUI
-local ACCEPT = ACCEPT
-local CANCEL = CANCEL
 
 ---------------------------------------------------------------------------------
 -- Message Popup
@@ -153,23 +150,50 @@ function KE.PromptTypedGateOpen(typed, required)
     return type(required) == "string" and typed == required
 end
 
--- An unsolicited prompt (opts.waitIfBusy) never replaces an open one: it waits
--- and opens once that prompt closes.
-function KE.PromptWaits(waitIfBusy, promptShowing)
-    return waitIfBusy == true and promptShowing == true
+-- An unsolicited prompt (opts.waitIfBusy) never replaces an open one, never
+-- opens in combat, where its keyboard reset cannot run, and never jumps ahead
+-- of prompts already waiting. It waits and opens in its turn.
+function KE.PromptWaits(waitIfBusy, promptShowing, inCombat, queued)
+    return waitIfBusy == true and (promptShowing == true or inCombat == true or queued == true)
 end
 
--- The one waiting prompt: its CreatePrompt arguments packed with their count.
--- The latest to wait replaces an earlier one.
-local heldPrompt
+-- Waiting prompts, oldest first: each its CreatePrompt arguments packed with
+-- their count, plus its accept as the owner. At the cap a new owner is
+-- refused, so a later prompt never drops an earlier one.
+local PROMPT_QUEUE_CAP = 8
+local promptQueue = {}
 
--- Runs the frame after a close, and at combat end. A prompt the closing
--- prompt's own callback opened keeps the held one waiting for that prompt in
--- turn, and a held prompt also waits out combat.
-local function OpenHeldPrompt()
-    if not heldPrompt or KE.activePrompt or InCombatLockdown() then return end
-    local args = heldPrompt
-    heldPrompt = nil
+-- A nil accept owns nothing: two ownerless prompts are two entries.
+function KE.PromptQueueRemove(queue, accept)
+    if accept == nil then return end
+    for i = #queue, 1, -1 do
+        if queue[i].accept == accept then table.remove(queue, i) end
+    end
+end
+
+function KE.PromptQueueAdd(queue, entry, cap)
+    KE.PromptQueueRemove(queue, entry.accept)
+    if #queue >= cap then return false end
+    queue[#queue + 1] = entry
+    return true
+end
+
+function KE.PromptQueueTake(queue)
+    return table.remove(queue, 1)
+end
+
+-- Set by the drain for the one prompt it opens. KE:CreatePrompt reads and
+-- clears it first thing; without it the taken prompt would see the entries
+-- still waiting, rejoin the back, and schedule another drain every frame.
+local openingQueued = false
+
+-- Runs the frame after a close, after a raise that waited only for the queue,
+-- and at combat end. Opens one prompt; a prompt the closing prompt's own
+-- callback opened keeps the queue waiting for that one in turn.
+local function OpenQueuedPrompt()
+    if #promptQueue == 0 or KE.activePrompt or InCombatLockdown() then return end
+    local args = KE.PromptQueueTake(promptQueue)
+    openingQueued = true
     KE:CreatePrompt(unpack(args, 1, args.n))
 end
 
@@ -203,6 +227,15 @@ local function CreateThemedButton(parent, Theme, labelText, isPrimary)
     return btn
 end
 
+-- Keyboard on, every key passing through to the game. EnableKeyboard is
+-- protected and SetPropagateKeyboardInput restricted in combat, so this does
+-- nothing in lockdown; the combat watcher runs it at both combat edges.
+local function ResetPromptKeyboard(dialog)
+    if not dialog or InCombatLockdown() then return end
+    dialog:EnableKeyboard(true)
+    dialog:SetPropagateKeyboardInput(true)
+end
+
 -- Closes the singleton prompt. Snapshots and NILS the callback fields
 -- before invoking — the immortal dialog would otherwise pin multi-KB
 -- export-string closures, and the close-then-invoke order lets a chained
@@ -215,7 +248,7 @@ local function ClosePrompt(dialog, runCancel)
     dialog._onCancel = nil
     dialog:Hide()
     KE.activePrompt = nil
-    if heldPrompt then C_Timer.After(0, OpenHeldPrompt) end
+    if #promptQueue > 0 then C_Timer.After(0, OpenQueuedPrompt) end
     if runCancel and onCancel then onCancel() end
     return onAccept
 end
@@ -226,7 +259,7 @@ end
 function KE:ClosePromptIfOwner(accept)
     -- A copy prompt carries no accept; nil must not match it.
     if not accept then return end
-    if heldPrompt and heldPrompt.accept == accept then heldPrompt = nil end
+    KE.PromptQueueRemove(promptQueue, accept)
     local dialog = KE.activePrompt
     if dialog and dialog._onAccept == accept then
         ClosePrompt(dialog, false)
@@ -261,6 +294,10 @@ local function EnsurePromptDialog()
         if key == "ESCAPE" then
             if not InCombatLockdown() then self:SetPropagateKeyboardInput(false) end
             ClosePrompt(self, not self._closeIsNeutral)
+            -- Left off, the next prompt raised in combat would swallow every
+            -- key. Restoring it inside this handler would pass this Escape on
+            -- to the game menu, so it waits a frame.
+            C_Timer.After(0, function() ResetPromptKeyboard(self) end)
         else
             if not InCombatLockdown() then self:SetPropagateKeyboardInput(true) end
         end
@@ -322,36 +359,29 @@ end
 -- onAccept with no arguments. Single edit box with an onAccept only.
 -- onSecondTextChanged(text, dialog) runs on every text change in the second
 -- box of a two-field prompt, for that call only. waitIfBusy is for a prompt
--- nobody asked for: with another prompt open it waits instead of replacing it,
--- and opens the frame after that prompt closes. It then returns nil.
+-- nobody asked for: with another prompt open, in combat, or others waiting, it
+-- joins the queue and opens in its turn. It then returns nil.
+-- acceptOnly (confirm mode only) shows the accept button alone, centred.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts)
+    -- First, so no raise below can leave the flag set.
+    local fromQueue = openingQueued
+    openingQueued = false
     local Theme = KE.Theme
-    if not Theme then
-        StaticPopupDialogs["KE_PROMPT_DIALOG"] = {
-            text = text or "",
-            button1 = acceptText or ACCEPT,
-            button2 = cancelText or CANCEL,
-            OnAccept = onAccept,
-            OnCancel = onCancel,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3,
-        }
-        return StaticPopup_Show("KE_PROMPT_DIALOG")
-    end
-
     if type(opts) ~= "table" then opts = nil end
 
-    if KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil) then
-        heldPrompt = {
+    if KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil, InCombatLockdown(),
+        #promptQueue > 0 and not fromQueue) then
+        KE.PromptQueueAdd(promptQueue, {
             title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
             textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
             showSecondEditBox, secondEditBoxLabel, opts,
             n = 16, accept = onAccept,
-        }
+        }, PROMPT_QUEUE_CAP)
+        -- Waiting only behind the queue: no close or combat end is coming to
+        -- drain it.
+        if not KE.activePrompt and not InCombatLockdown() then C_Timer.After(0, OpenQueuedPrompt) end
         return nil
     end
 
@@ -383,6 +413,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     local showButtons = (not showEditBox) or (onAccept ~= nil) or isCopyPrompt
     local requireTyped = (showEditBox and not twoField and onAccept and opts
         and type(opts.requireTyped) == "string") and opts.requireTyped or nil
+    local acceptOnly = (not showEditBox and opts and opts.acceptOnly == true) and true or false
 
     ------------------------------------------------------------------
     -- PASS 1: ensure-create every widget the current mode needs.
@@ -766,6 +797,13 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         -- Same grow-only idiom as the two-button branch below, sized for one
         -- button instead of a pair.
         dialog:SetWidth(math.max(POPUP_WIDTH, dialog.cancelBtn:GetWidth() + 24))
+    elseif dialog.buttonContainer and showButtons and acceptOnly then
+        ThemeButton(dialog.acceptBtn, Theme, acceptText or "Accept", true)
+        TintPromptLabel(dialog.acceptBtn, opts and opts.acceptColor)
+        SetPromptAcceptEnabled(dialog, true)
+        dialog.acceptBtn:ClearAllPoints()
+        dialog.acceptBtn:SetPoint("CENTER", dialog.buttonContainer, "CENTER", 0, 0)
+        dialog:SetWidth(math.max(POPUP_WIDTH, dialog.acceptBtn:GetWidth() + 24))
     elseif dialog.buttonContainer and showButtons then
         ThemeButton(dialog.acceptBtn, Theme, acceptText or "Accept", true)
         ThemeButton(dialog.cancelBtn, Theme, cancelText or "Cancel", false)
@@ -819,20 +857,12 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     -- the container with only cancelBtn in it, so acceptBtn -- left visible
     -- from a prior confirm-mode call -- must be hidden explicitly here.
     if dialog.acceptBtn then dialog.acceptBtn:SetShown(showButtons and not isCopyPrompt) end
-    if dialog.cancelBtn then dialog.cancelBtn:SetShown(showButtons) end
+    if dialog.cancelBtn then dialog.cancelBtn:SetShown(showButtons and not acceptOnly) end
 
-    -- Reset the keyboard state on every show, out of combat only. The reset is
-    -- what matters: an ESCAPE close leaves propagation off, and the next prompt
-    -- would inherit that and swallow every key.
-    --
-    -- Nothing is touched in combat because nothing can be -- EnableKeyboard is
-    -- protected and SetPropagateKeyboardInput is restricted, so both throw in
-    -- lockdown. A prompt raised mid-fight keeps whatever it inherited until the
-    -- combat watcher below repairs it.
-    if not InCombatLockdown() then
-        dialog:EnableKeyboard(true)
-        dialog:SetPropagateKeyboardInput(true)
-    end
+    -- Every show resets the keyboard out of combat. A prompt raised mid-fight
+    -- keeps what it inherited: propagation on (an Escape close restores it the
+    -- next frame), or no keyboard at all when the dialog was built in combat.
+    ResetPromptKeyboard(dialog)
 
     dialog:Show()
     KE.activePrompt = dialog
@@ -863,23 +893,17 @@ function KE:SkinningReloadPrompt()
     return self:CreateReloadPrompt("Changing this setting may require a reload to take full effect.")
 end
 
--- Repair, at the end of a fight, a prompt that spent it swallowing keys. Both
--- the builder and the show-time reset skip their keyboard setup in lockdown, so
--- a prompt raised there inherits whatever the last one left; PLAYER_REGEN_ENABLED
--- is the first legal moment to correct it. A prompt that waited through the
--- fight opens here, when no other prompt is open.
---
--- There is deliberately no combat-entry half: disarming would need
--- EnableKeyboard, which is protected and throws in combat.
+-- Both combat edges restore the dialog's keyboard, shown or hidden. Entry
+-- catches an Escape close in the frame a fight starts, when it still runs
+-- before lockdown; end arms a dialog built in combat and repairs the rest.
+-- Neither edge disarms: that needs EnableKeyboard(false), which is protected.
+-- A prompt that waited through the fight opens at the end.
 local promptCombatWatcher = CreateFrame("Frame")
+promptCombatWatcher:RegisterEvent("PLAYER_REGEN_DISABLED")
 promptCombatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-promptCombatWatcher:SetScript("OnEvent", function()
-    local dialog = KE.activePrompt
-    if dialog and dialog.IsShown and dialog:IsShown() then
-        dialog:EnableKeyboard(true)
-        dialog:SetPropagateKeyboardInput(true)
-    end
-    OpenHeldPrompt()
+promptCombatWatcher:SetScript("OnEvent", function(_, event)
+    ResetPromptKeyboard(KE.promptDialog)
+    if event == "PLAYER_REGEN_ENABLED" then OpenQueuedPrompt() end
 end)
 
 -- Skinning toggles FLAG instead of prompting, so ticking eight windows gives one

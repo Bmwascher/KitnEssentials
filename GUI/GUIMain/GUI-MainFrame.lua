@@ -18,7 +18,9 @@ local abs, floor = math.abs, math.floor
 -- Sidebar Data
 ---------------------------------------------------------------------------------
 
--- Sidebar configuration
+-- Search matches the whole query as ONE literal substring of the title or of
+-- a single keyword, so a row hosting tabs spells out each tab label and every
+-- keyword of each page it absorbed, as a phrase, apostrophe variants included.
 GUIFrame.sidebarConfig = {
     {
         id = "settings_section",
@@ -28,6 +30,7 @@ GUIFrame.sidebarConfig = {
         items = {
             { id = "HomePage", text = "Home Page", keywords = { "home", "home page", "start", "welcome", "overview", "about", "changelog", "theme", "color", "accent", "appearance", "skin", "preset", "tint" } },
             { id = "Profiles", text = "Profile Manager", keywords = { "profile", "profiles", "import", "export", "copy", "reset", "rename", "delete", "global", "sharing" } },
+            { id = "CVars", text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "world map scale", "map", "map scale", "scale", "maximized", "maximised", "fullscreen", "maximized map", "ui scaling", "core panels", "services", "housing", "legacy / optional", "legacy", "panel scale", "panel scaling", "blizzard panels", "character frame", "professions scale", "group finder scale", "housing scale", "service panels", "legacy panels" } },
             { id = "Optimize", text = "System Optimization", keywords = { "optimize", "performance", "fps", "cpu", "memory", "latency", "cvar" } },
         },
     },
@@ -37,11 +40,7 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 Combat",
         defaultExpanded = false,
         items = {
-            -- Search matches the whole query as ONE literal substring of the
-            -- title or of a single keyword, so a tab label has to appear here
-            -- as a phrase. Both merged pages spell out every tab label they
-            -- absorbed, apostrophe variants included.
-            { id = "ClassTools",    text = "Class Tools", keywords = { "class", "class tools", "tools", "evoker", "dragon", "empower", "disintegrate", "disintegrate ticks", "ticks", "augmentation", "devastation", "preservation", "stasis", "havoc", "havoc tracker", "havoc warning", "havoc target", "target has havoc", "demon hunter", "destruction", "destro", "destruction warlock", "warlock havoc", "hunter", "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "paladin", "priest", "presence", "aura" } },
+            { id = "ClassTools",    text = "Class Tools", keywords = { "class", "class tools", "tools", "all classes", "evoker", "dragon", "empower", "disintegrate", "disintegrate ticks", "ticks", "augmentation", "devastation", "preservation", "stasis", "havoc", "havoc tracker", "havoc warning", "havoc target", "target has havoc", "warlock", "destruction", "destro", "destruction warlock", "warlock havoc", "hunter", "hunters mark", "hunter's mark", "hunter: mark missing", "mark", "marksman", "beast mastery", "survival", "stance", "stance text", "form", "forms", "missing forms", "shapeshift", "druid", "warrior", "paladin", "priest", "presence", "aura", "utilities", "general", "priest: pi macro", "pi macro", "priest: pi assist", "pi assist", "power infusion", "power infusion assist", "pi", "assist", "burst", "glow", "raid frame", "macro", "builder", "trinket", "racial", "recuperate", "heal", "button", "time spiral", "tracker" } },
             { id = "CombatRes",     text = "Combat Res", keywords = { "battle res", "brez", "combat res", "resurrect", "raid res", "cr" } },
             { id = "CombatTexts",   text = "Combat Texts", keywords = { "combat text", "scrolling", "no target", "interrupt", "durability" } },
             { id = "CombatTimer",   text = "Combat Timer", keywords = { "combat timer", "encounter", "duration", "stopwatch", "fight length" } },
@@ -62,6 +61,7 @@ GUIFrame.sidebarConfig = {
             { id = "AuraHeaders_Debuffs", text = "Player Debuffs", keywords = { "debuff", "debuffs", "player debuffs", "aura", "auras", "magic", "curse", "poison", "disease", "blizzard", "replace" } },
             { id = "AuraDebuffs",   text = "Advanced Debuffs", keywords = { "debuff", "debuffs", "aura", "boss", "dot", "magic", "curse", "poison", "disease" } },
             { id = "AuraExternals", text = "External Tracker", keywords = { "external", "externals", "defensive", "buff", "cooldown", "mitigation" } },
+            { id = "PartyBuffs",    text = "Party Buffs", keywords = { "party", "party buffs", "buff", "buffs", "external", "defensive", "burst", "potion", "trinket", "cooldown", "arena" } },
             { id = "AuraMovement", text = "Movement Buffs", keywords = { "movement", "speed", "sprint", "buff", "mobility" } },
             { id = "TotemTracker",  text = "Totem Tracker", keywords = { "totem", "totems", "shaman", "evoker" } },
         },
@@ -72,14 +72,11 @@ GUIFrame.sidebarConfig = {
         text = "\226\128\162 QoL",
         defaultExpanded = false,
         items = {
-            { id = "Automation",        text = "Automation", keywords = { "automation", "auto", "role", "quest", "repair", "sell", "accept", "group", "duel", "delete", "ah", "auction house", "house", "housing", "vantus rune", "merchant", "vendor", "pages", "shop", "buy", "buyback", "extend", "wide" } },
+            { id = "Automation",        text = "Automation", keywords = { "automation", "auto", "role", "quest", "repair", "sell", "accept", "group", "duel", "delete", "ah", "auction house", "house", "housing", "vantus rune", "merchant", "vendor", "pages", "shop", "buy", "buyback", "extend", "wide", "combat logger", "combat log", "logging", "advanced logging", "warcraftlogs", "raid", "scenario", "scenarios", "delve", "delves", "torghast", "warcraft recorder", "recorder", "preset" } },
             { id = "BonusRoll",         text = "Bonus Roll", keywords = { "bonus roll", "bonus", "coin", "roll", "pass", "auto pass", "auto-pass", "loot spec", "confirm", "seal" } },
-            { id = "CombatLogger",      text = "Combat Logger", keywords = { "combat log", "logging", "advanced logging", "warcraftlogs", "raid", "scenario", "scenarios", "delve", "delves", "torghast", "warcraft recorder", "recorder", "preset" } },
-            { id = "CVars",             text = "CVars", keywords = { "cvar", "cvars", "console", "variable", "setting", "world map", "world map scale", "map", "map scale", "scale", "maximized", "maximised", "fullscreen", "maximized map" } },
-            { id = "GreatVaultAlert",   text = "Great Vault Alert", keywords = { "great vault", "vault", "weekly", "reward", "chest" } },
-            { id = "QualityOfLife",     text = "Quality of Life", keywords = { "quality of life", "qol", "spell alert opacity", "spell alert", "opacity", "proc", "alert", "glow", "overlay", "copy anything", "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip", "move frames", "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock", "slash", "slash command", "command", "commands", "shortcut", "reload" } },
+            { id = "GroupTools",        text = "Group Tools", keywords = { "group", "raid tools", "utilities", "general", "raid", "raid notifications", "notification", "notifications", "alert", "gateway", "soulwell", "feast", "repair", "portal", "ready check", "consumables", "flask", "food", "rune", "missing", "world marker", "world markers", "marker", "raid marker", "cycle", "cycler" } },
+            { id = "QualityOfLife",     text = "Quality of Life", keywords = { "quality of life", "qol", "spell alert opacity", "spell alert", "opacity", "proc", "alert", "glow", "overlay", "great vault alert", "great vault", "vault", "weekly", "reward", "chest", "copy anything", "copy", "spell id", "item id", "npc id", "aura id", "macro", "clipboard", "tooltip", "move frames", "move", "mover", "drag", "draggable", "reposition", "position", "window", "windows", "frame", "frames", "blizzard", "panel", "unlock", "slash", "slash command", "command", "commands", "shortcut", "reload" } },
             { id = "SecondaryStats",    text = "Secondary Stats Display", keywords = { "secondary stats", "stats", "stat", "crit", "critical strike", "haste", "mastery", "versatility", "vers", "leech", "lifesteal", "avoidance", "speed", "rating", "percent", "readout", "display" } },
-            { id = "Utilities",         text = "Utilities", keywords = { "utilities", "general", "priest", "priest: pi macro", "pi macro", "priest: pi assist", "pi assist", "power infusion assist", "assist", "burst", "glow", "raid frame", "power infusion", "pi", "macro", "builder", "trinket", "racial", "raid", "raid notifications", "notification", "notifications", "alert", "gateway", "soulwell", "feast", "repair", "portal", "ready check", "consumables", "flask", "food", "rune", "missing", "recuperate", "heal", "button", "time spiral", "tracker", "evoker", "world marker", "world markers", "marker", "raid marker", "cycle", "cycler" } },
         },
     },
     {
@@ -89,13 +86,9 @@ GUIFrame.sidebarConfig = {
         defaultExpanded = false,
         items = {
             { id = "KeystoneHelper",              text = "Keystone Helper", keywords = { "keystone", "reset", "instance reset", "reroll", "key", "announcer", "mythic", "m+", "group finder", "lfg", "premade", "affix", "filter", "sort", "dungeon", "raider io", "quick create", "list group", "playstyle", "teleport", "dungeon teleport", "reminder", "popup", "portal" } },
-            { id = "DeathNotifications",          text = "Death Notifications", keywords = { "death", "notification", "died", "dead", "party", "m+", "mythic" } },
-            { id = "DungeonCasts",                text = "Dungeon Casts", keywords = { "dungeon cast", "cast", "interrupt", "mob", "enemy", "castbar", "m+" } },
+            { id = "DungeonAlerts",               text = "Dungeon Alerts", keywords = { "death notifications", "death", "notification", "died", "dead", "party", "m+", "mythic", "enemy counter", "enemy", "counter", "count", "mobs", "pull", "nameplate", "targeted spells", "targeted", "spells", "cast", "incoming", "self", "target", "warning" } },
             { id = "DTimers_Main", text = "Dungeon Timers", keywords = { "dungeon timers", "timer", "timers", "bigwigs", "boss", "season", "enable", "general", "bar", "bars", "color", "texture", "size", "text", "font", "label", "nameplate", "trash", "mob", "icon", "cooldown", "predict", "dungeon", "algethar", "aa", "mgt", "pos", "sott" } },
-            { id = "EnemyCounter",                text = "Enemy Counter", keywords = { "enemy", "counter", "count", "mobs", "pull", "nameplate", "m+" } },
-            { id = "FocusMarker",                 text = "Focus Marker", keywords = { "focus", "marker", "focus marker", "macro", "builder", "raid marker" } },
-            { id = "KickTracker",                 text = "Interrupt Tracker", keywords = { "interrupt", "kick", "tracker", "cc", "stop", "party", "m+" } },
-            { id = "TargetedSpells",              text = "Targeted Spells", keywords = { "targeted", "spells", "cast", "incoming", "self", "target", "warning", "m+" } },
+            { id = "KicksCasts",                  text = "Kicks & Casts", keywords = { "focus", "marker", "focus marker", "focus macros", "macro", "builder", "raid marker", "kick", "interrupt", "focus kick", "interrupt tracker", "tracker", "cc", "stop", "party", "m+", "dungeon casts", "dungeon cast", "cast", "mob", "enemy", "castbar" } },
         },
     },
     {
@@ -408,152 +401,62 @@ function GUIFrame:CreateMainFrame()
         GameTooltip:SetText(GUIFrame.minimized and "Expand" or "Minimize")
         GameTooltip:Show()
     end)
-    minimizeBtn:SetScript("OnLeave", function()
+    minimizeBtn:SetScript("OnLeave", function(self)
         minimizeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-        GameTooltip:Hide()
+        if not GameTooltip:IsForbidden() and GameTooltip:IsOwned(self) then GameTooltip:Hide() end
     end)
     minimizeBtn:SetScript("OnClick", function()
         GUIFrame:ToggleMinimize()
     end)
     GUIFrame.minimizeBtn = minimizeBtn
 
-    -- Hamburger menu button
-    local menuBtn = CreateFrame("Button", nil, header)
-    menuBtn:SetSize(18, 18)
-    menuBtn:SetPoint("RIGHT", minimizeBtn, "LEFT", -8, 0)
-    local menuIcon = menuBtn:CreateTexture(nil, "ARTWORK")
-    menuIcon:SetAllPoints()
-    menuIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomBurger.png")
-    menuIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-    menuBtn:SetNormalTexture(menuIcon)
-    menuIcon:SetTexelSnappingBias(0)
-    menuIcon:SetSnapToPixelGrid(true)
+    -- Toggle Anchors button
+    local editModeBtn = CreateFrame("Button", nil, header)
+    editModeBtn:SetSize(18, 18)
+    editModeBtn:SetPoint("RIGHT", minimizeBtn, "LEFT", -8, 0)
+    local editModeIcon = editModeBtn:CreateTexture(nil, "ARTWORK")
+    editModeIcon:SetAllPoints()
+    editModeIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnCustomMove.png")
+    editModeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+    editModeIcon:SetTexelSnappingBias(0)
+    editModeIcon:SetSnapToPixelGrid(true)
+    editModeBtn.icon = editModeIcon
 
-    -- Dropdown panel
-    local ITEM_HEIGHT = 26
-    local menuDropdown = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    menuDropdown:SetWidth(160)
-    menuDropdown:SetFrameStrata("TOOLTIP")
-    menuDropdown:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Buttons\\WHITE8X8",
-        edgeSize = 1,
-    })
-    menuDropdown:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
-    menuDropdown:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
-    menuDropdown:SetPoint("TOPLEFT", frame, "TOPRIGHT", 2, 0)
-    menuDropdown:Hide()
-    GUIFrame.menuDropdown = menuDropdown
-
-    local menuShortcuts = {
-        { text = "Reload UI", onClick = function() ReloadUI() end },
-        { text = "Blizzard Edit Mode", onClick = function()
-            if EditModeManagerFrame and not EditModeManagerFrame:IsShown() then
-                ShowUIPanel(EditModeManagerFrame)
-            end
-        end },
-        { text = "Kitn Edit Mode", onClick = function()
-            if KE.EditMode then
-                KE.EditMode:Toggle()
-            end
-        end },
-        { text = "Cooldown Manager", onClick = function()
-            local cdFrame = _G["CooldownViewerSettings"]
-            if cdFrame then
-                cdFrame:Show()
-                cdFrame:Raise()
-            else
-                KE:Print("CooldownViewerSettings not found. Enable Cooldown Manager in Edit Mode.")
-            end
-        end },
-    }
-
-    menuDropdown:SetHeight(#menuShortcuts * ITEM_HEIGHT)
-
-    local menuItemTexts = {}
-
-    for i, item in ipairs(menuShortcuts) do
-        local btn = CreateFrame("Button", nil, menuDropdown, "BackdropTemplate")
-        btn:SetHeight(ITEM_HEIGHT)
-        btn:SetPoint("TOPLEFT", menuDropdown, "TOPLEFT", 0, -(i - 1) * ITEM_HEIGHT)
-        btn:SetPoint("RIGHT", menuDropdown, "RIGHT", 0, 0)
-
-        local btnText = btn:CreateFontString(nil, "OVERLAY")
-        btnText:SetPoint("LEFT", btn, "LEFT", 8, 0)
-        btnText:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
-        btnText:SetJustifyH("LEFT")
-        KE:ApplyThemeFont(btnText, "normal")
-        btnText:SetText(item.text)
-        local Th = KE.Theme
-        btnText:SetTextColor(Th.accent[1], Th.accent[2], Th.accent[3])
-
-        btn:SetScript("OnClick", function()
-            item.onClick()
-            menuDropdown:Hide()
-        end)
-        btn:SetScript("OnEnter", function()
-            local L = KE.Theme
-            btn:SetBackdrop({
-                bgFile = "Interface\\Buttons\\WHITE8X8",
-                edgeFile = "Interface\\Buttons\\WHITE8X8",
-                edgeSize = 1,
-            })
-            btn:SetBackdropBorderColor(L.border[1], L.border[2], L.border[3], 1)
-            btn:SetBackdropColor(L.accentHover[1], L.accentHover[2], L.accentHover[3], L.accentHover[4] or 0.25)
-            btnText:SetTextColor(L.textPrimary[1], L.textPrimary[2], L.textPrimary[3], 1)
-        end)
-        btn:SetScript("OnLeave", function()
-            local L = KE.Theme
-            btn:SetBackdrop(nil)
-            btnText:SetTextColor(L.accent[1], L.accent[2], L.accent[3])
-            C_Timer.After(0.3, function()
-                if menuDropdown:IsShown() and not menuDropdown:IsMouseOver() and not menuBtn:IsMouseOver() then
-                    menuDropdown:Hide()
-                end
-            end)
-        end)
-        menuItemTexts[#menuItemTexts + 1] = btnText
+    -- Exposed so EditMode's Enter/Exit and theme changes can repaint it.
+    local editModeHovered = false
+    local function PaintEditModeButton()
+        local lit = editModeHovered or (KE.EditMode and KE.EditMode:IsActive())
+        local c = lit and T.accent or T.textSecondary
+        editModeIcon:SetVertexColor(c[1], c[2], c[3], 1)
     end
+    GUIFrame.PaintEditModeButton = PaintEditModeButton
 
-    -- Refresh item text colors on show (picks up current theme)
-    menuDropdown:SetScript("OnShow", function()
-        local L = KE.Theme
-        menuDropdown:SetBackdropColor(L.bgMedium[1], L.bgMedium[2], L.bgMedium[3], 1)
-        menuDropdown:SetBackdropBorderColor(L.border[1], L.border[2], L.border[3], 1)
-        for _, txt in ipairs(menuItemTexts) do
-            txt:SetTextColor(L.accent[1], L.accent[2], L.accent[3])
+    editModeBtn:SetScript("OnEnter", function(self)
+        editModeHovered = true
+        PaintEditModeButton()
+        if GameTooltip:IsForbidden() then return end
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:SetText("Toggle Anchors")
+        GameTooltip:Show()
+    end)
+    editModeBtn:SetScript("OnLeave", function(self)
+        editModeHovered = false
+        PaintEditModeButton()
+        if not GameTooltip:IsForbidden() and GameTooltip:IsOwned(self) then
+            GameTooltip:Hide()
         end
     end)
-
-    -- Open dropdown on hover
-    menuBtn:SetScript("OnEnter", function()
-        local L = KE.Theme
-        menuIcon:SetVertexColor(L.accent[1], L.accent[2], L.accent[3], 1)
-        menuDropdown:Show()
+    editModeBtn:SetScript("OnClick", function()
+        if KE.EditMode then
+            KE.EditMode:Toggle()
+        end
     end)
-    menuBtn:SetScript("OnLeave", function()
-        local L = KE.Theme
-        menuIcon:SetVertexColor(L.textSecondary[1], L.textSecondary[2], L.textSecondary[3], 1)
-        C_Timer.After(0.3, function()
-            if not menuDropdown:IsMouseOver() and not menuBtn:IsMouseOver() then
-                menuDropdown:Hide()
-            end
-        end)
-    end)
-
-    -- Close dropdown when mouse leaves
-    menuDropdown:SetScript("OnLeave", function()
-        C_Timer.After(0.3, function()
-            if not menuDropdown:IsMouseOver() and not menuBtn:IsMouseOver() then
-                menuDropdown:Hide()
-            end
-        end)
-    end)
+    GUIFrame.editModeBtn = editModeBtn
 
     -- Home button (custom texture)
     local homeBtn = CreateFrame("Button", nil, header)
     homeBtn:SetSize(18, 18)
-    homeBtn:SetPoint("RIGHT", menuBtn, "LEFT", -8, 0)
+    homeBtn:SetPoint("RIGHT", editModeBtn, "LEFT", -8, 0)
     local homeIcon = homeBtn:CreateTexture(nil, "ARTWORK")
     homeIcon:SetAllPoints()
     homeIcon:SetTexture("Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\HomeButtonv2.png")

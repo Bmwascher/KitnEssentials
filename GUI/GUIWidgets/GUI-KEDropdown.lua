@@ -328,8 +328,8 @@ local function ConstructDropdown(parent, searchable)
 
     -- Border hover animation
     local hoverAnimGroup, hoverAnim
-    local borderColorFrom = { r = Theme.border[1], g = Theme.border[2], b = Theme.border[3] }
-    local borderColorTo = { r = Theme.border[1], g = Theme.border[2], b = Theme.border[3] }
+    local borderColorFrom = { r = Theme.controlBorder[1], g = Theme.controlBorder[2], b = Theme.controlBorder[3] }
+    local borderColorTo = { r = Theme.controlBorder[1], g = Theme.controlBorder[2], b = Theme.controlBorder[3] }
 
     if ENABLE_ANIMATIONS then
         hoverAnimGroup = dropdownButton:CreateAnimationGroup()
@@ -363,9 +363,9 @@ local function ConstructDropdown(parent, searchable)
                 borderColorTo.g = Theme.accent[2]
                 borderColorTo.b = Theme.accent[3]
             else
-                borderColorTo.r = Theme.border[1]
-                borderColorTo.g = Theme.border[2]
-                borderColorTo.b = Theme.border[3]
+                borderColorTo.r = Theme.controlBorder[1]
+                borderColorTo.g = Theme.controlBorder[2]
+                borderColorTo.b = Theme.controlBorder[3]
             end
 
             hoverAnimGroup:Play()
@@ -374,7 +374,7 @@ local function ConstructDropdown(parent, searchable)
             if hovered then
                 dropdownButton:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
             else
-                dropdownButton:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+                dropdownButton:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
             end
         end
     end
@@ -746,6 +746,9 @@ local function ConstructDropdown(parent, searchable)
         if GUIFrame.activeDropdown == dropdownButton then
             GUIFrame.activeDropdown = nil
         end
+        -- Pools reuse a hidden button without repainting its hover border.
+        if hoverAnimGroup then hoverAnimGroup:Stop() end
+        dropdownButton:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
     end)
 
     -- Public API
@@ -805,8 +808,8 @@ local function ConstructDropdown(parent, searchable)
     function row:ApplyThemeColors()
         local TT = Theme
         label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
-        dropdownButton:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], 1)
-        dropdownButton:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        dropdownButton:SetBackdropColor(TT.controlBg[1], TT.controlBg[2], TT.controlBg[3], TT.controlBg[4])
+        dropdownButton:SetBackdropBorderColor(TT.controlBorder[1], TT.controlBorder[2], TT.controlBorder[3], 1)
         selectedText:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
         arrow:SetVertexColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
     end
@@ -855,8 +858,8 @@ local function ConstructDropdown(parent, searchable)
     -- took them from the theme when it was built; a reused one takes them here.
     row._paintList = function()
         local TT = Theme
-        dropdownList:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], 1)
-        dropdownList:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        dropdownList:SetBackdropColor(TT.listBg[1], TT.listBg[2], TT.listBg[3], TT.listBg[4])
+        dropdownList:SetBackdropBorderColor(TT.listBorder[1], TT.listBorder[2], TT.listBorder[3], 1)
         -- The scrollbar is made on first need and then kept.
         if scrollbar then
             scrollbar:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
@@ -865,8 +868,8 @@ local function ConstructDropdown(parent, searchable)
             thumbBorder:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
         end
         if searchable then
-            searchContainer:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
-            searchContainer:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+            searchContainer:SetBackdropColor(TT.fieldBg[1], TT.fieldBg[2], TT.fieldBg[3], TT.fieldBg[4])
+            searchContainer:SetBackdropBorderColor(TT.fieldBorder[1], TT.fieldBorder[2], TT.fieldBorder[3], 1)
             KE:ApplyThemeFont(searchBox, "normal")
             searchBox:SetTextColor(TT.textPrimary[1], TT.textPrimary[2], TT.textPrimary[3], 1)
             KE:ApplyThemeFont(searchEmptyLabel, "normal")

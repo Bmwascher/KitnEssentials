@@ -21,10 +21,10 @@ local ThemeDefaults = {
     -- Depth comes from opacity stacking inside one near-black family, not from
     -- stepping the grey. Card bodies read marginally lighter than the window,
     -- which is deliberate: the alternative reads as a hole in the panel.
-    bgDark         = { 0.031, 0.031, 0.031, 0.80 }, -- #080808 window / content pane / inputs
-    bgMedium       = { 0.055, 0.055, 0.055, 0.95 }, -- #0E0E0E sidebar / title bar / footer / controls
+    bgDark         = { 0.031, 0.031, 0.031, 0.80 }, -- #080808 window / content pane
+    bgMedium       = { 0.055, 0.055, 0.055, 0.95 }, -- #0E0E0E sidebar / title bar / footer / card header
     bgLight        = { 0.055, 0.055, 0.055, 0.80 }, -- #0E0E0E card bodies / sliders / dialogs
-    bgButton       = { 0, 0, 0, 0.5 },              -- push buttons: black, so they stand off the card grey
+    bgButton       = { 0, 0, 0, 0.5 },              -- prompt buttons: black, so they stand off the card grey
     bgHover        = { 0.227, 0.227, 0.227, 0.80 }, -- #3A3A3A hover
     border         = { 0, 0, 0, 1 },
     accent         = { 1.0, 0.0, 0.549, 1 },       -- #FF008C (KitnUI pink)
@@ -38,6 +38,21 @@ local ThemeDefaults = {
     error          = { 0.90, 0.30, 0.30, 1 },
     success        = { 0.30, 0.80, 0.40, 1 },
     warning        = { 0.90, 0.75, 0.30, 1 },
+
+    -- Settings window controls only. Outside ACCENT_KEYS so no theme mode or
+    -- Customize pick reaches them; no window outside the GUI reads them.
+    fieldBg        = { 0.075, 0.075, 0.075, 1 },
+    fieldBorder    = { 0.188, 0.188, 0.188, 1 },
+    controlBg      = { 0.090, 0.090, 0.090, 1 },
+    controlHover   = { 0.110, 0.110, 0.110, 1 },
+    controlPressed = { 0.039, 0.039, 0.039, 1 },
+    controlBorder  = { 0.173, 0.173, 0.173, 1 },
+    listBg         = { 0.082, 0.082, 0.082, 1 },
+    listBorder     = { 0.188, 0.188, 0.188, 1 },
+    thumbRest      = { 0.431, 0.431, 0.431, 1 },
+    thumbHover     = { 0.690, 0.690, 0.690, 1 },
+    knobOff        = { 0.45, 0.45, 0.45, 1 },
+    divider        = { 0.110, 0.110, 0.110, 1 },
 
     -- Dimensions
     headerHeight   = 32,
@@ -136,6 +151,16 @@ local function ColorsMatch(a, b)
     return true
 end
 KE.ColorsMatch = ColorsMatch
+
+-- The opaque colour of `top` drawn at `alpha` over `base`. Both inputs' own
+-- alpha is ignored.
+local function BlendColor(top, alpha, base)
+    local inv = 1 - alpha
+    return top[1] * alpha + base[1] * inv,
+        top[2] * alpha + base[2] * inv,
+        top[3] * alpha + base[3] * inv
+end
+KE.BlendColor = BlendColor
 
 ---------------------------------------------------------------------------------
 -- Theme Color Resolution

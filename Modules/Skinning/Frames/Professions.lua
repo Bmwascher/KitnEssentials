@@ -145,15 +145,55 @@ local function SkinRewardButton(button)
     S.SlotIcon(button.Icon, button.IconBorder)
 end
 
-local function SkinSchematicSlots(form)
-    if form.reagentSlotPool then
-        for slot in form.reagentSlotPool:EnumerateActive() do
-            SkinReagentSlot(slot.Button)
-        end
+local function SoftenArtwork(tex, alpha, crop)
+    tex:Show()
+    if crop then tex:SetTexCoord(0.02, 0.98, 0.02, 0.98) end
+    tex:SetAlpha(alpha)
+end
+
+-- SetAtlas's second argument: false keeps the form's size, not the atlas's.
+local IGNORE_ATLAS_SIZE = false
+
+-- The inspect window is Blizzard's minimized layout, drawn on parchment. It
+-- takes the recipe's profession art instead, as the full crafting page does;
+-- when the art cannot be resolved, KE's backdrop shows alone.
+local function DressInspectArt(form, recipeInfo)
+    local bg, minimal = form.Background, form.MinimalBackground
+    if minimal then minimal:SetAlpha(0) end
+    if not bg then return end
+
+    local recipeID = recipeInfo and recipeInfo.recipeID
+    local tradeSkill, professions = _G.C_TradeSkillUI, _G.Professions
+    local info = recipeID and tradeSkill and tradeSkill.GetProfessionInfoByRecipeID(recipeID)
+    local atlas = info and professions and professions.GetProfessionBackgroundAtlas
+        and professions.GetProfessionBackgroundAtlas(info)
+    if not atlas then
+        bg:SetAlpha(0)
+        return
     end
 
-    if form.salvageSlot then SkinReagentSlot(form.salvageSlot.Button) end
-    if form.enchantSlot then SkinReagentSlot(form.enchantSlot.Button) end
+    bg:SetAtlas(atlas, IGNORE_ATLAS_SIZE)
+    SoftenArtwork(bg, 0.6, true)
+end
+
+local function SkinSlot(slot, inspecting)
+    local button = slot.Button
+    SkinReagentSlot(button)
+    -- Nothing can be added to an inspected recipe.
+    if inspecting and button and button.InputOverlay then
+        button.InputOverlay:SetAlpha(0)
+    end
+end
+
+local function SkinSchematicSlots(form, recipeInfo)
+    local inspecting = form.isInspection
+    if inspecting then DressInspectArt(form, recipeInfo) end
+
+    if form.reagentSlotPool then
+        for slot in form.reagentSlotPool:EnumerateActive() do SkinSlot(slot, inspecting) end
+    end
+    if form.salvageSlot then SkinSlot(form.salvageSlot, inspecting) end
+    if form.enchantSlot then SkinSlot(form.enchantSlot, inspecting) end
 end
 
 -- Blizzard's circular recipe-output icon: the mask and hover ring fight the
@@ -164,12 +204,6 @@ local function SkinResultIcon(frame)
     local hl = frame.GetHighlightTexture and frame:GetHighlightTexture()
     if hl then hl:Hide() end
     if frame.CircleMask then frame.CircleMask:Hide() end
-end
-
-local function SoftenArtwork(tex, alpha, crop)
-    tex:Show()
-    if crop then tex:SetTexCoord(0.02, 0.98, 0.02, 0.98) end
-    tex:SetAlpha(alpha)
 end
 
 local function SquareCheckBox(box)
@@ -203,8 +237,11 @@ local function SkinSchematic(form)
         bd:SetBackdropBorderColor(0, 0, 0, 0)
     end
 
-    if form.Background then SoftenArtwork(form.Background, 0.6, true) end
-    if form.MinimalBackground then SoftenArtwork(form.MinimalBackground, 0.6) end
+    -- The inspect form's art follows its recipe, so the Init hook sets it.
+    if not form.isInspection then
+        if form.Background then SoftenArtwork(form.Background, 0.6, true) end
+        if form.MinimalBackground then SoftenArtwork(form.MinimalBackground, 0.6) end
+    end
 
     S.Each(form, SquareCheckBox, "TrackRecipeCheckbox", "AllocateBestQualityCheckbox")
 
@@ -668,10 +705,9 @@ local function Skin()
     end
 end
 
--- Deviation 1: InspectRecipe is its own skin key. EllesmereUI has separate
--- settings for the professions window and the inspect-recipe window, but
--- both of its packs load from Blizzard_Professions, so per-registration
--- suppression cannot tell them apart. Two keys can.
+-- InspectRecipe is its own skin key. Another addon may skin the professions
+-- window and not the inspect window, but both load from Blizzard_Professions,
+-- so per-registration suppression cannot tell them apart. Two keys can.
 local function SkinInspectRecipeWindow()
     if _G.InspectRecipeFrame then SkinInspectRecipe(_G.InspectRecipeFrame) end
 end

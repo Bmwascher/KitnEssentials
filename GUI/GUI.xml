@@ -25,7 +25,6 @@
     <Script file="GUIWidgets\GUI-AuraAllowlistCard.lua" />
     <Script file="GUIWidgets\GUI-AuraApplicationSoundCard.lua" />
     <Script file="GUIWidgets\GUI-SoundSettingsCard.lua" />
-    <Script file="GUIWidgets\GUI-SpellBrowserCard.lua" />
     <Script file="GUIWidgets\GUI-TextFormatCard.lua" />
     <Script file="GUIWidgets\GUI-DispelCursorCard.lua" />
     <Script file="GUIWidgets\GUI-TauntCursorCard.lua" />
@@ -58,6 +57,7 @@
     <Script file="GUITabs\GUICombat\GUI-AuraDebuffs.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraHeaders.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraExternals.lua" />
+    <Script file="GUITabs\GUICombat\GUI-PartyBuffs.lua" />
     <Script file="GUITabs\GUICombat\GUI-AuraMovement.lua" />
     <Script file="GUITabs\GUICombat\GUI-DamageMeter.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-KickTracker.lua" />
@@ -84,7 +84,6 @@
     <Script file="GUITabs\GUIUtilities\GUI-WorldMarkerCycler.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-ReadyCheckConsumables.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-Utilities.lua" />
 
     <!-- Dungeons tabs -->
     <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />
@@ -97,6 +96,8 @@
     <Script file="GUITabs\GUIDungeons\GUI-LFGReminder.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DeathNotifications.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-MythicPlusTimer.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-DungeonAlerts.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-KicksCasts.lua" />
 
     <!-- DungeonsTimers tabs -->
     <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersCfg.lua" />
@@ -110,6 +111,7 @@
     <Script file="GUITabs\GUIQoL\GUI-Automation.lua" />
     <Script file="GUITabs\GUIQoL\GUI-BonusRoll.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CVars.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-UIScaling.lua" />
     <Script file="GUITabs\GUIQoL\GUI-SlashCommands.lua" />
     <Script file="GUITabs\GUIQoL\GUI-DragonRiding.lua" />
     <Script file="GUITabs\GUIQoL\GUI-CombatLogger.lua" />
@@ -120,6 +122,7 @@
     <Script file="GUITabs\GUIQoL\GUI-MoveFrames.lua" />
     <Script file="GUITabs\GUIQoL\GUI-RaidControl.lua" />
     <Script file="GUITabs\GUIQoL\GUI-QualityOfLife.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-GroupTools.lua" />
     <Script file="GUITabs\GUIQoL\GUI-SecondaryStats.lua" />
 
     <!-- Skinning tabs -->

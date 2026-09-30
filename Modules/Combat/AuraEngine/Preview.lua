@@ -131,8 +131,9 @@ local function PositionEntryFrame(frame, index, display, settings)
 end
 
 -- Mirrors the live formatter's breakpoints (Style.lua's GetDurationFormatter)
--- without going through C_StringUtil: that formatter only drives text via
--- SetDurationText, a registration call plain preview frames cannot accept.
+-- without going through C_StringUtil: that formatter binds only to registered
+-- duration text or a cooldown's countdown, and these frames draw the timer in
+-- a FontString of their own.
 -- Floors throughout, tenths included -- string.format rounds, which would show
 -- a value the live display never shows.
 local function FormatRemaining(seconds, decimalThreshold)
@@ -180,7 +181,7 @@ local function RepaintDispelRing(frame, group, settings, dispelType)
         r, g, b, a = group.getDispelPreviewColor(settings, dispelType)
     end
     if not r then
-        r, g, b, a = KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
+        r, g, b, a = KE.AuraStyle.FlatRingColor(settings, group.capabilities)
     end
 
     ring.top:SetColorTexture(r, g, b, a);    ring.top:SetSnapToPixelGrid(false)

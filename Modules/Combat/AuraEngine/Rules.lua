@@ -55,9 +55,11 @@ local math_ceil = math.ceil
 local math_floor = math.floor
 
 -- Applied unconditionally to every group, regardless of the user's own
--- blocklist. These are never-secret nuisance auras; spell-ID filtering only
--- works at all for never-secret spells, which is why the list cannot be
--- opened up to arbitrary boss debuffs.
+-- blocklist. The container matches spell IDs only for helpful auras on
+-- assistable units and harmful auras on non-assistable units, except for
+-- never-secret spells, which match anywhere. Every entry here is a
+-- never-secret nuisance aura, so it matches on friendly units; a boss debuff
+-- on the player would not, which is why the list cannot be opened up to them.
 Rules.HARDCODED_BLOCKLIST = {
     57723,   -- Exhaustion
     390435,  -- Exhaustion
@@ -118,6 +120,10 @@ end
 
 -- Saved allowlist entries are RECORDS with an enabled flag, matching the
 -- blocklist's shape, so a disabled row must not admit its spell.
+local function IsIncluded(spellID, record)
+    return IsPositiveInteger(spellID) and type(record) == "table" and record.enabled ~= false
+end
+
 --
 -- ALWAYS A TABLE, never nil. A nil includeSpellIDs means "no whitelist", and a
 -- group filtering plain HELPFUL with no whitelist shows every buff on the
@@ -131,8 +137,7 @@ function Rules.BuildIncludeSpellIDs(saved)
 
     if saved then
         for spellID, record in pairs(saved) do
-            if IsPositiveInteger(spellID)
-                and type(record) == "table" and record.enabled ~= false then
+            if IsIncluded(spellID, record) then
                 set[spellID] = true
             end
         end
@@ -212,6 +217,20 @@ function Rules.BuildSoundSpellIDs(saved)
     table_sort(ids)
 
     return ids
+end
+
+-- BuildSoundSpellIDs(saved)[1] without building either table: a preview reads
+-- one icon per list on every settings change.
+function Rules.FirstIncludeSpellID(saved)
+    local first
+    if saved then
+        for spellID, record in pairs(saved) do
+            if IsIncluded(spellID, record) and (first == nil or spellID < first) then
+                first = spellID
+            end
+        end
+    end
+    return first
 end
 
 -- maxFrameCount is per group and unused capacity cannot cross a group

@@ -36,9 +36,13 @@ local function InstallCloseHook()
         local frame = GUIFrame.mainFrame
         if not frame then return end
         frame:HookScript("OnHide", function()
+            -- A combat close keeps the flag: the window reopens after the
+            -- fight, and its next ordinary close prompts.
+            if GUIFrame.reopenAfterCombat then return end
             if optimizeDirty then
                 optimizeDirty = false
-                StaticPopup_Show("KE_OPTIMIZE_RELOAD")
+                local OPT = GetModule()
+                if OPT then OPT:PromptReload() end
             end
         end)
         hookInstalled = true
@@ -115,14 +119,14 @@ local function SetupHover(btn)
         self:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     end)
     btn:SetScript("OnLeave", function(self)
-        self:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        self:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
     end)
 end
 
 local function PaintSmallButton(btn, text, textColor)
     local TT = Theme
-    btn:SetBackdropColor(TT.bgButton[1], TT.bgButton[2], TT.bgButton[3], TT.bgButton[4])
-    btn:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+    btn:SetBackdropColor(TT.controlBg[1], TT.controlBg[2], TT.controlBg[3], TT.controlBg[4])
+    btn:SetBackdropBorderColor(TT.controlBorder[1], TT.controlBorder[2], TT.controlBorder[3], 1)
     KE:ApplyThemeFont(text, "normal")
     text:SetTextColor(textColor[1], textColor[2], textColor[3], 1)
 end

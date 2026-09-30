@@ -142,7 +142,8 @@ describe("CombatLogger arena classification", function()
         rec.pvp.ratedArena = true
         CL:CheckArenaLogging()
         assert.is_true(rec.logging)
-        assert.equals("KE_COMBATLOGGER_ACL_PROMPT", rec.popups[1])
+        assert.equals(1, #rec.prompts)
+        assert.equals("Combat Logger", rec.prompts[1].title)
     end)
 
     it("does not ask when the prompt is switched off", function()
@@ -154,7 +155,7 @@ describe("CombatLogger arena classification", function()
         rec.pvp.ratedArena = true
         CL:CheckArenaLogging()
         assert.is_true(rec.logging)
-        assert.equals(0, #rec.popups)
+        assert.equals(0, #rec.prompts)
     end)
 
     -- Turning it on must not need a reload: Blizzard's own checkbox for the

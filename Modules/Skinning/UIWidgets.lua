@@ -28,7 +28,7 @@ local C_Timer = C_Timer
 local CreateFrame = CreateFrame
 local UIParent = UIParent
 local unpack = unpack
-local math_max = math.max
+local math_max, math_min = math.max, math.min
 
 -- The four containers this module restyles. Widgets are pooled and drawn by
 -- many owners (tooltips, nameplates, the objective tracker); everything
@@ -47,6 +47,48 @@ local ignoreWidget = {
 -- Never a field on the widget: a pooled frame carries its fields into
 -- whatever shows it next.
 local backdrops = setmetatable({}, { __mode = "k" })
+
+-- Fill colour per Blizzard fill kit. Only the plain "widgetstatusbar" frame
+-- kit gets one; themed frame kits keep their own art.
+local FILL_COLORS = {
+    green  = { 0.30, 0.78, 0.30 },
+    yellow = { 0.95, 0.77, 0.20 },
+    red    = { 0.85, 0.22, 0.22 },
+    orange = { 0.95, 0.55, 0.20 },
+    blue   = { 0.25, 0.55, 0.90 },
+    purple = { 0.64, 0.35, 0.90 },
+}
+
+-- A "white" fill takes the bar's own tint. nil leaves Blizzard's fill.
+function UIW.ResolveFillColor(frameKit, fillKit, r, g, b)
+    if frameKit ~= "widgetstatusbar" or type(fillKit) ~= "string" then return nil end
+    local kit = fillKit:lower()
+    if kit == "white" then return r, g, b end
+    local c = FILL_COLORS[kit]
+    if not c then return nil end
+    return c[1], c[2], c[3]
+end
+
+local FONT_ROLES = {
+    Label   = { group = "StatusBar",  flag = "StyleLabel",   size = "LabelSize" },
+    BarText = { group = "StatusBar",  flag = "StyleBarText", size = "BarTextSize" },
+    Text    = { group = "TextWidget", flag = "StyleText",    size = "Size" },
+}
+
+-- The sweep and the SetFontObject hook share this rule. nil leaves
+-- Blizzard's font; it is also the hook's off switch, since a hook cannot be
+-- removed.
+function UIW.FontSizeForRole(db, role)
+    local spec = FONT_ROLES[role]
+    if not (spec and db and db.Enabled) then return nil end
+    local group = db[spec.group]
+    if not (group and group.Enabled and group[spec.flag]) then return nil end
+    return group[spec.size]
+end
+
+function UIW.ShouldCenterText(db)
+    return UIW.FontSizeForRole(db, "Text") ~= nil and db.TextWidget.CenterText == true
+end
 
 function UIW:UpdateDB()
     self.db = KE.db.profile.Skinning.UIWidgets
@@ -94,12 +136,138 @@ local function SetFontIfChanged(fs, path, size, outline)
     end
 end
 
+-- Font strings KE styles, keyed to their role. Blizzard's Setup calls
+-- SetFontObject on every update, each second for a timer widget; the hook
+-- puts KE's font back before Setup justifies and measures the text.
+local fontRoles = setmetatable({}, { __mode = "k" })
+
+local function StyleFont(fs, role)
+    local size = UIW.FontSizeForRole(UIW.db, role)
+    if not size then return false end
+    local fontPath, outline = UIW:GetFontSettings()
+    SetFontIfChanged(fs, fontPath, size, outline)
+    fs:SetShadowColor(0, 0, 0, 0)
+    return true
+end
+
+-- Runs inside Blizzard's widget pass, so nothing KE does may stop it.
+local function ReapplyFont(fs)
+    pcall(StyleFont, fs, fontRoles[fs])
+end
+
+-- Per font string, never on a mixin: these pools belong to the four owned
+-- containers and never lend a frame to a tooltip.
+local function ApplyFont(fs, role)
+    if StyleFont(fs, role) and not fontRoles[fs] then
+        fontRoles[fs] = role
+        hooksecurefunc(fs, "SetFontObject", ReapplyFont)
+    end
+end
+
+local function HideFill(record)
+    if record.fill then record.fill:Hide() end
+end
+
+-- A released bar is hidden with the last widget's fill still on it, and the
+-- next Setup shows it again before KE's sweep has seen the new kit. Hiding
+-- the fill with the bar and re-sweeping on show keeps the old fill off it.
+local function RestyleOnShow()
+    UIW:OnWidgetEvent()
+end
+
+-- KE's fill sits one sublevel above Blizzard's fill, which is in ARTWORK:
+-- regions sharing a layer and sublevel draw in no fixed order. The text is
+-- in OVERLAY, above both. Anchored to the fill texture, it follows the value
+-- and the smooth fill with no Lua of its own. Some widgets name a plain
+-- Frame .Bar; only a StatusBar has a fill texture.
+local function UpdateFill(bar, record, barDB)
+    local fillTex = bar:IsObjectType("StatusBar") and bar:GetStatusBarTexture()
+    if not fillTex then
+        HideFill(record)
+        return
+    end
+
+    local r, g, b = UIW.ResolveFillColor(bar.frameTextureKit, bar.textureKit, bar:GetStatusBarColor())
+    if not r then
+        HideFill(record)
+        return
+    end
+
+    local fill = record.fill
+    if not fill then
+        fill = bar:CreateTexture(nil, "ARTWORK")
+        record.fill = fill
+        record:SetScript("OnHide", HideFill)
+        record:SetScript("OnShow", RestyleOnShow)
+    end
+
+    local layer, sublevel = fillTex:GetDrawLayer()
+    fill:SetDrawLayer(layer, math_min((sublevel or 0) + 1, 7))
+
+    if record.fillAnchor ~= fillTex then
+        fill:ClearAllPoints()
+        fill:SetPoint("TOPLEFT", fillTex, "TOPLEFT")
+        fill:SetPoint("BOTTOMRIGHT", fillTex, "BOTTOMRIGHT")
+        record.fillAnchor = fillTex
+    end
+
+    local path = KE:GetStatusbarPath(barDB.BarTexture)
+    if record.fillPath ~= path then
+        fill:SetTexture(path)
+        record.fillPath = path
+    end
+
+    fill:SetVertexColor(r, g, b)
+    fill:Show()
+end
+
+-- Text widgets KE centres. Setup justifies from the widget's own alignment
+-- inside a fixed width, which leaves a short string off-centre; the hook
+-- turns it back to CENTER, and its own re-entrant call passes CENTER.
+local centred = setmetatable({}, { __mode = "k" })
+
+local function CentreNow(fs, justify)
+    if justify ~= "CENTER" and UIW.ShouldCenterText(UIW.db) then
+        fs:SetJustifyH("CENTER")
+    end
+end
+
+local function ReCentre(fs, justify)
+    pcall(CentreNow, fs, justify)
+end
+
+local function ApplyCentre(fs)
+    if not UIW.ShouldCenterText(UIW.db) then return end
+    CentreNow(fs, fs:GetJustifyH())
+    if not centred[fs] then
+        centred[fs] = true
+        hooksecurefunc(fs, "SetJustifyH", ReCentre)
+    end
+end
+
+-- Setup re-sets the icon's texture, size and mask shown-state and the
+-- Border's atlas and shown-state on every update, but never the texcoords,
+-- either border's alpha or which masks the icon carries: one pass holds.
+local skinnedIcons = setmetatable({}, { __mode = "k" })
+
+local function StyleSpellIcon(spell)
+    local icon = spell and spell.Icon
+    local S = KE.Skins
+    if not (icon and S) or skinnedIcons[icon] then return end
+    skinnedIcons[icon] = true
+
+    if spell.IconMask then icon:RemoveMaskTexture(spell.IconMask) end
+    if spell.CircleMask then icon:RemoveMaskTexture(spell.CircleMask) end
+    if spell.Border then spell.Border:SetAlpha(0) end
+    if spell.DebuffBorder then spell.DebuffBorder:SetAlpha(0) end
+    S.Icon(icon, true)
+end
+
 function UIW:StyleStatusBarWidget(widget)
     if not widget or widget:IsForbidden() then return end
 
     if widget.widgetID and ignoreWidget[widget.widgetSetID] == widget.widgetID then return end
 
-    local fontPath, outline = self:GetFontSettings()
     local barDB = self.db.StatusBar
 
     local width = barDB.Width or 0
@@ -112,10 +280,7 @@ function UIW:StyleStatusBarWidget(widget)
 
     -- Font only. Setup measures Label's width and height and sizes the widget
     -- from them; an anchor written here would be measured instead of the text.
-    if widget.Label and barDB.StyleLabel then
-        SetFontIfChanged(widget.Label, fontPath, barDB.LabelSize, outline)
-        widget.Label:SetShadowColor(0, 0, 0, 0)
-    end
+    if widget.Label then ApplyFont(widget.Label, "Label") end
 
     -- A capture bar's Bar is a Texture (UIWidgetTemplateCaptureBar.xml), not
     -- a frame; the backdrop below is parented to it.
@@ -123,21 +288,16 @@ function UIW:StyleStatusBarWidget(widget)
     if bar and bar.GetObjectType and bar:IsObjectType("Texture") then bar = nil end
     if bar then
 
-        if bar.Label and barDB.StyleBarText then
-            SetFontIfChanged(bar.Label, fontPath, barDB.BarTextSize, outline)
-            bar.Label:SetShadowColor(0, 0, 0, 0)
-        end
+        if bar.Label then ApplyFont(bar.Label, "BarText") end
 
         if bar.LeftText and barDB.StyleBarText then
-            SetFontIfChanged(bar.LeftText, fontPath, barDB.BarTextSize, outline)
-            bar.LeftText:SetShadowColor(0, 0, 0, 0)
+            ApplyFont(bar.LeftText, "BarText")
             bar.LeftText:SetJustifyH("LEFT")
             bar.LeftText:SetJustifyV("MIDDLE")
         end
 
         if bar.RightText and barDB.StyleBarText then
-            SetFontIfChanged(bar.RightText, fontPath, barDB.BarTextSize, outline)
-            bar.RightText:SetShadowColor(0, 0, 0, 0)
+            ApplyFont(bar.RightText, "BarText")
             bar.RightText:SetJustifyH("RIGHT")
             bar.RightText:SetJustifyV("MIDDLE")
         end
@@ -172,22 +332,32 @@ function UIW:StyleStatusBarWidget(widget)
                 backdrops[bar] = backdrop
             end
         end
+
+        local record = backdrops[bar]
+        if record then
+            if barDB.StripTextures then
+                UpdateFill(bar, record, barDB)
+            else
+                HideFill(record)
+            end
+        end
     end
 end
+
+local TEXT_WITH_STATE = Enum and Enum.UIWidgetVisualizationType
+    and Enum.UIWidgetVisualizationType.TextWithState
 
 function UIW:StyleTextWidget(widget)
     if not widget or widget:IsForbidden() then return end
 
-    local fontPath, outline = self:GetFontSettings()
-    local textDB = self.db.TextWidget
-
-    -- Font only. Setup sizes the widget from this fontstring's string width
-    -- on every update; a forced widget width leaves Text at its TOPLEFT
-    -- anchor, and a LEFT/RIGHT anchor here overrides the width Setup gives it.
-    if widget.Text and textDB.StyleText then
-        SetFontIfChanged(widget.Text, fontPath, textDB.Size, outline)
-        widget.Text:SetShadowColor(0, 0, 0, 0)
-    end
+    -- No anchor or width here. Setup sizes the widget from this fontstring's
+    -- string width on every update; a forced widget width leaves Text at its
+    -- TOPLEFT anchor, and a LEFT/RIGHT anchor here overrides the width Setup
+    -- gives it.
+    local text = widget.Text
+    if not text then return end
+    ApplyFont(text, "Text")
+    if TEXT_WITH_STATE and widget.widgetType == TEXT_WITH_STATE then ApplyCentre(text) end
 end
 
 function UIW:StyleWidgetByType(widget)
@@ -196,6 +366,8 @@ function UIW:StyleWidgetByType(widget)
         self:StyleStatusBarWidget(widget)
     elseif widget.Text and not widget.Bar and self.db.TextWidget.Enabled then
         self:StyleTextWidget(widget)
+    elseif widget.Spell and self.db.SkinIcons then
+        StyleSpellIcon(widget.Spell)
     end
 end
 
@@ -235,6 +407,7 @@ end
 -- own Setup then throws on a secret. The game's widget events drive the
 -- restyle from KE's own frame instead: one timer tick to sweep after
 -- Blizzard's containers have processed the change, a second to flush.
+-- ApplyFont's and ApplyCentre's per-font-string hooks are the exception.
 local restyleScheduled = false
 function UIW:OnWidgetEvent()
     if restyleScheduled or not self.db.Enabled then return end

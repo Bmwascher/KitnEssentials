@@ -45,8 +45,8 @@ local function ConstructCheckbox(parent)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    toggle:SetBackdropColor(Theme.bgMedium[1], Theme.bgMedium[2], Theme.bgMedium[3], 1)
-    toggle:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+    toggle:SetBackdropColor(Theme.fieldBg[1], Theme.fieldBg[2], Theme.fieldBg[3], Theme.fieldBg[4])
+    toggle:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
 
     local knob = CreateFrame("Frame", nil, toggle, "BackdropTemplate")
     knob:SetSize(KNOB_SIZE, KNOB_SIZE)
@@ -151,7 +151,7 @@ local function ConstructCheckbox(parent)
                 knobTexture:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
                 knobR, knobG, knobB, knobA = Theme.accent[1], Theme.accent[2], Theme.accent[3], 1
             else
-                toggle:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+                toggle:SetBackdropColor(Theme.fieldBg[1], Theme.fieldBg[2], Theme.fieldBg[3], Theme.fieldBg[4])
                 knobTexture:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.4)
                 knobR, knobG, knobB, knobA = Theme.accent[1], Theme.accent[2], Theme.accent[3], 0.4
             end
@@ -161,9 +161,9 @@ local function ConstructCheckbox(parent)
             colorAnimGroup:Stop()
             colorFrom.bgR, colorFrom.bgG, colorFrom.bgB = toggle:GetBackdropColor()
             colorFrom.knobR, colorFrom.knobG, colorFrom.knobB, colorFrom.knobA = knobR, knobG, knobB, knobA
-            colorTo.bgR = toState and Theme.accent[1] * 0.5 or Theme.bgDark[1]
-            colorTo.bgG = toState and Theme.accent[2] * 0.5 or Theme.bgDark[2]
-            colorTo.bgB = toState and Theme.accent[3] * 0.5 or Theme.bgDark[3]
+            colorTo.bgR = toState and Theme.accent[1] * 0.5 or Theme.fieldBg[1]
+            colorTo.bgG = toState and Theme.accent[2] * 0.5 or Theme.fieldBg[2]
+            colorTo.bgB = toState and Theme.accent[3] * 0.5 or Theme.fieldBg[3]
             colorTo.knobR = Theme.accent[1]
             colorTo.knobG = Theme.accent[2]
             colorTo.knobB = Theme.accent[3]
@@ -313,13 +313,13 @@ local function ConstructCheckbox(parent)
 
     -- Re-apply theme-tied state after KE:RefreshTheme replaces Theme color
     -- tables. Toggle is stateful — colors depend on the current on/off
-    -- state (toggle bg uses accent*0.5 when on, bgDark when off; knob
+    -- state (toggle bg uses accent*0.5 when on, fieldBg when off; knob
     -- uses accent at full alpha when on, accent at 0.4 when off). Defer
     -- to UpdateColors(state, true) which handles both cases.
     function row:ApplyThemeColors()
         local TT = Theme
         label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
-        toggle:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        toggle:SetBackdropBorderColor(TT.fieldBorder[1], TT.fieldBorder[2], TT.fieldBorder[3], 1)
         knob:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
         UpdateColors(state, true)
     end
@@ -482,7 +482,7 @@ local function ConstructCompactCheckbox(parent)
 
     cell:SetScript("OnLeave", function()
         label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.9)
-        box:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        box:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
         GameTooltip:Hide()
     end)
 
@@ -492,8 +492,8 @@ local function ConstructCompactCheckbox(parent)
     -- a straight re-apply is enough.
     function cell:ApplyThemeColors()
         local TT = Theme
-        box:SetBackdropColor(TT.bgMedium[1], TT.bgMedium[2], TT.bgMedium[3], 1)
-        box:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        box:SetBackdropColor(TT.fieldBg[1], TT.fieldBg[2], TT.fieldBg[3], TT.fieldBg[4])
+        box:SetBackdropBorderColor(TT.fieldBorder[1], TT.fieldBorder[2], TT.fieldBorder[3], 1)
         fill:SetColorTexture(TT.accent[1], TT.accent[2], TT.accent[3], 0.9)
         label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 0.9)
     end

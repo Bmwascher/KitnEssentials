@@ -83,6 +83,18 @@ Prepend the tree's `bin` to your **user PATH** so `lua`, `busted`, and
   "Path", "$HOME\Documents\KitnDev\tools\lua51\bin;" + [Environment]::GetEnvironmentVariable("Path","User"), "User")
 ```
 
+Git Bash does not search PATHEXT, so it cannot run the `.bat` launchers by
+plain name. Add sh shims in `~/bin` (first on Git Bash's PATH); they live
+outside the tree so a rebuild keeps them, and name the `.bat` by absolute
+path so no other `luacheck` on PATH can win:
+
+```sh
+mkdir -p ~/bin
+for t in busted luacheck luacov; do
+  printf '#!/bin/sh\nexec "%s/Documents/KitnDev/tools/lua51/bin/%s.bat" "$@"\n' "$HOME" "$t" > ~/bin/$t
+done
+```
+
 ### Linux / WSL / the cloud
 
 ```sh

@@ -77,8 +77,9 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     end)
 
     card1:AddLabel("Tracks your party's interrupts as cooldown bars. Teammates running a kick-sync " ..
-        "addon get live bars from the start; other kicks show as temporary class-coloured records " ..
-        "when they land. Only active in 5-player dungeons.")
+        "addon get live bars; other kicks show as temporary class-coloured records marked *. " ..
+        "Inside a running keystone the game blocks addon messages, so every teammate kick shows " ..
+        "as a record there. Only active in 5-player dungeons.")
 
     yOffset = card1:GetNextOffset()
 

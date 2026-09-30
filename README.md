@@ -26,6 +26,7 @@ The sections below mirror the settings panel, so anything listed here is where y
 | Home Page | Welcome page and the general settings below |
 | Profile Manager | Import, export, copy, and reset profiles, with per-character and global support |
 | Addon Theme | 8 WoW-themed color presets, class color mode, fully custom colors, and an optional tint for skinned Blizzard frames — opens as a popup from the title bar |
+| CVars | One-click console variable panel that reads its values live from your client; a UI Scaling tab that scales Blizzard windows such as the character, professions and auction house panels, with an optional scale per category, and holds the windowed and maximized world map scale; and a Dev tab of addon-restriction variables for testing |
 | System Optimization | One-click performance pass covering frame rate, memory, latency, and related console variables |
 
 The home page also carries the general settings: minimap button, login message, Global Font, and Slug font rendering. Slug is Blizzard's GPU glyph renderer — it gives sharper text but is unavailable in some locales, so it can be turned off for everything at once.
@@ -34,7 +35,7 @@ The home page also carries the general settings: minimap button, login message, 
 
 | Module | Description |
 |---|---|
-| Class Tools | Class-gated tools on one tabbed page: Disintegrate tick marks, Preservation Stasis tracker, Hunter's Mark alert, Warlock Havoc warning, and Missing Forms (stance, form, aura, and Evoker attunement alerts) |
+| Class Tools | Class tools on one page with a tab per class, opening on your own class: All Classes (Missing Forms stance, form, aura, and Evoker attunement alerts; Recuperate one-click self-heal with health-based visibility; Time Spiral movement proc tracker with glow and countdown), Evoker (Disintegrate tick marks and Preservation Stasis tracker), Hunter (Hunter's Mark alert), Priest (PI Macro, which builds a Power Infusion macro with trinkets, racials, and potions, and PI Assist, which glows the raid frame of your PI target while their burst cooldown runs), and Warlock (Havoc warning) |
 | Combat Res | Combat res charge tracker with timer |
 | Combat Texts | Combat enter/exit, no target warning, interrupt announce with spell icon, and low durability warnings |
 | Combat Timer | Configurable in-combat duration display |
@@ -58,25 +59,18 @@ The home page also carries the general settings: minimap button, login message, 
 
 | Page | Description |
 |---|---|
-| Automation | Auto-repair with a repair cost announcement, auto-sell, fast loot, a choice of delete confirmation style, auto-confirm queues, Group Finder quick signup with a persistent signup note, auto-slot keystone, skip cinematics, hide event toasts and zone text, merchant and auction house conveniences, and one-click withdrawal of the highest-quality current-tier Vantus Rune from the guild bank |
-| Combat Logger | Automatic combat logging for raids, dungeons, M+, PvP, arenas, and scenarios including delves, with per-content toggles, a one-click Advanced Combat Logging switch, and a Warcraft Recorder preset |
-| CVars | One-click console variable panel that reads its values live from your client, including separate scale sliders for the windowed and maximized world map, and a Dev tab of addon-restriction variables for testing |
-| Great Vault Alert | Shows your loot spec when opening the Great Vault, with class color and sound |
-| Quality of Life | Four tools on one page: Spell Alert Opacity (per-spec opt-in grid for Blizzard's proc overlay flashes, plus an opacity slider), Move Frames (drag Blizzard windows anywhere), Copy Anything (pull spell, item, NPC, and aura IDs to the clipboard from tooltips), and Slash Commands (shorthand commands such as `/rl`, `/cd`, `/fs`, `/leave`, `/reset`, `/mute`, `/music`) |
+| Automation | Auto-repair with a repair cost announcement, auto-sell, fast loot, a choice of delete confirmation style, auto-confirm queues, Group Finder quick signup with a persistent signup note, auto-slot keystone, skip cinematics, hide event toasts and zone text, merchant and auction house conveniences, and one-click withdrawal of the highest-quality current-tier Vantus Rune from the guild bank. Its Combat Logger tab logs combat automatically for raids, dungeons, M+, PvP, arenas, and scenarios including delves, with per-content toggles, a one-click Advanced Combat Logging switch, and a Warcraft Recorder preset |
+| Group Tools | Three raid and group tools on one page: Raid Notifications (gateway usability, reset and loot boss reminders, Mythic bench alert, seasonal bonus rolls), Ready Check (clickable consumable icons on ready check, including Warlock Soulstone with auto-target healer), and World Markers (cycle markers at the cursor with drag-to-reorder priority) |
+| Quality of Life | Five tools on one page: Spell Alert Opacity (per-spec opt-in grid for Blizzard's proc overlay flashes, plus an opacity slider), Move Frames (drag Blizzard windows anywhere), Great Vault Alert (shows your loot spec when opening the Great Vault, with class color and sound), Copy Anything (pull spell, item, NPC, and aura IDs to the clipboard from tooltips), and Slash Commands (shorthand commands such as `/rl`, `/cd`, `/fs`, `/leave`, `/reset`, `/mute`, `/music`) |
 | Secondary Stats Display | Movable readout for Crit, Haste, Mastery and Versatility, with optional Leech, Avoidance and Speed, per-stat percent or rating, direction, decimal and label styles, and Edit Mode placement |
-| Utilities | Seven tools on one page: Priest: PI Macro (builds a Power Infusion macro with trinkets, racials, and potions), Raid Notifications (gateway usability, reset and loot boss reminders, Mythic bench alert, seasonal bonus rolls), Ready Check (clickable consumable icons on ready check, including Warlock Soulstone with auto-target healer), Recuperate (one-click self-heal with health-based visibility), Time Spiral (movement proc tracker with glow and countdown, all classes), and World Markers (cycle markers at the cursor with drag-to-reorder priority) |
 
 ## Dungeon Tools
 
 | Module | Description |
 |---|---|
 | Keystone Helper | Keystone reminders and group tools on one tabbed page: party or raid announce on instance reset, a glowing "reroll your key" prompt after timing a key at or above your keystone's level, a "Your Key?" prompt when entering the Mythic 0 dungeon matching your keystone, plus a reworked group finder panel with filtering, a quick-create listing tool, and a reminder when you have a group listed and stop watching it |
-| Death Notifications | On-screen alert when party or raid members, or your focus target, die — class portrait and color, configurable text format, and an optional voice reminder when your focus dies in combat. Covers dungeons once you switch it on; raid activation is opt-in |
-| Dungeon Casts | Enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible or shielded status colors |
-| Enemy Counter | Number of enemies currently in combat via nameplate scanning, with editable prefix and combat-only visibility |
-| Focus Marker | Auto-creates a focus targeting and raid marker macro, with optional party ready-check announce |
-| Interrupt Tracker | Party interrupt cooldown bars rebuilt for 12.0.5 — live synced bars for teammates running kick-sync addons, temporary class-colored kick records for everyone else, dark mode, and healer position override |
-| Targeted Spells | Mirrored icon and countdown entries for enemy casts targeting you, with important-spell glow, an interrupt indicator, per-content filters, and adjustable layout, font, and colors |
+| Dungeon Alerts | Three pages on one row: Death Notifications (on-screen alert when party or raid members, or your focus target, die, with class portrait and color, configurable text format, and an optional voice reminder when your focus dies in combat; covers dungeons once you switch it on, raid activation is opt-in), Enemy Counter (number of enemies currently in combat via nameplate scanning, with editable prefix and combat-only visibility), and Targeted Spells (mirrored icon and countdown entries for enemy casts targeting you, with important-spell glow, an interrupt indicator, per-content filters, and adjustable layout, font, and colors) |
+| Kicks & Casts | Three pages on one row: Focus Macros (a focus-and-mark macro with an optional marker per class and party ready-check announce, plus an optional per-character focus interrupt macro), Interrupt Tracker (party interrupt cooldown bars rebuilt for 12.0.5, with live synced bars for teammates running kick-sync addons, temporary class-colored kick records for everyone else, dark mode, and healer position override), and Dungeon Casts (enemy cast bars for M+ nameplates with icon, target text, raid icons, bar stacking, and interruptible or shielded status colors) |
 
 ## Dungeon Timers
 

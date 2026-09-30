@@ -12,6 +12,10 @@ local math_floor = math.floor
 local Style = {}
 KE.AuraStyle = Style
 
+-- Fallback colours, shared because KE:ResolveColor only reads them.
+local BLACK = { 0, 0, 0, 1 }
+local DEFAULT_RING = { 0.8, 0, 0, 1 }
+
 -- The dispel badge is a fixed fraction of the icon, not a setting -- ported
 -- from the modules this engine replaces. A field rather than a local so the
 -- Edit Mode hitbox math can share this one definition instead of copying it.
@@ -95,6 +99,7 @@ local function GetDurationFormatter(settings)
     }
     return formatter
 end
+Style.GetDurationFormatter = GetDurationFormatter
 
 ---------------------------------------------------------------------------------
 -- Host creation -- called once, from initializeFrame.
@@ -116,7 +121,7 @@ end
 function Style.CreateBorderHost(button, settings, color)
     local px   = KE:GetPixelSize()
     local size = settings.IconSize or 0
-    local r, g, b, a = KE:ResolveColor(color, { 0, 0, 0, 1 })
+    local r, g, b, a = KE:ResolveColor(color, BLACK)
 
     local function MakeEdge(width, height)
         local tex = button:CreateTexture(nil, "OVERLAY", nil, 7)
@@ -427,6 +432,14 @@ end
 -- button; shared by the live and preview paths.
 ---------------------------------------------------------------------------------
 
+-- The ring's flat colour outside "dispel" mode, for StyleAuraFrame and the
+-- preview's stand-in repaint alike. A display with one ring colour per group
+-- names its key in the capabilities, as the border does.
+function Style.FlatRingColor(settings, caps)
+    local key = caps and caps.ringColorKey
+    return KE:ResolveColor(key and settings[key] or settings.BorderColor, DEFAULT_RING)
+end
+
 function Style.StyleAuraFrame(frame, settings, capabilities)
     local caps = capabilities or {}
 
@@ -482,8 +495,7 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         local size = settings.IconSize or 0
         local host = frame.keBorder
         local r, g, b, a = KE:ResolveColor(
-            caps.borderColorKey and settings[caps.borderColorKey] or nil,
-            { 0, 0, 0, 1 })
+            caps.borderColorKey and settings[caps.borderColorKey] or nil, BLACK)
 
         host.top:SetColorTexture(r, g, b, a)
         host.bottom:SetColorTexture(r, g, b, a)
@@ -554,7 +566,7 @@ function Style.StyleAuraFrame(frame, settings, capabilities)
         if settings.BorderColorMode == "dispel" then
             r, g, b, a = 1, 1, 1, 1
         else
-            r, g, b, a = KE:ResolveColor(settings.BorderColor, { 0.8, 0, 0, 1 })
+            r, g, b, a = Style.FlatRingColor(settings, caps)
         end
         ring.top:SetColorTexture(r, g, b, a);    ring.top:SetSnapToPixelGrid(false)
         ring.bottom:SetColorTexture(r, g, b, a); ring.bottom:SetSnapToPixelGrid(false)

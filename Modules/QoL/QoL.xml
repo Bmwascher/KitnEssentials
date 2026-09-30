@@ -12,6 +12,8 @@
     <Script file="VantusRune.lua" />
     <Script file="CharacterPanel.lua" />
     <Script file="InspectPanel.lua" />
+    <Script file="PanelScaleRegistry.lua" />
+    <Script file="PanelScale.lua" />
     <Script file="MapScale.lua" />
     <Script file="CopyAnything.lua" />
     <Script file="AlertFrames.lua" />

@@ -1,5 +1,250 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.17
+
+### Focus Macros
+
+- The Focus Marker page is renamed Focus Macros
+- Class markers are picked from one dropdown with icons; Mage defaults to Moon
+  and Priest to Skull
+- Marker from Class is now on by default. Untick it to keep a single marker
+- The marker and kick macro previews say which /macro tab holds each macro
+- The kick macro's #showtooltip line names your kick
+
+### Party Buffs
+
+- **NEW:** timer text with font settings, and category colours as an inner
+  ring (off by default)
+- Wider icon size and offset ranges; icons default to 32
+- The preview shows beside four party rows
+- Tracks the Liquid Luster potion
+- Attaches to the party frames after a /reload in a group
+
+### Spell History
+
+- **NEW:** anchor it to a chosen frame or any meter edge
+- Shows items and toys you press outside the spellbook
+
+### Kick Tracker
+
+- Synced rows show the spell that was kicked
+- A teammate's row updates after every kick message
+
+### Skinning
+
+- Context menus are skinned by default while Dark Theme is on. If you had
+  unticked them, untick them again
+
+### Move Frames
+
+- The hero talent picker scales with the talent window
+
+### UI Widgets
+
+- Unticking Strip Textures asks for a reload
+
+### CVars
+
+- Dragging a UI Scaling slider is smoother, and skin borders stay crisp
+
+---
+
+## v4.8.16
+
+### Kick Tracker
+
+- A talent-added kick is shared with teammates, and changes to it are announced
+- Command Demon's Spell Lock sends one kick message
+
+---
+
+## v4.8.15
+
+### Kick Tracker
+
+- A teammate's kick timer can no longer run past their kick's cooldown
+
+### Prompts
+
+- Waiting prompts show in order instead of only the latest
+- Keys work normally again after closing a prompt with Escape
+
+### Settings
+
+- Hover borders reset properly on reused controls, and buttons keep their
+  hover look through a theme change
+- A slider's last step is saved when the page closes
+
+### Fixes
+
+- Fishing's outfit cancel and Stasis Tracker no longer error on hidden combat
+  values
+
+---
+
+## v4.8.14
+
+### Party Buffs
+
+- **NEW:** icons on the party frames show a teammate's cooldown buffs, potions
+  and trinkets while they are up. Off by default
+
+---
+
+## v4.8.13
+
+### CVars
+
+- **NEW:** a UI Scaling tab to scale Blizzard panels; the World Map card moves
+  there
+- The Optimization group is renamed Gameplay and Interface
+
+---
+
+## v4.8.12
+
+### Prompts
+
+- The CPU profiler warning, the advanced combat logging question and the
+  Targeted Spells, Dungeon Trash and Optimize popups use KE's own prompt
+  instead of the game's popups, which could cause blocked-action errors
+- A prompt that arrives in combat waits until combat ends
+
+### Move Frames
+
+- Fixes errors from the hero talent picker after moving the talent window
+
+---
+
+## v4.8.11
+
+### Kick Tracker
+
+- Keeps working when a key blocks addon messages: your own row and the kick
+  records still show
+- Teammates see your talented kick cooldown and the time left on it
+- Kick records show a star and the target's raid marker
+- Demonology kicks follow the active demon; a Warrior's two kicks share one row
+- Mind Freeze is shortened by Coldthirst after a successful interrupt
+- Bars fill with smoother engine timers
+
+---
+
+## v4.8.10
+
+### Damage Meter
+
+- Reset on Instance Entry no longer resets on a difficulty flicker inside the
+  same instance, and forgets the last instance when you leave the group
+
+---
+
+## v4.8.9
+
+### Settings
+
+- Refreshed colours for buttons, fields, sliders, switches, dropdowns and
+  sub-tabs; buttons get hover and pressed looks
+
+---
+
+## v4.8.8
+
+### Settings
+
+- The sidebar is reorganised: new Group Tools, Dungeon Alerts and Kicks and
+  Casts pages, and the Utilities page is gone
+- Class Tools is split into class tabs and opens on your class
+- Great Vault Alert moves to Quality of Life, Combat Logger to Automation
+
+---
+
+## v4.8.7
+
+### Edit Mode
+
+- **NEW:** the selected mover shows a tooltip with its live position
+
+### Settings
+
+- The header menu is replaced by a Toggle Anchors button, tinted while edit
+  mode is on
+
+---
+
+## v4.8.6
+
+### UI Widgets
+
+- **NEW:** bar texture, text centring and icon skin controls
+- Widget text keeps KE's font through the game's refreshes, and text widgets
+  are centred
+- Spell icons in widget containers are cropped and bordered
+- Inspected recipes show the profession art
+
+---
+
+## v4.8.5
+
+### LFG Reminder
+
+- The popup is restyled as a dungeon row with the dungeon's art, a wrapping
+  name and a role line
+- The settings preview shows a current-season dungeon
+- A popup hidden by combat comes back when combat ends; one closed with X
+  stays closed
+
+---
+
+## v4.8.4
+
+### Damage Meter
+
+- **NEW:** Spell History: a strip of the casts you press, fading out, with its
+  own mover or attached to the meter
+
+---
+
+## v4.8.3
+
+### Damage Meter
+
+- Idle meter windows repaint when a group member's spec icon changes
+
+---
+
+## v4.8.2
+
+### Focus Marker
+
+- **NEW:** Marker from Class: each class gets its own marker, with a per-class
+  override
+- **NEW:** a per-character focus kick macro on its own tab, kept up to date
+  when your spec or pet changes
+
+---
+
+## v4.8.1
+
+### Raid Control
+
+- The ready check, countdown and everyone-assistant buttons grey out while the
+  game restricts party actions
+
+### Focus Marker
+
+- The marker announce is skipped while chat is locked
+
+### M+ Timer
+
+- Splits and the reset line are skipped while chat is locked
+
+### Damage Meter
+
+- Reports are refused with a message while chat is locked
+
+---
+
 ## v4.8.0
 
 ### Profile Manager

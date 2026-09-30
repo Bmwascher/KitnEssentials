@@ -12,7 +12,7 @@
 -- popup's anchors are protected through its secure child.
 --
 -- Loads the REAL Modules/Dungeons/LFGReminder.lua through _ke_loader. The
--- popup is the loader's lfgFrame stub; the spec replaces the three setters
+-- popup is the loader's lfgFrame stub; the spec replaces the setters
 -- it cares about with recorders AFTER the first build, so the assertions are
 -- about which db values the module pushes, never about the stub's own
 -- behavior.
@@ -36,6 +36,7 @@ describe("LFGReminder OnEnable settings pass", function()
         popup.SetPoint = function(_, p, _, rp, x, y)
             applied.point = { p = p, rp = rp, x = x, y = y }
         end
+        popup._disableBtn.SetShown = function(_, shown) applied.disableShown = shown end
         KE.db.profile.LFGReminder = newProfile
         LR:UpdateDB()
     end
@@ -59,11 +60,10 @@ describe("LFGReminder OnEnable settings pass", function()
         LR:OnEnable()
         assert.equals(0.8, applied.scale)
         assert.same({ p = "TOPLEFT", rp = "TOPLEFT", x = 40, y = -60 }, applied.point)
-        -- ShowDisable=false trims the window 20px below the full height.
-        local trimmed = applied.height
+        assert.is_false(applied.disableShown)
         LR.db.ShowDisable = true
         LR:OnEnable()
-        assert.equals(20, applied.height - trimmed)
+        assert.is_true(applied.disableShown)
     end)
 
     it("ApplySettings reaches the same three setters", function()

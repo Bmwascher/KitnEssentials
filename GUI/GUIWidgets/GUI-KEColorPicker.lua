@@ -91,9 +91,9 @@ local function ConstructColorPicker(parent)
             borderColorTo.g = Theme.accent[2]
             borderColorTo.b = Theme.accent[3]
         else
-            borderColorTo.r = Theme.border[1]
-            borderColorTo.g = Theme.border[2]
-            borderColorTo.b = Theme.border[3]
+            borderColorTo.r = Theme.controlBorder[1]
+            borderColorTo.g = Theme.controlBorder[2]
+            borderColorTo.b = Theme.controlBorder[3]
         end
 
         hoverAnimGroup:Play()
@@ -112,6 +112,13 @@ local function ConstructColorPicker(parent)
     swatch:SetScript("OnLeave", function(self)
         AnimateBorderColor(false)
         GameTooltip:Hide()
+    end)
+
+    -- Pools reuse a hidden swatch without repainting it, so a hover fade
+    -- still in flight at hide time is dropped here.
+    swatch:SetScript("OnHide", function(self)
+        hoverAnimGroup:Stop()
+        self:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
     end)
 
     ---------------------------------------------------------------------------------
@@ -201,7 +208,7 @@ local function ConfigureColorPicker(row, labelText, config)
     row._tooltip = config.tooltip
     row._hoverAnimGroup:Stop()
     row._setSwatch(color[1], color[2], color[3], color[4] or 1)
-    row.swatch:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+    row.swatch:SetBackdropBorderColor(TT.controlBorder[1], TT.controlBorder[2], TT.controlBorder[3], 1)
     row:SetEnabled(true)
     row._callback = config.callback
 end

@@ -909,7 +909,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- a section break (which would imply a new section header).
     local sliderSpacer = body:CreateTexture(nil, "ARTWORK")
     sliderSpacer:SetHeight(1)
-    sliderSpacer:SetColorTexture(KE.Theme.border[1], KE.Theme.border[2], KE.Theme.border[3], 0.35)
+    sliderSpacer:SetColorTexture(KE.Theme.divider[1], KE.Theme.divider[2], KE.Theme.divider[3], 0.35)
     sliderSpacer:SetPoint("LEFT",  body, "LEFT",  DETAIL_PADDING + 16, 0)
     sliderSpacer:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING - 16, 0)
     sliderSpacer:SetPoint("TOP",   sliderCaption, "BOTTOM", 0, -10)
@@ -968,7 +968,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- state for this spell so toggles return to curated default values.
     -- Uses GUIFrame:CreateButton (KE button factory) so hover styling
     -- matches the rest of the addon (Reset All Triggers and friends).
-    -- Red text + StaticPopup confirmation signal destructive intent.
+    -- Red text + a confirmation prompt signal destructive intent.
     --
     -- Anchored TOP-down (under the time-offset caption) instead of
     -- bottom-up. The rightCol's min height is sized for the tallest tab
@@ -1203,8 +1203,8 @@ local function CreateSegmentedToggle(parent, options, currentId, onChange)
     local function PaintButton(btn, isActive, isHover)
         local T = KE.Theme
         if not enabled then
-            btn:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
-            btn:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+            btn:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
+            btn:SetBackdropBorderColor(T.controlBorder[1], T.controlBorder[2], T.controlBorder[3], 1)
             btn:SetAlpha(0.5)
             if btn.text then btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1) end
             return
@@ -1218,13 +1218,13 @@ local function CreateSegmentedToggle(parent, options, currentId, onChange)
             if btn.text then btn.text:SetTextColor(1, 1, 1, 1) end
         elseif isHover then
             -- Hover on inactive: accent border only, fill stays neutral.
-            btn:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
+            btn:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
             btn:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 1)
             if btn.text then btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1) end
         else
             -- Idle inactive
-            btn:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
-            btn:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+            btn:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
+            btn:SetBackdropBorderColor(T.controlBorder[1], T.controlBorder[2], T.controlBorder[3], 1)
             if btn.text then btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1) end
         end
     end
@@ -1482,10 +1482,10 @@ local function BuildDisplayTabBody(parent, spellId, _)
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = 1,
         })
-        chip:SetBackdropColor(KE.Theme.bgMedium[1], KE.Theme.bgMedium[2],
-                              KE.Theme.bgMedium[3], 1)
-        chip:SetBackdropBorderColor(KE.Theme.border[1], KE.Theme.border[2],
-                                    KE.Theme.border[3], 1)
+        chip:SetBackdropColor(KE.Theme.controlBg[1], KE.Theme.controlBg[2],
+                              KE.Theme.controlBg[3], KE.Theme.controlBg[4])
+        chip:SetBackdropBorderColor(KE.Theme.controlBorder[1], KE.Theme.controlBorder[2],
+                                    KE.Theme.controlBorder[3], 1)
 
         local txt = chip:CreateFontString(nil, "OVERLAY")
         KE:ApplyFontToText(txt, "Expressway", 12, "OUTLINE")
@@ -1502,8 +1502,8 @@ local function BuildDisplayTabBody(parent, spellId, _)
                                         KE.Theme.accent[3], 1)
         end)
         chip:SetScript("OnLeave", function(self)
-            self:SetBackdropBorderColor(KE.Theme.border[1], KE.Theme.border[2],
-                                        KE.Theme.border[3], 1)
+            self:SetBackdropBorderColor(KE.Theme.controlBorder[1], KE.Theme.controlBorder[2],
+                                        KE.Theme.controlBorder[3], 1)
         end)
 
         local chipLabel = p.label  -- captured for the click closure
@@ -2531,8 +2531,8 @@ local function BuildTrashDisplayTabBody(parent, item)
             bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1,
         })
-        chip:SetBackdropColor(KE.Theme.bgMedium[1], KE.Theme.bgMedium[2], KE.Theme.bgMedium[3], 1)
-        chip:SetBackdropBorderColor(KE.Theme.border[1], KE.Theme.border[2], KE.Theme.border[3], 1)
+        chip:SetBackdropColor(KE.Theme.controlBg[1], KE.Theme.controlBg[2], KE.Theme.controlBg[3], KE.Theme.controlBg[4])
+        chip:SetBackdropBorderColor(KE.Theme.controlBorder[1], KE.Theme.controlBorder[2], KE.Theme.controlBorder[3], 1)
         local txt = chip:CreateFontString(nil, "OVERLAY")
         KE:ApplyFontToText(txt, "Expressway", 12, "OUTLINE")
         txt:SetPoint("CENTER")
@@ -2542,7 +2542,7 @@ local function BuildTrashDisplayTabBody(parent, item)
             self:SetBackdropBorderColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 1)
         end)
         chip:SetScript("OnLeave", function(self)
-            self:SetBackdropBorderColor(KE.Theme.border[1], KE.Theme.border[2], KE.Theme.border[3], 1)
+            self:SetBackdropBorderColor(KE.Theme.controlBorder[1], KE.Theme.controlBorder[2], KE.Theme.controlBorder[3], 1)
         end)
         local chipLabel, chipColor = p.label, p.color
         chip:SetScript("OnClick", function()
@@ -3137,7 +3137,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     -- buttons drifting into empty space.
     local tabSeparator = rightCol:CreateTexture(nil, "ARTWORK")
     tabSeparator:SetHeight(1)
-    tabSeparator:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 0.5)
+    tabSeparator:SetColorTexture(Theme.divider[1], Theme.divider[2], Theme.divider[3], Theme.divider[4])
     tabSeparator:SetPoint("LEFT",  rightCol, "LEFT",  DETAIL_PADDING, 0)
     tabSeparator:SetPoint("RIGHT", rightCol, "RIGHT", -DETAIL_PADDING, 0)
     tabSeparator:SetPoint("TOP",   tabBar, "BOTTOM", 0, -4)

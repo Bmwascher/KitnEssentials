@@ -3,7 +3,7 @@
 -- ║  Module: World Map Scale                                 ║
 -- ║  Purpose: Windowed and maximized world map scale, applied║
 -- ║           only while the map is hidden.                  ║
--- ║  Configured from the QoL > CVars page.                   ║
+-- ║  Configured from the Core > CVars > UI Scaling page.     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

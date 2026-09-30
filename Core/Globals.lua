@@ -835,23 +835,37 @@ local function KeystoneShortName(mapID)
     return entry[2]
 end
 
--- Name -> challenge-mode map ID, built once from the client's own map table
--- so a caller that only has the name reaches the same row.
+-- Name -> challenge-mode map ID, built from the client's own map table so a
+-- caller that only has the name reaches the same row. Keys are lowercased to
+-- match the teleport table's folding. An index that found no names is not
+-- kept: the map data may not have loaded yet, and a cached empty index would
+-- miss for the rest of the session. A secret name cannot index a table.
 local challengeMapByName
 local function ChallengeMapIDByName(name)
+    if type(name) ~= "string" or issecretvalue(name) then return nil end
     if not challengeMapByName then
-        challengeMapByName = {}
+        local index, found = {}, false
         local ok, maps = pcall(function() return C_ChallengeMode.GetMapTable() end)
         if ok and type(maps) == "table" then
             for _, id in ipairs(maps) do
                 local okName, mapName = pcall(function() return C_ChallengeMode.GetMapUIInfo(id) end)
-                if okName and type(mapName) == "string" and challengeMapByName[mapName] == nil then
-                    challengeMapByName[mapName] = id
+                if okName and type(mapName) == "string" then
+                    local key = mapName:lower()
+                    if index[key] == nil then
+                        index[key] = id
+                        found = true
+                    end
                 end
             end
         end
+        if not found then return nil end
+        challengeMapByName = index
     end
-    return challengeMapByName[name]
+    return challengeMapByName[name:lower()]
+end
+
+function KE:GetChallengeMapIDByName(name)
+    return ChallengeMapIDByName(name)
 end
 
 -- Listed row first, else initials with the stop-words dropped, else the first
@@ -884,7 +898,7 @@ local PREVIEW_MODULES = {
     "CombatTimer", "PetStatusText", "DragonRiding",
     "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "TotemTracker", "DisintegrateTicks", "StasisTracker", "Recuperate", "KickTracker",
-    "NoMovementAlert", "GreatVaultAlert", "SecondaryStats", "PotionReady", "AuraExternals", "AuraMovement", "AuraDebuffs",
+    "NoMovementAlert", "GreatVaultAlert", "SecondaryStats", "PotionReady", "AuraExternals", "AuraMovement", "AuraDebuffs", "PartyBuffs",
     "EnemyCounter", "DungeonCasts", "HealerMana",
     "ReadyCheckConsumables", "DeathNotifications",
     "Cursor",
@@ -913,18 +927,17 @@ local SECTION_PREVIEW_MODULES = {
         "NoMovementAlert", "PlayerAbsorbs", "PotionReady",
         "PetStatusText", "StanceText", "HuntersMark", "HavocTracker",
         "DisintegrateTicks", "StasisTracker",
+        "Recuperate", "TimeSpiral", "PIAssist",
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",
-        "AuraDebuffs", "AuraExternals", "AuraMovement",
+        "AuraDebuffs", "AuraExternals", "AuraMovement", "PartyBuffs",
         "TotemTracker",
     },
     qol_section = {
         "GreatVaultAlert",
-        "RaidNotifications", "Recuperate",
-        "TimeSpiral", "ReadyCheckConsumables",
+        "RaidNotifications", "ReadyCheckConsumables",
         "SecondaryStats",
-        "PIAssist",
     },
     -- Skyriding UI moved here from Quality of Life. Without this entry the
     -- module stays in PREVIEW_MODULES but no section reaches it, so opening its

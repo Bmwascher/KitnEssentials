@@ -104,6 +104,13 @@ describe("Secret.lua restriction state machine", function()
         frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 1, 0)
         assert.is_true(ran)
     end)
+
+    -- The field case behind the party-action guard: a running key restricts
+    -- between pulls while InCombatLockdown() answers false.
+    it("refuses protected calls in a running key between pulls", function()
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 2) -- ChallengeMode, Active
+        assert.is_false(KE:CanMakeProtectedCalls())
+    end)
 end)
 
 describe("Secret.lua value guards — the HONESTY BOUNDARY", function()
@@ -366,5 +373,197 @@ describe("IsAuraHiddenForSpell", function()
         })
         assert.is_true(KE:IsAuraHiddenForSpell("Soulstone"))
         assert.are.equal("Soulstone", seen)
+    end)
+end)
+
+-- KE:IsChatMessagingLocked gates every chat send KE makes.
+--
+-- HONESTY BOUNDARY: the mock declares what InChatMessagingLockdown answers and
+-- which restriction events fire. This pins KE's branching over those sources;
+-- it cannot vouch for when the client actually reports a chat lock.
+describe("Secret.lua chat-messaging lock", function()
+    local RESTRICTION_TYPES = {
+        Combat = 0, Encounter = 1, ChallengeMode = 2, PvPMatch = 3, Map = 4, Chat = 5,
+    }
+    local RESTRICTION_STATES = { Inactive = 0, Activating = 1, Active = 2 }
+
+    -- opts.api: what InChatMessagingLockdown returns, or "absent"
+    -- opts.noEnum: drop the restriction enum
+    -- opts.seeded: restriction type NAME IsAddOnRestrictionActive reports
+    local function loadWith(opts)
+        local frames = mock.install()
+        if opts.noEnum then
+            _G.Enum = nil
+        else
+            _G.Enum = {
+                AddOnRestrictionType = RESTRICTION_TYPES,
+                AddOnRestrictionState = RESTRICTION_STATES,
+            }
+        end
+        if opts.api == "absent" then
+            _G.C_ChatInfo = nil
+        else
+            _G.C_ChatInfo = {
+                InChatMessagingLockdown = function() return opts.api == true end,
+            }
+        end
+        _G.C_RestrictedActions = {
+            IsAddOnRestrictionActive = function(t)
+                return opts.seeded ~= nil and t == RESTRICTION_TYPES[opts.seeded]
+            end,
+        }
+        local KE = helpers.loadModule("Core/Secret.lua", { Print = function() end })
+        return KE, frames
+    end
+
+    after_each(function()
+        _G.Enum = nil
+        _G.C_ChatInfo = nil
+        _G.C_RestrictedActions = nil
+    end)
+
+    it("locks when any one chat-lock source is on", function()
+        local rows = {
+            { name = "API lockdown", opts = { api = true } },
+            { name = "Chat restriction", opts = {}, fire = { 5, 2 } },
+            { name = "ChallengeMode restriction", opts = {}, fire = { 2, 2 } },
+            { name = "Encounter activating", opts = {}, fire = { 1, 1 } },
+            { name = "ChallengeMode with no chat API", opts = { api = "absent" }, fire = { 2, 2 } },
+            { name = "API lockdown with no restriction enum", opts = { api = true, noEnum = true } },
+        }
+        for _, row in ipairs(rows) do
+            local KE, frames = loadWith(row.opts)
+            if row.fire then
+                frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", row.fire[1], row.fire[2])
+            end
+            assert.is_true(KE:IsChatMessagingLocked(), row.name)
+        end
+    end)
+
+    -- Combat and PvPMatch are deliberately not sources: chat sends work in
+    -- open-world combat, and nothing shows a PvP match refuses them.
+    it("stays unlocked when no chat-lock source is on", function()
+        local rows = {
+            { name = "nothing", opts = {} },
+            { name = "combat", opts = {}, combat = true },
+            { name = "PvPMatch restriction", opts = {}, fire = { 3, 2 } },
+            { name = "Map restriction", opts = {}, fire = { 4, 2 } },
+            { name = "nothing with no chat API", opts = { api = "absent" } },
+        }
+        for _, row in ipairs(rows) do
+            local KE, frames = loadWith(row.opts)
+            if row.combat then frames[1]:Fire("PLAYER_REGEN_DISABLED") end
+            if row.fire then
+                frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", row.fire[1], row.fire[2])
+            end
+            assert.is_false(KE:IsChatMessagingLocked(), row.name)
+        end
+    end)
+
+    it("unlocks when the tracked Chat restriction goes inactive", function()
+        local KE, frames = loadWith({})
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 5, 2) -- Chat, Active
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 5, 0) -- Chat, Inactive
+        assert.is_false(KE:IsChatMessagingLocked())
+    end)
+
+    -- Chat must not join the full-restriction set: that would change what
+    -- every existing caller of the state is told.
+    it("leaves the restriction state alone under a Chat restriction", function()
+        local KE, frames = loadWith({})
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 5, 2) -- Chat, Active
+        assert.equals(0, KE:GetRestrictionState())
+        assert.is_true(KE:CanMakeProtectedCalls())
+    end)
+
+    it("seeds an already-active Chat restriction on entering world", function()
+        local KE, frames = loadWith({ seeded = "Chat" })
+        frames[1]:Fire("PLAYER_ENTERING_WORLD")
+        assert.is_true(KE:IsChatMessagingLocked())
+    end)
+end)
+
+describe("Secret.lua restriction listener", function()
+    local KE, frames
+
+    before_each(function()
+        frames = mock.install()
+        _G.Enum = {
+            AddOnRestrictionType = {
+                Combat = 0, Encounter = 1, ChallengeMode = 2,
+                PvPMatch = 3, Map = 4, Chat = 5,
+            },
+            AddOnRestrictionState = { Inactive = 0, Activating = 1, Active = 2 },
+        }
+        _G.C_RestrictedActions = {
+            IsAddOnRestrictionActive = function() return false end,
+        }
+        KE = helpers.loadModule("Core/Secret.lua", { Print = function() end })
+    end)
+
+    after_each(function()
+        _G.Enum = nil
+        _G.C_RestrictedActions = nil
+    end)
+
+    it("runs on entering and on releasing, with the new state already written", function()
+        local seen = {}
+        KE:RegisterRestrictionListener(function(newState, oldState)
+            seen[#seen + 1] = {
+                newState, oldState, KE:GetRestrictionState(), KE:CanMakeProtectedCalls(),
+            }
+        end)
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 2) -- ChallengeMode, Active
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 0) -- ChallengeMode, Inactive
+        assert.same({ { 2, 0, 2, false }, { 0, 2, 0, true } }, seen)
+    end)
+
+    it("does not run when the state does not change", function()
+        local calls = 0
+        KE:RegisterRestrictionListener(function() calls = calls + 1 end)
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 5, 2) -- Chat alone
+        assert.equals(0, calls)
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 2) -- ChallengeMode: one change
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 1, 2) -- Encounter while already full
+        assert.equals(1, calls)
+    end)
+
+    it("does not run an unregistered listener", function()
+        local calls = 0
+        local listener = function() calls = calls + 1 end
+        KE:RegisterRestrictionListener(listener)
+        KE:UnregisterRestrictionListener(listener)
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 2) -- ChallengeMode, Active
+        assert.equals(0, calls)
+    end)
+
+    -- Raid Control attaches again while already attached: its post-combat
+    -- replay runs the attach step after any roster change or layout it
+    -- deferred in combat, so a repeat is ignored.
+    it("runs a listener registered twice once per change", function()
+        local calls = 0
+        local listener = function() calls = calls + 1 end
+        KE:RegisterRestrictionListener(listener)
+        KE:RegisterRestrictionListener(listener)
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 2) -- ChallengeMode, Active
+        assert.equals(1, calls)
+    end)
+
+    -- Walking the live list while a listener removes itself would shift the
+    -- next one into the removed slot and skip it.
+    it("still runs the next listener when one unregisters itself mid-dispatch", function()
+        local selfCalls, nextCalls = 0, 0
+        local selfRemoving
+        selfRemoving = function()
+            selfCalls = selfCalls + 1
+            KE:UnregisterRestrictionListener(selfRemoving)
+        end
+        KE:RegisterRestrictionListener(selfRemoving)
+        KE:RegisterRestrictionListener(function() nextCalls = nextCalls + 1 end)
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 2) -- ChallengeMode, Active
+        assert.equals(1, nextCalls)
+        frames[1]:Fire("ADDON_RESTRICTION_STATE_CHANGED", 2, 0) -- ChallengeMode, Inactive
+        assert.equals(1, selfCalls)
+        assert.equals(2, nextCalls)
     end)
 end)

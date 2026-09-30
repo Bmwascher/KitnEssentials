@@ -186,7 +186,8 @@ end
 ---------------------------------------------------------------------------------
 -- Widget factories
 ---------------------------------------------------------------------------------
--- Leader-gated buttons grey their label when the player lacks permission.
+-- Party-action buttons grey their label when the player lacks permission or
+-- the action is restricted (keystone, encounter, PvP match, combat).
 local function SetButtonEnabled(button, enabled, isLeader)
     if button.SetChecked then
         button:SetChecked(enabled)
@@ -797,6 +798,14 @@ local function ReanchorSection(section, bottom, target)
     end
 end
 
+-- The settings toggle disables this module live, so the refresh is attached
+-- only while enabled and OnDisable detaches it. Running it once on attach
+-- picks up any restriction change made while the module was off.
+function RC:FollowRestrictions()
+    KE:RegisterRestrictionListener(self.RefreshRestrictedControls)
+    self.RefreshRestrictedControls()
+end
+
 function RC:OnRegenEnabled()
     self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 
@@ -810,6 +819,7 @@ function RC:OnRegenEnabled()
     end
 
     if not self.setup then self:Setup() end
+    self:FollowRestrictions()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "ToggleRaidControl")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "ToggleRaidControl")
     self:ToggleRaidControl()
@@ -972,13 +982,19 @@ local function OnClick_CloseButton()
 end
 
 local function OnEvent_PermissionButton(self)
-    SetButtonEnabled(self, HasPermission())
+    SetButtonEnabled(self, HasPermission() and KE:CanMakeProtectedCalls())
 end
 
+-- OnMouseUp fires on a greyed button too, so each party-action click asks
+-- again: a running key restricts these calls with no combat lockdown.
 local function OnClick_ReadyCheckButton(self)
-    if self.enabled and InGroup() and not InCombatLockdown() then
+    if self.enabled and InGroup() and KE:CanMakeProtectedCalls() then
         DoReadyCheck()
     end
+end
+
+local function OnEvent_CountdownButton(self)
+    SetButtonEnabled(self, KE:CanMakeProtectedCalls())
 end
 
 -- Shift-click on any countdown button cancels a running countdown --
@@ -989,24 +1005,24 @@ end
 -- drifts apart.
 local function CountdownClick(seconds)
     return function()
-        if not (InGroup() and not InCombatLockdown()) then return end
+        if not (InGroup() and KE:CanMakeProtectedCalls()) then return end
         DoCountdown(IsShiftKeyDown() and 0 or seconds)
     end
 end
 
+-- A refused click reverts the box, or it would show a setting that was never
+-- applied.
 local function OnClick_EveryoneAssist(self)
-    if IsLeader() then
-        if not InCombatLockdown() then
-            PlaySound(IG_MAINMENU_OPTION_CHECKBOX_ON)
-            SetEveryoneIsAssistant(self:GetChecked())
-        end
+    if IsLeader() and KE:CanMakeProtectedCalls() then
+        PlaySound(IG_MAINMENU_OPTION_CHECKBOX_ON)
+        SetEveryoneIsAssistant(self:GetChecked())
     else
         self:SetChecked(IsEveryoneAssistant())
     end
 end
 
 local function OnEvent_EveryoneAssist(self)
-    SetButtonEnabled(self, IsEveryoneAssistant(), IsLeader())
+    SetButtonEnabled(self, IsEveryoneAssistant(), IsLeader() and KE:CanMakeProtectedCalls())
 end
 
 ---------------------------------------------------------------------------------
@@ -1260,13 +1276,13 @@ function RC:Setup()
     local cdLastWidth = BUTTON_WIDTH - COUNTDOWN_GAP * 2 - cdWidth * 2
     local Countdown5Button = CreateUtilButton("KE_RaidControlCountdown5", panel, nil,
         cdWidth, BUTTON_HEIGHT, "TOPLEFT", ReadyCheckButton, "BOTTOMLEFT", 0, -5,
-        "5s", nil, nil, CountdownClick(5))
+        "5s", nil, OnEvent_CountdownButton, CountdownClick(5))
     local Countdown10Button = CreateUtilButton("KE_RaidControlCountdown10", panel, nil,
         cdWidth, BUTTON_HEIGHT, "TOPLEFT", Countdown5Button, "TOPRIGHT", COUNTDOWN_GAP, 0,
-        "10s", nil, nil, CountdownClick(10))
-    CreateUtilButton("KE_RaidControlCountdown20", panel, nil,
+        "10s", nil, OnEvent_CountdownButton, CountdownClick(10))
+    local Countdown20Button = CreateUtilButton("KE_RaidControlCountdown20", panel, nil,
         cdLastWidth, BUTTON_HEIGHT, "TOPLEFT", Countdown10Button, "TOPRIGHT", COUNTDOWN_GAP, 0,
-        "20s", nil, nil, CountdownClick(20))
+        "20s", nil, OnEvent_CountdownButton, CountdownClick(20))
 
     -- Row 3: Dungeon Difficulty
     local DifficultyDropdown = CreateDropdown("KE_RaidControlDifficulty", panel, 85,
@@ -1281,6 +1297,17 @@ function RC:Setup()
     local EveryoneAssist = CreateCheckBox("KE_RaidControlEveryoneAssist", panel, BUTTON_HEIGHT + 4,
         "TOPLEFT", DifficultyDropdown, "BOTTOMLEFT", -4, -3,
         _G.ALL_ASSIST_LABEL_LONG or "Everyone is Assistant", buttonEvents, OnEvent_EveryoneAssist, OnClick_EveryoneAssist)
+
+    -- A restriction change has no widget event; RC:FollowRestrictions hands
+    -- this to the restriction listener. Text colour and SetChecked are plain
+    -- widget state, safe in combat.
+    self.RefreshRestrictedControls = function()
+        OnEvent_PermissionButton(ReadyCheckButton)
+        OnEvent_CountdownButton(Countdown5Button)
+        OnEvent_CountdownButton(Countdown10Button)
+        OnEvent_CountdownButton(Countdown20Button)
+        OnEvent_EveryoneAssist(EveryoneAssist)
+    end
 
     local lastUtilRow = EveryoneAssist
     local lastUtilXOfs, lastUtilYOfs = 4, -3
@@ -1474,6 +1501,7 @@ function RC:OnEnable()
     end
 
     self:Setup()
+    self:FollowRestrictions()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "ToggleRaidControl")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "ToggleRaidControl")
     self:ToggleRaidControl()
@@ -1481,6 +1509,9 @@ end
 
 function RC:OnDisable()
     if KE.GroupSort then KE.GroupSort:Stop() end
+    if self.RefreshRestrictedControls then
+        KE:UnregisterRestrictionListener(self.RefreshRestrictedControls)
+    end
     self:UnregisterEvent("GROUP_ROSTER_UPDATE")
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     if not self.setup then return end

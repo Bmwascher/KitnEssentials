@@ -340,9 +340,9 @@ describe("RaidControl", function()
             { enabled = false, setup = true, dirty = true,
               jobs = { "unregister", "hide-button", "hide-panel" } },
             { enabled = true, setup = false, dirty = false,
-              jobs = { "unregister", "setup", "register", "register", "toggle" } },
+              jobs = { "unregister", "setup", "follow", "register", "register", "toggle" } },
             { enabled = true, setup = true, dirty = true,
-              jobs = { "unregister", "register", "register", "toggle", "position", "fit" } },
+              jobs = { "unregister", "follow", "register", "register", "toggle", "position", "fit" } },
         }
 
         for _, case in ipairs(cases) do
@@ -360,6 +360,7 @@ describe("RaidControl", function()
                     jobs[#jobs + 1] = handler == "ToggleRaidControl" and "register" or "register:" .. tostring(handler)
                 end
                 RC.Setup = function(s) s.setup = true; jobs[#jobs + 1] = "setup" end
+                RC.FollowRestrictions = function() jobs[#jobs + 1] = "follow" end
                 RC.ToggleRaidControl = function() jobs[#jobs + 1] = "toggle" end
                 RC.PositionSections = function() jobs[#jobs + 1] = "position" end
                 RC.FitRolePlate = function() jobs[#jobs + 1] = "fit" end

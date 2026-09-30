@@ -33,8 +33,8 @@ describe("Core/Widgets.lua deferred reload prompt", function()
         -- Replaced AFTER the load, not seeded before it: Core/Widgets.lua
         -- defines CreateReloadPrompt itself and would overwrite a seed. Counts
         -- prompts without building one -- the real path goes through
-        -- CreatePrompt, StaticPopupDialogs and a pile of frames, and what this
-        -- file is about is WHETHER it is called.
+        -- CreatePrompt and a pile of frames, and what this file is about is
+        -- WHETHER it is called.
         KE.CreateReloadPrompt = function() prompts = prompts + 1 end
     end)
 

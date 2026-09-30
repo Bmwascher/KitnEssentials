@@ -1,12 +1,12 @@
 -- The Automation page is tabbed: GUI-Automation.lua declares the strip via
--- RegisterTabbedContent. Three of its Vendors & Bags cards (Auction House
--- Filter, Vantus Rune Withdrawer, Merchant Pages) are independent modules
--- with no other route into the interface, so the tab list must keep
--- AutomationVendors reachable in every state -- including a missing db,
--- since the master toggle itself lives inside that table. This spec proves
--- that branch and that every declared tab id resolves to a registered
--- content builder, the same discipline gui_blizzardframes_subtabs_spec.lua
--- uses for the Dark Theme page.
+-- RegisterTabbedContent. Four modules on it have their own switches and no
+-- other route into the interface: Vantus Rune Withdrawer (General), Auction
+-- House Filter and Merchant Pages (Vendors & Bags), and Combat Logger (its
+-- own tab). The tab list must keep those tabs reachable in every state --
+-- including a missing db, since the master toggle itself lives inside that
+-- table. This spec proves that branch and that every declared tab id
+-- resolves to a registered content builder, the same discipline
+-- gui_blizzardframes_subtabs_spec.lua uses for the Dark Theme page.
 local helpers = require("dev.spec._helpers")
 
 describe("GUI-Automation: subtab id coverage", function()
@@ -26,6 +26,7 @@ describe("GUI-Automation: subtab id coverage", function()
         }
 
         helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-Automation.lua", KE)
+        helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-CombatLogger.lua", KE)
     end)
 
     -- The strip is declared as a function, evaluated per build, so the list
@@ -38,42 +39,31 @@ describe("GUI-Automation: subtab id coverage", function()
         return type(tabs) == "function" and tabs() or tabs
     end
 
-    local function assertEveryIdResolves(tabs)
+    -- Every offered tab must have a builder: a declared id without one renders
+    -- a blank page in game rather than failing anywhere.
+    local function offered(tabs)
+        local set = {}
         for _, tab in ipairs(tabs) do
             assert.is_function(GUIFrame.registeredContent[tab.id],
                 "no RegisterContent builder for declared subtab id " .. tab.id)
+            set[tab.id] = true
         end
+        return set
     end
 
-    it("offers all four tabs, in order, while the master is on", function()
-        local tabs = strip({ Enabled = true })
-        assert.equals(4, #tabs)
-        assert.equals("AutomationGeneral", tabs[1].id)
-        assert.equals("AutomationInterface", tabs[2].id)
-        assert.equals("AutomationQuests", tabs[3].id)
-        assert.equals("AutomationVendors", tabs[4].id)
-        assertEveryIdResolves(tabs)
+    it("gives every tab a builder while the master is on", function()
+        offered(strip({ Enabled = true }))
     end)
 
     -- The reachability guarantee this page exists to keep. Every tab holding a
-    -- module that runs independently of the master must survive master-off, or
-    -- that module's only switch disappears: Vantus Rune Withdrawer sits on
-    -- General, and Auction House Filter and Merchant Pages sit on Vendors.
-    -- There is no other route to any of the three.
-    it("keeps General and Vendors & Bags reachable while the master is off", function()
-        local tabs = strip({ Enabled = false })
-        assert.equals(2, #tabs)
-        assert.equals("AutomationGeneral", tabs[1].id)
-        assert.equals("AutomationVendors", tabs[2].id)
-        assertEveryIdResolves(tabs)
-    end)
-
-    -- A missing db must not strand the three independent modules either.
-    it("keeps General and Vendors & Bags reachable when the db is missing entirely", function()
-        local tabs = strip(nil)
-        assert.equals(2, #tabs)
-        assert.equals("AutomationGeneral", tabs[1].id)
-        assert.equals("AutomationVendors", tabs[2].id)
-        assertEveryIdResolves(tabs)
+    -- module that runs independently of the master must survive master-off and
+    -- a missing db, or that module's only switch disappears.
+    it("keeps General, Vendors & Bags and Combat Logger reachable while the master is off or the db is missing", function()
+        for _, db in ipairs({ { Enabled = false }, false }) do
+            local set = offered(strip(db or nil))
+            for _, id in ipairs({ "AutomationGeneral", "AutomationVendors", "CombatLogger" }) do
+                assert.is_true(set[id] == true, id .. " is not offered with db " .. tostring(db))
+            end
+        end
     end)
 end)

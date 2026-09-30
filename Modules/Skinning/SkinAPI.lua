@@ -25,7 +25,13 @@ local C_AddOns = C_AddOns
 
 local function PixelBorder()
     local _, ph = GetPhysicalScreenSize()
-    local uiScale = (UIParent and UIParent.GetScale and UIParent:GetScale()) or 1
+    local uiScale = 1
+    if UIParent and UIParent.GetScale then
+        local s = UIParent:GetScale()
+        -- The scale aspect can be secret, and a truth test on a secret throws.
+        if issecretvalue(s) then return 1 end
+        if s then uiScale = s end
+    end
     if not ph or ph <= 0 or uiScale <= 0 then return 1 end
     return (768 / ph) / uiScale
 end
@@ -42,6 +48,8 @@ local function EdgeFor(bd)
     if not (bd and bd.GetEffectiveScale and UIParent and UIParent.GetEffectiveScale) then return px end
     local f = bd:GetEffectiveScale()
     local u = UIParent:GetEffectiveScale()
+    -- The scale aspect can be secret, and comparing a secret throws.
+    if issecretvalue(f) or issecretvalue(u) then return px end
     if not f or not u or f <= 0 or u <= 0 then return px end
     local factor = f / u
     if factor <= 0 then return px end
@@ -54,6 +62,18 @@ end
 S._EdgeFor = EdgeFor
 
 local backdropCache = setmetatable({}, { __mode = "k" })
+
+-- Settings tables this file created. A refresh edits only these in place: a
+-- table handed in from elsewhere may be shared with another backdrop, which
+-- would then pass its own size check without being re-laid.
+local ownedInfo = setmetatable({}, { __mode = "k" })
+
+-- Backdrops whose last refresh stopped part-way. Their stored edge size may
+-- already match the target, so the size check must not end their refresh.
+local unsettled = setmetatable({}, { __mode = "k" })
+
+-- Read-only seam: the in-game check counts backdrops left unsettled.
+S._unsettled = unsettled
 
 local skinState = setmetatable({}, { __mode = "k" })
 function S.data(obj)
@@ -375,20 +395,24 @@ function S.Template(frame, kind, inset)
     return bd
 end
 
+-- GetRegions can return a secret region, and indexing one throws.
+local function SnapRegions(...)
+    for i = 1, select("#", ...) do
+        local r = select(i, ...)
+        if not issecretvalue(r) and r.SetSnapToPixelGrid then
+            r:SetSnapToPixelGrid(false)
+            r:SetTexelSnappingBias(0)
+        end
+    end
+end
+
 function S.PixelSnap(obj)
     if not obj then return end
     if obj.SetSnapToPixelGrid then
         obj:SetSnapToPixelGrid(false)
         obj:SetTexelSnappingBias(0)
     end
-    if obj.GetRegions then
-        for _, r in ipairs({ obj:GetRegions() }) do
-            if r.SetSnapToPixelGrid then
-                r:SetSnapToPixelGrid(false)
-                r:SetTexelSnappingBias(0)
-            end
-        end
-    end
+    if obj.GetRegions then SnapRegions(obj:GetRegions()) end
 end
 
 -- crops a baked decorative border off an atlas texture in
@@ -431,26 +455,30 @@ function S.Backdrop(frame, inset, borderOnly)
     local bd = backdropCache[frame]
     if not bd then
         bd = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-        -- 12.1: a backdrop anchored to a frame whose size is secret reads a
-        -- secret size itself, and Blizzard's edge tiling divides by it
-        -- (Backdrop.lua SetupTextureCoordinates), which throws on every size
-        -- change. Both textures here are solid white, so the repeat factors
-        -- change nothing that can be seen -- skip the setup instead. Patched
-        -- on this instance only; never on the shared mixin.
+        -- A backdrop anchored to a frame whose size is secret reads a secret
+        -- size itself, and its effective scale can read secret too; Blizzard's
+        -- edge tiling does arithmetic on both (Backdrop.lua
+        -- SetupTextureCoordinates), which throws. Both textures here are solid
+        -- white, so the repeat factors change nothing that can be seen -- skip
+        -- the setup instead. Patched on this instance only; never on the
+        -- shared mixin.
         local SetupCoords = bd.SetupTextureCoordinates
         if SetupCoords then
             bd.SetupTextureCoordinates = function(self)
-                if KE:IsSecretValue(self:GetWidth()) or KE:IsSecretValue(self:GetHeight()) then
+                if KE:IsSecretValue(self:GetWidth()) or KE:IsSecretValue(self:GetHeight())
+                    or KE:IsSecretValue(self:GetEffectiveScale()) then
                     return
                 end
                 return SetupCoords(self)
             end
         end
-        bd:SetBackdrop({
+        local info = {
             bgFile = BG_TEX,
             edgeFile = "Interface\\Buttons\\WHITE8x8",
             edgeSize = EdgeFor(bd),
-        })
+        }
+        ownedInfo[info] = true
+        bd:SetBackdrop(info)
 
         S.PixelSnap(bd)
         bd:SetBackdropBorderColor(unpack(S.borderColor))
@@ -488,31 +516,60 @@ function S.InsetToEdge(region, bd)
     d.edgeClients[region] = true
 end
 
-local function RefreshEdge(bd)
-    local info = bd.backdropInfo
-    if not (info and info.edgeSize) then return end
-    local px = EdgeFor(bd)
-    local diff = info.edgeSize > px and info.edgeSize - px or px - info.edgeSize
-    if diff <= 0.001 then return end
-    local r, g, b, a = bd:GetBackdropColor()
-    local br, bg, bb, ba = bd:GetBackdropBorderColor()
-    bd:SetBackdrop({
+local function Relayout(bd, info, px)
+    if ownedInfo[info] then
+        -- SetBackdrop returns at once for the table it already holds.
+        info.edgeSize = px
+        bd:ApplyBackdrop()
+        return
+    end
+    local fresh = {
         bgFile = BG_TEX,
         edgeFile = "Interface\\Buttons\\WHITE8x8",
         edgeSize = px,
-    })
+    }
+    ownedInfo[fresh] = true
+    bd:SetBackdrop(fresh)
+end
+
+local function FinishEdge(bd)
+    S.PixelSnap(bd)
+    local state = skinState[bd]
+    local clients = state and state.edgeClients
+    if not clients then return end
+    local e = EdgeFor(bd)
+    for region in pairs(clients) do
+        region:ClearAllPoints()
+        region:SetPoint("TOPLEFT", bd, "TOPLEFT", e, -e)
+        region:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -e, e)
+    end
+end
+
+-- True once the border is fully laid for the backdrop's current scale. The
+-- flag goes up before the first write and comes down only after the last, so
+-- a stop anywhere in between leaves the refresh owed whatever the stored size.
+local function RefreshEdge(bd)
+    local info = bd.backdropInfo
+    if not (info and info.edgeSize) then return true end
+    local px = EdgeFor(bd)
+    local diff = info.edgeSize > px and info.edgeSize - px or px - info.edgeSize
+    if diff <= 0.001 and not unsettled[bd] then return true end
+    local r, g, b, a = bd:GetBackdropColor()
+    local br, bg, bb, ba = bd:GetBackdropBorderColor()
+    -- The re-layout paints both colours white, and a secret colour cannot be
+    -- written back, so such a backdrop is left as it is and stays owed.
+    if issecretvalue(r) or issecretvalue(g) or issecretvalue(b) or issecretvalue(a)
+        or issecretvalue(br) or issecretvalue(bg) or issecretvalue(bb) or issecretvalue(ba) then
+        return false
+    end
+    if not (r and br) then return false end
+    unsettled[bd] = true
+    local laid = pcall(Relayout, bd, info, px)
     bd:SetBackdropColor(r, g, b, a)
     bd:SetBackdropBorderColor(br, bg, bb, ba)
-    S.PixelSnap(bd)
-    local clients = S.data(bd).edgeClients
-    if clients then
-        local e = EdgeFor(bd)
-        for region in pairs(clients) do
-            region:ClearAllPoints()
-            region:SetPoint("TOPLEFT", bd, "TOPLEFT", e, -e)
-            region:SetPoint("BOTTOMRIGHT", bd, "BOTTOMRIGHT", -e, e)
-        end
-    end
+    if not (laid and pcall(FinishEdge, bd)) then return false end
+    unsettled[bd] = nil
+    return true
 end
 
 edgeRefresher:SetScript("OnEvent", function()
@@ -523,18 +580,49 @@ edgeRefresher:SetScript("OnEvent", function()
     for _, bd in pairs(backdropCache) do pcall(RefreshEdge, bd) end
 end)
 
+-- True when this backdrop owes nothing to the roots. The climb shares the
+-- pcall with the refresh, so a parent read that raises costs this backdrop,
+-- not the rest of the walk. A parent that reads secret cannot be placed, so
+-- the backdrop is refreshed anyway and its own size check decides.
+local function RefreshIfUnder(bd, root, roots, refresh)
+    local p = bd
+    while p do
+        if p == root or (roots and roots[p]) then return refresh(bd) end
+        if not p.GetParent then return true end
+        local parent = p:GetParent()
+        if issecretvalue(parent) then return refresh(bd) end
+        p = parent
+    end
+    return true
+end
+
+-- True only when every backdrop visited was placed outside the roots or
+-- settled. A raise before any match, or nested roots, leave no single root to
+-- charge, so an owed walk is owed by every root it covered.
+local function WalkEdges(root, roots, refresh)
+    local settled = true
+    for _, bd in pairs(backdropCache) do
+        local ok, done = pcall(RefreshIfUnder, bd, root, roots, refresh)
+        if not (ok and done) then settled = false end
+    end
+    return settled
+end
+
+-- Test seam: the walk's membership, raise isolation and settled report,
+-- driven with a recording refresh instead of real backdrops.
+S._WalkEdges = WalkEdges
+
 -- re-check every backdrop under a root whose scale changed
 -- (world map min/max toggles 1.1 <-> 1.0; scale changes fire no
 -- OnSizeChanged on descendants, so callers hook the root's resize).
 function S.RefreshEdgesUnder(root)
-    if not root then return end
-    for frame, bd in pairs(backdropCache) do -- luacheck: ignore 213/frame
-        local p = bd
-        while p do
-            if p == root then RefreshEdge(bd) break end
-            p = p.GetParent and p:GetParent() or nil
-        end
-    end
+    if not root then return true end
+    return WalkEdges(root, nil, RefreshEdge)
+end
+
+function S.RefreshEdgesUnderRoots(roots)
+    if not roots then return true end
+    return WalkEdges(nil, roots, RefreshEdge)
 end
 
 -- Re-measure ONE frame's border. For hosts that scale each element

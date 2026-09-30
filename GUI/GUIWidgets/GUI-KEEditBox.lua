@@ -47,7 +47,7 @@ local function ConstructEditBox(parent)
 
     local editBoxColorFrom = {}
     local editBoxColorTo = {}
-    local editBoxR, editBoxG, editBoxB = Theme.border[1], Theme.border[2], Theme.border[3]
+    local editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
 
     local function AnimateEditBoxBorder(toAccent)
         editBoxAnimGroup:Stop()
@@ -60,9 +60,9 @@ local function ConstructEditBox(parent)
             editBoxColorTo.g = Theme.accent[2]
             editBoxColorTo.b = Theme.accent[3]
         else
-            editBoxColorTo.r = Theme.border[1]
-            editBoxColorTo.g = Theme.border[2]
-            editBoxColorTo.b = Theme.border[3]
+            editBoxColorTo.r = Theme.fieldBorder[1]
+            editBoxColorTo.g = Theme.fieldBorder[2]
+            editBoxColorTo.b = Theme.fieldBorder[3]
         end
         editBoxAnimGroup:Play()
     end
@@ -97,7 +97,7 @@ local function ConstructEditBox(parent)
     end)
 
     editBox:SetScript("OnEditFocusLost", function(self)
-        container:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
+        container:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
         if row._callback then row._callback(self:GetText()) end
     end)
 
@@ -138,6 +138,14 @@ local function ConstructEditBox(parent)
         GameTooltip:Hide()
     end)
 
+    -- Pools reuse a hidden box without repainting it, so a hover fade still
+    -- in flight at hide time is dropped here.
+    container:SetScript("OnHide", function()
+        editBoxAnimGroup:Stop()
+        container:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
+        editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
+    end)
+
     -- silent: suppress the OnTextChanged debounce + pool-bound _onTextChanged
     -- callback. EditBox:SetText fires OnTextChanged with userInput=false, but
     -- we already gate on userInput so silent only matters if a future change
@@ -175,8 +183,8 @@ local function ConstructEditBox(parent)
     function row:ApplyThemeColors()
         local TT = Theme
         label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
-        container:SetBackdropColor(TT.bgDark[1], TT.bgDark[2], TT.bgDark[3], 1)
-        container:SetBackdropBorderColor(TT.border[1], TT.border[2], TT.border[3], 1)
+        container:SetBackdropColor(TT.fieldBg[1], TT.fieldBg[2], TT.fieldBg[3], TT.fieldBg[4])
+        container:SetBackdropBorderColor(TT.fieldBorder[1], TT.fieldBorder[2], TT.fieldBorder[3], 1)
         editBox:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
     end
 
@@ -184,7 +192,7 @@ local function ConstructEditBox(parent)
     function row:_resetInteraction()
         editBox:ClearFocus()
         editBoxAnimGroup:Stop()
-        editBoxR, editBoxG, editBoxB = Theme.border[1], Theme.border[2], Theme.border[3]
+        editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
     end
 
     row.editBox = editBox

@@ -30,8 +30,6 @@ local HOOKS_ALLOWED = {
     ["GUI/GUIWidgets/GUI-KEDropdown.lua|thumb|OnShow"] = 1,
     ["GUI/GUIWidgets/GUI-KEDropdown.lua|thumb|OnHide"] = 1,
     ["GUI/GUIWidgets/GUI-KESlider.lua|slider|OnUpdate"] = 1,
-    -- A kit's button, built once by its FramePool factory.
-    ["GUI/GUIWidgets/GUI-SpellBrowserCard.lua|useBtn|OnEnter"] = 1,
     -- The main window's close hook, installed once per session.
     ["GUI/GUITabs/GUIQoL/GUI-Optimize.lua|frame|OnHide"] = 1,
     -- A keybind button the page makes itself with CreateFrame.
@@ -45,9 +43,6 @@ local SETSCRIPT_ALLOWED = {
     -- SetupHover(btn): both callers pass buttons the page made with
     -- CreateFrame (applyBtn, revertBtnSmall).
     ["GUI/GUITabs/GUIQoL/GUI-Optimize.lua|btn"] = true,
-    -- A CreateButton made under the kit's own FramePool row, which is never a
-    -- pool parent, so the button is never pooled.
-    ["GUI/GUIWidgets/GUI-SpellBrowserCard.lua|useBtn"] = true,
 }
 
 local function MadeInFile(text, receiver)

@@ -39,13 +39,18 @@ local TAB_BACKDROP = {
 
 local function PaintTab(btn, active)
     local T, a = Theme, Theme.accent
+    btn._bar:SetShown(active)
     if active then
-        btn:SetBackdropColor(a[1], a[2], a[3], 0.25)
+        -- Opaque over the window colour, so a strip on a card panel reads the
+        -- same as one on the window.
+        btn:SetBackdropColor(KE.BlendColor(a, 0.20, T.bgDark))
         btn:SetBackdropBorderColor(a[1], a[2], a[3], 0.8)
+        btn._bar:SetColorTexture(a[1], a[2], a[3], 1)
         btn.label:SetTextColor(a[1], a[2], a[3], 1)
     else
-        btn:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4] or 0.6)
-        btn:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], T.border[4] or 0.4)
+        local idle, idleEdge = T.controlBg, T.controlBorder
+        btn:SetBackdropColor(idle[1], idle[2], idle[3], idle[4])
+        btn:SetBackdropBorderColor(idleEdge[1], idleEdge[2], idleEdge[3], 1)
         -- Full white for inactive tabs: a dim gray reads as washed-out on
         -- dark backdrops, and accent-on-active vs white-on-inactive gives
         -- clearer contrast. Hover state uses the backdrop tint for
@@ -66,16 +71,15 @@ end
 
 local function TabOnEnter(b)
     if b.tabId ~= b._strip._activeId then
-        local a = Theme.accent
-        b:SetBackdropColor(a[1], a[2], a[3], 0.12)
+        b:SetBackdropColor(KE.BlendColor(Theme.accent, 0.12, Theme.controlBg))
         b.label:SetTextColor(1, 1, 1, 1)
     end
 end
 
 local function TabOnLeave(b)
     if b.tabId ~= b._strip._activeId then
-        local T = Theme
-        b:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4] or 0.6)
+        local idle = Theme.controlBg
+        b:SetBackdropColor(idle[1], idle[2], idle[3], idle[4])
         b.label:SetTextColor(1, 1, 1, 1)
     end
 end
@@ -101,6 +105,12 @@ local function NewTab(strip)
     local label = btn:CreateFontString(nil, "OVERLAY")
     label:SetPoint("CENTER")
     btn.label = label
+    local bar = btn:CreateTexture(nil, "ARTWORK")
+    bar:SetHeight(2)
+    bar:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 1, 1)
+    bar:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
+    bar:Hide()
+    btn._bar = bar
     btn._strip = strip
     btn:SetScript("OnClick", TabOnClick)
     btn:SetScript("OnEnter", TabOnEnter)

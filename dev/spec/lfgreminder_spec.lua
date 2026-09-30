@@ -149,33 +149,31 @@ describe("LFGReminder module", function()
             inCombat = false
             LR:PLAYER_REGEN_ENABLED()
             assert.is_true(builds > 0)    -- built once combat ended
-            -- Assert the OUTCOME, not just that a build happened. Without
-            -- these two, deleting PLAYER_REGEN_ENABLED's attribute-flush
-            -- block or its show block leaves every spec passing.
+            -- Assert the OUTCOME, not just that a build happened: without
+            -- these two, a show that builds but never arms or shows the
+            -- popup leaves every spec passing.
             local popup = seams.frames["KE_LFGReminderPopup"]
             local btn   = seams.frames["KE_LFGReminderTeleport"]
             assert.is_true(popup:IsShown())
             assert.equals(1286809, btn:GetAttribute("spell"))
         end)
 
-        -- A join cancelled during combat must not arm the button later.
-        -- This asserts on the DEFERRED ATTRIBUTE, not pendingSpellID:
-        -- pendingSpellID is cleared by the pre-existing ClearPending lines,
-        -- so asserting on it would pass even without the fix this test
-        -- exists to protect.
+        -- A join cancelled during combat must not build or arm the button
+        -- when combat ends. Nothing was built before the join, so any
+        -- secure button here would be one PLAYER_REGEN_ENABLED made for the
+        -- cancelled dungeon.
         it("does not arm the button when a combat join is cancelled", function()
             local inCombat, inGroup = true, true
-            local LR = joinedWith("Murder Row", {
+            local LR, seams = joinedWith("Murder Row", {
                 inCombatFn = function() return inCombat end,
                 IsInGroup  = function() return inGroup end,
             })
             LR:LFG_LIST_JOINED_GROUP(nil, 1)
-            assert.equals(1286809, LR:_GetPendingAttrSpellID())  -- armed for later
             inGroup = false
             LR:GROUP_ROSTER_UPDATE()      -- group breaks while still in combat
-            assert.is_nil(LR:_GetPendingAttrSpellID())          -- cancelled
             inCombat = false
             LR:PLAYER_REGEN_ENABLED()
+            assert.is_nil(seams.frames["KE_LFGReminderTeleport"])
             assert.is_nil(LR:_GetPendingSpellID())
         end)
 
@@ -267,3 +265,165 @@ describe("LFGReminder module", function()
         end)
     end)
 end)
+
+describe("LFGReminder preview", function()
+    -- The preview must draw a dungeon the live teleport table knows, so a
+    -- season update that drops it from the table fails here.
+    it("draws the teleport the live table gives its dungeon", function()
+        local asked
+        local LR, _, seams = loader.loadLFGReminder({
+            C_Spell = {
+                GetSpellInfo = function(id) asked = id; return nil end,
+                GetSpellCooldown = function() return nil end,
+                GetSpellCooldownDuration = function() return nil end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        LR:ShowPreview()
+        local want = seams.resolveByName("Ruby Life Pools")
+        assert.is_not_nil(want)
+        assert.equals(want, asked)
+    end)
+end)
+
+describe("LFGReminder combat re-show", function()
+    -- Lockdown has not begun when PLAYER_REGEN_DISABLED fires, so the hide
+    -- lands at once and the end of combat must show the live prompt again.
+    -- The preview left the button disarmed, so that show must also arm it.
+    it("re-shows a live prompt combat hid, armed, when combat ends", function()
+        local LR, _, seams = loader.loadLFGReminder({
+            C_LFGList = {
+                GetSearchResultInfo = function() return { activityIDs = { 7 } } end,
+                GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        LR:LFG_LIST_JOINED_GROUP(nil, 1)
+        LR:ShowPreview()
+        local popup = seams.frames["KE_LFGReminderPopup"]
+        local btn   = seams.frames["KE_LFGReminderTeleport"]
+        LR:PLAYER_REGEN_DISABLED()
+        LR:HidePreview()  -- the settings window closes as combat starts
+        assert.is_false(popup:IsShown())
+        LR:PLAYER_REGEN_ENABLED()
+        assert.is_true(popup:IsShown())
+        assert.equals(1286809, btn:GetAttribute("spell"))
+    end)
+end)
+
+describe("LFGReminder close with X", function()
+    -- X ends the prompt: a preview opened and closed afterwards must not
+    -- bring it back.
+    it("keeps a prompt closed with X closed through a preview", function()
+        local LR, _, seams = loader.loadLFGReminder({
+            C_LFGList = {
+                GetSearchResultInfo = function() return { activityIDs = { 7 } } end,
+                GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        LR:LFG_LIST_JOINED_GROUP(nil, 1)
+        local popup = seams.frames["KE_LFGReminderPopup"]
+        local btn   = seams.frames["KE_LFGReminderTeleport"]
+        LR._ClosePrompt()
+        LR:ShowPreview()
+        LR:HidePreview()
+        assert.is_false(popup:IsShown())
+        assert.is_nil(btn:GetAttribute("spell"))
+    end)
+
+    -- X on the preview popup also ends the preview's hold; otherwise the next
+    -- join would wait behind a preview that is no longer on screen.
+    it("lets the next join show after X closes the preview", function()
+        local LR, _, seams = loader.loadLFGReminder({
+            C_LFGList = {
+                GetSearchResultInfo = function() return { activityIDs = { 7 } } end,
+                GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        LR:LFG_LIST_JOINED_GROUP(nil, 1)
+        LR:ShowPreview()
+        LR._ClosePrompt()
+        LR:LFG_LIST_JOINED_GROUP(nil, 2)
+        assert.is_true(seams.frames["KE_LFGReminderPopup"]:IsShown())
+        assert.equals(1286809, seams.frames["KE_LFGReminderTeleport"]:GetAttribute("spell"))
+    end)
+end)
+
+describe("LFGReminder preview hold", function()
+    -- While the settings preview is up it owns the popup and the button stays
+    -- unarmed; a show of the live prompt waits until the preview closes.
+    -- Combat models the order in game: the settings window closes as combat
+    -- starts and reopens, showing the preview, before this module's handler
+    -- runs at combat end.
+    it("keeps the preview unarmed until it closes, then restores the armed prompt", function()
+        local LR, _, seams = loader.loadLFGReminder({
+            C_LFGList = {
+                GetSearchResultInfo = function() return { activityIDs = { 7 } } end,
+                GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        LR:LFG_LIST_JOINED_GROUP(nil, 1)
+        LR:ShowPreview()
+        local popup = seams.frames["KE_LFGReminderPopup"]
+        local btn   = seams.frames["KE_LFGReminderTeleport"]
+        LR:PLAYER_REGEN_DISABLED()
+        LR:HidePreview()
+        LR:ShowPreview()
+        LR:PLAYER_REGEN_ENABLED()
+        assert.is_true(popup:IsShown())
+        assert.is_nil(btn:GetAttribute("spell"))
+        LR:HidePreview()
+        assert.is_true(popup:IsShown())
+        assert.equals(1286809, btn:GetAttribute("spell"))
+    end)
+end)
+
+describe("LFGReminder preview against later events", function()
+    local function loadJoinable(opts)
+        local LR, _, seams = loader.loadLFGReminder({
+            inCombatFn = opts and opts.inCombatFn,
+            C_LFGList = {
+                GetSearchResultInfo = function() return { activityIDs = { 7 } } end,
+                GetActivityInfoTable = function() return { fullName = "Murder Row" } end,
+            },
+        })
+        LR.IsEnabled = function() return true end
+        return LR, seams
+    end
+
+    -- A join that lands in combat is shown at combat end; the settings window
+    -- can reopen its preview first, and nothing may arm that preview.
+    it("keeps a reopened preview unarmed when a combat join is shown", function()
+        local inCombat = false
+        local LR, seams = loadJoinable({ inCombatFn = function() return inCombat end })
+        LR:OnEnable()
+        inCombat = true
+        LR:LFG_LIST_JOINED_GROUP(nil, 1)
+        inCombat = false
+        LR:ShowPreview()
+        LR:PLAYER_REGEN_ENABLED()
+        assert.is_true(seams.frames["KE_LFGReminderPopup"]:IsShown())
+        assert.is_nil(seams.frames["KE_LFGReminderTeleport"]:GetAttribute("spell"))
+    end)
+
+    -- A hide meant for the live prompt must not take the preview away while
+    -- the settings page still shows it; the dropped prompt stays dropped.
+    it("keeps the preview shown when the live teleport goes on cooldown", function()
+        local LR, seams = loadJoinable()
+        LR:LFG_LIST_JOINED_GROUP(nil, 1)
+        LR:ShowPreview()
+        local popup = seams.frames["KE_LFGReminderPopup"]
+        _G.C_Spell.GetSpellCooldown = function()
+            return { isActive = true, isOnGCD = false, duration = 300 }
+        end
+        LR:SPELL_UPDATE_COOLDOWN()
+        assert.is_true(popup:IsShown())
+        LR:HidePreview()
+        assert.is_false(popup:IsShown())
+        assert.is_nil(seams.frames["KE_LFGReminderTeleport"]:GetAttribute("spell"))
+    end)
+end)
+

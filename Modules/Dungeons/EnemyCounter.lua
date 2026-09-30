@@ -185,7 +185,8 @@ function EC:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "EnemyCounter",
+            guiPath = "DungeonAlerts",
+            guiTab = "EnemyCounter",
         })
         self.editModeRegistered = true
     end

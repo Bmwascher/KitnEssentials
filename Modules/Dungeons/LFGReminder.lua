@@ -18,8 +18,8 @@
 -- ║      phase secrecy is lifted once joined). Every field   ║
 -- ║      is still issecretvalue-guarded and the whole lookup ║
 -- ║      pcall'd: a secret can only skip the prompt, never   ║
--- ║      error. The dungeon name is only ever SetText'd,     ║
--- ║      which accepts secrets.                              ║
+-- ║      error. So the dungeon name is always plain, and the ║
+-- ║      row may measure it (the measure takes no secrets).  ║
 -- ║    * The secure button is created ONCE and ALWAYS out of ║
 -- ║      combat: normally at enable, else on the next        ║
 -- ║      PLAYER_REGEN_ENABLED. NOTHING may call BuildPopup   ║
@@ -120,6 +120,81 @@ end
 
 LR._PickRole = PickRole
 
+-- Row geometry: the name block and a 14 px role line, centred in a row at
+-- least 56 px tall.
+local ROW_MIN_H = 56
+local ROW_PAD   = 8
+local LINE_GAP  = 4
+local LINE2_H   = 14
+
+local function MeasuredWidth(measure, s)
+    local w = measure(s)
+    return type(w) == "number" and w or 0
+end
+
+-- A word wider than the column breaks between whole UTF-8 characters, so
+-- width / column undercounts its lines. Returns the lines the word spans and
+-- the text on its last line.
+local function PackGlyphs(word, width, measure)
+    local lines, current = 1, ""
+    for glyph in word:gmatch("[%z\1-\127\194-\244][\128-\191]*") do
+        local candidate = current .. glyph
+        if current ~= "" and MeasuredWidth(measure, candidate) > width then
+            lines = lines + 1
+            current = glyph
+        else
+            current = candidate
+        end
+    end
+    return lines, current
+end
+
+-- Lines a word-wrapping FontString gives text in a column `width` wide;
+-- measure(s) is the unbounded width of s. Words pack greedily at spaces; the
+-- next word may continue on the last line of a broken one.
+local function NameLineCount(text, width, measure)
+    if type(text) ~= "string" then return 1 end
+    local lines, current = 0, nil
+    for word in text:gmatch("%S+") do
+        local candidate = current and (current .. " " .. word) or word
+        if MeasuredWidth(measure, candidate) <= width then
+            current = candidate
+        else
+            if current then lines = lines + 1 end
+            if MeasuredWidth(measure, word) > width then
+                local wordLines, rest = PackGlyphs(word, width, measure)
+                lines = lines + wordLines - 1
+                current = rest
+            else
+                current = word
+            end
+        end
+    end
+    if current then lines = lines + 1 end
+    return math.max(lines, 1)
+end
+
+-- Row height and the name's top offset for a name of `lines` lines.
+local function RowLayout(lines, lineH)
+    local textH = lines * lineH + LINE_GAP + LINE2_H
+    local rowH = math.max(ROW_MIN_H, textH + ROW_PAD * 2)
+    return rowH, math.floor((rowH - textH) / 2)
+end
+
+-- Challenge-mode art for a dungeon name, or nil: no map for the name, or a
+-- map without art (the client's own dungeon list treats 0 as none).
+local function ResolveDungeonArt(name)
+    local mapID = KE:GetChallengeMapIDByName(name)
+    if not (mapID and C_ChallengeMode and C_ChallengeMode.GetMapUIInfo) then return nil end
+    local ok, _, _, _, texture = pcall(C_ChallengeMode.GetMapUIInfo, mapID)
+    if not ok or type(texture) ~= "number" or texture == 0 then return nil end
+    return texture
+end
+
+LR._NameLineCount = NameLineCount
+LR._RowLayout = RowLayout
+LR._ResolveDungeonArt = ResolveDungeonArt
+
 -- The prompt IS a teleport button, so it is pointless once the teleport is
 -- on cooldown -- which it always is straight after using it.
 --
@@ -149,30 +224,16 @@ local function TeleportOnCooldown(spellID)
     return type(dur) == "number" and dur > 1.5
 end
 
--- Layout constants
-local POPUP_W     = 210
-local TITLE_H     = 27
-local PAD         = 10
-local NAME_TOP    = TITLE_H + 9
-local NAME_H      = 24
-local BTN_TOP     = NAME_TOP + NAME_H
-local BTN_H       = 56
-local DISABLE_TOP = BTN_TOP + BTN_H + 8
-local DISABLE_H   = 16
-local POPUP_H     = DISABLE_TOP + DISABLE_H + 10
-local ROLE_TOP    = BTN_TOP + BTN_H + 6
-local ROLE_H      = 20  -- role row plus its gap, added to the height while shown
-
 -- State (plain upvalues; never keyed by a possibly-secret resultID)
 local popup, secureBtn
 local pendingSpellID       -- resolved teleport spell (static integer)
 local pendingName          -- dungeon display name (clean)
-local pendingAttrSpellID   -- spell attr stashed for out-of-combat write
 local pendingShow          -- join landed in combat; show on REGEN_ENABLED
 local pendingHide          -- hide requested in combat; flush on REGEN_ENABLED
 local combatHidden         -- the hide came from combat, not from the user
 local pendingRole          -- role captured with the prompt, or nil
 local shownRole            -- role the popup is drawing, or nil
+local previewState         -- settings preview: nil, "empty", or "prompt" (a live prompt waits behind it)
 
 
 local BuildPopup, ShowPrompt, HidePrompt, ClearPending
@@ -181,13 +242,23 @@ local SavePosition, ApplySavedPosition, ApplyPopupLayout
 
 -- Read-only test seams. The pending state stays in the upvalues above --
 -- these expose it without creating a second source of truth that could
--- drift from it. _GetPendingAttrSpellID exists specifically so the
--- cancellation spec can observe the deferred ATTRIBUTE write: asserting on
--- pendingSpellID alone would pass even without ClearPending's
--- pendingAttrSpellID line, making that test a false gate.
+-- drift from it.
 function LR:_GetPendingSpellID()     return pendingSpellID end
 function LR:_GetPendingName()        return pendingName end
-function LR:_GetPendingAttrSpellID() return pendingAttrSpellID end
+
+-- The X close. It ends the prompt rather than hiding it, so nothing that
+-- brings a hidden prompt back (the combat re-show, a preview closing) can
+-- show or re-arm it. The combat hide calls HidePrompt alone, because the
+-- end of combat must bring the prompt back.
+local function ClosePrompt()
+    ClearPending()
+    -- On the preview, X also ends the preview's hold, so a later prompt is
+    -- not kept behind a preview that is no longer on screen.
+    previewState = nil
+    HidePrompt()
+end
+
+LR._ClosePrompt = ClosePrompt
 
 function LR:UpdateDB()
     if KE.db and KE.db.profile then
@@ -224,31 +295,87 @@ ApplySavedPosition = function()
     end
 end
 
--- The one writer of the role row, the "Disable Feature" anchor and the popup
--- height. The popup parents a secure button, so every caller runs out of
--- combat.
+-- Popup geometry. The row sits below the header; the footer line under it
+-- holds "Disable Feature" and the watermark.
+local POPUP_W     = 210
+local TITLE_H     = 27
+local PAD         = 10
+local BTN_TOP     = TITLE_H + 11
+local ART_SIZE    = 40
+local ART_PAD     = 8
+local TEXT_LEFT   = ART_PAD + ART_SIZE + ART_PAD
+local TEXT_RIGHT  = 6
+local TEXT_W      = POPUP_W - PAD * 2 - TEXT_LEFT - TEXT_RIGHT
+local NAME_LINE_H = 17  -- used when the font reports no line height
+local FOOT_GAP    = 8
+local FOOT_H      = 16
+local FOOT_PAD    = 8
+local DISABLE_W   = 90  -- used when the label reports no width
+
+-- Dungeon name the popup is drawing; every show path sets it before layout.
+---@type string?
+local shownName = nil
+
+local function MeasureName(s)
+    return secureBtn._name:GetUnboundedStringWidthForText(s)
+end
+
+-- The one writer of the popup's geometry: the row height, the text inside the
+-- secure button, the footer and the popup height. The popup parents a secure
+-- button, so every caller runs out of combat.
 ApplyPopupLayout = function()
     if not popup then return end
     local showDisable = not LR.db or LR.db.ShowDisable ~= false
     local showRole = shownRole ~= nil and (not LR.db or LR.db.ShowRole ~= false)
-    local roleFS = popup._role
-    if roleFS then
-        if showRole then
-            local set = KE.Skins and KE.Skins.GetRoleIconSet and KE.Skins.GetRoleIconSet() or "modern"
-            local icons = KE.BuildChatRoleIconStrings and KE.BuildChatRoleIconStrings(set)
-            local icon = icons and icons[shownRole]
-            local word = ROLE_LABEL[shownRole]
-            roleFS:SetText(icon and (icon .. " " .. word) or word)
-        end
-        roleFS:SetShown(showRole)
+
+    local nameFS = secureBtn._name
+    nameFS:SetText(shownName or "")
+    local lineH = nameFS:GetLineHeight()
+    lineH = (type(lineH) == "number" and lineH > 0) and math.ceil(lineH) or NAME_LINE_H
+    local lines = NameLineCount(shownName, TEXT_W, MeasureName)
+    local rowH, nameTop = RowLayout(lines, lineH)
+    local line2Y = -(nameTop + lines * lineH + LINE_GAP + LINE2_H / 2)
+
+    secureBtn:SetHeight(rowH)
+    nameFS:ClearAllPoints()
+    nameFS:SetPoint("TOPLEFT", secureBtn, "TOPLEFT", TEXT_LEFT, -nameTop)
+    nameFS:SetPoint("TOPRIGHT", secureBtn, "TOPRIGHT", -TEXT_RIGHT, -nameTop)
+
+    local roleFS = secureBtn._role
+    if showRole then
+        local set = KE.Skins and KE.Skins.GetRoleIconSet and KE.Skins.GetRoleIconSet() or "modern"
+        local icons = KE.BuildChatRoleIconStrings and KE.BuildChatRoleIconStrings(set)
+        local icon = icons and icons[shownRole]
+        local word = ROLE_LABEL[shownRole]
+        roleFS:SetText(icon and (icon .. " " .. word) or word)
     end
-    local roleH = showRole and ROLE_H or 0
-    if popup._disableBtn then
-        popup._disableBtn:ClearAllPoints()
-        popup._disableBtn:SetPoint("TOP", popup, "TOP", 0, -(DISABLE_TOP + roleH))
-        popup._disableBtn:SetShown(showDisable)
+    roleFS:ClearAllPoints()
+    roleFS:SetPoint("LEFT", secureBtn, "TOPLEFT", TEXT_LEFT, line2Y)
+    roleFS:SetShown(showRole)
+
+    -- "Teleport" ends the role line, or starts it when no role shows.
+    local label = secureBtn._label
+    label:ClearAllPoints()
+    if showRole then
+        label:SetPoint("RIGHT", secureBtn, "TOPRIGHT", -TEXT_RIGHT, line2Y)
+        label:SetJustifyH("RIGHT")
+    else
+        label:SetPoint("LEFT", secureBtn, "TOPLEFT", TEXT_LEFT, line2Y)
+        label:SetJustifyH("LEFT")
     end
-    popup:SetHeight((showDisable and POPUP_H or (POPUP_H - 20)) + roleH)
+
+    local footTop = BTN_TOP + rowH + FOOT_GAP
+    local disableBtn = popup._disableBtn
+    local disableW = disableBtn._label:GetUnboundedStringWidth()
+    disableW = (type(disableW) == "number" and disableW > 0) and math.ceil(disableW) or DISABLE_W
+    disableBtn:SetSize(disableW, FOOT_H)
+    disableBtn:ClearAllPoints()
+    disableBtn:SetPoint("TOPLEFT", popup, "TOPLEFT", PAD, -footTop)
+    disableBtn:SetShown(showDisable)
+    popup._mark:ClearAllPoints()
+    popup._mark:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -PAD, -footTop)
+
+    popup:SetHeight(footTop + FOOT_H + FOOT_PAD)
 end
 
 -- Build the popup + secure button (once, out of combat)
@@ -260,7 +387,7 @@ BuildPopup = function()
     local S = KE.Skins
 
     popup = CreateFrame("Frame", "KE_LFGReminderPopup", UIParent)
-    popup:SetSize(POPUP_W, POPUP_H)
+    popup:SetWidth(POPUP_W)
     popup:SetFrameStrata("DIALOG")
     popup:SetMovable(true)
     popup:EnableMouse(true)
@@ -283,28 +410,20 @@ BuildPopup = function()
     title:SetWordWrap(false)
     title:SetText("LFG Reminder")
 
-    -- Joined dungeon's full name (SetText accepts secret strings)
-    local nameFS = popup:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(nameFS, 13, "") end
-    nameFS:SetPoint("TOPLEFT", popup, "TOPLEFT", PAD, -NAME_TOP)
-    nameFS:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -PAD, -NAME_TOP)
-    nameFS:SetJustifyH("CENTER")
-    nameFS:SetWordWrap(true)
-    popup._name = nameFS
-
     -- Close (X) in the header
     local xBtn = CreateFrame("Button", nil, popup)
     xBtn:SetSize(16, 16)
     xBtn:SetPoint("RIGHT", hdrBg, "RIGHT", -6, 0)
     if S and S.CloseButton then S.CloseButton(xBtn, 12) end
-    xBtn:SetScript("OnClick", function() HidePrompt() end)
+    xBtn:SetScript("OnClick", ClosePrompt)
 
     -- Secure teleport button (once; type + clicks set here and NEVER
     -- touched again; only "spell" is rewritten, out of combat).
     secureBtn = CreateFrame("Button", "KE_LFGReminderTeleport", popup, "SecureActionButtonTemplate")
-    secureBtn:SetSize(POPUP_W - PAD * 2, BTN_H)
+    -- ApplyPopupLayout sets the height: the row grows with the name.
+    secureBtn:SetWidth(POPUP_W - PAD * 2)
     -- A protected frame can only be anchored to another FRAME, never a
-    -- region -- anchor to the popup, below the name text.
+    -- region -- anchor to the popup, below the header.
     secureBtn:SetPoint("TOP", popup, "TOP", 0, -BTN_TOP)
     secureBtn:RegisterForClicks("AnyUp", "AnyDown")
     secureBtn:SetAttribute("type", "spell")
@@ -320,16 +439,29 @@ BuildPopup = function()
     end
 
     local icon = secureBtn:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(40, 40)
-    icon:SetPoint("LEFT", 8, 0)
+    icon:SetSize(ART_SIZE, ART_SIZE)
+    icon:SetPoint("LEFT", ART_PAD, 0)
     if S and S.Icon then S.Icon(icon, true) else icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
     secureBtn._icon = icon
 
+    -- Anchored top-left and top-right only, with no height and no line limit,
+    -- so a long name wraps instead of truncating.
+    local nameFS = secureBtn:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(nameFS, 14, "") end
+    nameFS:SetJustifyH("LEFT")
+    nameFS:SetWordWrap(true)
+    nameFS:SetNonSpaceWrap(true)
+    secureBtn._name = nameFS
+
+    local roleFS = secureBtn:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(roleFS, 12, "") end
+    roleFS:SetJustifyH("LEFT")
+    roleFS:SetWordWrap(false)
+    roleFS:Hide()
+    secureBtn._role = roleFS
+
     local btnLabel = secureBtn:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(btnLabel, 12, "") end
-    btnLabel:SetPoint("LEFT", icon, "RIGHT", 8, 0)
-    btnLabel:SetPoint("RIGHT", -6, 0)
-    btnLabel:SetJustifyH("LEFT")
+    if S and S.SetFont then S.SetFont(btnLabel, 10, "") end
     btnLabel:SetWordWrap(false)
     btnLabel:SetText("Teleport")
     secureBtn._label = btnLabel
@@ -341,8 +473,8 @@ BuildPopup = function()
     -- Cooldown inherits the button's protection: anchor to the button
     -- FRAME matching the icon's rect, never to the icon texture.
     local cd = CreateFrame("Cooldown", nil, secureBtn, "CooldownFrameTemplate")
-    cd:SetPoint("LEFT", secureBtn, "LEFT", 8, 0)
-    cd:SetSize(40, 40)
+    cd:SetPoint("LEFT", secureBtn, "LEFT", ART_PAD, 0)
+    cd:SetSize(ART_SIZE, ART_SIZE)
     cd:SetHideCountdownNumbers(true)
     cd:SetDrawSwipe(true); cd:SetDrawBling(false); cd:SetDrawEdge(false)
     secureBtn._cd = cd
@@ -362,29 +494,17 @@ BuildPopup = function()
     end)
     secureBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-    -- A region of the popup, not of the secure button; ApplyPopupLayout is
-    -- its only writer.
-    local roleFS = popup:CreateFontString(nil, "OVERLAY")
-    if S and S.SetFont then S.SetFont(roleFS, 12, "") end
-    roleFS:SetPoint("TOPLEFT", popup, "TOPLEFT", PAD, -ROLE_TOP)
-    roleFS:SetPoint("TOPRIGHT", popup, "TOPRIGHT", -PAD, -ROLE_TOP)
-    roleFS:SetJustifyH("CENTER")
-    roleFS:SetWordWrap(false)
-    roleFS:Hide()
-    popup._role = roleFS
-
     -- "Disable Feature" text: turns the whole feature off immediately
     local disableBtn = CreateFrame("Button", nil, popup)
-    disableBtn:SetSize(POPUP_W - PAD * 2, DISABLE_H)
-    disableBtn:SetPoint("TOP", popup, "TOP", 0, -DISABLE_TOP)
     local disableLbl = disableBtn:CreateFontString(nil, "OVERLAY")
     if S and S.SetFont then S.SetFont(disableLbl, 10, "") end
     disableLbl:SetAllPoints()
-    disableLbl:SetJustifyH("CENTER")
+    disableLbl:SetJustifyH("LEFT")
     disableLbl:SetText("Disable Feature")
     disableLbl:SetTextColor(0.6, 0.6, 0.6, 1)
     disableBtn:SetScript("OnEnter", function() disableLbl:SetTextColor(1, 0.3, 0.3, 1) end)
     disableBtn:SetScript("OnLeave", function() disableLbl:SetTextColor(0.6, 0.6, 0.6, 1) end)
+    disableBtn._label = disableLbl
     disableBtn:SetScript("OnClick", function()
         if LR.db then LR.db.Enabled = false end
         KitnEssentials:DisableModule("LFGReminder")
@@ -400,6 +520,12 @@ BuildPopup = function()
     end)
     popup._disableBtn = disableBtn
 
+    local mark = popup:CreateFontString(nil, "OVERLAY")
+    if S and S.SetFont then S.SetFont(mark, 10, "") end
+    mark:SetText("KitnEssentials")
+    mark:SetTextColor(1, 1, 1, 0.22)
+    popup._mark = mark
+
     -- Intentionally NOT Escape-closable: stays until teleport, dungeon
     -- entry, group leave, or disable.
     popup:SetScale((LR.db and LR.db.Scale) or 1.05)
@@ -409,16 +535,34 @@ BuildPopup = function()
     return popup
 end
 
+-- GetSpellInfo may return nothing; the slot then shows this, never an empty box.
+local FALLBACK_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+
+-- Dungeon art when the map has some and it loads, else the teleport's icon.
+-- Always writes, so one dungeon's image never carries over to the next.
+local function SetRowIcon(name, spellID)
+    local icon = secureBtn._icon
+    local art = ResolveDungeonArt(name)
+    if art and icon:SetTexture(art) then return end
+    local info = spellID and C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+    icon:SetTexture(info and info.iconID or FALLBACK_ICON)
+end
+
+local function SetRowKnown(known)
+    local icon = secureBtn._icon
+    icon:SetDesaturated(not known)
+    icon:SetAlpha(known and 1 or 0.4)
+    local nc = known and 1 or 0.5
+    secureBtn._name:SetTextColor(nc, nc, nc, 1)
+    secureBtn._label:SetTextColor(0.55, 0.55, 0.55, known and 1 or 0.5)
+end
+
 UpdateButtonVisuals = function()
     if not secureBtn or not pendingSpellID then return end
     local sid = pendingSpellID
-    local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(sid)
-    if info and info.iconID then secureBtn._icon:SetTexture(info.iconID) end
+    SetRowIcon(pendingName, sid)
     local known = C_SpellBook.IsSpellKnown(sid, SpellBookBank_Player)
-    secureBtn._icon:SetDesaturated(not known)
-    secureBtn._icon:SetAlpha(known and 1 or 0.4)
-    local lc = known and 1 or 0.5
-    secureBtn._label:SetTextColor(lc, lc, lc, 1)
+    SetRowKnown(known)
     if known then
         -- Duration object, not the startTime/duration pair: those two carry no
         -- NeverSecret flag, so under SecretWhenCooldownsRestricted the
@@ -544,17 +688,23 @@ ShowPrompt = function()
         -- combat, so this path IS reachable with no popup at all: enable or
         -- /reload during combat, then join a group before it ends.
         -- PLAYER_REGEN_ENABLED builds it and finishes the show.
-        pendingAttrSpellID = pendingSpellID
         pendingShow = true
         pendingHide = nil  -- a deferred show supersedes a deferred hide
         return
     end
+    if previewState then
+        -- The settings preview owns the popup and keeps the button unarmed;
+        -- HidePreview shows the prompt when the preview closes.
+        previewState = "prompt"
+        return
+    end
     BuildPopup()
-    popup._name:SetText(pendingName or "")
+    shownName = pendingName
     shownRole = pendingRole
     ApplyPopupLayout()
+    -- The only write that arms the button, so the preview hold above covers
+    -- every path that arms it.
     secureBtn:SetAttribute("spell", pendingSpellID)  -- static integer
-    pendingAttrSpellID = nil
     pendingHide = nil
     UpdateButtonVisuals()
     ShowPopup()
@@ -575,16 +725,12 @@ ClearPending = function()
     pendingSpellID     = nil
     pendingName        = nil
     pendingRole        = nil
+    -- A combat join sets pendingShow; a group that breaks before combat ends
+    -- must leave PLAYER_REGEN_ENABLED nothing to build or arm.
     pendingShow        = nil
     -- Whatever combat took away is no longer wanted either: this runs on
     -- group-leave and instance-entry, both of which invalidate the prompt.
     combatHidden       = nil
-    -- Also clear the deferred attribute write. A combat join sets BOTH
-    -- pendingAttrSpellID and pendingShow; if the group breaks before combat
-    -- ends, clearing only pendingShow would leave PLAYER_REGEN_ENABLED to
-    -- build a popup nobody asked for and arm it with the cancelled
-    -- dungeon's teleport.
-    pendingAttrSpellID = nil
 end
 
 -- Live refresh for the GUI (scale, disable and role rows). The popup parents
@@ -641,15 +787,26 @@ function LR:TryLeaderPrompt()
     ShowPrompt()
 end
 
+-- The live prompt is no longer wanted. While the settings preview is up the
+-- popup is the preview's and the page still shows it, so only the prompt
+-- waiting behind it is dropped.
+local function DropPrompt()
+    if previewState then
+        previewState = "empty"
+        return
+    end
+    HidePrompt()
+end
+
 function LR:SPELL_UPDATE_COOLDOWN()
     if not (popup and popup:IsShown()) then return end
-    if TeleportOnCooldown(pendingSpellID) then HidePrompt() end
+    if TeleportOnCooldown(pendingSpellID) then DropPrompt() end
 end
 
 function LR:GROUP_ROSTER_UPDATE()
     if not IsInGroup() then
         ClearArmed()
-        ClearPending(); HidePrompt()
+        ClearPending(); DropPrompt()
         return
     end
     self:TryLeaderPrompt()
@@ -658,76 +815,36 @@ end
 function LR:CheckInstance()
     local inInstance, instanceType = IsInInstance()
     if inInstance and instanceType == "party" then
-        ClearPending(); HidePrompt()
+        ClearPending(); DropPrompt()
     end
 end
 
 function LR:PLAYER_REGEN_DISABLED()
-    -- Remember that COMBAT is what took the prompt away, so REGEN_ENABLED can
-    -- put it back. HidePrompt clears pendingShow unconditionally, so by the time
-    -- combat ends there is no flag left saying a prompt was wanted. Re-showing
-    -- is deliberate: the group and dungeon are unchanged, and the end of the
-    -- fight is exactly when the teleport becomes useful.
-    combatHidden = (popup and popup:IsShown()) or nil
-    HidePrompt()  -- teleports can't be cast in combat
+    -- Teleports cannot be cast in combat, so the prompt goes, and
+    -- PLAYER_REGEN_ENABLED brings it back while it is still live. Lockdown
+    -- has not begun when this event fires, so the hide normally lands at
+    -- once; HidePrompt defers it if lockdown has begun. A prompt waiting
+    -- behind the settings preview passes to that same re-show.
+    combatHidden = previewState == "prompt"
+        or (popup and popup:IsShown() and not previewState) or nil
+    if previewState then previewState = "empty" end
+    HidePrompt()
 end
 
 function LR:PLAYER_REGEN_ENABLED()
-    -- Build now if combat prevented it. Both OnEnable and ShowPrompt skip
-    -- BuildPopup during combat, so a join that landed mid-combat can arrive
-    -- here with no popup at all. Out of combat now, so the secure frame and
-    -- its "type" attribute are safe to create.
-    --
-    -- Gated on a COHERENT live show -- pending show AND pending spell AND
-    -- still enabled -- so a cancelled or disabled join never materialises a
-    -- popup here.
-    local wantShow = pendingShow and pendingSpellID
-        and self.db and self.db.Enabled ~= false
-    if wantShow and not popup then
-        BuildPopup()
-    end
-    -- Flush a secure attribute write blocked during combat
-    if pendingAttrSpellID and secureBtn then
-        secureBtn:SetAttribute("spell", pendingAttrSpellID)
-        pendingAttrSpellID = nil
-    end
-    -- Surface a prompt whose join landed mid-combat. The name is set here
-    -- rather than in ShowPrompt: that path returned before touching the
-    -- popup, which may not have existed yet. Consumes pendingShow either
-    -- way -- a teleport already on cooldown by the time combat ends is not
-    -- retried later, same as ShowPrompt's own gate.
-    if wantShow then
-        pendingShow = nil
-        if not TeleportOnCooldown(pendingSpellID) then
-            if popup then
-                popup._name:SetText(pendingName or "")
-                shownRole = pendingRole
-                ApplyPopupLayout()
-            end
-            UpdateButtonVisuals()
-            if popup then ShowPopup() end
-        end
-    end
-    -- Flush a hide blocked during combat -- UNLESS combat is what caused it
-    -- and the prompt is still live. The popup is still on screen at this
-    -- point (HidePrompt deferred rather than hid), so "re-showing" is really
-    -- just cancelling the pending hide. Anything that invalidated the prompt
-    -- during the fight -- leaving the group, entering the dungeon -- ran
-    -- ClearPending, which nils pendingSpellID and combatHidden, so the hide
-    -- proceeds normally in those cases.
-    local keepShown = combatHidden and pendingSpellID
-        and self.db and self.db.Enabled ~= false
-    combatHidden = nil
+    -- Bring the prompt back if it is still wanted: a join that landed in
+    -- combat, or a shown prompt combat hid. Leaving the group or entering the
+    -- dungeon ran ClearPending, which clears pendingSpellID and both flags,
+    -- so a stale prompt never gets here. ShowPrompt refuses a disabled module
+    -- or a teleport on cooldown, builds the popup if combat kept it from being
+    -- built, waits behind a settings preview, and otherwise arms the spell.
+    local wantShow = pendingShow or combatHidden
+    pendingShow, combatHidden = nil, nil
+    if wantShow then ShowPrompt() end
+    -- A hide requested during lockdown that no show superseded.
     if pendingHide then
         pendingHide = nil
-        if keepShown and popup and popup:IsShown() then
-            popup._name:SetText(pendingName or "")
-            shownRole = pendingRole
-            ApplyPopupLayout()
-            UpdateButtonVisuals()
-        elseif popup and popup:IsShown() then
-            HidePopup()
-        end
+        if popup and popup:IsShown() then HidePopup() end
     end
 end
 
@@ -799,8 +916,17 @@ function LR:ShowPreview()
     if InCombatLockdown() then return end
     BuildPopup()
     if not popup then return end
+    -- Whether a live prompt was on screen decides what closing the preview
+    -- brings back.
+    if not previewState then
+        previewState = (popup:IsShown() and pendingSpellID) and "prompt" or "empty"
+    end
+    pendingHide = nil  -- the preview supersedes a deferred hide
     if secureBtn then secureBtn:SetAttribute("spell", nil) end
-    popup._name:SetText("Skyreach")
+    -- A current-season dungeon: it must stay a key of TELEPORT_BY_NAME, so
+    -- the preview draws the live table's teleport.
+    local dungeon = "Ruby Life Pools"
+    shownName = dungeon
     -- Read whether or not Show Role is on, so ticking it with the preview open
     -- shows the row through the page's refresh.
     local specIndex = C_SpecializationInfo and C_SpecializationInfo.GetSpecialization()
@@ -808,33 +934,25 @@ function LR:ShowPreview()
         and GetSpecializationRole(specIndex)
     shownRole = PickRole(specRole, nil) or "DAMAGER"
     ApplyPopupLayout()
-    if secureBtn and secureBtn._icon then
-        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(159898)
-        if info and info.iconID then secureBtn._icon:SetTexture(info.iconID) end
-        secureBtn._icon:SetDesaturated(false)
-        secureBtn._icon:SetAlpha(1)
-    end
-    if secureBtn and secureBtn._label then
-        secureBtn._label:SetTextColor(1, 1, 1, 1)
-    end
+    SetRowIcon(dungeon, ResolveTeleportSpellByName(dungeon))
+    SetRowKnown(true)
     ShowPopup()
 end
 
 function LR:HidePreview()
-    if not popup then return end
-    -- Same protection as HidePrompt: the popup parents a secure button.
-    if InCombatLockdown() then return end
-    if pendingSpellID then
-        -- A real prompt is live underneath the preview -- restore it
-        -- rather than hiding the user's actual teleport. The attribute has
-        -- to be re-armed too: ShowPreview cleared it.
-        if secureBtn then secureBtn:SetAttribute("spell", pendingSpellID) end
-        popup._name:SetText(pendingName or "")
-        shownRole = pendingRole
-        ApplyPopupLayout()
-        UpdateButtonVisuals()
+    if not previewState then return end
+    local restore = previewState == "prompt"
+    previewState = nil
+    shownName, shownRole = nil, nil
+    if InCombatLockdown() then
+        -- The popup parents a secure button: hide it when combat ends, and
+        -- let the combat re-show bring back a prompt that was waiting.
+        pendingHide = true
+        if restore then combatHidden = true end
         return
     end
-    shownRole = nil
     HidePopup()
+    -- ShowPrompt re-arms the live prompt, or refuses one that has since gone
+    -- on cooldown, been closed with X, or ended with the group.
+    if restore then ShowPrompt() end
 end

@@ -847,6 +847,31 @@ local Defaults = {
             NoToggle = true,
             NoOverwrite = true,
             AnnounceReadyCheck = true,
+
+            MarkerFromClass = true,
+            -- Keyed by the class token UnitClass returns. A saved entry that
+            -- differs from its default here is the player's override.
+            ClassMarkers = {
+                DEATHKNIGHT = "Cross",
+                DEMONHUNTER = "Diamond",
+                DRUID = "Circle",
+                EVOKER = "Triangle",
+                HUNTER = "Triangle",
+                MAGE = "Moon",
+                MONK = "Triangle",
+                PALADIN = "Diamond",
+                PRIEST = "Skull",
+                ROGUE = "Star",
+                SHAMAN = "Square",
+                WARLOCK = "Diamond",
+                WARRIOR = "Cross",
+            },
+
+            KickMacroEnabled = false,
+            KickMouseover = false,
+            KickTargetFallback = true,
+            KickStopCasting = false,
+            KickMarkFocus = false,
         },
 
         KeystoneHelper = {
@@ -1174,6 +1199,25 @@ local Defaults = {
             MaximizedScale = 1,
         },
 
+        -- Blizzard panel scaling. The category keys matter only while Enabled
+        -- is on.
+        PanelScale = {
+            Enabled = false,
+            Scale = 1,
+            CoreEnabled = true,
+            CoreOverride = false,
+            CoreScale = 1,
+            ServicesEnabled = true,
+            ServicesOverride = false,
+            ServicesScale = 1,
+            HousingEnabled = true,
+            HousingOverride = false,
+            HousingScale = 1,
+            LegacyEnabled = true,
+            LegacyOverride = false,
+            LegacyScale = 1,
+        },
+
         SpellAlerts = {
             Enabled = false,
             EnabledSpecs = {},  -- nil/missing = ON, false = OFF (per spec index)
@@ -1329,6 +1373,68 @@ local Defaults = {
             DecimalThreshold  = 1, -- seconds; below this the timer shows one decimal (0 = off)
             TimerPosition     = { AnchorFrom = "CENTER", AnchorTo = "CENTER", XOffset = 0, YOffset = 0 },
             StackPosition     = { AnchorFrom = "BOTTOMRIGHT", AnchorTo = "BOTTOMRIGHT", XOffset = -1, YOffset = 2 },
+        },
+
+        PartyBuffs = {
+            Enabled           = false,
+            TrackExternal     = true,
+            TrackBigDefensive = false,
+            TrackBurst        = true,
+            TrackPotion       = true,
+            TrackTrinket      = true,
+            ShowInKeys        = true,
+            ShowInDungeons    = true,
+            ShowInDelves      = true,
+            ShowInWorld       = true,
+            ShowInArenas      = true,
+            IconSize          = 32,
+            IconSpacing       = 2,
+            MaxPerMember      = 4,
+            Side              = "LEFT",
+            XOffset           = 0,
+            YOffset           = 0,
+            -- FRAME follows the party frame's own strata.
+            Strata            = "FRAME",
+            Swipe             = true,
+            CategoryColors    = false,
+            ColorExternal     = { 0.949, 0.757, 0.306, 1 },
+            ColorBigDefensive = { 0.310, 0.639, 1, 1 },
+            ColorBurst        = { 1, 0.353, 0.353, 1 },
+            ColorPotion       = { 0.333, 0.820, 0.478, 1 },
+            ColorTrinket      = { 0.718, 0.482, 1, 1 },
+            FontSize          = 10,
+            FontOutline       = "OUTLINE",
+            ShowTimer         = true,
+            TimerFontSize     = 12,
+            DecimalThreshold  = 0, -- seconds; below this the timer shows one decimal (0 = off)
+            -- ListExternals and ListBurst are row copies of the External
+            -- Tracker and PI Assist lists, made below this table.
+            ListPotions = {
+                [1236616] = { enabled = true, default = true }, -- Light's Potential
+                [1236994] = { enabled = true, default = true }, -- Potion of Recklessness
+                [1236998] = { enabled = true, default = true }, -- Draught of Rampant Abandon
+                [1239479] = { enabled = true, default = true }, -- Potion of Devoured Dreams
+                [1236551] = { enabled = true, default = true }, -- Void-Shrouded Tincture
+                [1295132] = { enabled = true, default = true }, -- Liquid Luster
+                [1295015] = { enabled = true, default = true }, -- Alluring Nostrum
+            },
+            -- One list for the current season. Kitn Defaults writes these rows
+            -- back; a past season's row the player kept stays as their own.
+            ListTrinkets = {
+                [1295328] = { enabled = true, default = true, label = "S2: First Mate's Shellward" },
+                [1295885] = { enabled = true, default = true, label = "S2: Hex Lord's Dooming Idol" },
+                [1297761] = { enabled = true, default = true, label = "S2: Voracious Heart of Ula'tek" },
+                [1293316] = { enabled = true, default = true, label = "S2: Vile Vial of Volatile Venom" },
+                [1293326] = { enabled = true, default = true, label = "S2: Tattered Amani War Banner" },
+                [1250587] = { enabled = true, default = true, label = "S2: Manaheart's Binding Flame" },
+                [1250533] = { enabled = true, default = true, label = "S2: Freightrunner's Flask" },
+                [1250557] = { enabled = true, default = true, label = "S2: Void Execution Mandate" },
+                [383926]  = { enabled = true, default = true, label = "S2: Blazebinder's Hoof" },
+                [271107]  = { enabled = true, default = true, label = "S2: Lustrous Golden Plumage" },
+                [265946]  = { enabled = true, default = true, label = "S2: Mchimba's Ritual Bandages" },
+                [1295275] = { enabled = true, default = true, label = "S2: Stormbound Emblem of Dazar" },
+                [1250580] = { enabled = true, default = true, label = "S2: Seed of the Devouring Wild" },
+            },
         },
 
         AuraMovement = {
@@ -2218,11 +2324,12 @@ local Defaults = {
             },
             -- Blizzard's UI widget frames: the top-centre status bars and text
             -- widgets used by M+ timers, event progress, power bars and zone
-            -- objectives. Standalone module, not a skin key -- it hooks the
-            -- widget mixins rather than a named window.
+            -- objectives. Standalone module, not a skin key -- it restyles the
+            -- widgets in four Blizzard containers rather than a named window.
             UIWidgets = {
                 Enabled = false,
                 FontOutline = "OUTLINE",
+                SkinIcons = true,     -- Crop and border spell display icons
                 -- Status bar widgets (M+ timer, power bars)
                 StatusBar = {
                     Enabled = true,
@@ -2232,6 +2339,7 @@ local Defaults = {
                     LabelSize = 14,       -- Font size for labels
                     BarTextSize = 12,     -- Font size for bar text
                     StripTextures = true, -- Remove Blizzard textures and add backdrop
+                    BarTexture = "KitnUI", -- Fill drawn over plain bars while StripTextures is on
                     BackdropColor = { 0, 0, 0, 0.8 },
                     BorderColor = { 0, 0, 0, 1 },
                 },
@@ -2240,6 +2348,7 @@ local Defaults = {
                     Enabled = true,
                     StyleText = true,
                     Size = 17,
+                    CenterText = true,    -- Centre the fixed-width text Blizzard left-aligns
                 },
                 -- Blizzard's top-centre widget container (M+ objective line,
                 -- delve and event bars). Off = Blizzard's own placement.
@@ -2320,7 +2429,7 @@ local Defaults = {
                 },
             },
             ContextMenus = {
-                Enabled = false,
+                Enabled = true,
             },
         },
 
@@ -2333,6 +2442,20 @@ local Defaults = {
         ChatTypingHistory = {},
     },
 }
+
+-- Copies, never aliases: each module saves its own list, and one shipped
+-- source keeps each ID in one place.
+local function CopyAllowlistRows(source)
+    local copy = {}
+    for spellID, row in pairs(source) do
+        local out = {}
+        for key, value in pairs(row) do out[key] = value end
+        copy[spellID] = out
+    end
+    return copy
+end
+Defaults.profile.PartyBuffs.ListExternals = CopyAllowlistRows(Defaults.profile.AuraExternals.Allowlist)
+Defaults.profile.PartyBuffs.ListBurst = CopyAllowlistRows(Defaults.profile.PIAssist.Allowlist)
 
 ---------------------------------------------------------------------------------
 -- Public API

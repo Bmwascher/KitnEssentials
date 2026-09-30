@@ -122,7 +122,6 @@ read_globals = {
     "WorldFrame",
     "GetMouseFoci", "GetMouseFocus",
     "GetPhysicalScreenSize", "GetCursorPosition", "GetScreenWidth", "GetScreenHeight",
-    "RunNextFrame",
     "IsModifierKeyDown",
     "IsSecureCmd",
     "EventUtil",
@@ -365,6 +364,7 @@ read_globals = {
     -- Macro
     "CreateMacro", "EditMacro", "GetMacroIndexByName",
     "GetMacroSpell", "GetNumMacros",
+    "GetMacroInfo",
 
     -- Keybinding
     "GetBindingKey", "SetBinding", "SaveBindings", "GetCurrentBindingSet",

@@ -1499,6 +1499,7 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
         callback = function(checked)
             db.ResetOnInstanceEntry = checked
             if not checked and DM and DM.CloseInstancePrompt then DM:CloseInstancePrompt() end
+            if DM and DM.UpdateInstanceEntryEvents then DM:UpdateInstanceEntryEvents() end
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })
@@ -1618,6 +1619,253 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
 end
 
 ---------------------------------------------------------------------------------
+-- Spell History tab
+---------------------------------------------------------------------------------
+local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
+    local DM = GetDM()
+    local sh = db.SpellHistory
+    if not sh then return yOffset end
+
+    local function ApplyStrip()
+        if DM and DM.ApplySpellHistory then DM:ApplySpellHistory() end
+    end
+
+    -- A resize can rewrite the saved offsets; the sliders are re-read in place
+    -- because a page rebuild would drop the slider being dragged.
+    local posCard
+    local function ResizeStrip(key, value)
+        if DM and DM.ResizeSpellHistory then
+            DM:ResizeSpellHistory(key, value)
+        else
+            sh[key] = value
+        end
+        if posCard then posCard:RefreshOffsets() end
+    end
+
+    -- Edge and Gap apply only while attached; the Position card only while free.
+    manager:SetCondition("shattached", function() return sh.Attach == true end)
+    manager:SetCondition("shfree", function() return sh.Attach ~= true end)
+
+    ----------------------------------------------------------------
+    -- Card 1: Enable
+    ----------------------------------------------------------------
+    local card1 = GUIFrame:CreateCard(scrollChild, "Spell History", yOffset)
+    manager:Register(card1, "all")
+    card1:AddHeaderToggle(sh.Enabled == true, function(checked)
+        sh.Enabled = checked
+        ApplyStrip()
+    end)
+
+    card1:AddLabel("Shows your recent casts as a row of icons, newest first, each fading a few " ..
+        "seconds after the cast. It shows only while the Damage Meter shows.\n\n" ..
+        "What shows: your spellbook spells and racials; potions, trinkets and other items used " ..
+        "from your bags or equipped gear, plus toys and other abilities you press that are outside " ..
+        "your spellbook (with Include Items and Toys on); your pet's spells (except those on " ..
+        "autocast, green border); and casts that were interrupted or failed after they started, " ..
+        "greyed with a red X. Instant presses that fail, and effects the game casts for you " ..
+        "without a press, do not show.")
+
+    yOffset = card1:GetNextOffset()
+
+    -- Lone header bar: a disabled feature shows its switch and nothing else.
+    if sh.Enabled ~= true then return yOffset end
+
+    ----------------------------------------------------------------
+    -- Card 2: Casts
+    ----------------------------------------------------------------
+    local cardCasts = GUIFrame:CreateCard(scrollChild, "Casts", yOffset)
+    manager:Register(cardCasts, "all")
+
+    local rowCasts = GUIFrame:CreateRow(cardCasts.content, Theme.rowHeightLast)
+    local itemsChk = GUIFrame:CreateCheckbox(rowCasts, "Include Items and Toys", {
+        value = sh.IncludeItems ~= false,
+        callback = function(checked) sh.IncludeItems = checked; ApplyStrip() end,
+    })
+    rowCasts:AddWidget(itemsChk, 0.33)
+    manager:Register(itemsChk, "all")
+
+    local petChk = GUIFrame:CreateCheckbox(rowCasts, "Include Pet Spells", {
+        value = sh.IncludePet ~= false,
+        callback = function(checked) sh.IncludePet = checked; ApplyStrip() end,
+    })
+    rowCasts:AddWidget(petChk, 0.33)
+    manager:Register(petChk, "all")
+
+    local failedChk = GUIFrame:CreateCheckbox(rowCasts, "Show Failed Casts", {
+        value = sh.ShowFailed ~= false,
+        callback = function(checked) sh.ShowFailed = checked; ApplyStrip() end,
+    })
+    rowCasts:AddWidget(failedChk, 0.34)
+    manager:Register(failedChk, "all")
+    cardCasts:AddRow(rowCasts, Theme.rowHeightLast, 0)
+
+    yOffset = cardCasts:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 3: Icons
+    ----------------------------------------------------------------
+    local cardIcons = GUIFrame:CreateCard(scrollChild, "Icons", yOffset)
+    manager:Register(cardIcons, "all")
+
+    local rowCount = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeight)
+    local countSlider = GUIFrame:CreateSlider(rowCount, "Icon Count", {
+        min = 1, max = 10, step = 1,
+        value = sh.Count or 5,
+        callback = function(val) ResizeStrip("Count", val) end,
+    })
+    rowCount:AddWidget(countSlider, 1)
+    manager:Register(countSlider, "all")
+    cardIcons:AddRow(rowCount, Theme.rowHeight)
+
+    local rowSize = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeight)
+    local sizeSlider = GUIFrame:CreateSlider(rowSize, "Icon Size", {
+        min = 16, max = 64, step = 1,
+        value = sh.IconSize or 32,
+        callback = function(val) ResizeStrip("IconSize", val) end,
+    })
+    rowSize:AddWidget(sizeSlider, 1)
+    manager:Register(sizeSlider, "all")
+    cardIcons:AddRow(rowSize, Theme.rowHeight)
+
+    local rowSpacing = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeightLast)
+    local spacingSlider = GUIFrame:CreateSlider(rowSpacing, "Spacing", {
+        min = 0, max = 10, step = 1,
+        value = sh.Spacing or 2,
+        callback = function(val) ResizeStrip("Spacing", val) end,
+    })
+    rowSpacing:AddWidget(spacingSlider, 0.5)
+    manager:Register(spacingSlider, "all")
+
+    -- Attached, the direction that grows into the meter is not offered, and
+    -- the value shown is the outside reading; a strip that sits inside the
+    -- meter steps that way into it instead.
+    local effectiveGrow = DM and DM.SpellHistoryEffectiveGrow
+    local growOptions = {}
+    for _, option in ipairs({
+        { key = "LEFT",  text = "Left" },
+        { key = "RIGHT", text = "Right" },
+        { key = "UP",    text = "Up" },
+        { key = "DOWN",  text = "Down" },
+    }) do
+        if not effectiveGrow or effectiveGrow(sh.Attach, sh.AttachEdge, option.key) == option.key then
+            growOptions[#growOptions + 1] = option
+        end
+    end
+    local growValue = sh.Grow or "LEFT"
+    if effectiveGrow then growValue = effectiveGrow(sh.Attach, sh.AttachEdge, growValue) end
+    local growDd = GUIFrame:CreateDropdown(rowSpacing, "Grow Direction", {
+        options = growOptions,
+        value = growValue,
+        callback = function(key) sh.Grow = key; ApplyStrip() end,
+    })
+    rowSpacing:AddWidget(growDd, 0.5)
+    manager:Register(growDd, "all")
+    cardIcons:AddRow(rowSpacing, Theme.rowHeightLast, 0)
+
+    yOffset = cardIcons:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 4: Fade
+    ----------------------------------------------------------------
+    local cardFade = GUIFrame:CreateCard(scrollChild, "Fade", yOffset)
+    manager:Register(cardFade, "all")
+
+    local rowFade = GUIFrame:CreateRow(cardFade.content, Theme.rowHeight)
+    local fadeSlider = GUIFrame:CreateSlider(rowFade, "Fade Delay (s)", {
+        min = 0, max = 30, step = 1,
+        value = sh.FadeDelay or 5,
+        callback = function(val) sh.FadeDelay = val; ApplyStrip() end,
+    })
+    rowFade:AddWidget(fadeSlider, 1)
+    manager:Register(fadeSlider, "all")
+    cardFade:AddRow(rowFade, Theme.rowHeight)
+    cardFade:AddNote("0 never fades: icons stay until newer casts push them out.")
+
+    yOffset = cardFade:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 5: Placement
+    ----------------------------------------------------------------
+    local cardPlace = GUIFrame:CreateCard(scrollChild, "Placement", yOffset)
+    manager:Register(cardPlace, "all")
+
+    local rowAttach = GUIFrame:CreateRow(cardPlace.content, Theme.rowHeight)
+    local attachChk = GUIFrame:CreateCheckbox(rowAttach, "Attach to Meter", {
+        value = sh.Attach == true,
+        callback = function(checked)
+            sh.Attach = checked
+            ApplyStrip()
+            manager:UpdateAll(db.Enabled ~= false)
+            -- A frame late, so the Grow options follow and this widget is not
+            -- torn down mid-call.
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end,
+    })
+    rowAttach:AddWidget(attachChk, 1)
+    manager:Register(attachChk, "all")
+    cardPlace:AddRow(rowAttach, Theme.rowHeight)
+
+    local rowEdge = GUIFrame:CreateRow(cardPlace.content, Theme.rowHeight)
+    local edgeDd = GUIFrame:CreateDropdown(rowEdge, "Edge", {
+        options = {
+            { key = "TOP",    text = "Top" },
+            { key = "BOTTOM", text = "Bottom" },
+            { key = "LEFT",   text = "Left" },
+            { key = "RIGHT",  text = "Right" },
+        },
+        value = sh.AttachEdge or "TOP",
+        callback = function(key)
+            sh.AttachEdge = key
+            ApplyStrip()
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end,
+    })
+    rowEdge:AddWidget(edgeDd, 0.5)
+    manager:Register(edgeDd, "shattached")
+
+    local gapSlider = GUIFrame:CreateSlider(rowEdge, "Gap", {
+        min = 0, max = 20, step = 1,
+        value = sh.AttachGap or 2,
+        callback = function(val) sh.AttachGap = val; ApplyStrip() end,
+    })
+    rowEdge:AddWidget(gapSlider, 0.5)
+    manager:Register(gapSlider, "shattached")
+    cardPlace:AddRow(rowEdge, Theme.rowHeight)
+    cardPlace:AddNote("Free, the strip moves in " .. KE:ColorTextByTheme("/kes edit") ..
+        "; attached, it follows the meter. For any other spot, such as inside the meter, turn Attach " ..
+        "off and use Anchored To in Position Settings.")
+
+    yOffset = cardPlace:GetNextOffset()
+
+    ----------------------------------------------------------------
+    -- Card 6: Position Settings (free-standing only)
+    ----------------------------------------------------------------
+    local posOffset
+    posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+        title = "Position Settings",
+        db = sh,
+        positionKey = "Position",
+        dbKeys = {
+            selfPoint = "AnchorFrom",
+            anchorPoint = "AnchorTo",
+            xOffset = "XOffset",
+            yOffset = "YOffset",
+            strata = "Strata",
+        },
+        showAnchorFrameType = true,
+        showStrata = true,
+        onChangeCallback = ApplyStrip,
+    })
+    if posCard.positionWidgets then
+        manager:RegisterGroup(posCard.positionWidgets, "shfree")
+    end
+    manager:Register(posCard, "shfree")
+    yOffset = posOffset
+
+    return yOffset
+end
+
+---------------------------------------------------------------------------------
 -- Page registration
 ---------------------------------------------------------------------------------
 GUIFrame:RegisterContent("DamageMeter", function(scrollChild, yOffset)
@@ -1634,6 +1882,7 @@ GUIFrame:RegisterContent("DamageMeter", function(scrollChild, yOffset)
             { id = "Windows", label = "Windows" },
             { id = "Appearance", label = "Appearance" },
             { id = "Behavior", label = "Behavior" },
+            { id = "SpellHistory", label = "Spell History" },
         },
         activeId = activeTab,
         onSwitch = function(newId) activeTab = newId end,
@@ -1651,6 +1900,8 @@ GUIFrame:RegisterContent("DamageMeter", function(scrollChild, yOffset)
         yOffset = BuildAppearanceTab(scrollChild, yOffset, db, manager)
     elseif activeTab == "Behavior" then
         yOffset = BuildBehaviorTab(scrollChild, yOffset, db, manager)
+    elseif activeTab == "SpellHistory" then
+        yOffset = BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     end
 
     manager:UpdateAll(db.Enabled ~= false)

@@ -44,6 +44,9 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     manager:SetCondition("textwidget", function()
         return textDB.Enabled ~= false
     end)
+    manager:SetCondition("striptex", function()
+        return barDB.Enabled ~= false and barDB.StripTextures ~= false
+    end)
 
     local function RefreshStates()
         manager:UpdateAll(db.Enabled ~= false)
@@ -87,7 +90,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
     if db.Enabled == false then
         yOffset = card1:GetNextOffset()
     else
-        card1:AddLabel("Restyles Blizzard's status bar and text widgets (M+ timer, power bars, event banners).")
+        card1:AddLabel("Restyles Blizzard's status bar and text widgets (M+ timer, power bars, event banners) and spell icons.")
 
         yOffset = card1:GetNextOffset()
 
@@ -232,12 +235,35 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             value = barDB.StripTextures ~= false,
             callback = function(checked)
                 barDB.StripTextures = checked
+                if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
                 ApplySettings()
+                RefreshStates()
             end,
         })
         row3d:AddWidget(stripTexturesCheck, 1)
         manager:Register(stripTexturesCheck, "statusbar")
         card3:AddRow(row3d, Theme.rowHeight)
+
+        local statusbarList = {}
+        if LSM then
+            for name in pairs(LSM:HashTable("statusbar")) do statusbarList[name] = name end
+        else
+            statusbarList["KitnUI"] = "KitnUI"
+        end
+
+        local row3dTex = GUIFrame:CreateRow(card3.content, 36)
+        local barTextureDropdown = GUIFrame:CreateDropdown(row3dTex, "Bar Texture", {
+            options = statusbarList,
+            value = barDB.BarTexture or "KitnUI",
+            callback = function(key)
+                barDB.BarTexture = key
+                ApplySettings()
+            end,
+            searchable = true,
+        })
+        row3dTex:AddWidget(barTextureDropdown, 0.5)
+        manager:Register(barTextureDropdown, "striptex")
+        card3:AddRow(row3dTex, 36)
 
         -- Backdrop Color
         local row3e = GUIFrame:CreateRow(card3.content, 36)
@@ -314,10 +340,43 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         manager:Register(textSizeSlider, "textwidget")
         card4:AddRow(row4b, Theme.rowHeight)
 
+        local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
+        local centerTextCheck = GUIFrame:CreateCheckbox(row4c, "Centre Text Widgets", {
+            value = textDB.CenterText ~= false,
+            callback = function(checked)
+                textDB.CenterText = checked
+                ApplySettings()
+            end,
+        })
+        row4c:AddWidget(centerTextCheck, 1)
+        manager:Register(centerTextCheck, "textwidget")
+        card4:AddRow(row4c, Theme.rowHeight)
+
         yOffset = card4:GetNextOffset()
 
         ----------------------------------------------------------------
-        -- Card 5: Top-Centre Widgets (container control)
+        -- Card 5: Widget Icons
+        ----------------------------------------------------------------
+        local cardIcons = GUIFrame:CreateCard(scrollChild, "Widget Icons", yOffset)
+        manager:Register(cardIcons, "all")
+
+        local rowIcons = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeight)
+        local skinIconsCheck = GUIFrame:CreateCheckbox(rowIcons, "Skin Widget Icons", {
+            value = db.SkinIcons ~= false,
+            callback = function(checked)
+                db.SkinIcons = checked
+                if not checked then KE:FlagReloadNeeded() end -- un-skin needs /reload
+                ApplySettings()
+            end,
+        })
+        rowIcons:AddWidget(skinIconsCheck, 1)
+        manager:Register(skinIconsCheck, "all")
+        cardIcons:AddRow(rowIcons, Theme.rowHeight)
+
+        yOffset = cardIcons:GetNextOffset()
+
+        ----------------------------------------------------------------
+        -- Card 6: Top-Centre Widgets (container control)
         ----------------------------------------------------------------
         local tcDB = db.TopCenter
         manager:SetCondition("topcenter", function()
@@ -374,7 +433,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         yOffset = card5:GetNextOffset()
 
         ----------------------------------------------------------------
-        -- Card 6: Top-Centre Widget Position
+        -- Card 7: Top-Centre Widget Position
         ----------------------------------------------------------------
         -- db is the TopCenter sub-table, so the card's root keys
         -- (anchorFrameType/ParentFrame/Strata) land there and cannot touch
