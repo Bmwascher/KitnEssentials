@@ -1961,8 +1961,9 @@ local function SetupAutoConfirmLootRoll()
         if which ~= "CONFIRM_LOOT_ROLL" then return end
         C_Timer.After(0, function()
             local popup = StaticPopup_FindVisible and StaticPopup_FindVisible("CONFIRM_LOOT_ROLL")
-            if popup and popup.button1 and popup.button1:IsEnabled() then
-                popup.button1:Click()
+            local yes = popup and popup.GetButton1 and popup:GetButton1()
+            if yes and yes:IsEnabled() then
+                yes:Click()
             end
         end)
     end)
