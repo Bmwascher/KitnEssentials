@@ -42,13 +42,30 @@ end
 
 local UNKNOWN_ANSWER = { open = true, closed = false }
 
+-- Stock Lua 5.1's xpcall, which the specs run on, passes no arguments, so
+-- predicates and spec listeners run through these without a closure per call.
+-- Each reads its upvalues before it starts, so a nested run cannot disturb it.
+---@type fun(facts: KE.ContextFacts): boolean?
+local runPredicate
+---@type KE.ContextFacts
+local runFacts
+local function CallPredicate()
+    return runPredicate(runFacts)
+end
+
+---@type fun(event: string, unit: string)
+local runSpecListener
+local function CallSpecListener()
+    runSpecListener(SPEC_EVENT, "player")
+end
+
 ---------------------------------------------------------------------------------
 -- Facts
 ---------------------------------------------------------------------------------
 
 -- An error, a secret or a value of the wrong type all read as nil.
 local function Usable(isSecret, value, kind)
-    if value == nil or isSecret(value) or type(value) ~= kind then return nil end
+    if isSecret(value) or type(value) ~= kind then return nil end
     return value
 end
 
@@ -195,10 +212,10 @@ function Context:_Teardown(sub)
 end
 
 function Context:_Run(sub)
-    local ok, answer = pcall(sub.predicate, self.facts)
-    -- A throwing predicate is a code defect, not an unreadable place: report
-    -- it, then take the subscriber's own answer for "cannot tell".
-    if not ok then self.deps.geterrorhandler()(answer) end
+    runPredicate, runFacts = sub.predicate, self.facts
+    -- A throwing predicate is a code defect, not an unreadable place: it is
+    -- reported, and the subscriber's own answer for "cannot tell" applies.
+    local ok, answer = xpcall(CallPredicate, self.deps.geterrorhandler())
     local inside
     if not ok or answer == nil then
         inside = sub.unknownAnswer
@@ -247,7 +264,8 @@ function Context:_DispatchSpec()
     for i = 1, #keys do
         local fn = self.specListeners[keys[i]]
         if fn then
-            xpcall(function() fn(SPEC_EVENT, "player") end, handler)
+            runSpecListener = fn
+            xpcall(CallSpecListener, handler)
         end
     end
     if self.refs.spec > 0 then self:_EvaluateAll() end
