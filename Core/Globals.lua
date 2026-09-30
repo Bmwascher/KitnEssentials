@@ -898,7 +898,7 @@ local PREVIEW_MODULES = {
     "CombatTimer", "PetStatusText", "DragonRiding",
     "FocusCastbar", "RaidNotifications", "HuntersMark", "RangeChecker",
     "TimeSpiral", "TotemTracker", "DisintegrateTicks", "StasisTracker", "Recuperate", "KickTracker",
-    "NoMovementAlert", "GreatVaultAlert", "SecondaryStats", "PotionReady", "AuraExternals", "AuraMovement", "AuraDebuffs",
+    "NoMovementAlert", "GreatVaultAlert", "SecondaryStats", "PotionReady", "AuraExternals", "AuraMovement", "AuraDebuffs", "PartyBuffs",
     "EnemyCounter", "DungeonCasts", "HealerMana",
     "ReadyCheckConsumables", "DeathNotifications",
     "Cursor",
@@ -931,7 +931,7 @@ local SECTION_PREVIEW_MODULES = {
     },
     aura_section = {
         "BuffTracking", "PlayerDebuffTracking",
-        "AuraDebuffs", "AuraExternals", "AuraMovement",
+        "AuraDebuffs", "AuraExternals", "AuraMovement", "PartyBuffs",
         "TotemTracker",
     },
     qol_section = {
