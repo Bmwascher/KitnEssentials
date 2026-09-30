@@ -335,10 +335,8 @@ end
 -- Frame Creation
 ---------------------------------------------------------------------------------
 function HM:CreateHealerFrame()
-    -- Anonymous (nil name): Refresh() recreates these per font/outline rebuild;
-    -- a global name would silently clobber the prior frame's _G slot and orphan
-    -- it. Nothing references these by name (the container holds them as children
-    -- and EditMode anchors via frame reference, not name).
+    -- Anonymous: nothing references these by name (the container holds them as
+    -- children and EditMode anchors via frame reference).
     local frame = CreateFrame("Frame", nil, self.containerFrame)
     frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
 
@@ -396,8 +394,7 @@ end
 function HM:CreateContainer()
     if self.containerFrame then return self.containerFrame end
 
-    -- Anonymous: Refresh() nils + recreates the container; a fixed global name
-    -- would clobber/orphan the prior one. EditMode tracks it by frame reference.
+    -- Anonymous: EditMode tracks it by frame reference.
     local frame = CreateFrame("Frame", nil, UIParent)
     frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
     frame:SetFrameStrata(self.db.Strata or "HIGH")
@@ -746,21 +743,14 @@ end
 function HM:Refresh()
     local wasPreview = self.isPreview
 
+    -- Redressed in place: ApplySettings restyles every existing frame, and the
+    -- next draw sizes, stacks and shows what the rows need.
     wipe(self.currentHealers)
     self._lastMode = nil
     for _, frame in pairs(self.healerFrames) do frame:Hide() end
-    wipe(self.healerFrames)
-
-    if self.containerFrame then
-        if KE.EditMode and KE.EditMode.UnregisterElement then
-            KE.EditMode:UnregisterElement("HealerMana")
-        end
-        self.containerFrame:Hide()
-        self.containerFrame = nil
-        self.editModeRegistered = false
-    end
 
     self:ApplySettings()
+    -- Shown again so the canned rows are recounted for MaxHealers.
     if wasPreview then self:ShowPreview() end
 end
 
@@ -835,9 +825,7 @@ end
 
 -- Point the overlay label at the mode the stack was last drawn in. Called on
 -- every draw; the compare inside SetElementLabel makes the unchanged case free.
--- Registers instead when the element is absent: HM:Refresh tears the container
--- down and unregisters, and the re-show that restores the registration runs
--- only when the module was previewing.
+-- Registers instead when the element is absent.
 function HM:RefreshEditMode()
     if not KE.EditMode then return end
     if not self.editModeRegistered then
