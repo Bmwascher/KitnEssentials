@@ -223,6 +223,9 @@ end
 
 function HM:StartScanning()
     if not isHunter then return end
+    -- A closed settings preview calls this whenever the saved setting is on,
+    -- including while the module is disabled.
+    if not self:IsEnabled() then return end
     if self.isPreview then return end
     if self.scanArmed then return end
     self.scanArmed = true
