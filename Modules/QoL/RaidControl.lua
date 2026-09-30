@@ -1561,6 +1561,7 @@ end
 
 function RC:OnEnable()
     self:UpdateDB()
+    if not self.db or not self.db.Enabled then return end
     if KE.GroupSort then KE.GroupSort:Start() end
 
     if InCombatLockdown() then

@@ -79,6 +79,7 @@ end
 
 function AM:OnEnable()
     self:UpdateDB()
+    if not self.db or not self.db.Enabled then return end
 
     if not self.display then
         self.display = KE.AuraEngine.Register(self, DECLARATION, function() return self.db end)
