@@ -205,10 +205,12 @@ describe("Gem helper: the click action refuses a gem that has moved", function()
             -- Recorders, not a fake socketing subsystem: nothing below asserts
             -- on the sequence, they exist so the success path can run at all.
             SocketInventoryItem = function(slotID) sockets[#sockets + 1] = slotID end,
-            C_ItemSocketInfo = { ClickSocketButton = function() end },
+            C_ItemSocketInfo = {
+                ClickSocketButton = function() end,
+                AcceptSockets = function() end,
+                CloseSocketInfo = function() end,
+            },
             ClearCursor = function() end,
-            AcceptSockets = function() end,
-            CloseSocketInfo = function() end,
             HideUIPanel = function() end,
             ItemSocketingFrame = nil,
         })
