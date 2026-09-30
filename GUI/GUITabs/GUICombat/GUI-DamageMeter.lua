@@ -1499,6 +1499,7 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
         callback = function(checked)
             db.ResetOnInstanceEntry = checked
             if not checked and DM and DM.CloseInstancePrompt then DM:CloseInstancePrompt() end
+            if DM and DM.UpdateInstanceEntryEvents then DM:UpdateInstanceEntryEvents() end
             manager:UpdateAll(db.Enabled ~= false)
         end,
     })

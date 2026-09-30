@@ -74,6 +74,14 @@ DM._entrySettling = false
 DM._entrySettleFresh = false
 DM._entrySettleGen = 0
 
+-- A known instance whose difficulty is not known yet, and whether it only
+-- records (a login, /reload or enable load saw it, or the option was off);
+-- and whether the player left the instance group since the last read outside
+-- an instance or the last load.
+DM._entryPendingID = nil
+DM._entryPendingFresh = false
+DM._entryGroupLeft = false
+
 -- An instance reset held as its token, to be judged again at combat end while
 -- a capture would read secret amounts, or at the settle while a load's
 -- difficulty is still settling.
@@ -378,6 +386,7 @@ DM.FillMissingDefaults = FillMissing
 function DM:ApplySettings()
     if not self.db then self:UpdateDB() end
     if not self.enabled then return end
+    self:UpdateInstanceEntryEvents()
 
     self.windows_rt = self.windows_rt or {}
     -- The clock cache survives a plain re-gate, so it has to be dropped wherever
@@ -785,6 +794,7 @@ function DM:OnEnable()
     self:RegisterEvent("ACTIVE_DELVE_DATA_UPDATE", "OnDelveDataUpdate")
     -- A load's difficulty settles after PLAYER_ENTERING_WORLD.
     self:RegisterEvent("PLAYER_DIFFICULTY_CHANGED", "OnDifficultyChanged")
+    self:UpdateInstanceEntryEvents()
     -- Record where the player is, so enabling the module is not an entry.
     self:OpenEntrySettle(true)
 
@@ -924,6 +934,8 @@ function DM:OnDisable()
     self:ClearFeignTags("module disable")
     self._wipeBoundary = false
     self._lastEntryKey, self._lastEntryScope = nil, nil
+    self._entryPendingID, self._entryPendingFresh = nil, false
+    self._entryGroupLeft = false
     self._entrySettling, self._entrySettleFresh = false, false
     self._entrySettleGen = self._entrySettleGen + 1
     self._deferredReset = nil
@@ -3309,6 +3321,8 @@ function DM.InstanceEntryKey(instanceID, difficultyID)
     -- concatenation would throw.
     if issecretvalue(instanceID) or issecretvalue(difficultyID) then return nil end
     if type(instanceID) ~= "number" or type(difficultyID) ~= "number" then return nil end
+    -- A load reads difficulty 0 before its difficulty is set.
+    if difficultyID == 0 then return nil end
     return instanceID .. ":" .. difficultyID
 end
 
@@ -3329,14 +3343,33 @@ function DM.InstanceKeystoneSwap(lastKey, instanceID, difficultyID)
 end
 
 -- Returns the new last key and scope, the action ("none", "auto" or "ask"),
--- and whether the player moved from the last entry's place, which ends any Ask
--- prompt raised there. The last key survives the open world, so running back
--- in after a death is not an entry. A Delve that ends in place is marked
--- "delveover": repeated events there count nothing, and a new Delve counts. A
--- Delve left behind is forgotten, so the next one counts. The key is tracked
--- even with the option off, so turning it on inside an instance is not an entry.
-function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficultyID, freshLoad, enabled, mode)
+-- whether the player moved from the last entry's place, which ends any Ask
+-- prompt raised there, and the new pending entry. The last key survives the
+-- open world, so walking back in is not an entry; after an instance group
+-- leave, a read outside or a load forgets it, so a re-queue is. A known
+-- instance at an unknown difficulty keys nothing and becomes the pending
+-- entry (not a flicker with no load in the keyed instance), judged at its
+-- first known difficulty with the freshness of the check that saw it. A
+-- Delve that ends in place is marked "delveover": repeated events there count
+-- nothing, and a new Delve counts. A Delve left behind is forgotten. The key
+-- is tracked even with the option off, so turning it on inside an instance is
+-- not an entry.
+function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficultyID, freshLoad, enabled, mode,
+                                  inPlace, pendingID, pendingFresh, groupLeft, atLoad)
     local key = DM.InstanceEntryKey(instanceID, difficultyID)
+    local incomingKey, incomingScope = lastKey, lastScope
+    if groupLeft and (scope == nil or atLoad) then
+        lastKey, lastScope = nil, nil
+        pendingID, pendingFresh = nil, false
+    end
+    local idKnown = not issecretvalue(instanceID) and type(instanceID) == "number"
+    local matches = idKnown and scope ~= nil and pendingID ~= nil and instanceID == pendingID
+    local recordOnly
+    if key ~= nil and matches then
+        recordOnly = freshLoad or pendingFresh
+    else
+        recordOnly = freshLoad or inPlace
+    end
     local entered = scope ~= nil and key ~= nil
         and (key ~= lastKey or (lastScope == "delveover" and scope == "delve"))
         and not DM.InstanceKeystoneSwap(lastKey, instanceID, difficultyID)
@@ -3351,13 +3384,27 @@ function DM.InstanceEntryDecision(lastKey, lastScope, scope, instanceID, difficu
             newKey, newScope = nil, nil
         end
     end
-    local moved = entered or scope == nil or newKey ~= lastKey
-        or (newScope == "delveover" and lastScope ~= "delveover")
-    if freshLoad or not enabled or not entered then
-        return newKey, newScope, "none", moved
+    local moved = entered or scope == nil or newKey ~= incomingKey
+        or (newScope == "delveover" and incomingScope ~= "delveover")
+    -- A read at difficulty 0 with no load, in the instance the last key already
+    -- holds, is a flicker in place: it starts no pending, so the next in-place
+    -- change only re-keys. A load's read, or one where a Delve ended, starts one.
+    local heldHere = idKnown and not atLoad and not matches and lastScope ~= "delveover"
+        and type(lastKey) == "string" and tonumber(lastKey:match("^(%d+):")) == instanceID
+    local newPendingID, newPendingFresh = pendingID, pendingFresh == true
+    if scope == nil or (key == nil and heldHere) then
+        newPendingID, newPendingFresh = nil, false
+    elseif idKnown and key == nil then
+        newPendingID, newPendingFresh = instanceID,
+            freshLoad == true or not enabled or (matches and pendingFresh == true)
+    elseif idKnown then
+        newPendingID, newPendingFresh = nil, false
     end
-    if mode == "auto" then return newKey, newScope, "auto", moved end
-    return newKey, newScope, "ask", moved
+    if recordOnly or not enabled or not entered then
+        return newKey, newScope, "none", moved, newPendingID, newPendingFresh
+    end
+    if mode == "auto" then return newKey, newScope, "auto", moved, newPendingID, newPendingFresh end
+    return newKey, newScope, "ask", moved, newPendingID, newPendingFresh
 end
 
 -- An instance reset, asked or held for combat end, happens only for the entry
@@ -3487,17 +3534,21 @@ function DM:ShowInstancePrompt(key, name)
         { closeIsNeutral = true, waitIfBusy = true })
 end
 
--- Called at the settling window's open and close, on PLAYER_DIFFICULTY_CHANGED
--- and when a Delve starts or ends. While a load settles its difficulty is the
--- previous zone's, so it counts as unknown and no instance is keyed.
-function DM:CheckInstanceEntry(freshLoad)
+-- Called at the settling window's open and close, on PLAYER_DIFFICULTY_CHANGED,
+-- when a Delve starts or ends, and when the instance group is left outside an
+-- instance. While a load settles its difficulty is the previous zone's, so it
+-- counts as unknown and no instance is keyed. inPlace marks a difficulty
+-- change with no load, atLoad a load's opening read.
+function DM:CheckInstanceEntry(freshLoad, inPlace, atLoad)
     local scope, instanceID, difficultyID, name = ReadInstanceEntry()
     if self._entrySettling then difficultyID = nil end
     local db = self.db
     local action, moved
-    self._lastEntryKey, self._lastEntryScope, action, moved = DM.InstanceEntryDecision(
-        self._lastEntryKey, self._lastEntryScope, scope, instanceID, difficultyID, freshLoad,
-        db and db.ResetOnInstanceEntry == true, db and db.InstanceResetMode)
+    self._lastEntryKey, self._lastEntryScope, action, moved, self._entryPendingID, self._entryPendingFresh =
+        DM.InstanceEntryDecision(self._lastEntryKey, self._lastEntryScope, scope, instanceID, difficultyID,
+            freshLoad, db and db.ResetOnInstanceEntry == true, db and db.InstanceResetMode, inPlace == true,
+            self._entryPendingID, self._entryPendingFresh, self._entryGroupLeft, atLoad == true)
+    if scope == nil or atLoad == true then self._entryGroupLeft = false end
     -- The key compare cannot see a way out and back in, or a Delve ending in
     -- place; this bump refuses a prompt or a held reset from before either, and
     -- the close takes the dead prompt off screen.
@@ -3516,6 +3567,31 @@ function DM:OnDelveDataUpdate()
     self:CheckInstanceEntry(false)
 end
 
+-- Leaving the instance group ends the last entry, so re-queuing the same
+-- dungeon counts; walking out and back in fires no group event. Outside an
+-- instance the key is forgotten now, otherwise at the next read outside or
+-- the next load. A premade group's leave is not an instance queue.
+function DM:OnGroupLeft(_, category)
+    if issecretvalue(category) or type(category) ~= "number" then return end
+    if category ~= LE_PARTY_CATEGORY_INSTANCE then return end
+    self._entryGroupLeft = true
+    local scope = ReadInstanceEntry()
+    if scope == nil then self:CheckInstanceEntry(false) end
+end
+
+-- The group-leave listener exists only while the module and Reset on Instance
+-- Entry are both on. An open pending that saw the option off only records,
+-- so ticking it again before the difficulty arrives is not an entry.
+function DM:UpdateInstanceEntryEvents()
+    if self.enabled and self.db and self.db.ResetOnInstanceEntry == true then
+        self:RegisterEvent("GROUP_LEFT", "OnGroupLeft")
+    else
+        self:UnregisterEvent("GROUP_LEFT")
+        self._entryGroupLeft = false
+        if self._entryPendingID ~= nil then self._entryPendingFresh = true end
+    end
+end
+
 -- Seconds a load waits for PLAYER_DIFFICULTY_CHANGED before its difficulty
 -- read is trusted anyway.
 local ENTRY_SETTLE_FALLBACK = 3
@@ -3532,7 +3608,7 @@ function DM:OpenEntrySettle(freshLoad)
         if not DM.enabled or DM._entrySettleGen ~= gen then return end
         DM:CloseEntrySettle()
     end)
-    self:CheckInstanceEntry(freshLoad)
+    self:CheckInstanceEntry(freshLoad, false, true)
 end
 
 -- A reset accepted or resumed inside the window was held because its read could
@@ -3553,12 +3629,12 @@ end
 
 -- Inside a load the first one settles the difficulty. Outside one, the change
 -- came with no loading screen (a keystone slotted, for one), so it only
--- re-keys: it is never an instance entry.
+-- re-keys, unless it brings the first known difficulty of a zone-in.
 function DM:OnDifficultyChanged()
     if self._entrySettling then
         self:CloseEntrySettle()
     else
-        self:CheckInstanceEntry(true)
+        self:CheckInstanceEntry(false, true)
     end
 end
 
