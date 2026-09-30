@@ -60,8 +60,8 @@ end
 -- SecureHook, not a bare frame + event:
 -- ResetInstances() has no corresponding event, so a hook is the only way to
 -- observe the reset. IsHooked guards against double-hooking across repeated
--- ApplySettings calls; the hook itself stays installed for the module's
--- lifetime and the callback re-checks db.ResetEnabled every fire.
+-- ApplySettings calls. The hook stays while any feature is on, so the callback
+-- re-checks db.ResetEnabled every fire.
 ---------------------------------------------------------------------------------
 local function OnInstanceReset()
     if not KH.db or not KH.db.Enabled or not KH.db.ResetEnabled then return end
@@ -442,8 +442,46 @@ end
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
-function KH:ApplySettings()
+-- One setup for all three features, taken while any of them is on.
+local FEATURE_EVENTS = {
+    { "CHALLENGE_MODE_COMPLETED", "OnChallengeModeCompleted" },
+    { "CHALLENGE_MODE_START", "OnChallengeModeStart" },
+    { "ZONE_CHANGED_NEW_AREA", "OnZoneChangedNewArea" },
+    { "PLAYER_ENTERING_WORLD", "OnYourKeyConditionChanged" },
+    { "PLAYER_DIFFICULTY_CHANGED", "OnYourKeyConditionChanged" },
+    { "CHALLENGE_MODE_MAPS_UPDATE", "OnYourKeyConditionChanged" },
+    { "PLAYER_LEAVING_WORLD", "OnPlayerLeavingWorld" },
+}
+
+-- Truthiness, the way each handler reads its own flag.
+function KH.AnyFeatureOn(db)
+    if not db then return false end
+    return (db.ResetEnabled or db.RerollEnabled or db.YourKeyEnabled) and true or false
+end
+
+function KH:SetupFeatures()
     self:ApplyResetHook()
+    for _, entry in ipairs(FEATURE_EVENTS) do
+        self:RegisterEvent(entry[1], entry[2])
+    end
+end
+
+-- Both stops leave a previewed frame to the preview.
+function KH:TeardownFeatures()
+    if self:IsHooked("ResetInstances") then self:Unhook("ResetInstances") end
+    for _, entry in ipairs(FEATURE_EVENTS) do
+        self:UnregisterEvent(entry[1])
+    end
+    self:StopRerollTimer()
+    self:HideYourKey()
+end
+
+function KH:ApplySettings()
+    if self:IsEnabled() and KH.AnyFeatureOn(self.db) then
+        self:SetupFeatures()
+    else
+        self:TeardownFeatures()
+    end
     self:ApplyReminders()
     self:RegisterEditModeElement()
 
@@ -474,13 +512,17 @@ end
 -- which the preview shows first.
 ---------------------------------------------------------------------------------
 function KH:RegisterEditModeElement()
-    if not KE.EditMode or not self.rerollFrame then return end
+    if not KE.EditMode then return end
 
+    -- By name until the frame exists: frames are built on first show, and Edit
+    -- Mode resolves the name when it draws. The name is the one
+    -- CreateReminderFrame gives the Reroll frame.
     KE.EditMode:RegisterElement({
         key = "KeystoneHelper",
         module = self,
         displayName = "Keystone Helper: Reminders",
         frame = self.rerollFrame,
+        frameName = not self.rerollFrame and "KE_KeystoneHelperReroll" or nil,
         getPosition = function() return self.db.Position end,
         setPosition = function(pos)
             self.db.Position = pos
@@ -568,20 +610,11 @@ function KH:OnEnable()
     self:StopRerollTimer()
     self:HideYourKey()
 
-    self:ApplyResetHook()
-
-    self:CreateRerollFrame()
-    self:CreateYourKeyFrame()
+    -- Restyles only frames that already exist; a profile switch that re-enables
+    -- the module reaches here and not ApplySettings.
     self:ApplyReminders()
     self:RegisterEditModeElement()
-
-    self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnChallengeModeCompleted")
-    self:RegisterEvent("CHALLENGE_MODE_START", "OnChallengeModeStart")
-    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "OnZoneChangedNewArea")
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnYourKeyConditionChanged")
-    self:RegisterEvent("PLAYER_DIFFICULTY_CHANGED", "OnYourKeyConditionChanged")
-    self:RegisterEvent("CHALLENGE_MODE_MAPS_UPDATE", "OnYourKeyConditionChanged")
-    self:RegisterEvent("PLAYER_LEAVING_WORLD", "OnPlayerLeavingWorld")
+    if KH.AnyFeatureOn(self.db) then self:SetupFeatures() end
 end
 
 function KH:OnDisable()
