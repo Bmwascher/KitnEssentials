@@ -14,11 +14,15 @@
 --                    that is actually known in the player or pet spellbook.
 --   announceExtras - optional array of additional spell IDs that count as
 --                    interrupts for announce purposes but not CD tracking.
+--   tracked        - optional candidate id a cooldown tracker shows for a
+--                    teammate, whose pet it cannot see.
 --
 -- Accessors:
 --   KE:GetInterruptCandidatesForSpec(specID) -> list of { id, cd } in priority
 --                                              order, or nil.
 --   KE:GetInterruptSpellSet(specID) -> { [id]=true, ... } or nil.
+--   KE:GetTrackedKickForSpec(specID) -> { id, cd } or nil.
+--   KE:GetInterruptKickSpellSet() -> { [id]=true, ... } of every candidate.
 
 ---@class KE
 local KE = select(2, ...)
@@ -27,6 +31,8 @@ local ipairs = ipairs
 local pairs = pairs
 
 local INTERRUPT_ANNOUNCE_SET = {}
+local KICK_SPELL_SET = {}
+local KICK_CD_CAP = {}
 
 local INTERRUPTS = {
     -- Warrior: Pummel 15s
@@ -60,8 +66,9 @@ local INTERRUPTS = {
     [63]   = { primary = { id = 2139, cd = 20 } },
     [64]   = { primary = { id = 2139, cd = 20 } },
     -- Warlock: interrupt depends on active pet. Candidates in priority order:
-    --   19647 Spell Lock (Felhunter), 89766 Axe Toss (Felguard),
+    --   19647 Spell Lock (Felhunter) 24s, 89766 Axe Toss (Felguard) 30s,
     --   119910 Command Demon (player-cast meta), 132409 pet variant.
+    --   With any other demon out there is no kick.
     [265]  = {
         candidates = {
             { id = 19647,  cd = 24 },
@@ -72,11 +79,12 @@ local INTERRUPTS = {
     },
     [266]  = {
         candidates = {
-            { id = 19647,  cd = 30 },
+            { id = 19647,  cd = 24 },
             { id = 89766,  cd = 30 },
             { id = 119910, cd = 24 },
             { id = 119914, cd = 30 },
         },
+        tracked = 89766,  -- the Felguard is the usual Demonology demon
     },
     [267]  = {
         candidates = {
@@ -103,6 +111,34 @@ local INTERRUPTS = {
     [1473] = { primary = { id = 351338, cd = 18 } },
 }
 
+-- One kick can report under more than one spell ID (a player command and the
+-- pet's own spell). Each maps to the ID a cooldown tracker keys that kick on.
+local KICK_ALIASES = {
+    [119910] = 19647,   -- Command Demon: Spell Lock
+    [132409] = 19647,   -- Spell Lock (sacrificed Felhunter)
+    [119914] = 89766,   -- Command Demon: Axe Toss
+}
+
+-- Kicks a talent adds beside a spec's main kick. `requires` is the talent
+-- that makes the spell interrupt; without it the spell is not a kick.
+local JAVELINEER = 1271948
+local WARRIOR_THROWS = {
+    { id = 384110, cd = 45,  requires = JAVELINEER },  -- Wrecking Throw
+    { id = 64382,  cd = 180, requires = JAVELINEER },  -- Shattering Throw
+}
+local EXTRA_KICKS_BY_SPEC = {
+    [71] = WARRIOR_THROWS,
+    [72] = WARRIOR_THROWS,
+    [73] = WARRIOR_THROWS,
+}
+local EXTRA_KICK_BY_ID = {}
+for _, list in pairs(EXTRA_KICKS_BY_SPEC) do
+    for _, e in ipairs(list) do
+        EXTRA_KICK_BY_ID[e.id] = e
+        KICK_CD_CAP[e.id] = e.cd
+    end
+end
+
 -- Precompute per-spec:
 --   entry.candidateList: normalized list of { id, cd } (primary becomes 1-entry list).
 --   entry.announceSet:   { [spellID] = true } union of all candidate IDs + announceExtras.
@@ -122,6 +158,9 @@ for _, entry in pairs(INTERRUPTS) do
         if c.id then
             set[c.id] = true
             INTERRUPT_ANNOUNCE_SET[c.id] = true
+            KICK_SPELL_SET[c.id] = true
+            local canon = KICK_ALIASES[c.id] or c.id
+            if (KICK_CD_CAP[canon] or 0) < c.cd then KICK_CD_CAP[canon] = c.cd end
         end
     end
     if entry.announceExtras then
@@ -158,4 +197,83 @@ end
 
 function KE:GetInterruptAnnounceSpellSet()
     return INTERRUPT_ANNOUNCE_SET
+end
+
+-- The candidate named by trackedID, else the first candidate.
+function KE:PickTrackedKick(candidates, trackedID)
+    if trackedID then
+        for _, c in ipairs(candidates) do
+            if c.id == trackedID then return c end
+        end
+    end
+    return candidates[1]
+end
+
+-- The kick a cooldown tracker shows for a spec when it cannot see the pet.
+function KE:GetTrackedKickForSpec(specID)
+    local d = INTERRUPTS[specID]
+    if not d then return nil end
+    local list = d.candidateList
+    if not list or #list == 0 then return nil end
+    return self:PickTrackedKick(list, d.tracked)
+end
+
+-- Every spell that starts a kick cooldown: candidate ids only, never the
+-- announce extras, which are not kicks.
+function KE:GetInterruptKickSpellSet()
+    return KICK_SPELL_SET
+end
+
+-- Talents that change a kick's cooldown outright, keyed by kick spell ID.
+-- Each entry names its talent and one change: `seconds` off the cooldown, or
+-- `multiplier`, the share of the cooldown kept (10% off is 0.9).
+local FLAT_KICK_TALENTS = {
+    [2139] = { { talent = 382297, seconds = 5 } },       -- Counterspell: Quick Witted
+    [6552] = { { talent = 391271, multiplier = 0.9 } },  -- Pummel: Honed Reflexes
+}
+
+function KE:GetFlatKickTalents(kickSpellID)
+    return FLAT_KICK_TALENTS[kickSpellID]
+end
+
+function KE:GetCanonicalKickSpell(spellID)
+    return KICK_ALIASES[spellID] or spellID
+end
+
+-- One kick's cooldown for a spec, alias-aware; nil when the spec lacks it.
+function KE:GetKickCooldownForSpec(specID, kickID)
+    local d = INTERRUPTS[specID]
+    local list = d and d.candidateList
+    if not list then return nil end
+    for _, c in ipairs(list) do
+        if (KICK_ALIASES[c.id] or c.id) == kickID then return c.cd end
+    end
+    return nil
+end
+
+-- A spec's talent-added kicks as { id, cd, requires }, or nil.
+function KE:GetExtraKicksForSpec(specID)
+    return EXTRA_KICKS_BY_SPEC[specID]
+end
+
+-- The { id, cd, requires } entry for a talent-added kick, or nil.
+function KE:GetExtraKick(spellID)
+    return EXTRA_KICK_BY_ID[spellID]
+end
+
+-- The largest table cooldown of a canonical kick ID, or nil when unknown.
+function KE:GetKickCooldownCap(kickID)
+    return KICK_CD_CAP[kickID]
+end
+
+-- Talents that shorten a kick after it interrupts something, keyed by kick
+-- spell ID.
+local SUCCESS_REDUCTIONS = {
+    [47528] = { talent = 378848, seconds = 3 },  -- Mind Freeze: Coldthirst
+}
+
+function KE:GetInterruptSuccessReduction(kickSpellID)
+    local reduction = SUCCESS_REDUCTIONS[kickSpellID]
+    if not reduction then return nil end
+    return reduction.talent, reduction.seconds
 end

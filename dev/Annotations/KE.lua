@@ -1040,6 +1040,61 @@ function KE:GetInterruptCandidatesForSpec(specID) end
 ---@return table<number, true>?
 function KE:GetInterruptSpellSet(specID) end
 
+--- The candidate whose id is trackedID, else the first candidate.
+---@param candidates { id: number, cd: number }[]
+---@param trackedID number?
+---@return { id: number, cd: number }?
+function KE:PickTrackedKick(candidates, trackedID) end
+
+--- The kick a cooldown tracker shows for a spec whose pet it cannot see: the
+--- `tracked` candidate, else the first; nil when the spec has no kick.
+---@param specID number
+---@return { id: number, cd: number }?
+function KE:GetTrackedKickForSpec(specID) end
+
+--- Every candidate kick ID across specs (announce extras excluded).
+--- Callers treat the returned table as read-only.
+---@return table<number, true>
+function KE:GetInterruptKickSpellSet() end
+
+--- Flat talent changes to one kick's cooldown, or nil.
+---@param kickSpellID number
+---@return { talent: number, seconds: number?, multiplier: number? }[]?
+function KE:GetFlatKickTalents(kickSpellID) end
+
+--- The spell ID a cooldown tracker keys a kick on (aliases collapsed).
+---@param spellID number
+---@return number
+function KE:GetCanonicalKickSpell(spellID) end
+
+--- One kick's cooldown for a spec, alias-aware; nil when the spec lacks it.
+---@param specID number?
+---@param kickID number
+---@return number?
+function KE:GetKickCooldownForSpec(specID, kickID) end
+
+--- A spec's talent-added kicks, or nil.
+---@param specID number
+---@return { id: number, cd: number, requires: number }[]?
+function KE:GetExtraKicksForSpec(specID) end
+
+--- The entry for a talent-added kick, or nil.
+---@param spellID number
+---@return { id: number, cd: number, requires: number }?
+function KE:GetExtraKick(spellID) end
+
+--- The largest table cooldown of a canonical kick ID, or nil when unknown.
+---@param kickID number
+---@return number?
+function KE:GetKickCooldownCap(kickID) end
+
+--- The talent that shortens a kick after a successful interrupt, and by how
+--- many seconds; nil when none.
+---@param kickSpellID number
+---@return number? talentSpellID
+---@return number? seconds
+function KE:GetInterruptSuccessReduction(kickSpellID) end
+
 -- Core/Main.lua
 function KE:SetupMinimapIcon() end
 

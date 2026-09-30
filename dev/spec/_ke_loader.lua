@@ -2958,13 +2958,26 @@ end
 
 -- Modules/Dungeons/KickTracker.lua, for the own-kick guard. Plain stubs only:
 -- the file reads C_SpecializationInfo (from the mock) and LibStub at load, and
--- the spec drives OnSpellcastSucceeded directly. Returns KT.
+-- the spec drives OnSpellcastSucceeded directly. Core/Interrupts.lua loads
+-- first into the same KE: the module takes its kick set from it at load.
+-- Returns KT.
 function L.loadKickTracker(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
-    helpers.loadModule("Modules/Dungeons/KickTracker.lua", { Print = function() end })
+    local KE = helpers.loadModule("Core/Interrupts.lua", { Print = function() end })
+    helpers.loadModule("Modules/Dungeons/KickTracker.lua", KE)
+    helpers.loadModule("Modules/Dungeons/KickTrackerRules.lua", KE)
+    return modules["KickTracker"]
+end
+
+-- Modules/Dungeons/KickTrackerRules.lua alone: the tracker's pure decisions
+-- call no WoW API, so only the module table the shim hands back is needed.
+-- Returns KT.
+function L.loadKickTrackerRules()
+    local modules = helpers.installAddonShim()
+    helpers.loadModule("Modules/Dungeons/KickTrackerRules.lua", {})
     return modules["KickTracker"]
 end
 
