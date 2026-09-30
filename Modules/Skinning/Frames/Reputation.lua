@@ -112,7 +112,7 @@ local function Skin()
         S.Backdrop(detail)
         if detail.CloseButton then S.CloseButton(detail.CloseButton) end
         if detail.ScrollingDescriptionScrollBar then S.ScrollBar(detail.ScrollingDescriptionScrollBar) end
-        for _, cb in ipairs({ "AtWarCheckBox", "InactiveCheckBox", "MainScreenCheckBox" }) do
+        for _, cb in ipairs({ "AtWarCheckbox", "MakeInactiveCheckbox", "WatchFactionCheckbox" }) do
             if detail[cb] then S.CheckBox(detail[cb]) end
         end
     end
