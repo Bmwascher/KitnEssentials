@@ -192,7 +192,6 @@ read_globals = {
     "UnitIsSpellTarget", "UnitSpellTargetName", "UnitSpellTargetClass",
     "PlayerIsSpellTarget",
     "UnitShouldDisplaySpellTargetName",
-    "C_CastingInfo",
 
     -- Inspect
     "CanInspect", "NotifyInspect", "GetInspectSpecialization",

@@ -1307,14 +1307,13 @@ function L.loadDungeonCasts(overrides)
     _G.LibStub = function() return nil end
     _G.UnitAffectingCombat = overrides.UnitAffectingCombat or function() return false end
     _G.UnitCanAttack = overrides.UnitCanAttack or function() return true end
-    -- The module localises this at file scope, so a test that assigns it
-    -- afterwards is assigning to a global nothing reads.
-    _G.C_CastingInfo = overrides.C_CastingInfo or {
-        GetCastInfo = function() return nil end,
-        GetChannelInfo = function() return nil end,
-    }
+    -- The module localises the cast readers at file scope, so a test that
+    -- assigns them afterwards is assigning to globals nothing reads. The
+    -- default is no cast.
+    _G.UnitCastingInfo = overrides.UnitCastingInfo or function() return nil end
+    _G.UnitChannelInfo = overrides.UnitChannelInfo or function() return nil end
     -- The module localises C_Spell at file scope, so the override is
-    -- assigned before the load, as C_CastingInfo above.
+    -- assigned before the load, as the cast readers above.
     _G.C_Spell = overrides.C_Spell or {}
     local KE = { Print = function() end, curves = {} }
     helpers.loadModule("Modules/Dungeons/DungeonCasts.lua", KE)
