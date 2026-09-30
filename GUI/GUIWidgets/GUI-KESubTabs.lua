@@ -84,7 +84,8 @@ local function TabOnLeave(b)
     end
 end
 
--- The row's remaining width is left empty.
+-- A fill strip sizes each tab to its label and leaves the row's remaining
+-- width empty.
 local function SizeTabToText(btn)
     btn:SetWidth((btn.label:GetStringWidth() or 0) + Theme.paddingLarge * 2)
 end
@@ -192,7 +193,7 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
 
         if fill then
             -- TOPLEFT chains left to right; each width comes from that tab's
-            -- own label in the sizing pass.
+            -- own label.
             if i == 1 then
                 btn:SetPoint("TOPLEFT", strip, "TOPLEFT", 0, 0)
             else
