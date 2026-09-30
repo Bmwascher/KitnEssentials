@@ -515,8 +515,6 @@ local function OnEnter_Role(self)
     GameTooltip:Show()
 end
 
--- Counts each role in the group onto the plate. Shared by the roster events,
--- the panel opening and the catch-up at combat start.
 function RC:RefreshRoleCounts()
     self._roleIconsDirty = false
     wipe(roleCount)
