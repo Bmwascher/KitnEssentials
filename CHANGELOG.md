@@ -1,5 +1,26 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.1
+
+### Raid Control
+
+- The ready check, countdown and everyone-assistant buttons grey out while the
+  game restricts party actions
+
+### Focus Marker
+
+- The marker announce is skipped while chat is locked
+
+### M+ Timer
+
+- Splits and the reset line are skipped while chat is locked
+
+### Damage Meter
+
+- Reports are refused with a message while chat is locked
+
+---
+
 ## v4.8.0
 
 ### Profile Manager
