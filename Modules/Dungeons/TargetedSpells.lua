@@ -1226,32 +1226,25 @@ end
 -- CVar Prompt
 ---------------------------------------------------------------------------------
 
--- Field write only — never reassign the StaticPopupDialogs global itself:
--- that taints the _G slot and every secure popup read (talent-commit confirm
--- included) then carries KE taint into OverlayPlayerCastingBarFrame.
-StaticPopupDialogs["KE_TARGETEDSPELLS_CVAR"] = {
-    text = "Targeted Spells: enemies casting from off-screen only produce nameplates when 'nameplateShowOffscreen' is enabled. Turn it on now?",
-    button1 = "Enable it",
-    button2 = "No thanks",
-    OnAccept = function()
-        SetCVar("nameplateShowOffscreen", "1")
-        KE:Print("nameplateShowOffscreen enabled.")
-    end,
-    OnCancel = function()
-        local db = KE.db and KE.db.profile.TargetedSpells
-        if db then db.CVarDeclined = true end
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    noCancelOnEscape = true,  -- Escape = soft dismiss (prompt returns next enable); only the button declines permanently
-    preferredIndex = 3,
-}
+local function EnableOffscreen()
+    SetCVar("nameplateShowOffscreen", "1")
+    KE:Print("nameplateShowOffscreen enabled.")
+end
+
+local function DeclineOffscreen()
+    local db = KE.db and KE.db.profile.TargetedSpells
+    if db then db.CVarDeclined = true end
+end
 
 function TS:CheckCVarPrompt()
     local db = self.db
     if not db or db.CVarDeclined then return end
     if GetCVar("nameplateShowOffscreen") ~= "1" then
-        StaticPopup_Show("KE_TARGETEDSPELLS_CVAR")
+        KE:ClosePromptIfOwner(EnableOffscreen)
+        -- X and Escape dismiss for now; only "No thanks" declines for good.
+        KE:CreatePrompt("Targeted Spells",
+            "Targeted Spells: enemies casting from off-screen only produce nameplates when 'nameplateShowOffscreen' is enabled. Turn it on now?",
+            false, nil, false, nil, nil, nil, nil, EnableOffscreen, DeclineOffscreen,
+            "Enable it", "No thanks", nil, nil, { closeIsNeutral = true, waitIfBusy = true })
     end
 end

@@ -22,6 +22,8 @@
 -- ║  gains it with its result list), so the drag handlers    ║
 -- ║  re-check it per drag. The three InCombatLockdown        ║
 -- ║  guards are load-bearing, never remove one.              ║
+-- ║  One exception: the talent window's open-time move       ║
+-- ║  reset runs insecurely, out of combat only.              ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -518,10 +520,10 @@ local function GetFrame(frameOrName)
 end
 
 -- Secure drag ------------------------------------------------------------------
--- Insecure SetMovable / EnableMouse / StartMoving / SetPoint on a protected
--- frame taint its tree; PVEFrame is protected once its result list is up,
--- and that list compares secret values. A protected frame is moved only by
--- a secure snippet, which taints nothing, and never in combat.
+-- Dragging a protected frame with insecure SetMovable / EnableMouse /
+-- StartMoving / SetPoint taints its tree; PVEFrame is protected once its
+-- result list is up, and that list compares secret values. A protected frame
+-- is dragged only by a secure snippet, which taints nothing, and never in combat.
 
 -- IsProtected can return a secret; a secret counts as protected.
 local function IsProtectedFrame(frame)
@@ -611,6 +613,12 @@ local function DragPath(button, modifierHeld, protected, inCombat, isDisabled)
         return "secure"
     end
     return "native"
+end
+
+-- Out of combat the talent-window move reset reaches the protected talent
+-- window too: resetting the hero picker alone breaks the picker's anchors.
+local function MoveResetAllowed(initialized, inCombat, protected)
+    return initialized == true and not (inCombat and protected)
 end
 
 -- Remembered positions ---------------------------------------------------------
@@ -812,7 +820,7 @@ function MF:HandleAddon(_, addon)
             end)
         elseif addon == "Blizzard_PlayerSpells" and _G.HeroTalentsSelectionDialog and _G.PlayerSpellsFrame then
             local function startStopMoving(frame)
-                if not MF.initialized or IsProtectedFrame(frame) then
+                if not MoveResetAllowed(MF.initialized, InCombatLockdown(), IsProtectedFrame(frame)) then
                     return
                 end
                 local backup = frame:IsMovable()

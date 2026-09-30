@@ -14,10 +14,7 @@ local UIParent = UIParent
 local type = type
 local IsControlKeyDown = IsControlKeyDown
 local IsMetaKeyDown = IsMetaKeyDown
-local StaticPopup_Show = StaticPopup_Show
 local ReloadUI = ReloadUI
-local ACCEPT = ACCEPT
-local CANCEL = CANCEL
 
 ---------------------------------------------------------------------------------
 -- Message Popup
@@ -153,10 +150,12 @@ function KE.PromptTypedGateOpen(typed, required)
     return type(required) == "string" and typed == required
 end
 
--- An unsolicited prompt (opts.waitIfBusy) never replaces an open one: it waits
--- and opens once that prompt closes.
-function KE.PromptWaits(waitIfBusy, promptShowing)
-    return waitIfBusy == true and promptShowing == true
+-- An unsolicited prompt (opts.waitIfBusy) never replaces an open one, and never
+-- opens in combat: the keyboard reset cannot run there, and a prompt left with
+-- propagation off by an earlier Escape would eat every key. It waits and opens
+-- once that prompt closes or the fight ends.
+function KE.PromptWaits(waitIfBusy, promptShowing, inCombat)
+    return waitIfBusy == true and (promptShowing == true or inCombat == true)
 end
 
 -- The one waiting prompt: its CreatePrompt arguments packed with their count.
@@ -322,30 +321,16 @@ end
 -- onAccept with no arguments. Single edit box with an onAccept only.
 -- onSecondTextChanged(text, dialog) runs on every text change in the second
 -- box of a two-field prompt, for that call only. waitIfBusy is for a prompt
--- nobody asked for: with another prompt open it waits instead of replacing it,
--- and opens the frame after that prompt closes. It then returns nil.
+-- nobody asked for: with another prompt open, or in combat, it waits and opens
+-- the frame after that prompt closes or the fight ends. It then returns nil.
+-- acceptOnly (confirm mode only) shows the accept button alone, centred.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts)
     local Theme = KE.Theme
-    if not Theme then
-        StaticPopupDialogs["KE_PROMPT_DIALOG"] = {
-            text = text or "",
-            button1 = acceptText or ACCEPT,
-            button2 = cancelText or CANCEL,
-            OnAccept = onAccept,
-            OnCancel = onCancel,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3,
-        }
-        return StaticPopup_Show("KE_PROMPT_DIALOG")
-    end
-
     if type(opts) ~= "table" then opts = nil end
 
-    if KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil) then
+    if KE.PromptWaits(opts and opts.waitIfBusy, KE.activePrompt ~= nil, InCombatLockdown()) then
         heldPrompt = {
             title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
             textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
@@ -383,6 +368,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     local showButtons = (not showEditBox) or (onAccept ~= nil) or isCopyPrompt
     local requireTyped = (showEditBox and not twoField and onAccept and opts
         and type(opts.requireTyped) == "string") and opts.requireTyped or nil
+    local acceptOnly = (not showEditBox and opts and opts.acceptOnly == true) and true or false
 
     ------------------------------------------------------------------
     -- PASS 1: ensure-create every widget the current mode needs.
@@ -766,6 +752,13 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         -- Same grow-only idiom as the two-button branch below, sized for one
         -- button instead of a pair.
         dialog:SetWidth(math.max(POPUP_WIDTH, dialog.cancelBtn:GetWidth() + 24))
+    elseif dialog.buttonContainer and showButtons and acceptOnly then
+        ThemeButton(dialog.acceptBtn, Theme, acceptText or "Accept", true)
+        TintPromptLabel(dialog.acceptBtn, opts and opts.acceptColor)
+        SetPromptAcceptEnabled(dialog, true)
+        dialog.acceptBtn:ClearAllPoints()
+        dialog.acceptBtn:SetPoint("CENTER", dialog.buttonContainer, "CENTER", 0, 0)
+        dialog:SetWidth(math.max(POPUP_WIDTH, dialog.acceptBtn:GetWidth() + 24))
     elseif dialog.buttonContainer and showButtons then
         ThemeButton(dialog.acceptBtn, Theme, acceptText or "Accept", true)
         ThemeButton(dialog.cancelBtn, Theme, cancelText or "Cancel", false)
@@ -819,7 +812,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     -- the container with only cancelBtn in it, so acceptBtn -- left visible
     -- from a prior confirm-mode call -- must be hidden explicitly here.
     if dialog.acceptBtn then dialog.acceptBtn:SetShown(showButtons and not isCopyPrompt) end
-    if dialog.cancelBtn then dialog.cancelBtn:SetShown(showButtons) end
+    if dialog.cancelBtn then dialog.cancelBtn:SetShown(showButtons and not acceptOnly) end
 
     -- Reset the keyboard state on every show, out of combat only. The reset is
     -- what matters: an ESCAPE close leaves propagation off, and the next prompt

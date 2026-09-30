@@ -334,7 +334,6 @@ function L.loadTargetedSpells(overrides)
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
     _G.LibStub = function() return nil end
-    _G.StaticPopupDialogs = {}  -- in-game Blizzard defines it; module must never assign the global
     local KE = { Print = function() end, curves = {} }
     helpers.loadModule("Modules/Dungeons/TargetedSpells.lua", KE)
     return modules["TargetedSpells"], KE
@@ -1907,7 +1906,8 @@ end
 -- delimiter-first) rather than adding a second local of the same name.
 -- Returns MF, KE, seams (seams.getFrame, seams.blizzardFrames,
 -- seams.blizzardFramesOnDemand, seams.disabled, seams.modifierHeld,
--- seams.dragPath, seams.secureDrag, seams.canRemember, seams.framePaths).
+-- seams.dragPath, seams.secureDrag, seams.canRemember, seams.framePaths,
+-- seams.moveResetAllowed).
 function L.loadMoveFrames(overrides)
     overrides = overrides or {}
     local modules = helpers.installAddonShim()
@@ -1936,6 +1936,7 @@ function L.loadMoveFrames(overrides)
         dragPath = findUpvalue(MF.Frame_StartMoving, "DragPath"),
         secureDrag = findUpvalue(MF.SetMovable, "secureDrag"),
         canRemember = findUpvalue(MF.Remember, "CanRemember"),
+        moveResetAllowed = findUpvalue(MF.HandleAddon, "MoveResetAllowed"),
     }
     seams.framePaths = findUpvalue(seams.canRemember, "framePaths")
     return MF, KE, seams
@@ -2178,7 +2179,6 @@ function L.loadOptimize(overrides)
     }
     _G.Enum.NamePlateStackType = { None = 0, Enemy = 1, Friendly = 2 }
     _G.GetInstanceInfo = function() return "Mock", "party", rec.difficultyID end
-    _G.StaticPopupDialogs = {}
     _G.ReloadUI = function() end
     -- Wiped per load: this is the module's own SavedVariables and busted
     -- insulates _G per FILE, not per test.
@@ -2592,7 +2592,8 @@ end
 -- holds IsArenaSkirmish and IsWargame as upvalues, so reassigning them on _G
 -- after the load would not reach it; routing every predicate through one table
 -- lets a single load serve every branch. C_PvP deliberately carries only the
--- members the module is supposed to use.
+-- members the module is supposed to use. rec.prompts records every
+-- KE:CreatePrompt call.
 -- Returns CL, rec.
 function L.loadCombatLogger(overrides)
     overrides = overrides or {}
@@ -2602,7 +2603,7 @@ function L.loadCombatLogger(overrides)
     local rec = {
         logging = false,
         prints = {},
-        popups = {},
+        prompts = {},
         pvp = {
             ratedArena = false,
             skirmish = false,
@@ -2612,8 +2613,6 @@ function L.loadCombatLogger(overrides)
         },
     }
 
-    _G.StaticPopupDialogs = {}
-    _G.StaticPopup_Show = function(which) rec.popups[#rec.popups + 1] = which end
     _G.ReloadUI = function() end
     _G.GetInstanceInfo = overrides.GetInstanceInfo
         or function() return "Test", "none", 0, "", 0 end
@@ -2633,7 +2632,19 @@ function L.loadCombatLogger(overrides)
         IsRatedBattleground = function() return rec.pvp.ratedBG end,
     }
 
-    local KE = { Print = function(_, msg) rec.prints[#rec.prints + 1] = msg end }
+    local KE = {
+        Print = function(_, msg) rec.prints[#rec.prints + 1] = msg end,
+        ClosePromptIfOwner = function() end,
+        -- SEVEN placeholders between text and onAccept, matching the real
+        -- signature (Core/Widgets.lua).
+        CreatePrompt = function(_, title, text, _, _, _, _, _, _, _,
+                                onAccept, onCancel, acceptText, cancelText, _, _, opts)
+            rec.prompts[#rec.prompts + 1] = {
+                title = title, text = text, onAccept = onAccept, onCancel = onCancel,
+                acceptText = acceptText, cancelText = cancelText, opts = opts,
+            }
+        end,
+    }
     helpers.loadModule("Modules/QoL/CombatLogger.lua", KE)
 
     local CL = modules["CombatLogger"]
