@@ -168,25 +168,38 @@ describe("PIAssist ready gate", function()
     end)
 end)
 
--- Only the PI Assist and PI Macro pages show the followed name, and both sit
--- under Class Tools' Priest tab.
+-- The PI Assist page shows state derived from the followed name and is
+-- rebuilt; the PI Macro page shows only its PI Target box, re-seeded in place.
 describe("PIAssist page refresh", function()
-    it("rebuilds only while Class Tools shows its Priest tab", function()
+    it("rebuilds the PI Assist tab, re-seeds the PI Macro box, and touches nothing elsewhere", function()
         local cases = {
-            { page = "ClassTools",  tab = "ClassToolsPriest", refreshes = 1 },
-            { page = "ClassTools",  tab = "ClassToolsEvoker", refreshes = 0 },
-            { page = "CombatTimer", tab = "ClassToolsPriest", refreshes = 0 },
+            { page = "ClassTools",  tab = "ClassToolsPriest", nested = "PIAssist",       refreshes = 1, seeds = 0 },
+            { page = "ClassTools",  tab = "ClassToolsPriest", nested = "PIMacroBuilder", refreshes = 0, seeds = 1 },
+            { page = "ClassTools",  tab = "ClassToolsPriest", nested = nil,              refreshes = 0, seeds = 1 },
+            { page = "ClassTools",  tab = "ClassToolsEvoker", nested = "PIAssist",       refreshes = 0, seeds = 0 },
+            { page = "CombatTimer", tab = "ClassToolsPriest", nested = "PIAssist",       refreshes = 0, seeds = 0 },
         }
         for i, c in ipairs(cases) do
-            local refreshes = 0
+            local refreshes, seeds, seeded = 0, 0, nil
             local gui = {
                 selectedSidebarItem = c.page,
-                tabbedPageState = { ClassTools = c.tab },
+                tabbedPageState = { ClassTools = c.tab, ClassToolsPriest = c.nested },
                 RefreshContent = function() refreshes = refreshes + 1 end,
+                piMacroTargetBox = {
+                    SetValue = function(_, value, silent)
+                        seeds = seeds + 1
+                        seeded = { value = value, silent = silent }
+                    end,
+                },
             }
-            local PA = L.loadPIAssist({ gui = gui })
+            local PA = L.loadPIAssist({ gui = gui, target = "Bob" })
             PA:OnTargetChanged()
             assert.equals(c.refreshes, refreshes, "case " .. i)
+            assert.equals(c.seeds, seeds, "case " .. i)
+            if c.seeds > 0 then
+                assert.equals("Bob", seeded.value, "case " .. i)
+                assert.is_true(seeded.silent, "case " .. i)
+            end
         end
     end)
 end)

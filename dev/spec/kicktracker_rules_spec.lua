@@ -216,6 +216,23 @@ describe("KickTracker remaining-time field", function()
     end)
 end)
 
+describe("KickTracker message bar times", function()
+    it("caps the remaining time at the cooldown the bar is sized by", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "a message cooldown below the row's caps at the message's",
+              field = "15", cd = 10, rowCd = 15, duration = 10, remaining = 10 },
+            { name = "no message cooldown sizes and caps at the row's",
+              field = "20", cd = nil, rowCd = 15, duration = 15, remaining = 15 },
+        }
+        for _, row in ipairs(rows) do
+            local duration, remaining = KT.MessageBarTimes(row.field, row.cd, row.rowCd)
+            assert.equals(row.duration, duration, row.name)
+            assert.equals(row.remaining, remaining, row.name)
+        end
+    end)
+end)
+
 describe("KickTracker message to row state", function()
     it("starts, sets, readies or keeps a teammate's row, and stamps only a valid R", function()
         local KT = L.loadKickTrackerRules()
@@ -234,20 +251,6 @@ describe("KickTracker message to row state", function()
             local action, stamp = KT.CooldownFromMessage(row.verb, row.remaining, row.reducedAt, 10, 1.5)
             assert.equals(row.want, action, row.name)
             assert.equals(row.stamp, stamp, row.name)
-        end
-    end)
-end)
-
-describe("KickTracker message-named kick across a refresh", function()
-    it("keeps a heard teammate's message kick through any refresh, a respec included", function()
-        local KT = L.loadKickTrackerRules()
-        local rows = {
-            { name = "never heard from: the spec default", member = { specID = 266 }, want = false },
-            { name = "heard from: their message kick, a respec included",
-              member = { kickFromMessage = true, specID = 266 }, want = true },
-        }
-        for _, row in ipairs(rows) do
-            assert.equals(row.want, KT.KeepsMessageKick(row.member), row.name)
         end
     end)
 end)

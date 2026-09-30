@@ -588,12 +588,33 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
 function KE.PromptTypedGateOpen(typed, required) end
 
 --- True when a prompt raised with opts.waitIfBusy must wait because another
---- prompt is showing or combat is on (Core/Widgets.lua).
+--- prompt is showing, combat is on, or others already wait (Core/Widgets.lua).
 ---@param waitIfBusy boolean?
 ---@param promptShowing boolean
 ---@param inCombat boolean?
+---@param queued boolean?
 ---@return boolean
-function KE.PromptWaits(waitIfBusy, promptShowing, inCombat) end
+function KE.PromptWaits(waitIfBusy, promptShowing, inCombat, queued) end
+
+--- Appends a waiting prompt's packed arguments after removing any entry with
+--- the same non-nil `accept`; false, with nothing added, when the queue holds
+--- `cap` entries (Core/Widgets.lua).
+---@param queue table[]
+---@param entry table
+---@param cap integer
+---@return boolean
+function KE.PromptQueueAdd(queue, entry, cap) end
+
+--- Removes the entry whose `accept` is `accept`, keeping the order of the
+--- rest; a nil `accept` removes nothing (Core/Widgets.lua).
+---@param queue table[]
+---@param accept function?
+function KE.PromptQueueRemove(queue, accept) end
+
+--- Removes and returns the oldest waiting entry, or nil (Core/Widgets.lua).
+---@param queue table[]
+---@return table?
+function KE.PromptQueueTake(queue) end
 
 --- Closes the prompt, shown or waiting, whose accept callback is `accept`,
 --- running neither callback (Core/Widgets.lua).

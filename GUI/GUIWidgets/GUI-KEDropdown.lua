@@ -773,6 +773,9 @@ function GUIFrame:CreateDropdown(parent, labelText, config)
         if GUIFrame.activeDropdown == dropdownButton then
             GUIFrame.activeDropdown = nil
         end
+        -- Pools reuse a hidden button without repainting its hover border.
+        if hoverAnimGroup then hoverAnimGroup:Stop() end
+        dropdownButton:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
     end)
 
     -- Public API

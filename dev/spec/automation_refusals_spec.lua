@@ -10,7 +10,7 @@
 --   * The effective-state predicates themselves, in all three
 --     (Enabled, feature key) states.
 --   * The Hide Helptips sweep lifecycle.
---   * Per-spell secrecy on the fishing outfit cancel.
+--   * The fishing outfit cancel's refusal gate.
 --   * The repair-cost report's spend rule, which refuses to announce anything
 --     it cannot prove was paid.
 --   * The repair split, which refuses rather than guesses when the wallet
@@ -199,13 +199,10 @@ local function newFixture()
     _G.COLLECTION_UNOPENED_PLURAL = "PLURAL"
     _G.COLLECTION_UNOPENED_SINGULAR = "SINGULAR"
 
-    -- Fishing outfit cancel path: both methods the converted guard's block
-    -- calls, so an "exact says readable" case reaches an observable cancel
-    -- instead of the same silent nothing a refusal produces.
-    local cancels = {}
+    -- Fishing outfit cancel path: both methods the guarded block calls.
     _G.C_UnitAuras = {
         GetPlayerAuraBySpellID = function() return { auraInstanceID = 42 } end,
-        CancelAuraByInstanceID = function(unit, id) cancels[#cancels + 1] = { unit = unit, id = id } end,
+        CancelAuraByInstanceID = function() end,
     }
     _G.CancelUnitBuff = function() end
     _G.C_CVar = { GetCVar = function() return "0" end, SetCVar = function() end }
@@ -258,7 +255,6 @@ local function newFixture()
         ledger = ledger, timers = timers,
         hookedGlobals = hookedGlobals, hookedMethods = hookedMethods,
         named = named, cvarSets = cvarSets,
-        cancels = cancels,
         setSecrets = function(t) _G.C_Secrets = t end,
         setCombat = function(v) combat = v end,
         createCount = function() return createCount end,
@@ -1034,41 +1030,39 @@ describe("Automation Hide Helptips sweep lifecycle", function()
 end)
 
 ---------------------------------------------------------------------------------
--- Behaviour 6: per-spell secrecy on the fishing outfit cancel (Task 6)
+-- Behaviour 6: the fishing outfit cancel's refusal gate
 ---------------------------------------------------------------------------------
-describe("Automation fishing outfit per-spell secrecy", function()
-    -- Same route Behaviour 4's "the fishing channel closure" path uses: obtain
-    -- the transform frame via the shared upvalue walk, fire it, then hand back
-    -- the queued 0.3s callback for the case to run.
-    local function captureFishCancel(fx)
-        local applyTransforms = findUpvalue(fx.AU.ApplySettings, "ApplyHideTransforms")
-        local fishFrame = findUpvalue(applyTransforms, "transformFishFrame")
-        local FISHING_CHANNEL_ID = findUpvalue(applyTransforms, "FISHING_CHANNEL_ID")
-        local before = #fx.timers
-        fishFrame:Fire("UNIT_SPELLCAST_CHANNEL_STOP", nil, nil, FISHING_CHANNEL_ID)
-        for i = before + 1, #fx.timers do
-            if fx.timers[i].delay == 0.3 then return fx.timers[i].fn end
+describe("Automation fishing outfit cancel gate", function()
+    it("refuses in combat, while identities are hidden whatever the spell says, and on a secret spell", function()
+        local AU = newFixture().AU
+        local cases = {
+            { name = "all clear allows",                          combat = false, hidden = false, spell = false, refused = false },
+            { name = "in combat refuses",                         combat = true,  hidden = false, spell = false, refused = true },
+            { name = "identities hidden, spell readable refuses", combat = false, hidden = true,  spell = false, refused = true },
+            { name = "spell secret, identities clear refuses",    combat = false, hidden = false, spell = true,  refused = true },
+        }
+        for _, c in ipairs(cases) do
+            assert.equals(c.refused, AU.FishingCancelRefused(c.combat, c.hidden, c.spell), c.name)
         end
-    end
-
-    it("exact says secret, broad says readable: the cancel recorder stays empty", function()
-        local fx = installedFixture()
-        local fn = captureFishCancel(fx)
-        assert.is_not_nil(fn)
-        fx.KE.AreAuraIdentitiesHidden = function() return false end
-        fx.setSecrets({ ShouldSpellAuraBeSecret = function() return true end })
-        fn()
-        assert.equals(0, #fx.cancels)
     end)
 
-    it("exact says readable, broad says hidden: the cancel recorder has exactly one entry", function()
+    it("the closure passes the broad answer: identities hidden with the spell readable cancels nothing", function()
         local fx = installedFixture()
-        local fn = captureFishCancel(fx)
-        assert.is_not_nil(fn)
+        local applyTransforms = findUpvalue(fx.AU.ApplySettings, "ApplyHideTransforms")
+        local fishFrame = findUpvalue(applyTransforms, "transformFishFrame")
+        local before = #fx.timers
+        fishFrame:Fire("UNIT_SPELLCAST_CHANNEL_STOP", nil, nil, findUpvalue(applyTransforms, "FISHING_CHANNEL_ID"))
+        local closure
+        for i = before + 1, #fx.timers do
+            if fx.timers[i].delay == 0.3 then closure = fx.timers[i].fn end
+        end
+        assert.is_not_nil(closure)
+        local cancelled = false
+        _G.C_UnitAuras.CancelAuraByInstanceID = function() cancelled = true end
         fx.KE.AreAuraIdentitiesHidden = function() return true end
         fx.setSecrets({ ShouldSpellAuraBeSecret = function() return false end })
-        fn()
-        assert.equals(1, #fx.cancels)
+        closure()
+        assert.is_false(cancelled)
     end)
 end)
 

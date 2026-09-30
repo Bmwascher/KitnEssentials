@@ -345,7 +345,7 @@ function ST:OnEvent(event, unit, ...)
         if issecretvalue(unit) or unit ~= "player" then return end
         if not self.state.showing or self.state.storedSpells >= 3 then return end
         local _, spellId, success = ...
-        if issecretvalue(spellId) then return end
+        if issecretvalue(spellId) or issecretvalue(success) then return end
         if success and DREAM_BREATH[spellId] then
             self:AddSpell(spellId)
         end

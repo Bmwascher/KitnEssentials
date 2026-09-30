@@ -189,6 +189,14 @@ function KT.ParseHelloRemaining(field, cd)
     return remaining
 end
 
+-- A message's bar: the cooldown it is sized by (the message's own, else the
+-- row's) and the remaining time capped at that same cooldown, so the bar
+-- never starts in the future.
+function KT.MessageBarTimes(field, cd, rowCd)
+    local duration = cd or rowCd
+    return duration, KT.ParseHelloRemaining(field, duration)
+end
+
 -- "start" the full cooldown, "set" a remaining time, "ready", or "keep".
 -- The second return is true when an R moved the row: that stamp makes a KICK
 -- inside the window keep the shorter time instead of restarting it.

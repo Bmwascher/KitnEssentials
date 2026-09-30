@@ -25,7 +25,13 @@ local C_AddOns = C_AddOns
 
 local function PixelBorder()
     local _, ph = GetPhysicalScreenSize()
-    local uiScale = (UIParent and UIParent.GetScale and UIParent:GetScale()) or 1
+    local uiScale = 1
+    if UIParent and UIParent.GetScale then
+        local s = UIParent:GetScale()
+        -- The scale aspect can be secret, and a truth test on a secret throws.
+        if issecretvalue(s) then return 1 end
+        if s then uiScale = s end
+    end
     if not ph or ph <= 0 or uiScale <= 0 then return 1 end
     return (768 / ph) / uiScale
 end
@@ -42,6 +48,8 @@ local function EdgeFor(bd)
     if not (bd and bd.GetEffectiveScale and UIParent and UIParent.GetEffectiveScale) then return px end
     local f = bd:GetEffectiveScale()
     local u = UIParent:GetEffectiveScale()
+    -- The scale aspect can be secret, and comparing a secret throws.
+    if issecretvalue(f) or issecretvalue(u) then return px end
     if not f or not u or f <= 0 or u <= 0 then return px end
     local factor = f / u
     if factor <= 0 then return px end

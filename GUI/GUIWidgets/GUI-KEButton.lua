@@ -61,6 +61,12 @@ function GUIFrame:CreateButton(parent, labelText, config)
     end
     PaintRest()
 
+    local function PaintHover()
+        local h = Theme.controlHover
+        button:SetBackdropColor(h[1], h[2], h[3], h[4])
+        button:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end
+
     -- Hover fade animation for border and plate color
     local hoverAnimGroup = button:CreateAnimationGroup()
     local hoverAnim = hoverAnimGroup:CreateAnimation("Animation")
@@ -165,6 +171,12 @@ function GUIFrame:CreateButton(parent, labelText, config)
         PlaceContent(0)
     end
 
+    local function ResetVisual()
+        hoverAnimGroup:Stop()
+        Release()
+        PaintRest()
+    end
+
     button:SetScript("OnLeave", function(self)
         Release()
         AnimateBorderColor(false)
@@ -185,9 +197,7 @@ function GUIFrame:CreateButton(parent, labelText, config)
         if mouseButton ~= "LeftButton" or not pressed then return end
         Release()
         if self:IsMouseOver() then
-            local h = Theme.controlHover
-            self:SetBackdropColor(h[1], h[2], h[3], h[4])
-            self:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+            PaintHover()
         else
             AnimateBorderColor(false)
         end
@@ -195,11 +205,7 @@ function GUIFrame:CreateButton(parent, labelText, config)
 
     -- Pools reuse a hidden button without repainting it, so a press, hover or
     -- fade still in flight at hide time is dropped here.
-    button:SetScript("OnHide", function()
-        hoverAnimGroup:Stop()
-        Release()
-        PaintRest()
-    end)
+    button:SetScript("OnHide", ResetVisual)
 
     button:SetScript("OnClick", function(self)
         callback()
@@ -227,9 +233,7 @@ function GUIFrame:CreateButton(parent, labelText, config)
                 iconWidget:SetAlpha(1)
             end
         else
-            hoverAnimGroup:Stop()
-            Release()
-            PaintRest()
+            ResetVisual()
             button:Disable()
             button:SetAlpha(0.5)
             button:EnableMouse(false)
@@ -246,7 +250,15 @@ function GUIFrame:CreateButton(parent, labelText, config)
     -- tables. Hover animation handlers read live values so they self-recover.
     -- Pool consumers call this when KE._themeVersion has advanced.
     function button:ApplyThemeColors()
-        PaintRest()
+        -- A repaint while this button holds the pointer (a click whose
+        -- callback changes the theme) keeps the hover look. Motion focus, not
+        -- a rectangle test: a button rebuilt under the theme popup must rest.
+        hoverAnimGroup:Stop()
+        if button:IsEnabled() and button:IsVisible() and button:IsMouseMotionFocus() then
+            PaintHover()
+        else
+            PaintRest()
+        end
         if textWidget then
             textWidget:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
         end

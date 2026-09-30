@@ -2929,6 +2929,13 @@ local transformFishFrame     -- lazy
 local FISHING_OUTFIT_AURA = 394009
 local FISHING_CHANNEL_ID  = 131476
 
+-- The outfit cancel is a restricted call: refused in combat, while aura
+-- identities are hidden (a key, an encounter, a PvP match) whatever the
+-- per-spell answer says, and when the outfit aura itself is secret.
+function AU.FishingCancelRefused(inCombat, identitiesHidden, spellHidden)
+    return inCombat == true or identitiesHidden == true or spellHidden == true
+end
+
 local function TransformItemEnabled(key)
     local t = AU.db.HideTransformItems
     if t and t[key] == false then return false end
@@ -3036,11 +3043,13 @@ local function ApplyHideTransforms()
         -- (131476) runs; clear it when the channel stops instead.
         transformFishFrame = CreateFrame("Frame")
         transformFishFrame:SetScript("OnEvent", function(_, _, _, _, spellID)
-            if spellID ~= FISHING_CHANNEL_ID then return end
+            -- The payload is secret while unit spellcasts are restricted.
+            if (issecretvalue and issecretvalue(spellID)) or spellID ~= FISHING_CHANNEL_ID then return end
             if not (AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
             C_Timer.After(0.3, function()
                 if not (AU.db.Enabled and AU.db.HideTransforms and TransformItemEnabled("fishing")) then return end
-                if UnitAffectingCombat("player") or KE:IsAuraHiddenForSpell(FISHING_OUTFIT_AURA) then return end
+                if AU.FishingCancelRefused(UnitAffectingCombat("player"), KE:AreAuraIdentitiesHidden(),
+                    KE:IsAuraHiddenForSpell(FISHING_OUTFIT_AURA)) then return end
                 if not (C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID) then return end
                 local aura = C_UnitAuras.GetPlayerAuraBySpellID(FISHING_OUTFIT_AURA)
                 if aura and aura.auraInstanceID ~= nil

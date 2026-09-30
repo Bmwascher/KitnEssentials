@@ -119,6 +119,8 @@ GUIFrame:RegisterContent("PIMacroBuilder", function(scrollChild, yOffset)
     })
     targetRow:AddWidget(targetInput, 1)
     manager:Register(targetInput, "all")
+    -- PIAssist re-seeds this box in place when the name changes elsewhere.
+    GUIFrame.piMacroTargetBox = targetInput
     card2:AddRow(targetRow, Theme.rowHeightLast, 0)
 
     yOffset = card2:GetNextOffset()
