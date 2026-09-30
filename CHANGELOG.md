@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.9
+
+### Settings
+
+- Refreshed colours for buttons, fields, sliders, switches, dropdowns and
+  sub-tabs; buttons get hover and pressed looks
+
+---
+
 ## v4.8.8
 
 ### Settings
