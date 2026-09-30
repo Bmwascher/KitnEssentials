@@ -102,7 +102,7 @@ PB.slots = {}
 PB.bindings = {}
 PB.queue = {}
 PB.queued = {}
-PB.watchedCells = {}
+PB.watchedCells = setmetatable({}, { __mode = "k" })
 PB.previewRows = {}
 
 local function Debug(fmt, ...)
