@@ -1,5 +1,13 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.3
+
+### Damage Meter
+
+- Idle meter windows repaint when a group member's spec icon changes
+
+---
+
 ## v4.8.2
 
 ### Focus Marker
