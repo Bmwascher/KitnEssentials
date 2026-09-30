@@ -2782,8 +2782,8 @@ local function SetupOmniumButton()
         end)
     end
 
-    -- The latch records a hide done here. Without it, every apply with the
-    -- feature off showed the button even where Blizzard keeps it hidden.
+    -- The latch records a hide done here, so turning the feature off hands
+    -- back only a button KE hid, never one Blizzard keeps hidden.
     if active then
         if mm then
             if mm:IsShown() then omniMinimapSuppressed = true end

@@ -1103,8 +1103,8 @@ function DC:UpdateInterruptible(unit)
     -- A held bar shows the interrupt colour under "Interrupted by X". Recolouring
     -- it to a live cast colour would contradict its own text.
     if bar.holdUntil then return end
-    -- Cast events stay registered while the preview is up, and UpdateBarColor's
-    -- preview branch tests notInterruptible for truth, which errors on a secret.
+    -- Cast events stay registered while the preview is up; a live bar in its
+    -- stack keeps its colour until the preview closes.
     if self.isPreview then return end
     if not (bar.casting or bar.channeling) then return end
 
