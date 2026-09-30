@@ -25,7 +25,6 @@ local UnitSpellTargetClass = UnitSpellTargetClass
 local GetTime = GetTime
 local GetRaidTargetIndex = GetRaidTargetIndex
 local SetRaidTargetIconTexture = SetRaidTargetIconTexture
-local IsInInstance = IsInInstance
 local C_Timer = C_Timer
 local C_DurationUtil = C_DurationUtil
 local C_CastingInfo = C_CastingInfo
@@ -120,24 +119,44 @@ end
 -- Instance Detection
 ---------------------------------------------------------------------------------
 
--- Determines whether the module should be active based on instance type
-function DC:ShouldBeActive()
-    if self.isPreview then return true end
-    local inInstance, instanceType = IsInInstance()
-    return inInstance and instanceType == "party"
+-- An unreadable zone answers nil, which the subscription counts as outside.
+---@param facts KE.ContextFacts
+---@return boolean?
+local function IsPartyInstance(facts)
+    if facts.inInstance == nil then return nil end
+    return facts.inInstance and facts.instanceType == "party"
 end
 
-function DC:CheckInstanceType()
-    local shouldBeActive = self:ShouldBeActive()
-    if shouldBeActive and not self.instanceActive then
-        self.instanceActive = true
-        self:SetUpdateFrameRunning(true)
-        self:ScanExistingNameplates()
-    elseif not shouldBeActive and self.instanceActive then
-        self.instanceActive = false
-        self:SetUpdateFrameRunning(false)
-        self:ReleaseAllBars()
-    end
+function DC:OnContextEnter()
+    self:SetContextEventsRegistered(true)
+    -- The preview owns the bars while it is up.
+    if self.isPreview then return end
+    self.instanceActive = true
+    self:SetUpdateFrameRunning(true)
+    self:ScanExistingNameplates()
+end
+
+-- Held bars go too: with the events and the update frame off, nothing else
+-- would release them.
+function DC:OnContextLeave()
+    self:SetContextEventsRegistered(false)
+    if self.isPreview then return end
+    self.instanceActive = false
+    self:SetUpdateFrameRunning(false)
+    self:ReleaseAllBars()
+end
+
+---@type KE.ContextSubscription
+local CONTEXT_SUBSCRIPTION = {
+    needs = { "zone" },
+    predicate = IsPartyInstance,
+    onUnknown = "closed",
+    onEnter = function() DC:OnContextEnter() end,
+    onLeave = function() DC:OnContextLeave() end,
+}
+
+local function OnPlayerSpecChanged()
+    DC:CacheKickSpell()
 end
 
 ---------------------------------------------------------------------------------
@@ -637,9 +656,7 @@ function DC:KickPassDue(now)
     return true
 end
 
--- PLAYER_SPECIALIZATION_CHANGED fires for every group member's spec change.
-function DC:CacheKickSpell(_, unit)
-    if unit and unit ~= "player" then return end
+function DC:CacheKickSpell()
     H.CacheInterruptId(self)
     -- Own spec, never secret. Tanks get no targeting glow: every trash cast
     -- is aimed at them, so it would never go out.
@@ -983,6 +1000,24 @@ local CAST_EVENT_HANDLERS = {
     UNIT_SPELLCAST_INTERRUPTIBLE = "UpdateInterruptible",
     UNIT_SPELLCAST_NOT_INTERRUPTIBLE = "UpdateInterruptible",
 }
+
+-- Registered on the context enter edge and removed on the leave edge, with
+-- the cast events above.
+local CONTEXT_EVENTS = {
+    NAME_PLATE_UNIT_ADDED = "OnNameplateAdded",
+    NAME_PLATE_UNIT_REMOVED = "OnNameplateRemoved",
+    PLAYER_REGEN_DISABLED = "OnCombatStart",
+    PLAYER_REGEN_ENABLED = "OnCombatEnd",
+}
+
+function DC:SetContextEventsRegistered(on)
+    for event, handler in pairs(CONTEXT_EVENTS) do
+        if on then self:RegisterEvent(event, handler) else self:UnregisterEvent(event) end
+    end
+    for event in pairs(CAST_EVENT_HANDLERS) do
+        if on then self:RegisterEvent(event, "OnCastEvent") else self:UnregisterEvent(event) end
+    end
+end
 
 function DC:OnNameplateAdded(_, unit)
     if not self.instanceActive then return end
@@ -1388,6 +1423,10 @@ end
 
 function DC:HidePreview()
     if not self.isPreview then return end
+    -- A fresh read, taken while the preview still owns the bars: between a
+    -- zone edge and its settle the latch can be stale, and an enter here only
+    -- registers the events, with no rescan.
+    KE.Context:Evaluate("DungeonCasts")
     self.isPreview = false
 
     if self.previewTicker then
@@ -1397,9 +1436,9 @@ function DC:HidePreview()
 
     self:ReleaseAllBars()
 
-    if self.db and self.db.Enabled then
-        self:CheckInstanceType()
-        self:SetUpdateFrameRunning(self.instanceActive)
+    if self.db and self.db.Enabled and KE.Context:IsActive("DungeonCasts") then
+        self.instanceActive = true
+        self:SetUpdateFrameRunning(true)
     else
         self.instanceActive = false
         self:SetUpdateFrameRunning(false)
@@ -1421,26 +1460,13 @@ function DC:OnEnable()
     -- fire a ConfigureBar in tainted context.
     self:RefreshTimeWidthReserve()
 
-    self:RegisterEvent("NAME_PLATE_UNIT_ADDED", "OnNameplateAdded")
-    self:RegisterEvent("NAME_PLATE_UNIT_REMOVED", "OnNameplateRemoved")
-
-    for event in pairs(CAST_EVENT_HANDLERS) do
-        self:RegisterEvent(event, "OnCastEvent")
-    end
-
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "CheckInstanceType")
-    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", "CheckInstanceType")
-    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnCombatStart")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
-
     -- Which spell is the kick changes with spec, talents and pet.
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "CacheKickSpell")
+    KE.Context:SubscribeSpec("DungeonCasts", OnPlayerSpecChanged)
     self:RegisterEvent("SPELLS_CHANGED", "CacheKickSpell")
     self:RegisterEvent("LOADING_SCREEN_DISABLED", "CacheKickSpell")
     self:CacheKickSpell()
 
-    self:CheckInstanceType()
-    self:SetUpdateFrameRunning(self.instanceActive)
+    KE.Context:Subscribe("DungeonCasts", CONTEXT_SUBSCRIPTION)
 
     if KE.EditMode and not self.editModeRegistered then
         KE.EditMode:RegisterElement({
@@ -1486,6 +1512,8 @@ function DC:OnEnable()
 end
 
 function DC:OnDisable()
+    KE.Context:Unsubscribe("DungeonCasts")
+    KE.Context:UnsubscribeSpec("DungeonCasts")
     self:HidePreview()
     self:ReleaseAllBars()
     self.instanceActive = false
