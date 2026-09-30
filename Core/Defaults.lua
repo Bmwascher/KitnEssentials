@@ -2429,7 +2429,7 @@ local Defaults = {
                 },
             },
             ContextMenus = {
-                Enabled = false,
+                Enabled = true,
             },
         },
 
