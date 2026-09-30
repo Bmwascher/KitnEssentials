@@ -22,6 +22,7 @@ local wipe = wipe
 local ipairs = ipairs
 local type = type
 local table_insert = table.insert
+local table_remove = table.remove
 local InCombatLockdown = InCombatLockdown
 local CreateFrame = CreateFrame
 local issecretvalue = issecretvalue
@@ -237,6 +238,7 @@ end
 local currentRestrictionState = 0
 local restrictionTypes = {}
 local deferredCallbacks = {}
+local restrictionListeners = {}
 
 -- The restriction event supplies numeric enum values, not strings, and its
 -- state enum starts at Inactive = 0 -- truthy in Lua. So the table is keyed by
@@ -254,6 +256,16 @@ local FULL_KEYS = RestrictionType and {
     RestrictionType.ChallengeMode,
     RestrictionType.PvPMatch,
 } or { COMBAT_KEY }
+
+-- Chat sends are refused under any of these. Chat itself stays out of
+-- FULL_KEYS, so the full-restriction answers stay what their callers expect;
+-- combat is left out because chat sends work in open-world combat.
+local CHAT_KEY = RestrictionType and RestrictionType.Chat
+local CHAT_LOCK_KEYS = RestrictionType and {
+    RestrictionType.ChallengeMode,
+    RestrictionType.Encounter,
+    RestrictionType.Chat,
+}
 
 -- Get current restriction state (0 = none, 1 = partial, 2 = full)
 function KE:GetRestrictionState()
@@ -293,6 +305,43 @@ function KE:DeferUntilUnrestricted(targetState, callback)
     })
 end
 
+-- Fail-closed: each source locks on its own, because a wrong "unlocked" is a
+-- blocked-action error and a wrong "locked" only skips a message. The tracked
+-- table is read rather than IsAddOnRestrictionActive, which answers false
+-- during the restriction event's dispatch.
+function KE:IsChatMessagingLocked()
+    local chatInfo = C_ChatInfo
+    if chatInfo and chatInfo.InChatMessagingLockdown
+        and chatInfo.InChatMessagingLockdown() then
+        return true
+    end
+    if CHAT_LOCK_KEYS then
+        for _, key in ipairs(CHAT_LOCK_KEYS) do
+            if restrictionTypes[key] then return true end
+        end
+    end
+    return false
+end
+
+-- Called as callback(newState, oldState) after every state change, in both
+-- directions, once the new state is written. A repeat registration is ignored:
+-- a caller may attach again while already attached (a post-combat replay).
+function KE:RegisterRestrictionListener(callback)
+    if not callback then return end
+    for _, existing in ipairs(restrictionListeners) do
+        if existing == callback then return end
+    end
+    table_insert(restrictionListeners, callback)
+end
+
+function KE:UnregisterRestrictionListener(callback)
+    for i = #restrictionListeners, 1, -1 do
+        if restrictionListeners[i] == callback then
+            table_remove(restrictionListeners, i)
+        end
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Internal State Logic
 ---------------------------------------------------------------------------------
@@ -325,6 +374,19 @@ local function SetRestrictionState(newState)
         -- Execute callbacks
         for _, callback in ipairs(toExecute) do
             callback()
+        end
+    end
+
+    -- Walk a copy: a listener that unregisters itself or another would shift
+    -- the live list and skip the next one. Every listener registered when the
+    -- change happened runs once; one added during the walk waits for the next.
+    if restrictionListeners[1] then
+        local snapshot = {}
+        for i = 1, #restrictionListeners do
+            snapshot[i] = restrictionListeners[i]
+        end
+        for i = 1, #snapshot do
+            snapshot[i](newState, oldState)
         end
     end
 end
@@ -362,6 +424,10 @@ local function SeedRestrictionState()
         if MAP_KEY then
             restrictionTypes[MAP_KEY] =
                 C_RestrictedActions.IsAddOnRestrictionActive(MAP_KEY) or nil
+        end
+        if CHAT_KEY then
+            restrictionTypes[CHAT_KEY] =
+                C_RestrictedActions.IsAddOnRestrictionActive(CHAT_KEY) or nil
         end
     end
     if InCombatLockdown() then restrictionTypes[COMBAT_KEY] = true end

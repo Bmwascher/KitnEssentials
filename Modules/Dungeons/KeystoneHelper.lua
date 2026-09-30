@@ -65,6 +65,7 @@ end
 ---------------------------------------------------------------------------------
 local function OnInstanceReset()
     if not KH.db or not KH.db.Enabled or not KH.db.ResetEnabled then return end
+    if KE:IsChatMessagingLocked() then return end
 
     local channel
     if IsInRaid() then

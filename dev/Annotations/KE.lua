@@ -1221,6 +1221,17 @@ function KE:CanMakeProtectedCalls() end
 ---@param callback fun()?
 function KE:DeferUntilUnrestricted(targetState, callback) end
 
+-- True while a chat send would be refused: chat lockdown, or a Chat, keystone
+-- or encounter restriction.
+---@return boolean
+function KE:IsChatMessagingLocked() end
+
+---@param callback fun(newState: number, oldState: number)?
+function KE:RegisterRestrictionListener(callback) end
+
+---@param callback fun(newState: number, oldState: number)?
+function KE:UnregisterRestrictionListener(callback) end
+
 -- Core/TextureSnap.lua
 ---@param obj Frame|Texture?
 function KE:DisablePixelSnap(obj) end

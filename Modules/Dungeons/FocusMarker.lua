@@ -18,7 +18,6 @@ local CreateMacro = CreateMacro
 local IsInGroup = IsInGroup
 local IsInRaid = IsInRaid
 local C_ChatInfo = C_ChatInfo
-local C_Timer = C_Timer
 local CreateFrame = CreateFrame
 local GetSpecialization = C_SpecializationInfo.GetSpecialization
 local GetSpecializationInfo = C_SpecializationInfo.GetSpecializationInfo
@@ -156,28 +155,26 @@ end
 ---------------------------------------------------------------------------------
 -- Lifecycle
 ---------------------------------------------------------------------------------
--- READY_CHECK announce uses a dedicated CreateFrame instead of AceEvent so the
--- callback does not dispatch through LibStub's shared CallbackHandler-1.0.
--- When other addons in the user's loadout (Augur, AdvancedInterfaceOptions,
--- etc.) share the same handler namespace, the dispatch chain becomes tainted
--- and SendChatMessage (HasRestrictions=true, RestrictedForMacroChatMessages=true)
--- is blocked. The C_Timer.After(0, ...) defer below is part of the same fix --
--- it keeps SendChatMessage off the tainted OnEvent dispatch by running it on
--- a clean next frame instead of inline in the handler.
+-- SendChatMessage is refused while chat messaging is locked, which a running
+-- keystone does between pulls with no combat lockdown. The caller checks the
+-- lock and sends in the same tick, so nothing can change between the two.
+function FM.AnnounceAllowed(specID, inGroup, inRaid, inCombat, chatLocked)
+    if specID and NO_KICK_SPECS[specID] then return false end
+    if not inGroup or inRaid or inCombat or chatLocked then return false end
+    return true
+end
+
 function FM:_AnnounceFocusMarkerOnReadyCheck()
     local db = self.db
     if not db.AnnounceReadyCheck then return end
     local specIndex = GetSpecialization()
-    if specIndex then
-        local specID = GetSpecializationInfo(specIndex)
-        if specID and NO_KICK_SPECS[specID] then return end
+    local specID = specIndex and GetSpecializationInfo(specIndex)
+    if not FM.AnnounceAllowed(specID, IsInGroup(), IsInRaid(), InCombatLockdown(),
+        KE:IsChatMessagingLocked()) then
+        return
     end
-    if not (IsInGroup() and not IsInRaid() and not InCombatLockdown()) then return end
     local marker = db.SelectedMarker or "Star"
-    local msg = "My Focus Marker is {" .. marker .. "}"
-    C_Timer.After(0, function()
-        C_ChatInfo.SendChatMessage(msg, "PARTY")
-    end)
+    C_ChatInfo.SendChatMessage("My Focus Marker is {" .. marker .. "}", "PARTY")
 end
 
 function FM:OnEnable()
