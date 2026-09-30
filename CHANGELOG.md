@@ -1,5 +1,20 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.12
+
+### Prompts
+
+- The CPU profiler warning, the advanced combat logging question and the
+  Targeted Spells, Dungeon Trash and Optimize popups use KE's own prompt
+  instead of the game's popups, which could cause blocked-action errors
+- A prompt that arrives in combat waits until combat ends
+
+### Move Frames
+
+- Fixes errors from the hero talent picker after moving the talent window
+
+---
+
 ## v4.8.11
 
 ### Kick Tracker
