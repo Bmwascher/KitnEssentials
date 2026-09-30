@@ -13,7 +13,12 @@ describe("GUIFrame:CreateCompactCheckbox", function()
         mock.install()
 
         fired = 0
-        GUIFrame = {}
+        -- The widget file builds its pools at load and asks whether a parent
+        -- is pooled; a stub parent never is, so the factory builds fresh.
+        GUIFrame = {
+            NewWidgetPool = function() return {} end,
+            IsPoolParent = function() return false end,
+        }
         helpers.loadModule("GUI/GUIWidgets/GUI-KEToggle.lua", {
             GUIFrame = GUIFrame,
             -- Colour keys answer one triple each; the widget only indexes

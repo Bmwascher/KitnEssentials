@@ -16,37 +16,24 @@ local C_Timer = C_Timer
 local math_floor, math_max, math_min = math.floor, math.max, math.min
 local GetTime = GetTime
 
+local STEPPER_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
+local STEPPER_SIZE = 20
+local THROTTLE_DELAY = 0.1 -- 100ms between updates
+
 ---------------------------------------------------------------------------------
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- Slider widget — config-table API: { min, max, step, value, callback, tooltip, isPercent }
--- TODO: `labelWidth` is accepted in the API but not yet wired into the widget
--- body. Callers (e.g. `labelWidth = 60`) won't see
--- the effect — config key passes silently. Implement when needed.
-function GUIFrame:CreateSlider(parent, labelText, config)
-    config = config or {}
-    local min = tonumber(config.min) or 0
-    local max = tonumber(config.max) or 100
-    local step = tonumber(config.step) or 1
-    local value = tonumber(config.value) or min
-    local tooltip = config.tooltip
-    local isPercent = config.isPercent
-    local customHeight = nil
-    local stepperTexture = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
-
+-- Builds one slider. Range, step, value, label and bindings are applied by
+-- ConfigureSlider, so a pooled slider can serve any setting.
+local function ConstructSlider(parent)
     -- Row
-    local rowHeight = customHeight or 36
     local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(rowHeight)
 
     -- Label
     local label = row:CreateFontString(nil, "OVERLAY")
     label:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 1)
     label:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(label, "small")
-    label:SetText(labelText or "")
-    label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
     row.label = label
 
     local sliderBG = CreateFrame("Frame", nil, row, "BackdropTemplate")
@@ -58,8 +45,6 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    sliderBG:SetBackdropColor(Theme.fieldBg[1], Theme.fieldBg[2], Theme.fieldBg[3], Theme.fieldBg[4])
-    sliderBG:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
     sliderBG:EnableMouse(false)
 
     -- Slider
@@ -68,10 +53,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     slider:SetPoint("TOPLEFT", row, "TOPLEFT", 77, -22)
     slider:SetPoint("TOPRIGHT", row, "TOPRIGHT", -27, -22) -- Make room for steppers + editbox
     slider:SetOrientation("HORIZONTAL")
-    slider:SetMinMaxValues(min or 0, max or 100)
-    slider:SetValueStep(step or 1)
     slider:SetObeyStepOnDrag(true)
-    slider:SetValue(value or min or 0)
     slider:SetHitRectInsets(-9, -9, -5, -5)
 
     -- Slider styling
@@ -87,7 +69,6 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     local fill = slider:CreateTexture(nil, "ARTWORK")
     fill:SetHeight(6)
     fill:SetPoint("LEFT", sliderBG, "LEFT", 1, 0)
-    fill:SetColorTexture(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     fill:SetTexelSnappingBias(0)
     fill:SetSnapToPixelGrid(false)
 
@@ -99,7 +80,6 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    thumbFrameBG:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], 1)
     thumbFrameBG:SetBackdropBorderColor(0, 0, 0, 1)
 
     -- Thumb container frame (animated color layer)
@@ -110,7 +90,6 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    thumbFrame:SetBackdropColor(Theme.thumbRest[1], Theme.thumbRest[2], Theme.thumbRest[3], 1)
     thumbFrame:SetBackdropBorderColor(0, 0, 0, 1) -- Black border
 
     -- Use a transparent texture for the actual thumb
@@ -188,7 +167,6 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         thumbR, thumbG, thumbB, thumbA = borderColorTo.r, borderColorTo.g, borderColorTo.b, borderColorTo.a
     end)
 
-    local throttleDelay = 0.1 -- 100ms between updates
     local lastUpdate = 0
     -- Set when the throttle drops a change. Without the flush, the last step of
     -- a fast drag, click run or typed value never reaches the callback, and the
@@ -201,19 +179,15 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         row._callback(slider:GetValue())
     end
 
-    -- Stepper buttons (left/right arrows)
-    local stepperSize = 20
-
     -- Left stepper (decrement) - arrow points left (rotated 90 clockwise)
     local leftStepper = CreateFrame("Button", nil, row)
-    leftStepper:SetSize(stepperSize, stepperSize)
+    leftStepper:SetSize(STEPPER_SIZE, STEPPER_SIZE)
     leftStepper:SetPoint("RIGHT", sliderBG, "LEFT", 0, 0)
 
     -- Left arrow icon
     local leftIcon = leftStepper:CreateTexture(nil, "ARTWORK")
     leftIcon:SetAllPoints()
-    leftIcon:SetTexture(stepperTexture)
-    leftIcon:SetVertexColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+    leftIcon:SetTexture(STEPPER_TEXTURE)
     leftIcon:SetRotation(math.rad(-90)) -- Rotate to point left
     leftIcon:SetTexelSnappingBias(0)
     leftIcon:SetSnapToPixelGrid(false)
@@ -223,7 +197,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     leftStepper:SetScript("OnClick", function()
         local currentVal = slider:GetValue()
         local minVal = slider:GetMinMaxValues()
-        local newVal = math_max(minVal, currentVal - step)
+        local newVal = math_max(minVal, currentVal - (row._step or 1))
         slider:SetValue(newVal)
         FlushDropped()
     end)
@@ -281,14 +255,13 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     -- Right stepper (increment) - arrow points right (rotated 90 counter-clockwise)
     local rightStepper = CreateFrame("Button", nil, row)
-    rightStepper:SetSize(stepperSize, stepperSize)
+    rightStepper:SetSize(STEPPER_SIZE, STEPPER_SIZE)
     rightStepper:SetPoint("LEFT", sliderBG, "RIGHT", 0, 0)
 
     -- Right arrow icon
     local rightIcon = rightStepper:CreateTexture(nil, "ARTWORK")
     rightIcon:SetAllPoints()
-    rightIcon:SetTexture(stepperTexture)
-    rightIcon:SetVertexColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+    rightIcon:SetTexture(STEPPER_TEXTURE)
     rightIcon:SetRotation(math.rad(90)) -- Rotate to point right
     rightIcon:SetTexelSnappingBias(0)
     rightIcon:SetSnapToPixelGrid(false)
@@ -298,7 +271,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     rightStepper:SetScript("OnClick", function()
         local currentVal = slider:GetValue()
         local _, maxVal = slider:GetMinMaxValues()
-        local newVal = math_min(maxVal, currentVal + step)
+        local newVal = math_min(maxVal, currentVal + (row._step or 1))
         slider:SetValue(newVal)
         FlushDropped()
     end)
@@ -371,8 +344,6 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    valueContainer:SetBackdropColor(Theme.fieldBg[1], Theme.fieldBg[2], Theme.fieldBg[3], Theme.fieldBg[4])
-    valueContainer:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
 
     -- EditBox border hover animation
     local editBoxAnimGroup = valueContainer:CreateAnimationGroup()
@@ -419,13 +390,8 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     local valueEdit = CreateFrame("EditBox", nil, valueContainer)
     valueEdit:SetPoint("TOPLEFT", 0, 0)
     valueEdit:SetPoint("BOTTOMRIGHT", 0, 0)
-    -- Own font, not a Blizzard font object: the global font sweep resizes
-    -- those, and the addon's config window must not follow a game-wide setting.
-    KE:ApplyThemeFont(valueEdit, "normal")
-    valueEdit:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     valueEdit:SetJustifyH("CENTER")
     valueEdit:SetAutoFocus(false)
-    valueEdit:SetText(tostring(value or min))
     row.valueEdit = valueEdit
 
     local isUpdating = false
@@ -440,7 +406,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         fill:SetWidth(width)
         if not isUpdating then
             isUpdating = true
-            if isPercent then
+            if row._isPercent then
                 -- Display as percentage: whole numbers as "65%", fractional as
                 -- "65.5%" (one decimal). Avoids a trailing ".0" on integer percents
                 -- while preserving sub-1% precision for callers that need it.
@@ -459,34 +425,42 @@ function GUIFrame:CreateSlider(parent, labelText, config)
 
     slider:SetScript("OnValueChanged", function(self, val)
         UpdateFill()
+        -- Read before either callback runs: one can rebuild the page and hand
+        -- this slider to another setting.
+        local callback, onValueChanged, gen = row._callback, row._onValueChanged, row._keGen
+        -- Every change, silent ones included: a caller that mirrors the
+        -- value, such as a live label, must follow neighbour cross-updates.
+        if onValueChanged then
+            onValueChanged(val)
+            if row._keGen ~= gen then
+                -- The throttle state now belongs to the new setting; the
+                -- change itself still belongs to the old one.
+                if callback then callback(val) end
+                return
+            end
+        end
         -- Silent SetValue (row:SetValue(v, true) — e.g. a neighbour-slider
         -- cross-update) nils row._callback: refresh the fill/editbox but do NOT
         -- touch the throttle clock. Otherwise the silent call would reset
         -- lastUpdate and the slider's next REAL drag would swallow its first
-        -- callback for up to throttleDelay.
-        if not row._callback then return end
+        -- callback for up to THROTTLE_DELAY.
+        if not callback then return end
         local currentTime = GetTime()
-        if currentTime - lastUpdate < throttleDelay then
+        if currentTime - lastUpdate < THROTTLE_DELAY then
             dropped = true
             return
         end
         lastUpdate = currentTime
         dropped = false
-        row._callback(val)
+        callback(val)
     end)
 
     slider:SetScript("OnSizeChanged", UpdateFill)
 
-    valueEdit:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
-        UpdateFill()
-    end)
-
-    valueEdit:SetScript("OnEnterPressed", function(self)
-        self:ClearFocus()
-        local text = self:GetText()
-        -- Handle percentage input (strip % and divide by 100)
-        if isPercent then
+    -- A typed value, clamped to the range, committed through the same
+    -- throttled SetValue.
+    local function CommitTyped(text)
+        if row._isPercent then
             text = text:gsub("%%", "")
             local num = tonumber(text)
             if num then
@@ -511,8 +485,17 @@ function GUIFrame:CreateSlider(parent, labelText, config)
                 UpdateFill()
             end
         end
-        -- A typed value commits through the same throttled SetValue.
         FlushDropped()
+    end
+
+    valueEdit:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+        UpdateFill()
+    end)
+
+    valueEdit:SetScript("OnEnterPressed", function(self)
+        self:ClearFocus()
+        CommitTyped(self:GetText())
     end)
 
     valueEdit:SetScript("OnEditFocusGained", function(self)
@@ -527,34 +510,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         valueContainer:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
         editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
         self:HighlightText(0, 0)
-        local text = self:GetText()
-        -- Handle percentage input (strip % and divide by 100)
-        if isPercent then
-            text = text:gsub("%%", "")
-            local num = tonumber(text)
-            if num then
-                num = num / 100
-                local minVal, maxVal = slider:GetMinMaxValues()
-                num = math_max(minVal, math_min(maxVal, num))
-                isUpdating = true
-                slider:SetValue(num)
-                isUpdating = false
-            else
-                UpdateFill()
-            end
-        else
-            local num = tonumber(text)
-            if num then
-                local minVal, maxVal = slider:GetMinMaxValues()
-                num = math_max(minVal, math_min(maxVal, num))
-                isUpdating = true
-                slider:SetValue(num)
-                isUpdating = false
-            else
-                UpdateFill()
-            end
-        end
-        FlushDropped()
+        CommitTyped(self:GetText())
     end)
 
     -- Add hover animation for editbox
@@ -600,6 +556,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         if not curDrag then
             AnimateThumbColor(true, false)
         end
+        local tooltip = row._tooltip
         if tooltip then
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
@@ -614,12 +571,10 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         GameTooltip:Hide()
     end)
 
-    -- A hide can swallow the mouse-up or cut a fade short, and a pooled slider
-    -- is reused without repainting its thumb.
+    -- A hide can swallow the mouse-up or cut a fade short.
     --
-    -- A step the throttle dropped is sent now, not later: a pooled card's
-    -- callback finds its settings through kit fields that the next page's
-    -- configure replaces, so a later send would write into that page.
+    -- A step the throttle dropped is sent now, while the slider is still bound
+    -- to its setting: a later send would reach whatever the slider serves next.
     slider:SetScript("OnHide", function()
         FlushDropped()
         curDrag = false
@@ -630,17 +585,17 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         thumbR, thumbG, thumbB, thumbA = c[1], c[2], c[3], 1
     end)
 
-    C_Timer.After(0, UpdateFill)
-
     function row:SetValue(val, silent)
         if silent then
             -- A silent value supersedes a dropped change; the flush must not
             -- send it to the callback.
             dropped = false
-            local saved = row._callback
+            -- onValueChanged still runs and can rebind this slider to another
+            -- setting; the old callback must not overwrite the new one.
+            local saved, gen = row._callback, row._keGen
             row._callback = nil
             slider:SetValue(val)
-            row._callback = saved
+            if row._keGen == gen then row._callback = saved end
         else
             slider:SetValue(val)
         end
@@ -657,16 +612,18 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         -- value — surfacing as "font size resets to max" when navigating
         -- between modules with different ranges. silent=true suppresses by
         -- the same save/clear/restore pattern row:SetValue uses.
+        local gen = row._keGen
         if silent then
             dropped = false
             local saved = row._callback
             row._callback = nil
             slider:SetMinMaxValues(minVal, maxVal)
-            row._callback = saved
+            if row._keGen == gen then row._callback = saved end
         else
             slider:SetMinMaxValues(minVal, maxVal)
         end
-        UpdateFill()
+        -- A rebound slider was already drawn by its configure.
+        if row._keGen == gen then UpdateFill() end
     end
 
     function row:SetEnabled(enabled)
@@ -690,8 +647,7 @@ function GUIFrame:CreateSlider(parent, labelText, config)
     -- Re-apply theme-tied state after KE:RefreshTheme replaces Theme color
     -- tables. Construction-time copies go stale; hover/animation handlers
     -- read live values via Theme.accent[1] indexing each call so they
-    -- self-recover. Pool consumers call this from Configure when the
-    -- KE._themeVersion has advanced since the kit's last refresh.
+    -- self-recover. Every configure calls this.
     function row:ApplyThemeColors()
         local TT = Theme
         label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
@@ -707,13 +663,88 @@ function GUIFrame:CreateSlider(parent, labelText, config)
         UpdateFill()
     end
 
+    -- Back to rest: no focus, no animation, no pending flush, resting thumb.
+    function row:_resetInteraction()
+        valueEdit:ClearFocus()
+        hoverAnimGroup:Stop()
+        leftAnimGroup:Stop()
+        rightAnimGroup:Stop()
+        editBoxAnimGroup:Stop()
+        curDrag = false
+        dropped = false
+        lastUpdate = 0
+        isUpdating = false
+        thumbR, thumbG, thumbB, thumbA = Theme.thumbRest[1], Theme.thumbRest[2], Theme.thumbRest[3], 1
+        thumbFrame:SetBackdropColor(thumbR, thumbG, thumbB, thumbA)
+        thumbFrame:SetBackdropBorderColor(0, 0, 0, 1)
+        leftR, leftG, leftB = Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3]
+        rightR, rightG, rightB = Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3]
+        editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
+    end
+
     row.slider = slider
+    row._updateFill = UpdateFill
 
     -- Pool-friendly callback slot; OnValueChanged reads late-bound.
-    row._callback = config.callback
     function row:SetCallback(fn)
         self._callback = fn
     end
 
+    function row:SetOnValueChanged(fn)
+        self._onValueChanged = fn
+    end
+
+    row._keOwned = { row, slider, valueContainer }
+    return row
+end
+
+local function ConfigureSlider(row, labelText, config)
+    local min = tonumber(config.min) or 0
+    local max = tonumber(config.max) or 100
+    local step = tonumber(config.step) or 1
+    local value = tonumber(config.value) or min
+
+    -- Every use: row:AddWidget sizes a widget to its row.
+    row:SetHeight(36)
+    local label = row.label
+    KE:ApplyThemeFont(label, "small")
+    label:SetText(labelText or "")
+    -- Own font, not a Blizzard font object: the global font sweep resizes
+    -- those, and the addon's config window must not follow a game-wide setting.
+    KE:ApplyThemeFont(row.valueEdit, "normal")
+
+    row._tooltip = config.tooltip
+    row._isPercent = config.isPercent
+    row._step = step
+    row:_resetInteraction()
+    row.slider:SetValueStep(step)
+    -- Silent: nothing is bound yet, and a clamp must not write anywhere.
+    row:SetMinMaxValues(min, max, true)
+    row:SetValue(value, true)
+    row:SetEnabled(true)
+    row:ApplyThemeColors()
+    row._callback = config.callback
+    row._onValueChanged = config.onValueChanged
+    C_Timer.After(0, row._updateFill)
+end
+
+local sliderPool = GUIFrame:NewWidgetPool("slider", ConstructSlider, function(row)
+    row:_resetInteraction()
+end)
+
+-- Slider widget — config-table API: { min, max, step, value, callback,
+-- onValueChanged, tooltip, isPercent }
+-- TODO: `labelWidth` is accepted in the API but not yet wired into the widget
+-- body. Callers (e.g. `labelWidth = 60`) won't see
+-- the effect — config key passes silently. Implement when needed.
+function GUIFrame:CreateSlider(parent, labelText, config)
+    config = config or {}
+    local row
+    if self:IsPoolParent(parent) then
+        row = sliderPool:Acquire(parent)
+    else
+        row = ConstructSlider(parent)
+    end
+    ConfigureSlider(row, labelText, config)
     return row
 end

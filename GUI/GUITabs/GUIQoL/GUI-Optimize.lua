@@ -49,6 +49,293 @@ local function InstallCloseHook()
     end)
 end
 
+local function MarkDirty()
+    optimizeDirty = true
+end
+
+-- What the selected preset wants for this cvar, or nil while no preset is
+-- selected. Max FPS falls through to the listed optimal for every cvar it does
+-- not override.
+local function PreviewValue(OPT, entry)
+    if not selectedPreset then return nil end
+    if selectedPreset == "maxfps" then
+        local v = OPT:GetMaxFPSOverrides()[entry.cvar]
+        if v ~= nil then return v end
+    end
+    return entry.optimal
+end
+
+------------------------------------------------------------------------
+-- Column header and per-CVar status lines: built once, reused by every
+-- page build through the settings widget pools.
+------------------------------------------------------------------------
+local function ConstructHeaderLine(parent)
+    local container = CreateFrame("Frame", nil, parent)
+
+    local settingHeader = container:CreateFontString(nil, "OVERLAY")
+    settingHeader:SetPoint("LEFT", container, "LEFT", 4, 0)
+    settingHeader:SetWidth(150)
+    settingHeader:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(settingHeader, "normal")
+    settingHeader:SetText("Setting")
+
+    local currentHeader = container:CreateFontString(nil, "OVERLAY")
+    currentHeader:SetPoint("LEFT", settingHeader, "RIGHT", 4, 0)
+    currentHeader:SetWidth(90)
+    currentHeader:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(currentHeader, "normal")
+    currentHeader:SetText("Current")
+
+    local spacer = container:CreateFontString(nil, "OVERLAY")
+    spacer:SetPoint("LEFT", currentHeader, "RIGHT", 2, 0)
+    KE:ApplyThemeFont(spacer, "normal")
+    spacer:SetText(" ")
+
+    local recHeader = container:CreateFontString(nil, "OVERLAY")
+    recHeader:SetPoint("LEFT", spacer, "RIGHT", 2, 0)
+    recHeader:SetWidth(90)
+    recHeader:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(recHeader, "normal")
+    recHeader:SetText("Recommended")
+
+    local headers = { settingHeader, currentHeader, recHeader }
+    function container:Configure()
+        KE:ApplyThemeFont(spacer, "normal")
+        local c = Theme.textSecondary
+        for _, header in ipairs(headers) do
+            KE:ApplyThemeFont(header, "normal")
+            header:SetTextColor(c[1], c[2], c[3], 0.7)
+        end
+    end
+
+    container._keOwned = { container }
+    return container
+end
+
+local ARROW_TEX = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
+
+local function SetupHover(btn)
+    btn:SetScript("OnEnter", function(self)
+        self:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+    end)
+    btn:SetScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
+    end)
+end
+
+local function PaintSmallButton(btn, text, textColor)
+    local TT = Theme
+    btn:SetBackdropColor(TT.controlBg[1], TT.controlBg[2], TT.controlBg[3], TT.controlBg[4])
+    btn:SetBackdropBorderColor(TT.controlBorder[1], TT.controlBorder[2], TT.controlBorder[3], 1)
+    KE:ApplyThemeFont(text, "normal")
+    text:SetTextColor(textColor[1], textColor[2], textColor[3], 1)
+end
+
+-- The cvar and the module the line serves are read from line._entry and
+-- line._opt at use time, so a reused line never acts for its last cvar.
+local function ConstructCVarLine(parent)
+    local line = CreateFrame("Frame", nil, parent)
+
+    local nameLabel = line:CreateFontString(nil, "OVERLAY")
+    nameLabel:SetPoint("LEFT", line, "LEFT", 4, 0)
+    nameLabel:SetWidth(150)
+    nameLabel:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(nameLabel, "normal")
+
+    local currentLabel = line:CreateFontString(nil, "OVERLAY")
+    currentLabel:SetPoint("LEFT", nameLabel, "RIGHT", 4, 0)
+    currentLabel:SetWidth(90)
+    currentLabel:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(currentLabel, "normal")
+
+    local optimalLabel = line:CreateFontString(nil, "OVERLAY")
+    optimalLabel:SetPoint("LEFT", currentLabel, "RIGHT", 30, 0)
+
+    local arrow1 = line:CreateTexture(nil, "OVERLAY")
+    arrow1:SetSize(10, 10)
+    arrow1:SetPoint("LEFT", currentLabel, "RIGHT", 0, 0)
+    arrow1:SetTexture(ARROW_TEX)
+    arrow1:SetRotation(math.pi / 2)
+
+    local arrow2 = line:CreateTexture(nil, "OVERLAY")
+    arrow2:SetSize(10, 10)
+    arrow2:SetPoint("LEFT", arrow1, "RIGHT", -3, 0)
+    arrow2:SetTexture(ARROW_TEX)
+    arrow2:SetRotation(math.pi / 2)
+    optimalLabel:SetWidth(90)
+    optimalLabel:SetJustifyH("LEFT")
+    KE:ApplyThemeFont(optimalLabel, "normal")
+
+    local applyBtn = CreateFrame("Button", nil, line, "BackdropTemplate")
+    applyBtn:SetSize(50, 20)
+    applyBtn:SetPoint("RIGHT", line, "RIGHT", -60, 0)
+    applyBtn:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    local applyText = applyBtn:CreateFontString(nil, "OVERLAY")
+    KE:ApplyThemeFont(applyText, "normal")
+    applyText:SetPoint("CENTER")
+    applyText:SetText("Apply")
+
+    local revertBtnSmall = CreateFrame("Button", nil, line, "BackdropTemplate")
+    revertBtnSmall:SetSize(50, 20)
+    revertBtnSmall:SetPoint("RIGHT", line, "RIGHT", -4, 0)
+    revertBtnSmall:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    local revertText = revertBtnSmall:CreateFontString(nil, "OVERLAY")
+    KE:ApplyThemeFont(revertText, "normal")
+    revertText:SetPoint("CENTER")
+    revertText:SetText("Revert")
+
+    local optimalStatusLabel = line:CreateFontString(nil, "OVERLAY")
+    KE:ApplyThemeFont(optimalStatusLabel, "normal")
+    optimalStatusLabel:SetPoint("CENTER", applyBtn, "CENTER", 0, 0)
+    optimalStatusLabel:SetText("Optimal")
+    optimalStatusLabel:Hide()
+
+    SetupHover(applyBtn)
+    SetupHover(revertBtnSmall)
+
+    function line:Refresh()
+        local OPT, entry = self._opt, self._entry
+        local current = OPT:GetCurrentValue(entry.cvar) or "?"
+        local rec = PreviewValue(OPT, entry)
+        currentLabel:SetText(OPT:GetValueLabel(entry.cvar, current))
+
+        if rec == nil then
+            -- No preset selected: there is nothing to recommend and nothing
+            -- for Apply to apply, so the row reads neutral.
+            currentLabel:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2],
+                Theme.textPrimary[3], 1)
+            optimalLabel:SetText("-")
+            optimalLabel:SetTextColor(0.5, 0.5, 0.5, 1)
+            optimalStatusLabel:Hide()
+            applyBtn:Show()
+            applyBtn:SetAlpha(0.35)
+            applyBtn:EnableMouse(false)
+        else
+            local isOpt = OPT:IsOptimal(entry.cvar, rec)
+            if isOpt then
+                currentLabel:SetTextColor(0.3, 1, 0.3, 1)
+            else
+                currentLabel:SetTextColor(1, 0.55, 0, 1)
+            end
+            optimalLabel:SetText(OPT:GetValueLabel(entry.cvar, rec))
+            optimalLabel:SetTextColor(0.3, 1, 0.3, 1)
+            if isOpt then
+                applyBtn:Hide()
+                optimalStatusLabel:Show()
+            else
+                applyBtn:Show()
+                applyBtn:SetAlpha(1)
+                applyBtn:EnableMouse(true)
+                optimalStatusLabel:Hide()
+            end
+        end
+
+        -- Revert shows whenever a backup exists, so it does not flicker as
+        -- presets are compared.
+        revertBtnSmall:Show()
+        if OPT:HasBackup(entry.cvar) then
+            revertBtnSmall:SetAlpha(1)
+            revertBtnSmall:EnableMouse(true)
+        else
+            revertBtnSmall:SetAlpha(0.35)
+            revertBtnSmall:EnableMouse(false)
+        end
+    end
+
+    -- gen is read before the cvar write: a line released and reused since
+    -- then skips the refresh.
+    local function RefreshSoon(gen)
+        C_Timer.After(0.1, function()
+            if line._keGen == gen then line:Refresh() end
+        end)
+    end
+
+    applyBtn:SetScript("OnClick", function()
+        local OPT, entry, gen = line._opt, line._entry, line._keGen
+        local rec = PreviewValue(OPT, entry)
+        if rec == nil then return end
+        OPT:ApplyCVar(entry.cvar, rec)
+        RefreshSoon(gen)
+        MarkDirty()
+    end)
+
+    revertBtnSmall:SetScript("OnClick", function()
+        local OPT, entry, gen = line._opt, line._entry, line._keGen
+        OPT:RevertCVar(entry.cvar)
+        RefreshSoon(gen)
+        MarkDirty()
+    end)
+
+    line:EnableMouse(true)
+    line:SetScript("OnEnter", function(self)
+        local OPT, entry = self._opt, self._entry
+        -- In the gap between the Recommended column and the buttons, so it
+        -- stays inside the window wherever the window sits.
+        GameTooltip:SetOwner(self, "ANCHOR_NONE")
+        GameTooltip:ClearAllPoints()
+        GameTooltip:SetPoint("LEFT", optimalLabel, "RIGHT", 10, 0)
+        GameTooltip:SetText(entry.name, 1, 0.82, 0, 1)
+        GameTooltip:AddLine(" ")
+        local cur = OPT:GetCurrentValue(entry.cvar) or "?"
+        GameTooltip:AddLine("Current: " .. OPT:GetValueLabel(entry.cvar, cur), 0.7, 0.7, 0.7)
+        local recTip = PreviewValue(OPT, entry)
+        if recTip ~= nil then
+            GameTooltip:AddLine("Recommended: " .. OPT:GetValueLabel(entry.cvar, recTip), 0.3, 1, 0.3)
+        else
+            GameTooltip:AddLine("Select a preset above to load its recommended values.", 0.5, 0.5, 0.5)
+        end
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("CVar: " .. entry.cvar, 0.5, 0.5, 0.5)
+        if entry.desc then
+            GameTooltip:AddLine(entry.desc, 0.5, 0.5, 0.5, true)
+        end
+        GameTooltip:Show()
+    end)
+    line:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    function line:Configure(OPT, entry)
+        self._opt = OPT
+        self._entry = entry
+        local TT = Theme
+        KE:ApplyThemeFont(nameLabel, "normal")
+        KE:ApplyThemeFont(currentLabel, "normal")
+        KE:ApplyThemeFont(optimalLabel, "normal")
+        nameLabel:SetText(entry.name)
+        nameLabel:SetTextColor(TT.textPrimary[1], TT.textPrimary[2], TT.textPrimary[3], 1)
+        local s = TT.textSecondary
+        arrow1:SetVertexColor(s[1], s[2], s[3], 0.6)
+        arrow2:SetVertexColor(s[1], s[2], s[3], 0.6)
+        PaintSmallButton(applyBtn, applyText, TT.accent)
+        PaintSmallButton(revertBtnSmall, revertText, TT.textSecondary)
+        KE:ApplyThemeFont(optimalStatusLabel, "normal")
+        optimalStatusLabel:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
+        self:Refresh()
+    end
+
+    line._keOwned = { line, applyBtn, revertBtnSmall }
+    return line
+end
+
+local headerPool = GUIFrame:NewWidgetPool("optimize:header", ConstructHeaderLine, function() end)
+local cvarLinePool = GUIFrame:NewWidgetPool("optimize:cvar", ConstructCVarLine, function(line)
+    if GameTooltip:IsOwned(line) then GameTooltip:Hide() end
+end)
+
+local function AcquireLine(pool, row)
+    if GUIFrame:IsPoolParent(row) then
+        return pool:Acquire(row)
+    end
+    return pool.construct(row)
+end
+
 GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
     local OPT = GetModule()
     if not OPT then
@@ -58,10 +345,6 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
     end
 
     InstallCloseHook()
-
-    local function MarkDirty()
-        optimizeDirty = true
-    end
 
     ----------------------------------------------------------------
     -- Card 1: Presets
@@ -77,23 +360,9 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
 
     local maxFpsBtn, balancedBtn, applyAllBtn
 
-    -- Selection reads as a fill inside the button, the same recipe the sidebar
-    -- uses for its selected row, so it follows a theme change on its own.
-    local function EnsureSelectedFill(btn)
-        if not btn.keSelectedFill then
-            local fill = btn:CreateTexture(nil, "ARTWORK", nil, 1)
-            fill:SetPoint("TOPLEFT", 1, -1)
-            fill:SetPoint("BOTTOMRIGHT", -1, 1)
-            fill:SetColorTexture(Theme.selectedBg[1], Theme.selectedBg[2],
-                Theme.selectedBg[3], Theme.selectedBg[4])
-            btn.keSelectedFill = fill
-        end
-        return btn.keSelectedFill
-    end
-
     local function PaintSelection()
-        EnsureSelectedFill(maxFpsBtn):SetShown(selectedPreset == "maxfps")
-        EnsureSelectedFill(balancedBtn):SetShown(selectedPreset == "balanced")
+        maxFpsBtn:SetSelected(selectedPreset == "maxfps")
+        balancedBtn:SetSelected(selectedPreset == "balanced")
         applyAllBtn:SetShown(selectedPreset ~= nil)
     end
 
@@ -189,247 +458,20 @@ GUIFrame:RegisterContent("Optimize", function(scrollChild, yOffset)
         yOffset = mvdCard:GetNextOffset()
     end
 
-    ----------------------------------------------------------------
-    -- Helper: column headers row
-    ----------------------------------------------------------------
     local function AddColumnHeaders(card)
         local row = GUIFrame:CreateRow(card.content, 20)
-
-        local container = CreateFrame("Frame", nil, row)
-        container:SetAllPoints()
-
-        local settingHeader = container:CreateFontString(nil, "OVERLAY")
-        settingHeader:SetPoint("LEFT", container, "LEFT", 4, 0)
-        settingHeader:SetWidth(150)
-        settingHeader:SetJustifyH("LEFT")
-        KE:ApplyThemeFont(settingHeader, "normal")
-        settingHeader:SetText("Setting")
-        settingHeader:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.7)
-
-        local currentHeader = container:CreateFontString(nil, "OVERLAY")
-        currentHeader:SetPoint("LEFT", settingHeader, "RIGHT", 4, 0)
-        currentHeader:SetWidth(90)
-        currentHeader:SetJustifyH("LEFT")
-        KE:ApplyThemeFont(currentHeader, "normal")
-        currentHeader:SetText("Current")
-        currentHeader:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.7)
-
-        local spacer = container:CreateFontString(nil, "OVERLAY")
-        spacer:SetPoint("LEFT", currentHeader, "RIGHT", 2, 0)
-        KE:ApplyThemeFont(spacer, "normal")
-        spacer:SetText(" ")
-
-        local recHeader = container:CreateFontString(nil, "OVERLAY")
-        recHeader:SetPoint("LEFT", spacer, "RIGHT", 2, 0)
-        recHeader:SetWidth(90)
-        recHeader:SetJustifyH("LEFT")
-        KE:ApplyThemeFont(recHeader, "normal")
-        recHeader:SetText("Recommended")
-        recHeader:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 0.7)
-
-        row:AddWidget(container, 1)
+        local header = AcquireLine(headerPool, row)
+        header:Configure()
+        row:AddWidget(header, 1)
         card:AddRow(row, 20)
     end
 
-    ----------------------------------------------------------------
-    -- Helper: bespoke per-CVar status row (Apply/Revert + tooltip)
-    ----------------------------------------------------------------
     local function AddCVarRow(card, entry)
         local row = GUIFrame:CreateRow(card.content, 32)
-
-        local container = CreateFrame("Frame", nil, row)
-        container:SetAllPoints()
-
-        local nameLabel = container:CreateFontString(nil, "OVERLAY")
-        nameLabel:SetPoint("LEFT", container, "LEFT", 4, 0)
-        nameLabel:SetWidth(150)
-        nameLabel:SetJustifyH("LEFT")
-        KE:ApplyThemeFont(nameLabel, "normal")
-        nameLabel:SetText(entry.name)
-        nameLabel:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 1)
-
-        local currentLabel = container:CreateFontString(nil, "OVERLAY")
-        currentLabel:SetPoint("LEFT", nameLabel, "RIGHT", 4, 0)
-        currentLabel:SetWidth(90)
-        currentLabel:SetJustifyH("LEFT")
-        KE:ApplyThemeFont(currentLabel, "normal")
-
-        local optimalLabel = container:CreateFontString(nil, "OVERLAY")
-        optimalLabel:SetPoint("LEFT", currentLabel, "RIGHT", 30, 0)
-
-        local arrowTex = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\collapse.png"
-        local arrowRot = math.pi / 2
-        local arrowR, arrowG, arrowB = Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3]
-
-        local arrow1 = container:CreateTexture(nil, "OVERLAY")
-        arrow1:SetSize(10, 10)
-        arrow1:SetPoint("LEFT", currentLabel, "RIGHT", 0, 0)
-        arrow1:SetTexture(arrowTex)
-        arrow1:SetRotation(arrowRot)
-        arrow1:SetVertexColor(arrowR, arrowG, arrowB, 0.6)
-
-        local arrow2 = container:CreateTexture(nil, "OVERLAY")
-        arrow2:SetSize(10, 10)
-        arrow2:SetPoint("LEFT", arrow1, "RIGHT", -3, 0)
-        arrow2:SetTexture(arrowTex)
-        arrow2:SetRotation(arrowRot)
-        arrow2:SetVertexColor(arrowR, arrowG, arrowB, 0.6)
-        optimalLabel:SetWidth(90)
-        optimalLabel:SetJustifyH("LEFT")
-        KE:ApplyThemeFont(optimalLabel, "normal")
-
-        local applyBtn = CreateFrame("Button", nil, container, "BackdropTemplate")
-        applyBtn:SetSize(50, 20)
-        applyBtn:SetPoint("RIGHT", container, "RIGHT", -60, 0)
-        applyBtn:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
-        })
-        applyBtn:SetBackdropColor(Theme.controlBg[1], Theme.controlBg[2], Theme.controlBg[3], Theme.controlBg[4])
-        applyBtn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
-        local applyText = applyBtn:CreateFontString(nil, "OVERLAY")
-        KE:ApplyThemeFont(applyText, "normal")
-        applyText:SetPoint("CENTER")
-        applyText:SetText("Apply")
-        applyText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-
-        local revertBtnSmall = CreateFrame("Button", nil, container, "BackdropTemplate")
-        revertBtnSmall:SetSize(50, 20)
-        revertBtnSmall:SetPoint("RIGHT", container, "RIGHT", -4, 0)
-        revertBtnSmall:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
-        })
-        revertBtnSmall:SetBackdropColor(Theme.controlBg[1], Theme.controlBg[2], Theme.controlBg[3], Theme.controlBg[4])
-        revertBtnSmall:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
-        local revertText = revertBtnSmall:CreateFontString(nil, "OVERLAY")
-        KE:ApplyThemeFont(revertText, "normal")
-        revertText:SetPoint("CENTER")
-        revertText:SetText("Revert")
-        revertText:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-
-        local optimalStatusLabel = container:CreateFontString(nil, "OVERLAY")
-        KE:ApplyThemeFont(optimalStatusLabel, "normal")
-        optimalStatusLabel:SetPoint("CENTER", applyBtn, "CENTER", 0, 0)
-        optimalStatusLabel:SetText("Optimal")
-        optimalStatusLabel:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-        optimalStatusLabel:Hide()
-
-        local function SetupHover(btn)
-            btn:SetScript("OnEnter", function(self)
-                self:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-            end)
-            btn:SetScript("OnLeave", function(self)
-                self:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
-            end)
-        end
-        SetupHover(applyBtn)
-        SetupHover(revertBtnSmall)
-
-        -- What the selected preset wants for this cvar, or nil while no preset
-        -- is selected. Max FPS falls through to the listed optimal for every
-        -- cvar it does not override.
-        local function PreviewValue()
-            if not selectedPreset then return nil end
-            if selectedPreset == "maxfps" then
-                local v = OPT:GetMaxFPSOverrides()[entry.cvar]
-                if v ~= nil then return v end
-            end
-            return entry.optimal
-        end
-
-        local function RefreshRow()
-            local current = OPT:GetCurrentValue(entry.cvar) or "?"
-            local rec = PreviewValue()
-            currentLabel:SetText(OPT:GetValueLabel(entry.cvar, current))
-
-            if rec == nil then
-                -- No preset selected: there is nothing to recommend and nothing
-                -- for Apply to apply, so the row reads neutral.
-                currentLabel:SetTextColor(Theme.textPrimary[1], Theme.textPrimary[2],
-                    Theme.textPrimary[3], 1)
-                optimalLabel:SetText("-")
-                optimalLabel:SetTextColor(0.5, 0.5, 0.5, 1)
-                optimalStatusLabel:Hide()
-                applyBtn:Show()
-                applyBtn:SetAlpha(0.35)
-                applyBtn:EnableMouse(false)
-            else
-                local isOpt = OPT:IsOptimal(entry.cvar, rec)
-                if isOpt then
-                    currentLabel:SetTextColor(0.3, 1, 0.3, 1)
-                else
-                    currentLabel:SetTextColor(1, 0.55, 0, 1)
-                end
-                optimalLabel:SetText(OPT:GetValueLabel(entry.cvar, rec))
-                optimalLabel:SetTextColor(0.3, 1, 0.3, 1)
-                if isOpt then
-                    applyBtn:Hide()
-                    optimalStatusLabel:Show()
-                else
-                    applyBtn:Show()
-                    applyBtn:SetAlpha(1)
-                    applyBtn:EnableMouse(true)
-                    optimalStatusLabel:Hide()
-                end
-            end
-
-            -- Revert now depends on the backup alone. It used to be hidden
-            -- outright on an optimal row with no backup, but "optimal" is a
-            -- per-preset answer since this change, so that rule would flick the
-            -- button in and out of existence as the user compares presets.
-            revertBtnSmall:Show()
-            if OPT:HasBackup(entry.cvar) then
-                revertBtnSmall:SetAlpha(1)
-                revertBtnSmall:EnableMouse(true)
-            else
-                revertBtnSmall:SetAlpha(0.35)
-                revertBtnSmall:EnableMouse(false)
-            end
-        end
-
-        applyBtn:SetScript("OnClick", function()
-            local rec = PreviewValue()
-            if rec == nil then return end
-            OPT:ApplyCVar(entry.cvar, rec)
-            C_Timer.After(0.1, RefreshRow)
-            MarkDirty()
-        end)
-
-        revertBtnSmall:SetScript("OnClick", function()
-            OPT:RevertCVar(entry.cvar)
-            C_Timer.After(0.1, RefreshRow)
-            MarkDirty()
-        end)
-
-        container:EnableMouse(true)
-        container:SetScript("OnEnter", function(self)
-            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            GameTooltip:SetText(entry.name, 1, 0.82, 0, 1)
-            GameTooltip:AddLine(" ")
-            local cur = OPT:GetCurrentValue(entry.cvar) or "?"
-            GameTooltip:AddLine("Current: " .. OPT:GetValueLabel(entry.cvar, cur), 0.7, 0.7, 0.7)
-            local recTip = PreviewValue()
-            if recTip ~= nil then
-                GameTooltip:AddLine("Recommended: " .. OPT:GetValueLabel(entry.cvar, recTip), 0.3, 1, 0.3)
-            else
-                GameTooltip:AddLine("Select a preset above to load its recommended values.", 0.5, 0.5, 0.5)
-            end
-            GameTooltip:AddLine(" ")
-            GameTooltip:AddLine("CVar: " .. entry.cvar, 0.5, 0.5, 0.5)
-            if entry.desc then
-                GameTooltip:AddLine(entry.desc, 0.5, 0.5, 0.5)
-            end
-            GameTooltip:Show()
-        end)
-        container:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-        row:AddWidget(container, 1)
+        local line = AcquireLine(cvarLinePool, row)
+        line:Configure(OPT, entry)
+        row:AddWidget(line, 1)
         card:AddRow(row, 32)
-
-        RefreshRow()
     end
 
     ----------------------------------------------------------------

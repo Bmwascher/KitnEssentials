@@ -11,36 +11,19 @@ local Theme = KE.Theme
 -- Localization Setup
 local tostring = tostring
 local CreateFrame = CreateFrame
-local C_Timer = C_Timer
-local GetTime = GetTime
 
 ---------------------------------------------------------------------------------
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- EditBox widget — config-table API:
---   { value, callback, tooltip, height, onTextChanged, textChangedDelay }
--- onTextChanged: optional debounced callback that fires DURING typing (not
--- on Enter/blur — that's `callback`'s job). Useful for live filters like the
--- BigWigs spell-search box. Debounce defaults to 150ms; override via
--- textChangedDelay. Pool-friendly: stored in row._onTextChanged and
--- swappable via row:SetOnTextChanged(fn).
-function GUIFrame:CreateEditBox(parent, labelText, config)
-    config = config or {}
-    local value = tostring(config.value or "")
-    local tooltip = config.tooltip
-    local customHeight = config.height
-
-    local rowHeight = customHeight or 34
+-- Builds one edit box. Label, height, value and bindings are applied by
+-- ConfigureEditBox, so a pooled box can serve any setting.
+local function ConstructEditBox(parent)
     local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(rowHeight)
 
     local label = row:CreateFontString(nil, "OVERLAY")
     label:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
     label:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(label, "small")
-    label:SetText(labelText or "")
-    label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
     row.label = label
 
     local container = CreateFrame("Frame", nil, row, "BackdropTemplate")
@@ -52,8 +35,6 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    container:SetBackdropColor(Theme.fieldBg[1], Theme.fieldBg[2], Theme.fieldBg[3], Theme.fieldBg[4])
-    container:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
 
     ---------------------------------------------------------------------------------
     -- Animation
@@ -103,18 +84,16 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
     local editBox = CreateFrame("EditBox", nil, container)
     editBox:SetPoint("TOPLEFT", container, "TOPLEFT", 6, -4)
     editBox:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", -6, 4)
-    -- Own font, not a Blizzard font object: the global font sweep resizes
-    -- those, and the addon's config window must not follow a game-wide setting.
-    KE:ApplyThemeFont(editBox, "normal")
-    editBox:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     editBox:SetAutoFocus(false)
-    editBox:SetText(value or "")
 
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
     editBox:SetScript("OnEnterPressed", function(self)
+        -- Read first: ClearFocus fires OnEditFocusLost, whose callback can
+        -- rebuild the page and hand this box to another setting.
+        local callback, text = row._callback, self:GetText()
         self:ClearFocus()
-        if row._callback then row._callback(self:GetText()) end
+        if callback then callback(text) end
     end)
 
     editBox:SetScript("OnEditFocusLost", function(self)
@@ -131,6 +110,7 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
         if not editBox:HasFocus() then
             AnimateEditBoxBorder(true)
         end
+        local tooltip = row._tooltip
         if tooltip then
             GameTooltip:SetOwner(container, "ANCHOR_TOP")
             GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
@@ -147,6 +127,7 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
     -- Add tooltip support for the container
     container:EnableMouse(true)
     container:SetScript("OnEnter", function(self)
+        local tooltip = row._tooltip
         if tooltip then
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
@@ -198,8 +179,7 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
 
     -- Re-apply theme-tied state after KE:RefreshTheme replaces Theme color
     -- tables. Hover/focus handlers read live values via Theme.accent[1]
-    -- indexing each call so they self-recover. Pool consumers call this
-    -- when KE._themeVersion has advanced.
+    -- indexing each call so they self-recover. Every configure calls this.
     function row:ApplyThemeColors()
         local TT = Theme
         label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
@@ -208,43 +188,84 @@ function GUIFrame:CreateEditBox(parent, labelText, config)
         editBox:SetTextColor(TT.accent[1], TT.accent[2], TT.accent[3], 1)
     end
 
+    -- Back to rest: no focus and no border fade.
+    function row:_resetInteraction()
+        editBox:ClearFocus()
+        editBoxAnimGroup:Stop()
+        editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
+    end
+
     row.editBox = editBox
     row.container = container
 
     -- Pool-friendly callback slots; OnEnterPressed/OnEditFocusLost read
-    -- _callback late-bound, OnTextChanged reads _onTextChanged late-bound.
-    row._callback = config.callback
+    -- _callback late-bound, OnTextChanged reads _onTextChanged per keystroke.
     function row:SetCallback(fn)
         self._callback = fn
     end
 
-    row._onTextChanged = config.onTextChanged
-    row._textChangedDelay = config.textChangedDelay or 0.15
     function row:SetOnTextChanged(fn)
         self._onTextChanged = fn
     end
 
-    -- Live-typing OnTextChanged: wired ONCE at factory time and reads the
-    -- _onTextChanged slot late-bound, so a pooled editbox kit can swap its
-    -- live-filter callback per render without re-binding scripts. Debounced
-    -- via fire-token: each keystroke schedules one C_Timer.After; intermediate
-    -- strokes invalidate prior tokens by bumping lastFireToken (no cancel API
-    -- needed). userInput=false (programmatic SetText) is ignored.
-    local lastFireToken = 0
+    -- Live typing waits out a short debounce. Only the latest keystroke's call
+    -- does anything when it runs, and a page rebuild in between runs it early
+    -- (GUIFrame:DeferWidgetCallback). userInput=false (programmatic SetText)
+    -- is ignored.
     editBox:SetScript("OnTextChanged", function(self, userInput)
         if not userInput then return end
-        if not row._onTextChanged then return end
-        local fireToken = GetTime()
-        lastFireToken = fireToken
+        local fn = row._onTextChanged
+        if not fn then return end
         local text = self:GetText()
-        local delay = row._textChangedDelay or 0.15
-        C_Timer.After(delay, function()
-            if lastFireToken == fireToken then
-                local fn = row._onTextChanged
-                if fn then fn(text) end
-            end
-        end)
+        local function Fire()
+            if row._pendingText ~= Fire then return end
+            row._pendingText = nil
+            fn(text)
+        end
+        row._pendingText = Fire
+        GUIFrame:DeferWidgetCallback(row._textChangedDelay or 0.15, Fire)
     end)
 
+    row._keOwned = { row, container, editBox }
+    return row
+end
+
+-- EditBox widget — config-table API:
+--   { value, callback, tooltip, height, onTextChanged, textChangedDelay }
+-- onTextChanged: optional debounced callback that fires DURING typing (not
+-- on Enter/blur — that's `callback`'s job). Useful for live filters like the
+-- BigWigs spell-search box. Debounce defaults to 150ms; override via
+-- textChangedDelay.
+local function ConfigureEditBox(row, labelText, config)
+    row:SetHeight(config.height or 34)
+    local label = row.label
+    KE:ApplyThemeFont(label, "small")
+    label:SetText(labelText or "")
+    -- Own font, not a Blizzard font object: the global font sweep resizes
+    -- those, and the addon's config window must not follow a game-wide setting.
+    KE:ApplyThemeFont(row.editBox, "normal")
+    row._tooltip = config.tooltip
+    row:_resetInteraction()
+    row:SetValue(tostring(config.value or ""), true)
+    row:SetEnabled(true)
+    row:ApplyThemeColors()
+    row._callback = config.callback
+    row._onTextChanged = config.onTextChanged
+    row._textChangedDelay = config.textChangedDelay or 0.15
+end
+
+local editBoxPool = GUIFrame:NewWidgetPool("editbox", ConstructEditBox, function(row)
+    row:_resetInteraction()
+end)
+
+function GUIFrame:CreateEditBox(parent, labelText, config)
+    config = config or {}
+    local row
+    if self:IsPoolParent(parent) then
+        row = editBoxPool:Acquire(parent)
+    else
+        row = ConstructEditBox(parent)
+    end
+    ConfigureEditBox(row, labelText, config)
     return row
 end

@@ -569,12 +569,12 @@ end
 -- glyph reads as the draggable divider (slides either way), and both panes' shares
 -- show at once so "which way grows which" is unambiguous as the thumb moves. The
 -- slider value is the left/top pane's 0-1 share of the pair, so the right share is
--- its complement (they always sum to 100). Hooked on OnValueChanged (UNthrottled,
--- unlike the db callback) so the label tracks the thumb every frame -- including the
+-- its complement (they always sum to 100). Fed by the slider's onValueChanged slot
+-- (UNthrottled, unlike the db callback) so the label tracks the thumb every frame -- including the
 -- silent neighbour cross-updates a shared-pane drag triggers. ASCII only: WoW's
 -- embedded fonts lack the geometric arrow glyphs (feedback_wow_fontstring_limits).
 local function WireSplitLabel(sliderRow, leftName, rightName)
-    if not (sliderRow and sliderRow.label and sliderRow.slider) then return end
+    if not (sliderRow and sliderRow.label and sliderRow.SetOnValueChanged) then return end
     local lbl = sliderRow.label
     local function refresh(val)
         val = val or sliderRow:GetValue() or 0.5
@@ -582,7 +582,7 @@ local function WireSplitLabel(sliderRow, leftName, rightName)
         if L < 0 then L = 0 elseif L > 100 then L = 100 end
         lbl:SetText(leftName .. "  " .. L .. "% <|> " .. (100 - L) .. "%  " .. rightName)
     end
-    sliderRow.slider:HookScript("OnValueChanged", function(_, val) refresh(val) end)
+    sliderRow:SetOnValueChanged(refresh)
     refresh()
 end
 

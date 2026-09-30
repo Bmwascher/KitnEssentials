@@ -98,7 +98,7 @@ function GUIFrame:CreatePairedRow(card, config)
         -- OnSizeChanged reflow carries the chevron at every window width.
         -- A quarter turn points the shipped down-arrow right; arrow glyphs
         -- render as empty boxes in Expressway, so this must be a texture.
-        local arrow = row:CreateTexture(nil, "OVERLAY")
+        local arrow = row:GetChevron()
         arrow:SetTexture(CHEVRON)
         arrow:SetVertexColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
         arrow:SetSize(CHEVRON_SIZE, CHEVRON_SIZE)

@@ -12,35 +12,28 @@ local Theme = KE.Theme
 local CreateFrame = CreateFrame
 local ColorPickerFrame = ColorPickerFrame
 
+local ANIMATION_DURATION = 0.18
+local SWATCH_BG_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnColorPickerBG.png"
+
 ---------------------------------------------------------------------------------
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- ColorPicker widget — config-table API: { color = {r,g,b,a}, callback, tooltip }
-function GUIFrame:CreateColorPicker(parent, labelText, config)
-    config = config or {}
-    local color = config.color
-    local tooltip = config.tooltip
-    local rowHeight = 34
-    local ANIMATION_DURATION = 0.18
-    local texPath = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures\\KitnColorPickerBG.png"
-
+-- Builds one colour picker. Label, colour and bindings are applied by
+-- ConfigureColorPicker, so a pooled picker can serve any setting.
+local function ConstructColorPicker(parent)
     local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(rowHeight)
 
     local label = row:CreateFontString(nil, "OVERLAY")
     label:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 1)
     label:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(label, "small")
-    label:SetText(labelText or "")
-    label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
     row.label = label
 
     -- Backdrop texture to easier see current alpha value
     local swatchBg = row:CreateTexture(nil, "BACKGROUND")
     swatchBg:SetSize(48, 24)
     swatchBg:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -14)
-    swatchBg:SetTexture(texPath)
+    swatchBg:SetTexture(SWATCH_BG_TEXTURE)
     swatchBg:SetAlpha(0.8)
     swatchBg:SetTexelSnappingBias(0)
     swatchBg:SetSnapToPixelGrid(false)
@@ -53,25 +46,16 @@ function GUIFrame:CreateColorPicker(parent, labelText, config)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    color = color or { 1, 1, 1, 1 }
-    swatch:SetBackdropColor(color[1], color[2], color[3], color[4] or 1)
-    swatch:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
-    swatch.r, swatch.g, swatch.b, swatch.a = color[1], color[2], color[3], color[4] or 1
 
     -- Hex code display
     local hexText = row:CreateFontString(nil, "OVERLAY")
     hexText:SetPoint("LEFT", swatch, "RIGHT", 8, 0)
-    KE:ApplyThemeFont(hexText, "small")
-    hexText:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-    hexText:SetText("#" .. KE:RGBAToHex(color[1], color[2], color[3]))
-    hexText:SetShadowColor(0,0,0,0)
     row.hexText = hexText
 
-    local function UpdateColor(r, g, b, a)
+    local function SetSwatch(r, g, b, a)
         swatch.r, swatch.g, swatch.b, swatch.a = r, g, b, a or 1
         swatch:SetBackdropColor(r, g, b, a or 1)
         hexText:SetText("#" .. KE:RGBAToHex(r, g, b))
-        if row._callback then row._callback(r, g, b, a or 1) end
     end
 
     -- Hover fade animation for border color
@@ -117,6 +101,7 @@ function GUIFrame:CreateColorPicker(parent, labelText, config)
 
     swatch:SetScript("OnEnter", function(self)
         AnimateBorderColor(true)
+        local tooltip = row._tooltip
         if tooltip then
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:SetText(tooltip, 1, 1, 1, 1, true)
@@ -142,6 +127,13 @@ function GUIFrame:CreateColorPicker(parent, labelText, config)
 
     swatch:SetScript("OnClick", function()
         local prevR, prevG, prevB, prevA = swatch.r, swatch.g, swatch.b, swatch.a
+        -- Bound for this one open: a rebuild while the picker is up must not
+        -- send its colour to another setting, nor repaint a reused swatch.
+        local callback, gen = row._callback, row._keGen
+        local function Apply(r, g, b, a)
+            if row._keGen == gen then SetSwatch(r, g, b, a) end
+            if callback then callback(r, g, b, a or 1) end
+        end
         local info = {
             r = prevR,
             g = prevG,
@@ -152,15 +144,27 @@ function GUIFrame:CreateColorPicker(parent, labelText, config)
         info.swatchFunc = function()
             local r, g, b = ColorPickerFrame:GetColorRGB()
             local a = ColorPickerFrame:GetColorAlpha()
-            UpdateColor(r or 1, g or 1, b or 1, a or 1)
+            Apply(r or 1, g or 1, b or 1, a or 1)
         end
         info.opacityFunc = info.swatchFunc
         info.cancelFunc = function()
-            UpdateColor(prevR, prevG, prevB, prevA)
+            Apply(prevR, prevG, prevB, prevA)
         end
+        row._openSwatchFunc = info.swatchFunc
         ColorPickerFrame:SetupColorPickerAndShow(info)
     end)
-    function row:SetColor(r, g, b, a) UpdateColor(r, g, b, a) end
+
+    -- Busy while Blizzard's picker is still open on this widget's colour: the
+    -- pool retires it rather than hand an open edit to another setting.
+    function row:_keIsBusy()
+        local open = self._openSwatchFunc
+        return open ~= nil and ColorPickerFrame:IsShown() and ColorPickerFrame.swatchFunc == open
+    end
+
+    function row:SetColor(r, g, b, a)
+        SetSwatch(r, g, b, a)
+        if row._callback then row._callback(r, g, b, a or 1) end
+    end
 
     function row:GetColor() return swatch.r, swatch.g, swatch.b, swatch.a end
 
@@ -174,13 +178,53 @@ function GUIFrame:CreateColorPicker(parent, labelText, config)
         end
     end
 
+    row._setSwatch = SetSwatch
+    row._hoverAnimGroup = hoverAnimGroup
     row.swatch = swatch
 
-    -- Pool-friendly callback slot; UpdateColor reads late-bound.
-    row._callback = config.callback
+    -- Pool-friendly callback slot; SetColor reads late-bound.
     function row:SetCallback(fn)
         self._callback = fn
     end
 
+    row._keOwned = { row, swatch }
+    return row
+end
+
+-- ColorPicker widget — config-table API: { color = {r,g,b,a}, callback, tooltip }
+local function ConfigureColorPicker(row, labelText, config)
+    local color = config.color or { 1, 1, 1, 1 }
+    local TT = Theme
+    -- Every use: row:AddWidget sizes a widget to its row.
+    row:SetHeight(34)
+    local label = row.label
+    KE:ApplyThemeFont(label, "small")
+    label:SetText(labelText or "")
+    label:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
+    KE:ApplyThemeFont(row.hexText, "small")
+    row.hexText:SetTextColor(TT.textSecondary[1], TT.textSecondary[2], TT.textSecondary[3], 1)
+    -- After the font: ApplyThemeFont sets the theme's shadow.
+    row.hexText:SetShadowColor(0, 0, 0, 0)
+    row._tooltip = config.tooltip
+    row._hoverAnimGroup:Stop()
+    row._setSwatch(color[1], color[2], color[3], color[4] or 1)
+    row.swatch:SetBackdropBorderColor(TT.controlBorder[1], TT.controlBorder[2], TT.controlBorder[3], 1)
+    row:SetEnabled(true)
+    row._callback = config.callback
+end
+
+local colorPickerPool = GUIFrame:NewWidgetPool("colorpicker", ConstructColorPicker, function(row)
+    row._hoverAnimGroup:Stop()
+end)
+
+function GUIFrame:CreateColorPicker(parent, labelText, config)
+    config = config or {}
+    local row
+    if self:IsPoolParent(parent) then
+        row = colorPickerPool:Acquire(parent)
+    else
+        row = ConstructColorPicker(parent)
+    end
+    ConfigureColorPicker(row, labelText, config)
     return row
 end

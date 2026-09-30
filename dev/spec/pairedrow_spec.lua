@@ -47,7 +47,7 @@ local function newHarness()
     local inert = setmetatable({}, { __index = function() return function() end end })
 
     function G:CreateRow()
-        return { AddWidget = function() end, CreateTexture = function() return inert end }
+        return { AddWidget = function() end, GetChevron = function() return inert end }
     end
     function G:CreateCheckbox(_, _, cfg) return { cfg = cfg } end
     function G:CreateDropdown(_, _, cfg) return { cfg = cfg } end
