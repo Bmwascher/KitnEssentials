@@ -70,9 +70,23 @@ local function Gold(text)
     return "|cffffd100" .. text .. "|r"
 end
 
+-- The /macro window's own tab labels, read from the game so the page matches it.
+local function GeneralTabName()
+    return _G.GENERAL_MACROS or "General Macros"
+end
+
+local function CharacterTabName()
+    local name = UnitName("player")
+    if _G.CHARACTER_SPECIFIC_MACROS and name then return _G.CHARACTER_SPECIFIC_MACROS:format(name) end
+    return "Character Specific Macros"
+end
+
 -- Shared so the two preview cards open the same way.
-local function AddPreviewSection(card, heading, body, bodyMax, macroName)
+local function AddPreviewSection(card, heading, body, bodyMax, macroName, tabName, scope)
     card:AddLabel(KE:ColorTextByTheme(heading) .. (macroName or ""))
+    if tabName then
+        card:AddLabel("Saved in " .. Gold("/macro") .. " > " .. Gold(tabName) .. ", " .. scope .. ".")
+    end
     card:AddLabel("|cff888888" .. #body .. " of " .. bodyMax .. " characters, read-only|r")
     card:AddLabel(body)
 end
@@ -366,7 +380,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     local markerBody = FM and FM:BuildMacroBody()
     if markerBody then
         AddPreviewSection(cardMarker, "What KE writes to ", markerBody, FM.MACRO_BODY_MAX,
-            Gold(db.MacroName or "!FocusMarker"))
+            Gold(db.MacroName or "!FocusMarker"), GeneralTabName(), "shared by every character")
     else
         cardMarker:AddLabel("Nothing to preview.")
     end
@@ -446,8 +460,8 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
         elseif FM:GetPlayerClass() == "WARLOCK" then
             status = kickName .. " written for " .. spellText .. ". Summoning a different demon rewrites it."
         else
-            status = kickName .. " is up to date. Drag it from " .. Gold("/macro") ..
-                " (character tab) onto a bar."
+            status = kickName .. " is up to date. Drag it from " .. Gold("/macro") .. " > " ..
+                Gold(CharacterTabName()) .. " onto a bar."
         end
     end
     cardSpec:AddLabel(status)
@@ -505,7 +519,8 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
     manager:Register(cardPreview, "all")
 
     if body then
-        AddPreviewSection(cardPreview, "What KE writes to ", body, bodyMax, kickName)
+        AddPreviewSection(cardPreview, "What KE writes to ", body, bodyMax, kickName,
+            CharacterTabName(), "for this character only")
         local fullBody = spellName and FM.BuildKickBody(spellName, KICK_ALL_ON, markerIdx)
         if fullBody then
             local sepRow = GUIFrame:CreateRow(cardPreview.content, Theme.rowHeightSeparator)
