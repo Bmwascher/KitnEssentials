@@ -24,6 +24,7 @@ local RECUPERATE_SPELL_ID = 1231411
 local spellInfo = C_Spell.GetSpellInfo(RECUPERATE_SPELL_ID)
 
 REC.isPreview = false
+REC.inCombat = false
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -63,6 +64,43 @@ end
 function REC:OnHealthChange(_, unit)
     if unit ~= "player" then return end
     if self.isPreview then return end
+    self:UpdateAlpha()
+end
+
+-- The state driver shows the button only while grouped and out of combat, so
+-- the player's health is heard only then; the roster and regen handlers
+-- repaint when that state begins.
+function REC:SyncHealthEvent()
+    local want = self:IsEnabled() and IsInGroup() and not self.inCombat
+    if want then
+        if not self.healthFrame then
+            local f = CreateFrame("Frame")
+            f:SetScript("OnEvent", function(_, event, unit) self:OnHealthChange(event, unit) end)
+            self.healthFrame = f
+        end
+        if not self._healthListening then
+            self._healthListening = true
+            self.healthFrame:RegisterUnitEvent("UNIT_HEALTH", "player")
+        end
+    elseif self._healthListening then
+        self._healthListening = false
+        self.healthFrame:UnregisterEvent("UNIT_HEALTH")
+    end
+end
+
+function REC:OnGroupOrWorld()
+    self:SyncHealthEvent()
+    self:UpdateAlpha()
+end
+
+function REC:OnRegenDisabled()
+    self.inCombat = true
+    self:SyncHealthEvent()
+end
+
+function REC:OnRegenEnabled()
+    self.inCombat = false
+    self:SyncHealthEvent()
     self:UpdateAlpha()
 end
 
@@ -171,17 +209,22 @@ function REC:OnEnable()
     C_Timer.After(0.5, function()
         self:ApplySettings()
     end)
-    self:RegisterEvent("PLAYER_ENTERING_WORLD", "UpdateAlpha")
-    self:RegisterEvent("PLAYER_REGEN_ENABLED", "UpdateAlpha")
-    self:RegisterEvent("GROUP_ROSTER_UPDATE", "UpdateAlpha")
-    self:RegisterEvent("UNIT_HEALTH", "OnHealthChange")
+    -- A fight already under way fired its PLAYER_REGEN_DISABLED before this.
+    self.inCombat = UnitAffectingCombat("player") and true or false
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnGroupOrWorld")
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", "OnRegenDisabled")
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
+    self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupOrWorld")
     self:RegisterEvent("PLAYER_DEAD", "UpdateAlpha")
     self:RegisterEvent("PLAYER_UNGHOST", "UpdateAlpha")
+    self:SyncHealthEvent()
     self:UpdateAlpha()
 end
 
 function REC:OnDisable()
     self:UnregisterAllEvents()
+    if self.healthFrame then self.healthFrame:UnregisterAllEvents() end
+    self._healthListening = false
     self.isPreview = false
     if self.button then
         KE:RunAfterCombat(function()
