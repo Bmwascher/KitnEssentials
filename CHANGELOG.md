@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.14
+
+### Party Buffs
+
+- **NEW:** icons on the party frames show a teammate's cooldown buffs, potions
+  and trinkets while they are up. Off by default
+
+---
+
 ## v4.8.13
 
 ### CVars
