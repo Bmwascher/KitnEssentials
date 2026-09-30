@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.13
+
+### CVars
+
+- **NEW:** a UI Scaling tab to scale Blizzard panels; the World Map card moves
+  there
+- The Optimization group is renamed Gameplay and Interface
+
+---
+
 ## v4.8.12
 
 ### Prompts
