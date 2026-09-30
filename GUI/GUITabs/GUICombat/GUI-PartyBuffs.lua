@@ -11,7 +11,7 @@ local GUIFrame = KE.GUIFrame
 local Theme    = KE.Theme
 
 local LIST_TABS = {
-    { id = "ListBurst",     label = "Offensive Burst" },
+    { id = "ListBurst",     label = "Offensive CDs" },
     { id = "ListPotions",   label = "Potions" },
     { id = "ListTrinkets",  label = "Trinkets" },
     { id = "ListExternals", label = "Externals" },
@@ -34,9 +34,9 @@ local STRATA_OPTIONS = {
 }
 
 local COLOR_PICKERS = {
-    { key = "ColorExternal",     label = "External" },
+    { key = "ColorExternal",     label = "Externals" },
     { key = "ColorBigDefensive", label = "Big Defensive" },
-    { key = "ColorBurst",        label = "Burst" },
+    { key = "ColorBurst",        label = "Offensive CDs" },
     { key = "ColorPotion",       label = "Potion" },
     { key = "ColorTrinket",      label = "Trinket" },
 }
@@ -152,8 +152,8 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     if db.Enabled ~= true then return yOffset end
 
     card1:AddLabel("Shows your party members' big cooldown buffs as icons beside their party frames while each " ..
-        "buff is up: externals, defensives, burst, potions and trinkets. Works on Blizzard's party frames and " ..
-        "on EllesmereUI frames. Where it shows is chosen below.")
+        "buff is up: externals, defensives, offensive cooldowns, potions and trinkets. Works on Blizzard's " ..
+        "party frames and on EllesmereUI frames. Where it shows is chosen below.")
     yOffset = card1:GetNextOffset()
 
     ----------------------------------------------------------------
@@ -161,12 +161,12 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local cardTracked = GUIFrame:CreateCard(scrollChild, "Tracked Buffs", yOffset)
     local rowT1 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeight)
-    AddCheck(rowT1, "Externals on the Member", "TrackExternal")
+    AddCheck(rowT1, "Externals", "TrackExternal")
     AddCheck(rowT1, "Big Defensives", "TrackBigDefensive",
         "Blizzard's and EllesmereUI's party frames already show these in the frame centre.")
     cardTracked:AddRow(rowT1, Theme.rowHeight)
     local rowT2 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeight)
-    AddCheck(rowT2, "Offensive Burst", "TrackBurst")
+    AddCheck(rowT2, "Offensive CDs", "TrackBurst")
     AddCheck(rowT2, "Potions", "TrackPotion")
     cardTracked:AddRow(rowT2, Theme.rowHeight)
     local rowT3 = GUIFrame:CreateRow(cardTracked.content, Theme.rowHeightLast)
@@ -180,8 +180,8 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     local cardPlaces = GUIFrame:CreateCard(scrollChild, "Where It Shows", yOffset)
     cardPlaces:AddLabel("Not shown in raids, battlegrounds or other raid groups.")
     local rowP1 = GUIFrame:CreateRow(cardPlaces.content, Theme.rowHeight)
-    AddCheck(rowP1, "Mythic+ Keys (Running)", "ShowInKeys")
-    AddCheck(rowP1, "Other Dungeons", "ShowInDungeons")
+    AddCheck(rowP1, "Mythic+", "ShowInKeys")
+    AddCheck(rowP1, "All Other Dungeon Types", "ShowInDungeons")
     cardPlaces:AddRow(rowP1, Theme.rowHeight)
     local rowP2 = GUIFrame:CreateRow(cardPlaces.content, Theme.rowHeight)
     AddCheck(rowP2, "Delves", "ShowInDelves")
@@ -197,7 +197,7 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     local cardDisplay = GUIFrame:CreateCard(scrollChild, "Display", yOffset)
     local rowD1 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
-    AddSlider(rowD1, "Icon Size", "IconSize", 12, 40)
+    AddSlider(rowD1, "Icon Size", "IconSize", 16, 72)
     AddSlider(rowD1, "Icon Spacing", "IconSpacing", 0, 10)
     cardDisplay:AddRow(rowD1, Theme.rowHeight)
     local rowD2 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
@@ -211,8 +211,11 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
 
     local rowD3 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     AddCheck(rowD3, "Time-Left Swipe", "Swipe")
-    AddCheck(rowD3, "Border Colour by Category", "CategoryColors", nil, RefreshStates)
+    AddCheck(rowD3, "Timer Text", "ShowTimer")
     cardDisplay:AddRow(rowD3, Theme.rowHeight)
+    local rowD3b = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
+    AddCheck(rowD3b, "Border Colour by Category", "CategoryColors", nil, RefreshStates)
+    cardDisplay:AddRow(rowD3b, Theme.rowHeight)
     local rowD4 = GUIFrame:CreateRow(cardDisplay.content, Theme.rowHeight)
     for i = 1, 3 do AddColor(rowD4, COLOR_PICKERS[i]) end
     cardDisplay:AddRow(rowD4, Theme.rowHeight)
@@ -222,12 +225,42 @@ GUIFrame:RegisterContent("PartyBuffs", function(scrollChild, yOffset)
     yOffset = cardDisplay:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Card 5: Position
+    -- Card 5: Font Settings (the timer text; the stack count shares the
+    -- font and outline)
+    ----------------------------------------------------------------
+    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+        title = "Font Settings",
+        db = db,
+        dbKeys = {
+            fontFace    = "FontFace",
+            fontOutline = "FontOutline",
+        },
+        fontSizes = {
+            { label = "Timer Size", dbKey = "TimerFontSize", default = 12 },
+        },
+        fontSizeRange = { 8, 48 },
+        extraSlider = {
+            label = "Show Decimals Below (sec)",
+            dbKey = "DecimalThreshold",
+            min = 0, max = 10, step = 1,
+            value = KE.AuraRules.NormalizeDecimalThreshold(db.DecimalThreshold),
+        },
+        onChangeCallback = ApplySettings,
+    })
+    manager:Register(fontCard, "all")
+    if fontWidgets then
+        manager:RegisterGroup(fontWidgets, "all")
+    end
+
+    yOffset = fontOffset
+
+    ----------------------------------------------------------------
+    -- Card 6: Position
     ----------------------------------------------------------------
     local cardPosition = GUIFrame:CreateCard(scrollChild, "Position", yOffset)
     local rowX1 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeight)
-    AddSlider(rowX1, "X Offset", "XOffset", -50, 50)
-    AddSlider(rowX1, "Y Offset", "YOffset", -50, 50)
+    AddSlider(rowX1, "X Offset", "XOffset", -100, 100)
+    AddSlider(rowX1, "Y Offset", "YOffset", -100, 100)
     cardPosition:AddRow(rowX1, Theme.rowHeight)
     local rowX2 = GUIFrame:CreateRow(cardPosition.content, Theme.rowHeightLast)
     AddDropdown(rowX2, "Frame Strata", "Strata", STRATA_OPTIONS)

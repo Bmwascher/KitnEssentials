@@ -848,19 +848,19 @@ local Defaults = {
             NoOverwrite = true,
             AnnounceReadyCheck = true,
 
+            MarkerFromClass = true,
             -- Keyed by the class token UnitClass returns. A saved entry that
             -- differs from its default here is the player's override.
-            MarkerFromClass = false,
             ClassMarkers = {
                 DEATHKNIGHT = "Cross",
                 DEMONHUNTER = "Diamond",
                 DRUID = "Circle",
                 EVOKER = "Triangle",
                 HUNTER = "Triangle",
-                MAGE = "Square",
+                MAGE = "Moon",
                 MONK = "Triangle",
                 PALADIN = "Diamond",
-                PRIEST = "Moon",
+                PRIEST = "Skull",
                 ROGUE = "Star",
                 SHAMAN = "Square",
                 WARLOCK = "Diamond",
@@ -1387,7 +1387,7 @@ local Defaults = {
             ShowInDelves      = true,
             ShowInWorld       = true,
             ShowInArenas      = true,
-            IconSize          = 20,
+            IconSize          = 32,
             IconSpacing       = 2,
             MaxPerMember      = 4,
             Side              = "LEFT",
@@ -1396,7 +1396,7 @@ local Defaults = {
             -- FRAME follows the party frame's own strata.
             Strata            = "FRAME",
             Swipe             = true,
-            CategoryColors    = true,
+            CategoryColors    = false,
             ColorExternal     = { 0.949, 0.757, 0.306, 1 },
             ColorBigDefensive = { 0.310, 0.639, 1, 1 },
             ColorBurst        = { 1, 0.353, 0.353, 1 },
@@ -1404,6 +1404,9 @@ local Defaults = {
             ColorTrinket      = { 0.718, 0.482, 1, 1 },
             FontSize          = 10,
             FontOutline       = "OUTLINE",
+            ShowTimer         = true,
+            TimerFontSize     = 12,
+            DecimalThreshold  = 0, -- seconds; below this the timer shows one decimal (0 = off)
             -- ListExternals and ListBurst are row copies of the External
             -- Tracker and PI Assist lists, made below this table.
             ListPotions = {
@@ -1412,25 +1415,25 @@ local Defaults = {
                 [1236998] = { enabled = true, default = true }, -- Draught of Rampant Abandon
                 [1239479] = { enabled = true, default = true }, -- Potion of Devoured Dreams
                 [1236551] = { enabled = true, default = true }, -- Void-Shrouded Tincture
-                [1295147] = { enabled = true, default = true }, -- Liquid Luster
+                [1295132] = { enabled = true, default = true }, -- Liquid Luster
                 [1295015] = { enabled = true, default = true }, -- Alluring Nostrum
             },
             -- One list for the current season. Kitn Defaults writes these rows
             -- back; a past season's row the player kept stays as their own.
             ListTrinkets = {
-                [1295328] = { enabled = true, default = true, label = "First Mate's Shellward, The Venomous Abyss, Season 2" },
-                [1295885] = { enabled = true, default = true, label = "Hex Lord's Dooming Idol, The Venomous Abyss, Season 2" },
-                [1297761] = { enabled = true, default = true, label = "Voracious Heart of Ula'tek, The Venomous Abyss, Season 2" },
-                [1293316] = { enabled = true, default = true, label = "Vile Vial of Volatile Venom, Altar of Fangs, Season 2" },
-                [1293326] = { enabled = true, default = true, label = "Tattered Amani War Banner, Altar of Fangs, Season 2" },
-                [1250587] = { enabled = true, default = true, label = "Manaheart's Binding Flame, Murder Row, Season 2" },
-                [1250533] = { enabled = true, default = true, label = "Freightrunner's Flask, Murder Row, Season 2" },
-                [1250557] = { enabled = true, default = true, label = "Void Execution Mandate, Voidscar Arena, Season 2" },
-                [383926]  = { enabled = true, default = true, label = "Blazebinder's Hoof, Ruby Life Pools, Season 2" },
-                [271107]  = { enabled = true, default = true, label = "Lustrous Golden Plumage, Kings' Rest, Season 2" },
-                [265946]  = { enabled = true, default = true, label = "Mchimba's Ritual Bandages, Kings' Rest, Season 2" },
-                [1295275] = { enabled = true, default = true, label = "Stormbound Emblem of Dazar, Kings' Rest, Season 2" },
-                [1250580] = { enabled = true, default = true, label = "Seed of the Devouring Wild, The Blinding Vale, Season 2" },
+                [1295328] = { enabled = true, default = true, label = "S2: First Mate's Shellward" },
+                [1295885] = { enabled = true, default = true, label = "S2: Hex Lord's Dooming Idol" },
+                [1297761] = { enabled = true, default = true, label = "S2: Voracious Heart of Ula'tek" },
+                [1293316] = { enabled = true, default = true, label = "S2: Vile Vial of Volatile Venom" },
+                [1293326] = { enabled = true, default = true, label = "S2: Tattered Amani War Banner" },
+                [1250587] = { enabled = true, default = true, label = "S2: Manaheart's Binding Flame" },
+                [1250533] = { enabled = true, default = true, label = "S2: Freightrunner's Flask" },
+                [1250557] = { enabled = true, default = true, label = "S2: Void Execution Mandate" },
+                [383926]  = { enabled = true, default = true, label = "S2: Blazebinder's Hoof" },
+                [271107]  = { enabled = true, default = true, label = "S2: Lustrous Golden Plumage" },
+                [265946]  = { enabled = true, default = true, label = "S2: Mchimba's Ritual Bandages" },
+                [1295275] = { enabled = true, default = true, label = "S2: Stormbound Emblem of Dazar" },
+                [1250580] = { enabled = true, default = true, label = "S2: Seed of the Devouring Wild" },
             },
         },
 
@@ -2426,7 +2429,7 @@ local Defaults = {
                 },
             },
             ContextMenus = {
-                Enabled = false,
+                Enabled = true,
             },
         },
 

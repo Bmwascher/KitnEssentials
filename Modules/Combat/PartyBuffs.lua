@@ -45,17 +45,20 @@ local type = type
 local unpack = unpack
 local table_remove = table.remove
 
--- Times each group build and logs the facts behind each own-frame decision.
+-- Times each group build and logs every candidate frame, binding and watched
+-- show or hide.
 local DEBUG_PB = false
 
 local MAX_SLOTS = 5
 local ROSTER_SETTLE = 0.5
+local WORLD_SETTLE = 1
 local PLACEHOLDER_ICON = 134400
 local BIG_PREVIEW_ICON = 136097
-local BLACK = { 0, 0, 0, 1 }
+-- The ring colour while Border Colour by Category is off. Every button has the
+-- ring from creation, so off paints it clear rather than removing it.
+local CLEAR = { 0, 0, 0, 0 }
 
 local GATE_EVENTS = {
-    "PLAYER_ENTERING_WORLD",
     "ZONE_CHANGED_NEW_AREA",
     "CHALLENGE_MODE_START",
     "CHALLENGE_MODE_COMPLETED",
@@ -73,19 +76,17 @@ local SIDES = {
     INSIDE = { point = "BOTTOMRIGHT", rel = "BOTTOMRIGHT", dx = -1, dy = 1,  corner = "BOTTOMRIGHT", left = true,  up = true },
 }
 
--- One per category, in on-screen order. The border host reads the colour key
--- from the group and the dressing reads it from the capabilities, so both
--- carry it.
+-- One per category, in on-screen order. The border stays black; the category
+-- colour is the inner ring's, whose key the dressing reads from the
+-- capabilities.
 local DESCRIPTORS = {}
 for i, category in ipairs(KE.PartyBuffsRules.CATEGORIES) do
-    local borderKey = "Border" .. category.colorKey:sub(6)
     DESCRIPTORS[i] = {
         key = category.key,
         category = category,
-        borderColorKey = borderKey,
         capabilities = {
-            hasBorder = true, hasGlow = false, hasDispelBadge = false, hasDispelRing = false,
-            borderColorKey = borderKey,
+            hasBorder = true, hasGlow = false, hasDispelBadge = false, hasDispelRing = true,
+            ringColorKey = "Ring" .. category.colorKey:sub(6),
         },
     }
 end
@@ -101,7 +102,7 @@ PB.slots = {}
 PB.bindings = {}
 PB.queue = {}
 PB.queued = {}
-PB.watchedCells = {}
+PB.watchedCells = setmetatable({}, { __mode = "k" })
 PB.previewRows = {}
 
 local function Debug(fmt, ...)
@@ -198,18 +199,45 @@ local function PlainString(value)
     return value
 end
 
+local function DebugName(frame)
+    local ok, name = pcall(frame.GetName, frame)
+    return ok and PlainString(name) or tostring(frame)
+end
+
+local function DebugPos(frame)
+    local okLeft, left = pcall(frame.GetLeft, frame)
+    local okTop, top = pcall(frame.GetTop, frame)
+    if not (okLeft and okTop) or issecretvalue(left) or issecretvalue(top) then return "?" end
+    if not (left and top) then return "none" end
+    return ("%d,%d"):format(left, top)
+end
+
+local seen = {}
+
 -- The unit comparison runs only for a visible frame with a token, and its
--- result is copied only when readable.
+-- result is copied only when readable. Every candidate is watched, shown or
+-- not: the right frame can appear after a resolve with no roster event. Only
+-- a shown frame with a unit is kept: the pick reads no other, and the search
+-- walks every unit button a unit-frame addon has built.
 local function AddCandidate(list, frame, family, raidIndex)
-    if type(frame) ~= "table" then return end
-    local candidate = { frame = frame, family = family, raidIndex = raidIndex }
+    if type(frame) ~= "table" or seen[frame] then return end
+    seen[frame] = true
+    if PB.active then PB:WatchCell(frame) end
     local okVisible, visible = pcall(frame.IsVisible, frame)
-    candidate.visible = okVisible and not issecretvalue(visible) and visible == true
+    if not (okVisible and not issecretvalue(visible) and visible == true) then
+        if DEBUG_PB then
+            local okAttr, attr = pcall(frame.GetAttribute, frame, "unit")
+            Debug("cand %s %s %s vis=false at %s raid=%s -> -", family, DebugName(frame),
+                PlainString(frame.unit) or (okAttr and PlainString(attr)) or nil, DebugPos(frame), raidIndex)
+        end
+        return
+    end
+    local candidate = { frame = frame, family = family, raidIndex = raidIndex, visible = true }
     candidate.unit = PlainString(frame.unit)
     local okAttr, attr = pcall(frame.GetAttribute, frame, "unit")
     if okAttr then candidate.attrUnit = PlainString(attr) end
     candidate.token = KE.PartyBuffsRules.CandidateToken(candidate)
-    if candidate.visible and candidate.token then
+    if candidate.token then
         local okSame, same = pcall(UnitIsUnit, candidate.token, "player")
         candidate.compareOk = okSame
         if okSame then
@@ -220,23 +248,37 @@ local function AddCandidate(list, frame, family, raidIndex)
                 candidate.compareResult = same
             end
         end
-        if DEBUG_PB then
-            Debug("cand %s %s raid=%s cmp=%s/%s/%s -> %s", family, candidate.token, raidIndex,
-                candidate.compareOk, candidate.compareSecret, candidate.compareResult,
-                KE.PartyBuffsRules.IsPlayerCandidate(candidate) and "skip" or "track")
-        end
     end
-    list[#list + 1] = candidate
+    if DEBUG_PB then
+        local verdict = "-"
+        if candidate.token then
+            verdict = KE.PartyBuffsRules.IsPlayerCandidate(candidate) and "skip" or "track"
+        end
+        Debug("cand %s %s %s vis=%s at %s raid=%s cmp=%s/%s/%s -> %s", family, DebugName(frame),
+            candidate.token, candidate.visible, DebugPos(frame), raidIndex,
+            candidate.compareOk, candidate.compareSecret, candidate.compareResult, verdict)
+    end
+    if candidate.token then list[#list + 1] = candidate end
 end
 
 function PB:FindFrames()
     local list = {}
+    wipe(seen)
     local raidIndex
     local okIndex, index = pcall(UnitInRaid, "player")
     if okIndex and not issecretvalue(index) and type(index) == "number" then raidIndex = index end
 
     local ns = _G.EllesmereUI and _G.EllesmereUI._ModuleNS
     ns = ns and ns.EllesmereUIRaidFrames
+    -- The party buttons exist from login, but join the registry only after
+    -- every raid button is styled, which after a /reload can be well after
+    -- they show. Listing them here gets them watched while still hidden.
+    local party = ns and ns._partyAllButtons
+    if type(party) == "table" then
+        for i = 1, #party do
+            AddCandidate(list, party[i], "eui", raidIndex)
+        end
+    end
     local buttons = ns and ns._euiUnitButtons
     if type(buttons) == "table" then
         for key, value in pairs(buttons) do
@@ -294,18 +336,19 @@ function PB:ClearQueue()
     self.queued = {}
 end
 
--- The one every-frame path: one queued slot per frame, rescheduled only while
--- the queue holds more, so at most five frames in a row and then nothing.
+-- The one every-frame path: at most one group build (about 3 ms) per frame.
+-- A slot stays at the head of the queue until BuildSlot reports it finished,
+-- so its teammate shows before the next slot starts.
 local function PumpBuild()
     PB.pumping = false
     if not (PB:IsEnabled() and PB.active) then
         PB:ClearQueue()
         return
     end
-    local k = table_remove(PB.queue, 1)
-    if k then
+    local k = PB.queue[1]
+    if k and PB:BuildSlot(k) then
+        table_remove(PB.queue, 1)
         PB.queued[k] = nil
-        PB:BuildSlot(k)
     end
     if #PB.queue > 0 then
         PB.pumping = true
@@ -314,9 +357,10 @@ local function PumpBuild()
 end
 
 function PB:Enqueue(k)
-    if self.queued[k] then return end
-    self.queued[k] = true
-    self.queue[#self.queue + 1] = k
+    if not self.queued[k] then
+        self.queued[k] = true
+        self.queue[#self.queue + 1] = k
+    end
     if not self.pumping then
         self.pumping = true
         C_Timer.After(0, PumpBuild)
@@ -363,19 +407,24 @@ function PB:QueueResolve()
     end)
 end
 
-local function OnCellChanged()
-    if PB:IsEnabled() and PB.active then PB:QueueResolve() end
+local function OnCellChanged(frame, change)
+    if not (PB:IsEnabled() and PB.active) then return end
+    if DEBUG_PB then Debug("cell %s %s", DebugName(frame), change) end
+    PB:QueueResolve()
 end
+
+local function OnCellHidden(frame) OnCellChanged(frame, "hidden") end
+local function OnCellShown(frame) OnCellChanged(frame, "shown") end
 
 -- A frame can hide or come back without a roster event (another addon swaps
 -- its party header, Blizzard rebuilds its frames, the whole interface is
--- hidden and shown), so each bound frame is hooked once both ways and the
+-- hidden and shown), so each frame is hooked once both ways and the
 -- re-resolve waits a frame for the replacement to exist.
 function PB:WatchCell(frame)
     if self.watchedCells[frame] then return end
     self.watchedCells[frame] = true
-    pcall(frame.HookScript, frame, "OnHide", OnCellChanged)
-    pcall(frame.HookScript, frame, "OnShow", OnCellChanged)
+    pcall(frame.HookScript, frame, "OnHide", OnCellHidden)
+    pcall(frame.HookScript, frame, "OnShow", OnCellShown)
 end
 
 -- The layout options are replaced whole on every set, so the category's
@@ -450,15 +499,17 @@ function PB:ApplySlotLayout(slot)
     return clean
 end
 
--- A slot whose teammate went away while it waited builds nothing: the build
--- follows a current binding only.
+-- Adds at most one group per call and returns false while one is still
+-- missing. A failed group leaves buildPending for the drain rather than a
+-- retry every frame, and the slot is bound with the groups it has. A slot
+-- whose teammate went away while it waited builds nothing.
 function PB:BuildSlot(k)
     local binding = self.bindings[k]
-    if not binding then return end
+    if not binding then return true end
     if not ContainersAvailable() then
         Debug("slot %d: aura containers unavailable", k)
         self.buildPending = true
-        return
+        return true
     end
     local slot = self.slots[k]
     if not slot then
@@ -476,7 +527,7 @@ function PB:BuildSlot(k)
         if not (ok and container) then
             Debug("slot %d: container failed", k)
             self.buildPending = true
-            return
+            return true
         end
         -- Pinned before any group exists, when a pin is expected to be
         -- allowed. A refused pin records no corner, so the layout pass below
@@ -491,10 +542,13 @@ function PB:BuildSlot(k)
         local d = DESCRIPTORS[i]
         if self.db[d.category.trackKey] == true and not slot.groups[d.key] then
             self:AddGroup(k, slot, d)
+            if slot.groups[d.key] and not self:SlotComplete(k) then return false end
+            break
         end
     end
     if not self:ApplySlotLayout(slot) then self.reconfigurePending = true end
     self:BindSlot(k, binding)
+    return true
 end
 
 -- Anchored, never parented: a child of a party frame inherits its protection
@@ -548,7 +602,6 @@ function PB:BindSlot(k, binding)
     end
     local clean = pcall(container.SetFrameStrata, container, strata)
     if level then clean = pcall(container.SetFrameLevel, container, level + 1) and clean end
-    self:WatchCell(binding.frame)
     if not pcall(container.SetEnabled, container, true) then
         Debug("slot %d: enable refused", k)
         self.buildPending = true
@@ -560,7 +613,10 @@ function PB:BindSlot(k, binding)
         Debug("slot %d: strata, level or refresh refused", k)
         self.buildPending = true
     end
-    Debug("slot %d -> %s (%s)", k, binding.token, binding.family)
+    if DEBUG_PB then
+        Debug("slot %d -> %s (%s) %s at %s", k, binding.token, binding.family,
+            DebugName(binding.frame), DebugPos(binding.frame))
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -585,6 +641,21 @@ function PB:OnRoster()
     if self.previewing then self:ShowPreview() end
 end
 
+-- Nothing announces that a unit-frame addon has finished building its party
+-- frames, and a frame already shown before the first resolve found it has no
+-- show left to hook. One more resolve after each loading screen catches it,
+-- timed from the latest entry.
+function PB:OnWorldEntry()
+    self:EvaluateGate()
+    if self._worldTimer then self._worldTimer:Cancel() end
+    self._worldTimer = C_Timer.NewTimer(WORLD_SETTLE, function()
+        self._worldTimer = nil
+        if not (self:IsEnabled() and self.active) then return end
+        Debug("world settle")
+        self:QueueResolve()
+    end)
+end
+
 -- Drains whatever a refusal or a failed build left pending. Also run on every
 -- activation, since a restriction can end while the tracker is off.
 function PB:OnRelease()
@@ -606,18 +677,20 @@ end
 function PB:BuildStyleSettings()
     local db = self.db
     local settings = self.styleSettings or {}
-    settings.IconSize      = db.IconSize
-    settings.IconSpacing   = db.IconSpacing
-    settings.Swipe         = db.Swipe == true
-    settings.Reverse       = true
-    settings.ShowTimer     = false
-    settings.FontSize      = db.FontSize
-    settings.TimerFontSize = db.FontSize
-    settings.FontOutline   = db.FontOutline
+    settings.IconSize         = db.IconSize
+    settings.IconSpacing      = db.IconSpacing
+    settings.Swipe            = db.Swipe == true
+    settings.Reverse          = true
+    settings.ShowTimer        = db.ShowTimer == true
+    settings.FontFace         = db.FontFace
+    settings.FontSize         = db.FontSize
+    settings.TimerFontSize    = db.TimerFontSize
+    settings.FontOutline      = db.FontOutline
+    settings.DecimalThreshold = db.DecimalThreshold
     local colored = db.CategoryColors == true
     for i = 1, #DESCRIPTORS do
         local d = DESCRIPTORS[i]
-        settings[d.borderColorKey] = colored and db[d.category.colorKey] or BLACK
+        settings[d.capabilities.ringColorKey] = colored and db[d.category.colorKey] or CLEAR
     end
     self.styleSettings = settings
 end
@@ -703,8 +776,8 @@ end
 
 ---------------------------------------------------------------------------------
 -- Preview: plain KE frames beside each resolved party frame (an engine button
--- cannot be made to show an absent aura), or beside a stand-in cell when no
--- party frame is on screen.
+-- cannot be made to show an absent aura), or beside four stand-in party rows
+-- when no party frame is on screen.
 ---------------------------------------------------------------------------------
 local function RearmPreview(cooldown)
     if cooldown.keDuration then cooldown:SetCooldown(GetTime(), cooldown.keDuration) end
@@ -713,33 +786,64 @@ end
 function PB:PreviewIcon(d)
     local listKey = d.category.listKey
     if not listKey then return BIG_PREVIEW_ICON end
-    local spellID = KE.AuraRules.BuildSoundSpellIDs(self.db[listKey])[1]
+    local spellID = KE.AuraRules.FirstIncludeSpellID(self.db[listKey])
     return spellID and C_Spell.GetSpellTexture(spellID) or PLACEHOLDER_ICON
 end
 
-function PB:EnsurePreviewCell()
-    if self.previewCell then return self.previewCell end
-    local cell = CreateFrame("Frame", "KE_PartyBuffsPreviewCell", UIParent)
-    cell:SetSize(72, 46)
-    cell:SetPoint("CENTER", UIParent, "CENTER", 0, -160)
-    cell:SetFrameStrata("HIGH")
-    cell:EnableMouse(false)
-    local bg = cell:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints(cell)
-    bg:SetColorTexture(0.08, 0.08, 0.08, 0.95)
-    local hp = cell:CreateTexture(nil, "ARTWORK")
-    hp:SetPoint("TOPLEFT", cell, "TOPLEFT", 1, -1)
-    hp:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -1, 1)
-    hp:SetColorTexture(0.25, 0.25, 0.25, 0.9)
-    local name = cell:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    name:SetPoint("CENTER", cell, "CENTER", 0, 4)
-    name:SetText("Party Frame")
-    local sub = cell:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    sub:SetPoint("CENTER", cell, "CENTER", 0, -8)
-    sub:SetText("preview")
-    cell:Hide()
-    self.previewCell = cell
-    return cell
+local STAND_IN_WIDTH, STAND_IN_HEIGHT = 220, 52
+-- The top of a party container whose mover reads -674,-63: the mover names
+-- the centre of a box sized for five rows, which fill it from the top.
+local STAND_IN_TOP_X, STAND_IN_TOP_Y = -674, 69
+local STAND_IN_ROWS = {
+    { token = "WARRIOR", percent = 100 },
+    { token = "PRIEST",  percent = 85 },
+    { token = "MAGE",    percent = 60 },
+    { token = "ROGUE",   percent = 35 },
+}
+
+-- Built once, on the first solo preview.
+function PB:EnsurePreviewCells()
+    if self.previewCells then return self.previewCells end
+    local px = KE:GetPixelSize()
+    local count = #STAND_IN_ROWS
+    local block = CreateFrame("Frame", "KE_PartyBuffsPreviewBlock", UIParent)
+    block:SetSize(STAND_IN_WIDTH, count * STAND_IN_HEIGHT + (count - 1) * px)
+    block:SetPoint("TOP", UIParent, "CENTER", STAND_IN_TOP_X, STAND_IN_TOP_Y)
+    block:SetFrameStrata("HIGH")
+    block:EnableMouse(false)
+    local cells = {}
+    for i, sample in ipairs(STAND_IN_ROWS) do
+        local cell = CreateFrame("Frame", "KE_PartyBuffsPreviewCell" .. i, block)
+        cell:SetSize(STAND_IN_WIDTH, STAND_IN_HEIGHT)
+        cell:SetPoint("TOPLEFT", block, "TOPLEFT", 0, -(i - 1) * (STAND_IN_HEIGHT + px))
+        cell:EnableMouse(false)
+        local edge = cell:CreateTexture(nil, "BACKGROUND")
+        edge:SetAllPoints(cell)
+        edge:SetColorTexture(0, 0, 0, 1)
+        local missing = cell:CreateTexture(nil, "BORDER")
+        missing:SetPoint("TOPLEFT", cell, "TOPLEFT", px, -px)
+        missing:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", -px, px)
+        missing:SetColorTexture(0.3, 0.3, 0.3, 1)
+        local fill = cell:CreateTexture(nil, "ARTWORK")
+        fill:SetPoint("TOPLEFT", missing, "TOPLEFT", 0, 0)
+        fill:SetPoint("BOTTOMLEFT", missing, "BOTTOMLEFT", 0, 0)
+        fill:SetWidth((STAND_IN_WIDTH - 2 * px) * sample.percent / 100)
+        fill:SetColorTexture(8 / 255, 12 / 255, 16 / 255, 1)
+        local names = _G.LOCALIZED_CLASS_NAMES_MALE
+        local name = cell:CreateFontString(nil, "OVERLAY")
+        KE:ApplyFontToText(name, nil, 12, "OUTLINE")
+        name:SetPoint("TOPLEFT", cell, "TOPLEFT", 4, -4)
+        name:SetText(KE:ColorTextByClass((names and names[sample.token]) or sample.token, sample.token))
+        local health = cell:CreateFontString(nil, "OVERLAY")
+        KE:ApplyFontToText(health, nil, 12, "OUTLINE")
+        health:SetPoint("TOPRIGHT", cell, "TOPRIGHT", -4, -4)
+        health:SetText(sample.percent .. "%")
+        cells[i] = cell
+    end
+    block:Hide()
+    self.previewBlock = block
+    self.previewCells = cells
+    return cells
 end
 
 function PB:DrawPreviewRow(k, frame)
@@ -776,9 +880,17 @@ function PB:DrawPreviewRow(k, frame)
             icon:SetPoint(side.corner, holder, side.corner, shown * step, 0)
             icon.keIcon:SetTexture(self:PreviewIcon(d))
             local duration, offset = KE.AuraRules.PreviewTiming(i)
-            icon.keCooldown.keDuration = duration
-            icon.keCooldown:SetShown(settings.Swipe)
-            icon.keCooldown:SetCooldown(now - offset, duration)
+            local cooldown = icon.keCooldown
+            cooldown.keDuration = duration
+            cooldown:SetShown(settings.Swipe or settings.ShowTimer)
+            cooldown:SetDrawSwipe(settings.Swipe)
+            -- A preview frame registers no engine text, so the widget's own
+            -- numbers stand in for it, in the timer's font and number format.
+            cooldown:SetHideCountdownNumbers(not settings.ShowTimer)
+            cooldown:SetCountdownFormatter(KE.AuraStyle.GetDurationFormatter(settings))
+            KE:ApplyFontToText(cooldown:GetCountdownFontString(), settings.FontFace, settings.TimerFontSize,
+                settings.FontOutline)
+            cooldown:SetCooldown(now - offset, duration)
             icon:Show()
             shown = shown + 1
         elseif icon then
@@ -797,14 +909,24 @@ function PB:ShowPreview()
         return
     end
     self:BuildStyleSettings()
-    local bindings = self:FindFrames()
     local frames = {}
-    for i = 1, #bindings do frames[i] = bindings[i].frame end
-    if #frames == 0 then
-        frames[1] = self:EnsurePreviewCell()
-        frames[1]:Show()
-    elseif self.previewCell then
-        self.previewCell:Hide()
+    -- Solo, the search can find no teammate, so it is skipped.
+    local grouped = PlainTrue(IsInGroup)
+    if grouped then
+        local bindings = self:FindFrames()
+        for i = 1, #bindings do frames[i] = bindings[i].frame end
+    end
+    -- Solo only: grouped with no party frame found, rows beside stand-ins
+    -- would stand for teammates the player cannot see.
+    if #frames == 0 and not grouped then
+        local cells = self:EnsurePreviewCells()
+        for k = 1, #cells do frames[k] = cells[k] end
+        self.previewBlock:Show()
+        -- The screen centre can fall on a half pixel. The snap needs the
+        -- rect, which a shown frame has; once on the grid it changes nothing.
+        KE:SnapFrameToPixels(self.previewBlock)
+    elseif self.previewBlock then
+        self.previewBlock:Hide()
     end
     for k = 1, MAX_SLOTS do
         if frames[k] then
@@ -828,7 +950,7 @@ function PB:HidePreviewFrames()
             row.holder:Hide()
         end
     end
-    if self.previewCell then self.previewCell:Hide() end
+    if self.previewBlock then self.previewBlock:Hide() end
 end
 
 function PB:HidePreview()
@@ -847,12 +969,14 @@ function PB:OnEnable()
     for i = 1, #GATE_EVENTS do
         self:RegisterEvent(GATE_EVENTS[i], "EvaluateGate")
     end
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnWorldEntry")
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRoster")
     self:ApplySettings()
 end
 
 function PB:OnDisable()
     if self._rosterTimer then self._rosterTimer:Cancel(); self._rosterTimer = nil end
+    if self._worldTimer then self._worldTimer:Cancel(); self._worldTimer = nil end
     self:Deactivate()
     self:UnregisterAllEvents()
     self:HidePreview()

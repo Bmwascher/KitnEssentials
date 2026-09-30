@@ -73,8 +73,21 @@ describe("KickTracker pairing, either order", function()
         local KT = L.loadKickTrackerRules()
         local pairing = fresh()
         assert.equals("opened", (KT.PairComm(pairing, {}, "A", 10, W)))
-        assert.is_true(KT.PairRecord(pairing, 10.5, W))
+        local paired, key = KT.PairRecord(pairing, 10.5, W)
+        assert.is_true(paired)
+        assert.equals("A", key)
         assert.is_false(KT.PairRecord(pairing, 10.6, W))
+    end)
+
+    it("a pairing key gives back the teammate's GUID", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { key = "Player-1305-0A1B2C3D:6552", guid = "Player-1305-0A1B2C3D" },
+            { key = "Player-1305-0A1B2C3D:0", guid = "Player-1305-0A1B2C3D" },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.guid, KT.PairKeyGuid(row.key), row.key)
+        end
     end)
 
     it("a record with two open claims is shown", function()
@@ -624,3 +637,35 @@ describe("KickTracker own-kick duplicate", function()
     end)
 end)
 
+describe("KickTracker own kick with a hidden kicker", function()
+    it("claims one hidden interrupt inside the window after the own cast, once", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "no own cast", at = nil, now = 10, want = false },
+            { name = "an interrupt inside the window", at = 10, now = 10.3, want = true },
+            { name = "an interrupt after the window", at = 10, now = 10.6, want = false },
+        }
+        for _, row in ipairs(rows) do
+            local claim = { at = row.at }
+            assert.equals(row.want, KT.TakeOwnClaim(claim, row.now, 0.5), row.name)
+            assert.is_nil(claim.at, row.name)
+        end
+    end)
+
+    it("takes the newest hidden-kicker record inside the window when the interrupt came first", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "no records", records = {}, want = nil },
+            { name = "the newest hidden record inside the window",
+              records = { { startTime = 9.9, hiddenKicker = true }, { startTime = 9.95, hiddenKicker = true } },
+              want = 2 },
+            { name = "a readable kicker's record is never taken",
+              records = { { startTime = 9.8, hiddenKicker = true }, { startTime = 9.9 } }, want = 1 },
+            { name = "a record older than the window is not the cast's",
+              records = { { startTime = 9.5, hiddenKicker = true } }, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.OwnRecordIndex(row.records, 10, 0.4), row.name)
+        end
+    end)
+end)

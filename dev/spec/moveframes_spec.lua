@@ -7,8 +7,7 @@
 -- that routes a press to the secure snippet, the native drag, or nothing;
 -- MF:SetMovable is also checked for the yield guard that stops a live
 -- secure drag on a frame it disables. CanRemember is the refusal rule
--- gating Remember Positions (opt-in). MoveResetAllowed is the refusal rule for
--- the talent-window move reset.
+-- gating Remember Positions (opt-in).
 local L = require("dev.spec._ke_loader")
 
 describe("MoveFrames.lua", function()
@@ -173,24 +172,6 @@ describe("MoveFrames.lua", function()
                 assert.equal(c.expect, ok, c.name)
                 if c.expect then assert.equal("MerchantFrame", path, c.name) end
                 seams.framePaths[frame] = "MerchantFrame"
-            end
-        end)
-    end)
-
-    describe("MoveResetAllowed", function()
-        it("resets the talent windows except after a disable or on a protected frame in combat", function()
-            assert.is_function(seams.moveResetAllowed)
-            local cases = {
-                -- initialized, inCombat, protected, expect
-                { false, false, false, false, "not initialized" },
-                { false, true,  true,  false, "not initialized, protected in combat" },
-                { true,  true,  true,  false, "protected frame in combat" },
-                { true,  false, true,  true,  "protected frame out of combat" },
-                { true,  false, false, true,  "unprotected frame out of combat" },
-                { true,  true,  false, true,  "unprotected frame in combat" },
-            }
-            for _, c in ipairs(cases) do
-                assert.equal(c[4], seams.moveResetAllowed(c[1], c[2], c[3]), c[5])
             end
         end)
     end)

@@ -251,7 +251,7 @@ end
 
 function FM.BuildKickBody(spellName, db, markerIdx)
     if not spellName or spellName == "" then return nil end
-    local lines = { "#showtooltip" }
+    local lines = { "#showtooltip " .. spellName }
     if db.KickStopCasting then
         lines[#lines + 1] = "/stopcasting"
     end

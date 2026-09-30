@@ -1917,16 +1917,13 @@ end
 -- delimiter-first) rather than adding a second local of the same name.
 -- Returns MF, KE, seams (seams.getFrame, seams.blizzardFrames,
 -- seams.blizzardFramesOnDemand, seams.disabled, seams.modifierHeld,
--- seams.dragPath, seams.secureDrag, seams.canRemember, seams.framePaths,
--- seams.moveResetAllowed).
+-- seams.dragPath, seams.secureDrag, seams.canRemember, seams.framePaths).
 function L.loadMoveFrames(overrides)
     overrides = overrides or {}
     local modules = helpers.installAddonShim()
     _G.strsplit = overrides.strsplit or wowStrsplit
     _G.wipe = overrides.wipe or function(t) for k in pairs(t) do t[k] = nil end return t end
     _G.tDeleteItem = overrides.tDeleteItem or function() end
-    _G.RunNextFrame = overrides.RunNextFrame or function() end
-    _G.GenerateFlatClosure = overrides.GenerateFlatClosure or function(f) return f end
     _G.InCombatLockdown = overrides.InCombatLockdown or function() return false end
     -- Captured into MODIFIER_DOWN at load time, so a spec's fake key state
     -- must be on _G before loadModule runs.
@@ -1947,7 +1944,6 @@ function L.loadMoveFrames(overrides)
         dragPath = findUpvalue(MF.Frame_StartMoving, "DragPath"),
         secureDrag = findUpvalue(MF.SetMovable, "secureDrag"),
         canRemember = findUpvalue(MF.Remember, "CanRemember"),
-        moveResetAllowed = findUpvalue(MF.HandleAddon, "MoveResetAllowed"),
     }
     seams.framePaths = findUpvalue(seams.canRemember, "framePaths")
     return MF, KE, seams

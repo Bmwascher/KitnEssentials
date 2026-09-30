@@ -121,8 +121,8 @@ function KT.PairComm(pairing, records, key, now, window)
     return "ambiguous"
 end
 
--- True when the record about to be created is the kick an open claim
--- announced; the claim is used up.
+-- True, and the claim's key, when the record about to be created is the kick
+-- an open claim announced; the claim is used up.
 function KT.PairRecord(pairing, now, window)
     dropOlder(pairing.claims, now, window)
     dropOlder(pairing.paired, now, window)
@@ -134,7 +134,12 @@ function KT.PairRecord(pairing, now, window)
     if count ~= 1 then return false end
     pairing.paired[only] = pairing.claims[only]
     pairing.claims[only] = nil
-    return true
+    return true, only
+end
+
+-- Keys are guid..":"..kickID.
+function KT.PairKeyGuid(key)
+    return key:match("^(.*):[^:]*$")
 end
 
 ---------------------------------------------------------------------------------
@@ -422,6 +427,27 @@ function KT.OwnKickMatched(kickAt, landedAt, window)
     local gap = kickAt - landedAt
     if gap < 0 then gap = -gap end
     return gap <= window
+end
+
+-- The player's kick cast and an interrupt whose kicker the game hid are one
+-- kick when the interrupt lands inside the window. The claim is used up either
+-- way, so one cast never hides two records.
+function KT.TakeOwnClaim(claim, now, window)
+    local at = claim.at
+    if not at then return false end
+    claim.at = nil
+    return now - at <= window
+end
+
+-- The interrupt came first: the newest record with a hidden kicker made
+-- inside the window is the player's own kick. Records are in time order.
+function KT.OwnRecordIndex(records, now, window)
+    for i = #records, 1, -1 do
+        local record = records[i]
+        if now - record.startTime > window then return nil end
+        if record.hiddenKicker then return i end
+    end
+    return nil
 end
 
 -- Every kick cooldown is far longer than the window, so the same kick again

@@ -128,27 +128,27 @@ describe("FocusMarker marker and kick macro rules", function()
             {
                 name = "all off",
                 opts = {},
-                want = "#showtooltip\n/cast [@focus,harm,nodead] Kick",
+                want = "#showtooltip Kick\n/cast [@focus,harm,nodead] Kick",
             },
             {
                 name = "mouseover",
                 opts = { KickMouseover = true },
-                want = "#showtooltip\n/cast [@focus,harm,nodead][@mouseover,harm,nodead] Kick",
+                want = "#showtooltip Kick\n/cast [@focus,harm,nodead][@mouseover,harm,nodead] Kick",
             },
             {
                 name = "target fallback",
                 opts = { KickTargetFallback = true },
-                want = "#showtooltip\n/cast [@focus,harm,nodead][] Kick",
+                want = "#showtooltip Kick\n/cast [@focus,harm,nodead][] Kick",
             },
             {
                 name = "stop casting",
                 opts = { KickStopCasting = true },
-                want = "#showtooltip\n/stopcasting\n/cast [@focus,harm,nodead] Kick",
+                want = "#showtooltip Kick\n/stopcasting\n/cast [@focus,harm,nodead] Kick",
             },
             {
                 name = "mark focus",
                 opts = { KickMarkFocus = true },
-                want = "#showtooltip\n/cast [@focus,harm,nodead] Kick\n/tm [@focus] ~8",
+                want = "#showtooltip Kick\n/cast [@focus,harm,nodead] Kick\n/tm [@focus] ~8",
             },
             {
                 name = "all on",
@@ -158,7 +158,7 @@ describe("FocusMarker marker and kick macro rules", function()
                     KickStopCasting = true,
                     KickMarkFocus = true,
                 },
-                want = "#showtooltip\n/stopcasting\n/cast [@focus,harm,nodead][@mouseover,harm,nodead][] Kick"
+                want = "#showtooltip Kick\n/stopcasting\n/cast [@focus,harm,nodead][@mouseover,harm,nodead][] Kick"
                     .. "\n/tm [@focus] ~8",
             },
         }
@@ -171,7 +171,7 @@ describe("FocusMarker marker and kick macro rules", function()
         local db = kickDB({ KickMarkFocus = true })
         local rows = { { name = "None", idx = 0 }, { name = "unset" } }
         for _, row in ipairs(rows) do
-            assert.are.equal("#showtooltip\n/cast [@focus,harm,nodead] Kick",
+            assert.are.equal("#showtooltip Kick\n/cast [@focus,harm,nodead] Kick",
                 FM.BuildKickBody("Kick", db, row.idx), row.name)
         end
     end)

@@ -107,7 +107,7 @@ local CLASS_SHEET_SIZE = 256
 -- shared search matcher strips |T and not |A. An atlas label would carry its own
 -- sheet name into the searchable text, so a query like "icon" would match every
 -- class.
-local function ClassIcon(token)
+function GUIFrame.ClassIconText(token)
     local coords = _G.CLASS_ICON_TCOORDS and _G.CLASS_ICON_TCOORDS[token]
     if not coords then return "" end
     return string_format("|T%s:16:16:0:0:%d:%d:%d:%d:%d:%d|t ",
@@ -160,7 +160,7 @@ function GUIFrame.BuildClassOptions(tokens, playerClass)
     local options = {}
     for _, token in ipairs(tokens) do
         local name = (_G.LOCALIZED_CLASS_NAMES_MALE and _G.LOCALIZED_CLASS_NAMES_MALE[token]) or token
-        local label = ClassIcon(token) .. name
+        local label = GUIFrame.ClassIconText(token) .. name
         if token == playerClass then label = label .. "  " .. KE:ColorTextByTheme("(current)") end
         options[#options + 1] = { key = token, text = label, name = name }
     end

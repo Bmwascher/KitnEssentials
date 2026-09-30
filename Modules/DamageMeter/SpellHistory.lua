@@ -19,6 +19,7 @@ local floor = math.floor
 local wipe = wipe
 local issecretvalue = issecretvalue
 local CreateFrame = CreateFrame
+local UIParent = UIParent
 local GetInventoryItemID = GetInventoryItemID
 local C_Spell = C_Spell
 local C_SpellBook = C_SpellBook
@@ -33,7 +34,8 @@ local STATUS_OK, STATUS_FAILED, STATUS_RESTORE = "ok", "failed", "restore"
 --
 -- Pure: every game lookup arrives through `api` and all memory lives in
 -- `state`, so dev/spec/dm_spell_history_spec.lua drives it headlessly.
--- Returns texture, kind, status as plain values; nothing is allocated.
+-- Returns texture, kind, status as plain values. The only allocation is the
+-- SENT ring, once, on the first press.
 ---------------------------------------------------------------------------------
 
 local function SetCurrent(state, isPet, castGUID)
@@ -56,9 +58,39 @@ local function SetFailed(state, isPet, castGUID)
     if isPet then state.failedPet = castGUID else state.failedPlayer = castGUID end
 end
 
+-- The slot the next cast writes; 0 is an empty ring.
+local function NextHead(head, size)
+    return head % size + 1
+end
+
+-- The castGUIDs of the player's last few UNIT_SPELLCAST_SENT, the presses. A
+-- queued press can send before the previous cast succeeds, so one slot is not
+-- enough. Made on the first press and never grown.
+local SENT_SLOTS = 4
+
+local function RecordSent(state, castGUID)
+    local sent = state.sent
+    if not sent then
+        sent = {}
+        state.sent = sent
+    end
+    local slot = NextHead(state.sentHead or 0, SENT_SLOTS)
+    sent[slot] = castGUID
+    state.sentHead = slot
+end
+
+local function WasSent(state, castGUID)
+    local sent = state.sent
+    if castGUID == nil or not sent then return false end
+    for i = 1, SENT_SLOTS do
+        if sent[i] == castGUID then return true end
+    end
+    return false
+end
+
 -- Autocast pet basics would fill the strip, so a pet spell shows only while
 -- its autocast flag reads plainly false; secret or missing counts as on.
-local function AcceptCast(isPet, spellID, state, api)
+local function AcceptCast(isPet, spellID, state, api, castGUID)
     if isPet then
         if not api.isPetKnown(spellID) then return nil end
         local auto = api.autoCast(spellID)
@@ -76,14 +108,21 @@ local function AcceptCast(isPet, spellID, state, api)
     end
     if not state.items then return nil end
     local item = api.itemFor(spellID)
-    if not item then return nil end
-    local tex = api.getItemIcon(item)
+    if item then
+        local tex = api.getItemIcon(item)
+        if not tex then return nil end
+        return tex, KIND_ITEM
+    end
+    -- A toy or another ability outside the spellbook shows only when the
+    -- player pressed it; an effect the game casts on its own had no SENT.
+    if not WasSent(state, castGUID) then return nil end
+    local tex = api.getTexture(spellID)
     if not tex then return nil end
-    return tex, KIND_ITEM
+    return tex, KIND_SPELL
 end
 
 local function ShowCast(isPet, spellID, castGUID, state, api)
-    local tex, kind = AcceptCast(isPet, spellID, state, api)
+    local tex, kind = AcceptCast(isPet, spellID, state, api, castGUID)
     if not tex then return nil end
     SetLast(state, isPet, castGUID)
     return tex, kind, STATUS_OK
@@ -105,6 +144,11 @@ local function Classify(event, unit, spellID, castGUID, state, api)
         return nil
     end
     if api.isSecret(spellID) or api.isSecret(castGUID) then return nil end
+
+    if event == "UNIT_SPELLCAST_SENT" then
+        if not isPet and castGUID ~= nil then RecordSent(state, castGUID) end
+        return nil
+    end
 
     local current, channel, last, failedGUID
     if isPet then
@@ -131,8 +175,9 @@ local function Classify(event, unit, spellID, castGUID, state, api)
 
     if event == "UNIT_SPELLCAST_CHANNEL_START" then
         SetChannel(state, isPet, spellID, castGUID)
-        -- Its SUCCEEDED may have arrived first and already shown it.
-        if castGUID == last then return nil end
+        -- Its SUCCEEDED may have arrived first and already shown it. Channel
+        -- events can carry a nil castGUID, which must not match a nil last.
+        if castGUID ~= nil and castGUID == last then return nil end
         return ShowCast(isPet, spellID, castGUID, state, api)
     end
 
@@ -155,11 +200,6 @@ end
 -- Ring arithmetic
 ---------------------------------------------------------------------------------
 
--- The slot the next cast writes; 0 is an empty ring.
-local function NextHead(head, size)
-    return head % size + 1
-end
-
 -- 0 is the newest position, size - 1 the oldest.
 local function SlotPosition(slot, head, size)
     return (head - slot) % size
@@ -169,6 +209,99 @@ end
 DM.SpellHistoryClassify = Classify
 DM.SpellHistoryNextHead = NextHead
 DM.SpellHistorySlotPosition = SlotPosition
+
+---------------------------------------------------------------------------------
+-- Attached placement
+---------------------------------------------------------------------------------
+
+-- The dock's rect arrives in GetRect order. A nil value, which the caller
+-- passes for a secret one, keeps the outside placement. Touching the screen
+-- edge counts as fitting.
+local function FitsOutside(edge, gap, left, bottom, width, height, stripW, stripH, screenW, screenH)
+    if left == nil or bottom == nil or width == nil or height == nil then return true end
+    if edge == "BOTTOM" then return bottom - gap - stripH >= 0 end
+    if edge == "LEFT" then return left - gap - stripW >= 0 end
+    if edge == "RIGHT" then return left + width + gap + stripW <= screenW end
+    return bottom + height + gap + stripH <= screenH
+end
+
+-- The strip's point, the dock's point and the offset, outside the edge or
+-- inside the dock at the gap. Top and Bottom take the corner on the newest
+-- icon's side; Left and Right align to the top unless the strip grows up. An
+-- unknown edge reads as Top.
+local function AttachPoints(edge, grow, gap, inside)
+    if edge == "LEFT" or edge == "RIGHT" then
+        local v = grow == "UP" and "BOTTOM" or "TOP"
+        local sign = edge == "LEFT" and -1 or 1
+        if inside then return v .. edge, v .. edge, -sign * gap, 0 end
+        local far = edge == "LEFT" and "RIGHT" or "LEFT"
+        return v .. far, v .. edge, sign * gap, 0
+    end
+    local s = grow == "RIGHT" and "LEFT" or "RIGHT"
+    if edge ~= "BOTTOM" then edge = "TOP" end
+    local sign = edge == "BOTTOM" and -1 or 1
+    if inside then return edge .. s, edge .. s, 0, -sign * gap end
+    local far = edge == "BOTTOM" and "TOP" or "BOTTOM"
+    return far .. s, edge .. s, 0, sign * gap
+end
+
+DM.SpellHistoryFitsOutside = FitsOutside
+DM.SpellHistoryAttachPoints = AttachPoints
+
+-- The end the newest icon sits at, and the end older icons step towards.
+local GROW_START = { LEFT = "RIGHT", RIGHT = "LEFT", UP = "BOTTOM", DOWN = "TOP" }
+local GROW_FAR = { LEFT = "LEFT", RIGHT = "RIGHT", UP = "TOP", DOWN = "BOTTOM" }
+
+-- How far to move a free strip's saved offset when its length changes, so the
+-- growth-start end stays put. The anchor's place along the growth axis is read
+-- from its name; one naming neither end sits on the centre line.
+local function GrowthShift(anchorFrom, grow, oldLength, newLength)
+    if not GROW_START[grow] then grow = "LEFT" end
+    anchorFrom = anchorFrom or "CENTER"
+    local d = newLength - oldLength
+    local shift
+    if anchorFrom:find(GROW_START[grow], 1, true) then
+        shift = 0
+    elseif anchorFrom:find(GROW_FAR[grow], 1, true) then
+        shift = d
+    else
+        shift = d / 2
+    end
+    if grow == "LEFT" then return -shift, 0 end
+    if grow == "RIGHT" then return shift, 0 end
+    if grow == "UP" then return 0, shift end
+    return 0, -shift
+end
+
+DM.SpellHistoryGrowthShift = GrowthShift
+
+-- Attached, a strip is pinned at its newest icon's end, so it only lengthens
+-- away from the edge it hugs: outward while outside the dock, inward while
+-- inside it. A direction across the edge reads as that one whichever of the
+-- two was saved, and the saved Grow is never rewritten.
+local INWARD = { TOP = "DOWN", BOTTOM = "UP", LEFT = "RIGHT", RIGHT = "LEFT" }
+local OPPOSITE = { LEFT = "RIGHT", RIGHT = "LEFT", UP = "DOWN", DOWN = "UP" }
+
+local function EffectiveGrow(attach, edge, grow, inside)
+    if not OPPOSITE[grow] then grow = "LEFT" end
+    if attach ~= true then return grow end
+    local inward = INWARD[edge] or INWARD.TOP
+    if inside then
+        if grow == OPPOSITE[inward] then return inward end
+    elseif grow == inward then
+        return OPPOSITE[inward]
+    end
+    return grow
+end
+
+-- The growth in effect and the anchor for an attached strip.
+local function AttachedPlacement(edge, grow, gap, inside)
+    local effective = EffectiveGrow(true, edge, grow, inside)
+    return effective, AttachPoints(edge, effective, gap, inside)
+end
+
+DM.SpellHistoryEffectiveGrow = EffectiveGrow
+DM.SpellHistoryAttachedPlacement = AttachedPlacement
 
 ---------------------------------------------------------------------------------
 -- Game lookups
@@ -274,6 +407,10 @@ local ringSize = 0
 local head = 0
 local fadeDelay = 0
 local growPoint, stepX, stepY = "TOPRIGHT", 0, 0
+-- The strip's size from the last Layout, and the attached anchor last applied,
+-- so a dock layout that changes nothing re-anchors nothing.
+local stripW, stripH, stripStep = 0, 0, 0
+local placedPoint, placedRel, placedX, placedY, placedStrata, placedSnapped
 
 -- SetColorTexture turns the pixel-grid snap back on; borders stay unsnapped.
 local function SetBorderPet(icon, pet)
@@ -415,6 +552,10 @@ local function OnStripEvent(_, event, ...)
         -- A pet dismissed or replaced mid-channel may never send its stop.
         castState.curPet = nil
         SetChannel(castState, true, nil, nil)
+    elseif event == "UNIT_SPELLCAST_SENT" then
+        -- unitTarget, target, castGUID, spellID: the target is never read.
+        local castGUID, spellID = select(3, ...)
+        HandleCast("player", event, castGUID, spellID)
     else
         local castGUID, spellID = select(2, ...)
         HandleCast("player", event, castGUID, spellID)
@@ -493,6 +634,14 @@ local function RegisterEvents(frame, pets, sh)
     end
 
     local items = sh.IncludeItems ~= false
+    -- Without Include Items the press record would let a bag potion through
+    -- by its spell, so it lives and dies with the item events.
+    if items then
+        frame:RegisterUnitEvent("UNIT_SPELLCAST_SENT", "player")
+    else
+        frame:UnregisterEvent("UNIT_SPELLCAST_SENT")
+        castState.sent, castState.sentHead = nil, nil
+    end
     for i = 1, #ITEM_EVENTS do
         local event = ITEM_EVENTS[i]
         if not items then
@@ -515,33 +664,52 @@ local function RegisterEvents(frame, pets, sh)
     end
 end
 
-local function Layout(sh)
-    local frame = strip
-    if not frame then return end
+-- Sets the growth corner and step, and moves the shown icons only when either
+-- changed: an attached strip's growth flips when it moves inside the dock.
+local function ApplyGrowth(grow)
+    local point = GROW_POINT[grow]
+    local x, y = GROW_X[grow] * stripStep, GROW_Y[grow] * stripStep
+    if point == growPoint and x == stepX and y == stepY then return end
+    growPoint, stepX, stepY = point, x, y
+    ReanchorShown()
+end
+
+-- The strip's length along its growth axis, with the clamped count, icon size
+-- and step it comes from.
+local function StripLength(sh)
     local count = floor(tonumber(sh.Count) or 5)
     if count < 1 then
         count = 1
     elseif count > MAX_ICONS then
         count = MAX_ICONS
     end
+    local size = KE:PixelSnap(tonumber(sh.IconSize) or 32)
+    local step = size + KE:PixelSnap(tonumber(sh.Spacing) or 2)
+    return count * step - (step - size), count, size, step
+end
+
+local function Layout(sh)
+    local frame = strip
+    if not frame then return end
+    local length, count, size, step = StripLength(sh)
     if count ~= ringSize then
         -- The slot arithmetic is per ring size, so a new size starts empty.
         ClearRing()
         ringSize = count
     end
 
-    local grow = GROW_POINT[sh.Grow] and sh.Grow or "LEFT"
-    local size = KE:PixelSnap(tonumber(sh.IconSize) or 32)
-    local step = size + KE:PixelSnap(tonumber(sh.Spacing) or 2)
-    growPoint = GROW_POINT[grow]
-    stepX, stepY = GROW_X[grow] * step, GROW_Y[grow] * step
+    -- The outside reading: both readings share an axis, so the size is right
+    -- either way, and Place sets the attached growth once it knows which.
+    local grow = EffectiveGrow(sh.Attach, sh.AttachEdge, sh.Grow, false)
+    stripStep = step
+    ApplyGrowth(grow)
 
-    local length = count * step - (step - size)
     if GROW_Y[grow] == 0 then
-        frame:SetSize(length, size)
+        stripW, stripH = length, size
     else
-        frame:SetSize(size, length)
+        stripW, stripH = size, length
     end
+    frame:SetSize(stripW, stripH)
 
     local markSize = KE:PixelSnap(size * FAILED_MARK_SCALE)
     for slot = 1, #icons do
@@ -552,24 +720,42 @@ local function Layout(sh)
     fadeDelay = tonumber(sh.FadeDelay) or 5
 end
 
--- Attached, the strip sits outside the dock's chosen edge, at the corner on
--- the newest icon's side (the right corner for vertical growth).
+-- Attached, the strip sits outside the dock's chosen edge when it fits on
+-- screen, and inside the dock at the gap when it does not. The dock is a
+-- UIParent child with no scale of its own, so its rect and the screen size
+-- share units.
 local function Place(db, sh)
     local frame = strip
     if not frame then return end
     local dock = DM.dock
     if sh.Attach == true and dock then
-        local side = sh.Grow == "RIGHT" and "LEFT" or "RIGHT"
         local gap = KE:PixelSnap(tonumber(sh.AttachGap) or 2)
-        frame:ClearAllPoints()
-        if sh.AttachEdge == "BOTTOM" then
-            frame:SetPoint("TOP" .. side, dock, "BOTTOM" .. side, 0, -gap)
-        else
-            frame:SetPoint("BOTTOM" .. side, dock, "TOP" .. side, 0, gap)
+        local left, bottom, width, height = dock:GetRect()
+        local secret = issecretvalue(left) or issecretvalue(bottom) or issecretvalue(width)
+            or issecretvalue(height)
+        if secret then left = nil end
+        local fits = FitsOutside(sh.AttachEdge, gap, left, bottom, width, height, stripW, stripH,
+            UIParent:GetWidth(), UIParent:GetHeight())
+        local grow, point, rel, x, y = AttachedPlacement(sh.AttachEdge, sh.Grow, gap, not fits)
+        ApplyGrowth(grow)
+        local strata = db.Strata or "MEDIUM"
+        -- A placement made while the dock's rect was secret or missing went
+        -- unsnapped, so the first layout that can measure the dock makes it again.
+        local unmeasured = issecretvalue(left) or not left
+        if point == placedPoint and rel == placedRel and x == placedX and y == placedY
+            and strata == placedStrata and (placedSnapped or unmeasured) then
+            return
         end
-        frame:SetFrameStrata(db.Strata or "MEDIUM")
-        KE:SnapFrameToPixels(frame)
+        frame:ClearAllPoints()
+        frame:SetPoint(point, dock, rel, x, y)
+        frame:SetFrameStrata(strata)
+        -- The snap reads and tests the strip's own left and bottom, which are
+        -- secret whenever the dock's rect is.
+        if not secret then KE:SnapFrameToPixels(frame) end
+        placedPoint, placedRel, placedX, placedY, placedStrata = point, rel, x, y, strata
+        placedSnapped = not unmeasured
     else
+        placedPoint = nil
         KE:ApplyFramePosition(frame, sh.Position, sh)
     end
 end
@@ -596,6 +782,10 @@ local function SyncMover(want)
                 module = DM,
                 displayName = "Spell History",
                 frame = frame,
+                getParentFrame = function()
+                    local sh = DM.db and DM.db.SpellHistory
+                    return KE:ResolveAnchorFrame(sh and sh.anchorFrameType, sh and sh.ParentFrame)
+                end,
                 getPosition = function()
                     local sh = DM.db and DM.db.SpellHistory
                     return sh and sh.Position
@@ -632,6 +822,7 @@ local function TearDown()
     castState.curPlayer, castState.curPet = nil, nil
     castState.lastPlayer, castState.lastPet = nil, nil
     castState.failedPlayer, castState.failedPet = nil, nil
+    castState.sent, castState.sentHead = nil, nil
 end
 
 ---------------------------------------------------------------------------------
@@ -651,8 +842,59 @@ function DM:ApplySpellHistory()
     if not (frame and pets) then return end
     RegisterEvents(frame, pets, sh)
     Layout(sh)
+    -- Layout may have resized the strip, which needs a fresh snap.
+    placedPoint = nil
     Place(db, sh)
     SyncMover(sh.Attach ~= true)
     frame:Show()
     SyncPreview()
+end
+
+-- Called at the end of the dock's layout, where its size and place are final,
+-- so a move, a resize or a chat-size match re-decides inside or outside.
+function DM:PlaceSpellHistory()
+    local sh = self.db and self.db.SpellHistory
+    if not (strip and sh and sh.Attach == true and strip:IsShown()) then return end
+    Place(self.db, sh)
+end
+
+-- The unrounded offsets the last resize moved to, and the placement it left.
+-- While the strip is still placed exactly so, the next resize goes on from
+-- them, so a run of resizes rounds once rather than once per step; any other
+-- change to the placement starts again from the saved offsets.
+local carry = { exactX = 0, exactY = 0 }
+
+local function CarriedOffset(sh, pos, length)
+    if carry.length == length and carry.x == pos.XOffset and carry.y == pos.YOffset
+        and carry.from == pos.AnchorFrom and carry.to == pos.AnchorTo and carry.grow == sh.Grow
+        and carry.frameType == sh.anchorFrameType and carry.parent == sh.ParentFrame then
+        return carry.exactX, carry.exactY
+    end
+    return pos.XOffset or 0, pos.YOffset or 0
+end
+
+-- Read by the smoke's load check: the carry is otherwise file-local.
+DM.SpellHistoryCarriedOffset = CarriedOffset
+
+-- The settings page's Count, Icon Size and Spacing. A free strip's saved
+-- offset moves by the length change, so its growth-start end stays put to
+-- within the whole-number rounding and the pixel snap; a Grow change, a drag
+-- or a profile switch never shifts it.
+function DM:ResizeSpellHistory(key, value)
+    local sh = self.db and self.db.SpellHistory
+    if not sh then return end
+    local oldLength = StripLength(sh)
+    sh[key] = value
+    local newLength = StripLength(sh)
+    local pos = sh.Position
+    if sh.Attach ~= true and pos and newLength ~= oldLength then
+        local x, y = CarriedOffset(sh, pos, oldLength)
+        local dx, dy = GrowthShift(pos.AnchorFrom, sh.Grow, oldLength, newLength)
+        x, y = x + dx, y + dy
+        pos.XOffset, pos.YOffset = KE:RoundOffset(x), KE:RoundOffset(y)
+        carry.exactX, carry.exactY, carry.x, carry.y = x, y, pos.XOffset, pos.YOffset
+        carry.length, carry.from, carry.to, carry.grow = newLength, pos.AnchorFrom, pos.AnchorTo, sh.Grow
+        carry.frameType, carry.parent = sh.anchorFrameType, sh.ParentFrame
+    end
+    self:ApplySpellHistory()
 end

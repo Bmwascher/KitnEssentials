@@ -10,7 +10,7 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 
 GUIFrame:RegisterTabbedContent("KicksCasts", {
-    { id = "FocusMarker",  label = "Focus Marker" },
+    { id = "FocusMarker",  label = "Focus Macros" },
     { id = "KickTracker",  label = "Interrupt Tracker" },
     { id = "DungeonCasts", label = "Dungeon Casts" },
 })

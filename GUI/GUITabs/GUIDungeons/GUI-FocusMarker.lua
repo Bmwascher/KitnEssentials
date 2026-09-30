@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  GUI-FocusMarker.lua                                     ║
--- ║  GUI: Focus Marker                                       ║
+-- ║  GUI: Focus Macros                                       ║
 -- ║  Purpose: Configuration panel for the FocusMarker module.║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -12,6 +12,7 @@ local Theme = KE.Theme
 local MARKER_TEX = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_"
 local MARKER_ORDER = { "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull", "None" }
 local MARKER_INDEX = { Star=1, Circle=2, Diamond=3, Triangle=4, Moon=5, Square=6, Cross=7, Skull=8 }
+local MARKER_NONE_TEX = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 
 local CLASS_ORDER = {
     { token = "DEATHKNIGHT", name = "Death Knight" },
@@ -64,9 +65,35 @@ local function ClassName(token)
     return token
 end
 
+-- Macro names, like addon names and slash commands, read in gold.
+local function Gold(text)
+    return "|cffffd100" .. text .. "|r"
+end
+
+-- The /macro window's own tab labels, read from the game so the page matches it.
+local function GeneralTabName()
+    return _G.GENERAL_MACROS or "General Macros"
+end
+
+local function CharacterTabName()
+    local name = UnitName("player")
+    if _G.CHARACTER_SPECIFIC_MACROS and name then return _G.CHARACTER_SPECIFIC_MACROS:format(name) end
+    return "Character Specific Macros"
+end
+
+-- Shared so the two preview cards open the same way.
+local function AddPreviewSection(card, heading, body, bodyMax, macroName, tabName, scope)
+    card:AddLabel(KE:ColorTextByTheme(heading) .. (macroName or ""))
+    if tabName then
+        card:AddLabel("Saved in " .. Gold("/macro") .. " > " .. Gold(tabName) .. ", " .. scope .. ".")
+    end
+    card:AddLabel("|cff888888" .. #body .. " of " .. bodyMax .. " characters, read-only|r")
+    card:AddLabel(body)
+end
+
 local function Unavailable(scrollChild, yOffset)
     local errorCard = GUIFrame:CreateCard(scrollChild, "Error", yOffset)
-    errorCard:AddLabel("Focus Marker is not available.")
+    errorCard:AddLabel("Focus Macros is not available.")
     return errorCard:GetNextOffset()
 end
 
@@ -77,7 +104,7 @@ local function BuildHeader(scrollChild, yOffset)
     local db = GetDB()
     if not db then return Unavailable(scrollChild, yOffset), true end
 
-    local card = GUIFrame:CreateCard(scrollChild, "Focus Marker", yOffset)
+    local card = GUIFrame:CreateCard(scrollChild, "Focus Macros", yOffset)
     card:AddHeaderToggle(db.Enabled ~= false, function(checked)
         db.Enabled = checked
         if not GetModule() then return end
@@ -93,10 +120,10 @@ local function BuildHeader(scrollChild, yOffset)
     local disabled = db.Enabled == false
     if not disabled then
         local FM = GetModule()
-        local kickName = FM and (", " .. FM.KICK_MACRO_NAME .. ",") or ""
+        local kickName = FM and (", " .. Gold(FM.KICK_MACRO_NAME) .. ",") or ""
         card:AddLabel("Writes a macro that sets your focus and puts your marker on it in one press, so " ..
             "a kick target can be called and taken together. The Focus Kick tab can add a second macro" ..
-            kickName .. " that casts your interrupt at that focus. Drag either from |cffffd100/macro|r onto " ..
+            kickName .. " that casts your interrupt at that focus. Drag either from " .. Gold("/macro") .. " onto " ..
             "a bar; both are kept up to date as you change the settings below." ..
             "\n\nThe marker macro goes for whatever is under your mouse, and falls back to your current " ..
             "target." ..
@@ -108,7 +135,7 @@ local function BuildHeader(scrollChild, yOffset)
 end
 
 ----------------------------------------------------------------
--- Marker tab
+-- Focus Marker tab
 ----------------------------------------------------------------
 GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     local db = GetDB()
@@ -146,7 +173,8 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
 
     if editsClass then
         local className = ClassName(classFile)
-        card2:AddLabel("Your class: " .. KE:ColorTextByClass(className, classFile) ..
+        card2:AddLabel("Your class: " .. GUIFrame.ClassIconText(classFile) ..
+            KE:ColorTextByClass(className, classFile) ..
             "  |cff888888- click a marker to change " .. className .. "'s marker.|r")
     end
 
@@ -195,7 +223,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
         if MARKER_INDEX[name] then
             icon:SetTexture(MARKER_TEX .. MARKER_INDEX[name])
         else
-            icon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+            icon:SetTexture(MARKER_NONE_TEX)
         end
 
         local borderFrame = CreateFrame("Frame", nil, btn, "BackdropTemplate")
@@ -225,7 +253,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
             end
             UpdateMarkerSelection()
             ApplySettings()
-            if editsClass then RefreshSoon() end
+            RefreshSoon()
         end)
 
         table.insert(markerButtons, btn)
@@ -238,7 +266,8 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     yOffset = card2:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Class Markers: one row per class, only while the class option is on
+    -- Class Markers: a class picker and that class's marker, only while the
+    -- class option is on
     ----------------------------------------------------------------
     if classMode and db.ClassMarkers then
         local root = KE.GetDefaultDB and KE:GetDefaultDB()
@@ -247,60 +276,57 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
 
         local markerOptions = {}
         for _, name in ipairs(MARKER_ORDER) do
-            markerOptions[#markerOptions + 1] = { value = name, text = name }
+            local tex = MARKER_INDEX[name] and (MARKER_TEX .. MARKER_INDEX[name]) or MARKER_NONE_TEX
+            markerOptions[#markerOptions + 1] = { value = name, text = "|T" .. tex .. ":16:16|t " .. name }
         end
+
+        local classTokens = {}
+        for i, info in ipairs(CLASS_ORDER) do classTokens[i] = info.token end
 
         local cardClass = GUIFrame:CreateCard(scrollChild, "Class Markers", yOffset)
         manager:Register(cardClass, "all")
-        cardClass:AddLabel("Each character uses its class's marker. Clicking the grid above changes your own " ..
-            "class's entry.")
+        cardClass:AddLabel("Each character uses its class's marker. Pick a class to see or change its marker; " ..
+            "clicking the grid above changes your own class's.")
 
-        for i, info in ipairs(CLASS_ORDER) do
-            local token = info.token
-            local current = db.ClassMarkers[token]
-            local default = shipped[token]
-            local isOverride = default ~= nil and current ~= default
+        local pickerRow, token = GUIFrame:CreateClassPickerRow(cardClass.content, {
+            scope = "FocusMarkerClass",
+            classTokens = classTokens,
+            label = "Class",
+        })
+        cardClass:AddRow(pickerRow, 36)
 
-            local label = KE:ColorTextByClass(info.name, token)
-            if token == classFile then
-                label = label .. "  |cff888888(your class)|r"
-            end
-            if isOverride then
-                label = label .. "  |cff888888override, default: " .. default .. "|r"
-            end
+        local current = db.ClassMarkers[token]
+        local default = shipped[token]
+        local isOverride = default ~= nil and current ~= default
+        local label = KE:ColorTextByClass(ClassName(token), token) .. " Marker"
+        if isOverride then
+            label = label .. "  |cff888888override, default: " .. default .. "|r"
+        end
 
-            local isLast = i == #CLASS_ORDER
-            local rowHeight = isLast and Theme.rowHeightLast or Theme.rowHeight
-            local row = GUIFrame:CreateRow(cardClass.content, rowHeight)
-            local dropdown = GUIFrame:CreateDropdown(row, label, {
-                options = markerOptions,
-                value = current,
-                callback = function(val)
-                    db.ClassMarkers[token] = val
+        local row = GUIFrame:CreateRow(cardClass.content, Theme.rowHeightLast)
+        local dropdown = GUIFrame:CreateDropdown(row, label, {
+            options = markerOptions,
+            value = current,
+            callback = function(val)
+                db.ClassMarkers[token] = val
+                ApplySettings()
+                RefreshSoon()
+            end,
+        })
+        row:AddWidget(dropdown, isOverride and 0.75 or 1)
+        manager:Register(dropdown, "all")
+
+        if isOverride then
+            local resetButton = GUIFrame:CreateButton(row, "Reset", {
+                callback = function()
+                    db.ClassMarkers[token] = default
                     ApplySettings()
                     RefreshSoon()
                 end,
             })
-            row:AddWidget(dropdown, isOverride and 0.75 or 1)
-            manager:Register(dropdown, "all")
-
-            if isOverride then
-                local resetButton = GUIFrame:CreateButton(row, "Reset", {
-                    callback = function()
-                        db.ClassMarkers[token] = default
-                        ApplySettings()
-                        RefreshSoon()
-                    end,
-                })
-                row:AddWidget(resetButton, 0.25)
-            end
-
-            if isLast then
-                cardClass:AddRow(row, rowHeight, 0)
-            else
-                cardClass:AddRow(row, rowHeight)
-            end
+            row:AddWidget(resetButton, 0.25)
         end
+        cardClass:AddRow(row, Theme.rowHeightLast, 0)
 
         yOffset = cardClass:GetNextOffset()
     end
@@ -319,7 +345,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
         { key = "NoToggle", label = "No Toggle",
           desc = "Prevent marker from toggling off on repeated clicks.", default = true },
         { key = "NoOverwrite", label = "No Overwrite",
-          desc = "Skip marking targets that are already marked (Patch 12.0.7+).", default = true },
+          desc = "Skip marking targets that are already marked.", default = true },
         { key = "AnnounceReadyCheck", label = "Ready Check Announce",
           desc = "Announce your marker in party chat on ready check.", default = true },
     }
@@ -333,7 +359,7 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
         local row = GUIFrame:CreateRow(card3.content, rowHeight)
         local checkbox = GUIFrame:CreateCheckbox(row, label, {
             value = checked,
-            callback = function(val) db[def.key] = val; ApplySettings() end,
+            callback = function(val) db[def.key] = val; ApplySettings(); RefreshSoon() end,
         })
         row:AddWidget(checkbox, 1)
         manager:Register(checkbox, "all")
@@ -347,60 +373,19 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     yOffset = card3:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Advanced
+    -- Marker Preview
     ----------------------------------------------------------------
-    local card4 = GUIFrame:CreateCard(scrollChild, "Advanced", yOffset)
-    manager:Register(card4, "all")
+    local cardMarker = GUIFrame:CreateCard(scrollChild, "Marker Preview", yOffset)
+    manager:Register(cardMarker, "all")
+    local markerBody = FM and FM:BuildMacroBody()
+    if markerBody then
+        AddPreviewSection(cardMarker, "What KE writes to ", markerBody, FM.MACRO_BODY_MAX,
+            Gold(db.MacroName or "!FocusMarker"), GeneralTabName(), "shared by every character")
+    else
+        cardMarker:AddLabel("Nothing to preview.")
+    end
 
-    local row4a = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local nameEditBox = GUIFrame:CreateEditBox(row4a, "Macro Name", {
-        value = db.MacroName or "!FocusMarker",
-        callback = function(val)
-            if val and val ~= "" then
-                db.MacroName = val
-            else
-                db.MacroName = "!FocusMarker"
-            end
-            ApplySettings()
-        end,
-    })
-    row4a:AddWidget(nameEditBox, 0.5)
-    manager:Register(nameEditBox, "all")
-
-    local iconEditBox = GUIFrame:CreateEditBox(row4a, "Macro Icon ID", {
-        value = tostring(db.MacroIcon or 1033497),
-        callback = function(val)
-            local num = tonumber(val)
-            if num then
-                db.MacroIcon = num
-                ApplySettings()
-            end
-        end,
-    })
-    row4a:AddWidget(iconEditBox, 0.5)
-    manager:Register(iconEditBox, "all")
-    card4:AddRow(row4a, Theme.rowHeight)
-
-    local row4b = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-    local condEditBox = GUIFrame:CreateEditBox(row4b, "Macro Conditionals (empty = default)", {
-        value = db.MacroConditionals or "",
-        callback = function(val) db.MacroConditionals = val or ""; ApplySettings() end,
-    })
-    row4b:AddWidget(condEditBox, 1)
-    manager:Register(condEditBox, "all")
-    card4:AddRow(row4b, Theme.rowHeight)
-
-    local advNoteRow = GUIFrame:CreateRow(card4.content, 75)
-    local advNoteText = GUIFrame:CreateText(advNoteRow,
-        KE:ColorTextByTheme("Note"),
-        KE:ColorTextByTheme("-") .. " Leave conditionals empty to use default: [@mouseover,exists,nodead][]\n" ..
-        KE:ColorTextByTheme("-") .. " Macro icon accepts numeric icon IDs.\n   " ..
-        KE:ColorTextByTheme(">") .. " Find IDs by clicking any spell or item icon on Wowhead.",
-        75, "hide")
-    advNoteRow:AddWidget(advNoteText, 1)
-    card4:AddRow(advNoteRow, 75, 0)
-
-    yOffset = card4:GetNextOffset()
+    yOffset = cardMarker:GetNextOffset()
 
     manager:UpdateAll(db.Enabled ~= false)
     return yOffset
@@ -414,7 +399,7 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
     local FM = GetModule()
     if not db or not FM then return Unavailable(scrollChild, yOffset) end
 
-    local kickName = FM.KICK_MACRO_NAME
+    local kickName = Gold(FM.KICK_MACRO_NAME)
     local bodyMax = FM.MACRO_BODY_MAX
 
     -- Writes before the page rebuilds, so the status below reads the result
@@ -475,7 +460,8 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
         elseif FM:GetPlayerClass() == "WARLOCK" then
             status = kickName .. " written for " .. spellText .. ". Summoning a different demon rewrites it."
         else
-            status = kickName .. " is up to date. Drag it from |cffffd100/macro|r (character tab) onto a bar."
+            status = kickName .. " is up to date. Drag it from " .. Gold("/macro") .. " > " ..
+                Gold(CharacterTabName()) .. " onto a bar."
         end
     end
     cardSpec:AddLabel(status)
@@ -526,20 +512,21 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
     yOffset = cardOptions:GetNextOffset()
 
     ----------------------------------------------------------------
-    -- Macro Preview
+    -- Macro Preview: the body written now, then the longest one the
+    -- options can make
     ----------------------------------------------------------------
     local cardPreview = GUIFrame:CreateCard(scrollChild, "Macro Preview", yOffset)
     manager:Register(cardPreview, "all")
 
     if body then
-        cardPreview:AddLabel("What KE writes to " .. kickName .. " with the options above. Read-only.  |cff888888" ..
-            #body .. " of " .. bodyMax .. " characters|r")
-        cardPreview:AddLabel(body)
+        AddPreviewSection(cardPreview, "What KE writes to ", body, bodyMax, kickName,
+            CharacterTabName(), "for this character only")
         local fullBody = spellName and FM.BuildKickBody(spellName, KICK_ALL_ON, markerIdx)
         if fullBody then
-            cardPreview:AddLabel("With every option on:  |cff888888" .. #fullBody .. " of " .. bodyMax ..
-                " characters|r")
-            cardPreview:AddLabel(fullBody)
+            local sepRow = GUIFrame:CreateRow(cardPreview.content, Theme.rowHeightSeparator)
+            sepRow:AddWidget(GUIFrame:CreateSeparator(sepRow), 1)
+            cardPreview:AddRow(sepRow, Theme.rowHeightSeparator)
+            AddPreviewSection(cardPreview, "With every option on", fullBody, bodyMax)
         end
     else
         cardPreview:AddLabel("Nothing to preview for this spec.")
@@ -552,10 +539,10 @@ GUIFrame:RegisterContent("FocusMarkerKick", function(scrollChild, yOffset)
 end)
 
 ----------------------------------------------------------------
--- Host: the module switch above a Marker | Focus Kick strip
+-- Host: the module switch above a Focus Marker | Focus Kick strip
 ----------------------------------------------------------------
 GUIFrame:RegisterTabbedContent("FocusMarker", {
-    { id = "FocusMarkerMarker", label = "Marker" },
+    { id = "FocusMarkerMarker", label = "Focus Marker" },
     { id = "FocusMarkerKick",   label = "Focus Kick" },
 }, {
     headerBuilder = BuildHeader,

@@ -408,6 +408,15 @@ local function CreatePositionCardKit(holder)
     card.strataWidget = strataOnlyDropdown
 
     function card:SetPositionWidgetsEnabled(enabled) self:SetEnabled(enabled) end
+
+    -- For a page that rewrites the saved offsets by code while the card shows.
+    function card:RefreshOffsets()
+        local keys = kit._keys
+        if not keys then return end
+        local defaults = kit._config and kit._config.defaults or {}
+        kit.xSlider:SetValue(kitGetValue(kit, keys.xOffset, defaults.xOffset or 0), true)
+        kit.ySlider:SetValue(kitGetValue(kit, keys.yOffset, defaults.yOffset or 0), true)
+    end
     function card:SetAnchorsOnlyEnabled(enabled)
         for _, widget in ipairs(kit.anchorButtonWidgets) do
             if widget.SetEnabled then widget:SetEnabled(enabled) end

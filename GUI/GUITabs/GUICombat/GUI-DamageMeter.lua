@@ -1630,6 +1630,18 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
         if DM and DM.ApplySpellHistory then DM:ApplySpellHistory() end
     end
 
+    -- A resize can rewrite the saved offsets; the sliders are re-read in place
+    -- because a page rebuild would drop the slider being dragged.
+    local posCard
+    local function ResizeStrip(key, value)
+        if DM and DM.ResizeSpellHistory then
+            DM:ResizeSpellHistory(key, value)
+        else
+            sh[key] = value
+        end
+        if posCard then posCard:RefreshOffsets() end
+    end
+
     -- Edge and Gap apply only while attached; the Position card only while free.
     manager:SetCondition("shattached", function() return sh.Attach == true end)
     manager:SetCondition("shfree", function() return sh.Attach ~= true end)
@@ -1647,9 +1659,11 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     card1:AddLabel("Shows your recent casts as a row of icons, newest first, each fading a few " ..
         "seconds after the cast. It shows only while the Damage Meter shows.\n\n" ..
         "What shows: your spellbook spells and racials; potions, trinkets and other items used " ..
-        "from your bags or equipped gear; your pet's spells (except those on autocast, green " ..
-        "border); and casts that were interrupted or failed after they started, greyed with a " ..
-        "red X. Toys, instant presses that fail, and spells outside your spellbook do not show.")
+        "from your bags or equipped gear, plus toys and other abilities you press that are outside " ..
+        "your spellbook (with Include Items and Toys on); your pet's spells (except those on " ..
+        "autocast, green border); and casts that were interrupted or failed after they started, " ..
+        "greyed with a red X. Instant presses that fail, and effects the game casts for you " ..
+        "without a press, do not show.")
 
     yOffset = card1:GetNextOffset()
 
@@ -1663,7 +1677,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     manager:Register(cardCasts, "all")
 
     local rowCasts = GUIFrame:CreateRow(cardCasts.content, Theme.rowHeightLast)
-    local itemsChk = GUIFrame:CreateCheckbox(rowCasts, "Include Items", {
+    local itemsChk = GUIFrame:CreateCheckbox(rowCasts, "Include Items and Toys", {
         value = sh.IncludeItems ~= false,
         callback = function(checked) sh.IncludeItems = checked; ApplyStrip() end,
     })
@@ -1697,7 +1711,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     local countSlider = GUIFrame:CreateSlider(rowCount, "Icon Count", {
         min = 1, max = 10, step = 1,
         value = sh.Count or 5,
-        callback = function(val) sh.Count = val; ApplyStrip() end,
+        callback = function(val) ResizeStrip("Count", val) end,
     })
     rowCount:AddWidget(countSlider, 1)
     manager:Register(countSlider, "all")
@@ -1707,36 +1721,46 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     local sizeSlider = GUIFrame:CreateSlider(rowSize, "Icon Size", {
         min = 16, max = 64, step = 1,
         value = sh.IconSize or 32,
-        callback = function(val) sh.IconSize = val; ApplyStrip() end,
+        callback = function(val) ResizeStrip("IconSize", val) end,
     })
     rowSize:AddWidget(sizeSlider, 1)
     manager:Register(sizeSlider, "all")
     cardIcons:AddRow(rowSize, Theme.rowHeight)
 
-    local rowSpacing = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeight)
+    local rowSpacing = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeightLast)
     local spacingSlider = GUIFrame:CreateSlider(rowSpacing, "Spacing", {
         min = 0, max = 10, step = 1,
         value = sh.Spacing or 2,
-        callback = function(val) sh.Spacing = val; ApplyStrip() end,
+        callback = function(val) ResizeStrip("Spacing", val) end,
     })
-    rowSpacing:AddWidget(spacingSlider, 1)
+    rowSpacing:AddWidget(spacingSlider, 0.5)
     manager:Register(spacingSlider, "all")
-    cardIcons:AddRow(rowSpacing, Theme.rowHeight)
 
-    local rowGrow = GUIFrame:CreateRow(cardIcons.content, Theme.rowHeightLast)
-    local growDd = GUIFrame:CreateDropdown(rowGrow, "Grow Direction", {
-        options = {
-            { key = "LEFT",  text = "Left" },
-            { key = "RIGHT", text = "Right" },
-            { key = "UP",    text = "Up" },
-            { key = "DOWN",  text = "Down" },
-        },
-        value = sh.Grow or "LEFT",
+    -- Attached, the direction that grows into the meter is not offered, and
+    -- the value shown is the outside reading; a strip that sits inside the
+    -- meter steps that way into it instead.
+    local effectiveGrow = DM and DM.SpellHistoryEffectiveGrow
+    local growOptions = {}
+    for _, option in ipairs({
+        { key = "LEFT",  text = "Left" },
+        { key = "RIGHT", text = "Right" },
+        { key = "UP",    text = "Up" },
+        { key = "DOWN",  text = "Down" },
+    }) do
+        if not effectiveGrow or effectiveGrow(sh.Attach, sh.AttachEdge, option.key) == option.key then
+            growOptions[#growOptions + 1] = option
+        end
+    end
+    local growValue = sh.Grow or "LEFT"
+    if effectiveGrow then growValue = effectiveGrow(sh.Attach, sh.AttachEdge, growValue) end
+    local growDd = GUIFrame:CreateDropdown(rowSpacing, "Grow Direction", {
+        options = growOptions,
+        value = growValue,
         callback = function(key) sh.Grow = key; ApplyStrip() end,
     })
-    rowGrow:AddWidget(growDd, 0.5)
+    rowSpacing:AddWidget(growDd, 0.5)
     manager:Register(growDd, "all")
-    cardIcons:AddRow(rowGrow, Theme.rowHeightLast, 0)
+    cardIcons:AddRow(rowSpacing, Theme.rowHeightLast, 0)
 
     yOffset = cardIcons:GetNextOffset()
 
@@ -1772,6 +1796,9 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
             sh.Attach = checked
             ApplyStrip()
             manager:UpdateAll(db.Enabled ~= false)
+            -- A frame late, so the Grow options follow and this widget is not
+            -- torn down mid-call.
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
         end,
     })
     rowAttach:AddWidget(attachChk, 1)
@@ -1783,9 +1810,15 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
         options = {
             { key = "TOP",    text = "Top" },
             { key = "BOTTOM", text = "Bottom" },
+            { key = "LEFT",   text = "Left" },
+            { key = "RIGHT",  text = "Right" },
         },
         value = sh.AttachEdge or "TOP",
-        callback = function(key) sh.AttachEdge = key; ApplyStrip() end,
+        callback = function(key)
+            sh.AttachEdge = key
+            ApplyStrip()
+            C_Timer.After(0, function() GUIFrame:RefreshContent() end)
+        end,
     })
     rowEdge:AddWidget(edgeDd, 0.5)
     manager:Register(edgeDd, "shattached")
@@ -1799,14 +1832,16 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     manager:Register(gapSlider, "shattached")
     cardPlace:AddRow(rowEdge, Theme.rowHeight)
     cardPlace:AddNote("Free, the strip moves in " .. KE:ColorTextByTheme("/kes edit") ..
-        "; attached, it follows the meter.")
+        "; attached, it follows the meter. For any other spot, such as inside the meter, turn Attach " ..
+        "off and use Anchored To in Position Settings.")
 
     yOffset = cardPlace:GetNextOffset()
 
     ----------------------------------------------------------------
     -- Card 6: Position Settings (free-standing only)
     ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+    local posOffset
+    posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
         title = "Position Settings",
         db = sh,
         positionKey = "Position",
@@ -1817,7 +1852,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
             yOffset = "YOffset",
             strata = "Strata",
         },
-        showAnchorFrameType = false,
+        showAnchorFrameType = true,
         showStrata = true,
         onChangeCallback = ApplyStrip,
     })
