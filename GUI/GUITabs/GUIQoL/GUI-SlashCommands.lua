@@ -74,7 +74,6 @@ GUIFrame:RegisterContent("SlashCommands", function(scrollChild, yOffset)
     card3:AddLabel(KE:ColorTextByTheme("/kitn chatbubbles") .. "  |cff888888— Toggle chat bubbles|r")
     card3:AddLabel(KE:ColorTextByTheme("/kitn nameplates") .. "  |cff888888— Toggle |cffFF4444enemy|r|cff888888 nameplates|r")
     card3:AddLabel(KE:ColorTextByTheme("/kitn friendplates") .. "  |cff888888— Toggle |cff44FF44friendly|r|cff888888 nameplates|r")
-    card3:AddLabel(KE:ColorTextByTheme("/kitn actioncam") .. "  |cff888888— Toggle action camera|r")
     card3:AddLabel(KE:ColorTextByTheme("/kitn errors") .. "  |cff888888— Toggle Lua error display|r")
 
     yOffset = card3:GetNextOffset()
