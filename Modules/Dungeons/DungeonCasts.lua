@@ -137,10 +137,12 @@ function DC:OnContextEnter()
 end
 
 -- Held bars go too: with the events and the update frame off, nothing else
--- would release them.
+-- would release them. While the preview is up the events stay: live bars can
+-- sit in its stack and need them to be released, and HidePreview settles the
+-- registration when the preview closes.
 function DC:OnContextLeave()
-    self:SetContextEventsRegistered(false)
     if self.isPreview then return end
+    self:SetContextEventsRegistered(false)
     self.instanceActive = false
     self:SetUpdateFrameRunning(false)
     self:ReleaseAllBars()
@@ -1434,13 +1436,10 @@ function DC:HidePreview()
 
     self:ReleaseAllBars()
 
-    if self.db and self.db.Enabled and KE.Context:IsActive("DungeonCasts") then
-        self.instanceActive = true
-        self:SetUpdateFrameRunning(true)
-    else
-        self.instanceActive = false
-        self:SetUpdateFrameRunning(false)
-    end
+    local active = (self.db and self.db.Enabled and KE.Context:IsActive("DungeonCasts")) and true or false
+    self:SetContextEventsRegistered(active)
+    self.instanceActive = active
+    self:SetUpdateFrameRunning(active)
 end
 
 ---------------------------------------------------------------------------------

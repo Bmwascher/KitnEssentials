@@ -216,6 +216,9 @@ function Context:_Run(sub)
     -- A throwing predicate is a code defect, not an unreadable place: it is
     -- reported, and the subscriber's own answer for "cannot tell" applies.
     local ok, answer = xpcall(CallPredicate, self.deps.geterrorhandler())
+    -- The predicate may have removed or replaced this subscription; a detached
+    -- record must not change its latch or fire a callback.
+    if self.subs[sub.key] ~= sub then return end
     local inside
     if not ok or answer == nil then
         inside = sub.unknownAnswer
