@@ -761,11 +761,9 @@ function AU:CanGuildCover(allowance, cost)
     return allowance >= cost
 end
 
--- Each report event is held only while the state it serves exists, whatever
--- the module state, so a repair in progress at a disable settles as it would
--- have. Durability needs a bill baseline. Money needs a wallet reading, or a
--- baseline for the handler's setting gate to clear. The merchant events are
--- also held while the module is on.
+-- Each event is held while the state it serves exists, even after a disable,
+-- so a repair in progress settles as it would have. Money also follows the
+-- bill, which the handler's setting gate clears on a money event.
 function AU:RepairReportListens(enabled, billHeld, moneyHeld, inFlight)
     local wantMerchant = (enabled or billHeld or moneyHeld or inFlight) and true or false
     local wantDurability = billHeld and true or false
@@ -3234,8 +3232,8 @@ end
 function AU:OnEnable()
     if not self.db.Enabled then return end
     self:RegisterEvent("CVAR_UPDATE")
-    -- A report frame kept from an earlier enable hears the next merchant at
-    -- once; the deferred ApplySettings below only builds it the first time.
+    -- A report frame kept from an earlier enable listens again now, not after
+    -- the deferred ApplySettings below.
     SyncRepairReportEvents()
     C_Timer.After(1.0, function()
         self:ApplySettings()

@@ -898,8 +898,8 @@ local function Skin()
                 end
             end
 
-            -- Cleared before the loop, so an error dressing one button cannot
-            -- leave the drain marked as scheduled.
+            -- DrainPending clears this before its loop, so an error dressing one
+            -- button cannot leave the drain marked as scheduled.
             local drainScheduled = false
 
             local function DrainPending()
