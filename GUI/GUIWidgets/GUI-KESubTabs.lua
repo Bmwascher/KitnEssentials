@@ -63,6 +63,9 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
 
     local T = Theme
     local a = T.accent
+    local idle, idleEdge = T.controlBg, T.controlBorder
+    local selR, selG, selB = KE.BlendColor(a, 0.20, T.bgDark)
+    local hovR, hovG, hovB = KE.BlendColor(a, 0.12, idle)
 
     local container = CreateFrame("Frame", nil, parent)
     container:SetHeight(tabHeight)
@@ -100,11 +103,18 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
         })
 
         if isActive then
-            btn:SetBackdropColor(a[1], a[2], a[3], 0.25)
+            -- Opaque over the window colour, so a strip on a card panel reads
+            -- the same as one on the window.
+            btn:SetBackdropColor(selR, selG, selB, 1)
             btn:SetBackdropBorderColor(a[1], a[2], a[3], 0.8)
+            local bar = btn:CreateTexture(nil, "ARTWORK")
+            bar:SetColorTexture(a[1], a[2], a[3], 1)
+            bar:SetHeight(2)
+            bar:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 1, 1)
+            bar:SetPoint("BOTTOMRIGHT", btn, "BOTTOMRIGHT", -1, 1)
         else
-            btn:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4] or 0.6)
-            btn:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], T.border[4] or 0.4)
+            btn:SetBackdropColor(idle[1], idle[2], idle[3], idle[4])
+            btn:SetBackdropBorderColor(idleEdge[1], idleEdge[2], idleEdge[3], 1)
         end
 
         local label = btn:CreateFontString(nil, "OVERLAY")
@@ -134,14 +144,14 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
 
         btn:SetScript("OnEnter", function(b)
             if b.tabId ~= activeId then
-                b:SetBackdropColor(a[1], a[2], a[3], 0.12)
+                b:SetBackdropColor(hovR, hovG, hovB, 1)
                 b.label:SetTextColor(1, 1, 1, 1)
             end
         end)
 
         btn:SetScript("OnLeave", function(b)
             if b.tabId ~= activeId then
-                b:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], T.bgMedium[4] or 0.6)
+                b:SetBackdropColor(idle[1], idle[2], idle[3], idle[4])
                 b.label:SetTextColor(1, 1, 1, 1)
             end
         end)

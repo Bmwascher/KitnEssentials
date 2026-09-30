@@ -494,8 +494,8 @@ function GUIFrame:CreateSidebar(parent)
         edgeFile = "Interface\\Buttons\\WHITE8X8",
         edgeSize = 1,
     })
-    searchContainer:SetBackdropColor(T.bgDark[1], T.bgDark[2], T.bgDark[3], T.bgDark[4])
-    searchContainer:SetBackdropBorderColor(T.border[1], T.border[2], T.border[3], 1)
+    searchContainer:SetBackdropColor(T.fieldBg[1], T.fieldBg[2], T.fieldBg[3], T.fieldBg[4])
+    searchContainer:SetBackdropBorderColor(T.fieldBorder[1], T.fieldBorder[2], T.fieldBorder[3], 1)
 
     -- Search EditBox
     local searchEditBox = CreateFrame("EditBox", nil, searchContainer)
@@ -550,7 +550,7 @@ function GUIFrame:CreateSidebar(parent)
 
     searchEditBox:SetScript("OnEditFocusLost", function()
         local L = KE.Theme
-        searchContainer:SetBackdropBorderColor(L.border[1], L.border[2], L.border[3], 1)
+        searchContainer:SetBackdropBorderColor(L.fieldBorder[1], L.fieldBorder[2], L.fieldBorder[3], 1)
     end)
 
     searchEditBox:SetScript("OnEscapePressed", function(self)

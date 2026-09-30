@@ -107,7 +107,7 @@ local function CreateSeparatorKit(holder)
 
     local tex = row:CreateTexture(nil, "ARTWORK")
     tex:SetAllPoints()
-    tex:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 0.5)
+    tex:SetColorTexture(Theme.divider[1], Theme.divider[2], Theme.divider[3], Theme.divider[4])
 
     return { row = row, tex = tex }
 end
@@ -137,7 +137,7 @@ local function ConfigureBossHeader(kit, headerText)
 end
 
 local function ConfigureSeparator(kit)
-    kit.tex:SetColorTexture(Theme.border[1], Theme.border[2], Theme.border[3], 0.5)
+    kit.tex:SetColorTexture(Theme.divider[1], Theme.divider[2], Theme.divider[3], Theme.divider[4])
 end
 
 ---------------------------------------------------------------------------------

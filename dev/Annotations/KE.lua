@@ -35,6 +35,18 @@ local AceDB
 ---@field textSecondary number[]
 ---@field sidebarWidth number
 ---@field contentWidth number
+---@field fieldBg number[]
+---@field fieldBorder number[]
+---@field controlBg number[]
+---@field controlHover number[]
+---@field controlPressed number[]
+---@field controlBorder number[]
+---@field listBg number[]
+---@field listBorder number[]
+---@field thumbRest number[]
+---@field thumbHover number[]
+---@field knobOff number[]
+---@field divider number[]
 local KETheme
 
 -- Animation curves created via C_CurveUtil.CreateCurve() in Core/Curves.lua.
@@ -173,6 +185,16 @@ function KE:GetInterruptAnnounceSpellSet() end
 ---@param query string|number|nil
 ---@return boolean
 function KE.DropdownSearchMatches(displayText, key, query) end
+
+--- The opaque colour of `top` drawn at `alpha` over `base`
+--- (Core/AddonTheme.lua). Both inputs' own alpha is ignored.
+---@param top number[]
+---@param alpha number
+---@param base number[]
+---@return number r
+---@return number g
+---@return number b
+function KE.BlendColor(top, alpha, base) end
 
 -- ─── Module utilities ─────────────────────────────────────
 --- True when ElvUI is loaded AND the user has opted into ElvUI handling
