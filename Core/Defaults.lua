@@ -2243,11 +2243,12 @@ local Defaults = {
             },
             -- Blizzard's UI widget frames: the top-centre status bars and text
             -- widgets used by M+ timers, event progress, power bars and zone
-            -- objectives. Standalone module, not a skin key -- it hooks the
-            -- widget mixins rather than a named window.
+            -- objectives. Standalone module, not a skin key -- it restyles the
+            -- widgets in four Blizzard containers rather than a named window.
             UIWidgets = {
                 Enabled = false,
                 FontOutline = "OUTLINE",
+                SkinIcons = true,     -- Crop and border spell display icons
                 -- Status bar widgets (M+ timer, power bars)
                 StatusBar = {
                     Enabled = true,
@@ -2257,6 +2258,7 @@ local Defaults = {
                     LabelSize = 14,       -- Font size for labels
                     BarTextSize = 12,     -- Font size for bar text
                     StripTextures = true, -- Remove Blizzard textures and add backdrop
+                    BarTexture = "KitnUI", -- Fill drawn over plain bars while StripTextures is on
                     BackdropColor = { 0, 0, 0, 0.8 },
                     BorderColor = { 0, 0, 0, 1 },
                 },
@@ -2265,6 +2267,7 @@ local Defaults = {
                     Enabled = true,
                     StyleText = true,
                     Size = 17,
+                    CenterText = true,    -- Centre the fixed-width text Blizzard left-aligns
                 },
                 -- Blizzard's top-centre widget container (M+ objective line,
                 -- delve and event bars). Off = Blizzard's own placement.

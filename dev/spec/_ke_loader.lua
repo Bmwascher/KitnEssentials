@@ -773,18 +773,16 @@ function L.loadCommunitiesSkin(overrides)
     return findUpvalue(captured, "ChatPaneFontSize"), KE
 end
 
--- Modules/Skinning/UIWidgets.lua. StyleWidgetByType is a module METHOD, so
--- it's reachable straight off the returned UIW table -- no seam needed.
--- SetFontIfChanged is a file-local FUNCTION value, so it is an upvalue of
--- any stored method that calls it directly (StyleStatusBarWidget);
--- findUpvalue recovers the function object straight off that upvalue slot
--- without ever running StyleStatusBarWidget itself. The module's event
--- registration is never run: the addon shim's module has no RegisterEvent.
--- Returns UIW, KE, seams (seams.SetFontIfChanged).
+-- Modules/Skinning/UIWidgets.lua. Its methods and the pure lookups are
+-- fields on the returned UIW table. Styling a font string installs hooks,
+-- so hooksecurefunc is a no-op here. The module's event registration is
+-- never run: the addon shim's module has no RegisterEvent.
+-- Returns UIW, KE.
 function L.loadUIWidgets(overrides)
     installMock(overrides, { C_Timer = inertTimer() })
     local modules = helpers.installAddonShim()
     _G.UIParent = noopFrame()
+    _G.hooksecurefunc = function() end
     local KE = {
         db = { profile = { Skinning = { UIWidgets = {} } } },
         ShouldNotLoadModule = function() return false end,
@@ -794,12 +792,7 @@ function L.loadUIWidgets(overrides)
         AddBorders = function() end,
     }
     helpers.loadModule("Modules/Skinning/UIWidgets.lua", KE)
-    local UIW = modules["UIWidgets"]
-
-    local seams = {
-        SetFontIfChanged = findUpvalue(UIW.StyleStatusBarWidget, "SetFontIfChanged"),
-    }
-    return UIW, KE, seams
+    return modules["UIWidgets"], KE
 end
 
 -- Modules/Skinning/LootRoll.lua. LR:UpdateDB/OnInitialize/OnEnable are never

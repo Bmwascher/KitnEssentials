@@ -1,9 +1,10 @@
 -- Modules/Skinning/UIWidgets.lua -- restyles Blizzard's on-screen UI widget
 -- frames (top-centre status bars / text widgets used by M+ timers, event
 -- progress, power bars). Almost everything in this module touches real
--- widget frames and is only verifiable in-game; the ApplySettings
--- font-cache invalidation path is the pure decision point reachable
--- headlessly through dev/spec/_ke_loader.lua's loadUIWidgets.
+-- widget frames and is only verifiable in-game; the pure decisions (the
+-- ApplySettings font-cache invalidation, the fill colour, the font role,
+-- the text centring) are reachable headlessly through
+-- dev/spec/_ke_loader.lua's loadUIWidgets.
 local L = require("dev.spec._ke_loader")
 
 describe("UIWidgets", function()
@@ -122,5 +123,108 @@ describe("UIWidgets", function()
             assert.equals(-40, c.y)
             assert.equals(0.8, c.scale)
         end)
+    end)
+end)
+
+describe("UIWidgets fill colour", function()
+    local function resolve(...)
+        local UIW = L.loadUIWidgets()
+        return UIW.ResolveFillColor(...)
+    end
+
+    it("resolves a known fill kit to the same colour in either case", function()
+        local upper = { resolve("widgetstatusbar", "Green", 1, 1, 1) }
+        local lower = { resolve("widgetstatusbar", "green", 1, 1, 1) }
+        assert.equals(3, #upper)
+        assert.same(upper, lower)
+        assert.are_not.same({ 1, 1, 1 }, upper)
+    end)
+
+    it("gives a white fill the bar's own tint", function()
+        assert.same({ 0.2, 0.4, 0.6 }, { resolve("widgetstatusbar", "White", 0.2, 0.4, 0.6) })
+    end)
+
+    it("leaves Blizzard's fill on any other frame kit, even with a known fill kit", function()
+        for _, frameKit in ipairs({ "jailerstower-scorebar", "ui-frame-dastardlyduos-progressbar", false }) do
+            assert.is_nil(resolve(frameKit or nil, "Green", 1, 1, 1))
+        end
+    end)
+
+    it("leaves Blizzard's fill for an unknown or missing fill kit", function()
+        for _, fillKit in ipairs({ "teal", false }) do
+            assert.is_nil(resolve("widgetstatusbar", fillKit or nil, 1, 1, 1))
+        end
+    end)
+end)
+
+describe("UIWidgets font role", function()
+    local ROLES = {
+        { role = "Label",   group = "StatusBar",  flag = "StyleLabel",   size = 14 },
+        { role = "BarText", group = "StatusBar",  flag = "StyleBarText", size = 12 },
+        { role = "Text",    group = "TextWidget", flag = "StyleText",    size = 17 },
+    }
+
+    local function allOn()
+        return {
+            Enabled = true,
+            StatusBar = { Enabled = true, StyleLabel = true, StyleBarText = true, LabelSize = 14, BarTextSize = 12 },
+            TextWidget = { Enabled = true, StyleText = true, Size = 17 },
+        }
+    end
+
+    it("gives each role its own size when everything is on", function()
+        local UIW = L.loadUIWidgets()
+        for _, r in ipairs(ROLES) do
+            assert.equals(r.size, UIW.FontSizeForRole(allOn(), r.role))
+        end
+    end)
+
+    it("gives nil for every role when the module is off", function()
+        local UIW = L.loadUIWidgets()
+        local db = allOn()
+        db.Enabled = false
+        for _, r in ipairs(ROLES) do
+            assert.is_nil(UIW.FontSizeForRole(db, r.role))
+        end
+    end)
+
+    it("gives nil when the role's group is off", function()
+        local UIW = L.loadUIWidgets()
+        for _, r in ipairs(ROLES) do
+            local db = allOn()
+            db[r.group].Enabled = false
+            assert.is_nil(UIW.FontSizeForRole(db, r.role))
+        end
+    end)
+
+    it("gives nil when the role's style flag is off", function()
+        local UIW = L.loadUIWidgets()
+        for _, r in ipairs(ROLES) do
+            local db = allOn()
+            db[r.group][r.flag] = false
+            assert.is_nil(UIW.FontSizeForRole(db, r.role))
+        end
+    end)
+end)
+
+describe("UIWidgets text centring", function()
+    it("centres only when the module, text widgets, text style and centring are all on", function()
+        local UIW = L.loadUIWidgets()
+        local function allOn()
+            return { Enabled = true, TextWidget = { Enabled = true, StyleText = true, Size = 17, CenterText = true } }
+        end
+        assert.is_true(UIW.ShouldCenterText(allOn()))
+
+        local turnOffs = {
+            function(db) db.Enabled = false end,
+            function(db) db.TextWidget.Enabled = false end,
+            function(db) db.TextWidget.StyleText = false end,
+            function(db) db.TextWidget.CenterText = false end,
+        }
+        for _, turnOff in ipairs(turnOffs) do
+            local db = allOn()
+            turnOff(db)
+            assert.is_false(UIW.ShouldCenterText(db))
+        end
     end)
 end)
