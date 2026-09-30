@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.7
+
+### Edit Mode
+
+- **NEW:** the selected mover shows a tooltip with its live position
+
+### Settings
+
+- The header menu is replaced by a Toggle Anchors button, tinted while edit
+  mode is on
+
+---
+
 ## v4.8.6
 
 ### UI Widgets
