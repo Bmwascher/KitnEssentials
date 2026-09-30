@@ -174,8 +174,11 @@ function CM:OnInitialize()
     self:SetEnabledState(false)
 end
 
+-- Like the Frame Skins rows, the skin runs only while Dark Theme is on;
+-- S:IsActive also covers the ElvUI stand-down.
 function CM:OnEnable()
-    if KE:ShouldNotLoadModule() then return end
+    local S = GetS()
+    if not (S and S:IsActive()) then return end
     if not self.db.Enabled then return end
 
     if not self:Setup() then
@@ -191,6 +194,7 @@ function CM:OnEnable()
 end
 
 function CM:ApplySettings()
-    if KE:ShouldNotLoadModule() then return end
+    local S = GetS()
+    if not (S and S:IsActive()) then return end
     if self.db.Enabled then self:Setup() end
 end
