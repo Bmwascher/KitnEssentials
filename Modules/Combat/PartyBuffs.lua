@@ -887,12 +887,17 @@ function PB:ShowPreview()
         return
     end
     self:BuildStyleSettings()
-    local bindings = self:FindFrames()
     local frames = {}
-    for i = 1, #bindings do frames[i] = bindings[i].frame end
+    -- Solo, the search can find no teammate, so it is skipped: it reads every
+    -- unit button a unit-frame addon has built.
+    local grouped = IsInGroup()
+    if grouped then
+        local bindings = self:FindFrames()
+        for i = 1, #bindings do frames[i] = bindings[i].frame end
+    end
     -- Solo only: grouped with no party frame found, rows beside stand-ins
     -- would stand for teammates the player cannot see.
-    if #frames == 0 and not IsInGroup() then
+    if #frames == 0 and not grouped then
         local cells = self:EnsurePreviewCells()
         for k = 1, #cells do frames[k] = cells[k] end
         self.previewBlock:Show()
