@@ -222,7 +222,11 @@ local function AddCandidate(list, frame, family, raidIndex)
     if PB.active then PB:WatchCell(frame) end
     local okVisible, visible = pcall(frame.IsVisible, frame)
     if not (okVisible and not issecretvalue(visible) and visible == true) then
-        if DEBUG_PB then Debug("cand %s %s vis=false at %s -> -", family, DebugName(frame), DebugPos(frame)) end
+        if DEBUG_PB then
+            local okAttr, attr = pcall(frame.GetAttribute, frame, "unit")
+            Debug("cand %s %s %s vis=false at %s raid=%s -> -", family, DebugName(frame),
+                PlainString(frame.unit) or (okAttr and PlainString(attr)) or nil, DebugPos(frame), raidIndex)
+        end
         return
     end
     local candidate = { frame = frame, family = family, raidIndex = raidIndex, visible = true }
@@ -893,9 +897,8 @@ function PB:ShowPreview()
     end
     self:BuildStyleSettings()
     local frames = {}
-    -- Solo, the search can find no teammate, so it is skipped: it reads every
-    -- unit button a unit-frame addon has built.
-    local grouped = IsInGroup()
+    -- Solo, the search can find no teammate, so it is skipped.
+    local grouped = PlainTrue(IsInGroup)
     if grouped then
         local bindings = self:FindFrames()
         for i = 1, #bindings do frames[i] = bindings[i].frame end
