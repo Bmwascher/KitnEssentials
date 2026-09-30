@@ -1,5 +1,54 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.17
+
+### Focus Macros
+
+- The Focus Marker page is renamed Focus Macros
+- Class markers are picked from one dropdown with icons; Mage defaults to Moon
+  and Priest to Skull
+- Marker from Class is now on by default. Untick it to keep a single marker
+- The marker and kick macro previews say which /macro tab holds each macro
+- The kick macro's #showtooltip line names your kick
+
+### Party Buffs
+
+- **NEW:** timer text with font settings, and category colours as an inner
+  ring (off by default)
+- Wider icon size and offset ranges; icons default to 32
+- The preview shows beside four party rows
+- Tracks the Liquid Luster potion
+- Attaches to the party frames after a /reload in a group
+
+### Spell History
+
+- **NEW:** anchor it to a chosen frame or any meter edge
+- Shows items and toys you press outside the spellbook
+
+### Kick Tracker
+
+- Synced rows show the spell that was kicked
+- A teammate's row updates after every kick message
+
+### Skinning
+
+- Context menus are skinned by default while Dark Theme is on. If you had
+  unticked them, untick them again
+
+### Move Frames
+
+- The hero talent picker scales with the talent window
+
+### UI Widgets
+
+- Unticking Strip Textures asks for a reload
+
+### CVars
+
+- Dragging a UI Scaling slider is smoother, and skin borders stay crisp
+
+---
+
 ## v4.8.16
 
 ### Kick Tracker
