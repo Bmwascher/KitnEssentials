@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.2
+
+### Focus Marker
+
+- **NEW:** Marker from Class: each class gets its own marker, with a per-class
+  override
+- **NEW:** a per-character focus kick macro on its own tab, kept up to date
+  when your spec or pet changes
+
+---
+
 ## v4.8.1
 
 ### Raid Control
