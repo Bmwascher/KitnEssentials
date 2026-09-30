@@ -82,3 +82,28 @@ describe("DungeonCasts interrupt hold vs interruptible repaint", function()
         assert.is_false(wasRepainted())
     end)
 end)
+
+-- The preview colour branch truth-tests notInterruptible, which is secret
+-- for a live enemy cast. A live bar can sit in the preview stack, so only
+-- bars the preview built may take that branch.
+describe("DungeonCasts preview colour branch", function()
+    it("gives a live bar in the preview stack the live colour path", function()
+        local DC, KE = L.loadDungeonCasts()
+        KE.ResolveColor = function() return 1, 1, 1, 1 end
+        DC.isPreview = true
+        DC.db = { Kick = {} }
+        local base = { GetRGB = function() return 1, 1, 1 end }
+        DC.colors = { Casting = base, Channeling = base, Shielded = base }
+        local calls = {}
+        local texture = {
+            SetVertexColor = function() calls[#calls + 1] = "plain" end,
+            SetVertexColorFromBoolean = function() calls[#calls + 1] = "boolean" end,
+        }
+        local bar = {
+            castBar = { GetStatusBarTexture = function() return texture end },
+            notInterruptible = false,
+        }
+        DC:UpdateBarColor(bar)
+        assert.same({ "boolean" }, calls)
+    end)
+end)

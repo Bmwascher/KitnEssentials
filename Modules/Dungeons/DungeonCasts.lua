@@ -482,6 +482,7 @@ function DC:ReleaseBar(bar)
     bar.previewIcon = nil
     bar.previewTarget = nil
     bar.previewTargetClass = nil
+    bar.isPreviewBar = nil
     bar.targetName = nil
     bar.targetClass = nil
     bar.targetUnit = nil
@@ -534,7 +535,9 @@ function DC:UpdateBarColor(bar, kickCd)
     if not bar or not bar.castBar then return end
     local texture = bar.castBar:GetStatusBarTexture()
 
-    if self.isPreview then
+    -- A live bar left in the preview stack carries a secret notInterruptible,
+    -- which the truth test below would raise on.
+    if self.isPreview and bar.isPreviewBar then
         local db = self.db
         local saved
         if bar.notInterruptible then
@@ -1361,6 +1364,7 @@ function DC:CreatePreviewBars()
         local targetClass = spell.hasTarget and playerClass or nil
 
         bar.unit = fakeUnit
+        bar.isPreviewBar = true
         bar.casting = not spell.channeling
         bar.channeling = spell.channeling
         bar.notInterruptible = spell.shielded
