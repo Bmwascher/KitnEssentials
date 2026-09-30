@@ -1423,6 +1423,10 @@ function L.loadLFGReminder(overrides)
         GetSearchResultInfo = function() return nil end,
         GetActivityInfoTable = function() return nil end,
     }
+    -- Read at call time by the row's art lookup; the default has no art.
+    _G.C_ChallengeMode = overrides.C_ChallengeMode or {
+        GetMapUIInfo = function() return nil end,
+    }
     -- LFGReminder.lua reads Enum.SpellBookSpellBank.Player at file scope, so the
     -- stub must exist BEFORE helpers.loadModule runs.
     _G.Enum = overrides.Enum or { SpellBookSpellBank = { Player = "Player" } }
@@ -1459,6 +1463,9 @@ function L.loadLFGReminder(overrides)
         -- loader's onCreateFrame spy (used to count BuildPopup's frames).
         IsSecretValue = function(_, v) return _G.issecretvalue and _G.issecretvalue(v) end,
     }
+    -- Core/Globals.lua's lookup; the default knows no map, so the row falls
+    -- back to the teleport icon.
+    KE.GetChallengeMapIDByName = overrides.GetChallengeMapIDByName or function() return nil end
     helpers.loadModule("Modules/Dungeons/LFGReminder.lua", KE)
     local LR = modules["LFGReminder"]
     -- ShowPopup/HidePopup (the leader/cooldown-gate work) register and
