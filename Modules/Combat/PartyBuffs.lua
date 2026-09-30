@@ -272,7 +272,7 @@ function PB:FindFrames()
     ns = ns and ns.EllesmereUIRaidFrames
     -- The party buttons exist from login, but join the registry only after
     -- every raid button is styled, which after a /reload can be well after
-    -- they show. Listing them first gets them watched while still hidden.
+    -- they show. Listing them here gets them watched while still hidden.
     local party = ns and ns._partyAllButtons
     if type(party) == "table" then
         for i = 1, #party do
