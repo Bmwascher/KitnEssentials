@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.4
+
+### Damage Meter
+
+- **NEW:** Spell History: a strip of the casts you press, fading out, with its
+  own mover or attached to the meter
+
+---
+
 ## v4.8.3
 
 ### Damage Meter
