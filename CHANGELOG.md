@@ -1,5 +1,17 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.5
+
+### LFG Reminder
+
+- The popup is restyled as a dungeon row with the dungeon's art, a wrapping
+  name and a role line
+- The settings preview shows a current-season dungeon
+- A popup hidden by combat comes back when combat ends; one closed with X
+  stays closed
+
+---
+
 ## v4.8.4
 
 ### Damage Meter
