@@ -60,6 +60,30 @@ function KT.HelloAllowed(locked, lastSent, now, force, throttle)
     return now - lastSent >= throttle
 end
 
+-- Fields 7-8 carry the player's talent-added kick (0 for none) and its
+-- remaining time after the reply flag, so older clients, which split a fixed
+-- number of fields, never read them.
+function KT.EncodeHello(id, cd, remaining, noAnswer, extra, now)
+    local extraID, extraRemaining = 0, 0
+    if extra then
+        extraID = extra.id
+        if extra.kickStart and extra.kickDuration then
+            extraRemaining = math.max(0, extra.kickStart + extra.kickDuration - now)
+        end
+    end
+    return "1;HELLO;" .. id .. ";" .. cd .. ";" .. string.format("%.1f", remaining)
+        .. ";" .. (noAnswer and "1" or "0")
+        .. ";" .. extraID .. ";" .. string.format("%.1f", extraRemaining)
+end
+
+-- A new main kick or spec asks teammates to answer; a change to the
+-- talent-added kick alone gives them nothing to answer.
+function KT.OwnKickHello(mainChanged, specChanged, extrasChanged)
+    if mainChanged or specChanged then return "ask" end
+    if extrasChanged then return "tell" end
+    return nil
+end
+
 ---------------------------------------------------------------------------------
 -- Pairing a KICK message with a nameplate record
 ---------------------------------------------------------------------------------
@@ -229,10 +253,11 @@ function KT.KickFromMessage(verb, isKE, sid, cd, extra)
 end
 
 -- How to answer a KE HELLO, from its reply flag (field 6): "0" asks for an
--- answer, sent even inside the throttle; "1" is a reply and gets none. A
--- HELLO without the flag comes from an older client, which cannot mark its
--- own replies, so it is answered only under the throttle: answering it at once
--- would let two clients answer each other every throttle period.
+-- answer, sent even inside the throttle; "1" (a reply, or a change to the
+-- talent-added kick alone) gets none. A HELLO without the flag comes from an
+-- older client, which cannot mark its own replies, so it is answered only
+-- under the throttle: answering it at once would let two clients answer each
+-- other every throttle period.
 function KT.HelloReplyMode(replyFlag)
     if replyFlag == "0" then return "force" end
     if replyFlag == "1" then return nil end
@@ -282,6 +307,30 @@ function KT.ExtraKick(member, kickID, cd)
     local entry = { id = kickID, cd = cd }
     member.extraKicks = { entry }
     return entry
+end
+
+-- HELLO fields 7-8 on receive. An older sender has no field 7, and an ID that
+-- is not a talent-added kick names nothing; both leave the entry. The
+-- cooldown is the table's. Returns true when the entry was set or cleared.
+function KT.HelloExtras(member, extraField, remField, getExtra, now)
+    if extraField == nil then return false end
+    local id = tonumber(extraField)
+    if not id or id % 1 ~= 0 then return false end
+    if id == 0 then
+        local had = member.extraKicks ~= nil
+        member.extraKicks = nil
+        return had
+    end
+    local known = getExtra(id)
+    if not known then return false end
+    local entry = KT.ExtraKick(member, id, known.cd)
+    local remaining = KT.ParseHelloRemaining(remField, known.cd)
+    if remaining == 0 then
+        entry.kickStart, entry.kickDuration = nil, nil
+    elseif remaining then
+        entry.kickStart, entry.kickDuration = now - (known.cd - remaining), known.cd
+    end
+    return true
 end
 
 -- The player's extra kicks after a talent check: a kick still wanted keeps
@@ -373,6 +422,12 @@ function KT.OwnKickMatched(kickAt, landedAt, window)
     local gap = kickAt - landedAt
     if gap < 0 then gap = -gap end
     return gap <= window
+end
+
+-- Every kick cooldown is far longer than the window, so the same kick again
+-- inside it is one press reported twice, not a recast.
+function KT.DuplicateOwnKick(lastID, lastAt, kickID, now, window)
+    return lastID == kickID and lastAt ~= nil and now - lastAt <= window
 end
 
 -- The own row's remaining time after a success reduction; nil when the row

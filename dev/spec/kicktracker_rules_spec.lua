@@ -511,3 +511,116 @@ describe("KickTracker wire kick numbers", function()
         end
     end)
 end)
+
+describe("KickTracker HELLO fields", function()
+    local function split(msg)
+        local out = {}
+        for field in (msg .. ";"):gmatch("([^;]*);") do out[#out + 1] = field end
+        return out
+    end
+
+    it("keeps fields 1-5 where older parsers read them, the answer flag in 6 and the talent-added kick in 7-8", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "no talent-added kick", extra = nil, noAnswer = false, f6 = "0", f7 = "0", f8 = "0.0" },
+            { name = "a ready throw", extra = { id = 384110 }, noAnswer = false,
+              f6 = "0", f7 = "384110", f8 = "0.0" },
+            { name = "an expired throw reads ready", extra = { id = 384110, kickStart = 50, kickDuration = 45 },
+              noAnswer = false, f6 = "0", f7 = "384110", f8 = "0.0" },
+            { name = "a cooling throw", extra = { id = 64382, kickStart = 90, kickDuration = 180 },
+              noAnswer = false, f6 = "0", f7 = "64382", f8 = "170.0" },
+            { name = "noAnswer sets the flag", extra = nil, noAnswer = true, f6 = "1", f7 = "0", f8 = "0.0" },
+        }
+        for _, row in ipairs(rows) do
+            local f = split(KT.EncodeHello(6552, 13.5, 12.5, row.noAnswer, row.extra, 100))
+            assert.equals(8, #f, row.name)
+            -- Older parsers split a fixed number of fields; Lua drops the rest.
+            assert.same({ "1", "HELLO", "6552", "13.5", "12.5" }, { f[1], f[2], f[3], f[4], f[5] }, row.name)
+            assert.equals(row.f6, f[6], row.name)
+            assert.equals(row.f7, f[7], row.name)
+            assert.equals(row.f8, f[8], row.name)
+        end
+    end)
+end)
+
+describe("KickTracker HELLO talent-added kick on receive", function()
+    it("sets, times, replaces or clears the entry from fields 7-8 and ignores what it cannot read", function()
+        local KT = L.loadKickTrackerRules()
+        local throws = { [384110] = { id = 384110, cd = 45 }, [64382] = { id = 64382, cd = 180 } }
+        local function getExtra(id) return throws[id] end
+        local function running() return { { id = 384110, cd = 45, kickStart = 80, kickDuration = 45 } } end
+        local rows = {
+            { name = "field 7 absent (an older sender) leaves the entry", start = running, f7 = nil, f8 = nil,
+              touched = false, id = 384110, kickStart = 80, kickDuration = 45 },
+            { name = "0 clears the entry", start = running, f7 = "0", f8 = "0.0", touched = true, id = nil },
+            { name = "0 with no entry changes nothing", start = nil, f7 = "0", f8 = "0.0",
+              touched = false, id = nil },
+            { name = "a throw with a remaining time cools at the table cd", start = nil,
+              f7 = "384110", f8 = "30.0", touched = true, id = 384110, kickStart = 85, kickDuration = 45 },
+            { name = "the same throw with an unreadable field 8 keeps its timer", start = running,
+              f7 = "384110", f8 = "abc", touched = true, id = 384110, kickStart = 80, kickDuration = 45 },
+            { name = "the same throw at 0.0 reads ready", start = running, f7 = "384110", f8 = "0.0",
+              touched = true, id = 384110, kickStart = nil, kickDuration = nil },
+            { name = "a different throw replaces the entry", start = running, f7 = "64382", f8 = nil,
+              touched = true, id = 64382, kickStart = nil, kickDuration = nil },
+            { name = "an ID that is not a throw leaves the entry", start = running, f7 = "6552", f8 = "0.0",
+              touched = false, id = 384110, kickStart = 80, kickDuration = 45 },
+            { name = "a fraction leaves the entry", start = running, f7 = "384110.5", f8 = "0.0",
+              touched = false, id = 384110, kickStart = 80, kickDuration = 45 },
+            { name = "NaN leaves the entry", start = running, f7 = "nan", f8 = "0.0",
+              touched = false, id = 384110, kickStart = 80, kickDuration = 45 },
+            { name = "infinity leaves the entry", start = running, f7 = "inf", f8 = "0.0",
+              touched = false, id = 384110, kickStart = 80, kickDuration = 45 },
+            { name = "text leaves the entry", start = running, f7 = "abc", f8 = "0.0",
+              touched = false, id = 384110, kickStart = 80, kickDuration = 45 },
+        }
+        for _, row in ipairs(rows) do
+            local member = { extraKicks = row.start and row.start() or nil }
+            assert.equals(row.touched, KT.HelloExtras(member, row.f7, row.f8, getExtra, 100), row.name)
+            local entry = member.extraKicks and member.extraKicks[1]
+            assert.equals(row.id, entry and entry.id, row.name)
+            if entry then
+                assert.equals(throws[entry.id].cd, entry.cd, row.name)
+                assert.equals(row.kickStart, entry.kickStart, row.name)
+                assert.equals(row.kickDuration, entry.kickDuration, row.name)
+            end
+        end
+    end)
+end)
+
+describe("KickTracker own-kick announce", function()
+    it("asks on a main or spec change, only tells on a talent-added kick change, and is silent otherwise", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "main kick changed", main = true, spec = false, extras = false, want = "ask" },
+            { name = "spec changed", main = false, spec = true, extras = false, want = "ask" },
+            { name = "main and extras changed: one asking HELLO", main = true, spec = false, extras = true,
+              want = "ask" },
+            { name = "extras alone", main = false, spec = false, extras = true, want = "tell" },
+            { name = "nothing changed", main = false, spec = false, extras = false, want = nil },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.OwnKickHello(row.main, row.spec, row.extras), row.name)
+        end
+    end)
+end)
+
+describe("KickTracker own-kick duplicate", function()
+    it("skips only the same kick inside the window", function()
+        local KT = L.loadKickTrackerRules()
+        local rows = {
+            { name = "the same kick at the same moment (one press, two events)",
+              lastID = 19647, lastAt = 10, kickID = 19647, now = 10, want = true },
+            { name = "the same kick after the window (a recast)",
+              lastID = 19647, lastAt = 10, kickID = 19647, now = 34, want = false },
+            { name = "a different kick inside the window",
+              lastID = 89766, lastAt = 10, kickID = 19647, now = 10.2, want = false },
+            { name = "no memory: the first event sends",
+              lastID = nil, lastAt = nil, kickID = 19647, now = 10, want = false },
+        }
+        for _, row in ipairs(rows) do
+            assert.equals(row.want, KT.DuplicateOwnKick(row.lastID, row.lastAt, row.kickID, row.now, 0.5), row.name)
+        end
+    end)
+end)
+

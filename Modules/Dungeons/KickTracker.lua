@@ -228,8 +228,9 @@ end
 -- pet or spellbook change), so a change is handled once whichever runs first.
 -- A new spec ends the cast mark. A new kick has not been used, so its cooldown
 -- starts clear. Either way synced teammates hear the kick, or spell 0 for
--- none, at once. Returns whether the main kick changed, then whether anything
--- the row shows changed.
+-- none, at once; a change to the talent-added kick alone is announced too.
+-- Returns whether the main kick changed, then whether anything the row shows
+-- changed.
 function KT:ApplyOwnKicks(member, specID)
     local specChanged = member.ownKickSpec ~= specID
     if specChanged then
@@ -245,8 +246,9 @@ function KT:ApplyOwnKicks(member, specID)
     if mainChanged then
         member.kickStart, member.kickDuration = nil, nil
     end
-    if mainChanged or specChanged then
-        self:BroadcastHello(true)
+    local hello = KT.OwnKickHello(mainChanged, specChanged, extrasChanged)
+    if hello then
+        self:BroadcastHello(true, hello == "tell")
     end
     return mainChanged, mainChanged or specChanged or extrasChanged
 end
@@ -672,9 +674,9 @@ end
 -- Presence announce: lets other KE users verify us (and show our bar at
 -- Ready) from dungeon start instead of on our first kick. Sent on activation
 -- and roster changes (throttled), as a reply to a HELLO (forced when it
--- asked), and forced when the chat lock lifts or the own kick changes.
--- isReply marks an answer, which is never answered in turn.
-function KT:BroadcastHello(force, isReply)
+-- asked), and forced when the chat lock lifts or the own kicks change.
+-- noAnswer marks a reply or a talent-added kick update; neither is answered.
+function KT:BroadcastHello(force, noAnswer)
     if not self.db.KickSync then return end
     if not self.isActive or not IsInGroup() then return end
 
@@ -698,9 +700,8 @@ function KT:BroadcastHello(force, isReply)
             remaining = math_max(0, member.kickStart + member.kickDuration - now)
         end
     end
-    -- Field 6: "1" marks a reply, which is never answered; "0" asks for one.
-    self:Transmit(COMM_PREFIX, "1;HELLO;" .. id .. ";" .. cd
-        .. ";" .. string_format("%.1f", remaining) .. ";" .. (isReply and "1" or "0"))
+    self:Transmit(COMM_PREFIX, KT.EncodeHello(id, cd, remaining, noAnswer,
+        member.extraKicks and member.extraKicks[1], now))
     -- Deliberately NO BliZzi-format hello: we stay out of their handshake
     -- (kick-data-only participation, established interop posture).
 end
@@ -736,6 +737,10 @@ function KT:TryOwnReduction()
     self:BroadcastReduction(member.interruptData.id, duration, remaining)
 end
 
+local function getExtraKick(id)
+    return KE:GetExtraKick(id)
+end
+
 function KT:OnCommReceived(_, prefix, message, _, sender)
     local isKE = prefix == COMM_PREFIX
     if not isKE and prefix ~= BLIZZI_PREFIX then return end
@@ -757,14 +762,16 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
             return
         end
 
-        --   KE:     "1;KICK;spellID;cd"  "1;HELLO;spellID;cd;remaining;replyFlag"
+        --   KE:     "1;KICK;spellID;cd"
+        --           "1;HELLO;spellID;cd;remaining;replyFlag;extraID;extraRemaining"
         --           "1;R;spellID;cd;remaining"
         --   BliZzi: "B1;KICK;spellID;cd" "B1;HELLO;class;spellID;cd"
-        local verb, sid, cd, remField, replyFlag
+        local verb, sid, cd, remField, replyFlag, extraField, extraRemField
         if isKE then
-            local ver, v, sidStr, cdStr, remStr, flagStr = strsplit(";", message)
+            local ver, v, sidStr, cdStr, remStr, flagStr, extraStr, extraRemStr = strsplit(";", message)
             if ver ~= "1" then return end  -- version-gate our own wire
             verb, sid, cd, remField, replyFlag = v, tonumber(sidStr), tonumber(cdStr), remStr, flagStr
+            extraField, extraRemField = extraStr, extraRemStr
         else
             local hdr, cmd, a3, a4, a5 = strsplit(";", message)
             if hdr ~= "B1" then return end
@@ -810,10 +817,13 @@ function KT:OnCommReceived(_, prefix, message, _, sender)
             self:LayoutBars()
             return
         end
+        local now = GetTime()
+        local extrasTouched = verb == "HELLO" and isKE
+            and KT.HelloExtras(member, extraField, extraRemField, getExtraKick, now)
         if not member.interruptData then return end
         self:UpdateBars()  -- materialize the bar (verified-only roster)
+        if extrasTouched then self:RefreshMemberRow(guid) end
 
-        local now = GetTime()
         if verb == "KICK" and self.commMode ~= "feed" then
             -- Keyed by teammate and canonical kick: Pummel then a throw inside
             -- the window are two kicks, and each pairs with its own record.
@@ -915,7 +925,13 @@ function KT:OnSpellcastSucceeded(_, unit, _, spellID)
         return
     end
     local kickID = KE:GetCanonicalKickSpell(spellID)
-    self._ownKickAt, self._ownKickSpell = GetTime(), kickID
+    local now = GetTime()
+    -- Command Demon fires for both the player and the pet: one press, one kick.
+    if KT.DuplicateOwnKick(self._lastOwnKickID, self._lastOwnKickAt, kickID, now, OWN_KICK_MATCH_WINDOW) then
+        return
+    end
+    self._lastOwnKickID, self._lastOwnKickAt = kickID, now
+    self._ownKickAt, self._ownKickSpell = now, kickID
     local member = self.partyMembers[guid]
     local data = member and member.interruptData
     local kickCd = member and KE:GetKickCooldownForSpec(member.specID, kickID)
