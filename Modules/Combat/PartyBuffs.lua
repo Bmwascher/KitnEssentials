@@ -212,13 +212,16 @@ local function DebugPos(frame)
     return ("%d,%d"):format(left, top)
 end
 
+local seen = {}
+
 -- The unit comparison runs only for a visible frame with a token, and its
 -- result is copied only when readable. Every candidate is watched, shown or
 -- not: the right frame can appear after a resolve with no roster event. Only
 -- a shown frame with a unit is kept: the pick reads no other, and the search
 -- walks every unit button a unit-frame addon has built.
 local function AddCandidate(list, frame, family, raidIndex)
-    if type(frame) ~= "table" then return end
+    if type(frame) ~= "table" or seen[frame] then return end
+    seen[frame] = true
     if PB.active then PB:WatchCell(frame) end
     local okVisible, visible = pcall(frame.IsVisible, frame)
     if not (okVisible and not issecretvalue(visible) and visible == true) then
@@ -260,12 +263,22 @@ end
 
 function PB:FindFrames()
     local list = {}
+    wipe(seen)
     local raidIndex
     local okIndex, index = pcall(UnitInRaid, "player")
     if okIndex and not issecretvalue(index) and type(index) == "number" then raidIndex = index end
 
     local ns = _G.EllesmereUI and _G.EllesmereUI._ModuleNS
     ns = ns and ns.EllesmereUIRaidFrames
+    -- The party buttons exist from login, but join the registry only after
+    -- every raid button is styled, which after a /reload can be well after
+    -- they show. Listing them first gets them watched while still hidden.
+    local party = ns and ns._partyAllButtons
+    if type(party) == "table" then
+        for i = 1, #party do
+            AddCandidate(list, party[i], "eui", raidIndex)
+        end
+    end
     local buttons = ns and ns._euiUnitButtons
     if type(buttons) == "table" then
         for key, value in pairs(buttons) do
