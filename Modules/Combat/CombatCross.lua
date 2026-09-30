@@ -255,6 +255,9 @@ function CC:UpdateOnUpdateState()
     if not self.frame then return end
 
     local wanted = self:ShouldRunRangeUpdate()
+    -- Read before the sync: a loop left detached for lack of a target still
+    -- owes the restore below when it stops being wanted.
+    local wasWanted = self._targetEventRegistered == true
     -- While the loop is wanted, a target change is what starts and stops it.
     self:SetTargetEventRegistered(wanted)
 
@@ -274,7 +277,7 @@ function CC:UpdateOnUpdateState()
             self.frame:SetScript("OnUpdate", nil)
         end
         self:UpdateRangeColor()
-    elseif self.onUpdateActive then
+    elseif self.onUpdateActive or wasWanted then
         self.onUpdateActive = false
         self.frame:SetScript("OnUpdate", nil)
         -- Unconditional, and not gated on the option: this branch runs

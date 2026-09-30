@@ -218,6 +218,22 @@ describe("CombatCross hide when in range", function()
         assert.equals(1, CC.frame._alpha)
     end)
 
+    it("restores alpha when the loop stops being wanted with no target", function()
+        -- With no target the loop is wanted but detached, so the restore cannot
+        -- key on the loop being attached.
+        local CC = faded({
+            C_Spell = { IsSpellInRange = function() return 1 end },
+            UnitExists = function() return false end,
+        })
+        CC.RegisterEvent = function() end
+        CC.UnregisterEvent = function() end
+        CC:UpdateOnUpdateState()
+        assert.equals(0, CC.frame._alpha)
+        CC.rangeAbility = nil
+        CC:UpdateOnUpdateState()
+        assert.equals(1, CC.frame._alpha)
+    end)
+
     it("restores alpha when the option is turned off while colouring stays on", function()
         -- The stranding case. The loop keeps running for colour, so nothing
         -- tears it down, and the faded cross has no other route back.
