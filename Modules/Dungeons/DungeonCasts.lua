@@ -1001,8 +1001,6 @@ local CAST_EVENT_HANDLERS = {
     UNIT_SPELLCAST_NOT_INTERRUPTIBLE = "UpdateInterruptible",
 }
 
--- Registered on the context enter edge and removed on the leave edge, with
--- the cast events above.
 local CONTEXT_EVENTS = {
     NAME_PLATE_UNIT_ADDED = "OnNameplateAdded",
     NAME_PLATE_UNIT_REMOVED = "OnNameplateRemoved",

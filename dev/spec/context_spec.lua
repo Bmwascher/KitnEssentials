@@ -1,8 +1,7 @@
 -- Core/Context.lua, the shared context gate. Every case builds its own
 -- instance through KE.Context.New(deps): the readers are plain injected
 -- functions over a mutable world table, the frame only records what was
--- registered, and the scheduler fires handles by hand. No Blizzard
--- subsystem is faked, so the spec header needs no reason for one.
+-- registered, and the scheduler fires handles by hand.
 local L = require("dev.spec._ke_loader")
 
 local SPEC_EVENT = "PLAYER_SPECIALIZATION_CHANGED"

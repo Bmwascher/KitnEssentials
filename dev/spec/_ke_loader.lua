@@ -2911,11 +2911,8 @@ function L.loadCombatState(overrides)
     return helpers.loadModule("Core/CombatState.lua", {}), declaredSecret
 end
 
--- Core/Context.lua. The live adapter at the bottom builds KE.Context at load,
--- but its deps resolve their globals only when called and the frame is
--- created on first use, so nothing beyond the mock is needed. Specs build
--- their own instances via `KE.Context.New(deps)`, which resolves through the
--- class metatable New sits on. Returns KE.
+-- Core/Context.lua. The singleton built at load touches no global until used,
+-- so the mock alone suffices; specs build instances via KE.Context.New(deps).
 function L.loadContext(overrides)
     overrides = overrides or {}
     installMock(managedSubset(overrides), { C_Timer = inertTimer() })
