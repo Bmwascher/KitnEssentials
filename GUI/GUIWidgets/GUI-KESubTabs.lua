@@ -178,7 +178,6 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
     strip._activeId = activeId
     strip._onSwitch = config.onSwitch
     strip._fill = fill
-    strip._count = #tabs
 
     local buttons = strip.buttons
     wipe(buttons)
@@ -214,6 +213,9 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
     for i = #tabs + 1, #btnList do
         btnList[i]:Hide()
     end
+    -- Set once every tab exists: painting a tab can resize the strip, and
+    -- the sizing pass must not reach a tab not made yet.
+    strip._count = #tabs
 
     if fill and #tabs > 0 then
         C_Timer.After(0, function() SizeTabsToText(strip) end)
