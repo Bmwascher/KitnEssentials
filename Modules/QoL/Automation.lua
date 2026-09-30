@@ -386,6 +386,15 @@ end
 -- deep.
 local TUTORIAL_MAX_DEPTH = 4
 
+-- One node's children, or nil for a node with none, so a leaf allocates no
+-- table. The count can be secret (Hierarchy aspect); a count that cannot be
+-- read is packed like any parent.
+local function TutorialChildrenOf(node)
+    local count = node:GetNumChildren()
+    if canaccessvalue(count) and count == 0 then return nil end
+    return { node:GetChildren() }
+end
+
 local function TutorialHideButtonsUnder(root)
     if not root then return end
     local fp = GetTutorialFingerprint()
@@ -405,7 +414,7 @@ local function TutorialHideButtonsUnder(root)
             if node.ShowTooltip == fp then TutorialHideButton(node) end
 
             if depth < TUTORIAL_MAX_DEPTH and node.GetChildren then
-                local ok, kids = pcall(function() return { node:GetChildren() } end)
+                local ok, kids = pcall(TutorialChildrenOf, node)
                 if ok and kids then
                     for i = 1, #kids do
                         queue[tail] = kids[i]
