@@ -214,18 +214,23 @@ end
 
 -- The unit comparison runs only for a visible frame with a token, and its
 -- result is copied only when readable. Every candidate is watched, shown or
--- not: the right frame can appear after a resolve with no roster event.
+-- not: the right frame can appear after a resolve with no roster event. Only
+-- a shown frame with a unit is kept: the pick reads no other, and the search
+-- walks every unit button a unit-frame addon has built.
 local function AddCandidate(list, frame, family, raidIndex)
     if type(frame) ~= "table" then return end
     if PB.active then PB:WatchCell(frame) end
-    local candidate = { frame = frame, family = family, raidIndex = raidIndex }
     local okVisible, visible = pcall(frame.IsVisible, frame)
-    candidate.visible = okVisible and not issecretvalue(visible) and visible == true
+    if not (okVisible and not issecretvalue(visible) and visible == true) then
+        if DEBUG_PB then Debug("cand %s %s vis=false at %s -> -", family, DebugName(frame), DebugPos(frame)) end
+        return
+    end
+    local candidate = { frame = frame, family = family, raidIndex = raidIndex, visible = true }
     candidate.unit = PlainString(frame.unit)
     local okAttr, attr = pcall(frame.GetAttribute, frame, "unit")
     if okAttr then candidate.attrUnit = PlainString(attr) end
     candidate.token = KE.PartyBuffsRules.CandidateToken(candidate)
-    if candidate.visible and candidate.token then
+    if candidate.token then
         local okSame, same = pcall(UnitIsUnit, candidate.token, "player")
         candidate.compareOk = okSame
         if okSame then
@@ -239,14 +244,14 @@ local function AddCandidate(list, frame, family, raidIndex)
     end
     if DEBUG_PB then
         local verdict = "-"
-        if candidate.visible and candidate.token then
+        if candidate.token then
             verdict = KE.PartyBuffsRules.IsPlayerCandidate(candidate) and "skip" or "track"
         end
         Debug("cand %s %s %s vis=%s at %s raid=%s cmp=%s/%s/%s -> %s", family, DebugName(frame),
             candidate.token, candidate.visible, DebugPos(frame), raidIndex,
             candidate.compareOk, candidate.compareSecret, candidate.compareResult, verdict)
     end
-    list[#list + 1] = candidate
+    if candidate.token then list[#list + 1] = candidate end
 end
 
 function PB:FindFrames()
