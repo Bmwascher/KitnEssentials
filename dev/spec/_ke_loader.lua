@@ -2911,6 +2911,17 @@ function L.loadCombatState(overrides)
     return helpers.loadModule("Core/CombatState.lua", {}), declaredSecret
 end
 
+-- Core/Context.lua. The live adapter at the bottom builds KE.Context at load,
+-- but its deps resolve their globals only when called and the frame is
+-- created on first use, so nothing beyond the mock is needed. Specs build
+-- their own instances via `KE.Context.New(deps)`, which resolves through the
+-- class metatable New sits on. Returns KE.
+function L.loadContext(overrides)
+    overrides = overrides or {}
+    installMock(managedSubset(overrides), { C_Timer = inertTimer() })
+    return helpers.loadModule("Core/Context.lua", {})
+end
+
 -- Modules/Utilities/WorldMarkerCycler.lua. The module captures its secure-handler
 -- and binding functions as file-scope upvalues, so every stub below must exist
 -- BEFORE loadModule; IsRaidMarkerActive is an override rather than a global a

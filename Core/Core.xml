@@ -3,6 +3,7 @@
 
     <Script file="Secret.lua" />
     <Script file="CombatState.lua" />
+    <Script file="Context.lua" />
     <Script file="Interrupts.lua" />
     <Script file="AddonTheme.lua" />
     <Script file="PixelPerfect.lua" />

@@ -125,6 +125,57 @@ function KE_CombatState:OnPvPMatchComplete() end
 function KE_CombatState:OnEnteringWorld() end
 function KE_CombatState:OnRosterUpdate() end
 
+--- Shared context gate (Core/Context.lua). KE.Context is the live singleton,
+--- built at file load; New(deps) is exposed for specs.
+---@class KE.Context
+local KE_Context = {}
+
+---@alias KE.ContextGroup "zone"|"group"|"key"|"spec"
+
+---@class KE.ContextFacts
+---@field inInstance boolean?
+---@field instanceType string?
+---@field difficultyID number?
+---@field inGroup boolean?
+---@field inRaid boolean?
+---@field keyActive boolean?
+---@field specID number?
+
+---@class KE.ContextSubscription
+---@field needs KE.ContextGroup[]
+---@field predicate fun(facts: KE.ContextFacts): boolean?
+---@field onEnter fun()?
+---@field onLeave fun()?
+---@field onUnknown "open"|"closed"
+
+---@param deps table
+---@return KE.Context
+function KE_Context.New(deps) end
+
+---@param key string
+---@param options KE.ContextSubscription
+---@return boolean subscribed
+function KE_Context:Subscribe(key, options) end
+
+---@param key string
+function KE_Context:Unsubscribe(key) end
+
+---@param key string
+---@return boolean
+function KE_Context:IsActive(key) end
+
+--- Re-reads the subscriber's own groups, then re-runs its predicate.
+---@param key string
+function KE_Context:Evaluate(key) end
+
+---@param key string
+---@param fn fun(event: string, unit: string)
+---@return boolean subscribed
+function KE_Context:SubscribeSpec(key, fn) end
+
+---@param key string
+function KE_Context:UnsubscribeSpec(key) end
+
 ---@class KE
 ---@field db AceDB
 ---@field FONT string
@@ -137,6 +188,7 @@ function KE_CombatState:OnRosterUpdate() end
 ---@field GUI table
 ---@field FramePool KE.FramePool
 ---@field CombatState KE.CombatState
+---@field Context KE.Context
 ---@field curves KE.Curves
 ---@field Skins table # Modules/Skinning/*.lua shared namespace (KE.Skins)
 ---@field msgContainer Frame? # message-popup singleton (Core/Widgets.lua)
