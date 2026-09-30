@@ -127,7 +127,7 @@ TS.drainEpoch = 0
 -- Reused by RepositionEntries. Never escapes that function.
 TS.sortScratch = {}
 -- Resolved once per rebuild rather than per cast. Both are pure functions of
--- settings, and every settings change already drops the entry pool.
+-- the font settings, and every font change runs a rebuild.
 TS.cachedFontPath = nil
 TS.cachedFontOutline = nil
 
@@ -185,8 +185,8 @@ function TS.ShardTokens(shardIndex, perShard, maxTokens)
     return tokens
 end
 
--- Every setting a pooled entry frame bakes in when it is built, as one
--- comparable value.
+-- Every setting the pooled entry frames were last built or redressed for, as
+-- one comparable value.
 --
 -- The set has a single definition, and it is not this function: it is whatever
 -- the settings page routes through QueueRebuild. That is the module's own
@@ -473,7 +473,7 @@ end
 -- path. Both come through here.
 --
 -- Only RebuildEntries may stamp the key, because only RebuildEntries actually
--- drops the pool. Stamping anywhere else — after re-sizing the anchor, say —
+-- redresses the pool. Stamping anywhere else — after re-sizing the anchor, say —
 -- makes the key claim the entries are current when they are not.
 function TS:SyncStructure()
     if self:CurrentRebuildKey() ~= self.builtRebuildKey then
@@ -520,9 +520,14 @@ end
 -- Entry frames
 ---------------------------------------------------------------------------------
 
-local function CreateIconFrame(entry, db)
+-- The interrupt X's outline: eight black copies, one pixel out in each direction.
+local SHADOW_OFFSETS = {
+    { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 },
+    { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 },
+}
+
+local function CreateIconFrame(entry)
     local f = CreateFrame("Frame", nil, entry)
-    f:SetSize(db.IconSize, db.IconSize)
     f.tex = f:CreateTexture(nil, "ARTWORK")
     f.tex:SetAllPoints(f)
     KE:ApplyIconZoom(f.tex, 0.3)
@@ -538,9 +543,7 @@ local function CreateIconFrame(entry, db)
 end
 
 function TS:CreateEntry()
-    local db = self.db
     local entry = CreateFrame("Frame", nil, self.anchorFrame)
-    entry:SetSize(EntryWidth(db), db.IconSize)
 
     -- Layout spine: textureless StatusBar whose fill extent mirrors entry
     -- alpha, so invisible entries compact out of the stack. Length covers
@@ -549,35 +552,27 @@ function TS:CreateEntry()
     entry.Spacer:SetStatusBarTexture("")
     entry.Spacer:SetOrientation("VERTICAL")
     entry.Spacer:SetMinMaxValues(0, 1)
-    entry.Spacer:SetSize(1, db.IconSize + db.Gap)
     entry.Spacer:SetValue(1)
 
-    entry.leftIcon = CreateIconFrame(entry, db)
+    entry.leftIcon = CreateIconFrame(entry)
     entry.leftIcon:SetPoint("LEFT", entry, "LEFT", 0, 0)
-    entry.rightIcon = CreateIconFrame(entry, db)
+    entry.rightIcon = CreateIconFrame(entry)
     entry.rightIcon:SetPoint("RIGHT", entry, "RIGHT", 0, 0)
     entry.rightIcon.cooldown:SetHideCountdownNumbers(true)
 
     -- Center X: fills the countdown slot while an interrupted entry lingers
-    -- (GUI close-button idiom: cross rotated 45°). Capped to the slot width
-    -- so a tight TextSpacing never pushes it into the icons. Outline = 8
-    -- black offset copies (CustomOutline idiom applied to a texture); the
-    -- whole stack sits on one sub-frame so it shows/hides atomically — no
-    -- ghosting window.
-    local xSize = math.min(db.FontSize * 1.2, db.TextSpacing or 32)
+    -- (GUI close-button idiom: cross rotated 45°). Outline = 8 black offset
+    -- copies (CustomOutline idiom applied to a texture); the whole stack sits
+    -- on one sub-frame so it shows/hides atomically — no ghosting window.
     local xFrame = CreateFrame("Frame", nil, entry)
-    xFrame:SetSize(xSize, xSize)
     xFrame:SetPoint("CENTER", entry, "CENTER", 0, 0)
-    local px = KE:GetPixelSize()
-    local offsets = { {-px,0}, {px,0}, {0,-px}, {0,px},
-                      {-px,-px}, {-px,px}, {px,-px}, {px,px} }
-    for _, off in ipairs(offsets) do
+    xFrame.shadows = {}
+    for i = 1, #SHADOW_OFFSETS do
         local shadow = xFrame:CreateTexture(nil, "OVERLAY", nil, 5)
-        shadow:SetSize(xSize, xSize)
-        shadow:SetPoint("CENTER", xFrame, "CENTER", off[1], off[2])
         shadow:SetTexture(INTERRUPT_ICON)
         shadow:SetRotation(math.rad(45))
         shadow:SetVertexColor(0, 0, 0, 1)
+        xFrame.shadows[i] = shadow
     end
     local xTex = xFrame:CreateTexture(nil, "OVERLAY", nil, 6)
     xTex:SetAllPoints(xFrame)
@@ -588,7 +583,33 @@ function TS:CreateEntry()
     entry.interruptX = xFrame
 
     entry.generation = 0
+    self:DressEntry(entry)
     return entry
+end
+
+-- Everything in an entry that follows the layout settings. Run on creation and
+-- on every pooled entry when those settings change, so a rebuild resizes the
+-- frames it has instead of building new ones.
+function TS:DressEntry(entry)
+    local db = self.db
+    local size = db.IconSize
+    entry:SetSize(EntryWidth(db), size)
+    entry.Spacer:SetSize(1, size + db.Gap)
+    entry.leftIcon:SetSize(size, size)
+    entry.rightIcon:SetSize(size, size)
+
+    -- Capped to the countdown slot so a tight TextSpacing never pushes the X
+    -- into the icons.
+    local xSize = math.min(db.FontSize * 1.2, db.TextSpacing or 32)
+    local xFrame = entry.interruptX
+    xFrame:SetSize(xSize, xSize)
+    local px = KE:GetPixelSize()
+    for i, shadow in ipairs(xFrame.shadows) do
+        local off = SHADOW_OFFSETS[i]
+        shadow:SetSize(xSize, xSize)
+        shadow:ClearAllPoints()
+        shadow:SetPoint("CENTER", xFrame, "CENTER", off[1] * px, off[2] * px)
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -709,8 +730,8 @@ function TS:HideGlow(entry)
     if right then right:Hide() end
 end
 
--- Retires the glow to its pool. Only for entries that will not be reused: a
--- parked child whose entry is discarded never returns to the pool.
+-- Retires the glow to its pool. For a parked child that must not be shown
+-- again: on disable, and on a resize, where it was started at the old size.
 function TS:ReleaseGlow(entry)
     if not Glows or not entry.leftIcon then return end
     Glows.PixelGlow_Stop(entry.leftIcon)
@@ -1060,33 +1081,32 @@ end
 ---------------------------------------------------------------------------------
 
 -- Structural keys (IconSize/Gap/Grow/Font*/MaxIcons) invalidate pooled frame
--- geometry: drop the pool and re-derive everything.
+-- geometry: redress the pool and re-derive everything.
 function TS:RebuildEntries()
     -- Any rebuild already queued has now been done, so let a later change queue
     -- a fresh one. The pending timer standing down is SyncStructure's job, not
     -- this flag's.
     self._rebuildQueued = false
 
-    -- Hide (and pool) any preview entries FIRST so the stale-geometry frames
-    -- are dropped with the rest of the pool below, then re-show after the
-    -- rebuild so the GUI preview reflects the new settings.
+    -- Hide (and pool) any preview entries FIRST so they are redressed with the
+    -- rest of the pool below, then re-show after the rebuild so the GUI preview
+    -- reflects the new settings.
     local wasPreview = self.isPreview
     self:HidePreview()
-    -- A rebuild drops the pool a queued cast would have populated.
+    -- Live entries are released below, so starts still queued for them go too.
     self:DiscardPendingCasts()
     self:ReleaseAllEntries()
     for _, entry in ipairs(self.entryPool) do
-        -- A parked child on a discarded entry never returns to the glow pool.
+        -- The glow child was started at the old size; retiring it makes the
+        -- next UpdateGlow start one at the new size.
         self:ReleaseGlow(entry)
-        entry:SetParent(nil)
-        entry:Hide()
+        self:DressEntry(entry)
     end
-    self.entryPool = {}
     if self.anchorFrame then
         self.anchorFrame:SetSize(EntryWidth(self.db), self.db.IconSize)
     end
-    -- Stamped HERE and nowhere else: this is the only function that drops the
-    -- pool, so it is the only one that can honestly claim the frames match.
+    -- Stamped HERE and nowhere else: this is the only function that redresses
+    -- the pool, so it is the only one that can claim the frames match.
     self:RefreshFontCache()
     self.builtRebuildKey = self:CurrentRebuildKey()
     self:ApplyPosition()
@@ -1100,7 +1120,7 @@ function TS:RebuildEntries()
 end
 
 -- Structural sliders fire during drag (~100ms throttle); coalesce so a drag
--- costs one rebuild instead of orphaning a pool per tick.
+-- costs one rebuild instead of one per tick.
 function TS:QueueRebuild()
     if self._rebuildQueued then return end
     self._rebuildQueued = true
@@ -1108,8 +1128,7 @@ function TS:QueueRebuild()
     -- second is long enough for a profile switch, and a switch can leave this
     -- timer wanting a rebuild nobody needs any more: the pool may have been
     -- rebuilt already, the new profile's settings may match what is built, or
-    -- the module may be off. Frames are never collected, so an unwanted rebuild
-    -- orphans a whole pool. SyncStructure answers all three by comparing the
+    -- the module may be off. SyncStructure answers all three by comparing the
     -- key that is live when the timer actually runs.
     C_Timer.After(0.25, function()
         TS._rebuildQueued = false
