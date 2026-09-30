@@ -480,6 +480,8 @@ function DTrash:OnEnable()
 end
 
 function DTrash:OnDisable()
+    -- A guidance check already scheduled must not prompt for a disabled module.
+    self._guidanceToken = (self._guidanceToken or 0) + 1
     self:StopMonitor()
     self:UnregisterEvent("PLAYER_ENTERING_WORLD")
     self:UnregisterEvent("ZONE_CHANGED_NEW_AREA")
