@@ -1,5 +1,14 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.10
+
+### Damage Meter
+
+- Reset on Instance Entry no longer resets on a difficulty flicker inside the
+  same instance, and forgets the last instance when you leave the group
+
+---
+
 ## v4.8.9
 
 ### Settings
