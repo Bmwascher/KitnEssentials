@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.18
+
+### Settings Window
+
+- The settings window reuses its cards, rows and controls instead of building
+  new ones on every page change, so its memory no longer grows the longer you
+  browse it
+- Dropdown items hover in the current accent colour after a theme change
+- Optimize: setting tooltips open beside the Recommended column, inside the
+  window
+- Sub-tabs no longer jump the first time a tabbed page opens
+
+---
+
 ## v4.8.17
 
 ### Focus Macros
