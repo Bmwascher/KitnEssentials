@@ -393,11 +393,6 @@ function GUIFrame:SelectSidebarItem(itemId)
     local T = Theme
     self.selectedSidebarItem = itemId
 
-    -- Close hamburger menu if open
-    if self.menuDropdown and self.menuDropdown:IsShown() then
-        self.menuDropdown:Hide()
-    end
-
     for _, item in ipairs(self.staticSidebarItemPool) do
         if item.inUse then
             if item.disabled then

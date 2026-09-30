@@ -158,6 +158,11 @@ function GUIFrame:Show()
         self:CreateMainFrame()
     end
     self.mainFrame:Show()
+    -- RefreshTheme repaints only a shown window, so an accent changed while
+    -- this one was hidden reaches the header button here.
+    if self.PaintEditModeButton then
+        self.PaintEditModeButton()
+    end
     KE.GUIOpen = true
     if KE.PreviewManager then
         KE.PreviewManager:SetGUIOpen(true)
@@ -291,6 +296,9 @@ function GUIFrame:ApplyThemeColors()
     end
     if self.versionText then
         self.versionText:SetText("|cff888888v" .. (KE.Version or "?") .. "|r")
+    end
+    if self.PaintEditModeButton then
+        self.PaintEditModeButton()
     end
 
     -- Rebuild current content to pick up new accent colors
