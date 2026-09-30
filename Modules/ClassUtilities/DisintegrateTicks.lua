@@ -1299,7 +1299,7 @@ function DT:OnEnable()
 
     -- Event routing
     self:RegisterEvent("LOADING_SCREEN_DISABLED", "OnEvent")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnEvent")
+    KE.Context:SubscribeSpec("DisintegrateTicks", function(event, unit) self:OnEvent(event, unit) end)
 
     -- Register spec events if valid spec
     if self:IsValidSpec() then
@@ -1317,7 +1317,7 @@ function DT:OnDisable()
     self:SyncEUITickMarkers()
     self:UnregisterSpecEvents()
     self:UnregisterEvent("LOADING_SCREEN_DISABLED")
-    self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    KE.Context:UnsubscribeSpec("DisintegrateTicks")
 
     if overlayCallbacksRegistered then
         EventRegistry:UnregisterCallback("OverlayPlayerCastBar.OnShow", self)
