@@ -2490,7 +2490,8 @@ end
 -- spec role string ("HEALER" / "DAMAGER"); overrides.db is the PIAssist block;
 -- overrides.builder = { enabled = bool, applied = name } stands in for the
 -- PIMacroBuilder module TargetName consults (off with nothing applied by
--- default); overrides.target is the stored PIMacroBuilder.Target.
+-- default); overrides.target is the stored PIMacroBuilder.Target;
+-- overrides.gui becomes KE.GUIFrame, for the page-refresh rule.
 function L.loadPIAssist(overrides)
     overrides = overrides or {}
     local rec = { activate = 0, deactivate = 0, resolve = 0, filters = 0, glow = 0, events = {} }
@@ -2517,6 +2518,7 @@ function L.loadPIAssist(overrides)
             PIAssist = overrides.db or { Enabled = true, HealersOnly = true },
             PIMacroBuilder = { Target = overrides.target or "" },
         } },
+        GUIFrame = overrides.gui,
         Print = function() end,
         IsSecretValue = function() return false end,
         IsSafeValue = function(_, v) return v ~= nil end,

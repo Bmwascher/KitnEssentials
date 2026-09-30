@@ -84,7 +84,6 @@
     <Script file="GUITabs\GUIUtilities\GUI-WorldMarkerCycler.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-PotionReady.lua" />
     <Script file="GUITabs\GUIUtilities\GUI-ReadyCheckConsumables.lua" />
-    <Script file="GUITabs\GUIUtilities\GUI-Utilities.lua" />
 
     <!-- Dungeons tabs -->
     <Script file="GUITabs\GUIDungeons\GUI-DungeonCasts.lua" />
@@ -97,6 +96,8 @@
     <Script file="GUITabs\GUIDungeons\GUI-LFGReminder.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-DeathNotifications.lua" />
     <Script file="GUITabs\GUIDungeons\GUI-MythicPlusTimer.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-DungeonAlerts.lua" />
+    <Script file="GUITabs\GUIDungeons\GUI-KicksCasts.lua" />
 
     <!-- DungeonsTimers tabs -->
     <Script file="GUITabs\GUIDungeonTimers\GUI-DungeonTimersCfg.lua" />
@@ -120,6 +121,7 @@
     <Script file="GUITabs\GUIQoL\GUI-MoveFrames.lua" />
     <Script file="GUITabs\GUIQoL\GUI-RaidControl.lua" />
     <Script file="GUITabs\GUIQoL\GUI-QualityOfLife.lua" />
+    <Script file="GUITabs\GUIQoL\GUI-GroupTools.lua" />
     <Script file="GUITabs\GUIQoL\GUI-SecondaryStats.lua" />
 
     <!-- Skinning tabs -->

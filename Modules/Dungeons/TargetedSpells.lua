@@ -507,7 +507,8 @@ function TS:RegisterEditMode()
         getParentFrame = function()
             return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
         end,
-        guiPath = "TargetedSpells",
+        guiPath = "DungeonAlerts",
+        guiTab = "TargetedSpells",
     })
     self.editModeRegistered = true
 end

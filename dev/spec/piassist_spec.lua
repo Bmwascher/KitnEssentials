@@ -167,3 +167,26 @@ describe("PIAssist ready gate", function()
         end
     end)
 end)
+
+-- Only the PI Assist and PI Macro pages show the followed name, and both sit
+-- under Class Tools' Priest tab.
+describe("PIAssist page refresh", function()
+    it("rebuilds only while Class Tools shows its Priest tab", function()
+        local cases = {
+            { page = "ClassTools",  tab = "ClassToolsPriest", refreshes = 1 },
+            { page = "ClassTools",  tab = "ClassToolsEvoker", refreshes = 0 },
+            { page = "CombatTimer", tab = "ClassToolsPriest", refreshes = 0 },
+        }
+        for i, c in ipairs(cases) do
+            local refreshes = 0
+            local gui = {
+                selectedSidebarItem = c.page,
+                tabbedPageState = { ClassTools = c.tab },
+                RefreshContent = function() refreshes = refreshes + 1 end,
+            }
+            local PA = L.loadPIAssist({ gui = gui })
+            PA:OnTargetChanged()
+            assert.equals(c.refreshes, refreshes, "case " .. i)
+        end
+    end)
+end)

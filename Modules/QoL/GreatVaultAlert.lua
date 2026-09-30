@@ -217,7 +217,8 @@ function GVA:RegWithEditMode()
             getParentFrame = function()
                 return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame)
             end,
-            guiPath = "GreatVaultAlert",
+            guiPath = "QualityOfLife",
+            guiTab = "GreatVaultAlert",
         })
         self.editModeRegistered = true
     end

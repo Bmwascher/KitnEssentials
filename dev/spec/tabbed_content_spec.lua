@@ -143,4 +143,77 @@ describe("GUI-TabbedContent", function()
             assert.same({ "PetStatusText" }, rendered)
         end)
     end)
+
+    -- Which tab a page opens on: an Edit Mode seed or a tab picked this
+    -- session, then defaultTab, then the first tab.
+    describe("defaultTab", function()
+        it("is used when no tab is remembered, and its pick is remembered", function()
+            register("HealerMana")
+            GUIFrame:RegisterTabbedContent("StatusTexts", TABS, {
+                defaultTab = function() return "HealerMana" end,
+            })
+            GUIFrame.registeredContent["StatusTexts"](nil, 0)
+            assert.same({ "HealerMana" }, rendered)
+            assert.equals("HealerMana", GUIFrame.tabbedPageState["StatusTexts"])
+        end)
+
+        it("is not consulted while a tab is remembered or seeded", function()
+            GUIFrame:RegisterNestedTabs("StanceText", { "STForms" })
+            for _, remembered in ipairs({ "PetStatusText", "STForms" }) do
+                local consulted = false
+                GUIFrame.tabbedPageState["StatusTexts"] = remembered
+                GUIFrame:RegisterTabbedContent("StatusTexts", TABS, {
+                    defaultTab = function()
+                        consulted = true
+                        return "HealerMana"
+                    end,
+                })
+                GUIFrame.registeredContent["StatusTexts"](nil, 0)
+                assert.is_false(consulted, remembered)
+            end
+        end)
+
+        it("falls back to the first tab and remembers nothing for an unusable pick", function()
+            register("PetStatusText")
+            for _, pick in ipairs({ false, "NotATab" }) do
+                GUIFrame.tabbedPageState["StatusTexts"] = nil
+                GUIFrame:RegisterTabbedContent("StatusTexts", TABS, {
+                    defaultTab = function() return pick or nil end,
+                })
+                GUIFrame.registeredContent["StatusTexts"](nil, 0)
+                assert.is_nil(GUIFrame.tabbedPageState["StatusTexts"])
+            end
+            assert.same({ "PetStatusText", "PetStatusText" }, rendered)
+        end)
+    end)
+
+    -- A nested tabbed page is handed its tab through pendingNestedTab by the
+    -- outer page's resolve, and must take it exactly once.
+    describe("pending nested tab", function()
+        local INNER = {
+            { id = "STForms", label = "Forms" },
+            { id = "STIcons", label = "Icons" },
+        }
+
+        it("wins over the remembered tab, is remembered, and is cleared", function()
+            register("STIcons")
+            GUIFrame:RegisterTabbedContent("StanceText", INNER)
+            GUIFrame.tabbedPageState["StanceText"] = "STForms"
+            GUIFrame.pendingNestedTab["StanceText"] = "STIcons"
+            GUIFrame.registeredContent["StanceText"](nil, 0)
+            assert.same({ "STIcons" }, rendered)
+            assert.equals("STIcons", GUIFrame.tabbedPageState["StanceText"])
+            assert.is_nil(GUIFrame.pendingNestedTab["StanceText"])
+        end)
+
+        it("lands a two-level jump on the nested tab", function()
+            register("STIcons")
+            GUIFrame:RegisterNestedTabs("StanceText", { "STForms", "STIcons" })
+            GUIFrame:RegisterTabbedContent("StanceText", INNER)
+            GUIFrame:RegisterTabbedContent("StatusTexts", TABS)
+            GUIFrame.tabbedPageState["StatusTexts"] = "STIcons"
+            GUIFrame.registeredContent["StatusTexts"](nil, 0)
+            assert.same({ "STIcons" }, rendered)
+        end)
+    end)
 end)

@@ -420,9 +420,9 @@ function TSP:RegWithEditMode()
             getPosition = function() return self.db.Position end,
             setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
             getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-            -- Folded into the Utilities page with no row of its own --
+            -- Folded into Class Tools with no row of its own --
             -- guiTab points Open Settings at the right tab.
-            guiPath = "Utilities",
+            guiPath = "ClassTools",
             guiTab = "TimeSpiral",
         })
         self.editModeRegistered = true
