@@ -1134,17 +1134,14 @@ function GUIFrame:RefreshContent()
 
     if not self.contentArea then return end
 
-    -- NEVER rebuild while the GUI is hidden. The clear pass below orphans a full
-    -- page of cards via SetParent(nil), and frames are never garbage-collected --
-    -- an event-driven caller firing with the GUI closed (shipped example:
-    -- Automation's CVAR_UPDATE handler) leaks hundreds of permanent frames per
-    -- event, unbounded, and reached hundreds of thousands in one session. Mark
-    -- dirty and bail; Show() replays one refresh so a reopened page is never
-    -- stale.
+    -- NEVER rebuild while the GUI is hidden. Every frame a page builds for
+    -- itself is orphaned by the clear pass below, and frames are never
+    -- garbage-collected, so an event-driven caller firing with the GUI closed
+    -- (Automation's CVAR_UPDATE handler) would leak on every event. Mark dirty
+    -- and bail; Show() replays one refresh so a reopened page is never stale.
     -- Minimized counts as hidden here. The frame is still shown, so the test
     -- below passes, but the page is not on screen and every edit-mode drop
-    -- calls in — which is the same unbounded orphaning this guard exists to
-    -- stop, just reached by a different door.
+    -- calls in.
     if self.minimized or not (self.mainFrame and self.mainFrame:IsShown()) then
         self._contentDirtyWhileHidden = true
         return
@@ -1156,8 +1153,8 @@ function GUIFrame:RefreshContent()
     self:DrainDeferredWidgetCallbacks()
 
     -- Fire rebuild callbacks FIRST so widget pools can ReleaseAll their
-    -- kits back to their hidden holders before the SetParent(nil) loop
-    -- below would orphan them. Always fires regardless of in-place vs.
+    -- kits back to their hidden holders before the clear loop below would
+    -- orphan them. Always fires regardless of in-place vs.
     -- item-switch — pools need to release every render, not just on
     -- item changes.
     for _, callback in pairs(self.contentRebuildCallbacks) do
