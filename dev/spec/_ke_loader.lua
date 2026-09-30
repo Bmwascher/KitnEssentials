@@ -2889,6 +2889,17 @@ function L.loadHealerMana(overrides)
     return HM, KE
 end
 
+-- Modules/Utilities/PotionReady.lua, for its pure gate rule. Nothing creates a
+-- frame or registers an event at load. Returns PR, KE.
+function L.loadPotionReady(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    local KE = { Print = function() end }
+    helpers.loadModule("Modules/Utilities/PotionReady.lua", KE)
+    return modules["PotionReady"], KE
+end
+
 -- Core/CombatState.lua. The live adapter tail runs unconditionally at load: it
 -- builds the live KE.CombatState instance and its private event frame, and the
 -- adapter functions capture UnitAffectingCombat, IsInInstance, IsInRaid,
