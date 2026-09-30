@@ -1,5 +1,16 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.8
+
+### Settings
+
+- The sidebar is reorganised: new Group Tools, Dungeon Alerts and Kicks and
+  Casts pages, and the Utilities page is gone
+- Class Tools is split into class tabs and opens on your class
+- Great Vault Alert moves to Quality of Life, Combat Logger to Automation
+
+---
+
 ## v4.8.7
 
 ### Edit Mode
