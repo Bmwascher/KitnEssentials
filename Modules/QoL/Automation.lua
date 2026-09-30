@@ -721,6 +721,9 @@ local repairTimers = {}
 -- frame. Without this line the call would resolve as a global, read nil, and
 -- error the first time a watch expired.
 local AnnounceRepair
+-- Forward-declared for the same reason: the arm and disarm below re-sync the
+-- report frame's events, and the sync is defined beside that frame.
+local SyncRepairReportEvents
 
 local function ReadGold()
     local gold = GetMoney()
@@ -756,6 +759,18 @@ function AU:CanGuildCover(allowance, cost)
     if type(allowance) ~= "number" or type(cost) ~= "number" then return false end
     if allowance < 0 then return true end
     return allowance >= cost
+end
+
+-- Each report event is held only while the state it serves exists, whatever
+-- the module state, so a repair in progress at a disable settles as it would
+-- have. Durability needs a bill baseline. Money needs a wallet reading, or a
+-- baseline for the handler's setting gate to clear. The merchant events are
+-- also held while the module is on.
+function AU:RepairReportListens(enabled, billHeld, moneyHeld, inFlight)
+    local wantMerchant = (enabled or billHeld or moneyHeld or inFlight) and true or false
+    local wantDurability = billHeld and true or false
+    local wantMoney = (billHeld or moneyHeld) and true or false
+    return wantMerchant, wantDurability, wantMoney
 end
 
 -- How long the report window outlives the merchant. Long enough for a bill drop
@@ -795,6 +810,7 @@ local function DisarmRepairWatch()
         repairTimers.watch = nil
     end
     ReleaseHeldSweep()
+    SyncRepairReportEvents()
 end
 
 -- Every armed watch gets its own expiry. Without it, a repair whose bill never
@@ -877,6 +893,7 @@ local function ArmRepairWatch(branch, expected, guildFunds, gold, sweep)
         if gen == repairWatchGen then DisarmRepairWatch() end
     end)
     repairTimers.watch = mine
+    SyncRepairReportEvents()
 end
 
 local function SetupAutoSellRepair()
@@ -1092,6 +1109,7 @@ function AnnounceRepair(force)
     repairPending = false
     local spent = repairPendingTotal
     repairPendingTotal = 0
+    SyncRepairReportEvents()
 
     local branch, ownSpent = repairOwnBranch, repairMoneySpent
     local guildFunds, expected = repairGuildFunds, repairExpected
@@ -1215,13 +1233,32 @@ local function RecordRepairDrop(spent)
     end
 end
 
+local function SetRepairReportEvent(frame, event, want)
+    if frame:IsEventRegistered(event) then
+        if not want then frame:UnregisterEvent(event) end
+    elseif want then
+        frame:RegisterEvent(event)
+    end
+end
+
+-- Assigned, not `local function`: see the note above AnnounceRepair.
+function SyncRepairReportEvents()
+    local frame = repairReportFrame
+    if not frame then return end
+    local inFlight = repairOwnBranch ~= nil or repairPending
+    local wantMerchant, wantDurability, wantMoney = AU:RepairReportListens(
+        AU:IsEnabled(), repairBill ~= nil, repairMoneyLast ~= nil, inFlight)
+    SetRepairReportEvent(frame, "MERCHANT_SHOW", wantMerchant)
+    SetRepairReportEvent(frame, "MERCHANT_CLOSED", wantMerchant)
+    SetRepairReportEvent(frame, "UPDATE_INVENTORY_DURABILITY", wantDurability)
+    SetRepairReportEvent(frame, "PLAYER_MONEY", wantMoney)
+end
+
 local function SetupRepairReport()
     if repairReportFrame then return end
     repairReportFrame = CreateFrame("Frame")
-    repairReportFrame:RegisterEvent("MERCHANT_SHOW")
-    repairReportFrame:RegisterEvent("MERCHANT_CLOSED")
-    repairReportFrame:RegisterEvent("UPDATE_INVENTORY_DURABILITY")
-    repairReportFrame:RegisterEvent("PLAYER_MONEY")
+    -- Reachable from the module so an in-game probe can read its events.
+    AU.repairReportFrame = repairReportFrame
     repairReportFrame:SetScript("OnEvent", function(_, event)
         if event == "MERCHANT_CLOSED" then
             -- A repair KE started can have its bill drop land AFTER the window
@@ -1267,6 +1304,7 @@ local function SetupRepairReport()
                     if repairTimers.grace ~= mine then return end
                     repairTimers.grace = nil
                     repairBill = nil
+                    SyncRepairReportEvents()
                 end)
                 repairTimers.grace = mine
                 return
@@ -1372,6 +1410,9 @@ local function SetupRepairReport()
 
         RecordRepairDrop(spent)
     end)
+    -- After every event, whichever return the handler took: the state it
+    -- leaves decides which events the frame keeps.
+    repairReportFrame:HookScript("OnEvent", function() SyncRepairReportEvents() end)
 end
 
 -- Auto Role Check --
@@ -3161,6 +3202,7 @@ function AU:ApplySettings()
     SetupHideZoneText()
     SetupAutoSellRepair()
     SetupRepairReport()
+    SyncRepairReportEvents()
     SetupAutoRoleCheck()
     SetupAutoQueueConfirm()
     SetupPersistSignupNote()
@@ -3192,6 +3234,9 @@ end
 function AU:OnEnable()
     if not self.db.Enabled then return end
     self:RegisterEvent("CVAR_UPDATE")
+    -- A report frame kept from an earlier enable hears the next merchant at
+    -- once; the deferred ApplySettings below only builds it the first time.
+    SyncRepairReportEvents()
     C_Timer.After(1.0, function()
         self:ApplySettings()
     end)
@@ -3222,4 +3267,7 @@ function AU:OnDisable()
     -- and friends use raw hooksecurefunc — permanent — their flags must stay.)
     self._talkingHeadHooked = false
     self:TeardownPorts()
+    -- No repair state is touched: a repair in progress settles through its own
+    -- timers and events, which the sync keeps until it has.
+    SyncRepairReportEvents()
 end
