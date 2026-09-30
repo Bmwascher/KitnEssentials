@@ -65,7 +65,6 @@ local MAX_COUNTED_TOKENS = 40
 EC.liveTokens = {}
 local liveTokens = EC.liveTokens
 
--- Pure (no WoW API), so the set's rules are spec-covered.
 function EC.TrackToken(set, unit, present)
     if type(unit) ~= "string" then return end
     local index = tonumber(unit:match("^nameplate(%d+)$"))
