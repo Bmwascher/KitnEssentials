@@ -1,5 +1,19 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.11
+
+### Kick Tracker
+
+- Keeps working when a key blocks addon messages: your own row and the kick
+  records still show
+- Teammates see your talented kick cooldown and the time left on it
+- Kick records show a star and the target's raid marker
+- Demonology kicks follow the active demon; a Warrior's two kicks share one row
+- Mind Freeze is shortened by Coldthirst after a successful interrupt
+- Bars fill with smoother engine timers
+
+---
+
 ## v4.8.10
 
 ### Damage Meter
