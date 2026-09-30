@@ -126,6 +126,8 @@ describe("HealerMana:FindHealers preview ownership", function()
         -- Obeying the flag then strands fabricated rows on screen for good.
         local HM, KE = L.loadHealerMana({ IsInRaid = function() return false end })
         KE.PreviewManager = { IsPreviewActive = function() return false end }
+        HM.IsEnabled = function() return true end
+        HM.RegisterEvent = function() end
         HM.isPreview = true
         HM.currentHealers = { { unit = "player", name = "sentinel" } }
         HM:FindHealers()
@@ -140,6 +142,8 @@ describe("HealerMana:FindHealers preview ownership", function()
         -- alone left six fabricated rows drawing the player's own live mana.
         local HM, KE = L.loadHealerMana({ IsInRaid = function() return false end })
         KE.PreviewManager = { IsPreviewActive = function() return false end }
+        HM.IsEnabled = function() return true end
+        HM.RegisterEvent = function() end
         HM.isPreview = true
         HM.currentHealers = {
             { unit = "player", name = "Healer 1", connected = true },

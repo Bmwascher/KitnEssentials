@@ -474,6 +474,7 @@ function HM:HideFrames()
     wipe(self.currentHealers)
     for _, frame in pairs(self.healerFrames) do frame:Hide() end
     if self.containerFrame then self.containerFrame:Hide() end
+    self:SyncUpdates()
 end
 
 -- LibSpec group callback: fires per-member when their spec/role is reported
@@ -689,6 +690,7 @@ function HM:UpdateHealerFrames()
     self:ApplyContainerPosition()
     self.containerFrame:Show()
     self:RefreshEditMode()
+    self:SyncUpdates()
 end
 
 function HM:UpdateMana()
@@ -771,6 +773,37 @@ function HM:StopUpdates()
     if self.updateTimer then
         self:CancelTimer(self.updateTimer)
         self.updateTimer = nil
+    end
+end
+
+-- The tick re-reads live rows and heals an orphaned preview; with neither it
+-- has nothing to do. Rows are only listed while grouped.
+function HM.ShouldTick(enabled, isPreview, count)
+    if not enabled then return false end
+    return isPreview == true or count > 0
+end
+
+function HM:SyncUpdates()
+    if HM.ShouldTick(self:IsEnabled(), self.isPreview, #self.currentHealers) then
+        self:StartUpdates()
+    else
+        self:StopUpdates()
+    end
+    self:SyncSpecEvent()
+end
+
+-- Roster-wide while grouped, because another member's spec change can make
+-- them the healer. Kept solo while the preview flag is set: the player's own
+-- spec change heals an orphaned preview at once. Otherwise, solo, FindHealers
+-- can only hide what is already hidden.
+function HM:SyncSpecEvent()
+    local want = (self:IsEnabled() and (IsInGroup() or self.isPreview == true)) and true or false
+    if want == (self._specListening == true) then return end
+    self._specListening = want
+    if want then
+        self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "FindHealers")
+    else
+        self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     end
 end
 
@@ -927,20 +960,20 @@ function HM:OnEnable()
         if HM.containerFrame and HM.db then HM:ApplyContainerPosition() end
     end)
     self:RegWithEditMode()
-    self:StartUpdates()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnGroupChanged")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "FindHealers")
     if LibSpec then
         LibSpec.RegisterGroup(self, function(specID, role, position, playerName)
             HM:OnLibSpecGroupUpdate(specID, role, position, playerName)
         end)
     end
+    self:SyncUpdates()
 end
 
 function HM:OnDisable()
     self:StopUpdates()
     self:UnregisterAllEvents()
+    self._specListening = false
     if LibSpec then LibSpec.UnregisterGroup(self) end
     wipe(self.libSpecCache)
     wipe(self.currentHealers)
