@@ -1,5 +1,29 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.15
+
+### Kick Tracker
+
+- A teammate's kick timer can no longer run past their kick's cooldown
+
+### Prompts
+
+- Waiting prompts show in order instead of only the latest
+- Keys work normally again after closing a prompt with Escape
+
+### Settings
+
+- Hover borders reset properly on reused controls, and buttons keep their
+  hover look through a theme change
+- A slider's last step is saved when the page closes
+
+### Fixes
+
+- Fishing's outfit cancel and Stasis Tracker no longer error on hidden combat
+  values
+
+---
+
 ## v4.8.14
 
 ### Party Buffs
