@@ -1210,6 +1210,11 @@ function L.loadCursor(overrides)
         FONT = "Fonts\\Expressway.TTF",
         GetFontPath = function() return "Fonts\\Expressway.TTF" end,
         GetAccentColor = function() return 1, 1, 1, 1 end,
+        -- OnEnable subscribes the taunt spec listener; the helper is not under test here.
+        Context = {
+            SubscribeSpec = function() return true end,
+            UnsubscribeSpec = function() end,
+        },
     }
     helpers.loadModule("Modules/Combat/Cursor.lua", KE)
     local C = modules["Cursor"]
