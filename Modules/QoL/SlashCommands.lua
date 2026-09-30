@@ -203,7 +203,7 @@ local function RegisterKitnCommands()
 
     -- /kitn friendplates — toggle friendly nameplates
     KitnCommands["friendplates"] = function()
-        local enabled = ToggleCVar("nameplateShowFriends")
+        local enabled = ToggleCVar("nameplateShowFriendlyPlayers")
         KE:Print("Friendly nameplates " .. (enabled and "enabled" or "disabled") .. ".")
     end
 
