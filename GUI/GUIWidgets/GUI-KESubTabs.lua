@@ -84,16 +84,18 @@ local function TabOnLeave(b)
     end
 end
 
--- The row's remaining width is left empty. Measured at layout time rather
--- than at creation: a FontString can report short before its first layout
--- pass, and there is no distributed slack to absorb a bad measurement.
+-- The row's remaining width is left empty.
+local function SizeTabToText(btn)
+    btn:SetWidth((btn.label:GetStringWidth() or 0) + Theme.paddingLarge * 2)
+end
+
+-- Re-measured at layout time: a FontString can report short before its first
+-- layout pass, and there is no distributed slack to absorb a bad measurement.
 local function SizeTabsToText(strip)
     if not strip._fill then return end
-    local tabPadding = Theme.paddingLarge * 2
     local tabs = strip._tabButtons
     for i = 1, strip._count do
-        local btn = tabs[i]
-        btn:SetWidth((btn.label:GetStringWidth() or 0) + tabPadding)
+        SizeTabToText(tabs[i])
     end
 end
 
@@ -203,6 +205,9 @@ function GUIFrame:CreateSubTabs(parent, yOffset, config)
 
         KE:ApplyThemeFont(btn.label, "normal")
         btn.label:SetText(def.label or def.id)
+        -- Sized now as well as after layout, so a new strip never draws a
+        -- frame of zero-width tabs.
+        if fill then SizeTabToText(btn) end
         btn.tabId = def.id
         PaintTab(btn, def.id == activeId)
         btn:Show()
