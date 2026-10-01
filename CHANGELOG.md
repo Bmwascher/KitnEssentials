@@ -1,5 +1,37 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.23
+
+### Automation
+
+- Auto-Confirm Loot Roll now accepts the "will become soulbound" confirm for
+  you
+- With Omnium Foil off, KE no longer shows the minimap landing-page button
+  where the game hides it
+
+### Skinning
+
+- The Reputation detail pane's three checkboxes, the Talents & Spellbook
+  collapse arrow and the Text to Speech message checkboxes get the house skin
+- Progress bars in tooltips (paragon reputation, world quests, PvP quests)
+  get the same skin as the achievement bar
+
+### Slash Commands
+
+- /kitn friendplates turns friendly player nameplates on and off again
+
+### Character Panel
+
+- Socketing a gem from the character sheet no longer errors when the game's
+  deprecation fallbacks are off
+
+### Dungeon Casts
+
+- Changing a setting while an enemy cast bar sits in the settings preview no
+  longer raises an error
+
+---
+
 ## v4.8.22
 
 ### Hunter's Mark
