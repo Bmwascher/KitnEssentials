@@ -1618,17 +1618,17 @@ local function SetTipHeader(self, bar, label, resolvedGUID, face, size, outline)
     KE:ApplyFontToText(_tip.header, face, size, outline)
 end
 
--- Put the tip into a MESSAGE state and size it for the message alone. Three
+-- Put the tip into a MESSAGE state and size it for the message alone. Four
 -- separate paths raise one -- the eligibility gate at the top of PopulateHoverTip,
--- a fetch that could not legally substitute an identity partway down, and a death
--- recap the client would not let us read -- and all three must leave the same tip
--- behind. One of them used to only raise the message, so a tip already carrying
+-- a stored pull that kept no detail, a fetch that could not legally substitute an
+-- identity partway down, and a death recap the client would not let us read -- and
+-- all four must leave the same tip behind. One of them used to only raise the message, so a tip already carrying
 -- rows, column headers and a Targets block kept all of it under a three-line frame.
 --
 -- Everything a data render can turn on is turned off here. PopulateHoverTip set
 -- the header before any branch.
 --
--- msg defaults to the in-combat refusal, which is what two of the three callers want.
+-- msg defaults to the in-combat refusal, which is what two of the four callers want.
 local function ShowTipRefusal(headerH, size, msg)
     for i = 1, HOVER_TIP_ROWS do _tip.rows[i].row:Hide() end
     if _tip.colHdr then

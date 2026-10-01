@@ -116,7 +116,7 @@ local PIN_ROLES = {
 -- block), so a thin fill leaves them untouched -- and shrinks only the colored fill into
 -- a clean underline. snapHeight is the pixel-snapped row height; the strip is clamped to
 -- [1, snapHeight]. Plain numbers / SetPoint only -- never a secret. Called from
--- CreateWindow's build loop and ApplyWindowGeometry (both user/structural, not per tick).
+-- DM:EnsureBars (once per row built) and ApplyWindowGeometry (user/structural).
 local function ApplyFillGeometry(row, db, snapHeight)
     row.fill:ClearAllPoints()
     if db and db.BarThinLine then
@@ -149,7 +149,7 @@ end
 -- standard KE 1px borders tightly bound the icon, not the whole row.
 ---------------------------------------------------------------------------------
 
--- db is passed in from CreateWindow (which already nil-guards self.db) rather
+-- db is passed in from DM:EnsureBars (which already nil-guards self.db) rather
 -- than read as a bare DM.db here; every downstream read still uses the `db and`
 -- guard, matching the nil-safety used elsewhere in this file.
 local function MakeBar(parent, db)
