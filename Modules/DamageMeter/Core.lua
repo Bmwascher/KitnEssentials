@@ -950,9 +950,9 @@ function DM:OnDisable()
     -- Pending provenance requires CONTINUOUS observation: a disabled module
     -- misses key boundaries (no START events), so an armed record can no
     -- longer be vouched for — one surviving disable->enable would mislabel
-    -- a multi-key store. Bundles stay: they are already-captured data, not
-    -- provenance. Guarded for load order (History.lua).
+    -- a multi-key store. Guarded for load order (History.lua).
     if self.HistoryDropPending then self:HistoryDropPending() end
+    if self.HistoryFree then self:HistoryFree() end
 
     -- Hand the meter back to Blizzard and drop the EditMode mover.
     self:RestoreBlizzardMeter()
@@ -1619,7 +1619,7 @@ function DM:OnMeterReset()
     self._loginResetHeld = false
     self:CloseInstancePrompt()
     -- History bundles are already-captured data and survive every reset
-    -- event (only eviction / HeaderReset / reload clear them). But pending
+    -- event (only eviction / HeaderReset / disable / reload clear them). But pending
     -- PROVENANCE does not: an external reset empties the native store, so
     -- the armed key label would mislabel whatever accumulates afterwards —
     -- clear it. EXCEPT for the module's own key-start wipe (one-shot flag

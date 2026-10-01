@@ -249,6 +249,20 @@ function DM:PopulateSegmentMenu(W)
     -- pooled label, same pooling as the row list, no _sid (OnClick pins nil
     -- -> live; prevented by disabling the row).
     local bundles = self.HistoryBundles and self:HistoryBundles() or nil
+    -- A populate can run under an open flyout. A reference to a bundle the
+    -- store dropped would keep it alive, and no row can match it again; one
+    -- to a stored bundle stays, so re-hovering that key leaves the flyout
+    -- as shown.
+    local fly = W.segFlyout
+    if fly and fly._bundle then
+        local stored = false
+        if bundles then
+            for bi = 1, #bundles do
+                if bundles[bi] == fly._bundle then stored = true; break end
+            end
+        end
+        if not stored then fly._bundle = nil end
+    end
     if bundles then
         idx = idx + 1
         local hdr = rows[idx]
@@ -288,7 +302,10 @@ function DM:PopulateSegmentMenu(W)
     end
 
     -- Hide any leftover pooled rows from a longer previous list.
-    for i = idx + 1, #rows do rows[i]:Hide() end
+    for i = idx + 1, #rows do
+        rows[i]._bundle = nil
+        rows[i]:Hide()
+    end
 
     -- Fixed footer: Current / Overall pinned at the panel bottom (nearest the ⌚
     -- icon the menu grows up from), OUTSIDE the scroll viewport so a long history

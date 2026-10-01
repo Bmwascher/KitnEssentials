@@ -98,16 +98,58 @@ function DM:HistoryBundles()
     return h.bundles
 end
 
--- Full clear: header reset only (plus /reload implicitly). The
+-- Full clear: header reset and module disable (plus /reload implicitly). The
 -- DAMAGE_METER_RESET event handler must NOT call this — our own key-start
 -- wipe fires that event right after capture, and external resets must not
--- erase captured history either (spec: store clears only on eviction,
--- header reset, /reload).
+-- erase captured history either.
 function DM:HistoryClear()
     local h = self._history
     if not h then return end
     wipe(h.bundles)
     wipe(h.byID)
+    self:HistoryReleaseRefs()
+end
+
+-- Drops references to bundles held outside the store, so a dropped bundle
+-- can be collected. Pins and plain names are the caller's business. The
+-- menu rebuilds its rows on every open and the caches refill on the next
+-- render, so clearing refs to bundles that survive costs nothing.
+-- keepOpenMenus (eviction): an open menu is using its rows' refs, so they
+-- stay; its next open re-stamps or clears every row. No menu is closed here.
+function DM:HistoryReleaseRefs(keepOpenMenus)
+    if self.windows_rt then
+        for _, W in pairs(self.windows_rt) do
+            if not (keepOpenMenus and W._segMenuOpen) then
+                local rows = W.segMenu and W.segMenu.rows
+                if rows then
+                    for i = 1, #rows do rows[i]._bundle = nil end
+                end
+                if W.segFlyout then W.segFlyout._bundle = nil end
+            end
+            if W._deathScratch then wipe(W._deathScratch) end
+        end
+    end
+    if self._sessionCache then wipe(self._sessionCache) end
+end
+
+-- Module disable: closes open segment menus, releases the store and the
+-- plain-name memo, and unpins any window from a stored pull. nextID
+-- survives, so an id is never reused. The guarded methods live in files
+-- that load after this one.
+function DM:HistoryFree()
+    if self.CloseAllSegmentMenus then self:CloseAllSegmentMenus() end
+    if self.windows_rt then
+        for _, W in pairs(self.windows_rt) do
+            local pin = W._curSessionID
+            if type(pin) == "number" and pin < 0 then
+                if W._detailOpen and self.CloseDetail then self:CloseDetail(W) end
+                W._curSessionID = nil
+            end
+        end
+    end
+    if self.InvalidateTargetsCache then self:InvalidateTargetsCache() end
+    self:HistoryClear()
+    self._plainNames = nil
 end
 
 ---------------------------------------------------------------------------------
@@ -121,9 +163,9 @@ end
 -- Learned wherever a source name renders/marshals plain (RenderBar's plain
 -- ticks + every captured pull); Detail.lua falls back to it for the tip
 -- header and the Targets lookup when a bar's name is secret. Player GUIDs
--- only — identity restriction never applies to creatures. Runtime lifetime,
--- exactly matching the store it backs; survives HeaderReset (identity is not
--- meter data).
+-- only — identity restriction never applies to creatures. Runtime only:
+-- dropped with the store on module disable, kept across HeaderReset
+-- (identity is not meter data).
 ---------------------------------------------------------------------------------
 
 function DM:NotePlainName(guid, name)
@@ -335,12 +377,15 @@ local function evictOverCap(self, h)
     local cap = self.db and self.db.HistoryRetain
     if type(cap) ~= "number" then cap = 5 end
     if cap < 1 then cap = 1 elseif cap > 5 then cap = 5 end
+    local evicted = false
     while #h.bundles > cap do
         local old = tremove(h.bundles)   -- bundles is newest-first: tail = oldest
         for _, entry in ipairs(old.sessions) do
             h.byID[entry.id] = nil
         end
+        evicted = true
     end
+    if evicted then self:HistoryReleaseRefs(true) end
 end
 
 -- Snapshot every stored session × all 11 meter types into one sealed bundle;
