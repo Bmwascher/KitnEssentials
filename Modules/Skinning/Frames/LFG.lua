@@ -851,7 +851,6 @@ local function Skin()
             -- of it is held until combat drops. Nothing here is urgent -- the
             -- category list is not interactable mid-fight anyway.
             local pendingCategories = {}
-            local combatWatcher
 
             local function DressCategoryButton(button)
                 if not S.data(button).skinned then
@@ -899,7 +898,12 @@ local function Skin()
                 end
             end
 
+            -- DrainPending clears this before its loop, so an error dressing one
+            -- button cannot leave the drain marked as scheduled.
+            local drainScheduled = false
+
             local function DrainPending()
+                drainScheduled = false
                 for button in next, pendingCategories do
                     pendingCategories[button] = nil
                     DressCategoryButton(button)
@@ -913,15 +917,9 @@ local function Skin()
                 end
 
                 pendingCategories[button] = true
-                if combatWatcher then return end
-
-                combatWatcher = CreateFrame("Frame")
-                combatWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
-                combatWatcher:SetScript("OnEvent", function(f)
-                    f:UnregisterAllEvents()
-                    combatWatcher = nil
-                    DrainPending()
-                end)
+                if drainScheduled then return end
+                drainScheduled = true
+                KE:RunAfterCombat(DrainPending)
             end
 
             hooksecurefunc("LFGListCategorySelection_AddButton", function(sel, btnIndex)

@@ -17,6 +17,8 @@
 --     reading cannot be reconciled with the bill.
 --   * Guild withdrawal coverage, whose sentinel for an unlimited rank reads as
 --     smaller than every bill if it is compared naively.
+--   * The repair report's listening rule, which holds each event only while
+--     the state it serves exists, and the merchant events while enabled.
 --   * Character-window button placement arithmetic.
 --   * The Great Vault button's gates, including the lifecycle predicate in the
 --     one state a preference key cannot reach.
@@ -1251,6 +1253,40 @@ describe("guild withdrawal coverage", function()
         assert.is_false(AU:CanGuildCover(nil, 500))
         assert.is_false(AU:CanGuildCover(500, nil))
         assert.is_false(AU:CanGuildCover("500", 500))
+    end)
+end)
+
+---------------------------------------------------------------------------------
+-- The repair report's listening rule
+---------------------------------------------------------------------------------
+describe("Automation repair report listening rule", function()
+    it("holds each event only while its state exists, and the merchant events while enabled", function()
+        local AU = newFixture().AU
+        -- enabled, billHeld, moneyHeld, inFlight -> wantMerchant, wantDurability, wantMoney
+        local rows = {
+            { true,  true,  true,  true,  true,  true,  true  },
+            { true,  true,  true,  false, true,  true,  true  },
+            { true,  true,  false, true,  true,  true,  true  },
+            { true,  true,  false, false, true,  true,  true  },
+            { true,  false, true,  true,  true,  false, true  },
+            { true,  false, true,  false, true,  false, true  },
+            { true,  false, false, true,  true,  false, false },
+            { true,  false, false, false, true,  false, false },
+            { false, true,  true,  true,  true,  true,  true  },
+            { false, true,  true,  false, true,  true,  true  },
+            { false, true,  false, true,  true,  true,  true  },
+            { false, true,  false, false, true,  true,  true  },
+            { false, false, true,  true,  true,  false, true  },
+            { false, false, true,  false, true,  false, true  },
+            { false, false, false, true,  true,  false, false },
+            { false, false, false, false, false, false, false },
+        }
+        for i, row in ipairs(rows) do
+            local wantMerchant, wantDurability, wantMoney = AU:RepairReportListens(row[1], row[2], row[3], row[4])
+            assert.are.equal(row[5], wantMerchant, "merchant, row " .. i)
+            assert.are.equal(row[6], wantDurability, "durability, row " .. i)
+            assert.are.equal(row[7], wantMoney, "money, row " .. i)
+        end
     end)
 end)
 

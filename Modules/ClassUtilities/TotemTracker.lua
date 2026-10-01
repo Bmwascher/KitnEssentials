@@ -56,37 +56,37 @@ end
 
 function TT:OnInitialize()
     self:UpdateDB()
-    self:CreateDestroyButtons()
     self:SetEnabledState(false)
 end
 
 function TT:CreateDestroyButtons()
     local slotCount = GetTotemSlotCount()
     if destroyButtons[slotCount] then return end
-    if InCombatLockdown() then
-        -- AceEvent-3.0 closure callbacks receive (event, ...args), NOT (self, ...).
-        -- Capture the module table via an upvalue.
-        local module = self
-        self:RegisterEvent("PLAYER_REGEN_ENABLED", function()
-            module:UnregisterEvent("PLAYER_REGEN_ENABLED")
-            module:CreateDestroyButtons()
-        end)
-        return
-    end
+    if InCombatLockdown() then return end
 
     -- The GUI's destroy-all macro clicks KE_DestroyTotem1..5, so every slot
     -- GetNumTotemSlots() reports needs a button behind it.
     for slot = 1, slotCount do
         if not destroyButtons[slot] then
             local btn = CreateFrame("Button", "KE_DestroyTotem" .. slot, UIParent, "SecureActionButtonTemplate")
-            btn:SetAttribute("type",                "destroytotem")
-            btn:SetAttribute("typerelease",         "destroytotem")
             btn:SetAttribute("totem-slot",          slot)
             btn:SetAttribute("pressAndHoldAction",  1)
             btn:RegisterForClicks("AnyUp", "AnyDown")
             btn:Hide()
             destroyButtons[slot] = btn
         end
+    end
+end
+
+-- The macro clicks these by name, and a secure button cannot be destroyed, so
+-- a disabled module clears the action instead: a click with no type does
+-- nothing.
+function TT:SetDestroyButtonsArmed(armed)
+    if InCombatLockdown() then return end
+    local action = armed and "destroytotem" or nil
+    for _, btn in ipairs(destroyButtons) do
+        btn:SetAttribute("type", action)
+        btn:SetAttribute("typerelease", action)
     end
 end
 
@@ -457,7 +457,13 @@ function TT:OnEnable()
     if not self.db or not self.db.Enabled then return end
 
     self:CreateContainer()
-    self:CreateDestroyButtons()
+    -- Secure buttons: built and armed out of combat, and only if the module
+    -- is still on by then.
+    KE:RunAfterCombat(function()
+        if not self:IsEnabled() then return end
+        self:CreateDestroyButtons()
+        self:SetDestroyButtonsArmed(true)
+    end)
     self:UpdateContainerPosition()
     self:LayoutButtons()
 
@@ -487,4 +493,8 @@ function TT:OnDisable()
 
     if containerFrame then containerFrame:Hide() end
     self:UnregisterEditMode()
+    KE:RunAfterCombat(function()
+        if self:IsEnabled() then return end
+        self:SetDestroyButtonsArmed(false)
+    end)
 end

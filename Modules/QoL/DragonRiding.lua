@@ -30,6 +30,13 @@ local THRILL_SPELL = 377234
 local SECOND_WIND_SPELL = 425782
 local WHIRLING_SURGE_SPELL = 361584
 
+-- Defaults handed to KE:ResolveColor and the border helpers, which only read
+-- them, so one shared table each replaces an allocation per call.
+local DEFAULT_SECOND_WIND = { 0.3, 0.7, 1, 1 }
+local DEFAULT_VIGOR = { 0.898, 0.063, 0.224, 1 }
+local DEFAULT_THRILL = { 0.2, 0.8, 0.2, 1 }
+local BORDER_BLACK = { 0, 0, 0, 1 }
+
 ---------------------------------------------------------------------------------
 -- Module State
 ---------------------------------------------------------------------------------
@@ -64,7 +71,7 @@ end
 -- column at pillA.right) — clean shared 1px divider, matching outer 1px
 -- borders. Hand-rolled equivalent of Falcon's PixelOutline.tga slice.
 local function AddPillOutsetBorders(frame, color)
-    color = color or { 0, 0, 0, 1 }
+    color = color or BORDER_BLACK
     local px = KE:GetPixelSize()
 
     local function MakeStrip()
@@ -118,7 +125,7 @@ local function CreatePill(parent, height)
     bg:SetColorTexture(0, 0, 0, 1)
     pill.bg = bg
 
-    AddPillOutsetBorders(pill, { 0, 0, 0, 1 })
+    AddPillOutsetBorders(pill, BORDER_BLACK)
 
     return pill
 end
@@ -160,7 +167,7 @@ local function UpdateSecondWind(self)
     if not charges or not canaccessvalue(charges.currentCharges) then return end
 
     local db = self.db
-    local r, g, b = KE:ResolveColor(db.Colors and db.Colors.SecondWind, { 0.3, 0.7, 1, 1 })
+    local r, g, b = KE:ResolveColor(db.Colors and db.Colors.SecondWind, DEFAULT_SECOND_WIND)
     local dr, dg, db_ = r * 0.25, g * 0.25, b * 0.25
 
     for index = 1, 3 do
@@ -196,9 +203,9 @@ local function UpdateVigor(self)
     local thrillUp = db.EnableThrillColor ~= false
         and C_UnitAuras.GetAuraDataBySpellName("player", C_Spell.GetSpellName(THRILL_SPELL), "HELPFUL")
     if thrillUp then
-        r, g, b = KE:ResolveColor(db.Colors and db.Colors.VigorThrill, { 0.2, 0.8, 0.2, 1 })
+        r, g, b = KE:ResolveColor(db.Colors and db.Colors.VigorThrill, DEFAULT_THRILL)
     else
-        r, g, b = KE:ResolveColor(db.Colors and db.Colors.Vigor, { 0.898, 0.063, 0.224, 1 })
+        r, g, b = KE:ResolveColor(db.Colors and db.Colors.Vigor, DEFAULT_VIGOR)
     end
     -- Darkened shade for the empty/unfilled bg (Falcon-style fade).
     local dr, dg, db_ = r * 0.25, g * 0.25, b * 0.25
@@ -237,12 +244,6 @@ local function UpdateVigor(self)
         numVigor = charges.maxCharges
         ResizePillsToFit(self.vigorFrame, self.vigorFrame, numVigor, spacing)
     end
-end
-
--- Re-routes color refresh through UpdateVigor so Thrill state (UNIT_AURA)
--- and recharging-pill state (SPELL_UPDATE_CHARGES) stay in sync.
-local function UpdateVigorColor(self)
-    UpdateVigor(self)
 end
 
 local function UpdateSpeed(self)
@@ -327,7 +328,7 @@ function DR:CreateFrames()
     self.secondWindFrame = CreateFrame("Frame", nil, self.container)
     self.secondWindFrame:SetHeight(barHeight)
 
-    local swr, swg, swb = KE:ResolveColor(db.Colors and db.Colors.SecondWind, { 0.3, 0.7, 1, 1 })
+    local swr, swg, swb = KE:ResolveColor(db.Colors and db.Colors.SecondWind, DEFAULT_SECOND_WIND)
     for i = 1, 3 do
         local pill = CreatePill(self.secondWindFrame, barHeight)
         pill:SetStatusBarColor(swr, swg, swb)
@@ -358,7 +359,7 @@ function DR:CreateFrames()
     self.surgeFrame.cooldown:SetDrawBling(false)
     self.surgeFrame.cooldown:SetDrawEdge(false)
 
-    KE:AddIconBorders(self.surgeFrame, { 0, 0, 0, 1 })
+    KE:AddIconBorders(self.surgeFrame, BORDER_BLACK)
 
     -- Speed text — parented to the container so it can re-anchor to whichever
     -- row ends up on top (vigor or secondWind, depending on FlipBars).
@@ -470,7 +471,7 @@ function DR:Refresh()
     self:ApplyBarLayout()
 
     -- Update Second Wind pills (color/spacing/size)
-    local swr, swg, swb = KE:ResolveColor(db.Colors and db.Colors.SecondWind, { 0.3, 0.7, 1, 1 })
+    local swr, swg, swb = KE:ResolveColor(db.Colors and db.Colors.SecondWind, DEFAULT_SECOND_WIND)
     for i = 1, 3 do
         if self.secondWindFrame[i] then
             self.secondWindFrame[i]:SetHeight(barHeight)
@@ -499,7 +500,7 @@ function DR:Refresh()
     if vigorCount > 0 then
         ResizePillsToFit(self.vigorFrame, self.vigorFrame, vigorCount, spacing)
     end
-    UpdateVigorColor(self)
+    UpdateVigor(self)
 
     -- Speed font
     local fontFile = KE:GetFontPath(self.db.FontFace) or KE.FONT or "Fonts\\FRIZQT__.TTF"
@@ -564,7 +565,6 @@ function DR:ApplySettings()
 
     if self.parent and self.parent:IsShown() then
         UpdateVigor(self)
-        UpdateVigorColor(self)
         UpdateWhirlingSurge(self)
         UpdateSecondWind(self)
     end
@@ -641,7 +641,7 @@ function DR:ShowPreview()
     -- Set preview values. Pill 5 demos the recharging state via partial
     -- fill (the dark bg shows through the unfilled portion); pills 1-4
     -- are fully charged; pill 6 is empty.
-    local vr, vg, vb = KE:ResolveColor(self.db.Colors and self.db.Colors.Vigor, { 0.898, 0.063, 0.224, 1 })
+    local vr, vg, vb = KE:ResolveColor(self.db.Colors and self.db.Colors.Vigor, DEFAULT_VIGOR)
     local vdr, vdg, vdb = vr * 0.25, vg * 0.25, vb * 0.25
     for i = 1, 6 do
         self.vigorFrame[i].bg:SetColorTexture(vdr, vdg, vdb, 1)
@@ -656,7 +656,7 @@ function DR:ShowPreview()
         end
     end
 
-    local sr, sg, sb = KE:ResolveColor(self.db.Colors and self.db.Colors.SecondWind, { 0.3, 0.7, 1, 1 })
+    local sr, sg, sb = KE:ResolveColor(self.db.Colors and self.db.Colors.SecondWind, DEFAULT_SECOND_WIND)
     local sdr, sdg, sdb = sr * 0.25, sg * 0.25, sb * 0.25
     for i = 1, 3 do
         self.secondWindFrame[i].bg:SetColorTexture(sdr, sdg, sdb, 1)
@@ -713,8 +713,7 @@ function DR:OnShowHandler()
     end
 
     -- UNIT_AURA is registered unfiltered; the handler keeps the player only,
-    -- otherwise every party or raid member's aura change would run UpdateVigor
-    -- and UpdateVigorColor.
+    -- otherwise every party or raid member's aura change would run UpdateVigor.
     self.vigorFrame:RegisterEvent("SPELL_UPDATE_CHARGES")
     self.vigorFrame:RegisterEvent("UNIT_AURA")
     self.vigorFrame:SetScript("OnEvent", function(_, event, unit)
@@ -723,13 +722,6 @@ function DR:OnShowHandler()
             if unit ~= "player" then return end
         end
         UpdateVigor(self)
-    end)
-    self.vigorFrame:HookScript("OnEvent", function(_, event, unit)
-        if event == "UNIT_AURA" then
-            if KE:IsUnreadableAuraPayload(unit, nil) then return end
-            if unit ~= "player" then return end
-        end
-        UpdateVigorColor(self)
     end)
 
     self.surgeFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
@@ -744,7 +736,6 @@ function DR:OnShowHandler()
     self.speedTicker = C_Timer.NewTicker(0.05, function() UpdateSpeed(self) end)
 
     UpdateVigor(self)
-    UpdateVigorColor(self)
     UpdateWhirlingSurge(self)
     UpdateSecondWind(self)
 end

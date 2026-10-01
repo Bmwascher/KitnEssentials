@@ -90,6 +90,7 @@ end
 function HM:UpdateWarningDisplay()
     if not isHunter then return end
     if self.isPreview then return end
+    if not self.scanArmed then return end
     if not self.frame then return end
 
     -- During full restriction: hide and stop tracking entirely
@@ -119,6 +120,7 @@ end
 
 function HM:CheckUnitForMark(unit)
     if not isHunter then return end
+    if not self.scanArmed then return end
     if KE:IsFullyRestricted() then return end
     -- The scan below hard errors without aura access, and the state machine
     -- above answers from the last event rather than from the restriction
@@ -163,6 +165,9 @@ end
 function HM:SetScanningActive(active)
     if not isHunter then return end
     if not self.scannerFrame then return end
+    -- A world-enter callback queued before a disable can land after it; it
+    -- must neither register the raid events nor hide a disabled preview.
+    if not self.scanArmed then return end
 
     if active then
         self.scannerFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED")
@@ -218,10 +223,25 @@ end
 
 function HM:StartScanning()
     if not isHunter then return end
+    -- A closed settings preview calls this whenever the saved setting is on,
+    -- including while the module is disabled.
+    if not self:IsEnabled() then return end
     if self.isPreview then return end
-    if self.scannerFrame then return end
+    if self.scanArmed then return end
+    self.scanArmed = true
 
-    self:CreateWarningFrame()
+    -- Both frames outlive a disable. A re-enable re-registers the kept scanner
+    -- and re-applies settings that may have changed while it was off.
+    if self.frame then
+        self:ApplySettings()
+    else
+        self:CreateWarningFrame()
+    end
+    if self.scannerFrame then
+        self.scannerFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+        if IsInRaid() then self:SetScanningActive(true) end
+        return
+    end
 
     local scanner = CreateFrame("Frame")
     scanner:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -359,8 +379,8 @@ function HM:HidePreview()
 
     if not self.db.Enabled then return end
 
-    -- If module was enabled during preview, scanner never started
-    if not self.scannerFrame then
+    -- If module was enabled during preview, scanning never started
+    if not self.scanArmed then
         self:StartScanning()
         return
     end
@@ -387,17 +407,16 @@ function HM:OnEnable()
 end
 
 function HM:OnDisable()
+    -- Both frames are kept for the next enable; only the events go.
+    self.scanArmed = false
     if self.scannerFrame then
         self.scannerFrame:UnregisterAllEvents()
-        self.scannerFrame:SetScript("OnEvent", nil)
-        self.scannerFrame = nil
     end
     if self.frame then
         self.frame:Hide()
-        self.frame = nil
     end
-    -- The frame is dropped here, so the registration pointing at it has to go
-    -- with it. Clearing the guard is what lets a later enable register again.
+    -- Keeps the element out of /kes edit while the module is off. Clearing the
+    -- guard is what lets a later enable register again.
     if KE.EditMode then KE.EditMode:UnregisterElement("HuntersMark") end
     self.editModeRegistered = nil
     wipe(markedUnits)

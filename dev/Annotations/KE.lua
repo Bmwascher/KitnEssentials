@@ -1401,11 +1401,6 @@ function KE:DisablePixelSnap(obj) end
 ---@return Frame?
 function KE:CreateMessagePopup(timer, text, fontSize, parentFrame, xOffset, yOffset) end
 
----@param frame Frame
----@param targetAlpha number
----@param duration number
-function KE:CombatSafeFade(frame, targetAlpha, duration) end
-
 -- Modules/QoL/SlashCommands.lua
 ---@return boolean
 function KE:HasAuraAddon() end

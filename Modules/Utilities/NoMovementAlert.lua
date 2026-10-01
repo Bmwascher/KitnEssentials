@@ -866,6 +866,7 @@ function NMA:Update()
     -- counting down -- exactly when this is visible -- so re-seating here
     -- costs nothing when idle and keeps formation when not.
     if not anyRunning then self:StopTicker() end
+    return anyRunning
 end
 
 -- The restriction event fires BEFORE a restriction becomes active or AFTER it is
@@ -901,7 +902,8 @@ end
 -- garbage collector pauses on, and the pause is what is felt as stutter.
 --
 -- Update() reads live cooldown state per entry itself, so refreshing the
--- display and making sure the ticker is running is the entire job here.
+-- display is the entire job here. The ticker starts only when Update reports
+-- a countdown: while idle, its first tick would only cancel it again.
 --
 -- Rate-capped with a trailing flush so a burst of events costs one pass rather
 -- than one per event. The cap matches the ticker's own 0.1s period, so nothing
@@ -924,8 +926,7 @@ function NMA:RefreshDisplay()
         return
     end
     self._displayCapped = true
-    self:Update()
-    self:StartTicker()
+    if self:Update() then self:StartTicker() end
     C_Timer.After(DISPLAY_REFRESH_CAP, flushDisplayRefresh)
 end
 

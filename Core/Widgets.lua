@@ -941,37 +941,6 @@ function KE:FlushPendingReloadPrompt()
 end
 
 ---------------------------------------------------------------------------------
--- Combat-Safe Fade
----------------------------------------------------------------------------------
-
--- Smooth alpha transition via OnUpdate, avoids taint
-function KE:CombatSafeFade(frame, targetAlpha, duration)
-    if frame._fadeTimer then frame._fadeTimer:Hide() end
-
-    local startAlpha = frame:GetAlpha()
-    local diff = targetAlpha - startAlpha
-    if diff == 0 or duration <= 0 then
-        frame:SetAlpha(targetAlpha)
-        return
-    end
-
-    local timer = frame._fadeTimer or CreateFrame("Frame")
-    frame._fadeTimer = timer
-    local elapsed = 0
-    timer:SetScript("OnUpdate", function(self, dt)
-        elapsed = elapsed + dt
-        local progress = elapsed / duration
-        if progress >= 1 then
-            frame:SetAlpha(targetAlpha)
-            self:Hide()
-        else
-            frame:SetAlpha(startAlpha + diff * progress)
-        end
-    end)
-    timer:Show()
-end
-
----------------------------------------------------------------------------------
 -- Font and Backdrop Helpers
 ---------------------------------------------------------------------------------
 
