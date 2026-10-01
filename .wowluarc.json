@@ -42,7 +42,7 @@
     ],
     "write": [
       "KitnEssentials",
-      "KitnEssentialsDB", "KitnEssentialsOptimizeDB",
+      "KitnEssentialsDB", "KitnEssentialsOptimizeDB", "KitnEssentialsCharDB",
       "KitnCommands", "KitnEssentialsAPI", "KitnSlashLines",
       "SLASH_KITNESSENTIALS1", "SLASH_KITNESSENTIALS2", "SLASH_KITNESSENTIALS3",
       "SLASH_KE_CDM1", "SLASH_KE_CDM2",

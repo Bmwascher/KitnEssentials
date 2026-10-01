@@ -12,17 +12,17 @@ describe("ChatHistory storage guards", function()
     it("stores an ordinary say message", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(1, #KE.db.char.ChatHistory)
-        assert.equals("hello", KE.db.char.ChatHistory[1][1])
-        assert.equals("CHAT_MSG_SAY", KE.db.char.ChatHistory[1].event)
-        assert.equals(2000, KE.db.char.ChatHistory[1].time)
+        assert.equals(1, #KE:GetCharStore().ChatHistory)
+        assert.equals("hello", KE:GetCharStore().ChatHistory[1][1])
+        assert.equals("CHAT_MSG_SAY", KE:GetCharStore().ChatHistory[1].event)
+        assert.equals(2000, KE:GetCharStore().ChatHistory[1].time)
     end)
 
     it("refuses every message received inside an instance", function()
         local CH, KE = L.loadChatHistory({ IsInInstance = inInstance() })
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
         CH:SaveChatHistory("CHAT_MSG_PARTY", "pull", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        assert.equals(0, #KE:GetCharStore().ChatHistory)
     end)
 
     it("refuses when the instance check throws, returns nil, or returns a secret", function()
@@ -35,20 +35,20 @@ describe("ChatHistory storage guards", function()
         for _, overrides in ipairs(variants) do
             local CH, KE = L.loadChatHistory(overrides)
             CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-            assert.equals(0, #KE.db.char.ChatHistory)
+            assert.equals(0, #KE:GetCharStore().ChatHistory)
         end
     end)
 
     it("refuses a secret body", function()
         local CH, KE = L.loadChatHistory({ issecretvalue = secretIs("hello") })
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        assert.equals(0, #KE:GetCharStore().ChatHistory)
     end)
 
     it("refuses a secret sender even when the body is plain", function()
         local CH, KE = L.loadChatHistory({ issecretvalue = secretIs("Bob") })
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        assert.equals(0, #KE:GetCharStore().ChatHistory)
     end)
 
     it("refuses a row whose timestamp reads secret at capture time, or when neither clock is installed", function()
@@ -63,7 +63,7 @@ describe("ChatHistory storage guards", function()
         for _, overrides in ipairs(variants) do
             local CH, KE = L.loadChatHistory(overrides)
             CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-            assert.equals(0, #KE.db.char.ChatHistory)
+            assert.equals(0, #KE:GetCharStore().ChatHistory)
         end
     end)
 
@@ -75,7 +75,7 @@ describe("ChatHistory storage guards", function()
         for _, overrides in ipairs(variants) do
             local CH, KE = L.loadChatHistory(overrides)
             CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-            assert.equals(1000, KE.db.char.ChatHistory[1].time)
+            assert.equals(1000, KE:GetCharStore().ChatHistory[1].time)
         end
     end)
 
@@ -88,14 +88,14 @@ describe("ChatHistory storage guards", function()
         for _, overrides in ipairs(variants) do
             local CH, KE = L.loadChatHistory(overrides)
             CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-            assert.equals(0, #KE.db.char.ChatHistory)
+            assert.equals(0, #KE:GetCharStore().ChatHistory)
         end
     end)
 
     it("refuses a protected body", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_SAY", "hi |Kf123|k there", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        assert.equals(0, #KE:GetCharStore().ChatHistory)
     end)
 
     it("never puts a table on disk", function()
@@ -103,7 +103,7 @@ describe("ChatHistory storage guards", function()
         -- Position 3, so the table is followed by a real value and survives
         -- truncation as a stored slot rather than being trimmed off the tail.
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob", { globalName = "leak" }, "Common")
-        local row = KE.db.char.ChatHistory[1]
+        local row = KE:GetCharStore().ChatHistory[1]
         assert.equals("hello", row[1])
         assert.equals(false, row[3])
         assert.equals("Common", row[4])
@@ -112,7 +112,7 @@ describe("ChatHistory storage guards", function()
     it("trims a trailing table off the row entirely", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob", { globalName = "leak" })
-        local row = KE.db.char.ChatHistory[1]
+        local row = KE:GetCharStore().ChatHistory[1]
         assert.equals(2, #row)
         assert.is_nil(row[3])
     end)
@@ -121,26 +121,26 @@ describe("ChatHistory storage guards", function()
         local CH, KE = L.loadChatHistory()
         KE.db.profile.Skinning.ChatHistory.ShowTypes.SAY = false
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        assert.equals(0, #KE:GetCharStore().ChatHistory)
     end)
 
     it("refuses everything while the module is off", function()
         local CH, KE = L.loadChatHistory()
         KE.db.profile.Skinning.ChatHistory.Enabled = false
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        assert.equals(0, #KE:GetCharStore().ChatHistory)
     end)
 
     it("refuses an event it does not cover", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_LOOT", "you get", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        assert.equals(0, #KE:GetCharStore().ChatHistory)
     end)
 
     it("refuses guild achievements, which the handler routes elsewhere", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_GUILD_ACHIEVEMENT", "earned", "Bob")
-        assert.equals(0, #KE.db.char.ChatHistory)
+        assert.equals(0, #KE:GetCharStore().ChatHistory)
     end)
 
     it("trims to the cap, dropping the oldest, and keeps exactly the number the cap advertises", function()
@@ -152,7 +152,7 @@ describe("ChatHistory storage guards", function()
             local CH, KE = L.loadChatHistory()
             KE.db.profile.Skinning.ChatHistory.Size = v.size
             for i = 1, v.count do CH:SaveChatHistory("CHAT_MSG_SAY", "m" .. i, "Bob") end
-            local data = KE.db.char.ChatHistory
+            local data = KE:GetCharStore().ChatHistory
             assert.equals(v.size, #data)
             assert.equals(v.first, data[1][1])
             assert.equals(v.last, data[v.size][1])
@@ -162,7 +162,7 @@ describe("ChatHistory storage guards", function()
     it("packs nil holes as false so the row stays dense", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob", nil, nil, "Bob")
-        local row = KE.db.char.ChatHistory[1]
+        local row = KE:GetCharStore().ChatHistory[1]
         assert.equals(false, row[3])
         assert.equals("Bob", row[5])
     end)
@@ -170,7 +170,7 @@ describe("ChatHistory storage guards", function()
     it("truncates the row at the last argument that carries anything", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.equals(2, #KE.db.char.ChatHistory[1])
+        assert.equals(2, #KE:GetCharStore().ChatHistory[1])
     end)
 
     it("registers only the types the user has switched on", function()
@@ -221,10 +221,10 @@ describe("ChatHistory storage guards", function()
     it("clears both stores", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        KE.db.char.ChatTypingHistory[1] = "/say hi"
+        KE:GetCharStore().ChatTypingHistory[1] = "/say hi"
         CH:ClearHistory()
-        assert.equals(0, #KE.db.char.ChatHistory)
-        assert.equals(0, #KE.db.char.ChatTypingHistory)
+        assert.equals(0, #KE:GetCharStore().ChatHistory)
+        assert.equals(0, #KE:GetCharStore().ChatTypingHistory)
     end)
 end)
 
@@ -257,8 +257,8 @@ describe("ChatHistory replay", function()
         }
         for _, v in ipairs(variants) do
             local CH, KE = L.loadChatHistory({ issecretvalue = v.issecretvalue })
-            KE.db.char.ChatHistory[1] = v.row
-            assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+            KE:GetCharStore().ChatHistory[1] = v.row
+            assert.is_false(CH:RowIsReplayable(KE:GetCharStore().ChatHistory[1]))
         end
     end)
 
@@ -277,7 +277,7 @@ describe("ChatHistory replay", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
         KE.db.profile.Skinning.ChatHistory.ShowTypes.SAY = false
-        assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+        assert.is_false(CH:RowIsReplayable(KE:GetCharStore().ChatHistory[1]))
     end)
 
     it("refuses a malformed row", function()
@@ -298,7 +298,7 @@ describe("ChatHistory replay", function()
     it("accepts an ordinary stored row", function()
         local CH, KE = L.loadChatHistory()
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
-        assert.is_true(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+        assert.is_true(CH:RowIsReplayable(KE:GetCharStore().ChatHistory[1]))
     end)
 
     it("dispatches with the marker and the stored time", function()
@@ -430,7 +430,7 @@ describe("ChatHistory replay", function()
         CH:SaveChatHistory("CHAT_MSG_SAY", "hello", "Bob")
 
         local armed = false
-        setmetatable(KE.db.char.ChatHistory[1], {
+        setmetatable(KE:GetCharStore().ChatHistory[1], {
             __index = function(_, key)
                 if armed and type(key) == "number" then error("boom") end
                 return nil
@@ -543,13 +543,13 @@ describe("ChatHistory typed-line store", function()
     it("stores a typed line", function()
         local CH, KE = L.loadChatHistory()
         assert.is_true(CH:RecordTypedLine("/say hello"))
-        assert.equals("/say hello", KE.db.char.ChatTypingHistory[1])
+        assert.equals("/say hello", KE:GetCharStore().ChatTypingHistory[1])
     end)
 
     it("refuses secret text", function()
         local CH, KE = L.loadChatHistory({ issecretvalue = secretIs("/say hello") })
         assert.is_false(CH:RecordTypedLine("/say hello"))
-        assert.equals(0, #KE.db.char.ChatTypingHistory)
+        assert.equals(0, #KE:GetCharStore().ChatTypingHistory)
     end)
 
     it("refuses an empty or non-string line", function()
@@ -557,26 +557,26 @@ describe("ChatHistory typed-line store", function()
         assert.is_false(CH:RecordTypedLine(""))
         assert.is_false(CH:RecordTypedLine(nil))
         assert.is_false(CH:RecordTypedLine(42))
-        assert.equals(0, #KE.db.char.ChatTypingHistory)
+        assert.equals(0, #KE:GetCharStore().ChatTypingHistory)
     end)
 
     it("refuses everything typed inside an instance", function()
         local CH, KE = L.loadChatHistory({ IsInInstance = inInstance() })
         assert.is_false(CH:RecordTypedLine("/say hello"))
-        assert.equals(0, #KE.db.char.ChatTypingHistory)
+        assert.equals(0, #KE:GetCharStore().ChatTypingHistory)
     end)
 
     it("refuses while the chat skin is off", function()
         local CH, KE = L.loadChatHistory()
         CH.ChatSkinActive = function() return false end
         assert.is_false(CH:RecordTypedLine("/say hello"))
-        assert.equals(0, #KE.db.char.ChatTypingHistory)
+        assert.equals(0, #KE:GetCharStore().ChatTypingHistory)
     end)
 
     it("caps the saved list at fifty, dropping the oldest", function()
         local CH, KE = L.loadChatHistory()
         for i = 1, 55 do CH:RecordTypedLine("line " .. i) end
-        local saved = KE.db.char.ChatTypingHistory
+        local saved = KE:GetCharStore().ChatTypingHistory
         assert.equals(50, #saved)
         assert.equals("line 6", saved[1])
         assert.equals("line 55", saved[50])
@@ -620,7 +620,7 @@ describe("ChatHistory Battle.net sender token", function()
                 },
             })
             saveBNWhisper(CH, "|Kf1|k", 5)
-            local row = KE.db.char.ChatHistory[1]
+            local row = KE:GetCharStore().ChatHistory[1]
             assert.equals("SoTilted#1527", row.bnTag)
             assert.equals("SoTilted#1527", row[2])
         end)
@@ -628,7 +628,7 @@ describe("ChatHistory Battle.net sender token", function()
         it("refuses the row when the lookup does not resolve", function()
             local CH, KE = L.loadChatHistory()
             saveBNWhisper(CH, "|Kf1|k", 5)
-            assert.equals(0, #KE.db.char.ChatHistory)
+            assert.equals(0, #KE:GetCharStore().ChatHistory)
         end)
 
         it("refuses the row when the resolved BattleTag is empty", function()
@@ -636,7 +636,7 @@ describe("ChatHistory Battle.net sender token", function()
                 C_BattleNet = { GetAccountInfoByID = function() return { battleTag = "" } end },
             })
             saveBNWhisper(CH, "|Kf1|k", 5)
-            assert.equals(0, #KE.db.char.ChatHistory)
+            assert.equals(0, #KE:GetCharStore().ChatHistory)
         end)
 
         it("refuses the row when argument 13 is not a positive number", function()
@@ -650,14 +650,14 @@ describe("ChatHistory Battle.net sender token", function()
                 },
             })
             saveBNWhisper(CH, "|Kf1|k", 0)
-            assert.equals(0, #KE.db.char.ChatHistory)
+            assert.equals(0, #KE:GetCharStore().ChatHistory)
         end)
 
         it("leaves an ordinary sender name alone", function()
             local CH, KE = L.loadChatHistory()
             CH:SaveChatHistory("CHAT_MSG_GUILD", "hello", "Bob")
-            assert.is_nil(KE.db.char.ChatHistory[1].bnTag)
-            assert.equals("Bob", KE.db.char.ChatHistory[1][2])
+            assert.is_nil(KE:GetCharStore().ChatHistory[1].bnTag)
+            assert.equals("Bob", KE:GetCharStore().ChatHistory[1][2])
         end)
 
         -- The sender id is refused by the coercion loop's secrecy check, which
@@ -675,7 +675,7 @@ describe("ChatHistory Battle.net sender token", function()
                 },
             })
             saveBNWhisper(CH, "|Kf1|k", 7)
-            assert.equals(0, #KE.db.char.ChatHistory)
+            assert.equals(0, #KE:GetCharStore().ChatHistory)
         end)
 
         -- The lookup's own return is checked separately from its arguments: a
@@ -691,7 +691,7 @@ describe("ChatHistory Battle.net sender token", function()
                 },
             })
             saveBNWhisper(CH, "|Kf1|k", 5)
-            assert.equals(0, #KE.db.char.ChatHistory)
+            assert.equals(0, #KE:GetCharStore().ChatHistory)
         end)
 
         it("refuses the row when the looked-up BattleTag is not a string", function()
@@ -700,7 +700,7 @@ describe("ChatHistory Battle.net sender token", function()
                     C_BattleNet = { GetAccountInfoByID = function() return { battleTag = bad } end },
                 })
                 saveBNWhisper(CH, "|Kf1|k", 5)
-                assert.equals(0, #KE.db.char.ChatHistory)
+                assert.equals(0, #KE:GetCharStore().ChatHistory)
             end
         end)
     end)
@@ -708,8 +708,8 @@ describe("ChatHistory Battle.net sender token", function()
     describe("RowIsReplayable", function()
         it("refuses a legacy row that still carries the token in row[2]", function()
             local CH, KE = L.loadChatHistory()
-            KE.db.char.ChatHistory[1] = { "hello", "|Kf1|k", event = "CHAT_MSG_BN_WHISPER", time = 5 }
-            assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+            KE:GetCharStore().ChatHistory[1] = { "hello", "|Kf1|k", event = "CHAT_MSG_BN_WHISPER", time = 5 }
+            assert.is_false(CH:RowIsReplayable(KE:GetCharStore().ChatHistory[1]))
         end)
 
         it("refuses a row whose stored BattleTag reads secret", function()
@@ -717,9 +717,9 @@ describe("ChatHistory Battle.net sender token", function()
             -- refused by the type check one line below the secrecy check, and
             -- a value shared with row[2] by the argument loop.
             local CH, KE = L.loadChatHistory({ issecretvalue = secretIs("Other#1") })
-            KE.db.char.ChatHistory[1] =
+            KE:GetCharStore().ChatHistory[1] =
                 { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = "Other#1" }
-            assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+            assert.is_false(CH:RowIsReplayable(KE:GetCharStore().ChatHistory[1]))
         end)
 
         -- The prepass runs outside every pcall, so a row that reaches
@@ -727,23 +727,23 @@ describe("ChatHistory Battle.net sender token", function()
         it("refuses a row whose stored BattleTag is not a string", function()
             local CH, KE = L.loadChatHistory()
             for _, bad in ipairs({ false, true, 5, {} }) do
-                KE.db.char.ChatHistory[1] =
+                KE:GetCharStore().ChatHistory[1] =
                     { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = bad }
-                assert.is_false(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+                assert.is_false(CH:RowIsReplayable(KE:GetCharStore().ChatHistory[1]))
             end
         end)
 
         it("accepts a resolved Battle.net row", function()
             local CH, KE = L.loadChatHistory()
-            KE.db.char.ChatHistory[1] =
+            KE:GetCharStore().ChatHistory[1] =
                 { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = "SoTilted#1527" }
-            assert.is_true(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+            assert.is_true(CH:RowIsReplayable(KE:GetCharStore().ChatHistory[1]))
         end)
 
         it("still accepts an ordinary guild row", function()
             local CH, KE = L.loadChatHistory()
-            KE.db.char.ChatHistory[1] = { "hello", "Bob", event = "CHAT_MSG_GUILD", time = 5 }
-            assert.is_true(CH:RowIsReplayable(KE.db.char.ChatHistory[1]))
+            KE:GetCharStore().ChatHistory[1] = { "hello", "Bob", event = "CHAT_MSG_GUILD", time = 5 }
+            assert.is_true(CH:RowIsReplayable(KE:GetCharStore().ChatHistory[1]))
         end)
     end)
 
@@ -761,7 +761,7 @@ describe("ChatHistory Battle.net sender token", function()
             })
             KE.ChatMessageHandler = fakeHandler()
             withFrame({ "BN_WHISPER" })
-            KE.db.char.ChatHistory[1] =
+            KE:GetCharStore().ChatHistory[1] =
                 { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = "SoTilted#1527" }
             CH:DisplayChatHistory()
 
@@ -775,7 +775,7 @@ describe("ChatHistory Battle.net sender token", function()
             local CH, KE = L.loadChatHistory({ BNGetNumFriends = function() return 0 end })
             KE.ChatMessageHandler = fakeHandler()
             withFrame({ "BN_WHISPER" })
-            KE.db.char.ChatHistory[1] =
+            KE:GetCharStore().ChatHistory[1] =
                 { "hello", "SoTilted#1527", event = "CHAT_MSG_BN_WHISPER", time = 5, bnTag = "SoTilted#1527" }
             CH:DisplayChatHistory()
 
@@ -800,7 +800,7 @@ describe("ChatHistory Battle.net sender token", function()
             local CH, KE, _, caught = L.loadChatHistory()
             KE.ChatMessageHandler = fakeHandler()
             withFrame({ "BN_WHISPER" })
-            KE.db.char.ChatHistory[1] = { "hello", "|Kf1|k", event = "CHAT_MSG_BN_WHISPER", time = 5 }
+            KE:GetCharStore().ChatHistory[1] = { "hello", "|Kf1|k", event = "CHAT_MSG_BN_WHISPER", time = 5 }
             CH:DisplayChatHistory()
 
             assert.equals(0, #KE.ChatMessageHandler.calls)

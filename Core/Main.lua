@@ -79,6 +79,8 @@ function KitnEssentials:OnInitialize()
     KE:MigrateModuleEnableDefaults()
     KE:MigrateCombatLoggerKeys()
     KE.db = LibStub("AceDB-3.0"):New("KitnEssentialsDB", defaults, true) --[[@as AceDB]]
+    KE:MigrateChatHistoryToCharStore()
+    KE:ClearStaleChatHistory()
     if KE.LDS then
         KE.LDS:EnhanceDatabase(KE.db, "KitnEssentials")
     end

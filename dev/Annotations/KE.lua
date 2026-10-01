@@ -15,6 +15,8 @@
 ---@field profile table
 ---@field global table
 ---@field defaults table
+---@field sv table
+---@field keys table<string, string>
 local AceDB
 
 ---@class KETheme
@@ -413,6 +415,25 @@ function KE:MigrateCombatLoggerKeys() end
 --- once-per-install record; an absent old key is skipped.
 ---@param profile table
 function KE:MigrateProfileKeys(profile) end
+
+--- The per-character saved table (KitnEssentialsCharDB), or nil; created
+--- only when `create` is true.
+---@param create boolean?
+---@return table|nil
+function KE:GetCharStore(create) end
+
+--- Moves the current character's chat history from the account file into
+--- the per-character store. Runs right after AceDB:New.
+function KE:MigrateChatHistoryToCharStore() end
+
+--- Deletes every other character's chat history from the account file.
+---@return number characters
+---@return number lines
+function KE:ClearOtherCharsChatHistory() end
+
+--- Deletes another character's chat history from the account file when its
+--- newest dated line is over 90 days old; prints once when it clears any.
+function KE:ClearStaleChatHistory() end
 
 -- Core/ProfileManager.lua export string codec
 ---@param tbl table

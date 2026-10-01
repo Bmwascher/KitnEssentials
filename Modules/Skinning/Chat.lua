@@ -298,13 +298,12 @@ local RebuildLFGRoles
 local BuildGuildStatusPatterns
 
 function CHAT:SeedTypingHistory()
-    local char = KE.db and KE.db.char
-    if not char then return end
-    if type(char.ChatTypingHistory) ~= "table" then char.ChatTypingHistory = {} end
-
     wipe(self.TypingHistory)
-    for i = 1, #char.ChatTypingHistory do
-        self.TypingHistory[i] = char.ChatTypingHistory[i]
+    local store = KE:GetCharStore()
+    local saved = store and store.ChatTypingHistory
+    if type(saved) ~= "table" then return end
+    for i = 1, #saved do
+        self.TypingHistory[i] = saved[i]
     end
 end
 

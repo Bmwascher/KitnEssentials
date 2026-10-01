@@ -2433,13 +2433,6 @@ local Defaults = {
         },
 
     },
-    char = {
-        -- Per-character chat history. Rows are appended by the ChatHistory
-        -- module and trimmed to the user's cap; the typing list is the saved
-        -- half of the chat edit box's Up/Down recall.
-        ChatHistory = {},
-        ChatTypingHistory = {},
-    },
 }
 
 -- Copies, never aliases: each module saves its own list, and one shipped
@@ -2799,5 +2792,141 @@ function KE:MigrateCombatLoggerKeys()
                 end
             end
         end
+    end
+end
+
+---------------------------------------------------------------------------------
+-- Per-Character Chat Store
+---------------------------------------------------------------------------------
+-- Chat history lives in KitnEssentialsCharDB, so a login loads one
+-- character's chat instead of every character's.
+
+local CHAR_STORE_KEYS = { "ChatHistory", "ChatTypingHistory" }
+
+---@param create boolean?
+---@return table|nil
+function KE:GetCharStore(create)
+    local store = _G.KitnEssentialsCharDB
+    if type(store) == "table" then return store end
+    if not create then return nil end
+    store = {}
+    _G.KitnEssentialsCharDB = store
+    return store
+end
+
+local function IsFilled(value)
+    return type(value) == "table" and next(value) ~= nil
+end
+
+-- AceDB's raw account table and the current character's key, or nil. Indexing
+-- AceDB's char section would create an entry; without the key every entry
+-- would count as another character's.
+local function AccountChars(db)
+    local sv = db and db.sv
+    local charKey = db and db.keys and db.keys.char
+    if type(sv) ~= "table" or type(sv.char) ~= "table" or not charKey then return nil end
+    return sv, charKey
+end
+
+-- Absence means done, so no record stamp is needed.
+function KE:MigrateChatHistoryToCharStore()
+    local sv, charKey = AccountChars(self.db)
+    if not sv then return end
+    local account = sv.char[charKey]
+    if type(account) ~= "table" then return end
+
+    for i = 1, #CHAR_STORE_KEYS do
+        local key = CHAR_STORE_KEYS[i]
+        local rows = account[key]
+        if IsFilled(rows) then
+            local store = self:GetCharStore(true)
+            -- A filled store means an older version wrote the account copy
+            -- after the move; the store is kept.
+            if store and not IsFilled(store[key]) then store[key] = rows end
+        end
+        account[key] = nil
+    end
+
+    if next(account) == nil then sv.char[charKey] = nil end
+    if next(sv.char) == nil then sv.char = nil end
+end
+
+---@return number characters
+---@return number lines
+function KE:ClearOtherCharsChatHistory()
+    local sv, charKey = AccountChars(self.db)
+    if not sv then return 0, 0 end
+
+    local characters, lines = 0, 0
+    for key, entry in pairs(sv.char) do
+        if key ~= charKey and type(entry) == "table" then
+            local removed = false
+            for i = 1, #CHAR_STORE_KEYS do
+                local storeKey = CHAR_STORE_KEYS[i]
+                local rows = entry[storeKey]
+                if rows ~= nil then
+                    -- Every entry, not #rows: a saved list can hold non-array keys.
+                    if type(rows) == "table" then
+                        for _ in pairs(rows) do lines = lines + 1 end
+                    end
+                    entry[storeKey] = nil
+                    removed = true
+                end
+            end
+            if removed then characters = characters + 1 end
+            if next(entry) == nil then sv.char[key] = nil end
+        end
+    end
+    if next(sv.char) == nil then sv.char = nil end
+    return characters, lines
+end
+
+---------------------------------------------------------------------------------
+-- Stale Chat Cleanup
+---------------------------------------------------------------------------------
+
+local STALE_CHAT_SECONDS = 90 * 24 * 60 * 60
+
+-- Stale only when every saved row, under any key, carries a readable numeric
+-- time and the newest is older than maxAge. A row that cannot be dated keeps
+-- the character: a secret, missing or non-numeric time is not a date.
+local function IsStale(rows, now, maxAge)
+    if KE:IsSecretValue(rows) or type(rows) ~= "table" then return false end
+    local newest
+    for _, row in pairs(rows) do
+        if KE:IsSecretValue(row) or type(row) ~= "table" then return false end
+        local stamp = row.time
+        if KE:IsSecretValue(stamp) or type(stamp) ~= "number" or stamp ~= stamp then
+            return false
+        end
+        if newest == nil or stamp > newest then newest = stamp end
+    end
+    return newest ~= nil and now - newest > maxAge
+end
+
+-- Other characters only; per-character files are out of reach here. AceDB's
+-- logout pass drops the entries this leaves empty.
+function KE:ClearStaleChatHistory()
+    local sv, charKey = AccountChars(self.db)
+    if not sv then return end
+
+    local now
+    if GetServerTime then now = GetServerTime() end
+    if KE:IsSecretValue(now) or type(now) ~= "number" then
+        if not time then return end
+        now = time()
+        if KE:IsSecretValue(now) or type(now) ~= "number" then return end
+    end
+
+    local cleared = 0
+    for key, entry in pairs(sv.char) do
+        if key ~= charKey and type(entry) == "table"
+            and IsStale(entry.ChatHistory, now, STALE_CHAT_SECONDS) then
+            entry.ChatHistory, entry.ChatTypingHistory = nil, nil
+            cleared = cleared + 1
+        end
+    end
+    if cleared > 0 then
+        self:Print(string.format("Removed saved chat older than 90 days for %d characters.", cleared))
     end
 end
