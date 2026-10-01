@@ -40,6 +40,9 @@ local REFUSAL_MSG = "Detailed information is\nsecret while in combat"
 local RECAP_UNREADABLE_MSG = "Death recap data is\nunreadable in combat"
 local RECAP_ABSENT_MSG = "No death recap available"
 
+-- A stored pull that kept totals only.
+local DETAIL_NOT_KEPT_MSG = "Detail not kept\nfor this pull"
+
 -- Same fixed pool ceiling as the main bars; the detail list never exceeds it.
 local DETAIL_POOL_SIZE = DM.BAR_POOL_SIZE or 40
 
@@ -564,6 +567,12 @@ function DM:RenderBreakdown(W)
     -- Honor a live in-world view override (Selector.lua) so the breakdown matches the
     -- bars; EffectiveMeterType falls back to cfg.MeterType when no override is active.
     local meterType = self:EffectiveMeterType(W.idx, cfg)
+    if self.HistoryDetailDropped and self:HistoryDetailDropped(sessionID) then
+        self:ShowDetailMessage(W, DETAIL_NOT_KEPT_MSG)
+        -- An earlier long breakdown can leave the panel scrolled past the line.
+        W.detail.view:SetVerticalScroll(0)
+        return
+    end
     -- The own-row answer comes from the snapshot OpenDetail took, not from a fresh
     -- read: the bar is not available here. A "refused" second return means the
     -- identity was secret and could not legally be substituted -- distinct from an
@@ -1671,6 +1680,11 @@ function DM:PopulateHoverTip(W, bar, isInitial)
     -- survive secret values.
     if not self:DetailEligible(bar._isLocalPlayer, meterType, tipResolvedGUID) then
         return ShowTipRefusal(headerH, size)
+    end
+    -- Deaths reads the recap by id and never needs per-source detail.
+    if not isDeaths and self.HistoryDetailDropped
+        and self:HistoryDetailDropped(self:EffectiveSessionID(W)) then
+        return ShowTipRefusal(headerH, size, DETAIL_NOT_KEPT_MSG)
     end
     _tip.msg:Hide()
 
