@@ -1,5 +1,33 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.24
+
+### Dungeon Trash
+
+- No longer shows its guidance prompt after being switched off when a check
+  was already scheduled
+
+### Group Finder Panel
+
+- Rewrites and saves Blizzard's advanced filter on a roster change only while
+  Party Fit is on
+
+### Combat Potion Ready
+
+- Reads whether you are in combat or in an instance as soon as it is
+  enabled, so a reload mid-fight shows the text at once
+
+### Disintegrate Ticks and No Movement Alert
+
+- Ignore other players' spec changes; your own still refreshes them
+
+### Slash Commands
+
+- The /kitn actioncam command is removed (its camera settings no longer
+  exist)
+
+---
+
 ## v4.8.23
 
 ### Automation
