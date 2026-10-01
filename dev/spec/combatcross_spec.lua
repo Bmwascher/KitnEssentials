@@ -111,6 +111,8 @@ describe("CombatCross visibility", function()
         CC.db.RangeColorMeleeEnabled = true
         CC:ResolveRangeAbility()
         withFrame(CC)
+        CC.RegisterEvent = function() end
+        CC.UnregisterEvent = function() end
         CC:UpdateVisibility(false)
         assert.is_false(CC.onUpdateActive)
 
@@ -212,6 +214,22 @@ describe("CombatCross hide when in range", function()
         CC.onUpdateActive = true
         CC.db.HideWhenInRange = false
         CC.db.RangeColorMeleeEnabled = false
+        CC:UpdateOnUpdateState()
+        assert.equals(1, CC.frame._alpha)
+    end)
+
+    it("restores alpha when the loop stops being wanted with no target", function()
+        -- With no target the loop is wanted but detached, so the restore cannot
+        -- key on the loop being attached.
+        local CC = faded({
+            C_Spell = { IsSpellInRange = function() return 1 end },
+            UnitExists = function() return false end,
+        })
+        CC.RegisterEvent = function() end
+        CC.UnregisterEvent = function() end
+        CC:UpdateOnUpdateState()
+        assert.equals(0, CC.frame._alpha)
+        CC.rangeAbility = nil
         CC:UpdateOnUpdateState()
         assert.equals(1, CC.frame._alpha)
     end)

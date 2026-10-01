@@ -1210,6 +1210,11 @@ function L.loadCursor(overrides)
         FONT = "Fonts\\Expressway.TTF",
         GetFontPath = function() return "Fonts\\Expressway.TTF" end,
         GetAccentColor = function() return 1, 1, 1, 1 end,
+        -- OnEnable subscribes the taunt spec listener; the helper is not under test here.
+        Context = {
+            SubscribeSpec = function() return true end,
+            UnsubscribeSpec = function() end,
+        },
     }
     helpers.loadModule("Modules/Combat/Cursor.lua", KE)
     local C = modules["Cursor"]
@@ -2887,6 +2892,28 @@ function L.loadHealerMana(overrides)
     local HM = modules["HealerMana"]
     HM:UpdateDB()
     return HM, KE
+end
+
+-- Modules/Utilities/PotionReady.lua, for its pure gate rule. Nothing creates a
+-- frame or registers an event at load. Returns PR, KE.
+function L.loadPotionReady(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    local KE = { Print = function() end }
+    helpers.loadModule("Modules/Utilities/PotionReady.lua", KE)
+    return modules["PotionReady"], KE
+end
+
+-- Modules/Combat/CombatRes.lua, for its pure listening rule. Nothing creates a
+-- frame, registers an event or subscribes at load. Returns CR, KE.
+function L.loadCombatRes(overrides)
+    installMock(overrides, { C_Timer = inertTimer() })
+    local modules = helpers.installAddonShim()
+    _G.UIParent = noopFrame()
+    local KE = { Print = function() end }
+    helpers.loadModule("Modules/Combat/CombatRes.lua", KE)
+    return modules["CombatRes"], KE
 end
 
 -- Core/CombatState.lua. The live adapter tail runs unconditionally at load: it

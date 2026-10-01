@@ -50,6 +50,7 @@ PR.isPreview          = false
 PR.editModeRegistered = false
 PR.inCombat           = false
 PR.inInstance         = false
+PR._listening         = false
 
 ---------------------------------------------------------------------------------
 -- DB Helper
@@ -82,12 +83,36 @@ local function IsHealer()
     return role == "HEALER"
 end
 
+-- Pure, so the rule is spec-covered; the caller supplies the three reads.
+function PR.PassesGates(db, inInstance, inCombat, isHealer)
+    if db.InstanceOnly and not inInstance then return false end
+    if db.CombatOnly and not inCombat then return false end
+    if db.DisableOnHealer and isHealer then return false end
+    return true
+end
+
 function PR:PassesVisibility()
     local db = self.db
-    if db.InstanceOnly and not self.inInstance then return false end
-    if db.CombatOnly  and not self.inCombat    then return false end
-    if db.DisableOnHealer and IsHealer()        then return false end
-    return true
+    return PR.PassesGates(db, self.inInstance, self.inCombat, db.DisableOnHealer and IsHealer())
+end
+
+-- The cooldown and bag events only matter while the text may show. Only
+-- CheckPotions turns them off, because it hides the text in the same call;
+-- anywhere else, onlyOn keeps them until then, so the text hides on the same
+-- event it always did.
+function PR:SyncListening(onlyOn)
+    local want = (self:IsEnabled() and self.db and self.db.Enabled and self:PassesVisibility())
+        and true or false
+    if want == self._listening then return end
+    if onlyOn and not want then return end
+    self._listening = want
+    if want then
+        self:RegisterEvent("BAG_UPDATE_DELAYED", "BAG_UPDATE_DELAYED")
+        self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "SPELL_UPDATE_COOLDOWN")
+    else
+        self:UnregisterEvent("BAG_UPDATE_DELAYED")
+        self:UnregisterEvent("SPELL_UPDATE_COOLDOWN")
+    end
 end
 
 ---------------------------------------------------------------------------------
@@ -95,6 +120,7 @@ end
 ---------------------------------------------------------------------------------
 function PR:CheckPotions()
     if not self.frame then return end
+    self:SyncListening()
     if self.isPreview then return end
     if not self:PassesVisibility() then
         self.frame:Hide()
@@ -143,6 +169,10 @@ function PR:ApplySettings()
 
     self.frame:SetFrameStrata(db.Strata or "HIGH")
     KE:ApplyFramePosition(self.frame, db.Position, db)
+
+    -- A profile switch reaches this module here only; a gate it opens needs
+    -- the events on for the next cooldown or bag change.
+    self:SyncListening(true)
 end
 
 ---------------------------------------------------------------------------------
@@ -199,6 +229,9 @@ end
 function PR:PLAYER_ENTERING_WORLD()
     local inInstance = IsInInstance()
     self.inInstance = inInstance == true
+    -- At once rather than with the delayed check: a cooldown event inside that
+    -- second repaints the text.
+    self:SyncListening(true)
     C_Timer.After(1, function()
         if self.db and self.db.Enabled then self:CheckPotions() end
     end)
@@ -255,11 +288,10 @@ function PR:OnEnable()
 
     self:RegisterEvent("PLAYER_ENTERING_WORLD",       "PLAYER_ENTERING_WORLD")
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA",        "ZONE_CHANGED_NEW_AREA")
-    self:RegisterEvent("BAG_UPDATE_DELAYED",           "BAG_UPDATE_DELAYED")
-    self:RegisterEvent("SPELL_UPDATE_COOLDOWN",        "SPELL_UPDATE_COOLDOWN")
     self:RegisterEvent("PLAYER_REGEN_DISABLED",        "PLAYER_REGEN_DISABLED")
     self:RegisterEvent("PLAYER_REGEN_ENABLED",         "PLAYER_REGEN_ENABLED")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED","PLAYER_SPECIALIZATION_CHANGED")
+    self:SyncListening()
 end
 
 function PR:OnThemeChanged()
@@ -275,4 +307,5 @@ function PR:OnDisable()
     if self.frame then self.frame:Hide() end
     self.isPreview = false
     self.inCombat  = false
+    self._listening = false
 end

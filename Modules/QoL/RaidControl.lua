@@ -138,6 +138,33 @@ local roles = {
 
 local buttonEvents = { "GROUP_ROSTER_UPDATE", "PARTY_LEADER_CHANGED" }
 
+-- Every widget that registers its own frame events, with its catch-up, so a
+-- disabled module whose panel is hidden holds none of them and a re-enable
+-- restores them.
+local widgetEvents = {}
+
+function RC:UnregisterWidgetEvents()
+    if self._widgetEventsOff then return end
+    for _, w in ipairs(widgetEvents) do
+        for _, event in ipairs(w.events) do
+            w.frame:UnregisterEvent(event)
+        end
+    end
+    self._widgetEventsOff = true
+end
+
+function RC:RegisterWidgetEvents()
+    if not self._widgetEventsOff then return end
+    self._widgetEventsOff = false
+    for _, w in ipairs(widgetEvents) do
+        for _, event in ipairs(w.events) do
+            w.frame:RegisterEvent(event)
+        end
+        -- As at creation: pick up what changed while the events were off.
+        if w.catchUp then w.catchUp(w.frame) end
+    end
+end
+
 local function SetGrabCoords(data, xOffset, yOffset)
     data.texA, data.texB, data.texC, data.texD = GetTexCoordsByGrid(xOffset, yOffset, 256, 256, 67, 67)
 end
@@ -214,6 +241,7 @@ local function CreateUtilButton(name, parent, template, width, height, point, re
         for _, event in next, events do
             btn:RegisterEvent(event)
         end
+        widgetEvents[#widgetEvents + 1] = { frame = btn, events = events, catchUp = eventFunc }
     end
 
     btn:SetScript("OnEvent", eventFunc)
@@ -257,6 +285,7 @@ local function CreateDropdown(name, parent, width, point, relativeto, point2, xO
         for _, event in next, events do
             dropdown:RegisterEvent(event)
         end
+        widgetEvents[#widgetEvents + 1] = { frame = dropdown, events = events, catchUp = eventFunc }
     end
 
     dropdown:SetScript("OnEvent", eventFunc)
@@ -291,6 +320,7 @@ local function CreateCheckBox(name, parent, size, point, relativeto, point2, xOf
         for _, event in next, events do
             box:RegisterEvent(event)
         end
+        widgetEvents[#widgetEvents + 1] = { frame = box, events = events, catchUp = eventFunc }
     end
 
     box:SetScript("OnEvent", eventFunc)
@@ -485,30 +515,52 @@ local function OnEnter_Role(self)
     GameTooltip:Show()
 end
 
+function RC:RefreshRoleCounts()
+    self._roleIconsDirty = false
+    wipe(roleCount)
+
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local role = select(12, GetRaidRosterInfo(i))
+            if role and role ~= "NONE" then roleCount[role] = (roleCount[role] or 0) + 1 end
+        end
+    elseif IsInGroup() then
+        for i = 1, GetNumGroupMembers() - 1 do
+            local role = UnitGroupRolesAssigned("party" .. i)
+            if role and role ~= "NONE" then roleCount[role] = (roleCount[role] or 0) + 1 end
+        end
+        local myrole = UnitGroupRolesAssigned("player")
+        if myrole and myrole ~= "NONE" then roleCount[myrole] = (roleCount[myrole] or 0) + 1 end
+    end
+
+    for role, icon in next, self.RoleIcons.icons do
+        icon.count:SetText(roleCount[role] or 0)
+    end
+    self:FitRolePlate()
+end
+
 function RC:OnEvent_RoleIcons(event, initLogin, isReload)
+    local visible = self.RoleIcons:IsVisible()
+    if event == "PLAYER_REGEN_DISABLED" then
+        -- The panel can be opened in combat, where the plate cannot be refitted,
+        -- so roster changes skipped while it was closed are applied now.
+        if self._roleIconsDirty and not visible then
+            self:PositionSections()
+            self:RefreshRoleCounts()
+        end
+        return
+    end
+    -- Nothing shows the counts while the panel is closed; opening it recounts.
+    -- In combat the layout pass still runs: there it only queues
+    -- OnRegenEnabled, which is also what hides a panel disabled in combat.
+    if not visible then
+        self._roleIconsDirty = true
+        if InCombatLockdown() then self:PositionSections() end
+        return
+    end
     self:PositionSections()
-
     if event ~= "PLAYER_ENTERING_WORLD" or (initLogin or isReload) then
-        wipe(roleCount)
-
-        if IsInRaid() then
-            for i = 1, GetNumGroupMembers() do
-                local role = select(12, GetRaidRosterInfo(i))
-                if role and role ~= "NONE" then roleCount[role] = (roleCount[role] or 0) + 1 end
-            end
-        elseif IsInGroup() then
-            for i = 1, GetNumGroupMembers() - 1 do
-                local role = UnitGroupRolesAssigned("party" .. i)
-                if role and role ~= "NONE" then roleCount[role] = (roleCount[role] or 0) + 1 end
-            end
-            local myrole = UnitGroupRolesAssigned("player")
-            if myrole and myrole ~= "NONE" then roleCount[myrole] = (roleCount[myrole] or 0) + 1 end
-        end
-
-        for role, icon in next, self.RoleIcons.icons do
-            icon.count:SetText(roleCount[role] or 0)
-        end
-        self:FitRolePlate()
+        self:RefreshRoleCounts()
     end
 end
 
@@ -561,9 +613,16 @@ function RC:CreateRoleIcons(panel)
     -- the flush right edge holds.
     RoleIcons:SetSize(ROLE_PLATE_WIDTH, BUTTON_HEIGHT + 8)
     S.Backdrop(RoleIcons)
-    RoleIcons:RegisterEvent("PLAYER_ENTERING_WORLD")
-    RoleIcons:RegisterEvent("GROUP_ROSTER_UPDATE")
+    local roleEvents = { "PLAYER_ENTERING_WORLD", "GROUP_ROSTER_UPDATE", "PLAYER_REGEN_DISABLED" }
+    for _, event in ipairs(roleEvents) do
+        RoleIcons:RegisterEvent(event)
+    end
     RoleIcons:SetScript("OnEvent", function(_, event, a, b) RC:OnEvent_RoleIcons(event, a, b) end)
+    RoleIcons:SetScript("OnShow", function() RC:RefreshRoleCounts() end)
+    widgetEvents[#widgetEvents + 1] = {
+        frame = RoleIcons, events = roleEvents,
+        catchUp = function() RC:OnEvent_RoleIcons("GROUP_ROSTER_UPDATE") end,
+    }
     RoleIcons.icons = {}
 
     for i, data in ipairs(roles) do
@@ -684,10 +743,15 @@ function RC:CreateBuffStrip(panel)
         strip.cells[i] = cell
     end
 
-    strip:RegisterEvent("GROUP_ROSTER_UPDATE")
-    strip:RegisterEvent("PLAYER_ENTERING_WORLD")
-    strip:RegisterEvent("PLAYER_DIFFICULTY_CHANGED")
+    local stripEvents = { "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD", "PLAYER_DIFFICULTY_CHANGED" }
+    for _, event in ipairs(stripEvents) do
+        strip:RegisterEvent(event)
+    end
     strip:SetScript("OnEvent", function() RC:UpdateBuffStrip() end)
+    widgetEvents[#widgetEvents + 1] = {
+        frame = strip, events = stripEvents,
+        catchUp = function() RC:UpdateBuffStrip() end,
+    }
     -- A hidden strip stops updating and catches up on show, so a raid that
     -- changes while the panel is closed costs nothing.
     strip:SetScript("OnShow", function()
@@ -812,6 +876,7 @@ function RC:OnRegenEnabled()
     if not self:IsEnabled() then
         self._positionDirty = nil
         if self.setup then
+            self:UnregisterWidgetEvents()
             self.ShowButton:Hide()
             self.Panel:Hide()
         end
@@ -819,6 +884,7 @@ function RC:OnRegenEnabled()
     end
 
     if not self.setup then self:Setup() end
+    self:RegisterWidgetEvents()
     self:FollowRestrictions()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "ToggleRaidControl")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "ToggleRaidControl")
@@ -1493,6 +1559,7 @@ end
 
 function RC:OnEnable()
     self:UpdateDB()
+    if not self.db or not self.db.Enabled then return end
     if KE.GroupSort then KE.GroupSort:Start() end
 
     if InCombatLockdown() then
@@ -1501,6 +1568,7 @@ function RC:OnEnable()
     end
 
     self:Setup()
+    self:RegisterWidgetEvents()
     self:FollowRestrictions()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "ToggleRaidControl")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "ToggleRaidControl")
@@ -1520,6 +1588,9 @@ function RC:OnDisable()
         self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnRegenEnabled")
         return
     end
+    -- Only with the hide: a panel left up by a combat disable (see the file
+    -- header) keeps updating.
+    self:UnregisterWidgetEvents()
     self.ShowButton:Hide()
     self.Panel:Hide()
 end

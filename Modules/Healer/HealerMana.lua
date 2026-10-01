@@ -335,10 +335,8 @@ end
 -- Frame Creation
 ---------------------------------------------------------------------------------
 function HM:CreateHealerFrame()
-    -- Anonymous (nil name): Refresh() recreates these per font/outline rebuild;
-    -- a global name would silently clobber the prior frame's _G slot and orphan
-    -- it. Nothing references these by name (the container holds them as children
-    -- and EditMode anchors via frame reference, not name).
+    -- Anonymous: nothing references these by name (the container holds them as
+    -- children and EditMode anchors via frame reference).
     local frame = CreateFrame("Frame", nil, self.containerFrame)
     frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
 
@@ -396,8 +394,7 @@ end
 function HM:CreateContainer()
     if self.containerFrame then return self.containerFrame end
 
-    -- Anonymous: Refresh() nils + recreates the container; a fixed global name
-    -- would clobber/orphan the prior one. EditMode tracks it by frame reference.
+    -- Anonymous: EditMode tracks it by frame reference.
     local frame = CreateFrame("Frame", nil, UIParent)
     frame:SetSize(self:Look("FrameWidth"), self:Look("IconSize"))
     frame:SetFrameStrata(self.db.Strata or "HIGH")
@@ -474,6 +471,7 @@ function HM:HideFrames()
     wipe(self.currentHealers)
     for _, frame in pairs(self.healerFrames) do frame:Hide() end
     if self.containerFrame then self.containerFrame:Hide() end
+    self:SyncUpdates()
 end
 
 -- LibSpec group callback: fires per-member when their spec/role is reported
@@ -689,6 +687,7 @@ function HM:UpdateHealerFrames()
     self:ApplyContainerPosition()
     self.containerFrame:Show()
     self:RefreshEditMode()
+    self:SyncUpdates()
 end
 
 function HM:UpdateMana()
@@ -744,21 +743,14 @@ end
 function HM:Refresh()
     local wasPreview = self.isPreview
 
+    -- Redressed in place: ApplySettings restyles every existing frame, and the
+    -- next draw sizes, stacks and shows what the rows need.
     wipe(self.currentHealers)
     self._lastMode = nil
     for _, frame in pairs(self.healerFrames) do frame:Hide() end
-    wipe(self.healerFrames)
-
-    if self.containerFrame then
-        if KE.EditMode and KE.EditMode.UnregisterElement then
-            KE.EditMode:UnregisterElement("HealerMana")
-        end
-        self.containerFrame:Hide()
-        self.containerFrame = nil
-        self.editModeRegistered = false
-    end
 
     self:ApplySettings()
+    -- Shown again so the canned rows are recounted for MaxHealers.
     if wasPreview then self:ShowPreview() end
 end
 
@@ -771,6 +763,37 @@ function HM:StopUpdates()
     if self.updateTimer then
         self:CancelTimer(self.updateTimer)
         self.updateTimer = nil
+    end
+end
+
+-- The tick re-reads live rows and heals an orphaned preview; with neither it
+-- has nothing to do. Rows are only listed while grouped.
+function HM.ShouldTick(enabled, isPreview, count)
+    if not enabled then return false end
+    return isPreview == true or count > 0
+end
+
+function HM:SyncUpdates()
+    if HM.ShouldTick(self:IsEnabled(), self.isPreview, #self.currentHealers) then
+        self:StartUpdates()
+    else
+        self:StopUpdates()
+    end
+    self:SyncSpecEvent()
+end
+
+-- Roster-wide while grouped, because another member's spec change can make
+-- them the healer. Kept solo while the preview flag is set: the player's own
+-- spec change heals an orphaned preview at once. Otherwise, solo, FindHealers
+-- can only hide what is already hidden.
+function HM:SyncSpecEvent()
+    local want = (self:IsEnabled() and (IsInGroup() or self.isPreview == true)) and true or false
+    if want == (self._specListening == true) then return end
+    self._specListening = want
+    if want then
+        self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "FindHealers")
+    else
+        self:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     end
 end
 
@@ -802,9 +825,7 @@ end
 
 -- Point the overlay label at the mode the stack was last drawn in. Called on
 -- every draw; the compare inside SetElementLabel makes the unchanged case free.
--- Registers instead when the element is absent: HM:Refresh tears the container
--- down and unregisters, and the re-show that restores the registration runs
--- only when the module was previewing.
+-- Registers instead when the element is absent.
 function HM:RefreshEditMode()
     if not KE.EditMode then return end
     if not self.editModeRegistered then
@@ -927,20 +948,20 @@ function HM:OnEnable()
         if HM.containerFrame and HM.db then HM:ApplyContainerPosition() end
     end)
     self:RegWithEditMode()
-    self:StartUpdates()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnGroupChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnGroupChanged")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "FindHealers")
     if LibSpec then
         LibSpec.RegisterGroup(self, function(specID, role, position, playerName)
             HM:OnLibSpecGroupUpdate(specID, role, position, playerName)
         end)
     end
+    self:SyncUpdates()
 end
 
 function HM:OnDisable()
     self:StopUpdates()
     self:UnregisterAllEvents()
+    self._specListening = false
     if LibSpec then LibSpec.UnregisterGroup(self) end
     wipe(self.libSpecCache)
     wipe(self.currentHealers)

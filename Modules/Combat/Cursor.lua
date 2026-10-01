@@ -210,7 +210,11 @@ local function _cursorOnUpdate(f, elapsed)
         -- NOTE: trail + mouseDown is largely ineffective in practice — WoW locks the
         -- cursor position while L/R mouse is held, so the cursor doesn't move and
         -- new dots can't spawn beyond the first frame's spawn at the click location.
-        C._trail_cursorShown = shown
+        -- Written only on a change, which is when the trail script is re-decided.
+        if C._trail_cursorShown ~= shown then
+            C._trail_cursorShown = shown
+            C:_SyncTrailScript()
+        end
     end
 
     local s = UIParent:GetEffectiveScale()
@@ -836,6 +840,11 @@ end
 local function _trailOnUpdate(_, elapsed)
     if not C._trail_instanceOK or not C._trail_cursorShown then
         _updateTrailDots(elapsed)  -- still fade existing dots
+        -- Nothing to draw and nothing left fading: off until a sync needs it.
+        if #_trailActive == 0 then
+            C.trailFrame:SetScript("OnUpdate", nil)
+            C._trailAttached = false
+        end
         return
     end
     local db = C.db.Trail
@@ -868,13 +877,26 @@ function C:ApplyTrailSatellite()
     if not db.Enabled then
         if self.trailFrame then
             self.trailFrame:SetScript("OnUpdate", nil)
+            self._trailAttached = false
             _hideAllTrailDots()
         end
         return
     end
     if not self.trailFrame then self:CreateTrailSatellite() end
-    -- Trail OnUpdate must always run when enabled (to fade existing dots)
-    self.trailFrame:SetScript("OnUpdate", _trailOnUpdate)
+    self:_SyncTrailScript()
+end
+
+-- The trail script runs only while the trail can draw or a dot is still
+-- fading; once the last dot has faded it detaches itself.
+function C:_SyncTrailScript()
+    local tf = self.trailFrame
+    if not tf then return end
+    local want = (self.db.Trail.Enabled
+        and ((self._trail_instanceOK and self._trail_cursorShown) or #_trailActive > 0))
+        and true or false
+    if want == (self._trailAttached == true) then return end
+    self._trailAttached = want
+    tf:SetScript("OnUpdate", want and _trailOnUpdate or nil)
 end
 
 ---------------------------------------------------------------------------------
@@ -1223,11 +1245,10 @@ function C:_TauntEvaluateGate()
     end
 end
 
--- PLAYER_SPECIALIZATION_CHANGED fires for ANY unit, not just the player
--- (UnitDocumentation.lua -- it carries a unitTarget payload), so a
--- groupmate's spec swap would otherwise run our gate. The filter lives here
--- rather than inside _TauntEvaluateGate because OnEnable, Refresh and the
--- preview timer all call the gate with no unit argument.
+-- The KE.Context spec listener delivers only the player's own spec change;
+-- the unit check is a second guard. It lives here rather than inside
+-- _TauntEvaluateGate because OnEnable, Refresh and the preview timer all call
+-- the gate with no unit argument.
 --
 -- UpdateVisibility runs after the gate because ApplyTauntSatellite ends in an
 -- unconditional Show(): without this, gating in would force the satellite
@@ -1418,6 +1439,7 @@ function C:UpdateVisibility(event)
     if self.trailFrame and self.db.Trail.Enabled and not masterShown then
         _hideAllTrailDots()  -- suppress dot fade-in when cursor hidden
     end
+    self:_SyncTrailScript()
 end
 
 function C:CreateCursorFrame()
@@ -1481,7 +1503,7 @@ function C:OnEnable()
     self:RegisterEvent("PLAYER_REGEN_DISABLED",  "UpdateVisibility")
     self:RegisterEvent("PLAYER_REGEN_ENABLED",   "UpdateVisibility")
     self:RegisterEvent("GROUP_ROSTER_UPDATE",    "UpdateVisibility")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "_TauntSpecChanged")
+    KE.Context:SubscribeSpec("Cursor", function(event, unit) self:_TauntSpecChanged(event, unit) end)
     -- Stays registered for the module's whole life, including while the taunt
     -- satellite is gated off: it is the only thing that can tell us a tracked
     -- spell has appeared, and a listener that dies with the satellite can
@@ -1504,6 +1526,7 @@ function C:OnEnable()
 end
 
 function C:OnDisable()
+    KE.Context:UnsubscribeSpec("Cursor")
     if self.cursorFrame then
         self.cursorFrame:SetScript("OnUpdate", nil)
         self.cursorFrame:Hide()
@@ -1518,6 +1541,7 @@ function C:OnDisable()
     end
     if self.trailFrame then
         self.trailFrame:SetScript("OnUpdate", nil)
+        self._trailAttached = false
         _hideAllTrailDots()
     end
     if self.dispelFrame then
@@ -1592,7 +1616,7 @@ function C:HidePreview()
         if self.cursorFrame then self.cursorFrame:Hide() end
         if self.gcdFrame    then self.gcdFrame:Hide() end
         if self.castFrame   then self.castFrame:Hide() end
-        if self.trailFrame  then _hideAllTrailDots(); self.trailFrame:SetScript("OnUpdate", nil) end
+        if self.trailFrame  then _hideAllTrailDots(); self.trailFrame:SetScript("OnUpdate", nil); self._trailAttached = false end
         if self.dispelFrame then self.dispelFrame:Hide() end
         if self.tauntFrame then self.tauntFrame:Hide() end
         return

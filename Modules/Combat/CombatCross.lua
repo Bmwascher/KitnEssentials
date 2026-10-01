@@ -254,29 +254,58 @@ end
 function CC:UpdateOnUpdateState()
     if not self.frame then return end
 
-    if self:ShouldRunRangeUpdate() then
+    local wanted = self:ShouldRunRangeUpdate()
+    -- Read before the sync: a loop left detached for lack of a target still
+    -- owes the restore below when it stops being wanted.
+    local wasWanted = self._targetEventRegistered == true
+    -- While the loop is wanted, a target change is what starts and stops it.
+    self:SetTargetEventRegistered(wanted)
+
+    if wanted and UnitExists("target") then
         if not self.onUpdateActive then
             self.onUpdateActive = true
             rangeUpdateElapsed = 0
             self.frame:SetScript("OnUpdate", function(_, elapsed) self:OnUpdate(elapsed) end)
+            self:UpdateRangeColor()
         end
-    else
+    elseif wanted then
+        -- Nothing to poll. Not the restore below: with no target the answer is
+        -- UpdateRangeColor's no-target state, and a Show or a preview may have
+        -- raised the alpha since it was last applied.
         if self.onUpdateActive then
             self.onUpdateActive = false
             self.frame:SetScript("OnUpdate", nil)
-            -- Unconditional, and not gated on the option: this branch runs
-            -- precisely when the user has just switched the option off, so a
-            -- condition that consulted it would decline the restore at the one
-            -- moment a faded cross needs it.
-            if self.frame then self.frame:SetAlpha(1) end
-            -- Reset color to default when disabling
-            if self.text then
-                local r, g, b, a = self:GetColor()
-                self.text:SetTextColor(r, g, b, a)
-            end
-            self.lastInRange = nil
         end
+        self:UpdateRangeColor()
+    elseif self.onUpdateActive or wasWanted then
+        self.onUpdateActive = false
+        self.frame:SetScript("OnUpdate", nil)
+        -- Unconditional, and not gated on the option: this branch runs
+        -- precisely when the user has just switched the option off, so a
+        -- condition that consulted it would decline the restore at the one
+        -- moment a faded cross needs it.
+        if self.frame then self.frame:SetAlpha(1) end
+        -- Reset color to default when disabling
+        if self.text then
+            local r, g, b, a = self:GetColor()
+            self.text:SetTextColor(r, g, b, a)
+        end
+        self.lastInRange = nil
     end
+end
+
+function CC:SetTargetEventRegistered(want)
+    if want == (self._targetEventRegistered == true) then return end
+    self._targetEventRegistered = want
+    if want then
+        self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
+    else
+        self:UnregisterEvent("PLAYER_TARGET_CHANGED")
+    end
+end
+
+function CC:OnTargetChanged()
+    self:UpdateOnUpdateState()
 end
 
 function CC:OnUpdate(elapsed)
@@ -440,6 +469,8 @@ function CC:HidePreview()
     if InCombatLockdown() then return end
     if not self.previewActive then return end
     self:Hide(true)
+    -- With no target there is no loop to lower the alpha the preview raised.
+    self:UpdateOnUpdateState()
 end
 
 ---------------------------------------------------------------------------------
@@ -546,4 +577,5 @@ function CC:OnDisable()
     self.specType = nil
     self.lastInRange = nil
     self.onUpdateActive = false
+    self._targetEventRegistered = false
 end
