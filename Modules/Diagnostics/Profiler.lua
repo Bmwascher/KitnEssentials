@@ -898,11 +898,13 @@ local function CensusInspect(frame)
 end
 
 -- A frame object (a table holding its userdata at [0]) is counted, never
--- entered: its fields lead into parent chains and Blizzard's tables.
+-- entered: its fields lead into parent chains and Blizzard's tables. A secret
+-- at [0] cannot be classified, so it is counted the same way.
 local function CensusPush(run, value, owner)
     if KE:IsSecretValue(value) or type(value) ~= "table" or run.seen[value] then return end
     run.seen[value] = true
-    if type(rawget(value, 0)) == "userdata" then
+    local handle = rawget(value, 0)
+    if KE:IsSecretValue(handle) or type(handle) == "userdata" then
         run.frameRefs = run.frameRefs + 1
         return
     end
@@ -1055,7 +1057,7 @@ local function CensusTableEntry(run)
     if not ok then
         run.skipped = run.skipped + 1
         run.tbl = nil
-    elseif key == nil then
+    elseif not KE:IsSecretValue(key) and key == nil then
         run.tbl = nil
     else
         run.key = key
@@ -1072,7 +1074,7 @@ local function CensusUnit(run)
     if phase == "libs" or phase == "globals" then
         local key, value = next(phase == "libs" and run.libraries or _G, run.key)
         run.key = key
-        if key == nil then
+        if not KE:IsSecretValue(key) and key == nil then
             run.phase = phase == "libs" and "globals" or "frames"
         elseif not KE:IsSecretValue(value) and type(value) == "table"
             and (phase == "libs" or not IsOwnGlobal(key)) then
@@ -1146,9 +1148,12 @@ local function RunCensus()
         p("Census aborted: the frame list could not be read.")
         return
     end
-    local libraries = type(LibStub) == "table" and rawget(LibStub, "libs")
+    local libraries
+    local stub = LibStub
+    if not KE:IsSecretValue(stub) and type(stub) == "table" then libraries = rawget(stub, "libs") end
+    if KE:IsSecretValue(libraries) or type(libraries) ~= "table" then libraries = {} end
     local run = {
-        phase = "libs", libraries = type(libraries) == "table" and libraries or {},
+        phase = "libs", libraries = libraries,
         frame = first, started = debugprofilestop(),
         frames = 0, forbidden = 0, unreadable = 0, bucket = 0,
         histogram = {}, creators = {}, unknownCreators = 0,

@@ -1243,17 +1243,32 @@ describe("Profiler snapshot cap", function()
         local state = loadProfiler()
         local pick = state.profiler.OldestSnapshotLabel
         assert.equals("old", pick({ old = { time = 1 }, mid = { time = 2 }, new = { time = 3 } }, "new"))
-        assert.equals("a", pick({ b = { time = 1 }, a = { time = 1 }, c = { time = 2 } }, "c"))
+        -- Ties whose pairs order does not start at the lowest label, so only
+        -- the tie-break returns it.
+        assert.equals("x", pick({ x = { time = 1 }, y = { time = 1 } }))
+        assert.equals("w", pick({ z = { time = 1 }, y = { time = 1 }, x = { time = 1 }, w = { time = 1 } }))
         assert.equals("b", pick({ a = { time = 1 }, b = { time = 1 } }, "a"))
 
         local snapshots = {}
         for i = 1, 20 do snapshots["s" .. i] = { time = i, frames = {} } end
         state.KE.db.global.profiler = { snapshots = snapshots, lastMemKB = 0 }
-        state.profiler.TakeSnapshot("s1")
-        local count = 0
-        for _ in pairs(snapshots) do count = count + 1 end
-        assert.equals(20, count)
-        assert.is_nil(table.concat(state.printed, "\n"):find("Dropped", 1, true))
+        local function count()
+            local n = 0
+            for _ in pairs(snapshots) do n = n + 1 end
+            return n
+        end
+
+        state.profiler.TakeSnapshot("s21")
+        assert.equals(20, count())
+        assert.is_nil(snapshots.s1)
+        assert.is_table(snapshots.s21)
+
+        state.profiler.TakeSnapshot("s2")
+        assert.equals(20, count())
+        local printed = table.concat(state.printed, "\n")
+        local _, drops = printed:gsub("Dropped oldest snapshot", "")
+        assert.equals(1, drops)
+        assert.truthy(printed:find("Dropped oldest snapshot: s1", 1, true))
     end)
 end)
 
