@@ -1,5 +1,18 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.19
+
+### Dungeon Casts
+
+- Listens for enemy casts and nameplates only inside a party dungeon, so it
+  costs nothing in town or the open world
+- A real enemy cast outside a dungeon no longer adds a bar to the settings
+  preview
+- Corrects itself a second after a zone change when the game reports the
+  previous zone late
+
+---
+
 ## v4.8.18
 
 ### Settings Window
