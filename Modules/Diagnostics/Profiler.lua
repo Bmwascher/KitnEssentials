@@ -840,11 +840,9 @@ end
 ---------------------------------------------------------------------------------
 -- Census
 ---------------------------------------------------------------------------------
--- On demand only. Every walking and ranking phase works one unit at a time (a
--- library, a global, a frame, a table entry, a ranked key) under one unit
--- count and millisecond budget per step; the report is a bounded last step of
--- its own. It registers nothing, and its timer chain ends with the report.
--- Baselines live in these locals for the session, never in saved data.
+-- On demand only. Each phase works one unit at a time under one count and
+-- millisecond budget per step; it registers nothing, and baselines live in
+-- these locals for the session, never in saved data.
 
 local EnumerateFrames  = EnumerateFrames
 local debugprofilestop = debugprofilestop
@@ -975,12 +973,9 @@ local function PrintDiff(run, label, base)
     end
 end
 
--- The last unit, alone in its own step, and bounded whatever the census found:
--- three ranked lists of ten and two diff blocks of ten. `started` is this
--- step's start, so the Walk line covers every line printed before it. The run
--- is marked done after the Walk line, and the baseline is kept after that,
--- never for a run stopped at the step cap: a partial count would make every
--- later diff wrong.
+-- Bounded whatever the census found: three lists of ten and two diffs of ten.
+-- A run stopped at the step cap keeps no baseline, or every later diff would
+-- compare against partial counts.
 local function CensusReport(run, started)
     local ranked = run.ranked
     if run.stoppedAt then
