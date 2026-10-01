@@ -1,5 +1,39 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.22
+
+### Hunter's Mark
+
+- Re-enabling reuses its warning and scanner frames instead of building new
+  ones
+
+### Skyriding UI
+
+- Each vigor event redraws once instead of twice
+
+### No Movement Alert
+
+- An idle spell update no longer starts a ticker that cancels itself
+
+### Automation
+
+- The repair report listens for durability and money only while a repair is
+  being measured, and not at all while Automation is off
+- Hide Helptips allocates less each time a panel opens
+
+### Totem Tracker
+
+- The destroy-totem buttons are created when the module is enabled and
+  disarmed when it is disabled, so the macro does nothing while the module
+  is off
+
+### Group Finder
+
+- Category buttons queued during combat are dressed through the shared
+  after-combat queue
+
+---
+
 ## v4.8.21
 
 ### Cursor Effects
