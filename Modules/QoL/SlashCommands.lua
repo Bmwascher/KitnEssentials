@@ -207,13 +207,6 @@ local function RegisterKitnCommands()
         KE:Print("Friendly nameplates " .. (enabled and "enabled" or "disabled") .. ".")
     end
 
-    -- /kitn actioncam — toggle action camera
-    KitnCommands["actioncam"] = function()
-        local enabled = ToggleCVar("test_cameraOverShoulder")
-        SetCVar("test_cameraDynamicPitch", enabled and "1" or "0")
-        KE:Print("Action camera " .. (enabled and "enabled" or "disabled") .. ".")
-    end
-
     -- /kitn errors — toggle Lua error display
     KitnCommands["errors"] = function()
         local enabled = ToggleCVar("scriptErrors")
@@ -231,7 +224,6 @@ local function RegisterKitnCommands()
     table_insert(KitnSlashLines, "  /kitn chatbubbles  - Toggle chat bubbles")
     table_insert(KitnSlashLines, "  /kitn nameplates   - Toggle enemy nameplates")
     table_insert(KitnSlashLines, "  /kitn friendplates - Toggle friendly nameplates")
-    table_insert(KitnSlashLines, "  /kitn actioncam    - Toggle action camera")
     table_insert(KitnSlashLines, "  /kitn errors       - Toggle Lua error display")
 
     kitnHooked = true

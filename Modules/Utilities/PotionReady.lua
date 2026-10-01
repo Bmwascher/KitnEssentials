@@ -291,6 +291,11 @@ function PR:OnEnable()
     self:RegisterEvent("PLAYER_REGEN_DISABLED",        "PLAYER_REGEN_DISABLED")
     self:RegisterEvent("PLAYER_REGEN_ENABLED",         "PLAYER_REGEN_ENABLED")
     self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED","PLAYER_SPECIALIZATION_CHANGED")
+    -- The events that keep these fire only on a change, so a state already in
+    -- place when the module comes on (a reload mid-fight, enabling inside an
+    -- instance) is read here.
+    self.inCombat = UnitAffectingCombat("player") and true or false
+    self.inInstance = IsInInstance() == true
     self:SyncListening()
 end
 

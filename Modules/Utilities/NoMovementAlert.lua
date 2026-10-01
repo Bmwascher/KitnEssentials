@@ -1175,7 +1175,7 @@ function NMA:OnEnable()
     self:RegisterEvent("SPELL_UPDATE_COOLDOWN", "RefreshDisplay")
     self:RegisterEvent("SPELL_UPDATE_CHARGES", "RefreshDisplay")
     self:RegisterEvent("SPELL_UPDATE_USABLE", "RefreshDisplay")
-    self:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED", "OnSpecChanged")
+    KE.Context:SubscribeSpec("NoMovementAlert", function() self:OnSpecChanged() end)
     self:RegisterEvent("PLAYER_TALENT_UPDATE", "OnSpecChanged")
     self:RegisterEvent("TRAIT_CONFIG_UPDATED", "OnSpecChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnSpecChanged")
@@ -1226,6 +1226,7 @@ function NMA:OnSpecChanged()
 end
 
 function NMA:OnDisable()
+    KE.Context:UnsubscribeSpec("NoMovementAlert")
     if self.unitEventFrame then self.unitEventFrame:UnregisterAllEvents() end
     self:UnregisterAllEvents()
     self:CancelChargeTimers()

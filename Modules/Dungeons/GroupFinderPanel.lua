@@ -1183,8 +1183,9 @@ function GFP:OnAddonLoaded()
 end
 
 function GFP:OnRosterChanged()
-    -- No gate of its own: ApplyAdvancedFilters has one, and gating both
-    -- would be two places to keep in sync.
+    -- The roster only feeds Party Fit. Without it this write would re-save the
+    -- same fields over edits made in Blizzard's own filter menu.
+    if not (self.db and self.db.PartyFit) then return end
     self:ApplyAdvancedFilters()
 end
 
