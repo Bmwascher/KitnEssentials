@@ -840,9 +840,10 @@ end
 ---------------------------------------------------------------------------------
 -- Census
 ---------------------------------------------------------------------------------
--- On demand only. Each phase works one unit at a time under one count and
--- millisecond budget per step; it registers nothing, and baselines live in
--- these locals for the session, never in saved data.
+-- On demand only. Each walking and ranking phase works one unit at a time
+-- under one count and millisecond budget per step; the report is one bounded
+-- step. It registers nothing, and baselines live in these locals for the
+-- session, never in saved data.
 
 local EnumerateFrames  = EnumerateFrames
 local debugprofilestop = debugprofilestop
