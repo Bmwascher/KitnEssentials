@@ -16,7 +16,7 @@
 ---@field global table
 ---@field defaults table
 ---@field sv table
----@field keys table<string, string>
+---@field keys table<string, string|boolean>
 local AceDB
 
 ---@class KETheme
