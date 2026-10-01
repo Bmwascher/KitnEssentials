@@ -1,7 +1,9 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  TooltipStatusBar.lua                                    ║
--- ║  Purpose: Skins the progress bars that appear inside     ║
--- ║           tooltips (reputation, experience).             ║
+-- ║  Purpose: Skins the bars that appear inside tooltips:    ║
+-- ║           the achievement bar (status bar), and the      ║
+-- ║           paragon reputation, quest and PvP bars         ║
+-- ║           (progress bar).                                ║
 -- ║  Owner: SkinTooltips calls the installer from OnEnable.  ║
 -- ║  Not dispatched by the skin engine: that dispatch is     ║
 -- ║  gated on the separate Blizzard Frames toggle and would  ║
@@ -26,6 +28,14 @@ local function SkinBar(bar)
     S.ProgressFill(bar)
 end
 
+-- Every permanent hook in the tooltip skin gates on TT:IsEnabled(),
+-- because disabled must mean inert. These hooks are permanent too, so they
+-- carry the same gate.
+local function TooltipSkinOn()
+    local TT = KitnEssentials:GetModule("SkinTooltips", true)
+    return TT and TT:IsEnabled()
+end
+
 -- hooksecurefunc closures can never be removed, so a second install would
 -- stack a permanent duplicate layer. Once per session, whatever happens.
 local installed = false
@@ -39,15 +49,21 @@ function S.InstallTooltipStatusBarHook()
     if not _G.GameTooltip_ShowStatusBar then return end
     installed = true
     hooksecurefunc("GameTooltip_ShowStatusBar", function(tooltip)
-        -- Every permanent hook in the tooltip skin gates on TT:IsEnabled(),
-        -- because disabled must mean inert. This hook is permanent too, so it
-        -- carries the same gate.
-        local TT = KitnEssentials:GetModule("SkinTooltips", true)
-        if not (TT and TT:IsEnabled()) then return end
+        if not TooltipSkinOn() then return end
         local pool = tooltip and tooltip.statusBarPool
         if not pool or not pool.EnumerateActive then return end
         for bar in pool:EnumerateActive() do
             SkinBar(bar)
+        end
+    end)
+    -- A different pool: each frame holds its StatusBar as .Bar.
+    if not _G.GameTooltip_ShowProgressBar then return end
+    hooksecurefunc("GameTooltip_ShowProgressBar", function(tooltip)
+        if not TooltipSkinOn() then return end
+        local pool = tooltip and tooltip.progressBarPool
+        if not pool or not pool.EnumerateActive then return end
+        for frame in pool:EnumerateActive() do
+            if frame.Bar then SkinBar(frame.Bar) end
         end
     end)
 end

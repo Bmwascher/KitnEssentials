@@ -177,6 +177,11 @@ local function newFixture()
     _G.IsAltKeyDown = function() return _G.KE_SPEC_HELD_KEY == "ALT" end
 
     _G.ExpansionLandingPageMinimapButton = newSpy("ExpansionLandingPageMinimapButton")
+    -- Blizzard shows the landing-page button at login, before Automation's first
+    -- apply, and the restore path asks Blizzard's two eligibility predicates.
+    _G.ExpansionLandingPageMinimapButton:Show()
+    _G.ExpansionLandingPageMinimapButton.IsInGarrisonMode = function() return false end
+    _G.GameRulesUtil = { ShouldShowExpansionLandingPageButton = function() return true end }
     _G.ActionStatus = newSpy("ActionStatus")
     _G.PaperDollFrame = newSpy("PaperDollFrame")
     _G.CharacterStatsPane = nil

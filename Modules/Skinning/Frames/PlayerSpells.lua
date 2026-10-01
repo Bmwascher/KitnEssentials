@@ -81,7 +81,7 @@ end
 
 local function SkinSpellBook(frame, book)
     if S.data(book).skinned then return end
-    if frame.MaxMinButtonFrame then S.MaxMinFrame(frame.MaxMinButtonFrame) end
+    if frame.MaximizeMinimizeButton then S.MaxMinFrame(frame.MaximizeMinimizeButton) end
     if book.SearchBox then S.EditBox(book.SearchBox) end
 
     SkinSearchPreview(book.SearchPreviewContainer

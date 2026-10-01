@@ -1961,8 +1961,9 @@ local function SetupAutoConfirmLootRoll()
         if which ~= "CONFIRM_LOOT_ROLL" then return end
         C_Timer.After(0, function()
             local popup = StaticPopup_FindVisible and StaticPopup_FindVisible("CONFIRM_LOOT_ROLL")
-            if popup and popup.button1 and popup.button1:IsEnabled() then
-                popup.button1:Click()
+            local yes = popup and popup.GetButton1 and popup:GetButton1()
+            if yes and yes:IsEnabled() then
+                yes:Click()
             end
         end)
     end)
@@ -2542,6 +2543,7 @@ local VAULT_ICON_FILEID = 2744751
 local omniCharButton
 local vaultCharButton
 local omniMinimapHooked = false
+local omniMinimapSuppressed = false
 
 -- Size is its own key rather than following the gem socket slider: the two
 -- rows are different shapes, and the gem default is 24 while this button has
@@ -2742,6 +2744,27 @@ local function EnsureCharBtnShowHook()
     _G.CharacterFrame:HookScript("OnShow", RefreshCharButtons)
 end
 
+-- The two conditions under which the button's own RefreshButton hides it,
+-- read without writing any of its fields. A missing predicate reads as "do
+-- not show": showing a button Blizzard hid is the thing to avoid.
+local function LandingPageButtonAllowed(mm)
+    local rules = _G.GameRulesUtil
+    if not (rules and rules.ShouldShowExpansionLandingPageButton
+        and rules.ShouldShowExpansionLandingPageButton()) then
+        return false
+    end
+    if mm.IsInGarrisonMode and mm:IsInGarrisonMode() then
+        local garrison = _G.C_Garrison
+        if not (garrison and garrison.GetLandingPageGarrisonType
+            and garrison.IsLandingPageMinimapButtonVisible) then
+            return false
+        end
+        local garrType = garrison.GetLandingPageGarrisonType()
+        return garrType ~= nil and garrison.IsLandingPageMinimapButtonVisible(garrType) == true
+    end
+    return true
+end
+
 local function SetupOmniumButton()
     local mm = _G.ExpansionLandingPageMinimapButton
     -- Lifecycle, not the key: this function is reached from OnDisable through
@@ -2752,15 +2775,24 @@ local function SetupOmniumButton()
     if mm and not omniMinimapHooked then
         omniMinimapHooked = true
         hooksecurefunc(mm, "Show", function(self)
-            if AU:IsEnabled() and AU.db.OmniumCharButton and OmniumAllowed() then self:Hide() end
+            if AU:IsEnabled() and AU.db.OmniumCharButton and OmniumAllowed() then
+                omniMinimapSuppressed = true
+                self:Hide()
+            end
         end)
     end
 
+    -- The latch records a hide done here, so turning the feature off hands
+    -- back only a button KE hid, never one Blizzard keeps hidden.
     if active then
-        if mm then mm:Hide() end
+        if mm then
+            if mm:IsShown() then omniMinimapSuppressed = true end
+            mm:Hide()
+        end
         OmniumCreateButton()
-    elseif mm then
-        mm:Show()
+    elseif mm and omniMinimapSuppressed then
+        omniMinimapSuppressed = false
+        if LandingPageButtonAllowed(mm) then mm:Show() end
     end
 
     -- TeardownPorts reaches this function too, so the gate stops two things

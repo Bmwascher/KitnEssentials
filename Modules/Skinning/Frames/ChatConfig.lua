@@ -176,13 +176,12 @@ local function Skin()
 
     hooksecurefunc("TextToSpeechFrame_UpdateMessageCheckboxes", function(frame)
         if not frame.checkBoxTable then return end
-        local nameString = frame:GetName() .. "CheckBox"
+        local nameString = frame:GetName() .. "Checkbox"
         for index in ipairs(frame.checkBoxTable) do
             local checkBox = _G[nameString .. index]
-            if checkBox and not S.data(checkBox).skinned then
-                S.data(checkBox).skinned = true
-                S.CheckBox(checkBox)
-            end
+            -- S.CheckBox sets and tests its own skinned flag; setting it here
+            -- first makes it return without skinning.
+            if checkBox then S.CheckBox(checkBox) end
         end
     end)
 end

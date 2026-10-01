@@ -2646,8 +2646,8 @@ function CP:SocketGemFromPopup(gemData, targetSlotID, targetSocketIndex)
     C_Container.PickupContainerItem(bag, slot)
     C_ItemSocketInfo.ClickSocketButton(targetSocketIndex)
     ClearCursor()
-    AcceptSockets()
-    CloseSocketInfo()
+    C_ItemSocketInfo.AcceptSockets()
+    C_ItemSocketInfo.CloseSocketInfo()
     if ItemSocketingFrame then HideUIPanel(ItemSocketingFrame) end
     self:HideGemPopup()
     self:HideSlotHighlight()
@@ -2692,7 +2692,7 @@ function CP:ReplaceAllMatchingGems(oldGemID, newGemID, isRetry)
             -- Already-replaced sockets no longer match oldGemID, so the retry
             -- pass naturally resumes where this one stopped.
             C_Timer.After(0.1, function()
-                CloseSocketInfo()
+                C_ItemSocketInfo.CloseSocketInfo()
                 CP:ReplaceAllMatchingGems(oldGemID, newGemID, true)
             end)
             return
@@ -2713,23 +2713,23 @@ function CP:ReplaceAllMatchingGems(oldGemID, newGemID, isRetry)
             if stagedID ~= newGemID then
                 if not isRetry then
                     C_Timer.After(0.1, function()
-                        CloseSocketInfo()
+                        C_ItemSocketInfo.CloseSocketInfo()
                         CP:ReplaceAllMatchingGems(oldGemID, newGemID, true)
                     end)
                     return
                 end
                 -- Retry pass failed for this socket too; skip it and continue.
             else
-                AcceptSockets()
+                C_ItemSocketInfo.AcceptSockets()
                 replaced = replaced + 1
                 if matches[i + 1] and matches[i + 1].slotID == m.slotID then
-                    CloseSocketInfo()
+                    C_ItemSocketInfo.CloseSocketInfo()
                 end
             end
         end
     end
 
-    CloseSocketInfo()
+    C_ItemSocketInfo.CloseSocketInfo()
     if ItemSocketingFrame then HideUIPanel(ItemSocketingFrame) end
     if DEBUG_CP then
         KE:Print(string.format("[CP] Replace All: %d/%d sockets replaced", replaced, #matches))
