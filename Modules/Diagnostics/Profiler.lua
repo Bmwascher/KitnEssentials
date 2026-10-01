@@ -558,11 +558,45 @@ local function SnapshotFrameCount(snapshot)
     return #(snapshot.frames or snapshot.functions or {})
 end
 
+-- Twenty covers a before/after series with room and bounds the saved block.
+local SNAPSHOT_CAP = 20
+
+-- The oldest by time among every label except `keep`, the one just written.
+-- Equal times fall to the lower label so the pick is the same every run; a
+-- snapshot with no numeric time sorts oldest.
+local function OldestSnapshotLabel(snapshots, keep)
+    local oldestLabel, oldestTime = nil, math_huge
+    for label, snapshot in pairs(snapshots) do
+        if label ~= keep then
+            local stamp = -math_huge
+            if type(snapshot) == "table" and type(snapshot.time) == "number" then
+                stamp = snapshot.time
+            end
+            if oldestLabel == nil or stamp < oldestTime
+                or (stamp == oldestTime and tostring(label) < tostring(oldestLabel)) then
+                oldestLabel, oldestTime = label, stamp
+            end
+        end
+    end
+    return oldestLabel
+end
+
 local function TakeSnapshot(label)
     local snap = CaptureSnapshot(label)
-    ResolveDB().snapshots[label] = snap
+    local snapshots = ResolveDB().snapshots
+    snapshots[label] = snap
     pf("Snapshot saved: %s (mem=%.1f KB, cpu=%.2f ms, frames=%d)",
         label, snap.memKB, snap.cpuMS, SnapshotFrameCount(snap))
+
+    local count = 0
+    for _ in pairs(snapshots) do count = count + 1 end
+    while count > SNAPSHOT_CAP do
+        local oldest = OldestSnapshotLabel(snapshots, label)
+        if oldest == nil then break end
+        snapshots[oldest] = nil
+        count = count - 1
+        pf("Dropped oldest snapshot: %s", tostring(oldest))
+    end
 end
 
 local function ListSnapshots()
@@ -882,5 +916,6 @@ Profiler.ResetCpu       = ResetCpu
 Profiler.GatherCpuRows  = GatherCpuRows
 Profiler.GroupSharedRows = GroupSharedRows
 Profiler.GetFooterDisplay = GetFooterDisplay
+Profiler.OldestSnapshotLabel = OldestSnapshotLabel
 
 KE.Profiler = Profiler

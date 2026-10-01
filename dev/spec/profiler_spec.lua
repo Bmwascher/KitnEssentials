@@ -1237,3 +1237,22 @@ describe("Profiler reload warning", function()
         assert.are.equal(0, #state.prompts)
     end)
 end)
+
+describe("Profiler snapshot cap", function()
+    it("drops the oldest other snapshot by time, ties by label, never the one just written", function()
+        local state = loadProfiler()
+        local pick = state.profiler.OldestSnapshotLabel
+        assert.equals("old", pick({ old = { time = 1 }, mid = { time = 2 }, new = { time = 3 } }, "new"))
+        assert.equals("a", pick({ b = { time = 1 }, a = { time = 1 }, c = { time = 2 } }, "c"))
+        assert.equals("b", pick({ a = { time = 1 }, b = { time = 1 } }, "a"))
+
+        local snapshots = {}
+        for i = 1, 20 do snapshots["s" .. i] = { time = i, frames = {} } end
+        state.KE.db.global.profiler = { snapshots = snapshots, lastMemKB = 0 }
+        state.profiler.TakeSnapshot("s1")
+        local count = 0
+        for _ in pairs(snapshots) do count = count + 1 end
+        assert.equals(20, count)
+        assert.is_nil(table.concat(state.printed, "\n"):find("Dropped", 1, true))
+    end)
+end)
