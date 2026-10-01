@@ -249,8 +249,19 @@ local function MakeDetailRow(parent)
     return bar
 end
 
--- Lazily builds W.detail (ScrollFrame viewport + content child + a create-once
--- spell-row pool) once, parented to W.frame and anchored over the same area as
+-- Builds detail rows up to n, capped at the pool size; rows are never destroyed.
+local function EnsureDetailRows(W, n)
+    local rows = W.detail.rows
+    if n > DETAIL_POOL_SIZE then n = DETAIL_POOL_SIZE end
+    for i = #rows + 1, n do
+        local bar = MakeDetailRow(W.detail.content)
+        bar.win = W
+        rows[i] = bar
+    end
+end
+
+-- Lazily builds W.detail (ScrollFrame viewport + content child; rows are built
+-- on demand) once, parented to W.frame and anchored over the same area as
 -- W.body. Idempotent. Background click on the content closes the panel.
 function DM:EnsureDetail(W)
     if W.detail then return W.detail end
@@ -291,11 +302,6 @@ function DM:EnsureDetail(W)
     end)
 
     d.rows = {}
-    for i = 1, DETAIL_POOL_SIZE do
-        local bar = MakeDetailRow(d.content)
-        bar.win = W
-        d.rows[i] = bar
-    end
     W.detail = d
     return d
 end
@@ -537,7 +543,7 @@ function DM:ShowDetailMessage(W, msg)
     if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
     if W.body then W.body:Hide() end
     W.detail:Show()
-    for i = 1, DETAIL_POOL_SIZE do W.detail.rows[i].row:Hide() end
+    for i = 1, #W.detail.rows do W.detail.rows[i].row:Hide() end
     if not W.detail.msg then
         W.detail.msg = W.detail.content:CreateFontString(nil, "OVERLAY")
         W.detail.msg:SetPoint("TOP", W.detail.content, "TOP", 0, -8)
@@ -616,7 +622,7 @@ function DM:RenderBreakdown(W)
             self:ShowDetailMessage(W, REFUSAL_MSG)
             return
         end
-        for i = 1, DETAIL_POOL_SIZE do d.rows[i].row:Hide() end
+        for i = 1, #d.rows do d.rows[i].row:Hide() end
         return
     end
 
@@ -635,7 +641,8 @@ function DM:RenderBreakdown(W)
     -- a death recap should show every event leading to the death.
     local maxRows = (self.db and self.db.DetailMaxRows) or DETAIL_POOL_SIZE
     local count = math_min(#spells, DETAIL_POOL_SIZE, maxRows)
-    for i = 1, DETAIL_POOL_SIZE do
+    EnsureDetailRows(W, count)
+    for i = 1, #d.rows do
         local bar = d.rows[i]
         local row = bar.row
         if i <= count then
@@ -736,7 +743,7 @@ function DM:RenderEnemyBreakdown(W, src)
     local d = W.detail
     local players = AggregateEnemyPlayers(src)
     if not players then
-        for i = 1, DETAIL_POOL_SIZE do d.rows[i].row:Hide() end
+        for i = 1, #d.rows do d.rows[i].row:Hide() end
         return
     end
 
@@ -752,7 +759,8 @@ function DM:RenderEnemyBreakdown(W, src)
 
     local maxRows = (self.db and self.db.DetailMaxRows) or DETAIL_POOL_SIZE
     local count = math_min(#players, DETAIL_POOL_SIZE, maxRows)
-    for i = 1, DETAIL_POOL_SIZE do
+    EnsureDetailRows(W, count)
+    for i = 1, #d.rows do
         local bar = d.rows[i]
         local row = bar.row
         if i <= count then
@@ -988,8 +996,9 @@ function DM:RenderDeathRecap(W, preEvents, preSink, prePlain)
     local barH = W._snapHeight or 16
     local deathTime = events[#events] and events[#events].timestamp
     local count = math_min(#events, DETAIL_POOL_SIZE)
+    EnsureDetailRows(W, count)
 
-    for i = 1, DETAIL_POOL_SIZE do
+    for i = 1, #d.rows do
         local bar = d.rows[i]
         local row = bar.row
         if i <= count then
