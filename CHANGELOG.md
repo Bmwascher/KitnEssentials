@@ -1,5 +1,43 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.21
+
+### Cursor Effects
+
+- The trail stops its per-frame work once the cursor is hidden and the last
+  dot has faded
+
+### Combat Potion Ready
+
+- Listens for cooldown and bag changes only while its settings allow the text
+  to show
+
+### Recuperate
+
+- Hears only your own health, and only while grouped and out of combat
+
+### Healer Mana
+
+- Runs its timer only while it has something to show, and hears spec changes
+  only while grouped or previewing
+- Settings changes restyle its frames in place instead of building new ones
+
+### Combat Res
+
+- Listens for charge updates only in combat, in an encounter, inside an
+  instance, or while the count shows
+
+### Player Crosshair
+
+- Polls range only while you have a target
+
+### Raid Control
+
+- Counts roles only while its panel is open; its widgets stop listening while
+  it is disabled
+
+---
+
 ## v4.8.20
 
 ### Targeted Spells
