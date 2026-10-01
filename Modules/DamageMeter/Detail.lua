@@ -521,7 +521,7 @@ function DM:CloseDetail(W)
     if self.SyncHeaderIconsToOverlayState then self:SyncHeaderIconsToOverlayState(W) end
 end
 
--- Reuses detail-row 1 as a centered message line (in-combat / no-recap states).
+-- Shows a centered message line (in-combat / no-recap states).
 function DM:ShowDetailMessage(W, msg)
     -- Clear the hover tip before the detail message takes over (see OpenDetail):
     -- this sets W._detailOpen = true with no preceding OnLeave, so HideHoverTip

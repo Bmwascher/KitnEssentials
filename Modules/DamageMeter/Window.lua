@@ -770,7 +770,7 @@ function DM:ApplyHeaderColor(W)
 end
 
 -- Re-applies font (header + every bar's rank/name/value) and the status-bar
--- texture to every pooled row. The cached value/name strings are NOT secret out
+-- texture to every built row. The cached value/name strings are NOT secret out
 -- of combat; a font swap doesn't change the string, so the next Tick repaints
 -- naturally. Called by DM:ApplySettings.
 function DM:ReapplyBarVisuals(W)
@@ -1483,7 +1483,7 @@ function DM:RenderWindow(W)
     W._classSpecRowCounts = W._classSpecRowCounts or {}
     for _, bySpec in pairs(W._classSpecRowCounts) do wipe(bySpec) end
     if not sources then
-        -- No session/data this segment: hide every pooled row so stale bars from
+        -- No session/data this segment: hide every built row so stale bars from
         -- a prior segment don't linger. Gate on IsShown so already-hidden rows
         -- skip the redundant widget call.
         for i = 1, #W.bars do

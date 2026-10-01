@@ -40,7 +40,7 @@ end
 
 -- Shared nil-safe source key — capture and lookup MUST use the same mapping
 -- [C3]. Both fields are Nilable in the API contract; a source with neither
--- is skipped by the deep pass (its bar row still renders from byType).
+-- is skipped by the detail pass (its bar row still renders from byType).
 -- Secret guard mirrors Detail.lua's enemy-key idiom (never key a table on a
 -- possibly-secret value); capture runs OOC where these are plain, so a
 -- secret here is a contract surprise and the source is simply skipped.
