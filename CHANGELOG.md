@@ -1,5 +1,37 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.20
+
+### Targeted Spells
+
+- Builds its frames and listens for nameplates only inside the content it is
+  set for
+- Keeps its entry frames across layout changes instead of building new ones
+- No longer switches itself on for fresh installs and new profiles; profiles
+  that already have it on stay on
+
+### Dungeon Casts
+
+- Bars recolour when an enemy cast turns uninterruptible or interruptible
+  mid-cast
+
+### Enemy Counter
+
+- Counts from the nameplates currently on screen instead of scanning every
+  slot on each event
+
+### Keystone Helper
+
+- Sets nothing up until one of its features is on
+- LFG Quick Create repaints its party-key glows only while the Group Finder's
+  entry panel is open
+
+### Mythic+ Timer
+
+- The enemy overlay listens for nameplates only inside a keystone run
+
+---
+
 ## v4.8.19
 
 ### Dungeon Casts
