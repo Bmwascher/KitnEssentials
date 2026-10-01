@@ -3,8 +3,8 @@
 -- ║  Module: Damage Meter                                    ║
 -- ║  Purpose: Runtime-only key-history snapshot store. At    ║
 -- ║          CHALLENGE_MODE_START (before KE's wipe) every   ║
--- ║          stored session × 11 meter types (+ per-source   ║
--- ║          details) is RETAINED verbatim as one bundle;    ║
+-- ║          stored session × 11 meter types (+ one pull's   ║
+-- ║          source details) is RETAINED as one bundle;      ║
 -- ║          Core.lua's GetSession/GetSource serve entries   ║
 -- ║          by NEGATIVE session id.                         ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -69,8 +69,26 @@ function DM:HistorySource(sessionID, dmType, sourceGUID, sourceCreatureID)
     local entry = h and h.byID[sessionID]
     if not entry then return nil end
     local key = DM.HistorySourceKey(sourceGUID, sourceCreatureID)
-    local perSource = key ~= nil and entry.sources[key] or nil
+    local sources = entry.sources
+    local perSource = key ~= nil and sources and sources[key] or nil
     return perSource and perSource[dmType] or nil
+end
+
+-- The one pull of a bundle that keeps per-source detail: the run summary,
+-- else the newest stored pull. Capture and the segment menu both read it.
+function DM.HistoryDetailEntry(sessions)
+    for i = 1, #sessions do
+        if sessions[i].isSummary then return sessions[i] end
+    end
+    return sessions[#sessions]
+end
+
+-- True for a stored pull that kept totals only. An unknown id is false.
+function DM:HistoryDetailDropped(sessionID)
+    if type(sessionID) ~= "number" or sessionID >= 0 then return false end
+    local h = self._history
+    local entry = h and h.byID[sessionID]
+    return entry ~= nil and entry.hasDetail ~= true
 end
 
 -- Newest-first bundle list for the segment menu. nil = no history yet.
@@ -101,7 +119,7 @@ end
 -- enemy-side attribution (combatSpellDetails.unitName — not conditional)
 -- stays plain (in-game probe: 7/7 attackers plain, 0 secret).
 -- Learned wherever a source name renders/marshals plain (RenderBar's plain
--- ticks + the capture deep pass); Detail.lua falls back to it for the tip
+-- ticks + every captured pull); Detail.lua falls back to it for the tip
 -- header and the Targets lookup when a bar's name is secret. Player GUIDs
 -- only — identity restriction never applies to creatures. Runtime lifetime,
 -- exactly matching the store it backs; survives HeaderReset (identity is not
@@ -312,8 +330,7 @@ local METER_TYPE_MIN, METER_TYPE_MAX = 0, 10   -- Enum.DamageMeterType range
 
 -- Whole-bundle eviction, oldest first. HistoryRetain is clamped at READ so
 -- a legacy stored value (old slider max 10, older default 20) needs no
--- migration. Max 5: a deep bundle measured ~2.9MB live (smoke),
--- so 5 keys ≈ 15MB runtime ceiling — 10 was ruled too heavy.
+-- migration.
 local function evictOverCap(self, h)
     local cap = self.db and self.db.HistoryRetain
     if type(cap) ~= "number" then cap = 5 end
@@ -326,8 +343,8 @@ local function evictOverCap(self, h)
     end
 end
 
--- Snapshot every stored session × all 11 meter types (+ per-source deep
--- pass) into one sealed bundle. Reads go through the module's own pcall'd
+-- Snapshot every stored session × all 11 meter types into one sealed bundle;
+-- one pull also keeps per-source detail. Reads go through the module's own pcall'd
 -- getters with POSITIVE ids (the API path). Returns the bundle, or nil when
 -- the store was empty/unreadable. ALWAYS consumes the pending metadata —
 -- BOTH copies, even on the early returns.
@@ -377,6 +394,7 @@ function DM:HistoryCapture()
     local h = store(self)
     local outcomes = self._sessionOutcomes
     local startT = debugprofilestop()
+    local nativeIDs = {}   -- entry -> native session id, for the detail pass
 
     local bundle = {
         label = pending and pending.label or nil,   -- nil = "Earlier runs" row [C2]
@@ -401,7 +419,6 @@ function DM:HistoryCapture()
                 outcome = outcomes and outcomes[oldID],
                 isSummary = (pending and pending.summarySessionID == oldID) or nil,
                 byType = {},
-                sources = {},
             }
             h.nextID = h.nextID - 1
             for dmType = METER_TYPE_MIN, METER_TYPE_MAX do
@@ -415,29 +432,45 @@ function DM:HistoryCapture()
                             -- Current members marshal plain here — feed the
                             -- identity memo (self-filters secrets/creatures).
                             self:NotePlainName(src.sourceGUID, src.name)
-                            local key = DM.HistorySourceKey(src.sourceGUID, src.sourceCreatureID)
-                            if key ~= nil then
-                                local detail = self:GetSource(nil, dmType,
-                                    src.sourceGUID, src.sourceCreatureID, oldID)
-                                if detail then
-                                    local perSource = entry.sources[key]
-                                    if not perSource then
-                                        perSource = {}
-                                        entry.sources[key] = perSource
-                                    end
-                                    perSource[dmType] = detail
-                                end
-                            end
                         end
                     end
                 end
             end
             bundle.sessions[#bundle.sessions + 1] = entry
             h.byID[entry.id] = entry
+            nativeIDs[entry] = oldID
         end
     end
 
     if #bundle.sessions == 0 then return nil end
+
+    -- Per-source detail for one pull only; every other pull keeps totals.
+    local detailEntry = DM.HistoryDetailEntry(bundle.sessions)
+    local detailID = nativeIDs[detailEntry]
+    detailEntry.sources = {}
+    detailEntry.hasDetail = true
+    for dmType = METER_TYPE_MIN, METER_TYPE_MAX do
+        local session = detailEntry.byType[dmType]
+        local srcs = session and session.combatSources
+        if srcs then
+            for si = 1, #srcs do
+                local src = srcs[si]
+                local key = DM.HistorySourceKey(src.sourceGUID, src.sourceCreatureID)
+                if key ~= nil then
+                    local detail = self:GetSource(nil, dmType,
+                        src.sourceGUID, src.sourceCreatureID, detailID)
+                    if detail then
+                        local perSource = detailEntry.sources[key]
+                        if not perSource then
+                            perSource = {}
+                            detailEntry.sources[key] = perSource
+                        end
+                        perSource[dmType] = detail
+                    end
+                end
+            end
+        end
+    end
     tinsert(h.bundles, 1, bundle)   -- newest first
     evictOverCap(self, h)
     if DEBUG_DMH then

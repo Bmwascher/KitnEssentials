@@ -276,13 +276,9 @@ function DM:PopulateSegmentMenu(W)
                 local dur = select(1, self.FormatDeathTime(bundle.durationMs / 1000))
                 label = label .. "  |cff999999(" .. dur .. ")|r"
             end
-            -- Click pins the run summary (or the first segment) via the
-            -- normal row pin path; hover opens the flyout.
-            local pinEntry = nil
-            for _, entry in ipairs(bundle.sessions) do
-                if entry.isSummary then pinEntry = entry; break end
-            end
-            pinEntry = pinEntry or bundle.sessions[1]
+            -- Click pins the pull that kept detail via the normal row pin
+            -- path; hover opens the flyout.
+            local pinEntry = DM.HistoryDetailEntry(bundle.sessions)
             place(label, W._curSessionID ~= nil and pinEntry ~= nil
                 and W._curSessionID == pinEntry.id, pinEntry and pinEntry.id or nil, nil)
             local row = rows[idx]

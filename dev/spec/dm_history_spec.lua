@@ -197,24 +197,59 @@ describe("HistoryCapture", function()
         return sessions, details
     end
 
-    it("retains byType and per-source details keyed by HistorySourceKey", function()
-        installFakeMeter(oneSessionStore())
-        DM._pendingBundle = { label = "Algeth'ar Academy", level = 12 }
-        local bundle = DM:HistoryCapture()
-        assert.is_table(bundle)
-        assert.equals(1, #bundle.sessions)
-        local e = bundle.sessions[1]
-        assert.equals(-1, e.id)
-        assert.equals(100, e.byType[0].totalAmount)
-        assert.equals(60, e.sources["g1"][0].totalAmount)
-        assert.equals(40, e.sources["c:42"][0].totalAmount)
-        -- both-nil source skipped [C3]; bar row still renders from byType
-        local n = 0
-        for _ in pairs(e.sources) do n = n + 1 end
-        assert.equals(2, n)
-        -- served back through the store lookups
-        assert.equals(100, DM:HistorySession(-1, 0).totalAmount)
-        assert.equals(40, DM:HistorySource(-1, 0, nil, 42).totalAmount)
+    it("keeps per-source detail for the summary pull, else the newest, and totals for the rest", function()
+        -- Three sessions (native ids 7, 8, 9), each with a player source, a
+        -- creature source and a source with neither id.
+        local function threeSessionStore()
+            local sessions, details = {}, {}
+            for id = 7, 9 do
+                local guid = "Player-1-P" .. id
+                sessions[id] = { [0] = {
+                    totalAmount = id * 100,
+                    combatSources = {
+                        { sourceGUID = guid, name = "P" .. id .. "-Realm", totalAmount = 60 },
+                        { sourceGUID = nil, sourceCreatureID = 42, totalAmount = 40 },
+                        { sourceGUID = nil, sourceCreatureID = nil, totalAmount = 0 },
+                    } } }
+                details[id] = { [0] = {
+                    [guid]   = { totalAmount = 60, combatSpells = {} },
+                    ["c:42"] = { totalAmount = 40, combatSpells = {} },
+                } }
+            end
+            return sessions, details
+        end
+        local rows = {
+            { name = "summary present", summaryID = 8, detailIndex = 2 },
+            { name = "no summary", summaryID = nil, detailIndex = 3 },
+        }
+        for _, row in ipairs(rows) do
+            DM._history, DM._plainNames = nil, nil
+            installFakeMeter(threeSessionStore())
+            DM._pendingBundle = { label = "Algeth'ar Academy", summarySessionID = row.summaryID }
+            local bundle = DM:HistoryCapture()
+            assert.equals(3, #bundle.sessions, row.name)
+            assert.equals(bundle.sessions[row.detailIndex], DM.HistoryDetailEntry(bundle.sessions), row.name)
+            for i, e in ipairs(bundle.sessions) do
+                local nativeID = 6 + i
+                local guid = "Player-1-P" .. nativeID
+                assert.equals(nativeID * 100, DM:HistorySession(e.id, 0).totalAmount, row.name)
+                assert.equals("P" .. nativeID .. "-Realm", DM:PlainNameFor(guid), row.name)
+                if i == row.detailIndex then
+                    assert.is_true(e.hasDetail, row.name)
+                    assert.is_false(DM:HistoryDetailDropped(e.id), row.name)
+                    assert.equals(60, DM:HistorySource(e.id, 0, guid, nil).totalAmount, row.name)
+                    assert.equals(40, DM:HistorySource(e.id, 0, nil, 42).totalAmount, row.name)
+                    local n = 0
+                    for _ in pairs(e.sources) do n = n + 1 end
+                    assert.equals(2, n, row.name)
+                else
+                    assert.is_nil(e.hasDetail, row.name)
+                    assert.is_nil(e.sources, row.name)
+                    assert.is_true(DM:HistoryDetailDropped(e.id), row.name)
+                    assert.is_nil(DM:HistorySource(e.id, 0, nil, 42), row.name)
+                end
+            end
+        end
     end)
 
     it("takes the armed pending label and freezes per-segment outcomes [C1]", function()
@@ -333,7 +368,7 @@ describe("HistoryCapture", function()
         assert.is_nil(bundle.sessions[1].isSummary)   -- anchor id is NOT the summary flag
     end)
 
-    it("learns current members' plain names during the deep pass", function()
+    it("learns current members' plain names during capture", function()
         local sessions = { [7] = { [0] = {
             totalAmount = 100,
             combatSources = {
