@@ -838,6 +838,347 @@ local function PrintPeak()
 end
 
 ---------------------------------------------------------------------------------
+-- Census
+---------------------------------------------------------------------------------
+-- On demand only. Every walking and ranking phase works one unit at a time (a
+-- library, a global, a frame, a table entry, a ranked key) under one unit
+-- count and millisecond budget per step; the report is a bounded last step of
+-- its own. It registers nothing, and its timer chain ends with the report.
+-- Baselines live in these locals for the session, never in saved data.
+
+local EnumerateFrames  = EnumerateFrames
+local debugprofilestop = debugprofilestop
+local rawget           = rawget
+local next             = next
+local strfind          = string.find
+local math_floor       = math.floor
+
+local CENSUS_SLICE = 4000
+local CENSUS_BUDGET_MS = 4
+-- About a minute at 60 fps. A walk still running then (a live table or the
+-- frame list growing as fast as it is read) stops and reports as incomplete.
+local CENSUS_MAX_STEPS = 3600
+local CENSUS_TOP = 10
+local UNKNOWN_CREATOR = "unknown creator"
+local WALKING = { libs = true, globals = true, frames = true, tables = true }
+local RANKED = { "histogram", "creators", "byKey" }
+
+-- Owner markers for the table walk: SAVED counts KE.db.sv on its own line,
+-- ROOT is the KE namespace itself.
+local SAVED, ROOT = {}, {}
+
+local censusRunning = false
+local censusFirst, censusPrev
+
+local function CensusKey(objectType, children, regions)
+    return format("%s %d:%d", tostring(objectType), children, regions)
+end
+
+-- Every read here is a secret aspect in 12.x, so each return is tested before
+-- it is used. A frame with a parent stops after two calls.
+local function CensusInspect(frame)
+    local forbidden = frame:IsForbidden()
+    if KE:IsSecretValue(forbidden) then return "unreadable" end
+    if forbidden then return "forbidden" end
+    local parent = frame:GetParent()
+    if KE:IsSecretValue(parent) then return "unreadable" end
+    if parent ~= nil then return "outside" end
+    local name = frame:GetName()
+    if KE:IsSecretValue(name) then return "unreadable" end
+    if name ~= nil then return "outside" end
+    local objectType = frame:GetObjectType()
+    local children = frame:GetNumChildren()
+    local regions = frame:GetNumRegions()
+    if KE:IsSecretValue(objectType) or KE:IsSecretValue(children) or KE:IsSecretValue(regions) then
+        return "unreadable"
+    end
+    local creator = frame:GetSourceLocation()
+    if KE:IsSecretValue(creator) or type(creator) ~= "string" or creator == "" then
+        creator = nil
+    end
+    return "bucket", CensusKey(objectType, children, regions), creator
+end
+
+-- A frame object (a table holding its userdata at [0]) is counted, never
+-- entered: its fields lead into parent chains and Blizzard's tables.
+local function CensusPush(run, value, owner)
+    if KE:IsSecretValue(value) or type(value) ~= "table" or run.seen[value] then return end
+    run.seen[value] = true
+    if type(rawget(value, 0)) == "userdata" then
+        run.frameRefs = run.frameRefs + 1
+        return
+    end
+    local top = run.top + 1
+    run.top = top
+    run.stackTables[top] = value
+    run.stackOwners[top] = owner
+end
+
+local function CensusEntry(run, key, value, owner)
+    local childOwner = owner
+    if owner == SAVED then
+        run.savedEntries = run.savedEntries + 1
+    else
+        local label = owner
+        if owner == ROOT then
+            label = "KE"
+            childOwner = KE:IsSecretValue(key) and "?" or tostring(key)
+        end
+        run.entries = run.entries + 1
+        run.byKey[label] = (run.byKey[label] or 0) + 1
+    end
+    CensusPush(run, key, childOwner)
+    CensusPush(run, value, childOwner)
+end
+
+-- KE's own globals carry the house prefixes. Every other table in _G belongs
+-- to Blizzard or another addon and is not walked, however KE reaches it (a
+-- field, or a hook registry keyed by the hooked table).
+local function IsOwnGlobal(name)
+    if KE:IsSecretValue(name) or type(name) ~= "string" then return false end
+    return (strfind(name, "^KE_") or strfind(name, "^KitnEssentials")
+        or strfind(name, "^KITNESSENTIALS")) ~= nil
+end
+
+-- Every ranked key is a string: histogram keys, creator locations and owner
+-- labels are all built as strings.
+local function Outranks(count, key, row)
+    return count > row.count or (count == row.count and key < row.key)
+end
+
+-- Keeps the top CENSUS_TOP rows, one key per call, without a full sort.
+local function RankInto(rows, key, count)
+    local n = #rows
+    if n == CENSUS_TOP and not Outranks(count, key, rows[n]) then return end
+    if n == CENSUS_TOP then
+        rows[n] = nil
+        n = n - 1
+    end
+    local i = n
+    while i > 0 and Outranks(count, key, rows[i]) do
+        rows[i + 1] = rows[i]
+        i = i - 1
+    end
+    rows[i + 1] = { key = key, count = count }
+end
+
+local function PrintRows(rows)
+    for _, row in ipairs(rows) do pf("  %6d  %s", row.count, row.key) end
+end
+
+local function PrintDiff(run, label, base)
+    pf("Since the %s census: parentless unnamed %+d, tables %+d, entries %+d.",
+        label, run.bucket - base.bucket, run.tableCount - base.tableCount,
+        run.entries - base.entries)
+    for _, row in ipairs(run.ranked.histogram) do
+        pf("  %+6d  %s", row.count - (base.histogram[row.key] or 0), row.key)
+    end
+end
+
+-- The last unit, alone in its own step, and bounded whatever the census found:
+-- three ranked lists of ten and two diff blocks of ten. `started` is this
+-- step's start, so the Walk line covers every line printed before it. The run
+-- is marked done after the Walk line, and the baseline is kept after that,
+-- never for a run stopped at the step cap: a partial count would make every
+-- later diff wrong.
+local function CensusReport(run, started)
+    local ranked = run.ranked
+    if run.stoppedAt then
+        pf("INCOMPLETE: stopped after %d steps; every count below is partial.", run.stoppedAt)
+    end
+    pf("Census: %d frames, %d forbidden, %d unreadable.", run.frames, run.forbidden, run.unreadable)
+    pf("Parentless unnamed frames: %d. Top %d by type and children:regions:", run.bucket, CENSUS_TOP)
+    PrintRows(ranked.histogram)
+    pf("Top %d creators:", CENSUS_TOP)
+    PrintRows(ranked.creators)
+    pf("  %6d  %s", run.unknownCreators, UNKNOWN_CREATOR)
+    pf("KE_GUI_ORPHAN_COUNT: %d", KE_GUI_ORPHAN_COUNT or 0)
+    pf("Saved data: %d entries under KE.db.sv.", run.savedEntries)
+    pf("KE tables: %d tables, %d entries, %d frame references, %d skipped. Top %d keys:",
+        run.tableCount, run.entries, run.frameRefs, run.skipped, CENSUS_TOP)
+    PrintRows(ranked.byKey)
+    if censusPrev then PrintDiff(run, "previous", censusPrev) end
+    if censusFirst and censusFirst ~= censusPrev then PrintDiff(run, "first", censusFirst) end
+
+    local ms = debugprofilestop() - started
+    if ms > run.slowestMs then run.slowestMs = ms end
+    local perStep = run.frameSteps > 0 and math_floor(run.frames / run.frameSteps) or 0
+    pf("Walk: %d steps, %d frames per frame step, slowest step %.2f ms, %.0f ms elapsed.",
+        run.steps, perStep, run.slowestMs, debugprofilestop() - run.started)
+    run.phase = "done"
+
+    if run.stoppedAt then return end
+    local summary = {
+        bucket = run.bucket,
+        tableCount = run.tableCount,
+        entries = run.entries,
+        histogram = run.histogram,
+    }
+    censusPrev = summary
+    censusFirst = censusFirst or summary
+end
+
+local function CensusFrame(run)
+    local frame = run.frame
+    if not frame then
+        run.phase = "tables"
+        return
+    end
+    run.frames = run.frames + 1
+    local ok, kind, key, creator = pcall(CensusInspect, frame)
+    if not ok or kind == "unreadable" then
+        run.unreadable = run.unreadable + 1
+    elseif kind == "forbidden" then
+        run.forbidden = run.forbidden + 1
+    elseif kind == "bucket" then
+        run.bucket = run.bucket + 1
+        run.histogram[key] = (run.histogram[key] or 0) + 1
+        if creator then
+            run.creators[creator] = (run.creators[creator] or 0) + 1
+        else
+            run.unknownCreators = run.unknownCreators + 1
+        end
+    end
+    run.frame = EnumerateFrames(frame)
+end
+
+local function CensusTableEntry(run)
+    if not run.tbl then
+        local top = run.top
+        if top == 0 then
+            run.phase, run.rankIndex, run.key = "rank", 1, nil
+            return
+        end
+        run.tbl, run.owner, run.key = run.stackTables[top], run.stackOwners[top], nil
+        run.stackTables[top], run.stackOwners[top] = nil, nil
+        run.top = top - 1
+        if run.owner ~= SAVED then run.tableCount = run.tableCount + 1 end
+    end
+    -- A throw means the table changed between steps (its key was removed):
+    -- the rest of that table is skipped and counted.
+    local ok, key, value = pcall(next, run.tbl, run.key)
+    if not ok then
+        run.skipped = run.skipped + 1
+        run.tbl = nil
+    elseif key == nil then
+        run.tbl = nil
+    else
+        run.key = key
+        CensusEntry(run, key, value, run.owner)
+    end
+end
+
+-- One unit of whichever walking or ranking phase the run is in. A `next` that
+-- throws while marking libraries or globals is deliberately not caught: it
+-- aborts the census, because a partial mark would let the walk enter tables
+-- that are not KE's.
+local function CensusUnit(run)
+    local phase = run.phase
+    if phase == "libs" or phase == "globals" then
+        local key, value = next(phase == "libs" and run.libraries or _G, run.key)
+        run.key = key
+        if key == nil then
+            run.phase = phase == "libs" and "globals" or "frames"
+        elseif not KE:IsSecretValue(value) and type(value) == "table"
+            and (phase == "libs" or not IsOwnGlobal(key)) then
+            run.seen[value] = true
+        end
+    elseif phase == "frames" then
+        CensusFrame(run)
+    elseif phase == "tables" then
+        CensusTableEntry(run)
+    else
+        local source = RANKED[run.rankIndex]
+        if not source then
+            run.phase = "report"
+            return
+        end
+        local key, count = next(run[source], run.key)
+        run.key = key
+        if key == nil then
+            run.rankIndex = run.rankIndex + 1
+        else
+            RankInto(run.ranked[source], key, count)
+        end
+    end
+end
+
+-- Entries added to or removed from a live table between steps may be counted
+-- or missed; the step cap is what ends a walk that never catches up. The step
+-- is counted before any work, so the report step counts itself.
+local function CensusSlice(run)
+    local started = debugprofilestop()
+    run.steps = run.steps + 1
+    if run.phase == "report" then
+        CensusReport(run, started)
+        return
+    end
+    local deadline = started + CENSUS_BUDGET_MS
+    local framesBefore = run.frames
+    local units = 0
+    while run.phase ~= "report" and units < CENSUS_SLICE and debugprofilestop() < deadline do
+        CensusUnit(run)
+        units = units + 1
+    end
+    if run.frames > framesBefore then run.frameSteps = run.frameSteps + 1 end
+    local ms = debugprofilestop() - started
+    if ms > run.slowestMs then run.slowestMs = ms end
+    if WALKING[run.phase] and run.steps >= CENSUS_MAX_STEPS then
+        run.stoppedAt = run.steps
+        run.phase, run.rankIndex, run.key, run.tbl = "rank", 1, nil, nil
+    end
+end
+
+-- Every exit clears the running flag, so a throw or a failed schedule never
+-- leaves the command refusing for the rest of the session.
+local function CensusStep(run)
+    local ok, err = pcall(CensusSlice, run)
+    if ok and run.phase ~= "done" then
+        if pcall(C_Timer.After, 0, function() CensusStep(run) end) then return end
+        ok, err = false, "could not schedule the next step"
+    end
+    censusRunning = false
+    if not ok then pf("Census aborted: %s", tostring(err)) end
+end
+
+local function RunCensus()
+    if censusRunning then
+        p("Census already running.")
+        return
+    end
+    local ok, first = pcall(EnumerateFrames)
+    if not ok then
+        p("Census aborted: the frame list could not be read.")
+        return
+    end
+    local libraries = type(LibStub) == "table" and rawget(LibStub, "libs")
+    local run = {
+        phase = "libs", libraries = type(libraries) == "table" and libraries or {},
+        frame = first, started = debugprofilestop(),
+        frames = 0, forbidden = 0, unreadable = 0, bucket = 0,
+        histogram = {}, creators = {}, unknownCreators = 0,
+        steps = 0, frameSteps = 0, slowestMs = 0,
+        top = 0, stackTables = {}, stackOwners = {}, seen = { [_G] = true },
+        tableCount = 0, entries = 0, savedEntries = 0, frameRefs = 0, skipped = 0,
+        byKey = {}, ranked = { histogram = {}, creators = {}, byKey = {} },
+    }
+    -- KE.db.sv goes on the stack last, so its walk runs first and marks every
+    -- saved table seen before KE.db.profile can reach it.
+    CensusPush(run, KE, ROOT)
+    CensusPush(run, KE.db and KE.db.sv, SAVED)
+    -- Printed before the flag goes up: a throw here must not leave every later
+    -- start refused. Nothing runs between the flag and the protected step.
+    p("Census started.")
+    censusRunning = true
+    CensusStep(run)
+end
+
+local function ResetCensus()
+    censusFirst, censusPrev = nil, nil
+    p("Census baseline cleared.")
+end
+
+---------------------------------------------------------------------------------
 -- Help
 ---------------------------------------------------------------------------------
 
@@ -854,6 +1195,8 @@ local function PrintHelp()
     p("  list              — list saved snapshots.")
     p("  diff <a> [b]      — diff snapshots in one reset window (default b = now).")
     p("  clear             — delete all saved snapshots.")
+    p("  census            — count frames and KE tables; diff against earlier runs.")
+    p("  census reset      — forget this session's census baselines.")
     p("Workflow: /kes profiler on -> /reload -> /kes profiler reset -> exercise UI -> /kes profiler cpu")
 end
 
@@ -898,6 +1241,12 @@ function Profiler.RunCommand(input)
         DiffSnapshots(a, (b ~= "" and b) or nil)
     elseif cmd == "clear" then
         ClearSnapshots()
+    elseif cmd == "census" then
+        if rest:lower() == "reset" then
+            ResetCensus()
+        else
+            RunCensus()
+        end
     else
         pf("Unknown subcommand '%s'.  Try /kes profiler help.", cmd)
     end
@@ -917,5 +1266,6 @@ Profiler.GatherCpuRows  = GatherCpuRows
 Profiler.GroupSharedRows = GroupSharedRows
 Profiler.GetFooterDisplay = GetFooterDisplay
 Profiler.OldestSnapshotLabel = OldestSnapshotLabel
+Profiler.CensusKey = CensusKey
 
 KE.Profiler = Profiler

@@ -1256,3 +1256,11 @@ describe("Profiler snapshot cap", function()
         assert.is_nil(table.concat(state.printed, "\n"):find("Dropped", 1, true))
     end)
 end)
+
+describe("Profiler census key", function()
+    it("keys a frame by its type and children:regions", function()
+        local key = loadProfiler().profiler.CensusKey
+        assert.equals("Frame 0:0", key("Frame", 0, 0))
+        assert.equals("Button 2:5", key("Button", 2, 5))
+    end)
+end)
