@@ -273,15 +273,11 @@ end
 -- Overlay API (public)
 ---------------------------------------------------------------------------------
 
--- One-time overlay setup: register the tooltip post-call and (if the nameplate
--- overlay is enabled in DB) the nameplate add/remove events. Safe to call again;
--- SetupTooltip self-guards and RegisterEvent is idempotent in AceEvent.
+-- One-time overlay setup: the tooltip post-call. Safe to call again;
+-- SetupTooltip self-guards. The nameplate events belong to a run and come on
+-- in SetOverlayActive.
 function MPT:InitOverlay()
     SetupTooltip()
-    if self.db and self.db.OverlayNameplateEnabled then
-        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
-    end
 end
 
 -- Activate or deactivate the nameplate overlay. `active` reflects this
@@ -305,9 +301,10 @@ end
 -- the nameplate subsystem to match the current DB + live-refreshes style/position.
 function MPT:ApplyOverlaySettings()
     if self.db and self.db.OverlayNameplateEnabled then
-        self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
-        self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+        -- Out of a key the run start registers them.
         if IsInChallengeMode() then
+            self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+            self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
             StartNameplateTicker()
             UpdateAllNameplateTexts()
         end

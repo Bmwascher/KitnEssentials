@@ -17,7 +17,6 @@ return {
     missing_ok = {
         GetMouseFocus = "removed API; deliberate nil-checked compat (GUI/GUIHelpers/GUI-FrameChooser.lua:111)",
         GetMacroIndexByName = "undocumented C-side macro API; works in 12.0.x (PIMacroBuilder/FocusMarker/GUI-TotemTracker)",
-        C_CastingInfo = "removed namespace; nil-checked forward-compat (DungeonCasts.lua:757)",
         IsWargame = "undocumented C-side; /run-verified function (type probe) 12.0.7 2026-07-05 (CombatLogger.lua:156)",
         CharacterFrameTitleText = "generated frame name ($parentTitleText — literal grep can't see it); /run-verified frame exists in 12.0.7 2026-07-01 (CharacterPanel.lua:855)",
         ROLL_DISENCHANT = "GlobalStrings.lua constant, not in the UI-source export; /run-verified = \"Disenchant\" in 12.0.7 2026-07-31 (Modules/Skinning/LootRollBars.lua:237)",

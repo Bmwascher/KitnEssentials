@@ -61,15 +61,12 @@ end)
 -- a live cast colour and contradict its own text.
 describe("DungeonCasts interrupt hold vs interruptible repaint", function()
     local function loadWithBar(holdUntil)
-        local DC = L.loadDungeonCasts({
-            C_CastingInfo = {
-                GetCastInfo = function() return { notInterruptible = false } end,
-                GetChannelInfo = function() return nil end,
-            },
-        })
+        -- The loader's cast readers answer nil, which keeps the bar's last
+        -- value and still repaints.
+        local DC = L.loadDungeonCasts()
         local repainted = false
         DC.UpdateBarColor = function() repainted = true end
-        DC.activeFrames = { nameplate1 = { holdUntil = holdUntil } }
+        DC.activeFrames = { nameplate1 = { holdUntil = holdUntil, casting = true } }
         return DC, function() return repainted end
     end
 

@@ -376,11 +376,11 @@ end
 -- Debounced, because the library's callback arrives once per party member.
 local glowRefreshPending = false
 local function QueueGlowRefresh()
-    if glowRefreshPending then return end
+    if glowRefreshPending or not QC.EntryPanelOpen() then return end
     glowRefreshPending = true
     C_Timer.After(0.2, function()
         glowRefreshPending = false
-        RefreshGlow()
+        if QC.EntryPanelOpen() then RefreshGlow() end
     end)
 end
 
@@ -410,6 +410,14 @@ local function RequestPartyKeys()
     if LKS and IsInGroup() then
         LKS.Request("PARTY") -- library-throttled at 3s; replies land in the callback
     end
+end
+
+-- The panel's OnShow repaints, so a repaint while it is closed draws a row
+-- nobody can see. IsVisible, not IsShown: closing the Group Finder hides the
+-- panel through its parent, and IsShown stays true.
+function QC.EntryPanelOpen()
+    local ec = _G.LFGListFrame and _G.LFGListFrame.EntryCreation
+    return ec ~= nil and ec:IsVisible()
 end
 
 MakeButton = function(parent, dungeon, index)
@@ -796,7 +804,9 @@ function QC:ApplySettings()
     if self.db and self.db.Enabled ~= false then
         Init()
         local ec = _G.LFGListFrame and _G.LFGListFrame.EntryCreation
-        if ec and ec:IsShown() and container then
+        -- Every world enter reaches here; with the panel closed its OnShow does
+        -- this same work when it next opens.
+        if ec and container and QC.EntryPanelOpen() then
             if self.db.QuickCreate ~= false then
                 PushLayout(ec); SyncVisibility(); RefreshGlow()
             else

@@ -27,7 +27,6 @@ local GetRaidTargetIndex = GetRaidTargetIndex
 local SetRaidTargetIconTexture = SetRaidTargetIconTexture
 local C_Timer = C_Timer
 local C_DurationUtil = C_DurationUtil
-local C_CastingInfo = C_CastingInfo
 local C_ClassColor = C_ClassColor
 local C_Spell = C_Spell
 local GetSpecialization = C_SpecializationInfo.GetSpecialization
@@ -1101,13 +1100,24 @@ function DC:UpdateInterruptible(unit)
     -- A held bar shows the interrupt colour under "Interrupted by X". Recolouring
     -- it to a live cast colour would contradict its own text.
     if bar.holdUntil then return end
+    -- Cast events stay registered while the preview is up, and UpdateBarColor's
+    -- preview branch tests notInterruptible for truth, which errors on a secret.
+    if self.isPreview then return end
+    if not (bar.casting or bar.channeling) then return end
 
-    local castInfo = C_CastingInfo and
-        (C_CastingInfo.GetCastInfo(unit) or C_CastingInfo.GetChannelInfo(unit))
-    if castInfo then
-        bar.notInterruptible = castInfo.notInterruptible
-        self:UpdateBarColor(bar)
+    -- Secret for hostile casts in restricted content; it only reaches the colour
+    -- sinks UpdateBarColor already feeds it to at cast start.
+    local notInterruptible
+    if bar.casting then
+        notInterruptible = select(8, UnitCastingInfo(unit))
+    else
+        notInterruptible = select(7, UnitChannelInfo(unit))
     end
+    -- Nil between cast states; keep the last answer until the next event.
+    if notInterruptible ~= nil then
+        bar.notInterruptible = notInterruptible
+    end
+    self:UpdateBarColor(bar)
 end
 
 function DC:ScanExistingNameplates()
