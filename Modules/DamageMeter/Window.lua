@@ -6,7 +6,7 @@
 -- ║           path (secret-safe SetValue + text gating) is   ║
 -- ║           built in the next chunk. Each window is a      ║
 -- ║           header + scroll viewport + content child, with ║
--- ║           BAR_POOL_SIZE bars pre-acquired once and laid  ║
+-- ║           up to BAR_POOL_SIZE bars built on demand, laid ║
 -- ║           out top-to-bottom on the pixel grid.           ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -64,10 +64,10 @@ local nickByGUID = {}
 ---------------------------------------------------------------------------------
 -- Constants
 --
--- BAR_POOL_SIZE is the fixed number of bar rows each window pre-allocates once.
--- The render layer only ever shows up to this many (VisibleBars is clamped
--- against it), so the pool never grows after CreateWindow. RANK_STRINGS caches the "N."
--- rank labels so the render path never builds them per tick.
+-- BAR_POOL_SIZE is the most bar rows a window ever builds; DM:EnsureBars
+-- builds them on demand up to it (VisibleBars is clamped against it).
+-- RANK_STRINGS caches the "N." rank labels so the render path never builds
+-- them per tick.
 ---------------------------------------------------------------------------------
 
 local BAR_POOL_SIZE = 40
@@ -276,7 +276,7 @@ local function MakeBar(parent, db)
 
     -- Hover quick-peek. Forward-resolved like OnClick above
     -- (Detail.lua defines ShowHoverTip / HideHoverTip and loads after Window.lua).
-    -- bar.win is assigned where the pool is built in CreateWindow; the methods
+    -- bar.win is assigned where the row is built (DM:EnsureBars); the methods
     -- guard against a missing window themselves. The populate path is OOC-gated
     -- for secret reads and shows a "secret while in combat" message in combat.
     row:SetScript("OnEnter", function()
@@ -290,12 +290,47 @@ local function MakeBar(parent, db)
     return bar
 end
 
+-- Builds bar rows up to n, capped at the pool size; rows are never destroyed.
+-- Geometry comes from the window's cached snap values, never a frame getter,
+-- so a combat tick can call it.
+function DM:EnsureBars(W, n)
+    if n > BAR_POOL_SIZE then n = BAR_POOL_SIZE end
+    local built = #W.bars
+    if built >= n then return end
+    local db = self.db
+    local snapHeight = W._snapHeight
+    local snapStride = W._snapStride
+    local valueGutter = KE:PixelSnap(((db and db.FontSize) or 12) * VALUE_GUTTER_SINGLE)
+    for i = built + 1, n do
+        local bar = MakeBar(W.content, db)
+        local row = bar.row
+        row:SetHeight(snapHeight)
+        row:ClearAllPoints()
+        local yOff = -(i - 1) * snapStride
+        row:SetPoint("TOPLEFT", W.content, "TOPLEFT", 0, yOff)
+        row:SetPoint("TOPRIGHT", W.content, "TOPRIGHT", 0, yOff)
+        row.iconFrame:SetSize(snapHeight, snapHeight)
+        ApplyFillGeometry(row, db, snapHeight)
+        -- Default anchors until the first render re-anchors for the live
+        -- view. Anchored to the row and icon frame, not the fill, so
+        -- centering holds in BarThinLine mode.
+        row.rank:ClearAllPoints()
+        row.rank:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+        row.name:ClearAllPoints()
+        row.name:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
+        row.name:SetPoint("RIGHT", row, "RIGHT", -valueGutter, 0)
+        bar.win = W
+        row:Hide()
+        W.bars[i] = bar
+    end
+end
+
 ---------------------------------------------------------------------------------
 -- Window factory
 --
 -- Builds a fully independent window frame tree (frame + header + scroll
--- viewport + content child) and a create-once bar pool. Rows are pre-acquired
--- once and laid out top-to-bottom on the content child; the render chunk
+-- viewport + content child). Bar rows are built on demand (DM:EnsureBars),
+-- laid out top-to-bottom on the content child; the render chunk
 -- shows/hides and positions the fill, never re-creating widgets.
 ---------------------------------------------------------------------------------
 
@@ -413,7 +448,7 @@ function DM:CreateWindow(winIdx)
 
     -- Header icons: settings / reset / segment / report, right-aligned,
     -- stepping left from the frame's TOPRIGHT (report furthest left). Built once here
-    -- (the pool-build below never re-runs); visibility is driven by db.ShowHeaderIcons.
+    -- (CreateWindow runs once per window); visibility is driven by db.ShowHeaderIcons.
     -- The frame level is bumped above the bars so the icons stay clickable over
     -- the body rows. The
     -- callbacks resolve DM methods at click time (Core.lua defines them), matching
@@ -565,49 +600,9 @@ function DM:CreateWindow(winIdx)
     local snapHeight = KE:PixelSnap(barHeight)
     local snapSpacing = KE:PixelSnap(barSpacing)
     local snapStride = snapHeight + snapSpacing
-    -- Default value gutter for the pre-render name anchor below (single-value
-    -- width; RenderBar re-anchors per the live view/format on first paint).
-    local valueGutter = KE:PixelSnap(((self.db and self.db.FontSize) or 12) * VALUE_GUTTER_SINGLE)
-
-    -- Create-once bar rows. KE.FramePool is a render-time pool (ReleaseAll +
-    -- Acquire each tick); these rows are permanent and owned by the window, so
-    -- a plain build-once loop is used instead. The render layer indexes W.bars
-    -- directly and toggles row visibility -- there is no pool to ReleaseAll.
-    for i = 1, BAR_POOL_SIZE do
-        local bar = MakeBar(W.content, self.db)
-        local row = bar.row
-
-        row:SetHeight(snapHeight)
-        row:ClearAllPoints()
-        local yOff = -(i - 1) * snapStride
-        row:SetPoint("TOPLEFT", W.content, "TOPLEFT", 0, yOff)
-        row:SetPoint("TOPRIGHT", W.content, "TOPRIGHT", 0, yOff)
-
-        -- Square icon sized to the (snapped) row height.
-        row.iconFrame:SetSize(snapHeight, snapHeight)
-
-        -- Fill anchor: full row, or a thin bottom strip in BarThinLine mode.
-        ApplyFillGeometry(row, self.db, snapHeight)
-
-        -- rank/name anchor left after the icon; resolved fully in the render
-        -- chunk (which knows ShowIcon/ShowRank). Provide a sane default anchor
-        -- so the row is laid out even before first render. Anchored to the ROW /
-        -- icon frame (not row.fill) so vertical centering holds in BarThinLine
-        -- mode; identical in normal mode (fill == row). The name's RIGHT edge
-        -- stops at the fixed value gutter, never at the live value text.
-        row.rank:ClearAllPoints()
-        row.rank:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
-        row.name:ClearAllPoints()
-        row.name:SetPoint("LEFT", row.iconFrame, "RIGHT", 3, 0)
-        row.name:SetPoint("RIGHT", row, "RIGHT", -valueGutter, 0)
-
-        -- Back-reference for the render layer / OnClick (forward-compatible).
-        bar.win = W
-        row:Hide()
-        W.bars[i] = bar
-    end
-
-    -- Snapped geometry is reused by the render/layout chunk.
+    -- Rows are permanent and owned by the window, so KE.FramePool (released
+    -- and re-acquired each tick) does not fit. LayoutWindow below builds the
+    -- first rows through DM:EnsureBars, which reads this geometry.
     W._snapHeight = snapHeight
     W._snapSpacing = snapSpacing
     W._snapStride = snapStride
@@ -666,6 +661,7 @@ function DM:LayoutWindow(W)
     local visible = math_min(visibleDB, BAR_POOL_SIZE)
     if stride <= 0 then stride = 1 end
     local barsH = visible * stride
+    self:EnsureBars(W, visible)
 
     -- Re-anchor the body only when the header band changes (first call always
     -- runs; SetPoint is idempotent so re-running is harmless either way).
@@ -719,8 +715,8 @@ end
 -- Live geometry re-apply
 --
 -- Recomputes the snapped per-row geometry from the current appearance DB and, if
--- it changed, re-applies it to every pooled row (height, top-anchored stride,
--- icon square). The create-once pool is reused — NO frames are rebuilt (rebuilding
+-- it changed, re-applies it to every built row (height, top-anchored stride,
+-- icon square). Built rows are reused — NO frames are rebuilt (rebuilding
 -- would leak the old frame trees). Called by DM:ApplySettings when the user drags
 -- BarHeight / BarSpacing / VisibleBars / Width in the GUI.
 ---------------------------------------------------------------------------------
@@ -736,7 +732,7 @@ function DM:ApplyWindowGeometry(W)
         W._snapHeight = snapHeight
         W._snapSpacing = snapSpacing
         W._snapStride = snapStride
-        for i = 1, BAR_POOL_SIZE do
+        for i = 1, #W.bars do
             local row = W.bars[i].row
             row:SetHeight(snapHeight)
             row:ClearAllPoints()
@@ -751,7 +747,7 @@ function DM:ApplyWindowGeometry(W)
     -- settings apply: BarThinLine / BarThinLineHeight can toggle without snapHeight
     -- changing, so this isn't covered by the dirty-gate above. Cheap (user-driven, not
     -- per tick); snapHeight is the live snapped row height clamp for the strip.
-    for i = 1, BAR_POOL_SIZE do
+    for i = 1, #W.bars do
         ApplyFillGeometry(W.bars[i].row, db, snapHeight)
     end
 
@@ -805,7 +801,7 @@ function DM:ReapplyBarVisuals(W)
     -- ShowTypeIcon (or the header font) re-evaluates the meter-type glyph + title anchor --
     -- that block is otherwise dirty-gated on meter/session type, which a toggle doesn't move.
     W._headerType = nil
-    for i = 1, BAR_POOL_SIZE do
+    for i = 1, #W.bars do
         local bar = W.bars[i]
         local row = bar.row
         row.fill:SetStatusBarTexture(texPath)
@@ -1490,7 +1486,7 @@ function DM:RenderWindow(W)
         -- No session/data this segment: hide every pooled row so stale bars from
         -- a prior segment don't linger. Gate on IsShown so already-hidden rows
         -- skip the redundant widget call.
-        for i = 1, self.BAR_POOL_SIZE do
+        for i = 1, #W.bars do
             local row = W.bars[i].row
             if row:IsShown() then row:Hide() end
         end
@@ -1676,7 +1672,9 @@ function DM:RenderWindow(W)
     -- filled + shown; everything else (above the fold, below count, or past count) is
     -- hidden (no stale bar lingers).
     local maxAmount = session.maxAmount
-    for i = 1, self.BAR_POOL_SIZE do
+    -- A list longer than the viewport, or a scroll, needs rows not built yet.
+    if lastVis > #W.bars then self:EnsureBars(W, lastVis) end
+    for i = 1, #W.bars do
         local bar = W.bars[i]
         local row = bar.row
         if i >= firstVis and i <= lastVis then
