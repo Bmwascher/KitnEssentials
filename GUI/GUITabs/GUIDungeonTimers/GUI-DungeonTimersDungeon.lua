@@ -1488,7 +1488,7 @@ end
 
 GUIFrame:NewWidgetPool("dtd:chip", ConstructChip, function() end)
 
--- The text takes the preset's own colour, so the palette documents itself.
+-- The text takes the preset's own colour, which is the colour the bar gets.
 local function ConfigureChip(chip, label, color, onClick)
     local T = KE.Theme
     chip:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
