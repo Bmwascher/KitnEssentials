@@ -12,6 +12,37 @@ local Theme    = KE.Theme
 
 local function GetModule() return KitnEssentials and KitnEssentials:GetModule("AuraDebuffs", true) end
 
+-- Hover-only hint for an always-on entry. The toggle has no way to change its
+-- tooltip after creation, so a thin mouse catcher sits over it, shown only
+-- while such an entry is selected: a disabled toggle drops its own mouse
+-- handling, which leaves this frame free to take the hover.
+local function ConstructAlwaysOnHint(parent)
+    local hint = CreateFrame("Frame", nil, parent)
+    hint:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
+        GameTooltip:SetText(
+            "Always filtered. This entry is applied unconditionally and cannot be turned off.",
+            1, 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    hint:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    function hint:Configure(toggle)
+        self:ClearAllPoints()
+        self:SetAllPoints(toggle)
+        self:SetFrameLevel(toggle:GetFrameLevel() + 10)
+        self:EnableMouse(true)
+        self:Hide()
+    end
+
+    hint._keOwned = { hint }
+    return hint
+end
+
+GUIFrame:NewWidgetPool("auradebuffs:hint", ConstructAlwaysOnHint, function(hint)
+    if GameTooltip:IsOwned(hint) then GameTooltip:Hide() end
+end)
+
 GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     local db = KE.db and KE.db.profile.AuraDebuffs
     if not db then
@@ -542,26 +573,11 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     selectRow:AddWidget(enabledToggle, 0.5, 3)
     manager:Register(enabledToggle, "toggleable")
 
-    -- Hover-only hint for an always-on entry. The toggle widget has no
-    -- public API to change its tooltip after creation, so a thin mouse
-    -- catcher sits over it instead, shown only while such an entry is
-    -- selected -- SetEnabled(false) on the toggle already drops its own
-    -- mouse handling, leaving this frame free to receive the hover.
-    enabledAlwaysOnHint = CreateFrame("Frame", nil, enabledToggle.toggle)
-    enabledAlwaysOnHint:SetAllPoints(enabledToggle.toggle)
-    enabledAlwaysOnHint:SetFrameLevel(enabledToggle.toggle:GetFrameLevel() + 10)
-    enabledAlwaysOnHint:EnableMouse(true)
-    enabledAlwaysOnHint:Hide()
-    enabledAlwaysOnHint:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
-        GameTooltip:SetText(
-            "Always filtered. This entry is applied unconditionally and cannot be turned off.",
-            1, 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    enabledAlwaysOnHint:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
     card8:AddRow(selectRow, Theme.rowHeight)
+
+    -- After the row is on its card, so no later reparent moves its level.
+    enabledAlwaysOnHint = GUIFrame:AcquirePooled("auradebuffs:hint", selectRow)
+    enabledAlwaysOnHint:Configure(enabledToggle.toggle)
 
     -- Separator under select/toggle row
     local sep2Row = GUIFrame:CreateRow(card8.content, Theme.rowHeightSeparator)
