@@ -692,7 +692,10 @@ local function ConstructSlider(parent)
         self._onValueChanged = fn
     end
 
-    row._keOwned = { row, slider, valueContainer }
+    row._keOwned = {
+        row, sliderBG, slider, thumbFrameBG, thumbFrame,
+        leftStepper, rightStepper, valueContainer, valueEdit,
+    }
     return row
 end
 

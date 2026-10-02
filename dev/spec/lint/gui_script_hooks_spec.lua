@@ -67,10 +67,12 @@ local function MadeNearby(text, receiver, pos)
     local value
     local from = 1
     while true do
-        local s, e, rhs = text:find(pattern, from)
+        local s, _, rhs = text:find(pattern, from)
         if not s or s >= pos then break end
         value = rhs
-        from = e + 1
+        -- One character on, not past the match: a match runs to the end of
+        -- its line, and a later assignment on that line is the nearer one.
+        from = s + 1
     end
     if not value then return false end
     return value:find("^%s*[%w_%.:]*CreateFrame%s*%(") ~= nil
@@ -160,9 +162,11 @@ describe("script hooks in the settings GUI", function()
             'row:SetScript("OnShow", Paint)',
             "row = GUIFrame:CreateRow(parent)",
             'row:SetScript("OnHide", Paint)',
+            'local cell = CreateFrame("Frame", nil, parent); cell = GUIFrame:CreateRow(parent)',
+            'cell:SetScript("OnShow", Paint)',
         }, "\n")
         local offenders = {}
         SetScriptOffenders("sample.lua", sample, offenders, {})
-        assert.same({ "sample.lua|row" }, offenders)
+        assert.same({ "sample.lua|row", "sample.lua|cell" }, offenders)
     end)
 end)
