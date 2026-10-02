@@ -234,49 +234,46 @@ local function GetSchematicGhost()
     return g
 end
 
--- Builds the layout-map schematic: one box per window, positioned proportionally
--- to mirror the in-world dock (columns left->right, stacked rows top->bottom),
--- each stamped with its on-screen display number (posOf) + the FULL panel label
--- (fullLabel(idx), matching the in-world header exactly -- e.g. "Overall Damage
--- Done"). Returns a container frame the caller AddRow's into the card. Boxes are
--- positioned in the container's OnSizeChanged (its width isn't known until AddRow
--- anchors it). The map is the ONLY arranging surface: drag a box onto another box's
--- CENTER to stack/reorder (a horizontal line shows the row gap it lands in), or drag
--- to a column's SIDE / off the map edge to peel it into its own new column (a
--- vertical line shows the column boundary it lands at). A cursor-following ghost
--- shows what you grabbed throughout.
-local function BuildSchematic(card, height, cols, posOf, fullLabel)
-    local T = Theme
-    local container = CreateFrame("Frame", nil, card.content)
-    container:SetHeight(height)
+-- The layout map: one box per window, placed to mirror the in-world dock
+-- (columns left to right, stacked rows top to bottom), each showing its
+-- on-screen number and its full panel label. It is the only arranging
+-- surface: drag a box onto another box's centre to stack or reorder (a
+-- horizontal line shows the row gap it lands in), or to a column's side or
+-- off the map edge to peel it into a new column (a vertical line shows the
+-- boundary). A ghost follows the cursor throughout.
+local function ConstructSchematic(parent)
+    local container = CreateFrame("Frame", nil, parent)
+    -- Kept across uses: OnSizeChanged does not fire for a map that comes
+    -- back at the width it last reported.
+    container._keWidth = 0
 
-    local boxAt = {}    -- boxAt[c][r] = box frame
-    local allBoxes = {} -- flat list for drag hit-testing + highlight
+    local boxes = {}
 
-    -- Insertion line: a bright theme-accent bar shown where the dragged window will
-    -- land -- horizontal in a row gap (stack: top of the hovered box = before, bottom
-    -- = after) or vertical at a column boundary (new column). Accent (not white) so it
-    -- pops against the dark gaps; the hovered box's WHITE border stays the distinct
-    -- "this is the target column" cue during a stack drag.
     local dropLine = container:CreateTexture(nil, "OVERLAY")
-    dropLine:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 1)
     dropLine:SetHeight(3)
     dropLine:Hide()
 
-    -- Restore every box's resting accent border (clears any drag highlight).
     local function ResetBorders()
-        for _, b in ipairs(allBoxes) do
-            b:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 0.9)
+        local T = Theme
+        for i = 1, container._count or 0 do
+            boxes[i]:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 0.9)
         end
     end
 
-    -- Representative SURVIVING window of column c (the first window that isn't the
-    -- one being dragged) -- nil if c is out of range or holds ONLY the dragged window
-    -- (that column is dropped on release, so it can't anchor a new-column insert).
-    -- Lets a new-column drop be identified in a way that survives the dragged
-    -- window's own removal (the backend re-finds the anchor post-removal).
+    local function ClearDrop()
+        container._dropMode = nil
+        container._dropAnchor = nil
+        container._dropAfter = nil
+        container._dropLeftRep = nil
+        container._dropRightRep = nil
+    end
+
+    -- The first window of column c that is not the one being dragged, or nil
+    -- when c is out of range or holds only the dragged window. That column
+    -- is dropped on release, so it cannot anchor a new-column insert.
     local function repOf(c, dragWin)
-        if c < 1 or c > #cols then return nil end
+        local cols = container._cols
+        if not cols or c < 1 or c > #cols then return nil end
         local wins = cols[c] and cols[c].Windows
         if not wins then return nil end
         for r = 1, #wins do
@@ -285,32 +282,23 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
         return nil
     end
 
-    -- Parks the insertion line VERTICAL at content-x lineX (a column boundary),
-    -- spanning the map's full height. Defined once (captures dropLine/container/
-    -- height) so the per-frame DragUpdate allocates no closure while dragging.
     local function showColLine(lineX)
         dropLine:ClearAllPoints()
-        dropLine:SetSize(3, height)
+        dropLine:SetSize(3, container._height or 0)
         dropLine:SetPoint("TOPLEFT", container, "TOPLEFT", lineX - 1.5, 0)
         dropLine:Show()
     end
 
-    -- Per-frame drag feedback (attached as the container OnUpdate only while a box is
-    -- being dragged). Moves the ghost to the cursor, then resolves ONE drop from the
-    -- cursor's x-zone over the map:
-    --   * CENTER of a column      -> STACK: a horizontal line shows the row gap it
-    --                                lands in (above the hovered box, or below when
-    --                                the cursor is in its lower half).
-    --   * SIDE of a column / off  -> NEW COLUMN: a vertical line shows the column
-    --     the map edge               boundary; the left/right anchor windows are
-    --                                stashed so the insert survives idx's removal.
-    -- The chosen drop (_dropMode + anchors) is stashed on the container for
-    -- OnDragStop. No valid target -> everything clears (a drop there is a no-op).
+    -- The container's OnUpdate, attached only while a box is being dragged.
+    -- Moves the ghost to the cursor, then resolves one drop from where the
+    -- cursor is over the map: the centre of a column stacks into it, a
+    -- column's side or beyond the map edge makes a new column. The choice is
+    -- left on the container for OnDragStop.
     local function DragUpdate()
         local dragWin = container._dragWin
-        if not dragWin then return end
+        local cols, boxAt = container._cols, container._boxAt
+        if not (dragWin and cols and boxAt) then return end
 
-        -- Ghost follows the cursor (UIParent space).
         local ghost = GetSchematicGhost()
         local us = UIParent:GetEffectiveScale()
         local mx, my = GetCursorPosition()
@@ -318,11 +306,7 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
         ghost:SetPoint("CENTER", UIParent, "BOTTOMLEFT", (mx / us) + 16, (my / us) - 14)
 
         ResetBorders()
-        container._dropMode = nil
-        container._dropAnchor = nil
-        container._dropAfter = nil
-        container._dropLeftRep = nil
-        container._dropRightRep = nil
+        ClearDrop()
 
         -- Boxes share the container's effective scale; one division covers all.
         local cs = container:GetEffectiveScale()
@@ -331,8 +315,8 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
         local cLeft = container:GetLeft()
         if not cLeft then dropLine:Hide() return end
 
-        -- Which column is the cursor over (by x)? Boxes in a column share its x-span,
-        -- so the first box of each column gives the column's left/right edges.
+        -- Boxes in a column share its x-span, so the first box of each
+        -- column gives the column's left and right edges.
         local hoverCol, colL, colR
         for c = 1, #cols do
             local b = boxAt[c] and boxAt[c][1]
@@ -346,14 +330,12 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
         end
 
         if not hoverCol then
-            -- Off the left/right edge of the map -> new column at that end.
             local cRight = container:GetRight()
             if cRight and cx > cRight then
                 container._dropMode = "newcol"
-                -- `or repOf(#cols - 1)` covers the dragged window being SOLO in the
-                -- outermost column (that column drops on release): the next-innermost
-                -- column anchors the insert so the new column still lands at this end
-                -- instead of defaulting to the opposite side.
+                -- The second term covers the dragged window being alone in
+                -- the outermost column: the next column in anchors the
+                -- insert, so the new column still lands at this end.
                 container._dropLeftRep = repOf(#cols, dragWin) or repOf(#cols - 1, dragWin)
                 showColLine(container:GetWidth())
             elseif cx < cLeft then
@@ -366,15 +348,11 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
             return
         end
 
-        -- Zone within the hovered column: outer quarters -> new column on that side;
-        -- middle half -> stack into the column.
+        -- Outer quarters of the hovered column make a new column on that
+        -- side; the middle half stacks into the column.
         local frac = (cx - colL) / math_max(1, colR - colL)
         if frac <= 0.25 then
             container._dropMode = "newcol"
-            -- `or repOf(hoverCol + 1)` covers the dragged window being SOLO in hoverCol
-            -- (hoverCol drops on release): the column to its right anchors the insert,
-            -- so a left-edge drop on column 1 still lands leftmost rather than defaulting
-            -- to the far right.
             container._dropLeftRep = repOf(hoverCol - 1, dragWin)
             container._dropRightRep = repOf(hoverCol, dragWin) or repOf(hoverCol + 1, dragWin)
             showColLine(colL - cLeft)
@@ -384,7 +362,6 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
             container._dropRightRep = repOf(hoverCol + 1, dragWin)
             showColLine(colR - cLeft)
         else
-            -- Center zone: stack into the hovered column. Find the box under cy.
             local wins = cols[hoverCol].Windows or {}
             local hit, after
             for r = 1, #wins do
@@ -419,104 +396,87 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
         end
     end
 
-    for c = 1, #cols do
-        local wins = cols[c].Windows or {}
-        boxAt[c] = {}
-        for r = 1, #wins do
-            local idx = wins[r]
-            local box = CreateFrame("Frame", nil, container, "BackdropTemplate")
-            box:SetBackdrop({
-                bgFile = "Interface\\Buttons\\WHITE8X8",
-                edgeFile = "Interface\\Buttons\\WHITE8X8",
-                edgeSize = 1,
-            })
-            box:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
-            box:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 0.9)
-
-            local num = box:CreateFontString(nil, "OVERLAY")
-            KE:ApplyThemeFont(num, "large")
-            num:SetPoint("CENTER", box, "CENTER", 0, 5)
-            num:SetText(tostring(posOf[idx] or "?"))
-            num:SetTextColor(1, 1, 1, 1)
-            box.num = num
-
-            -- Full panel label tucked directly UNDER the number (not pinned to the box
-            -- bottom) so it stays close to the number and still shows in a short box;
-            -- wrapped so long names like "Overall Damage Done" stay readable in tall boxes.
-            local tlabel = box:CreateFontString(nil, "OVERLAY")
-            KE:ApplyThemeFont(tlabel, "small")
-            tlabel:SetPoint("TOP", num, "BOTTOM", 0, -1)
-            tlabel:SetPoint("LEFT", box, "LEFT", 2, 0)
-            tlabel:SetPoint("RIGHT", box, "RIGHT", -2, 0)
-            tlabel:SetJustifyH("CENTER")
-            tlabel:SetWordWrap(true)
-            tlabel:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
-            tlabel:SetText((fullLabel and fullLabel(idx)) or "")
-            box.tlabel = tlabel
-
-            -- Drag-to-rearrange: a cursor-following ghost shows what you grabbed and
-            -- the insertion line shows where it lands; on release the dragged window
-            -- drops at that spot -- either STACKED next to the hovered box
-            -- (DM:MoveWindowToSlot) or peeled into a NEW COLUMN at the previewed
-            -- boundary (DM:MoveWindowToNewColumn). DragUpdate decides which.
-            box.winIdx = idx
-            box:EnableMouse(true)
-            box:RegisterForDrag("LeftButton")
-            box:SetScript("OnDragStart", function(self2)
-                container._dragWin = self2.winIdx
-                container._dropMode = nil
-                container._dropAnchor = nil
-                container._dropAfter = nil
-                container._dropLeftRep = nil
-                container._dropRightRep = nil
-                self2:SetAlpha(0.4)
-                local ghost = GetSchematicGhost()
-                local label = tostring(posOf[self2.winIdx] or "?")
-                local nm = fullLabel and fullLabel(self2.winIdx)
-                if nm and nm ~= "" then label = label .. "  " .. nm end
-                ghost.text:SetText(label)
-                ghost:SetWidth(math_max(60, ghost.text:GetStringWidth() + 18))
-                ghost:Show()
-                container:SetScript("OnUpdate", DragUpdate)
-                DragUpdate()  -- position immediately, before the first frame tick
-            end)
-            box:SetScript("OnDragStop", function(self2)
-                container:SetScript("OnUpdate", nil)
-                self2:SetAlpha(1)
-                GetSchematicGhost():Hide()
-                dropLine:Hide()
-                ResetBorders()
-                local dragWin = container._dragWin
-                local mode = container._dropMode
-                local anchor = container._dropAnchor
-                local after = container._dropAfter
-                local leftRep = container._dropLeftRep
-                local rightRep = container._dropRightRep
-                container._dragWin = nil
-                container._dropMode = nil
-                container._dropAnchor = nil
-                container._dropAfter = nil
-                container._dropLeftRep = nil
-                container._dropRightRep = nil
-                local dm = GetDM()
-                if dm and dragWin then
-                    if mode == "stack" and anchor and anchor ~= dragWin then
-                        if dm.MoveWindowToSlot then dm:MoveWindowToSlot(dragWin, anchor, after) end
-                        RebuildPage()
-                    elseif mode == "newcol" then
-                        if dm.MoveWindowToNewColumn then dm:MoveWindowToNewColumn(dragWin, leftRep, rightRep) end
-                        RebuildPage()
-                    end
-                end
-            end)
-
-            boxAt[c][r] = box
-            allBoxes[#allBoxes + 1] = box
-        end
+    -- Ends a drag with nothing moved. Also the pool's reset, so a page
+    -- rebuilt under a drag leaves no ghost, line or dimmed box.
+    function container.CancelDrag()
+        container:SetScript("OnUpdate", nil)
+        container._dragWin = nil
+        ClearDrop()
+        dropLine:Hide()
+        for i = 1, #boxes do boxes[i]:SetAlpha(1) end
+        ResetBorders()
+        if schematicGhost then schematicGhost:Hide() end
     end
 
-    local function layout(width)
-        if not width or width <= 0 then return end
+    local function NewBox()
+        local box = CreateFrame("Frame", nil, container, "BackdropTemplate")
+        box:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+        })
+
+        local num = box:CreateFontString(nil, "OVERLAY")
+        num:SetPoint("CENTER", box, "CENTER", 0, 5)
+        box.num = num
+
+        -- Tucked under the number, not pinned to the box bottom, so it
+        -- still shows in a short box; wrapped so a long name stays readable.
+        local tlabel = box:CreateFontString(nil, "OVERLAY")
+        tlabel:SetPoint("TOP", num, "BOTTOM", 0, -1)
+        tlabel:SetPoint("LEFT", box, "LEFT", 2, 0)
+        tlabel:SetPoint("RIGHT", box, "RIGHT", -2, 0)
+        tlabel:SetJustifyH("CENTER")
+        tlabel:SetWordWrap(true)
+        box.tlabel = tlabel
+
+        box:EnableMouse(true)
+        box:RegisterForDrag("LeftButton")
+        box:SetScript("OnDragStart", function(self)
+            local posOf, fullLabel = container._posOf, container._fullLabel
+            if not posOf then return end
+            container._dragWin = self.winIdx
+            ClearDrop()
+            self:SetAlpha(0.4)
+            local ghost = GetSchematicGhost()
+            local label = tostring(posOf[self.winIdx] or "?")
+            local nm = fullLabel and fullLabel(self.winIdx)
+            if nm and nm ~= "" then label = label .. "  " .. nm end
+            ghost.text:SetText(label)
+            ghost:SetWidth(math_max(60, ghost.text:GetStringWidth() + 18))
+            ghost:Show()
+            container:SetScript("OnUpdate", DragUpdate)
+            DragUpdate()  -- position immediately, before the first frame tick
+        end)
+        box:SetScript("OnDragStop", function()
+            local dragWin = container._dragWin
+            local mode = container._dropMode
+            local anchor = container._dropAnchor
+            local after = container._dropAfter
+            local leftRep = container._dropLeftRep
+            local rightRep = container._dropRightRep
+            container.CancelDrag()
+            local dm = GetDM()
+            if dm and dragWin then
+                if mode == "stack" and anchor and anchor ~= dragWin then
+                    if dm.MoveWindowToSlot then dm:MoveWindowToSlot(dragWin, anchor, after) end
+                    RebuildPage()
+                elseif mode == "newcol" then
+                    if dm.MoveWindowToNewColumn then dm:MoveWindowToNewColumn(dragWin, leftRep, rightRep) end
+                    RebuildPage()
+                end
+            end
+        end)
+
+        boxes[#boxes + 1] = box
+        GUIFrame:PoolGrow(container, container, 1, 0)
+        GUIFrame:PoolOwn(container, box)
+        return box
+    end
+
+    local function Layout(width)
+        local cols, boxAt, height = container._cols, container._boxAt, container._height
+        if not (cols and boxAt and height) or not width or width <= 0 then return end
         local GAP = 4
         local sumW = 0
         for c = 1, #cols do sumW = sumW + ((cols[c].WidthRatio) or 1) end
@@ -536,17 +496,14 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
             local runY = 0
             for r = 1, #wins do
                 local rowH = availH * (((ratios[r]) or 1) / sumR)
-                local box = boxAt[c][r]
+                local box = boxAt[c] and boxAt[c][r]
                 if box then
                     box:ClearAllPoints()
                     box:SetPoint("TOPLEFT", container, "TOPLEFT", runX, -runY)
                     box:SetSize(math_max(1, colW), math_max(1, rowH))
-                    if box.tlabel then
-                        -- Show the label whenever the box is tall enough for the number
-                        -- + one label line (it now sits right under the number, so this
-                        -- threshold is lower than when it was pinned to the box bottom).
-                        if rowH < 26 then box.tlabel:Hide() else box.tlabel:Show() end
-                    end
+                    -- The label shows whenever the box fits the number plus
+                    -- one label line.
+                    if rowH < 26 then box.tlabel:Hide() else box.tlabel:Show() end
                 end
                 runY = runY + rowH + GAP
             end
@@ -554,15 +511,141 @@ local function BuildSchematic(card, height, cols, posOf, fullLabel)
         end
     end
 
-    container:SetScript("OnSizeChanged", function(_, w) layout(w) end)
-    layout(container:GetWidth())
+    container:SetScript("OnSizeChanged", function(_, w)
+        container._keWidth = w
+        Layout(w)
+    end)
 
-    -- Exposed so the Sizing sliders can re-tile the boxes LIVE as ratios change: `cols`
-    -- is the live db.Dock.Columns reference, so layout() re-reads the new WidthRatio /
-    -- RowRatios. Cheaper + smoother than a full page rebuild on every slider tick.
-    container.Relayout = function() layout(container:GetWidth()) end
+    -- For the Sizing sliders: the columns table is the live saved one, so a
+    -- relayout picks up a ratio the slider has just written.
+    container.Relayout = function() Layout(container:GetWidth()) end
+
+    function container.Configure(_, height, cols, posOf, fullLabel)
+        local T = Theme
+        container:SetHeight(height)
+        container._height = height
+        container._cols = cols
+        container._posOf = posOf
+        container._fullLabel = fullLabel
+        dropLine:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 1)
+        dropLine:Hide()
+
+        local boxAt = {}
+        local count = 0
+        for c = 1, #cols do
+            local wins = cols[c].Windows or {}
+            boxAt[c] = {}
+            for r = 1, #wins do
+                local idx = wins[r]
+                count = count + 1
+                local box = boxes[count] or NewBox()
+                box.winIdx = idx
+                box:SetBackdropColor(T.bgMedium[1], T.bgMedium[2], T.bgMedium[3], 1)
+                box:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 0.9)
+                box:SetAlpha(1)
+                KE:ApplyThemeFont(box.num, "large")
+                box.num:SetText(tostring(posOf[idx] or "?"))
+                box.num:SetTextColor(1, 1, 1, 1)
+                KE:ApplyThemeFont(box.tlabel, "small")
+                box.tlabel:SetTextColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
+                box.tlabel:SetText((fullLabel and fullLabel(idx)) or "")
+                box:Show()
+                boxAt[c][r] = box
+            end
+        end
+        for i = count + 1, #boxes do boxes[i]:Hide() end
+
+        container._boxAt = boxAt
+        container._count = count
+        Layout(container._keWidth)
+    end
+
+    container._keOwned = { container }
     return container
 end
+
+GUIFrame:NewWidgetPool("dm:schematic", ConstructSchematic, function(container)
+    container.CancelDrag()
+end)
+
+-- Small accent number chip matching the map boxes and the in-world index
+-- badges, so a row maps to its numbered window. The outer frame takes the
+-- column width; the chip inside is fixed, at the control band 14px down,
+-- where the toggle and dropdowns sit.
+local function ConstructNumberBadge(parent)
+    local f = CreateFrame("Frame", nil, parent)
+    local chip = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    chip:SetSize(24, 24)
+    chip:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -14)
+    chip:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    local t = chip:CreateFontString(nil, "OVERLAY")
+    t:SetPoint("CENTER")
+
+    function f.Configure(_, n)
+        local a = Theme.accent
+        chip:SetBackdropColor(a[1], a[2], a[3], 0.9)
+        chip:SetBackdropBorderColor(0, 0, 0, 1)
+        KE:ApplyThemeFont(t, "normal")
+        t:SetTextColor(1, 1, 1, 1)
+        t:SetText(tostring(n))
+    end
+
+    f._keOwned = { f, chip }
+    return f
+end
+
+GUIFrame:NewWidgetPool("dm:badge", ConstructNumberBadge, function() end)
+
+local WINDOW_HEADER_NAMES = { "Show", "Type", "Segment" }
+
+-- Column labels, shown once above the window rows so "Type" and "Segment" do
+-- not repeat on every row. Each sits at the cumulative column fraction
+-- row:AddWidget uses, so it lands above its control column.
+local function ConstructWindowHeader(parent)
+    local hdr = CreateFrame("Frame", nil, parent)
+    hdr._keWidth = 0
+
+    local labels = {}
+    for i = 1, 3 do
+        local fs = hdr:CreateFontString(nil, "OVERLAY")
+        fs:SetJustifyH("LEFT")
+        labels[i] = fs
+    end
+
+    local function Layout(w)
+        local fractions = hdr._fractions
+        if not fractions or w <= 0 then return end
+        for i = 1, 3 do
+            labels[i]:ClearAllPoints()
+            labels[i]:SetPoint("BOTTOMLEFT", hdr, "BOTTOMLEFT", w * fractions[i], 0)
+        end
+    end
+
+    hdr:SetScript("OnSizeChanged", function(_, w)
+        hdr._keWidth = w
+        Layout(w)
+    end)
+
+    function hdr.Configure(_, fractions)
+        hdr:SetHeight(14)
+        hdr._fractions = fractions
+        for i = 1, 3 do
+            KE:ApplyThemeFont(labels[i], "small")
+            labels[i]:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+            labels[i]:SetText(WINDOW_HEADER_NAMES[i])
+        end
+        Layout(hdr._keWidth)
+    end
+
+    hdr._keOwned = { hdr }
+    return hdr
+end
+
+GUIFrame:NewWidgetPool("dm:hdr", ConstructWindowHeader, function() end)
 
 -- Rewrites a sizing slider's label into a LIVE, directional dual-share readout:
 -- "Col 1  60% <|> 40%  Col 2" -- leftName/rightName flank the split, the `<|>`
@@ -682,7 +765,8 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
 
     -- Visual layout map (numbered boxes mirroring the in-world dock).
     if cols and #order > 0 then
-        schematic = BuildSchematic(card1, 96, cols, posOf, FullLabelFor)
+        schematic = GUIFrame:AcquirePooled("dm:schematic", card1.content)
+        schematic:Configure(96, cols, posOf, FullLabelFor)
         card1:AddRow(schematic, 96)
     end
 
@@ -837,51 +921,9 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     --   badge 0.08 | enable 0.16 | Type 0.38 | Segment 0.38.
     local COL_BADGE, COL_ENABLE, COL_TYPE, COL_SEG = 0.08, 0.16, 0.38, 0.38
 
-    -- Small accent number chip matching the map boxes + in-world index badges, so a
-    -- row visually maps to its numbered window. A plain Frame (AddWidget stretches it
-    -- to its column); the chip inside is fixed-size, anchored at the control band so
-    -- it lines up with the toggle/dropdowns (which sit 14px below the row top).
-    local function MakeNumberBadge(parent, n)
-        local f = CreateFrame("Frame", nil, parent)
-        local chip = CreateFrame("Frame", nil, f, "BackdropTemplate")
-        chip:SetSize(24, 24)
-        chip:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -14)
-        chip:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
-        })
-        local a = Theme.accent
-        chip:SetBackdropColor(a[1], a[2], a[3], 0.9)
-        chip:SetBackdropBorderColor(0, 0, 0, 1)
-        local t = chip:CreateFontString(nil, "OVERLAY")
-        t:SetPoint("CENTER")
-        KE:ApplyThemeFont(t, "normal")
-        t:SetTextColor(1, 1, 1, 1)
-        t:SetText(tostring(n))
-        return f
-    end
-
-    -- Single header row -- carries the column labels ONCE (the per-widget labels are
-    -- dropped below) so "Type"/"Segment" don't repeat on every window. FontStrings sit
-    -- at the same cumulative column fractions AddWidget uses, so each lands directly
-    -- above its control column. (Card alpha greys it with the module; not registered.)
-    local hdrRow = CreateFrame("Frame", nil, card2.content)
-    hdrRow:SetHeight(14)
-    local function makeHdr(text)
-        local fs = hdrRow:CreateFontString(nil, "OVERLAY")
-        KE:ApplyThemeFont(fs, "small")
-        fs:SetJustifyH("LEFT")
-        fs:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
-        fs:SetText(text)
-        return fs
-    end
-    local hShow, hType, hSeg = makeHdr("Show"), makeHdr("Type"), makeHdr("Segment")
-    hdrRow:SetScript("OnSizeChanged", function(self, w)
-        hShow:ClearAllPoints(); hShow:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", w * COL_BADGE, 0)
-        hType:ClearAllPoints(); hType:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", w * (COL_BADGE + COL_ENABLE), 0)
-        hSeg:ClearAllPoints();  hSeg:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", w * (COL_BADGE + COL_ENABLE + COL_TYPE), 0)
-    end)
+    -- Card alpha greys the header with the module; it is not registered.
+    local hdrRow = GUIFrame:AcquirePooled("dm:hdr", card2.content)
+    hdrRow:Configure({ COL_BADGE, COL_BADGE + COL_ENABLE, COL_BADGE + COL_ENABLE + COL_TYPE })
     card2:AddRow(hdrRow, 14)
 
     -- One row per window (numbered left->right / top->bottom by on-screen position):
@@ -908,7 +950,9 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
             local isLast = (n == #order)
             local rowW = GUIFrame:CreateRow(card2.content, isLast and Theme.rowHeightLast or Theme.rowHeight)
 
-            rowW:AddWidget(MakeNumberBadge(rowW, n), COL_BADGE)
+            local badge = GUIFrame:AcquirePooled("dm:badge", rowW)
+            badge:Configure(n)
+            rowW:AddWidget(badge, COL_BADGE)
 
             local enChk = GUIFrame:CreateCheckbox(rowW, "", {
                 value = cfg.Enabled ~= false,
