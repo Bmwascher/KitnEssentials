@@ -573,39 +573,16 @@ GUIFrame:RegisterContent("AuraDebuffs", function(scrollChild, yOffset)
     -- Row: icon + name (0.5) + Spell ID input (0.25) + Label input (0.25)
     local detailRow = GUIFrame:CreateRow(card8.content, Theme.rowHeight)
 
-    local spellInfoContainer = CreateFrame("Frame", nil, detailRow)
-    spellInfoContainer:SetHeight(Theme.rowHeight)
-    -- First-cell inset: xOffset=3, spacing=7 to align with separator's left edge.
-    detailRow:AddWidget(spellInfoContainer, 0.5, 7, 3)
-
-    spellIconFrame = CreateFrame("Frame", nil, spellInfoContainer)
-    spellIconFrame:SetSize(34, 34)
-    spellIconFrame:SetPoint("LEFT", spellInfoContainer, "LEFT", 0, 0)
-    spellIconFrame:EnableMouse(true)
-
-    spellIconTexture = spellIconFrame:CreateTexture(nil, "ARTWORK")
-    spellIconTexture:SetPoint("TOPLEFT", 1, -1)
-    spellIconTexture:SetPoint("BOTTOMRIGHT", -1, 1)
-    spellIconTexture:SetTexture(134400)
-    KE:ApplyIconZoom(spellIconTexture)
     -- Red border signals "blocklisted spell".
-    KE:AddIconBorders(spellIconFrame, { 1, 0, 0, 1 })
-
-    spellIconFrame:SetScript("OnEnter", function(self)
-        if selectedSpellId then
-            GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
-            GameTooltip:SetSpellByID(selectedSpellId)
-            GameTooltip:Show()
-        end
-    end)
-    spellIconFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-    spellNameLabel = spellInfoContainer:CreateFontString(nil, "OVERLAY")
-    spellNameLabel:SetPoint("LEFT", spellIconFrame, "RIGHT", 6, 0)
-    spellNameLabel:SetPoint("RIGHT", spellInfoContainer, "RIGHT", -4, 0)
-    spellNameLabel:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(spellNameLabel, "normal")
-    spellNameLabel:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+    local spellPreview = GUIFrame:CreateSpellInfo(detailRow, {
+        borderColor = { 1, 0, 0, 1 },
+        getSpellId = function() return selectedSpellId end,
+    })
+    -- First-cell inset: xOffset=3, spacing=7 to align with separator's left edge.
+    detailRow:AddWidget(spellPreview, 0.5, 7, 3)
+    spellIconFrame = spellPreview.iconFrame
+    spellIconTexture = spellPreview.iconTexture
+    spellNameLabel = spellPreview.nameLabel
 
     spellIdInput = GUIFrame:CreateEditBox(detailRow, "Spell ID", {
         value = "",

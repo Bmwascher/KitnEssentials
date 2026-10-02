@@ -11,6 +11,74 @@ local Theme = KE.Theme
 
 local ICON_ESCAPE = "|T%d:16:16:0:0:64:64:5:59:5:59|t "
 
+local DEFAULT_SPELL_ICON = 134400
+
+-- Icon plus name for the selected spell. The border textures are made once
+-- here: KE:AddIconBorders adds four more each time it runs.
+local function ConstructSpellInfo(parent)
+    local container = CreateFrame("Frame", nil, parent)
+
+    local iconFrame = CreateFrame("Frame", nil, container)
+    iconFrame:SetSize(34, 34)
+    iconFrame:SetPoint("LEFT", container, "LEFT", 0, 0)
+    iconFrame:EnableMouse(true)
+
+    local iconTexture = iconFrame:CreateTexture(nil, "ARTWORK")
+    iconTexture:SetPoint("TOPLEFT", 1, -1)
+    iconTexture:SetPoint("BOTTOMRIGHT", -1, 1)
+    KE:ApplyIconZoom(iconTexture)
+    KE:AddIconBorders(iconFrame)
+
+    iconFrame:SetScript("OnEnter", function(self)
+        local getSpellId = container._getSpellId
+        local spellId = getSpellId and getSpellId()
+        if spellId then
+            GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
+            GameTooltip:SetSpellByID(spellId)
+            GameTooltip:Show()
+        end
+    end)
+    iconFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    local nameLabel = container:CreateFontString(nil, "OVERLAY")
+    nameLabel:SetPoint("LEFT", iconFrame, "RIGHT", 6, 0)
+    nameLabel:SetPoint("RIGHT", container, "RIGHT", -4, 0)
+    nameLabel:SetJustifyH("LEFT")
+
+    function container:Configure(config)
+        self._getSpellId = config.getSpellId
+        self:SetHeight(Theme.rowHeight)
+        local r, g, b, a = KE:ResolveColor(config.borderColor, { 0, 0, 0, 1 })
+        for _, tex in pairs(iconFrame.borders) do
+            tex:SetColorTexture(r, g, b, a)
+        end
+        iconFrame._borderColor = { r, g, b, a }
+        iconTexture:SetTexture(DEFAULT_SPELL_ICON)
+        KE:ApplyThemeFont(nameLabel, "normal")
+        nameLabel:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+        nameLabel:SetText("")
+        iconFrame:Show()
+    end
+
+    container.iconFrame = iconFrame
+    container.iconTexture = iconTexture
+    container.nameLabel = nameLabel
+    container._keOwned = { container, iconFrame }
+    return container
+end
+
+GUIFrame:NewWidgetPool("spellinfo", ConstructSpellInfo, function(container)
+    if GameTooltip:IsOwned(container.iconFrame) then GameTooltip:Hide() end
+end)
+
+-- config: { borderColor, getSpellId }. The border is black when no colour is
+-- given; getSpellId feeds the icon's hover tooltip.
+function GUIFrame:CreateSpellInfo(parent, config)
+    local container = self:AcquirePooled("spellinfo", parent)
+    container:Configure(config or {})
+    return container
+end
+
 ----------------------------------------------------------------
 -- Allowlist
 --
@@ -337,38 +405,14 @@ function GUIFrame:CreateAuraAllowlistCard(scrollChild, yOffset, config)
     -- Row: icon + name (0.5) + Spell ID input (0.25) + Label input (0.25)
     local detailRow = GUIFrame:CreateRow(card.content, Theme.rowHeight)
 
-    local spellInfoContainer = CreateFrame("Frame", nil, detailRow)
-    spellInfoContainer:SetHeight(Theme.rowHeight)
+    local spellPreview = GUIFrame:CreateSpellInfo(detailRow, {
+        getSpellId = function() return selectedSpellId end,
+    })
     -- First-cell inset: xOffset=3, spacing=7 to align with separator's left edge.
-    detailRow:AddWidget(spellInfoContainer, 0.5, 7, 3)
-
-    spellIconFrame = CreateFrame("Frame", nil, spellInfoContainer)
-    spellIconFrame:SetSize(34, 34)
-    spellIconFrame:SetPoint("LEFT", spellInfoContainer, "LEFT", 0, 0)
-    spellIconFrame:EnableMouse(true)
-
-    spellIconTexture = spellIconFrame:CreateTexture(nil, "ARTWORK")
-    spellIconTexture:SetPoint("TOPLEFT", 1, -1)
-    spellIconTexture:SetPoint("BOTTOMRIGHT", -1, 1)
-    spellIconTexture:SetTexture(134400)
-    KE:ApplyIconZoom(spellIconTexture)
-    KE:AddIconBorders(spellIconFrame)
-
-    spellIconFrame:SetScript("OnEnter", function(self)
-        if selectedSpellId then
-            GameTooltip:SetOwner(self, "ANCHOR_CURSOR_RIGHT", 10, 10)
-            GameTooltip:SetSpellByID(selectedSpellId)
-            GameTooltip:Show()
-        end
-    end)
-    spellIconFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-    spellNameLabel = spellInfoContainer:CreateFontString(nil, "OVERLAY")
-    spellNameLabel:SetPoint("LEFT", spellIconFrame, "RIGHT", 6, 0)
-    spellNameLabel:SetPoint("RIGHT", spellInfoContainer, "RIGHT", -4, 0)
-    spellNameLabel:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(spellNameLabel, "normal")
-    spellNameLabel:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+    detailRow:AddWidget(spellPreview, 0.5, 7, 3)
+    spellIconFrame = spellPreview.iconFrame
+    spellIconTexture = spellPreview.iconTexture
+    spellNameLabel = spellPreview.nameLabel
 
     spellIdInput = GUIFrame:CreateEditBox(detailRow, "Spell ID", {
         value = "",
