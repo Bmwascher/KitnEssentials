@@ -1551,9 +1551,9 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     manager:Register(retainSlider, "all")
     cardSeg:AddRow(rowRetain, Theme.rowHeight)
 
-    -- 80px, not the usual 65: the third bullet wraps to a 4th body line, and 65
-    -- fits only a title plus 3 at the small font's ~16px line pitch.
-    local segNoteRow = GUIFrame:CreateRow(cardSeg.content, 80)
+    -- 96px, not the usual 65: four bullets take 5 body lines (the third wraps),
+    -- and 65 fits only a title plus 3 at the small font's ~16px line pitch.
+    local segNoteRow = GUIFrame:CreateRow(cardSeg.content, 96)
     local segNote = GUIFrame:CreateText(segNoteRow,
         KE:ColorTextByTheme("Note"),
         KE:ColorTextByTheme("-") .. " On: all segments clear when a keystone starts, so " ..
@@ -1562,11 +1562,12 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
         " both span keys until you clear them with " ..
         KE:ColorTextByTheme("/kes dm reset") .. " or the header reset button.\n" ..
         KE:ColorTextByTheme("-") .. " With reset on, the last " ..
-        KE:ColorTextByTheme("Key History") .. " keys stay browsable in the segment menu (this session only — history clears on reload; the header reset clears it too).",
-        80, "hide")
+        KE:ColorTextByTheme("Key History") .. " keys stay browsable in the segment menu until a reload, the header reset, or the module is disabled.\n" ..
+        KE:ColorTextByTheme("-") .. " Each stored key keeps full detail for its Run Summary (or newest pull) and totals for its other pulls.",
+        96, "hide")
     segNoteRow:AddWidget(segNote, 1)
     manager:Register(segNote, "all")
-    cardSeg:AddRow(segNoteRow, 80, 0)
+    cardSeg:AddRow(segNoteRow, 96, 0)
 
     cardSeg:AddNote(KE:ColorTextByTheme("Reset on Instance Entry") .. " clears the meter when you enter a different dungeon, raid, scenario or Delve, or a different difficulty; " ..
         KE:ColorTextByTheme("Ask") .. " shows a prompt first. Running back after a death, a login or a /reload is never an entry. Key history is kept. " ..
