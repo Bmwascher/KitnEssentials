@@ -267,4 +267,30 @@ describe("GUI-Core deferred widget callbacks", function()
         for _, fire in ipairs(timers) do fire() end
         assert.equals(4, #ran, "the timers found nothing left to run")
     end)
+
+    it("refuses a rebuild asked for from inside its own teardown", function()
+        local scrollChild = {}
+        local asked = false
+        local child = {
+            GetParent = function() return scrollChild end,
+            IsObjectType = function() return true end,
+            SetParent = function() end,
+            Hide = function()
+                if asked then return end
+                asked = true
+                GUIFrame:RefreshContent()
+            end,
+        }
+        function scrollChild:GetRegions() end
+        function scrollChild:GetChildren() return child end
+        GUIFrame.contentArea = { scrollChild = scrollChild }
+
+        -- Everything past the teardown is real frame work and throws against
+        -- these stubs.
+        pcall(GUIFrame.RefreshContent, GUIFrame)
+
+        assert.is_true(asked)
+        assert.equals(1, rebuilt, "the nested call started no second rebuild")
+        assert.is_nil(GUIFrame._tearingDown)
+    end)
 end)

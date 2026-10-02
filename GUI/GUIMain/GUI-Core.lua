@@ -1162,9 +1162,9 @@ function GUIFrame:RefreshContent()
     KE_GUI_REFRESH_COUNT = (KE_GUI_REFRESH_COUNT or 0) + 1
     KE_GUI_REFRESH_ITEM = self.selectedSidebarItem or "HomePage"
 
-    -- A callback drained below may ask for a rebuild; the rebuild already
-    -- under way is the one it wants.
-    if self._drainingDeferred then return end
+    -- A callback drained below, or a release in the teardown loop, may ask
+    -- for a rebuild; the rebuild already under way is the one it wants.
+    if self._drainingDeferred or self._tearingDown then return end
 
     if not self.contentArea then return end
 
@@ -1244,11 +1244,18 @@ function GUIFrame:RefreshContent()
         end
     end
     -- Pooled objects go back to their pools; anything else is orphaned and
-    -- counted in KE_GUI_ORPHAN_COUNT, the leak's ground truth.
-    for _, child in ipairs({ scrollChild:GetChildren() }) do
-        self:ReleaseTracked(child, scrollChild)
-    end
+    -- counted in KE_GUI_ORPHAN_COUNT, the leak's ground truth. A release that
+    -- raises must not leave the flag set: every later refresh would be
+    -- swallowed.
+    self._tearingDown = true
+    local released, releaseErr = pcall(function()
+        for _, child in ipairs({ scrollChild:GetChildren() }) do
+            self:ReleaseTracked(child, scrollChild)
+        end
+    end)
+    self._tearingDown = nil
     self._releasingPage = nil
+    if not released then error(releaseErr, 0) end
 
     local T = Theme
     local yOffset = T.paddingMedium
