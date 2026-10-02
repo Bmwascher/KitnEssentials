@@ -31,3 +31,12 @@ jobs:
           args: -q
           annotate: warning
           job_summary: true
+
+  spelling:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check spelling
+        run: bash dev/scripts/check-spelling.sh

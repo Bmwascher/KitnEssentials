@@ -25,6 +25,10 @@ if ! staged="$(git diff -U0 --no-color --cached -- "${ng_paths[@]}")"; then
     echo "[pre-commit] BLOCKED: could not read the staged diff." >&2
     exit 1
 fi
+# American spelling on every added line of every staged file, not only the
+# comment-guard paths; the rule and its allow list live in the script.
+bash "$(dirname "$0")/../scripts/check-spelling.sh" --staged || exit 1
+
 [ -n "$staged" ] || exit 0
 
 # Added code lines only (the + side of each hunk), with the "+++" header
