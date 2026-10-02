@@ -283,9 +283,9 @@ local function ConstructDropdown(parent, searchable)
             end
         end)
         scrollbar:SetScript("OnMouseUp", function(_, button)
-            if button == "LeftButton" then
-                -- A release to the pool ends the hold itself; this clear
-                -- must not reach the dropdown's next use.
+            -- A release to the pool ends the hold itself. Neither this clear
+            -- nor a mouse-up while parked may reach the dropdown's next use.
+            if button == "LeftButton" and row._keState ~= "free" then
                 local gen = row._keGen
                 C_Timer.After(0.1, function()
                     if row._keGen == gen then scrollHold = false end
