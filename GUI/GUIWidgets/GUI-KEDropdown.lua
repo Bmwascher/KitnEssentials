@@ -208,6 +208,7 @@ local function ConstructDropdown(parent, searchable)
     local startHeight = 0
     local targetHeight = 0
     local scrollHold = false
+    local holdGen
     local searchText = ""
 
     -- Dropdown list
@@ -280,12 +281,16 @@ local function ConstructDropdown(parent, searchable)
         scrollbar:SetScript("OnMouseDown", function(_, button)
             if button == "LeftButton" then
                 scrollHold = true
+                holdGen = row._keGen
             end
         end)
         scrollbar:SetScript("OnMouseUp", function(_, button)
             if button == "LeftButton" then
+                -- The clear belongs to the use that pressed; a release to
+                -- the pool in between has already ended that hold.
+                local gen = holdGen
                 C_Timer.After(0.1, function()
-                    scrollHold = false
+                    if row._keGen == gen then scrollHold = false end
                 end)
             end
         end)
@@ -657,8 +662,9 @@ local function ConstructDropdown(parent, searchable)
                 searchBox:SetText("")
                 searchEmptyLabel:Hide()
                 CreateItemButtons()
+                local gen = row._keGen
                 C_Timer.After(0, function()
-                    if isOpen then
+                    if isOpen and row._keGen == gen then
                         searchBox:SetFocus()
                         searchBox:HighlightText(0, 0)
                     end
