@@ -10,149 +10,195 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 
--- Visual texture selector: grid of clickable texture-preview buttons.
--- The texture name string isn't intuitive, so users pick from the actual ring
--- TGA preview instead.
-local function CreateTextureSelector(parent, textures, textureOrder, currentTexture, getColorFunc, onSelect, labelText)
-    local container = CreateFrame("Frame", nil, parent)
+-- Visual texture selector: a grid of clickable texture previews. The texture
+-- name is not intuitive, so users pick from the ring preview itself.
+local TEXSEL_BUTTON = 58
+local TEXSEL_MIN_SPACING = 6
+local TEXSEL_COLUMNS = 6
+local TEXSEL_ROW_SPACING = 6
+local TEXSEL_LABEL = 16
 
-    local buttons = {}
-    local buttonSize = 58
-    local minSpacing = 6
-    local maxColumns = 6
-    local rowSpacing = 6
-    local labelOffset = 0
+local function UpdateTexselButton(btn)
+    local owner = btn._sel
+    local tex = btn.tex
+    local r, g, b, a = 1, 1, 1, 1
+    local getColor = owner._getColor
+    if getColor then r, g, b, a = getColor() end
 
-    -- Optional header label rendered above the button row. White text to match
-    -- the other widget labels (Size, Color Mode, etc), not gold.
-    if labelText and labelText ~= "" then
-        local label = container:CreateFontString(nil, "OVERLAY")
-        KE:ApplyThemeFont(label, "small")
-        label:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
-        label:SetText(labelText)
-        label:SetTextColor(1, 1, 1)
-        labelOffset = 16
+    if btn.disabled then
+        btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 0.6)
+        tex:SetVertexColor(r * 0.3, g * 0.3, b * 0.3)
+        tex:SetAlpha(0.5)
+    elseif owner._value == btn.textureName then
+        btn:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        tex:SetVertexColor(r, g, b)
+        tex:SetAlpha(a)
+    elseif btn.hover then
+        btn:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        tex:SetVertexColor(r * 0.8, g * 0.8, b * 0.8)
+        tex:SetAlpha(a * 0.9)
+    else
+        btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
+        tex:SetVertexColor(r * 0.6, g * 0.6, b * 0.6)
+        tex:SetAlpha(a * 0.8)
     end
+end
 
-    for _, textureName in ipairs(textureOrder) do
-        local texturePath = textures[textureName]
-
-        local btn = CreateFrame("Button", nil, container, "BackdropTemplate")
-        btn:SetSize(buttonSize, buttonSize)
-        btn:SetBackdrop({
-            bgFile = "Interface\\BUTTONS\\WHITE8X8",
-            edgeFile = "Interface\\BUTTONS\\WHITE8X8",
-            edgeSize = 1,
-        })
-        btn:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
-
-        local tex = btn:CreateTexture(nil, "ARTWORK")
-        tex:SetPoint("TOPLEFT", 8, -8)
-        tex:SetPoint("BOTTOMRIGHT", -8, 8)
-        tex:SetTexture(texturePath)
-        btn.tex = tex
-        btn.textureName = textureName
-
-        local function UpdateVisuals()
-            local isSelected = currentTexture == btn.textureName
-            local r, g, b, a = 1, 1, 1, 1
-            if getColorFunc then r, g, b, a = getColorFunc() end
-
-            if btn.disabled then
-                btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 0.6)
-                tex:SetVertexColor(r * 0.3, g * 0.3, b * 0.3)
-                tex:SetAlpha(0.5)
-            elseif isSelected then
-                btn:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-                tex:SetVertexColor(r, g, b)
-                tex:SetAlpha(a)
-            elseif btn.hover then
-                btn:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-                tex:SetVertexColor(r * 0.8, g * 0.8, b * 0.8)
-                tex:SetAlpha(a * 0.9)
-            else
-                btn:SetBackdropBorderColor(Theme.controlBorder[1], Theme.controlBorder[2], Theme.controlBorder[3], 1)
-                tex:SetVertexColor(r * 0.6, g * 0.6, b * 0.6)
-                tex:SetAlpha(a * 0.8)
-            end
-        end
-        btn.UpdateVisuals = UpdateVisuals
-
-        -- Tooltip label: strip "ring_" prefix + Title-case; special-case "circle".
-        local tooltipLabel = textureName
-        if tooltipLabel == "circle" then
-            tooltipLabel = "Soft Glow"
-        elseif tooltipLabel:find("^ring_") then
-            tooltipLabel = tooltipLabel:sub(6):gsub("^%l", string.upper)
-        end
-        btn:SetScript("OnEnter", function(self)
-            self.hover = true
-            UpdateVisuals()
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:SetText(tooltipLabel, 1, 0.82, 0)
-            GameTooltip:Show()
-        end)
-        btn:SetScript("OnLeave", function(self)
-            self.hover = false
-            UpdateVisuals()
-            GameTooltip:Hide()
-        end)
-        btn:SetScript("OnClick", function(self)
-            if self.disabled then return end
-            currentTexture = self.textureName
-            for _, b in ipairs(buttons) do b.UpdateVisuals() end
-            if onSelect then onSelect(self.textureName) end
-        end)
-
-        UpdateVisuals()
-        buttons[#buttons + 1] = btn
+local function UpdateTexselButtons(sel)
+    for i = 1, sel._count or 0 do
+        UpdateTexselButton(sel.buttons[i])
     end
+end
 
-    local numButtons = #buttons
-    local numRows = math.ceil(numButtons / maxColumns)
-    container:SetHeight(numRows * buttonSize + (numRows - 1) * rowSpacing + labelOffset)
-    container.lastWidth = 0
+local function LayoutTexsel(sel, width)
+    local count = sel._count or 0
+    if count == 0 or width <= 0 then return end
 
-    container:SetScript("OnSizeChanged", function(self, width)
-        if not width or width <= 0 then return end
-        local flooredWidth = math.floor(width)
-        if math.abs(flooredWidth - (self.lastWidth or 0)) < 2 then return end
-        self.lastWidth = flooredWidth
-        if numButtons == 0 then return end
+    local cols = math.min(TEXSEL_COLUMNS, count)
+    local available = width - cols * TEXSEL_BUTTON - Theme.paddingSmall
+    local spacing = math.max(TEXSEL_MIN_SPACING, math.floor(available / math.max(cols - 1, 1)))
 
-        local cols = math.min(maxColumns, numButtons)
-        local totalButtonWidth = cols * buttonSize
-        local availableSpacing = flooredWidth - totalButtonWidth - Theme.paddingSmall
-        local spacing = math.max(minSpacing, math.floor(availableSpacing / math.max(cols - 1, 1)))
+    for i = 1, count do
+        local col = (i - 1) % TEXSEL_COLUMNS
+        local line = math.floor((i - 1) / TEXSEL_COLUMNS)
+        local cell = sel.buttons[i]
+        cell:ClearAllPoints()
+        cell:SetPoint("TOPLEFT", sel, "TOPLEFT", col * (TEXSEL_BUTTON + spacing),
+            -(TEXSEL_LABEL + line * (TEXSEL_BUTTON + TEXSEL_ROW_SPACING)))
+    end
+end
 
-        for i, btn in ipairs(buttons) do
-            btn:ClearAllPoints()
-            local col = (i - 1) % maxColumns
-            local row = math.floor((i - 1) / maxColumns)
-            local x = col * (buttonSize + spacing)
-            local y = -(labelOffset + row * (buttonSize + rowSpacing))
-            btn:SetPoint("TOPLEFT", self, "TOPLEFT", x, y)
-        end
+-- Tooltip label: strip "ring_" prefix + Title-case; special-case "circle".
+local function TexselTooltip(name)
+    if name == "circle" then return "Soft Glow" end
+    if name:find("^ring_") then
+        return (name:sub(6):gsub("^%l", string.upper))
+    end
+    return name
+end
+
+-- One more preview button, made when a selector is asked for more textures
+-- than it has buttons.
+local function NewTexselButton(sel)
+    local btn = CreateFrame("Button", nil, sel, "BackdropTemplate")
+    btn:SetSize(TEXSEL_BUTTON, TEXSEL_BUTTON)
+    btn:SetBackdrop({
+        bgFile = "Interface\\BUTTONS\\WHITE8X8",
+        edgeFile = "Interface\\BUTTONS\\WHITE8X8",
+        edgeSize = 1,
+    })
+
+    local tex = btn:CreateTexture(nil, "ARTWORK")
+    tex:SetPoint("TOPLEFT", 8, -8)
+    tex:SetPoint("BOTTOMRIGHT", -8, 8)
+    btn.tex = tex
+    btn._sel = sel
+
+    btn:SetScript("OnEnter", function(self)
+        self.hover = true
+        UpdateTexselButton(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText(TexselTooltip(self.textureName), 1, 0.82, 0)
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function(self)
+        self.hover = false
+        UpdateTexselButton(self)
+        GameTooltip:Hide()
+    end)
+    btn:SetScript("OnClick", function(self)
+        if self.disabled then return end
+        local onSelect = sel._onSelect
+        sel._value = self.textureName
+        UpdateTexselButtons(sel)
+        if onSelect then onSelect(self.textureName) end
     end)
 
-    function container:SetEnabled(enabled)
-        for _, btn in ipairs(buttons) do
-            btn.disabled = not enabled
-            btn:EnableMouse(enabled)
-            btn.UpdateVisuals()
+    sel.buttons[#sel.buttons + 1] = btn
+    GUIFrame:PoolGrow(sel, sel, 1, 0)
+    GUIFrame:PoolOwn(sel, btn)
+    return btn
+end
+
+local function ConstructTexsel(parent)
+    local sel = CreateFrame("Frame", nil, parent)
+    sel.buttons = {}
+    -- Kept across uses: OnSizeChanged does not fire for a selector that
+    -- comes back at the width it last reported.
+    sel._keWidth = 0
+
+    -- White to match the other widget labels (Size, Color Mode), not gold.
+    local label = sel:CreateFontString(nil, "OVERLAY")
+    label:SetPoint("TOPLEFT", sel, "TOPLEFT", 0, 0)
+
+    sel:SetScript("OnSizeChanged", function(self, width)
+        if not width or width <= 0 then return end
+        local floored = math.floor(width)
+        if math.abs(floored - self._keWidth) < 2 then return end
+        self._keWidth = floored
+        LayoutTexsel(self, floored)
+    end)
+
+    function sel:SetEnabled(enabled)
+        for i = 1, self._count or 0 do
+            local cell = self.buttons[i]
+            cell.disabled = not enabled
+            cell:EnableMouse(enabled)
+            UpdateTexselButton(cell)
         end
     end
-    function container:SetValue(textureName)
-        currentTexture = textureName
-        for _, btn in ipairs(buttons) do btn.UpdateVisuals() end
-    end
-    function container:RefreshColors()
-        for _, btn in ipairs(buttons) do btn.UpdateVisuals() end
+
+    function sel:SetValue(textureName)
+        self._value = textureName
+        UpdateTexselButtons(self)
     end
 
-    container.buttons = buttons
-    return container
+    function sel:RefreshColors()
+        UpdateTexselButtons(self)
+    end
+
+    function sel:Configure(textures, order, value, getColor, onSelect)
+        self._value = value
+        self._getColor = getColor
+        self._onSelect = onSelect
+        self._count = #order
+
+        KE:ApplyThemeFont(label, "small")
+        label:SetText("Texture")
+        label:SetTextColor(1, 1, 1)
+
+        for i, textureName in ipairs(order) do
+            local cell = self.buttons[i] or NewTexselButton(self)
+            cell.textureName = textureName
+            cell.tex:SetTexture(textures[textureName])
+            cell:SetBackdropColor(Theme.bgDark[1], Theme.bgDark[2], Theme.bgDark[3], 1)
+            cell.hover = false
+            cell.disabled = false
+            cell:EnableMouse(true)
+            cell:Show()
+            UpdateTexselButton(cell)
+        end
+        for i = #order + 1, #self.buttons do
+            self.buttons[i]:Hide()
+        end
+
+        local lines = math.ceil(#order / TEXSEL_COLUMNS)
+        self:SetHeight(lines * TEXSEL_BUTTON + (lines - 1) * TEXSEL_ROW_SPACING + TEXSEL_LABEL)
+        LayoutTexsel(self, self._keWidth)
+    end
+
+    sel._keOwned = { sel }
+    return sel
 end
+
+GUIFrame:NewWidgetPool("cursor:texsel", ConstructTexsel, function(sel)
+    for _, cell in ipairs(sel.buttons) do
+        cell.hover = false
+        cell.disabled = false
+        cell:EnableMouse(true)
+        if GameTooltip:IsOwned(cell) then GameTooltip:Hide() end
+    end
+end)
 
 local function GetModule()
     if not KitnEssentials then return nil end
@@ -264,8 +310,11 @@ GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
     end
 
     local row2a = GUIFrame:CreateRow(card2.content, 82)  -- 58px buttons + 16px label + padding
-    textureSelector = CreateTextureSelector(
-        row2a,
+    textureSelector = GUIFrame:AcquirePooled("cursor:texsel", row2a)
+    textureSelector:ClearAllPoints()
+    textureSelector:SetPoint("TOPLEFT", row2a, "TOPLEFT", 0, 0)
+    textureSelector:SetPoint("TOPRIGHT", row2a, "TOPRIGHT", 0, 0)
+    textureSelector:Configure(
         (C and C.CIRCLE_TEXTURES) or {},
         (C and C.TEXTURE_ORDER) or {},
         db.Texture or "circle_normal",
@@ -273,12 +322,8 @@ GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
         function(textureName)
             db.Texture = textureName
             RefreshModule()
-        end,
-        "Texture"
+        end
     )
-    textureSelector:SetParent(row2a)
-    textureSelector:SetPoint("TOPLEFT", row2a, "TOPLEFT", 0, 0)
-    textureSelector:SetPoint("TOPRIGHT", row2a, "TOPRIGHT", 0, 0)
     manager:Register(textureSelector, "all")
     card2:AddRow(row2a, 82)
 
@@ -387,8 +432,11 @@ GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
         return KE:GetAccentColor(db.GCD.RingColorMode or "theme", db.GCD.RingColor or { 1, 1, 1, 1 })
     end
     local row3cTex = GUIFrame:CreateRow(card3.content, 82)
-    gcdTextureSelector = CreateTextureSelector(
-        row3cTex,
+    gcdTextureSelector = GUIFrame:AcquirePooled("cursor:texsel", row3cTex)
+    gcdTextureSelector:ClearAllPoints()
+    gcdTextureSelector:SetPoint("TOPLEFT", row3cTex, "TOPLEFT", 0, 0)
+    gcdTextureSelector:SetPoint("TOPRIGHT", row3cTex, "TOPRIGHT", 0, 0)
+    gcdTextureSelector:Configure(
         (C and C.CIRCLE_TEXTURES) or {},
         (C and C.TEXTURE_ORDER) or {},
         db.GCD.Texture or "circle_light",
@@ -396,12 +444,8 @@ GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
         function(textureName)
             db.GCD.Texture = textureName
             RefreshModule()
-        end,
-        "Texture"
+        end
     )
-    gcdTextureSelector:SetParent(row3cTex)
-    gcdTextureSelector:SetPoint("TOPLEFT", row3cTex, "TOPLEFT", 0, 0)
-    gcdTextureSelector:SetPoint("TOPRIGHT", row3cTex, "TOPRIGHT", 0, 0)
     manager:Register(gcdTextureSelector, "gcdSeparate")
     card3:AddRow(row3cTex, 82)
 
@@ -532,8 +576,11 @@ GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
         return KE:GetAccentColor(db.Cast.RingColorMode or "class", db.Cast.RingColor or { 1, 1, 1, 1 })
     end
     local row4bTex = GUIFrame:CreateRow(card4.content, 82)
-    castTextureSelector = CreateTextureSelector(
-        row4bTex,
+    castTextureSelector = GUIFrame:AcquirePooled("cursor:texsel", row4bTex)
+    castTextureSelector:ClearAllPoints()
+    castTextureSelector:SetPoint("TOPLEFT", row4bTex, "TOPLEFT", 0, 0)
+    castTextureSelector:SetPoint("TOPRIGHT", row4bTex, "TOPRIGHT", 0, 0)
+    castTextureSelector:Configure(
         (C and C.CIRCLE_TEXTURES) or {},
         (C and C.TEXTURE_ORDER) or {},
         db.Cast.Texture or "circle_normal",
@@ -541,12 +588,8 @@ GUIFrame:RegisterContent("CursorGeneral", function(scrollChild, yOffset)
         function(textureName)
             db.Cast.Texture = textureName
             RefreshModule()
-        end,
-        "Texture"
+        end
     )
-    castTextureSelector:SetParent(row4bTex)
-    castTextureSelector:SetPoint("TOPLEFT", row4bTex, "TOPLEFT", 0, 0)
-    castTextureSelector:SetPoint("TOPRIGHT", row4bTex, "TOPRIGHT", 0, 0)
     manager:Register(castTextureSelector, "castEnabled")
     card4:AddRow(row4bTex, 82)
 
