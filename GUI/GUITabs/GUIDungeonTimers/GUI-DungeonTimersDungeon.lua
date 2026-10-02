@@ -213,14 +213,16 @@ GUIFrame:NewWidgetPool("dtd:panel", ConstructPanel, ResetHost, true)
 -- subsequent content to its BOTTOMLEFT.
 local function CreateSectionHeader(parent, anchorFrame, text, yPad)
     local T = KE.Theme
-    -- A parent that is not a pooled host has no Text or Line to hand out.
-    local label = parent.Text and parent:Text() or parent:CreateFontString(nil, "OVERLAY")
+    -- Only a pooled host hands out captions and lines. Its own list is the
+    -- test: another frame may carry something else under the name Text.
+    local isHost = parent._keTexts ~= nil
+    local label = isHost and parent:Text() or parent:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(label, "Expressway", 13, "OUTLINE")
     label:SetTextColor(T.accent[1], T.accent[2], T.accent[3])
     label:SetText(text)
     label:SetPoint("TOPLEFT", anchorFrame, "BOTTOMLEFT", 0, -(yPad or 14))
 
-    local underline = parent.Line and parent:Line() or parent:CreateTexture(nil, "ARTWORK")
+    local underline = isHost and parent:Line() or parent:CreateTexture(nil, "ARTWORK")
     underline:SetHeight(1)
     underline:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 0.4)
     underline:SetPoint("LEFT", label, "RIGHT", 6, 0)
