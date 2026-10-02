@@ -17,7 +17,10 @@ describe("SpecPicker class resolution", function()
         savedSpecInfo = _G.C_SpecializationInfo
         _G.C_SpecializationInfo = {}
         local KE = helpers.loadModule("GUI/GUIWidgets/GUI-SpecPicker.lua", {
-            GUIFrame = { RegisterContentCleanup = function() end },
+            GUIFrame = {
+                RegisterContentCleanup = function() end,
+                NewWidgetPool = function() return {} end,
+            },
             Theme = {},
         })
         GUIFrame = KE.GUIFrame
@@ -72,6 +75,7 @@ describe("SpecPicker class picker: what a pick redraws, and the option order", f
             ColorTextByTheme = function(_, text) return text end,
             GUIFrame = {
                 RegisterContentCleanup = function() end,
+                NewWidgetPool = function() return {} end,
                 CreateRow = function() return { AddWidget = function() end } end,
                 CreateDropdown = function(_, _, _, config) picked = config.callback; return {} end,
                 RefreshContent = function() refreshes = refreshes + 1 end,
@@ -176,6 +180,7 @@ describe("SpecEnableCard per-spec checkboxes", function()
             GetPlayerSpecId = function() return 1467 end,
             GUIFrame = {
                 RegisterContentCleanup = function() end,
+                NewWidgetPool = function() return {} end,
                 CreateCard = function()
                     local card = { content = {} }
                     function card:AddRow() end
