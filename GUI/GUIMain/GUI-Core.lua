@@ -487,7 +487,7 @@ function WidgetPool:Release(obj)
 end
 
 -- holdsWidgets marks a pool whose objects are containers other pooled objects
--- may be made under (rows); a leaf widget is never one.
+-- may be made under (rows, a page's own hosts); a leaf widget is never one.
 function GUIFrame:NewWidgetPool(kind, construct, reset, holdsWidgets)
     local pool = setmetatable({
         kind = kind, construct = construct, reset = reset, free = {}, created = 0,
@@ -521,10 +521,10 @@ function GUIFrame:PoolOwn(obj, frame)
 end
 
 -- Pooling follows the page down from its root: the live scroll child, the
--- content of a card in use, or a row in use. Those are the containers whose
--- release walks their pooled children. Anything made elsewhere (kit holders,
--- the theme popup, a page's own frames, another widget) is built directly,
--- with no pooling.
+-- content of a card in use, or a row or other widget holder in use. Those are
+-- the containers whose release walks their pooled children. Anything made
+-- elsewhere (kit holders, the theme popup, a page's own frames, another
+-- widget) is built directly, with no pooling.
 function GUIFrame:IsPoolParent(parent)
     if not parent then return false end
     local area = self.contentArea
@@ -1117,7 +1117,7 @@ local function ReleaseRow(row)
     end
 end
 
--- Rows are the one pooled kind other pooled widgets may be built under.
+-- Rows hold other pooled widgets; a page may register holders of its own.
 local rowPool = GUIFrame:NewWidgetPool("row", NewRow, ReleaseRow, true)
 
 function GUIFrame:CreateRow(parent, height)

@@ -26,10 +26,10 @@
 -- ║  user-configurable knob today). Future N13d-g sub-phases ║
 -- ║  fill remaining fields without further rebuilds.         ║
 -- ║                                                          ║
--- ║  Memory: list rows are pooled via KE.FramePool; detail-  ║
--- ║  pane widgets are built per render but persist in pool   ║
--- ║  via the same ReleaseAll hook so RefreshContent doesn't  ║
--- ║  churn allocations across spell/tab clicks.              ║
+-- ║  Memory: list rows come from a KE.FramePool; the detail  ║
+-- ║  pane's frames, captions and widgets come from widget    ║
+-- ║  pools, so a spell or tab click rebuilds the page        ║
+-- ║  without creating frames.                                ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -656,7 +656,7 @@ local function ResetListRow(kit)
     -- Clear anchors so re-Acquire's SetPoint starts from a clean slate. Without
     -- this, in rare cases the kit can hold a stale TOPLEFT anchor referencing
     -- the previous render's leftCol (which the page teardown has since
-    -- released or orphaned). The new SetPoint usually replaces cleanly, but if
+    -- released). The new SetPoint usually replaces cleanly, but if
     -- WoW's frame system delivers a layout pass between the SetParent + SetPoint
     -- calls, the row can render at the stale position (off-screen relative to
     -- the new leftCol) and look "missing".
@@ -837,9 +837,9 @@ local function RefreshListRowTag(spellId)
 end
 
 ---------------------------------------------------------------------------------
--- Detail pane (right column). Built fresh per render — Show/Hide on tab
--- content frames toggles which body is visible. State writes go straight
--- through to DT helpers; selection (which spell) lives in _state.
+-- Detail pane (right column). Each render builds the selected tab's body on
+-- pooled hosts. State writes go straight through to DT helpers; selection
+-- (which spell) lives in _state.
 ---------------------------------------------------------------------------------
 
 -- Builds the Visibility tab body. Today: a friendly "Default: X" subtitle +
@@ -2368,8 +2368,7 @@ end
 -- Trash ability tab bodies. Trash rows are folded into the same list+detail
 -- editor as boss spells/phases (keyed "trash:mapID:npcID:spellID"); these three
 -- builders mirror the boss Visibility/Display/Actions tabs but read/write the
--- DungeonTrash override backend via explicit (mapID, npcID, spellID). Built
--- fresh per render like the boss tabs; teardown rides the same ReleaseAll hook.
+-- DungeonTrash override backend via explicit (mapID, npcID, spellID).
 -- Each takes the list `item` ({ id, data, mapID, npcID, spellID }).
 ---------------------------------------------------------------------------------
 local ROLE_TOKEN_TO_KEY = { TANK = "tank", HEALER = "healer", DAMAGER = "dps" }
@@ -3212,10 +3211,9 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     local listY = 0
     local bossNum = 0
     for _, enc in ipairs(encounters) do
-        -- Encounter header row (not pooled — low count, transient). Bosses get
-        -- a "B1 - ", "B2 - " prefix (BigWigs in-fight shorthand); trash-mob
-        -- groups render the mob name plainly so they read as a separate block
-        -- below the bosses.
+        -- Encounter header. Bosses get a "B1 - ", "B2 - " prefix (BigWigs
+        -- in-fight shorthand); trash-mob groups render the mob name plainly so
+        -- they read as a separate block below the bosses.
         local header = leftCol:Text()
         KE:ApplyFontToText(header, "Expressway", 15, "OUTLINE")
         header:SetPoint("TOPLEFT", leftCol, "TOPLEFT", 4, -listY - 6)
