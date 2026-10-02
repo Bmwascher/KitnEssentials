@@ -83,7 +83,6 @@ local function SkinEncounterJournal()
     ejSkinned = true
 
     S.Frame(EJ)
-    S.Backdrop(EJ)
     if _G.EncounterJournalBg then S.KillTexture(_G.EncounterJournalBg) end
     if _G.EncounterJournalInset then S.StripTextures(_G.EncounterJournalInset) end
 
