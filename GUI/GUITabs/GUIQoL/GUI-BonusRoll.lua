@@ -9,7 +9,6 @@ local KE = select(2, ...)
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local ipairs = ipairs
-local CreateFrame = CreateFrame
 
 local BR = KitnEssentials and KitnEssentials:GetModule("BonusRoll", true)
 
@@ -124,15 +123,12 @@ GUIFrame:RegisterContent("BonusRoll", function(scrollChild, yOffset)
     for g, group in ipairs(AUTO_PASS_GROUPS) do
         local cellWidth = CellWidth(#group.buckets)
         local row = GUIFrame:CreateRow(card3.content, CELL_H)
-        local labelHost = CreateFrame("Frame", nil, row)
-        labelHost:SetHeight(CELL_H)
-        local label = labelHost:CreateFontString(nil, "OVERLAY")
-        KE:ApplyThemeFont(label, "normal")
-        label:SetPoint("LEFT", labelHost, "LEFT", 2, 0)
+        local label = row:GetLabel("normal")
         label:SetJustifyH("LEFT")
+        label:SetWordWrap(false)
         label:SetText(group.header)
         label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-        row:AddWidget(labelHost, LABEL_W)
+        row:AddWidget(label, LABEL_W, nil, 2)
         for _, bucket in ipairs(group.buckets) do
             local key = bucket.key
             local cb = GUIFrame:CreateCompactCheckbox(row, bucket.label, {
