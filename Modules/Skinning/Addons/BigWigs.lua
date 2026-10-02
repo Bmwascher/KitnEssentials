@@ -187,7 +187,8 @@ local function FindKeystonePanel(titleText)
         local tt = tc and tc.TitleText
         if tt and tt.GetText and not S.data(frame).kchecked then
             local ok, result = pcall(tt.GetText, tt)
-            if ok and result == titleText then
+            -- The pcall covers the read, not the compare.
+            if ok and not issecretvalue(result) and result == titleText then
                 S.data(frame).kchecked = true
                 return frame
             end
