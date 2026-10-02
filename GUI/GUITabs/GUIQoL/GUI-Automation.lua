@@ -379,11 +379,10 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
             local items = byCategory[catKey]
 
             local headingRow = GUIFrame:CreateRow(card3.content, HEADING_H)
-            local headingText = headingRow:CreateFontString(nil, "OVERLAY")
+            local headingText = headingRow:GetLabel("normal")
             headingText:SetPoint("TOPLEFT", headingRow, "TOPLEFT", 0, 0)
             headingText:SetPoint("BOTTOMRIGHT", headingRow, "BOTTOMRIGHT", 0, 0)
             headingText:SetJustifyH("LEFT")
-            KE:ApplyThemeFont(headingText, "normal")
             headingText:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
             headingText:SetText(data.labels[catKey] or catKey)
             card3:AddRow(headingRow, HEADING_H)
