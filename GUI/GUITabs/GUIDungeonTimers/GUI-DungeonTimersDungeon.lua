@@ -1917,17 +1917,17 @@ end
 
 local function BuildPhaseVisibilityTabBody(parent, phaseKey, rule)
     local DT = GetModule()
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     -- Section: Master.
-    local masterHeader = body:CreateFontString(nil, "OVERLAY")
+    local masterHeader = body:Text()
     KE:ApplyFontToText(masterHeader, "Expressway", 13, "OUTLINE")
     masterHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     masterHeader:SetText("Master")
     masterHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", masterHeader, "RIGHT", 6, 0)
@@ -1963,7 +1963,7 @@ local function BuildPhaseVisibilityTabBody(parent, phaseKey, rule)
     local windowHeader = CreateSectionHeader(body, enableToggle, "When It Fires", 18)
 
     -- Description: explains threshold + lead window.
-    local desc = body:CreateFontString(nil, "OVERLAY")
+    local desc = body:Text()
     KE:ApplyFontToText(desc, "Expressway", 12, "OUTLINE")
     desc:SetPoint("TOPLEFT", windowHeader, "BOTTOMLEFT", 0, -10)
     desc:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2002,7 +2002,7 @@ local function BuildPhaseVisibilityTabBody(parent, phaseKey, rule)
     leadRow:AddWidget(leadSlider, 1.0, 0)
     secondaryWidgets[#secondaryWidgets + 1] = leadSlider
 
-    local leadCaption = body:CreateFontString(nil, "OVERLAY")
+    local leadCaption = body:Text()
     KE:ApplyFontToText(leadCaption, "Expressway", 11, "OUTLINE")
     leadCaption:SetPoint("TOPLEFT", leadRow, "BOTTOMLEFT", 8, -12)
     leadCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2050,17 +2050,17 @@ end
 
 local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
     local DT = GetModule()
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     -- Section: Display Mode
-    local modeHeader = body:CreateFontString(nil, "OVERLAY")
+    local modeHeader = body:Text()
     KE:ApplyFontToText(modeHeader, "Expressway", 13, "OUTLINE")
     modeHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     modeHeader:SetText("Display Mode")
     modeHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", modeHeader, "RIGHT", 6, 0)
@@ -2068,7 +2068,7 @@ local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
         underline:SetPoint("TOP", modeHeader, "TOP", 0, -8)
     end
 
-    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    local sectionLabel = body:Text()
     KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
     sectionLabel:SetPoint("TOPLEFT", modeHeader, "BOTTOMLEFT", 0, -14)
     sectionLabel:SetTextColor(0.85, 0.85, 0.85)
@@ -2096,14 +2096,14 @@ local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
     toggle:SetPoint("TOPLEFT", sectionLabel, "BOTTOMLEFT", 0, -8)
     secondaryWidgets[#secondaryWidgets + 1] = toggle
 
-    local defaultLabel = body:CreateFontString(nil, "OVERLAY")
+    local defaultLabel = body:Text()
     KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
     defaultLabel:SetPoint("LEFT", toggle, "RIGHT", 16, 0)
     defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
     defaultLabel:SetJustifyH("LEFT")
     defaultLabel:SetText("Default: Text")
 
-    local caption = body:CreateFontString(nil, "OVERLAY")
+    local caption = body:Text()
     KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
     caption:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -12)
     caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2142,7 +2142,7 @@ local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
     labelEditRow:AddWidget(labelEdit, 1)
     secondaryWidgets[#secondaryWidgets + 1] = labelEdit
 
-    local labelCaption = body:CreateFontString(nil, "OVERLAY")
+    local labelCaption = body:Text()
     KE:ApplyFontToText(labelCaption, "Expressway", 11, "OUTLINE")
     labelCaption:SetPoint("TOPLEFT", labelEditRow, "BOTTOMLEFT", 0, -8)
     labelCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2164,7 +2164,7 @@ local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
 
     local effectiveColor = ResolveEffectivePhaseColor()
 
-    local colorRow = CreateFrame("Frame", nil, body)
+    local colorRow = GUIFrame:AcquirePooled("dtd:host", body)
     colorRow:SetHeight(36)
     colorRow:SetPoint("TOPLEFT", colorHeader, "BOTTOMLEFT", 0, -10)
     colorRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2227,7 +2227,7 @@ end
 
 local function BuildPhaseActionsTabBody(parent, phaseKey)
     local DT = GetModule()
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     local soundList = { ["None"] = "None" }
@@ -2253,13 +2253,13 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     local secondaryWidgets = {}
 
     -- Section: On Show
-    local showHeader = body:CreateFontString(nil, "OVERLAY")
+    local showHeader = body:Text()
     KE:ApplyFontToText(showHeader, "Expressway", 13, "OUTLINE")
     showHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     showHeader:SetText("On Show")
     showHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", showHeader, "RIGHT", 6, 0)
@@ -2301,7 +2301,7 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = showTestBtn
 
-    local showCaption = body:CreateFontString(nil, "OVERLAY")
+    local showCaption = body:Text()
     KE:ApplyFontToText(showCaption, "Expressway", 11, "OUTLINE")
     showCaption:SetPoint("TOPLEFT", showRow, "BOTTOMLEFT", 0, -8)
     showCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2346,7 +2346,7 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     hideRow:AddWidget(hideTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = hideTestBtn
 
-    local hideCaption = body:CreateFontString(nil, "OVERLAY")
+    local hideCaption = body:Text()
     KE:ApplyFontToText(hideCaption, "Expressway", 11, "OUTLINE")
     hideCaption:SetPoint("TOPLEFT", hideRow, "BOTTOMLEFT", 0, -8)
     hideCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
