@@ -2970,6 +2970,132 @@ local function BuildTrashActionsTabBody(parent, item)
 end
 
 ---------------------------------------------------------------------------------
+-- Title row of the detail pane: icon and name in one frame, so the whole area
+-- is a single tooltip hover target. The hover reads the fields ConfigureTitle
+-- sets.
+---------------------------------------------------------------------------------
+local TITLE_ICON_SIZE = 26
+
+local function TitleOnEnter(title)
+    local id = title._hoverId
+    if not id then return end
+    GameTooltip:SetOwner(title, "ANCHOR_CURSOR_RIGHT")
+    if title._hoverIsPhase then
+        GameTooltip:AddLine(string_format("Phase Transition %d", title._hoverPhaseIdx))
+        local rule = title._hoverPhaseRule
+        if rule then
+            local thr = rule.threshold or "?"
+            local lead = rule.lead or "?"
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(
+                string_format("Triggers when the boss drops below %s%% HP (alert window: %s%%).",
+                              tostring(thr), tostring(lead)),
+                0.85, 0.85, 0.85, true)
+        end
+    elseif title._hoverIsTrash then
+        local trashSpellID = title._hoverTrashSpellID
+        if trashSpellID then
+            GameTooltip:SetSpellByID(trashSpellID)
+            local mobName = title._hoverTrashMob
+            if mobName then
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine(string_format("Cast by: %s", mobName), 0.7, 0.7, 0.7)
+            end
+            GameTooltip:AddLine(string_format("Spell ID: %d", trashSpellID), 1, 1, 1)
+        end
+    else
+        GameTooltip:SetSpellByID(id)
+        local roleTag = title._hoverRoleTag
+        if roleTag then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(string_format("Curated role: %s", roleTag), 0.7, 0.7, 0.7)
+        end
+        GameTooltip:AddLine(string_format("Spell ID: %d", id), 1, 1, 1)
+    end
+    GameTooltip:Show()
+end
+
+local function TitleOnLeave()
+    GameTooltip:Hide()
+end
+
+-- The borders are added here, once: KE:AddIconBorders makes four textures
+-- every time it runs.
+local function ConstructTitle(parent)
+    local title = CreateFrame("Frame", nil, parent)
+
+    local iconFrame = CreateFrame("Frame", nil, title, "BackdropTemplate")
+    iconFrame:SetSize(TITLE_ICON_SIZE, TITLE_ICON_SIZE)
+    iconFrame:SetPoint("LEFT", title, "LEFT", 0, 0)
+    iconFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+    iconFrame:SetBackdropColor(0, 0, 0, 0.8)
+    if KE.AddIconBorders then KE:AddIconBorders(iconFrame) end
+
+    local icon = iconFrame:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", 1, -1)
+    icon:SetPoint("BOTTOMRIGHT", -1, 1)
+    if KE.ApplyIconZoom then KE:ApplyIconZoom(icon) end
+
+    local nameText = title:CreateFontString(nil, "OVERLAY")
+    nameText:SetPoint("LEFT", iconFrame, "RIGHT", 8, 0)
+
+    title:SetScript("OnEnter", TitleOnEnter)
+    title:SetScript("OnLeave", TitleOnLeave)
+
+    title._keIcon = icon
+    title._keName = nameText
+    title._keOwned = { title, iconFrame }
+    return title
+end
+
+-- item is the selected list entry (spell, phase rule or trash ability) and
+-- data its curated table; both nil when nothing is selected.
+local function ConfigureTitle(title, item, data)
+    local icon, nameText = title._keIcon, title._keName
+    KE:ApplyFontToText(nameText, "Expressway", 16, "OUTLINE")
+    if not item then
+        icon:SetTexture(134400)
+        nameText:SetText("(no selection)")
+        title:EnableMouse(false)
+        return
+    end
+    local isPhase = item.isPhase or false
+    local isTrash = item.isTrash or false
+    if isPhase then
+        icon:SetTexture(PHASE_ROW_ICON)
+        nameText:SetText(ResolvePhaseRowLabel(item))
+    elseif isTrash then
+        icon:SetTexture(
+            (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(item.spellID))
+            or 134400
+        )
+        nameText:SetText((data and data.name) or "Trash")
+    else
+        local DT = GetModule()
+        icon:SetTexture(
+            (DT and DT.ResolveSpellIcon and DT:ResolveSpellIcon(item.id))
+            or (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(item.id))
+            or 134400
+        )
+        nameText:SetText(ResolveSpellDisplayName(item.id, data))
+    end
+    title._hoverId = item.id
+    title._hoverIsPhase = isPhase
+    title._hoverIsTrash = isTrash
+    title._hoverTrashSpellID = isTrash and item.spellID or nil
+    title._hoverTrashMob = isTrash and item.mobName or nil
+    title._hoverRoleTag = (not isPhase and not isTrash) and data and data.role or nil
+    title._hoverPhaseRule = isPhase and data or nil
+    title._hoverPhaseIdx = isPhase and (item.ruleIndex or 1) or nil
+    title:EnableMouse(true)
+end
+
+GUIFrame:NewWidgetPool("dtd:title", ConstructTitle, function(title)
+    title:EnableMouse(false)
+    if GameTooltip:IsOwned(title) then GameTooltip:Hide() end
+end)
+
+---------------------------------------------------------------------------------
 -- Page builder. Called from the per-dungeon RegisterContent factory below.
 ---------------------------------------------------------------------------------
 local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
@@ -3099,14 +3225,9 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     ---------------------------------------------------------------------------
     -- RIGHT COLUMN: tab bar + tab body for selected spell.
     ---------------------------------------------------------------------------
-    local rightCol = CreateFrame("Frame", nil, scrollChild, "BackdropTemplate")
+    local rightCol = GUIFrame:AcquirePooled("dtd:panel", scrollChild)
     rightCol:SetPoint("TOPLEFT", leftCol, "TOPRIGHT", COL_GAP, 0)
     rightCol:SetPoint("RIGHT", scrollChild, "RIGHT", -Theme.paddingSmall, 0)
-    rightCol:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
     rightCol:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], Theme.bgLight[4])
     rightCol:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], Theme.border[4])
 
@@ -3128,120 +3249,14 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     selectedIsPhase = selectedSpell and selectedSpell.isPhase or false
     selectedIsTrash = selectedSpell and selectedSpell.isTrash or false
 
-    -- Title row: spell icon + spell name wrapped in a single Frame so the
-    -- whole "icon-and-name area" is one tooltip hover target. Wrapping the
-    -- two pieces (FontStrings can't catch mouse events on their own) gives
-    -- a single OnEnter / OnLeave anchor and a generous hit zone — hovering
-    -- anywhere across the icon-or-name fires the tooltip.
-    local TITLE_ICON_SIZE = 26
-    local titleRow = CreateFrame("Frame", nil, rightCol)
+    local titleRow = GUIFrame:AcquirePooled("dtd:title", rightCol)
     titleRow:SetHeight(TITLE_ICON_SIZE)
     titleRow:SetPoint("TOPLEFT", rightCol, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     titleRow:SetPoint("RIGHT", rightCol, "RIGHT", -DETAIL_PADDING, 0)
-
-    local titleIconFrame = CreateFrame("Frame", nil, titleRow, "BackdropTemplate")
-    titleIconFrame:SetSize(TITLE_ICON_SIZE, TITLE_ICON_SIZE)
-    titleIconFrame:SetPoint("LEFT", titleRow, "LEFT", 0, 0)
-    titleIconFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
-    titleIconFrame:SetBackdropColor(0, 0, 0, 0.8)
-    if KE.AddIconBorders then KE:AddIconBorders(titleIconFrame) end
-
-    local titleIcon = titleIconFrame:CreateTexture(nil, "ARTWORK")
-    titleIcon:SetPoint("TOPLEFT", 1, -1)
-    titleIcon:SetPoint("BOTTOMRIGHT", -1, 1)
-    if KE.ApplyIconZoom then KE:ApplyIconZoom(titleIcon) end
-    if selectedSpell then
-        if selectedIsPhase then
-            titleIcon:SetTexture(PHASE_ROW_ICON)
-        elseif selectedIsTrash then
-            titleIcon:SetTexture(
-                (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(selectedSpell.spellID))
-                or 134400
-            )
-        else
-            local DT = GetModule()
-            titleIcon:SetTexture(
-                (DT and DT.ResolveSpellIcon and DT:ResolveSpellIcon(selectedSpell.id))
-                or (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(selectedSpell.id))
-                or 134400
-            )
-        end
-    else
-        titleIcon:SetTexture(134400)
-    end
-
-    local titleFs = titleRow:CreateFontString(nil, "OVERLAY")
-    KE:ApplyFontToText(titleFs, "Expressway", 16, "OUTLINE")
-    titleFs:SetPoint("LEFT", titleIconFrame, "RIGHT", 8, 0)
-    if selectedSpell then
-        if selectedIsPhase then
-            titleFs:SetText(ResolvePhaseRowLabel(selectedSpell))
-        elseif selectedIsTrash then
-            titleFs:SetText((selectedSpellData and selectedSpellData.name) or "Trash")
-        else
-            titleFs:SetText(ResolveSpellDisplayName(selectedSpell.id, selectedSpellData))
-        end
-    else
-        titleFs:SetText("(no selection)")
-    end
-
-    -- Tooltip on hover. titleRow is the hover target so both icon AND
-    -- name area trigger the tooltip. GameTooltip is Blizzard's singleton —
-    -- no per-frame OnUpdate, no per-row allocation. Lifecycle is per-hover
-    -- only; cost scales with mouse interaction rate. Closure captures the
-    -- selected spellId at render time which is fine since titleRow is
-    -- recreated each RefreshContent (one frame per click).
-    if selectedSpell then
-        local hoverId = selectedSpell.id
-        local hoverIsPhase = selectedIsPhase
-        local hoverIsTrash = selectedIsTrash
-        local hoverTrashSpellID = selectedIsTrash and selectedSpell.spellID or nil
-        local hoverTrashMob = selectedIsTrash and selectedSpell.mobName or nil
-        local hoverRoleTag = (not hoverIsPhase and not hoverIsTrash)
-                             and selectedSpellData and selectedSpellData.role or nil
-        local hoverPhaseRule = hoverIsPhase and selectedSpellData or nil
-        local hoverPhaseIdx = hoverIsPhase and (selectedSpell.ruleIndex or 1) or nil
-        titleRow:EnableMouse(true)
-        titleRow:SetScript("OnEnter", function(b)
-            -- ANCHOR_CURSOR_RIGHT places the tooltip's left edge at the
-            -- cursor's right side. Standard for hover-context tooltips.
-            GameTooltip:SetOwner(b, "ANCHOR_CURSOR_RIGHT")
-            if hoverIsPhase then
-                GameTooltip:AddLine(string_format("Phase Transition %d", hoverPhaseIdx))
-                if hoverPhaseRule then
-                    local thr = hoverPhaseRule.threshold or "?"
-                    local lead = hoverPhaseRule.lead or "?"
-                    GameTooltip:AddLine(" ")
-                    GameTooltip:AddLine(string_format("Triggers when the boss drops below %s%% HP (alert window: %s%%).",
-                                                       tostring(thr), tostring(lead)),
-                                        0.85, 0.85, 0.85, true)
-                end
-            elseif hoverIsTrash then
-                if hoverTrashSpellID then
-                    GameTooltip:SetSpellByID(hoverTrashSpellID)
-                    if hoverTrashMob then
-                        GameTooltip:AddLine(" ")
-                        GameTooltip:AddLine(string_format("Cast by: %s", hoverTrashMob),
-                                            0.7, 0.7, 0.7)
-                    end
-                    GameTooltip:AddLine(string_format("Spell ID: %d", hoverTrashSpellID), 1, 1, 1)
-                end
-            else
-                GameTooltip:SetSpellByID(hoverId)
-                if hoverRoleTag then
-                    GameTooltip:AddLine(" ")
-                    GameTooltip:AddLine(string_format("Curated role: %s", hoverRoleTag),
-                                        0.7, 0.7, 0.7)
-                end
-                GameTooltip:AddLine(string_format("Spell ID: %d", hoverId), 1, 1, 1)
-            end
-            GameTooltip:Show()
-        end)
-        titleRow:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    end
+    ConfigureTitle(titleRow, selectedSpell, selectedSpellData)
 
     -- Tab bar — uses CreateSubTabs which handles active state + RefreshContent.
-    local tabBar = CreateFrame("Frame", nil, rightCol)
+    local tabBar = GUIFrame:AcquirePooled("dtd:host", rightCol)
     tabBar:SetPoint("TOPLEFT", titleRow, "BOTTOMLEFT", 0, -10)
     tabBar:SetPoint("RIGHT", rightCol, "RIGHT", -DETAIL_PADDING, 0)
     tabBar:SetHeight(28)
@@ -3256,7 +3271,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     -- Subtle 1px line below the tab bar — visually anchors the tabs to
     -- the body content below them so they don't feel like floating
     -- buttons drifting into empty space.
-    local tabSeparator = rightCol:CreateTexture(nil, "ARTWORK")
+    local tabSeparator = rightCol:Line()
     tabSeparator:SetHeight(1)
     tabSeparator:SetColorTexture(Theme.divider[1], Theme.divider[2], Theme.divider[3], Theme.divider[4])
     tabSeparator:SetPoint("LEFT",  rightCol, "LEFT",  DETAIL_PADDING, 0)
@@ -3264,7 +3279,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     tabSeparator:SetPoint("TOP",   tabBar, "BOTTOM", 0, -4)
 
     -- Tab content area — anchored below the separator, fills remaining height.
-    local tabBody = CreateFrame("Frame", nil, rightCol)
+    local tabBody = GUIFrame:AcquirePooled("dtd:host", rightCol)
     tabBody:SetPoint("TOPLEFT", tabSeparator, "BOTTOMLEFT", 0, -4)
     tabBody:SetPoint("BOTTOMRIGHT", rightCol, "BOTTOMRIGHT", -DETAIL_PADDING, DETAIL_PADDING)
 
