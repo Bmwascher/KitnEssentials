@@ -3,8 +3,7 @@
 -- ║  Module: KE.FramePool                                    ║
 -- ║  Purpose: Reusable typed frame pool. Lets GUI code that  ║
 -- ║           rebuilds frames per-render reuse them instead  ║
--- ║           of leaking via SetParent(nil) -> UIParent      ║
--- ║           orphaning.                                     ║
+-- ║           of orphaning them at every page teardown.      ║
 -- ║                                                          ║
 -- ║  Pattern matches Blizzard's FramePool / FramePoolMixin:  ║
 -- ║  consumer calls ReleaseAll() at top of render to mark    ║
@@ -71,7 +70,7 @@ function FramePool:Acquire(parent)
 end
 
 --- Mark every active kit as idle. Reparents kits back to the pool's hidden
---- holder (so subsequent ClearContent passes don't orphan them) and calls
+--- holder (so the page teardown that follows does not orphan them) and calls
 --- the resetter on each. Always called at the top of a render before any
 --- Acquire — there is no individual Release.
 function FramePool:ReleaseAll()

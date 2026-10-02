@@ -65,7 +65,7 @@ end
 -- Content rebuild callbacks (fire UNCONDITIONALLY at the start of every
 -- RefreshContent — used by widget pools to ReleaseAll before the new render
 -- starts so kits can be re-acquired into the fresh scrollChild without
--- being orphaned by ClearContent's SetParent(nil) loop).
+-- being orphaned by the teardown loop).
 GUIFrame.contentRebuildCallbacks = {}
 
 function GUIFrame:RegisterContentRebuildCallback(key, callback)
