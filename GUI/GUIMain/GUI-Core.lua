@@ -78,9 +78,9 @@ function GUIFrame:UnregisterContentRebuildCallback(key)
     if key then self.contentRebuildCallbacks[key] = nil end
 end
 
--- Toggle and edit-box callbacks wait out a short delay. A page rebuild inside
--- that delay runs them first, while the page they belong to is still whole,
--- instead of letting them reach widgets another page has since taken.
+-- Toggle callbacks wait out a short delay. A page rebuild inside that delay
+-- runs them first, while the page they belong to is still whole, instead of
+-- letting them reach widgets another page has since taken.
 -- One entry per call, in the order scheduled; whichever of its timer or a
 -- drain reaches an entry first runs it.
 GUIFrame._deferred = {}
@@ -1182,8 +1182,8 @@ function GUIFrame:RefreshContent()
     end
     self._contentDirtyWhileHidden = nil
 
-    -- A toggle or edit box still waiting to fire its callback fires it now,
-    -- while the page it belongs to is whole.
+    -- A toggle still waiting to fire its callback fires it now, while the
+    -- page it belongs to is whole.
     self:DrainDeferredWidgetCallbacks()
 
     -- Fire rebuild callbacks FIRST so widget pools can ReleaseAll their

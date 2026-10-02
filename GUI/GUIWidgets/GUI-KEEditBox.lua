@@ -146,20 +146,10 @@ local function ConstructEditBox(parent)
         editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
     end)
 
-    -- silent: suppress the OnTextChanged debounce + pool-bound _onTextChanged
-    -- callback. EditBox:SetText fires OnTextChanged with userInput=false, but
-    -- we already gate on userInput so silent only matters if a future change
-    -- ever lifts that gate. Cheap to track and matches Slider/Dropdown API.
-    function row:SetValue(val, silent)
-        local saved
-        if silent then
-            saved = row._onTextChanged
-            row._onTextChanged = nil
-        end
+    -- The second argument is accepted and ignored: nothing listens to a
+    -- programmatic SetText, and callers pass it as they do to a slider.
+    function row:SetValue(val, _)
         editBox:SetText(val or "")
-        if silent then
-            row._onTextChanged = saved
-        end
     end
 
     function row:GetValue() return editBox:GetText() end
@@ -198,44 +188,16 @@ local function ConstructEditBox(parent)
     row.editBox = editBox
     row.container = container
 
-    -- Pool-friendly callback slots; OnEnterPressed/OnEditFocusLost read
-    -- _callback late-bound, OnTextChanged reads _onTextChanged per keystroke.
+    -- Pool-friendly callback slot, read late-bound.
     function row:SetCallback(fn)
         self._callback = fn
     end
-
-    function row:SetOnTextChanged(fn)
-        self._onTextChanged = fn
-    end
-
-    -- Live typing waits out a short debounce. Only the latest keystroke's call
-    -- does anything when it runs, and a page rebuild in between runs it early
-    -- (GUIFrame:DeferWidgetCallback). userInput=false (programmatic SetText)
-    -- is ignored.
-    editBox:SetScript("OnTextChanged", function(self, userInput)
-        if not userInput then return end
-        local fn = row._onTextChanged
-        if not fn then return end
-        local text = self:GetText()
-        local function Fire()
-            if row._pendingText ~= Fire then return end
-            row._pendingText = nil
-            fn(text)
-        end
-        row._pendingText = Fire
-        GUIFrame:DeferWidgetCallback(row._textChangedDelay or 0.15, Fire)
-    end)
 
     row._keOwned = { row, container, editBox }
     return row
 end
 
--- EditBox widget — config-table API:
---   { value, callback, tooltip, height, onTextChanged, textChangedDelay }
--- onTextChanged: optional debounced callback that fires DURING typing (not
--- on Enter/blur — that's `callback`'s job). Useful for live filters like the
--- BigWigs spell-search box. Debounce defaults to 150ms; override via
--- textChangedDelay.
+-- EditBox widget — config-table API: { value, callback, tooltip, height }
 local function ConfigureEditBox(row, labelText, config)
     row:SetHeight(config.height or 34)
     local label = row.label
@@ -250,8 +212,6 @@ local function ConfigureEditBox(row, labelText, config)
     row:SetEnabled(true)
     row:ApplyThemeColors()
     row._callback = config.callback
-    row._onTextChanged = config.onTextChanged
-    row._textChangedDelay = config.textChangedDelay or 0.15
 end
 
 local editBoxPool = GUIFrame:NewWidgetPool("editbox", ConstructEditBox, function(row)
