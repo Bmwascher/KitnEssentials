@@ -85,6 +85,127 @@ local CURATED_TAG_COLOR = { 0.65, 0.65, 0.65 }
 -- button so destructive UX is consistent across the addon.
 local REMOVE_COLOR = { 0.9, 0.2, 0.2, 1 }
 
+---------------------------------------------------------------------------------
+-- Pooled containers. A host hands out its own captions and lines, so a builder
+-- never adds a region the pool would reject, and widgets built under a host
+-- come from their pools.
+---------------------------------------------------------------------------------
+
+---@class KE.DTDHost : Frame
+---@field _keTexts FontString[]
+---@field _keLines Texture[]
+---@field _keTextUsed integer
+---@field _keLineUsed integer
+local HostMethods = {}
+
+-- The next unused caption, put back to what a new FontString has: the next
+-- builder may set less than the last one did. The font only lets the text be
+-- cleared; every builder applies its own.
+---@return FontString
+function HostMethods:Text()
+    local n = self._keTextUsed + 1
+    self._keTextUsed = n
+    local fs = self._keTexts[n]
+    if not fs then
+        fs = self:CreateFontString(nil, "OVERLAY")
+        self._keTexts[n] = fs
+        GUIFrame:PoolGrow(self, self, 0, 1)
+    end
+    fs:SetDrawLayer("OVERLAY")
+    fs:ClearAllPoints()
+    fs:SetSize(0, 0)
+    fs:SetJustifyH("CENTER")
+    fs:SetJustifyV("MIDDLE")
+    fs:SetWordWrap(true)
+    fs:SetAlpha(1)
+    fs:SetTextColor(1, 1, 1, 1)
+    KE:ApplyThemeFont(fs, "normal")
+    fs:SetText("")
+    fs:Show()
+    return fs
+end
+
+-- The next unused line, put back to what a new texture has.
+---@return Texture
+function HostMethods:Line()
+    local n = self._keLineUsed + 1
+    self._keLineUsed = n
+    local tex = self._keLines[n]
+    if not tex then
+        tex = self:CreateTexture(nil, "ARTWORK")
+        self._keLines[n] = tex
+        GUIFrame:PoolGrow(self, self, 0, 1)
+    end
+    tex:SetDrawLayer("ARTWORK", 0)
+    tex:ClearAllPoints()
+    tex:SetSize(0, 0)
+    tex:SetTexture(nil)
+    tex:SetTexCoord(0, 1, 0, 1)
+    tex:SetVertexColor(1, 1, 1, 1)
+    tex:SetAlpha(1)
+    tex:Show()
+    return tex
+end
+
+---@param host Frame
+---@return KE.DTDHost
+local function InitHost(host)
+    ---@cast host KE.DTDHost
+    host._keTexts = {}
+    host._keLines = {}
+    host._keTextUsed = 0
+    host._keLineUsed = 0
+    for name, fn in pairs(HostMethods) do
+        host[name] = fn
+    end
+    host._keOwned = { host }
+    return host
+end
+
+local function ConstructHost(parent)
+    return InitHost(CreateFrame("Frame", nil, parent))
+end
+
+local PANEL_BACKDROP = {
+    bgFile   = "Interface\\Buttons\\WHITE8x8",
+    edgeFile = "Interface\\Buttons\\WHITE8x8",
+    edgeSize = 1,
+}
+
+-- The backdrop is set here, once, so its textures are part of the baseline.
+local function ConstructPanel(parent)
+    local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    panel:SetBackdrop(PANEL_BACKDROP)
+    return InitHost(panel)
+end
+
+-- Every child goes through ReleaseTracked, so a frame a builder made directly
+-- is orphaned alone instead of retiring the host. Captions and lines are
+-- unanchored so a parked one holds no anchor to a widget another page now uses.
+local function ResetHost(host)
+    if host:GetNumChildren() > 0 then
+        for _, child in ipairs({ host:GetChildren() }) do
+            GUIFrame:ReleaseTracked(child, host)
+        end
+    end
+    local texts, lines = host._keTexts, host._keLines
+    for i = 1, host._keTextUsed do
+        texts[i]:Hide()
+        texts[i]:ClearAllPoints()
+    end
+    for i = 1, host._keLineUsed do
+        lines[i]:Hide()
+        lines[i]:ClearAllPoints()
+    end
+    host._keTextUsed = 0
+    host._keLineUsed = 0
+    host:SetSize(0, 0)
+    host:EnableMouse(false)
+end
+
+GUIFrame:NewWidgetPool("dtd:host", ConstructHost, ResetHost, true)
+GUIFrame:NewWidgetPool("dtd:panel", ConstructPanel, ResetHost, true)
+
 -- Section header for the Visibility tab body. Small accent-colored label
 -- followed by a thin underline that runs to the right edge — gives clear
 -- semantic grouping ("WHO SEES IT", "WHEN IT APPEARS") without nesting
@@ -2862,7 +2983,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     if #encounters == 0 then
         local card = GUIFrame:CreateCard(scrollChild, dungeonName, yOffset)
         local row = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-        local label = row:CreateFontString(nil, "OVERLAY")
+        local label = row:GetLabel("normal")
         KE:ApplyFontToText(label, "Expressway", 13, "OUTLINE")
         label:SetPoint("LEFT", row, "LEFT", 8, 0)
         label:SetText("No curated encounters yet for this dungeon.")
@@ -2875,7 +2996,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     -- Header card with dungeon name + master-toggle reminder.
     local hintCard = GUIFrame:CreateCard(scrollChild, dungeonName, yOffset)
     local hintRow = GUIFrame:CreateRow(hintCard.content, Theme.rowHeightLast)
-    local hint = hintRow:CreateFontString(nil, "OVERLAY")
+    local hint = hintRow:GetLabel("normal")
     KE:ApplyFontToText(hint, "Expressway", 13, "OUTLINE")
     hint:SetPoint("LEFT", hintRow, "LEFT", 8, 0)
     hint:SetPoint("RIGHT", hintRow, "RIGHT", -8, 0)
