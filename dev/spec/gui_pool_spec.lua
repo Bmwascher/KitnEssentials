@@ -191,6 +191,42 @@ describe("GUI-Core widget pools", function()
             assert.equals(case.pooled, GUIFrame:IsPoolParent(case.parent), case.name)
         end
     end)
+
+    it("gives a row one label for its whole use and still releases the row clean", function()
+        local labels = 0
+        mock.install({ CreateFrame = function(_, _, parent)
+            local f = fakeFrame(0, 0)
+            f.parent = parent
+            function f:SetScript() end
+            function f:SetHeight() end
+            function f:EnableMouse() end
+            function f:CreateFontString()
+                self.regions = self.regions + 1
+                labels = labels + 1
+                return setmetatable({}, { __index = function() return function() end end })
+            end
+            return f
+        end })
+        _G.UIParent = fakeFrame(0, 0)
+        local KE = {
+            Theme = { headerHeight = 32, borderSize = 1 },
+            Print = function() end,
+            ApplyThemeFont = function() end,
+        }
+        helpers.loadModule("GUI/GUIMain/GUI-Core.lua", KE)
+        local G = KE.GUIFrame
+        local page = fakeFrame(0, 0)
+        G.contentArea = { scrollChild = page }
+
+        local row = G:CreateRow(page, 24)
+        local label = row:GetLabel("small")
+        assert.equals(label, row:GetLabel("normal"))
+        assert.equals(1, labels)
+
+        G:ReleaseTracked(row, page)
+        assert.equals("free", row._keState)
+        assert.equals(0, G._poolStats.retired)
+    end)
 end)
 
 describe("GUI-Core deferred widget callbacks", function()

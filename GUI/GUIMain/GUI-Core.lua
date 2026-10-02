@@ -549,6 +549,16 @@ function GUIFrame:IsPoolParent(parent)
     return pool ~= nil and pool.holdsWidgets and parent._keState == "used" or false
 end
 
+-- A pool's object for this parent: from the pool under a pool parent, built
+-- directly under any other, where nothing would ever release it.
+function GUIFrame:AcquirePooled(kind, parent)
+    local pool = self._pools[kind]
+    if self:IsPoolParent(parent) then
+        return pool:Acquire(parent)
+    end
+    return pool.construct(parent)
+end
+
 -- One child a container tracks or holds. A pooled object still here goes back
 -- to its pool; any other frame still here is orphaned, as a rebuild always
 -- does; a child something else has since taken is left alone. Regions are never
@@ -1070,6 +1080,29 @@ function RowMethods:GetChevron()
     return chevron
 end
 
+-- A row owns at most one label, made on first use like the chevron. Every
+-- call puts it back to one known state, because the next page to get this
+-- row may set less than the last one did.
+function RowMethods:GetLabel(size)
+    local label = self._keLabel
+    if not label then
+        label = self:CreateFontString(nil, "OVERLAY")
+        self._keLabel = label
+        GUIFrame:PoolGrow(self, self, 0, 1)
+    end
+    KE:ApplyThemeFont(label, size)
+    label:ClearAllPoints()
+    label:SetSize(0, 0)
+    label:SetJustifyH("CENTER")
+    label:SetJustifyV("MIDDLE")
+    label:SetWordWrap(true)
+    label:SetAlpha(1)
+    label:SetTextColor(1, 1, 1, 1)
+    label:SetText("")
+    label:Show()
+    return label
+end
+
 local function NewRow(parent)
     local row = CreateFrame("Frame", nil, parent)
     row.widgets = {}
@@ -1088,6 +1121,7 @@ local function ReleaseRow(row)
         widgets[i] = nil
     end
     if row._keChevron then row._keChevron:Hide() end
+    if row._keLabel then row._keLabel:Hide() end
     -- A pooled widget built on this row but never added to it.
     if row:GetNumChildren() > 0 then
         for _, child in ipairs({ row:GetChildren() }) do
