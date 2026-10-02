@@ -934,7 +934,6 @@ local function ConfigureCard(card, parent, title, yOffset, width)
         card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
     end
     card:EnableMouse(false)
-    card:SetAlpha(1)
     if card.titleText then
         card.header:SetAlpha(1)
         card.titleText:SetAlpha(1)
@@ -1143,7 +1142,6 @@ function GUIFrame:CreateRow(parent, height)
     end
     row:SetHeight(height)
     row:EnableMouse(false)
-    row:SetAlpha(1)
     row._rowHeight = height
     row.nextX = 0
     return row
