@@ -260,6 +260,10 @@ local function SkinChangelog()
     local f = _G.BetterFriendlistChangelogFrame
     if not f or S.data(f).bflSkinned then return end
     S.data(f).bflSkinned = true
+    -- The addon's own theme sets the alpha of every region of its windows,
+    -- which would dim a fill drawn on the window. A backdrop frame is out
+    -- of its reach.
+    S.Backdrop(f)
     S.Frame(f)
     SkinInset(f.MainInset)
     S.Button(f.DiscordButton)
@@ -278,6 +282,8 @@ local function SkinHelp()
     local f = _G.BetterFriendlistHelpFrame
     if not f or S.data(f).bflSkinned then return end
     S.data(f).bflSkinned = true
+    -- Backdrop frame, for the reason given in SkinChangelog.
+    S.Backdrop(f)
     S.Frame(f)
     SkinInset(f.Inset)
     if f.ScrollBar then
@@ -305,6 +311,8 @@ local function SkinSettingsShell(designer)
     local ok, f = pcall(function() return designer:GetFrame() end)
     if not ok or not f or S.data(f).bflSkinned then return end
     S.data(f).bflSkinned = true
+    -- Backdrop frame, for the reason given in SkinChangelog.
+    S.Backdrop(f)
     S.Frame(f)
     for _, key in ipairs({ "TopBar", "Sidebar", "ContentShell", "SearchShell" }) do
         local child = f[key]
@@ -730,6 +738,8 @@ local function Skin()
 
     local ign = frame.IgnoreListWindow
     if ign then
+        -- Backdrop frame, for the reason given in SkinChangelog.
+        S.Backdrop(ign)
         S.Frame(ign)
         SkinInset(ign.Inset)
         S.ScrollBar(ign.ScrollBar)

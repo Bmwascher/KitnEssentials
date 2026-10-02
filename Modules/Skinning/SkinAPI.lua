@@ -133,7 +133,7 @@ local function Plate(frame)
         SizePlate(plate, frame)
         PaintPlate(plate)
         for i = 1, 5 do plate[i]:Show() end
-        return plate
+        return
     end
 
     plate = {}
@@ -163,7 +163,6 @@ local function Plate(frame)
     SizePlate(plate, frame)
     plateCache[frame] = plate
     PaintPlate(plate)
-    return plate
 end
 
 local function DropPlate(frame)
@@ -176,14 +175,15 @@ end
 local function PlateOrBackdrop(frame)
     if CanPlate(frame) then
         Plate(frame)
-        return nil
+    else
+        S.Backdrop(frame)
     end
-    return S.Backdrop(frame)
 end
 
--- True when the frame sits under the root, or under any of the roots.
-local function PlateUnder(frame, root, roots)
-    local p = frame
+-- True when the object sits under the root, or under any of the roots. A
+-- parent that reads secret cannot be placed and counts as under.
+local function IsUnder(obj, root, roots)
+    local p = obj
     while p do
         if p == root or (roots and roots[p]) then return true end
         if not p.GetParent then return false end
@@ -199,7 +199,7 @@ end
 local function SizePlatesUnder(root, roots)
     local settled = true
     for frame, plate in pairs(plateCache) do
-        local ok, under = pcall(PlateUnder, frame, root, roots)
+        local ok, under = pcall(IsUnder, frame, root, roots)
         if not ok then
             settled = false
         elseif under and not pcall(SizePlate, plate, frame) then
@@ -404,10 +404,13 @@ function S.Kill(object)
     if object.Hide then object:Hide() end
 end
 
+-- GetRegions can return a secret region. It cannot be indexed or used as a
+-- table key, so it is skipped.
 local function ClearRegions(...)
     for i = 1, select("#", ...) do
         local r = (select(i, ...))
-        if not plateTextures[r] and r.GetObjectType and r:GetObjectType() == "Texture" then
+        if not issecretvalue(r) and not plateTextures[r]
+            and r.GetObjectType and r:GetObjectType() == "Texture" then
             if r.SetTexture then r:SetTexture(S.ClearTexture) end
             if r.SetAtlas then r:SetAtlas("") end
         end
@@ -417,7 +420,8 @@ end
 local function StripRegions(kill, ...)
     for i = 1, select("#", ...) do
         local region = (select(i, ...))
-        if not plateTextures[region] and region.GetObjectType and region:GetObjectType() == "Texture" then
+        if not issecretvalue(region) and not plateTextures[region]
+            and region.GetObjectType and region:GetObjectType() == "Texture" then
             region:SetTexture(S.ClearTexture)
             if region.SetAtlas then region:SetAtlas("") end
             if kill and region.Hide then region:Hide() end
@@ -728,14 +732,7 @@ end)
 -- not the rest of the walk. A parent that reads secret cannot be placed, so
 -- the backdrop is refreshed anyway and its own size check decides.
 local function RefreshIfUnder(bd, root, roots, refresh)
-    local p = bd
-    while p do
-        if p == root or (roots and roots[p]) then return refresh(bd) end
-        if not p.GetParent then return true end
-        local parent = p:GetParent()
-        if issecretvalue(parent) then return refresh(bd) end
-        p = parent
-    end
+    if IsUnder(bd, root, roots) then return refresh(bd) end
     return true
 end
 

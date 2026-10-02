@@ -47,6 +47,9 @@ end
 skinners.ButtonFrame = function(frame)
     if S.data(frame).bagSkinned then return end
     S.data(frame).bagSkinned = true
+    -- A window another addon owns keeps a backdrop frame: that addon's
+    -- code may sweep the window's own regions.
+    S.Backdrop(frame)
     S.Frame(frame)
 
     if frame.Bg then S.KillTexture(frame.Bg) end
