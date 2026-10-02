@@ -51,6 +51,9 @@ local function ConstructSpellInfo(parent)
         local r, g, b, a = KE:ResolveColor(config.borderColor, { 0, 0, 0, 1 })
         for _, tex in pairs(iconFrame.borders) do
             tex:SetColorTexture(r, g, b, a)
+            -- SetColorTexture turns pixel-grid snapping back on.
+            tex:SetTexelSnappingBias(0)
+            tex:SetSnapToPixelGrid(false)
         end
         iconFrame._borderColor = { r, g, b, a }
         iconTexture:SetTexture(DEFAULT_SPELL_ICON)

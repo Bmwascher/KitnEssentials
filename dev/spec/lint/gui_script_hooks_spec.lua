@@ -9,7 +9,9 @@
 -- assignment above the call takes it from CreateFrame or CreateAnimationGroup:
 -- a script replaced on a pooled widget is the same defect and just as
 -- invisible, and a name can be a made frame early in a file and a pooled one
--- later.
+-- later. A function parameter or a loop variable is not an assignment: a
+-- receiver named by one is judged by the nearest earlier assignment of that
+-- name, and is flagged when there is none.
 local lfs = require("lfs")
 
 -- "file|receiver|handler" -> how many such calls the file makes.
@@ -145,7 +147,11 @@ describe("script hooks in the settings GUI", function()
 
     it("walks the main-window folder as well as the page and widget folders", function()
         local _, seen = CheckTree(SETSCRIPT_DIRS)
-        assert.is_true(seen["GUI/GUIMain/GUI-Core.lua|btn"] == true)
+        local inMainWindow = false
+        for key in pairs(seen) do
+            if key:find("GUI/GUIMain/", 1, true) == 1 then inMainWindow = true end
+        end
+        assert.is_true(inMainWindow)
     end)
 
     it("judges a receiver by its nearest assignment above the call, not by any in the file", function()

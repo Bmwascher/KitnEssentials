@@ -273,6 +273,8 @@ local function ConstructDragStrip(parent)
         slot._endDrag = EndDrag
 
         slot:SetScript("OnDragStart", function(self)
+            local unfinished = strip._dragSlot
+            if unfinished and unfinished ~= self then unfinished._endDrag() end
             strip._dragSlot = self
             ghost:SetTexture(MarkerTexture(self.markerId))
             ghost:Show()
