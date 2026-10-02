@@ -55,6 +55,18 @@ local function GetTrashModule()
     return nil
 end
 
+-- Holds the module's sample plate while the page shows.
+local function ConstructPreviewHost(parent)
+    local host = CreateFrame("Frame", nil, parent)
+    host._keOwned = { host }
+    return host
+end
+
+GUIFrame:NewWidgetPool("dtnp:host", ConstructPreviewHost, function(host)
+    local mod = GetTrashModule()
+    if mod and mod.DetachNameplatePreview then mod:DetachNameplatePreview(host) end
+end)
+
 -- Repaint any live on-plate markers AND the in-page preview so slider/dropdown
 -- edits show up at once. Outside an instance there are no tracked plates, so the
 -- marker pass is a no-op — but the preview still updates live, and the settings
@@ -123,7 +135,7 @@ GUIFrame:RegisterContent("DTimers_Nameplates", function(scrollChild, yOffset)
     local previewCard = GUIFrame:CreateCard(scrollChild, "Preview", yOffset)
     manager:Register(previewCard, "all")
 
-    local previewHost = CreateFrame("Frame", nil, previewCard.content)
+    local previewHost = GUIFrame:AcquirePooled("dtnp:host", previewCard.content)
     previewHost:SetHeight(116)
     previewCard:AddRow(previewHost, 116)
 
