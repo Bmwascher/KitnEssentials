@@ -481,14 +481,19 @@ local function ConstructSlider(parent)
         FlushDropped()
     end
 
+    -- Set while Escape clears focus, so the commit below is skipped.
+    local cancelTyped = false
+
     valueEdit:SetScript("OnEscapePressed", function(self)
+        cancelTyped = true
         self:ClearFocus()
+        cancelTyped = false
         UpdateFill()
     end)
 
+    -- The commit lives in OnEditFocusLost, which ClearFocus fires.
     valueEdit:SetScript("OnEnterPressed", function(self)
         self:ClearFocus()
-        CommitTyped(self:GetText())
     end)
 
     valueEdit:SetScript("OnEditFocusGained", function(self)
@@ -503,7 +508,7 @@ local function ConstructSlider(parent)
         valueContainer:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
         editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
         self:HighlightText(0, 0)
-        CommitTyped(self:GetText())
+        if not cancelTyped then CommitTyped(self:GetText()) end
     end)
 
     -- Add hover animation for editbox

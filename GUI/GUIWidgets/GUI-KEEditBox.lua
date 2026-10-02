@@ -88,13 +88,8 @@ local function ConstructEditBox(parent)
 
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-    editBox:SetScript("OnEnterPressed", function(self)
-        -- Read first: ClearFocus fires OnEditFocusLost, whose callback can
-        -- rebuild the page and hand this box to another setting.
-        local callback, text = row._callback, self:GetText()
-        self:ClearFocus()
-        if callback then callback(text) end
-    end)
+    -- The commit lives in OnEditFocusLost, which ClearFocus fires.
+    editBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 
     editBox:SetScript("OnEditFocusLost", function(self)
         container:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
