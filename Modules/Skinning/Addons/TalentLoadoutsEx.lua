@@ -411,11 +411,9 @@ local function SkinMainFrame()
     end
 end
 
--- The addon builds its frame when the talent UI loads. When this runs before
--- that, the talent window's own show is the next moment the frame can be
--- seen; SkinMainFrame returns until the frame exists and after it is skinned.
--- This also runs when the talent UI loads without the addon, so the hook is
--- installed only when the addon is present.
+-- The frame may not exist yet; the talent window's show is the next moment
+-- it can be seen. The talent UI also loads without the addon, so the hook
+-- is installed only when the addon is present.
 local function Skin()
     if _G.TalentLoadoutExMainFrame then SkinMainFrame(); return end
     local addons = _G.C_AddOns
