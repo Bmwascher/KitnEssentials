@@ -29,7 +29,6 @@ local HOOKS_ALLOWED = {
     -- Installed once by the factory on a part of the widget it just built.
     ["GUI/GUIWidgets/GUI-KEDropdown.lua|thumb|OnShow"] = 1,
     ["GUI/GUIWidgets/GUI-KEDropdown.lua|thumb|OnHide"] = 1,
-    ["GUI/GUIWidgets/GUI-KESlider.lua|slider|OnUpdate"] = 1,
     -- The main window's close hook, installed once per session.
     ["GUI/GUITabs/GUIQoL/GUI-Optimize.lua|frame|OnHide"] = 1,
     -- A keybind button the page makes itself with CreateFrame.

@@ -97,17 +97,10 @@ local function ConstructSlider(parent)
     thumb:SetColorTexture(0, 0, 0, 0) -- Fully transparent
     slider:SetThumbTexture(thumb)
 
-    -- Hook thumb position to move our custom frames
-    slider:HookScript("OnUpdate", function(self)
-        local thumbX = self:GetThumbTexture():GetPoint()
-        if thumbX then
-            -- Position both frames at thumb location
-            thumbFrameBG:ClearAllPoints()
-            thumbFrameBG:SetPoint("CENTER", thumb, "CENTER", 0, 0)
-            thumbFrame:ClearAllPoints()
-            thumbFrame:SetPoint("CENTER", thumb, "CENTER", 0, 0)
-        end
-    end)
+    -- Anchored once: both frames follow the thumb texture as the slider
+    -- moves it.
+    thumbFrameBG:SetPoint("CENTER", thumb, "CENTER", 0, 0)
+    thumbFrame:SetPoint("CENTER", thumb, "CENTER", 0, 0)
 
     -- Hover fade animation for thumb color
     local hoverAnimGroup = slider:CreateAnimationGroup()
