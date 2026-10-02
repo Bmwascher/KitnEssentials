@@ -36,18 +36,6 @@ function GUIFrame:HasContent(id)
     return self.registeredContent[id] ~= nil
 end
 
--- Panel registration (full content area takeover, no scroll frame)
-GUIFrame.PanelBuilders = {}
-
-function GUIFrame:RegisterPanel(itemId, builderFunc)
-    if type(builderFunc) ~= "function" then return end
-    self.PanelBuilders[itemId] = builderFunc
-end
-
-function GUIFrame:HasPanel(itemId)
-    return self.PanelBuilders[itemId] ~= nil
-end
-
 -- Content cleanup callbacks (fire on REAL item switch only — used by modules
 -- that need to tear down preview state, etc.)
 GUIFrame.contentCleanupCallbacks = {}
@@ -1193,25 +1181,11 @@ function GUIFrame:RefreshContent()
         pcall(callback)
     end
 
-    -- In-place refresh detection: when the same panel is being rebuilt
-    -- (e.g. RefreshContentDeferred fired by a card edit on the DungeonTimers
-    -- panel), skip the teardown side effects (cleanup callbacks, panel
-    -- OnHide preview teardown). Otherwise the live preview stops + restarts
-    -- across the rebuild and the user sees a visible bar/text flash on every
-    -- keystroke. Cleared at the end of this function before the next call.
     local itemId = self.selectedSidebarItem or "HomePage"
     local sameItem = (self.contentArea._lastItemId == itemId)
     -- Anything released or retired during the teardown below is counted
     -- against the page being torn down, not the one being built.
     self._releasingPage = self.contentArea._lastItemId or itemId
-    self.contentArea._inPlaceRefresh = sameItem
-
-    -- Clean up custom panel if exists (e.g. sub-tab panel)
-    if self.contentArea._customPanel then
-        self.contentArea._customPanel:Hide()
-        self.contentArea._customPanel:SetParent(nil)
-        self.contentArea._customPanel = nil
-    end
 
     -- Fire content cleanup callbacks ONLY on real item switch — same-item
     -- refreshes shouldn't tear down preview state.
@@ -1221,17 +1195,7 @@ function GUIFrame:RefreshContent()
         end
     end
 
-    -- Flag is only needed across the synchronous teardown above (panel
-    -- :Hide() fires OnHide handlers in-place). Clear before the new panel
-    -- is built; record the itemId so the next RefreshContent can detect
-    -- in-place vs. switch.
-    self.contentArea._inPlaceRefresh = false
     self.contentArea._lastItemId = itemId
-
-    -- Show scroll frame
-    if self.contentArea.scrollFrame then
-        self.contentArea.scrollFrame:Show()
-    end
 
     -- Clear existing content
     local scrollChild = self.contentArea.scrollChild
@@ -1257,27 +1221,6 @@ function GUIFrame:RefreshContent()
 
     local T = Theme
     local yOffset = T.paddingMedium
-
-    -- Check for panel builders (full content-area takeover, no scroll frame)
-    if itemId and self.PanelBuilders and self.PanelBuilders[itemId] then
-        if self.contentArea.scrollFrame then
-            self.contentArea.scrollFrame:Hide()
-        end
-
-        local contentFrame = self.contentArea
-        local ok, panel = pcall(self.PanelBuilders[itemId], contentFrame)
-        if ok and panel then
-            contentFrame._customPanel = panel
-        elseif not ok then
-            if contentFrame.scrollFrame then
-                contentFrame.scrollFrame:Show()
-            end
-            local errChild = contentFrame.scrollChild
-            local errorCard = self:CreateCard(errChild, "Error", T.paddingMedium)
-            errorCard:AddLabel("Panel builder failed: " .. tostring(panel))
-        end
-        return
-    end
 
     if itemId and self.registeredContent[itemId] then
         local ok, result = pcall(self.registeredContent[itemId], scrollChild, yOffset)
