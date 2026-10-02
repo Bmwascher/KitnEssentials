@@ -2389,17 +2389,17 @@ local function BuildTrashVisibilityTabBody(parent, item)
     local DTrash = GetTrashModule()
     local m, n, s = item.mapID, item.npcID, item.spellID
     local key = item.id
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     -- Section: Master
-    local masterHeader = body:CreateFontString(nil, "OVERLAY")
+    local masterHeader = body:Text()
     KE:ApplyFontToText(masterHeader, "Expressway", 13, "OUTLINE")
     masterHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     masterHeader:SetText("Master")
     masterHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", masterHeader, "RIGHT", 6, 0)
@@ -2429,7 +2429,7 @@ local function BuildTrashVisibilityTabBody(parent, item)
     -- driven by the DungeonTrash role backend instead of the DungeonTimers one).
     local whoHeader = CreateSectionHeader(body, enableToggle, "Who Sees It", 16)
 
-    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    local sectionLabel = body:Text()
     KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
     sectionLabel:SetPoint("TOPLEFT", whoHeader, "BOTTOMLEFT", 0, -10)
     sectionLabel:SetTextColor(0.85, 0.85, 0.85)
@@ -2462,7 +2462,7 @@ local function BuildTrashVisibilityTabBody(parent, item)
 
     local defaultLabel
     if firstToggle then
-        defaultLabel = body:CreateFontString(nil, "OVERLAY")
+        defaultLabel = body:Text()
         KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
         defaultLabel:SetPoint("TOPLEFT", firstToggle, "BOTTOMLEFT", 0, -8)
         defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
@@ -2490,7 +2490,7 @@ local function BuildTrashVisibilityTabBody(parent, item)
     plateCheck:SetWidth(360)
     secondaryWidgets[#secondaryWidgets + 1] = plateCheck
 
-    local plateCaption = body:CreateFontString(nil, "OVERLAY")
+    local plateCaption = body:Text()
     KE:ApplyFontToText(plateCaption, "Expressway", 11, "OUTLINE")
     plateCaption:SetPoint("TOPLEFT", plateCheck, "BOTTOMLEFT", 0, -10)
     plateCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2523,7 +2523,7 @@ local function BuildTrashVisibilityTabBody(parent, item)
     revealRow:AddWidget(revealSlider, 1.0, 0)
     secondaryWidgets[#secondaryWidgets + 1] = revealSlider
 
-    local revealCaption = body:CreateFontString(nil, "OVERLAY")
+    local revealCaption = body:Text()
     KE:ApplyFontToText(revealCaption, "Expressway", 11, "OUTLINE")
     revealCaption:SetPoint("TOPLEFT", revealRow, "BOTTOMLEFT", 8, -12)
     revealCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2576,20 +2576,20 @@ local function BuildTrashDisplayTabBody(parent, item)
     local DT = GetModule()  -- DISPLAY_PRESETS palette lives on the DungeonTimers module
     local m, n, s = item.mapID, item.npcID, item.spellID
     local key = item.id
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     local secondaryWidgets = {}
     local refreshColorPicker  -- forward-declared; assigned after the picker exists
 
     -- Section: Display Mode
-    local modeHeader = body:CreateFontString(nil, "OVERLAY")
+    local modeHeader = body:Text()
     KE:ApplyFontToText(modeHeader, "Expressway", 13, "OUTLINE")
     modeHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     modeHeader:SetText("Display Mode")
     modeHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", modeHeader, "RIGHT", 6, 0)
@@ -2597,7 +2597,7 @@ local function BuildTrashDisplayTabBody(parent, item)
         underline:SetPoint("TOP", modeHeader, "TOP", 0, -8)
     end
 
-    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    local sectionLabel = body:Text()
     KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
     sectionLabel:SetPoint("TOPLEFT", modeHeader, "BOTTOMLEFT", 0, -14)
     sectionLabel:SetTextColor(0.85, 0.85, 0.85)
@@ -2618,14 +2618,14 @@ local function BuildTrashDisplayTabBody(parent, item)
     secondaryWidgets[#secondaryWidgets + 1] = toggle
 
     local curatedDisplay = (DTrash and DTrash:GetSpellCuratedDisplay(m, n, s)) or "bar"
-    local defaultLabel = body:CreateFontString(nil, "OVERLAY")
+    local defaultLabel = body:Text()
     KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
     defaultLabel:SetPoint("LEFT", toggle, "RIGHT", 16, 0)
     defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
     defaultLabel:SetJustifyH("LEFT")
     defaultLabel:SetText(string_format("Default: %s", (curatedDisplay == "bar") and "Bar" or "Text"))
 
-    local caption = body:CreateFontString(nil, "OVERLAY")
+    local caption = body:Text()
     KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
     caption:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -12)
     caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2657,7 +2657,7 @@ local function BuildTrashDisplayTabBody(parent, item)
     labelEditRow:AddWidget(labelEdit, 1)
     secondaryWidgets[#secondaryWidgets + 1] = labelEdit
 
-    local labelCaption = body:CreateFontString(nil, "OVERLAY")
+    local labelCaption = body:Text()
     KE:ApplyFontToText(labelCaption, "Expressway", 11, "OUTLINE")
     labelCaption:SetPoint("TOPLEFT", labelEditRow, "BOTTOMLEFT", 0, -8)
     labelCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2680,7 +2680,7 @@ local function BuildTrashDisplayTabBody(parent, item)
     end
 
     local CHIP_WIDTH, CHIP_HEIGHT, CHIP_HGAP, CHIP_VGAP, CHIPS_PER_ROW = 80, 24, 4, 4, 5
-    local presetGrid = CreateFrame("Frame", nil, body)
+    local presetGrid = GUIFrame:AcquirePooled("dtd:host", body)
     presetGrid:SetPoint("TOPLEFT", presetHeader, "BOTTOMLEFT", 0, -10)
     presetGrid:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
 
@@ -2688,29 +2688,12 @@ local function BuildTrashDisplayTabBody(parent, item)
         local p = DT.DISPLAY_PRESETS[k]
         local gridRow = math.floor((i - 1) / CHIPS_PER_ROW)
         local col = (i - 1) % CHIPS_PER_ROW
-        local chip = CreateFrame("Button", nil, presetGrid, "BackdropTemplate")
+        local chip = GUIFrame:AcquirePooled("dtd:chip", presetGrid)
         chip:SetSize(CHIP_WIDTH, CHIP_HEIGHT)
         chip:SetPoint("TOPLEFT", presetGrid, "TOPLEFT",
             col * (CHIP_WIDTH + CHIP_HGAP), -gridRow * (CHIP_HEIGHT + CHIP_VGAP))
-        chip:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1,
-        })
-        chip:SetBackdropColor(KE.Theme.controlBg[1], KE.Theme.controlBg[2], KE.Theme.controlBg[3], KE.Theme.controlBg[4])
-        chip:SetBackdropBorderColor(KE.Theme.controlBorder[1], KE.Theme.controlBorder[2], KE.Theme.controlBorder[3], 1)
-        local txt = chip:CreateFontString(nil, "OVERLAY")
-        KE:ApplyFontToText(txt, "Expressway", 12, "OUTLINE")
-        txt:SetPoint("CENTER")
-        txt:SetText(p.label)
-        txt:SetTextColor(p.color[1], p.color[2], p.color[3], 1)
-        chip:SetScript("OnEnter", function(self)
-            self:SetBackdropBorderColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 1)
-        end)
-        chip:SetScript("OnLeave", function(self)
-            self:SetBackdropBorderColor(KE.Theme.controlBorder[1], KE.Theme.controlBorder[2], KE.Theme.controlBorder[3], 1)
-        end)
         local chipLabel, chipColor = p.label, p.color
-        chip:SetScript("OnClick", function()
+        ConfigureChip(chip, chipLabel, chipColor, function()
             if not (DTrash and DTrash.SetSpellLabelOverride) then return end
             DTrash:SetSpellLabelOverride(m, n, s, chipLabel)
             DTrash:SetSpellColorOverride(m, n, s, { chipColor[1], chipColor[2], chipColor[3] })
@@ -2720,13 +2703,6 @@ local function BuildTrashDisplayTabBody(parent, item)
             RefreshOverrideStripe(key)
             RefreshTrashPreview()
         end)
-        function chip:SetEnabled(enabled)
-            if enabled then
-                self:Enable(); self:EnableMouse(true); self:SetAlpha(1)
-            else
-                self:Disable(); self:EnableMouse(false); self:SetAlpha(0.5)
-            end
-        end
         secondaryWidgets[#secondaryWidgets + 1] = chip
     end
 
@@ -2737,7 +2713,7 @@ local function BuildTrashDisplayTabBody(parent, item)
         presetGrid:SetHeight(1)
     end
 
-    local presetCaption = body:CreateFontString(nil, "OVERLAY")
+    local presetCaption = body:Text()
     KE:ApplyFontToText(presetCaption, "Expressway", 11, "OUTLINE")
     presetCaption:SetPoint("TOPLEFT", presetGrid, "BOTTOMLEFT", 0, -8)
     presetCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2753,7 +2729,7 @@ local function BuildTrashDisplayTabBody(parent, item)
     end
     local effectiveColor = ResolveEffectiveColor()
 
-    local colorRow = CreateFrame("Frame", nil, body)
+    local colorRow = GUIFrame:AcquirePooled("dtd:host", body)
     colorRow:SetHeight(36)
     colorRow:SetPoint("TOPLEFT", colorHeader, "BOTTOMLEFT", 0, -10)
     colorRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2800,7 +2776,7 @@ local function BuildTrashDisplayTabBody(parent, item)
         colorPicker._callback = saved
     end
 
-    local colorCaption = body:CreateFontString(nil, "OVERLAY")
+    local colorCaption = body:Text()
     KE:ApplyFontToText(colorCaption, "Expressway", 11, "OUTLINE")
     colorCaption:SetPoint("TOPLEFT", colorRow, "BOTTOMLEFT", 0, -8)
     colorCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2830,7 +2806,7 @@ local function BuildTrashDisplayTabBody(parent, item)
     thresholdRow:AddWidget(thresholdSlider, 1.0, 0)
     secondaryWidgets[#secondaryWidgets + 1] = thresholdSlider
 
-    local thresholdCaption = body:CreateFontString(nil, "OVERLAY")
+    local thresholdCaption = body:Text()
     KE:ApplyFontToText(thresholdCaption, "Expressway", 11, "OUTLINE")
     thresholdCaption:SetPoint("TOPLEFT", thresholdRow, "BOTTOMLEFT", 0, -12)
     thresholdCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2851,7 +2827,7 @@ local function BuildTrashActionsTabBody(parent, item)
     local DTrash = GetTrashModule()
     local m, n, s = item.mapID, item.npcID, item.spellID
     local key = item.id
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     local soundList = { ["None"] = "None" }
@@ -2876,13 +2852,13 @@ local function BuildTrashActionsTabBody(parent, item)
     local secondaryWidgets = {}
 
     -- Section: On Show
-    local showHeader = body:CreateFontString(nil, "OVERLAY")
+    local showHeader = body:Text()
     KE:ApplyFontToText(showHeader, "Expressway", 13, "OUTLINE")
     showHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     showHeader:SetText("On Show")
     showHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", showHeader, "RIGHT", 6, 0)
@@ -2917,7 +2893,7 @@ local function BuildTrashActionsTabBody(parent, item)
     showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = showTestBtn
 
-    local showCaption = body:CreateFontString(nil, "OVERLAY")
+    local showCaption = body:Text()
     KE:ApplyFontToText(showCaption, "Expressway", 11, "OUTLINE")
     showCaption:SetPoint("TOPLEFT", showRow, "BOTTOMLEFT", 0, -8)
     showCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2955,7 +2931,7 @@ local function BuildTrashActionsTabBody(parent, item)
     hideRow:AddWidget(hideTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = hideTestBtn
 
-    local hideCaption = body:CreateFontString(nil, "OVERLAY")
+    local hideCaption = body:Text()
     KE:ApplyFontToText(hideCaption, "Expressway", 11, "OUTLINE")
     hideCaption:SetPoint("TOPLEFT", hideRow, "BOTTOMLEFT", 0, -8)
     hideCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2995,7 +2971,7 @@ local function BuildTrashActionsTabBody(parent, item)
     castRow:AddWidget(castTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = castTestBtn
 
-    local castCaption = body:CreateFontString(nil, "OVERLAY")
+    local castCaption = body:Text()
     KE:ApplyFontToText(castCaption, "Expressway", 11, "OUTLINE")
     castCaption:SetPoint("TOPLEFT", castRow, "BOTTOMLEFT", 0, -8)
     castCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
