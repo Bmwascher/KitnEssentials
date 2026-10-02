@@ -3059,7 +3059,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     ---------------------------------------------------------------------------
     -- LEFT COLUMN: spell list, encounter-grouped via section-header rows.
     ---------------------------------------------------------------------------
-    local leftCol = CreateFrame("Frame", nil, scrollChild)
+    local leftCol = GUIFrame:AcquirePooled("dtd:host", scrollChild)
     leftCol:SetWidth(LEFT_COL_WIDTH)
     leftCol:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", Theme.paddingSmall, -yOffset)
 
@@ -3070,7 +3070,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
         -- a "B1 - ", "B2 - " prefix (BigWigs in-fight shorthand); trash-mob
         -- groups render the mob name plainly so they read as a separate block
         -- below the bosses.
-        local header = leftCol:CreateFontString(nil, "OVERLAY")
+        local header = leftCol:Text()
         KE:ApplyFontToText(header, "Expressway", 15, "OUTLINE")
         header:SetPoint("TOPLEFT", leftCol, "TOPLEFT", 4, -listY - 6)
         if enc.isTrash then
