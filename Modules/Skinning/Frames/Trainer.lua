@@ -60,8 +60,8 @@ local function Skin()
 
     -- also targets a Train All button, if one exists. Both
     -- names below are third-party globals -- KitnEssentials has no
-    -- Train All button of its own. The OnShow hook and the S.WaitFor
-    -- poll below catch a button created after this skin already ran.
+    -- Train All button of its own. The OnShow hook below catches a
+    -- button created after this skin already ran.
     local function SkinEUIButton()
         for _, name in ipairs({ "EUI_TrainAllButton", "AES_TrainAllButton" }) do
             local b = _G[name]
@@ -73,11 +73,6 @@ local function Skin()
         end
     end
     SkinEUIButton()
-    -- EllesmereUI's button appears late; a fixed retry delay leaves it
-    -- unskinned until that delay expires. Poll per frame until it exists.
-    S.WaitFor(function()
-        return _G.EUI_TrainAllButton ~= nil or _G.AES_TrainAllButton ~= nil
-    end, SkinEUIButton, 300)
     if not S.data(frame).euiHooked then
         frame:HookScript("OnShow", SkinEUIButton)
         S.data(frame).euiHooked = true
