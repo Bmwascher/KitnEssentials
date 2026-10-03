@@ -1601,3 +1601,72 @@ describe("SkinAPI edge walk", function()
         end
     end)
 end)
+
+describe("SkinAPI first-show deferral", function()
+    local KE, S
+
+    before_each(function()
+        KE = L.loadSkinAPI_EUIWindows()
+        S = KE.Skins
+        KE.ShouldNotLoadModule = function() return false end
+        KE.db.profile.Skinning.BlizzardFrames = { Enabled = true, Skins = {} }
+        KE.Print = function() end
+    end)
+
+    local function fakeFrame(visible)
+        local frame = { hooks = {}, visible = visible or false }
+        function frame:HookScript(script, fn)
+            if script == "OnShow" then self.hooks[#self.hooks + 1] = fn end
+        end
+        function frame:IsVisible() return self.visible end
+        function frame:Show()
+            self.visible = true
+            for _, fn in ipairs(self.hooks) do fn(self) end
+        end
+        return frame
+    end
+
+    local function dispatch(key)
+        for _, record in ipairs(S.skinRegistrations[key]) do
+            S._runList({ record.entry })
+        end
+    end
+
+    it("reads armed until the record's last body runs, then ok, in the record and the key", function()
+        local first, second = fakeFrame(), fakeFrame()
+        S:RegisterEarly(function() end, "Key")
+        S:RegisterEarly(function()
+            S.Defer(function() end, first)
+            S.Defer(function() end, second)
+        end, "Key")
+        dispatch("Key")
+        local record = S.skinRegistrations.Key[2]
+        assert.equals("armed", record.status)
+        assert.equals("armed", S.skinStatus.Key)
+        first:Show()
+        assert.equals("armed", record.status)
+        assert.equals("armed", S.skinStatus.Key)
+        second:Show()
+        assert.equals("ok", record.status)
+        assert.equals("ok", S.skinStatus.Key)
+    end)
+
+    it("refuses to rerun an armed record", function()
+        local frame = fakeFrame()
+        local calls = 0
+        S:RegisterEarly(function()
+            calls = calls + 1
+            S.Defer(function() end, frame)
+        end, "Key")
+        dispatch("Key")
+
+        local printed = {}
+        local realPrint = _G.print
+        _G.print = function(msg) printed[#printed + 1] = msg end
+        local ok, err = pcall(S.DebugRerun, "Key")
+        _G.print = realPrint
+        assert.is_true(ok, err)
+        assert.equals(1, calls)
+        assert.truthy(printed[1]:find("has not run yet", 1, true))
+    end)
+end)
