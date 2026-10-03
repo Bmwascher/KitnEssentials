@@ -6,7 +6,7 @@
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
-local KE = select(2, ...)
+local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 
 GUIFrame:RegisterContent("RaidControl", function(scrollChild, yOffset)

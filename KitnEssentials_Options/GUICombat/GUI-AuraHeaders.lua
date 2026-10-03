@@ -9,7 +9,7 @@
 -- the header is fixed to Blizzard's own order. Spacing is the one layout
 -- control that earns its place.
 ---@class KE
-local KE = select(2, ...)
+local KE = KitnEssentials:GetNamespace()
 
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme

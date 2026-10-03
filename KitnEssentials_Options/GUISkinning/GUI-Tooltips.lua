@@ -5,7 +5,7 @@
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
-local KE = select(2, ...)
+local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 local Theme = KE.Theme
 local LSM = KE.LSM or LibStub("LibSharedMedia-3.0", true)

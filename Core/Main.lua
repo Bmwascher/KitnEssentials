@@ -22,6 +22,11 @@ _G.KitnEssentials = KitnEssentials
 -- KE-level state (singletons, helpers). Not a public API.
 _G.KITNESSENTIALS_NS = KE
 
+-- The settings pages are their own addon, so their vararg is not this table.
+function KitnEssentials:GetNamespace()
+    return KE
+end
+
 -- Every module enable/disable funnels through these two AceAddon methods
 -- (GUI checkboxes, the profile enable-state sync, and module:Enable()
 -- internally), so this is the one seam that keeps GUI previews honest

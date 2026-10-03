@@ -7,7 +7,7 @@
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
-local KE = select(2, ...)
+local KE = KitnEssentials:GetNamespace()
 local GUIFrame = KE.GUIFrame
 
 -- No header card: each page owns its own master toggle inside itself, so a
