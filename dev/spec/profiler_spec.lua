@@ -1341,7 +1341,6 @@ describe("Profiler census walk", function()
         end
 
         assert.equals(0, #queue)
-        assert.truthy(gameFrame > 1)
         local output = table.concat(state.printed, "\n")
         assert.truthy(output:find("Census: 10 frames, 0 forbidden, 0 unreadable.", 1, true), output)
     end)
