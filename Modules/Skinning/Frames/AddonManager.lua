@@ -9,4 +9,8 @@ local function Skin()
 
 end
 
-S:RegisterEarly(Skin, "AddonManager")
+local function Arm()
+    S.Defer(Skin, _G.AddonList)
+end
+
+S:RegisterEarly(Arm, "AddonManager")

@@ -9,4 +9,8 @@ local function Skin()
 
 end
 
-S:Register("Blizzard_ExpansionLandingPage", Skin, "ExpansionLandingPage")
+local function Arm()
+    S.Defer(Skin, _G.ExpansionLandingPage)
+end
+
+S:Register("Blizzard_ExpansionLandingPage", Arm, "ExpansionLandingPage")

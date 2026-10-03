@@ -33,4 +33,8 @@ local function Skin()
     end
 end
 
-S:RegisterEarly(Skin, "Help")
+local function Arm()
+    S.Defer(Skin, _G.HelpFrame)
+end
+
+S:RegisterEarly(Arm, "Help")
