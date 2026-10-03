@@ -5,8 +5,9 @@
 -- answer loads pages from another version or names the wrong fix, and fails
 -- nowhere but in game. The decision is pure, so it is tested directly; the
 -- API reads around it are verified in game. The save after enabling a
--- disabled pages addon is a guard (an open AddOn List keeps its own
--- Okay or Cancel), tested against stubbed C_AddOns and AddonList.
+-- disabled pages addon is a guard (an open AddOn List or another staged
+-- change keeps the player's own Okay or Cancel): its pending test is pure,
+-- and the save rule runs against stubbed C_AddOns and AddonList.
 local helpers = require("dev.spec._helpers")
 
 describe("GUI-Core settings-pages decision", function()
@@ -42,20 +43,43 @@ describe("GUI-Core settings-pages decision", function()
         end
     end)
 
-    it("saves the enable after a load, unless the AddOn List is open", function()
-        local savedAddOns, savedList = _G.C_AddOns, _G.AddonList
-        finally(function() _G.C_AddOns, _G.AddonList = savedAddOns, savedList end)
+    it("counts another addon as changed but unsaved only when its state contradicts its load", function()
+        local cases = {
+            { name = "staged enable", args = { "Other", true, false, false, true }, want = true },
+            { name = "staged disable", args = { "Other", false, true, false, nil }, want = true },
+            { name = "load-on-demand, staged disable", args = { "Other", false, true, true, nil }, want = true },
+            { name = "enabled but unloadable", args = { "Other", true, false, false, false }, want = false },
+            { name = "load-on-demand, not loaded yet", args = { "Other", true, false, true, nil }, want = false },
+            { name = "enabled and loaded", args = { "Other", true, true, false, nil }, want = false },
+            { name = "the pages addon itself", args = { "KitnEssentials_Options", false, true, false, nil }, want = false },
+        }
+        for _, case in ipairs(cases) do
+            assert.equals(case.want, GUIFrame.AddOnChangePending(unpack(case.args)), case.name)
+        end
+    end)
+
+    it("saves the enable unless the AddOn List is open or another change looks staged", function()
+        local savedAddOns, savedList, savedEnum = _G.C_AddOns, _G.AddonList, _G.Enum
+        finally(function() _G.C_AddOns, _G.AddonList, _G.Enum = savedAddOns, savedList, savedEnum end)
         local saves
         GUIFrame.PagesLoadFailed = function() return false, false end
         KE.Print = function() end
+        _G.Enum = { AddOnEnableState = { None = 0 } }
         local cases = {
-            { name = "loads, AddOn List closed", loads = true, listShown = false, wantSaves = 1 },
-            { name = "loads, AddOn List open", loads = true, listShown = true, wantSaves = 0 },
-            { name = "load fails", loads = false, listShown = false, wantSaves = 0 },
+            { name = "nothing else staged, list closed", loads = true, listShown = false, staged = false, wantSaves = 1 },
+            { name = "AddOn List open", loads = true, listShown = true, staged = false, wantSaves = 0 },
+            { name = "another addon staged", loads = true, listShown = false, staged = true, wantSaves = 0 },
+            { name = "load fails, still saved for the retry", loads = false, listShown = false, staged = false, wantSaves = 1 },
         }
         for _, case in ipairs(cases) do
             saves = 0
             _G.C_AddOns = {
+                GetNumAddOns = function() return 1 end,
+                GetAddOnName = function() return "Other" end,
+                GetAddOnEnableState = function() return case.staged and 2 or 0 end,
+                IsAddOnLoaded = function() return false, false end,
+                IsAddOnLoadOnDemand = function() return false end,
+                IsAddOnLoadable = function() return true end,
                 EnableAddOn = function() end,
                 LoadAddOn = function() return case.loads end,
                 SaveAddOns = function() saves = saves + 1 end,

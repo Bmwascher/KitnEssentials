@@ -191,18 +191,45 @@ function GUIFrame:LoadPages()
     return true, true, false, true
 end
 
+-- Pure. Whether another addon's enable state looks changed and not yet
+-- saved: loaded but disabled, or enabled and loadable but not loaded. A
+-- load-on-demand addon is not loaded until asked, so only its disable shows.
+function GUIFrame.AddOnChangePending(name, enabled, loaded, loadOnDemand, loadable)
+    if name == PAGES_ADDON then return false end
+    if loaded then return not enabled end
+    return enabled and not loadOnDemand and loadable == true
+end
+
+local function OtherAddOnChangesPending(character)
+    for i = 1, C_AddOns.GetNumAddOns() do
+        local name = C_AddOns.GetAddOnName(i)
+        local enabled = C_AddOns.GetAddOnEnableState(i, character) > Enum.AddOnEnableState.None
+        local _, loaded = C_AddOns.IsAddOnLoaded(i)
+        local loadOnDemand = C_AddOns.IsAddOnLoadOnDemand(i)
+        local loadable
+        if enabled and not loaded and not loadOnDemand then
+            loadable = C_AddOns.IsAddOnLoadable(i, character)
+        end
+        if GUIFrame.AddOnChangePending(name, enabled, loaded, loadOnDemand, loadable) then
+            return true
+        end
+    end
+    return false
+end
+
 -- Enabled for this character only; the message names the manual fix when
 -- the load still fails.
 function GUIFrame:LoadDisabledPages(character)
+    -- An unsaved enable is lost at logout, but saving commits every staged
+    -- change, so it is skipped while the AddOn List is open (its Okay or
+    -- Cancel decides) or another change looks staged.
+    local othersPending = OtherAddOnChangesPending(character)
     C_AddOns.EnableAddOn(PAGES_ADDON, character)
+    local addonList = _G.AddonList
+    if not othersPending and not (addonList and addonList:IsShown()) then
+        C_AddOns.SaveAddOns()
+    end
     if C_AddOns.LoadAddOn(PAGES_ADDON) then
-        -- An unsaved enable is lost at logout. Saving also commits the AddOn
-        -- List's unconfirmed ticks, so while it is open its Okay or Cancel
-        -- decides instead.
-        local addonList = _G.AddonList
-        if not (addonList and addonList:IsShown()) then
-            C_AddOns.SaveAddOns()
-        end
         self._pagesLoaded = true
         KE:Print(PAGES_ENABLED)
         return true, true, false, true
