@@ -62,9 +62,10 @@ end
 -- The strip's per-use state (active tab, switch handler) lives on the strip,
 -- so every tab button's scripts are set once and read it when they run.
 local function TabOnClick(b)
+    -- Before the active-tab return: a click on the tab on screen still keeps this page.
+    GUIFrame:DropQueuedPage()
     local strip = b._strip
     if b.tabId == strip._activeId then return end
-    GUIFrame:DropQueuedPage()
     local onSwitch = strip._onSwitch
     if onSwitch then onSwitch(b.tabId) end
     ScheduleRefresh()

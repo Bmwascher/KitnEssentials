@@ -339,7 +339,9 @@ function GUIFrame:Show()
             self:ApplySidebarExpansion()
             self:RefreshSidebar()
         end
-        if self._contentDirtyWhileHidden then
+        -- A waiting page link rebuilds the content below; replaying first
+        -- would build a page nobody sees.
+        if self._contentDirtyWhileHidden and not self._pendingPage then
             -- A refresh was requested while hidden (RefreshContent's hidden gate
             -- swallowed it) — replay it once so the reopened page isn't stale.
             self:RefreshContent()
