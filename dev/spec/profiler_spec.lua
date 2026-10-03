@@ -183,6 +183,9 @@ local function loadProfiler(options)
         db = {
             global = {},
         },
+        IsSecretValue = function()
+            return false
+        end,
         -- SEVEN placeholders between text and onAccept, matching the real
         -- signature (Core/Widgets.lua).
         CreatePrompt = function(_, title, text, _, _, _, _, _, _, _,
@@ -1277,5 +1280,69 @@ describe("Profiler census key", function()
         local key = loadProfiler().profiler.CensusKey
         assert.equals("Frame 0:0", key("Frame", 0, 0))
         assert.equals("Button 2:5", key("Button", 2, 5))
+    end)
+end)
+
+-- The fake frame list is stateful because the defect is a handle's lifetime:
+-- EnumerateFrames(handle) ends the walk when the handle was read in an earlier
+-- game frame. No pure predicate covers when the census reads its handles.
+describe("Profiler census walk", function()
+    local STUBBED = { "EnumerateFrames", "debugprofilestop", "C_Timer" }
+    local saved
+
+    before_each(function()
+        saved = {}
+        for _, name in ipairs(STUBBED) do saved[name] = rawget(_G, name) end
+    end)
+
+    after_each(function()
+        for _, name in ipairs(STUBBED) do rawset(_G, name, saved[name]) end
+    end)
+
+    it("counts every frame when the walk is split across steps", function()
+        local parent = {}
+        local frames, position, readIn = {}, {}, {}
+        for index = 1, 10 do
+            frames[index] = {
+                IsForbidden = function() return false end,
+                GetParent = function() return parent end,
+            }
+            position[frames[index]] = index
+        end
+        local gameFrame = 0
+        _G.EnumerateFrames = function(previous)
+            local nextFrame
+            if previous == nil then
+                nextFrame = frames[1]
+            elseif readIn[previous] == gameFrame then
+                nextFrame = frames[position[previous] + 1]
+            end
+            if nextFrame then readIn[nextFrame] = gameFrame end
+            return nextFrame
+        end
+        -- Three units fit under each step's budget, so the walk spans many steps.
+        local clock = 0
+        _G.debugprofilestop = function()
+            clock = clock + 1
+            return clock
+        end
+        local queue = {}
+        _G.C_Timer = {
+            After = function(_, callback) queue[#queue + 1] = callback end,
+        }
+
+        local state = loadProfiler()
+        state.profiler.RunCommand("census")
+        local ran = 0
+        while #queue > 0 and ran < 10000 do
+            gameFrame = gameFrame + 1
+            ran = ran + 1
+            table.remove(queue, 1)()
+        end
+
+        assert.equals(0, #queue)
+        assert.truthy(gameFrame > 1)
+        local output = table.concat(state.printed, "\n")
+        assert.truthy(output:find("Census: 10 frames, 0 forbidden, 0 unreadable.", 1, true), output)
     end)
 end)

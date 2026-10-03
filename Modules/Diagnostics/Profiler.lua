@@ -840,10 +840,10 @@ end
 ---------------------------------------------------------------------------------
 -- Census
 ---------------------------------------------------------------------------------
--- On demand only. Each walking and ranking phase works one unit at a time
--- under one count and millisecond budget per step; the report is one bounded
--- step. It registers nothing, and baselines live in these locals for the
--- session, never in saved data.
+-- On demand only. The first step reads the frame list whole; each walking and
+-- ranking phase then works one unit at a time under one count and millisecond
+-- budget per step; the report is one bounded step. It registers nothing, and
+-- baselines live in these locals for the session, never in saved data.
 
 local EnumerateFrames  = EnumerateFrames
 local debugprofilestop = debugprofilestop
@@ -854,8 +854,8 @@ local math_floor       = math.floor
 
 local CENSUS_SLICE = 4000
 local CENSUS_BUDGET_MS = 4
--- About a minute at 60 fps. A walk still running then (a live table or the
--- frame list growing as fast as it is read) stops and reports as incomplete.
+-- About a minute at 60 fps. A walk still running then (a live table growing
+-- as fast as it is read) stops and reports as incomplete.
 local CENSUS_MAX_STEPS = 3600
 local CENSUS_TOP = 10
 local UNKNOWN_CREATOR = "unknown creator"
@@ -1016,12 +1016,27 @@ local function CensusReport(run, started)
     censusFirst = censusFirst or summary
 end
 
+-- RunCensus runs this step at once and it calls nothing on a frame: a handle
+-- kept into a later game frame ends the walk early.
+local function CensusCollect(run)
+    local list, n, frame = run.frameList, 0, run.frame
+    while frame do
+        n = n + 1
+        list[n] = frame
+        frame = EnumerateFrames(frame)
+    end
+    run.frame = nil
+    run.phase = "libs"
+end
+
 local function CensusFrame(run)
-    local frame = run.frame
+    local index = run.frameIndex
+    local frame = run.frameList[index]
     if not frame then
-        run.phase = "tables"
+        run.phase, run.frameList = "tables", nil
         return
     end
+    run.frameIndex = index + 1
     run.frames = run.frames + 1
     local ok, kind, key, creator = pcall(CensusInspect, frame)
     if not ok or kind == "unreadable" then
@@ -1037,7 +1052,6 @@ local function CensusFrame(run)
             run.unknownCreators = run.unknownCreators + 1
         end
     end
-    run.frame = EnumerateFrames(frame)
 end
 
 local function CensusTableEntry(run)
@@ -1111,12 +1125,16 @@ local function CensusSlice(run)
         CensusReport(run, started)
         return
     end
-    local deadline = started + CENSUS_BUDGET_MS
     local framesBefore = run.frames
-    local units = 0
-    while run.phase ~= "report" and units < CENSUS_SLICE and debugprofilestop() < deadline do
-        CensusUnit(run)
-        units = units + 1
+    if run.phase == "collect" then
+        CensusCollect(run)
+    else
+        local deadline = started + CENSUS_BUDGET_MS
+        local units = 0
+        while run.phase ~= "report" and units < CENSUS_SLICE and debugprofilestop() < deadline do
+            CensusUnit(run)
+            units = units + 1
+        end
     end
     if run.frames > framesBefore then run.frameSteps = run.frameSteps + 1 end
     local ms = debugprofilestop() - started
@@ -1154,8 +1172,8 @@ local function RunCensus()
     if not KE:IsSecretValue(stub) and type(stub) == "table" then libraries = rawget(stub, "libs") end
     if KE:IsSecretValue(libraries) or type(libraries) ~= "table" then libraries = {} end
     local run = {
-        phase = "libs", libraries = libraries,
-        frame = first, started = debugprofilestop(),
+        phase = "collect", libraries = libraries,
+        frame = first, frameList = {}, frameIndex = 1, started = debugprofilestop(),
         frames = 0, forbidden = 0, unreadable = 0, bucket = 0,
         histogram = {}, creators = {}, unknownCreators = 0,
         steps = 0, frameSteps = 0, slowestMs = 0,
