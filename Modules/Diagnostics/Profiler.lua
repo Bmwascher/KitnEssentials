@@ -840,10 +840,11 @@ end
 ---------------------------------------------------------------------------------
 -- Census
 ---------------------------------------------------------------------------------
--- On demand only. The first step reads the frame list whole; each walking and
--- ranking phase then works one unit at a time under one count and millisecond
--- budget per step; the report is one bounded step. It registers nothing, and
--- baselines live in these locals for the session, never in saved data.
+-- On demand only. Each walking and ranking phase works one unit at a time
+-- under one count and millisecond budget per step; the frame list is read
+-- whole in one step, and the report is one bounded step. It registers
+-- nothing, and baselines live in these locals for the session, never in saved
+-- data.
 
 local EnumerateFrames  = EnumerateFrames
 local debugprofilestop = debugprofilestop
@@ -1016,17 +1017,18 @@ local function CensusReport(run, started)
     censusFirst = censusFirst or summary
 end
 
--- RunCensus runs this step at once and it calls nothing on a frame: a handle
--- kept into a later game frame ends the walk early.
+-- One unbudgeted step that freezes the game for seconds, so it runs after the
+-- warning line has been drawn and never in combat. It calls nothing on a
+-- frame: a handle kept into a later game frame ends the walk early.
 local function CensusCollect(run)
-    local list, n, frame = run.frameList, 0, run.frame
+    if InCombatLockdown() then error("combat started before the frame list was read", 0) end
+    local list, n, frame = run.frameList, 0, EnumerateFrames()
     while frame do
         n = n + 1
         list[n] = frame
         frame = EnumerateFrames(frame)
     end
-    run.frame = nil
-    run.phase = "libs"
+    run.phase = "frames"
 end
 
 local function CensusFrame(run)
@@ -1090,7 +1092,7 @@ local function CensusUnit(run)
         local key, value = next(phase == "libs" and run.libraries or _G, run.key)
         run.key = key
         if not KE:IsSecretValue(key) and key == nil then
-            run.phase = phase == "libs" and "globals" or "frames"
+            run.phase = phase == "libs" and "globals" or "collect"
         elseif not KE:IsSecretValue(value) and type(value) == "table"
             and (phase == "libs" or not IsOwnGlobal(key)) then
             run.seen[value] = true
@@ -1131,7 +1133,8 @@ local function CensusSlice(run)
     else
         local deadline = started + CENSUS_BUDGET_MS
         local units = 0
-        while run.phase ~= "report" and units < CENSUS_SLICE and debugprofilestop() < deadline do
+        while run.phase ~= "report" and run.phase ~= "collect"
+            and units < CENSUS_SLICE and debugprofilestop() < deadline do
             CensusUnit(run)
             units = units + 1
         end
@@ -1162,8 +1165,11 @@ local function RunCensus()
         p("Census already running.")
         return
     end
-    local ok, first = pcall(EnumerateFrames)
-    if not ok then
+    if InCombatLockdown() then
+        p("Census refused in combat.")
+        return
+    end
+    if not pcall(EnumerateFrames) then
         p("Census aborted: the frame list could not be read.")
         return
     end
@@ -1172,8 +1178,8 @@ local function RunCensus()
     if not KE:IsSecretValue(stub) and type(stub) == "table" then libraries = rawget(stub, "libs") end
     if KE:IsSecretValue(libraries) or type(libraries) ~= "table" then libraries = {} end
     local run = {
-        phase = "collect", libraries = libraries,
-        frame = first, frameList = {}, frameIndex = 1, started = debugprofilestop(),
+        phase = "libs", libraries = libraries,
+        frameList = {}, frameIndex = 1, started = debugprofilestop(),
         frames = 0, forbidden = 0, unreadable = 0, bucket = 0,
         histogram = {}, creators = {}, unknownCreators = 0,
         steps = 0, frameSteps = 0, slowestMs = 0,
@@ -1188,6 +1194,7 @@ local function RunCensus()
     -- Printed before the flag goes up: a throw here must not leave every later
     -- start refused. Nothing runs between the flag and the protected step.
     p("Census started.")
+    p("The game will freeze for a few seconds while the frame list is read.")
     censusRunning = true
     CensusStep(run)
 end

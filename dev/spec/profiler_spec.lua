@@ -1288,18 +1288,11 @@ end)
 -- game frame. No pure predicate covers when the census reads its handles.
 describe("Profiler census walk", function()
     local STUBBED = { "EnumerateFrames", "debugprofilestop", "C_Timer" }
-    local saved
+    local saved, queue, gameFrame, walks
 
     before_each(function()
         saved = {}
         for _, name in ipairs(STUBBED) do saved[name] = rawget(_G, name) end
-    end)
-
-    after_each(function()
-        for _, name in ipairs(STUBBED) do rawset(_G, name, saved[name]) end
-    end)
-
-    it("counts every frame when the walk is split across steps", function()
         local parent = {}
         local frames, position, readIn = {}, {}, {}
         for index = 1, 10 do
@@ -1309,10 +1302,11 @@ describe("Profiler census walk", function()
             }
             position[frames[index]] = index
         end
-        local gameFrame = 0
+        gameFrame, walks = 0, 0
         _G.EnumerateFrames = function(previous)
             local nextFrame
             if previous == nil then
+                walks = walks + 1
                 nextFrame = frames[1]
             elseif readIn[previous] == gameFrame then
                 nextFrame = frames[position[previous] + 1]
@@ -1326,22 +1320,60 @@ describe("Profiler census walk", function()
             clock = clock + 1
             return clock
         end
-        local queue = {}
+        queue = {}
         _G.C_Timer = {
             After = function(_, callback) queue[#queue + 1] = callback end,
         }
+    end)
 
-        local state = loadProfiler()
-        state.profiler.RunCommand("census")
+    after_each(function()
+        for _, name in ipairs(STUBBED) do rawset(_G, name, saved[name]) end
+    end)
+
+    local function drain()
         local ran = 0
         while #queue > 0 and ran < 10000 do
             gameFrame = gameFrame + 1
             ran = ran + 1
             table.remove(queue, 1)()
         end
-
         assert.equals(0, #queue)
+    end
+
+    it("counts every frame when the walk is split across steps", function()
+        local state = loadProfiler()
+        state.profiler.RunCommand("census")
+        drain()
+
         local output = table.concat(state.printed, "\n")
         assert.truthy(output:find("Census: 10 frames, 0 forbidden, 0 unreadable.", 1, true), output)
+    end)
+
+    it("refuses to start in combat and reads no frame", function()
+        local state = loadProfiler({ inCombat = true })
+        state.profiler.RunCommand("census")
+
+        local output = table.concat(state.printed, "\n")
+        assert.truthy(output:find("Census refused in combat.", 1, true), output)
+        assert.falsy(output:find("Census started.", 1, true))
+        assert.equals(0, walks)
+        assert.equals(0, #queue)
+    end)
+
+    it("aborts before the frame list is read when combat starts mid-run, and starts again after", function()
+        local state = loadProfiler()
+        state.profiler.RunCommand("census")
+        local walksAtStart = walks
+        state.setCombat(true)
+        drain()
+        local output = table.concat(state.printed, "\n")
+        assert.truthy(output:find("Census aborted: combat started before the frame list was read", 1, true), output)
+        assert.equals(walksAtStart, walks)
+
+        state.setCombat(false)
+        state.profiler.RunCommand("census")
+        drain()
+        output = table.concat(state.printed, "\n")
+        assert.truthy(output:find("Census: 10 frames", 1, true), output)
     end)
 end)
