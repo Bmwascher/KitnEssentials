@@ -1330,11 +1330,12 @@ describe("Profiler census walk", function()
         for _, name in ipairs(STUBBED) do rawset(_G, name, saved[name]) end
     end)
 
-    local function drain()
+    local function drain(beforeStep)
         local ran = 0
         while #queue > 0 and ran < 10000 do
             gameFrame = gameFrame + 1
             ran = ran + 1
+            if beforeStep then beforeStep(ran) end
             table.remove(queue, 1)()
         end
         assert.equals(0, #queue)
@@ -1360,12 +1361,22 @@ describe("Profiler census walk", function()
         assert.equals(0, #queue)
     end)
 
-    it("aborts before the frame list is read when combat starts mid-run, and starts again after", function()
+    it("aborts when combat starts just before the frame list step, and starts again after", function()
+        -- A clean run finds the step that reads the frame list; the second run
+        -- enters combat right before that step, after the globals walk ended.
         local state = loadProfiler()
         state.profiler.RunCommand("census")
+        local walksBefore, collectAt = {}, nil
+        drain(function(step) walksBefore[step] = walks end)
+        for step = 1, #walksBefore - 1 do
+            if not collectAt and walksBefore[step + 1] > walksBefore[step] then collectAt = step end
+        end
+        assert.truthy(collectAt and collectAt > 1)
+
+        state = loadProfiler()
+        state.profiler.RunCommand("census")
         local walksAtStart = walks
-        state.setCombat(true)
-        drain()
+        drain(function(step) if step == collectAt then state.setCombat(true) end end)
         local output = table.concat(state.printed, "\n")
         assert.truthy(output:find("Census aborted: combat started before the frame list was read", 1, true), output)
         assert.equals(walksAtStart, walks)

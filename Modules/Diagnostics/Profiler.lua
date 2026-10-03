@@ -860,7 +860,7 @@ local CENSUS_BUDGET_MS = 4
 local CENSUS_MAX_STEPS = 3600
 local CENSUS_TOP = 10
 local UNKNOWN_CREATOR = "unknown creator"
-local WALKING = { libs = true, globals = true, frames = true, tables = true }
+local WALKING = { libs = true, globals = true, collect = true, frames = true, tables = true }
 local RANKED = { "histogram", "creators", "byKey" }
 
 -- Owner markers for the table walk: SAVED counts KE.db.sv on its own line,
