@@ -162,7 +162,7 @@ local function Skin()
 end
 
 -- An inbox update can reach the rows while the window is hidden, so these
--- hooks exist from login, as they always have.
+-- hooks exist from login.
 local function Arm()
     if not _G.MailFrame then return end
     if _G.SendMailFrame_Update then hooksecurefunc("SendMailFrame_Update", SkinSendAttachments) end

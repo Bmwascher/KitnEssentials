@@ -1742,7 +1742,6 @@ function S.TabSetSelected(tab, selected)
     end
 end
 
--- Runs the seam settle S.Tab armed for this tab, if any.
 function S.TabSettleSeam(tab)
     local settle = tab and S.data(tab).settleSeam
     if settle then settle() end
