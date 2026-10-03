@@ -5,8 +5,6 @@
 
 local M = {}
 
--- Settings pages ship as their own addon, so a page reads the addon table
--- through KitnEssentials:GetNamespace() rather than its vararg.
 local PAGES_ROOT = "KitnEssentials_Options/"
 
 -- WoW loads each addon Lua file as a chunk whose vararg is

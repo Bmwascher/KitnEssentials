@@ -341,7 +341,6 @@ function GUIFrame:Show()
             self:RefreshContent()
         end
     end
-    -- A page link that came before the window existed opens now.
     local page = self._pendingPage
     if page then
         self._pendingPage = nil
@@ -1390,7 +1389,6 @@ function GUIFrame:BuildPlaceholderContent(scrollChild, yOffset)
     return yOffset
 end
 
--- Shown in place of a page while the pages addon is not loaded.
 function GUIFrame:BuildPagesNotLoadedContent(scrollChild, yOffset)
     local T = Theme
     local card = self:CreateCard(scrollChild, "Settings pages not loaded", yOffset)
