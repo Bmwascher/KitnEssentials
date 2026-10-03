@@ -3510,9 +3510,12 @@ local function runList(list)
         local record = entryRecords[entry]
 
         if SkinEnabled(entry.key, entry.addon) then
+            -- Restored, not cleared: a registered function can load an addon
+            -- whose skins dispatch inside this call.
+            local outerRecord = runningRecord
             runningRecord = record
             local ok, err = pcall(entry.fn)
-            runningRecord = nil
+            runningRecord = outerRecord
             if entry.key then
                 local status = ok and "ok" or ("ERROR: " .. tostring(err))
                 if ok and record and record.arms then
@@ -3688,8 +3691,8 @@ function S.DebugRerun(key, selector)
         return
     end
 
-    -- The window has never been laid out, and running the body from a slash
-    -- command is the load-pass moment the body was moved away from.
+    -- A rerun reaches only the login part. With nothing skinned yet it would
+    -- install that part's hooks again and report a skin that has not happened.
     if record.status == "armed" then
         print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key .. " #" .. record.id
             .. " has not run yet -- open its window first.")
