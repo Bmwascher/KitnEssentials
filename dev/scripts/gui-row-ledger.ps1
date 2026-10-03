@@ -65,7 +65,7 @@ function Get-ThemeValues($repo) {
 #
 # This scans the WHOLE FILE rather than one line, because lexical state carries
 # across lines and a diff hunk does not show you where you are. That is not
-# hypothetical here: GUI/GUITabs/GUICombat/GUI-Cursor.lua:456-475 is a multiline
+# hypothetical here: KitnEssentials_Options/GUICombat/GUI-Cursor.lua:456-475 is a multiline
 # --[[ ]]-- block containing real CreateRow/AddRow calls with theme constants in
 # them. A line-level scanner marks those as live code, and any grammar-based
 # check would match them too. Both limits named by review, 2026-08-03.
@@ -226,7 +226,7 @@ try {
     # step whose entire purpose is to prove the checker can go red would be
     # unable to. This form sees committed and uncommitted changes alike, so
     # every step measures what the engineer is actually looking at.
-    $diff = & git diff --unified=0 "$BaseRef" -- 'GUI/GUITabs' 'Core/AddonTheme.lua'
+    $diff = & git diff --unified=0 "$BaseRef" -- 'KitnEssentials_Options' 'Core/AddonTheme.lua'
     if ($LASTEXITCODE -ne 0) { throw "git diff failed against $BaseRef" }
 } finally {
     Pop-Location

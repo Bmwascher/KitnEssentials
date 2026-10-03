@@ -29,8 +29,8 @@ describe("GUI-CVars: subtab id coverage", function()
 
         KE = { GUIFrame = GUIFrame }
 
-        helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-CVars.lua", KE)
-        helpers.loadModule("GUI/GUITabs/GUIQoL/GUI-UIScaling.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUIQoL/GUI-CVars.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUIQoL/GUI-UIScaling.lua", KE)
     end)
 
     -- The strip is declared as a function, evaluated per build. Resolve it the

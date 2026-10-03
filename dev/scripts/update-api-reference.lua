@@ -100,7 +100,7 @@ local birVersion = popenLine('git -C "' .. BIR .. '" log -1 --format=%s 2>nul') 
 -- ---- step 4: used surface -------------------------------------------------
 local used = C.newUsedSurface()
 local nKeFiles = 0
-for _, sub in ipairs({ "Core", "Modules", "GUI" }) do
+for _, sub in ipairs({ "Core", "Modules", "GUI", "KitnEssentials_Options" }) do
     for _, f in ipairs(P.listFiles(ROOT .. "\\" .. sub, "*.lua")) do
         local src = P.readAll(f)
         if src then

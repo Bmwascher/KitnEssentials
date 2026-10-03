@@ -1,4 +1,4 @@
--- GUI/GUITabs/GUIClassUtilities/GUI-ClassTools.lua -- which tab Class Tools
+-- KitnEssentials_Options/GUIClassUtilities/GUI-ClassTools.lua -- which tab Class Tools
 -- opens on. A pick that names no tab on the strip falls silently to the first
 -- tab, so each pick is checked against the strip the file registers.
 local helpers = require("dev.spec._helpers")
@@ -12,7 +12,7 @@ describe("GUI-ClassTools: own-class tab", function()
             RegisterTabbedContent = function(self, id, tabs) self.tabStrips[id] = tabs end,
             RegisterNestedTabs = function() end,
         }
-        helpers.loadModule("GUI/GUITabs/GUIClassUtilities/GUI-ClassTools.lua", { GUIFrame = GUIFrame })
+        helpers.loadModule("KitnEssentials_Options/GUIClassUtilities/GUI-ClassTools.lua", { GUIFrame = GUIFrame })
     end)
 
     it("picks a tab of its own, on the strip, for each class with a tool", function()

@@ -1,4 +1,4 @@
--- GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua — the Frame Skins grid's
+-- KitnEssentials_Options/GUISkinning/GUI-BlizzardFrames.lua — the Frame Skins grid's
 -- three-state suppression handling (Task 0C). The file only READS
 -- KE.GUIFrame, so it loads against a hand-built stub (GUI-Core.lua creates
 -- the real GUIFrame table and would clobber a stub). Widget factories on the
@@ -155,7 +155,7 @@ describe("GUI-BlizzardFrames: Frame Skins grid suppression state", function()
         helpers.installAddonShim()
         _G.KitnEssentials.EnableModule = function() end
         _G.KitnEssentials.DisableModule = function() end
-        helpers.loadModule("GUI/GUITabs/GUISkinning/GUI-BlizzardFrames.lua", KE)
+        helpers.loadModule("KitnEssentials_Options/GUISkinning/GUI-BlizzardFrames.lua", KE)
     end)
 
     -- Invokes the REAL registered content builder for the Frames tab.
