@@ -51,4 +51,8 @@ local function Skin()
     end
 end
 
-S:RegisterEarly(Skin, "Trade")
+local function Arm()
+    S.Defer(Skin, _G.TradeFrame)
+end
+
+S:RegisterEarly(Arm, "Trade")
