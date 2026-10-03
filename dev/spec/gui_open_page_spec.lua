@@ -1,42 +1,53 @@
--- Tier 2: the page-link queue in GUI/GUIWidgets/GUI-Sidebar.lua OpenPage.
+-- Tier 2: page-link ordering in GUI/GUIWidgets/GUI-Sidebar.lua OpenPage.
 --
--- A page link that cannot select yet is queued, and Show selects it later.
--- A newer link must replace or drop the queued one, or Show later puts the
--- older page over it. Show and ShowPage are stubbed: the window and the
--- selection are frame work verified in game.
+-- OpenPage records its link before calling Show, and only Show's tail
+-- selects it, so the newest request is the one selected: an older waiting
+-- link is replaced before Show runs, and a link made inside Show (a handler
+-- running in the pages' load) replaces the outer one. Show and ShowPage are
+-- stubbed: the window and the selection are frame work verified in game.
 local helpers = require("dev.spec._helpers")
 
-describe("GUI-Sidebar page-link queue", function()
-    local GUIFrame, shown
+describe("GUI-Sidebar page-link ordering", function()
+    local GUIFrame, selected, seenAtShow, nestedLink
 
     before_each(function()
-        shown = {}
         GUIFrame = {}
         helpers.loadModule("GUI/GUIWidgets/GUI-Sidebar.lua", { GUIFrame = GUIFrame })
-        GUIFrame.Show = function() end
-        GUIFrame.ShowPage = function(_, itemId) shown[#shown + 1] = itemId end
+        GUIFrame.Show = function(self)
+            if seenAtShow == nil then
+                local waiting = self._pendingPage
+                seenAtShow = waiting and waiting.itemId or false
+            end
+            if nestedLink then
+                local link = nestedLink
+                nestedLink = nil
+                self:OpenPage(link)
+            end
+        end
+        GUIFrame.ShowPage = function(_, itemId) selected[#selected + 1] = itemId end
     end)
 
-    it("lets the newest page link win over an older queued one", function()
+    it("selects only the newest page link, and only through Show", function()
         local cases = {
             {
-                name = "open pending: the newer link replaces the queued one",
-                pending = true, wantQueued = "B", wantShown = nil,
+                name = "an older waiting link is replaced before Show runs",
+                waiting = "Old", nested = nil, wantSeen = "A", wantWaiting = "A",
             },
             {
-                name = "window built, nothing pending: the newer link selects and drops the queued one",
-                pending = false, wantQueued = nil, wantShown = "B",
+                name = "a link made inside Show beats the outer one",
+                waiting = nil, nested = "B", wantSeen = "A", wantWaiting = "B",
             },
         }
         for _, case in ipairs(cases) do
-            shown = {}
-            GUIFrame._openPending = case.pending or nil
+            selected, seenAtShow, nestedLink = {}, nil, case.nested
+            GUIFrame._openPending = nil
             GUIFrame.mainFrame = {}
-            GUIFrame._pendingPage = { itemId = "A" }
-            GUIFrame:OpenPage("B")
-            local queued = GUIFrame._pendingPage
-            assert.equals(case.wantQueued, queued and queued.itemId, case.name)
-            assert.equals(case.wantShown, shown[1], case.name)
+            GUIFrame._pendingPage = case.waiting and { itemId = case.waiting } or nil
+            GUIFrame:OpenPage("A")
+            local waiting = GUIFrame._pendingPage
+            assert.equals(case.wantSeen, seenAtShow, case.name)
+            assert.equals(case.wantWaiting, waiting and waiting.itemId, case.name)
+            assert.equals(0, #selected, case.name)
         end
     end)
 end)

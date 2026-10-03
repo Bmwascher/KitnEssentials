@@ -64,6 +64,7 @@ end
 local function TabOnClick(b)
     local strip = b._strip
     if b.tabId == strip._activeId then return end
+    GUIFrame:DropQueuedPage()
     local onSwitch = strip._onSwitch
     if onSwitch then onSwitch(b.tabId) end
     ScheduleRefresh()

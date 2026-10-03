@@ -468,6 +468,7 @@ function GUIFrame:CreateMainFrame()
         homeIcon:SetVertexColor(T.textSecondary[1], T.textSecondary[2], T.textSecondary[3], 1)
     end)
     homeBtn:SetScript("OnClick", function()
+        GUIFrame:DropQueuedPage()
         GUIFrame:SelectSidebarItem("HomePage")
     end)
 
