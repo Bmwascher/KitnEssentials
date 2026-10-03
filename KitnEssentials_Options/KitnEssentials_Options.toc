@@ -6,7 +6,7 @@
 ## Dependencies: KitnEssentials
 ## LoadOnDemand: 1
 ## IconTexture: Interface\AddOns\KitnEssentials\Media\Icon\KES
-## Category-enUS: |cffFF008CKitn|rUI
+## Category-enUS: |cffFF008CKitn|r |cffffffffSuite|r
 ## Group: KitnEssentials
 
 Pages.xml

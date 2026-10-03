@@ -7,7 +7,7 @@
 ## Interface: 120100
 ## OptionalDeps: Ace3, LibSharedMedia-3.0, ElvUI
 ## IconTexture: Interface\AddOns\KitnEssentials\Media\Icon\KES
-## Category-enUS: |cffFF008CKitn|rUI
+## Category-enUS: |cffFF008CKitn|r |cffffffffSuite|r
 ## X-Curse-Project-ID: 1485435
 ## X-Wago-ID: n6VLEEGd
 
