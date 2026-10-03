@@ -1532,8 +1532,15 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
         value = db.ResetOnKeyStart ~= false,
         callback = function(checked) db.ResetOnKeyStart = checked end,
     })
-    rowSeg:AddWidget(keyResetChk, 1)
+    rowSeg:AddWidget(keyResetChk, 0.5)
     manager:Register(keyResetChk, "all")
+
+    local logoutResetChk = GUIFrame:CreateCheckbox(rowSeg, "Reset on Logout", {
+        value = db.ResetOnLogout == true,
+        callback = function(checked) db.ResetOnLogout = checked end,
+    })
+    rowSeg:AddWidget(logoutResetChk, 0.5)
+    manager:Register(logoutResetChk, "all")
     cardSeg:AddRow(rowSeg, Theme.rowHeight)
 
     manager:SetCondition("instancereset", function() return db.ResetOnInstanceEntry == true end)
@@ -1561,15 +1568,6 @@ local function BuildBehaviorTab(scrollChild, yOffset, db, manager)
     rowInst:AddWidget(instModeDd, 0.5)
     manager:Register(instModeDd, "instancereset")
     cardSeg:AddRow(rowInst, Theme.rowHeight)
-
-    local rowLogout = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
-    local logoutResetChk = GUIFrame:CreateCheckbox(rowLogout, "Reset on Logout", {
-        value = db.ResetOnLogout == true,
-        callback = function(checked) db.ResetOnLogout = checked end,
-    })
-    rowLogout:AddWidget(logoutResetChk, 1)
-    manager:Register(logoutResetChk, "all")
-    cardSeg:AddRow(rowLogout, Theme.rowHeight)
 
     local rowRetain = GUIFrame:CreateRow(cardSeg.content, Theme.rowHeight)
     -- Display-only clamp mirroring History.lua evictOverCap's read semantics exactly
