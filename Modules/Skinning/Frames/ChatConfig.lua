@@ -9,6 +9,79 @@ local hooksecurefunc = hooksecurefunc
 local TAB_W, TAB_W_WIDE, TAB_W_NARROW = 80, 90, 70
 local WIDE_TABS = 2
 
+-- Blizzard resets the combat tabs to their natural width on a UI scale
+-- change; after one, fixed widths written later would undo it.
+local scaleChanged = false
+local combatEventHooked = false
+
+local function OnCombatSettingsEvent(_, event)
+    if event == "UI_SCALE_CHANGED" then scaleChanged = true end
+end
+
+local function OnUpdateCheckboxes(frame)
+    if not _G.FCF_GetCurrentChatFrame() then return end
+    if not frame.checkBoxTable then return end
+    local nameString = frame:GetName() .. "Checkbox"
+    for index in ipairs(frame.checkBoxTable) do
+        local checkboxName = nameString .. index
+        local checkbox = _G[checkboxName]
+        if checkbox and not S.data(checkbox).skinned then
+            S.data(checkbox).skinned = true
+            S.StripTextures(checkbox)
+            S.CheckBox(_G[checkboxName .. "Check"])
+        end
+    end
+end
+
+local function OnCreateTieredCheckboxes(frame, checkBoxTable)
+    if S.data(frame).tieredSkinned then return end
+    S.data(frame).tieredSkinned = true
+    local nameString = frame:GetName() .. "Checkbox"
+    for index, value in ipairs(checkBoxTable) do
+        local checkboxName = nameString .. index
+        S.CheckBox(_G[checkboxName])
+        if value.subTypes then
+            for i in ipairs(value.subTypes) do
+                S.CheckBox(_G[checkboxName .. "_" .. i])
+            end
+        end
+    end
+end
+
+local function OnTabManagerWidth(frame)
+    for tab in frame.tabPool:EnumerateActive() do
+        if not S.data(tab).skinned then
+            S.data(tab).skinned = true
+            S.StripTextures(tab)
+        end
+        tab:SetWidth(TAB_W)
+    end
+end
+
+local function OnUpdateSwatches(frame)
+    if not frame.swatchTable then return end
+    local nameString = frame:GetName() .. "Swatch"
+    for index in ipairs(frame.swatchTable) do
+        local bu = _G[nameString .. index]
+        if bu and not S.data(bu).swatchSkinned then
+            S.data(bu).swatchSkinned = true
+            S.StripTextures(bu)
+            S.Backdrop(bu)
+        end
+    end
+end
+
+local function OnUpdateSpeechCheckboxes(frame)
+    if not frame.checkBoxTable then return end
+    local nameString = frame:GetName() .. "Checkbox"
+    for index in ipairs(frame.checkBoxTable) do
+        local checkBox = _G[nameString .. index]
+        -- S.CheckBox sets and tests its own skinned flag; setting it here
+        -- first makes it return without skinning.
+        if checkBox then S.CheckBox(checkBox) end
+    end
+end
+
 local function Skin()
     local ccf = _G.ChatConfigFrame
     if not ccf then return end
@@ -16,54 +89,14 @@ local function Skin()
     S.Template(ccf, "Window")
     if ccf.Header then S.StripTextures(ccf.Header) end
 
-    hooksecurefunc("ChatConfig_UpdateCheckboxes", function(frame)
-        if not _G.FCF_GetCurrentChatFrame() then return end
-        if not frame.checkBoxTable then return end
-        local nameString = frame:GetName() .. "Checkbox"
-        for index in ipairs(frame.checkBoxTable) do
-            local checkboxName = nameString .. index
-            local checkbox = _G[checkboxName]
-            if checkbox and not S.data(checkbox).skinned then
-                S.data(checkbox).skinned = true
-                S.StripTextures(checkbox)
-                S.CheckBox(_G[checkboxName .. "Check"])
-            end
-        end
-    end)
-
-    hooksecurefunc("ChatConfig_CreateTieredCheckboxes", function(frame, checkBoxTable)
-        if S.data(frame).tieredSkinned then return end
-        S.data(frame).tieredSkinned = true
-        local nameString = frame:GetName() .. "Checkbox"
-        for index, value in ipairs(checkBoxTable) do
-            local checkboxName = nameString .. index
-            S.CheckBox(_G[checkboxName])
-            if value.subTypes then
-                for i in ipairs(value.subTypes) do
-                    S.CheckBox(_G[checkboxName .. "_" .. i])
-                end
-            end
-        end
-    end)
-
-    if _G.ChatConfigFrameChatTabManager then
-        hooksecurefunc(_G.ChatConfigFrameChatTabManager, "UpdateWidth", function(frame)
-            for tab in frame.tabPool:EnumerateActive() do
-                if not S.data(tab).skinned then
-                    S.data(tab).skinned = true
-                    S.StripTextures(tab)
-                end
-                tab:SetWidth(TAB_W)
-            end
-        end)
-    end
-
     do
         local i = 1
         local tab = _G["CombatConfigTab" .. i]
         while tab do
             S.StripTextures(tab)
-            tab:SetWidth(i <= WIDE_TABS and TAB_W_WIDE or TAB_W_NARROW)
+            if not scaleChanged then
+                tab:SetWidth(i <= WIDE_TABS and TAB_W_WIDE or TAB_W_NARROW)
+            end
             i = i + 1
             tab = _G["CombatConfigTab" .. i]
         end
@@ -107,19 +140,6 @@ local function Skin()
         S.CheckBox(box)
     end
 
-    hooksecurefunc("ChatConfig_UpdateSwatches", function(frame)
-        if not frame.swatchTable then return end
-        local nameString = frame:GetName() .. "Swatch"
-        for index in ipairs(frame.swatchTable) do
-            local bu = _G[nameString .. index]
-            if bu and not S.data(bu).swatchSkinned then
-                S.data(bu).swatchSkinned = true
-                S.StripTextures(bu)
-                S.Backdrop(bu)
-            end
-        end
-    end)
-
     S.Button(_G.CombatLogDefaultButton)
     S.Button(_G.ChatConfigCombatSettingsFiltersCopyFilterButton)
     S.Button(_G.ChatConfigCombatSettingsFiltersAddFilterButton)
@@ -149,7 +169,6 @@ local function Skin()
     S.CheckBox(_G.CombatConfigColorsColorizeEntireLineByTarget)
     if _G.ChatConfigCombatSettingsFilters then S.ScrollBar(_G.ChatConfigCombatSettingsFilters.ScrollBar) end
 
-    if _G.TextToSpeechButton then S.StripTextures(_G.TextToSpeechButton) end
     if _G.TextToSpeechFramePlaySampleButton then
         S.Button(_G.TextToSpeechFramePlaySampleButton)
         S.Button(_G.TextToSpeechFramePlaySampleAlternateButton)
@@ -173,17 +192,29 @@ local function Skin()
             S.CheckBox(ttsPanel[key])
         end
     end
-
-    hooksecurefunc("TextToSpeechFrame_UpdateMessageCheckboxes", function(frame)
-        if not frame.checkBoxTable then return end
-        local nameString = frame:GetName() .. "Checkbox"
-        for index in ipairs(frame.checkBoxTable) do
-            local checkBox = _G[nameString .. index]
-            -- S.CheckBox sets and tests its own skinned flag; setting it here
-            -- first makes it return without skinning.
-            if checkBox then S.CheckBox(checkBox) end
-        end
-    end)
 end
 
-S:RegisterEarly(Skin, "ChatConfig")
+-- Blizzard builds and updates the checkboxes when the world loads, long
+-- before the window opens; the held hooks skin them on its first show.
+local function Arm()
+    local ccf = _G.ChatConfigFrame
+    if not ccf then return end
+    local arm = S.Defer(Skin, ccf)
+    hooksecurefunc("ChatConfig_UpdateCheckboxes", arm:Late(OnUpdateCheckboxes))
+    hooksecurefunc("ChatConfig_CreateTieredCheckboxes", arm:Late(OnCreateTieredCheckboxes))
+    hooksecurefunc("ChatConfig_UpdateSwatches", arm:Late(OnUpdateSwatches))
+    hooksecurefunc("TextToSpeechFrame_UpdateMessageCheckboxes", arm:Late(OnUpdateSpeechCheckboxes))
+    if _G.ChatConfigFrameChatTabManager then
+        hooksecurefunc(_G.ChatConfigFrameChatTabManager, "UpdateWidth", OnTabManagerWidth)
+    end
+    -- The combat tabs' only width writer after login is this frame's own
+    -- XML OnEvent, which a hook on the global function never sees.
+    if _G.ChatConfigCombatSettings and not combatEventHooked then
+        combatEventHooked = true
+        _G.ChatConfigCombatSettings:HookScript("OnEvent", OnCombatSettingsEvent)
+    end
+    -- The chat-bar speech button sits outside the window.
+    if _G.TextToSpeechButton then S.StripTextures(_G.TextToSpeechButton) end
+end
+
+S:RegisterEarly(Arm, "ChatConfig")
