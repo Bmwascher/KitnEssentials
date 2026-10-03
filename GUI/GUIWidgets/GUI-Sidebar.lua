@@ -891,8 +891,21 @@ end
 -- OpenPage
 ---------------------------------------------------------------------------------
 function GUIFrame:OpenPage(itemId, sectionId, context)
-    self.pendingContext = context
-    self:Show()
+    if not self._openPending then
+        self.pendingContext = context
+        self:Show()
+    end
+    -- Selecting before Show has built the window, or while the pages are
+    -- loading, leaves a page half drawn, so the link waits for Show (a Show
+    -- waiting a frame, or combat before the first open).
+    if self._openPending or not self.mainFrame then
+        self._pendingPage = { itemId = itemId, sectionId = sectionId, context = context }
+        return
+    end
+    self:ShowPage(itemId, sectionId)
+end
+
+function GUIFrame:ShowPage(itemId, sectionId)
     if sectionId then
         self.sidebarExpanded[sectionId] = true
         self:RefreshSidebar()

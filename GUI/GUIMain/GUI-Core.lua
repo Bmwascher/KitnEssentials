@@ -145,6 +145,115 @@ function GUIFrame:FireOnCloseCallbacks()
 end
 
 ---------------------------------------------------------------------------------
+-- Settings pages addon
+---------------------------------------------------------------------------------
+
+local PAGES_ADDON = "KitnEssentials_Options"
+local PAGES_MISSING = "KitnEssentials Options is not installed. Reinstall KitnEssentials (both folders ship together)."
+local PAGES_DISABLED = "KitnEssentials Options is disabled. Enable it in the AddOn list, then open settings again."
+local PAGES_ENABLED = "KitnEssentials Options was disabled; enabled it to open settings."
+local PAGES_MISMATCH = "KitnEssentials and KitnEssentials Options are different versions (%s / %s). Update or reinstall both."
+local PAGES_FAILED = "Settings pages could not load (%s). Open settings again to retry, or reinstall KitnEssentials if it keeps failing."
+
+-- Pure. The version is compared before the enable state, so a disabled copy
+-- from another version is reported as a mismatch and never enabled; a version
+-- the client did not return never counts as a match.
+function GUIFrame.PagesLoadAction(state)
+    if state.loaded then return "ready" end
+    if state.loading then return "loading" end
+    if not state.exists then return "missing" end
+    if not state.coreVersion or state.coreVersion ~= state.pagesVersion then return "mismatch" end
+    if not state.enabled then return "disabled" end
+    return "load"
+end
+
+-- Nothing is latched, so the next open tries again.
+function GUIFrame:PagesLoadFailed(message)
+    self._pagesLoadMessage = message
+    KE:Print(message)
+    return false, false
+end
+
+function GUIFrame:LoadPages()
+    local loaded, reason = C_AddOns.LoadAddOn(PAGES_ADDON)
+    if not loaded then
+        local text = reason and _G["ADDON_" .. reason]
+        if type(text) ~= "string" then
+            text = reason or "unknown"
+        end
+        return self:PagesLoadFailed(PAGES_FAILED:format(text))
+    end
+    self._pagesLoaded = true
+    return true, true, false, true
+end
+
+-- Enabled for this character only; the message names the manual fix when
+-- the load still fails.
+function GUIFrame:LoadDisabledPages(character)
+    C_AddOns.EnableAddOn(PAGES_ADDON, character)
+    if C_AddOns.LoadAddOn(PAGES_ADDON) then
+        self._pagesLoaded = true
+        KE:Print(PAGES_ENABLED)
+        return true, true, false, true
+    end
+    return self:PagesLoadFailed(PAGES_DISABLED)
+end
+
+-- Returns ready, newlyReady, loading, compiled. newlyReady is true on the
+-- first call that finds the pages usable, whoever loaded them; loading is
+-- true only for a call made from inside the pages' own load; compiled is
+-- true when this call ran the load.
+function GUIFrame:EnsurePagesLoaded()
+    if self._pagesLoaded then return true, false end
+    -- The other reads need an addon name the client knows.
+    local exists = C_AddOns.DoesAddOnExist(PAGES_ADDON)
+    local state = { exists = exists }
+    local character = KE:GetSafeUnitGUID("player")
+    if exists then
+        local loadedOrLoading, loaded = C_AddOns.IsAddOnLoaded(PAGES_ADDON)
+        state.loaded = loaded
+        state.loading = loadedOrLoading and not loaded
+        state.coreVersion = C_AddOns.GetAddOnMetadata("KitnEssentials", "Version")
+        state.pagesVersion = C_AddOns.GetAddOnMetadata(PAGES_ADDON, "Version")
+        -- With no readable GUID the enable state cannot be read: the load is
+        -- tried, and a disabled addon fails with the client's own reason.
+        state.enabled = true
+        if character then
+            local enableState = C_AddOns.GetAddOnEnableState(PAGES_ADDON, character)
+            state.enabled = enableState ~= nil and enableState > Enum.AddOnEnableState.None
+        end
+    end
+    local action = GUIFrame.PagesLoadAction(state)
+    if action == "ready" then
+        self._pagesLoaded = true
+        return true, true
+    elseif action == "loading" then
+        return false, false, true
+    elseif action == "missing" then
+        return self:PagesLoadFailed(PAGES_MISSING)
+    elseif action == "mismatch" then
+        return self:PagesLoadFailed(PAGES_MISMATCH:format(state.coreVersion or "unknown", state.pagesVersion or "unknown"))
+    elseif action == "disabled" then
+        return self:LoadDisabledPages(character)
+    end
+    return self:LoadPages()
+end
+
+-- The deferred Show, one frame after the pages loaded. The combat handler
+-- takes a pending open when combat starts first, turning it into a reopen
+-- after combat as it does for an open window.
+function GUIFrame:FinishPendingOpen()
+    if not self._openPending then return end
+    self._openPending = nil
+    if InCombatLockdown() then
+        self.reopenAfterCombat = true
+        return
+    end
+    self._continuingOpen = true
+    self:Show()
+end
+
+---------------------------------------------------------------------------------
 -- Show / Hide
 ---------------------------------------------------------------------------------
 
@@ -181,6 +290,26 @@ function GUIFrame:Show()
         self.reopenAfterCombat = true
         return
     end
+    if self._openPending then return end
+    local continuing = self._continuingOpen
+    self._continuingOpen = nil
+    local _, newlyReady, loading, compiled = self:EnsurePagesLoaded()
+    if (newlyReady or loading) and self.mainFrame then
+        -- The page on screen may be the not-loaded card from an earlier
+        -- failure; the replay further down rebuilds it.
+        self._contentDirtyWhileHidden = true
+    end
+    -- Nothing builds or selects while the pages compile or in the call that
+    -- compiled them; the window builds a frame later. A Show nested inside
+    -- the load has already set _openPending. The continuation already runs a
+    -- frame later, so pages it finds ready build at once.
+    if loading or compiled or self._openPending or (newlyReady and not continuing) then
+        if not self._openPending then
+            self._openPending = true
+            C_Timer.After(0, function() self:FinishPendingOpen() end)
+        end
+        return
+    end
     if not self.mainFrame then
         self:CreateMainFrame()
     end
@@ -211,6 +340,13 @@ function GUIFrame:Show()
             -- swallowed it) — replay it once so the reopened page isn't stale.
             self:RefreshContent()
         end
+    end
+    -- A page link that came before the window existed opens now.
+    local page = self._pendingPage
+    if page then
+        self._pendingPage = nil
+        self.pendingContext = page.context
+        self:ShowPage(page.itemId, page.sectionId)
     end
 end
 
@@ -1234,6 +1370,8 @@ function GUIFrame:RefreshContent()
             errorCard:AddLabel("Content builder failed: " .. tostring(result))
             yOffset = yOffset + errorCard:GetContentHeight() + T.paddingMedium
         end
+    elseif not self._pagesLoaded then
+        yOffset = self:BuildPagesNotLoadedContent(scrollChild, yOffset)
     else
         -- No registered builder
         yOffset = self:BuildPlaceholderContent(scrollChild, yOffset)
@@ -1247,6 +1385,16 @@ function GUIFrame:BuildPlaceholderContent(scrollChild, yOffset)
     local T = Theme
     local card = self:CreateCard(scrollChild, "Coming Soon", yOffset)
     card:AddLabel("This section is under construction.")
+    card:AddSpacing(T.paddingSmall)
+    yOffset = yOffset + card:GetContentHeight() + T.paddingMedium
+    return yOffset
+end
+
+-- Shown in place of a page while the pages addon is not loaded.
+function GUIFrame:BuildPagesNotLoadedContent(scrollChild, yOffset)
+    local T = Theme
+    local card = self:CreateCard(scrollChild, "Settings pages not loaded", yOffset)
+    card:AddLabel(self._pagesLoadMessage or "")
     card:AddSpacing(T.paddingSmall)
     yOffset = yOffset + card:GetContentHeight() + T.paddingMedium
     return yOffset

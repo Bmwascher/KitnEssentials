@@ -659,9 +659,14 @@ combatFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 combatFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 combatFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_REGEN_DISABLED" then
+        -- A Show still waiting a frame for its build counts as open.
+        local pending = GUIFrame._openPending
+        GUIFrame._openPending = nil
         if GUIFrame:IsShown() then
             GUIFrame.reopenAfterCombat = true
             GUIFrame:Hide()
+        elseif pending then
+            GUIFrame.reopenAfterCombat = true
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
         if GUIFrame.reopenAfterCombat then
