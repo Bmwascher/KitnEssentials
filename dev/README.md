@@ -45,6 +45,19 @@ luacheck .        # static analysis (strict — zero-warning baseline since 2026
 
 ## One-time local setup
 
+### Second addon folder (settings pages)
+
+The settings pages ship as their own load-on-demand addon,
+`KitnEssentials_Options/` at the repo root. The AddOns folder needs a second
+junction to it, made once per machine with the game closed: the client reads
+the AddOns folder list at launch, so a `/reload` does not pick up a new
+folder. From PowerShell:
+
+    cmd /c mklink /J "C:\Program Files (x86)\World of Warcraft\_retail_\Interface\AddOns\KitnEssentials_Options" "$HOME\Documents\KitnDev\KitnEssentials\KitnEssentials_Options"
+
+On a branch without the folder the junction dangles and the client lists
+nothing for it.
+
 ### Windows (hererocks — Lua 5.1.5, matching WoW and CI)
 
 The suite runs under Lua **5.1.5** everywhere (WoW's embedded major version):
