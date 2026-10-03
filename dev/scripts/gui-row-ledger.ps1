@@ -65,7 +65,7 @@ function Get-ThemeValues($repo) {
 #
 # This scans the WHOLE FILE rather than one line, because lexical state carries
 # across lines and a diff hunk does not show you where you are. That is not
-# hypothetical here: KitnEssentials_Options/GUICombat/GUI-Cursor.lua:456-475 is a multiline
+# hypothetical here: KitnEssentials_Options/GUICombat/GUI-Cursor.lua holds a multiline
 # --[[ ]]-- block containing real CreateRow/AddRow calls with theme constants in
 # them. A line-level scanner marks those as live code, and any grammar-based
 # check would match them too. Both limits named by review, 2026-08-03.

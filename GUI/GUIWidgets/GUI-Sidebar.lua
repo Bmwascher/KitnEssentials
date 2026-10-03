@@ -902,6 +902,8 @@ function GUIFrame:OpenPage(itemId, sectionId, context)
         self._pendingPage = { itemId = itemId, sectionId = sectionId, context = context }
         return
     end
+    -- An older queued link would otherwise reopen over this one at the next Show.
+    self._pendingPage = nil
     self:ShowPage(itemId, sectionId)
 end
 

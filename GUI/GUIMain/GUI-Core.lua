@@ -169,6 +169,10 @@ end
 
 -- Nothing is latched, so the next open tries again.
 function GUIFrame:PagesLoadFailed(message)
+    if self.mainFrame and message ~= self._pagesLoadMessage then
+        -- A not-loaded card on screen shows the old reason until rebuilt.
+        self._contentDirtyWhileHidden = true
+    end
     self._pagesLoadMessage = message
     KE:Print(message)
     return false, false
