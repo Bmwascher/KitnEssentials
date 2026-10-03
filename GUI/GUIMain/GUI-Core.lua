@@ -196,6 +196,13 @@ end
 function GUIFrame:LoadDisabledPages(character)
     C_AddOns.EnableAddOn(PAGES_ADDON, character)
     if C_AddOns.LoadAddOn(PAGES_ADDON) then
+        -- An unsaved enable is lost at logout. Saving also commits the AddOn
+        -- List's unconfirmed ticks, so while it is open its Okay or Cancel
+        -- decides instead.
+        local addonList = _G.AddonList
+        if not (addonList and addonList:IsShown()) then
+            C_AddOns.SaveAddOns()
+        end
         self._pagesLoaded = true
         KE:Print(PAGES_ENABLED)
         return true, true, false, true
