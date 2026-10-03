@@ -14,7 +14,7 @@ or `.github/`.
 | Layer | Tool | Catches |
 |-------|------|---------|
 | Static analysis | `luacheck` | typo'd/undefined globals, unused vars, shadowing (12.0 API contract lives in `.luacheckrc`) |
-| Compile smoke | `busted` → `dev/spec/smoke_spec.lua` | syntax errors in any shipped `Core/`, `Modules/`, `GUI/` file (one check per file) |
+| Compile smoke | `busted` → `dev/spec/smoke_spec.lua` | syntax errors in any shipped `Core/`, `Modules/`, `GUI/`, `KitnEssentials_Options/` file (one check per file) |
 | Unit specs | `busted` → `dev/spec/*_spec.lua` | logic in pure + API-adjacent code |
 
 ### The honesty boundary (read this before trusting a mock)

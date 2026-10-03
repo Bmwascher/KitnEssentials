@@ -1,7 +1,8 @@
 -- The settings pages ship as their own addon and reach the addon's table
 -- through KitnEssentials:GetNamespace(). loadModule answers that call with
--- the table the spec passes, and leaves the KitnEssentials global as it found
--- it, so a page's file-scope `KitnEssentials and ...` lines read as before.
+-- the table the spec passes. With no KitnEssentials global the page borrows
+-- one for its load only, so its file-scope `KitnEssentials and ...` lines
+-- read as before; an installed shim keeps the accessor.
 local helpers = require("dev.spec._helpers")
 
 local PAGE = "KitnEssentials_Options/GUIQoL/GUI-MoveFrames.lua"
