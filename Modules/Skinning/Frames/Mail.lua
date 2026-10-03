@@ -101,10 +101,6 @@ local function Skin()
     SkinOpenAttachments()
     SkinInboxRows()
 
-    if _G.SendMailFrame_Update then hooksecurefunc("SendMailFrame_Update", SkinSendAttachments) end
-    if _G.OpenMail_Update then hooksecurefunc("OpenMail_Update", SkinOpenAttachments) end
-    if _G.InboxFrame_Update then hooksecurefunc("InboxFrame_Update", SkinInboxRows) end
-
     if _G.SendMailMailButton then S.Button(_G.SendMailMailButton) end
     if _G.SendMailCancelButton then S.Button(_G.SendMailCancelButton) end
     if _G.SendMailSendMoneyButton then S.CheckBox(_G.SendMailSendMoneyButton) end
@@ -134,14 +130,6 @@ local function Skin()
         if _G.OpenMailScrollFrame.ScrollBar then S.TrimScrollBar(_G.OpenMailScrollFrame.ScrollBar) end
     end
 
-    -- Body fonts for the letter and the auction invoice.
-    for _, name in next, { "InvoiceTextFontNormal", "MailTextFontNormal" } do
-        local font = _G[name]
-        if font then
-            S.SetFont(font, 13)
-            font:SetTextColor(1, 1, 1)
-        end
-    end
     if _G.OpenMailArithmeticLine then S.KillAllTextures(_G.OpenMailArithmeticLine) end
 
     for _, name in next, { "OpenMailLetterButton", "OpenMailMoneyButton" } do
@@ -169,6 +157,28 @@ local function Skin()
     if _G.SendMailMailButton and _G.SendMailCancelButton then
         _G.SendMailMailButton:SetPoint("RIGHT", _G.SendMailCancelButton, "LEFT", -2, 0)
     end
+
+    S.TabsSettle("MailFrameTab", 2)
 end
 
-S:RegisterEarly(Skin, "Mail")
+-- An inbox update can reach the rows while the window is hidden, so these
+-- hooks exist from login, as they always have.
+local function Arm()
+    if not _G.MailFrame then return end
+    if _G.SendMailFrame_Update then hooksecurefunc("SendMailFrame_Update", SkinSendAttachments) end
+    if _G.OpenMail_Update then hooksecurefunc("OpenMail_Update", SkinOpenAttachments) end
+    if _G.InboxFrame_Update then hooksecurefunc("InboxFrame_Update", SkinInboxRows) end
+
+    -- Body fonts for the letter and the auction invoice.
+    for _, name in next, { "InvoiceTextFontNormal", "MailTextFontNormal" } do
+        local font = _G[name]
+        if font then
+            S.SetFont(font, 13)
+            font:SetTextColor(1, 1, 1)
+        end
+    end
+
+    S.Defer(Skin, _G.MailFrame, _G.OpenMailFrame)
+end
+
+S:RegisterEarly(Arm, "Mail")
