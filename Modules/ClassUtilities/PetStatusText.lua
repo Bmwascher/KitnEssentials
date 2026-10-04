@@ -203,6 +203,11 @@ local function CheckPetStatus()
     if isGrimoireClass and C_SpellBook.IsSpellKnown(108503, SpellBookBank_Player) then
         local hasPet = UnitExists("pet")
         local hidden = KE:IsAuraHiddenForSpell(196099)
+        -- Hidden, a missing buff proves nothing: no pet stays silent, and a
+        -- remembered death waits until the buff can be read.
+        if not hasPet and hidden then
+            return PET_STATUS.NONE, nil, nil
+        end
         if (not hasPet or UnitIsDeadOrGhost("pet")) and not hidden
             and C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID(196099) then
             petDeathTracked = false

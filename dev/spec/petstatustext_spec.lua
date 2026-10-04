@@ -93,7 +93,7 @@ describe("PetStatusText Grimoire of Sacrifice after a death", function()
             { name = "buff present while the dead pet still exists",
               state = { hasPet = true, petDead = true, aura = { spellId = GRIMOIRE } }, expect = nil },
             { name = "buff hidden, no pet, after the death",
-              state = { hasPet = false, petDead = false, aurasHidden = true }, expect = "PET DEAD" },
+              state = { hasPet = false, petDead = false, aurasHidden = true }, expect = nil },
             { name = "buff hidden while the dead pet still exists",
               state = { hasPet = true, petDead = true, aurasHidden = true }, expect = "PET DEAD" },
             { name = "buff absent after a real death",
