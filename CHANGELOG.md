@@ -1,5 +1,23 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.27
+
+### Settings Window
+
+- Switching pages reuses rows and controls instead of leaving the old ones
+  behind, so memory no longer grows as you browse settings
+- Escape in a slider's number box cancels what you typed instead of applying
+  it
+- Enter in a slider's number box applies once; text that is not a number
+  only restores the display
+- Enter in a text box runs its setting once (PI Target prints its line once)
+
+### World Markers
+
+- A key capture left waiting when its page is rebuilt is cancelled
+
+---
+
 ## v4.8.26
 
 ### Chat
