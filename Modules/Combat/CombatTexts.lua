@@ -70,7 +70,8 @@ CM.lastAcceptedCastGUID = nil
 CM.lastUnkeyedAcceptAt = nil
 CM.reverseInterruptAt = nil
 CM.reverseInterruptSuccessSpellID = nil
--- Lets an external line's owner re-home it when this module turns on or off.
+-- Sent on enable and disable, so an external line's owner can move its text
+-- between its own frame and this stack.
 CM.CHANGED_MESSAGE = "KitnEssentials_CombatTextsChanged"
 
 ---------------------------------------------------------------------------------
@@ -587,8 +588,8 @@ function CM:HidePreview()
         if frame then frame:Hide() end
         self.activeMessages[msgType] = nil
     end
-    -- Re-stacked only when such a line survives: the arrange shrinks the
-    -- container, which moves anything anchored to its top.
+    -- Re-arranged only while such a line is still shown: the arrange shrinks
+    -- the container, which moves anything anchored to its top.
     for _, key in ipairs(EXTERNAL_LINE_TYPES) do
         local frame = self.messageFrames[key]
         if frame and frame:IsShown() then

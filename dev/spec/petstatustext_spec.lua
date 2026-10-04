@@ -18,9 +18,10 @@ describe("PetStatusText missing-pet verdict", function()
         assert.is_true(rec.shown)
     end)
 
-    it("stays silent for a Warlock whose Grimoire is readable and present", function()
+    it("stays silent for a Warlock without the talent whose Grimoire is readable and present", function()
         local PS, rec = L.loadPetStatusText({
             class = "WARLOCK", specID = AFFLICTION, hasPet = false, aura = { spellId = GRIMOIRE },
+            unknownSpells = { [108503] = true },
         })
         PS:UpdatePetText()
         assert.is_nil(rec.text)
@@ -34,12 +35,14 @@ describe("PetStatusText missing-pet verdict", function()
         assert.is_false(rec.shown)
     end)
 
-    it("REFUSES to accuse a Warlock while aura identities are hidden", function()
+    it("REFUSES to accuse a Warlock without the talent while aura identities are hidden", function()
         -- The defect. The Grimoire search cannot succeed here, so the old code
         -- read its own blindness as proof the pet was missing and said so for
-        -- the whole pull.
+        -- the whole pull. Without the talent, so the Missing branch's own guard
+        -- is what refuses; a talent holder returns earlier.
         local PS, rec = L.loadPetStatusText({
             class = "WARLOCK", specID = AFFLICTION, hasPet = false, aurasHidden = true,
+            unknownSpells = { [108503] = true },
         })
         PS:UpdatePetText()
         assert.is_nil(rec.text)
@@ -66,10 +69,11 @@ describe("pet status per-spell secrecy", function()
                  ShouldAurasBeSecret = function() return true end }
     end
 
-    it("refuses when the exact predicate says the sacrifice aura is secret", function()
+    it("refuses a Warlock without the talent when the exact predicate says the sacrifice aura is secret", function()
         local PS, rec = L.loadPetStatusText({
             class = "WARLOCK", specID = 265, hasPet = false,
             aurasHidden = false, C_Secrets = secrets(true),
+            unknownSpells = { [108503] = true },
         })
         PS:UpdatePetText()
         assert.is_false(rec.shown)

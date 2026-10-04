@@ -384,7 +384,8 @@ function PS:ApplySettings()
     if self.isPreview then
         self:ShowPreview(self.previewState)
     elseif self._tracking and (self.db.AttachToCombatTexts or self.externalShown) then
-        -- Only the attach state can move the live text between homes.
+        -- Repaint now only when attached or a line is still up; a detached
+        -- settings change waits for the next pet event.
         self:UpdatePetText()
     end
 end
@@ -394,8 +395,8 @@ end
 ---------------------------------------------------------------------------------
 function PS:RegWithEditMode()
     if not KE.EditMode then return end
-    -- Attached, Combat Texts owns the spot; a second mover for it would fight
-    -- that module's own.
+    -- Attached, the text is a Combat Texts line; a second Edit Mode mover for
+    -- it would conflict with the Combat Texts mover.
     if GetAttachTarget() then
         if self.editModeRegistered then
             KE.EditMode:UnregisterElement("PetStatusText")
