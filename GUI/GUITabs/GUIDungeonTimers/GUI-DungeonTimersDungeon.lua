@@ -26,10 +26,10 @@
 -- ║  user-configurable knob today). Future N13d-g sub-phases ║
 -- ║  fill remaining fields without further rebuilds.         ║
 -- ║                                                          ║
--- ║  Memory: list rows are pooled via KE.FramePool; detail-  ║
--- ║  pane widgets are built per render but persist in pool   ║
--- ║  via the same ReleaseAll hook so RefreshContent doesn't  ║
--- ║  churn allocations across spell/tab clicks.              ║
+-- ║  Memory: list rows come from a KE.FramePool; the detail  ║
+-- ║  pane's frames, captions and widgets come from widget    ║
+-- ║  pools, so a spell or tab click rebuilds the page        ║
+-- ║  without creating frames.                                ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -85,6 +85,127 @@ local CURATED_TAG_COLOR = { 0.65, 0.65, 0.65 }
 -- button so destructive UX is consistent across the addon.
 local REMOVE_COLOR = { 0.9, 0.2, 0.2, 1 }
 
+---------------------------------------------------------------------------------
+-- Pooled containers. A host hands out its own captions and lines, so a builder
+-- never adds a region the pool would reject, and widgets built under a host
+-- come from their pools.
+---------------------------------------------------------------------------------
+
+---@class KE.DTDHost : Frame
+---@field _keTexts FontString[]
+---@field _keLines Texture[]
+---@field _keTextUsed integer
+---@field _keLineUsed integer
+local HostMethods = {}
+
+-- The next unused caption, put back to what a new FontString has: the next
+-- builder may set less than the last one did. The font only lets the text be
+-- cleared; every builder applies its own.
+---@return FontString
+function HostMethods:Text()
+    local n = self._keTextUsed + 1
+    self._keTextUsed = n
+    local fs = self._keTexts[n]
+    if not fs then
+        fs = self:CreateFontString(nil, "OVERLAY")
+        self._keTexts[n] = fs
+        GUIFrame:PoolGrow(self, self, 0, 1)
+    end
+    fs:SetDrawLayer("OVERLAY")
+    fs:ClearAllPoints()
+    fs:SetSize(0, 0)
+    fs:SetJustifyH("CENTER")
+    fs:SetJustifyV("MIDDLE")
+    fs:SetWordWrap(true)
+    fs:SetAlpha(1)
+    fs:SetTextColor(1, 1, 1, 1)
+    KE:ApplyThemeFont(fs, "normal")
+    fs:SetText("")
+    fs:Show()
+    return fs
+end
+
+-- The next unused line, put back to what a new texture has.
+---@return Texture
+function HostMethods:Line()
+    local n = self._keLineUsed + 1
+    self._keLineUsed = n
+    local tex = self._keLines[n]
+    if not tex then
+        tex = self:CreateTexture(nil, "ARTWORK")
+        self._keLines[n] = tex
+        GUIFrame:PoolGrow(self, self, 0, 1)
+    end
+    tex:SetDrawLayer("ARTWORK", 0)
+    tex:ClearAllPoints()
+    tex:SetSize(0, 0)
+    tex:SetTexture(nil)
+    tex:SetTexCoord(0, 1, 0, 1)
+    tex:SetVertexColor(1, 1, 1, 1)
+    tex:SetAlpha(1)
+    tex:Show()
+    return tex
+end
+
+---@param host Frame
+---@return KE.DTDHost
+local function InitHost(host)
+    ---@cast host KE.DTDHost
+    host._keTexts = {}
+    host._keLines = {}
+    host._keTextUsed = 0
+    host._keLineUsed = 0
+    for name, fn in pairs(HostMethods) do
+        host[name] = fn
+    end
+    host._keOwned = { host }
+    return host
+end
+
+local function ConstructHost(parent)
+    return InitHost(CreateFrame("Frame", nil, parent))
+end
+
+local PANEL_BACKDROP = {
+    bgFile   = "Interface\\Buttons\\WHITE8x8",
+    edgeFile = "Interface\\Buttons\\WHITE8x8",
+    edgeSize = 1,
+}
+
+-- The backdrop is set here, once, so its textures are part of the baseline.
+local function ConstructPanel(parent)
+    local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    panel:SetBackdrop(PANEL_BACKDROP)
+    return InitHost(panel)
+end
+
+-- Every child goes through ReleaseTracked, so a frame a builder made directly
+-- is orphaned alone instead of retiring the host. Captions and lines are
+-- unanchored so a parked one holds no anchor to a widget another page now uses.
+local function ResetHost(host)
+    if host:GetNumChildren() > 0 then
+        for _, child in ipairs({ host:GetChildren() }) do
+            GUIFrame:ReleaseTracked(child, host)
+        end
+    end
+    local texts, lines = host._keTexts, host._keLines
+    for i = 1, host._keTextUsed do
+        texts[i]:Hide()
+        texts[i]:ClearAllPoints()
+    end
+    for i = 1, host._keLineUsed do
+        lines[i]:Hide()
+        lines[i]:ClearAllPoints()
+    end
+    host._keTextUsed = 0
+    host._keLineUsed = 0
+    host:SetSize(0, 0)
+    host:EnableMouse(false)
+end
+
+GUIFrame:NewWidgetPool("dtd:host", ConstructHost, ResetHost, true)
+GUIFrame:NewWidgetPool("dtd:panel", ConstructPanel, ResetHost, true)
+
 -- Section header for the Visibility tab body. Small accent-colored label
 -- followed by a thin underline that runs to the right edge — gives clear
 -- semantic grouping ("WHO SEES IT", "WHEN IT APPEARS") without nesting
@@ -92,13 +213,16 @@ local REMOVE_COLOR = { 0.9, 0.2, 0.2, 1 }
 -- subsequent content to its BOTTOMLEFT.
 local function CreateSectionHeader(parent, anchorFrame, text, yPad)
     local T = KE.Theme
-    local label = parent:CreateFontString(nil, "OVERLAY")
+    -- Only a pooled host hands out captions and lines. Its own list is the
+    -- test: another frame may carry something else under the name Text.
+    local isHost = parent._keTexts ~= nil
+    local label = isHost and parent:Text() or parent:CreateFontString(nil, "OVERLAY")
     KE:ApplyFontToText(label, "Expressway", 13, "OUTLINE")
     label:SetTextColor(T.accent[1], T.accent[2], T.accent[3])
     label:SetText(text)
     label:SetPoint("TOPLEFT", anchorFrame, "BOTTOMLEFT", 0, -(yPad or 14))
 
-    local underline = parent:CreateTexture(nil, "ARTWORK")
+    local underline = isHost and parent:Line() or parent:CreateTexture(nil, "ARTWORK")
     underline:SetHeight(1)
     underline:SetColorTexture(T.accent[1], T.accent[2], T.accent[3], 0.4)
     underline:SetPoint("LEFT", label, "RIGHT", 6, 0)
@@ -534,7 +658,7 @@ local function ResetListRow(kit)
     -- Clear anchors so re-Acquire's SetPoint starts from a clean slate. Without
     -- this, in rare cases the kit can hold a stale TOPLEFT anchor referencing
     -- the previous render's leftCol (which the page teardown has since
-    -- released or orphaned). The new SetPoint usually replaces cleanly, but if
+    -- released). The new SetPoint usually replaces cleanly, but if
     -- WoW's frame system delivers a layout pass between the SetParent + SetPoint
     -- calls, the row can render at the stale position (off-screen relative to
     -- the new leftCol) and look "missing".
@@ -715,9 +839,9 @@ local function RefreshListRowTag(spellId)
 end
 
 ---------------------------------------------------------------------------------
--- Detail pane (right column). Built fresh per render — Show/Hide on tab
--- content frames toggles which body is visible. State writes go straight
--- through to DT helpers; selection (which spell) lives in _state.
+-- Detail pane (right column). Each render builds the selected tab's body on
+-- pooled hosts. State writes go straight through to DT helpers; selection
+-- (which spell) lives in _state.
 ---------------------------------------------------------------------------------
 
 -- Builds the Visibility tab body. Today: a friendly "Default: X" subtitle +
@@ -729,18 +853,18 @@ end
 -- the three labels (Tank / Healer / DPS) line up cleanly without overlap.
 local function BuildVisibilityTabBody(parent, spellId, spell)
     local DT = GetModule()
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     -- Section: Master — section header above the Enable toggle for
     -- consistency with the two sections below.
-    local masterHeader = body:CreateFontString(nil, "OVERLAY")
+    local masterHeader = body:Text()
     KE:ApplyFontToText(masterHeader, "Expressway", 13, "OUTLINE")
     masterHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     masterHeader:SetText("Master")
     masterHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", masterHeader, "RIGHT", 6, 0)
@@ -786,7 +910,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
 
     -- Sub-label for the role toggles (small grey caption, not a section
     -- header — the section header above already groups this content).
-    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    local sectionLabel = body:Text()
     KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
     sectionLabel:SetPoint("TOPLEFT", whoHeader, "BOTTOMLEFT", 0, -10)
     sectionLabel:SetTextColor(0.85, 0.85, 0.85)
@@ -830,7 +954,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- anchors to this label, not firstToggle, so it sits below correctly.
     local defaultLabel
     if firstToggle then
-        defaultLabel = body:CreateFontString(nil, "OVERLAY")
+        defaultLabel = body:Text()
         KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
         defaultLabel:SetPoint("TOPLEFT", firstToggle, "BOTTOMLEFT", 0, -8)
         defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
@@ -895,7 +1019,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
 
     -- Caption under the slider — explains the 0-position semantic and the
     -- group-default fallback so users don't have to guess.
-    local sliderCaption = body:CreateFontString(nil, "OVERLAY")
+    local sliderCaption = body:Text()
     KE:ApplyFontToText(sliderCaption, "Expressway", 11, "OUTLINE")
     sliderCaption:SetPoint("TOPLEFT", revealSliderRow, "BOTTOMLEFT", 8, -12)
     sliderCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -907,7 +1031,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- the same section so they don't read as one continuous slider stack.
     -- Indented from the section edges so it reads as "inside" rather than
     -- a section break (which would imply a new section header).
-    local sliderSpacer = body:CreateTexture(nil, "ARTWORK")
+    local sliderSpacer = body:Line()
     sliderSpacer:SetHeight(1)
     sliderSpacer:SetColorTexture(KE.Theme.divider[1], KE.Theme.divider[2], KE.Theme.divider[3], 0.35)
     sliderSpacer:SetPoint("LEFT",  body, "LEFT",  DETAIL_PADDING + 16, 0)
@@ -950,7 +1074,7 @@ local function BuildVisibilityTabBody(parent, spellId, spell)
     -- all. Spells with curated=0 (channels, no-cast spells) only support
     -- positive offsets, so the negative half of the explanation would
     -- mislead. Show only the relevant direction.
-    local timeOffsetCaption = body:CreateFontString(nil, "OVERLAY")
+    local timeOffsetCaption = body:Text()
     KE:ApplyFontToText(timeOffsetCaption, "Expressway", 11, "OUTLINE")
     timeOffsetCaption:SetPoint("TOPLEFT", timeOffsetRow, "BOTTOMLEFT", 8, -12)
     timeOffsetCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1028,7 +1152,7 @@ end
 -- clears the override.
 local function BuildActionsTabBody(parent, spellId)
     local DT = GetModule()
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     -- Build sound list from LibSharedMedia. "None" prepended explicitly
@@ -1059,13 +1183,13 @@ local function BuildActionsTabBody(parent, spellId)
     ---------------------------------------------------------------------------
     -- Section: On Show
     ---------------------------------------------------------------------------
-    local showHeader = body:CreateFontString(nil, "OVERLAY")
+    local showHeader = body:Text()
     KE:ApplyFontToText(showHeader, "Expressway", 13, "OUTLINE")
     showHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     showHeader:SetText("On Show")
     showHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", showHeader, "RIGHT", 6, 0)
@@ -1110,7 +1234,7 @@ local function BuildActionsTabBody(parent, spellId)
     showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = showTestBtn
 
-    local showCaption = body:CreateFontString(nil, "OVERLAY")
+    local showCaption = body:Text()
     KE:ApplyFontToText(showCaption, "Expressway", 11, "OUTLINE")
     showCaption:SetPoint("TOPLEFT", showRow, "BOTTOMLEFT", 0, -8)
     showCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1153,7 +1277,7 @@ local function BuildActionsTabBody(parent, spellId)
     hideRow:AddWidget(hideTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = hideTestBtn
 
-    local hideCaption = body:CreateFontString(nil, "OVERLAY")
+    local hideCaption = body:Text()
     KE:ApplyFontToText(hideCaption, "Expressway", 11, "OUTLINE")
     hideCaption:SetPoint("TOPLEFT", hideRow, "BOTTOMLEFT", 0, -8)
     hideCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1191,109 +1315,192 @@ local SEG_BTN_WIDTH    = 100
 local SEG_BTN_HEIGHT   = 30
 local SEG_BTN_SPACING  = 4
 
----@param options { id: string, label: string }[]
-local function CreateSegmentedToggle(parent, options, currentId, onChange)
-    local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(SEG_BTN_HEIGHT)
-    row:SetWidth((#options * SEG_BTN_WIDTH) + ((#options - 1) * SEG_BTN_SPACING))
+-- Per-use state (enabled, active id, change callback) lives on the toggle, so
+-- the button scripts are set once and read it when they run.
+local function PaintSegButton(seg, btn, isHover)
+    local T = KE.Theme
+    if not seg._enabled then
+        btn:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
+        btn:SetBackdropBorderColor(T.controlBorder[1], T.controlBorder[2], T.controlBorder[3], 1)
+        btn:SetAlpha(0.5)
+        btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        return
+    end
+    btn:SetAlpha(1)
+    if btn._id == seg._activeId then
+        -- Active = accent-tinted fill + accent border. Brighter than hover
+        -- so the selected option reads as "stuck on" not "transient hover".
+        btn:SetBackdropColor(T.accent[1] * 0.35, T.accent[2] * 0.35, T.accent[3] * 0.35, 0.9)
+        btn:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        btn.text:SetTextColor(1, 1, 1, 1)
+    elseif isHover then
+        -- Hover on inactive: accent border only, fill stays neutral.
+        btn:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
+        btn:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 1)
+        btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
+    else
+        btn:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
+        btn:SetBackdropBorderColor(T.controlBorder[1], T.controlBorder[2], T.controlBorder[3], 1)
+        btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1)
+    end
+end
+
+local function RepaintSeg(seg)
+    for _, btn in ipairs(seg._keButtons) do
+        PaintSegButton(seg, btn, false)
+    end
+end
+
+local function SegButtonOnEnter(btn)
+    local seg = btn._keSeg
+    if seg._enabled and btn._id ~= seg._activeId then
+        PaintSegButton(seg, btn, true)
+    end
+end
+
+local function SegButtonOnLeave(btn)
+    local seg = btn._keSeg
+    if seg._enabled and btn._id ~= seg._activeId then
+        PaintSegButton(seg, btn, false)
+    end
+end
+
+local function SegButtonOnClick(btn)
+    local seg = btn._keSeg
+    if not seg._enabled or btn._id == seg._activeId then return end
+    seg._activeId = btn._id
+    RepaintSeg(seg)
+    local onChange = seg._onChange
+    if onChange then onChange(btn._id) end
+end
+
+-- Built for exactly two options, which is what every caller passes.
+local function ConstructSegmentedToggle(parent)
+    local seg = CreateFrame("Frame", nil, parent)
+    seg:SetHeight(SEG_BTN_HEIGHT)
+    seg:SetWidth(2 * SEG_BTN_WIDTH + SEG_BTN_SPACING)
 
     local buttons = {}
-    local enabled = true
-
-    local function PaintButton(btn, isActive, isHover)
-        local T = KE.Theme
-        if not enabled then
-            btn:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
-            btn:SetBackdropBorderColor(T.controlBorder[1], T.controlBorder[2], T.controlBorder[3], 1)
-            btn:SetAlpha(0.5)
-            if btn.text then btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1) end
-            return
-        end
-        btn:SetAlpha(1)
-        if isActive then
-            -- Active = accent-tinted fill + accent border. Brighter than hover
-            -- so the selected option reads as "stuck on" not "transient hover".
-            btn:SetBackdropColor(T.accent[1] * 0.35, T.accent[2] * 0.35, T.accent[3] * 0.35, 0.9)
-            btn:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 1)
-            if btn.text then btn.text:SetTextColor(1, 1, 1, 1) end
-        elseif isHover then
-            -- Hover on inactive: accent border only, fill stays neutral.
-            btn:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
-            btn:SetBackdropBorderColor(T.accent[1], T.accent[2], T.accent[3], 1)
-            if btn.text then btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1) end
-        else
-            -- Idle inactive
-            btn:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
-            btn:SetBackdropBorderColor(T.controlBorder[1], T.controlBorder[2], T.controlBorder[3], 1)
-            if btn.text then btn.text:SetTextColor(T.accent[1], T.accent[2], T.accent[3], 1) end
-        end
-    end
-
-    local activeId = currentId
-
-    local function RepaintAll()
-        for _, btn in ipairs(buttons) do
-            PaintButton(btn, btn._id == activeId, false)
-        end
-    end
-
-    for i, opt in ipairs(options) do
-        local btn = CreateFrame("Button", nil, row, "BackdropTemplate")
+    for i = 1, 2 do
+        local btn = CreateFrame("Button", nil, seg, "BackdropTemplate")
         btn:SetSize(SEG_BTN_WIDTH, SEG_BTN_HEIGHT)
-        btn:SetPoint("LEFT", row, "LEFT",
+        btn:SetPoint("LEFT", seg, "LEFT",
             (i - 1) * (SEG_BTN_WIDTH + SEG_BTN_SPACING), 0)
         btn:SetBackdrop({
             bgFile   = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\Buttons\\WHITE8X8",
             edgeSize = 1,
         })
-        btn._id = opt.id
-
         btn.text = btn:CreateFontString(nil, "OVERLAY")
-        KE:ApplyThemeFont(btn.text, "normal")
         btn.text:SetPoint("CENTER")
-        btn.text:SetText(opt.label)
+        btn._keSeg = seg
+        btn:SetScript("OnEnter", SegButtonOnEnter)
+        btn:SetScript("OnLeave", SegButtonOnLeave)
+        btn:SetScript("OnClick", SegButtonOnClick)
+        buttons[i] = btn
+    end
+    seg._keButtons = buttons
 
-        btn:SetScript("OnEnter", function(self)
-            if not enabled then return end
-            if self._id ~= activeId then
-                PaintButton(self, false, true)
-            end
-        end)
-        btn:SetScript("OnLeave", function(self)
-            if not enabled then return end
-            if self._id ~= activeId then
-                PaintButton(self, false, false)
-            end
-        end)
-        btn:SetScript("OnClick", function(self)
-            if not enabled then return end
-            if self._id == activeId then return end
-            activeId = self._id
-            RepaintAll()
-            if onChange then onChange(self._id) end
-        end)
-
-        buttons[#buttons + 1] = btn
+    function seg:SetActive(newId)
+        if newId == self._activeId then return end
+        self._activeId = newId
+        RepaintSeg(self)
     end
 
-    RepaintAll()
-
-    function row:SetActive(newId)
-        if newId == activeId then return end
-        activeId = newId
-        RepaintAll()
-    end
-
-    function row:SetEnabled(isEnabled)
-        enabled = isEnabled and true or false
-        RepaintAll()
-        for _, btn in ipairs(buttons) do
-            btn:EnableMouse(enabled)
+    function seg:SetEnabled(isEnabled)
+        self._enabled = isEnabled and true or false
+        RepaintSeg(self)
+        for _, btn in ipairs(self._keButtons) do
+            btn:EnableMouse(self._enabled)
         end
     end
 
-    return row
+    seg._keOwned = { seg, buttons[1], buttons[2] }
+    return seg
+end
+
+GUIFrame:NewWidgetPool("dtd:seg", ConstructSegmentedToggle, function() end)
+
+---@param options { id: string, label: string }[]
+local function CreateSegmentedToggle(parent, options, currentId, onChange)
+    local seg = GUIFrame:AcquirePooled("dtd:seg", parent)
+    for i, btn in ipairs(seg._keButtons) do
+        local opt = options[i]
+        btn._id = opt.id
+        KE:ApplyThemeFont(btn.text, "normal")
+        btn.text:SetText(opt.label)
+        btn:EnableMouse(true)
+    end
+    seg._enabled = true
+    seg._activeId = currentId
+    seg._onChange = onChange
+    RepaintSeg(seg)
+    return seg
+end
+
+---------------------------------------------------------------------------------
+-- Preset chip. The click callback is per use; the hover and click scripts are
+-- set once and read it.
+---------------------------------------------------------------------------------
+local function ChipOnEnter(chip)
+    local a = KE.Theme.accent
+    chip:SetBackdropBorderColor(a[1], a[2], a[3], 1)
+end
+
+local function ChipOnLeave(chip)
+    local c = KE.Theme.controlBorder
+    chip:SetBackdropBorderColor(c[1], c[2], c[3], 1)
+end
+
+local function ChipOnClick(chip)
+    local onClick = chip._onClick
+    if onClick then onClick() end
+end
+
+local function ConstructChip(parent)
+    local chip = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    chip:SetBackdrop({
+        bgFile   = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    local txt = chip:CreateFontString(nil, "OVERLAY")
+    txt:SetPoint("CENTER")
+    chip._keText = txt
+
+    chip:SetScript("OnEnter", ChipOnEnter)
+    chip:SetScript("OnLeave", ChipOnLeave)
+    chip:SetScript("OnClick", ChipOnClick)
+
+    function chip:SetEnabled(enabled)
+        if enabled then
+            self:Enable()
+            self:EnableMouse(true)
+            self:SetAlpha(1)
+        else
+            self:Disable()
+            self:EnableMouse(false)
+            self:SetAlpha(0.5)
+        end
+    end
+
+    chip._keOwned = { chip }
+    return chip
+end
+
+GUIFrame:NewWidgetPool("dtd:chip", ConstructChip, function() end)
+
+-- The text takes the preset's own color, which is the color the bar gets.
+local function ConfigureChip(chip, label, color, onClick)
+    local T = KE.Theme
+    chip:SetBackdropColor(T.controlBg[1], T.controlBg[2], T.controlBg[3], T.controlBg[4])
+    chip:SetBackdropBorderColor(T.controlBorder[1], T.controlBorder[2], T.controlBorder[3], 1)
+    local txt = chip._keText
+    KE:ApplyFontToText(txt, "Expressway", 12, "OUTLINE")
+    txt:SetText(label)
+    txt:SetTextColor(color[1], color[2], color[3], 1)
+    chip._onClick = onClick
+    chip:SetEnabled(true)
 end
 
 -- Builds the Display tab body. N13f's first knob: bar/text mode toggle.
@@ -1301,17 +1508,17 @@ end
 -- below the mode section as additional CreateSectionHeader blocks.
 local function BuildDisplayTabBody(parent, spellId, _)
     local DT = GetModule()
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     -- Section: Display Mode
-    local modeHeader = body:CreateFontString(nil, "OVERLAY")
+    local modeHeader = body:Text()
     KE:ApplyFontToText(modeHeader, "Expressway", 13, "OUTLINE")
     modeHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     modeHeader:SetText("Display Mode")
     modeHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", modeHeader, "RIGHT", 6, 0)
@@ -1320,7 +1527,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
     end
 
     -- Sub-label above the toggle row.
-    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    local sectionLabel = body:Text()
     KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
     sectionLabel:SetPoint("TOPLEFT", modeHeader, "BOTTOMLEFT", 0, -14)
     sectionLabel:SetTextColor(0.85, 0.85, 0.85)
@@ -1362,7 +1569,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
     -- a floating tag at the panel's far edge.
     local curatedDisplay = (DT and DT:GetSpellCuratorDisplay(spellId)) or "text"
     local curatedFriendly = (curatedDisplay == "bar") and "Bar" or "Text"
-    local defaultLabel = body:CreateFontString(nil, "OVERLAY")
+    local defaultLabel = body:Text()
     KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
     defaultLabel:SetPoint("LEFT", toggle, "RIGHT", 16, 0)
     defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
@@ -1370,7 +1577,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
     defaultLabel:SetText(string_format("Default: %s", curatedFriendly))
 
     -- Caption below the toggle — explains what each mode looks like.
-    local caption = body:CreateFontString(nil, "OVERLAY")
+    local caption = body:Text()
     KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
     caption:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -12)
     caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1417,7 +1624,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
     -- Caption below the editbox. Reads the curator's default. When no
     -- curated value exists, the bar falls back to the BigWigs spell name —
     -- explain that so users know what "default" looks like.
-    local labelCaption = body:CreateFontString(nil, "OVERLAY")
+    local labelCaption = body:Text()
     KE:ApplyFontToText(labelCaption, "Expressway", 11, "OUTLINE")
     labelCaption:SetPoint("TOPLEFT", labelEditRow, "BOTTOMLEFT", 0, -8)
     labelCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1463,7 +1670,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
     local CHIP_VGAP    = 4
     local CHIPS_PER_ROW = 5
 
-    local presetGrid = CreateFrame("Frame", nil, body)
+    local presetGrid = GUIFrame:AcquirePooled("dtd:host", body)
     presetGrid:SetPoint("TOPLEFT", presetHeader, "BOTTOMLEFT", 0, -10)
     presetGrid:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
 
@@ -1472,42 +1679,14 @@ local function BuildDisplayTabBody(parent, spellId, _)
         local row = math.floor((i - 1) / CHIPS_PER_ROW)
         local col = (i - 1) % CHIPS_PER_ROW
 
-        local chip = CreateFrame("Button", nil, presetGrid, "BackdropTemplate")
+        local chip = GUIFrame:AcquirePooled("dtd:chip", presetGrid)
         chip:SetSize(CHIP_WIDTH, CHIP_HEIGHT)
         chip:SetPoint("TOPLEFT", presetGrid, "TOPLEFT",
             col * (CHIP_WIDTH + CHIP_HGAP),
             -row * (CHIP_HEIGHT + CHIP_VGAP))
-        chip:SetBackdrop({
-            bgFile   = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8",
-            edgeSize = 1,
-        })
-        chip:SetBackdropColor(KE.Theme.controlBg[1], KE.Theme.controlBg[2],
-                              KE.Theme.controlBg[3], KE.Theme.controlBg[4])
-        chip:SetBackdropBorderColor(KE.Theme.controlBorder[1], KE.Theme.controlBorder[2],
-                                    KE.Theme.controlBorder[3], 1)
-
-        local txt = chip:CreateFontString(nil, "OVERLAY")
-        KE:ApplyFontToText(txt, "Expressway", 12, "OUTLINE")
-        txt:SetPoint("CENTER")
-        txt:SetText(p.label)
-        -- Render the chip text in the preset's own color so the palette
-        -- is self-documenting — DODGE shows orange, TANK HIT shows red,
-        -- etc. The bar will look identical when this preset is applied.
-        txt:SetTextColor(p.color[1], p.color[2], p.color[3], 1)
-        chip._txt = txt
-
-        chip:SetScript("OnEnter", function(self)
-            self:SetBackdropBorderColor(KE.Theme.accent[1], KE.Theme.accent[2],
-                                        KE.Theme.accent[3], 1)
-        end)
-        chip:SetScript("OnLeave", function(self)
-            self:SetBackdropBorderColor(KE.Theme.controlBorder[1], KE.Theme.controlBorder[2],
-                                        KE.Theme.controlBorder[3], 1)
-        end)
 
         local chipLabel = p.label  -- captured for the click closure
-        chip:SetScript("OnClick", function()
+        ConfigureChip(chip, chipLabel, p.color, function()
             if not (DT and DT.SetSpellDisplayTextOverride) then return end
             DT:SetSpellDisplayTextOverride(spellId, chipLabel)
             -- Sync the editbox with whatever was actually stored. If the
@@ -1519,18 +1698,6 @@ local function BuildDisplayTabBody(parent, spellId, _)
             if refreshColorPicker then refreshColorPicker() end
             RefreshSpellPreview()
         end)
-
-        function chip:SetEnabled(enabled)
-            if enabled then
-                self:Enable()
-                self:EnableMouse(true)
-                self:SetAlpha(1)
-            else
-                self:Disable()
-                self:EnableMouse(false)
-                self:SetAlpha(0.5)
-            end
-        end
 
         secondaryWidgets[#secondaryWidgets + 1] = chip
     end
@@ -1545,7 +1712,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
     end
 
     -- Caption under the grid — explains the click + custom-text behavior.
-    local presetCaption = body:CreateFontString(nil, "OVERLAY")
+    local presetCaption = body:Text()
     KE:ApplyFontToText(presetCaption, "Expressway", 11, "OUTLINE")
     presetCaption:SetPoint("TOPLEFT", presetGrid, "BOTTOMLEFT", 0, -8)
     presetCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1589,7 +1756,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
     -- x=0 (not 8) so subsequent CreateSectionHeader chains don't inherit
     -- an indent. Other Display-tab captions all use x=0; mirroring keeps
     -- the section-header anchor chain at body.left + DETAIL_PADDING.
-    local thresholdCaption = body:CreateFontString(nil, "OVERLAY")
+    local thresholdCaption = body:Text()
     KE:ApplyFontToText(thresholdCaption, "Expressway", 11, "OUTLINE")
     thresholdCaption:SetPoint("TOPLEFT", thresholdRow, "BOTTOMLEFT", 0, -12)
     thresholdCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1650,7 +1817,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
     -- from its natural 130px to ~220px. Direct positioning lets each
     -- widget keep its natural width and the swatch sits next to the
     -- button instead of half a screen apart.
-    local colorRow = CreateFrame("Frame", nil, body)
+    local colorRow = GUIFrame:AcquirePooled("dtd:host", body)
     colorRow:SetHeight(36)
     colorRow:SetPoint("TOPLEFT", colorHeader, "BOTTOMLEFT", 0, -10)
     colorRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1719,7 +1886,7 @@ local function BuildDisplayTabBody(parent, spellId, _)
 
     -- Caption under the color row — explains the resolution chain so
     -- users understand what "default" means in this context.
-    local colorCaption = body:CreateFontString(nil, "OVERLAY")
+    local colorCaption = body:Text()
     KE:ApplyFontToText(colorCaption, "Expressway", 11, "OUTLINE")
     colorCaption:SetPoint("TOPLEFT", colorRow, "BOTTOMLEFT", 0, -8)
     colorCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1752,17 +1919,17 @@ end
 
 local function BuildPhaseVisibilityTabBody(parent, phaseKey, rule)
     local DT = GetModule()
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     -- Section: Master.
-    local masterHeader = body:CreateFontString(nil, "OVERLAY")
+    local masterHeader = body:Text()
     KE:ApplyFontToText(masterHeader, "Expressway", 13, "OUTLINE")
     masterHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     masterHeader:SetText("Master")
     masterHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", masterHeader, "RIGHT", 6, 0)
@@ -1798,7 +1965,7 @@ local function BuildPhaseVisibilityTabBody(parent, phaseKey, rule)
     local windowHeader = CreateSectionHeader(body, enableToggle, "When It Fires", 18)
 
     -- Description: explains threshold + lead window.
-    local desc = body:CreateFontString(nil, "OVERLAY")
+    local desc = body:Text()
     KE:ApplyFontToText(desc, "Expressway", 12, "OUTLINE")
     desc:SetPoint("TOPLEFT", windowHeader, "BOTTOMLEFT", 0, -10)
     desc:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1837,7 +2004,7 @@ local function BuildPhaseVisibilityTabBody(parent, phaseKey, rule)
     leadRow:AddWidget(leadSlider, 1.0, 0)
     secondaryWidgets[#secondaryWidgets + 1] = leadSlider
 
-    local leadCaption = body:CreateFontString(nil, "OVERLAY")
+    local leadCaption = body:Text()
     KE:ApplyFontToText(leadCaption, "Expressway", 11, "OUTLINE")
     leadCaption:SetPoint("TOPLEFT", leadRow, "BOTTOMLEFT", 8, -12)
     leadCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1885,17 +2052,17 @@ end
 
 local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
     local DT = GetModule()
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     -- Section: Display Mode
-    local modeHeader = body:CreateFontString(nil, "OVERLAY")
+    local modeHeader = body:Text()
     KE:ApplyFontToText(modeHeader, "Expressway", 13, "OUTLINE")
     modeHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     modeHeader:SetText("Display Mode")
     modeHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", modeHeader, "RIGHT", 6, 0)
@@ -1903,7 +2070,7 @@ local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
         underline:SetPoint("TOP", modeHeader, "TOP", 0, -8)
     end
 
-    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    local sectionLabel = body:Text()
     KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
     sectionLabel:SetPoint("TOPLEFT", modeHeader, "BOTTOMLEFT", 0, -14)
     sectionLabel:SetTextColor(0.85, 0.85, 0.85)
@@ -1931,14 +2098,14 @@ local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
     toggle:SetPoint("TOPLEFT", sectionLabel, "BOTTOMLEFT", 0, -8)
     secondaryWidgets[#secondaryWidgets + 1] = toggle
 
-    local defaultLabel = body:CreateFontString(nil, "OVERLAY")
+    local defaultLabel = body:Text()
     KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
     defaultLabel:SetPoint("LEFT", toggle, "RIGHT", 16, 0)
     defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
     defaultLabel:SetJustifyH("LEFT")
     defaultLabel:SetText("Default: Text")
 
-    local caption = body:CreateFontString(nil, "OVERLAY")
+    local caption = body:Text()
     KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
     caption:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -12)
     caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1977,7 +2144,7 @@ local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
     labelEditRow:AddWidget(labelEdit, 1)
     secondaryWidgets[#secondaryWidgets + 1] = labelEdit
 
-    local labelCaption = body:CreateFontString(nil, "OVERLAY")
+    local labelCaption = body:Text()
     KE:ApplyFontToText(labelCaption, "Expressway", 11, "OUTLINE")
     labelCaption:SetPoint("TOPLEFT", labelEditRow, "BOTTOMLEFT", 0, -8)
     labelCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -1999,7 +2166,7 @@ local function BuildPhaseDisplayTabBody(parent, phaseKey, _)
 
     local effectiveColor = ResolveEffectivePhaseColor()
 
-    local colorRow = CreateFrame("Frame", nil, body)
+    local colorRow = GUIFrame:AcquirePooled("dtd:host", body)
     colorRow:SetHeight(36)
     colorRow:SetPoint("TOPLEFT", colorHeader, "BOTTOMLEFT", 0, -10)
     colorRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2062,7 +2229,7 @@ end
 
 local function BuildPhaseActionsTabBody(parent, phaseKey)
     local DT = GetModule()
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     local soundList = { ["None"] = "None" }
@@ -2088,13 +2255,13 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     local secondaryWidgets = {}
 
     -- Section: On Show
-    local showHeader = body:CreateFontString(nil, "OVERLAY")
+    local showHeader = body:Text()
     KE:ApplyFontToText(showHeader, "Expressway", 13, "OUTLINE")
     showHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     showHeader:SetText("On Show")
     showHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", showHeader, "RIGHT", 6, 0)
@@ -2136,7 +2303,7 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = showTestBtn
 
-    local showCaption = body:CreateFontString(nil, "OVERLAY")
+    local showCaption = body:Text()
     KE:ApplyFontToText(showCaption, "Expressway", 11, "OUTLINE")
     showCaption:SetPoint("TOPLEFT", showRow, "BOTTOMLEFT", 0, -8)
     showCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2181,7 +2348,7 @@ local function BuildPhaseActionsTabBody(parent, phaseKey)
     hideRow:AddWidget(hideTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = hideTestBtn
 
-    local hideCaption = body:CreateFontString(nil, "OVERLAY")
+    local hideCaption = body:Text()
     KE:ApplyFontToText(hideCaption, "Expressway", 11, "OUTLINE")
     hideCaption:SetPoint("TOPLEFT", hideRow, "BOTTOMLEFT", 0, -8)
     hideCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2203,8 +2370,7 @@ end
 -- Trash ability tab bodies. Trash rows are folded into the same list+detail
 -- editor as boss spells/phases (keyed "trash:mapID:npcID:spellID"); these three
 -- builders mirror the boss Visibility/Display/Actions tabs but read/write the
--- DungeonTrash override backend via explicit (mapID, npcID, spellID). Built
--- fresh per render like the boss tabs; teardown rides the same ReleaseAll hook.
+-- DungeonTrash override backend via explicit (mapID, npcID, spellID).
 -- Each takes the list `item` ({ id, data, mapID, npcID, spellID }).
 ---------------------------------------------------------------------------------
 local ROLE_TOKEN_TO_KEY = { TANK = "tank", HEALER = "healer", DAMAGER = "dps" }
@@ -2224,17 +2390,17 @@ local function BuildTrashVisibilityTabBody(parent, item)
     local DTrash = GetTrashModule()
     local m, n, s = item.mapID, item.npcID, item.spellID
     local key = item.id
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     -- Section: Master
-    local masterHeader = body:CreateFontString(nil, "OVERLAY")
+    local masterHeader = body:Text()
     KE:ApplyFontToText(masterHeader, "Expressway", 13, "OUTLINE")
     masterHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     masterHeader:SetText("Master")
     masterHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", masterHeader, "RIGHT", 6, 0)
@@ -2264,7 +2430,7 @@ local function BuildTrashVisibilityTabBody(parent, item)
     -- driven by the DungeonTrash role backend instead of the DungeonTimers one).
     local whoHeader = CreateSectionHeader(body, enableToggle, "Who Sees It", 16)
 
-    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    local sectionLabel = body:Text()
     KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
     sectionLabel:SetPoint("TOPLEFT", whoHeader, "BOTTOMLEFT", 0, -10)
     sectionLabel:SetTextColor(0.85, 0.85, 0.85)
@@ -2297,7 +2463,7 @@ local function BuildTrashVisibilityTabBody(parent, item)
 
     local defaultLabel
     if firstToggle then
-        defaultLabel = body:CreateFontString(nil, "OVERLAY")
+        defaultLabel = body:Text()
         KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
         defaultLabel:SetPoint("TOPLEFT", firstToggle, "BOTTOMLEFT", 0, -8)
         defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
@@ -2325,7 +2491,7 @@ local function BuildTrashVisibilityTabBody(parent, item)
     plateCheck:SetWidth(360)
     secondaryWidgets[#secondaryWidgets + 1] = plateCheck
 
-    local plateCaption = body:CreateFontString(nil, "OVERLAY")
+    local plateCaption = body:Text()
     KE:ApplyFontToText(plateCaption, "Expressway", 11, "OUTLINE")
     plateCaption:SetPoint("TOPLEFT", plateCheck, "BOTTOMLEFT", 0, -10)
     plateCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2358,7 +2524,7 @@ local function BuildTrashVisibilityTabBody(parent, item)
     revealRow:AddWidget(revealSlider, 1.0, 0)
     secondaryWidgets[#secondaryWidgets + 1] = revealSlider
 
-    local revealCaption = body:CreateFontString(nil, "OVERLAY")
+    local revealCaption = body:Text()
     KE:ApplyFontToText(revealCaption, "Expressway", 11, "OUTLINE")
     revealCaption:SetPoint("TOPLEFT", revealRow, "BOTTOMLEFT", 8, -12)
     revealCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2411,20 +2577,20 @@ local function BuildTrashDisplayTabBody(parent, item)
     local DT = GetModule()  -- DISPLAY_PRESETS palette lives on the DungeonTimers module
     local m, n, s = item.mapID, item.npcID, item.spellID
     local key = item.id
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     local secondaryWidgets = {}
     local refreshColorPicker  -- forward-declared; assigned after the picker exists
 
     -- Section: Display Mode
-    local modeHeader = body:CreateFontString(nil, "OVERLAY")
+    local modeHeader = body:Text()
     KE:ApplyFontToText(modeHeader, "Expressway", 13, "OUTLINE")
     modeHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     modeHeader:SetText("Display Mode")
     modeHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", modeHeader, "RIGHT", 6, 0)
@@ -2432,7 +2598,7 @@ local function BuildTrashDisplayTabBody(parent, item)
         underline:SetPoint("TOP", modeHeader, "TOP", 0, -8)
     end
 
-    local sectionLabel = body:CreateFontString(nil, "OVERLAY")
+    local sectionLabel = body:Text()
     KE:ApplyFontToText(sectionLabel, "Expressway", 12, "OUTLINE")
     sectionLabel:SetPoint("TOPLEFT", modeHeader, "BOTTOMLEFT", 0, -14)
     sectionLabel:SetTextColor(0.85, 0.85, 0.85)
@@ -2453,14 +2619,14 @@ local function BuildTrashDisplayTabBody(parent, item)
     secondaryWidgets[#secondaryWidgets + 1] = toggle
 
     local curatedDisplay = (DTrash and DTrash:GetSpellCuratedDisplay(m, n, s)) or "bar"
-    local defaultLabel = body:CreateFontString(nil, "OVERLAY")
+    local defaultLabel = body:Text()
     KE:ApplyFontToText(defaultLabel, "Expressway", 12, "OUTLINE")
     defaultLabel:SetPoint("LEFT", toggle, "RIGHT", 16, 0)
     defaultLabel:SetTextColor(CURATED_TAG_COLOR[1], CURATED_TAG_COLOR[2], CURATED_TAG_COLOR[3])
     defaultLabel:SetJustifyH("LEFT")
     defaultLabel:SetText(string_format("Default: %s", (curatedDisplay == "bar") and "Bar" or "Text"))
 
-    local caption = body:CreateFontString(nil, "OVERLAY")
+    local caption = body:Text()
     KE:ApplyFontToText(caption, "Expressway", 11, "OUTLINE")
     caption:SetPoint("TOPLEFT", toggle, "BOTTOMLEFT", 0, -12)
     caption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2492,7 +2658,7 @@ local function BuildTrashDisplayTabBody(parent, item)
     labelEditRow:AddWidget(labelEdit, 1)
     secondaryWidgets[#secondaryWidgets + 1] = labelEdit
 
-    local labelCaption = body:CreateFontString(nil, "OVERLAY")
+    local labelCaption = body:Text()
     KE:ApplyFontToText(labelCaption, "Expressway", 11, "OUTLINE")
     labelCaption:SetPoint("TOPLEFT", labelEditRow, "BOTTOMLEFT", 0, -8)
     labelCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2515,7 +2681,7 @@ local function BuildTrashDisplayTabBody(parent, item)
     end
 
     local CHIP_WIDTH, CHIP_HEIGHT, CHIP_HGAP, CHIP_VGAP, CHIPS_PER_ROW = 80, 24, 4, 4, 5
-    local presetGrid = CreateFrame("Frame", nil, body)
+    local presetGrid = GUIFrame:AcquirePooled("dtd:host", body)
     presetGrid:SetPoint("TOPLEFT", presetHeader, "BOTTOMLEFT", 0, -10)
     presetGrid:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
 
@@ -2523,29 +2689,12 @@ local function BuildTrashDisplayTabBody(parent, item)
         local p = DT.DISPLAY_PRESETS[k]
         local gridRow = math.floor((i - 1) / CHIPS_PER_ROW)
         local col = (i - 1) % CHIPS_PER_ROW
-        local chip = CreateFrame("Button", nil, presetGrid, "BackdropTemplate")
+        local chip = GUIFrame:AcquirePooled("dtd:chip", presetGrid)
         chip:SetSize(CHIP_WIDTH, CHIP_HEIGHT)
         chip:SetPoint("TOPLEFT", presetGrid, "TOPLEFT",
             col * (CHIP_WIDTH + CHIP_HGAP), -gridRow * (CHIP_HEIGHT + CHIP_VGAP))
-        chip:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1,
-        })
-        chip:SetBackdropColor(KE.Theme.controlBg[1], KE.Theme.controlBg[2], KE.Theme.controlBg[3], KE.Theme.controlBg[4])
-        chip:SetBackdropBorderColor(KE.Theme.controlBorder[1], KE.Theme.controlBorder[2], KE.Theme.controlBorder[3], 1)
-        local txt = chip:CreateFontString(nil, "OVERLAY")
-        KE:ApplyFontToText(txt, "Expressway", 12, "OUTLINE")
-        txt:SetPoint("CENTER")
-        txt:SetText(p.label)
-        txt:SetTextColor(p.color[1], p.color[2], p.color[3], 1)
-        chip:SetScript("OnEnter", function(self)
-            self:SetBackdropBorderColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 1)
-        end)
-        chip:SetScript("OnLeave", function(self)
-            self:SetBackdropBorderColor(KE.Theme.controlBorder[1], KE.Theme.controlBorder[2], KE.Theme.controlBorder[3], 1)
-        end)
         local chipLabel, chipColor = p.label, p.color
-        chip:SetScript("OnClick", function()
+        ConfigureChip(chip, chipLabel, chipColor, function()
             if not (DTrash and DTrash.SetSpellLabelOverride) then return end
             DTrash:SetSpellLabelOverride(m, n, s, chipLabel)
             DTrash:SetSpellColorOverride(m, n, s, { chipColor[1], chipColor[2], chipColor[3] })
@@ -2555,13 +2704,6 @@ local function BuildTrashDisplayTabBody(parent, item)
             RefreshOverrideStripe(key)
             RefreshTrashPreview()
         end)
-        function chip:SetEnabled(enabled)
-            if enabled then
-                self:Enable(); self:EnableMouse(true); self:SetAlpha(1)
-            else
-                self:Disable(); self:EnableMouse(false); self:SetAlpha(0.5)
-            end
-        end
         secondaryWidgets[#secondaryWidgets + 1] = chip
     end
 
@@ -2572,7 +2714,7 @@ local function BuildTrashDisplayTabBody(parent, item)
         presetGrid:SetHeight(1)
     end
 
-    local presetCaption = body:CreateFontString(nil, "OVERLAY")
+    local presetCaption = body:Text()
     KE:ApplyFontToText(presetCaption, "Expressway", 11, "OUTLINE")
     presetCaption:SetPoint("TOPLEFT", presetGrid, "BOTTOMLEFT", 0, -8)
     presetCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2588,7 +2730,7 @@ local function BuildTrashDisplayTabBody(parent, item)
     end
     local effectiveColor = ResolveEffectiveColor()
 
-    local colorRow = CreateFrame("Frame", nil, body)
+    local colorRow = GUIFrame:AcquirePooled("dtd:host", body)
     colorRow:SetHeight(36)
     colorRow:SetPoint("TOPLEFT", colorHeader, "BOTTOMLEFT", 0, -10)
     colorRow:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2635,7 +2777,7 @@ local function BuildTrashDisplayTabBody(parent, item)
         colorPicker._callback = saved
     end
 
-    local colorCaption = body:CreateFontString(nil, "OVERLAY")
+    local colorCaption = body:Text()
     KE:ApplyFontToText(colorCaption, "Expressway", 11, "OUTLINE")
     colorCaption:SetPoint("TOPLEFT", colorRow, "BOTTOMLEFT", 0, -8)
     colorCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2665,7 +2807,7 @@ local function BuildTrashDisplayTabBody(parent, item)
     thresholdRow:AddWidget(thresholdSlider, 1.0, 0)
     secondaryWidgets[#secondaryWidgets + 1] = thresholdSlider
 
-    local thresholdCaption = body:CreateFontString(nil, "OVERLAY")
+    local thresholdCaption = body:Text()
     KE:ApplyFontToText(thresholdCaption, "Expressway", 11, "OUTLINE")
     thresholdCaption:SetPoint("TOPLEFT", thresholdRow, "BOTTOMLEFT", 0, -12)
     thresholdCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2686,7 +2828,7 @@ local function BuildTrashActionsTabBody(parent, item)
     local DTrash = GetTrashModule()
     local m, n, s = item.mapID, item.npcID, item.spellID
     local key = item.id
-    local body = CreateFrame("Frame", nil, parent)
+    local body = GUIFrame:AcquirePooled("dtd:host", parent)
     body:SetAllPoints()
 
     local soundList = { ["None"] = "None" }
@@ -2711,13 +2853,13 @@ local function BuildTrashActionsTabBody(parent, item)
     local secondaryWidgets = {}
 
     -- Section: On Show
-    local showHeader = body:CreateFontString(nil, "OVERLAY")
+    local showHeader = body:Text()
     KE:ApplyFontToText(showHeader, "Expressway", 13, "OUTLINE")
     showHeader:SetTextColor(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3])
     showHeader:SetText("On Show")
     showHeader:SetPoint("TOPLEFT", body, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     do
-        local underline = body:CreateTexture(nil, "ARTWORK")
+        local underline = body:Line()
         underline:SetHeight(1)
         underline:SetColorTexture(KE.Theme.accent[1], KE.Theme.accent[2], KE.Theme.accent[3], 0.4)
         underline:SetPoint("LEFT", showHeader, "RIGHT", 6, 0)
@@ -2752,7 +2894,7 @@ local function BuildTrashActionsTabBody(parent, item)
     showRow:AddWidget(showTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = showTestBtn
 
-    local showCaption = body:CreateFontString(nil, "OVERLAY")
+    local showCaption = body:Text()
     KE:ApplyFontToText(showCaption, "Expressway", 11, "OUTLINE")
     showCaption:SetPoint("TOPLEFT", showRow, "BOTTOMLEFT", 0, -8)
     showCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2790,7 +2932,7 @@ local function BuildTrashActionsTabBody(parent, item)
     hideRow:AddWidget(hideTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = hideTestBtn
 
-    local hideCaption = body:CreateFontString(nil, "OVERLAY")
+    local hideCaption = body:Text()
     KE:ApplyFontToText(hideCaption, "Expressway", 11, "OUTLINE")
     hideCaption:SetPoint("TOPLEFT", hideRow, "BOTTOMLEFT", 0, -8)
     hideCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2830,7 +2972,7 @@ local function BuildTrashActionsTabBody(parent, item)
     castRow:AddWidget(castTestBtn, 0.3, 0, 0, -12)
     secondaryWidgets[#secondaryWidgets + 1] = castTestBtn
 
-    local castCaption = body:CreateFontString(nil, "OVERLAY")
+    local castCaption = body:Text()
     KE:ApplyFontToText(castCaption, "Expressway", 11, "OUTLINE")
     castCaption:SetPoint("TOPLEFT", castRow, "BOTTOMLEFT", 0, -8)
     castCaption:SetPoint("RIGHT", body, "RIGHT", -DETAIL_PADDING, 0)
@@ -2849,6 +2991,132 @@ local function BuildTrashActionsTabBody(parent, item)
 end
 
 ---------------------------------------------------------------------------------
+-- Title row of the detail pane: icon and name in one frame, so the whole area
+-- is a single tooltip hover target. The hover reads the fields ConfigureTitle
+-- sets.
+---------------------------------------------------------------------------------
+local TITLE_ICON_SIZE = 26
+
+local function TitleOnEnter(title)
+    local id = title._hoverId
+    if not id then return end
+    GameTooltip:SetOwner(title, "ANCHOR_CURSOR_RIGHT")
+    if title._hoverIsPhase then
+        GameTooltip:AddLine(string_format("Phase Transition %d", title._hoverPhaseIdx))
+        local rule = title._hoverPhaseRule
+        if rule then
+            local thr = rule.threshold or "?"
+            local lead = rule.lead or "?"
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(
+                string_format("Triggers when the boss drops below %s%% HP (alert window: %s%%).",
+                              tostring(thr), tostring(lead)),
+                0.85, 0.85, 0.85, true)
+        end
+    elseif title._hoverIsTrash then
+        local trashSpellID = title._hoverTrashSpellID
+        if trashSpellID then
+            GameTooltip:SetSpellByID(trashSpellID)
+            local mobName = title._hoverTrashMob
+            if mobName then
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine(string_format("Cast by: %s", mobName), 0.7, 0.7, 0.7)
+            end
+            GameTooltip:AddLine(string_format("Spell ID: %d", trashSpellID), 1, 1, 1)
+        end
+    else
+        GameTooltip:SetSpellByID(id)
+        local roleTag = title._hoverRoleTag
+        if roleTag then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(string_format("Curated role: %s", roleTag), 0.7, 0.7, 0.7)
+        end
+        GameTooltip:AddLine(string_format("Spell ID: %d", id), 1, 1, 1)
+    end
+    GameTooltip:Show()
+end
+
+local function TitleOnLeave()
+    GameTooltip:Hide()
+end
+
+-- The borders are added here, once: KE:AddIconBorders makes four textures
+-- every time it runs.
+local function ConstructTitle(parent)
+    local title = CreateFrame("Frame", nil, parent)
+
+    local iconFrame = CreateFrame("Frame", nil, title, "BackdropTemplate")
+    iconFrame:SetSize(TITLE_ICON_SIZE, TITLE_ICON_SIZE)
+    iconFrame:SetPoint("LEFT", title, "LEFT", 0, 0)
+    iconFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
+    iconFrame:SetBackdropColor(0, 0, 0, 0.8)
+    if KE.AddIconBorders then KE:AddIconBorders(iconFrame) end
+
+    local icon = iconFrame:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", 1, -1)
+    icon:SetPoint("BOTTOMRIGHT", -1, 1)
+    if KE.ApplyIconZoom then KE:ApplyIconZoom(icon) end
+
+    local nameText = title:CreateFontString(nil, "OVERLAY")
+    nameText:SetPoint("LEFT", iconFrame, "RIGHT", 8, 0)
+
+    title:SetScript("OnEnter", TitleOnEnter)
+    title:SetScript("OnLeave", TitleOnLeave)
+
+    title._keIcon = icon
+    title._keName = nameText
+    title._keOwned = { title, iconFrame }
+    return title
+end
+
+-- item is the selected list entry (spell, phase rule or trash ability) and
+-- data its curated table; both nil when nothing is selected.
+local function ConfigureTitle(title, item, data)
+    local icon, nameText = title._keIcon, title._keName
+    KE:ApplyFontToText(nameText, "Expressway", 16, "OUTLINE")
+    if not item then
+        icon:SetTexture(134400)
+        nameText:SetText("(no selection)")
+        title:EnableMouse(false)
+        return
+    end
+    local isPhase = item.isPhase or false
+    local isTrash = item.isTrash or false
+    if isPhase then
+        icon:SetTexture(PHASE_ROW_ICON)
+        nameText:SetText(ResolvePhaseRowLabel(item))
+    elseif isTrash then
+        icon:SetTexture(
+            (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(item.spellID))
+            or 134400
+        )
+        nameText:SetText((data and data.name) or "Trash")
+    else
+        local DT = GetModule()
+        icon:SetTexture(
+            (DT and DT.ResolveSpellIcon and DT:ResolveSpellIcon(item.id))
+            or (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(item.id))
+            or 134400
+        )
+        nameText:SetText(ResolveSpellDisplayName(item.id, data))
+    end
+    title._hoverId = item.id
+    title._hoverIsPhase = isPhase
+    title._hoverIsTrash = isTrash
+    title._hoverTrashSpellID = isTrash and item.spellID or nil
+    title._hoverTrashMob = isTrash and item.mobName or nil
+    title._hoverRoleTag = (not isPhase and not isTrash) and data and data.role or nil
+    title._hoverPhaseRule = isPhase and data or nil
+    title._hoverPhaseIdx = isPhase and (item.ruleIndex or 1) or nil
+    title:EnableMouse(true)
+end
+
+GUIFrame:NewWidgetPool("dtd:title", ConstructTitle, function(title)
+    title:EnableMouse(false)
+    if GameTooltip:IsOwned(title) then GameTooltip:Hide() end
+end)
+
+---------------------------------------------------------------------------------
 -- Page builder. Called from the per-dungeon RegisterContent factory below.
 ---------------------------------------------------------------------------------
 local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
@@ -2862,7 +3130,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     if #encounters == 0 then
         local card = GUIFrame:CreateCard(scrollChild, dungeonName, yOffset)
         local row = GUIFrame:CreateRow(card.content, Theme.rowHeightLast)
-        local label = row:CreateFontString(nil, "OVERLAY")
+        local label = row:GetLabel("normal")
         KE:ApplyFontToText(label, "Expressway", 13, "OUTLINE")
         label:SetPoint("LEFT", row, "LEFT", 8, 0)
         label:SetText("No curated encounters yet for this dungeon.")
@@ -2875,7 +3143,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     -- Header card with dungeon name + master-toggle reminder.
     local hintCard = GUIFrame:CreateCard(scrollChild, dungeonName, yOffset)
     local hintRow = GUIFrame:CreateRow(hintCard.content, Theme.rowHeightLast)
-    local hint = hintRow:CreateFontString(nil, "OVERLAY")
+    local hint = hintRow:GetLabel("normal")
     KE:ApplyFontToText(hint, "Expressway", 13, "OUTLINE")
     hint:SetPoint("LEFT", hintRow, "LEFT", 8, 0)
     hint:SetPoint("RIGHT", hintRow, "RIGHT", -8, 0)
@@ -2938,18 +3206,17 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     ---------------------------------------------------------------------------
     -- LEFT COLUMN: spell list, encounter-grouped via section-header rows.
     ---------------------------------------------------------------------------
-    local leftCol = CreateFrame("Frame", nil, scrollChild)
+    local leftCol = GUIFrame:AcquirePooled("dtd:host", scrollChild)
     leftCol:SetWidth(LEFT_COL_WIDTH)
     leftCol:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", Theme.paddingSmall, -yOffset)
 
     local listY = 0
     local bossNum = 0
     for _, enc in ipairs(encounters) do
-        -- Encounter header row (not pooled — low count, transient). Bosses get
-        -- a "B1 - ", "B2 - " prefix (BigWigs in-fight shorthand); trash-mob
-        -- groups render the mob name plainly so they read as a separate block
-        -- below the bosses.
-        local header = leftCol:CreateFontString(nil, "OVERLAY")
+        -- Encounter header. Bosses get a "B1 - ", "B2 - " prefix (BigWigs
+        -- in-fight shorthand); trash-mob groups render the mob name plainly so
+        -- they read as a separate block below the bosses.
+        local header = leftCol:Text()
         KE:ApplyFontToText(header, "Expressway", 15, "OUTLINE")
         header:SetPoint("TOPLEFT", leftCol, "TOPLEFT", 4, -listY - 6)
         if enc.isTrash then
@@ -2978,14 +3245,9 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     ---------------------------------------------------------------------------
     -- RIGHT COLUMN: tab bar + tab body for selected spell.
     ---------------------------------------------------------------------------
-    local rightCol = CreateFrame("Frame", nil, scrollChild, "BackdropTemplate")
+    local rightCol = GUIFrame:AcquirePooled("dtd:panel", scrollChild)
     rightCol:SetPoint("TOPLEFT", leftCol, "TOPRIGHT", COL_GAP, 0)
     rightCol:SetPoint("RIGHT", scrollChild, "RIGHT", -Theme.paddingSmall, 0)
-    rightCol:SetBackdrop({
-        bgFile   = "Interface\\Buttons\\WHITE8x8",
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 1,
-    })
     rightCol:SetBackdropColor(Theme.bgLight[1], Theme.bgLight[2], Theme.bgLight[3], Theme.bgLight[4])
     rightCol:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], Theme.border[4])
 
@@ -3007,120 +3269,14 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     selectedIsPhase = selectedSpell and selectedSpell.isPhase or false
     selectedIsTrash = selectedSpell and selectedSpell.isTrash or false
 
-    -- Title row: spell icon + spell name wrapped in a single Frame so the
-    -- whole "icon-and-name area" is one tooltip hover target. Wrapping the
-    -- two pieces (FontStrings can't catch mouse events on their own) gives
-    -- a single OnEnter / OnLeave anchor and a generous hit zone — hovering
-    -- anywhere across the icon-or-name fires the tooltip.
-    local TITLE_ICON_SIZE = 26
-    local titleRow = CreateFrame("Frame", nil, rightCol)
+    local titleRow = GUIFrame:AcquirePooled("dtd:title", rightCol)
     titleRow:SetHeight(TITLE_ICON_SIZE)
     titleRow:SetPoint("TOPLEFT", rightCol, "TOPLEFT", DETAIL_PADDING, -DETAIL_PADDING)
     titleRow:SetPoint("RIGHT", rightCol, "RIGHT", -DETAIL_PADDING, 0)
-
-    local titleIconFrame = CreateFrame("Frame", nil, titleRow, "BackdropTemplate")
-    titleIconFrame:SetSize(TITLE_ICON_SIZE, TITLE_ICON_SIZE)
-    titleIconFrame:SetPoint("LEFT", titleRow, "LEFT", 0, 0)
-    titleIconFrame:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8" })
-    titleIconFrame:SetBackdropColor(0, 0, 0, 0.8)
-    if KE.AddIconBorders then KE:AddIconBorders(titleIconFrame) end
-
-    local titleIcon = titleIconFrame:CreateTexture(nil, "ARTWORK")
-    titleIcon:SetPoint("TOPLEFT", 1, -1)
-    titleIcon:SetPoint("BOTTOMRIGHT", -1, 1)
-    if KE.ApplyIconZoom then KE:ApplyIconZoom(titleIcon) end
-    if selectedSpell then
-        if selectedIsPhase then
-            titleIcon:SetTexture(PHASE_ROW_ICON)
-        elseif selectedIsTrash then
-            titleIcon:SetTexture(
-                (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(selectedSpell.spellID))
-                or 134400
-            )
-        else
-            local DT = GetModule()
-            titleIcon:SetTexture(
-                (DT and DT.ResolveSpellIcon and DT:ResolveSpellIcon(selectedSpell.id))
-                or (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(selectedSpell.id))
-                or 134400
-            )
-        end
-    else
-        titleIcon:SetTexture(134400)
-    end
-
-    local titleFs = titleRow:CreateFontString(nil, "OVERLAY")
-    KE:ApplyFontToText(titleFs, "Expressway", 16, "OUTLINE")
-    titleFs:SetPoint("LEFT", titleIconFrame, "RIGHT", 8, 0)
-    if selectedSpell then
-        if selectedIsPhase then
-            titleFs:SetText(ResolvePhaseRowLabel(selectedSpell))
-        elseif selectedIsTrash then
-            titleFs:SetText((selectedSpellData and selectedSpellData.name) or "Trash")
-        else
-            titleFs:SetText(ResolveSpellDisplayName(selectedSpell.id, selectedSpellData))
-        end
-    else
-        titleFs:SetText("(no selection)")
-    end
-
-    -- Tooltip on hover. titleRow is the hover target so both icon AND
-    -- name area trigger the tooltip. GameTooltip is Blizzard's singleton —
-    -- no per-frame OnUpdate, no per-row allocation. Lifecycle is per-hover
-    -- only; cost scales with mouse interaction rate. Closure captures the
-    -- selected spellId at render time which is fine since titleRow is
-    -- recreated each RefreshContent (one frame per click).
-    if selectedSpell then
-        local hoverId = selectedSpell.id
-        local hoverIsPhase = selectedIsPhase
-        local hoverIsTrash = selectedIsTrash
-        local hoverTrashSpellID = selectedIsTrash and selectedSpell.spellID or nil
-        local hoverTrashMob = selectedIsTrash and selectedSpell.mobName or nil
-        local hoverRoleTag = (not hoverIsPhase and not hoverIsTrash)
-                             and selectedSpellData and selectedSpellData.role or nil
-        local hoverPhaseRule = hoverIsPhase and selectedSpellData or nil
-        local hoverPhaseIdx = hoverIsPhase and (selectedSpell.ruleIndex or 1) or nil
-        titleRow:EnableMouse(true)
-        titleRow:SetScript("OnEnter", function(b)
-            -- ANCHOR_CURSOR_RIGHT places the tooltip's left edge at the
-            -- cursor's right side. Standard for hover-context tooltips.
-            GameTooltip:SetOwner(b, "ANCHOR_CURSOR_RIGHT")
-            if hoverIsPhase then
-                GameTooltip:AddLine(string_format("Phase Transition %d", hoverPhaseIdx))
-                if hoverPhaseRule then
-                    local thr = hoverPhaseRule.threshold or "?"
-                    local lead = hoverPhaseRule.lead or "?"
-                    GameTooltip:AddLine(" ")
-                    GameTooltip:AddLine(string_format("Triggers when the boss drops below %s%% HP (alert window: %s%%).",
-                                                       tostring(thr), tostring(lead)),
-                                        0.85, 0.85, 0.85, true)
-                end
-            elseif hoverIsTrash then
-                if hoverTrashSpellID then
-                    GameTooltip:SetSpellByID(hoverTrashSpellID)
-                    if hoverTrashMob then
-                        GameTooltip:AddLine(" ")
-                        GameTooltip:AddLine(string_format("Cast by: %s", hoverTrashMob),
-                                            0.7, 0.7, 0.7)
-                    end
-                    GameTooltip:AddLine(string_format("Spell ID: %d", hoverTrashSpellID), 1, 1, 1)
-                end
-            else
-                GameTooltip:SetSpellByID(hoverId)
-                if hoverRoleTag then
-                    GameTooltip:AddLine(" ")
-                    GameTooltip:AddLine(string_format("Curated role: %s", hoverRoleTag),
-                                        0.7, 0.7, 0.7)
-                end
-                GameTooltip:AddLine(string_format("Spell ID: %d", hoverId), 1, 1, 1)
-            end
-            GameTooltip:Show()
-        end)
-        titleRow:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    end
+    ConfigureTitle(titleRow, selectedSpell, selectedSpellData)
 
     -- Tab bar — uses CreateSubTabs which handles active state + RefreshContent.
-    local tabBar = CreateFrame("Frame", nil, rightCol)
+    local tabBar = GUIFrame:AcquirePooled("dtd:host", rightCol)
     tabBar:SetPoint("TOPLEFT", titleRow, "BOTTOMLEFT", 0, -10)
     tabBar:SetPoint("RIGHT", rightCol, "RIGHT", -DETAIL_PADDING, 0)
     tabBar:SetHeight(28)
@@ -3135,7 +3291,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     -- Subtle 1px line below the tab bar — visually anchors the tabs to
     -- the body content below them so they don't feel like floating
     -- buttons drifting into empty space.
-    local tabSeparator = rightCol:CreateTexture(nil, "ARTWORK")
+    local tabSeparator = rightCol:Line()
     tabSeparator:SetHeight(1)
     tabSeparator:SetColorTexture(Theme.divider[1], Theme.divider[2], Theme.divider[3], Theme.divider[4])
     tabSeparator:SetPoint("LEFT",  rightCol, "LEFT",  DETAIL_PADDING, 0)
@@ -3143,7 +3299,7 @@ local function BuildDungeonPage(scrollChild, yOffset, dungeonKey, dungeonName)
     tabSeparator:SetPoint("TOP",   tabBar, "BOTTOM", 0, -4)
 
     -- Tab content area — anchored below the separator, fills remaining height.
-    local tabBody = CreateFrame("Frame", nil, rightCol)
+    local tabBody = GUIFrame:AcquirePooled("dtd:host", rightCol)
     tabBody:SetPoint("TOPLEFT", tabSeparator, "BOTTOMLEFT", 0, -4)
     tabBody:SetPoint("BOTTOMRIGHT", rightCol, "BOTTOMRIGHT", -DETAIL_PADDING, DETAIL_PADDING)
 
