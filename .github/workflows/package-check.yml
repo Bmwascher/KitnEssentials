@@ -1,0 +1,42 @@
+name: Package check
+
+# Builds the player zip without uploading it anywhere, then checks what a
+# release would ship. Run by hand before a release tag.
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Package without uploading
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -d
+
+      # The settings pages refuse to load when the two addons report
+      # different versions, so both tocs must carry the same substituted line.
+      - name: Check both toc versions
+        run: |
+          zip=$(ls .release/*.zip | head -n 1)
+          unzip -q "$zip" -d out
+          ls out
+          main=$(grep -m 1 '^## Version:' out/KitnEssentials/KitnEssentials.toc | tr -d '\r')
+          pages=$(grep -m 1 '^## Version:' out/KitnEssentials_Options/KitnEssentials_Options.toc | tr -d '\r')
+          echo "KitnEssentials:         $main"
+          echo "KitnEssentials_Options: $pages"
+          if [ -z "$main" ] || [ "$main" != "$pages" ]; then
+            echo "::error::the two toc Version lines are missing or differ"
+            exit 1
+          fi
+          case "$main" in
+            *@project-version@*)
+              echo "::error::the Version line was not substituted"
+              exit 1
+              ;;
+          esac
