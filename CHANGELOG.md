@@ -1,5 +1,15 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.9.1
+
+### Dark Theme
+
+- Chat Settings, Merchant, Trade, Mail, the AddOn List, Help, Petition, the
+  expansion landing page, the Clock and the Stopwatch are skinned when first
+  opened instead of at login, which builds about 300 fewer frames at login
+
+---
+
 ## v4.9.0
 
 ### Settings Window
