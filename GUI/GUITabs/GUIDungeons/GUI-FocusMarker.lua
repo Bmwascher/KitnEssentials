@@ -58,6 +58,114 @@ local function RefreshSoon()
     C_Timer.After(0, function() GUIFrame:RefreshContent() end)
 end
 
+local GRID_ICON = 40
+local GRID_SPACING = 8
+
+-- The marker the grid shows as selected: the module's effective one, which
+-- follows the class entry while Marker From Class is on.
+local function CurrentMarker()
+    local FM = GetModule()
+    local db = GetDB()
+    return (FM and FM:GetEffectiveMarker()) or (db and db.SelectedMarker) or "Star"
+end
+
+local function PaintGrid(grid)
+    local selected = CurrentMarker()
+    local label = grid._label
+    label:ClearAllPoints()
+    label:SetPoint("TOP", grid, "BOTTOM", 0, -4)
+    for _, btn in ipairs(grid._buttons) do
+        if btn.markerName == selected then
+            btn.border:Show()
+            btn:SetAlpha(1)
+            label:ClearAllPoints()
+            label:SetPoint("TOP", btn, "BOTTOM", 0, -4)
+        else
+            btn.border:Hide()
+            btn:SetAlpha(0.5)
+        end
+    end
+    label:SetText(selected)
+end
+
+local function ConstructMarkerGrid(parent)
+    local grid = CreateFrame("Frame", nil, parent)
+
+    local label = grid:CreateFontString(nil, "OVERLAY")
+    grid._label = label
+
+    local buttons = {}
+    grid._buttons = buttons
+    local owned = { grid }
+
+    for i, name in ipairs(MARKER_ORDER) do
+        local btn = CreateFrame("Button", nil, grid)
+        btn:SetSize(GRID_ICON, GRID_ICON)
+        btn:SetPoint("LEFT", grid, "LEFT", (i - 1) * (GRID_ICON + GRID_SPACING), 0)
+        btn.markerName = name
+
+        local icon = btn:CreateTexture(nil, "ARTWORK")
+        icon:SetPoint("TOPLEFT", 2, -2)
+        icon:SetPoint("BOTTOMRIGHT", -2, 2)
+        if MARKER_INDEX[name] then
+            icon:SetTexture(MARKER_TEX .. MARKER_INDEX[name])
+        else
+            icon:SetTexture(MARKER_NONE_TEX)
+        end
+
+        local border = CreateFrame("Frame", nil, btn, "BackdropTemplate")
+        border:SetAllPoints()
+        border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+        btn.border = border
+
+        btn:SetScript("OnEnter", function(self)
+            if self.markerName ~= CurrentMarker() then
+                self:SetAlpha(0.8)
+            end
+        end)
+        btn:SetScript("OnLeave", function(self)
+            if self.markerName ~= CurrentMarker() then
+                self:SetAlpha(0.5)
+            end
+        end)
+
+        -- In class mode the grid edits your own class's entry, so a click is never silently ignored.
+        btn:SetScript("OnClick", function(self)
+            local db = GetDB()
+            if not db then return end
+            local classFile = grid._classFile
+            if classFile then
+                db.ClassMarkers[classFile] = self.markerName
+            else
+                db.SelectedMarker = self.markerName
+            end
+            PaintGrid(grid)
+            ApplySettings()
+            RefreshSoon()
+        end)
+
+        buttons[i] = btn
+        owned[#owned + 1] = btn
+        owned[#owned + 1] = border
+    end
+
+    function grid:Configure(classFile)
+        self:SetSize(#buttons * GRID_ICON + (#buttons - 1) * GRID_SPACING, GRID_ICON + 8)
+        self._classFile = classFile
+        KE:ApplyThemeFont(label, "normal")
+        label:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        for _, btn in ipairs(buttons) do
+            btn.border:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
+        end
+        PaintGrid(self)
+    end
+
+    grid._keOwned = owned
+    return grid
+end
+
+GUIFrame:NewWidgetPool("focusmarker:grid", ConstructMarkerGrid, function() end)
+
 local function ClassName(token)
     for _, info in ipairs(CLASS_ORDER) do
         if info.token == token then return info.name end
@@ -147,10 +255,6 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
     local classMode = db.MarkerFromClass == true
     local editsClass = classMode and classFile ~= nil and db.ClassMarkers ~= nil
 
-    local function EffectiveMarker()
-        return (FM and FM:GetEffectiveMarker()) or db.SelectedMarker or "Star"
-    end
-
     ----------------------------------------------------------------
     -- Marker Selection: the class switch, then the icon grid
     ----------------------------------------------------------------
@@ -178,90 +282,13 @@ GUIFrame:RegisterContent("FocusMarkerMarker", function(scrollChild, yOffset)
             "  |cff888888- click a marker to change " .. className .. "'s marker.|r")
     end
 
-    local ICON_SIZE = 40
-    local ICON_SPACING = 8
-    local totalWidth = (#MARKER_ORDER * ICON_SIZE) + ((#MARKER_ORDER - 1) * ICON_SPACING)
-    local gridRowHeight = ICON_SIZE + 8
+    local gridRowHeight = GRID_ICON + 8
     local gridRow = GUIFrame:CreateRow(card2.content, gridRowHeight)
-    local gridContainer = CreateFrame("Frame", nil, gridRow)
-    gridContainer:SetSize(totalWidth, gridRowHeight)
-    gridContainer:SetPoint("CENTER", gridRow, "CENTER", 0, 0)
-
-    local selectedLabel = gridRow:CreateFontString(nil, "OVERLAY")
-    selectedLabel:SetPoint("TOP", gridContainer, "BOTTOM", 0, -4)
-    KE:ApplyThemeFont(selectedLabel, "normal")
-    selectedLabel:SetTextColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-    selectedLabel:SetText(EffectiveMarker())
-
-    local markerButtons = {}
-
-    local function UpdateMarkerSelection()
-        local sel = EffectiveMarker()
-        for _, btn in ipairs(markerButtons) do
-            if btn.markerName == sel then
-                btn.border:Show()
-                btn:SetAlpha(1)
-                selectedLabel:ClearAllPoints()
-                selectedLabel:SetPoint("TOP", btn, "BOTTOM", 0, -4)
-            else
-                btn.border:Hide()
-                btn:SetAlpha(0.5)
-            end
-        end
-        selectedLabel:SetText(sel)
-    end
-
-    for i, name in ipairs(MARKER_ORDER) do
-        local btn = CreateFrame("Button", nil, gridContainer)
-        btn:SetSize(ICON_SIZE, ICON_SIZE)
-        btn:SetPoint("LEFT", gridContainer, "LEFT", (i - 1) * (ICON_SIZE + ICON_SPACING), 0)
-        btn.markerName = name
-
-        local icon = btn:CreateTexture(nil, "ARTWORK")
-        icon:SetPoint("TOPLEFT", 2, -2)
-        icon:SetPoint("BOTTOMRIGHT", -2, 2)
-        if MARKER_INDEX[name] then
-            icon:SetTexture(MARKER_TEX .. MARKER_INDEX[name])
-        else
-            icon:SetTexture(MARKER_NONE_TEX)
-        end
-
-        local borderFrame = CreateFrame("Frame", nil, btn, "BackdropTemplate")
-        borderFrame:SetAllPoints()
-        borderFrame:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-        borderFrame:SetBackdropBorderColor(Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
-        borderFrame:Hide()
-        btn.border = borderFrame
-
-        btn:SetScript("OnEnter", function(self)
-            if self.markerName ~= EffectiveMarker() then
-                self:SetAlpha(0.8)
-            end
-        end)
-        btn:SetScript("OnLeave", function(self)
-            if self.markerName ~= EffectiveMarker() then
-                self:SetAlpha(0.5)
-            end
-        end)
-
-        -- In class mode the grid edits your own class's entry, so a click is never silently ignored.
-        btn:SetScript("OnClick", function(self)
-            if editsClass then
-                db.ClassMarkers[classFile] = self.markerName
-            else
-                db.SelectedMarker = self.markerName
-            end
-            UpdateMarkerSelection()
-            ApplySettings()
-            RefreshSoon()
-        end)
-
-        table.insert(markerButtons, btn)
-    end
-
+    local grid = GUIFrame:AcquirePooled("focusmarker:grid", gridRow)
+    grid:ClearAllPoints()
+    grid:SetPoint("CENTER", gridRow, "CENTER", 0, 0)
+    grid:Configure(editsClass and classFile or nil)
     card2:AddRow(gridRow, gridRowHeight + 24, 0)
-
-    UpdateMarkerSelection()
 
     yOffset = card2:GetNextOffset()
 

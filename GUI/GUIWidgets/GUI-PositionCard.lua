@@ -14,7 +14,7 @@
 -- ║  recomputes height.                                      ║
 -- ║  ReleaseAll fires from contentRebuildCallbacks on every  ║
 -- ║  GUIFrame:RefreshContent so the pool reclaims kits       ║
--- ║  before ClearContent's SetParent(nil) loop orphans them. ║
+-- ║  before the page teardown would orphan them.             ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -428,9 +428,9 @@ end
 
 local positionCardPool = KE.FramePool:New(CreatePositionCardKit)
 
--- Register pool ReleaseAll on every GUIFrame:RefreshContent. Fires before
--- the existing scrollChild SetParent(nil) loop, so pooled kits get back to
--- the holder before they'd otherwise be orphaned to UIParent.
+-- ReleaseAll runs on every GUIFrame:RefreshContent, before the teardown loop
+-- releases or orphans the page's children, so the kits are back on the
+-- holder by then.
 GUIFrame:RegisterContentRebuildCallback("__PositionCardPool", function()
     positionCardPool:ReleaseAll()
 end)
@@ -542,7 +542,7 @@ local function ConfigurePositionCardKit(kit, scrollChild, yOffset, config)
     local showStrataRow = showStrata
 
     -- Re-anchor visible rows in order, accumulating currentY. Hide invisible
-    -- rows. Skip card:Reset (it would orphan persistent rows to UIParent).
+    -- rows. Skip card:Reset (it would orphan the kit's persistent rows).
     -- We rebuild card.rows inline so card:UpdateHeight reads the right state.
     local function showRow(row, height)
         row:Show()

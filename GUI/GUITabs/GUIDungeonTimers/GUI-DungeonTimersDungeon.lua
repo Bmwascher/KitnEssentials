@@ -533,8 +533,8 @@ local function ResetListRow(kit)
     if kit.overrideStripe then kit.overrideStripe:Hide() end
     -- Clear anchors so re-Acquire's SetPoint starts from a clean slate. Without
     -- this, in rare cases the kit can hold a stale TOPLEFT anchor referencing
-    -- the previous render's leftCol (which has since been SetParent(nil)'d
-    -- during ClearContent). The new SetPoint usually replaces cleanly, but if
+    -- the previous render's leftCol (which the page teardown has since
+    -- released or orphaned). The new SetPoint usually replaces cleanly, but if
     -- WoW's frame system delivers a layout pass between the SetParent + SetPoint
     -- calls, the row can render at the stale position (off-screen relative to
     -- the new leftCol) and look "missing".

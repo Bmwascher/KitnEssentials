@@ -97,17 +97,10 @@ local function ConstructSlider(parent)
     thumb:SetColorTexture(0, 0, 0, 0) -- Fully transparent
     slider:SetThumbTexture(thumb)
 
-    -- Hook thumb position to move our custom frames
-    slider:HookScript("OnUpdate", function(self)
-        local thumbX = self:GetThumbTexture():GetPoint()
-        if thumbX then
-            -- Position both frames at thumb location
-            thumbFrameBG:ClearAllPoints()
-            thumbFrameBG:SetPoint("CENTER", thumb, "CENTER", 0, 0)
-            thumbFrame:ClearAllPoints()
-            thumbFrame:SetPoint("CENTER", thumb, "CENTER", 0, 0)
-        end
-    end)
+    -- Anchored once: both frames follow the thumb texture as the slider
+    -- moves it.
+    thumbFrameBG:SetPoint("CENTER", thumb, "CENTER", 0, 0)
+    thumbFrame:SetPoint("CENTER", thumb, "CENTER", 0, 0)
 
     -- Hover fade animation for thumb color
     local hoverAnimGroup = slider:CreateAnimationGroup()
@@ -488,14 +481,19 @@ local function ConstructSlider(parent)
         FlushDropped()
     end
 
+    -- Set while Escape clears focus, so the commit below is skipped.
+    local cancelTyped = false
+
     valueEdit:SetScript("OnEscapePressed", function(self)
+        cancelTyped = true
         self:ClearFocus()
+        cancelTyped = false
         UpdateFill()
     end)
 
+    -- The commit lives in OnEditFocusLost, which ClearFocus fires.
     valueEdit:SetScript("OnEnterPressed", function(self)
         self:ClearFocus()
-        CommitTyped(self:GetText())
     end)
 
     valueEdit:SetScript("OnEditFocusGained", function(self)
@@ -510,7 +508,7 @@ local function ConstructSlider(parent)
         valueContainer:SetBackdropBorderColor(Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3], 1)
         editBoxR, editBoxG, editBoxB = Theme.fieldBorder[1], Theme.fieldBorder[2], Theme.fieldBorder[3]
         self:HighlightText(0, 0)
-        CommitTyped(self:GetText())
+        if not cancelTyped then CommitTyped(self:GetText()) end
     end)
 
     -- Add hover animation for editbox
@@ -694,7 +692,10 @@ local function ConstructSlider(parent)
         self._onValueChanged = fn
     end
 
-    row._keOwned = { row, slider, valueContainer }
+    row._keOwned = {
+        row, sliderBG, slider, thumbFrameBG, thumbFrame,
+        leftStepper, rightStepper, valueContainer, valueEdit,
+    }
     return row
 end
 

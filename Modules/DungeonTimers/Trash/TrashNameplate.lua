@@ -718,6 +718,16 @@ function DTrash:RefreshNameplatePreview()
     if host then self:BuildNameplatePreview(host) end
 end
 
+-- Takes the sample off a settings-page host that is being put away, so the
+-- host is left with no child.
+function DTrash:DetachNameplatePreview(host)
+    local stage = self._npPreviewStage
+    if stage and stage:GetParent() == host then
+        stage:Hide()
+        stage:SetParent(nil)
+    end
+end
+
 function DTrash:HideNameplatePreview()
     if self._npPreviewStage then self._npPreviewStage:Hide() end
     if self._npPreviewPlate then self._npPreviewPlate:Hide() end

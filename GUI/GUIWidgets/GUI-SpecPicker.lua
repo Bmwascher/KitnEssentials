@@ -28,11 +28,8 @@ local type = type
 ---------------------------------------------------------------------------------
 -- Icon plus name, drawn above a spec's controls so a card of near identical
 -- rows reads as a list of specs rather than a wall of checkboxes.
-function GUIFrame:CreateSpecHeaderRow(parent, labelText, config)
-    if type(config) ~= "table" then config = {} end
-
+local function ConstructSpecHeader(parent)
     local row = CreateFrame("Frame", nil, parent)
-    row:SetHeight(26)
 
     local border = row:CreateTexture(nil, "BACKGROUND")
     border:SetSize(20, 20)
@@ -43,20 +40,40 @@ function GUIFrame:CreateSpecHeaderRow(parent, labelText, config)
     icon:SetSize(18, 18)
     icon:SetPoint("CENTER", border, "CENTER")
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    if config.icon then icon:SetTexture(config.icon) else border:Hide() end
-
-    local text = labelText or ""
-    if config.current then
-        text = text .. "  " .. KE:ColorTextByTheme("(current)")
-    end
 
     local fs = row:CreateFontString(nil, "OVERLAY")
     fs:SetPoint("LEFT", border, "RIGHT", 6, 0)
     fs:SetJustifyH("LEFT")
-    KE:ApplyThemeFont(fs, "large")
-    fs:SetText(text)
-    fs:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
 
+    function row.Configure(_, labelText, config)
+        row:SetHeight(26)
+        if config.icon then
+            icon:SetTexture(config.icon)
+            border:Show()
+        else
+            icon:SetTexture(nil)
+            border:Hide()
+        end
+
+        local text = labelText or ""
+        if config.current then
+            text = text .. "  " .. KE:ColorTextByTheme("(current)")
+        end
+        KE:ApplyThemeFont(fs, "large")
+        fs:SetText(text)
+        fs:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
+    end
+
+    row._keOwned = { row }
+    return row
+end
+
+GUIFrame:NewWidgetPool("specheader", ConstructSpecHeader, function() end)
+
+function GUIFrame:CreateSpecHeaderRow(parent, labelText, config)
+    if type(config) ~= "table" then config = {} end
+    local row = self:AcquirePooled("specheader", parent)
+    row:Configure(labelText, config)
     return row
 end
 

@@ -18,6 +18,38 @@ local function GetSettingsDB()
     return KE.db.profile.DungeonTimers
 end
 
+-- A dungeon's icon in a one-pixel black frame, for the Reset Overrides rows.
+local function ConstructDungeonIcon(parent)
+    local holder = CreateFrame("Frame", nil, parent)
+
+    local icon = holder:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("TOPLEFT", holder, "TOPLEFT", 1, -1)
+    icon:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", -1, 1)
+
+    local border = CreateFrame("Frame", nil, holder, "BackdropTemplate")
+    border:SetAllPoints()
+    border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+
+    function holder.Configure(_, size, iconID)
+        holder:SetSize(size, size)
+        if iconID then
+            icon:SetTexture(iconID)
+            if KE.ApplyIconZoom then KE:ApplyIconZoom(icon) end
+        else
+            -- The question mark is drawn uncropped, so the crop a reused
+            -- icon carries is taken off.
+            icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+            icon:SetTexCoord(0, 1, 0, 1)
+        end
+        border:SetBackdropBorderColor(0, 0, 0, 1)
+    end
+
+    holder._keOwned = { holder, border }
+    return holder
+end
+
+GUIFrame:NewWidgetPool("dtcfg:icon", ConstructDungeonIcon, function() end)
+
 KE.GUI = KE.GUI or {}
 KE.GUI.DungeonTimers = KE.GUI.DungeonTimers or {}
 
@@ -262,23 +294,10 @@ GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
     for _, dungeon in ipairs(KE.DungeonTimerDungeons) do
         local row = GUIFrame:CreateRow(card4.content, ROW_H)
 
-        local iconHolder = CreateFrame("Frame", nil, row)
-        iconHolder:SetSize(ICON_SIZE, ICON_SIZE)
+        local iconHolder = GUIFrame:AcquirePooled("dtcfg:icon", row)
+        iconHolder:ClearAllPoints()
         iconHolder:SetPoint("LEFT", row, "LEFT", 0, 0)
-
-        local icon = iconHolder:CreateTexture(nil, "ARTWORK")
-        icon:SetPoint("TOPLEFT", iconHolder, "TOPLEFT", 1, -1)
-        icon:SetPoint("BOTTOMRIGHT", iconHolder, "BOTTOMRIGHT", -1, 1)
-        if dungeon.iconID then
-            icon:SetTexture(dungeon.iconID)
-            if KE.ApplyIconZoom then KE:ApplyIconZoom(icon) end
-        else
-            icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-        end
-        local iconBorder = CreateFrame("Frame", nil, iconHolder, "BackdropTemplate")
-        iconBorder:SetAllPoints()
-        iconBorder:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-        iconBorder:SetBackdropBorderColor(0, 0, 0, 1)
+        iconHolder:Configure(ICON_SIZE, dungeon.iconID)
 
         local btn = GUIFrame:CreateButton(row, "Reset", {
             width  = BTN_W,
@@ -306,14 +325,12 @@ GUIFrame:RegisterContent("DTimers_General", function(scrollChild, yOffset)
         btn:SetPoint("RIGHT", row, "RIGHT", -RIGHT_INSET, 0)
         btn:SetSize(BTN_W, BTN_H)
 
-        local label = row:CreateFontString(nil, "OVERLAY")
+        local label = row:GetLabel("large")
         label:SetPoint("LEFT",   iconHolder, "RIGHT", Theme.paddingMedium, 0)
         label:SetPoint("RIGHT",  btn,        "LEFT",  -Theme.paddingMedium, 0)
         label:SetPoint("TOP",    row,        "TOP",    0, 0)
         label:SetPoint("BOTTOM", row,        "BOTTOM", 0, 0)
         label:SetJustifyH("LEFT")
-        label:SetJustifyV("MIDDLE")
-        KE:ApplyThemeFont(label, "large")
         label:SetText(dungeon.name)
 
         card4:AddRow(row, ROW_H, 2)

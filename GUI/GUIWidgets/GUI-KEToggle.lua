@@ -358,7 +358,6 @@ local function ConfigureCheckbox(row, labelText, config)
     row._msgOn = config.msgOn
     row._msgOff = config.msgOff
     row._immediate = config.immediateCallback
-    row:SetAlpha(1)
     row:SetEnabled(true)
     row:_setStateNow(config.value)
     row:ApplyThemeColors()

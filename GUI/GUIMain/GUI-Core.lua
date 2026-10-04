@@ -36,18 +36,6 @@ function GUIFrame:HasContent(id)
     return self.registeredContent[id] ~= nil
 end
 
--- Panel registration (full content area takeover, no scroll frame)
-GUIFrame.PanelBuilders = {}
-
-function GUIFrame:RegisterPanel(itemId, builderFunc)
-    if type(builderFunc) ~= "function" then return end
-    self.PanelBuilders[itemId] = builderFunc
-end
-
-function GUIFrame:HasPanel(itemId)
-    return self.PanelBuilders[itemId] ~= nil
-end
-
 -- Content cleanup callbacks (fire on REAL item switch only — used by modules
 -- that need to tear down preview state, etc.)
 GUIFrame.contentCleanupCallbacks = {}
@@ -65,7 +53,7 @@ end
 -- Content rebuild callbacks (fire UNCONDITIONALLY at the start of every
 -- RefreshContent — used by widget pools to ReleaseAll before the new render
 -- starts so kits can be re-acquired into the fresh scrollChild without
--- being orphaned by ClearContent's SetParent(nil) loop).
+-- being orphaned by the teardown loop).
 GUIFrame.contentRebuildCallbacks = {}
 
 function GUIFrame:RegisterContentRebuildCallback(key, callback)
@@ -78,9 +66,9 @@ function GUIFrame:UnregisterContentRebuildCallback(key)
     if key then self.contentRebuildCallbacks[key] = nil end
 end
 
--- Toggle and edit-box callbacks wait out a short delay. A page rebuild inside
--- that delay runs them first, while the page they belong to is still whole,
--- instead of letting them reach widgets another page has since taken.
+-- Toggle callbacks wait out a short delay. A page rebuild inside that delay
+-- runs them first, while the page they belong to is still whole, instead of
+-- letting them reach widgets another page has since taken.
 -- One entry per call, in the order scheduled; whichever of its timer or a
 -- drain reaches an entry first runs it.
 GUIFrame._deferred = {}
@@ -549,6 +537,16 @@ function GUIFrame:IsPoolParent(parent)
     return pool ~= nil and pool.holdsWidgets and parent._keState == "used" or false
 end
 
+-- A pool's object for this parent: from the pool under a pool parent, built
+-- directly under any other, where nothing would ever release it.
+function GUIFrame:AcquirePooled(kind, parent)
+    local pool = self._pools[kind]
+    if self:IsPoolParent(parent) then
+        return pool:Acquire(parent)
+    end
+    return pool.construct(parent)
+end
+
 -- One child a container tracks or holds. A pooled object still here goes back
 -- to its pool; any other frame still here is orphaned, as a rebuild always
 -- does; a child something else has since taken is left alone. Regions are never
@@ -924,7 +922,6 @@ local function ConfigureCard(card, parent, title, yOffset, width)
         card:SetPoint("RIGHT", parent, "RIGHT", -T.paddingSmall, 0)
     end
     card:EnableMouse(false)
-    card:SetAlpha(1)
     if card.titleText then
         card.header:SetAlpha(1)
         card.titleText:SetAlpha(1)
@@ -1070,6 +1067,29 @@ function RowMethods:GetChevron()
     return chevron
 end
 
+-- A row owns at most one label, made on first use like the chevron. Every
+-- call puts it back to one known state, because the next page to get this
+-- row may set less than the last one did.
+function RowMethods:GetLabel(size)
+    local label = self._keLabel
+    if not label then
+        label = self:CreateFontString(nil, "OVERLAY")
+        self._keLabel = label
+        GUIFrame:PoolGrow(self, self, 0, 1)
+    end
+    KE:ApplyThemeFont(label, size)
+    label:ClearAllPoints()
+    label:SetSize(0, 0)
+    label:SetJustifyH("CENTER")
+    label:SetJustifyV("MIDDLE")
+    label:SetWordWrap(true)
+    label:SetAlpha(1)
+    label:SetTextColor(1, 1, 1, 1)
+    label:SetText("")
+    label:Show()
+    return label
+end
+
 local function NewRow(parent)
     local row = CreateFrame("Frame", nil, parent)
     row.widgets = {}
@@ -1088,6 +1108,7 @@ local function ReleaseRow(row)
         widgets[i] = nil
     end
     if row._keChevron then row._keChevron:Hide() end
+    if row._keLabel then row._keLabel:Hide() end
     -- A pooled widget built on this row but never added to it.
     if row:GetNumChildren() > 0 then
         for _, child in ipairs({ row:GetChildren() }) do
@@ -1109,7 +1130,6 @@ function GUIFrame:CreateRow(parent, height)
     end
     row:SetHeight(height)
     row:EnableMouse(false)
-    row:SetAlpha(1)
     row._rowHeight = height
     row.nextX = 0
     return row
@@ -1128,9 +1148,9 @@ function GUIFrame:RefreshContent()
     KE_GUI_REFRESH_COUNT = (KE_GUI_REFRESH_COUNT or 0) + 1
     KE_GUI_REFRESH_ITEM = self.selectedSidebarItem or "HomePage"
 
-    -- A callback drained below may ask for a rebuild; the rebuild already
-    -- under way is the one it wants.
-    if self._drainingDeferred then return end
+    -- A callback drained below, or a release in the teardown loop, may ask
+    -- for a rebuild; the rebuild already under way is the one it wants.
+    if self._drainingDeferred or self._tearingDown then return end
 
     if not self.contentArea then return end
 
@@ -1148,8 +1168,8 @@ function GUIFrame:RefreshContent()
     end
     self._contentDirtyWhileHidden = nil
 
-    -- A toggle or edit box still waiting to fire its callback fires it now,
-    -- while the page it belongs to is whole.
+    -- A toggle still waiting to fire its callback fires it now, while the
+    -- page it belongs to is whole.
     self:DrainDeferredWidgetCallbacks()
 
     -- Fire rebuild callbacks FIRST so widget pools can ReleaseAll their
@@ -1161,25 +1181,11 @@ function GUIFrame:RefreshContent()
         pcall(callback)
     end
 
-    -- In-place refresh detection: when the same panel is being rebuilt
-    -- (e.g. RefreshContentDeferred fired by a card edit on the DungeonTimers
-    -- panel), skip the teardown side effects (cleanup callbacks, panel
-    -- OnHide preview teardown). Otherwise the live preview stops + restarts
-    -- across the rebuild and the user sees a visible bar/text flash on every
-    -- keystroke. Cleared at the end of this function before the next call.
     local itemId = self.selectedSidebarItem or "HomePage"
     local sameItem = (self.contentArea._lastItemId == itemId)
     -- Anything released or retired during the teardown below is counted
     -- against the page being torn down, not the one being built.
     self._releasingPage = self.contentArea._lastItemId or itemId
-    self.contentArea._inPlaceRefresh = sameItem
-
-    -- Clean up custom panel if exists (e.g. sub-tab panel)
-    if self.contentArea._customPanel then
-        self.contentArea._customPanel:Hide()
-        self.contentArea._customPanel:SetParent(nil)
-        self.contentArea._customPanel = nil
-    end
 
     -- Fire content cleanup callbacks ONLY on real item switch — same-item
     -- refreshes shouldn't tear down preview state.
@@ -1189,17 +1195,7 @@ function GUIFrame:RefreshContent()
         end
     end
 
-    -- Flag is only needed across the synchronous teardown above (panel
-    -- :Hide() fires OnHide handlers in-place). Clear before the new panel
-    -- is built; record the itemId so the next RefreshContent can detect
-    -- in-place vs. switch.
-    self.contentArea._inPlaceRefresh = false
     self.contentArea._lastItemId = itemId
-
-    -- Show scroll frame
-    if self.contentArea.scrollFrame then
-        self.contentArea.scrollFrame:Show()
-    end
 
     -- Clear existing content
     local scrollChild = self.contentArea.scrollChild
@@ -1210,35 +1206,21 @@ function GUIFrame:RefreshContent()
         end
     end
     -- Pooled objects go back to their pools; anything else is orphaned and
-    -- counted in KE_GUI_ORPHAN_COUNT, the leak's ground truth.
-    for _, child in ipairs({ scrollChild:GetChildren() }) do
-        self:ReleaseTracked(child, scrollChild)
-    end
+    -- counted in KE_GUI_ORPHAN_COUNT, the leak's ground truth. A release that
+    -- raises must not leave the flag set: every later refresh would be
+    -- swallowed.
+    self._tearingDown = true
+    local released, releaseErr = pcall(function()
+        for _, child in ipairs({ scrollChild:GetChildren() }) do
+            self:ReleaseTracked(child, scrollChild)
+        end
+    end)
+    self._tearingDown = nil
     self._releasingPage = nil
+    if not released then error(releaseErr, 0) end
 
     local T = Theme
     local yOffset = T.paddingMedium
-
-    -- Check for panel builders (full content-area takeover, no scroll frame)
-    if itemId and self.PanelBuilders and self.PanelBuilders[itemId] then
-        if self.contentArea.scrollFrame then
-            self.contentArea.scrollFrame:Hide()
-        end
-
-        local contentFrame = self.contentArea
-        local ok, panel = pcall(self.PanelBuilders[itemId], contentFrame)
-        if ok and panel then
-            contentFrame._customPanel = panel
-        elseif not ok then
-            if contentFrame.scrollFrame then
-                contentFrame.scrollFrame:Show()
-            end
-            local errChild = contentFrame.scrollChild
-            local errorCard = self:CreateCard(errChild, "Error", T.paddingMedium)
-            errorCard:AddLabel("Panel builder failed: " .. tostring(panel))
-        end
-        return
-    end
 
     if itemId and self.registeredContent[itemId] then
         local ok, result = pcall(self.registeredContent[itemId], scrollChild, yOffset)

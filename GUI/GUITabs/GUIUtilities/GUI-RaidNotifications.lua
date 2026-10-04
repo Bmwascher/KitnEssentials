@@ -121,9 +121,8 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
 
     -- Inline descriptor: sits to the right of the slider's "Alert Duration" label,
     -- in the empty space above the slider bar (y=0 to y=-14ish).
-    local durationDesc = row2c:CreateFontString(nil, "OVERLAY")
+    local durationDesc = row2c:GetLabel("small")
     durationDesc:SetPoint("LEFT", durationSlider.label, "RIGHT", 8, 0)
-    KE:ApplyThemeFont(durationDesc, "small")
     durationDesc:SetTextColor(0x88 / 0xFF, 0x88 / 0xFF, 0x88 / 0xFF, 1)
     durationDesc:SetJustifyH("LEFT")
     durationDesc:SetText(accentDash .. " |cff888888Duration applies to Reset Boss and Loot Boss alerts.|r")
