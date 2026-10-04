@@ -184,6 +184,7 @@ local ADDON_SKINS = {
     { key = "BigWigs",            text = "BigWigs",              addon = "BigWigs" },
     { key = "BugSack",            text = "BugSack",              addon = "BugSack" },
     { key = "MythicDungeonTools", text = "Mythic Dungeon Tools", addon = "MythicDungeonTools" },
+    { key = "RCLootCouncil",      text = "RCLootCouncil",        addon = "RCLootCouncil" },
     { key = "SimpleAddonManager", text = "Simple Addon Manager", addon = "SimpleAddonManager" },
     { key = "Simulationcraft",    text = "SimulationCraft",      addon = "Simulationcraft" },
     { key = "TalentLoadoutsEx",   text = "Talent Loadouts Ex",   addon = "TalentLoadoutsEx" },
@@ -207,7 +208,7 @@ end
 
 -- Frame Skins takes three columns; Addon Skins takes two. Their labels are
 -- longer ("Mythic Dungeon Tools (not installed)" is 36 characters against the
--- roughly 29 a third of the content width holds) and the list is only nine
+-- roughly 29 a third of the content width holds) and the list is only ten
 -- rows, so squeezing it costs readability and buys nothing.
 local FRAME_PER_ROW = 3
 local ADDON_PER_ROW = 2
@@ -317,7 +318,7 @@ local function ResolveRow(entry)
         disabled = true
     elseif not AddonInstalled(entry) then
         -- Addon Skins keeps its per-row text: that list is two columns wide, at
-        -- most nine rows, and WHICH addons are missing differs per machine, so a
+        -- most ten rows, and WHICH addons are missing differs per machine, so a
         -- shared note line could not say which rows it meant.
         label = label .. " |cff888888(not installed)|r"
         tooltip = "This addon is not installed, so there is nothing to skin. The setting is kept and applies by itself once you install it."
