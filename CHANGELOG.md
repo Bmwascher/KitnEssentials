@@ -1,5 +1,25 @@
 # [Changelog](https://github.com/Bmwascher/KitnEssentials/blob/main/CHANGELOG.md)
 
+## v4.8.26
+
+### Chat
+
+- Chat history is now saved per character, so one character's history no
+  longer loads on every other character
+- **NEW:** A Clear Other Characters button on the Chat History card removes
+  the saved chat of your other characters
+- Saved chat of a character whose newest line is over 90 days old is removed
+  at login, with one chat line saying how many characters were cleared
+
+### Profiler
+
+- Saved snapshots are capped at 20; saving another drops the oldest
+- **NEW:** /kes profiler census counts frames and tables on demand. It
+  freezes the game for a few seconds while it reads the frame list (longer
+  in a long session) and refuses to start in combat
+
+---
+
 ## v4.8.25
 
 ### Damage Meter
