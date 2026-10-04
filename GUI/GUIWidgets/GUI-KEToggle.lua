@@ -442,8 +442,8 @@ local function ConstructCompactCheckbox(parent)
     -- full opacity, which reads as "locked on" rather than "does not apply".
     --
     -- Mouse input stays ON while disabled. The obvious EnableMouse(false) would
-    -- make the row unhoverable, and the tooltip is the ONLY place a greyed row
-    -- says WHY it is greyed once the per-row text marker is gone. The refusal
+    -- make the row unhoverable, and the tooltip is the ONLY place a grayed row
+    -- says WHY it is grayed once the per-row text marker is gone. The refusal
     -- lives in OnClick instead, where it is one explicit branch rather than an
     -- absence of input.
     function cell:SetEnabled(enabled)
@@ -462,9 +462,9 @@ local function ConstructCompactCheckbox(parent)
     end)
 
     cell:SetScript("OnEnter", function(self)
-        -- Hover STYLING is for live rows only -- a greyed row that lit up on
+        -- Hover STYLING is for live rows only -- a grayed row that lit up on
         -- hover would read as clickable. The tooltip is not styling and shows
-        -- either way; on a greyed row it is the whole explanation.
+        -- either way; on a grayed row it is the whole explanation.
         if self._enabled then
             label:SetTextColor(Theme.textSecondary[1], Theme.textSecondary[2], Theme.textSecondary[3], 1)
             box:SetBackdropBorderColor(Theme.textPrimary[1], Theme.textPrimary[2], Theme.textPrimary[3], 0.8)
@@ -485,8 +485,8 @@ local function ConstructCompactCheckbox(parent)
         GameTooltip:Hide()
     end)
 
-    -- Re-tint after KE:RefreshTheme swaps the Theme colour tables. Unlike the
-    -- sliding toggle this widget is not stateful in colour -- the fill is the
+    -- Re-tint after KE:RefreshTheme swaps the Theme color tables. Unlike the
+    -- sliding toggle this widget is not stateful in color -- the fill is the
     -- accent whether checked or not, and only its visibility tracks state -- so
     -- a straight re-apply is enough.
     function cell:ApplyThemeColors()

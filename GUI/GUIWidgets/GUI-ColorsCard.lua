@@ -4,7 +4,7 @@
 -- ║  pages: color-mode dropdown, source toggles, per-entry   ║
 -- ║  color pickers, and an optional note row, plus the       ║
 -- ║  KE:ReadCardColor / KE:WriteCardColor read-write pair    ║
--- ║  that stores a colour as a flat {r,g,b,a} DB field.      ║
+-- ║  that stores a color as a flat {r,g,b,a} DB field.       ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -14,8 +14,8 @@ local Theme = KE.Theme
 
 GUIFrame.ColorsCardPerRow = 2
 
--- A colour key is a flat field on the profile table. Pages that nest their
--- colours under a parent table are deliberately not routed through this card:
+-- A color key is a flat field on the profile table. Pages that nest their
+-- colors under a parent table are deliberately not routed through this card:
 -- writing the parent key would discard its siblings on the first edit.
 function KE:ReadCardColor(db, entry)
     local stored = db and db[entry.key]
@@ -62,8 +62,8 @@ function GUIFrame:CreateColorsCard(scrollChild, yOffset, config)
     if config.colorMode then
         local cm = config.colorMode
         -- The mode dropdown ALWAYS registers under the card group, never under
-        -- the group its custom-colour picker uses. Putting it in that group
-        -- would grey out the only control that can switch back once the user
+        -- the group its custom-color picker uses. Putting it in that group
+        -- would gray out the only control that can switch back once the user
         -- picks Theme mode. Every page this replaces registers it the same way.
         addRow(Theme.rowHeight, function(row)
             local dd = GUIFrame:CreateDropdown(row, "Color Mode", {

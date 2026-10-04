@@ -261,7 +261,7 @@ local function CreateFontSettingsCardLegacy(scrollChild, yOffset, config)
 
     -- Optional caller-supplied accessors. HealerMana needs a read that falls
     -- through to a shared key while the write stays mode-prefixed, which a
-    -- single dbKey cannot express. Absent, behaviour is unchanged. A supplied
+    -- single dbKey cannot express. Absent, behavior is unchanged. A supplied
     -- accessor owns key resolution outright, nested "a.b.c" keys included.
     local rawGet = config.getValue
     local rawSet = config.setValue

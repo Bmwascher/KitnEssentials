@@ -91,7 +91,7 @@ local TOGGLE_ICON   = 22   -- dungeon icon, left of the short name
 -- PVEFrame. A self-owned KE:ApplyBackdrop did not draw in game -- don't retry
 -- it without an in-game probe first.
 
--- Themed rather than a hardcoded colour, so it tracks the user's accent. Read
+-- Themed rather than a hardcoded color, so it tracks the user's accent. Read
 -- once per function, keep each site's alpha.
 local KE_PINK = { 1, 0, 0.549 }
 local function Accent()
@@ -236,7 +236,7 @@ local function SanitizeScore(resultID)
 end
 
 ------------------------------------------------------------------------
--- Leader score on result rows: prepend the coloured overall score to each
+-- Leader score on result rows: prepend the colored overall score to each
 -- entry's name line, using Blizzard's own rarity ramp.
 ------------------------------------------------------------------------
 local function DecorateSearchEntry(entry)
@@ -377,7 +377,7 @@ local function RepositionRaiderIO()
         anchor.SetPoint = function(self, p, rel, rp, x, y)
             -- While inactive this wrapper delegates straight to `orig`
             -- without substituting `rel` or nudging `x`. It stays
-            -- installed; it stops changing behaviour.
+            -- installed; it stops changing behavior.
             -- Record EVERY request, as it arrived, before any substitution.
             -- Two reasons, and the second is why this sits outside the branch
             -- below. A re-anchor replays this rather than the anchor's
@@ -423,7 +423,7 @@ end
 -- creation instead of assuming it.
 local rioWatcher
 local function EnsureRaiderIOWrap()
-    -- Cancelling the ticker is NOT sufficient on its own -- the permanent
+    -- Canceling the ticker is NOT sufficient on its own -- the permanent
     -- panel Show hook can call this again and install the wrapper while
     -- inactive.
     if not IsActive() then return end
@@ -739,7 +739,7 @@ local function SetToggleVisual(btn, active)
 end
 
 -- `iconTex` is optional. When given, the dungeon art sits at the LEFT edge
--- and the label centres in the space beside it; without it the label centres
+-- and the label centers in the space beside it; without it the label centers
 -- across the whole button, which is what the role and sort toggles want.
 local function MakeToggle(parent, S, label, getter, onClick, iconTex)
     local btn = CreateFrame("Button", nil, parent)
@@ -1010,7 +1010,7 @@ end
 -- of the session. Takes the FIRST return, loadedOrLoading -- deliberately
 -- the opposite of the two sibling modules, which take `loaded` because
 -- they wait for another addon's objects. This is a CONFLICT BAIL: if PGF
--- is merely loading, competing behaviour must still not be installed, or
+-- is merely loading, competing behavior must still not be installed, or
 -- both addons rewrite the same results table in the gap. No fallback to
 -- the legacy global IsAddOnLoaded -- the 12.0.7 authority documents this
 -- only under C_AddOns.
@@ -1164,7 +1164,7 @@ end
 -- Late loads only, in practice. Most of an installation's ADDON_LOADED
 -- events land before this module enables, and a conflict already present at
 -- enable returns before the registration ever happens -- so this handler
--- exists for the addon that arrives afterwards. Both of its actions are
+-- exists for the addon that arrives afterward. Both of its actions are
 -- needed: the restore hands the filter back, and the refresh clears a panel
 -- left on screen when the Group Finder was already open.
 function GFP:OnAddonLoaded()
@@ -1189,7 +1189,7 @@ function GFP:OnRosterChanged()
     self:ApplyAdvancedFilters()
 end
 
--- Recolour friend-group entry names ourselves -- BATTLENET_FONT_COLOR,
+-- Recolor friend-group entry names ourselves -- BATTLENET_FONT_COLOR,
 -- exactly what Blizzard's own (currently blind) branch would do.
 -- Post-hook so we run after Blizzard's SetTextColor.
 local entryHookInstalled = false

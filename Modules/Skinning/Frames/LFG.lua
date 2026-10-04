@@ -70,7 +70,7 @@ for set in pairs(KE.ROLE_ICON_ART) do ROLE_ICON_SETS[set] = true end
 
 -- The single read path for the saved role-icon-set key. LFG.lua, Chat.lua and
 -- the GUI callback all come through GetRoleIconSet, so an absent or
--- unrecognised value cannot mean different things on different surfaces.
+-- unrecognized value cannot mean different things on different surfaces.
 function S.GetRoleIconSet()
     local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
@@ -401,7 +401,7 @@ local function HookLFGListIcons()
         -- Painting inside Blizzard's stack is what removes the one-frame flash
         -- of stock art, because its own paint never reaches a draw. It is also
         -- what taints that stack, and both callers of
-        -- LFGListGroupDataDisplay_Update keep using secret values afterwards:
+        -- LFGListGroupDataDisplay_Update keep using secret values afterward:
         -- LFGListSearchEntry_Update compares searchResultInfo.voiceChat three
         -- lines later, and the applicant viewer's GROUP_ROSTER_UPDATE path
         -- continues into UpdateInviteState. Tainted execution reaching either
@@ -1044,9 +1044,9 @@ local function Skin()
             else
                 S.Button(btn)
             end
-            -- (check/x boxes looked grey): compact icon
+            -- (check/x boxes looked gray): compact icon
             -- buttons read better on the theme background than on the
-            -- control-grey fill. S.Backdrop cached-returns the existing
+            -- control-gray fill. S.Backdrop cached-returns the existing
             -- backdrop.
             local bd = S.Backdrop(btn)
             if bd then bd:SetBackdropColor(0.063, 0.063, 0.063, 0.90) end -- palette control alpha

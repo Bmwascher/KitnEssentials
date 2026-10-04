@@ -50,7 +50,7 @@ local function ShowCopyDialog(name, id)
     -- overwriting the highlighted id with the letter V instead of copying it.
     local hint = "Press " .. KE:ColorTextByTheme("Ctrl-C") .. " to copy"
     -- cancelText ("Close") is the opt-in Core/Widgets.lua reads to show a single
-    -- Close button and swap this prompt's title and edit-box colours -- see
+    -- Close button and swap this prompt's title and edit-box colors -- see
     -- CreatePrompt's isCopyPrompt flag.
     KE:CreatePrompt(name or "Copy", tostring(id), true, hint, false, nil, nil, nil, nil, nil, nil, nil, "Close")
 end

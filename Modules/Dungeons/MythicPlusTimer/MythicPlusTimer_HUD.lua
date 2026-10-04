@@ -92,7 +92,7 @@ local TIMER_PB_GAP = 8
 local RACE_VAL_GAP = 2
 
 -- Deaths list placement: GAP (px) between the headline and the list's near
--- edge; LIFT (px) of the list's bottom edge above the headline's centre line.
+-- edge; LIFT (px) of the list's bottom edge above the headline's center line.
 local DEATHS_TOOLTIP_GAP = 8
 local DEATHS_TOOLTIP_LIFT = 4
 
@@ -675,7 +675,7 @@ local function _ThreshLabel(elapsed, cutoff)
     return _FmtShort(cutoff - elapsed)
 end
 
--- BELOW placement: a passed cutoff greys to its ABSOLUTE time instead of
+-- BELOW placement: a passed cutoff grays to its ABSOLUTE time instead of
 -- hiding — the below-bar labels double as permanent pacing marks under
 -- their ticks (prototype style). Live cutoffs count down like _ThreshLabel.
 local function _ThreshLabelBelow(elapsed, cutoff)
@@ -686,7 +686,7 @@ local function _ThreshLabelBelow(elapsed, cutoff)
 end
 
 -- Completion: the +3/+2 labels lock to their margin/overshoot vs the frozen
--- clear time — the bar-mode analogue of the race line's LOCKED_MADE/
+-- clear time — the bar-mode analog of the race line's LOCKED_MADE/
 -- LOCKED_MISSED states, same sign/color convention (made = bare margin in
 -- TimerSuccessColor, missed = "+overshoot" in TimerExpiredColor). The +1
 -- (bar end) label keeps its own behavior — white frozen remaining when
@@ -850,10 +850,10 @@ function MPT:RenderThresholds()
         self.SetTextGated(f.thresh1Text, ""); f.thresh1Text:Hide()
         return
     end
-    -- BELOW keeps passed cutoffs visible as greyed absolute times; every
+    -- BELOW keeps passed cutoffs visible as grayed absolute times; every
     -- other placement hides them (_ThreshLabel returns nil).
     -- Completion overrides every placement: the +3/+2 labels un-hide and lock
-    -- to their signed margin/overshoot vs the frozen clear time (BELOW's grey
+    -- to their signed margin/overshoot vs the frozen clear time (BELOW's gray
     -- absolute state is a mid-run pacing aid, not a result readout).
     if run.completed then
         _SetThreshText(f.thresh3Text, _ThreshLockedLabel(elapsed, t3, db))
@@ -1173,7 +1173,7 @@ function MPT:SetPullDisplay(count, countText, percentText)
     if type(total) ~= "number" or total <= 0 then return end
     local bar = bars.forcesPullBar
     if db.ShowForcesBar ~= false then
-        -- Colour follows the bound profile per delivery like the sibling
+        -- Color follows the bound profile per delivery like the sibling
         -- fills (RenderForces); gated because SetStatusBarColor is a draw call.
         local pc = db.PullOverlayColor or { 0.6, 0.6, 0.6 }
         if bar._keFillR ~= pc[1] or bar._keFillG ~= pc[2] or bar._keFillB ~= pc[3] then
@@ -1772,7 +1772,7 @@ function MPT:ApplySettings()
     self:ApplyLayout()    -- fonts, bar sizes, position, scale, backdrop, Strata
     self:NotifyRefresh()  -- debounced Render repaints texts/colors (works in preview)
     -- Settings or profile changed: drop any in-flight estimate and rebuild
-    -- under the new state (format, colour, opt-in, DB rebind).
+    -- under the new state (format, color, opt-in, DB rebind).
     if self.ClearPullEstimate then
         self:ClearPullEstimate()
         self:SyncPullEstimate()

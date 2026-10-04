@@ -66,7 +66,7 @@ end
 -- Core Logic
 ---------------------------------------------------------------------------------
 -- 1px outset outline: four strips that sit 1px OUTSIDE the frame's edges.
--- With spacing=1 between adjacent pills, neighbour outsets land on the same
+-- With spacing=1 between adjacent pills, neighbor outsets land on the same
 -- 1px column (pillA.right outset and pillB.left outset both occupy the
 -- column at pillA.right) — clean shared 1px divider, matching outer 1px
 -- borders. Hand-rolled equivalent of Falcon's PixelOutline.tga slice.

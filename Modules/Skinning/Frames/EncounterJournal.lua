@@ -6,7 +6,7 @@ local _G = _G
 local ipairs = ipairs
 local hooksecurefunc = hooksecurefunc
 
-local GREY = S.palette.hover
+local GRAY = S.palette.hover
 local navHooked = false
 
 local function SafeHook(owner, method, fn)
@@ -174,7 +174,7 @@ local function SkinEncounterJournal()
                     if child.SetHighlightTexture then
                         child:SetHighlightTexture("Interface\\Buttons\\WHITE8x8")
                         local hl = child:GetHighlightTexture()
-                        hl:SetVertexColor(GREY[1], GREY[2], GREY[3], S.palette.hover[4])
+                        hl:SetVertexColor(GRAY[1], GRAY[2], GRAY[3], S.palette.hover[4])
                         hl:ClearAllPoints()
 
                         local anchor = S.GetBackdrop(child.bgImage) or child.bgImage or child
@@ -264,7 +264,7 @@ local function SkinEncounterJournal()
                     if tab.GetHighlightTexture then
                         local hl = tab:GetHighlightTexture()
                         if hl then
-                            hl:SetColorTexture(GREY[1], GREY[2], GREY[3], S.palette.hover[4])
+                            hl:SetColorTexture(GRAY[1], GRAY[2], GRAY[3], S.palette.hover[4])
                             hl:ClearAllPoints()
                             hl:SetPoint("TOPLEFT", bd or tab, "TOPLEFT", 1, -1)
                             hl:SetPoint("BOTTOMRIGHT", bd or tab, "BOTTOMRIGHT", -1, 1)

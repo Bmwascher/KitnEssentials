@@ -27,7 +27,7 @@ describe("EditMode revert", function()
     end
 
     -- The second style ADOPTS the table it is handed as its own storage, and
-    -- edits through it afterwards. Both halves are needed: adopting alone
+    -- edits through it afterward. Both halves are needed: adopting alone
     -- corrupts nothing, and the later edit is what writes through into whatever
     -- was adopted. Modules that save a position table wholesale and then nudge
     -- it in place behave exactly this way.

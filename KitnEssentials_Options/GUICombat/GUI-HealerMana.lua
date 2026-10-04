@@ -287,7 +287,7 @@ GUIFrame:RegisterContent("HealerManaRaid", function(scrollChild, yOffset)
             if mod and mod.ShowPreview then mod:ShowPreview() end
             ApplySettings()
             RefreshStates()
-            RebuildPage()  -- the preview context and the greyed set both move
+            RebuildPage()  -- the preview context and the grayed set both move
         end,
     })
     rowRaid1:AddWidget(enableRaidCheck, 0.5)

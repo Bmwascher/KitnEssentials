@@ -11,15 +11,15 @@ local SPEC_EVENT = "PLAYER_SPECIALIZATION_CHANGED"
 local function newScheduler()
     local sched = { handles = {} }
     function sched.newTimer(sec, fn)
-        local h = { sec = sec, fn = fn, cancelled = false, fired = false }
-        h.Cancel = function() h.cancelled = true end
+        local h = { sec = sec, fn = fn, canceled = false, fired = false }
+        h.Cancel = function() h.canceled = true end
         sched.handles[#sched.handles + 1] = h
         return h
     end
     function sched.live()
         local out = {}
         for _, h in ipairs(sched.handles) do
-            if not h.cancelled and not h.fired then out[#out + 1] = h end
+            if not h.canceled and not h.fired then out[#out + 1] = h end
         end
         return out
     end
@@ -220,7 +220,7 @@ describe("KE.Context", function()
 
         frame:Fire("ZONE_CHANGED_NEW_AREA")
         assert.are.equal(2, log.evals)
-        assert.is_true(first.cancelled)
+        assert.is_true(first.canceled)
         local settles = sched.live()
         assert.are.equal(1, #settles)
         assert.are_not.equal(first, settles[1])

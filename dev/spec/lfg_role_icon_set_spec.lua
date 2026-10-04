@@ -1,6 +1,6 @@
 -- Modules/Skinning/Frames/LFG.lua — S.GetRoleIconSet. The resolver is the
 -- single read path for the saved key: five files would otherwise each decide
--- what an absent or unrecognised value means, and they would drift.
+-- what an absent or unrecognized value means, and they would drift.
 local loader = require("dev.spec._ke_loader")
 
 describe("S.GetRoleIconSet", function()
@@ -11,7 +11,7 @@ describe("S.GetRoleIconSet", function()
         return S.GetRoleIconSet()
     end
 
-    it("returns modern when the key is absent, the stored value when recognised, modern otherwise", function()
+    it("returns modern when the key is absent, the stored value when recognized, modern otherwise", function()
         assert.are.equal("modern", resolverWith({}))
         assert.are.equal("blizzard", resolverWith({ RoleIconSet = "blizzard" }))
         assert.are.equal("circle", resolverWith({ RoleIconSet = "circle" }))

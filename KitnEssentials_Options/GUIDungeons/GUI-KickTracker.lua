@@ -77,7 +77,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     end)
 
     card1:AddLabel("Tracks your party's interrupts as cooldown bars. Teammates running a kick-sync " ..
-        "addon get live bars; other kicks show as temporary class-coloured records marked *. " ..
+        "addon get live bars; other kicks show as temporary class-colored records marked *. " ..
         "Inside a running keystone the game blocks addon messages, so every teammate kick shows " ..
         "as a record there. Only active in 5-player dungeons.")
 
@@ -110,7 +110,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
     -- the top of this function.)
     -- First open after /reload: default the edited context to the player's
     -- live-active context so the card matches the spec-driven preview — a healer
-    -- main lands on Healer, not Default (the old two-card UI did this by greying
+    -- main lands on Healer, not Default (the old two-card UI did this by graying
     -- the default card for live healers).
     if KT and KT.guiConfigContext == nil then
         KT.guiConfigContext = (db.UseHealerPosition and KE.IsPlayerHealerSpec and KE:IsPlayerHealerSpec())
@@ -167,7 +167,7 @@ GUIFrame:RegisterContent("KickTracker", function(scrollChild, yOffset)
         end,
     })
     rowPosMode:AddWidget(configureForDropdown, 0.5)
-    manager:Register(configureForDropdown, "healerConfig")  -- greyed when override off
+    manager:Register(configureForDropdown, "healerConfig")  -- grayed when override off
     cardPosMode:AddRow(rowPosMode, Theme.rowHeight)
 
     local posModeNoteRow = GUIFrame:CreateRow(cardPosMode.content, Theme.rowHeightNote)

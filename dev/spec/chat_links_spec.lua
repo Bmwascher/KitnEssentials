@@ -33,7 +33,7 @@ describe("ChatLinks filter", function()
         assert.equal("hello", out)
     end)
 
-    it("matches a live keystone link, which the colour-prefixed pattern does not", function()
+    it("matches a live keystone link, which the color-prefixed pattern does not", function()
         local _, out = CL:Filter("CHAT_MSG_SAY", KEYSTONE)
         assert.equal("|cnIQ4:" .. ICON_4321
             .. " |Hkeystone:180653:399:2:165:0:0:0:0"
@@ -113,7 +113,7 @@ describe("ChatLinks web addresses", function()
 
     -- Regression cases. A flat pass over the whole message wraps an address
     -- inside a link's display text into a NESTED link, and its greedy tail eats
-    -- the terminator that closes the outer link or colour escape. Both were
+    -- the terminator that closes the outer link or color escape. Both were
     -- reproduced in Lua 5.1 before the span walk was added.
     it("leaves a plain or scheme address inside an item link's text alone", function()
         local plain = "|Hitem:1|h[Foo www.example.com]|h"
@@ -128,7 +128,7 @@ describe("ChatLinks web addresses", function()
             CL.WrapURLs("a |Hitem:1|h[Sword]|h and https://example.com", BLUE))
     end)
 
-    it("does not swallow a trailing colour terminator", function()
+    it("does not swallow a trailing color terminator", function()
         assert.equal("look at " .. BLUE
             .. "|Hkeurl:https://example.com|h[https://example.com]|h|r|r",
             CL.WrapURLs("look at https://example.com|r", BLUE))
@@ -141,7 +141,7 @@ describe("ChatLinks web addresses", function()
     end)
 
     -- The span walk's loop only iterates twice when a second link follows the
-    -- first, and the fallback colour is the one branch no other case reaches.
+    -- first, and the fallback color is the one branch no other case reaches.
     it("keeps two adjacent links intact and wraps the address after them", function()
         local out = CL.WrapURLs(
             "|Hitem:1|h[A]|h |Hitem:2|h[B]|h see www.example.com", BLUE)
@@ -177,10 +177,10 @@ describe("ChatLinks web addresses", function()
         assert.is_truthy(out:find("|Hkeurl:www.example.com|h", 1, true))
     end)
 
-    -- Without the resynchronisation, the unterminated marker claims the item
+    -- Without the resynchronization, the unterminated marker claims the item
     -- link's two terminators, the whole string is copied through as one link,
     -- and the address never wraps.
-    it("resynchronises past an unterminated marker onto a real link", function()
+    it("resynchronizes past an unterminated marker onto a real link", function()
         local out = CL.WrapURLs(
             "|Hbroken see www.example.com |Hitem:1|h[Item]|h", BLUE)
         assert.is_truthy(out:find("|Hkeurl:www.example.com|h", 1, true))

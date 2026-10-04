@@ -80,7 +80,7 @@ function CHAT:GetChatLines(frame)
         local message, r, g, b = frame:GetMessageInfo(i)
         if message and not self:MessageIsProtected(message) then
             r, g, b = r or 1, g or 1, b or 1
-            -- Inside the protected-line check on purpose: the sanitiser reads
+            -- Inside the protected-line check on purpose: the sanitizer reads
             -- bytes, and a secret line must never reach it.
             message = SanitizeCopyLine(message)
             message = removeIconFromLine(message)
@@ -252,7 +252,7 @@ function CHAT:BuildCopyChatFrame()
     local thumb = scrollbar:CreateTexture(nil, "OVERLAY")
     thumb:SetSize(SCROLLBAR_WIDTH - 2, 40)
     -- Theme lookup first, literal only as a fallback: dropping the lookup
-    -- ships a hardcoded colour instead of KE's accent.
+    -- ships a hardcoded color instead of KE's accent.
     local brand = (KE.GetThemeColor and KE:GetThemeColor("accent")) or { 1.0, 0.0, 0.549 }
     thumb:SetColorTexture(brand[1], brand[2], brand[3], 0.8)
     scrollbar:SetThumbTexture(thumb)

@@ -300,7 +300,7 @@ function MPT:UpdateSplits()
         run.pbRec = rec
         run.pbSourceLevel = resolved and srcLvl or nil
     end
-    -- Normalise: false means no record; treat as nil for downstream logic.
+    -- Normalize: false means no record; treat as nil for downstream logic.
     local r = rec or nil
     run.bestOverall = r and r.overall or run.bestOverall
     -- Forces 100% PB target/delta source (PB target while filling, +/- once capped).

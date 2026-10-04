@@ -36,7 +36,7 @@ describe("HealerMana:Look", function()
         assert.are.equal(24, HM:Look("IconSize"))
     end)
 
-    it("honours the preview context over the live mode", function()
+    it("honors the preview context over the live mode", function()
         local HM, KE = L.loadHealerMana({ IsInRaid = function() return false end })
         KE.PreviewManager = { guiOpen = true }
         HM.db.SplitPositioning = true
@@ -74,9 +74,9 @@ describe("HealerMana:SeedRaidLook", function()
         assert.are.equal(48, HM.db.RaidIconSize)
     end)
 
-    it("copies colour tables by value, not by reference", function()
+    it("copies color tables by value, not by reference", function()
         -- Sharing the table would make the two modes the same setting wearing
-        -- two names: editing Raid's colour would silently change Dungeon's.
+        -- two names: editing Raid's color would silently change Dungeon's.
         local HM = L.loadHealerMana()
         HM.db.HighManaColor = { 1, 0, 0, 1 }
         HM.db.RaidHighManaColor = nil

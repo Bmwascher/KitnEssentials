@@ -137,9 +137,9 @@ local OBJECTIVE_WAYPOINT = { 0.4, 1, 1 }
 local OBJECTIVE_DONE     = { 0.2, 1, 0.2 }
 local OBJECTIVE_PENDING  = { 1, 1, 1 }
 
-local function PaintObjective(objectives, slot, colour)
+local function PaintObjective(objectives, slot, color)
     local line = objectives[slot]
-    if line then line:SetTextColor(colour[1], colour[2], colour[3]) end
+    if line then line:SetTextColor(color[1], color[2], color[3]) end
 
     return slot + 1
 end

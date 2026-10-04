@@ -347,7 +347,7 @@ end
 
 -- Groups PLAYERS ONLY: several people earning the same achievement collapse into
 -- one line. One person earning several achievements stays several lines, because
--- the merged line reuses Blizzard's own localised format string and there is no
+-- the merged line reuses Blizzard's own localized format string and there is no
 -- published wording for that case.
 --
 -- cache[frame][event][achievementID] = {
@@ -355,7 +355,7 @@ end
 --     seen     = { [playerLink] = true },
 --     link     = <the achievement link lifted from arg1, already decorated>,
 --     rendered = <exactly what the caller would have printed>,
---     info     = <ChatTypeInfo entry the caller would have coloured with>,
+--     info     = <ChatTypeInfo entry the caller would have colored with>,
 -- }
 local achievementCache = {}
 local ACHIEVEMENT_WINDOW = 0.3
@@ -378,7 +378,7 @@ end
 
 -- The client publishes no plural "have earned the achievement" string, so a
 -- merged line is a LABEL rather than a sentence: link, label, names. The label
--- is read from the client so it is localised; the two-word fallback exists only
+-- is read from the client so it is localized; the two-word fallback exists only
 -- because a GlobalString absent from the local reference clone is a coverage
 -- gap rather than proof it is missing, and a nil label must not produce "nil".
 -- GUILD_ACHIEVEMENT_EARNED_BY is a plain label and the live client uses it, so
@@ -434,25 +434,25 @@ function CMH:CaptureAchievement(frame, event, info, message, playerLink)
     if not achievementID then return end
 
     -- The whole link INCLUDING any icon the incoming filter prepended AND the
-    -- colour escape that wraps both -- the client sends
+    -- color escape that wraps both -- the client sends
     -- "|cffffff00<link>|r" and the incoming filter builds
     -- "|cffffff00<icon> <link>|r", so a pattern anchored at |T or |H drops the
-    -- icon, the colour, or both. Losing the colour is not cosmetic in one
-    -- place only: the merged line is printed in the channel's colour, so a
+    -- icon, the color, or both. Losing the color is not cosmetic in one
+    -- place only: the merged line is printed in the channel's color, so a
     -- guild achievement rendered its title green while the identical personal
     -- announcement rendered it gold.
     --
     -- Four alternatives, widest first, all bound to THIS achievement's id. The
-    -- uncoloured pair stays because a caller that strips colour must still
+    -- uncolored pair stays because a caller that strips color must still
     -- merge. The texture is [^|]- rather than .- so it cannot swallow an
     -- earlier unrelated escape or the prose between them. An unbound pattern
     -- captured "|Traid:14|t before |Tachievement:14|t |Hachievement:123..." as
     -- the link, and paired a second achievement's decorated link with the first
-    -- one's id. Nothing may sit between |c and the icon or |H, so the colour
+    -- one's id. Nothing may sit between |c and the icon or |H, so the color
     -- cannot be borrowed from an unrelated escape earlier in the line. The id
     -- is digits only, so splicing it into a pattern is safe.
     -- [^|]* rather than .-: an unterminated prefix followed by a VALID link let
-    -- the lazy form run through the neighbour's |h terminators and report the
+    -- the lazy form run through the neighbor's |h terminators and report the
     -- first id with the second link's text. Neither achievement link data nor a
     -- display name can contain a bar -- one would break the client's own parser
     -- -- so excluding it cannot cross into an adjacent escape. Well-formed
@@ -578,9 +578,9 @@ local function ChatModule()
 end
 
 -- Records the byte range of every escape sequence so no rewrite can land inside
--- one. A colour span protects its CONTENT as well as its markers: colouring text
--- that is already coloured inserts a |r that closes the OUTER colour early, so
--- the rest of the original span silently loses its colour.
+-- one. A color span protects its CONTENT as well as its markers: coloring text
+-- that is already colored inserts a |r that closes the OUTER color early, so
+-- the rest of the original span silently loses its color.
 function CMH.CollectProtected(text, bossBody)
     local count, pos = 0, 1
     local colorOpen, colorDepth = nil, 0
@@ -639,7 +639,7 @@ function CMH.CollectProtected(text, bossBody)
         end
     end
 
-    -- An unterminated colour protects everything to the end of the line.
+    -- An unterminated color protects everything to the end of the line.
     if colorOpen then
         count = count + 1
         protectStart[count] = colorOpen
@@ -647,7 +647,7 @@ function CMH.CollectProtected(text, bossBody)
     end
 
     -- A %% pair on every line. On a boss body, which becomes a format pattern
-    -- after this rewrite, a %s too: a colour code inside it shows a literal %s
+    -- after this rewrite, a %s too: a color code inside it shows a literal %s
     -- instead of the name. A lone % is escaped either way, so splitting it is
     -- harmless. Elsewhere the body is a format argument and %s is plain text.
     local pp = 1
@@ -772,7 +772,7 @@ local function ScanMentions(text, lowered, classNames, excluded, protectCount, h
                 -- Exclusion is read BEFORE the class lookup. Checking it only
                 -- for a cached name would let "Ana-Realm" fall through to
                 -- "Ana" whenever the realm-qualified form was never cached,
-                -- colouring exactly the name the user excluded.
+                -- coloring exactly the name the user excluded.
                 if excluded[candidate] then break end
 
                 local class = classNames[candidate]
@@ -792,8 +792,8 @@ local function ScanMentions(text, lowered, classNames, excluded, protectCount, h
     return hitCount
 end
 
--- The SOUND is gated on the sender, not the colour: your keyword still
--- colours in a line you typed, it just does not ding you. An unreadable sender
+-- The SOUND is gated on the sender, not the color: your keyword still
+-- colors in a line you typed, it just does not ding you. An unreadable sender
 -- counts as somebody else -- a missed alert is worse than an occasional
 -- self-ding, and your own name is not identity-restricted.
 --
@@ -899,7 +899,7 @@ function CMH.Highlight(text, author, bossBody)
     for i = 1, hitCount do
         local s, e = hitStart[i], hitEnd[i]
         -- Overlaps are dropped rather than nested: nesting breaks the |r
-        -- pairing, and two colours over the same bytes render as one anyway.
+        -- pairing, and two colors over the same bytes render as one anyway.
         if s >= pos then
             np = np + 1; pieces[np] = text:sub(pos, s - 1)
             np = np + 1; pieces[np] = hitColor[i]
@@ -1291,7 +1291,7 @@ function CMH:ChatFrame_MessageEventHandler(frame, event, arg1, arg2, arg3, arg4,
                 -- of it. It cannot be a format string -- that is unverified --
                 -- and it cannot be searched for the name slot, because a pattern
                 -- match on a secret DOES throw. So it goes to the frame exactly
-                -- as it arrived, which is what the neighbouring LOOT and SPELL_
+                -- as it arrived, which is what the neighboring LOOT and SPELL_
                 -- branches already do with an unguarded arg1. Anchor 5 says
                 -- never dropped, and that covers a secret body as much as a
                 -- secret sender.

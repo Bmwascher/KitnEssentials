@@ -77,12 +77,12 @@ describe("RaidControl", function()
     end)
 
     describe("ScreenPosition", function()
-        -- Returns (bottom, left): true when the frame's centre is in the
+        -- Returns (bottom, left): true when the frame's center is in the
         -- lower / left half of a 1600x900 UIParent.
         -- UIParent must be installed by the loader, BEFORE the module chunk
         -- runs: the module captures it as a file-scope local, so assigning
         -- _G.UIParent here would leave the module reading a different table.
-        local function withCentre(x, y)
+        local function withCenter(x, y)
             RC, KE, seams = loader.loadRaidControl({
                 SafeCenter = function() return x, y end,
                 UIParent = { GetSize = function() return 1600, 900 end },
@@ -91,19 +91,19 @@ describe("RaidControl", function()
         end
 
         it("reports bottom-left for a frame near the origin", function()
-            local bottom, left = withCentre(10, 10)({})
+            local bottom, left = withCenter(10, 10)({})
             assert.is_true(bottom)
             assert.is_true(left)
         end)
 
         it("reports top-right for a frame near the far corner", function()
-            local bottom, left = withCentre(1590, 890)({})
+            local bottom, left = withCenter(1590, 890)({})
             assert.is_false(bottom)
             assert.is_false(left)
         end)
 
-        it("treats a nil centre as the origin rather than erroring", function()
-            local bottom, left = withCentre(nil, nil)({})
+        it("treats a nil center as the origin rather than erroring", function()
+            local bottom, left = withCenter(nil, nil)({})
             assert.is_true(bottom)
             assert.is_true(left)
         end)
@@ -115,7 +115,7 @@ describe("RaidControl", function()
             -- swapped-dimension one (w and h transposed) satisfies all
             -- three anyway. An off-diagonal point pins the two returns to
             -- DIFFERENT halves of the screen, so either swap fails it.
-            local bottom, left = withCentre(10, 890)({})
+            local bottom, left = withCenter(10, 890)({})
             assert.is_false(bottom)
             assert.is_true(left)
         end)
@@ -156,7 +156,7 @@ describe("RaidControl", function()
     end)
 
     describe("RoleIcons_AddNames", function()
-        it("colours the entry by class and truncates the realm to a star", function()
+        it("colors the entry by class and truncates the realm to a star", function()
             local out = {}
             seams.roleIconsAddNames(out, "Kitn-Ravencrest", "MAGE")
             assert.equals(1, #out)
@@ -164,15 +164,15 @@ describe("RaidControl", function()
             assert.equals("|cff3fc6eaKitn*", out[1])
         end)
 
-        it("falls back to the priest colour for an unknown class", function()
+        it("falls back to the priest color for an unknown class", function()
             local out = {}
             seams.roleIconsAddNames(out, "Nobody", nil)
             assert.equals("|cffffffffNobody", out[1])
         end)
 
-        it("falls back to the priest colour when the class token is secret", function()
+        it("falls back to the priest color when the class token is secret", function()
             -- A real class key ("MAGE") marked secret. An unguarded lookup
-            -- would still find MAGE's colour in the mock's plain table --
+            -- would still find MAGE's color in the mock's plain table --
             -- indexing does not itself error the way it would against a
             -- real secret value -- so this only fails if the guard rejects
             -- the token BEFORE the lookup, not because indexing throws.
@@ -184,7 +184,7 @@ describe("RaidControl", function()
             assert.equals("|cffffffffNobody", out[1])
         end)
 
-        it("leaves a realmless name untouched apart from the colour prefix", function()
+        it("leaves a realmless name untouched apart from the color prefix", function()
             local out = {}
             seams.roleIconsAddNames(out, "Kitn", "MAGE")
             assert.equals("|cff3fc6eaKitn", out[1])
@@ -192,12 +192,12 @@ describe("RaidControl", function()
     end)
 
     describe("RoleIcons_SortNames", function()
-        it("orders by the name AFTER the 10-character colour prefix", function()
-            -- The colour codes are chosen so the two orderings DISAGREE:
+        it("orders by the name AFTER the 10-character color prefix", function()
+            -- The color codes are chosen so the two orderings DISAGREE:
             -- raw string order puts Zed first (byte 5 is "0" vs "f"), name
             -- order puts Aaa first. A comparator that forgot the strsub
             -- therefore fails this, which is the whole point. Picking the
-            -- colours the other way round makes the example vacuous.
+            -- colors the other way round makes the example vacuous.
             local list = { "|cff000000Zed", "|cffffffffAaa" }
             table.sort(list, seams.roleIconsSortNames)
             assert.equals("|cffffffffAaa", list[1])

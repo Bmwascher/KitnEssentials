@@ -451,7 +451,7 @@ local BlizzardFramesOnDemand = {
 
 local disabled = {}    -- [frame] = true while movement is suppressed via SetMovable API
 local moveTargets = {} -- [handle frame] = frame that actually moves
-local secureDrag = {}  -- .frame plus press-time cursor and centre while a protected drag is live
+local secureDrag = {}  -- .frame plus press-time cursor and center while a protected drag is live
 
 local framePaths = {}  -- [frame] = dotted path it was registered under; keys the saved positions
 local applying = {}    -- [frame] = true while our own SetPoint is in flight
@@ -558,8 +558,8 @@ local function StopSecureDrag()
     secureDrag.frame = nil
 end
 
--- Moves the dragged frame's centre by the cursor's travel since the press,
--- clamped so the centre stays on screen (a protected frame never gets
+-- Moves the dragged frame's center by the cursor's travel since the press,
+-- clamped so the center stays on screen (a protected frame never gets
 -- SetClampedToScreen). Shown only while a protected drag is live. A window
 -- hidden mid-drag (Escape with the button held) gets no OnMouseUp, so the
 -- updater ends that drag itself.

@@ -2,7 +2,7 @@
 -- ║  ChatLinks.lua                                           ║
 -- ║  Module: Chat Link Decoration                            ║
 -- ║  Purpose: Prepend an icon to chat hyperlinks and render  ║
--- ║           the profession quality tier as a coloured digit║
+-- ║           the profession quality tier as a colored digit ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -12,7 +12,7 @@ if not KitnEssentials then return end
 local CL = KitnEssentials:NewModule("ChatLinks", "AceEvent-3.0")
 
 -- The chat skin owns the panel this module's popup anchors to. Silent form: the
--- popup falls back to a chat frame, then to screen centre, if the skin is off.
+-- popup falls back to a chat frame, then to screen center, if the skin is off.
 local CHAT = KitnEssentials:GetModule("Chat", true)
 
 local _G = _G
@@ -217,7 +217,7 @@ end
 -- a wrapped link the address is preceded by `:` or `[`, so no frontier exists.
 --
 -- The tail is `[^%s|]+`, not `%S+`. A pipe cannot appear in an address, and a
--- greedy `%S+` swallows the `|r` that closes a colour escape or the `]|h` that
+-- greedy `%S+` swallows the `|r` that closes a color escape or the `]|h` that
 -- closes a hyperlink, producing a link whose text carries the terminator and
 -- leaving the outer escape unclosed.
 local URL_PATTERNS = {
@@ -271,7 +271,7 @@ local function NextLink(text, pos)
         if not dataEnd then return nil end
 
         -- An unterminated `|H` is not a link. Left alone it would claim the NEXT
-        -- link's terminators and swallow everything between, so resynchronise on
+        -- link's terminators and swallow everything between, so resynchronize on
         -- the later marker and let the broken one fall through as plain text.
         local laterOpen = strfind(text, "|H", open + 2, true)
         if laterOpen and laterOpen < dataEnd then
@@ -293,7 +293,7 @@ function CL.WrapURLs(text, hexColor)
     if not CL.ContainsURL(text) then return text end
 
     -- gsub inserts a capture literally, so a `%` inside the matched address is
-    -- not re-read as an escape. The colour prefix carries no `%` either.
+    -- not re-read as an escape. The color prefix carries no `%` either.
     local substitution = (hexColor or URL_COLOR_FALLBACK) .. "|Hkeurl:%1|h[%1]|h|r"
 
     -- Complete hyperlinks are copied through byte for byte and never scanned.
@@ -363,7 +363,7 @@ local function BuildURLPopup()
         edgeSize = 1,
     })
     urlPopup:SetBackdropColor(POPUP_BG[1], POPUP_BG[2], POPUP_BG[3], POPUP_BG[4])
-    -- The border colour is set per show, not here: the theme accent it takes can
+    -- The border color is set per show, not here: the theme accent it takes can
     -- change without a reload.
 
     local hint = urlPopup:CreateFontString(nil, "OVERLAY")
@@ -485,7 +485,7 @@ local function AnchorFor(sourceFrame)
     return ChatAnchorUnderCursor()
 end
 
--- The addon theme's accent, read live so a preset or class-colour change reaches
+-- The addon theme's accent, read live so a preset or class-color change reaches
 -- the popup without a reload. The chat panel's own border is usually near-black,
 -- which leaves the popup indistinguishable from the window it sits on.
 local function PopupBorderColor()
@@ -550,9 +550,9 @@ end
 -- colon definition puts the frame in `self`. The body reads CL.db rather than
 -- self.db for exactly that reason; changing either half breaks the other.
 --
--- The keystone pattern deliberately carries no colour prefix. Live keystone
--- links open with a named-quality colour, so matching on the old literal hex
--- colour matches nothing at all. No other type's pattern depends on colour.
+-- The keystone pattern deliberately carries no color prefix. Live keystone
+-- links open with a named-quality color, so matching on the old literal hex
+-- color matches nothing at all. No other type's pattern depends on color.
 function CL:Filter(event, msg, ...)
     -- First contact. A pattern match on secret text throws, so this cannot move
     -- below the transforms, and a type check is no substitute: a secret string

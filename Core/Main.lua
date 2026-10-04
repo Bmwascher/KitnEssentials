@@ -37,7 +37,7 @@ hooksecurefunc(KitnEssentials, "EnableModule", function(_, name)
     KE.PreviewManager:OnModuleEnableChanged(name)
     -- Conflicts are keyed on the KE module being ENABLED (Core/Conflicts.lua
     -- BuildConflictQueue), so the login scan correctly skips a module that
-    -- ships off -- and nothing re-armed it afterwards. The Tooltips page tells
+    -- ships off -- and nothing re-armed it afterward. The Tooltips page tells
     -- the user in shipped text to "enable this one to be prompted again", and
     -- that promise went unkept until a reload or /kes conflicts. Gated on the
     -- login scan having run, and deferred out of combat, both matching that

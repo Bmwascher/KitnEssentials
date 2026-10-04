@@ -76,7 +76,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     manager:Register(card2, "all")
 
     local accentDash = KE:ColorTextByTheme("—")
-    local grey = "|cff888888"
+    local gray = "|cff888888"
 
     local alertTypes = {
         { dbKey = "GatewayEnabled",  label = "Gateway",     desc = "- Shows when Demonic Gateway is usable.",    default = true },
@@ -92,7 +92,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
         if alert.default == false then
             checked = db[alert.dbKey] == true
         end
-        local check = GUIFrame:CreateCheckbox(row, alert.label .. "  " .. grey .. alert.desc .. "|r", {
+        local check = GUIFrame:CreateCheckbox(row, alert.label .. "  " .. gray .. alert.desc .. "|r", {
             value = checked,
             callback = function(val) db[alert.dbKey] = val; ApplySettings() end,
         })
@@ -102,7 +102,7 @@ GUIFrame:RegisterContent("RaidNotifications", function(scrollChild, yOffset)
     end
 
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
-    local iconToggle = GUIFrame:CreateCheckbox(row2b, "Show Icons  " .. grey .. "- Shows the spell icon alongside alert text.|r", {
+    local iconToggle = GUIFrame:CreateCheckbox(row2b, "Show Icons  " .. gray .. "- Shows the spell icon alongside alert text.|r", {
         value = db.ShowIcons ~= false,
         callback = function(checked) db.ShowIcons = checked; ApplySettings() end,
     })

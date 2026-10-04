@@ -20,7 +20,7 @@
 --
 -- NOT tested here, per the project's tiered policy: the Chat-side resolver
 -- (a chain of guards one line from its own assertion), the GUI wiring, the
--- greying, and anything about what a frame actually measures on screen.
+-- graying, and anything about what a frame actually measures on screen.
 --
 -- HONESTY BOUNDARY (see dev/README.md): the loader's PixelSnap is an identity
 -- stub and the Chat module here is a three-field stand-in. A pass verifies
@@ -78,7 +78,7 @@ describe("GetBackdropRectSize reports the carrier", function()
     end)
 
     it("does NOT drop the header when the backdrop is off but behind-bars is on", function()
-        -- UpdateBackdrop only honours the flag while the backdrop is enabled.
+        -- UpdateBackdrop only honors the flag while the backdrop is enabled.
         -- A build that dropped the enabled half of the condition passes every
         -- other case here and fails this one.
         meter(400, 300, 4, true, 18, true)
@@ -311,8 +311,8 @@ describe("CreateAllWindows supersedes a stale build", function()
         runOne()
         DM:CreateAllWindows()
         drain()
-        -- The finaliser count is the whole assertion. A build that bumps the
-        -- counter and never compares fires the stale chain's finaliser too.
+        -- The finalizer count is the whole assertion. A build that bumps the
+        -- counter and never compares fires the stale chain's finalizer too.
         assert.equals(1, finals.layout)
         assert.equals(1, finals.backdrop)
         assert.equals(1, finals.tick)
@@ -331,16 +331,16 @@ describe("CreateAllWindows supersedes a stale build", function()
         local before = #created
         drain()
         -- The stale chain must stop without building anything more and
-        -- without finalising a second time.
+        -- without finalizing a second time.
         assert.equals(before, #created)
         assert.equals(1, finals.layout)
         -- And it must NOT tear down: a superseded chain returns, so the window
         -- it already built is still there for the new one. A build that
-        -- cancelled by wiping windows_rt passes every assertion above.
+        -- canceled by wiping windows_rt passes every assertion above.
         assert.is_table(DM.windows_rt[1])
     end)
 
-    it("initialises the generation counter from nil", function()
+    it("initializes the generation counter from nil", function()
         assert.is_nil(DM._dockBuildGen)
         DM:CreateAllWindows()
         assert.equals(1, DM._dockBuildGen)

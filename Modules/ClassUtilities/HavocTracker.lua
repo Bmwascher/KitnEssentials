@@ -16,7 +16,7 @@
 -- data is secret, so a Get or Set call on it can be refused outright rather
 -- than returning anything -- which is why every touch of it after AddAuraSlot
 -- returns is pcall'd rather than issecretvalue-guarded. A texture stretched to
--- fill it therefore had nothing to fill. A FontString on a single centre
+-- fill it therefore had nothing to fill. A FontString on a single center
 -- anchor needs no size at all: when a measurement can be refused, find the
 -- layout that needs no measurement.
 

@@ -82,7 +82,7 @@ describe("SkinAPI palette", function()
         assert.equals(0.40, S.palette.progress[4])
     end)
 
-    it("mutates colour tables in place so file-scope captures stay live", function()
+    it("mutates color tables in place so file-scope captures stay live", function()
         -- brand is captured by BRAND_HL and CLOSE_HOVER, hover by
         -- HOVER_COLOR. Both tables must keep their identity across a refresh
         -- or those captures hold an orphan.
@@ -405,7 +405,7 @@ describe("SkinAPI skin registry", function()
 
     -- Regression for the load-on-demand trap: a plan draft registered the
     -- GM chat skin early, which would have run it once before its addon
-    -- existed and then dropped it. This pins the queueing behaviour.
+    -- existed and then dropped it. This pins the queueing behavior.
     it("holds an addon-registered skin until that addon is announced", function()
         local ran = 0
         S:Register("Blizzard_GMChatUI", function() ran = ran + 1 end, "GMChat")
@@ -563,7 +563,7 @@ describe("SkinAPI per-registration diagnostics", function()
     end)
 
     describe("aggregate", function()
-        it("aggregates mixed ok+suppressed to partial, specifically not ok, and never colours either record red", function()
+        it("aggregates mixed ok+suppressed to partial, specifically not ok, and never colors either record red", function()
             S.suppressed = { Key = { euiKey = "eui", addons = { Blizzard_A = true } } }
             S:Register("Blizzard_A", function() end, "Key")
             S:Register("Blizzard_B", function() end, "Key")
@@ -588,12 +588,12 @@ describe("SkinAPI per-registration diagnostics", function()
             assert.truthy(S.skinStatus.Key:find("ERROR"))
             assert.not_equals("partial", S.skinStatus.Key)
 
-            -- Positive control for every "not the error colour" assertion in
+            -- Positive control for every "not the error color" assertion in
             -- this file: a real error string must still render red, or the
             -- fallback in statusColor could silently stop being red (or its
             -- literal could drift) with every falsy assertion staying green.
             local errLine = findLine(captureVerify(), "Blizzard_A")
-            assert.truthy(errLine:find("|cffff0000", 1, true), "a real error did not render in the error colour")
+            assert.truthy(errLine:find("|cffff0000", 1, true), "a real error did not render in the error color")
         end)
 
         it("aggregates all user-disabled to disabled", function()
@@ -624,7 +624,7 @@ describe("SkinAPI per-registration diagnostics", function()
     end)
 
     describe("verify output", function()
-        it("prints a suppressed record as 'suppressed by EllesmereUI', never 'disabled', and not in the error colour", function()
+        it("prints a suppressed record as 'suppressed by EllesmereUI', never 'disabled', and not in the error color", function()
             S.suppressed = { Key = "eui" }
             S:Register("Blizzard_A", function() end, "Key")
             BF:RunForAddon("Blizzard_A")
@@ -632,17 +632,17 @@ describe("SkinAPI per-registration diagnostics", function()
             local line = findLine(captureVerify(), "Blizzard_A")
             assert.truthy(line, "no line printed for the suppressed record")
             assert.truthy(line:find("suppressed by EllesmereUI", 1, true))
-            assert.falsy(line:find("|cffff0000", 1, true), "suppressed rendered in the error colour")
+            assert.falsy(line:find("|cffff0000", 1, true), "suppressed rendered in the error color")
             assert.falsy(line:find("disabled", 1, true), "suppressed printed as disabled")
         end)
 
-        it("does not render a pending record in the error colour", function()
+        it("does not render a pending record in the error color", function()
             S:Register("Blizzard_A", function() end, "Key")
 
             local line = findLine(captureVerify(), "Blizzard_A")
             assert.truthy(line, "no pending line printed")
             assert.truthy(line:find("pending", 1, true))
-            assert.falsy(line:find("|cffff0000", 1, true), "pending rendered in the error colour")
+            assert.falsy(line:find("|cffff0000", 1, true), "pending rendered in the error color")
         end)
     end)
 
@@ -708,7 +708,7 @@ describe("SkinAPI per-registration diagnostics", function()
             assert.truthy(line:find("Rerunning it would double", 1, true))
         end)
 
-        it("keeps single-registration behaviour unchanged with no selector", function()
+        it("keeps single-registration behavior unchanged with no selector", function()
             local runs = 0
             S:Register("Blizzard_A", function() runs = runs + 1 end, "Key")
             BF:RunForAddon("Blizzard_A")
@@ -763,7 +763,7 @@ end)
 -- The slash parser change (Core/Globals.lua): "rerun <key> [selector]" now
 -- captures an optional second token and forwards both to S.DebugRerun.
 -- KE.Skins is stubbed here (not the real SkinAPI) because this case is only
--- about the parsing/forwarding wiring -- the registry and dispatch behaviour
+-- about the parsing/forwarding wiring -- the registry and dispatch behavior
 -- behind DebugRerun are already proven above.
 describe("SkinAPI rerun via the real slash handler", function()
     it("forwards key and selector through the two-token rerun form", function()
@@ -804,15 +804,15 @@ describe("S.SetSkinColors", function()
         assert.are.equal(S.palette.border, S.borderColor)
     end)
 
-    it("leaves a colour alone when passed nil", function()
+    it("leaves a color alone when passed nil", function()
         local before = { unpack(S.palette.border) }
         S.SetSkinColors({ 0.2, 0.2, 0.2, 1 }, nil)
         assert.are.same(before, S.palette.border)
     end)
 
-    -- The sweep's whole reason for existing. A backdrop wearing a colour some
-    -- other skin chose must survive a window-colour change untouched.
-    it("repaints a window-coloured backdrop and spares every other one", function()
+    -- The sweep's whole reason for existing. A backdrop wearing a color some
+    -- other skin chose must survive a window-color change untouched.
+    it("repaints a window-colored backdrop and spares every other one", function()
         local function fakeBackdrop(r, g, b, a)
             local bd = { _r = r, _g = g, _b = b, _a = a, _border = nil }
             function bd:GetBackdropColor() return self._r, self._g, self._b, self._a end
@@ -847,7 +847,7 @@ describe("S.SetSkinColors", function()
     end)
 
     -- A border-only backdrop carries the window RGB at alpha 0. It must follow
-    -- the new colour and STAY invisible.
+    -- the new color and STAY invisible.
     it("keeps a border-only backdrop transparent", function()
         local w = S.palette.window
         local bd = { _r = w[1], _g = w[2], _b = w[3], _a = 0 }
@@ -897,7 +897,7 @@ describe("S.ResolveSkinFace", function()
         S = KE.Skins
     end)
 
-    it("reads the stored face while the skin's font state is uninitialised", function()
+    it("reads the stored face while the skin's font state is uninitialized", function()
         KE.db.profile.Skinning.BlizzardFrames.FontFace = "ChosenFace"
         assert.are.equal("ChosenFace", S.ResolveSkinFace())
     end)
@@ -907,7 +907,7 @@ describe("S.ResolveSkinFace", function()
         assert.are.equal("Expressway", S.ResolveSkinFace())
     end)
 
-    it("prefers the live face once that state is initialised", function()
+    it("prefers the live face once that state is initialized", function()
         KE.db.profile.Skinning.BlizzardFrames.FontFace = "ChosenFace"
         S.SetSkinFont("LiveFace", nil, nil)
         assert.are.equal("LiveFace", S.ResolveSkinFace())
@@ -1112,7 +1112,7 @@ describe("SkinAPI PinButtonFont", function()
         }
     end
 
-    -- What CreateFont hands back: records colour and justification so a
+    -- What CreateFont hands back: records color and justification so a
     -- re-pin reading the CURRENT state object sees what we set.
     local function fontObject(name)
         local o = { name = name, color = {}, justify = {} }
@@ -1182,7 +1182,7 @@ describe("SkinAPI PinButtonFont", function()
             applied[#applied + 1] = { fs = fs, face = face, size = size, outline = outline }
             return true
         end
-        -- Non-cancelling base and offset: a requested 12 renders as 18, so an
+        -- Non-canceling base and offset: a requested 12 renders as 18, so an
         -- accidental double application cannot hide behind identity.
         S.SetSkinFont(nil, 16, nil)
         S.SetFontOffset(2)
@@ -1192,7 +1192,7 @@ describe("SkinAPI PinButtonFont", function()
         _G.CreateFont = nil
     end)
 
-    it("driven through SetFont on the button's own label, the resolved size reaches all three states and each keeps its colour and justification", function()
+    it("driven through SetFont on the button's own label, the resolved size reaches all three states and each keeps its color and justification", function()
         local states = threeStates()
         states.Normal = stateObject(1, 0.82, 0, 1, "LEFT", "TOP")
         local b = button(states)
@@ -1217,7 +1217,7 @@ describe("SkinAPI PinButtonFont", function()
         assert.same({ h = "CENTER", v = "MIDDLE" }, seen.Highlight.justify)
     end)
 
-    it("returns the same cached object for the same request across a base-size change, and a different one for a different colour", function()
+    it("returns the same cached object for the same request across a base-size change, and a different one for a different color", function()
         local b = button(threeStates())
         S.SetFont(b.Text, 12, "")
         local first = b.states.Normal
@@ -1282,7 +1282,7 @@ describe("SkinAPI PinButtonFont", function()
         assert.is_nil(b.states.Disabled)
     end)
 
-    it("re-pins a reassigned state at KE's size while taking the newly assigned object's colour", function()
+    it("re-pins a reassigned state at KE's size while taking the newly assigned object's color", function()
         local b = button(threeStates())
         S.SetFont(b.Text, 12, "")
         -- Blizzard swaps the disabled object to a white one, as a legacy
@@ -1387,7 +1387,7 @@ describe("SkinAPI IconBorder", function()
 
     -- A border texture whose hooked setters fire whatever hooksecurefunc
     -- registered, the way the live texture does. No atlas: quest reward
-    -- borders are plain textures, so the colour arrives via SetVertexColor.
+    -- borders are plain textures, so the color arrives via SetVertexColor.
     local function border()
         local t = { shown = false, rgb = { 1, 1, 1 }, hooks = {} }
         local function fire(method, ...)
@@ -1418,8 +1418,8 @@ describe("SkinAPI IconBorder", function()
     -- The redisplay of a pooled reward button: Blizzard shows the border (KE's
     -- hook hides it again), paints the quality, and then the consumer's
     -- post-hook re-calls S.IconBorder. The first call reads the border's
-    -- state; a re-call must leave the hook-painted colour alone.
-    it("keeps the hook-painted quality colour on a re-call of a hooked border", function()
+    -- state; a re-call must leave the hook-painted color alone.
+    it("keeps the hook-painted quality color on a re-call of a hooked border", function()
         local b, bd = border(), backdrop()
         b:SetShown(true)
         b:SetVertexColor(0.2, 0.4, 0.6)
@@ -1451,7 +1451,7 @@ describe("SkinAPI edge refresh", function()
         }
         function bd:GetEffectiveScale() return self.scale end
         -- The reads return what was last set, so a refresh that read the
-        -- colours after the layout whitened them would write white back.
+        -- colors after the layout whitened them would write white back.
         function bd:GetBackdropColor() return unpack(self.bg) end
         function bd:GetBackdropBorderColor() return unpack(self.border) end
         function bd:SetBackdropColor(r, g, b, a) self.bg = { r, g, b, a } end

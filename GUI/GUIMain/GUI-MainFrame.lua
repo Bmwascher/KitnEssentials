@@ -104,7 +104,7 @@ GUIFrame.sidebarConfig = {
             -- onto General, or nested inside the Elements sub-row.
             --
             -- alwaysEnabled keeps it and Skyriding UI clickable while the
-            -- section is greyed for ElvUI.
+            -- section is grayed for ElvUI.
             -- Dark Theme's General tab carries Color Picker and Raid Control,
             -- neither of which has an ElvUI gate of its own; Character Panel
             -- and Skyriding UI are not skins and hold their own rows. Chat and
@@ -619,7 +619,7 @@ function GUIFrame:CreateMainFrame()
     --
     -- RegisterForDrag stays. The whole window is draggable, so without it the
     -- press would bubble up and start MOVING the window mid-resize. OnDragStart
-    -- still fires afterwards and the isResizing guard makes it a no-op.
+    -- still fires afterward and the isResizing guard makes it a no-op.
     resizeGrip:RegisterForDrag("LeftButton")
     resizeGrip:SetScript("OnMouseDown", function(_, button)
         if button ~= "LeftButton" or isResizing then return end

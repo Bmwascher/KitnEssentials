@@ -52,8 +52,8 @@ local CATEGORY_ROW_HEIGHT = 20
 local TOOL_HEIGHT = 330
 local RESTORE_ROW = 28
 
--- Centre-guide diagnosis. Set true, /reload, drag through the centre, read the
--- log. It prints only inside a band around the origin and only when the centre
+-- Center-guide diagnosis. Set true, /reload, drag through the center, read the
+-- log. It prints only inside a band around the origin and only when the center
 -- moves a whole unit, so one pass is readable instead of several hundred lines.
 local DEBUG_GUIDES = false
 local guideLogStamp
@@ -105,7 +105,7 @@ function EditMode:BuildSnapContext()
     return {
         enabled = self:GetGuideSetting("Snapping") and true or false,
         spacing = tonumber(self:GetGuideSetting("Spacing")) or 32,
-        -- Whole units. The screen centre is fractional at a non-perfect UI
+        -- Whole units. The screen center is fractional at a non-perfect UI
         -- scale or an odd physical dimension, and a fractional lattice would
         -- push every single snap through the offset rounding downstream.
         originX = math.floor((width or 0) / 2 + 0.5),
@@ -161,7 +161,7 @@ function EditMode:BuildElementCandidates(context, draggedOverlay)
     for _, overlay in pairs(self.overlayFrames) do
         if overlay ~= draggedOverlay and overlay:IsShown()
             and self:ElementShouldShow(overlay.element) then
-            -- One unreadable neighbour costs its own lines and nothing else.
+            -- One unreadable neighbor costs its own lines and nothing else.
             -- Refusing the whole build would take every other alignment on
             -- screen away over a frame the user is not even dragging.
             local left, bottom, width, height = ReadableRect(overlay)
@@ -450,7 +450,7 @@ function EditMode:UpdateOverlayPosition(overlay)
     -- The box is sometimes larger than the frame: decorations anchored just
     -- outside an edge are part of what the user sees and expects to grab. They
     -- must not reach the drag, which still measures the frame itself. All four
-    -- default to zero, which is the plain SetAllPoints behaviour.
+    -- default to zero, which is the plain SetAllPoints behavior.
     local left, right, top, bottom = 0, 0, 0, 0
     if element.getOverlayInset then
         left, right, top, bottom = element.getOverlayInset()
@@ -468,7 +468,7 @@ end
 -- live, and so has a box in Edit Mode, calls this and nothing else. Three
 -- things follow from liveness, and splitting them is how they drift: the boxes
 -- themselves, whether the selected element is still one of them, and the
--- per-category counts that grey out an empty category button.
+-- per-category counts that gray out an empty category button.
 function EditMode:RefreshLiveState()
     if not self.isActive then return end
 
@@ -492,7 +492,7 @@ end
 
 -- Everything a pooled overlay must forget before it is reused. Exit resets the
 -- same state; retirement has to do it too, or a frame comes back mid-animation
--- or still wearing its selected colours.
+-- or still wearing its selected colors.
 function EditMode:RetireOverlay(overlay)
     if overlay._fadeFrame then
         overlay._fadeFrame:SetScript("OnUpdate", nil)
@@ -629,7 +629,7 @@ end
 function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
                                       context, anchorFrom, anchorTo, dragParent)
     -- The version check lives HERE rather than in the callers, and that is what
-    -- makes it total. A neighbour can move between the last update and the
+    -- makes it total. A neighbor can move between the last update and the
     -- release, and a drag can start and stop without a single update ever
     -- running -- so a caller-side check leaves whichever path nobody thought
     -- about resolving against magnets that describe a screen that has changed.
@@ -637,7 +637,7 @@ function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
         self:DropElementCandidates(context)
     end
 
-    local snappedX, snappedY, onCentreX, onCentreY, guideX, guideY =
+    local snappedX, snappedY, onCenterX, onCenterY, guideX, guideY =
         KE:SnapCenter(rawX, rawY, context, IsAltKeyDown() and true or false)
 
     -- Re-anchor before reading the size. The width and height below are
@@ -654,7 +654,7 @@ function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
         parentWidth, parentHeight = UIParent:GetWidth(), UIParent:GetHeight()
     end
 
-    -- The offsets that will be stored, and the centre they actually reach. A
+    -- The offsets that will be stored, and the center they actually reach. A
     -- stored offset is a whole number and a snap target is not, so showing the
     -- raw target would put the frame and its guide somewhere the commit never
     -- goes.
@@ -694,7 +694,7 @@ function EditMode:ResolveDragPosition(overlay, targetFrame, rawX, rawY,
     }
     overlay.draggedPos = pos
 
-    self:SetCentreGuides(onCentreX, onCentreY)
+    self:SetCenterGuides(onCenterX, onCenterY)
     self:SetElementSnapGuides(guideX, guideY)
     self:ShowDraggedOffsets(offsetX, offsetY)
 
@@ -706,7 +706,7 @@ function EditMode:CandidatesAreStale(context)
     return context and context.version ~= (self.candidateVersion or 0)
 end
 
--- Give up the magnets, keep the drag. Cancelling would throw away the move in
+-- Give up the magnets, keep the drag. Canceling would throw away the move in
 -- progress to fix candidates that have merely gone out of date; that is
 -- reserved for a scale change, where every captured number is wrong.
 function EditMode:DropElementCandidates(context)
@@ -794,19 +794,19 @@ function EditMode:SetupDragHandlers(overlay)
 
         snapContext = EditMode:BuildSnapContext()
 
-        -- The dragged box's own edges, as offsets from the frame centre. Not
+        -- The dragged box's own edges, as offsets from the frame center. Not
         -- half-extents: an inset can be asymmetric, or move the box off the
         -- frame entirely, and half a width cannot describe either.
         --
-        -- Unlike a neighbour, a failure here is a refusal. This rect is not a
+        -- Unlike a neighbor, a failure here is a refusal. This rect is not a
         -- candidate, it is what every comparison is measured from.
         local oLeft, oBottom, oWidth, oHeight = EditMode._ReadableRect(self)
         if not oLeft then return end
         snapContext.edgeLeft = oLeft - frameStartX
-        snapContext.edgeCentreX = oLeft + oWidth / 2 - frameStartX
+        snapContext.edgeCenterX = oLeft + oWidth / 2 - frameStartX
         snapContext.edgeRight = oLeft + oWidth - frameStartX
         snapContext.edgeBottom = oBottom - frameStartY
-        snapContext.edgeCentreY = oBottom + oHeight / 2 - frameStartY
+        snapContext.edgeCenterY = oBottom + oHeight / 2 - frameStartY
         snapContext.edgeTop = oBottom + oHeight - frameStartY
 
         EditMode:BuildElementCandidates(snapContext, self)
@@ -828,7 +828,7 @@ function EditMode:SetupDragHandlers(overlay)
         if not self.isDragging then return end
         self.isDragging = false
         self:SetAlpha(1)
-        EditMode:HideCentreGuides()
+        EditMode:HideCenterGuides()
         EditMode:HideElementSnapGuides()
 
         -- Taken and retired in one move, above the guards below, so that every
@@ -851,7 +851,7 @@ function EditMode:SetupDragHandlers(overlay)
         end
 
         -- Commit exactly what the last update displayed, UNLESS that answer
-        -- leaned on a neighbour that has since moved or gone. Everything else
+        -- leaned on a neighbor that has since moved or gone. Everything else
         -- commits untouched, including an answer that only ever used the grid:
         -- no magnet going stale can invalidate a position that never referenced
         -- one, and re-deciding it would move the frame after the user let go.
@@ -871,7 +871,7 @@ function EditMode:SetupDragHandlers(overlay)
 
             -- That resolve wrote the guides on its way through, and the drag is
             -- over, so they go straight back off.
-            EditMode:SetCentreGuides(false, false)
+            EditMode:SetCenterGuides(false, false)
             EditMode:SetElementSnapGuides(nil, nil)
             self.draggedPos = nil
         end
@@ -1032,7 +1032,7 @@ function EditMode:CancelDrag(overlay)
     if not overlay or not overlay.isDragging then return end
     overlay.isDragging = false
     overlay:SetAlpha(1)
-    self:HideCentreGuides()
+    self:HideCenterGuides()
     self:HideElementSnapGuides()
 
     -- The live read-out is showing a position that is about to stop existing,
@@ -1123,7 +1123,7 @@ function EditMode:Enter()
     --
     -- The sidebar has sections the strip deliberately does not offer, because
     -- they own no movers. Adopting one of those would filter everything away
-    -- with no button lit to show why, so they normalise to All.
+    -- with no button lit to show why, so they normalize to All.
     local PM = KE.PreviewManager
     local opening = PM and PM.guiOpen and PM.activeSection or nil
     -- Written out rather than folded into an `and/or` chain: the test returns a
@@ -1581,7 +1581,7 @@ function EditMode:CreateNudgeFrame()
     frame:SetBackdropBorderColor(Theme.border[1], Theme.border[2], Theme.border[3], 1)
 
     -- Category selector. Parented to the nudge frame so the two drag together.
-    -- Matches the tool's width: a row of seven labelled buttons could not, and
+    -- Matches the tool's width: a row of seven labeled buttons could not, and
     -- read as a shelf balanced on top of the tool rather than part of it.
     local selector = CreateFrame("Button", nil, frame, "BackdropTemplate")
     selector:SetSize(160, 22)
@@ -1973,7 +1973,7 @@ function EditMode:CreateNudgeFrame()
             AnimateColor(false)
         end)
 
-        -- The theme pass cannot reach the colour this button animates from,
+        -- The theme pass cannot reach the color this button animates from,
         -- because that is a closure local. Repainting the icon without resetting
         -- it leaves the next hover fading out of the old accent, which is why
         -- the arrows only corrected themselves after being moused over once.
@@ -2132,7 +2132,7 @@ function EditMode:CreateNudgeFrame()
     settingsBtn:SetScript("OnEnter", function() AnimateSettingsBtn(true) end)
     settingsBtn:SetScript("OnLeave", function() AnimateSettingsBtn(false) end)
 
-    -- Same reason the arrows carry one: the border colour this animates from is
+    -- Same reason the arrows carry one: the border color this animates from is
     -- a closure local, and its label was never in the theme pass at all because
     -- the button as a whole was excluded for animating its own border.
     settingsBtn.ApplyTheme = function()
@@ -2178,8 +2178,8 @@ function EditMode:CreateNudgeFrame()
 
     -- The Snapping row is the only grid control on the tool's face. It shares
     -- its 140 with the chevron, so it needs a container: CreateToolToggle
-    -- centres its button above the anchor it is given, and a narrowed button
-    -- centred that way would leave the chevron no edge to sit against.
+    -- centers its button above the anchor it is given, and a narrowed button
+    -- centered that way would leave the chevron no edge to sit against.
     local snapRow = CreateFrame("Frame", nil, frame)
     snapRow:SetSize(140, 22)
     snapRow:SetPoint("BOTTOM", settingsBtn, "TOP", 0, 6)
@@ -2210,7 +2210,7 @@ function EditMode:CreateNudgeFrame()
     chevronArrow:SetSnapToPixelGrid(false)
     guidesChevron.arrow = chevronArrow
 
-    -- The selector's hover, copied exactly: a direct colour swap, no animation
+    -- The selector's hover, copied exactly: a direct color swap, no animation
     -- group. That is why this control needs no ApplyTheme -- it keeps no
     -- closure local for a shade to go stale in.
     guidesChevron:SetScript("OnEnter", function(self)
@@ -2542,7 +2542,7 @@ function EditMode:UpdateNudgeFrameTheme()
     -- Done is the only control here that ends the session, so it is the only
     -- one filled rather than outlined. The fill is accent at low alpha and the
     -- text stays accent: a solid fill would need dark text, and the accent is
-    -- the user's own colour, so a dark accent would put dark text on a dark
+    -- the user's own color, so a dark accent would put dark text on a dark
     -- ground with nothing to catch it.
     if self.nudgeFrame.doneBtn then
         self.nudgeFrame.doneBtn:SetBackdropColor(
@@ -2562,7 +2562,7 @@ function EditMode:UpdateNudgeFrameTheme()
             Theme.accent[1], Theme.accent[2], Theme.accent[3], 1)
     end
 
-    -- Everything that animates its own colour owns its repaint, because the
+    -- Everything that animates its own color owns its repaint, because the
     -- shade it animates away from lives in a closure this cannot see. Written
     -- out one call each for the same reason the toggles are: a nil in an array
     -- literal ends the iteration at the gap.

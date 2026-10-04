@@ -1,6 +1,6 @@
 -- The kick pass scheduler, the range-fade transition rule and the Targeting
 -- You arming rule, all pure rules on the module. The cooldown reads, the
--- colour curves, the alpha sinks, the stacked StatusBars and the pulse are
+-- color curves, the alpha sinks, the stacked StatusBars and the pulse are
 -- verified in game.
 local L = require("dev.spec._ke_loader")
 

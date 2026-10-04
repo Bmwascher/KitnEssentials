@@ -280,7 +280,7 @@ end
 
 -- Only maxCharges has to be readable: the API never makes it secret, while
 -- the count and the recharge length are secret under cooldown restrictions,
--- and a charge spell first seen there must still be recognised as one.
+-- and a charge spell first seen there must still be recognized as one.
 -- ResolveCharges guards the other fields.
 local function SafeCharges(spellId)
     if not (C_Spell and C_Spell.GetSpellCharges) then return nil end
@@ -309,7 +309,7 @@ end
 
 -- Choice nodes: one talent replaces another, so the player can only ever have
 -- one of the pair. Both IDs still read as KNOWN -- the base is learned from
--- levelling and never stops being known, and known-ness is asked with
+-- leveling and never stops being known, and known-ness is asked with
 -- overrides included -- and their names differ, so neither SpellKnown nor the
 -- name dedupe separates them, and both render as two rows counting the same
 -- cooldown.
@@ -466,8 +466,8 @@ function NMA:GetSlot(index)
     return slot
 end
 
--- One colour for every part in theme mode, the three saved ones otherwise.
--- Every read of a colour goes through here so the mode cannot be honoured in
+-- One color for every part in theme mode, the three saved ones otherwise.
+-- Every read of a color goes through here so the mode cannot be honored in
 -- one place and forgotten in another.
 function NMA:RoleColor(key)
     local db = self.db
@@ -615,10 +615,10 @@ local function FormatTime(remaining)
     return string.format("%.1f", remaining)
 end
 
--- "Roll - 12" rather than "Roll  12" -- a separator plus its own colour
--- for the countdown, so the eye lands on the number. Colours are
+-- "Roll - 12" rather than "Roll  12" -- a separator plus its own color
+-- for the countdown, so the eye lands on the number. Colors are
 -- hex-wrapped rather than two FontStrings so the whole line stays a
--- single centred string that the bar/icon modes can ignore.
+-- single centered string that the bar/icon modes can ignore.
 local function Hex(c)
     return string.format("%02x%02x%02x",
         math.floor((c[1] or 1) * 255 + 0.5),
@@ -626,7 +626,7 @@ local function Hex(c)
         math.floor((c[3] or 1) * 255 + 0.5))
 end
 
--- Colour-wrapped line with a printf slot for the time, so a secret
+-- Color-wrapped line with a printf slot for the time, so a secret
 -- number can be rendered via SetFormattedText without being read.
 function NMA:ComposeFormat(name, numberFmt)
     local db = self.db
@@ -1108,7 +1108,7 @@ function NMA:ApplySettings()
             KitnEssentials:EnableModule("NoMovementAlert")
         elseif self.isPreview then
             -- Refresh/Update both early-out while previewing, so
-            -- font/spacing/colour edits would silently do nothing on the
+            -- font/spacing/color edits would silently do nothing on the
             -- preview -- the one place the user is actually looking.
             -- Repaint the preview instead.
             self:ShowPreview()

@@ -183,7 +183,7 @@ function FC:Start(callback, initialValue)
 end
 
 -- Stop frame chooser mode
-function FC:Stop(cancelled)
+function FC:Stop(canceled)
     if not isActive then return end
 
     isActive = false
@@ -200,7 +200,7 @@ function FC:Stop(cancelled)
     ResetCursor()
 
     if currentCallback then
-        if cancelled then
+        if canceled then
             currentCallback(originalValue, false)
         else
             currentCallback(oldFocusName, false)

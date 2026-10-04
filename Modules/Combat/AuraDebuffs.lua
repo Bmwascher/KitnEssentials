@@ -6,7 +6,7 @@
 -- ║           AuraEngine/). Visibility is filter-driven; the ║
 -- ║           engine owns the container, rendering, and the  ║
 -- ║           live aura pipeline. This module owns the       ║
--- ║           dispel colour palette, since it is the only    ║
+-- ║           dispel color palette, since it is the only     ║
 -- ║           display with dispel settings.                  ║
 -- ║  Subsumes: BossDebuffs (migrated then deleted).          ║
 -- ╚══════════════════════════════════════════════════════════╝
@@ -142,7 +142,7 @@ local function ResolveDispelPreviewColor(settings, dispelType, palette)
 end
 
 -- Preview counterpart to GetDispelColorCurve, exposed for the same reason.
--- The caller's own settings still decide the colour mode and the flat
+-- The caller's own settings still decide the color mode and the flat
 -- fallback; only the palette is borrowed.
 function AD:GetDispelPreviewColor(settings, dispelType)
     return ResolveDispelPreviewColor(settings, dispelType, self.db and self.db.DispelColors)
@@ -209,7 +209,7 @@ local DECLARATION = {
 
             -- group.getDispelPreviewColor(settings, dispelType) -> r, g, b, a
             -- Optional, declared only by a group that has a per-type palette.
-            -- Absent means the preview falls back to the flat border colour,
+            -- Absent means the preview falls back to the flat border color,
             -- which is correct for a group with no palette.
             getDispelPreviewColor = ResolveDispelPreviewColor,
         },

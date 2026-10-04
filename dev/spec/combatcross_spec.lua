@@ -102,7 +102,7 @@ describe("CombatCross visibility", function()
 
     it("starts the range loop when an always-on mode puts the cross up", function()
         -- A mode that shows out of combat must not leave a visible cross with
-        -- range colouring configured and no loop running. gameplayActive is
+        -- range coloring configured and no loop running. gameplayActive is
         -- what gates the loop, and only UpdateVisibility sets it.
         local CC = loader.loadCombatCross({
             GetSpecializationInfo = function() return 73 end,
@@ -149,7 +149,7 @@ describe("CombatCross hide when in range", function()
 
     it("hides when there is no target at all", function()
         -- Nothing to be out of range of, so the cross goes away. This is the
-        -- reference's behaviour and it is the opposite of a restore.
+        -- reference's behavior and it is the opposite of a restore.
         local CC = faded({
             C_Spell = { IsSpellInRange = function() return 1 end },
             UnitExists = function() return false end,
@@ -200,7 +200,7 @@ describe("CombatCross hide when in range", function()
         assert.equals(0, CC.frame._alpha)
     end)
 
-    it("runs the range loop for this option even with both colours off", function()
+    it("runs the range loop for this option even with both colors off", function()
         local CC = faded({ C_Spell = { IsSpellInRange = function() return 1 end } })
         CC.db.RangeColorMeleeEnabled = false
         CC.db.RangeColorRangedEnabled = false
@@ -234,8 +234,8 @@ describe("CombatCross hide when in range", function()
         assert.equals(1, CC.frame._alpha)
     end)
 
-    it("restores alpha when the option is turned off while colouring stays on", function()
-        -- The stranding case. The loop keeps running for colour, so nothing
+    it("restores alpha when the option is turned off while coloring stays on", function()
+        -- The stranding case. The loop keeps running for color, so nothing
         -- tears it down, and the faded cross has no other route back.
         local CC = faded({ C_Spell = { IsSpellInRange = function() return 1 end } })
         CC.db.RangeColorMeleeEnabled = true

@@ -97,14 +97,14 @@ end)
 -- names are typed by a human against auto-generated data and a palette in a
 -- different file, and every mistake fails SILENTLY in-game: a typo'd
 -- mapID/npcID/spellID key no-ops the whole entry, a typo'd label/colorKey
--- degrades the alert to the flat default colour, a typo'd role key drops the
+-- degrades the alert to the flat default color, a typo'd role key drops the
 -- restriction. The real DungeonTimers.lua is loaded so labels resolve through
 -- the REAL preset/alias tables — no stub to drift.
 describe("DungeonTrash data integrity — TrashCurated overlay", function()
     local loader = require("dev.spec._ke_loader")
     local KE2, curated, cdata
 
-    -- Labels DELIBERATELY rendered verbatim in the flat default colour (no
+    -- Labels DELIBERATELY rendered verbatim in the flat default color (no
     -- preset/alias match intended). Add here with a reason, or the resolution
     -- test flags them as probable typos.
     local VERBATIM_LABELS = {}
@@ -135,7 +135,7 @@ describe("DungeonTrash data integrity — TrashCurated overlay", function()
         assert.same({}, orphans)
     end)
 
-    it("every curated label and colorKey resolves to a preset colour", function()
+    it("every curated label and colorKey resolves to a preset color", function()
         local misses = {}
         for mapID, mobs in pairs(curated) do
             for npcID, spells in pairs(mobs) do

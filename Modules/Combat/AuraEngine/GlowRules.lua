@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  Modules/Combat/AuraEngine/GlowRules.lua                 ║
 -- ║  Purpose: pure glow value rules — type coercion, speed   ║
--- ║  normalisation, and the legacy-duration adapter.         ║
+-- ║  normalization, and the legacy-duration adapter.         ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE
@@ -25,7 +25,7 @@ local DEFAULT_FREQUENCY = 0.25
 -- animation has no geometry to step through.
 GlowRules.FLIPBOOKS = {
     ants = {
-        -- Lowercase, exactly as Blizzard declares it. A capitalised spelling
+        -- Lowercase, exactly as Blizzard declares it. A capitalized spelling
         -- finds nothing when searching the client source.
         atlas = "rotationhelper_ants_flipbook",
         rows = 6, columns = 5, frames = 30, sizeFactor = 1.6,
@@ -73,7 +73,7 @@ end
 -- The bounds arrive from the caller's adapter rather than as constants,
 -- which is what lets Externals keep the old 0.5 second minimum by passing a
 -- maximum of 2 while every other consumer stays at 1.
-function GlowRules.NormaliseFrequency(value, min, max)
+function GlowRules.NormalizeFrequency(value, min, max)
     local frequency = tonumber(value)
     if not frequency or frequency <= 0 then frequency = DEFAULT_FREQUENCY end
     if min and frequency < min then frequency = min end
@@ -120,15 +120,15 @@ end
 -- speed FIRST, under the old type, then write both.
 function GlowRules.SetType(db, keys, chosen)
     if not db or not keys then return end
-    -- Normalised, not raw: ReadSpeed can return nil, and this writes to the
+    -- Normalized, not raw: ReadSpeed can return nil, and this writes to the
     -- user's profile.
-    local speed = GlowRules.NormaliseFrequency(GlowRules.ReadSpeed(db, keys), 0.05, 2)
+    local speed = GlowRules.NormalizeFrequency(GlowRules.ReadSpeed(db, keys), 0.05, 2)
     db[keys.frequency] = speed
     db[keys.type]      = chosen
     return db[keys.frequency], db[keys.type]
 end
 
--- The flipbook's OWN inputs, and nothing else. Icon size and colour are
+-- The flipbook's OWN inputs, and nothing else. Icon size and color are
 -- deliberately absent: changing them must not restart a playing animation.
 function GlowRules.FlipbookState(entry, duration)
     return {
@@ -160,7 +160,7 @@ local math_floor = math.floor
 
 -- Clamped to the range the Lines slider offers, so a hand-edited profile
 -- cannot ask for a dash count the geometry was never solved for.
-function GlowRules.NormalisePixelCount(value)
+function GlowRules.NormalizePixelCount(value)
     local n = tonumber(value)
     if not n or n < 1 then return 8 end
     if n > 16 then return 16 end
@@ -168,7 +168,7 @@ function GlowRules.NormalisePixelCount(value)
 end
 
 -- Same rule for the Thickness slider's range.
-function GlowRules.NormalisePixelThickness(value)
+function GlowRules.NormalizePixelThickness(value)
     local t = tonumber(value)
     if not t or t < 1 then return 1 end
     if t > 8 then return 8 end
@@ -186,7 +186,7 @@ end
 --
 -- Edge order is clockwise from the top: top, right, bottom, left.
 function GlowRules.PixelPerimeter(count, width, height, period)
-    local n = GlowRules.NormalisePixelCount(count)
+    local n = GlowRules.NormalizePixelCount(count)
     local perimeter = 2 * (width + height)
     local cycle = perimeter / n
 

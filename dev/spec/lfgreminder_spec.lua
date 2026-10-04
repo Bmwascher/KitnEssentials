@@ -158,11 +158,11 @@ describe("LFGReminder module", function()
             assert.equals(1286809, btn:GetAttribute("spell"))
         end)
 
-        -- A join cancelled during combat must not build or arm the button
+        -- A join canceled during combat must not build or arm the button
         -- when combat ends. Nothing was built before the join, so any
         -- secure button here would be one PLAYER_REGEN_ENABLED made for the
-        -- cancelled dungeon.
-        it("does not arm the button when a combat join is cancelled", function()
+        -- canceled dungeon.
+        it("does not arm the button when a combat join is canceled", function()
             local inCombat, inGroup = true, true
             local LR, seams = joinedWith("Murder Row", {
                 inCombatFn = function() return inCombat end,
@@ -312,7 +312,7 @@ describe("LFGReminder combat re-show", function()
 end)
 
 describe("LFGReminder close with X", function()
-    -- X ends the prompt: a preview opened and closed afterwards must not
+    -- X ends the prompt: a preview opened and closed afterward must not
     -- bring it back.
     it("keeps a prompt closed with X closed through a preview", function()
         local LR, _, seams = loader.loadLFGReminder({

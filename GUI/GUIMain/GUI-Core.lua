@@ -901,7 +901,7 @@ function CardMethods:AddLabel(text)
     return label
 end
 
--- A label with the accent-coloured lead-in the GUI uses for explanatory
+-- A label with the accent-colored lead-in the GUI uses for explanatory
 -- text. Resolved per call, not captured, so it follows a theme change.
 function CardMethods:AddNote(text)
     return self:AddLabel(KE:ColorTextByTheme("-") .. " " .. text)
@@ -957,7 +957,7 @@ function CardMethods:UpdateHeight()
     local totalHeight
     if self.currentY == 0 and self.headerHeight > 0 then
         -- Exactly the header, so the header plate covers the card entirely
-        -- and the bar is one solid colour. No borderSize*2 allowance: the
+        -- and the bar is one solid color. No borderSize*2 allowance: the
         -- header is flush at (0,0) with its own edge, so that allowance
         -- would expose two pixels of card backdrop under the header.
         totalHeight = self.headerHeight
@@ -996,7 +996,7 @@ local function GetMouseBlocker(card)
         GUIFrame:PoolOwn(card, blocker)
     end
     -- +100 above the card's own frame level should cover all default-level
-    -- descendants. Re-levelled on every use: a reused card can sit at a
+    -- descendants. Re-leveled on every use: a reused card can sit at a
     -- different level than when the blocker was made.
     blocker:SetFrameLevel(card:GetFrameLevel() + 100)
     return blocker

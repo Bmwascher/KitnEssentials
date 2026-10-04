@@ -69,7 +69,7 @@ GUIFrame:RegisterContent("UIScalingGeneral", function(scrollChild, yOffset)
     local mapDB = KE.db.profile.MapScale
     if mapDB then
         -- Not registered with `manager`: MapScale has its own enable
-        -- lifecycle, so this card must not grey out with Panel Scaling.
+        -- lifecycle, so this card must not gray out with Panel Scaling.
         local card2 = GUIFrame:CreateCard(scrollChild, "World Map Scale", yOffset)
 
         local function ApplyMapScale()

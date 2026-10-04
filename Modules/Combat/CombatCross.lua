@@ -244,7 +244,7 @@ function CC:ShouldRunRangeUpdate()
     if not self.gameplayActive then return false end
     if not self.rangeAbility or not self.specType then return false end
     -- Hide When In Range needs the range answer whether or not anything is
-    -- being recoloured, so it drives the loop on its own.
+    -- being recolored, so it drives the loop on its own.
     if self.db.HideWhenInRange then return true end
     if self.specType == "melee" and not self.db.RangeColorMeleeEnabled then return false end
     if self.specType == "ranged" and not self.db.RangeColorRangedEnabled then return false end
@@ -380,7 +380,7 @@ function CC:ApplySettings()
     -- used to be here is not lost.
     -- Hide When In Range is the only thing that ever lowers alpha, so turning
     -- it off has to raise it again here. The loop may still be running for
-    -- colour, in which case nothing tears it down and no other path restores.
+    -- color, in which case nothing tears it down and no other path restores.
     if not self.db.HideWhenInRange then self.frame:SetAlpha(1) end
     self:UpdateVisibility()
 end
@@ -503,7 +503,7 @@ function CC:UpdateVisibility(inCombat)
     -- The range loop is gated on gameplayActive, which the two calls above are
     -- what set. Anything that changes visibility therefore has to re-decide the
     -- loop in the same breath, or a cross left up by a non-combat mode can sit
-    -- on screen with range colouring configured and never start recolouring.
+    -- on screen with range coloring configured and never start recoloring.
     self:UpdateOnUpdateState()
 end
 

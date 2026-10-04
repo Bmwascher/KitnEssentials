@@ -18,7 +18,7 @@ local LARGE_ROLE_ATLASES = {
 -- cannot express: the declared width is the layout advance, so an overlay
 -- reserves the sum of both widths. The ring alone is what the set is for, and
 -- these three classes are blue, green and red, which keeps the tank/healer/dps
--- colour reading every other row has.
+-- color reading every other row has.
 local CIRCLE_CLASS_ATLASES = {
     "groupfinder-icon-class-color-SHAMAN",
     "groupfinder-icon-class-color-MONK",

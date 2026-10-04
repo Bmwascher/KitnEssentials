@@ -195,7 +195,7 @@ GUIFrame:RegisterContent("PIAssist", function(scrollChild, yOffset)
             { key = "border", text = "Pulse Border" },
         },
         resolveType = KE.AuraGlowRules.ResolveType,
-        typeTooltip = "A border around the target's raid frame while their burst buff is up. Colour and thickness edits made inside a dungeon or raid take effect when you leave.",
+        typeTooltip = "A border around the target's raid frame while their burst buff is up. Color and thickness edits made inside a dungeon or raid take effect when you leave.",
         typeRows = function(rows)
             return {
                 border      = rows.border,
@@ -208,7 +208,7 @@ GUIFrame:RegisterContent("PIAssist", function(scrollChild, yOffset)
         showSpeed = function() return false end,
         speedAdapter = {
             read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormaliseFrequency(
+                return KE.AuraGlowRules.NormalizeFrequency(
                     KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 1)
             end,
             write   = KE.AuraGlowRules.WriteSpeed,

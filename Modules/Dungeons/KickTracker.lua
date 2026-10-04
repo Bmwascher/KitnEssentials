@@ -563,7 +563,7 @@ function KT:ProcessTeammateKick(interrupterGuid, interruptedSpellID, raidMark, h
     if not ok or not (issecretvalue(name) or name ~= nil) then return end
 
     -- classToken may be SECRET: it is only handed to the C-side GetClassColor
-    -- (AllowedWhenTainted) for the record's colour.
+    -- (AllowedWhenTainted) for the record's color.
     local okClass, _, cf = pcall(UnitClassFromGUID, interrupterGuid)
     local classToken
     if okClass and (issecretvalue(cf) or cf ~= nil) then classToken = cf end
@@ -1299,11 +1299,11 @@ function KT:ApplyRegionDefaults(bar)
     bar.raidMarkTex:Hide()
 end
 
--- Record bars draw secret names, icons, colours and marks, and member rows a
+-- Record bars draw secret names, icons, colors and marks, and member rows a
 -- kicked spell's icon and mark (KT:ShowKicked). SetToDefaults clears a text
 -- or texture region's secret state before the bar serves another row.
 -- Resetting the status bar would drop its layout, so it is only stopped and
--- re-coloured; its colour may stay secret, and nothing reads it back.
+-- re-colored; its color may stay secret, and nothing reads it back.
 function KT:ResetBarRegions(bar)
     bar.nameText:SetToDefaults()
     bar.markerText:SetToDefaults()
@@ -1389,7 +1389,7 @@ end
 
 local zeroDuration
 
--- The engine drains (dark) or fills (class colour) the bar from a plain start
+-- The engine drains (dark) or fills (class color) the bar from a plain start
 -- and duration; no Lua runs per frame for the fill.
 function KT:StartBarTimer(bar, startTime, duration)
     local d = C_DurationUtil.CreateDuration()
@@ -1551,7 +1551,7 @@ function KT:UpdateBarVisuals(bar, member)
     bar.timerText:SetShown(db.ShowTimer)
     bar.timerText:SetTextColor(1, 1, 1, 1)
 
-    -- Icon desaturation (greyed out when on CD)
+    -- Icon desaturation (grayed out when on CD)
     bar.iconTex:SetDesaturated(not isReady)
 
     -- Bar color (ready state)

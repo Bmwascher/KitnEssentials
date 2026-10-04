@@ -51,7 +51,7 @@
 
 ### World Markers
 
-- A key capture left waiting when its page is rebuilt is cancelled
+- A key capture left waiting when its page is rebuilt is canceled
 
 ---
 
@@ -233,7 +233,7 @@
 
 ### Dungeon Casts
 
-- Bars recolour when an enemy cast turns uninterruptible or interruptible
+- Bars recolor when an enemy cast turns uninterruptible or interruptible
   mid-cast
 
 ### Enemy Counter
@@ -273,7 +273,7 @@
 - The settings window reuses its cards, rows and controls instead of building
   new ones on every page change, so its memory no longer grows the longer you
   browse it
-- Dropdown items hover in the current accent colour after a theme change
+- Dropdown items hover in the current accent color after a theme change
 - Optimize: setting tooltips open beside the Recommended column, inside the
   window
 - Sub-tabs no longer jump the first time a tabbed page opens
@@ -293,7 +293,7 @@
 
 ### Party Buffs
 
-- **NEW:** timer text with font settings, and category colours as an inner
+- **NEW:** timer text with font settings, and category colors as an inner
   ring (off by default)
 - Wider icon size and offset ranges; icons default to 32
 - The preview shows beside four party rows
@@ -423,7 +423,7 @@
 
 ### Settings
 
-- Refreshed colours for buttons, fields, sliders, switches, dropdowns and
+- Refreshed colors for buttons, fields, sliders, switches, dropdowns and
   sub-tabs; buttons get hover and pressed looks
 
 ---
@@ -432,7 +432,7 @@
 
 ### Settings
 
-- The sidebar is reorganised: new Group Tools, Dungeon Alerts and Kicks and
+- The sidebar is reorganized: new Group Tools, Dungeon Alerts and Kicks and
   Casts pages, and the Utilities page is gone
 - Class Tools is split into class tabs and opens on your class
 - Great Vault Alert moves to Quality of Life, Combat Logger to Automation
@@ -456,9 +456,9 @@
 
 ### UI Widgets
 
-- **NEW:** bar texture, text centring and icon skin controls
+- **NEW:** bar texture, text centering and icon skin controls
 - Widget text keeps KE's font through the game's refreshes, and text widgets
-  are centred
+  are centered
 - Spell icons in widget containers are cropped and bordered
 - Inspected recipes show the profession art
 
@@ -508,7 +508,7 @@
 
 ### Raid Control
 
-- The ready check, countdown and everyone-assistant buttons grey out while the
+- The ready check, countdown and everyone-assistant buttons gray out while the
   game restricts party actions
 
 ### Focus Marker
@@ -541,7 +541,7 @@
   from an older version opens an Import Failed dialog with a Try Again
   button
 - The import dialog fills the profile name from the pasted string unless you
-  typed one, and the status line colours the active profile, global mode and
+  typed one, and the status line colors the active profile, global mode and
   the profile count
 - Switching, renaming or importing a profile rebuilds the settings page once
 - The sidebar search finds the page by rename, delete, global and sharing
@@ -594,9 +594,9 @@
   check; the row hides and rebuilds cleanly on every path, and the preview
   box in the settings panel is its own frame, separate from the live row
 - The settings page is regrouped: sizing, then the low-buff warning and the
-  flask and rune filters, then the popup behaviour, with shorter labels. The
+  flask and rune filters, then the popup behavior, with shorter labels. The
   Warlock requirement moved from a note to the Healthstone toggle's tooltip,
-  and the three text colours sit in one row with a note that no longer cuts
+  and the three text colors sit in one row with a note that no longer cuts
   off
 
 ### Conflicts
@@ -660,12 +660,12 @@
 
 - **NEW:** cursor offset sliders
 - The settings page is regrouped
-- An NPC whose name the game hides gets its reaction colour, and a player
-  with no class colour keeps the default name colour
+- An NPC whose name the game hides gets its reaction color, and a player
+  with no class color keeps the default name color
 
 ### Disintegrate Ticks
 
-- **NEW:** Highlight Last Tick, with its own colour
+- **NEW:** Highlight Last Tick, with its own color
 - No longer errors on values the game hides
 
 ### Enemy Counter
@@ -812,7 +812,7 @@
 ### Keystone Helper
 
 - **Changed, and it resets a setting:** the two keystone reminders now share one
-  look and one position instead of carrying a font, size, colour and mover each.
+  look and one position instead of carrying a font, size, color and mover each.
   If you had styled them separately, both now use the shared settings and the
   second mover is gone. Edit Mode shows one element, `Keystone Helper: Reminders`
 - The reminder's key line uses the short dungeon names players actually say,
@@ -826,7 +826,7 @@
   own interrupt. The bar is tinted while your kick is ready, dims to 45% while
   the caster is out of your range, carries a white mark where your kick comes
   back, and a cast aimed at you carries a pulsing gold border - never on a tank
-  spec. Each of the four has its own tick and colour, plus an optional shade of
+  spec. Each of the four has its own tick and color, plus an optional shade of
   the window you will get your kick back in
 - **NEW:** a Pulse Border glow style on the target glow, with its own thickness
   and an optional pulse
@@ -836,12 +836,12 @@
 - **NEW:** Pull estimate, on by default: a gray segment after the credited
   forces and a (+count - percent) label for the enemies you have pulled but not
   yet killed; the segment shrinks as kills land. Toggle it under Features >
-  Forces, and its colour has its own swatch under Display > Forces Colors
+  Forces, and its color has its own swatch under Display > Forces Colors
 - The death list is easier to read: a darker backdrop and more space between rows
 - Switching to a profile that turns the timer on repaints its bars, background,
   fonts and position right away
-- The Forces card's three toggles share one row, with the colour swatches
-  separated from the banded colour controls
+- The Forces card's three toggles share one row, with the color swatches
+  separated from the banded color controls
 
 ### Chat
 
@@ -864,7 +864,7 @@
 
 ### Secondary Stats Display
 
-- **NEW:** the tracker can be turned off for individual specialisations. A spec
+- **NEW:** the tracker can be turned off for individual specializations. A spec
   you untick really stops the module rather than just hiding it, under Quality of
   Life > Secondary Stats Display
 
@@ -886,18 +886,18 @@
 
 ### Skinning
 
-- **NEW:** Top-Centre Widgets under UI Widgets: move the top-of-screen objective
+- **NEW:** Top-Center Widgets under UI Widgets: move the top-of-screen objective
   display (the keystone objective line, delve and event bars) with the Edit Mode
   mover, scale it, set its layer, or hide it. Off by default; turning it off
   returns the display to where the game had it
 - Selected tabs, rows and buttons across every skinned window share one highlight
   strength, and scrollbar thumbs, tab fills, ticked checkboxes and slider fills
-  all take a new theme colour as soon as the preset is swapped
+  all take a new theme color as soon as the preset is swapped
 - Guild message of the day and guild information follow the Skin Font face, size
   and outline as you change them, without reopening the panel
-- Addon option trees (BigWigs, Details, WeakAuras) keep their own row colouring,
+- Addon option trees (BigWigs, Details, WeakAuras) keep their own row coloring,
   and option tabs squeezed onto a second row no longer overlap
-- Quest rewards keep their quality-coloured border when a quest is shown twice,
+- Quest rewards keep their quality-colored border when a quest is shown twice,
   the chosen reward is outlined cleanly, follower rewards are skinned, and the
   already-known marker sits inside the reward button
 - Right-click menus opened after a taller one no longer draw an oversized
@@ -922,7 +922,7 @@
   once at login instead of quietly standing down. Raid warnings and macro names
   are where you notice it, and the message names the setting to change. Nothing
   is printed if the stand-down costs you nothing
-- The Blizzard Fonts row greys out while such an addon is installed, and says
+- The Blizzard Fonts row grays out while such an addon is installed, and says
   which one
 - The font sweeps follow the face picked on the Blizzard Frames page, and the
   picker reaches stock text without a reload
@@ -947,11 +947,11 @@
 ### Automation
 
 - **Changed:** five automations now act inside dungeons, raids, keys and rated
-  matches, where the game's addon restrictions used to stop them - selling greys
+  matches, where the game's addon restrictions used to stop them - selling grays
   and repairing at a vendor, quick signup and auto queue confirm, the persistent
   signup note, and accepting and turning in quests. The legacy greeting hand-in
   keeps its refusal, and Skip Cinematics is narrowed to cinematics the game says
-  can be cancelled. Its movie half was removed because the call it used no longer
+  can be canceled. Its movie half was removed because the call it used no longer
   exists
 - Role checks are answered again inside dungeons, raids and rated matches, using
   the roles you have ticked in the Dungeon Finder
@@ -961,7 +961,7 @@
 ### Focus Castbar
 
 - **Changed:** only an interrupted cast holds the bar. A cast that finishes or is
-  cancelled hides it at once, and the Cast Success colour is gone with it
+  canceled hides it at once, and the Cast Success color is gone with it
 - Setting focus on someone already mid-cast no longer plays the cast sound, and a
   cast that stops and immediately continues re-syncs the bar instead of ending it
 
@@ -1008,7 +1008,7 @@
   count the game hides in dungeons and raids, so the alert no longer shows a
   phantom countdown with a charge still banked, or stays silent after the last
   one is spent
-- Spirit Walk is recognised from the spell you actually cast, so it can no longer
+- Spirit Walk is recognized from the spell you actually cast, so it can no longer
   produce two rows at once
 
 ### No Movement Alert
@@ -1019,7 +1019,7 @@
 ### Dungeon Timers
 
 - Turning the module off clears any running timer bars, and a bar that was about
-  to appear from a boss message no longer shows up afterwards
+  to appear from a boss message no longer shows up afterward
 
 ### Player Crosshair
 
@@ -1051,16 +1051,16 @@
 
 - Group Sort, the tooltip skin, the Group Finder skin, Focus Castbar and Movement
   Alert no longer do background work while their feature is off or idle
-- A party member changing specialisation no longer rebuilds your own interrupt
+- A party member changing specialization no longer rebuilds your own interrupt
   cache, and Loot Roll writes its mover position once rather than twice
 
 ### Fixes
 
 - The Power Infusion assist border follows the raid frame that is actually on
   screen when another addon swaps its party and raid headers
-- Glow controls stay greyed after leaving and returning to a page with the glow
+- Glow controls stay grayed after leaving and returning to a page with the glow
   switched off, on Dungeon Casts, External Tracker and Movement Buffs
-- On the Dungeon Casts page each Your Interrupt colour or slider greys with its
+- On the Dungeon Casts page each Your Interrupt color or slider grays with its
   own tick, and on the Bonus Roll page the auto-pass rows no longer clip their
   labels. The Bonus Roll module switch moved to the card header, like every other
   module
@@ -1174,9 +1174,9 @@
 - In the open world the meter waits until you enter combat yourself before it
   starts. Dungeons are unchanged
 - Redrew all twelve meter icons so they hold their shape at the size they are
-  drawn. The old ones blurred into grey smudges. The four buttons at the top
+  drawn. The old ones blurred into gray smudges. The four buttons at the top
   right are a quarter larger and now match each other, and the report button is
-  a new picture that no longer looks dimmer than its neighbours
+  a new picture that no longer looks dimmer than its neighbors
 - The meter loads on a fresh install again. It asked for a piece of shared code
   the addon never included, so it only ever worked when another addon you
   happened to have supplied it first
@@ -1244,7 +1244,7 @@
   anchor, and stops running once the login is over
 
 ### Enemy Casts
-- **NEW:** An interrupted cast now names who kicked it, in their class colour,
+- **NEW:** An interrupted cast now names who kicked it, in their class color,
   and holds the bar for a moment so you can read it
 - With Combat Only on, pulling a mob that is already casting shows its bar
   straight away instead of waiting for its next cast
@@ -1274,11 +1274,11 @@
 
 ### Character Sheet
 - **NEW:** Your Mythic+ rating now appears where the race line used to be,
-  coloured by rating. Nothing shows if you are unrated this season
+  colored by rating. Nothing shows if you are unrated this season
 - **NEW:** The alt-click comparison flyout tints each item's border to its
   rarity, the same as the equipped slots. Turning Item Rarity Borders off turns
   these off too
-- Your name and level sit centred over your character rather than over the
+- Your name and level sit centered over your character rather than over the
   window
 
 ### Chat
@@ -1382,7 +1382,7 @@
   popup from the title bar, with the eight presets as a chip strip
 - **NEW:** Also Tint Skinned Frames. On by default, so nothing changes unless
   you want it to. Turn it off to hold skinned Blizzard frames at a fixed
-  neutral colour while the settings window still follows your accent. Takes
+  neutral color while the settings window still follows your accent. Takes
   effect on the next reload
 
 ### Settings Window
@@ -1475,7 +1475,7 @@
   painting its own background on top of the others, and the stack added up to
   nearly solid. The window paints one background now, so the sidebar, the
   content area and the bottom bar all let the game show through
-- Changing your accent colour no longer paints the window solid again
+- Changing your accent color no longer paints the window solid again
 
 ### Settings Sidebar
 - The Optimize section is gone. Its System Optimization page now sits in a new
@@ -1518,14 +1518,14 @@
   large text on screen, defaulting to "Havoc Target", and hides again when you
   switch to a clean target
 - Off by default. Turn it on under Combat, Status Texts, Havoc Tracker, where it
-  is the fifth tab. You can set the text, colour, font, size and position
+  is the fifth tab. You can set the text, color, font, size and position
 - The position is draggable using /kes edit as "Havoc Warning"
 - Other classes and other Warlock specs see nothing at all, not even a mover
 
 ### Healer Mana
 - Separate Raid Settings now covers the whole look, not just the position. Font
   sizes, icon size, frame width, spacing, grow direction, text offsets and the
-  high mana colour can all differ between Dungeon and Raid
+  high mana color can all differ between Dungeon and Raid
 - New Configure For switcher picks which of the two you are editing, and the
   on-screen preview follows your choice, so Raid can be set up from a party
 - Turning Separate Raid Settings on copies your current Dungeon look across, so
@@ -1574,7 +1574,7 @@
 
 ### Character Skin
 - Equipped slot borders are now tinted by item rarity, with its own toggle on a
-  new Character Skin card. ElvUI paints its own, so the option greys out when
+  new Character Skin card. ElvUI paints its own, so the option grays out when
   ElvUI is running
 - The character stat rows fade at both ends instead of sitting on a flat plate
 
@@ -1624,7 +1624,7 @@
   during a fight
 - New Shape dropdown draws the crosshair as a circle instead of a cross
 - New Hide When In Range option draws the crosshair only while your target is
-  out of range. It works on its own, separate from the range warning colours
+  out of range. It works on its own, separate from the range warning colors
 - The crosshair now comes back up after a reload in the middle of a fight. It
   used to stay hidden until the next fight started
 
@@ -1704,13 +1704,13 @@
 ### Chat
 - **NEW:** Chat Links. Items, currencies, spells, achievements, keystones and
   PvP talents linked in chat now show their icon in front of the link, and the
-  crafting quality can read as a coloured number instead of the small gem. Icon
+  crafting quality can read as a colored number instead of the small gem. Icon
   height, width and aspect ratio are yours to set. Off by default, in
   Skinning > Chat > Chat Links
-- **NEW:** Clickable web addresses. An address posted in chat is coloured, and
+- **NEW:** Clickable web addresses. An address posted in chat is colored, and
   clicking it opens a copy box pinned above the chat window it came from, as
   wide as that window and tall enough to show a long address in full. Part of
-  the Chat Links card, with its own colour picker
+  the Chat Links card, with its own color picker
 - **NEW:** Chat History. Your chat comes back after a reload or a relogin, per
   character, with the time each line first arrived. Keep 50 to 500 lines,
   choose which chat types are stored, and clear everything with one button.
@@ -1718,16 +1718,16 @@
   never stored. Needs the chat skin on. Off by default
 - **NEW:** What you type in the chat box is kept per character too, so the Up
   arrow still recalls it after a reload
-- **NEW:** Keyword Highlight. Words you list are coloured inside the message
+- **NEW:** Keyword Highlight. Words you list are colored inside the message
   body, with an optional sound and a switch that keeps the sound quiet while
   you are fighting. Your own name is highlighted in mint by default
-- **NEW:** Class Colour Mentions colours player names typed inside a message.
+- **NEW:** Class Color Mentions colors player names typed inside a message.
   Names that are also ordinary words can be excluded by name
 - **NEW:** Merge Achievement Spam collapses several people earning the same
-  achievement into one line, keeping the achievement's own colour
+  achievement into one line, keeping the achievement's own color
 - **NEW:** Match Damage Meter Size sizes the chat panel to the Damage Meter's
   backdrop. The meter has no height setting, so matching the two by hand meant
-  guessing; the two panel sliders grey out while it is on and your own numbers
+  guessing; the two panel sliders gray out while it is on and your own numbers
   come back untouched when you turn it off
 - Fixed chat refusing to send any message that carried a link while you were in
   combat
@@ -1809,10 +1809,10 @@
 - Pings in chat name whoever pinged again
 
 ### Tooltips
-- Hostile creatures read in their reaction colour again instead of a class
-  colour. Blizzard's class lookup answers for creatures too, which made every
+- Hostile creatures read in their reaction color again instead of a class
+  color. Blizzard's class lookup answers for creatures too, which made every
   hostile mob wear Warrior tan
-- An enemy's Target line is class-coloured when the target is a player
+- An enemy's Target line is class-colored when the target is a player
 
 ### Combat Logger
 - The chat message now names the content logging started for
@@ -1821,14 +1821,14 @@
 - Advanced combat logging no longer asks for a reload. It never needed one
 
 ### Dark Theme
-- Window colours moved to the top of the General page instead of their own tab
+- Window colors moved to the top of the General page instead of their own tab
 - Addon skins moved below frame skins instead of their own tab
 - The pink selection highlight is softer on every skinned panel
 - Notes across the General page, the Color Picker and Raid Control carry a
-  KE-coloured dash
+  KE-colored dash
 
 ### Friends List
-- The Battle.net account row is centred again, and the tabs sit tight
+- The Battle.net account row is centered again, and the tabs sit tight
 
 ---
 
@@ -1859,7 +1859,7 @@ game's own aura display system. That rebuild is the actual fix for the patch
   to its own default position; re-anchor it to the new name
 - The custom Blocklist can now only block spells the game itself lets addons
   identify by name. The settings card already warned this could happen; it
-  is now the actual behaviour rather than a caveat
+  is now the actual behavior rather than a caveat
 - The INCLUDE_NAME_PLATE_ONLY tick box on the Filtering Options card works
   for the first time. It never did anything useful before. Everyone starts
   with it ticked, which shows exactly the debuffs this display always showed.
@@ -1873,7 +1873,7 @@ game's own aura display system. That rebuild is the actual fix for the patch
   back to its own default position; re-anchor it to the new name
 - The glow on a tracked external now uses the game's own glow art instead of
   the drawn-in glow it used before, so its appearance changes for everyone.
-  The choices are now Ants, Proc Loop and Alert; Colour and Speed still work,
+  The choices are now Ants, Proc Loop and Alert; Color and Speed still work,
   but the Lines, Length, Thickness, Border, Scale and Start Animation settings
   are gone because the new art has no use for them
 - Two changes that only affect you if **Include Defensives** is turned on.
@@ -1881,7 +1881,7 @@ game's own aura display system. That rebuild is the actual fix for the patch
   instead of the two being mixed together in the order they landed. And half
   the icon slots, rounded down, are now held for your own cooldowns even when
   none are running, so six slots that used to show six incoming externals now
-  show three. Turning Include Defensives off restores the old behaviour. This
+  show three. Turning Include Defensives off restores the old behavior. This
   comes from how the game's own aura display divides its slots and cannot be
   tuned away
 - The sound now plays only for a fixed list of externals (Blessing of
@@ -1905,7 +1905,7 @@ game's own aura display system. That rebuild is the actual fix for the patch
   produced the errors in keystones, raids and rated play
 - Covers Ebon Might Helper, Prescience Tracker, Hunter's Mark, Dragonriding,
   Ready Check Consumables, No Movement Alert, Burning Rush, Pet Status Text and
-  the automatic buff cancelling
+  the automatic buff canceling
 - Burning Rush now reads whether it is running from the spell's own activation
   glow instead of from your buffs, so it stays right while the game is hiding
   that information
@@ -1966,8 +1966,8 @@ Another patch 12.1 fix.
 
 ### Skinning
 - Fixed a skin error on the Recruit A Friend rewards list. Patch 12.1 moved
-  the month label into a wrapper, so the skin was colouring something that no
-  longer accepted a colour
+  the month label into a wrapper, so the skin was coloring something that no
+  longer accepted a color
 
 ---
 
@@ -2016,13 +2016,13 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 
 ### Edit Mode
 - **NEW:** boxes now snap to each other. Drag a frame near another and it locks
-  to that frame's left, centre or right edge, and to its bottom, middle or top,
+  to that frame's left, center or right edge, and to its bottom, middle or top,
   with a line showing where the lock happened. The two directions decide
-  separately, so a frame can line up horizontally with one neighbour and
+  separately, so a frame can line up horizontally with one neighbor and
   vertically with another
 - **NEW:** hold **Alt** while dragging to turn snapping off for as long as you
   hold it. Works on both the grid and the new element snapping
-- **NEW:** centre guides and a coarse grid, both toggleable, so you can see what
+- **NEW:** center guides and a coarse grid, both toggleable, so you can see what
   a drag is aiming at
 - **NEW:** right-click a box for its settings, add Shift to hide that box for
   the session, or Ctrl to put the frame back where it started
@@ -2059,12 +2059,12 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   normally remember where you put them
 - **NEW:** Copy Anything, copy text out of tooltips, chat and most UI text
 - **NEW:** Color Picker, RGB and alpha entry added to Blizzard's picker, so a
-  colour can be typed rather than hunted for
+  color can be typed rather than hunted for
 - **NEW:** Raid Control, a compact raid utility panel
 - **NEW:** Group Sort, keeps party and raid frames in a consistent order
 - **NEW:** Merchant Pages, wider vendor windows with fewer pages to click
   through
-- **NEW:** Map Scale, an adjustable size for the minimised world map
+- **NEW:** Map Scale, an adjustable size for the minimized world map
 - **NEW:** Alert Frames, moves Blizzard's achievement and loot alerts somewhere
   less intrusive
 - The Quality of Life page now gathers several small modules that used to have
@@ -2094,7 +2094,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 ### Interface
 - **NEW:** settings pages that carry a lot of options are now tabbed, which
   makes the long ones navigable
-- **NEW:** a shared colours card, so the colour controls behave the same way on
+- **NEW:** a shared colors card, so the color controls behave the same way on
   every page that has them
 - **NEW:** conflict detection warns when another addon is doing the same job as
   a module you have enabled
@@ -2420,7 +2420,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   and locks green or red at the finish. The final tier timer bare completion and
   reads "Timed"
 - **NEW:** "Below Bar" threshold label position, keeps every cutoff visible:
-  live cutoffs count down under their ticks, and passed cutoffs grey out to
+  live cutoffs count down under their ticks, and passed cutoffs gray out to
   their absolute times as permanent pacing marks
 - **NEW:** Thresholds font card, the +3/+2/+1 labels and the race line get their
   own font face, size, and outline, independent of the global HUD font
@@ -2437,7 +2437,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   Rest" with dot-separated affixes ("Fortified · Peril · Tyrannical")
 - Completion colors refreshed: the timer lands green on a timed finish (was
   gold), completed forces recolor the percent text instead of the bar fill, PB
-  targets read grey-white, and the key row reads white; boss clear times drop
+  targets read gray-white, and the key row reads white; boss clear times drop
   their brackets
 - Threshold labels in the Above and Below positions right-align to their tick
   marks, so labels near the end of the bar no longer collide or clip the frame
@@ -2454,7 +2454,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 - Walking out of a live key and re-entering could blank the timer HUD and
   permanently lose the run's boss splits and death log, run state now survives
   the walk-out and restores on re-entry
-- Config page polish: bar color controls grey out while their bar is hidden,
+- Config page polish: bar color controls gray out while their bar is hidden,
   Count Brackets enables only for count-bearing formats, and the tooltip toggle
   now leads the Overlay tab
 
@@ -2686,7 +2686,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 - The kick cooldown indicator now tracks the interrupt's actual cooldown
   directly and stays accurate across spec/talent changes, with no
   per-frame polling
-- Bar color refreshes as soon as you change a theme or colour setting in
+- Bar color refreshes as soon as you change a theme or color setting in
   the GUI
 - **NEW:** Important-spell glow (Focus), the focus castbar can glow on casts
   Blizzard flags as important (lethal-if-not-interrupted). Pick the glow style
@@ -2832,7 +2832,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   at full mana
 
 ### Sidebar
-- Section labels relabelled for clarity: "Combat Utilities", "General
+- Section labels relabeled for clarity: "Combat Utilities", "General
   Utilities", "Dungeon & Party Utilities". Module entries renamed too: Aura
   Debuffs is now "Advanced Debuffs", Aura Externals is now "External and
   Defensive Buffs"
@@ -3045,7 +3045,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 
 ### Healer Mana Tracker
 - **NEW:** OFFLINE display state: when the party healer disconnects, the row
-  stays visible with greyed text reading "OFFLINE" and a dimmed icon,
+  stays visible with grayed text reading "OFFLINE" and a dimmed icon,
   instead of vanishing entirely. Reconnect restores the live mana %
   automatically on the next tick
 - Cross-realm Discipline vs Holy priest icons now resolve correctly.
@@ -3728,7 +3728,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   the active sidebar section (edit mode still shows all)
 - **NEW:** Full content-area takeover panels for the dungeon trigger editor
   pages
-- **NEW:** Dungeon Timers sidebar entries grey out and stop responding to
+- **NEW:** Dungeon Timers sidebar entries gray out and stop responding to
   clicks while their module is off, or can be marked always enabled
 
 ### Combat Cross / Combat Texts / Core
@@ -4030,7 +4030,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 ### Combat Texts
 - **NEW:** Interrupt Text: displays the interrupted spell name and icon on
   a successful kick, with spec-aware detection. Works in dungeons, with
-  configurable text, colour and fade
+  configurable text, color and fade
 - "Interrupt Announce" is now "Interrupt Text"
 - Combat Enter/Exit combined into a single "Combat Messages" card with one
   enable toggle
@@ -4319,7 +4319,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
 ## v1.4.2
 
 ### Minimap Button
-- Tooltip styled with gold-colored click keywords and grey "Essentials"
+- Tooltip styled with gold-colored click keywords and gray "Essentials"
   text for better visual hierarchy
 
 ---
@@ -4499,7 +4499,7 @@ have moved or merged, so it is worth a look through the sidebar after updating.
   the sidebar; ACDM handles them now
 
 ### GUI
-- The custom colour picker no longer errors when its colour is unset
+- The custom color picker no longer errors when its color is unset
 - Refreshing the theme can no longer lock the game in a loop
 - The sidebar's accent bar and selection highlight update with theme changes
 

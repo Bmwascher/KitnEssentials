@@ -45,7 +45,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
     end
 
     -- "Reverse Cooldown Direction" only matters when Swipe is on, so it's
-    -- greyed out when Swipe is unchecked.
+    -- grayed out when Swipe is unchecked.
     manager:SetCondition("swipeOn", function() return db.Swipe ~= false end)
 
     ----------------------------------------------------------------
@@ -257,7 +257,7 @@ GUIFrame:RegisterContent("AuraMovement", function(scrollChild, yOffset)
         showSpeed = function() return true end,
         speedAdapter = {
             read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormaliseFrequency(
+                return KE.AuraGlowRules.NormalizeFrequency(
                     KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 2)
             end,
             write   = KE.AuraGlowRules.WriteSpeed,

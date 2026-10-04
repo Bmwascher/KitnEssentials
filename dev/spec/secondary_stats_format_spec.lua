@@ -51,7 +51,7 @@ describe("SecondaryStatsFormat", function()
         end
     end)
 
-    -- The refused half of behaviour 4: ResolveVersatility hands back nil, and
+    -- The refused half of behavior 4: ResolveVersatility hands back nil, and
     -- this is what the row does with it. Assigned after construction, because
     -- `entry({ percent = nil })` would pass an EMPTY table -- a nil-valued key
     -- does not exist in Lua, so the override loop would see nothing.
@@ -136,7 +136,7 @@ describe("SecondaryStatsFormat", function()
     end)
 
     describe("VisibleKeys", function()
-        it("drops hidden stats, honours a saved order, and appends omitted keys", function()
+        it("drops hidden stats, honors a saved order, and appends omitted keys", function()
             local stats = {
                 crit = { Shown = true }, haste = { Shown = false },
                 mastery = { Shown = true }, vers = { Shown = true },

@@ -113,7 +113,7 @@ describe("Character panel: refusals while the module is disabled", function()
     end)
 
     -- Both branches of this one end in SetText, so a numeric average and a
-    -- recording Value are the whole fixture. No layout is modelled.
+    -- recording Value are the whole fixture. No layout is modeled.
     it("UpdateItemLevelText refuses while the module is disabled", function()
         local CP = loadCP()
         local painted = false
@@ -139,7 +139,7 @@ describe("Character panel: refusals while the module is disabled", function()
     end)
 
     -- Everything past the gate goes through methods on this module, so the
-    -- fixture stubs those rather than modelling a FontString.
+    -- fixture stubs those rather than modeling a FontString.
     it("ShowRaceText refuses while the module is disabled", function()
         local CP = loadCP()
         -- Seeded, and load-bearing: the method's SECOND guard is this key, so

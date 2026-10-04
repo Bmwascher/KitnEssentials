@@ -45,7 +45,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
     end
 
     -- "Reverse Cooldown Direction" only matters when Swipe is on, so it's
-    -- greyed out when Swipe is unchecked.
+    -- grayed out when Swipe is unchecked.
     manager:SetCondition("swipeOn", function() return db.Swipe ~= false end)
 
     ----------------------------------------------------------------
@@ -248,9 +248,9 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
         typeTooltip = "Pixel plays four animations for every icon, more than any other style. In testing it ran about 2% slower than Ants at two icons, and about 7% slower at thirty-six icons, twelve per row across three rows.",
         -- Pixel is now a real resolved type, so the card's default lookup
         -- would show its Length and Border controls too. This display's
-        -- border is animation-driven and honours neither, so the override
+        -- border is animation-driven and honors neither, so the override
         -- maps `pixel` to the one row carrying the two controls it does
-        -- honour, Lines and Thickness, and omits every other
+        -- honor, Lines and Thickness, and omits every other
         -- group -- which is also what keeps the retired autocast and proc
         -- geometry rows hidden.
         -- Every group must stay REACHABLE by the visibility loop, including the
@@ -270,12 +270,12 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
         showSpeed = function() return true end,
         speedAdapter = {
             -- WRAPPED, not passed bare. The read rule's result needs
-            -- normalising -- nil or zero becomes 0.25, then clamp -- and the
+            -- normalizing -- nil or zero becomes 0.25, then clamp -- and the
             -- glow card is shared and generic, so it has no access to these
             -- rules. Passing ReadSpeed directly hands the slider a nil on a
             -- profile with no stored frequency.
             read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormaliseFrequency(
+                return KE.AuraGlowRules.NormalizeFrequency(
                     KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 2)
             end,
             write   = KE.AuraGlowRules.WriteSpeed,
@@ -324,7 +324,7 @@ GUIFrame:RegisterContent("AuraExternals", function(scrollChild, yOffset)
         db = db,
         dbKeys = { enabled = "SoundEnabled", name = "SoundName" },
         notes = {
-            -- Says "including your own" because the sound CANNOT honour
+            -- Says "including your own" because the sound CANNOT honor
             -- HideSelfCast. Blizzard's UnitAuraSoundInfo carries a unit and a
             -- spell id and no caster field, so a registration fires for the
             -- spell however it was applied. The display filters on the caster;

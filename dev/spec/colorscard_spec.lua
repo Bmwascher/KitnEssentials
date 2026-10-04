@@ -1,9 +1,9 @@
 -- Tier 1: GUI/GUIWidgets/GUI-ColorsCard.lua -- ReadCardColor's default fallback.
--- This is the only logic in the card that can silently discard a saved colour,
+-- This is the only logic in the card that can silently discard a saved color,
 -- so it is the only part with a spec; layout and gating are smoke-tested.
 local helpers = require("dev.spec._helpers")
 
-describe("ColorsCard colour read and write", function()
+describe("ColorsCard color read and write", function()
     local KE
 
     before_each(function()
@@ -21,7 +21,7 @@ describe("ColorsCard colour read and write", function()
         assert.equals(0.5, r); assert.equals(0.6, g); assert.equals(0.7, b); assert.equals(0.8, a)
     end)
 
-    it("defaults alpha to 1 when the stored colour omits it", function()
+    it("defaults alpha to 1 when the stored color omits it", function()
         local _, _, _, a = KE:ReadCardColor({ BarColor = { 0.1, 0.2, 0.3 } },
             { key = "BarColor", default = { 1, 1, 1, 1 } })
         assert.equals(1, a)

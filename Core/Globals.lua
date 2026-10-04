@@ -1056,7 +1056,7 @@ function KE:GetGridOverlayInset(cols, rows, size, spacing, pin, growLeft, growUp
     local h = (rows - 1) * step + size
 
     -- Where button[1]'s own anchor corner lands, measured from the frame's left
-    -- and bottom edges. A point naming neither side of an axis is centred on it.
+    -- and bottom edges. A point naming neither side of an axis is centered on it.
     local pinX = string_find(pin, "LEFT") and 0
         or (string_find(pin, "RIGHT") and w or w * 0.5)
     local pinY = string_find(pin, "BOTTOM") and 0
@@ -1083,7 +1083,7 @@ function KE:GetGridOverlayInset(cols, rows, size, spacing, pin, growLeft, growUp
 end
 
 -- A fixed-size decoration hung just outside one edge of a host frame and
--- centred on the other axis: how far it reaches past that edge, and how far
+-- centered on the other axis: how far it reaches past that edge, and how far
 -- past each of the two perpendicular edges. The caller decides which edges
 -- those are, so this never has to know a module's spelling of a side.
 --
@@ -1103,7 +1103,7 @@ end
 
 -- Where a named anchor point sits inside a rectangle, as a fraction of its
 -- width and height. Y runs from the bottom because that is the direction frame
--- offsets run. An unrecognised point centres rather than throwing: saved
+-- offsets run. An unrecognized point centers rather than throwing: saved
 -- profiles predate the current dropdowns and can hold anything, and a throw
 -- here takes the whole overlay down with it.
 local ANCHOR_FRACTIONS = {
@@ -1221,7 +1221,7 @@ end
 -- The secret test comes FIRST and this order is the whole point: both getters
 -- are secret when the string is anchored into a secret chain, and a positivity
 -- comparison is arithmetic, so `w <= 0` on a secret throws before any later
--- guard can run. SafeInset sanitises what the overlay callback RETURNS; it
+-- guard can run. SafeInset sanitizes what the overlay callback RETURNS; it
 -- cannot rescue a throw inside it.
 --
 -- The string extents rather than the rect, which is a constraint on the CALLER
@@ -1277,34 +1277,34 @@ end
 -- bestCoord is nil while the best is the grid or nothing, which is what turns
 -- "an element breaks a tie with the grid" into a single comparison rather than
 -- a flag threaded through the caller.
-local function ElementBeats(displacement, centre, coord, bestDisplacement, bestCentre, bestCoord)
+local function ElementBeats(displacement, center, coord, bestDisplacement, bestCenter, bestCoord)
     if bestDisplacement == nil then return true end
     if displacement < bestDisplacement then return true end
     if displacement > bestDisplacement then return false end
     if bestCoord == nil then return true end
-    -- Two alignments can reach the same centre by different routes, so the
-    -- centre alone is not a total order and the drawn coordinate settles it.
-    if centre ~= bestCentre then return centre > bestCentre end
+    -- Two alignments can reach the same center by different routes, so the
+    -- center alone is not a total order and the drawn coordinate settles it.
+    if center ~= bestCenter then return center > bestCenter end
     return coord > bestCoord
 end
 
--- One axis, grid and elements together. Returns the centre to use, whether that
--- centre is the origin itself, and the coordinate a guide should be drawn at
+-- One axis, grid and elements together. Returns the center to use, whether that
+-- center is the origin itself, and the coordinate a guide should be drawn at
 -- (nil unless an element won).
 --
 -- A file local rather than a closure inside SnapCenter: the drag update calls
 -- this every frame, and a closure built per call is an allocation in the one
 -- path that must not allocate.
-local function SnapAxis(value, origin, spacing, threshold, candidates, near, centreOffset, far)
-    local bestCentre, bestDisplacement, bestOnCentre, bestCoord = value, nil, false, nil
+local function SnapAxis(value, origin, spacing, threshold, candidates, near, centerOffset, far)
+    local bestCenter, bestDisplacement, bestOnCenter, bestCoord = value, nil, false, nil
 
-    local line, displacement, onCentre = GridAxis(value, origin, spacing, threshold)
+    local line, displacement, onCenter = GridAxis(value, origin, spacing, threshold)
     if line then
-        bestCentre, bestDisplacement, bestOnCentre = line, displacement, onCentre
+        bestCenter, bestDisplacement, bestOnCenter = line, displacement, onCenter
     end
 
     if not candidates then
-        return bestCentre, bestOnCentre, nil
+        return bestCenter, bestOnCenter, nil
     end
 
     for i = 1, #candidates do
@@ -1312,31 +1312,31 @@ local function SnapAxis(value, origin, spacing, threshold, candidates, near, cen
 
         -- Unrolled over the box's three edges. A loop would want a table of the
         -- offsets, and building one here would allocate on every frame.
-        -- An offset is measured from the frame centre, so the centre that puts
+        -- An offset is measured from the frame center, so the center that puts
         -- that edge on this candidate is the candidate minus the offset.
-        local centre = coord - near
-        local d = math_abs(centre - value)
+        local center = coord - near
+        local d = math_abs(center - value)
         if d <= threshold
-            and ElementBeats(d, centre, coord, bestDisplacement, bestCentre, bestCoord) then
-            bestCentre, bestDisplacement, bestOnCentre, bestCoord = centre, d, false, coord
+            and ElementBeats(d, center, coord, bestDisplacement, bestCenter, bestCoord) then
+            bestCenter, bestDisplacement, bestOnCenter, bestCoord = center, d, false, coord
         end
 
-        centre = coord - centreOffset
-        d = math_abs(centre - value)
+        center = coord - centerOffset
+        d = math_abs(center - value)
         if d <= threshold
-            and ElementBeats(d, centre, coord, bestDisplacement, bestCentre, bestCoord) then
-            bestCentre, bestDisplacement, bestOnCentre, bestCoord = centre, d, false, coord
+            and ElementBeats(d, center, coord, bestDisplacement, bestCenter, bestCoord) then
+            bestCenter, bestDisplacement, bestOnCenter, bestCoord = center, d, false, coord
         end
 
-        centre = coord - far
-        d = math_abs(centre - value)
+        center = coord - far
+        d = math_abs(center - value)
         if d <= threshold
-            and ElementBeats(d, centre, coord, bestDisplacement, bestCentre, bestCoord) then
-            bestCentre, bestDisplacement, bestOnCentre, bestCoord = centre, d, false, coord
+            and ElementBeats(d, center, coord, bestDisplacement, bestCenter, bestCoord) then
+            bestCenter, bestDisplacement, bestOnCenter, bestCoord = center, d, false, coord
         end
     end
 
-    return bestCentre, bestOnCentre, bestCoord
+    return bestCenter, bestOnCenter, bestCoord
 end
 
 -- The element family for one axis, or nil when this drag has none. Both halves
@@ -1344,9 +1344,9 @@ end
 -- against anything, and offsets with no list have nothing to measure. Missing
 -- either leaves grid snapping working, which is the ordinary state on a screen
 -- showing one element.
-local function ElementAxis(candidates, near, centreOffset, far)
+local function ElementAxis(candidates, near, centerOffset, far)
     if type(candidates) ~= "table" or #candidates == 0 then return nil end
-    if type(near) ~= "number" or type(centreOffset) ~= "number"
+    if type(near) ~= "number" or type(centerOffset) ~= "number"
         or type(far) ~= "number" then
         return nil
     end
@@ -1357,16 +1357,16 @@ end
 -- no-update fallback and the stop reconciliation can only stay in step by
 -- sharing this, and a version that read the database or a frame could not be
 -- shared at all.
----@param x number desired centre, absolute UIParent coordinates
+---@param x number desired center, absolute UIParent coordinates
 ---@param y number
 ---@param context table? { enabled, spacing, originX, originY, candidatesX,
----       candidatesY, edgeLeft, edgeCentreX, edgeRight, edgeBottom,
----       edgeCentreY, edgeTop }
+---       candidatesY, edgeLeft, edgeCenterX, edgeRight, edgeBottom,
+---       edgeCenterY, edgeTop }
 ---@param suppressed boolean? true while the suppress modifier is held
 ---@return number snappedX
 ---@return number snappedY
----@return boolean onCentreX true only when the result is the origin itself
----@return boolean onCentreY
+---@return boolean onCenterX true only when the result is the origin itself
+---@return boolean onCenterY
 ---@return number? guideX coordinate to draw a vertical guide at, nil unless an
 ---        element won this axis
 ---@return number? guideY
@@ -1379,19 +1379,19 @@ function KE:SnapCenter(x, y, context, suppressed)
 
     local threshold = math_min(spacing / 2, SNAP_THRESHOLD_CAP)
 
-    local snappedX, onCentreX, guideX = SnapAxis(
+    local snappedX, onCenterX, guideX = SnapAxis(
         x, tonumber(context.originX) or 0, spacing, threshold,
-        ElementAxis(context.candidatesX, context.edgeLeft, context.edgeCentreX,
+        ElementAxis(context.candidatesX, context.edgeLeft, context.edgeCenterX,
             context.edgeRight),
-        context.edgeLeft, context.edgeCentreX, context.edgeRight)
+        context.edgeLeft, context.edgeCenterX, context.edgeRight)
 
-    local snappedY, onCentreY, guideY = SnapAxis(
+    local snappedY, onCenterY, guideY = SnapAxis(
         y, tonumber(context.originY) or 0, spacing, threshold,
-        ElementAxis(context.candidatesY, context.edgeBottom, context.edgeCentreY,
+        ElementAxis(context.candidatesY, context.edgeBottom, context.edgeCenterY,
             context.edgeTop),
-        context.edgeBottom, context.edgeCentreY, context.edgeTop)
+        context.edgeBottom, context.edgeCenterY, context.edgeTop)
 
-    return snappedX, snappedY, onCentreX, onCentreY, guideX, guideY
+    return snappedX, snappedY, onCenterX, onCenterY, guideX, guideY
 end
 
 -- Y is positive upward, matching the nudge buttons and the stored offsets.
@@ -1402,7 +1402,7 @@ local ARROW_DELTAS = {
     RIGHT = { 1,  0 },
 }
 
--- nil for a non-arrow, so the key handler can use one call to both recognise
+-- nil for a non-arrow, so the key handler can use one call to both recognize
 -- an arrow and resolve it.
 ---@param key string?
 ---@param ctrlDown boolean?
@@ -1422,7 +1422,7 @@ end
 -- to agree today.
 --
 -- The frame term is where the frame's own anchor point sits relative to its
--- centre; the parent term is where the parent's anchor point sits absolutely.
+-- center; the parent term is where the parent's anchor point sits absolutely.
 -- The two axes are independent chains on purpose: a corner moves both.
 local function FrameAnchorDelta(anchorFrom, frameWidth, frameHeight)
     local dx, dy = 0, 0
@@ -1458,7 +1458,7 @@ local function ParentAnchorPoint(anchorTo, parentLeft, parentBottom, parentWidth
     return x, y
 end
 
--- Turns an absolute centre into the two offsets a SetPoint stores. Pure by
+-- Turns an absolute center into the two offsets a SetPoint stores. Pure by
 -- contract: it calls no API, because three of the geometry reads behind its
 -- arguments are secret when the anchoring is secret, and proving them clean is
 -- the caller's job.
@@ -1485,24 +1485,24 @@ function KE:ResolveAnchorOffsets(centerX, centerY, anchorFrom, anchorTo,
         self:RoundOffset(centerY + deltaY - toY)
 end
 
--- The offsets that will actually be stored, and the centre those offsets
+-- The offsets that will actually be stored, and the center those offsets
 -- produce. Same inputs as ResolveAnchorOffsets, and the right-inverse of it:
--- feed the returned centre back through that function and the same offsets come
+-- feed the returned center back through that function and the same offsets come
 -- out, because RoundOffset is the identity on a whole number.
 --
 -- This exists because a stored offset is a whole number and a snap target is
 -- not. Without it the guide marks a coordinate the commit never reaches, and by
 -- an amount that depends on where the parent's anchor happens to sit rather
--- than on anything the user can see. It CANNOT recover the pre-rounding centre
+-- than on anything the user can see. It CANNOT recover the pre-rounding center
 -- -- rounding is many-to-one -- and it does not try to; it answers a different
 -- question, which is where the frame will end up.
 --
 -- One stage further on, the common setter pixel-snaps the frame again. That is
--- deliberately not modelled here: doing so would mean assuming every module's
+-- deliberately not modeled here: doing so would mean assuming every module's
 -- position setter routes through that helper, which nothing enforces and at
 -- least one setter does not do. So the residual this bounds is 0.5 UI unit,
 -- and the pipeline as a whole has no bound this function can promise.
----@param centerX number desired centre, absolute UIParent coordinates
+---@param centerX number desired center, absolute UIParent coordinates
 ---@param centerY number
 ---@param anchorFrom string
 ---@param anchorTo string
@@ -1514,7 +1514,7 @@ end
 ---@param parentHeight number
 ---@return number offsetX stored offset, a whole number
 ---@return number offsetY
----@return number representedX the centre those offsets produce
+---@return number representedX the center those offsets produce
 ---@return number representedY
 function KE:ResolveRepresentablePlacement(centerX, centerY, anchorFrom, anchorTo,
                                 frameWidth, frameHeight,
@@ -1765,7 +1765,7 @@ local EUI_ELEMENT_KEYS = {
         ilvl = "showItemLevel", enchant = "showEnchants",
         gems = "showGems",     track   = "showUpgradeTrack",
         -- EUI's own bottom-of-sheet socket row (SocketPanel.lua), the same
-        -- feature as KE's socket bar down to the click-to-flyout behaviour.
+        -- feature as KE's socket bar down to the click-to-flyout behavior.
         socketPanel = "charSheetSocketPanel",
     },
     inspect = {
@@ -2010,7 +2010,7 @@ anchorWatcher:SetScript("OnEvent", function(_, event)
     -- world entry fires again on every loading screen, and an unguarded queue
     -- out here would add one more pass per screen inside the window.
     --
-    -- The queued passes check the flag rather than cancelling: C_Timer.After
+    -- The queued passes check the flag rather than canceling: C_Timer.After
     -- returns no handle, so a callback outliving the window is the only case
     -- that has to be handled.
     local function QueuePass()

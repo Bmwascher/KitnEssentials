@@ -1,9 +1,9 @@
 -- Modules/Skinning/UIWidgets.lua -- restyles Blizzard's on-screen UI widget
--- frames (top-centre status bars / text widgets used by M+ timers, event
+-- frames (top-center status bars / text widgets used by M+ timers, event
 -- progress, power bars). Almost everything in this module touches real
 -- widget frames and is only verifiable in-game; the pure decisions (the
--- ApplySettings font-cache invalidation, the fill colour, the font role,
--- the text centring) are reachable headlessly through
+-- ApplySettings font-cache invalidation, the fill color, the font role,
+-- the text centering) are reachable headlessly through
 -- dev/spec/_ke_loader.lua's loadUIWidgets.
 local L = require("dev.spec._ke_loader")
 
@@ -126,13 +126,13 @@ describe("UIWidgets", function()
     end)
 end)
 
-describe("UIWidgets fill colour", function()
+describe("UIWidgets fill color", function()
     local function resolve(...)
         local UIW = L.loadUIWidgets()
         return UIW.ResolveFillColor(...)
     end
 
-    it("resolves a known fill kit to the same colour in either case", function()
+    it("resolves a known fill kit to the same color in either case", function()
         local upper = { resolve("widgetstatusbar", "Green", 1, 1, 1) }
         local lower = { resolve("widgetstatusbar", "green", 1, 1, 1) }
         assert.equals(3, #upper)
@@ -207,8 +207,8 @@ describe("UIWidgets font role", function()
     end)
 end)
 
-describe("UIWidgets text centring", function()
-    it("centres only when the module, text widgets, text style and centring are all on", function()
+describe("UIWidgets text centering", function()
+    it("centers only when the module, text widgets, text style and centering are all on", function()
         local UIW = L.loadUIWidgets()
         local function allOn()
             return { Enabled = true, TextWidget = { Enabled = true, StyleText = true, Size = 17, CenterText = true } }

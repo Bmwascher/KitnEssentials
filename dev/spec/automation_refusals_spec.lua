@@ -242,7 +242,7 @@ local function newFixture()
     -- Neither AceEvent nor AceHook is mixed in by the bare shim; stub only
     -- what the ported paths under test actually call. SecureHook is
     -- pre-empted by presetting the talking-head latch below rather than
-    -- stubbed, since nothing in these four behaviours exercises it.
+    -- stubbed, since nothing in these four behaviors exercises it.
     AU.RegisterEvent = function(_, event) record("AU", "RegisterEvent:" .. event) end
     AU.UnregisterEvent = function(_, event) record("AU", "UnregisterEvent:" .. event) end
     -- Mirrors the key by default, since existing cases switch the module off
@@ -292,7 +292,7 @@ local function newFixture()
 end
 
 ---------------------------------------------------------------------------------
--- Behaviour 1: combat deferral on the two button creators
+-- Behavior 1: combat deferral on the two button creators
 ---------------------------------------------------------------------------------
 describe("Automation combat deferral (Task 2 Step 5)", function()
     it("creates neither button in combat, then creates both once combat ends", function()
@@ -327,7 +327,7 @@ describe("Automation combat deferral (Task 2 Step 5)", function()
 end)
 
 ---------------------------------------------------------------------------------
--- Shared install fixture for behaviours 2 and 4: all seven feature keys plus
+-- Shared install fixture for behaviors 2 and 4: all seven feature keys plus
 -- every window precondition the button creators need, master and combat
 -- both in their "everything can install" state.
 ---------------------------------------------------------------------------------
@@ -365,7 +365,7 @@ local function normalizeAndClear(fx)
 end
 
 ---------------------------------------------------------------------------------
--- Behaviour 2: master teardown and the return trip
+-- Behavior 2: master teardown and the return trip
 ---------------------------------------------------------------------------------
 describe("Automation master teardown and return trip (Task 3 Step 10b)", function()
     it("installs everything, tears every feature down, then restores it all on return", function()
@@ -466,7 +466,7 @@ describe("Automation master teardown and return trip (Task 3 Step 10b)", functio
 end)
 
 ---------------------------------------------------------------------------------
--- Behaviour 3: master-off startup for Hide Helptips
+-- Behavior 3: master-off startup for Hide Helptips
 ---------------------------------------------------------------------------------
 describe("Automation Hide Helptips master-off startup (Task 3 Step 10b)", function()
     it("applies suppression from OnInitialize with the master off, HideHelptips on", function()
@@ -489,7 +489,7 @@ describe("Automation Hide Helptips master-off startup (Task 3 Step 10b)", functi
 end)
 
 ---------------------------------------------------------------------------------
--- Behaviour 4: the effective-state predicates themselves, in all three
+-- Behavior 4: the effective-state predicates themselves, in all three
 -- (Enabled, feature key) states. Every gated path is supposed to read
 -- "Enabled AND its own feature key" -- writing "or" instead passes the Step 8
 -- structural diff (same hunk, correctly attributed) while the path keeps
@@ -520,7 +520,7 @@ describe("Automation effective-state predicates (Task 3 Step 10b)", function()
             end,
         },
         {
-            name = "the 0.2 second acknowledgement closure",
+            name = "the 0.2 second acknowledgment closure",
             key = "AutoUnwrapCollections",
             capture = function(fx)
                 -- Drive DismissCollectionAlerts itself (still fully active)
@@ -735,11 +735,11 @@ describe("Automation effective-state predicates (Task 3 Step 10b)", function()
         end)
     end)
 
-    -- The seven top-level functions: behaviour 2 already drives (false, true)
+    -- The seven top-level functions: behavior 2 already drives (false, true)
     -- and (true, true) for all seven. The one quadrant nothing else covers is
     -- (true, false) -- master ON, that function's own key OFF -- reached
     -- through AU:ApplySettings(), asserting the same off-state effect
-    -- behaviour 2 asserts for that feature on teardown.
+    -- behavior 2 asserts for that feature on teardown.
     describe("the seven top-level functions, master on / own key off", function()
         it("ApplyNoBossLoot leaves the loot banner suppressed if HideBossBannerLoot alone is off", function()
             local fx = installedFixture()
@@ -765,7 +765,7 @@ describe("Automation effective-state predicates (Task 3 Step 10b)", function()
 end)
 
 ---------------------------------------------------------------------------------
--- Behaviour 5: the Hide Helptips sweep lifecycle
+-- Behavior 5: the Hide Helptips sweep lifecycle
 ---------------------------------------------------------------------------------
 -- The sweep walks the client's entire frame list in slices so it cannot trip
 -- the script watchdog. Everything asserted here is invented bookkeeping around
@@ -1037,7 +1037,7 @@ describe("Automation Hide Helptips sweep lifecycle", function()
 end)
 
 ---------------------------------------------------------------------------------
--- Behaviour 6: the fishing outfit cancel's refusal gate
+-- Behavior 6: the fishing outfit cancel's refusal gate
 ---------------------------------------------------------------------------------
 describe("Automation fishing outfit cancel gate", function()
     it("refuses in combat, while identities are hidden whatever the spell says, and on a secret spell", function()
@@ -1064,17 +1064,17 @@ describe("Automation fishing outfit cancel gate", function()
             if fx.timers[i].delay == 0.3 then closure = fx.timers[i].fn end
         end
         assert.is_not_nil(closure)
-        local cancelled = false
-        _G.C_UnitAuras.CancelAuraByInstanceID = function() cancelled = true end
+        local canceled = false
+        _G.C_UnitAuras.CancelAuraByInstanceID = function() canceled = true end
         fx.KE.AreAuraIdentitiesHidden = function() return true end
         fx.setSecrets({ ShouldSpellAuraBeSecret = function() return false end })
         closure()
-        assert.is_false(cancelled)
+        assert.is_false(canceled)
     end)
 end)
 
 ---------------------------------------------------------------------------------
--- Behaviour 5: the repair-cost report's spend rule
+-- Behavior 5: the repair-cost report's spend rule
 ---------------------------------------------------------------------------------
 describe("Automation repair spend rule", function()
     local AU
@@ -1181,8 +1181,8 @@ describe("repair split", function()
 end)
 
 describe("repair money text", function()
-    -- The colour escapes are pinned once, in the case that is about them.
-    -- Every other case reads the bare text so a colour change cannot make
+    -- The color escapes are pinned once, in the case that is about them.
+    -- Every other case reads the bare text so a color change cannot make
     -- an arithmetic case fail for the wrong reason.
     local function plain(s)
         return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
@@ -1220,7 +1220,7 @@ describe("repair money text", function()
         assert.equals("144g", plain(AU:FormatMoney(1440803, nil)))
     end)
 
-    it("colours only the unit letter", function()
+    it("colors only the unit letter", function()
         local AU = newFixture().AU
         assert.equals(
             "1|cffffd100g|r 1|cffc7c7cfs|r 1|cffeda55fc|r",
@@ -1719,18 +1719,18 @@ describe("Automation auto role check", function()
 end)
 
 ---------------------------------------------------------------------------------
--- Skip Cinematics under full restriction. Only a cinematic that can be cancelled
+-- Skip Cinematics under full restriction. Only a cinematic that can be canceled
 -- is skipped there: for any other, Blizzard's cancel ends a scene or exits a
 -- vehicle.
 ---------------------------------------------------------------------------------
 describe("Automation Skip Cinematics restriction", function()
     local cases = {
-        { label = "skips a cancellable cinematic under full restriction",
-          restricted = true, cancellable = true, cancels = 1 },
-        { label = "refuses one that cannot be cancelled under full restriction",
-          restricted = true, cancellable = false, cancels = 0 },
-        { label = "skips one that cannot be cancelled when unrestricted",
-          restricted = false, cancellable = false, cancels = 1 },
+        { label = "skips a cancelable cinematic under full restriction",
+          restricted = true, cancelable = true, cancels = 1 },
+        { label = "refuses one that cannot be canceled under full restriction",
+          restricted = true, cancelable = false, cancels = 0 },
+        { label = "skips one that cannot be canceled when unrestricted",
+          restricted = false, cancelable = false, cancels = 1 },
     }
 
     for _, case in ipairs(cases) do
@@ -1745,7 +1745,7 @@ describe("Automation Skip Cinematics restriction", function()
             local setup = findUpvalue(AU.ApplySettings, "SetupSkipCinematics")
             local frame = findUpvalue(setup, "cinematicFrame")
             fx.KE.IsFullyRestricted = function() return case.restricted end
-            frame:Fire("CINEMATIC_START", case.cancellable, 0)
+            frame:Fire("CINEMATIC_START", case.cancelable, 0)
             assert.equals(case.cancels, cancels)
         end)
     end

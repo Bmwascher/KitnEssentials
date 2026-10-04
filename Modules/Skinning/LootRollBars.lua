@@ -292,7 +292,7 @@ function LR:RollBars_Layout()
 
         bar.status:SetStatusBarTexture(KE:GetStatusbarPath(db.BarTexture or "KitnUI"))
 
-        -- The item icon is NOT sized to the bar frame height and centred
+        -- The item icon is NOT sized to the bar frame height and centered
         -- there, which is the obvious reading. The visible
         -- row is taller than the frame: the roll buttons sit ABOVE the status
         -- bar (see the anchors below), so the content spans

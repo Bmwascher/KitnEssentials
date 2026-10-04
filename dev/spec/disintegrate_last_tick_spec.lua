@@ -1,6 +1,6 @@
 -- Tier: logic KE invented for the last-tick highlight. Which index is last
--- decides which pooled texture gets the highlight colour, and a wrong answer
--- only shows as a mark in the wrong colour. The tick-time arithmetic these
+-- decides which pooled texture gets the highlight color, and a wrong answer
+-- only shows as a mark in the wrong color. The tick-time arithmetic these
 -- cases pass through is moved code, covered by the diff, not by this file.
 
 local loader = require("dev.spec._ke_loader")
@@ -42,7 +42,7 @@ describe("DisintegrateTicks last tick", function()
         end
     end)
 
-    it("the colour choice follows the toggle", function()
+    it("the color choice follows the toggle", function()
         local tickColor = { 0.1, 0.2, 0.3, 0.4 }
         local lastTickColor = { 0.5, 0.6, 0.7, 0.8 }
         local rows = {

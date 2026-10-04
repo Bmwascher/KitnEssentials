@@ -193,13 +193,13 @@ GUIFrame:RegisterContent("NoMovementAlert", function(scrollChild, yOffset)
             { key = "THEME",  text = "Match Theme" },
         },
         value = db.ColorMode or "CUSTOM",
-        tooltip = "Match Theme paints the name, timer and separator with the addon accent colour, and hides the three pickers.",
+        tooltip = "Match Theme paints the name, timer and separator with the addon accent color, and hides the three pickers.",
         callback = function(v) db.ColorMode = v; ApplySettings(); GUIFrame:RefreshContent() end,
     }), 1)
     card5:AddRow(modeRow, 40)
 
-    -- The three pickers are hidden rather than greyed in theme mode: a
-    -- disabled swatch still shows a colour, which reads as the one in use.
+    -- The three pickers are hidden rather than grayed in theme mode: a
+    -- disabled swatch still shows a color, which reads as the one in use.
     if db.ColorMode ~= "THEME" then
         local colorRow = GUIFrame:CreateRow(card5.content, 46)
         colorRow:AddWidget(GUIFrame:CreateColorPicker(colorRow, "Text Color", {

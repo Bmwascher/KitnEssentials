@@ -230,7 +230,7 @@ function TT:LayoutButtons(visibleButtons)
     local buttonsToLayout = visibleButtons or totemButtons
 
     -- Reserve every slot only while EllesmereUI holds the anchor. It positions a
-    -- registered element by its centre and keeps its growth-edge path for its own
+    -- registered element by its center and keeps its growth-edge path for its own
     -- bars, so a container that resized as totems came and went would creep away
     -- from the edge GrowDirection points at. Everywhere else the container stays
     -- occupancy-sized: the reserved width counts against SetClampedToScreen, and a

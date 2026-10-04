@@ -117,7 +117,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
         onChangeCallback = function() ApplySettings() end,
     })
     -- Strata still applies to every tooltip under cursor anchoring. The card
-    -- itself joins no group: its SetEnabled would grey Strata with it.
+    -- itself joins no group: its SetEnabled would gray Strata with it.
     if posCard.positionWidgets then
         for _, widget in ipairs(posCard.positionWidgets) do
             if widget == posCard.strataWidget then
@@ -228,7 +228,7 @@ GUIFrame:RegisterContent("SkinTooltips", function(scrollChild, yOffset)
     local row4b = GUIFrame:CreateRow(card4.content, 40)
     local mythicPlusCheck = GUIFrame:CreateCheckbox(row4b, "Mythic+ Score", {
         value = db.MythicPlusLine == true,
-        tooltip = "Adds the player's current season Mythic+ rating, coloured by score. Only shows for players the game already has rating data for.",
+        tooltip = "Adds the player's current season Mythic+ rating, colored by score. Only shows for players the game already has rating data for.",
         callback = function(checked) db.MythicPlusLine = checked; ApplySettings() end,
     })
     row4b:AddWidget(mythicPlusCheck, 0.5)

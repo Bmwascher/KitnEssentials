@@ -50,7 +50,7 @@ local function newFixture(opts)
     }
 
     -- The module creates its regen watcher at file scope, so the stub has to
-    -- exist before the chunk runs. Registration is modelled as LIVE state: the
+    -- exist before the chunk runs. Registration is modeled as LIVE state: the
     -- failure this catches is a teardown removing a handler that was armed
     -- moments earlier, and a call log cannot see that -- both calls happened.
     local watcherEvents = {}
@@ -306,7 +306,7 @@ describe("MapScale refusals", function()
             assert.equals(1, f.regenArmed())
         end)
 
-        it("survives the AceEvent teardown Ace runs straight afterwards", function()
+        it("survives the AceEvent teardown Ace runs straight afterward", function()
             local f = newFixture({ combat = true, db = DIMMED })
             f.disable()
             f.MS:OnDisable()

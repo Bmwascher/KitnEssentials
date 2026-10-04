@@ -74,7 +74,7 @@ GUIFrame:NewWidgetPool("spellinfo", ConstructSpellInfo, function(container)
     if GameTooltip:IsOwned(container.iconFrame) then GameTooltip:Hide() end
 end)
 
--- config: { borderColor, getSpellId }. The border is black when no colour is
+-- config: { borderColor, getSpellId }. The border is black when no color is
 -- given; getSpellId feeds the icon's hover tooltip.
 function GUIFrame:CreateSpellInfo(parent, config)
     local container = self:AcquirePooled("spellinfo", parent)
@@ -207,7 +207,7 @@ function GUIFrame:CreateAuraAllowlistCard(scrollChild, yOffset, config)
         for i = 1, #sorted do
             local spellId, entry, label = sorted[i].spellId, sorted[i].entry, sorted[i].label
             -- `== false`, not `not entry.enabled`: the filter rule treats a row
-            -- with no enabled key as ENABLED, and a spec pins that. Greying it
+            -- with no enabled key as ENABLED, and a spec pins that. Graying it
             -- here would show a row as off while its spell still gets through.
             local isDisabled = type(entry) == "table" and entry.enabled == false
             local text = label .. " (" .. spellId .. ")"

@@ -2,7 +2,7 @@
 -- ║  HousingDashboardFix.lua                                 ║
 -- ║  Purpose: Re-requests the owned-house list when the      ║
 -- ║           housing dashboard opens stuck on an empty or   ║
--- ║           uninitialised house view.                      ║
+-- ║           uninitialized house view.                      ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 ---@class KE

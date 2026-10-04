@@ -341,7 +341,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         card4:AddRow(row4b, Theme.rowHeight)
 
         local row4c = GUIFrame:CreateRow(card4.content, Theme.rowHeight)
-        local centerTextCheck = GUIFrame:CreateCheckbox(row4c, "Centre Text Widgets", {
+        local centerTextCheck = GUIFrame:CreateCheckbox(row4c, "Center Text Widgets", {
             value = textDB.CenterText ~= false,
             callback = function(checked)
                 textDB.CenterText = checked
@@ -376,7 +376,7 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         yOffset = cardIcons:GetNextOffset()
 
         ----------------------------------------------------------------
-        -- Card 6: Top-Centre Widgets (container control)
+        -- Card 6: Top-Center Widgets (container control)
         ----------------------------------------------------------------
         local tcDB = db.TopCenter
         manager:SetCondition("topcenter", function()
@@ -388,12 +388,12 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
             if UIW and UIW:IsEnabled() then UIW:ApplyTopCenter() end
         end
 
-        local card5 = GUIFrame:CreateCard(scrollChild, "Top-Centre Widgets", yOffset)
+        local card5 = GUIFrame:CreateCard(scrollChild, "Top-Center Widgets", yOffset)
         manager:Register(card5, "all")
-        card5:AddLabel("Moves, scales or hides Blizzard's top-centre widget container (M+ objective line, delve and event bars) in every zone.")
+        card5:AddLabel("Moves, scales or hides Blizzard's top-center widget container (M+ objective line, delve and event bars) in every zone.")
 
         local row5a = GUIFrame:CreateRow(card5.content, Theme.rowHeight)
-        local tcEnableCheck = GUIFrame:CreateCheckbox(row5a, "Control Top-Centre Widgets", {
+        local tcEnableCheck = GUIFrame:CreateCheckbox(row5a, "Control Top-Center Widgets", {
             value = tcDB.Enabled == true,
             callback = function(checked)
                 tcDB.Enabled = checked
@@ -433,13 +433,13 @@ GUIFrame:RegisterContent("SkinBlizzardFramesWidgets", function(scrollChild, yOff
         yOffset = card5:GetNextOffset()
 
         ----------------------------------------------------------------
-        -- Card 7: Top-Centre Widget Position
+        -- Card 7: Top-Center Widget Position
         ----------------------------------------------------------------
         -- db is the TopCenter sub-table, so the card's root keys
         -- (anchorFrameType/ParentFrame/Strata) land there and cannot touch
         -- the alert-frame cards below, which share this page.
         local tcPosCard, tcPosOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-            title = "Top-Centre Widget Position",
+            title = "Top-Center Widget Position",
             db = tcDB,
             dbKeys = {
                 selfPoint = "AnchorFrom",

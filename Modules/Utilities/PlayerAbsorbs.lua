@@ -412,7 +412,7 @@ end
 
 -- Records an absorb-change event time for one row and ensures a SINGLE hide timer is
 -- armed, so the row re-evaluates (and hides) once the fade window (GetHold) elapses
--- with no newer event. The timer is deliberately NOT cancelled/rearmed per event: a
+-- with no newer event. The timer is deliberately NOT canceled/rearmed per event: a
 -- running timer re-checks the (moved-forward) event time when it fires and extends
 -- itself if needed. UNIT_ABSORB_AMOUNT_CHANGED fires dozens of times a second in
 -- sustained combat, so a cancel+NewTimer+closure per event is real GC churn; this

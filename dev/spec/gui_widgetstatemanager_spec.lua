@@ -1,7 +1,7 @@
 -- Tier 2: GUI/GUIMain/GUI-WidgetStateManager.lua -- the stale-manager refusal.
 -- A manager outlives its page whenever a closure holds it. Once the page is
 -- rebuilt, its cards and widgets are reused by the next page, so an old
--- manager must not grey them out. Pooled objects carry a generation that
+-- manager must not gray them out. Pooled objects carry a generation that
 -- every release advances; unpooled ones carry none.
 local helpers = require("dev.spec._helpers")
 

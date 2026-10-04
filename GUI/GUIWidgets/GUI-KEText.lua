@@ -90,7 +90,7 @@ local function ConfigureText(row, titleTex, labelText, customRowHeight, bgShow)
         container:SetBackdropColor(0, 0, 0, 0)
         container:SetBackdropBorderColor(0, 0, 0, 0)
     else
-        -- The colours SetBackdrop itself leaves, which a fresh block showed.
+        -- The colors SetBackdrop itself leaves, which a fresh block showed.
         container:SetBackdropColor(1, 1, 1, 1)
         container:SetBackdropBorderColor(1, 1, 1, 1)
     end

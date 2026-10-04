@@ -13,7 +13,7 @@ local tconcat = table.concat
 
 -- Kept apart from ChatCopy.lua so a spec can load the rules without the chat
 -- skin. One control byte or invalid UTF-8 byte makes the edit box drop its
--- whole text. The pipe byte is printable and passes, so colour codes and
+-- whole text. The pipe byte is printable and passes, so color codes and
 -- escapes survive.
 
 -- Reused across calls; the join reads only the first `count` entries.

@@ -441,8 +441,8 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     local row9a = GUIFrame:CreateRow(card9.content, Theme.rowHeight)
     local readyTintCheck = GUIFrame:CreateCheckbox(row9a, "Tint When Kick Is Ready", {
         value = db.Kick.ReadyTint,
-        tooltip = "Colour the bar while your own interrupt is off cooldown.\n\n"
-            .. "A cast that cannot be interrupted at all still shows the Shielded colour, "
+        tooltip = "Color the bar while your own interrupt is off cooldown.\n\n"
+            .. "A cast that cannot be interrupted at all still shows the Shielded color, "
             .. "whatever your cooldown is doing.",
         callback = function(checked)
             db.Kick.ReadyTint = checked
@@ -453,7 +453,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     row9a:AddWidget(readyTintCheck, 0.5)
     manager:Register(readyTintCheck, "all")
 
-    local readyColorPicker = GUIFrame:CreateColorPicker(row9a, "Kick Ready Colour", {
+    local readyColorPicker = GUIFrame:CreateColorPicker(row9a, "Kick Ready Color", {
         color = db.Kick.ReadyColor,
         callback = function(r, g, b, a)
             db.Kick.ReadyColor = { r, g, b, a }
@@ -506,7 +506,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     row9c:AddWidget(tickCheck, 0.5)
     manager:Register(tickCheck, "all")
 
-    local tickColorPicker = GUIFrame:CreateColorPicker(row9c, "Mark Colour", {
+    local tickColorPicker = GUIFrame:CreateColorPicker(row9c, "Mark Color", {
         color = db.Kick.TickColor,
         callback = function(r, g, b, a)
             db.Kick.TickColor = { r, g, b, a }
@@ -531,7 +531,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
     row9d:AddWidget(windowCheck, 0.5)
     manager:Register(windowCheck, "all")
 
-    local windowColorPicker = GUIFrame:CreateColorPicker(row9d, "Window Colour", {
+    local windowColorPicker = GUIFrame:CreateColorPicker(row9d, "Window Color", {
         color = db.Kick.WindowColor,
         callback = function(r, g, b, a)
             db.Kick.WindowColor = { r, g, b, a }
@@ -579,7 +579,7 @@ GUIFrame:RegisterContent("DungeonCasts", function(scrollChild, yOffset)
         showSpeed = function(glowType) return glowType == "pixel" end,
         speedAdapter = {
             read = function(readDb, readKeys)
-                return KE.AuraGlowRules.NormaliseFrequency(
+                return KE.AuraGlowRules.NormalizeFrequency(
                     KE.AuraGlowRules.ReadSpeed(readDb, readKeys), 0.05, 1)
             end,
             write   = KE.AuraGlowRules.WriteSpeed,

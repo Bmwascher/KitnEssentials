@@ -169,8 +169,8 @@ end
 -- registered dispel texture; a preview frame gets no such registration, so
 -- this stands in for that repaint. The per-type palette is module data --
 -- only a group that owns one declares getDispelPreviewColor -- so it is
--- asked for the colour when present. A group with none (Externals has no
--- dispel host at all) falls back to the flat border colour, the same colour
+-- asked for the color when present. A group with none (Externals has no
+-- dispel host at all) falls back to the flat border color, the same color
 -- StyleAuraFrame paints outside "dispel" mode.
 local function RepaintDispelRing(frame, group, settings, dispelType)
     local ring = frame.keDispel and frame.keDispel.ring
@@ -194,7 +194,7 @@ end
 -- same built-in atlas map (AuraUtil.GetAuraDispelTypeIcon) a live button
 -- gets from its registered dispel texture -- a preview frame takes no such
 -- registration, so nothing else would ever set it. Returns nil for a type
--- with no atlas (including "None"), which is the old module's behaviour:
+-- with no atlas (including "None"), which is the old module's behavior:
 -- no badge for a non-dispellable aura.
 local function PopulateDispelBadge(frame, dispelType)
     local dispel = frame.keDispel
@@ -389,7 +389,7 @@ end
 -- true answer is a promise that the caller acts on it immediately. Exit's
 -- own plan may then decide not to restore the container (a disabled module,
 -- or the caller's moduleState says otherwise), so asking Request here would
--- consume a debt Exit is not guaranteed to honour. Every display gets a gate
+-- consume a debt Exit is not guaranteed to honor. Every display gets a gate
 -- when it is registered, so this is never nil in production.
 function Preview.Exit(handle, display, _settings, moduleState)
     -- Same guard as Enter. A display with no container or no gate is one this

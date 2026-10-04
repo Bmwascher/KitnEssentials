@@ -240,7 +240,7 @@ function KE:GetInterruptAnnounceSpellSet() end
 ---@return boolean
 function KE.DropdownSearchMatches(displayText, key, query) end
 
---- The opaque colour of `top` drawn at `alpha` over `base`
+--- The opaque color of `top` drawn at `alpha` over `base`
 --- (Core/AddonTheme.lua). Both inputs' own alpha is ignored.
 ---@param top number[]
 ---@param alpha number
@@ -382,7 +382,7 @@ function KE:ApplyFont(fontStr, name, size, outline) end
 ---@param shadowConfig table?
 function KE:ApplyFontToText(fontStr, face, size, outline, shadowConfig) end
 
---- Preset/alias colour for arbitrary display text, or nil when nothing matches
+--- Preset/alias color for arbitrary display text, or nil when nothing matches
 --- (defined in DungeonTimers.lua; shared with the Dungeon Trash resolvers).
 ---@param text string?
 ---@return number[]? color
@@ -563,29 +563,29 @@ function KE:GetSideDecorationInset(size, gap, hostSize) end
 
 --- One snap decision shared by the live drag and the commit, so the two can
 --- only ever agree. Pure: the caller supplies the grid in `context`.
----@param x number desired centre, absolute UIParent coordinates
+---@param x number desired center, absolute UIParent coordinates
 ---@param y number
 ---@param context table? { enabled, spacing, originX, originY, candidatesX,
----       candidatesY, edgeLeft, edgeCentreX, edgeRight, edgeBottom,
----       edgeCentreY, edgeTop }
+---       candidatesY, edgeLeft, edgeCenterX, edgeRight, edgeBottom,
+---       edgeCenterY, edgeTop }
 ---@param suppressed boolean? true while the suppress modifier is held
 ---@return number snappedX
 ---@return number snappedY
----@return boolean onCentreX true only when the result is the origin itself
----@return boolean onCentreY
+---@return boolean onCenterX true only when the result is the origin itself
+---@return boolean onCenterY
 ---@return number? guideX nil unless an element won this axis
 ---@return number? guideY
 function KE:SnapCenter(x, y, context, suppressed) end
 
 --- Resolves an arrow key and the modifier state into a nudge delta. nil for
---- any other key, so one call both recognises an arrow and resolves it.
+--- any other key, so one call both recognizes an arrow and resolves it.
 ---@param key string?
 ---@param ctrlDown boolean?
 ---@return number? deltaX
 ---@return number? deltaY
 function KE:ArrowNudgeDelta(key, ctrlDown) end
 
---- Turns an absolute centre into the two offsets a SetPoint stores. Pure by
+--- Turns an absolute center into the two offsets a SetPoint stores. Pure by
 --- contract: calls no API, so the caller proves every number clean first.
 ---@param centerX number
 ---@param centerY number
@@ -751,7 +751,7 @@ function KE.Skins.GetSuppressionState(key) end
 
 -- ─── Skinning (Modules/Skinning/SkinAPI.lua) ──────────────
 --- Mutates the palette in place, then repaints only cached backdrops still
---- wearing the old colour. Re-colours every skinned window with no reload.
+--- wearing the old color. Re-colors every skinned window with no reload.
 ---@param bg number[]?     {r,g,b,a} or nil to leave unchanged
 ---@param border number[]? {r,g,b,a} or nil to leave unchanged
 function KE.Skins.SetSkinColors(bg, border) end
@@ -930,7 +930,7 @@ function KE:GetThemeColor(key) end
 
 function KE:RefreshTheme() end
 
---- The colour the skinning palette receives: the accent, or the neutral
+--- The color the skinning palette receives: the accent, or the neutral
 --- when TintSkins is off.
 ---@return number[] color
 function KE:GetSkinBrandColor() end

@@ -203,7 +203,7 @@ function GUIFrame:ConfigureSectionHeader(header, config, yOffset, isExpanded)
     header.sectionId = config.id
     header.label:SetText(config.text or "")
 
-    -- Grey out if disabled (ElvUI check or custom disabledCheck function)
+    -- Gray out if disabled (ElvUI check or custom disabledCheck function)
     local isDisabled = false
     if config.elvUIDisabled and KE.ShouldNotLoadModule and KE:ShouldNotLoadModule() then
         isDisabled = true

@@ -184,7 +184,7 @@ end)
 --
 -- Bonus rolls arrive on SPELL_CONFIRMATION_PROMPT, not START_LOOT_ROLL, so
 -- SetupRollBars' unregister never intercepts them and they stay Blizzard's
--- frame at Blizzard's bottom-centre spot -- while every other roll obeys the
+-- frame at Blizzard's bottom-center spot -- while every other roll obeys the
 -- user's position. Hidden bars keep their slots, so the anchor is a scan for
 -- the highest shown index, not the last entry.
 describe("LootRoll bonus roll anchoring", function()

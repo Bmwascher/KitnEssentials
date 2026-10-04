@@ -315,7 +315,7 @@ local function ProcessEnchantText(text, style)
         return text
     end
 
-    -- An effect line ("+41 Intellect & +115 Stamina": spellthreads, armour
+    -- An effect line ("+41 Intellect & +115 Stamina": spellthreads, armor
     -- kits) starts with a number once the signs are gone; the numbers change
     -- with the rank, so the stat words alone carry the label.
     if text:find("^%d") then
@@ -847,7 +847,7 @@ end
 -- Wider character window
 ---------------------------------------------------------------------------------
 -- Fixed, not a slider. Everything below is expressed as `add` or `add / 2`, so
--- the layout re-centres itself at any value -- the number is a matter of taste
+-- the layout re-centers itself at any value -- the number is a matter of taste
 -- rather than of geometry, and a slider would invite widths nobody has looked
 -- at.
 local WIDEN_BY = 40
@@ -856,7 +856,7 @@ local WIDEN_BY = 40
 -- the frame, and an EUI themed sheet re-anchors every slot into its own
 -- two-column grid, so widening under either fights a layout we do not control.
 --
--- The ElvUI test matches the one the GUI card is gated on. A behaviour gate
+-- The ElvUI test matches the one the GUI card is gated on. A behavior gate
 -- that disagreed with its own control would act on a setting the user is being
 -- told is unavailable.
 local function ExtraWidth()
@@ -905,7 +905,7 @@ local function WidenAmount(extra, pdfShown, applied)
 end
 CP._WidenAmount = WidenAmount
 
--- The header belongs over the character, not over the panel. Blizzard centres
+-- The header belongs over the character, not over the panel. Blizzard centers
 -- both header strings on the whole frame, so the stat pane drags them right of
 -- the model.
 --
@@ -984,7 +984,7 @@ local function ApplyWiden()
         hands:SetPoint("TOPRIGHT", inset, "TOPRIGHT", -4, -2)
     end
 
-    -- Centred content moves by half the delta, from Blizzard's literal offsets.
+    -- Centered content moves by half the delta, from Blizzard's literal offsets.
     model:ClearAllPoints()
     model:SetPoint("TOPLEFT", pdf, "TOPLEFT", 52 + add / 2, -66)
 
@@ -998,7 +998,7 @@ end
 --
 -- ANCHORS, not offsets. The name hangs off the model scene and the level line
 -- hangs off the name, so the whole stack tracks the model for free. An x offset
--- derived from the frame's centre is only correct at the width it was measured
+-- derived from the frame's center is only correct at the width it was measured
 -- at, and CharacterFrame swaps widths on Expand/Collapse -- which puts the name
 -- right on the first open and drifting on the next.
 function CP:ApplyHeaderCentering()
@@ -1021,7 +1021,7 @@ function CP:ApplyHeaderCentering()
         and not KE:EUIDrawsSlotElement("player", "headerText")
 
     -- Paperdoll tab only. Reputation and Currency reuse this same title string
-    -- for their own headers, where a name centred over the model column reads
+    -- for their own headers, where a name centered over the model column reads
     -- wrong above a list.
     if not (own and pdf and pdf:IsShown() and model) then
         RestoreAnchors(titleText)
@@ -1038,7 +1038,7 @@ function CP:ApplyHeaderCentering()
         self._titleModelTopOff = titleTop - modelTop
     end
 
-    -- +10: the model is posed slightly right of the scene frame's own centre.
+    -- +10: the model is posed slightly right of the scene frame's own center.
     titleText:ClearAllPoints()
     titleText:SetPoint("TOP", model, "TOP", 10, self._titleModelTopOff)
 
@@ -1483,7 +1483,7 @@ local function DungeonScoreText()
     local color = C_ChallengeMode.GetDungeonScoreRarityColor
         and C_ChallengeMode.GetDungeonScoreRarityColor(score)
     if color and color.GenerateHexColor then
-        -- The label stays uncoloured; only the number carries the rating colour.
+        -- The label stays uncolored; only the number carries the rating color.
         return "Mythic+ Score: |c" .. color:GenerateHexColor() .. score .. "|r"
     end
     return "Mythic+ Score: " .. score
@@ -2105,7 +2105,7 @@ function CP:UpdateSlotDetail(slotFrame, slotID, unit, suppressGems, data)
 
     -- Item level, colored by the equipped item's quality, with the track span
     -- inline while the item is still upgrading. The item level retains its
-    -- quality colour, while the span carries the track colour.
+    -- quality color, while the span carries the track color.
     if self.db.ShowSlotItemLevel and not euiOwnsIlvl then
         local lvl = self:GetSlotItemLevel(unit, slotID)
 
@@ -2783,7 +2783,7 @@ function CP:CreateSocketButton(index)
     btn:SetScript("OnEnter", function(self)
         -- Mirrors the enchant button's own OnEnter. Without it, sliding from the
         -- enchant popup onto a socket leaves BOTH popups up: IsMouseOverGemUI
-        -- now recognises the socket you just moved onto, so the enchant popup's
+        -- now recognizes the socket you just moved onto, so the enchant popup's
         -- 0.05s close timer sees the bar still hovered and bails.
         CP:HideEnchantPopup()
         CP.currentSocketBtn = self
@@ -3390,7 +3390,7 @@ local function SlotHoldsEnchantTarget(slotID)
 end
 CP._SlotHoldsEnchantTarget = SlotHoldsEnchantTarget
 
--- The single slot this enchant can only mean, or nil when it is a judgement
+-- The single slot this enchant can only mean, or nil when it is a judgment
 -- call. Two rings, a weapon in each hand, or nothing equipped all return nil.
 local function UnambiguousEnchantSlot(targetSlots)
     if not targetSlots then return nil end
@@ -3420,7 +3420,7 @@ end
 
 -- Slots KE will not offer an enchant for, whatever the tooltip claims.
 --
---   [7] legs -- armour kits, which do not apply reliably through this flow.
+--   [7] legs -- armor kits, which do not apply reliably through this flow.
 --
 -- Head is NOT in here, and must not go back in: Midnight ships current helm
 -- enchants. See BLOCKED_ENCHANT_ITEMS below for what actually fails.
@@ -3703,7 +3703,7 @@ function CP:ApplyEnchantFromBags(enchantData)
         return false
     end
     if not enchantData then return false end
-    -- Second line of defence on the blacklist. ScanBagsForEnchants already
+    -- Second line of defense on the blacklist. ScanBagsForEnchants already
     -- keeps these out of the popup, but a row built before the list is only
     -- rebuilt on a refresh, and the whole point is that this call cannot fail
     -- quietly -- it puts an error in the player's log with our name on it.
@@ -3749,7 +3749,7 @@ function CP:ApplyEnchantFromBags(enchantData)
     -- Where there is exactly one item it could mean, finish the job.
     -- PickupInventoryItem is what Blizzard's own paperdoll slot OnClick calls
     -- with a loaded cursor, and this runs inside a real button press, which is
-    -- what such a call needs. Where it is a judgement call -- two rings, a
+    -- what such a call needs. Where it is a judgment call -- two rings, a
     -- weapon in each hand, a target we could not read -- the cursor is left
     -- loaded and the player picks.
     --

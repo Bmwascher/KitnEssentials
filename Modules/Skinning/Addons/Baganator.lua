@@ -29,7 +29,7 @@ end
 skinners.IconButton = function(button) S.Button(button) end
 skinners.Button = function(button) S.Button(button) end
 
--- The bag window is built at scale 1 and rescaled from settings afterwards,
+-- The bag window is built at scale 1 and rescaled from settings afterward,
 -- so borders measured at build time draw roughly double. Re-measure whenever
 -- the window shows or its scale changes.
 local function WatchScale(frame)

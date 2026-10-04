@@ -422,7 +422,7 @@ local function ConstructSlider(parent)
         -- this slider to another setting.
         local callback, onValueChanged, gen = row._callback, row._onValueChanged, row._keGen
         -- Every change, silent ones included: a caller that mirrors the
-        -- value, such as a live label, must follow neighbour cross-updates.
+        -- value, such as a live label, must follow neighbor cross-updates.
         if onValueChanged then
             onValueChanged(val)
             if row._keGen ~= gen then
@@ -432,7 +432,7 @@ local function ConstructSlider(parent)
                 return
             end
         end
-        -- Silent SetValue (row:SetValue(v, true) — e.g. a neighbour-slider
+        -- Silent SetValue (row:SetValue(v, true) — e.g. a neighbor-slider
         -- cross-update) nils row._callback: refresh the fill/editbox but do NOT
         -- touch the throttle clock. Otherwise the silent call would reset
         -- lastUpdate and the slider's next REAL drag would swallow its first

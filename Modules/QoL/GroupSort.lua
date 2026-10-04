@@ -504,11 +504,11 @@ function GS:Cancel()
     SetProcessing(false)
     Groups.ProcessStart = nil
     lastRun = nil -- do not also make them sit out the run cooldown
-    KE:Print("Group Sort: cancelled.")
+    KE:Print("Group Sort: canceled.")
 end
 
 function GS:Run(mode) -- "default" | "split" | "odds"
-    -- Hard combat gate: the buttons grey out too, but keybinds, macros, and
+    -- Hard combat gate: the buttons gray out too, but keybinds, macros, and
     -- edge-of-combat clicks all land here.
     if _G.InCombatLockdown() or UnitAffectingCombat("player") then
         KE:Print("Group Sort: not available in combat.")

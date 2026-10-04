@@ -152,7 +152,7 @@ function CT:UpdateText()
     self:_PaintTime(self.running and (GetTime() - self.startTime) or self.span)
 end
 
--- Colour is the only thing a combat transition changes, so it is split out of
+-- Color is the only thing a combat transition changes, so it is split out of
 -- ApplySettings: running the whole of that on every enter and exit re-applied
 -- the font, re-anchored the text and re-measured the frame twice per fight for
 -- nothing.
@@ -181,7 +181,7 @@ function CT:ApplySettings()
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline, self.db.FontShadow)
 
     -- One string, so placement is just where it sits in the frame: pinned to
-    -- the held edge for an edge anchor, centred otherwise. Pinning the held
+    -- the held edge for an edge anchor, centered otherwise. Pinning the held
     -- edge keeps that edge still as the rendered width changes.
     local justify = KE:GetTextJustifyFromAnchor(self.db.Position.AnchorFrom)
     local point = KE:GetTextPointFromAnchor(self.db.Position.AnchorFrom)

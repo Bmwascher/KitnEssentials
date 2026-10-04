@@ -46,7 +46,7 @@ describe("StanceText:EvaluateSpec", function()
         assert.is_nil(ST:EvaluateSpec(db, 71, entryForm, ctx))
     end)
 
-    it("honours the per-spec required-spell override", function()
+    it("honors the per-spec required-spell override", function()
         db["71Spell"] = "386196"
         ctx.currentFormSpell = 386164
         assert.equals(386196, ST:EvaluateSpec(db, 71, entryForm, ctx))

@@ -45,7 +45,7 @@ local pairs = pairs
 local math_max = math.max
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
--- Indexed off _G, unlike its neighbours: C_LFGList is the one API this file
+-- Indexed off _G, unlike its neighbors: C_LFGList is the one API this file
 -- touches that is NOT in .luacheckrc's allowlist, so a bare capture is a
 -- W113 (accessing undefined global) and every task gates on zero warnings.
 -- Modules/Skinning/Frames/LFG.lua already reaches this same API this way.
@@ -385,12 +385,12 @@ local function QueueGlowRefresh()
 end
 
 -- Class token for the party member LibKeystone named, so their tooltip line
--- can carry their class colour. The library sends no class, so the roster is
+-- can carry their class color. The library sends no class, so the roster is
 -- the only source.
 --
 -- UnitName is SecretWhenUnitNameIdentityRestricted and comparing a secret
 -- throws, so a unit whose name comes back secret is skipped and the line
--- keeps the accent colour. UnitClass is SecretWhenUnitIdentityRestricted,
+-- keeps the accent color. UnitClass is SecretWhenUnitIdentityRestricted,
 -- which exempts party members, so the class is read without a test.
 local function PartyClassToken(shortName)
     for i = 1, 4 do
@@ -474,8 +474,8 @@ MakeButton = function(parent, dungeon, index)
         local accent = KE.Theme and KE.Theme.accent or { 1, 0, 0.549 }
         for name, info in pairs(partyKeys) do
             if info.cmID == self._cmID and info.level and info.level > 0 then
-                -- Class colour when the roster gave one up, accent when it
-                -- did not. KE:GetClassColor falls back to the PLAYER's colour
+                -- Class color when the roster gave one up, accent when it
+                -- did not. KE:GetClassColor falls back to the PLAYER's color
                 -- on a nil token, which would be wrong here, so the nil case
                 -- never reaches it.
                 local c = info.class and KE:GetClassColor(info.class) or accent
@@ -512,8 +512,8 @@ MakeButton = function(parent, dungeon, index)
         if ownLfgID and OwnsKeyFor(self, ownLfgID, ownMapID) then
             activityID = ownLfgID
         end
-        local levelled = ActivityForLevel(activityID, self._level)
-        if levelled then activityID = levelled end
+        local leveled = ActivityForLevel(activityID, self._level)
+        if leveled then activityID = leveled end
 
         -- `activityIDs = { nil }` is an empty table: a listing for no dungeon.
         if not activityID then

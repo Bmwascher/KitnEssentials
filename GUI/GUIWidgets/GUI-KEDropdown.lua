@@ -858,7 +858,7 @@ local function ConstructDropdown(parent, searchable)
         end
     end
 
-    -- Colours of the parts only seen while the list is open. A fresh dropdown
+    -- Colors of the parts only seen while the list is open. A fresh dropdown
     -- took them from the theme when it was built; a reused one takes them here.
     row._paintList = function()
         local TT = Theme

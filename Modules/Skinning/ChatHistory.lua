@@ -11,7 +11,7 @@ if not KitnEssentials then return end
 
 local CH = KitnEssentials:NewModule("ChatHistory", "AceEvent-3.0")
 
--- The chat skin installs the AddMessage override that honours the replay
+-- The chat skin installs the AddMessage override that honors the replay
 -- marker, so this module stands down when the skin is off.
 local CHAT = KitnEssentials:GetModule("Chat", true)
 
@@ -334,7 +334,7 @@ end
 -- reason InsideInstance is not cached.
 function CH:IsPersistenceActive()
     -- IsEnabled first and cheapest: an Ace-disabled module with db.Enabled still
-    -- true would otherwise authorise the typing writes in Chat.lua, which do not
+    -- true would otherwise authorize the typing writes in Chat.lua, which do not
     -- go through this module's own event handlers.
     if self.IsEnabled and not self:IsEnabled() then return false end
     if not self.db or not self.db.Enabled then return false end
@@ -343,7 +343,7 @@ function CH:IsPersistenceActive()
     return true
 end
 
--- The replay marker is honoured by the chat skin's AddMessage override, which
+-- The replay marker is honored by the chat skin's AddMessage override, which
 -- only exists while that module runs. Without it every replayed line would be
 -- stamped with the login time instead of its own.
 function CH:ChatSkinActive()
@@ -359,7 +359,7 @@ end
 
 -- The chat frames are not styled yet at OnEnable. One deferred pass rather than
 -- a retry loop: nothing in this replay path needs a warm cache, because no
--- coloured name is stored, and a frame that is still absent would be skipped
+-- colored name is stored, and a frame that is still absent would be skipped
 -- anyway.
 function CH:ScheduleReplay()
     -- Once per session, not once per enable. The GUI toggle disables and

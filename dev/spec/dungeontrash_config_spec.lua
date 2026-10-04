@@ -21,7 +21,7 @@ local function loadConfig()
     helpers.loadModule("Modules/DungeonTimers/Trash/TrashConfig.lua", KE)
     -- Controlled EMPTY overlay so resolver tests stay independent of the shipped
     -- TrashCurated.lua content (which grows as dungeons are curated). Tests that
-    -- need overlay behaviour inject KE.TrashCurated[map] themselves.
+    -- need overlay behavior inject KE.TrashCurated[map] themselves.
     KE.TrashCurated = {}
     return modules["DungeonTrash"], KE
 end
@@ -49,13 +49,13 @@ describe("DungeonTrash config — override backend", function()
         assert.equals("INCOMING", DT:GetSpellLabel(MAP, NPC, SPELL))   -- user override wins
     end)
 
-    it("colorKey pins the colour to a preset independent of the label", function()
+    it("colorKey pins the color to a preset independent of the label", function()
         KE.ResolveTrashPresetColor = function(text)
             return (text == "KICK") and { 1.0, 0.15, 0.15 } or nil
         end
         KE.TrashCurated[MAP] = { [NPC] = { [SPELL] = { display = "text", colorKey = "KICK" } } }
         assert.same({ 1.0, 0.15, 0.15 }, DT:GetSpellEffectiveColor(MAP, NPC, SPELL))
-        DT:SetSpellColorOverride(MAP, NPC, SPELL, { 0, 0, 1 })          -- user colour still wins
+        DT:SetSpellColorOverride(MAP, NPC, SPELL, { 0, 0, 1 })          -- user color still wins
         assert.same({ 0, 0, 1 }, DT:GetSpellEffectiveColor(MAP, NPC, SPELL))
     end)
 

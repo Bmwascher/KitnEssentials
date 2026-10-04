@@ -30,7 +30,7 @@ local DM
 
 -- Build a C_DeathRecap stub and load Core.lua against it. C_DeathRecap is
 -- captured as a file-scope local at load time, so it has to exist BEFORE the
--- loader runs -- reassigning _G afterwards would not be seen.
+-- loader runs -- reassigning _G afterward would not be seen.
 --   events   : what GetRecapEvents returns (a function is called instead)
 --   maxHealth: what GetRecapMaxHealth returns (a function is called instead)
 --   has      : what HasRecapEvents returns (a function is called instead)

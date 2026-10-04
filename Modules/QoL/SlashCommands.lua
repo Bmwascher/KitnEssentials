@@ -71,7 +71,7 @@ end
 
 -- The chat engine reads SLASH_KE_CDM1/2 only while it imports SlashCmdList,
 -- and it moves every imported entry behind a proxy metatable and wipes the
--- table afterwards. Two consequences drive the shape below: an alias global
+-- table afterward. Two consequences drive the shape below: an alias global
 -- assigned after the handler was first registered is never read, and clearing
 -- SlashCmdList.KE_CDM does not reach the imported copy or the resolved-command
 -- cache. So every state change must drop the cached aliases AND write the

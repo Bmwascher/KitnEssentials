@@ -17,7 +17,7 @@
 -- still works in combat.
 --
 -- ONE EXCEPTION, and it is deliberate. OnDisable's combat deferral cannot
--- fire: Ace tears the module's events down immediately afterwards, so the
+-- fire: Ace tears the module's events down immediately afterward, so the
 -- PLAYER_REGEN_ENABLED it registers is unregistered before the event arrives.
 -- Disabling in combat therefore leaves the button up until a reload. Only a
 -- profile switch can reach that path -- the config window hides itself in
@@ -213,7 +213,7 @@ end
 ---------------------------------------------------------------------------------
 -- Widget factories
 ---------------------------------------------------------------------------------
--- Party-action buttons grey their label when the player lacks permission or
+-- Party-action buttons gray their label when the player lacks permission or
 -- the action is restricted (keystone, encounter, PvP match, combat).
 local function SetButtonEnabled(button, enabled, isLeader)
     if button.SetChecked then
@@ -222,7 +222,7 @@ local function SetButtonEnabled(button, enabled, isLeader)
         button.enabled = enabled
     end
 
-    if button.Text then -- grey when isLeader is explicitly false
+    if button.Text then -- gray when isLeader is explicitly false
         button.Text:SetFormattedText("%s%s|r",
             ((isLeader ~= nil and isLeader) or (isLeader == nil and enabled)) and "|cFFffffff" or "|cFF888888",
             button.label)
@@ -359,7 +359,7 @@ local function TargetIcons_GetCoords(button)
 end
 
 do
-    -- ground[] is the world-marker id order that makes the flag colours
+    -- ground[] is the world-marker id order that makes the flag colors
     -- line up with the target-icon art on the same button.
     local ground = { 5, 6, 3, 2, 7, 1, 4, 8 }
 
@@ -797,7 +797,7 @@ function RC:LayoutBuffStrip()
         local c = strip.cells[i]
         c:SetSize(size, size)
         c:ClearAllPoints()
-        -- Vertically centred, since the icon can be shorter than the row.
+        -- Vertically centered, since the icon can be shorter than the row.
         c:SetPoint("LEFT", strip, "LEFT", x, 0)
         x = x + size + gap + (i <= spare and 1 or 0)
     end
@@ -1051,7 +1051,7 @@ local function OnEvent_PermissionButton(self)
     SetButtonEnabled(self, HasPermission() and KE:CanMakeProtectedCalls())
 end
 
--- OnMouseUp fires on a greyed button too, so each party-action click asks
+-- OnMouseUp fires on a grayed button too, so each party-action click asks
 -- again: a running key restricts these calls with no combat lockdown.
 local function OnClick_ReadyCheckButton(self)
     if self.enabled and InGroup() and KE:CanMakeProtectedCalls() then
@@ -1150,7 +1150,7 @@ local function SetupDifficulty(dropdown)
 
         for i = 1, #ids do
             local radio = root:CreateRadio(labels[i], isSelected, setSelected, ids[i])
-            -- Grey out a difficulty the player cannot actually set (locked
+            -- Gray out a difficulty the player cannot actually set (locked
             -- instance, story raid, size mismatch) instead of letting the click
             -- silently do nothing.
             if isEnabled and radio and radio.SetEnabled then
@@ -1365,7 +1365,7 @@ function RC:Setup()
         _G.ALL_ASSIST_LABEL_LONG or "Everyone is Assistant", buttonEvents, OnEvent_EveryoneAssist, OnClick_EveryoneAssist)
 
     -- A restriction change has no widget event; RC:FollowRestrictions hands
-    -- this to the restriction listener. Text colour and SetChecked are plain
+    -- this to the restriction listener. Text color and SetChecked are plain
     -- widget state, safe in combat.
     self.RefreshRestrictedControls = function()
         OnEvent_PermissionButton(ReadyCheckButton)
@@ -1389,7 +1389,7 @@ function RC:Setup()
     self.RaidOnlyRows = raidOnly
 
     if hasGroupSort then
-        -- Combat-gated: SetEnabled(false) blocks input, grey text signals it.
+        -- Combat-gated: SetEnabled(false) blocks input, gray text signals it.
         -- The hard gate lives in GroupSort:Run; this is the visual layer.
         -- eventFunc also runs once at creation, so a /reload mid-combat starts
         -- the buttons in the correct state.

@@ -309,7 +309,7 @@ GUIFrame:RegisterContent("AutomationInterface", function(scrollChild, yOffset)
     card2:AddRow(row2, Theme.rowHeight)
 
     -- Hide Helptips is NOT registered with the manager: it is master-independent
-    -- and keeps working while Automation is off, so it must never be greyed out
+    -- and keeps working while Automation is off, so it must never be grayed out
     -- alongside the switches that do follow the master.
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
     local hideHelptipsCheck = GUIFrame:CreateCheckbox(row2b, "Hide Helptips", {
@@ -617,7 +617,7 @@ GUIFrame:RegisterContent("AutomationVendors", function(scrollChild, yOffset)
         manager:Register(card1, "all")
 
         local row1a = GUIFrame:CreateRow(card1.content, Theme.rowHeight)
-        local autoSellCheck = GUIFrame:CreateCheckbox(row1a, "Auto Sell Junk (Grey Items)", {
+        local autoSellCheck = GUIFrame:CreateCheckbox(row1a, "Auto Sell Junk (Gray Items)", {
             value = db.AutoSellJunk ~= false,
             callback = function(checked) db.AutoSellJunk = checked; ApplySettings() end,
         })

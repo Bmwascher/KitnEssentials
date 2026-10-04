@@ -128,7 +128,7 @@ local function ThemeButton(btn, Theme, labelText, isPrimary)
 
     -- GROW-ONLY: the label is a centered FontString with no width limit, so a
     -- label wider than BUTTON_WIDTH spilled equally past both edges and drew
-    -- straight over the neighbouring button (the two sit 8px apart around the
+    -- straight over the neighboring button (the two sit 8px apart around the
     -- container's center). Every prior caller used short labels -- "Reset",
     -- "Reload Now" -- which is why this only surfaced once a prompt put a
     -- variable-length addon name on a button. Widening only when the text
@@ -137,7 +137,7 @@ local function ThemeButton(btn, Theme, labelText, isPrimary)
     btn:SetWidth(math.max(BUTTON_WIDTH, textWidth + BUTTON_TEXT_PADDING))
 end
 
--- Colours a prompt button's label only; plate and border stay themed. For a
+-- Colors a prompt button's label only; plate and border stay themed. For a
 -- dialog whose two choices mean different things (spend a coin, keep it).
 local function TintPromptLabel(btn, color)
     if not (btn and color) then return end
@@ -361,7 +361,7 @@ end
 -- box of a two-field prompt, for that call only. waitIfBusy is for a prompt
 -- nobody asked for: with another prompt open, in combat, or others waiting, it
 -- joins the queue and opens in its turn. It then returns nil.
--- acceptOnly (confirm mode only) shows the accept button alone, centred.
+-- acceptOnly (confirm mode only) shows the accept button alone, centered.
 function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture, texturePath, textureSizeX,
                               textureSizeY, textureColor, onAccept, onCancel, acceptText, cancelText,
                               showSecondEditBox, secondEditBoxLabel, opts)
@@ -407,7 +407,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     -- mode can reach this flag -- showEditBox+onAccept~=nil already shows
     -- buttons the ordinary way, and confirm mode (not showEditBox) always
     -- did. A copy prompt carrying a cancelText IS the Copy Anything window;
-    -- the title/edit-box colour swap below keys off the same flag rather
+    -- the title/edit-box color swap below keys off the same flag rather
     -- than adding a second parameter for what is really one signal.
     local isCopyPrompt = showEditBox and not onAccept and cancelText and true or false
     local showButtons = (not showEditBox) or (onAccept ~= nil) or isCopyPrompt
@@ -642,7 +642,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
 
     dialog.titleLabel:SetText(title or "Confirm")
     -- Copy Anything is the one KE popup with a white title and an
-    -- accent-coloured id in the edit box below.
+    -- accent-colored id in the edit box below.
     local titleColor = isCopyPrompt and textPrimary or accent
     dialog.titleLabel:SetTextColor(titleColor[1], titleColor[2], titleColor[3], titleColor[4] or 1)
     dialog.titleLabel:SetShadowColor(0, 0, 0, 0)
@@ -719,7 +719,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
             editBox:SetFont(STANDARD_TEXT_FONT, 12, "OUTLINE")
         end
         -- Same isCopyPrompt swap as the title above: Copy Anything shows its
-        -- id in the accent colour instead of the usual white.
+        -- id in the accent color instead of the usual white.
         local editTextColor = isCopyPrompt and accent or textPrimary
         editBox:SetTextColor(editTextColor[1], editTextColor[2], editTextColor[3], 1)
         editBox:SetShadowColor(0, 0, 0, 0)
@@ -786,7 +786,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
     end
 
     if dialog.buttonContainer and showButtons and isCopyPrompt then
-        -- Copy Anything's opt-in: ONE centred button carrying cancelText,
+        -- Copy Anything's opt-in: ONE centered button carrying cancelText,
         -- no accept button at all. ThemeButton alone (not both), so the
         -- hidden acceptBtn keeps whatever theme/label it last had -- fine,
         -- since PASS 3 below hides it and the mode that shows it again
@@ -835,7 +835,7 @@ function KE:CreatePrompt(title, text, showEditBox, editBoxLabelText, useTexture,
         dialog:SetWidth(math.max(POPUP_WIDTH, pairWidth + 24))
     else
         -- The dialog is a singleton: without this, a button-less prompt would
-        -- inherit the width of whatever wide-labelled prompt ran before it.
+        -- inherit the width of whatever wide-labeled prompt ran before it.
         dialog:SetWidth(POPUP_WIDTH)
     end
 
@@ -923,7 +923,7 @@ function KE:FlushPendingReloadPrompt()
     -- Entering combat hides this GUI, which would otherwise put a "Reload Now"
     -- button on screen at the pull, one misclick from reloading mid-fight.
     -- Both guards KEEP the flag rather than clearing it: the combat handler
-    -- reopens the GUI afterwards, so the next ordinary close prompts instead.
+    -- reopens the GUI afterward, so the next ordinary close prompts instead.
     --
     -- The first guard is the load-bearing one. The combat handler sets
     -- reopenAfterCombat immediately before hiding us, so it identifies a combat

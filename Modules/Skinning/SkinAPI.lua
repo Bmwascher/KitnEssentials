@@ -92,7 +92,7 @@ function S._RegisterBackdropForTest(bd)
     backdropCache[bd] = bd
 end
 
--- Structural colours are left alone — they are tuned
+-- Structural colors are left alone — they are tuned
 -- against real Blizzard art. The brand/hover/progress entries follow KE's
 -- live theme so a skinned Blizzard window matches KE's own panels.
 S.palette = {
@@ -105,7 +105,7 @@ S.palette = {
     hover      = { 0.851, 0.851, 0.851, 0.15 },
     progress   = { 1, 1, 1, 0.40 },
     -- Brand fill behind a selected tab, row or button. One value for every
-    -- surface; selection is told from the grey hover by colour, not strength.
+    -- surface; selection is told from the gray hover by color, not strength.
     selectedA  = 0.25,
     brandFillA = 0.8,
     brandRestA = 0.35,
@@ -117,10 +117,10 @@ S.palette = {
 -- the accent at its placeholder for the whole session.
 --
 -- palette.hover is deliberately NOT themed. It is a neutral
--- grey mouseover wash, not an accent: theme accent and accentHover share
+-- gray mouseover wash, not an accent: theme accent and accentHover share
 -- the same RGB and differ only in alpha, so driving hover from accentHover
 -- collapsed every rest/hover pair (rows, tabs, buttons, the close X) onto
--- one flat brand colour with no visible mouseover state at all.
+-- one flat brand color with no visible mouseover state at all.
 local function ApplyColor(target, value)
     if not value then return end
     for i = 1, 4 do
@@ -128,7 +128,7 @@ local function ApplyColor(target, value)
     end
 end
 
--- Regions painted in the brand colour at skin time, keyed by region with
+-- Regions painted in the brand color at skin time, keyed by region with
 -- the paint method and rest alpha. RefreshPalette walks them so a theme
 -- swap reaches frames built before it; hover handlers repaint on their own.
 local brandPaint = setmetatable({}, { __mode = "k" })
@@ -138,7 +138,7 @@ function S.PaintBrand(obj, method, alpha)
     obj[method](obj, b[1], b[2], b[3], alpha)
 end
 
--- For a region that leaves the brand colour (a disabled control), so a later
+-- For a region that leaves the brand color (a disabled control), so a later
 -- refresh does not paint it brand again.
 function S.ForgetBrand(obj)
     brandPaint[obj] = nil
@@ -154,7 +154,7 @@ function S.RefreshPalette()
         end
     end
 
-    -- Saved window colours. Read here rather than at file scope: this runs
+    -- Saved window colors. Read here rather than at file scope: this runs
     -- again once the db exists, and at file scope it never would.
     local bs = KE.db and KE.db.profile and KE.db.profile.Skinning
         and KE.db.profile.Skinning.BlizzardFrames
@@ -167,22 +167,22 @@ end
 S.RefreshPalette()
 
 -- Repaint rule: a cached backdrop is repainted only if it is STILL wearing the
--- colour being replaced. backdropCache records which backdrops this engine
--- created, not which colour each one ended up with -- roughly forty-five sites
--- re-colour a backdrop after it is created, S.Template among them, and a
--- blanket sweep would flatten every one of them onto the window colour.
+-- color being replaced. backdropCache records which backdrops this engine
+-- created, not which color each one ended up with -- roughly forty-five sites
+-- re-color a backdrop after it is created, S.Template among them, and a
+-- blanket sweep would flatten every one of them onto the window color.
 --
 -- Only RGB is compared. Alpha is then carried: a zero stays zero, anything else
 -- takes the new alpha. That is what keeps a border-only backdrop, which wears
--- the window RGB at alpha 0, following the new colour while staying invisible.
+-- the window RGB at alpha 0, following the new color while staying invisible.
 -- The border half needs the same carry for the same reason -- some frames hide
 -- a border by zeroing its alpha rather than by not asking for one, and giving
 -- those a visible border is exactly the damage this rule exists to prevent.
 --
 -- What the RGB match cannot tell apart: a backdrop still wearing the default,
--- and one a skin deliberately painted the same colour the default happens to
+-- and one a skin deliberately painted the same color the default happens to
 -- be. Borders used as a state indicator sit in that overlap; they take the new
--- colour here and are repainted by their own refresh, so the mismatch is
+-- color here and are repainted by their own refresh, so the mismatch is
 -- visible only until that frame next updates.
 local function ColorMatches(r, g, b, refR, refG, refB)
     if not (r and g and b) then return false end
@@ -569,7 +569,7 @@ local function RefreshEdge(bd)
     if diff <= 0.001 and not unsettled[bd] then return true end
     local r, g, b, a = bd:GetBackdropColor()
     local br, bg, bb, ba = bd:GetBackdropBorderColor()
-    -- The re-layout paints both colours white, and a secret colour cannot be
+    -- The re-layout paints both colors white, and a secret color cannot be
     -- written back, so such a backdrop is left as it is and stays owed.
     if issecretvalue(r) or issecretvalue(g) or issecretvalue(b) or issecretvalue(a)
         or issecretvalue(br) or issecretvalue(bg) or issecretvalue(bb) or issecretvalue(ba) then
@@ -783,9 +783,9 @@ local function armHover(button, anchor, l, t, r, b)
     end
 end
 
--- hold a fontstring's colour without owning its setter.
+-- hold a fontstring's color without owning its setter.
 -- Hook + re-assert; never `SetTextColor = NOOP`.
--- the texture analogue of S.LockTextColor, for plain art regions
+-- the texture analog of S.LockTextColor, for plain art regions
 -- that Blizzard re-dresses BY ATLAS on a state change.
 --
 -- Found on SettingsPanel.GameTab/AddOnsTab: /aesskin regions after a hover
@@ -1037,7 +1037,7 @@ end
 -- This is what our KillTexture was badly reinventing: first with NOOP
 -- surgery (tainted the flyout display loop), then state-only
 -- (Blizzard re-dressed it -> the flash regressions). Every skin that
--- calls S.ClearButtonArt inherits the correct behaviour from here.
+-- calls S.ClearButtonArt inherits the correct behavior from here.
 
 local function ClearNormal(btn, texture)
     if texture ~= S.ClearTexture then btn:SetNormalTexture(S.ClearTexture) end
@@ -1112,7 +1112,7 @@ local ARROW_ROT = { down = 0, up = 3.14159, right = 1.5708, left = -1.5708 }
 -- KitnCustomCrossv3 is a PLUS glyph -- KE's own GUI close button draws it as
 -- an X by rotating 45 degrees (GUI/GUIMain/GUI-MainFrame.lua). Without the
 -- rotation every skinned window draws a small upright plus.
--- Rest colour is KE's GUI white (T.textPrimary), for the same reason: these
+-- Rest color is KE's GUI white (T.textPrimary), for the same reason: these
 -- must read as the same button.
 local CLOSE_ROT = math.rad(45)
 local CLOSE_SIZE = 16
@@ -1323,8 +1323,8 @@ function S.IconBorder(border, backdrop)
     if not backdrop then return end
     local d = S.data(border)
     d.ibBackdrop = backdrop
-    -- Once hooked, the hooks own the colour. Re-reading IsShown() here would
-    -- see the Hide(0) the hooks applied and reset a quality colour they just
+    -- Once hooked, the hooks own the color. Re-reading IsShown() here would
+    -- see the Hide(0) the hooks applied and reset a quality color they just
     -- painted (every redisplay of a pooled reward button).
     if d.ibHooked then return end
 
@@ -1587,7 +1587,7 @@ function S.EditBox(editbox, keepFont)
     S.data(editbox).skinned = true
 end
 
--- Both bounds are on OUR backdrop's inset, not a licence to relocate a tab
+-- Both bounds are on OUR backdrop's inset, not a license to relocate a tab
 -- row: a leading tab whose parent is the whole frame can otherwise be dragged
 -- across it onto whatever sits at the edge. The chain bound is wider because
 -- a chained backdrop on a row anchored at -16 starts 12px short and needs +13
@@ -1649,7 +1649,7 @@ local function CalibrateTabGap(tab)
         d.gapDone = true
         return
     end
-    -- The neighbour's edge is as stale as ours would be while it is hidden.
+    -- The neighbor's edge is as stale as ours would be while it is hidden.
     if not chainRel:IsVisible() then return end
     local prevBD = S.GetBackdrop(chainRel)
     local left = myBD and myBD:GetLeft()
@@ -1793,7 +1793,7 @@ function S.Tab(tab)
                 -- Blizzard re-anchors on tab select). `recentering`
                 -- already guards the re-entry from our own SetPoints,
                 -- so this is safe to do inline -- and the text never
-                -- renders off-centre.
+                -- renders off-center.
                 if recentering or pending or S.data(tab).noGeometry then return end
                 pending = true
                 RecenterTabText(tab)
@@ -2523,7 +2523,7 @@ S.fontOffset = 0
 S.fontOutline = false
 
 -- Three-state outline over a two-state engine. The switch decides whether a
--- string's ASKED-for outline is honoured at all; THICK additionally overrides
+-- string's ASKED-for outline is honored at all; THICK additionally overrides
 -- what was asked. The mode is what the GUI stores and reads back.
 --
 -- The db key predates the third state and held a boolean, so both forms are
@@ -2609,7 +2609,7 @@ end
 
 -- Shared font objects KE has created, keyed on the object, holding the
 -- requested pair so a settings change can re-render them. fontRegistry is
--- keyed on FontStrings and cannot hold these; a cached object is initialised
+-- keyed on FontStrings and cannot hold these; a cached object is initialized
 -- only on a cache miss, so nothing else would ever refresh it.
 local fontObjects = setmetatable({}, { __mode = "k" })
 
@@ -2726,7 +2726,7 @@ function S.PrimeNoShadow(fontString)
 end
 
 -- A button's three state font objects must share a SIZE without sharing a
--- COLOUR, and a Font object also carries its own justification, which some
+-- COLOR, and a Font object also carries its own justification, which some
 -- fixed-width labels rely on. All of that is in the key.
 local buttonFontCache = {}
 local buttonFontCount = 0
@@ -2753,7 +2753,7 @@ local BUTTON_FONT_STATES = {
 }
 
 -- A state with no object is left alone: there is nothing to re-apply over
--- our SetFont, and inventing an object would invent a colour.
+-- our SetFont, and inventing an object would invent a color.
 local function PinState(button, state, size, outline)
     local cur = button[state.get] and button[state.get](button)
     if not cur or not cur.GetTextColor then return end
@@ -2763,9 +2763,9 @@ local function PinState(button, state, size, outline)
     button[state.set](button, StateFontObject(size, outline, r, g, b, a, jh, jv))
 end
 
--- Blizzard swaps a state's object to change the label's COLOUR (a selected
+-- Blizzard swaps a state's object to change the label's COLOR (a selected
 -- legacy tab reads white), so a reassigned state is re-pinned at our size
--- with the NEW object's colour rather than re-asserting the old object.
+-- with the NEW object's color rather than re-asserting the old object.
 -- Hook-and-re-assert, never method replacement: see S.KillTexture.
 local function HookStates(button, d)
     if d.buttonFontHooked then return end
@@ -3025,7 +3025,7 @@ function S.TrimScrollBar(frame, ignoreUpdates) -- luacheck: ignore 212/ignoreUpd
     -- The removal itself stands anyway: the trim scroll bar needs no
     -- Update hook, it reskins the steppers once and they stay (the
     -- state-only rewrite is what makes that true). One less per-update
-    -- closure, no behaviour change.
+    -- closure, no behavior change.
 end
 
 function S.ScrollBar(scrollbar, ignoreUpdates)
@@ -3561,10 +3561,10 @@ end
 
 -- Test seam: runList is file-local because nothing outside this file should
 -- dispatch a skin list, but its enable gate and error isolation are the two
--- behaviours that keep one broken skin from taking the rest down.
+-- behaviors that keep one broken skin from taking the rest down.
 S._runList = runList
 
--- "ok" and "disabled" keep their long-standing colours; the three states a
+-- "ok" and "disabled" keep their long-standing colors; the three states a
 -- multi-registration key can now report (pending/partial/suppressed) each
 -- get their own non-red rendering, so only a genuine error string (the
 -- "ERROR: ..." shape runList builds) ever reads as one.
@@ -3747,7 +3747,7 @@ function BF:OnEnable()
     if not S:IsActive() then return end
 
     -- Resolve BEFORE any skin runs. SkinEnabled reads S.suppressed on every
-    -- dispatch, so resolving afterwards would let the early skins through.
+    -- dispatch, so resolving afterward would let the early skins through.
     KE:ResolveSkinSuppression()
 
     -- The palette's accent comes from the theme, which needs KE.db. File

@@ -244,7 +244,7 @@ describe("DetailEligible admits a resolved ally row in combat", function()
         _G.UnitAffectingCombat = nil
     end)
 
-    it("refuses an ally row with no resolved guid -- today's behaviour, unchanged", function()
+    it("refuses an ally row with no resolved guid -- today's behavior, unchanged", function()
         assert.is_false(DM:DetailEligible(false, DAMAGE))
         assert.is_false(DM:DetailEligible(false, DAMAGE, nil))
     end)

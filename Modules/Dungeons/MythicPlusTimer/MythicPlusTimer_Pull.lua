@@ -313,7 +313,7 @@ function MPT:SyncPullEstimate()
     end
 end
 
--- Idempotent teardown: pending timer cancelled, in-flight settle callbacks
+-- Idempotent teardown: pending timer canceled, in-flight settle callbacks
 -- made inert, listener silent, pool released, display cleared.
 function MPT:ClearPullEstimate()
     epoch = epoch + 1

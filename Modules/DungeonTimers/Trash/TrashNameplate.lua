@@ -52,7 +52,7 @@ local function isAddonActive(name)
 end
 
 -- Resolve the real health-bar widget to anchor icons beside. The C_NamePlate
--- "plate" is a tall frame; anchoring to it floats icons at plate centre, so we
+-- "plate" is a tall frame; anchoring to it floats icons at plate center, so we
 -- probe for the actual bar across the supported nameplate addons and skip any
 -- frame that's hidden/detached/forbidden (each replacement addon disables the
 -- others' bar rather than removing it). Do NOT simplify: the ordering and the
@@ -63,7 +63,7 @@ end
 --     Blizzard HealthBarsContainer → the lowercase bar wins, and we only trust
 --     HealthBarsContainer when Plater is NOT driving plates (PlateColor keeps it).
 --   • Blizzard default → plate.UnitFrame.healthBar. Anything hidden falls through
---     to the plate itself (graceful centre-anchor) rather than an invisible frame.
+--     to the plate itself (graceful center-anchor) rather than an invisible frame.
 local function resolvePlateAnchor(plate)
     if type(plate) ~= "table" then return nil end
 
@@ -118,7 +118,7 @@ local function resolvePlateAnchor(plate)
     -- EUI parents its own plate as a child of the Blizzard nameplate and hides
     -- the default bar, exposing no public accessor; per its source that child
     -- carries a .health StatusBar and a .cast bar. Safe fallback: if this misses
-    -- we drop through to the plate centre, so verify placement in-game.
+    -- we drop through to the plate center, so verify placement in-game.
     local function findEUIAnchor()
         if not isAddonActive("EllesmereUINameplates") then return nil end
         if type(plate.GetChildren) ~= "function" then return nil end
@@ -223,7 +223,7 @@ local function layoutMarkerIcons(marker, anchor, order, cfg, now)
     -- nudge from there.
     --   LEFT  → marker's right edge at the plate's left edge, icons grow left.
     --   RIGHT → mirror, icons grow right.
-    --   TOP   → marker centred above the plate's top edge, icons in a centred row.
+    --   TOP   → marker centered above the plate's top edge, icons in a centered row.
     marker:ClearAllPoints()
     if side == "TOP" then
         marker:SetPoint("BOTTOM", anchor, "TOP", ox, gap + oy)
@@ -234,7 +234,7 @@ local function layoutMarkerIcons(marker, anchor, order, cfg, now)
     end
     marker:Show()
 
-    -- Full row width, for centring the TOP layout on the plate (soonest-first).
+    -- Full row width, for centering the TOP layout on the plate (soonest-first).
     local rowSpan = #order * size + (#order - 1) * gap
 
     for i, entry in ipairs(order) do
@@ -243,7 +243,7 @@ local function layoutMarkerIcons(marker, anchor, order, cfg, now)
         icon:SetSize(size, size)
         icon:ClearAllPoints()
         -- First (soonest) icon nearest the plate; subsequent grow outward. TOP
-        -- lays the same order out left-to-right, centred over the plate.
+        -- lays the same order out left-to-right, centered over the plate.
         local step = (i - 1) * (size + gap)
         if side == "TOP" then
             icon:SetPoint("BOTTOM", marker, "BOTTOM", -rowSpan / 2 + step + size / 2, 0)
@@ -459,7 +459,7 @@ end
 -- (layoutMarkerIcons) drawn beside it. No live unit, no C_NamePlate, no OnUpdate
 -- — the swipe is frozen. Detection is per-session (addons don't hot-load); the
 -- sample is rebuilt on each GUI setter change so it tracks size/gap/side/offset/
--- colour live. Bypasses resolvePlateAnchor entirely (the stand-in IS the anchor).
+-- color live. Bypasses resolvePlateAnchor entirely (the stand-in IS the anchor).
 
 -- Default health-bar footprints (w×h @ scale 1.0) from each addon's source
 -- defaults. Representative only — every addon lets the user resize its bar.
@@ -653,10 +653,10 @@ function DTrash:BuildNameplatePreview(host)
     plate:Show()
 
     -- Enlarge the whole sample to fill the card width (up to PREVIEW_MAX_SCALE),
-    -- then centre the COMPOSITE, not just the plate, so the icons never spill off
+    -- then center the COMPOSITE, not just the plate, so the icons never spill off
     -- the edge. LEFT/RIGHT put the row beside the plate (fit plate + row, shift
-    -- the plate away from the icons); TOP centres the row above (fit the wider of
-    -- plate/row, no horizontal shift — the row is centred on the plate already).
+    -- the plate away from the icons); TOP centers the row above (fit the wider of
+    -- plate/row, no horizontal shift — the row is centered on the plate already).
     local isTop = (cfg.AnchorSide == "TOP")
     local iconSize = cfg.IconSize or 32
     local gap = cfg.Gap or 8

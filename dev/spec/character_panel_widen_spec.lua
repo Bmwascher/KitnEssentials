@@ -9,7 +9,7 @@
 local helpers = require("dev.spec._helpers")
 
 -- Copied from dev/spec/character_panel_enchant_spec.lua's loadCP, which is the
--- proven recipe for standing this module up headless. Do not hand-minimise it:
+-- proven recipe for standing this module up headless. Do not hand-minimize it:
 -- the module captures several of these as file-locals at load.
 local function loadCP(overrides, keOverrides)
     local modules = helpers.installAddonShim()

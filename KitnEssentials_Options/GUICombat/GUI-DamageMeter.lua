@@ -237,7 +237,7 @@ end
 -- The layout map: one box per window, placed to mirror the in-world dock
 -- (columns left to right, stacked rows top to bottom), each showing its
 -- on-screen number and its full panel label. It is the only arranging
--- surface: drag a box onto another box's centre to stack or reorder (a
+-- surface: drag a box onto another box's center to stack or reorder (a
 -- horizontal line shows the row gap it lands in), or to a column's side or
 -- off the map edge to peel it into a new column (a vertical line shows the
 -- boundary). A ghost follows the cursor throughout.
@@ -291,7 +291,7 @@ local function ConstructSchematic(parent)
 
     -- The container's OnUpdate, attached only while a box is being dragged.
     -- Moves the ghost to the cursor, then resolves one drop from where the
-    -- cursor is over the map: the centre of a column stacks into it, a
+    -- cursor is over the map: the center of a column stacks into it, a
     -- column's side or beyond the map edge makes a new column. The choice is
     -- left on the container for OnDragStop.
     local function DragUpdate()
@@ -654,7 +654,7 @@ GUIFrame:NewWidgetPool("dm:hdr", ConstructWindowHeader, function() end)
 -- slider value is the left/top pane's 0-1 share of the pair, so the right share is
 -- its complement (they always sum to 100). Fed by the slider's onValueChanged slot
 -- (UNthrottled, unlike the db callback) so the label tracks the thumb every frame -- including the
--- silent neighbour cross-updates a shared-pane drag triggers. ASCII only: WoW's
+-- silent neighbor cross-updates a shared-pane drag triggers. ASCII only: WoW's
 -- embedded fonts lack the geometric arrow glyphs (feedback_wow_fontstring_limits).
 local function WireSplitLabel(sliderRow, leftName, rightName)
     if not (sliderRow and sliderRow.label and sliderRow.SetOnValueChanged) then return end
@@ -823,7 +823,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
                     callback = function(val)
                         if DM and DM.SetColumnBoundaryShare then DM:SetColumnBoundaryShare(c, val * 100) end
                         if schematic and schematic.Relayout then schematic.Relayout() end
-                        -- Refresh the two neighbours that share a touched column.
+                        -- Refresh the two neighbors that share a touched column.
                         if colSliders[c - 1] and DM then
                             colSliders[c - 1]:SetValue(DM:GetColumnBoundaryShare(c - 1) / 100, true)
                         end
@@ -877,7 +877,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
             local szNoteRow = GUIFrame:CreateRow(sizeCard.content, Theme.rowHeightNote)
             local szNote = GUIFrame:CreateText(szNoteRow,
                 KE:ColorTextByTheme("Note"),
-                KE:ColorTextByTheme("-") .. " Each slider splits just its two neighbours; the rest stay put.\n" ..
+                KE:ColorTextByTheme("-") .. " Each slider splits just its two neighbors; the rest stay put.\n" ..
                 KE:ColorTextByTheme("-") .. " Same effect as dragging that gap between windows in the world.",
                 50, "hide")
             szNoteRow:AddWidget(szNote, 1)
@@ -921,7 +921,7 @@ local function BuildWindowsTab(scrollChild, yOffset, db, manager)
     --   badge 0.08 | enable 0.16 | Type 0.38 | Segment 0.38.
     local COL_BADGE, COL_ENABLE, COL_TYPE, COL_SEG = 0.08, 0.16, 0.38, 0.38
 
-    -- Card alpha greys the header with the module; it is not registered.
+    -- Card alpha grays the header with the module; it is not registered.
     local hdrRow = GUIFrame:AcquirePooled("dm:hdr", card2.content)
     hdrRow:Configure({ COL_BADGE, COL_BADGE + COL_ENABLE, COL_BADGE + COL_ENABLE + COL_TYPE })
     card2:AddRow(hdrRow, 14)
@@ -992,9 +992,9 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     local statusbarList = MediaList("statusbar", "Blizzard")
     local fontList = MediaList("font", "Friz Quadrata TT")
 
-    -- Backdrop sub-widgets greyed when BackdropEnabled is off.
+    -- Backdrop sub-widgets grayed when BackdropEnabled is off.
     manager:SetCondition("backdrop", function() return db.BackdropEnabled ~= false end)
-    -- Line Thickness greyed unless Thin Line is on; the Custom fill-color picker greyed
+    -- Line Thickness grayed unless Thin Line is on; the Custom fill-color picker grayed
     -- unless the Bar Color mode is Custom.
     manager:SetCondition("thinline", function() return db.BarThinLine == true end)
     manager:SetCondition("barcustomcolor", function() return db.BarColorMode == "Custom" end)
@@ -1060,7 +1060,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     card1:AddRow(row1sep, Theme.rowHeightSeparator)
 
     -- Thin-line style: the colored fill becomes a thin strip pinned to the bottom edge
-    -- (a clean minimalist look). Line Thickness shares the toggle's row and greys out when
+    -- (a clean minimalist look). Line Thickness shares the toggle's row and grays out when
     -- the toggle is off.
     local row1d = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
     local thinChk = GUIFrame:CreateCheckbox(row1d, "Thin Line Bars", {
@@ -1091,7 +1091,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     local card2 = GUIFrame:CreateCard(scrollChild, "Bar Content", yOffset)
     manager:Register(card2, "all")
 
-    -- Row 1: spec icon + class-coloured names (the two "how a row reads at a glance" toggles).
+    -- Row 1: spec icon + class-colored names (the two "how a row reads at a glance" toggles).
     local row2a = GUIFrame:CreateRow(card2.content, Theme.rowHeight)
     local iconChk = GUIFrame:CreateCheckbox(row2a, "Show Spec Icon", {
         value = db.ShowIcon ~= false,
@@ -1169,7 +1169,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 
     ----------------------------------------------------------------
     -- Bar Colors -- fill color mode + opacity + bar text color.
-    -- The Custom color picker greys out unless the fill mode is Custom.
+    -- The Custom color picker grays out unless the fill mode is Custom.
     ----------------------------------------------------------------
     local cardColors = GUIFrame:CreateCard(scrollChild, "Bar Colors", yOffset)
     manager:Register(cardColors, "all")
@@ -1185,7 +1185,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
         callback = function(key)
             db.BarColorMode = key
             ApplySettings()
-            manager:UpdateAll(db.Enabled ~= false)   -- re-evaluate the Custom-color grey
+            manager:UpdateAll(db.Enabled ~= false)   -- re-evaluate the Custom-color gray
         end,
     })
     rowCol1:AddWidget(fillModeDd, 0.5)
@@ -1213,7 +1213,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 
     local rowCol2 = GUIFrame:CreateRow(cardColors.content, Theme.rowHeightLast)
     -- Fill opacity applies to ALL modes (Class / Custom / Accent), so it stays enabled even
-    -- when the Custom picker is greyed.
+    -- when the Custom picker is grayed.
     local opacitySlider = GUIFrame:CreateSlider(rowCol2, "Fill Opacity", {
         min = 0, max = 1, step = 0.05, isPercent = true,
         value = db.BarColorAlpha or 1,
@@ -1238,7 +1238,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     -- Header Icons -- two independent elements on each window header band: the
     -- meter-type glyph beside the title ("Show Type Icon") and the settings /
     -- reset / segment action buttons ("Show Action Buttons"). "Only on Mouseover"
-    -- governs the action buttons and greys when they're off.
+    -- governs the action buttons and grays when they're off.
     ----------------------------------------------------------------
     manager:SetCondition("headericons", function() return db.ShowHeaderIcons ~= false end)
 
@@ -1301,7 +1301,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
 
     ----------------------------------------------------------------
     -- Hover Tooltip -- hovering a bar floats a top-N breakdown / death
-    -- recap. The position dropdown greys when the tip is off.
+    -- recap. The position dropdown grays when the tip is off.
     ----------------------------------------------------------------
     manager:SetCondition("hovertip", function() return db.HoverTooltip ~= false end)
 
@@ -1457,7 +1457,7 @@ local function BuildAppearanceTab(scrollChild, yOffset, db, manager)
     card4:AddRow(row4c, Theme.rowHeight)
 
     -- Wrap only the bar rows: drops the backdrop off the header band so the title
-    -- floats above it. Backdrop group so it greys out when the backdrop is off.
+    -- floats above it. Backdrop group so it grays out when the backdrop is off.
     local row4d = GUIFrame:CreateRow(card4.content, Theme.rowHeightLast)
     local behindBarsChk = GUIFrame:CreateCheckbox(row4d, "Behind Bars Only", {
         value = db.BackdropBehindBarsOnly == true,
@@ -1706,7 +1706,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
         "from your bags or equipped gear, plus toys and other abilities you press that are outside " ..
         "your spellbook (with Include Items and Toys on); your pet's spells (except those on " ..
         "autocast, green border); and casts that were interrupted or failed after they started, " ..
-        "greyed with a red X. Instant presses that fail, and effects the game casts for you " ..
+        "grayed with a red X. Instant presses that fail, and effects the game casts for you " ..
         "without a press, do not show.")
 
     yOffset = card1:GetNextOffset()

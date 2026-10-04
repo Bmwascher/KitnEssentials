@@ -12,9 +12,9 @@ local function SkinModelControls(controlFrame)
     S.data(controlFrame).skinned = true
 end
 
--- A slot borrows its border from the item name's colour, which Blizzard has
--- already set to the quality colour. Empty, hidden and stateful slots have no
--- item to take a colour from and fall back to the neutral border.
+-- A slot borrows its border from the item name's color, which Blizzard has
+-- already set to the quality color. Empty, hidden and stateful slots have no
+-- item to take a color from and fall back to the neutral border.
 local function TintSlotBorder(slot)
     local bd = slot.Icon and S.GetBackdrop(slot.Icon)
     if not bd then return end

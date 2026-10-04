@@ -415,7 +415,7 @@ describe("DungeonTrash — engage-gated first-cast seeding", function()
         assert.equals(111, rt.matchedNPCID)               -- identity kept
         assert.is_true(rt.enterSeeded)                    -- output kept
         assert.is_nil(rt.activeCastKind)                  -- lifecycle torn down
-        -- a REAL kick afterwards still latches evidence — but with every row
+        -- a REAL kick afterward still latches evidence — but with every row
         -- cannotInterrupt and no resolvable alternative, the identity is KEPT
         -- (keep-locked) instead of blanking the plate
         DTrash:OnCastInterrupted(nil, "nameplate1", nil, nil, nil, 5)

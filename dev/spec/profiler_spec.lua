@@ -33,7 +33,7 @@ local function loadProfiler(options)
         -- Reads are recorded, not just writes. The regen handler must unregister
         -- and clear its latch BEFORE it reads the CVar; without a read entry in
         -- lifecycle that ordering is unobservable, and a handler that reads first
-        -- and tears down afterwards passes every other assertion here.
+        -- and tears down afterward passes every other assertion here.
         GetCVar = function(name)
             lifecycle[#lifecycle + 1] = "cvar-read:" .. name
             if name == "scriptProfile" then return scriptProfile end
@@ -644,7 +644,7 @@ describe("Profiler shared-counter grouping", function()
 
         -- Asking for one row is what makes the limit itself load-bearing: with
         -- two groups and a limit of two, a build that ignores the limit prints
-        -- the same lines as one that honours it.
+        -- the same lines as one that honors it.
         local before = #state.printed
         state.profiler.RunCommand("cpu 1")
         local limited = table.concat(state.printed, "\n", before + 1, #state.printed)

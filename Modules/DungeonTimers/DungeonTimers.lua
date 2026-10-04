@@ -265,9 +265,9 @@ end
 
 DT._ResolvePresetByText = ResolvePresetByText
 
--- Preset/alias colour for arbitrary text, or nil when nothing matches. The
+-- Preset/alias color for arbitrary text, or nil when nothing matches. The
 -- Dungeon Trash Tracker borrows the boss palette so a curated/overridden trash
--- label (SOAK, DODGE, FRONTAL…) colours its alert exactly like a boss timer;
+-- label (SOAK, DODGE, FRONTAL…) colors its alert exactly like a boss timer;
 -- an unmatched label (e.g. a raw spell name) returns nil so the caller can fall
 -- back to its own default. Lives on KE so trash resolvers reach it without a
 -- GetModule round-trip.

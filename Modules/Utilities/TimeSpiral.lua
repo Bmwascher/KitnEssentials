@@ -559,7 +559,7 @@ function TSP:OnDisable()
     end
     self.isPreview = false
     self.activeProcs = {}
-    -- The hide timer is cancelled below, so a window left open here would
+    -- The hide timer is canceled below, so a window left open here would
     -- silence the first proc after re-enabling.
     self.procStartTime = nil
     self.glowActive = false

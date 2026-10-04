@@ -92,7 +92,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     local CHAT = GetChatModule()
     local manager = GUIFrame:CreateWidgetStateManager()
     -- The two panel-size sliders do nothing while the size is synced to the
-    -- Damage Meter, so they grey out. UpdateAll resolves a conditional group as
+    -- Damage Meter, so they gray out. UpdateAll resolves a conditional group as
     -- (module enabled AND condition), so the master gate is preserved and the
     -- sliders must belong to this group INSTEAD of "all", never to both -- the
     -- manager walks groups in unspecified order.
@@ -151,9 +151,9 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     row2a:AddWidget(classColorCheck, 0.5)
     manager:Register(classColorCheck, "all")
 
-    local mentionsCheck = GUIFrame:CreateCheckbox(row2a, "Class Colour Mentions", {
+    local mentionsCheck = GUIFrame:CreateCheckbox(row2a, "Class Color Mentions", {
         value = db.ClassColorMentions == true,
-        tooltip = "Colours player names typed inside a message.",
+        tooltip = "Colors player names typed inside a message.",
         callback = function(checked) db.ClassColorMentions = checked end,
     })
     row2a:AddWidget(mentionsCheck, 0.5)
@@ -161,7 +161,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     card2:AddRow(row2a, Theme.rowHeight)
 
     local row2b = GUIFrame:CreateRow(card2.content, Theme.rowHeightLast)
-    local excludeBox = GUIFrame:CreateEditBox(row2b, "Never Colour These Names", {
+    local excludeBox = GUIFrame:CreateEditBox(row2b, "Never Color These Names", {
         value = db.ExcludedMentions or "",
         tooltip = "Comma separated. Use it for names that are also ordinary words.",
         callback = function(text) db.ExcludedMentions = text end,
@@ -668,7 +668,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- A separate module with its own enable flag, so it is deliberately NOT
     -- registered with the state manager: switching the chat skin off must not
-    -- grey out link decoration.
+    -- gray out link decoration.
     local linksDb = KE.db and KE.db.profile.Skinning.ChatLinks
     if linksDb then
         local card11 = GUIFrame:CreateCard(scrollChild, "Chat Links", yOffset)
@@ -696,7 +696,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
         }), 0.33)
         row11a:AddWidget(GUIFrame:CreateCheckbox(row11a, "Quality Tier As A Number", {
             value = linksDb.NumericalQualityTier == true,
-            tooltip = "Shows the crafting quality as a coloured number instead of the small gem.",
+            tooltip = "Shows the crafting quality as a colored number instead of the small gem.",
             callback = function(checked) linksDb.NumericalQualityTier = checked end,
         }), 0.33)
         card11:AddRow(row11a, Theme.rowHeight)
@@ -715,10 +715,10 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
         local row11c = GUIFrame:CreateRow(card11.content, Theme.rowHeightLast)
         row11c:AddWidget(GUIFrame:CreateCheckbox(row11c, "Clickable Web Addresses", {
             value = linksDb.WebAddresses == true,
-            tooltip = "Colours web addresses posted in chat and opens a copy box when you click one.",
+            tooltip = "Colors web addresses posted in chat and opens a copy box when you click one.",
             callback = function(checked) linksDb.WebAddresses = checked end,
         }), 0.5)
-        row11c:AddWidget(GUIFrame:CreateColorPicker(row11c, "Web Address Colour", {
+        row11c:AddWidget(GUIFrame:CreateColorPicker(row11c, "Web Address Color", {
             color = linksDb.WebAddressColor,
             callback = function(r, g, b) linksDb.WebAddressColor = { r, g, b } end,
         }), 0.5)
@@ -745,10 +745,10 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     manager:Register(keywordBox, "all")
     card12:AddRow(row12a, Theme.rowHeight)
 
-    -- Colour, sound and the combat mute all answer "what happens on a hit",
+    -- Color, sound and the combat mute all answer "what happens on a hit",
     -- so they share a row rather than stacking three deep.
     local row12b = GUIFrame:CreateRow(card12.content, Theme.rowHeightLast)
-    local colorPick = GUIFrame:CreateColorPicker(row12b, "Highlight Colour", {
+    local colorPick = GUIFrame:CreateColorPicker(row12b, "Highlight Color", {
         color = db.HighlightColor,
         callback = function(r, g, b) db.HighlightColor = { r, g, b } end,
     })
@@ -781,7 +781,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     -- A separate module with its own enable flag, so it is deliberately NOT
     -- registered with the state manager. It does depend on the chat skin
     -- being on, which the label says rather than the widget state, because
-    -- greying it out would hide the reason.
+    -- graying it out would hide the reason.
     --
     -- This sits after the page's chat-skin early return, so with the skin off
     -- the card is not built at all. That is deliberate and matches the sibling

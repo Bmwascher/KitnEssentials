@@ -54,7 +54,7 @@ local ROSTER_SETTLE = 0.5
 local WORLD_SETTLE = 1
 local PLACEHOLDER_ICON = 134400
 local BIG_PREVIEW_ICON = 136097
--- The ring colour while Border Colour by Category is off. Every button has the
+-- The ring color while Border Color by Category is off. Every button has the
 -- ring from creation, so off paints it clear rather than removing it.
 local CLEAR = { 0, 0, 0, 0 }
 
@@ -77,7 +77,7 @@ local SIDES = {
 }
 
 -- One per category, in on-screen order. The border stays black; the category
--- colour is the inner ring's, whose key the dressing reads from the
+-- color is the inner ring's, whose key the dressing reads from the
 -- capabilities.
 local DESCRIPTORS = {}
 for i, category in ipairs(KE.PartyBuffsRules.CATEGORIES) do
@@ -175,7 +175,7 @@ end
 
 -- Every built container is disabled, so no UNIT_AURA stays registered. The
 -- frames cannot be destroyed and wait hidden until /reload. A pending roster
--- settle is left running: cancelling it would let the next gate event bind
+-- settle is left running: canceling it would let the next gate event bind
 -- before the roster has settled.
 function PB:Deactivate()
     self:ClearQueue()
@@ -792,7 +792,7 @@ end
 
 local STAND_IN_WIDTH, STAND_IN_HEIGHT = 220, 52
 -- The top of a party container whose mover reads -674,-63: the mover names
--- the centre of a box sized for five rows, which fill it from the top.
+-- the center of a box sized for five rows, which fill it from the top.
 local STAND_IN_TOP_X, STAND_IN_TOP_Y = -674, 69
 local STAND_IN_ROWS = {
     { token = "WARRIOR", percent = 100 },
@@ -922,7 +922,7 @@ function PB:ShowPreview()
         local cells = self:EnsurePreviewCells()
         for k = 1, #cells do frames[k] = cells[k] end
         self.previewBlock:Show()
-        -- The screen centre can fall on a half pixel. The snap needs the
+        -- The screen center can fall on a half pixel. The snap needs the
         -- rect, which a shown frame has; once on the grid it changes nothing.
         KE:SnapFrameToPixels(self.previewBlock)
     elseif self.previewBlock then

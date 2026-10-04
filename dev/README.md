@@ -2,7 +2,7 @@
 
 Static analysis + headless unit/smoke tests that run **outside** the game, as a
 fast layer *under* in-game `/reload` testing. They do **not** replace it —
-anything visual, secure-frame, taint, EditMode, or true event-sequence behaviour
+anything visual, secure-frame, taint, EditMode, or true event-sequence behavior
 is still verified in-game.
 
 All of this tooling is **git-tracked but stripped from the player zip** via
@@ -22,7 +22,7 @@ or `.github/`.
 `dev/spec/_wow_mock.lua` stubs only what a test touches. A mock verifies *"does my
 code branch correctly given a value I **declare** secret/restricted"* — **not**
 *"is my understanding of 12.0 secret/taint semantics correct."* True
-secret/taint runtime behaviour is in-game-only. Tests that lean on declared
+secret/taint runtime behavior is in-game-only. Tests that lean on declared
 secret values say so in comments; keep that distinction when adding specs.
 
 ### Testability tiers
@@ -31,7 +31,7 @@ secret values say so in comments; keep that distinction when adding specs.
 - **Tier 2 — logic around the WoW API** (e.g. `Core/Secret.lua`): drive via `dev/spec/_wow_mock.lua`; deterministically fire events through recorded frame handlers.
 - **Tier 3 — frame layout / visual / EditMode / GUI**: in-game only. Out of scope here.
 - **Lint specs** (`dev/spec/lint/`): schema and cross-table walks over curated
-  data. They run with the suite but pin data shape, not behaviour; a behaviour
+  data. They run with the suite but pin data shape, not behavior; a behavior
   spec never lives there and a data pin never lives outside it.
 
 ## Running
@@ -148,7 +148,7 @@ shorts='x|y'       # their short forms, matched at word boundaries only
 compat='d|e'       # addons the project legitimately names, see below
 provenance='...'   # the vocabulary, dates included, that makes a compat name a leak
 namesCI='F|G'      # people/agents, word-bounded, case-insensitive
-namesCS='H|I'      # people/agents that double as plausible WoW words, capitalised only
+namesCS='H|I'      # people/agents that double as plausible WoW words, capitalized only
 ```
 
 `stems` and `shorts` block on sight. `compat` holds addons KE detects, skins,
@@ -225,6 +225,18 @@ by the one parser rather than a second approximation of it. Run it after every
 list edit; it takes about half a minute. It also reports pre-existing
 provenance and history references, which nothing enforces, since the hooks
 only ever read added lines.
+
+## Spelling
+
+The project writes American English everywhere: comments, help strings,
+docs, identifiers. `dev/scripts/check-spelling.sh` is the gate: `pre-commit`
+runs it with `--staged` on the added lines of every staged file, and the
+`spelling` job in `lint.yml` runs it over every tracked text file. Blizzard
+identifiers and game item names that carry a British spelling are scrubbed
+by the allow list at the top of the script; extend that list, never the
+pattern. The sweep that converted the tree used a case-preserving rewrite
+over comments, strings and identifiers alike, so a renamed helper is the
+same name everywhere.
 
 `Libs/` is out of scope: the comment rules govern what this project writes,
 not the third-party code it embeds, and upstream library headers carry dates

@@ -132,7 +132,7 @@ describe("CombatLogger arena classification", function()
     end)
 
     -- Asks, but does not block. A basic log beats no log, and accepting the
-    -- prompt afterwards cycles the running log so it records advanced detail.
+    -- prompt afterward cycles the running log so it records advanced detail.
     it("starts anyway without advanced combat logging, and asks", function()
         CL, rec = L.loadCombatLogger({
             C_CVar = { GetCVar = function() return "0" end, SetCVar = function() end },

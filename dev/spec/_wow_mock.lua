@@ -4,11 +4,11 @@
 -- ╚══════════════════════════════════════════════════════════╝
 --
 -- This stubs ONLY the slice of the WoW API a test actually touches. It does
--- NOT emulate WoW behaviour — in particular it cannot reproduce 12.0 secret /
+-- NOT emulate WoW behavior — in particular it cannot reproduce 12.0 secret /
 -- taint semantics. A mock verifies "does my code branch correctly given a
 -- value I DECLARE secret/restricted", never "is my understanding of real
 -- secret semantics correct". Anything depending on true secret/taint runtime
--- behaviour stays in-game-only; see dev/README.md.
+-- behavior stays in-game-only; see dev/README.md.
 --
 -- Usage:
 --   local mock = require("dev.spec._wow_mock")
@@ -108,7 +108,7 @@ function M.install(overrides)
     _G.UnitIsUnit = overrides.UnitIsUnit or function() return false end
 
     -- ColorMixin objects. Blizzard's CreateColor, enough of it for the
-    -- unpack-into-a-sink pattern the colour helpers use.
+    -- unpack-into-a-sink pattern the color helpers use.
     _G.CreateColor = overrides.CreateColor or function(r, g, b, a)
         return {
             r = r, g = g, b = b, a = a,

@@ -278,7 +278,7 @@ function VR:ShowConfirmation(guildTab, guildSlot, bagIndex, bagSlot)
     self.popup.noBtn:SetScript("OnClick", function()
         self:ClosePopup()
         if self.db.ShowChatMessages then
-            KE:Print("|cffff4444Vantus Rune withdrawal cancelled.|r")
+            KE:Print("|cffff4444Vantus Rune withdrawal canceled.|r")
         end
     end)
 

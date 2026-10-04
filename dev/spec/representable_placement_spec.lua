@@ -1,6 +1,6 @@
 -- Tier 1: invented arithmetic, and a right-inverse, which is the rare case
 -- where the property is stronger than any table of expected numbers. Asserting
--- specific centres would only re-transcribe the formula; asserting that the
+-- specific centers would only re-transcribe the formula; asserting that the
 -- round trip closes catches a wrong term in either direction.
 --
 -- Every anchor pair is covered rather than a sample. There are 81 and the
@@ -24,14 +24,14 @@ describe("KE:ResolveRepresentablePlacement", function()
     local PARENT = { left = 100.25, bottom = 50.75, width = 800.5, height = 600.5 }
     local FRAME = { width = 37, height = 23 }
 
-    local function place(centreX, centreY, from, to)
-        return KE:ResolveRepresentablePlacement(centreX, centreY, from, to,
+    local function place(centerX, centerY, from, to)
+        return KE:ResolveRepresentablePlacement(centerX, centerY, from, to,
             FRAME.width, FRAME.height,
             PARENT.left, PARENT.bottom, PARENT.width, PARENT.height)
     end
 
-    local function resolve(centreX, centreY, from, to)
-        return KE:ResolveAnchorOffsets(centreX, centreY, from, to,
+    local function resolve(centerX, centerY, from, to)
+        return KE:ResolveAnchorOffsets(centerX, centerY, from, to,
             FRAME.width, FRAME.height,
             PARENT.left, PARENT.bottom, PARENT.width, PARENT.height)
     end
@@ -39,10 +39,10 @@ describe("KE:ResolveRepresentablePlacement", function()
     it("closes the round trip for all 81 anchor pairs", function()
         for _, from in ipairs(ANCHORS) do
             for _, to in ipairs(ANCHORS) do
-                local offsetX, offsetY, centreX, centreY =
+                local offsetX, offsetY, centerX, centerY =
                     place(613.4, 421.9, from, to)
 
-                local backX, backY = resolve(centreX, centreY, from, to)
+                local backX, backY = resolve(centerX, centerY, from, to)
                 assert.equals(offsetX, backX,
                     "x round trip broke on " .. from .. " -> " .. to)
                 assert.equals(offsetY, backY,
@@ -75,8 +75,8 @@ describe("KE:ResolveRepresentablePlacement", function()
 
     -- The bound this function is allowed to claim. Half a UI unit per axis,
     -- from the rounding and nothing else. The pixel snap that follows at commit
-    -- is not modelled here and is not covered by this number.
-    it("moves the centre by at most half a unit on each axis", function()
+    -- is not modeled here and is not covered by this number.
+    it("moves the center by at most half a unit on each axis", function()
         for _, from in ipairs(ANCHORS) do
             for _, to in ipairs(ANCHORS) do
                 for step = 0, 9 do
@@ -91,13 +91,13 @@ describe("KE:ResolveRepresentablePlacement", function()
         end
     end)
 
-    -- An already-representable centre must survive untouched, or every drag
+    -- An already-representable center must survive untouched, or every drag
     -- that does not snap would still drift.
-    it("leaves a centre that is already representable alone", function()
-        local _, _, centreX, centreY = place(613.4, 421.9, "CENTER", "CENTER")
-        local _, _, againX, againY = place(centreX, centreY, "CENTER", "CENTER")
-        assert.equals(centreX, againX)
-        assert.equals(centreY, againY)
+    it("leaves a center that is already representable alone", function()
+        local _, _, centerX, centerY = place(613.4, 421.9, "CENTER", "CENTER")
+        local _, _, againX, againY = place(centerX, centerY, "CENTER", "CENTER")
+        assert.equals(centerX, againX)
+        assert.equals(centerY, againY)
     end)
 end)
 
@@ -108,7 +108,7 @@ end)
 -- sides, and here they are deliberately not independent.
 --
 -- Parent left 100.25, bottom 50.75, size 800.5 x 600.5. Frame 37 x 23, both
--- odd so a half-extent is fractional. Centre 613.4, 421.9. Every number below
+-- odd so a half-extent is fractional. Center 613.4, 421.9. Every number below
 -- was produced by running the arithmetic, then checked against the branch it
 -- exercises.
 describe("KE:ResolveAnchorOffsets anchor terms", function()

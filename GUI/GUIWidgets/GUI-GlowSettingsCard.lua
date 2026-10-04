@@ -66,7 +66,7 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
 
     local widgets = {}
     -- `pixelExtras` holds the two controls only a Lua-driven pixel glow can
-    -- honour -- Length and Border. A consumer whose glow is animation-driven
+    -- honor -- Length and Border. A consumer whose glow is animation-driven
     -- overrides this table to omit that group.
     local typeOnlyRows = {
         pixel = {},
@@ -141,7 +141,7 @@ function GUIFrame:CreateGlowSettingsCard(scrollChild, yOffset, config)
         value = speedAdapter.read(db, keys),
         callback = function(val)
             -- The adapter's write may set two db values; assign directly and
-            -- fire onChange exactly once afterwards, not through setValue.
+            -- fire onChange exactly once afterward, not through setValue.
             speedAdapter.write(db, keys, val)
             if onChange then onChange() end
         end

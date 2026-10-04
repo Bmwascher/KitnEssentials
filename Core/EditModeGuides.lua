@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  EditModeGuides.lua                                      ║
--- ║  Purpose: Edit mode's coarse grid and centre guides —    ║
+-- ║  Purpose: Edit mode's coarse grid and center guides —    ║
 -- ║           drawing, teardown, and invalidation.           ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -13,11 +13,11 @@ local UIParent = UIParent
 local math_floor = math.floor
 local pairs = pairs
 
--- The grid is a reference the eye reads past; the centre guides are an answer
+-- The grid is a reference the eye reads past; the center guides are an answer
 -- it reads. The gap between these two is what keeps that true, so raising the
 -- grid means checking the guides still dominate rather than just raising it.
 local GRID_ALPHA = 0.35
-local CENTRE_GUIDE_ALPHA = 0.85
+local CENTER_GUIDE_ALPHA = 0.85
 
 -- Textures are reused across rebuilds. Frames are never destroyed in this
 -- runtime, so a rebuild that created fresh ones would leak the old set for the
@@ -83,7 +83,7 @@ function EditMode:RefreshGrid()
 
     local originX, originY = context.originX, context.originY
     local thickness = KE:GetPixelSize()
-    local colour = KE.Theme and KE.Theme.accent or { 1, 1, 1 }
+    local color = KE.Theme and KE.Theme.accent or { 1, 1, 1 }
 
     local steps = math_floor(originX / spacing)
     for i = -steps, steps do
@@ -91,7 +91,7 @@ function EditMode:RefreshGrid()
         if x >= 0 and x <= width then
             local tex = AcquireLine(frame)
             tex:ClearAllPoints()
-            tex:SetColorTexture(colour[1], colour[2], colour[3], GRID_ALPHA)
+            tex:SetColorTexture(color[1], color[2], color[3], GRID_ALPHA)
             tex:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", x, height)
             tex:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", x + thickness, 0)
         end
@@ -103,7 +103,7 @@ function EditMode:RefreshGrid()
         if y >= 0 and y <= height then
             local tex = AcquireLine(frame)
             tex:ClearAllPoints()
-            tex:SetColorTexture(colour[1], colour[2], colour[3], GRID_ALPHA)
+            tex:SetColorTexture(color[1], color[2], color[3], GRID_ALPHA)
             tex:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, y)
             tex:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, y + thickness)
         end
@@ -115,7 +115,7 @@ end
 function EditMode:ShowGuideFrame()
     local frame = self:BuildGuideFrame()
     self:RefreshGrid()
-    self:RepositionCentreGuides()
+    self:RepositionCenterGuides()
     frame:Show()
 end
 
@@ -125,7 +125,7 @@ end
 
 -- The guide reports a snap that has already been decided. It never predicts
 -- one: a second prediction is a second chance to disagree with the commit.
-local function CentreLine(frame, key)
+local function CenterLine(frame, key)
     local tex = frame[key]
     if tex then return tex end
 
@@ -139,50 +139,50 @@ end
 -- Positioning is separate from creation because the coordinates these lines
 -- sit on can change while the tool is closed. Textures belong to their frame
 -- for the session, so a stale one is re-pointed, never dropped and remade.
-function EditMode:RepositionCentreGuides()
+function EditMode:RepositionCenterGuides()
     local frame = self.guideFrame
     if not frame then return end
 
     local context = self:BuildSnapContext()
     local thickness = KE:GetPixelSize()
     local height = UIParent:GetHeight() or 0
-    -- Colour is set here rather than at creation so a theme change is picked up
+    -- Color is set here rather than at creation so a theme change is picked up
     -- the next time the tool opens, the same way the grid's is.
-    local colour = KE.Theme and KE.Theme.accent or { 1, 1, 1 }
+    local color = KE.Theme and KE.Theme.accent or { 1, 1, 1 }
 
-    local vertical = CentreLine(frame, "centreLineX")
-    vertical:SetColorTexture(colour[1], colour[2], colour[3], CENTRE_GUIDE_ALPHA)
+    local vertical = CenterLine(frame, "centerLineX")
+    vertical:SetColorTexture(color[1], color[2], color[3], CENTER_GUIDE_ALPHA)
     vertical:ClearAllPoints()
     vertical:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", context.originX, height)
     vertical:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", context.originX + thickness, 0)
 
-    local horizontal = CentreLine(frame, "centreLineY")
-    horizontal:SetColorTexture(colour[1], colour[2], colour[3], CENTRE_GUIDE_ALPHA)
+    local horizontal = CenterLine(frame, "centerLineY")
+    horizontal:SetColorTexture(color[1], color[2], color[3], CENTER_GUIDE_ALPHA)
     horizontal:ClearAllPoints()
     horizontal:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, context.originY)
     horizontal:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, context.originY + thickness)
 end
 
-function EditMode:SetCentreGuides(onX, onY)
+function EditMode:SetCenterGuides(onX, onY)
     local frame = self:BuildGuideFrame()
     -- The vertical line marks a snap on the X axis, and vice versa.
-    CentreLine(frame, "centreLineX"):SetShown(onX and true or false)
-    CentreLine(frame, "centreLineY"):SetShown(onY and true or false)
+    CenterLine(frame, "centerLineX"):SetShown(onX and true or false)
+    CenterLine(frame, "centerLineY"):SetShown(onY and true or false)
 end
 
-function EditMode:HideCentreGuides()
+function EditMode:HideCenterGuides()
     local frame = self.guideFrame
     if not frame then return end
-    if frame.centreLineX then frame.centreLineX:Hide() end
-    if frame.centreLineY then frame.centreLineY:Hide() end
+    if frame.centerLineX then frame.centerLineX:Hide() end
+    if frame.centerLineY then frame.centerLineY:Hide() end
 end
 
 ---------------------------------------------------------------------------------
 -- Element Snap Guides
 ---------------------------------------------------------------------------------
--- The centre guides mark two fixed coordinates the user already knows. These
--- mark wherever a neighbour was matched, so unlike those they are re-pointed as
--- the drag moves. Same colour and alpha, because they mean the same thing: a
+-- The center guides mark two fixed coordinates the user already knows. These
+-- mark wherever a neighbor was matched, so unlike those they are re-pointed as
+-- the drag moves. Same color and alpha, because they mean the same thing: a
 -- snap that has already been decided. The line's position says which is which.
 --
 -- Two persistent textures, never the grid pool. RefreshGrid resets that pool by
@@ -205,14 +205,14 @@ end
 function EditMode:SetElementSnapGuides(x, y)
     local frame = self:BuildGuideFrame()
     local thickness = KE:GetPixelSize()
-    local colour = KE.Theme and KE.Theme.accent or { 1, 1, 1 }
+    local color = KE.Theme and KE.Theme.accent or { 1, 1, 1 }
 
     local vertical = SnapLine(frame, "snapLineX")
     if x then
         if frame._snapAtX ~= x then
             frame._snapAtX = x
             local height = UIParent:GetHeight() or 0
-            vertical:SetColorTexture(colour[1], colour[2], colour[3], CENTRE_GUIDE_ALPHA)
+            vertical:SetColorTexture(color[1], color[2], color[3], CENTER_GUIDE_ALPHA)
             vertical:ClearAllPoints()
             vertical:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", x, height)
             vertical:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", x + thickness, 0)
@@ -227,7 +227,7 @@ function EditMode:SetElementSnapGuides(x, y)
     if y then
         if frame._snapAtY ~= y then
             frame._snapAtY = y
-            horizontal:SetColorTexture(colour[1], colour[2], colour[3], CENTRE_GUIDE_ALPHA)
+            horizontal:SetColorTexture(color[1], color[2], color[3], CENTER_GUIDE_ALPHA)
             horizontal:ClearAllPoints()
             horizontal:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 0, y)
             horizontal:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, y + thickness)
@@ -258,14 +258,14 @@ watcher:RegisterEvent("UI_SCALE_CHANGED")
 watcher:RegisterEvent("DISPLAY_SIZE_CHANGED")
 watcher:SetScript("OnEvent", function()
     -- Refresh the pixel cache FIRST. Everything below reads the pixel size, and
-    -- the cancelled drag's restore re-applies a position through the framework
+    -- the canceled drag's restore re-applies a position through the framework
     -- snap. Doing this after would leave those on the previous lattice and make
     -- correctness depend on which handler ran first.
     KE:UpdatePixelCache()
 
     -- A drag started in the old coordinate space. Its start cursor, its start
-    -- centre and its grid origin were all captured there, so continuing would
-    -- land the frame somewhere nobody asked for. Cancelling restores the saved
+    -- center and its grid origin were all captured there, so continuing would
+    -- land the frame somewhere nobody asked for. Canceling restores the saved
     -- position and costs one re-drag.
     for _, overlay in pairs(EditMode.overlayFrames) do
         if overlay.isDragging then
@@ -279,6 +279,6 @@ watcher:SetScript("OnEvent", function()
     -- event even if the tool has never been opened, which is deliberate -- a
     -- gated version would miss exactly the case this exists for.
     EditMode:BuildGuideFrame()
-    EditMode:RepositionCentreGuides()
+    EditMode:RepositionCenterGuides()
     EditMode:RefreshGrid()
 end)

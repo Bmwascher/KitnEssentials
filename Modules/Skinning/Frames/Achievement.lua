@@ -10,7 +10,7 @@ local BAR_TEX = "Interface\\Buttons\\WHITE8x8"
 
 -- Blizzard paints criteria text black once the achievement itself is complete,
 -- which vanishes against a dark backdrop. Its other two picks -- green for a
--- met criterion, grey for a pending one -- read fine and are left alone, so
+-- met criterion, gray for a pending one -- read fine and are left alone, so
 -- the only thing to do is walk the frames it already built and lift the black.
 local function Whiten(fontString)
     if not fontString then return end

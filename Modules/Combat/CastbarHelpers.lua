@@ -665,7 +665,7 @@ end
 ---------------------------------------------------------------------------------
 
 -- The cooldown OBJECT, never a number. In restricted content its IsZero and
--- remaining values are secret, so callers hand the object to colour, alpha
+-- remaining values are secret, so callers hand the object to color, alpha
 -- and bar-value sinks and branch only on whether it exists.
 function H.ReadKickCooldown(interruptId, ignoreGCD)
     if not interruptId then return nil end
@@ -680,7 +680,7 @@ function H.ReadKickCooldown(interruptId, ignoreGCD)
     return cd
 end
 
--- Ready/not-ready is a colour curve on the secret IsZero; shielded goes on
+-- Ready/not-ready is a color curve on the secret IsZero; shielded goes on
 -- last, so a cast nobody can interrupt reads as shielded whatever the
 -- cooldown is doing.
 function H.PaintKickColor(texture, cooldown, readyColor, notReadyColor, notInterruptible, shieldedColor)
@@ -809,7 +809,7 @@ function H.RefreshKickMark(mark, castDuration, kickCd, notInterruptible, showTic
     mark.marker:SetValue(kickCd:GetRemainingDuration())
 
     -- Hidden while the kick is already up and on a cast nothing can kick.
-    -- Both booleans may be secret, so each is a colour curve, chained.
+    -- Both booleans may be secret, so each is a color curve, chained.
     local ev = C_CurveUtil.EvaluateColorValueFromBoolean
     local alpha = 1
     if notInterruptible ~= nil then
@@ -868,7 +868,7 @@ function H.UpdateTargetNames(self)
     end
 
     -- UnitSpellTargetName returns the target's name, secret when the target
-    -- is a player. SetText accepts a secret string; the colour goes through
+    -- is a player. SetText accepts a secret string; the color goes through
     -- SetTextColor with plain r/g/b so no Lua string work touches the name.
     local targetName = UnitSpellTargetName and UnitSpellTargetName(unit) or nil
     if not targetName then

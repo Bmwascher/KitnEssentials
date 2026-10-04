@@ -51,7 +51,7 @@ GUIFrame:RegisterContent("PlayerAbsorbs", function(scrollChild, yOffset)
     end
 
     -- Contextual spacing sliders: Row Spacing applies to the stacked/adjacent
-    -- directions, Separation only to Split L/R. Each greys out when it does nothing.
+    -- directions, Separation only to Split L/R. Each grays out when it does nothing.
     manager:SetCondition("nonSplit", function() return (db.GrowthDirection or "DOWN") ~= "SPLIT" end)
     manager:SetCondition("splitOnly", function() return db.GrowthDirection == "SPLIT" end)
     -- Icon Side only applies to the stacked Down/Up directions.

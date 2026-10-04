@@ -19,7 +19,7 @@ local SWATCH_BG_TEXTURE = "Interface\\AddOns\\KitnEssentials\\Media\\GUITextures
 -- Widget Creation
 ---------------------------------------------------------------------------------
 
--- Builds one colour picker. Label, colour and bindings are applied by
+-- Builds one color picker. Label, color and bindings are applied by
 -- ConfigureColorPicker, so a pooled picker can serve any setting.
 local function ConstructColorPicker(parent)
     local row = CreateFrame("Frame", nil, parent)
@@ -128,7 +128,7 @@ local function ConstructColorPicker(parent)
     swatch:SetScript("OnClick", function()
         local prevR, prevG, prevB, prevA = swatch.r, swatch.g, swatch.b, swatch.a
         -- Bound for this one open: a rebuild while the picker is up must not
-        -- send its colour to another setting, nor repaint a reused swatch.
+        -- send its color to another setting, nor repaint a reused swatch.
         local callback, gen = row._callback, row._keGen
         local function Apply(r, g, b, a)
             if row._keGen == gen then SetSwatch(r, g, b, a) end
@@ -154,7 +154,7 @@ local function ConstructColorPicker(parent)
         ColorPickerFrame:SetupColorPickerAndShow(info)
     end)
 
-    -- Busy while Blizzard's picker is still open on this widget's colour: the
+    -- Busy while Blizzard's picker is still open on this widget's color: the
     -- pool retires it rather than hand an open edit to another setting.
     function row:_keIsBusy()
         local open = self._openSwatchFunc

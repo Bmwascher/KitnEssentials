@@ -19,12 +19,12 @@ local pcall = pcall
 
 local ThemeDefaults = {
     -- Depth comes from opacity stacking inside one near-black family, not from
-    -- stepping the grey. Card bodies read marginally lighter than the window,
+    -- stepping the gray. Card bodies read marginally lighter than the window,
     -- which is deliberate: the alternative reads as a hole in the panel.
     bgDark         = { 0.031, 0.031, 0.031, 0.80 }, -- #080808 window / content pane
     bgMedium       = { 0.055, 0.055, 0.055, 0.95 }, -- #0E0E0E sidebar / title bar / footer / card header
     bgLight        = { 0.055, 0.055, 0.055, 0.80 }, -- #0E0E0E card bodies / sliders / dialogs
-    bgButton       = { 0, 0, 0, 0.5 },              -- prompt buttons: black, so they stand off the card grey
+    bgButton       = { 0, 0, 0, 0.5 },              -- prompt buttons: black, so they stand off the card gray
     bgHover        = { 0.227, 0.227, 0.227, 0.80 }, -- #3A3A3A hover
     border         = { 0, 0, 0, 1 },
     accent         = { 1.0, 0.0, 0.549, 1 },       -- #FF008C (KitnUI pink)
@@ -113,8 +113,8 @@ local THEME_PRESETS = {
 KE.ThemePresets = THEME_PRESETS
 KE.ThemePresetOrder = { "KitnUI", "Nighthold", "Firelands", "Icecrown", "Dreamsurge", "Twilight", "Sunwell", "Torghast" }
 
--- The colour skinned Blizzard frames take when the accent is not allowed to
--- reach them: visible against the near-black windows, not a brand colour.
+-- The color skinned Blizzard frames take when the accent is not allowed to
+-- reach them: visible against the near-black windows, not a brand color.
 local SKIN_NEUTRAL = { 0.651, 0.651, 0.651, 1 }
 KE.SkinNeutralColor = SKIN_NEUTRAL
 KE.ThemeModeOptions = {
@@ -152,7 +152,7 @@ local function ColorsMatch(a, b)
 end
 KE.ColorsMatch = ColorsMatch
 
--- The opaque colour of `top` drawn at `alpha` over `base`. Both inputs' own
+-- The opaque color of `top` drawn at `alpha` over `base`. Both inputs' own
 -- alpha is ignored.
 local function BlendColor(top, alpha, base)
     local inv = 1 - alpha
@@ -200,7 +200,7 @@ function KE:GetThemeColor(key)
     return ThemeDefaults[key] and CopyColor(ThemeDefaults[key]) or nil
 end
 
--- The colour the skinning palette receives. The settings window always follows
+-- The color the skinning palette receives. The settings window always follows
 -- the accent; skinned Blizzard frames follow it only while TintSkins is on.
 -- Absent or nil TintSkins means on, so a profile written before the switch
 -- existed keeps behaving exactly as it did.
@@ -321,7 +321,7 @@ function KE:CopyPresetToCustom()
     end
 end
 
--- Most skinned regions take their colour once, at frame-build time, so flipping
+-- Most skinned regions take their color once, at frame-build time, so flipping
 -- this switch only reaches frames built after it (the few registered through
 -- Skins.PaintBrand repaint live). The palette is updated immediately
 -- regardless, so anything built later is already correct.

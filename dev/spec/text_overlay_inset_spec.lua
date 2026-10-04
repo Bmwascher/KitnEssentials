@@ -25,13 +25,13 @@ describe("KE:GetAnchorFractions", function()
 
     -- Saved profiles predate the current dropdowns and can hold anything. A
     -- throw here would take the whole edit-mode overlay down with it.
-    it("centres an unknown point instead of throwing", function()
+    it("centers an unknown point instead of throwing", function()
         local x, y = KE:GetAnchorFractions("NOT_A_POINT")
         assert.equals(0.5, x)
         assert.equals(0.5, y)
     end)
 
-    it("centres a nil point", function()
+    it("centers a nil point", function()
         local x, y = KE:GetAnchorFractions(nil)
         assert.equals(0.5, x)
         assert.equals(0.5, y)
@@ -81,7 +81,7 @@ describe("KE:GetTextOverlayInset", function()
         assert.are_not.equals(t, b)
     end)
 
-    it("splits the overhang evenly for a centred oversized element", function()
+    it("splits the overhang evenly for a centered oversized element", function()
         local l, r, t, b = inset("CENTER", "CENTER", 0, 0, 50, 50)
         assert.equals(10, l); assert.equals(10, r)
         assert.equals(10, t); assert.equals(10, b)
@@ -135,7 +135,7 @@ describe("KE:CombineOverlayInsets", function()
     -- The grid term is a SHIFT whose two terms cancel. Taking a maximum against
     -- it instead of adding would drop the shift on one edge and misplace the
     -- box rather than merely mis-size it.
-    it("adds to the grid term rather than maximising against it", function()
+    it("adds to the grid term rather than maximizing against it", function()
         local l, r = KE:CombineOverlayInsets({ -8, 8, 0, 0 }, { { 3, 3, 0, 0 } })
         assert.equals(-5, l)
         assert.equals(11, r)

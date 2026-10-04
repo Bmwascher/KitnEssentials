@@ -9,14 +9,14 @@ describe("KE:ResolveAnchorOffsets", function()
     setup(function() KE = L.loadGlobals() end)
 
     -- A 100x50 element on a 1000x800 parent whose bottom-left is the origin.
-    -- Its centre sits at 400,300 unless a case says otherwise.
+    -- Its center sits at 400,300 unless a case says otherwise.
     local function resolve(anchorFrom, anchorTo, cx, cy)
         return KE:ResolveAnchorOffsets(
             cx or 400, cy or 300, anchorFrom, anchorTo,
             100, 50, 0, 0, 1000, 800)
     end
 
-    it("measures centre to centre", function()
+    it("measures center to center", function()
         local x, y = resolve("CENTER", "CENTER")
         assert.equals(-100, x)   -- 400 - 500
         assert.equals(-100, y)   -- 300 - 400
@@ -81,7 +81,7 @@ describe("KE:ResolveAnchorOffsets", function()
         assert.equals(200, br[2])
     end)
 
-    -- Offsets are whole. A fractional centre must not store a fraction.
+    -- Offsets are whole. A fractional center must not store a fraction.
     it("rounds both offsets", function()
         local x, y = resolve("CENTER", "CENTER", 400.4, 300.6)
         assert.equals(-100, x)
