@@ -165,42 +165,54 @@ local function SkinKeystoneTeleports(frame)
     end
 end
 
+local function SkinKeystonePanel(frame)
+    if frame.NineSlice then S.StripTextures(frame.NineSlice) end
+    if frame.PortraitContainer then frame.PortraitContainer:Hide() end
+    if frame.TopTileStreaks then frame.TopTileStreaks:Hide() end
+    if frame.Bg then frame.Bg:Hide() end
+    S.StripTextures(frame); S.Backdrop(frame)
+    if frame.CloseButton then S.CloseButton(frame.CloseButton) end
+    for _, child in next, { frame:GetChildren() } do
+        if child.ScrollBar then S.TrimScrollBar(child.ScrollBar) end
+    end
+    SkinKeystoneTabs(frame)
+    SkinKeystoneTeleports(frame)
+end
+
+-- The panel has no global name and no creation callback, so it is found by
+-- its title among UIParent's children.
+local function FindKeystonePanel(titleText)
+    for _, frame in next, { _G.UIParent:GetChildren() } do
+        local tc = frame and frame.TitleContainer
+        local tt = tc and tc.TitleText
+        if tt and tt.GetText and not S.data(frame).kchecked then
+            local ok, result = pcall(tt.GetText, tt)
+            -- The pcall covers the read, not the compare.
+            if ok and not issecretvalue(result) and result == titleText then
+                S.data(frame).kchecked = true
+                return frame
+            end
+        end
+    end
+    return nil
+end
+
 local function SkinKeystone()
     local api = _G.BigWigsAPI
     local L = api and api.GetLocale and api:GetLocale("BigWigs")
     local titleText = L and L.keystoneTitle
-    if not titleText then return end
+    if not titleText or not _G.C_Timer then return end
 
-    local tries = 0
-    local function scan()
-        tries = tries + 1
-        for _, frame in next, { _G.UIParent:GetChildren() } do
-            local tc = frame and frame.TitleContainer
-            local tt = tc and tc.TitleText
-            if tt and tt.GetText and not S.data(frame).kchecked then
-                local ok, result = pcall(tt.GetText, tt)
-                if ok and result == titleText then
-                    S.data(frame).kchecked = true
-                    if frame.NineSlice then S.StripTextures(frame.NineSlice) end
-                    if frame.PortraitContainer then frame.PortraitContainer:Hide() end
-                    if frame.TopTileStreaks then frame.TopTileStreaks:Hide() end
-                    if frame.Bg then frame.Bg:Hide() end
-                    S.StripTextures(frame); S.Backdrop(frame)
-                    if frame.CloseButton then S.CloseButton(frame.CloseButton) end
-                    for _, child in next, { frame:GetChildren() } do
-                        if child.ScrollBar then S.TrimScrollBar(child.ScrollBar) end
-                    end
-                    SkinKeystoneTabs(frame)
-                    SkinKeystoneTeleports(frame)
-                    return
-                end
-            end
-        end
-        -- was 0.5s per try -- half a second of unskinned
-        -- keystone/queue frames every time. Per-frame, same patience.
-        if tries < 1800 and _G.C_Timer then _G.C_Timer.After(0, scan) end
+    local function scanOnce()
+        local frame = FindKeystonePanel(titleText)
+        if frame then SkinKeystonePanel(frame) end
+        return frame ~= nil
     end
-    if _G.C_Timer then _G.C_Timer.After(0, scan) end
+    -- The panel is built when the addon loads, so the first scan finds it.
+    -- One more on the following frame covers a load order where it does not.
+    _G.C_Timer.After(0, function()
+        if not scanOnce() then _G.C_Timer.After(0, scanOnce) end
+    end)
 end
 
 local function SkinTooltip()

@@ -411,25 +411,18 @@ local function SkinMainFrame()
     end
 end
 
+-- The frame may not exist yet; the talent window's show is the next moment
+-- it can be seen. The talent UI also loads without the addon, so the hook
+-- is installed only when the addon is present.
 local function Skin()
-    -- (TLX visibly skins in after opening): this polled
-    -- for TalentLoadoutExMainFrame every 0.25s -- and never checked
-    -- before the first wait -- so even when the frame already existed
-    -- we sat unskinned for a quarter second. That IS the flash.
-    -- Now: skin immediately if it exists, otherwise poll every FRAME
-    -- (After(0)) so the worst case is one frame instead of 250ms. Same
-    -- ~10s total patience for a slow-loading TLX.
     if _G.TalentLoadoutExMainFrame then SkinMainFrame(); return end
-    local tries = 0
-    local function poll()
-        tries = tries + 1
-        if _G.TalentLoadoutExMainFrame then
-            SkinMainFrame()
-        elseif tries < 600 and _G.C_Timer then
-            _G.C_Timer.After(0, poll)
-        end
+    local addons = _G.C_AddOns
+    if not (addons and addons.IsAddOnLoaded and addons.IsAddOnLoaded("TalentLoadoutsEx")) then return end
+    local host = _G.PlayerSpellsFrame
+    if host and not S.data(host).tlxShowHook then
+        S.data(host).tlxShowHook = true
+        host:HookScript("OnShow", function() SkinMainFrame() end)
     end
-    if _G.C_Timer then _G.C_Timer.After(0, poll) end
 end
 
 S:Register("Blizzard_PlayerSpells", Skin, "TalentLoadoutsEx")

@@ -184,15 +184,15 @@ S.RefreshPalette()
 -- be. Borders used as a state indicator sit in that overlap; they take the new
 -- colour here and are repainted by their own refresh, so the mismatch is
 -- visible only until that frame next updates.
-local function ColorMatches(r, g, b, ref)
+local function ColorMatches(r, g, b, refR, refG, refB)
     if not (r and g and b) then return false end
     local e = 0.001
-    return math_abs(r - ref[1]) < e and math_abs(g - ref[2]) < e and math_abs(b - ref[3]) < e
+    return math_abs(r - refR) < e and math_abs(g - refG) < e and math_abs(b - refB) < e
 end
 
 function S.SetSkinColors(bg, border)
-    local oldBg = { S.palette.window[1], S.palette.window[2], S.palette.window[3] }
-    local oldBorder = { S.palette.border[1], S.palette.border[2], S.palette.border[3] }
+    local bgR, bgG, bgB = S.palette.window[1], S.palette.window[2], S.palette.window[3]
+    local bdR, bdG, bdB = S.palette.border[1], S.palette.border[2], S.palette.border[3]
 
     ApplyColor(S.palette.window, bg)
     ApplyColor(S.palette.border, border)
@@ -200,14 +200,14 @@ function S.SetSkinColors(bg, border)
     for _, bd in pairs(backdropCache) do
         if bg and bd.GetBackdropColor and bd.SetBackdropColor then
             local r, g, b, a = bd:GetBackdropColor()
-            if ColorMatches(r, g, b, oldBg) then
+            if ColorMatches(r, g, b, bgR, bgG, bgB) then
                 local alpha = (a == 0) and 0 or S.bgColor[4]
                 bd:SetBackdropColor(S.bgColor[1], S.bgColor[2], S.bgColor[3], alpha)
             end
         end
         if border and bd.GetBackdropBorderColor and bd.SetBackdropBorderColor then
             local r, g, b, a = bd:GetBackdropBorderColor()
-            if ColorMatches(r, g, b, oldBorder) then
+            if ColorMatches(r, g, b, bdR, bdG, bdB) then
                 local alpha = (a == 0) and 0 or S.borderColor[4]
                 bd:SetBackdropBorderColor(S.borderColor[1], S.borderColor[2],
                     S.borderColor[3], alpha)
@@ -277,6 +277,30 @@ function S.Kill(object)
     if object.Hide then object:Hide() end
 end
 
+-- GetRegions can return a secret region, which cannot be indexed, so it
+-- is skipped.
+local function ClearRegions(...)
+    for i = 1, select("#", ...) do
+        local r = (select(i, ...))
+        if not issecretvalue(r) and r.GetObjectType and r:GetObjectType() == "Texture" then
+            if r.SetTexture then r:SetTexture(S.ClearTexture) end
+            if r.SetAtlas then r:SetAtlas("") end
+        end
+    end
+end
+
+local function StripRegions(kill, ...)
+    for i = 1, select("#", ...) do
+        local region = (select(i, ...))
+        if not issecretvalue(region) and region.GetObjectType
+            and region:GetObjectType() == "Texture" then
+            region:SetTexture(S.ClearTexture)
+            if region.SetAtlas then region:SetAtlas("") end
+            if kill and region.Hide then region:Hide() end
+        end
+    end
+end
+
 function S.KillRegions(frame, name)
     -- (Equipment Manager buttons vanished): this used
     -- to :Hide() every name in the list -- and the list has "Right",
@@ -297,12 +321,7 @@ function S.KillRegions(frame, name)
                 if object.SetTexture then object:SetTexture(S.ClearTexture) end
                 if object.SetAtlas then object:SetAtlas("") end
             elseif object.GetRegions then
-                for _, r in ipairs({ object:GetRegions() }) do
-                    if r.GetObjectType and r:GetObjectType() == "Texture" then
-                        if r.SetTexture then r:SetTexture(S.ClearTexture) end
-                        if r.SetAtlas then r:SetAtlas("") end
-                    end
-                end
+                ClearRegions(object:GetRegions())
             end
         end
     end
@@ -349,13 +368,7 @@ end
 
 function S.StripTextures(frame, kill)
     if not frame or not frame.GetRegions then return end
-    for _, region in ipairs({ frame:GetRegions() }) do
-        if region.GetObjectType and region:GetObjectType() == "Texture" then
-            region:SetTexture(S.ClearTexture)
-            if region.SetAtlas then region:SetAtlas("") end
-            if kill and region.Hide then region:Hide() end
-        end
-    end
+    StripRegions(kill, frame:GetRegions())
     if frame.NineSlice and frame.NineSlice.SetAlpha then
         frame.NineSlice:SetAlpha(0)
 
@@ -3118,13 +3131,17 @@ function S.StepSlider(stepper)
     S.data(stepper).skinned = true
 end
 
+local INSET_ART_KEYS = {
+    "InsetBorderTop", "InsetBorderTopLeft", "InsetBorderTopRight",
+    "InsetBorderBottom", "InsetBorderBottomLeft", "InsetBorderBottomRight",
+    "InsetBorderLeft", "InsetBorderRight", "Bg",
+}
+local FRAME_ART_KEYS = { "Bg", "bg", "Background", "TopTileStreaks", "TitleBg", "FrameBg" }
+local FRAME_INSET_KEYS = { "LeftInset", "RightInset", "BottomInset" }
+
 function S.Inset(frame, withBackdrop)
     if not frame or S.data(frame).inset then return end
-    for _, key in ipairs({
-        "InsetBorderTop", "InsetBorderTopLeft", "InsetBorderTopRight",
-        "InsetBorderBottom", "InsetBorderBottomLeft", "InsetBorderBottomRight",
-        "InsetBorderLeft", "InsetBorderRight", "Bg",
-    }) do
+    for _, key in ipairs(INSET_ART_KEYS) do
         local r = frame[key]
         if r and r.Hide then r:Hide() end
     end
@@ -3174,7 +3191,7 @@ function S.Frame(frame, keepChildArt)
     S.Portrait(frame)
     S.StripTextures(frame)
 
-    for _, key in ipairs({ "Bg", "bg", "Background", "TopTileStreaks", "TitleBg", "FrameBg" }) do
+    for _, key in ipairs(FRAME_ART_KEYS) do
         local r = frame[key]
         if r and r.SetAlpha then r:SetAlpha(0) end
     end
@@ -3204,7 +3221,7 @@ function S.Frame(frame, keepChildArt)
 
     local inset = frame.Inset or (name and _G[name .. "Inset"])
     if inset then S.Inset(inset) end
-    for _, key in ipairs({ "LeftInset", "RightInset", "BottomInset" }) do
+    for _, key in ipairs(FRAME_INSET_KEYS) do
         if frame[key] then S.Inset(frame[key]) end
     end
 
