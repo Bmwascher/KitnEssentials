@@ -277,10 +277,12 @@ function S.Kill(object)
     if object.Hide then object:Hide() end
 end
 
+-- GetRegions can return a secret region, which cannot be indexed, so it
+-- is skipped.
 local function ClearRegions(...)
     for i = 1, select("#", ...) do
         local r = (select(i, ...))
-        if r.GetObjectType and r:GetObjectType() == "Texture" then
+        if not issecretvalue(r) and r.GetObjectType and r:GetObjectType() == "Texture" then
             if r.SetTexture then r:SetTexture(S.ClearTexture) end
             if r.SetAtlas then r:SetAtlas("") end
         end
@@ -290,7 +292,8 @@ end
 local function StripRegions(kill, ...)
     for i = 1, select("#", ...) do
         local region = (select(i, ...))
-        if region.GetObjectType and region:GetObjectType() == "Texture" then
+        if not issecretvalue(region) and region.GetObjectType
+            and region:GetObjectType() == "Texture" then
             region:SetTexture(S.ClearTexture)
             if region.SetAtlas then region:SetAtlas("") end
             if kill and region.Hide then region:Hide() end
