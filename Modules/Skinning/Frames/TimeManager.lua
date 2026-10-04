@@ -2,7 +2,7 @@ local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G
 
-local function Skin()
+local function SkinClock()
     local tmf = _G.TimeManagerFrame
     if tmf then S.Frame(tmf) end
 
@@ -35,7 +35,9 @@ local function Skin()
         hover:SetPoint("BOTTOMRIGHT", swCheck, "BOTTOMRIGHT", -2, 2)
         swCheck:SetHighlightTexture(hover)
     end
+end
 
+local function SkinStopwatch()
     local sw = _G.StopwatchFrame
     if sw then
         S.StripTextures(sw)
@@ -68,4 +70,10 @@ local function Skin()
     end
 end
 
-S:Register("Blizzard_TimeManager", Skin, "TimeManager")
+-- The stopwatch opens on its own, without the clock window.
+local function Arm()
+    S.Defer(SkinClock, _G.TimeManagerFrame)
+    S.Defer(SkinStopwatch, _G.StopwatchFrame)
+end
+
+S:Register("Blizzard_TimeManager", Arm, "TimeManager")

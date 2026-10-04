@@ -2,6 +2,59 @@ local KE = select(2, ...)
 local S = KE.Skins
 local _G = _G
 
+local function SkinTokens()
+    local i = 1
+    while true do
+        local token = _G["MerchantToken" .. i]
+        if not token then break end
+        if not S.data(token).skinned then
+            local icon = token.Icon or token.icon
+            if icon then
+                icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                S.Icon(icon, true)
+            end
+            local count = token.Count or token.count
+            if count then S.SetFont(count) end
+            S.data(token).skinned = true
+        end
+        i = i + 1
+    end
+end
+
+local function OnUpdateRepairButtons()
+    local frame = _G.MerchantFrame
+    if _G.MerchantRepairAllButton and frame then
+        _G.MerchantRepairAllButton:ClearAllPoints()
+        _G.MerchantRepairAllButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", 90, 32)
+    end
+    if _G.MerchantRepairItemButton and _G.MerchantRepairAllButton then
+        _G.MerchantRepairItemButton:ClearAllPoints()
+        _G.MerchantRepairItemButton:SetPoint("RIGHT", _G.MerchantRepairAllButton, "LEFT", -5, 0)
+    end
+    if _G.MerchantSellAllJunkButton and _G.MerchantRepairAllButton then
+        _G.MerchantSellAllJunkButton:ClearAllPoints()
+        _G.MerchantSellAllJunkButton:SetPoint("RIGHT", _G.MerchantRepairAllButton, "LEFT", 117, 0)
+    end
+end
+
+local function OnUpdateMerchantInfo()
+    for i = 1, (_G.MERCHANT_ITEMS_PER_PAGE or 10) do
+        local button = _G["MerchantItem" .. i .. "ItemButton"]
+        local money = _G["MerchantItem" .. i .. "MoneyFrame"]
+        local currency = _G["MerchantItem" .. i .. "AltCurrencyFrame"]
+        if button and money and currency then
+            money:ClearAllPoints()
+            money:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 5, -3)
+            currency:ClearAllPoints()
+            if button.price and button.extendedCost then
+                currency:SetPoint("LEFT", money, "RIGHT", -8, 0)
+            else
+                currency:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 5, -3)
+            end
+        end
+    end
+end
+
 local function Skin()
     local frame = _G.MerchantFrame
     if not frame then return end
@@ -66,29 +119,7 @@ local function Skin()
     if _G.MerchantNextPageButton then S.ArrowButton(_G.MerchantNextPageButton, "right") end
     if _G.MerchantPageText then S.SetFont(_G.MerchantPageText) end
 
-    local function SkinTokens()
-        local i = 1
-        while true do
-            local token = _G["MerchantToken" .. i]
-            if not token then break end
-            if not S.data(token).skinned then
-                local icon = token.Icon or token.icon
-                if icon then
-                    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-                    S.Icon(icon, true)
-                end
-                local count = token.Count or token.count
-                if count then S.SetFont(count) end
-                S.data(token).skinned = true
-            end
-            i = i + 1
-        end
-    end
     SkinTokens()
-    if _G.MerchantFrame_UpdateCurrencies and not S.skinIndex.__merchantTokenHook then
-        S.skinIndex.__merchantTokenHook = true
-        hooksecurefunc("MerchantFrame_UpdateCurrencies", SkinTokens)
-    end
     if frame.FilterDropdown then S.DropDown(frame.FilterDropdown) end
 
     for i = 1, 12 do
@@ -102,43 +133,6 @@ local function Skin()
         local button = _G["MerchantItem" .. i .. "ItemButton"]
         if button and item then
             button:SetPoint("TOPLEFT", item, "TOPLEFT", 4, -4)
-        end
-    end
-
-    if _G.MerchantFrame_UpdateRepairButtons and not S.skinIndex.__merchantHooks then
-        S.skinIndex.__merchantHooks = true
-        hooksecurefunc("MerchantFrame_UpdateRepairButtons", function()
-            if _G.MerchantRepairAllButton then
-                _G.MerchantRepairAllButton:ClearAllPoints()
-                _G.MerchantRepairAllButton:SetPoint("BOTTOMRIGHT", frame, "BOTTOMLEFT", 90, 32)
-            end
-            if _G.MerchantRepairItemButton and _G.MerchantRepairAllButton then
-                _G.MerchantRepairItemButton:ClearAllPoints()
-                _G.MerchantRepairItemButton:SetPoint("RIGHT", _G.MerchantRepairAllButton, "LEFT", -5, 0)
-            end
-            if _G.MerchantSellAllJunkButton and _G.MerchantRepairAllButton then
-                _G.MerchantSellAllJunkButton:ClearAllPoints()
-                _G.MerchantSellAllJunkButton:SetPoint("RIGHT", _G.MerchantRepairAllButton, "LEFT", 117, 0)
-            end
-        end)
-        if _G.MerchantFrame_UpdateMerchantInfo then
-            hooksecurefunc("MerchantFrame_UpdateMerchantInfo", function()
-                for i = 1, (_G.MERCHANT_ITEMS_PER_PAGE or 10) do
-                    local button = _G["MerchantItem" .. i .. "ItemButton"]
-                    local money = _G["MerchantItem" .. i .. "MoneyFrame"]
-                    local currency = _G["MerchantItem" .. i .. "AltCurrencyFrame"]
-                    if button and money and currency then
-                        money:ClearAllPoints()
-                        money:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 5, -3)
-                        currency:ClearAllPoints()
-                        if button.price and button.extendedCost then
-                            currency:SetPoint("LEFT", money, "RIGHT", -8, 0)
-                        else
-                            currency:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 5, -3)
-                        end
-                    end
-                end
-            end)
         end
     end
 
@@ -172,6 +166,27 @@ local function Skin()
             end)
         end
     end
+
+    S.TabsSettle("MerchantFrameTab", 2)
 end
 
-S:RegisterEarly(Skin, "Merchant")
+-- The repair and money anchors are rewritten while the window is hidden,
+-- so their hooks exist from login.
+local function Arm()
+    local frame = _G.MerchantFrame
+    if not frame then return end
+    if _G.MerchantFrame_UpdateCurrencies and not S.skinIndex.__merchantTokenHook then
+        S.skinIndex.__merchantTokenHook = true
+        hooksecurefunc("MerchantFrame_UpdateCurrencies", SkinTokens)
+    end
+    if _G.MerchantFrame_UpdateRepairButtons and not S.skinIndex.__merchantHooks then
+        S.skinIndex.__merchantHooks = true
+        hooksecurefunc("MerchantFrame_UpdateRepairButtons", OnUpdateRepairButtons)
+        if _G.MerchantFrame_UpdateMerchantInfo then
+            hooksecurefunc("MerchantFrame_UpdateMerchantInfo", OnUpdateMerchantInfo)
+        end
+    end
+    S.Defer(Skin, frame)
+end
+
+S:RegisterEarly(Arm, "Merchant")

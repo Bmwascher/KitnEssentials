@@ -1742,6 +1742,11 @@ function S.TabSetSelected(tab, selected)
     end
 end
 
+function S.TabSettleSeam(tab)
+    local settle = tab and S.data(tab).settleSeam
+    if settle then settle() end
+end
+
 -- is this one of Blizzard's modern TabSystem tabs?
 -- TabSystemMixin owns their geometry through the MANAGED LAYOUT system:
 -- AddTab/SetTabShown call MarkDirty(), and LayoutMixin resolves size and
@@ -1906,6 +1911,7 @@ function S.Tab(tab)
                                 tab:AdjustPointsOffset(0, delta)
                             end
                         end
+                        d2.settleSeam = settle
                         C_Timer.After(0, settle)
                         tab:HookScript("OnShow", function()
                             settle()
@@ -3244,6 +3250,19 @@ function S.Tabs(prefix, maxN)
     end
 end
 
+-- A first-show body skins its tabs after their own OnShow has run, so it
+-- makes the gap and seam catch-up those OnShow hooks would have made, in
+-- their order.
+function S.TabsSettle(prefix, maxN)
+    for i = 1, (maxN or 12) do
+        local tab = _G[prefix .. i]
+        if tab then
+            S.TabSetSelected(tab)
+            S.TabSettleSeam(tab)
+        end
+    end
+end
+
 function S:IsActive()
     if KE:ShouldNotLoadModule() then return false end
     local db = KE.db and KE.db.profile and KE.db.profile.Skinning
@@ -3288,9 +3307,10 @@ local function aggregateStatus(key)
 
     local errorStatus
     local allPending, allOk, allDisabled, allSuppressed = true, true, true, true
+    local anyArmed, okOrArmed = false, true
     for _, record in ipairs(records) do
         local status = record.status
-        if status ~= "pending" and status ~= "ok"
+        if status ~= "pending" and status ~= "ok" and status ~= "armed"
             and status ~= "disabled" and status ~= "suppressed" then
             errorStatus = errorStatus or status
         end
@@ -3298,11 +3318,14 @@ local function aggregateStatus(key)
         if status ~= "ok" then allOk = false end
         if status ~= "disabled" then allDisabled = false end
         if status ~= "suppressed" then allSuppressed = false end
+        if status == "armed" then anyArmed = true end
+        if status ~= "ok" and status ~= "armed" then okOrArmed = false end
     end
 
     if errorStatus then return errorStatus end
     if allPending then return "pending" end
     if allOk then return "ok" end
+    if anyArmed and okOrArmed then return "armed" end
     if allDisabled then return "disabled" end
     if allSuppressed then return "suppressed" end
     return "partial"
@@ -3355,6 +3378,131 @@ end
 S.skinStatus = {}
 S.skinIndex = {}
 
+-- First-show deferral. A registered function arms a body on its window's
+-- OnShow; the body runs once, inside that Show() and after Blizzard's own
+-- handler, which is the only moment a skin may touch a ScrollBox-backed
+-- window without becoming the cause of its first layout.
+local runningRecord
+local armByBody = {}
+local NO_KEY = {}
+
+local function pendingArms(record)
+    if not record.arms then return 0 end
+    local n = 0
+    for _, arm in ipairs(record.arms) do
+        if not arm.done then n = n + 1 end
+    end
+    return n
+end
+
+local function settleRecord(record, errStatus)
+    if errStatus then
+        record.armError = record.armError or errStatus
+        record.status = record.armError
+    elseif record.status == "armed" and pendingArms(record) == 0 then
+        record.status = "ok"
+    end
+    local key = record.entry.key
+    S.skinStatus[key] = aggregateStatus(key)
+end
+
+-- One body can be armed by several registrations; each of them owns the arm
+-- and reports its pending and failed state.
+local function attachArm(arm, record)
+    if not record then return end
+    for _, owner in ipairs(arm.records) do
+        if owner == record then return end
+    end
+    arm.records[#arm.records + 1] = record
+    record.arms = record.arms or {}
+    record.arms[#record.arms + 1] = arm
+    if arm.err then record.armError = record.armError or arm.err end
+end
+
+local function failArm(arm, err)
+    arm.err = arm.err or ("ERROR: " .. tostring(err))
+    local first = arm.records[1]
+    local tag = first and ("[" .. first.entry.key .. "] ") or ""
+    KE:Print("|cffff0000KE SKIN ERROR (report this line):|r " .. tag .. tostring(err))
+    for _, record in ipairs(arm.records) do settleRecord(record, arm.err) end
+end
+
+local Arm = {}
+Arm.__index = Arm
+
+function Arm:Run()
+    if self.done then return end
+    self.done = true
+    local ok, err = pcall(self.body)
+    if ok then
+        for _, record in ipairs(self.records) do settleRecord(record) end
+    else
+        failArm(self, err)
+    end
+    local queue = self.queue
+    self.replayed = true
+    self.queue = nil
+    self.late = nil
+    -- Each held call is replayed under its own pcall: one that raises is
+    -- reported and the rest still run.
+    for _, call in ipairs(queue) do
+        local replayed, replayErr = pcall(call.handler, unpack(call, 1, call.n))
+        if not replayed then failArm(self, replayErr) end
+    end
+end
+
+-- Keyed on the first argument, so it only suits hooks on global functions
+-- whose first argument is the object being styled.
+function Arm:Late(handler)
+    local arm = self
+    return function(...)
+        if arm.replayed then return handler(...) end
+        local key = (...)
+        if key == nil then key = NO_KEY end
+        local byKey = arm.late[handler]
+        if not byKey then byKey = {}; arm.late[handler] = byKey end
+        local call = byKey[key]
+        if not call then
+            call = { handler = handler }
+            byKey[key] = call
+            arm.queue[#arm.queue + 1] = call
+        end
+        call.n = select("#", ...)
+        for i = 1, call.n do call[i] = (select(i, ...)) end
+    end
+end
+
+-- With no usable trigger the window does not exist, so the body can never
+-- run: the arm returned is already spent and is not remembered.
+function S.Defer(body, ...)
+    local arm = armByBody[body]
+    if arm then
+        attachArm(arm, runningRecord)
+        return arm
+    end
+    arm = setmetatable({ body = body, queue = {}, late = {}, records = {} }, Arm)
+
+    local function onShow() arm:Run() end
+    local hooked, visible = false, false
+    for i = 1, select("#", ...) do
+        local frame = (select(i, ...))
+        if type(frame) == "table" and frame.HookScript then
+            frame:HookScript("OnShow", onShow)
+            hooked = true
+            if frame.IsVisible and frame:IsVisible() then visible = true end
+        end
+    end
+    if not hooked then
+        arm.done, arm.replayed, arm.queue, arm.late = true, true, nil, nil
+        return arm
+    end
+
+    armByBody[body] = arm
+    attachArm(arm, runningRecord)
+    if visible then arm:Run() end
+    return arm
+end
+
 local function runList(list)
     if not list then return end
     for _, entry in ipairs(list) do
@@ -3362,9 +3510,17 @@ local function runList(list)
         local record = entryRecords[entry]
 
         if SkinEnabled(entry.key, entry.addon) then
+            -- Restored, not cleared: a registered function can load an addon
+            -- whose skins dispatch inside this call.
+            local outerRecord = runningRecord
+            runningRecord = record
             local ok, err = pcall(entry.fn)
+            runningRecord = outerRecord
             if entry.key then
                 local status = ok and "ok" or ("ERROR: " .. tostring(err))
+                if ok and record and record.arms then
+                    status = record.armError or (pendingArms(record) > 0 and "armed") or "ok"
+                end
                 if record then
                     record.status = status
                     S.skinStatus[entry.key] = aggregateStatus(entry.key)
@@ -3418,6 +3574,7 @@ local STATUS_COLOR = {
     suppressed = "|cff33ccff",
     pending    = "|cffffff00",
     partial    = "|cffff9900",
+    armed      = "|cffcc99ff",
 }
 local function statusColor(status)
     return STATUS_COLOR[status] or "|cffff0000"
@@ -3448,6 +3605,9 @@ function S.DebugVerify()
                     -- inside a concat becomes nil, which throws.
                     local _, euiKey = S.GetSuppressionState(key)
                     shown = "suppressed by EllesmereUI (" .. (euiKey or record.suppressor or "unknown") .. ")"
+                end
+                if record.status == "armed" then
+                    shown = ("armed (%d of %d run)"):format(#record.arms - pendingArms(record), #record.arms)
                 end
                 local label = key .. " #" .. record.id .. " (" .. (record.addon or "early") .. ")"
                 print(("|cffFF008CKitn|r|cffffffffEssentials:|r %-32s %s%s|r"):format(label, statusColor(record.status), shown))
@@ -3528,6 +3688,14 @@ function S.DebugRerun(key, selector)
         local who = record.addon and (record.addon .. " has not loaded") or "this registration has not run"
         print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key .. " #" .. record.id .. " has not dispatched -- "
             .. who .. " this session, so there is nothing to rerun yet.")
+        return
+    end
+
+    -- A rerun reaches only the login part. With nothing skinned yet it would
+    -- install that part's hooks again and report a skin that has not happened.
+    if record.status == "armed" then
+        print("|cffFF008CKitn|r|cffffffffEssentials:|r " .. key .. " #" .. record.id
+            .. " has not run yet -- open its window first.")
         return
     end
 

@@ -33,4 +33,8 @@ local function Skin()
     end
 end
 
-S:RegisterEarly(Skin, "Petition")
+local function Arm()
+    S.Defer(Skin, _G.PetitionFrame)
+end
+
+S:RegisterEarly(Arm, "Petition")
