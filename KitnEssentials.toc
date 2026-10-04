@@ -4,6 +4,7 @@
 ## Version: @project-version@
 ## X-Manual-Version: 4.8.25
 ## SavedVariables: KitnEssentialsDB, KitnEssentialsOptimizeDB
+## SavedVariablesPerCharacter: KitnEssentialsCharDB
 ## Interface: 120100
 ## OptionalDeps: Ace3, LibSharedMedia-3.0, ElvUI
 ## IconTexture: Interface\AddOns\KitnEssentials\Media\Icon\KES

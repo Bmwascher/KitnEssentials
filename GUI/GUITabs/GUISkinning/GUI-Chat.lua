@@ -818,6 +818,26 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
         }), 0.5)
         card13:AddRow(row13a, Theme.rowHeight)
 
+        local row13e = GUIFrame:CreateRow(card13.content, Theme.rowHeight)
+        row13e:AddWidget(GUIFrame:CreateButton(row13e, "Clear Other Characters", {
+            width = 180,
+            tooltip = "Deletes the chat older versions saved in the shared account file for your other characters. A character that has logged in since this update keeps its own saved chat, which this cannot reach.",
+            callback = function()
+                KE:CreatePrompt("Clear Other Characters",
+                    "Delete every other character's saved chat from the shared account file? This cannot be undone.",
+                    false, nil, false, nil, nil, nil, nil,
+                    function()
+                        local characters, lines = KE:ClearOtherCharsChatHistory()
+                        if characters > 0 then
+                            KE:Print(string.format("Removed saved chat for %d other characters (%d lines).", characters, lines))
+                        else
+                            KE:Print("No other characters have saved chat in the account file.")
+                        end
+                    end, nil, "Clear", "Cancel")
+            end,
+        }), 0.5)
+        card13:AddRow(row13e, Theme.rowHeight)
+
         -- A type switched off is UNREGISTERED, not filtered per message, so a
         -- toggle has to tell the module to rebuild its registrations.
         local types = historyDb.ShowTypes

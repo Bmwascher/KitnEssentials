@@ -2785,12 +2785,12 @@ function L.loadChatHistory(overrides)
     local caught = {}
     _G.geterrorhandler = function() return function(err) caught[#caught + 1] = err end end
 
+    _G.KitnEssentialsCharDB = { ChatHistory = {}, ChatTypingHistory = {} }
     local KE = {
         -- InsideInstance prints once when it cannot read the API, so the seed
         -- needs Print or three of the specs below throw instead of asserting.
         Print = function() end,
         db = {
-            char = { ChatHistory = {}, ChatTypingHistory = {} },
             profile = {
                 Skinning = {
                     Chat = { Enabled = true },
@@ -2808,6 +2808,7 @@ function L.loadChatHistory(overrides)
         },
     }
     helpers.loadModule("Core/Secret.lua", KE)
+    helpers.loadModule("Core/Defaults.lua", KE)
     helpers.loadModule("Modules/Skinning/ChatHistory.lua", KE)
 
     local CH = modules["ChatHistory"]

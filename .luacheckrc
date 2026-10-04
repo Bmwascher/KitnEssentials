@@ -63,6 +63,7 @@ ignore = {
 globals = {
     "KitnEssentialsDB",
     "KitnEssentialsOptimizeDB",
+    "KitnEssentialsCharDB",
     "KitnCommands",
     "KitnEssentialsAPI",
     "KitnSlashLines",

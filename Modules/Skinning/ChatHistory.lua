@@ -70,11 +70,16 @@ function CH:UpdateDB()
     self.db = KE.db.profile.Skinning.ChatHistory
 end
 
-local function Store()
-    local char = KE.db and KE.db.char
-    if not char then return nil end
-    if type(char.ChatHistory) ~= "table" then char.ChatHistory = {} end
-    return char.ChatHistory
+-- Only a write creates the table, so a character that never stores a line
+-- leaves nothing in its saved file.
+local function Store(create)
+    local store = KE:GetCharStore(create)
+    if not store then return nil end
+    if type(store.ChatHistory) ~= "table" then
+        if not create then return nil end
+        store.ChatHistory = {}
+    end
+    return store.ChatHistory
 end
 CH.Store = Store
 
@@ -231,11 +236,11 @@ end
 function CH:SaveChatHistory(event, ...)
     if not self:ShouldStore(event) then return end
 
-    local data = Store()
-    if not data then return end
-
     local row = self:PackRow(event, ...)
     if not row then return end
+
+    local data = Store(true)
+    if not data then return end
 
     tinsert(data, row)
 
@@ -258,13 +263,14 @@ function CH:RecordTypedLine(text)
     if type(text) ~= "string" or text == "" then return false end
     if not self:IsPersistenceActive() then return false end
 
-    local char = KE.db and KE.db.char
-    if not char then return false end
-    if type(char.ChatTypingHistory) ~= "table" then char.ChatTypingHistory = {} end
+    local store = KE:GetCharStore(true)
+    if not store then return false end
+    if type(store.ChatTypingHistory) ~= "table" then store.ChatTypingHistory = {} end
 
-    tinsert(char.ChatTypingHistory, text)
-    while #char.ChatTypingHistory > TYPING_CAP do
-        tremove(char.ChatTypingHistory, 1)
+    local typed = store.ChatTypingHistory
+    tinsert(typed, text)
+    while #typed > TYPING_CAP do
+        tremove(typed, 1)
     end
 
     return true
@@ -274,8 +280,8 @@ function CH:ClearHistory()
     local data = Store()
     if data then wipe(data) end
 
-    local char = KE.db and KE.db.char
-    if char and type(char.ChatTypingHistory) == "table" then wipe(char.ChatTypingHistory) end
+    local store = KE:GetCharStore()
+    if store and type(store.ChatTypingHistory) == "table" then wipe(store.ChatTypingHistory) end
 
     -- The live list too, or the button throws away the saved copy while every
     -- edit box still recalls the same lines. CHAT.TypingHistory is the table
