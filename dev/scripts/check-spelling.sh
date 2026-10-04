@@ -27,43 +27,93 @@ gated_stems='normalis|initialis|organis|recognis|realis|customis|optimis|minimis
 gated_suf='(e|ed|es|ing|ation|ations|ers?|able|ably|ability)'
 doubled_stems='cancell|travell|modell|labell|levell|signall|fuell|diall|totall|channell'
 doubled_suf='(ed|ing|ers?|able)'
-whole='catalogue|dialogue|defence|offence|licence|pretence|artefact|mould|judgement|acknowledgement|fulfil|fulfilment|skilful|enrol|enrolment|instalment|whilst|amongst|learnt|spelt|afterwards|towards|ageing|aluminium|storey|sceptic|manoeuvre|anticlockwise|tyre|kerb|programme'
+whole='catalogue|dialogue|defence|offence|licence|pretence|artefact|mould|judgement|acknowledgement|fulfil|fulfilment|skilful|enrol|enrolment|instalment|whilst|amongst|learnt|spelt|afterwards|towards|ageing|aluminium|storey|sceptic|manoeuvre|anticlockwise|tyre|kerb|programme|centring|analogue'
 
-# Capitalized twin of an alternation: colour|grey -> Colour|Grey.
+# Capitalized and uppercase twins of an alternation: colour|grey ->
+# Colour|Grey and COLOUR|GREY, so a constant such as CANCELLED_AT or
+# NORMALISE_FREQUENCY is caught like the camelCase forms.
 cap() { printf '%s' "$1" | sed -E 's/(^|\||\()([a-z])/\1\u\2/g'; }
 upper() { printf '%s' "$1" | tr 'a-z' 'A-Z'; }
 
 pattern="($sub|$(cap "$sub")|$(upper "$sub"))"
 pattern="$pattern|($gated_stems|$(cap "$gated_stems"))$gated_suf([^a-z]|$)"
+pattern="$pattern|($(upper "$gated_stems"))$(upper "$gated_suf")([^A-Za-z]|$)"
 pattern="$pattern|($doubled_stems|$(cap "$doubled_stems"))$doubled_suf([^a-z]|$)"
-pattern="$pattern|(^|[^A-Za-z])($whole|$(cap "$whole"))s?([^a-z]|$)"
+pattern="$pattern|($(upper "$doubled_stems"))$(upper "$doubled_suf")([^A-Za-z]|$)"
+pattern="$pattern|(^|[^A-Za-z])($whole)s?([^a-z]|$)"
+pattern="$pattern|($(cap "$whole"))s?([^a-z]|$)"
+pattern="$pattern|(^|[^A-Za-z])($(upper "$whole"))S?([^A-Za-z]|$)"
 
-# Allowed: Blizzard globals, game item names, and the GUI search alias that
-# lets a player type the British word.
+tag="check-spelling"
+[ "${1:-}" = "--staged" ] && tag="pre-commit"
+
+printf '' | grep -qE "$pattern"
+if [ $? -gt 1 ]; then
+    echo "[$tag] BLOCKED: the spelling pattern does not compile." >&2
+    exit 1
+fi
+
+# Allowed, scrubbed from the scanned lines (each is file:line:text):
+# Blizzard globals, game item names, the one American word that carries a
+# British substring, and the search alias on the Dark Theme page that lets a
+# player type the British word, scoped to that file alone.
 scrub() {
-    sed -E 's/GameFontNormalLeftGrey|Draught of|"colour"/ALLOWED/g'
+    sed -E 's/GameFontNormalLeftGrey|Draught of|[Gg]reyhound|GREYHOUND/ALLOWED/g; /^GUI\/GUIMain\/GUI-MainFrame\.lua:/ s/"colour"|"maximised"/ALLOWED/g'
 }
 
-if [ "${1:-}" = "--staged" ]; then
-    # file:line of each added line, built from the hunk headers so the
-    # report points at the staged file.
-    hits="$(git diff -U0 --no-color --cached -- . ':!Libs' ':!References' ':!Media' ':!dev/scripts/check-spelling.sh' \
+# Third-party trees are not ours to spell; everything else tracked and
+# textual is scanned (git grep -I and the diff skip binaries on their own).
+paths=(. ':!Libs' ':!References' ':!dev/scripts/check-spelling.sh')
+
+if ! scan="$(mktemp)"; then
+    echo "[$tag] BLOCKED: could not create a scratch file." >&2
+    exit 1
+fi
+trap 'rm -f "$scan"' EXIT
+
+if [ "$tag" = "pre-commit" ]; then
+    # file:line of each added line, rebuilt from the hunk headers so the
+    # report points at the staged file. A "+++ " line is a header only
+    # between a "diff --git" line and its first hunk: an added source line
+    # that itself begins with ++ renders as "+++ " too and stays content.
+    git diff -U0 --no-color --src-prefix=a/ --dst-prefix=b/ --cached -- "${paths[@]}" \
         | awk '
-            /^\+\+\+ / { file = substr($0, 7); next }
-            /^@@/ { split($3, a, ","); line = substr(a[1], 2) + 0; next }
+            /^diff --git / { header = 1; next }
+            header && /^\+\+\+ / { file = substr($0, 7); header = 0; next }
+            /^@@/ { header = 0; split($3, a, ","); line = substr(a[1], 2) + 0; next }
             /^\+/ { print file ":" line ":" substr($0, 2); line++; next }
             /^-/ { next }
             /^ / { line++ }
-        ' | scrub | grep -E "$pattern" || true)"
-    tag="pre-commit"
+        ' > "$scan"
+    status=("${PIPESTATUS[@]}")
+    if [ "${status[0]}" -ne 0 ] || [ "${status[1]}" -ne 0 ]; then
+        echo "[$tag] BLOCKED: could not read the staged diff." >&2
+        exit 1
+    fi
 else
-    hits="$(git ls-files -z -- . ':!Libs' ':!References' ':!Media' ':!dev/scripts/check-spelling.sh' \
-        | xargs -0 grep -InE "$pattern" -- 2>/dev/null \
-        | scrub | grep -E "$pattern" || true)"
-    tag="check-spelling"
+    git grep -nIE "$pattern" -- "${paths[@]}" > "$scan"
+    st=$?
+    if [ "$st" -gt 1 ]; then
+        echo "[$tag] BLOCKED: git grep failed (exit $st)." >&2
+        exit 1
+    fi
 fi
 
-[ -z "$hits" ] && exit 0
+# The scrub and the grep are checked separately: under pipefail a failed
+# sed with no output would hide behind grep's "no match" exit 1.
+if ! scrubbed="$(scrub < "$scan")"; then
+    echo "[$tag] BLOCKED: the allow-list scrub failed." >&2
+    exit 1
+fi
+# grep: 0 hits, 1 none, anything else a failure that must not read as clean.
+hits="$(printf '%s\n' "$scrubbed" | grep -E "$pattern")"
+st=$?
+if [ "$st" -gt 1 ]; then
+    echo "[$tag] BLOCKED: the spelling scan failed (exit $st)." >&2
+    exit 1
+fi
+[ "$st" -eq 1 ] && exit 0
+
 echo "[$tag] BLOCKED: British spelling; the project writes American English (dev/README.md, Spelling):" >&2
 printf '%s\n' "$hits" | sed -n '1,20p' >&2
 n="$(printf '%s\n' "$hits" | wc -l)"
