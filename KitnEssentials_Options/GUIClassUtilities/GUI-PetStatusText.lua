@@ -63,50 +63,68 @@ GUIFrame:RegisterContent("PetStatusText", function(scrollChild, yOffset)
     card1:AddLabel("|cffffd100For Hunters, Warlocks, Death Knights and Mages.|r Shows a warning text " ..
         "when your pet is missing, dead, on passive, or not the pet your spec wants. Each state has " ..
         "its own text and color below.")
+
+    local attachRow = GUIFrame:CreateRow(card1.content, Theme.rowHeightLast)
+    local attachCheck = GUIFrame:CreateCheckbox(attachRow, "Attach to Combat Texts", {
+        value = db.AttachToCombatTexts == true,
+        tooltip = "Show the pet text as a line of the Combat Texts messages and move with them, "
+            .. "instead of using a separate anchor.",
+        callback = function(checked)
+            db.AttachToCombatTexts = checked
+            ApplySettings()
+            GUIFrame:RefreshContent()
+        end,
+    })
+    attachRow:AddWidget(attachCheck, 1)
+    manager:Register(attachCheck, "all")
+    card1:AddRow(attachRow, Theme.rowHeightLast, 0)
     yOffset = card1:GetNextOffset()
 
-    ----------------------------------------------------------------
-    -- Card 2: Position Settings
-    ----------------------------------------------------------------
-    local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            anchorFrameType = "anchorFrameType",
-            anchorFrameFrame = "ParentFrame",
-            selfPoint = "AnchorFrom",
-            anchorPoint = "AnchorTo",
-            xOffset = "XOffset",
-            yOffset = "YOffset",
-            strata = "Strata",
-        },
-        showAnchorFrameType = true,
-        showStrata = true,
-        onChangeCallback = ApplySettings,
-    })
+    -- Combat Texts owns the anchor and the font while attached.
+    if not db.AttachToCombatTexts then
+        ----------------------------------------------------------------
+        -- Card 2: Position Settings
+        ----------------------------------------------------------------
+        local posCard, posOffset = GUIFrame:CreatePositionCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                anchorFrameType = "anchorFrameType",
+                anchorFrameFrame = "ParentFrame",
+                selfPoint = "AnchorFrom",
+                anchorPoint = "AnchorTo",
+                xOffset = "XOffset",
+                yOffset = "YOffset",
+                strata = "Strata",
+            },
+            showAnchorFrameType = true,
+            showStrata = true,
+            onChangeCallback = ApplySettings,
+        })
 
-    if posCard.positionWidgets then
-        manager:RegisterGroup(posCard.positionWidgets, "all")
-    end
-    manager:Register(posCard, "all")
-    yOffset = posOffset
+        if posCard.positionWidgets then
+            manager:RegisterGroup(posCard.positionWidgets, "all")
+        end
+        manager:Register(posCard, "all")
+        yOffset = posOffset
 
-    ----------------------------------------------------------------
-    -- Card 3: Font Settings
-    ----------------------------------------------------------------
-    local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
-        db = db,
-        dbKeys = {
-            fontFace = "FontFace",
-            fontSize = "FontSize",
-            fontOutline = "FontOutline",
-        },
-        onChangeCallback = ApplySettings,
-    })
-    manager:Register(fontCard, "all")
-    if fontWidgets then
-        manager:RegisterGroup(fontWidgets, "all")
+        ----------------------------------------------------------------
+        -- Card 3: Font Settings
+        ----------------------------------------------------------------
+        local fontCard, fontOffset, fontWidgets = GUIFrame:CreateFontSettingsCard(scrollChild, yOffset, {
+            db = db,
+            dbKeys = {
+                fontFace = "FontFace",
+                fontSize = "FontSize",
+                fontOutline = "FontOutline",
+            },
+            onChangeCallback = ApplySettings,
+        })
+        manager:Register(fontCard, "all")
+        if fontWidgets then
+            manager:RegisterGroup(fontWidgets, "all")
+        end
+        yOffset = fontOffset
     end
-    yOffset = fontOffset
 
     ----------------------------------------------------------------
     -- Card 4: State Settings

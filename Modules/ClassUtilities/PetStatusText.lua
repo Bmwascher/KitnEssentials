@@ -10,6 +10,7 @@ local KE = select(2, ...)
 if not KitnEssentials then return end
 
 ---@class PetStatusText: AceModule, AceEvent-3.0
+---@field attachMessage string? the Combat Texts message, registered only while attached
 local PS = KitnEssentials:NewModule("PetStatusText", "AceEvent-3.0")
 
 local UnitClass = UnitClass
@@ -56,6 +57,7 @@ local PET_STATUS = {
 }
 
 local UPDATE_DEBOUNCE = 0.15
+local PET_LINE_KEY = "petStatus"
 
 PS.frame = nil
 PS.text = nil
@@ -288,6 +290,37 @@ function PS:CreateFrame()
     self.frame:Hide()
 end
 
+local function GetAttachTarget()
+    if not PS.db.AttachToCombatTexts then return nil end
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm and cm.AcceptsExternalLines and cm:AcceptsExternalLines() then return cm end
+    return nil
+end
+
+function PS:HideExternalLine()
+    if not self.externalShown then return end
+    self.externalShown = false
+    local cm = KitnEssentials:GetModule("CombatTexts", true)
+    if cm and cm.HideExternalLine then cm:HideExternalLine(PET_LINE_KEY) end
+end
+
+function PS:Paint(text, r, g, b, a)
+    local cm = text and GetAttachTarget()
+    if cm and cm:ShowExternalLine(PET_LINE_KEY, text, r, g, b, a) then
+        self.externalShown = true
+        self.frame:Hide()
+        return
+    end
+    self:HideExternalLine()
+    if text then
+        self.text:SetText(text)
+        self.text:SetTextColor(r, g, b, a)
+        self.frame:Show()
+    else
+        self.frame:Hide()
+    end
+end
+
 function PS:UpdatePetText()
     if not self.frame then return end
     -- The preview owns the frame while it is up; a live pet event must not
@@ -298,18 +331,10 @@ function PS:UpdatePetText()
     -- rather than leave the last painted state frozen on screen. A reminder
     -- that cannot evaluate must not nag.
     local ok, _, message, color = pcall(CheckPetStatus)
-    if not ok then
-        self.frame:Hide()
-        return
-    end
-
-    if message and color then
-        self.text:SetText(message)
-        local r, g, b, a = KE:ResolveColor(color, { 1, 1, 1, 1 })
-        self.text:SetTextColor(r, g, b, a)
-        self.frame:Show()
+    if ok and message and color then
+        self:Paint(message, KE:ResolveColor(color, { 1, 1, 1, 1 }))
     else
-        self.frame:Hide()
+        self:Paint(nil)
     end
 end
 
@@ -333,14 +358,34 @@ end
 ---------------------------------------------------------------------------------
 -- Settings
 ---------------------------------------------------------------------------------
+-- Subscribed only while attached, so a player who never attaches does no
+-- work when Combat Texts turns on or off.
+function PS:UpdateAttachSubscription()
+    local cm = self._tracking and self.db.AttachToCombatTexts
+        and KitnEssentials:GetModule("CombatTexts", true)
+    local message = cm and cm.CHANGED_MESSAGE
+    if message and not self.attachMessage then
+        self:RegisterMessage(message, "ApplySettings")
+        self.attachMessage = message
+    elseif not message and self.attachMessage then
+        self:UnregisterMessage(self.attachMessage)
+        self.attachMessage = nil
+    end
+end
+
 function PS:ApplySettings()
     if not self.frame then return end
 
     KE:ApplyFramePosition(self.frame, self.db.Position, self.db)
     KE:ApplyFontToText(self.text, self.db.FontFace, self.db.FontSize, self.db.FontOutline)
+    self:RegWithEditMode()
+    self:UpdateAttachSubscription()
 
     if self.isPreview then
         self:ShowPreview(self.previewState)
+    elseif self._tracking and (self.db.AttachToCombatTexts or self.externalShown) then
+        -- Only the attach state can move the live text between homes.
+        self:UpdatePetText()
     end
 end
 
@@ -348,18 +393,27 @@ end
 -- Edit Mode
 ---------------------------------------------------------------------------------
 function PS:RegWithEditMode()
-    if KE.EditMode and not self.editModeRegistered then
-        KE.EditMode:RegisterElement({
-            key = "PetStatusText", displayName = "Pet Status Text", frame = self.frame,
-            module = self,
-            getPosition = function() return self.db.Position end,
-            setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
-            getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
-            guiPath = "StatusTexts",
-            guiTab = "PetStatusText",
-        })
-        self.editModeRegistered = true
+    if not KE.EditMode then return end
+    -- Attached, Combat Texts owns the spot; a second mover for it would fight
+    -- that module's own.
+    if GetAttachTarget() then
+        if self.editModeRegistered then
+            KE.EditMode:UnregisterElement("PetStatusText")
+            self.editModeRegistered = false
+        end
+        return
     end
+    if self.editModeRegistered then return end
+    KE.EditMode:RegisterElement({
+        key = "PetStatusText", displayName = "Pet Status Text", frame = self.frame,
+        module = self,
+        getPosition = function() return self.db.Position end,
+        setPosition = function(pos) self.db.Position = pos; KE:ApplyFramePosition(self.frame, self.db.Position, self.db) end,
+        getParentFrame = function() return KE:ResolveAnchorFrame(self.db.anchorFrameType, self.db.ParentFrame) end,
+        guiPath = "StatusTexts",
+        guiTab = "PetStatusText",
+    })
+    self.editModeRegistered = true
 end
 
 ---------------------------------------------------------------------------------
@@ -392,6 +446,12 @@ function PS:ShowPreview(state)
         r, g, b, a = KE:ResolveColor(self.db.MissingColor, { 1, 0.82, 0, 1 })
     end
 
+    if GetAttachTarget() then
+        self:Paint(previewText, r, g, b, a)
+        return
+    end
+    self:HideExternalLine()
+
     self.text:SetText(previewText)
     self.text:SetTextColor(r, g, b, a)
 
@@ -409,6 +469,7 @@ function PS:HidePreview()
         self:UpdatePetText()
     else
         if self.frame then self.frame:Hide() end
+        self:HideExternalLine()
     end
 end
 
@@ -429,7 +490,6 @@ function PS:OnEnable()
 
     self:CreateFrame()
     self:ApplySettings()
-    self:RegWithEditMode()
 
     self._tracking = true
     self._updatePending = false
@@ -454,6 +514,7 @@ function PS:OnEnable()
     -- Mounting hides the text, and without this nothing re-checks on dismount.
     self:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED", "QueueUpdate")
     self:RegisterEvent("PET_BAR_UPDATE", "QueueUpdate")
+    self:UpdateAttachSubscription()
 
     self:UpdatePetText()
 end
@@ -462,5 +523,7 @@ function PS:OnDisable()
     self._tracking = false
     self._updatePending = false
     self:UnregisterAllEvents()
+    self:UpdateAttachSubscription()
     if self.frame then self.frame:Hide() end
+    self:HideExternalLine()
 end
