@@ -1700,14 +1700,9 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
         ApplyStrip()
     end)
 
-    card1:AddLabel("Shows your recent casts as a row of icons, newest first, each fading a few " ..
-        "seconds after the cast. It shows only while the Damage Meter shows.\n\n" ..
-        "What shows: your spellbook spells and racials; potions, trinkets and other items used " ..
-        "from your bags or equipped gear, plus toys and other abilities you press that are outside " ..
-        "your spellbook (with Include Items and Toys on); your pet's spells (except those on " ..
-        "autocast, green border); and casts that were interrupted or failed after they started, " ..
-        "grayed with a red X. Instant presses that fail, and effects the game casts for you " ..
-        "without a press, do not show.")
+    card1:AddLabel("Shows your recent casts as a row of icons, newest first, while the Damage " ..
+        "Meter shows. Your spellbook spells and racials always show; the checkboxes below add " ..
+        "the rest.")
 
     yOffset = card1:GetNextOffset()
 
@@ -1720,9 +1715,11 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     local cardCasts = GUIFrame:CreateCard(scrollChild, "Casts", yOffset)
     manager:Register(cardCasts, "all")
 
-    local rowCasts = GUIFrame:CreateRow(cardCasts.content, Theme.rowHeightLast)
+    local rowCasts = GUIFrame:CreateRow(cardCasts.content, Theme.rowHeight)
     local itemsChk = GUIFrame:CreateCheckbox(rowCasts, "Include Items and Toys", {
         value = sh.IncludeItems ~= false,
+        tooltip = "Potions, trinkets and other items used from your bags or equipped gear, plus " ..
+            "toys and other abilities you press that are outside your spellbook.",
         callback = function(checked) sh.IncludeItems = checked; ApplyStrip() end,
     })
     rowCasts:AddWidget(itemsChk, 0.33)
@@ -1730,6 +1727,7 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
 
     local petChk = GUIFrame:CreateCheckbox(rowCasts, "Include Pet Spells", {
         value = sh.IncludePet ~= false,
+        tooltip = "Your pet's spells, with a green border. Spells left on autocast do not show.",
         callback = function(checked) sh.IncludePet = checked; ApplyStrip() end,
     })
     rowCasts:AddWidget(petChk, 0.33)
@@ -1737,11 +1735,14 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
 
     local failedChk = GUIFrame:CreateCheckbox(rowCasts, "Show Failed Casts", {
         value = sh.ShowFailed ~= false,
+        tooltip = "Casts interrupted or failed after they started, grayed with a red X. Instant " ..
+            "presses that fail do not show.",
         callback = function(checked) sh.ShowFailed = checked; ApplyStrip() end,
     })
     rowCasts:AddWidget(failedChk, 0.34)
     manager:Register(failedChk, "all")
-    cardCasts:AddRow(rowCasts, Theme.rowHeightLast, 0)
+    cardCasts:AddRow(rowCasts, Theme.rowHeight)
+    cardCasts:AddNote("Effects the game casts for you without a press never show.")
 
     yOffset = cardCasts:GetNextOffset()
 
@@ -1823,6 +1824,26 @@ local function BuildSpellHistoryTab(scrollChild, yOffset, db, manager)
     rowFade:AddWidget(fadeSlider, 1)
     manager:Register(fadeSlider, "all")
     cardFade:AddRow(rowFade, Theme.rowHeight)
+
+    local rowMode = GUIFrame:CreateRow(cardFade.content, Theme.rowHeight)
+    local modeDd = GUIFrame:CreateDropdown(rowMode, "Fade Mode", {
+        options = {
+            { key = "ICON",  text = "Per Icon" },
+            { key = "STRIP", text = "Whole Strip" },
+        },
+        value = sh.FadeMode == "ICON" and "ICON" or "STRIP",
+        callback = function(key) sh.FadeMode = key; ApplyStrip() end,
+    })
+    rowMode:AddWidget(modeDd, 0.5)
+    manager:Register(modeDd, "all")
+
+    local holdChk = GUIFrame:CreateCheckbox(rowMode, "Hold in Combat", {
+        value = sh.HoldInCombat ~= false,
+        callback = function(checked) sh.HoldInCombat = checked; ApplyStrip() end,
+    })
+    rowMode:AddWidget(holdChk, 0.5)
+    manager:Register(holdChk, "all")
+    cardFade:AddRow(rowMode, Theme.rowHeight)
     cardFade:AddNote("0 never fades: icons stay until newer casts push them out.")
 
     yOffset = cardFade:GetNextOffset()
