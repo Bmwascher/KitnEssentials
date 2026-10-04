@@ -1382,6 +1382,31 @@ describe("SkinAPI _CanCalibrateTab", function()
     end)
 end)
 
+describe("SkinAPI _IsCheckDecoration", function()
+    local S
+    before_each(function() S = L.loadSkinAPI().Skins end)
+
+    local function child(kind, withAlpha)
+        return {
+            SetAlpha = withAlpha and function() end or nil,
+            IsObjectType = function(_, t) return t == kind end,
+        }
+    end
+
+    it("spares the backdrop, a nested CheckButton and a child without SetAlpha, and hides any other child", function()
+        local ours = child("Frame", true)
+        for _, row in ipairs({
+            { ours,                       false },
+            { child("CheckButton", true), false },
+            { child("Frame", true),       true },
+            { child("Button", true),      true },
+            { child("Frame", false),      false },
+        }) do
+            assert.equal(row[2], S._IsCheckDecoration(row[1], ours))
+        end
+    end)
+end)
+
 describe("SkinAPI IconBorder", function()
     local S
 
