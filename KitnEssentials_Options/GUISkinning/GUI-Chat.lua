@@ -157,7 +157,6 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
 
     local historyDb = KE.db and KE.db.profile.Skinning.ChatHistory
     local function OnHistoryToggled(checked)
-        if not historyDb then return end
         historyDb.Enabled = checked
         if checked then
             KitnEssentials:EnableModule("ChatHistory")
@@ -823,10 +822,7 @@ GUIFrame:RegisterContent("Chat", function(scrollChild, yOffset)
     ----------------------------------------------------------------
     -- Cards 13 and 14: Chat History, Saved Chat Types
     ----------------------------------------------------------------
-    -- Grayed by History's own switch through the "history" group. History
-    -- saves nothing while the chat skin is off (CH:IsPersistenceActive), which
-    -- is why the skin-off page keeps its switch: see the stub above the early
-    -- return.
+    -- With the chat skin off these give way to the stub above the early return.
     if historyDb then
         manager:SetCondition("history", function() return historyDb.Enabled == true end)
 
