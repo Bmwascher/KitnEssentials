@@ -11,6 +11,7 @@ local Theme = KE.Theme
 -- Localization Setup
 local CreateFrame = CreateFrame
 local select = select
+local max = math.max
 
 ---------------------------------------------------------------------------------
 -- Widget Creation
@@ -395,6 +396,24 @@ end
 -- Theme.accent so it tracks the user's chosen theme.
 local BOX = 16
 local CELL = 22
+local LABEL_GAP = 8
+
+-- Right inset that ends the hit rect at the end of the label text, so the
+-- blank rest of the column takes no click, hover or tooltip. A label that
+-- fills or overflows the cell keeps the whole cell.
+---@param cellWidth number?
+---@param textWidth number?
+---@return number
+function GUIFrame.CompactCheckboxHitInset(cellWidth, textWidth)
+    return max(0, (cellWidth or 0) - (BOX + LABEL_GAP + (textWidth or 0)))
+end
+
+-- Also run from Configure: a pooled cell reused at its last width with new
+-- text gets no OnSizeChanged.
+local function ApplyCompactHitRect(cell, width)
+    local textWidth = cell._label:GetUnboundedStringWidth()
+    cell:SetHitRectInsets(0, GUIFrame.CompactCheckboxHitInset(width or cell:GetWidth(), textWidth), 0, 0)
+end
 
 local function ConstructCompactCheckbox(parent)
     local cell = CreateFrame("Button", nil, parent)
@@ -417,7 +436,7 @@ local function ConstructCompactCheckbox(parent)
     fill:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -2, 2)
 
     local label = cell:CreateFontString(nil, "OVERLAY")
-    label:SetPoint("LEFT", box, "RIGHT", 8, 0)
+    label:SetPoint("LEFT", box, "RIGHT", LABEL_GAP, 0)
     label:SetPoint("RIGHT", cell, "RIGHT", 0, 0)
     label:SetJustifyH("LEFT")
     -- No wrap: a wrapped label would overflow a 22px cell into the row below.
@@ -485,6 +504,8 @@ local function ConstructCompactCheckbox(parent)
         GameTooltip:Hide()
     end)
 
+    cell:SetScript("OnSizeChanged", ApplyCompactHitRect)
+
     -- Re-tint after KE:RefreshTheme swaps the Theme color tables. Unlike the
     -- sliding toggle this widget is not stateful in color -- the fill is the
     -- accent whether checked or not, and only its visibility tracks state -- so
@@ -509,6 +530,7 @@ local function ConfigureCompactCheckbox(cell, labelText, config)
     -- rather than the "normal" step, which is not guaranteed to be one point up.
     KE:ApplyThemeFont(label, (Theme.fontSizeSmall or 11) + 1)
     label:SetText(labelText or "")
+    ApplyCompactHitRect(cell)
     cell._tooltip = config.tooltip
     cell._callback = config.callback
     cell:ApplyThemeColors()
